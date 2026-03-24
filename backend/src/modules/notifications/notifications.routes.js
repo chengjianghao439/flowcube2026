@@ -1,0 +1,56 @@
+const { Router } = require('express')
+const { pool } = require('../../config/db')
+const { successResponse } = require('../../utils/response')
+const { authMiddleware } = require('../../middleware/auth')
+const router = Router()
+router.use(authMiddleware)
+
+router.get('/', async (req, res, next) => {
+  try {
+    const threshold = 10 // 低库存阈值
+
+    const [[{ pendingPurchase }]] = await pool.query(
+      `SELECT COUNT(*) AS pendingPurchase FROM purchase_orders WHERE status IN (1,2) AND deleted_at IS NULL`
+    )
+    const [[{ pendingSale }]] = await pool.query(
+      `SELECT COUNT(*) AS pendingSale FROM sale_orders WHERE status IN (1,2,3) AND deleted_at IS NULL`
+    )
+    const [[{ lowStockCount }]] = await pool.query(
+      `SELECT COUNT(*) AS lowStockCount FROM (
+         SELECT product_id, SUM(quantity) AS total FROM inventory_stock GROUP BY product_id HAVING total < ?
+       ) t`, [threshold]
+    )
+    const [[{ unpaidPayable }]] = await pool.query(
+      `SELECT COUNT(*) AS unpaidPayable FROM payment_records WHERE type=1 AND status IN (1,2)`
+    )
+    const [[{ unpaidReceivable }]] = await pool.query(
+      `SELECT COUNT(*) AS unpaidReceivable FROM payment_records WHERE type=2 AND status IN (1,2)`
+    )
+    const [[{ pendingTransfer }]] = await pool.query(
+      `SELECT COUNT(*) AS pendingTransfer FROM transfer_orders WHERE status IN (1,2) AND deleted_at IS NULL`
+    )
+    const [[{ overduePayable }]] = await pool.query(
+      `SELECT COUNT(*) AS overduePayable FROM payment_records WHERE type=1 AND status IN (1,2) AND due_date IS NOT NULL AND due_date < CURDATE()`
+    )
+    const [[{ overdueReceivable }]] = await pool.query(
+      `SELECT COUNT(*) AS overdueReceivable FROM payment_records WHERE type=2 AND status IN (1,2) AND due_date IS NOT NULL AND due_date < CURDATE()`
+    )
+
+    // 组装通知列表
+    const items = []
+    if (overduePayable > 0) items.push({ type: 'danger', icon: '🚨', text: `${overduePayable} 笔应付账款已逾期！`, path: '/payments' })
+    if (overdueReceivable > 0) items.push({ type: 'danger', icon: '🚨', text: `${overdueReceivable} 笔应收账款已逾期！`, path: '/payments' })
+    if (lowStockCount > 0) items.push({ type: 'warning', icon: '⚠️', text: `${lowStockCount} 种商品库存不足`, path: '/inventory' })
+    if (pendingPurchase > 0) items.push({ type: 'info', icon: '📦', text: `${pendingPurchase} 笔采购单待处理`, path: '/purchase' })
+    if (pendingSale > 0) items.push({ type: 'info', icon: '🚚', text: `${pendingSale} 笔销售单待处理`, path: '/sale' })
+    if (unpaidPayable > 0) items.push({ type: 'danger', icon: '💳', text: `${unpaidPayable} 笔应付账款未清`, path: '/payments' })
+    if (unpaidReceivable > 0) items.push({ type: 'danger', icon: '💰', text: `${unpaidReceivable} 笔应收账款未清`, path: '/payments' })
+    if (pendingTransfer > 0) items.push({ type: 'info', icon: '🔄', text: `${pendingTransfer} 笔调拨单待处理`, path: '/transfer' })
+
+    const total = items.length
+
+    return successResponse(res, { total, items, counts: { lowStockCount, pendingPurchase, pendingSale, unpaidPayable, unpaidReceivable, pendingTransfer, overduePayable, overdueReceivable } }, '查询成功')
+  } catch (e) { next(e) }
+})
+
+module.exports = router

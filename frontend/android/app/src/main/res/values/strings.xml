@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FlowCube PDA</string>
+    <string name="title_activity_main">FlowCube PDA</string>
+    <string name="package_name">com.flowcube.pda</string>
+    <string name="custom_url_scheme">com.flowcube.pda</string>
+</resources>

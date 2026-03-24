@@ -1,0 +1,16 @@
+const { Router } = require('express')
+const { z } = require('zod')
+const ctrl = require('./stockcheck.controller')
+const { authMiddleware } = require('../../middleware/auth')
+const router = Router()
+const vBody = schema => (req,res,next) => { const r=schema.safeParse(req.body); if(!r.success) return res.status(400).json({success:false,message:r.error.errors.map(e=>e.message).join('；'),data:null}); req.body=r.data; next() }
+const createSchema = z.object({ warehouseId:z.number().int().positive('请选择仓库'), warehouseName:z.string(), remark:z.string().optional() })
+const updateSchema = z.object({ items:z.array(z.object({ id:z.number().int().positive(), actualQty:z.number().nonnegative('实盘数量不能为负') })).min(1) })
+router.use(authMiddleware)
+router.get('/',              ctrl.list)
+router.get('/:id',           ctrl.detail)
+router.post('/',             vBody(createSchema), ctrl.create)
+router.put('/:id/items',     vBody(updateSchema),  ctrl.update)
+router.post('/:id/submit',   ctrl.submit)
+router.post('/:id/cancel',   ctrl.cancel)
+module.exports = router

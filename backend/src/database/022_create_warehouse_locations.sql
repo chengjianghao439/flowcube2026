@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `warehouse_locations` (
+  `id`           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `warehouse_id` BIGINT UNSIGNED NOT NULL              COMMENT '所属仓库ID',
+  `code`         VARCHAR(20)     NOT NULL              COMMENT '库位编码，如 A01-01-01',
+  `zone`         VARCHAR(20)     DEFAULT NULL          COMMENT '库区，如 A / B / C',
+  `aisle`        VARCHAR(20)     DEFAULT NULL          COMMENT '巷道',
+  `rack`         VARCHAR(20)     DEFAULT NULL          COMMENT '货架',
+  `level`        VARCHAR(20)     DEFAULT NULL          COMMENT '层',
+  `position`     VARCHAR(20)     DEFAULT NULL          COMMENT '位',
+  `capacity`     INT UNSIGNED    NOT NULL DEFAULT 0    COMMENT '最大容量（0=不限）',
+  `status`       TINYINT(1)      NOT NULL DEFAULT 1    COMMENT '1=启用 2=停用',
+  `remark`       VARCHAR(200)    DEFAULT NULL,
+  `deleted_at`   DATETIME        DEFAULT NULL,
+  `created_at`   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_location_code` (`code`),
+  INDEX `idx_location_warehouse` (`warehouse_id`),
+  INDEX `idx_location_zone` (`warehouse_id`, `zone`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='仓库库位';

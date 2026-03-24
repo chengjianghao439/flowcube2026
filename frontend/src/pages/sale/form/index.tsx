@@ -1,0 +1,974 @@
+/**
+ * SaleFormPage — 销售单新建 / 查看页面（独立路由）
+ *
+ * 路由：
+ *   /sale/new    → 新建模式（空表单）
+ *   /sale/:id    → 查看模式（已有订单详情 + 操作按钮）
+ *
+ * 路径由 TabPathContext 提供，不依赖 useLocation，
+ * 确保 keep-alive 多标签场景下路径隔离正确。
+ */
+
+import { useState, useCallback, useContext, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Loader2, Printer, Save, Trash2, Truck, Warehouse, X } from 'lucide-react'
+import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
+import { Button }  from '@/components/ui/button'
+import { Input }   from '@/components/ui/input'
+import { Label }   from '@/components/ui/label'
+import { TabPathContext } from '@/components/layout/TabPathContext'
+import { toast } from '@/lib/toast'
+import { useWorkspaceStore } from '@/store/workspaceStore'
+import { useDirtyGuard } from '@/hooks/useDirtyGuard'
+import { ActionBar }      from '@/components/shared/ActionBar'
+import { StatusBadge }    from '@/components/shared/StatusBadge'
+import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
+import { CustomerFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
+import { useCreateSale, useUpdateSale, useSaleDetail, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
+import { useCarriersActive } from '@/hooks/useCarriers'
+import { LimitedInput } from '@/components/shared/LimitedInput'
+import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
+import { getCustomerPriceApi } from '@/api/price-lists'
+
+const PHONE_RE = /^1\d{10}$/
+import type { SaleOrderItem } from '@/types/sale'
+import type { ProductFinderResult } from '@/types/products'
+import type { FinderResult } from '@/types/finder'
+
+interface DraftItem extends Omit<SaleOrderItem, 'id' | 'amount'> {
+  _key: number
+  priceSource?: 'list' | 'default' | 'manual'
+}
+
+// ─── 信息区块 ─────────────────────────────────────────────────────────────────
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="card-base p-5">
+      <h3 className="text-section-title mb-4 pb-2 border-b border-border/50">{title}</h3>
+      {children}
+    </div>
+  )
+}
+
+// ─── 主页面 ───────────────────────────────────────────────────────────────────
+
+export default function SaleFormPage() {
+  const tabPath  = useContext(TabPathContext)
+  const navigate = useNavigate()
+  const isNew    = tabPath === '/sale/new' || tabPath === ''
+  const saleId   = isNew ? null : Number(tabPath.split('/').pop())
+
+  // ── 关闭当前 Tab 并返回 ──
+  function closeTab() {
+    const { removeTab, tabs } = useWorkspaceStore.getState()
+    const nextKey = removeTab(tabPath || '/sale/new')
+    const nextTab = tabs.find(t => t.key === nextKey)
+    navigate(nextTab?.path ?? '/sale')
+  }
+
+  // ─── ① 新建模式 ─────────────────────────────────────────────────────────────
+
+  if (isNew) return <CreateView closeTab={closeTab} tabPath={tabPath} />
+
+  // ─── ② 查看模式 ─────────────────────────────────────────────────────────────
+
+  return <DetailView saleId={saleId!} tabPath={tabPath} closeTab={closeTab} />
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 新建视图
+// ════════════════════════════════════════════════════════════════════════════
+
+function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string }) {
+  const navigate     = useNavigate()
+  const createMutate = useCreateSale()
+
+  const [customerId,      setCustomerId]      = useState('')
+  const [customerName,    setCustomerName]    = useState('')
+  const [warehouseId,     setWarehouseId]     = useState('')
+  const [warehouseName,   setWarehouseName]   = useState('')
+  const [remark,          setRemark]          = useState('')
+  const [carrierId,       setCarrierId]       = useState<string>('')
+  const [freightType,     setFreightType]     = useState('')
+  const [receiverName,    setReceiverName]    = useState('')
+  const [receiverPhone,   setReceiverPhone]   = useState('')
+  const [receiverAddress, setReceiverAddress] = useState('')
+  const counterRef    = useRef(0)
+  const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
+  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default' })
+
+  const { data: carrierOptions = [] } = useCarriersActive()
+
+  const [items,        setItems]        = useState<DraftItem[]>(() => [mkEmpty()])
+  const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
+  const [finderOpen,    setFinderOpen]    = useState(false)
+  const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
+  const [customerFinderOpen,  setCustomerFinderOpen]  = useState(false)
+  const [warehouseFinderOpen, setWarehouseFinderOpen] = useState(false)
+
+  // 未保存变更保护：已填写商品或表头字段有值才标脏
+  const isDirty = !!(customerId || warehouseId || remark || carrierId || receiverName || items.some(i => i.productId > 0))
+  useDirtyGuard(tabPath, isDirty)
+
+  // 触发已有商品行的专属价格查询（只查价，不设 customerId）
+  const handleCustomerChange = useCallback(async (cid: string) => {
+    if (!cid) return
+    setItems(prev => prev.map(i => {
+      if (!i.productId) return i
+      void (async () => {
+        try {
+          const r = await getCustomerPriceApi(+cid, i.productId)
+          if (r.data.data?.salePrice !== undefined) {
+            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r.data.data!.salePrice, priceSource: 'list' } : x))
+          }
+        } catch (_) {}
+      })()
+      return i
+    }))
+  }, [])
+
+  function handleCustomerConfirm(result: FinderResult) {
+    setCustomerId(String(result.id))
+    setCustomerName(result.name)
+    void handleCustomerChange(String(result.id))
+  }
+
+  function handleWarehouseConfirm(result: FinderResult) {
+    setWarehouseId(String(result.id))
+    setWarehouseName(result.name)
+  }
+
+  // 删除行：至少保留一行空行
+  const removeItem = (k: number) => setItems(prev => {
+    const filtered = prev.filter(i => i._key !== k)
+    return filtered.length === 0 ? [mkEmpty()] : filtered
+  })
+
+  // 更新行：最后一行填完后自动追加新空行
+  const updateItem = (k: number, field: string, val: string | number) =>
+    setItems(prev => {
+      const updated = prev.map(i => i._key === k ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource } : i)
+      const last = updated[updated.length - 1]
+      if (last._key === k && last.productId > 0 && last.quantity > 0) return [...updated, mkEmpty()]
+      return updated
+    })
+
+  // 数量框 Enter 键：跳到下一行商品，或新增行后自动打开选择器
+  const handleQuantityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, k: number) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    setItems(prev => {
+      const idx = prev.findIndex(i => i._key === k)
+      if (idx === -1) return prev
+      const isLast = idx === prev.length - 1
+      const cur = prev[idx]
+      if (isLast) {
+        if (cur.productId > 0 && cur.quantity > 0) {
+          const newItem = mkEmpty()
+          setTimeout(() => { setFinderItemKey(newItem._key); setFinderOpen(true) }, 50)
+          return [...prev, newItem]
+        }
+      } else {
+        const nextKey = prev[idx + 1]._key
+        setTimeout(() => { setFinderItemKey(nextKey); setFinderOpen(true) }, 0)
+      }
+      return prev
+    })
+  }
+
+  async function handleFinderConfirm(product: ProductFinderResult) {
+    if (finderItemKey === null) return
+    const k = finderItemKey
+    setItems(prev => prev.map(i => i._key === k
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default' }
+      : i
+    ))
+    // 商品选择后自动聚焦到该行数量框
+    setTimeout(() => { const inp = quantityRefs.current.get(k); if (inp) { inp.focus(); inp.select() } }, 0)
+    if (customerId) {
+      setPriceLoading(prev => ({ ...prev, [k]: true }))
+      try {
+        const r = await getCustomerPriceApi(+customerId, product.id)
+        if (r.data.data?.salePrice !== undefined)
+          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r.data.data!.salePrice, priceSource: 'list' } : i))
+      } catch (_) {}
+      setPriceLoading(prev => ({ ...prev, [k]: false }))
+    }
+  }
+
+  async function handleSubmit() {
+    const filledItems = items.filter(i => i.productId > 0)
+    if (!customerId || !customerName) { toast.warning('请选择客户'); return }
+    if (!warehouseId || !warehouseName) { toast.warning('请选择仓库'); return }
+    if (!filledItems.length) { toast.warning('请添加至少一条明细'); return }
+    if (filledItems.find(i => i.quantity <= 0)) { toast.warning('商品数量必须大于 0'); return }
+    if (filledItems.find(i => i.unitPrice <= 0)) { toast.warning('商品价格必须大于 0'); return }
+    if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的手机号'); return }
+    try {
+      await createMutate.mutateAsync({
+        customerId: +customerId, customerName,
+        warehouseId: +warehouseId, warehouseName,
+        remark: remark || undefined,
+        carrierId: carrierId ? +carrierId : null,
+        freightType: freightType ? +freightType : null,
+        receiverName: receiverName || undefined,
+        receiverPhone: receiverPhone || undefined,
+        receiverAddress: receiverAddress || undefined,
+        items: filledItems.map(({ _key, priceSource, ...r }) => r),
+      })
+      closeTab()
+    } catch (_) {}
+  }
+
+  const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+
+  return (
+    <div className="flex flex-col gap-4">
+      <ActionBar
+        title="新建销售单"
+        rightActions={
+          <>
+            <Button variant="outline" onClick={closeTab} disabled={createMutate.isPending}>取消</Button>
+            <Button onClick={handleSubmit} disabled={createMutate.isPending} className="gap-1.5">
+              {createMutate.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</>
+                : <><Save className="h-4 w-4" />提交保存</>}
+            </Button>
+          </>
+        }
+      />
+
+      {/* 订单信息 */}
+      <Section title="订单信息">
+        {/* 三列主区域：第一行客户/仓库/承运商，第二行运费方式/收货人/联系电话 */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <Label>客户 *</Label>
+            <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>出库仓库 *</Label>
+            <FinderTrigger value={warehouseName} placeholder="点击选择仓库..." onClick={() => setWarehouseFinderOpen(true)} onDoubleClick={() => { setWarehouseFinderOpen(false); navigate('/warehouses') }} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>承运商</Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              value={carrierId}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCarrierId(e.target.value)}
+            >
+              <option value="">{carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'}</option>
+              {carrierOptions.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>运费方式</Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              value={freightType}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFreightType(e.target.value)}
+            >
+              <option value="">请选择</option>
+              <option value="1">寄付</option>
+              <option value="2">到付</option>
+              <option value="3">第三方付</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>收货人</Label>
+            <LimitedInput maxLength={5} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>联系电话</Label>
+            <LimitedInput maxLength={11} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="11位手机号" inputMode="numeric" />
+          </div>
+        </div>
+        {/* 第三行：收货地址 + 备注 各占一半 */}
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>收货地址</Label>
+            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={3} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>备注</Label>
+            <LimitedTextarea maxLength={30} value={remark} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRemark(e.target.value)} placeholder="选填" rows={3} />
+          </div>
+        </div>
+      </Section>
+
+      {/* 商品明细 */}
+      <Section title="商品明细">
+        <div className="mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3 text-xs font-medium text-muted-foreground">
+          <span>商品</span>
+          <span className="text-center">单位</span>
+          <span>数量</span>
+          <span>单价 (¥)</span>
+          <span className="text-right">金额</span>
+          <span />
+        </div>
+
+        {items.map(item => (
+          <div key={item._key} className="mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3 items-center">
+            <button
+              type="button"
+              onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+              onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
+              className="truncate rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {item.productName
+                ? <span className="flex items-center gap-1.5">
+                    <span className="font-medium truncate">{item.productName}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">({item.productCode})</span>
+                  </span>
+                : <span className="text-muted-foreground">点击选择商品...</span>}
+            </button>
+
+            <div className="text-center text-sm text-muted-foreground">{item.unit || '—'}</div>
+
+            <Input
+              type="number" min="0.01" step="0.01" placeholder="数量"
+              value={item.quantity}
+              ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
+              className="text-sm"
+            />
+
+            <div className="relative">
+              <Input
+                type="number" min="0" step="0.01" placeholder="单价"
+                value={item.unitPrice}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
+                className={`text-sm ${item.priceSource === 'list' ? 'border-blue-400 bg-blue-50' : ''}`}
+              />
+              {priceLoading[item._key] && (
+                <span className="absolute right-2 top-2 text-xs text-blue-500">查询中...</span>
+              )}
+              {item.priceSource === 'list' && !priceLoading[item._key] && (
+                <span className="absolute -top-1.5 -right-1.5 rounded-full bg-blue-500 px-1 text-[9px] text-white">专属</span>
+              )}
+            </div>
+
+            <div className="text-right text-sm font-medium">
+              ¥{(item.quantity * item.unitPrice).toFixed(2)}
+            </div>
+
+            <Button
+              type="button" size="sm" variant="ghost"
+              className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
+              onClick={() => removeItem(item._key)}
+            >✕</Button>
+          </div>
+        ))}
+      </Section>
+
+      {/* 金额统计：仅统计已选商品的行 */}
+      {items.some(i => i.productId > 0) && (
+        <Section title="金额统计">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground space-y-0.5">
+              <p>商品种数：{items.filter(i => i.productId > 0).length} 种</p>
+              <p>合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground mb-1">合计金额</p>
+              <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {/* 商品选择中心 */}
+      <ProductFinder
+        open={finderOpen}
+        warehouseId={warehouseId ? +warehouseId : null}
+        onConfirm={handleFinderConfirm}
+        onClose={() => { setFinderOpen(false); setFinderItemKey(null) }}
+      />
+
+      {/* 客户 / 仓库 Finder */}
+      <CustomerFinder
+        open={customerFinderOpen}
+        onClose={() => setCustomerFinderOpen(false)}
+        onConfirm={handleCustomerConfirm}
+      />
+      <WarehouseFinder
+        open={warehouseFinderOpen}
+        onClose={() => setWarehouseFinderOpen(false)}
+        onConfirm={handleWarehouseConfirm}
+      />
+
+      {/* 底部安全间距 */}
+      <div className="h-4" />
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 编辑视图（草稿状态 status=1 可编辑）
+// ════════════════════════════════════════════════════════════════════════════
+
+function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; closeTab: () => void }) {
+  const navigate      = useNavigate()
+  const updateMutate  = useUpdateSale()
+  const reserveMutate = useReserveSale()
+  const cancelMutate  = useCancelSale()
+  const [reserveConfirmOpen, setReserveConfirmOpen] = useState(false)
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
+
+  const [customerId,      setCustomerId]      = useState(String(order.customerId))
+  const [customerName,    setCustomerName]    = useState(order.customerName ?? '')
+  const [warehouseId,     setWarehouseId]     = useState(String(order.warehouseId))
+  const [warehouseName,   setWarehouseName]   = useState(order.warehouseName ?? '')
+  const [remark,          setRemark]          = useState(order.remark ?? '')
+  const [carrierId,       setCarrierId]       = useState(order.carrierId ? String(order.carrierId) : '')
+  const [freightType,     setFreightType]     = useState(order.freightType ? String(order.freightType) : '')
+  const [receiverName,    setReceiverName]    = useState(order.receiverName ?? '')
+  const [receiverPhone,   setReceiverPhone]   = useState(order.receiverPhone ?? '')
+  const [receiverAddress, setReceiverAddress] = useState(order.receiverAddress ?? '')
+  const counterRef    = useRef((order.items ?? []).length)
+  const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
+  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default' })
+
+  const { data: carrierOptions = [] } = useCarriersActive()
+
+  const [items, setItems] = useState<DraftItem[]>(() => {
+    const loaded = (order.items ?? []).map((item, i) => ({
+      _key: i, productId: item.productId, productCode: item.productCode,
+      productName: item.productName, unit: item.unit, quantity: item.quantity,
+      unitPrice: item.unitPrice, remark: item.remark ?? '', priceSource: 'default' as const,
+    }))
+    // 已有明细末尾追加一行空行，保持 Excel 式输入体验
+    return [...loaded, mkEmpty()]
+  })
+  const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
+  const [finderOpen,    setFinderOpen]    = useState(false)
+  const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
+  const [customerFinderOpen,  setCustomerFinderOpen]  = useState(false)
+  const [warehouseFinderOpen, setWarehouseFinderOpen] = useState(false)
+
+  const handleCustomerChange = useCallback(async (cid: string) => {
+    if (!cid) return
+    setItems(prev => prev.map(i => {
+      if (!i.productId) return i
+      ;(async () => {
+        try {
+          const r = await getCustomerPriceApi(+cid, i.productId)
+          if (r.data.data?.salePrice !== undefined)
+            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r.data.data!.salePrice, priceSource: 'list' } : x))
+        } catch (_) {}
+      })()
+      return i
+    }))
+  }, [])
+
+  function handleCustomerConfirm(result: FinderResult) {
+    setCustomerId(String(result.id))
+    setCustomerName(result.name)
+    void handleCustomerChange(String(result.id))
+  }
+
+  function handleWarehouseConfirm(result: FinderResult) {
+    setWarehouseId(String(result.id))
+    setWarehouseName(result.name)
+  }
+
+  // 删除行：至少保留一行空行
+  const removeItem = (k: number) => setItems(prev => {
+    const filtered = prev.filter(i => i._key !== k)
+    return filtered.length === 0 ? [mkEmpty()] : filtered
+  })
+
+  // 更新行：最后一行填完后自动追加新空行
+  const updateItem = (k: number, field: string, val: string | number) =>
+    setItems(prev => {
+      const updated = prev.map(i => i._key === k ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource } : i)
+      const last = updated[updated.length - 1]
+      if (last._key === k && last.productId > 0 && last.quantity > 0) return [...updated, mkEmpty()]
+      return updated
+    })
+
+  // 数量框 Enter 键：跳到下一行商品，或新增行后自动打开选择器
+  const handleQuantityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, k: number) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    setItems(prev => {
+      const idx = prev.findIndex(i => i._key === k)
+      if (idx === -1) return prev
+      const isLast = idx === prev.length - 1
+      const cur = prev[idx]
+      if (isLast) {
+        if (cur.productId > 0 && cur.quantity > 0) {
+          const newItem = mkEmpty()
+          setTimeout(() => { setFinderItemKey(newItem._key); setFinderOpen(true) }, 50)
+          return [...prev, newItem]
+        }
+      } else {
+        const nextKey = prev[idx + 1]._key
+        setTimeout(() => { setFinderItemKey(nextKey); setFinderOpen(true) }, 0)
+      }
+      return prev
+    })
+  }
+
+  async function handleFinderConfirm(product: ProductFinderResult) {
+    if (finderItemKey === null) return
+    const k = finderItemKey
+    setItems(prev => prev.map(i => i._key === k
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default' }
+      : i
+    ))
+    // 商品选择后自动聚焦到该行数量框
+    setTimeout(() => { const inp = quantityRefs.current.get(k); if (inp) { inp.focus(); inp.select() } }, 0)
+    if (customerId) {
+      setPriceLoading(prev => ({ ...prev, [k]: true }))
+      try {
+        const r = await getCustomerPriceApi(+customerId, product.id)
+        if (r.data.data?.salePrice !== undefined)
+          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r.data.data!.salePrice, priceSource: 'list' } : i))
+      } catch (_) {}
+      setPriceLoading(prev => ({ ...prev, [k]: false }))
+    }
+  }
+
+  async function handleSubmit() {
+    const filledItems = items.filter(i => i.productId > 0)
+    if (!customerId || !customerName) { toast.warning('请选择客户'); return }
+    if (!warehouseId || !warehouseName) { toast.warning('请选择仓库'); return }
+    if (!filledItems.length) { toast.warning('请添加至少一条明细'); return }
+    if (filledItems.find(i => i.quantity <= 0)) { toast.warning('商品数量必须大于 0'); return }
+    if (filledItems.find(i => i.unitPrice <= 0)) { toast.warning('商品价格必须大于 0'); return }
+    if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的手机号'); return }
+    try {
+      await updateMutate.mutateAsync({
+        id: order.id,
+        customerId: +customerId, customerName,
+        warehouseId: +warehouseId, warehouseName,
+        remark: remark || undefined,
+        carrierId: carrierId ? +carrierId : null,
+        freightType: freightType ? +freightType : null,
+        receiverName: receiverName || undefined,
+        receiverPhone: receiverPhone || undefined,
+        receiverAddress: receiverAddress || undefined,
+        items: filledItems.map(({ _key, priceSource, ...r }) => r),
+      })
+    } catch (_) {}
+  }
+
+  const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+
+  return (
+    <div className="flex flex-col gap-4">
+      <ActionBar
+        title={order.orderNo}
+        subtitle={<StatusBadge type="sale" status={order.status} />}
+        rightActions={
+          <>
+            <Button variant="outline" onClick={closeTab} disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending}>关闭</Button>
+            <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5"
+              onClick={() => setCancelConfirmOpen(true)}
+              disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending}>
+              <X className="h-4 w-4 mr-1" />取消订单
+            </Button>
+            <Button variant="outline" onClick={() => setReserveConfirmOpen(true)}
+              disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending}>
+              <Warehouse className="h-4 w-4 mr-1" />占用库存
+            </Button>
+            <Button onClick={handleSubmit} disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending} className="gap-1.5">
+              {updateMutate.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" />保存中...</>
+                : <><Save className="h-4 w-4" />保存</>}
+            </Button>
+          </>
+        }
+      />
+
+      {/* 订单信息 */}
+      <Section title="订单信息">
+        {/* 三列主区域：第一行客户/仓库/承运商，第二行运费方式/收货人/联系电话 */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <Label>客户 *</Label>
+            <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>出库仓库 *</Label>
+            <FinderTrigger value={warehouseName} placeholder="点击选择仓库..." onClick={() => setWarehouseFinderOpen(true)} onDoubleClick={() => { setWarehouseFinderOpen(false); navigate('/warehouses') }} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>承运商</Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              value={carrierId}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCarrierId(e.target.value)}
+            >
+              <option value="">{carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'}</option>
+              {carrierOptions.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>运费方式</Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              value={freightType}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFreightType(e.target.value)}
+            >
+              <option value="">请选择</option>
+              <option value="1">寄付</option>
+              <option value="2">到付</option>
+              <option value="3">第三方付</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>收货人</Label>
+            <LimitedInput maxLength={5} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>联系电话</Label>
+            <LimitedInput maxLength={11} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="11位手机号" inputMode="numeric" />
+          </div>
+        </div>
+        {/* 第三行：收货地址 + 备注 各占一半 */}
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>收货地址</Label>
+            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={3} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>备注</Label>
+            <LimitedTextarea maxLength={30} value={remark} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRemark(e.target.value)} placeholder="选填" rows={3} />
+          </div>
+        </div>
+      </Section>
+
+      {/* 商品明细 */}
+      <Section title="商品明细">
+        <div className="mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3 text-xs font-medium text-muted-foreground">
+          <span>商品</span><span className="text-center">单位</span><span>数量</span><span>单价 (¥)</span><span className="text-right">金额</span><span />
+        </div>
+        {items.map(item => (
+          <div key={item._key} className="mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3 items-center">
+            <button
+              type="button"
+              onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+              onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
+              className="truncate rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {item.productName
+                ? <span className="flex items-center gap-1.5"><span className="font-medium truncate">{item.productName}</span><span className="shrink-0 text-xs text-muted-foreground">({item.productCode})</span></span>
+                : <span className="text-muted-foreground">点击选择商品...</span>}
+            </button>
+            <div className="text-center text-sm text-muted-foreground">{item.unit || '—'}</div>
+            <Input type="number" min="0.01" step="0.01" placeholder="数量" value={item.quantity}
+              ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
+              className="text-sm" />
+            <div className="relative">
+              <Input type="number" min="0" step="0.01" placeholder="单价" value={item.unitPrice}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
+                className={`text-sm ${item.priceSource === 'list' ? 'border-blue-400 bg-blue-50' : ''}`} />
+              {priceLoading[item._key] && <span className="absolute right-2 top-2 text-xs text-blue-500">查询中...</span>}
+              {item.priceSource === 'list' && !priceLoading[item._key] && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-blue-500 px-1 text-[9px] text-white">专属</span>}
+            </div>
+            <div className="text-right text-sm font-medium">¥{(item.quantity * item.unitPrice).toFixed(2)}</div>
+            <Button type="button" size="sm" variant="ghost" className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
+          </div>
+        ))}
+      </Section>
+
+      {/* 金额统计：仅统计已选商品的行 */}
+      {items.some(i => i.productId > 0) && (
+        <Section title="金额统计">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground space-y-0.5">
+              <p>商品种数：{items.filter(i => i.productId > 0).length} 种</p>
+              <p>合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground mb-1">合计金额</p>
+              <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
+            </div>
+          </div>
+        </Section>
+      )}
+
+      <ProductFinder
+        open={finderOpen}
+        warehouseId={warehouseId ? +warehouseId : null}
+        onConfirm={handleFinderConfirm}
+        onClose={() => { setFinderOpen(false); setFinderItemKey(null) }}
+      />
+
+      <CustomerFinder
+        open={customerFinderOpen}
+        onClose={() => setCustomerFinderOpen(false)}
+        onConfirm={handleCustomerConfirm}
+      />
+      <WarehouseFinder
+        open={warehouseFinderOpen}
+        onClose={() => setWarehouseFinderOpen(false)}
+        onConfirm={handleWarehouseConfirm}
+      />
+
+      <ConfirmDialog
+        open={reserveConfirmOpen}
+        title="占用库存"
+        description="将预占该销售单所需库存，可用量减少。请确保已保存最新改动，是否继续？"
+        confirmText="占用库存"
+        loading={reserveMutate.isPending}
+        onConfirm={() => { setReserveConfirmOpen(false); reserveMutate.mutate(order.id) }}
+        onCancel={() => setReserveConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        title="取消订单"
+        description="取消后订单将变为已取消状态，是否继续？"
+        variant="destructive"
+        confirmText="确认取消"
+        loading={cancelMutate.isPending}
+        onConfirm={() => { setCancelConfirmOpen(false); cancelMutate.mutate(order.id) }}
+        onCancel={() => setCancelConfirmOpen(false)}
+      />
+
+      <div className="h-4" />
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 查看视图（已有销售单详情 + 状态操作）
+// ════════════════════════════════════════════════════════════════════════════
+
+function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: string; closeTab: () => void }) {
+  const navigate       = useNavigate()
+  const { data: order, isLoading } = useSaleDetail(saleId)
+  const releaseMutate  = useReleaseSale()
+  const shipMutate     = useShipSale()
+  const deleteMutate   = useDeleteSale()
+
+  const [printOpen, setPrintOpen] = useState(false)
+
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; description: string; variant: 'default' | 'destructive'; onConfirm: () => void
+  }>({ open: false, title: '', description: '', variant: 'default', onConfirm: () => {} })
+
+  function ask(
+    title: string, description: string,
+    variant: 'default' | 'destructive',
+    onConfirm: () => void,
+  ) {
+    setConfirmState({ open: true, title, description, variant, onConfirm })
+  }
+  const closeAsk = () => setConfirmState(s => ({ ...s, open: false }))
+
+  const { setActive } = useWorkspaceStore()
+
+  if (isLoading) {
+    return (
+      <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中...
+      </div>
+    )
+  }
+
+  if (!order) {
+    return (
+      <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
+        <p className="text-sm">销售单不存在或已删除</p>
+        <Button size="sm" variant="outline" onClick={closeTab}>返回列表</Button>
+      </div>
+    )
+  }
+
+  // 草稿状态直接进入可编辑视图
+  if (order.status === 1) {
+    return <EditView order={order} closeTab={closeTab} />
+  }
+
+  const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending
+
+  return (
+    <div className="flex flex-col gap-4">
+      <ActionBar
+        title={order.orderNo}
+        subtitle={<StatusBadge type="sale" status={order.status} />}
+        rightActions={
+          <>
+            {/* RESERVED（已占库）：发货 + 取消占库 */}
+            {order.status === 2 && (
+              <>
+                <Button disabled={isPending} className="gap-1.5"
+                  onClick={() => ask('发起出库', '将创建仓库出库任务，由仓库人员执行拣货后完成出库，是否继续？', 'default', () => {
+                    closeAsk(); shipMutate.mutate(order.id)
+                  })}>
+                  <Truck className="h-4 w-4" />发货
+                </Button>
+                <Button variant="outline" disabled={isPending} className="gap-1.5"
+                  onClick={() => ask('取消占库', '将释放已预占的库存并将订单恢复为草稿状态，是否继续？', 'destructive', () => {
+                    closeAsk(); releaseMutate.mutate(order.id)
+                  })}>
+                  取消占库
+                </Button>
+              </>
+            )}
+
+            {/* PICKING（发货中）：查看仓库任务 */}
+            {order.status === 3 && order.taskNo && (
+              <Button variant="outline" disabled={isPending}
+                className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
+                onClick={() => navigate('/warehouse-tasks')}>
+                <Warehouse className="h-4 w-4" />查看任务 · {order.taskNo}
+              </Button>
+            )}
+
+            {/* SHIPPED（已出库）：打印 */}
+            {order.status === 4 && (
+              <Button variant="outline" className="gap-1.5" onClick={() => setPrintOpen(true)}>
+                <Printer className="h-4 w-4" />打印订单
+              </Button>
+            )}
+
+            {/* CANCELLED（已取消）：删除 */}
+            {order.status === 5 && (
+              <Button variant="destructive" disabled={isPending} className="gap-1.5"
+                onClick={() => ask('确认删除订单', '删除后订单将无法恢复。', 'destructive', () => {
+                  closeAsk(); deleteMutate.mutate(order.id, { onSuccess: closeTab })
+                })}>
+                <Trash2 className="h-4 w-4" />删除订单
+              </Button>
+            )}
+
+            <Button variant="outline" onClick={closeTab}>关闭</Button>
+          </>
+        }
+      />
+
+      {/* 基础信息 */}
+      <Section title="基础信息">
+        <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
+          {[
+            ['客户',     order.customerName],
+            ['仓库',     order.warehouseName],
+            ['销售日期', order.saleDate ?? '—'],
+            ['经办人',   order.operatorName],
+            ['创建时间', order.createdAt?.slice(0, 16)],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-xs text-muted-foreground mb-0.5">{label}</dt>
+              <dd className="font-medium">{value}</dd>
+            </div>
+          ))}
+          {order.remark && (
+            <div className="col-span-3">
+              <dt className="text-xs text-muted-foreground mb-0.5">备注</dt>
+              <dd>{order.remark}</dd>
+            </div>
+          )}
+        </dl>
+      </Section>
+
+      {/* 物流信息 */}
+      {(order.carrier || order.freightType || order.receiverName || order.receiverPhone || order.receiverAddress) && (
+        <Section title="物流信息">
+          <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
+            {order.carrier && (
+              <div>
+                <dt className="text-xs text-muted-foreground mb-0.5">承运商</dt>
+                <dd className="font-medium">{order.carrier}</dd>
+              </div>
+            )}
+            {order.freightType && (
+              <div>
+                <dt className="text-xs text-muted-foreground mb-0.5">运费方式</dt>
+                <dd className="font-medium">{order.freightTypeName}</dd>
+              </div>
+            )}
+            {order.receiverName && (
+              <div>
+                <dt className="text-xs text-muted-foreground mb-0.5">收货人</dt>
+                <dd className="font-medium">{order.receiverName}</dd>
+              </div>
+            )}
+            {order.receiverPhone && (
+              <div>
+                <dt className="text-xs text-muted-foreground mb-0.5">联系电话</dt>
+                <dd className="font-medium">{order.receiverPhone}</dd>
+              </div>
+            )}
+            {order.receiverAddress && (
+              <div className="col-span-3">
+                <dt className="text-xs text-muted-foreground mb-0.5">收货地址</dt>
+                <dd className="font-medium">{order.receiverAddress}</dd>
+              </div>
+            )}
+          </dl>
+        </Section>
+      )}
+
+      {/* 商品明细 */}
+      <Section title="商品明细">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-xs text-muted-foreground">
+                <th className="pb-2 text-left font-medium">商品</th>
+                <th className="pb-2 text-left font-medium">编码</th>
+                <th className="pb-2 text-center font-medium w-16">单位</th>
+                <th className="pb-2 text-right font-medium w-20">数量</th>
+                <th className="pb-2 text-right font-medium w-24">单价</th>
+                <th className="pb-2 text-right font-medium w-24">金额</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(order.items ?? []).map(item => (
+                <tr key={item.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
+                  <td className="py-2.5 font-medium">{item.productName}</td>
+                  <td className="py-2.5 font-mono text-xs text-muted-foreground">{item.productCode}</td>
+                  <td className="py-2.5 text-center text-muted-foreground">{item.unit}</td>
+                  <td className="py-2.5 text-right">{item.quantity}</td>
+                  <td className="py-2.5 text-right">¥{Number(item.unitPrice).toFixed(2)}</td>
+                  <td className="py-2.5 text-right font-semibold">¥{Number(item.amount).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {/* 金额统计 */}
+      <Section title="金额统计">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            共 {order.items?.length ?? 0} 种商品
+          </p>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground mb-1">合计金额</p>
+            <p className="text-3xl font-bold">¥{Number(order.totalAmount).toFixed(2)}</p>
+          </div>
+        </div>
+      </Section>
+
+      {/* 底部安全间距 */}
+      <div className="h-4" />
+
+      <ConfirmDialog
+        open={confirmState.open}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant}
+        confirmText={confirmState.variant === 'destructive' ? '确认取消' : '确认'}
+        loading={isPending}
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
+
+      {/* 打印预览全屏遮罩 */}
+      {printOpen && (
+        <PrintPreviewOverlay order={order} onClose={() => setPrintOpen(false)} />
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,194 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    /* primary: 降饱和(83→58) + 略深(53→47)，对标 Linear/飞书后台风格 */
+    --primary: 221 58% 47%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    /* destructive: 降饱和(84→68) + 深暗(60→42)，稳重酒红而非消防车红 */
+    --destructive: 3 68% 42%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221 58% 47%;
+    --radius: 0.5rem;
+    /* Sidebar — 浅色工具型风格，与主背景同色系 */
+    --sidebar-background: 210 40% 97.5%;
+    --sidebar-foreground: 222.2 47.4% 11.2%;
+    --sidebar-primary: 221 58% 47%;
+    --sidebar-primary-foreground: 221 58% 47%;
+    --sidebar-accent: 210 40% 93%;
+    --sidebar-accent-foreground: 222.2 47.4% 11.2%;
+    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-ring: 221 58% 47%;
+    /* 语义扩展 token */
+    --success: 142.1 76.2% 36.3%;
+    --success-foreground: 355.7 100% 97.3%;
+    --warning: 32.1 94.6% 43.7%;
+    --warning-foreground: 355.7 100% 97.3%;
+    --info: 199.4 95.5% 39.4%;
+    --info-foreground: 210 40% 98%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    /* primary: 暗色模式降饱和(91→68)，避免霓虹蓝 */
+    --primary: 217 68% 58%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    /* destructive: 暗色模式稍提亮(30→44)保证可读性，同步降饱和 */
+    --destructive: 3 60% 44%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 217 68% 58%;
+    --success: 142.1 70.6% 45.3%;
+    --success-foreground: 144.9 80.4% 10%;
+    --warning: 35.5 91.7% 32.9%;
+    --warning-foreground: 355.7 100% 97.3%;
+    --info: 199.4 95.5% 39.4%;
+    --info-foreground: 210 40% 98%;
+    /* Sidebar — 暗色模式：比主背景略亮，形成层次感 */
+    --sidebar-background: 222.2 47.4% 8%;
+    --sidebar-foreground: 215 20.2% 75%;
+    --sidebar-primary: 217 68% 58%;
+    --sidebar-primary-foreground: 217 68% 58%;
+    --sidebar-accent: 217.2 32.6% 14%;
+    --sidebar-accent-foreground: 210 40% 95%;
+    --sidebar-border: 217.2 32.6% 14%;
+    --sidebar-ring: 217 68% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply font-sans bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* 排版工具类 */
+  .text-page-title    { @apply text-2xl font-semibold tracking-tight text-foreground; }
+  .text-section-title { @apply text-base font-medium text-foreground; }
+  .text-label         { @apply text-sm font-medium text-foreground; }
+  .text-body          { @apply text-sm text-foreground; }
+  .text-muted-body    { @apply text-sm text-muted-foreground; }
+
+  /* 语义色工具类 */
+  .text-success  { color: hsl(var(--success)); }
+  .text-warning  { color: hsl(var(--warning)); }
+  .text-info     { color: hsl(var(--info)); }
+  .bg-success    { background-color: hsl(var(--success)); }
+  .bg-warning    { background-color: hsl(var(--warning)); }
+  .bg-info       { background-color: hsl(var(--info)); }
+  .bg-success\/10 { background-color: hsl(var(--success) / 0.1); }
+  .bg-warning\/10 { background-color: hsl(var(--warning) / 0.1); }
+  .bg-info\/10    { background-color: hsl(var(--info) / 0.1); }
+
+  /* 卡片基础样式 */
+  .card-base { @apply rounded-2xl border border-border bg-card shadow-sm; }
+}
+
+/* ── AppToast 进出场动画 ─────────────────────────────────────────────────── */
+
+@keyframes fc-toast-in {
+  from {
+    transform: translateX(calc(100% + 1rem));
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fc-toast-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(calc(100% + 1rem));
+    opacity: 0;
+  }
+}
+
+.fc-toast[data-state="open"] {
+  animation: fc-toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fc-toast[data-state="closed"] {
+  animation: fc-toast-out 180ms ease-in forwards;
+}
+
+/* ── PDA 工业终端全局适配 ────────────────────────────────────────────────── */
+
+/* 禁止长按弹出系统菜单（复制/粘贴等），避免误触 */
+.pda-root, .pda-root * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 允许输入框内选中文字 */
+.pda-root input, .pda-root textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 消除 iOS/Android WebView 点击高亮 */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 滚动容器优化：惯性滚动 + 防止橡皮筋效果导致布局抖动 */
+.pda-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* 大按钮基础样式：最小点击区域 48×48dp，适合工业手套操作 */
+.pda-btn {
+  min-height: 48px;
+  min-width: 48px;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+/* 输入框聚焦时无蓝色轮廓（PDA 扫码场景视觉更干净）*/
+.pda-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.4);
+}
+
+/* 防止页面在键盘弹出时整体缩放跳动 */
+html {
+  touch-action: manipulation;
+}
+

@@ -1,0 +1,58 @@
+version: '3.9'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: flowcube-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-flowcube123}
+      MYSQL_DATABASE: ${DB_NAME:-flowcube}
+      MYSQL_USER: ${DB_USER:-flowcube}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-flowcube123}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/src/database:/docker-entrypoint-initdb.d
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: flowcube-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-flowcube}
+      DB_PASSWORD: ${DB_PASSWORD:-flowcube123}
+      DB_NAME: ${DB_NAME:-flowcube}
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: flowcube-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  mysql_data:

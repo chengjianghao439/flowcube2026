@@ -1,0 +1,11 @@
+const { Router } = require('express')
+const svc = require('./dashboard.service')
+const { successResponse } = require('../../utils/response')
+const { authMiddleware } = require('../../middleware/auth')
+const router = Router()
+router.use(authMiddleware)
+router.get('/summary',    async(req,res,next)=>{ try{return successResponse(res,await svc.getSummary(),'查询成功')}catch(e){next(e)} })
+router.get('/low-stock',  async(req,res,next)=>{ try{return successResponse(res,await svc.getLowStock(+req.query.threshold||10),'查询成功')}catch(e){next(e)} })
+router.get('/trend',      async(req,res,next)=>{ try{return successResponse(res,await svc.getRecentTrend(+req.query.days||7),'查询成功')}catch(e){next(e)} })
+router.get('/top-stock',  async(req,res,next)=>{ try{return successResponse(res,await svc.getTopStockByValue(10),'查询成功')}catch(e){next(e)} })
+module.exports = router

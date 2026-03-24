@@ -1,0 +1,2 @@
+# 忽略所有备份文件（.sql.gz），但保留目录结构（.gitkeep）
+daily/*.sql.gz
