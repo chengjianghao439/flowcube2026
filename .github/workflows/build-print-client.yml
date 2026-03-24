@@ -2,10 +2,8 @@ name: Build Print Client
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'print-client.cjs'
-      - 'config.json'
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
