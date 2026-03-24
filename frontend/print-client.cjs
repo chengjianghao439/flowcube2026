@@ -26,14 +26,21 @@ const path     = require('path')
 
 // ── 日志系统（控制台 + 文件）──────────────────────────────────────────────────
 const IS_DEV = process.env.NODE_ENV !== 'production'
-const LOG_DIR = path.join(__dirname, 'logs')
-const LOG_FILE = path.join(LOG_DIR, 'print-client.log')
+const baseDir = process.cwd()
+const logsDir = path.join(baseDir, 'logs')
 
-fs.mkdirSync(LOG_DIR, { recursive: true })
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true })
+}
+
+const logFile = path.join(logsDir, 'print-client.log')
+
+console.log('[启动目录]', process.cwd())
+console.log('[日志目录]', logsDir)
 
 function writeLog(level, message) {
   const line = `[${new Date().toISOString()}] [${level}] ${message}`
-  fs.appendFileSync(LOG_FILE, `${line}\n`, 'utf8')
+  fs.appendFileSync(logFile, `${line}\n`, 'utf8')
   if (IS_DEV) {
     if (level === 'ERROR') process.stderr.write(`${line}\n`)
     else if (level === 'WARN') process.stderr.write(`${line}\n`)
@@ -57,7 +64,7 @@ function getArg(name) {
   return idx !== -1 ? args[idx + 1] : null
 }
 
-const CONFIG_PATH = path.join(__dirname, 'config.json')
+const CONFIG_PATH = path.join(process.cwd(), 'config.json')
 const DEFAULT_CONFIG = {
   server: 'http://localhost:3000',
   printerCode: 'LABEL_01',
@@ -90,6 +97,16 @@ const ZPL_HOST = getArg('--zpl-host') || null
 const ZPL_PORT = parseInt(getArg('--zpl-port') || '9100', 10)
 const LOCAL_PRINTER = getArg('--local-printer') || null
 const CLIENT_ID = `${os.hostname()}-${PRINTER_CODE}`
+
+function getLanIp() {
+  const nets = os.networkInterfaces()
+  for (const key of Object.keys(nets)) {
+    for (const n of nets[key] || []) {
+      if (n.family === 'IPv4' && !n.internal) return n.address
+    }
+  }
+  return null
+}
 
 function getWindowsRunCommandValue() {
   const exePath = process.execPath
@@ -131,6 +148,18 @@ if (createdConfig) {
 logger.info('[FlowCube Print Client]')
 logger.info(`Server: ${SERVER_URL}`)
 logger.info(`Printer: ${PRINTER_CODE}`)
+logger.info(`[服务器地址] ${SERVER_URL}`)
+
+if (SERVER_URL.includes('localhost') || SERVER_URL.includes('127.0.0.1')) {
+  logger.error('❌ 当前 server 配置为 localhost，这在局域网环境下是错误的')
+  logger.error('👉 请修改 config.json，例如：')
+  logger.error('   http://192.168.x.x:3000')
+}
+
+const lanIp = getLanIp()
+if (lanIp) {
+  logger.info(`💡 当前设备 IP 建议使用：${lanIp}`)
+}
 
 // ── SSE 连接 ──────────────────────────────────────────────────────────────────
 const SSE_URL = `${SERVER_URL}/api/print-jobs/listen/${PRINTER_CODE}`
@@ -171,6 +200,10 @@ function connect() {
 
   req.on('error', (e) => {
     logger.error(`[网络错误] ${e.message}，5 秒后重连...`)
+    logger.error('❌ 无法连接服务器，请检查：')
+    logger.error('1. server 地址是否正确（不能用 localhost）')
+    logger.error('2. 是否与服务器在同一局域网')
+    logger.error('3. 后端是否已启动')
     setTimeout(connect, 5000)
   })
 
@@ -283,6 +316,10 @@ async function heartbeat() {
     logger.info('[Heartbeat] success')
   } catch (e) {
     logger.warn(`[Heartbeat] failed: ${e.message || e}`)
+    logger.error('❌ 无法连接服务器，请检查：')
+    logger.error('1. server 地址是否正确（不能用 localhost）')
+    logger.error('2. 是否与服务器在同一局域网')
+    logger.error('3. 后端是否已启动')
     // 网络失败后快速重试一次，不影响主流程
     setTimeout(() => { heartbeat().catch(() => {}) }, 3_000)
   } finally {
@@ -365,6 +402,10 @@ async function registerClient(localPrinters) {
     }
   } catch (e) {
     logger.warn(`[注册跳过] 无法连接服务器：${e.message}`)
+    logger.error('❌ 无法连接服务器，请检查：')
+    logger.error('1. server 地址是否正确（不能用 localhost）')
+    logger.error('2. 是否与服务器在同一局域网')
+    logger.error('3. 后端是否已启动')
   }
 }
 
