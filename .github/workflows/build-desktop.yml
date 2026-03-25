@@ -1,3 +1,4 @@
+# 唯一 Electron 桌面安装包构建定义。若 GitHub 上仍出现旧 workflow（含 cache: npm），请在默认分支删除 ci.yml / build.yml 等重复文件并合并此版本。
 name: Build Desktop Installer
 
 on:
@@ -8,22 +9,63 @@ on:
         required: false
         type: string
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
 jobs:
   build:
     runs-on: windows-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: DEBUG — step start marker (after checkout)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== START step: post-checkout DEBUG ==="
+          echo "GITHUB_WORKSPACE=${GITHUB_WORKSPACE:-}"
+          echo "GITHUB_REF=${GITHUB_REF:-}"
+          echo "GITHUB_REF_NAME=${GITHUB_REF_NAME:-}"
+          echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME:-}"
+          pwd
+          ls -la
+          echo "=== END step: post-checkout DEBUG ==="
+
+      - name: Print workflow info
+        run: |
+          Write-Host "=== START step: Print workflow info ==="
+          Write-Host "========================================"
+          Write-Host "  FlowCube — DESKTOP BUILD (Electron)"
+          Write-Host "  (NOT print-client / NOT other workflows)"
+          Write-Host "========================================"
+          Write-Host "Running Desktop Build Workflow"
+          Write-Host "Ref: ${{ github.ref }}"
+          Write-Host "Ref name: ${{ github.ref_name }}"
+          Write-Host "Event: ${{ github.event_name }}"
+          Write-Host "SHA: ${{ github.sha }}"
+          Write-Host "========================================"
+          Write-Host "=== END step: Print workflow info ==="
+          Get-Location
+          Get-ChildItem | Select-Object Name, Mode
+
+      - name: DEBUG — after Print workflow info
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== DEBUG checkpoint: after Print workflow info ==="
+          pwd
+          ls -la
+
       - name: Get version from tag
         id: version
         run: |
+          Write-Host "=== START step: Get version from tag ==="
           $tag = $env:GITHUB_REF_NAME
           if ([string]::IsNullOrEmpty($tag) -or $tag -eq 'refs/heads/main') {
             $tag = "v${{ github.event.inputs.version }}"
@@ -39,15 +81,23 @@ jobs:
           }
           echo "version=$version" >> $env:GITHUB_OUTPUT
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "=== END step: Get version (version=$version tag=$tag) ==="
+          Get-Location
+          Get-ChildItem | Select-Object Name, Mode
 
       - name: Show directories
         run: |
+          Write-Host "=== START step: Show directories ==="
           Write-Host "Current directory: $(Get-Location)"
           Write-Host "Directories:"
           Get-ChildItem -Directory | Select-Object Name
+          Write-Host "=== END step: Show directories ==="
+          Get-Location
+          Get-ChildItem | Select-Object Name, Mode
 
       - name: Check frontend exists
         run: |
+          Write-Host "=== START step: Check frontend exists ==="
           if (Test-Path "frontend") {
             Write-Host "frontend/ exists"
             Get-ChildItem "frontend" | Select-Object Name
@@ -55,9 +105,13 @@ jobs:
             Write-Host "ERROR: frontend/ not found"
             exit 1
           }
+          Write-Host "=== END step: Check frontend exists ==="
+          Get-Location
+          Get-ChildItem | Select-Object Name, Mode
 
       - name: Check desktop exists
         run: |
+          Write-Host "=== START step: Check desktop exists ==="
           if (Test-Path "desktop") {
             Write-Host "desktop/ exists"
             Get-ChildItem "desktop" | Select-Object Name
@@ -65,54 +119,175 @@ jobs:
             Write-Host "ERROR: desktop/ not found"
             exit 1
           }
+          Write-Host "=== END step: Check desktop exists ==="
+          Get-Location
+          Get-ChildItem | Select-Object Name, Mode
 
+      - name: DEBUG — before Setup Node.js
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== DEBUG checkpoint: immediately BEFORE actions/setup-node ==="
+          pwd
+          ls -la
+          test -d frontend && ls -la frontend | head -20
+          test -d desktop && ls -la desktop | head -20
+
+      # 勿使用 cache: npm：setup-node 默认在仓库根目录找 package-lock.json，本仓库锁文件在 frontend/、desktop/
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
+      - name: DEBUG — after Setup Node.js
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== DEBUG checkpoint: immediately AFTER actions/setup-node ==="
+          node -v
+          npm -v
+          pwd
+          ls -la
+
       - name: Install frontend dependencies
         working-directory: ./frontend
-        run: npm install
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== STEP: Install frontend — START ==="
+          pwd
+          ls -la
+          test -f package-lock.json || { echo "ERROR: frontend/package-lock.json 缺失，请提交 lock 文件"; exit 1; }
+          node -e "const p=require('./package.json'); console.log('@vitejs/plugin-legacy in package.json =', p.devDependencies?.['@vitejs/plugin-legacy'])"
+          npm ci
+          echo "=== STEP: Install frontend — END (success) ==="
+          pwd
+          ls -la
+
+      - name: DEBUG — after Install frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== DEBUG checkpoint: after npm install (frontend) ==="
+          pwd
+          ls -la
+          ls -la frontend | head -30
 
       - name: Build frontend for Electron
         working-directory: ./frontend
-        run: npm run build:electron
+        shell: bash
         env:
           VITE_ELECTRON: 1
-
-      - name: Verify frontend dist
         run: |
-          if (Test-Path "frontend/dist") {
-            Write-Host "SUCCESS: frontend/dist exists"
-            Get-ChildItem "frontend/dist" | Select-Object Name
+          set -euo pipefail
+          echo "=== STEP: Build frontend — START (npm run build:electron) ==="
+          pwd
+          ls -la
+          npm run build:electron
+          echo "=== STEP: Build frontend — END (success) ==="
+          pwd
+          ls -la
+          ls -la dist | head -20
+
+      - name: DEBUG — after Build frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== DEBUG checkpoint: after build:electron ==="
+          pwd
+          ls -la frontend/dist | head -30
+
+      - name: Log frontend dist after build
+        run: |
+          Write-Host "=== START step: Log frontend dist ==="
+          Write-Host "=== dir frontend\dist (desktop renderer build) ==="
+          if (Test-Path "frontend\dist") {
+            dir frontend\dist
+            Get-ChildItem -Path frontend\dist -Recurse -File | Measure-Object | ForEach-Object { Write-Host "Total files: $($_.Count)" }
           } else {
-            Write-Host "ERROR: frontend/dist not found"
+            Write-Host "ERROR: frontend\dist missing"
             exit 1
           }
+          Write-Host "=== END step: Log frontend dist ==="
+          Get-Location
+          Get-ChildItem | Select-Object Name, Mode
 
       - name: Install desktop dependencies
         working-directory: ./desktop
-        run: npm install
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== STEP: Install desktop — START ==="
+          pwd
+          ls -la
+          test -f package-lock.json || { echo "ERROR: desktop/package-lock.json 缺失"; exit 1; }
+          npm ci
+          echo "=== STEP: Install desktop — END (success) ==="
+          pwd
+          ls -la
+
+      - name: DEBUG — after Install desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== DEBUG checkpoint: after npm install (desktop) ==="
+          pwd
+          ls -la desktop | head -30
 
       - name: Build desktop installer
         working-directory: ./desktop
-        run: npm run dist:win
-
-      - name: List release directory
-        working-directory: ./desktop
+        shell: bash
+        env:
+          VITE_ELECTRON: 1
         run: |
-          if (Test-Path "release") {
-            Write-Host "release/ contents:"
-            Get-ChildItem "release" | Select-Object Name, Length
-          } else {
-            Write-Host "ERROR: release/ not found"
+          set -euo pipefail
+          echo "=== STEP: Build desktop — START (npm run dist:win) ==="
+          pwd
+          ls -la
+          npm run dist:win
+          echo "=== STEP: Build desktop — END (success) ==="
+          pwd
+          ls -la
+          ls -la release | head -30
+
+      - name: Verify exe exists
+        run: |
+          Write-Host "=== Verify exe exists (desktop/release/*.exe) ==="
+          $exes = @(Get-ChildItem -Path "desktop/release" -Filter "*.exe" -ErrorAction SilentlyContinue)
+          if ($exes.Count -eq 0) {
+            Write-Host "❌ 未在 desktop/release 下发现任何 .exe"
             exit 1
           }
+          Write-Host "✅ exe 已生成 ($($exes.Count) 个)"
+          $exes | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length) bytes)" }
+
+      - name: DEBUG — after Build desktop (dist:win)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== DEBUG checkpoint: after dist:win ==="
+          pwd
+          ls -la desktop/release
+
+      - name: Log desktop release after build
+        run: |
+          Write-Host "=== START step: Log desktop release ==="
+          Write-Host "=== dir desktop\release (NSIS / electron-builder output) ==="
+          if (Test-Path "desktop\release") {
+            dir desktop\release
+            Get-ChildItem -Path desktop\release -Filter "*.exe" | ForEach-Object { Write-Host "EXE: $($_.Name) ($($_.Length) bytes)" }
+          } else {
+            Write-Host "ERROR: desktop\release missing"
+            exit 1
+          }
+          Write-Host "=== END step: Log desktop release ==="
+          Get-Location
+          Get-ChildItem | Select-Object Name, Mode
 
       - name: Rename output files (remove spaces)
         working-directory: ./desktop
         run: |
+          Write-Host "=== START step: Rename output files ==="
           Get-ChildItem -Path release -Filter "*.exe" | ForEach-Object {
             $newName = $_.Name -replace ' ', '-'
             if ($_.Name -ne $newName) {
@@ -127,8 +302,62 @@ jobs:
               Write-Host "Renamed: $($_.Name) -> $newName"
             }
           }
+          Write-Host "=== END step: Rename output files ==="
+          Get-Location
+          Get-ChildItem release | Select-Object Name, Length
 
+      # ── 推 tag 时：用 SSH 私钥将 Setup 安装包上传到服务器 backend/downloads（供 /downloads 静态访问）──
+      - name: Setup SSH agent
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add SSH known_hosts
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          PORT="${SERVER_SSH_PORT:-22}"
+          ssh-keyscan -H -p "$PORT" "$SERVER_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload EXE to server (SCP)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          REMOTE_DIR: ${{ secrets.SERVER_DOWNLOADS_PATH }}
+          SERVER_SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${SERVER_SSH_PORT:-22}"
+          if [ -z "${SERVER_HOST:-}" ] || [ -z "${SERVER_USER:-}" ] || [ -z "${REMOTE_DIR:-}" ]; then
+            echo "ERROR: 请配置 Secrets: SERVER_HOST, SERVER_USER, SERVER_DOWNLOADS_PATH"
+            exit 1
+          fi
+          shopt -s nullglob
+          files=(desktop/release/*.exe)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "ERROR: desktop/release 下未找到 .exe"
+            exit 1
+          fi
+          echo "=== SCP → ${SERVER_USER}@${SERVER_HOST}:${REMOTE_DIR}/ (port ${PORT}) ==="
+          for f in "${files[@]}"; do
+            echo "Uploading: $f"
+            scp -P "$PORT" -o StrictHostKeyChecking=yes -o BatchMode=yes "$f" "${SERVER_USER}@${SERVER_HOST}:${REMOTE_DIR}/"
+          done
+          echo "=== 上传完成；HTTP 示例: https://<API域名>/downloads/<文件名>（与 backend app.use('/downloads') 一致）==="
+
+      # 标签或手动触发时发 GitHub Release；push main 不上传 Release
       - name: Upload EXE to Release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -136,22 +365,31 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          files: |
-            desktop/release/*.exe
-            desktop/release/*.zip
+          files: desktop/release/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifacts (fallback)
+      - name: DEBUG — before upload-artifact (exe)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== DEBUG checkpoint: before Upload Windows Setup EXE artifact ==="
+          pwd
+          ls -la desktop/release
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: FlowCube-Desktop-Setup
           path: desktop/release/*.exe
+          if-no-files-found: error
           retention-days: 30
 
-      - name: Upload ZIP artifact (fallback)
+      # 当前 win 目标多为 NSIS 仅 .exe；无 zip 时用 warn 记录日志且 job 仍成功（与「忽略 || true」不同，仍会输出警告）
+      - name: Upload portable ZIP artifact (optional)
         uses: actions/upload-artifact@v4
         with:
           name: FlowCube-Desktop-Portable
           path: desktop/release/*.zip
+          if-no-files-found: warn
           retention-days: 30

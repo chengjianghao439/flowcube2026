@@ -1,5 +1,6 @@
 const express = require('express')
 const path = require('path')
+const fs = require('fs')
 const cors = require('cors')
 const helmet = require('helmet')
 const errorHandler    = require('./middleware/errorHandler')
@@ -40,10 +41,6 @@ app.get('/health', (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() })
 })
-
-// 桌面端安装包等静态资源（与 app-update 清单中的 filename 对应）
-const downloadsDir = path.join(__dirname, '../downloads')
-app.use('/downloads', express.static(downloadsDir))
 
 // ─── 业务路由（按模块在此注册）────────────────────────────────────────────────
 
@@ -89,6 +86,39 @@ app.use('/api/sorting-bins',   require('./modules/sorting-bins/sorting-bins.rout
 app.use('/api/pda',            require('./modules/pda/pda.routes'))
 app.use('/api/printer-bindings', require('./modules/printer-bindings/printer-bindings.routes'))
 app.use('/api/app-update',     require('./modules/app-update/app-update.routes'))
+
+// ─── /downloads 静态资源（必须在所有 /api 之后、404 之前）────────────────────────
+// express.static 对「目录 URL」无 index 时会 next()，若无下列路由会落到全局 404 →「接口不存在」
+const downloadsPath = path.join(__dirname, '../downloads')
+console.log('[Downloads] 📦 静态目录绝对路径:', downloadsPath)
+if (!fs.existsSync(downloadsPath)) {
+  fs.mkdirSync(downloadsPath, { recursive: true })
+  console.log('[Downloads] ❌→✅ 目录不存在，已自动创建')
+} else {
+  console.log('[Downloads] ✅ downloads 目录存在')
+}
+try {
+  const list = fs.readdirSync(downloadsPath)
+  console.log('[Downloads] 📁 文件列表:', list.length ? list.join(', ') : '(空目录)')
+} catch (e) {
+  console.warn('[Downloads] 无法读取目录:', e.message)
+}
+
+app.get(/^\/downloads\/?$/, (req, res) => {
+  try {
+    const files = fs.readdirSync(downloadsPath).filter((n) => !n.startsWith('.'))
+    res.set('Cache-Control', 'no-store')
+    res.json({
+      success: true,
+      message: 'ok',
+      data: { path: downloadsPath, files },
+    })
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message, data: null })
+  }
+})
+
+app.use('/downloads', express.static(downloadsPath))
 
 // ─── 404 处理 ─────────────────────────────────────────────────────────────────
 
