@@ -7,10 +7,10 @@
  *  - recovering：刚恢复，正在同步中
  */
 import { useState, useEffect, useCallback } from 'react'
+import { getApiHealthUrl } from '@/lib/apiOrigin'
 
 export type NetworkStatus = 'online' | 'offline' | 'recovering'
 
-const HEARTBEAT_URL    = '/api/health'
 const HEARTBEAT_INTERVAL = 10_000  // 10 秒探一次
 const HEARTBEAT_TIMEOUT  = 5_000
 
@@ -27,7 +27,7 @@ async function probe(): Promise<boolean> {
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), HEARTBEAT_TIMEOUT)
-    const res = await fetch(HEARTBEAT_URL, { signal: ctrl.signal, cache: 'no-store' })
+    const res = await fetch(getApiHealthUrl(), { signal: ctrl.signal, cache: 'no-store' })
     clearTimeout(timer)
     return res.ok
   } catch {

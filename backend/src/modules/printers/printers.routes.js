@@ -1,11 +1,32 @@
 const { Router } = require('express')
 const ctrl = require('./printers.controller')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, permissionMiddleware } = require('../../middleware/auth')
+const { loadRolePermissions } = require('../../middleware/loadRolePermissions')
+const {
+  validateRegisterIncludesPrinterHeader,
+  validateHeartbeatPrinter,
+} = require('../print-jobs/print-jobs.middleware')
+
 const router = Router()
 
-// 无需登录：打印客户端自动注册 + 心跳
-router.post('/register-client', ctrl.registerClient)
-router.post('/heartbeat',       ctrl.heartbeat)
+const printClientPerm = permissionMiddleware('print:client', { superAdminRoleIds: [1] })
+
+router.post(
+  '/register-client',
+  authMiddleware,
+  loadRolePermissions,
+  printClientPerm,
+  validateRegisterIncludesPrinterHeader,
+  ctrl.registerClient,
+)
+router.post(
+  '/heartbeat',
+  authMiddleware,
+  loadRolePermissions,
+  printClientPerm,
+  validateHeartbeatPrinter,
+  ctrl.heartbeat,
+)
 
 router.use(authMiddleware)
 router.get('/online-clients', ctrl.listOnlineClients)

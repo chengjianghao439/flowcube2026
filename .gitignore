@@ -8,7 +8,11 @@ dist/
 *.exe
 frontend/node_modules/
 frontend/dist/
+desktop/node_modules/
+desktop/release/
 frontend/.vite/
+# PDA 套壳加载的前端地址（本机 IP，勿提交）
+frontend/.pda-server-url
 logs/
 
 # 测试种子脚本（含数据库凭据，仅在本地使用）

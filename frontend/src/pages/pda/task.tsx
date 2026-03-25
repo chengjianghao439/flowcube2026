@@ -8,7 +8,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getTaskByIdApi, getPickSuggestionsApi,
-  updatePickedQtyApi, readyToShipApi, cancelTaskApi,
+  readyToShipApi, cancelTaskApi,
 } from '@/api/warehouse-tasks'
 import type { PickSuggestionItem, PickSuggestionContainer } from '@/api/warehouse-tasks'
 import { Button } from '@/components/ui/button'
@@ -94,7 +94,7 @@ export default function PdaTaskPage() {
   const { id }    = useParams<{ id: string }>()
   const taskId    = Number(id) || 0
   const qc        = useQueryClient()
-  const { submitScan, logError, logUndo } = useOfflineScan()
+  const { submitScan, logError } = useOfflineScan()
 
   const inputRef  = useRef<HTMLInputElement>(null)
   const [inputVal, setInputVal]   = useState('')
@@ -117,14 +117,6 @@ export default function PdaTaskPage() {
   })
 
   // ── Mutations ─────────────────────────────────────────────────────────
-  const updatePicked = useMutation({
-    mutationFn: ({ itemId, qty }: { itemId: number; qty: number }) =>
-      updatePickedQtyApi(taskId, itemId, qty),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
-      refetchSug()
-    },
-  })
   const readyMut  = useMutation({ mutationFn: () => readyToShipApi(taskId),  onSuccess: () => setFinished('completed') })
 
   // ── Focus ─────────────────────────────────────────────────────────────
@@ -138,21 +130,6 @@ export default function PdaTaskPage() {
 
   // ── 防重复扫码：同一条码 1 秒内不重复处理 ─────────────────────────────────
   const lastScanRef = useRef<{ barcode: string; time: number } | null>(null)
-
-  // ── 撤销栈：记录最近 5 次拣货操作 ───────────────────────────────────────
-  const undoStackRef = useRef<{ itemId: number; prevQty: number; barcode: string; productName: string }[]>([])
-  const [canUndo, setCanUndo] = useState(false)
-
-  async function undoLast() {
-    const last = undoStackRef.current.pop()
-    if (!last) return
-    setCanUndo(undoStackRef.current.length > 0)
-    try {
-      await updatePicked.mutateAsync({ itemId: last.itemId, qty: last.prevQty })
-      logUndo({ taskId, itemId: last.itemId, barcode: last.barcode, prevQty: last.prevQty + 1, newQty: last.prevQty, productName: last.productName })
-      ok(`↩ 已撤销：${last.productName}`)
-    } catch { err('撤销失败，请重试') }
-  }
 
   // ── Scan handler ─────────────────────────────────────────────────────
   async function handleScan(barcode: string, hint?: { containerId: number; locationCode: string|null; remainingQty: number }) {
@@ -187,18 +164,12 @@ export default function PdaTaskPage() {
         if (item.pickedQty >= item.requiredQty) { err('该商品已全部拣完'); return }
         const addQty = Math.min(c.remainingQty || 1, item.requiredQty - item.pickedQty)
         await submitScan({ taskId, itemId: item.id, containerId: c.containerId, barcode: b, productId: c.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: c.locationCode ?? undefined })
-        // 记录撤销栈
-        undoStackRef.current = [...undoStackRef.current.slice(-4), { itemId: item.id, prevQty: item.pickedQty, barcode: b, productName: item.productName }]
-        setCanUndo(true)
-        await updatePicked.mutateAsync({ itemId: item.id, qty: item.pickedQty + addQty })
+        await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       } else {
         if (match.remaining <= 0) { err('该商品已全部拣完'); return }
         const addQty = Math.min(container.remainingQty || 1, match.remaining)
         await submitScan({ taskId, itemId: match.id, containerId: container.containerId, barcode: b, productId: match.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: container.locationCode ?? undefined })
-        // 记录撤销栈
-        undoStackRef.current = [...undoStackRef.current.slice(-4), { itemId: match.id, prevQty: match.pickedQty, barcode: b, productName: match.productName }]
-        setCanUndo(true)
-        await updatePicked.mutateAsync({ itemId: match.id, qty: match.pickedQty + addQty })
+        await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       }
       ok('✓ 扫描成功')
       // 用 refetch 返回的最新数据判断是否全部完成
@@ -223,7 +194,7 @@ export default function PdaTaskPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
       <div className="text-6xl mb-6">✅</div>
       <h2 className="text-2xl font-semibold text-foreground mb-2">拣货完成！</h2>
-      <p className="text-muted-foreground mb-8">任务已更新为「待出库」</p>
+      <p className="text-muted-foreground mb-8">任务已进入「待分拣」</p>
       <Button size="lg" onClick={() => navigate('/pda/picking')}>返回任务列表</Button>
     </div>
   )
@@ -274,9 +245,6 @@ export default function PdaTaskPage() {
           className="flex-1 h-12 text-base"
           autoComplete="off" autoCorrect="off" spellCheck={false}
         />
-        {canUndo && (
-          <Button variant="outline" size="lg" onClick={undoLast} disabled={scanning}>↩</Button>
-        )}
         <Button size="lg" onClick={() => handleScan(inputVal)} disabled={!inputVal||scanning||!!finished}>确认</Button>
       </PdaBottomBar>
 

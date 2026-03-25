@@ -1,20 +1,47 @@
 import { CapacitorConfig } from '@capacitor/cli'
+import { existsSync, readFileSync } from 'fs'
+import { join } from 'path'
 
-// ── WebView 壳模式配置 ──────────────────────────────────────────────────────
-// App 启动后直接加载服务器页面，绕过 Android 5 本地 WebView 兼容性问题
-// 修改 SERVER_URL 为实际服务器 IP（开发：Vite dev server；生产：nginx 地址）
-const SERVER_URL = process.env.PDA_SERVER_URL || 'http://192.168.8.109:5173'
+/**
+ * PDA_LIVE_SERVER=1：WebView 加载局域网 Vite（热更新开发）
+ * 默认（独立 APK）：不配置 server，使用 webDir(dist) 内置资源 + localStorage 配置 API 根地址
+ */
+function resolvePdaServerUrl(): string {
+  const fromEnv = process.env.PDA_SERVER_URL?.trim()
+  if (fromEnv) return fromEnv.replace(/\/$/, '')
+
+  const candidates = [
+    join(process.cwd(), '.pda-server-url'),
+    join(process.cwd(), 'frontend', '.pda-server-url'),
+  ]
+  for (const file of candidates) {
+    if (!existsSync(file)) continue
+    const line = readFileSync(file, 'utf8')
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .find((l) => l.length > 0 && !l.startsWith('#'))
+    if (line) return line.replace(/\/$/, '')
+  }
+
+  return 'http://10.0.2.2:5173'
+}
+
+const useLiveServer = process.env.PDA_LIVE_SERVER === '1'
+const SERVER_URL = resolvePdaServerUrl()
 
 const config: CapacitorConfig = {
   appId: 'com.flowcube.pda',
   appName: 'FlowCube PDA',
   webDir: 'dist',
 
-  // 加载服务器上的 /pda 页面（Live 模式）
-  server: {
-    url: `${SERVER_URL}/pda`,
-    cleartext: true,  // 允许明文 HTTP（局域网内网）
-  },
+  ...(useLiveServer
+    ? {
+        server: {
+          url: `${SERVER_URL}/pda`,
+          cleartext: true,
+        },
+      }
+    : {}),
 
   android: {
     allowMixedContent: true,

@@ -1,6 +1,7 @@
 const { Router } = require('express')
 const path = require('path')
 const fs   = require('fs')
+const { safeJsonParse } = require('../../utils/safeJsonParse')
 const router = Router()
 
 // APK 存放目录（放在 backend/apk/ 下，与 index.js 同级）
@@ -29,7 +30,9 @@ router.get('/version', (req, res) => {
     return res.json({ success: true, data: null })  // 尚未部署 APK
   }
   try {
-    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
+    const meta = safeJsonParse(fs.readFileSync(metaPath, 'utf8'), 'apk/version.json', {
+      logBeforeParse: process.env.FLOWCUBE_DEBUG_JSON === '1',
+    })
     const apkPath = path.join(APK_DIR, meta.filename || 'app-release.apk')
     const size = fs.existsSync(apkPath) ? fs.statSync(apkPath).size : 0
     res.json({
@@ -57,7 +60,14 @@ router.get('/download', (req, res) => {
   if (!fs.existsSync(metaPath)) {
     return res.status(404).json({ success: false, message: 'APK 未部署' })
   }
-  const meta    = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
+  let meta
+  try {
+    meta = safeJsonParse(fs.readFileSync(metaPath, 'utf8'), 'apk/version.json(download)', {
+      logBeforeParse: process.env.FLOWCUBE_DEBUG_JSON === '1',
+    })
+  } catch {
+    return res.status(500).json({ success: false, message: '版本信息 JSON 损坏' })
+  }
   const apkPath = path.join(APK_DIR, meta.filename || 'app-release.apk')
   if (!fs.existsSync(apkPath)) {
     return res.status(404).json({ success: false, message: 'APK 文件不存在' })

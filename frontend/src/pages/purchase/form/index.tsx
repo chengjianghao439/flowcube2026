@@ -25,8 +25,9 @@ import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import { SupplierFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import {
   useCreatePurchase, usePurchaseDetail,
-  useConfirmPurchase, useReceivePurchase, useCancelPurchase,
+  useConfirmPurchase, useCancelPurchase,
 } from '@/hooks/usePurchase'
+import { useCreateInboundTask } from '@/hooks/useInboundTasks'
 import type { PurchaseOrderItem } from '@/types/purchase'
 import type { ProductFinderResult } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
@@ -289,22 +290,33 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 // ════════════════════════════════════════════════════════════════════════════
 
 function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: () => void }) {
+  const navigate = useNavigate()
+  const addTab = useWorkspaceStore(s => s.addTab)
   const { data: order, isLoading } = usePurchaseDetail(purchaseId)
   const confirmMutate = useConfirmPurchase()
-  const receiveMutate = useReceivePurchase()
+  const createInboundMut = useCreateInboundTask()
   const cancelMutate  = useCancelPurchase()
 
   const [confirmState, setConfirmState] = useState<{
-    open: boolean; title: string; description: string; variant: 'default' | 'destructive'; onConfirm: () => void
+    open: boolean
+    title: string
+    description: string
+    variant: 'default' | 'destructive'
+    confirmText?: string
+    onConfirm: () => void
   }>({ open: false, title: '', description: '', variant: 'default', onConfirm: () => {} })
 
   function ask(
     title: string, description: string,
     variant: 'default' | 'destructive',
     onConfirm: () => void,
+    confirmText?: string,
   ) {
-    setConfirmState({ open: true, title, description, variant, onConfirm })
+    setConfirmState({ open: true, title, description, variant, onConfirm, confirmText })
   }
+
+  const confirmLoading =
+    createInboundMut.isPending && confirmState.open && confirmState.title === '创建入库任务'
 
   if (isLoading) {
     return (
@@ -324,9 +336,9 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
   }
 
   const canConfirm = order.status === 1
-  const canReceive = order.status === 2
+  const canCreateInbound = order.status === 2 && !order.openInboundTaskId
   const canCancel  = order.status === 1 || order.status === 2
-  const isPending  = confirmMutate.isPending || receiveMutate.isPending || cancelMutate.isPending
+  const isPending  = confirmMutate.isPending || cancelMutate.isPending
 
   return (
     <div className="flex flex-col gap-4">
@@ -353,13 +365,40 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
                 确认
               </Button>
             )}
-            {canReceive && (
-              <Button disabled={isPending}
-                onClick={() => ask('确认收货入库', '确认后将执行入库操作，库存数量将相应增加。', 'default', () => {
-                  setConfirmState(s => ({ ...s, open: false }))
-                  receiveMutate.mutate(order.id)
-                })}>
-                收货入库
+            {order.status === 2 && order.openInboundTaskId && order.openInboundTaskNo && (
+              <Button variant="outline" disabled={isPending}
+                onClick={() => {
+                  const path = `/inbound-tasks/${order.openInboundTaskId}`
+                  addTab({ key: path, title: order.openInboundTaskNo!, path })
+                  navigate(path)
+                }}>
+                入库任务 {order.openInboundTaskNo}
+              </Button>
+            )}
+            {canCreateInbound && (
+              <Button disabled={isPending || createInboundMut.isPending}
+                onClick={() => ask(
+                  '创建入库任务',
+                  '确认后将为该采购单生成入库任务；收货将产生待上架容器，上架后才计入库存。',
+                  'default',
+                  () => {
+                    createInboundMut.mutate(order.id, {
+                      onSuccess: (d) => {
+                        setConfirmState(s => ({ ...s, open: false }))
+                        toast.success(`入库任务 ${d.taskNo} 已创建`)
+                        const path = `/inbound-tasks/${d.taskId}`
+                        addTab({ key: path, title: d.taskNo, path })
+                        navigate(path)
+                      },
+                      onError: (e: unknown) => {
+                        const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'
+                        toast.error(msg)
+                      },
+                    })
+                  },
+                  '继续',
+                )}>
+                创建入库任务
               </Button>
             )}
             <Button variant="outline" onClick={closeTab}>关闭</Button>
@@ -442,10 +481,16 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
         title={confirmState.title}
         description={confirmState.description}
         variant={confirmState.variant}
-        confirmText={confirmState.variant === 'destructive' ? '确认取消' : '确认'}
-        loading={isPending}
+        confirmText={
+          confirmState.confirmText
+            ?? (confirmState.variant === 'destructive' ? '确认取消' : '确认')
+        }
+        loading={isPending || confirmLoading}
         onConfirm={confirmState.onConfirm}
-        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+        onCancel={() => {
+          if (confirmLoading) return
+          setConfirmState(s => ({ ...s, open: false }))
+        }}
       />
     </div>
   )

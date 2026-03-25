@@ -24,6 +24,9 @@ export interface PurchaseOrder {
   operatorId: number
   operatorName: string
   createdAt: string
+  /** 存在未完结入库任务时返回（已完成/已取消的任务不算） */
+  openInboundTaskId?: number | null
+  openInboundTaskNo?: string | null
   items?: PurchaseOrderItem[]
 }
 export interface CreatePurchaseParams {

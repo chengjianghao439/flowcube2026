@@ -17,6 +17,39 @@ const AppError = require('../utils/AppError')
 const logger   = require('../utils/logger')
 const { generateContainerCode } = require('../utils/codeGenerator')
 
+/** 与 inventory_containers.status 一致 */
+const CONTAINER_STATUS = {
+  ACTIVE:           1,
+  EMPTY:            2,
+  VOID:             3,
+  PENDING_PUTAWAY:  4,
+}
+
+/** 写入 inventory_containers.source_type 的规范取值 */
+const SOURCE_TYPE = {
+  INBOUND_TASK: 'inbound_task',
+  STOCKCHECK:   'stockcheck',
+  TRANSFER:     'transfer',
+  RETURN:       'return',
+  IMPORT:       'import',
+  MANUAL:       'manual',
+  LEGACY:       'legacy',
+}
+
+const ALLOWED_SOURCE_TYPES = new Set(Object.values(SOURCE_TYPE))
+
+/** 允许 createContainer 直接落 status=ACTIVE(1) 的来源（调拨入、销售退货）；其余须先 4 再 promote */
+const DIRECT_ACTIVE_SOURCE_TYPES = new Set([SOURCE_TYPE.TRANSFER, SOURCE_TYPE.RETURN])
+
+const PUTAWAY_DEFAULT_HOURS = 24
+
+function defaultPutawayDeadline() {
+  const d = new Date()
+  d.setTime(d.getTime() + PUTAWAY_DEFAULT_HOURS * 3600 * 1000)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
 /**
  * 数据一致性断言：remaining_qty 必须 >= 0
  * 如果违反，立即抛出错误并记录 error 日志（不允许出现负库存容器）
@@ -49,12 +82,16 @@ async function genBarcode(conn) {
  * @param {string} [params.batchNo]
  * @param {string} [params.mfgDate]          - YYYY-MM-DD
  * @param {string} [params.expDate]          - YYYY-MM-DD
- * @param {string} [params.sourceRefType]    - e.g. 'purchase_order'
- * @param {number} [params.sourceRefId]
+ * @param {string} params.sourceType         - SOURCE_TYPE.*，必填
+ * @param {number} params.sourceRefId          - 来源单据 ID，必填且 >0
+ * @param {string} [params.sourceRefType]      - 细分类（写入 source_ref_type，如 sale_return）
  * @param {string} [params.sourceRefNo]
  * @param {string} [params.remark]
  * @param {string} [params.barcode]          - 自定义条码（不传则自动生成）
  * @param {number} [params.locationId]       - 库位ID
+ * @param {number} [params.inboundTaskId]     - 入库任务ID（收货生成待上架容器）
+ * @param {number} [params.containerStatus]   - 默认 ACTIVE（仅调拨/退货允许）；其它来源须显式传 PENDING_PUTAWAY 或由引擎内部两段式入账
+ * @param {string|null} [params.putawayDeadlineAt] - status=4 时写入；默认当前 +24h（YYYY-MM-DD HH:mm:ss）
  * @returns {{ containerId: number, barcode: string }}
  */
 async function createContainer(conn, {
@@ -65,29 +102,78 @@ async function createContainer(conn, {
   batchNo       = null,
   mfgDate       = null,
   expDate       = null,
+  sourceType,
+  sourceRefId,
   sourceRefType = null,
-  sourceRefId   = null,
   sourceRefNo   = null,
   remark        = null,
   barcode       = null,
   locationId    = null,
+  inboundTaskId = null,
+  containerStatus = CONTAINER_STATUS.ACTIVE,
+  putawayDeadlineAt = null,
 }) {
   assertNonNegativeQty(initialQty, `createContainer productId=${productId} warehouseId=${warehouseId}`)
 
+  if (!sourceType || typeof sourceType !== 'string' || !ALLOWED_SOURCE_TYPES.has(sourceType)) {
+    throw new AppError(`容器 sourceType 无效或未传：${sourceType}`, 400)
+  }
+  const sid = Number(sourceRefId)
+  if (!Number.isFinite(sid) || sid <= 0) {
+    throw new AppError('容器必须提供有效的 sourceRefId（正整数单据ID）', 400)
+  }
+
+  const st = Number(containerStatus)
+  if (st === CONTAINER_STATUS.ACTIVE && !DIRECT_ACTIVE_SOURCE_TYPES.has(sourceType)) {
+    throw new AppError(
+      '禁止直接创建在库(ACTIVE)容器：仅「调拨入、销售退货」允许；盘点/导入等须先待上架再入账',
+      400,
+    )
+  }
+  if (st === CONTAINER_STATUS.ACTIVE && sourceType === SOURCE_TYPE.INBOUND_TASK) {
+    throw new AppError('禁止以在库状态创建入库任务容器，须先收货(待上架)再上架', 400)
+  }
+
+  let deadline = null
+  if (st === CONTAINER_STATUS.PENDING_PUTAWAY) {
+    deadline = putawayDeadlineAt || defaultPutawayDeadline()
+  }
+
   const bc = barcode || await genBarcode(conn)
+  const detailRefType = sourceRefType || sourceType
   const [r] = await conn.query(
     `INSERT INTO inventory_containers
        (barcode, container_type, product_id, warehouse_id, location_id,
         batch_no, mfg_date, exp_date, unit,
         initial_qty, remaining_qty, status,
-        source_ref_type, source_ref_id, source_ref_no, remark)
-     VALUES (?,1,?,?,?,?,?,?,?,?,?,1,?,?,?,?)`,
+        source_ref_type, source_ref_id, source_ref_no, inbound_task_id, remark,
+        source_type, source_audit_missing, putaway_flagged_overdue,
+        is_legacy, putaway_deadline_at, is_overdue)
+     VALUES (?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?,0)`,
     [bc, productId, warehouseId, locationId,
      batchNo, mfgDate || null, expDate || null, unit,
-     initialQty, initialQty,
-     sourceRefType, sourceRefId, sourceRefNo, remark]
+     initialQty, initialQty, containerStatus,
+     detailRefType, sid, sourceRefNo, inboundTaskId, remark,
+     sourceType,
+     deadline]
   )
   return { containerId: r.insertId, barcode: bc }
+}
+
+/**
+ * 待上架容器在同一事务内转为在库并刷新缓存（盘点盘盈、导入等非调拨/退货路径）
+ */
+async function promotePendingContainerToActive(conn, containerId, productId, warehouseId) {
+  const [r] = await conn.query(
+    `UPDATE inventory_containers
+     SET status = ?, is_overdue = 0, putaway_flagged_overdue = 0, putaway_deadline_at = NULL
+     WHERE id = ? AND status = ? AND deleted_at IS NULL`,
+    [CONTAINER_STATUS.ACTIVE, containerId, CONTAINER_STATUS.PENDING_PUTAWAY],
+  )
+  if (r.affectedRows !== 1) {
+    throw new AppError('容器无法从待上架转为在库（状态已变更或不存在）', 409)
+  }
+  return syncStockFromContainers(conn, productId, warehouseId)
 }
 
 /**
@@ -155,6 +241,76 @@ async function deductFromContainers(conn, {
       taken:          take,
       remainingAfter: newQty,
       // 批次信息（供调拨目标仓库创建容器时保留）
+      unit:    container.unit,
+      batchNo: container.batch_no,
+      mfgDate: container.mfg_date,
+      expDate: container.exp_date,
+    })
+    remaining -= take
+  }
+
+  return deducted
+}
+
+/**
+ * 仅扣减被指定仓库任务锁定的在库容器（locked_by_task_id = taskId）
+ * 用于销售任务出库，禁止全局 FIFO 绕过拣货容器。
+ *
+ * @param {number} params.taskId - warehouse_tasks.id
+ */
+async function deductFromTaskLockedContainers(conn, {
+  productId,
+  productName = '该商品',
+  warehouseId,
+  qty,
+  taskId,
+}) {
+  const absQty = Math.abs(qty)
+  const tid = Number(taskId)
+  if (!Number.isFinite(tid) || tid <= 0) {
+    throw new AppError('deductFromTaskLockedContainers 需要有效的 taskId', 500)
+  }
+
+  const [containers] = await conn.query(
+    `SELECT id, barcode, remaining_qty, unit, batch_no, mfg_date, exp_date
+     FROM inventory_containers
+     WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL
+       AND locked_by_task_id = ?
+     ORDER BY created_at ASC, id ASC
+     FOR UPDATE`,
+    [productId, warehouseId, tid],
+  )
+
+  const totalAvailable = containers.reduce((s, c) => s + Number(c.remaining_qty), 0)
+  if (totalAvailable < absQty) {
+    throw new AppError(
+      `商品「${productName}」本任务锁定容器可用量不足，当前 ${totalAvailable}，需要 ${absQty}`,
+      400,
+    )
+  }
+
+  let remaining = absQty
+  const deducted = []
+
+  for (const container of containers) {
+    if (remaining <= 0) break
+    const containerQty = Number(container.remaining_qty)
+    const take = Math.min(containerQty, remaining)
+    const newQty = containerQty - take
+    const newStatus = newQty === 0 ? 2 : 1
+
+    assertNonNegativeQty(newQty, `containerId=${container.id} barcode=${container.barcode}`)
+
+    await conn.query(
+      'UPDATE inventory_containers SET remaining_qty=?, status=? WHERE id=?',
+      [newQty, newStatus, container.id],
+    )
+
+    deducted.push({
+      containerId:    container.id,
+      barcode:        container.barcode,
+      taken:          take,
+      remainingAfter: newQty,
       unit:    container.unit,
       batchNo: container.batch_no,
       mfgDate: container.mfg_date,
@@ -265,8 +421,9 @@ async function transferContainers(conn, {
   })
 
   // 5. 在目标仓库按批次创建对应容器
+  let firstNewContainerId = null
   for (const d of deducted) {
-    await createContainer(conn, {
+    const { containerId } = await createContainer(conn, {
       productId,
       warehouseId:   toWarehouseId,
       initialQty:    d.taken,
@@ -274,18 +431,20 @@ async function transferContainers(conn, {
       batchNo:       d.batchNo,
       mfgDate:       d.mfgDate ? (d.mfgDate instanceof Date ? d.mfgDate.toISOString().slice(0,10) : d.mfgDate) : null,
       expDate:       d.expDate ? (d.expDate instanceof Date ? d.expDate.toISOString().slice(0,10) : d.expDate) : null,
-      sourceRefType,
+      sourceType:    SOURCE_TYPE.TRANSFER,
       sourceRefId,
+      sourceRefType,
       sourceRefNo,
       remark,
     })
+    if (!firstNewContainerId) firstNewContainerId = containerId
   }
 
   // 6. 同步两个仓库的 inventory_stock 缓存
   const fromAfter = await syncStockFromContainers(conn, productId, fromWarehouseId)
   const toAfter   = await syncStockFromContainers(conn, productId, toWarehouseId)
 
-  return { fromBefore, fromAfter, toBefore, toAfter, deducted }
+  return { fromBefore, fromAfter, toBefore, toAfter, deducted, firstNewContainerId }
 }
 
 /**
@@ -329,33 +488,39 @@ async function adjustContainersForStockcheck(conn, {
   )
   const before = stockRow ? Number(stockRow.qty) : 0
 
+  let createdContainerId = null
+  let primaryDeductContainerId = null
+
   if (diffQty > 0) {
-    // 盘盈：创建新容器，source 标记为盘点
-    await createContainer(conn, {
+    const r = await createContainer(conn, {
       productId,
       warehouseId,
       initialQty:   diffQty,
       unit,
-      sourceRefType,
+      sourceType:   SOURCE_TYPE.STOCKCHECK,
       sourceRefId,
+      sourceRefType,
       sourceRefNo,
       remark: remark || `盘点盘盈 ${sourceRefNo ?? ''}`,
+      containerStatus: CONTAINER_STATUS.PENDING_PUTAWAY,
     })
+    await promotePendingContainerToActive(conn, r.containerId, productId, warehouseId)
+    createdContainerId = r.containerId
   } else if (diffQty < 0) {
-    // 盘亏：FIFO 扣减容器（不足则抛出）
-    await deductFromContainers(conn, {
+    const ded = await deductFromContainers(conn, {
       productId,
       productName,
       warehouseId,
       qty: Math.abs(diffQty),
     })
+    primaryDeductContainerId = ded[0]?.containerId ?? null
   }
   // diffQty === 0 时无需任何操作
 
   // 同步 inventory_stock 缓存（保证容器总和 = 缓存值）
   const after = await syncStockFromContainers(conn, productId, warehouseId)
 
-  return { before, after }
+  return { before, after, createdContainerId, primaryDeductContainerId }
 }
 
 /**
@@ -374,11 +539,12 @@ async function adjustContainersForStockcheck(conn, {
  * @param {number} params.warehouseId
  * @param {number} params.qty                - 有符号量（正=入库，负=出库）
  * @param {string} [params.unit]
+ * @param {string} params.sourceType   - SOURCE_TYPE.*
+ * @param {number} params.sourceRefId
  * @param {string} [params.sourceRefType]
- * @param {number} [params.sourceRefId]
  * @param {string} [params.sourceRefNo]
  * @param {string} [params.remark]
- * @returns {{ before: number, after: number }}
+ * @returns {{ before: number, after: number, createdContainerId: number|null, primaryDeductContainerId: number|null }}
  */
 async function adjustContainerStock(conn, {
   productId,
@@ -386,8 +552,9 @@ async function adjustContainerStock(conn, {
   warehouseId,
   qty,
   unit         = null,
+  sourceType,
+  sourceRefId,
   sourceRefType = null,
-  sourceRefId   = null,
   sourceRefNo   = null,
   remark        = null,
 }) {
@@ -397,18 +564,31 @@ async function adjustContainerStock(conn, {
   )
   const before = stockRow ? Number(stockRow.qty) : 0
 
+  let createdContainerId = null
+  let primaryDeductContainerId = null
+
   if (qty > 0) {
-    await createContainer(conn, {
+    const directActive = DIRECT_ACTIVE_SOURCE_TYPES.has(sourceType)
+    const r = await createContainer(conn, {
       productId, warehouseId, initialQty: qty, unit,
-      sourceRefType, sourceRefId, sourceRefNo,
+      sourceType,
+      sourceRefId,
+      sourceRefType: sourceRefType || sourceType,
+      sourceRefNo,
       remark: remark || `入库 ${sourceRefNo ?? ''}`,
+      containerStatus: directActive ? CONTAINER_STATUS.ACTIVE : CONTAINER_STATUS.PENDING_PUTAWAY,
     })
+    if (!directActive) {
+      await promotePendingContainerToActive(conn, r.containerId, productId, warehouseId)
+    }
+    createdContainerId = r.containerId
   } else if (qty < 0) {
-    await deductFromContainers(conn, { productId, productName, warehouseId, qty: Math.abs(qty) })
+    const ded = await deductFromContainers(conn, { productId, productName, warehouseId, qty: Math.abs(qty) })
+    primaryDeductContainerId = ded[0]?.containerId ?? null
   }
 
   const after = await syncStockFromContainers(conn, productId, warehouseId)
-  return { before, after }
+  return { before, after, createdContainerId, primaryDeductContainerId }
 }
 
 /**
@@ -424,7 +604,7 @@ async function adjustContainerStock(conn, {
 async function lockContainer(conn, containerId, taskId) {
   const [result] = await conn.query(
     `UPDATE inventory_containers
-     SET locked_by_task_id = ?, locked_at = IF(locked_by_task_id IS NULL, NOW(), locked_at)
+     SET locked_by_task_id = ?, locked_at = NOW()
      WHERE id = ? AND (locked_by_task_id IS NULL OR locked_by_task_id = ?)`,
     [taskId, containerId, taskId],
   )
@@ -454,7 +634,9 @@ async function unlockContainersByTask(conn, taskId) {
 
 module.exports = {
   createContainer,
+  promotePendingContainerToActive,
   deductFromContainers,
+  deductFromTaskLockedContainers,
   syncStockFromContainers,
   transferContainers,
   adjustContainersForStockcheck,
@@ -462,4 +644,7 @@ module.exports = {
   genBarcode,
   lockContainer,
   unlockContainersByTask,
+  CONTAINER_STATUS,
+  SOURCE_TYPE,
+  DIRECT_ACTIVE_SOURCE_TYPES,
 }

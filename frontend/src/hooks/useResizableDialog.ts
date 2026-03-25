@@ -14,6 +14,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { safeJsonParse } from '@/lib/safeJsonParse'
 
 const STORAGE_PREFIX = 'flowcube-dialog-size-'
 
@@ -33,7 +34,7 @@ function loadPersistedSize(
     const raw = localStorage.getItem(STORAGE_PREFIX + dialogId)
     if (!raw) return { width: defaultWidth, height: defaultHeight }
 
-    const parsed = JSON.parse(raw) as unknown
+    const parsed = safeJsonParse<unknown>(raw, `${STORAGE_PREFIX}${dialogId}`, true)
     if (
       typeof parsed !== 'object' ||
       parsed === null ||

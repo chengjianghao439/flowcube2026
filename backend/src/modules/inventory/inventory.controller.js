@@ -2,6 +2,37 @@ const svc = require('./inventory.service')
 const { successResponse } = require('../../utils/response')
 const { pool } = require('../../config/db')
 
+async function trace(req, res, next) {
+  try {
+    const productId = +req.params.productId
+    if (!productId) return res.status(400).json({ success: false, message: 'productId 无效', data: null })
+    const q = req.query || {}
+    const includeLegacy = q.includeLegacy === '1' || q.includeLegacy === 'true'
+    const containerId = q.containerId ? +q.containerId : null
+    const sourceType = q.sourceType ? String(q.sourceType) : null
+    const sourceRefId = q.sourceRefId != null && q.sourceRefId !== '' ? +q.sourceRefId : null
+    const result = await svc.traceByProductId(productId, {
+      containerId: containerId || null,
+      sourceType: sourceType || null,
+      sourceRefId: Number.isFinite(sourceRefId) && sourceRefId > 0 ? sourceRefId : null,
+      includeLegacy,
+    })
+    return successResponse(res, result, '查询成功')
+  } catch (e) { next(e) }
+}
+
+async function checkConsistency(req, res, next) {
+  try {
+    const q = req.query || {}
+    const result = await svc.checkStockConsistency({
+      productId: q.productId ? +q.productId : null,
+      warehouseId: q.warehouseId ? +q.warehouseId : null,
+      limit: q.limit ? +q.limit : 500,
+    })
+    return successResponse(res, result, result.ok ? '缓存与容器一致' : '发现差异')
+  } catch (e) { next(e) }
+}
+
 async function stock(req, res, next) {
   try {
     const result = await svc.getStock({
@@ -64,7 +95,8 @@ async function containers(req, res, next) {
     const productId   = req.query.productId   ? +req.query.productId   : null
     const warehouseId = req.query.warehouseId ? +req.query.warehouseId : null
     if (!productId) return res.status(400).json({ success: false, message: '缺少 productId', data: null })
-    const result = await svc.getContainers({ productId, warehouseId })
+    const includeLegacy = req.query.includeLegacy === '1' || req.query.includeLegacy === 'true'
+    const result = await svc.getContainers({ productId, warehouseId, includeLegacy })
     return successResponse(res, result, '查询成功')
   } catch(e){next(e)}
 }
@@ -99,4 +131,16 @@ async function assignContainerLocation(req, res, next) {
   } catch (e) { next(e) }
 }
 
-module.exports = { stock, logs, inbound, outbound, adjust, overview, containers, containerByBarcode, assignContainerLocation }
+module.exports = {
+  trace,
+  checkConsistency,
+  stock,
+  logs,
+  inbound,
+  outbound,
+  adjust,
+  overview,
+  containers,
+  containerByBarcode,
+  assignContainerLocation,
+}

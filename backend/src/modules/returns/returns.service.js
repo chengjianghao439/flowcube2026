@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { adjustContainerStock } = require('../../engine/containerEngine')
+const { adjustContainerStock, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 
 // ─── 采购退货 ────────────────────────────────────────────────
@@ -48,14 +48,15 @@ async function executePR(id, operator) {
     await conn.beginTransaction()
     for (const item of ret.items) {
       // 采购退货出库：从仓库扣减容器（FIFO）→ 同步缓存
-      const { before, after } = await adjustContainerStock(conn, {
+      const { before, after, primaryDeductContainerId } = await adjustContainerStock(conn, {
         productId:    item.productId,
         productName:  item.productName,
         warehouseId:  ret.warehouseId,
         qty:          -item.quantity,   // 出库方向
         unit:         item.unit,
-        sourceRefType: 'purchase_return',
+        sourceType:   SOURCE_TYPE.RETURN,
         sourceRefId:  ret.id,
+        sourceRefType: 'purchase_return',
         sourceRefNo:  ret.returnNo,
         remark:       `采购退货出库 ${ret.returnNo}`,
       })
@@ -63,11 +64,13 @@ async function executePR(id, operator) {
         `INSERT INTO inventory_logs
            (move_type, type, product_id, warehouse_id, supplier_id,
             quantity, before_qty, after_qty, unit_price,
-            ref_type, ref_id, ref_no, remark, operator_id, operator_name)
-         VALUES (?,2,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [MOVE_TYPE.PURCHASE_RET, item.productId, ret.warehouseId, ret.supplierId,
+            ref_type, ref_id, ref_no, container_id, log_source_type, log_source_ref_id,
+            remark, operator_id, operator_name)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [MOVE_TYPE.PURCHASE_RET, 2, item.productId, ret.warehouseId, ret.supplierId,
          item.quantity, before, after, item.unitPrice,
          'purchase_return', ret.id, ret.returnNo,
+         primaryDeductContainerId, SOURCE_TYPE.RETURN, ret.id,
          `采购退货出库 ${ret.returnNo}`, operator.userId, operator.realName]
       )
     }
@@ -118,14 +121,15 @@ async function executeSR(id, operator) {
     await conn.beginTransaction()
     for (const item of ret.items) {
       // 销售退货入库：客户退回商品，创建新容器→ 同步缓存
-      const { before, after } = await adjustContainerStock(conn, {
+      const { before, after, createdContainerId } = await adjustContainerStock(conn, {
         productId:    item.productId,
         productName:  item.productName,
         warehouseId:  ret.warehouseId,
         qty:          +item.quantity,   // 入库方向
         unit:         item.unit,
-        sourceRefType: 'sale_return',
+        sourceType:   SOURCE_TYPE.RETURN,
         sourceRefId:  ret.id,
+        sourceRefType: 'sale_return',
         sourceRefNo:  ret.returnNo,
         remark:       `销售退货入库 ${ret.returnNo}`,
       })
@@ -133,11 +137,13 @@ async function executeSR(id, operator) {
         `INSERT INTO inventory_logs
            (move_type, type, product_id, warehouse_id,
             quantity, before_qty, after_qty, unit_price,
-            ref_type, ref_id, ref_no, remark, operator_id, operator_name)
-         VALUES (?,1,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [MOVE_TYPE.SALE_RET, item.productId, ret.warehouseId,
+            ref_type, ref_id, ref_no, container_id, log_source_type, log_source_ref_id,
+            remark, operator_id, operator_name)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [MOVE_TYPE.SALE_RET, 1, item.productId, ret.warehouseId,
          item.quantity, before, after, item.unitPrice,
          'sale_return', ret.id, ret.returnNo,
+         createdContainerId, SOURCE_TYPE.RETURN, ret.id,
          `销售退货入库 ${ret.returnNo}`, operator.userId, operator.realName]
       )
     }

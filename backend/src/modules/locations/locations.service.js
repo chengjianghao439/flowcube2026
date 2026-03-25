@@ -73,6 +73,21 @@ async function findById(id) {
   return formatRow(rows[0])
 }
 
+/** 某仓库下全部库位（下拉/上架选位，与前端 getLocationsByWarehouseApi 一致） */
+async function findAllByWarehouseId(warehouseId) {
+  const wid = Number(warehouseId)
+  if (!Number.isFinite(wid) || wid <= 0) throw new AppError('仓库 ID 无效', 400)
+  const [rows] = await pool.query(
+    `SELECT wl.*, iw.name AS warehouse_name
+     FROM warehouse_locations wl
+     LEFT JOIN inventory_warehouses iw ON iw.id = wl.warehouse_id
+     WHERE wl.deleted_at IS NULL AND wl.warehouse_id = ?
+     ORDER BY wl.code ASC`,
+    [wid],
+  )
+  return rows.map(formatRow)
+}
+
 async function create(data) {
   const { warehouseId, zone, aisle, rack, level, position, name, remark } = data
   if (!warehouseId) throw new AppError('仓库不能为空', 400)
@@ -170,7 +185,18 @@ async function findByCode(code) {
   )
   if (!rows.length) throw new AppError(`库位编码 ${code} 不存在`, 404)
   const r = rows[0]
+  if (Number(r.status) !== 1) throw new AppError(`库位 ${code} 已停用`, 400)
   return { id: r.id, code: r.code, name: r.name, zone: r.zone, aisle: r.aisle, rack: r.rack, level: r.level, position: r.position, warehouseId: r.warehouse_id, status: r.status }
 }
 
-module.exports = { findByCode, findAll, findById, create, update, softDelete, generateCode, findOrCreateByRackLevel }
+module.exports = {
+  findByCode,
+  findAll,
+  findById,
+  findAllByWarehouseId,
+  create,
+  update,
+  softDelete,
+  generateCode,
+  findOrCreateByRackLevel,
+}

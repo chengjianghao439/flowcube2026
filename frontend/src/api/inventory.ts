@@ -22,7 +22,9 @@ export const getContainerByBarcodeApi = async (barcode: string) =>
     productName: string; warehouseId: number; warehouseName: string
     locationId: number | null; locationCode: string | null
     remainingQty: number; unit: string
-  }>>(`/inventory/containers/barcode/${barcode}`)
+    containerStatus?: 'waiting_putaway' | 'stored'
+    inboundTaskId?: number | null
+  }>>(`/inventory/containers/barcode/${encodeURIComponent(barcode)}`)
 
 export const assignContainerLocationApi = async (containerId: number, locationId: number) =>
   apiClient.put<ApiResponse<{ containerId: number; barcode: string; locationCode: string }>>(

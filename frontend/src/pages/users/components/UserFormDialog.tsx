@@ -31,6 +31,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
   const [realName, setRealName] = useState('')
   const [roleId, setRoleId] = useState(2)
   const [isActive, setIsActive] = useState(true)
+  const [tenantId, setTenantId] = useState(0)
 
   const { mutate: createUser, isPending: creating, error: createError } = useCreateUser()
   const { mutate: updateUser, isPending: updating, error: updateError } = useUpdateUser()
@@ -43,12 +44,14 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
       setRealName(editUser.realName)
       setRoleId(editUser.roleId)
       setIsActive(editUser.isActive)
+      setTenantId(editUser.tenantId ?? 0)
     } else {
       setUsername('')
       setPassword('')
       setRealName('')
       setRoleId(2)
       setIsActive(true)
+      setTenantId(0)
     }
   }, [editUser, open])
 
@@ -56,11 +59,11 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
     e.preventDefault()
     if (isEdit && editUser) {
       updateUser(
-        { id: editUser.id, data: { realName, roleId, isActive } },
+        { id: editUser.id, data: { realName, roleId, isActive, tenantId } },
         { onSuccess: onClose },
       )
     } else {
-      createUser({ username, password, realName, roleId }, { onSuccess: onClose })
+      createUser({ username, password, realName, roleId, tenantId }, { onSuccess: onClose })
     }
   }
 
@@ -107,6 +110,23 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
               placeholder="真实姓名"
               disabled={isPending}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="form-tenantId">租户 ID（tenant_id）</Label>
+            <Input
+              id="form-tenantId"
+              type="number"
+              min={0}
+              step={1}
+              value={tenantId}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setTenantId(Number(e.target.value) >= 0 ? Number(e.target.value) : 0)
+              }
+              placeholder="0 = 共享 / 默认单租户"
+              disabled={isPending}
+            />
+            <p className="text-xs text-muted-foreground">与业务 company_id 对齐时填入相同数字即可。</p>
           </div>
 
           <div className="space-y-2">

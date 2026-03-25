@@ -77,8 +77,17 @@ async function req(method, path, body, authToken) {
       let data = ''
       res.on('data', c => { data += c })
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }) }
-        catch { resolve({ status: res.statusCode, body: data }) }
+        try {
+          const normalized = String(data).replace(/^\uFEFF/, '').trim()
+          if (process.env.FLOWCUBE_DEBUG_JSON === '1') {
+            console.warn('[integration] 响应 JSON 解析前 length=', normalized.length, 'preview=', normalized.slice(0, 400))
+          }
+          resolve({ status: res.statusCode, body: JSON.parse(normalized) })
+        } catch (e) {
+          console.error('[integration] JSON.parse 失败:', e && e.message, 'length=', data.length)
+          console.error('[integration] 原始 data:', data.length > 4000 ? data.slice(0, 4000) + '…' : data)
+          resolve({ status: res.statusCode, body: data })
+        }
       })
     })
     r.on('error', reject)

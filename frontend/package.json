@@ -6,8 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:electron": "VITE_ELECTRON=1 vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:pda": "VITE_CAPACITOR=1 vite build",
+    "pda:sync": "npm run build:pda && npx cap sync android",
+    "pda:sync:live": "node scripts/write-pda-lan-url.mjs && PDA_LIVE_SERVER=1 npx cap sync android",
+    "pda:open": "npx cap open android",
+    "pda:doctor": "node scripts/pda-doctor.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",

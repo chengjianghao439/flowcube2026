@@ -20,4 +20,13 @@ async function getMe(req, res, next) {
   }
 }
 
-module.exports = { login, getMe }
+async function refresh(req, res, next) {
+  try {
+    const result = await authService.refreshAccessToken(req.user.userId)
+    return successResponse(res, result, 'Token 已刷新')
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = { login, getMe, refresh }

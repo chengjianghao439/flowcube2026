@@ -19,6 +19,7 @@
  */
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { usePdaFeedback } from './usePdaFeedback'
+import { safeJsonParse } from '@/lib/safeJsonParse'
 
 // ── 条码类型 ──────────────────────────────────────────────────────────────────
 export type BarcodeType = 'product' | 'container' | 'box' | 'bin' | 'any'
@@ -59,19 +60,21 @@ export function usePdaFlow<C extends Record<string, unknown>>(
   const { ok, err, warn, flash } = usePdaFeedback()
   const [stepId, setStepId]     = useState<string>(() => {
     if (storageKey) {
-      try {
-        const saved = sessionStorage.getItem(`pda_flow_${storageKey}`)
-        if (saved) return JSON.parse(saved).stepId ?? flow.initialStep
-      } catch { /* ignore */ }
+      const saved = sessionStorage.getItem(`pda_flow_${storageKey}`)
+      if (saved) {
+        const doc = safeJsonParse<{ stepId?: string; context?: Partial<C> }>(saved, `pda_flow_${storageKey}`, true)
+        if (doc && typeof doc.stepId === 'string') return doc.stepId
+      }
     }
     return flow.initialStep
   })
   const [context, setContext]   = useState<C>(() => {
     if (storageKey) {
-      try {
-        const saved = sessionStorage.getItem(`pda_flow_${storageKey}`)
-        if (saved) return { ...initialContext, ...JSON.parse(saved).context }
-      } catch { /* ignore */ }
+      const saved = sessionStorage.getItem(`pda_flow_${storageKey}`)
+      if (saved) {
+        const doc = safeJsonParse<{ stepId?: string; context?: Partial<C> }>(saved, `pda_flow_${storageKey}`, true)
+        if (doc?.context && typeof doc.context === 'object') return { ...initialContext, ...doc.context }
+      }
     }
     return initialContext
   })

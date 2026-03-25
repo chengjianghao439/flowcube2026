@@ -29,6 +29,8 @@ const adjustSchema = z.object({
 })
 
 router.use(authMiddleware)
+router.get('/check-consistency',      ctrl.checkConsistency)
+router.get('/trace/:productId',       ctrl.trace)
 router.get('/overview',                ctrl.overview)
 router.get('/containers',              ctrl.containers)
 router.get('/containers/barcode/:bc',  ctrl.containerByBarcode)

@@ -2,10 +2,10 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
-  getWaveByIdApi, updateWavePickedQtyApi, finishPickingApi, cancelWaveApi,
+  getWaveByIdApi, finishPickingApi, cancelWaveApi,
   getWavePickRouteApi, markRouteCompletedApi,
 } from '@/api/picking-waves'
-import type { WaveItem, WaveRouteStep, WaveRouteContainer } from '@/api/picking-waves'
+import type { WaveItem, WaveRouteStep, WaveRouteContainer, WavePickLine } from '@/api/picking-waves'
 import client from '@/api/client'
 
 // ── 容器查询 ──────────────────────────────────────────────────────────────────
@@ -25,11 +25,16 @@ async function fetchContainerByBarcode(bc: string): Promise<ContainerInfo> {
   return res.data.data
 }
 
+function allocatePickLine(pickLines: WavePickLine[] | undefined, productId: number): WavePickLine | null {
+  if (!pickLines?.length) return null
+  return pickLines.find(l => l.productId === productId && l.pickedQty < l.requiredQty) ?? null
+}
+
 async function createScanLog(params: {
   taskId: number; itemId: number; containerId: number; barcode: string
   productId: number; qty: number; scanMode: string; locationCode?: string
 }): Promise<void> {
-  await client.post('/scan-logs', params)
+  await client.post('/scan-logs', params, { headers: { 'X-Client': 'pda' } })
 }
 
 // ── 扫描记录 ──────────────────────────────────────────────────────────────────
@@ -89,12 +94,6 @@ export default function PdaWavePage() {
 
   // ── mutations ───────────────────────────────────────────────────────────
 
-  const updatePicked = useMutation({
-    mutationFn: ({ itemId, qty }: { itemId: number; qty: number }) =>
-      updateWavePickedQtyApi(waveId, itemId, qty),
-    onSuccess: () => refetch(),
-  })
-
   const finishPickingMut = useMutation({
     mutationFn: () => finishPickingApi(waveId),
     onSuccess: () => setFinished('completed'),
@@ -136,7 +135,13 @@ export default function PdaWavePage() {
         return
       }
 
-      const remaining = matchItem.totalQty - matchItem.pickedQty
+      const line = allocatePickLine(wave.pickLines, container.productId)
+      if (!line) {
+        showError(`${matchItem.productName} 在波次任务中已无可分配拣货行，请刷新后重试`)
+        return
+      }
+
+      const remaining = line.requiredQty - line.pickedQty
       if (remaining <= 0) {
         showError(`${matchItem.productName} 已完成拣货`)
         return
@@ -147,15 +152,16 @@ export default function PdaWavePage() {
       const scanMode = isWhole ? '整件' : '散件'
 
       await createScanLog({
-        taskId: waveId, itemId: matchItem.id, containerId: container.containerId,
-        barcode: trimmed, productId: container.productId, qty: addQty, scanMode,
+        taskId: line.taskId,
+        itemId: line.itemId,
+        containerId: container.containerId,
+        barcode: trimmed,
+        productId: container.productId,
+        qty: addQty,
+        scanMode,
         locationCode: container.locationCode || undefined,
       })
 
-      const newPickedQty = matchItem.pickedQty + addQty
-      await updatePicked.mutateAsync({ itemId: matchItem.id, qty: newPickedQty })
-
-      // 标记路线缓存中的容器为已完成
       await markRouteCompletedApi(waveId, trimmed)
 
       setRecords(prev => [{
@@ -163,13 +169,11 @@ export default function PdaWavePage() {
         locationCode: container.locationCode, qty: addQty, time: now(), mode: scanMode,
       }, ...prev])
       triggerFlash('success')
-      refetchRoute()
 
-      const updated = wave.items.map(i =>
-        i.id === matchItem.id ? { ...i, pickedQty: newPickedQty } : i,
-      )
-      const allDone = updated.every(i => i.pickedQty >= i.totalQty)
-      if (allDone && wave.status === 2) {
+      const refetchResult = await refetch()
+      await refetchRoute()
+      const fresh = refetchResult.data
+      if (fresh && fresh.status === 2 && fresh.items.length > 0 && fresh.items.every(i => i.pickedQty >= i.totalQty)) {
         await finishPickingMut.mutateAsync()
       }
     } catch (err: unknown) {
@@ -479,16 +483,15 @@ export default function PdaWavePage() {
             取消波次
           </button>
           {allDone ? (
-            <button onClick={() => finishPickingMut.mutate()}
+            <button type="button" onClick={() => finishPickingMut.mutate()}
               disabled={finishPickingMut.isPending}
               className="flex-[2] rounded-xl bg-green-500 py-4 text-base font-bold text-white shadow-lg shadow-green-500/30 hover:bg-green-400 active:scale-95 disabled:opacity-50">
               {finishPickingMut.isPending ? '提交中...' : '✓ 提交拣货完成'}
             </button>
           ) : (
-            <button onClick={() => finishPickingMut.mutate()}
-              className="flex-[2] rounded-xl bg-purple-600 py-4 text-base font-bold text-white hover:bg-purple-500 active:scale-95">
-              提前完成 ({totalPicked}/{totalRequired})
-            </button>
+            <div className="flex-[2] flex items-center justify-center rounded-xl border border-white/10 bg-white/5 py-4 text-sm text-gray-500">
+              请扫满全部数量后再提交（{totalPicked}/{totalRequired}）
+            </div>
           )}
         </div>
       </footer>

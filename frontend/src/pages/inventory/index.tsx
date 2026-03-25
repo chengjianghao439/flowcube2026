@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -9,19 +10,18 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { useStock, useLogs, useInbound, useOutbound, useAdjust } from '@/hooks/useInventory'
-import { SupplierFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
+import { useStock, useLogs, useOutbound } from '@/hooks/useInventory'
+import { WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import type { StockItem, InventoryLog } from '@/types/inventory'
 import type { TableColumn } from '@/types'
 import type { ProductFinderResult } from '@/types/products'
 
 type Tab = 'stock' | 'logs'
-type OpType = 'inbound' | 'outbound' | 'adjust'
+type OpType = 'outbound'
 
 const emptyOp = {
   productId: '',  productName: '',
   warehouseId: '', warehouseName: '',
-  supplierId: '',  supplierName: '',
   quantity: '', unitPrice: '', remark: '',
 }
 
@@ -29,18 +29,14 @@ export default function InventoryPage() {
   const [tab, setTab] = useState<Tab>('stock')
   const [stockPage, setStockPage] = useState(1); const [stockKw, setStockKw] = useState(''); const [stockSearch, setStockSearch] = useState('')
   const [logPage, setLogPage] = useState(1); const [logType, setLogType] = useState<number|null>(null)
-  const [opOpen, setOpOpen] = useState(false); const [opType, setOpType] = useState<OpType>('inbound')
+  const [opOpen, setOpOpen] = useState(false); const [opType, setOpType] = useState<OpType>('outbound')
   const [form, setForm] = useState(emptyOp)
   const [productFinderOpen,  setProductFinderOpen]  = useState(false)
   const [warehouseFinderOpen, setWarehouseFinderOpen] = useState(false)
-  const [supplierFinderOpen,  setSupplierFinderOpen]  = useState(false)
 
   const { data: stocks, isLoading: stockLoading } = useStock({ page:stockPage, pageSize:20, keyword:stockKw })
   const { data: logs, isLoading: logLoading } = useLogs({ page:logPage, pageSize:20, type:logType })
-  const { mutate: inbound, isPending: inbounding } = useInbound()
-  const { mutate: outbound, isPending: outbounding } = useOutbound()
-  const { mutate: adjust, isPending: adjusting } = useAdjust()
-  const isPending = inbounding || outbounding || adjusting
+  const { mutate: outbound, isPending } = useOutbound()
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   function openOp(t: OpType) { setOpType(t); setForm(emptyOp); setOpOpen(true) }
@@ -48,9 +44,7 @@ export default function InventoryPage() {
     e.preventDefault()
     const base = { productId:+form.productId, warehouseId:+form.warehouseId, quantity:+form.quantity, remark:form.remark||undefined }
     const cb = { onSuccess:()=>setOpOpen(false) }
-    if (opType==='inbound') inbound({ ...base, supplierId:form.supplierId?+form.supplierId:null, unitPrice:form.unitPrice?+form.unitPrice:null }, cb)
-    else if (opType==='outbound') outbound({ ...base, supplierId:null, unitPrice:null }, cb)
-    else adjust(base, cb)
+    outbound({ ...base, supplierId:null, unitPrice:form.unitPrice?+form.unitPrice:null }, cb)
   }
 
   function handleProductConfirm(p: ProductFinderResult) {
@@ -58,7 +52,7 @@ export default function InventoryPage() {
     setProductFinderOpen(false)
   }
 
-  const OP_LABELS: Record<OpType, string> = { inbound:'入库', outbound:'出库', adjust:'库存调整' }
+  const OP_LABELS: Record<OpType, string> = { outbound:'出库' }
   const TYPE_VARIANT: Record<number, 'default'|'secondary'|'outline'> = { 1:'default', 2:'secondary', 3:'outline' }
   const TYPE_NAMES: Record<number, string> = { 1:'入库', 2:'出库', 3:'调整' }
 
@@ -85,12 +79,11 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="库存管理" description="库存查询与出入库操作" actions={
+      <PageHeader title="库存管理" description="库存查询；采购入库请走「入库任务」上架后计入库存" actions={
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={()=>downloadExport(tab==='stock'?'/export/stock':'/export/inventory-logs').catch(e=>toast.error((e as Error).message))}>导出 Excel</Button>
-          <Button onClick={()=>openOp('inbound')}>入库</Button>
           <Button variant="outline" onClick={()=>openOp('outbound')}>出库</Button>
-          <Button variant="outline" onClick={()=>openOp('adjust')}>调整</Button>
+          <Button variant="outline" asChild><Link to="/stockcheck">盘点调整</Link></Button>
         </div>
       } />
 
@@ -150,29 +143,9 @@ export default function InventoryPage() {
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>{opType==='adjust'?'调整目标数量':'数量'} *</Label><Input type="number" step="0.0001" min="0" value={form.quantity} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('quantity',e.target.value)} disabled={isPending}/></div>
-              {opType!=='adjust' && <div className="space-y-2"><Label>单价</Label><Input type="number" step="0.01" min="0" value={form.unitPrice} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('unitPrice',e.target.value)} disabled={isPending} placeholder="选填"/></div>}
+              <div className="space-y-2"><Label>数量 *</Label><Input type="number" step="0.0001" min="0" value={form.quantity} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('quantity',e.target.value)} disabled={isPending}/></div>
+              <div className="space-y-2"><Label>单价</Label><Input type="number" step="0.01" min="0" value={form.unitPrice} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('unitPrice',e.target.value)} disabled={isPending} placeholder="选填"/></div>
             </div>
-            {opType==='inbound' && (
-              <div className="space-y-2">
-                <Label>供应商</Label>
-                <FinderTrigger
-                  value={form.supplierName}
-                  placeholder="点击选择供应商（选填）..."
-                  onClick={() => setSupplierFinderOpen(true)}
-                  disabled={isPending}
-                />
-                {form.supplierId && (
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, supplierId: '', supplierName: '' }))}
-                    className="text-xs text-muted-foreground hover:text-destructive"
-                  >
-                    清除供应商
-                  </button>
-                )}
-              </div>
-            )}
             <div className="space-y-2"><Label>备注</Label><Input value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)} disabled={isPending} placeholder="选填"/></div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={()=>setOpOpen(false)} disabled={isPending}>取消</Button>
@@ -193,11 +166,6 @@ export default function InventoryPage() {
         open={warehouseFinderOpen}
         onClose={() => setWarehouseFinderOpen(false)}
         onConfirm={r => { setForm(f => ({ ...f, warehouseId: String(r.id), warehouseName: r.name })); setWarehouseFinderOpen(false) }}
-      />
-      <SupplierFinder
-        open={supplierFinderOpen}
-        onClose={() => setSupplierFinderOpen(false)}
-        onConfirm={r => { setForm(f => ({ ...f, supplierId: String(r.id), supplierName: r.name })); setSupplierFinderOpen(false) }}
       />
     </div>
   )

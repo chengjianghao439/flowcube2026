@@ -1,11 +1,12 @@
 const svc = require('./printers.service')
 const { pool } = require('../../config/db')
+const { getTenantId } = require('../../utils/tenantScope')
 
-const list   = async (req, res, next) => { try { res.json({ success:true, data: await svc.findAll({ type: req.query.type ? +req.query.type : undefined }) }) } catch(e) { next(e) } }
-const detail = async (req, res, next) => { try { res.json({ success:true, data: await svc.findById(+req.params.id) }) } catch(e) { next(e) } }
-const create = async (req, res, next) => { try { res.status(201).json({ success:true, data: await svc.create(req.body) }) } catch(e) { next(e) } }
-const update = async (req, res, next) => { try { res.json({ success:true, data: await svc.update(+req.params.id, req.body) }) } catch(e) { next(e) } }
-const remove = async (req, res, next) => { try { await svc.remove(+req.params.id); res.json({ success:true, data:null }) } catch(e) { next(e) } }
+const list   = async (req, res, next) => { try { res.json({ success:true, data: await svc.findAll({ type: req.query.type ? +req.query.type : undefined, tenantId: getTenantId(req) }) }) } catch(e) { next(e) } }
+const detail = async (req, res, next) => { try { res.json({ success:true, data: await svc.findById(+req.params.id, getTenantId(req)) }) } catch(e) { next(e) } }
+const create = async (req, res, next) => { try { res.status(201).json({ success:true, data: await svc.create(req.body, getTenantId(req)) }) } catch(e) { next(e) } }
+const update = async (req, res, next) => { try { res.json({ success:true, data: await svc.update(+req.params.id, req.body, getTenantId(req)) }) } catch(e) { next(e) } }
+const remove = async (req, res, next) => { try { await svc.remove(+req.params.id, getTenantId(req)); res.json({ success:true, data:null }) } catch(e) { next(e) } }
 
 const updateClientAlias = async (req, res, next) => {
   try {
@@ -32,6 +33,7 @@ async function markOfflineClients() {
 // 获取在线客户端列表（数据库，status=online 或 30秒内有心跳）
 const listOnlineClients = async (req, res, next) => {
   try {
+    const tid = getTenantId(req)
     await markOfflineClients()
     const [clients] = await pool.query(
       `SELECT client_id, hostname, alias_name, ip_address, last_seen
@@ -43,8 +45,8 @@ const listOnlineClients = async (req, res, next) => {
     const data = []
     for (const c of clients) {
       const [printers] = await pool.query(
-        'SELECT name, code FROM printers WHERE client_id=? AND status=1 ORDER BY id ASC',
-        [c.client_id]
+        'SELECT name, code FROM printers WHERE client_id=? AND status=1 AND (tenant_id=? OR tenant_id=0) ORDER BY id ASC',
+        [c.client_id, tid],
       )
       data.push({
         clientId: c.client_id,
@@ -95,6 +97,7 @@ const heartbeat = async (req, res, next) => {
 // 打印客户端自动注册（备用）
 const registerClient = async (req, res, next) => {
   try {
+    const tid = getTenantId(req)
     const { clientId, hostname, printers = [] } = req.body
     if (!clientId) return res.status(400).json({ success: false, message: 'clientId 必填' })
 
@@ -115,13 +118,19 @@ const registerClient = async (req, res, next) => {
       if (!p.code && !p.name) continue
       const code = (p.code || p.name.replace(/[^A-Z0-9]/gi, '_').toUpperCase()).slice(0, 50)
       const name = p.name || code
-      const [[existing]] = await pool.query('SELECT id FROM printers WHERE code=?', [code])
+      const [[existing]] = await pool.query(
+        'SELECT id FROM printers WHERE code=? AND (tenant_id=? OR tenant_id=0) ORDER BY CASE WHEN tenant_id=? THEN 0 ELSE 1 END LIMIT 1',
+        [code, tid, tid],
+      )
       if (existing) {
-        await pool.query('UPDATE printers SET status=1, client_id=? WHERE id=?', [clientId, existing.id])
+        await pool.query(
+          'UPDATE printers SET status=1, client_id=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
+          [clientId, existing.id, tid],
+        )
       } else {
         await pool.query(
-          'INSERT INTO printers (name, code, type, description, status, source, client_id) VALUES (?,?,1,?,1,?,?)',
-          [name, code, `来自客户端 ${hostname || clientId}`, 'client', clientId]
+          'INSERT INTO printers (name, code, type, description, status, source, client_id, tenant_id) VALUES (?,?,1,?,1,?,?,?)',
+          [name, code, `来自客户端 ${hostname || clientId}`, 'client', clientId, tid],
         )
       }
     }

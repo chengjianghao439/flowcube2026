@@ -74,12 +74,17 @@ router.put('/:id/start-picking', pdaOnly, async (req, res, next) => {
   try { await svc.startPicking(+req.params.id); return successResponse(res, null, '备货已开始') } catch (e) { next(e) }
 })
 
-// PUT /api/warehouse-tasks/:id/items/:itemId/picked-qty — 更新已备货数量
-router.put('/:id/items/:itemId/picked-qty', vBody(z.object({ pickedQty: z.number().nonnegative() })), async (req, res, next) => {
-  try {
-    await svc.updatePickedQty(+req.params.id, +req.params.itemId, req.body.pickedQty)
-    return successResponse(res, null, '更新成功')
-  } catch (e) { next(e) }
+// PUT /api/warehouse-tasks/:id/items/:itemId/picked-qty — 已禁用（已拣数量仅允许由 PDA 拣货扫码累加）
+router.put('/:id/items/:itemId/picked-qty', (req, res) => {
+  const client = (req.headers['x-client'] || '').toLowerCase()
+  if (client !== 'pda') {
+    return res.status(403).json({ success: false, message: '此操作只能由 PDA 执行', data: null })
+  }
+  return res.status(400).json({
+    success: false,
+    message: '已拣数量仅可通过拣货扫码写入，禁止手动修改',
+    data: null,
+  })
 })
 
 // PUT /api/warehouse-tasks/:id/ready — 拣货完成，待分拣（2→3）
@@ -283,7 +288,7 @@ router.put('/:id/pack-done', pdaOnly, async (req, res, next) => {
   try { await svc.packDone(+req.params.id); return successResponse(res, null, '已标记为待出库') } catch (e) { next(e) }
 })
 
-// PUT /api/warehouse-tasks/:id/ship — 执行出库（3→4）
+// PUT /api/warehouse-tasks/:id/ship — 执行出库（6→7）
 // 在 route 层获取销售单数据，消除 WMS service → ERP service 循环依赖
 router.put('/:id/ship', pdaOnly, async (req, res, next) => {
   try {
@@ -303,29 +308,36 @@ router.put('/:id/ship', pdaOnly, async (req, res, next) => {
     if (saleOrder.status === 4) return res.status(400).json({ success: false, message: '对应销售单已出库', data: null })
     if (saleOrder.status === 5) return res.status(400).json({ success: false, message: '对应销售单已取消', data: null })
 
-    const [saleItems] = await pool.query(
-      'SELECT product_id, product_name, product_code, unit, quantity, unit_price FROM sale_order_items WHERE order_id=?',
-      [saleOrder.id]
+    const [wmsItems] = await pool.query(
+      `SELECT wti.product_id, wti.product_name, wti.picked_qty, soi.unit_price
+       FROM warehouse_task_items wti
+       LEFT JOIN sale_order_items soi ON soi.order_id = ? AND soi.product_id = wti.product_id
+       WHERE wti.task_id = ?`,
+      [saleOrder.id, taskId],
     )
+    if (!wmsItems.length) {
+      return res.status(400).json({ success: false, message: '任务无出库明细', data: null })
+    }
 
     await svc.ship(taskId, op, {
       saleOrderId:  saleOrder.id,
       warehouseId:  saleOrder.warehouse_id,
       totalAmount:  Number(saleOrder.total_amount),
       customerName: saleOrder.customer_name,
-      items: saleItems.map(i => ({
+      items: wmsItems.map(i => ({
         productId:   i.product_id,
         productName: i.product_name,
-        quantity:    Number(i.quantity),
-        unitPrice:   Number(i.unit_price),
+        quantity:    Number(i.picked_qty),
+        unitPrice:   i.unit_price != null ? Number(i.unit_price) : null,
       })),
     })
     return successResponse(res, null, '出库成功')
   } catch (e) { next(e) }
 })
 
-// PUT /api/warehouse-tasks/:id/check — 复核明细
+// PUT /api/warehouse-tasks/:id/check — 已关闭手动复核（须 POST /scan-logs/check）
 router.put('/:id/check',
+  pdaOnly,
   vBody(z.object({
     items: z.array(z.object({
       itemId:     z.number().int().positive(),

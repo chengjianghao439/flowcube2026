@@ -5,9 +5,15 @@
  * 全局错误中间件会识别 isOperational 标识并返回对应 HTTP 状态码。
  */
 class AppError extends Error {
-  constructor(message, statusCode = 400) {
+  /**
+   * @param {string} message
+   * @param {number} [statusCode=400]
+   * @param {Record<string, unknown>|null} [data] 随错误返回给客户端的结构化数据（如 429 配额详情）
+   */
+  constructor(message, statusCode = 400, data = null) {
     super(message)
     this.statusCode = statusCode
+    this.data = data
     this.isOperational = true
     Error.captureStackTrace(this, this.constructor)
   }

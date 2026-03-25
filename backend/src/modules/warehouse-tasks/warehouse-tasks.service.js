@@ -10,6 +10,97 @@ const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.servi
 const TASK_STATUS = WT_STATUS_NAME
 const PRIORITY    = { 1:'紧急',   2:'普通',   3:'低优先级' }
 
+/**
+ * 拣货闭环：已拣满 + 扫码合计与 picked_qty 一致 + 锁定容器集合与拣货扫码容器一致
+ */
+async function assertTaskPickScanClosure(conn, taskId) {
+  const [items] = await conn.query(
+    'SELECT id, required_qty, picked_qty FROM warehouse_task_items WHERE task_id=?',
+    [taskId],
+  )
+  for (const row of items) {
+    if (Number(row.picked_qty) !== Number(row.required_qty)) {
+      throw new AppError(`拣货未完成：存在未拣满明细（需 ${row.required_qty}，已拣 ${row.picked_qty}）`, 400)
+    }
+    const [[agg]] = await conn.query(
+      `SELECT COALESCE(SUM(qty),0) AS sq FROM scan_logs
+       WHERE task_id=? AND item_id=? AND COALESCE(scan_purpose,1)=1`,
+      [taskId, row.id],
+    )
+    if (Number(agg.sq) !== Number(row.picked_qty)) {
+      throw new AppError('拣货扫码合计与明细已拣数量不一致，无法推进', 400)
+    }
+  }
+  const [locked] = await conn.query(
+    'SELECT id FROM inventory_containers WHERE locked_by_task_id=? AND deleted_at IS NULL',
+    [taskId],
+  )
+  const [pickedContainers] = await conn.query(
+    `SELECT DISTINCT container_id AS cid FROM scan_logs
+     WHERE task_id=? AND COALESCE(scan_purpose,1)=1`,
+    [taskId],
+  )
+  const lockedIds = new Set(locked.map(r => r.id))
+  const pickIds = new Set(pickedContainers.map(r => r.cid))
+  if (lockedIds.size !== pickIds.size) {
+    throw new AppError('锁定容器与拣货扫码容器不一致：每个锁定容器必须完成拣货扫码', 400)
+  }
+  for (const id of lockedIds) {
+    if (!pickIds.has(id)) throw new AppError('存在未经拣货扫码的锁定容器', 400)
+  }
+  for (const id of pickIds) {
+    if (!lockedIds.has(id)) throw new AppError('拣货扫码中的容器必须全部锁定于本任务', 400)
+  }
+}
+
+/**
+ * 复核闭环：checked_qty === picked_qty，且复核扫码合计与 checked_qty 一致
+ */
+async function assertTaskCheckScanClosure(conn, taskId) {
+  const [items] = await conn.query(
+    'SELECT id, picked_qty, required_qty, checked_qty FROM warehouse_task_items WHERE task_id=?',
+    [taskId],
+  )
+  for (const row of items) {
+    const p = Number(row.picked_qty)
+    const ch = Number(row.checked_qty)
+    if (p !== Number(row.required_qty)) {
+      throw new AppError('出库前置：存在未拣满明细', 400)
+    }
+    if (ch !== p) {
+      throw new AppError('出库前置：复核未完成（已核须等于拣货数量）', 400)
+    }
+    const [[agg]] = await conn.query(
+      `SELECT COALESCE(SUM(qty),0) AS sq FROM scan_logs
+       WHERE task_id=? AND item_id=? AND scan_purpose=2`,
+      [taskId, row.id],
+    )
+    if (Number(agg.sq) !== ch) {
+      throw new AppError('复核扫码合计与已核数量不一致', 400)
+    }
+  }
+}
+
+/** 打包闭环：全部箱子已完成，且存在装箱明细 */
+async function assertTaskPackagingClosure(conn, taskId) {
+  const [[{ open }]] = await conn.query(
+    `SELECT COUNT(*) AS open FROM packages WHERE warehouse_task_id=? AND status <> 2`,
+    [taskId],
+  )
+  if (Number(open) > 0) {
+    throw new AppError('存在未完成的装箱，请先完成全部箱子打包', 400)
+  }
+  const [[{ cnt }]] = await conn.query(
+    `SELECT COUNT(*) AS cnt FROM package_items pi
+     INNER JOIN packages p ON p.id = pi.package_id
+     WHERE p.warehouse_task_id = ? AND p.status = 2`,
+    [taskId],
+  )
+  if (Number(cnt) === 0) {
+    throw new AppError('没有已完成的装箱明细，无法进入待出库', 400)
+  }
+}
+
 const fmt = r => ({
   id: r.id,
   taskNo: r.task_no,
@@ -155,11 +246,10 @@ async function startPicking(id) {
 }
 
 /**
- * 更新单个明细的已备货数量
+ * 已废弃：已拣数量仅允许由拣货扫码（scan_logs）累加
  */
-async function updatePickedQty(taskId, itemId, pickedQty) {
-  await findById(taskId)
-  await pool.query('UPDATE warehouse_task_items SET picked_qty=? WHERE id=? AND task_id=?', [pickedQty, itemId, taskId])
+async function updatePickedQty() {
+  throw new AppError('禁止直接修改已拣数量，请使用 PDA 拣货扫码', 400)
 }
 
 /**
@@ -173,6 +263,7 @@ async function readyToShip(id) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await assertTaskPickScanClosure(conn, id)
     // 乐观锁：带状态条件防止并发重复推进
     const [r] = await conn.query('UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?', [WT_STATUS.SORTING, id, WT_STATUS.PICKING])
     if (r.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
@@ -206,6 +297,8 @@ async function sortTask(id, sortedItems = null) {
   let released = false
   try {
     await conn.beginTransaction()
+
+    await assertTaskPickScanClosure(conn, id)
 
     // 若传入明细，逐件更新 sorted_qty
     if (sortedItems && sortedItems.length > 0) {
@@ -280,16 +373,32 @@ async function checkDone(id) {
   const task = await findById(id)
   if (task.status !== WT_STATUS.CHECKING) throw new AppError('只有"待复核"状态可以完成复核', 400)
   if (!isValidTransition(task.status, WT_STATUS.PACKING)) throw new AppError(`非法状态迁移：${task.status} → ${WT_STATUS.PACKING}`, 400)
-  const [r] = await pool.query('UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?', [WT_STATUS.PACKING, id, WT_STATUS.CHECKING])
-  if (r.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
+  for (const i of task.items) {
+    if (Number(i.checkedQty) !== Number(i.pickedQty)) {
+      throw new AppError('复核未完成：每条明细已核数量须等于拣货数量', 400)
+    }
+  }
+  const conn = await pool.getConnection()
   try {
-    await recordEvent(pool, {
-      taskId: id, taskNo: task.taskNo,
-      eventType:  WT_EVENT.CHECK_DONE,
-      fromStatus: WT_STATUS.CHECKING,
-      toStatus:   WT_STATUS.PACKING,
-    })
-  } catch (_) {}
+    await conn.beginTransaction()
+    await assertTaskCheckScanClosure(conn, id)
+    const [r] = await conn.query('UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?', [WT_STATUS.PACKING, id, WT_STATUS.CHECKING])
+    if (r.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
+    try {
+      await recordEvent(conn, {
+        taskId: id, taskNo: task.taskNo,
+        eventType:  WT_EVENT.CHECK_DONE,
+        fromStatus: WT_STATUS.CHECKING,
+        toStatus:   WT_STATUS.PACKING,
+      })
+    } catch (_) {}
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 /**
@@ -299,8 +408,28 @@ async function packDone(id) {
   const task = await findById(id)
   if (task.status !== WT_STATUS.PACKING) throw new AppError('只有"待打包"状态可以完成打包', 400)
   if (!isValidTransition(task.status, WT_STATUS.SHIPPING)) throw new AppError(`非法状态迁移：${task.status} → ${WT_STATUS.SHIPPING}`, 400)
-  const [r] = await pool.query('UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?', [WT_STATUS.SHIPPING, id, WT_STATUS.PACKING])
-  if (r.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await assertTaskCheckScanClosure(conn, id)
+    await assertTaskPackagingClosure(conn, id)
+    const [r] = await conn.query('UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?', [WT_STATUS.SHIPPING, id, WT_STATUS.PACKING])
+    if (r.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
+    try {
+      await recordEvent(conn, {
+        taskId: id, taskNo: task.taskNo,
+        eventType:  WT_EVENT.PACK_DONE,
+        fromStatus: WT_STATUS.PACKING,
+        toStatus:   WT_STATUS.SHIPPING,
+      })
+    } catch (_) {}
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 /**
@@ -317,7 +446,11 @@ async function ship(id, operator, saleData) {
   try {
     await conn.beginTransaction()
 
-    // 通过引擎扣减库存
+    await assertTaskPickScanClosure(conn, id)
+    await assertTaskCheckScanClosure(conn, id)
+    await assertTaskPackagingClosure(conn, id)
+
+    // 通过引擎扣减库存（仅本任务锁定容器）
     for (const item of items) {
       await moveStock(conn, {
         moveType:    MOVE_TYPE.TASK_OUT,
@@ -333,6 +466,7 @@ async function ship(id, operator, saleData) {
         reservationRefId:   saleOrderId,
         operatorId:  operator.userId,
         operatorName: operator.realName,
+        lockedByTaskId: id,
       })
     }
 
@@ -575,41 +709,30 @@ async function findMyTasks() {
  * @param {Array<{itemId: number, checkedQty: number}>} items
  */
 async function checkItems(taskId, items) {
-  const task = await findById(taskId)
-  if (task.status !== WT_STATUS.CHECKING) throw new AppError('只有"待复核"状态的任务可以执行复核', 400)
-
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-
-    for (const { itemId, checkedQty } of items) {
-      const taskItem = task.items.find(i => i.id === itemId)
-      if (!taskItem) throw new AppError(`明细 ${itemId} 不属于该任务`, 400)
-      if (checkedQty < 0) throw new AppError('复核数量不能为负', 400)
-      await conn.query(
-        'UPDATE warehouse_task_items SET checked_qty=? WHERE id=? AND task_id=?',
-        [checkedQty, itemId, taskId],
-      )
-    }
-
-    // 读取最新明细，判断是否全部复核完成
-    const [updatedItems] = await conn.query(
-      'SELECT required_qty, checked_qty FROM warehouse_task_items WHERE task_id=?',
-      [taskId],
-    )
-    const allChecked = updatedItems.every(
-      i => Number(i.checked_qty) >= Number(i.required_qty),
-    )
-    if (allChecked) {
-      // 复核全部完成 → 自动推进到「待打包」(status=5)，乐观锁防并发
-      const [r] = await conn.query('UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?', [WT_STATUS.PACKING, taskId, WT_STATUS.CHECKING])
-      if (r.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
-    }
-
-    await conn.commit()
-    return { allChecked }
-  } catch (e) { await conn.rollback(); throw e }
-  finally { conn.release() }
+  void taskId
+  void items
+  throw new AppError('已禁止手动提交复核数量，请使用 PDA 复核扫码（扫描容器条码）', 400)
 }
 
-module.exports = { findAll, findById, findMyTasks, createForSaleOrder, assign, startPicking, updatePickedQty, readyToShip, sortTask, checkDone, packDone, ship, cancel, updatePriority, getPickSuggestions, getPickRoute, checkItems }
+module.exports = {
+  findAll,
+  findById,
+  findMyTasks,
+  createForSaleOrder,
+  assign,
+  startPicking,
+  updatePickedQty,
+  readyToShip,
+  sortTask,
+  checkDone,
+  packDone,
+  ship,
+  cancel,
+  updatePriority,
+  getPickSuggestions,
+  getPickRoute,
+  checkItems,
+  assertTaskPickScanClosure,
+  assertTaskCheckScanClosure,
+  assertTaskPackagingClosure,
+}

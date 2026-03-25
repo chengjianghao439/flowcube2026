@@ -7,7 +7,7 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export type PermCode =
   | 'page:dashboard' | 'page:users' | 'page:warehouses' | 'page:suppliers'
-  | 'page:products' | 'page:categories' | 'page:inventory' | 'page:customers' | 'page:purchase'
+  | 'page:products' | 'page:categories' | 'page:inventory' | 'page:customers' | 'page:carriers' | 'page:purchase'
   | 'page:sale' | 'page:stockcheck' | 'page:reports' | 'page:settings'
   | 'page:transfer' | 'page:returns' | 'page:payments' | 'page:warehouse-tasks'
   | 'action:purchase:confirm' | 'action:purchase:receive' | 'action:purchase:cancel'
@@ -18,7 +18,7 @@ export type PermCode =
 
 const ALL: PermCode[] = [
   'page:dashboard','page:users','page:warehouses','page:suppliers','page:products','page:categories',
-  'page:inventory','page:customers','page:purchase','page:sale','page:stockcheck',
+  'page:inventory','page:customers','page:carriers','page:purchase','page:sale','page:stockcheck',
   'page:transfer','page:returns','page:payments','page:warehouse-tasks','page:reports','page:settings',
   'action:purchase:confirm','action:purchase:receive','action:purchase:cancel',
   'action:sale:confirm','action:sale:ship','action:sale:cancel',

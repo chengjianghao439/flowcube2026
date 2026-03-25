@@ -11,6 +11,8 @@
 
 const cron = require('node-cron')
 const { runAllChecks } = require('./modules/system/healthCheck.service')
+const { runContainerLockCleanup } = require('./jobs/containerLockCleanup')
+const { runPrintAlertChecks } = require('./modules/print-jobs/print-alert-monitor.service')
 
 /**
  * 系统健康巡检任务
@@ -46,12 +48,44 @@ function scheduleHealthCheck() {
   console.log(`[Scheduler] 健康巡检已注册（${EXPR}，Asia/Shanghai）`)
 }
 
+/** 容器锁兜底清理：每 5 分钟（终态残留 + 拣货中超时无续扫） */
+function scheduleContainerLockCleanup() {
+  const EXPR = process.env.CONTAINER_LOCK_CLEANUP_CRON || '*/5 * * * *'
+  if (!cron.validate(EXPR)) {
+    console.error(`[Scheduler] 容器锁清理 Cron 无效：${EXPR}，任务未注册`)
+    return
+  }
+  cron.schedule(EXPR, () => {
+    runContainerLockCleanup().catch(() => {})
+  }, { timezone: 'Asia/Shanghai' })
+  console.log(`[Scheduler] 容器锁清理已注册（${EXPR}，Asia/Shanghai）`)
+}
+
 /**
  * 启动所有定时任务
  * 在 index.js 的 bootstrap() 末尾调用
  */
+/** 打印运营告警：成功率 / 队列积压 / 打印机健康 */
+function schedulePrintAlerts() {
+  const EXPR = process.env.PRINT_ALERT_CRON || '*/7 * * * *'
+  if (!cron.validate(EXPR)) {
+    console.error(`[Scheduler] 打印告警 Cron 无效：${EXPR}，任务未注册`)
+    return
+  }
+  cron.schedule(
+    EXPR,
+    () => {
+      runPrintAlertChecks().catch(() => {})
+    },
+    { timezone: 'Asia/Shanghai' },
+  )
+  console.log(`[Scheduler] 打印告警巡检已注册（${EXPR}，Asia/Shanghai）`)
+}
+
 function startScheduler() {
   scheduleHealthCheck()
+  scheduleContainerLockCleanup()
+  schedulePrintAlerts()
 }
 
 module.exports = { startScheduler }

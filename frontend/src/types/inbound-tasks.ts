@@ -30,6 +30,7 @@ export interface InboundTask {
   warehouseName: string | null
   status: InboundTaskStatus
   statusName: string
+  loopStatus?: 'pending_receive' | 'pending_putaway' | 'done' | 'cancelled' | 'unknown'
   operatorId: number | null
   operatorName: string | null
   remark: string | null
@@ -38,10 +39,47 @@ export interface InboundTask {
   items?: InboundTaskItem[]
 }
 
+/** 逐包收货：单次一包，生成一个待上架容器并排队打印标签 */
 export interface ReceiveParams {
-  items: { itemId: number; qty: number }[]
+  productId: number
+  qty: number
 }
 
+export interface ReceivePackageResult {
+  containerCode: string
+  containerId: number
+  productName: string
+  qty: number
+  printJobId: number | null
+}
+
+/** 上架：单容器单库位 */
 export interface PutawayParams {
-  items: { itemId: number; qty: number; locationId?: number }[]
+  containerId: number
+  locationId: number
+}
+
+export interface InboundContainerRow {
+  id: number
+  barcode: string
+  taskId: number | null
+  productId: number
+  productCode: string | null
+  productName: string | null
+  qty: number
+  unit: string | null
+  status: 'waiting_putaway' | 'stored'
+  locationId: number | null
+  locationCode: string | null
+  createdAt: string
+}
+
+export interface InboundContainersResult {
+  waiting: InboundContainerRow[]
+  stored: InboundContainerRow[]
+}
+
+export interface CreateInboundTaskResult {
+  taskId: number
+  taskNo: string
 }

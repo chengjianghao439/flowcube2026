@@ -1,6 +1,8 @@
 /**
  * usePdaScanner — 工业 PDA 扫码枪输入 Hook
  *
+ * Android 套壳：扫码枪一般为「键盘模式」，按键事件进入 document，本 Hook 即可接收，无需额外原生插件。
+ *
  * 稳定性优化：
  *  - onScan 通过 ref 调用，避免 useEffect 依赖变化导致反复注册/销毁事件监听
  *  - 高频扫码（每秒多次）不丢码，不重复注册

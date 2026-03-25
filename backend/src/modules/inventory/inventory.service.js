@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { adjustContainerStock, adjustContainersForStockcheck } = require('../../engine/containerEngine')
+const { adjustContainerStock, SOURCE_TYPE } = require('../../engine/containerEngine')
 
 // ─── 库存查询 ─────────────────────────────────────────────────────────────────
 
@@ -87,6 +87,9 @@ async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehou
       quantity: Number(r.quantity), beforeQty: Number(r.before_qty), afterQty: Number(r.after_qty),
       unitPrice: r.unit_price ? Number(r.unit_price) : null,
       remark: r.remark, operatorId: r.operator_id, operatorName: r.operator_name,
+      containerId: r.container_id ?? null,
+      logSourceType: r.log_source_type ?? null,
+      logSourceRefId: r.log_source_ref_id != null ? Number(r.log_source_ref_id) : null,
       createdAt: r.created_at,
     })),
     pagination: { page, pageSize, total },
@@ -95,9 +98,9 @@ async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehou
 
 // ─── 入库 / 出库 / 调整 ───────────────────────────────────────────────────────
 //
-// type=1 手动入库  → adjustContainerStock(+qty)  创建新容器
-// type=2 手动出库  → adjustContainerStock(-qty)  FIFO 扣减容器
-// type=3 直接设定  → adjustContainersForStockcheck(delta) 盘盈创建/盘亏扣减
+// type=1 手动入库  → 已关闭（须走入库任务 → 收货容器 → 上架）
+// type=2 手动出库  → adjustContainerStock(-qty)，来源 manual + 操作人 ID
+// type=3 库存调整  → 已关闭（须走盘点单，容器来源 stockcheck）
 //
 // 所有路径均通过 containerEngine 完成，inventory_stock 仅作缓存写入
 
@@ -116,56 +119,45 @@ async function changeStock({ type, productId, warehouseId, supplierId, quantity,
     )
     if (!warehouse) throw new AppError('仓库不存在或已停用', 404)
 
-    let moveType, before, after
-
     if (type === 1) {
-      // 手动入库：创建新容器
-      moveType = MOVE_TYPE.MANUAL_IN;
-      ({ before, after } = await adjustContainerStock(conn, {
-        productId, productName: product.name, warehouseId,
-        qty: +quantity, unit: product.unit,
-        sourceRefType: 'manual', sourceRefNo: 'MANUAL',
-        remark: remark || '手动入库',
-      }))
-    } else if (type === 2) {
-      // 手动出库：FIFO 扣减容器（不足则抛出）
-      moveType = MOVE_TYPE.MANUAL_OUT;
-      ({ before, after } = await adjustContainerStock(conn, {
-        productId, productName: product.name, warehouseId,
-        qty: -quantity, unit: product.unit,
-        sourceRefType: 'manual', sourceRefNo: 'MANUAL',
-        remark: remark || '手动出库',
-      }))
-    } else {
-      // 直接设定（type=3）：计算 delta，走盘点容器路径
-      moveType = MOVE_TYPE.STOCKCHECK;
-      const [[stockRow]] = await conn.query(
-        'SELECT COALESCE(quantity,0) AS qty FROM inventory_stock WHERE product_id=? AND warehouse_id=?',
-        [productId, warehouseId],
-      )
-      const currentQty = stockRow ? Number(stockRow.qty) : 0
-      const diffQty    = quantity - currentQty;
-      ({ before, after } = await adjustContainersForStockcheck(conn, {
-        productId, productName: product.name, warehouseId,
-        diffQty, unit: product.unit,
-        sourceRefType: 'manual', sourceRefNo: 'MANUAL',
-        remark: remark || `手动设定库存 ${quantity}`,
-      }))
+      throw new AppError('手动入库已关闭：请通过「入库任务」收货生成容器并上架后计入库存', 403)
     }
+
+    if (type === 3) {
+      throw new AppError('库存调整已关闭：请创建并提交「盘点单」，差异将通过容器来源 stockcheck 落账', 403)
+    }
+
+    if (type !== 2) {
+      throw new AppError('不支持的库存操作类型', 400)
+    }
+
+    // 手动出库：FIFO 扣减容器（不足则抛出）
+    const moveType = MOVE_TYPE.MANUAL_OUT
+    const { before, after, primaryDeductContainerId } = await adjustContainerStock(conn, {
+      productId, productName: product.name, warehouseId,
+      qty: -quantity, unit: product.unit,
+      sourceType: SOURCE_TYPE.MANUAL,
+      sourceRefId: operator.userId,
+      sourceRefType: 'manual',
+      sourceRefNo: `OP${operator.userId}`,
+      remark: remark || '手动出库',
+    })
 
     // 写库存变动日志
     await conn.query(
       `INSERT INTO inventory_logs
          (move_type, type, product_id, warehouse_id, supplier_id,
           quantity, before_qty, after_qty, unit_price,
-          ref_type, ref_id, ref_no, remark, operator_id, operator_name)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          ref_type, ref_id, ref_no,
+          container_id, log_source_type, log_source_ref_id,
+          remark, operator_id, operator_name)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        moveType,
-        moveType === MOVE_TYPE.MANUAL_OUT ? 2 : 1,
+        moveType, 2,
         productId, warehouseId, supplierId || null,
-        Math.abs(after - before), before, after, unitPrice || null,
-        'manual', null, 'MANUAL',
+        quantity, before, after, unitPrice || null,
+        'manual', operator.userId, `OP${operator.userId}`,
+        primaryDeductContainerId, SOURCE_TYPE.MANUAL, operator.userId,
         remark || null, operator.userId, operator.realName,
       ]
     )
@@ -305,13 +297,17 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
 
 // ─── 容器列表（只读，仅返回 ACTIVE 容器）────────────────────────────────────
 
-async function getContainers({ productId, warehouseId }) {
+async function getContainers({ productId, warehouseId, includeLegacy = false }) {
   const conditions = [
     'c.product_id = ?',
     'c.status = 1',            // ACTIVE only
     'c.deleted_at IS NULL',
   ]
   const params = [productId]
+
+  if (!includeLegacy) {
+    conditions.push('(c.is_legacy = 0 OR c.is_legacy IS NULL)')
+  }
 
   if (warehouseId) {
     conditions.push('c.warehouse_id = ?')
@@ -322,7 +318,9 @@ async function getContainers({ productId, warehouseId }) {
     `SELECT
        c.id, c.barcode, c.batch_no,
        c.initial_qty, c.remaining_qty,
+       c.source_type, c.source_ref_id,
        c.source_ref_type, c.source_ref_no,
+       c.is_legacy,
        c.mfg_date, c.exp_date, c.unit, c.remark,
        c.created_at,
        w.name AS warehouse_name,
@@ -341,8 +339,11 @@ async function getContainers({ productId, warehouseId }) {
     batchNo:      r.batch_no      || null,
     initialQty:   Number(r.initial_qty),
     remainingQty: Number(r.remaining_qty),
+    sourceType:   r.source_type || null,
+    sourceRefId:  r.source_ref_id != null ? Number(r.source_ref_id) : null,
     sourceRefType: r.source_ref_type || null,
     sourceRefNo:  r.source_ref_no  || null,
+    isLegacy:     !!Number(r.is_legacy),
     mfgDate:      r.mfg_date       || null,
     expDate:      r.exp_date       || null,
     unit:         r.unit           || null,
@@ -353,10 +354,256 @@ async function getContainers({ productId, warehouseId }) {
   }))
 }
 
+/**
+ * 根据容器来源解析关联单据（只读）
+ */
+async function resolveSourceDocument(sourceType, sourceRefId) {
+  const rid = Number(sourceRefId)
+  if (!Number.isFinite(rid) || rid <= 0) return null
+
+  try {
+    if (sourceType === 'inbound_task') {
+      const [[row]] = await pool.query(
+        'SELECT id, task_no, status, purchase_order_no, warehouse_name FROM inbound_tasks WHERE id=? AND deleted_at IS NULL',
+        [rid],
+      )
+      return row ? { kind: 'inbound_task', id: row.id, no: row.task_no, status: row.status, purchaseOrderNo: row.purchase_order_no, warehouseName: row.warehouse_name } : null
+    }
+    if (sourceType === 'stockcheck') {
+      const [[row]] = await pool.query(
+        'SELECT id, check_no, status, warehouse_name FROM inventory_checks WHERE id=? AND deleted_at IS NULL',
+        [rid],
+      )
+      return row ? { kind: 'stockcheck', id: row.id, no: row.check_no, status: row.status, warehouseName: row.warehouse_name } : null
+    }
+    if (sourceType === 'transfer') {
+      const [[row]] = await pool.query(
+        'SELECT id, order_no, status, from_warehouse_name, to_warehouse_name FROM transfer_orders WHERE id=? AND deleted_at IS NULL',
+        [rid],
+      )
+      return row ? { kind: 'transfer', id: row.id, no: row.order_no, status: row.status, fromWarehouseName: row.from_warehouse_name, toWarehouseName: row.to_warehouse_name } : null
+    }
+    if (sourceType === 'import') {
+      const [[row]] = await pool.query(
+        'SELECT id, file_name, row_count, created_at FROM inventory_import_batches WHERE id=?',
+        [rid],
+      )
+      return row ? { kind: 'import', id: row.id, fileName: row.file_name, rowCount: row.row_count, createdAt: row.created_at } : null
+    }
+    if (sourceType === 'return') {
+      const [[sr]] = await pool.query('SELECT id, return_no, status FROM sale_returns WHERE id=? AND deleted_at IS NULL', [rid])
+      if (sr) return { kind: 'sale_return', id: sr.id, no: sr.return_no, status: sr.status }
+      const [[pr]] = await pool.query('SELECT id, return_no, status FROM purchase_returns WHERE id=? AND deleted_at IS NULL', [rid])
+      if (pr) return { kind: 'purchase_return', id: pr.id, no: pr.return_no, status: pr.status }
+      return null
+    }
+    if (sourceType === 'manual') {
+      const [[u]] = await pool.query('SELECT id, username, real_name FROM sys_users WHERE id=?', [rid])
+      return u ? { kind: 'manual', operatorUserId: u.id, username: u.username, realName: u.real_name } : null
+    }
+  } catch (e) {
+    if (e.code === 'ER_NO_SUCH_TABLE') return null
+    throw e
+  }
+  return null
+}
+
+/**
+ * 按商品聚合在库容器及来源（status=1），支持按容器/来源/单据过滤；默认排除 is_legacy
+ */
+async function traceByProductId(productId, {
+  containerId = null,
+  sourceType = null,
+  sourceRefId = null,
+  includeLegacy = false,
+} = {}) {
+  const [[p]] = await pool.query(
+    'SELECT id, code, name, unit FROM product_items WHERE id=? AND deleted_at IS NULL',
+    [productId],
+  )
+  if (!p) throw new AppError('商品不存在', 404)
+
+  const conditions = [
+    'c.product_id = ?',
+    'c.status = 1',
+    'c.deleted_at IS NULL',
+  ]
+  const params = [productId]
+
+  if (!includeLegacy) {
+    conditions.push('(c.is_legacy = 0 OR c.is_legacy IS NULL)')
+  }
+  if (containerId) {
+    conditions.push('c.id = ?')
+    params.push(containerId)
+  }
+  if (sourceType) {
+    conditions.push('c.source_type = ?')
+    params.push(sourceType)
+  }
+  if (sourceRefId != null && sourceRefId !== '') {
+    conditions.push('c.source_ref_id = ?')
+    params.push(Number(sourceRefId))
+  }
+
+  const [rows] = await pool.query(
+    `SELECT c.id AS containerId, c.barcode, c.source_type AS sourceType, c.source_ref_id AS sourceRefId,
+            c.source_ref_no AS sourceRefNo, c.source_ref_type AS sourceRefType,
+            c.warehouse_id AS warehouseId, w.name AS warehouseName,
+            c.remaining_qty AS remainingQty, c.batch_no AS batchNo, c.created_at AS createdAt,
+            c.is_legacy AS isLegacy
+     FROM inventory_containers c
+     INNER JOIN inventory_warehouses w ON w.id = c.warehouse_id AND w.deleted_at IS NULL
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY c.warehouse_id ASC, c.created_at ASC, c.id ASC`,
+    params,
+  )
+
+  const summaryMap = new Map()
+  for (const r of rows) {
+    const k = `${r.sourceType || 'unknown'}:${r.sourceRefId ?? 'null'}`
+    const prev = summaryMap.get(k) || {
+      sourceType: r.sourceType,
+      sourceRefId: r.sourceRefId,
+      sourceRefNo: r.sourceRefNo,
+      totalQty: 0,
+      containerCount: 0,
+    }
+    prev.totalQty += Number(r.remainingQty)
+    prev.containerCount += 1
+    summaryMap.set(k, prev)
+  }
+
+  const chains = []
+  for (const r of rows) {
+    const doc = await resolveSourceDocument(r.sourceType, r.sourceRefId)
+    chains.push({
+      container: {
+        containerId: r.containerId,
+        barcode: r.barcode,
+        remainingQty: Number(r.remainingQty),
+        batchNo: r.batchNo,
+        createdAt: r.createdAt,
+        warehouseId: r.warehouseId,
+        warehouseName: r.warehouseName,
+        isLegacy: !!Number(r.isLegacy),
+      },
+      source: {
+        sourceType: r.sourceType,
+        sourceRefId: r.sourceRefId != null ? Number(r.sourceRefId) : null,
+        sourceRefNo: r.sourceRefNo,
+        sourceRefType: r.sourceRefType,
+      },
+      document: doc,
+    })
+  }
+
+  return {
+    productId: p.id,
+    productCode: p.code,
+    productName: p.name,
+    unit: p.unit,
+    filters: { containerId, sourceType, sourceRefId, includeLegacy },
+    summary: [...summaryMap.values()],
+    chains,
+    containers: rows.map(r => ({
+      containerId: r.containerId,
+      barcode: r.barcode,
+      sourceType: r.sourceType,
+      sourceRefId: r.sourceRefId != null ? Number(r.sourceRefId) : null,
+      sourceRefNo: r.sourceRefNo,
+      sourceRefType: r.sourceRefType,
+      warehouseId: r.warehouseId,
+      warehouseName: r.warehouseName,
+      remainingQty: Number(r.remainingQty),
+      batchNo: r.batchNo,
+      createdAt: r.createdAt,
+      isLegacy: !!Number(r.isLegacy),
+    })),
+  }
+}
+
+/** 校验容器汇总（ACTIVE）与 inventory_stock.quantity 是否一致 */
+async function checkStockConsistency({ productId = null, warehouseId = null, limit = 500 } = {}) {
+  const condC = ['c.status = 1', 'c.deleted_at IS NULL']
+  const paramsC = []
+  if (productId) { condC.push('c.product_id = ?'); paramsC.push(productId) }
+  if (warehouseId) { condC.push('c.warehouse_id = ?'); paramsC.push(warehouseId) }
+
+  const [agg] = await pool.query(
+    `SELECT c.product_id AS productId, c.warehouse_id AS warehouseId,
+            SUM(c.remaining_qty) AS containerQty
+     FROM inventory_containers c
+     WHERE ${condC.join(' AND ')}
+     GROUP BY c.product_id, c.warehouse_id`,
+    paramsC,
+  )
+
+  const mismatches = []
+  for (const row of agg) {
+    const pid = row.productId
+    const wid = row.warehouseId
+    const cQty = Number(row.containerQty)
+    const [[s]] = await pool.query(
+      'SELECT COALESCE(quantity,0) AS q FROM inventory_stock WHERE product_id=? AND warehouse_id=?',
+      [pid, wid],
+    )
+    const sQty = s ? Number(s.q) : 0
+    const diff = sQty - cQty
+    if (Math.abs(diff) > 0.0001) {
+      mismatches.push({ productId: pid, warehouseId: wid, containerQty: cQty, stockQty: sQty, diff })
+    }
+  }
+
+  const condS = ['s.quantity > 0.0001']
+  const paramsS = []
+  if (productId) { condS.push('s.product_id = ?'); paramsS.push(productId) }
+  if (warehouseId) { condS.push('s.warehouse_id = ?'); paramsS.push(warehouseId) }
+
+  const [stockOnly] = await pool.query(
+    `SELECT s.product_id AS productId, s.warehouse_id AS warehouseId, s.quantity AS stockQty
+     FROM inventory_stock s
+     LEFT JOIN (
+       SELECT product_id, warehouse_id, SUM(remaining_qty) AS sq
+       FROM inventory_containers
+       WHERE status = 1 AND deleted_at IS NULL
+       GROUP BY product_id, warehouse_id
+     ) x ON x.product_id = s.product_id AND x.warehouse_id = s.warehouse_id
+     WHERE ${condS.join(' AND ')}
+       AND (x.sq IS NULL OR x.sq = 0)`,
+    paramsS,
+  )
+
+  for (const row of stockOnly) {
+    const cQty = 0
+    const sQty = Number(row.stockQty)
+    mismatches.push({
+      productId: row.productId,
+      warehouseId: row.warehouseId,
+      containerQty: cQty,
+      stockQty: sQty,
+      diff: sQty - cQty,
+      note: '库存表有量但无在库容器汇总',
+    })
+  }
+
+  mismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+  const total = mismatches.length
+  const list = mismatches.slice(0, Math.min(Math.max(1, limit), 2000))
+
+  return {
+    ok: total === 0,
+    mismatchCount: total,
+    checkedHint: '按 SKU+仓库 比对 ACTIVE 容器 remaining_qty 合计与 inventory_stock.quantity',
+    mismatches: list,
+  }
+}
+
 async function getContainerByBarcode(barcode) {
   const [[row]] = await pool.query(
     `SELECT c.id, c.barcode, c.product_id, c.warehouse_id, c.location_id,
-            c.remaining_qty, c.unit,
+            c.remaining_qty, c.unit, c.status, c.inbound_task_id,
+            c.source_type, c.source_ref_id, c.is_legacy,
             p.code AS product_code, p.name AS product_name,
             w.name AS warehouse_name,
             loc.code AS location_code
@@ -364,7 +611,7 @@ async function getContainerByBarcode(barcode) {
      LEFT JOIN product_items p ON p.id = c.product_id
      LEFT JOIN inventory_warehouses w ON w.id = c.warehouse_id
      LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
-     WHERE c.barcode = ? AND c.status = 1`,
+     WHERE c.barcode = ? AND c.deleted_at IS NULL AND c.status IN (1, 4)`,
     [barcode],
   )
   if (!row) throw new AppError('容器不存在或已失效', 404)
@@ -380,6 +627,11 @@ async function getContainerByBarcode(barcode) {
     locationCode:  row.location_code || null,
     remainingQty:  Number(row.remaining_qty),
     unit:          row.unit,
+    containerStatus: Number(row.status) === 4 ? 'waiting_putaway' : 'stored',
+    inboundTaskId: row.inbound_task_id || null,
+    sourceType:    row.source_type || null,
+    sourceRefId:   row.source_ref_id != null ? Number(row.source_ref_id) : null,
+    isLegacy:      !!Number(row.is_legacy),
   }
 }
 
@@ -398,7 +650,10 @@ async function assignContainerLocation(containerId, locationId) {
     [containerId],
   )
   if (!container) throw new AppError('容器不存在', 404)
-  if (container.status !== 1) throw new AppError('容器已清空或作废，无法上架', 400)
+  if (Number(container.status) === 4) {
+    throw new AppError('待上架容器请使用「入库任务」上架接口绑定库位', 400)
+  }
+  if (Number(container.status) !== 1) throw new AppError('容器已清空或作废，无法移动库位', 400)
 
   // 校验库位存在
   const [[location]] = await pool.query(
@@ -419,4 +674,15 @@ async function assignContainerLocation(containerId, locationId) {
   }
 }
 
-module.exports = { getStock, getLogs, changeStock, getOverview, getContainers, getContainerByBarcode, assignContainerLocation }
+module.exports = {
+  getStock,
+  getLogs,
+  changeStock,
+  getOverview,
+  getContainers,
+  traceByProductId,
+  checkStockConsistency,
+  resolveSourceDocument,
+  getContainerByBarcode,
+  assignContainerLocation,
+}

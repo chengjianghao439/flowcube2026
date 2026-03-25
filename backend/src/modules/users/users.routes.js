@@ -22,12 +22,14 @@ const createSchema = z.object({
   password: z.string().min(6, '密码至少 6 位').max(100),
   realName: z.string().min(1, '姓名不能为空').max(50),
   roleId: z.number().int().min(1).max(2),
+  tenantId: z.coerce.number().int().min(0).optional(),
 })
 
 const updateSchema = z.object({
   realName: z.string().min(1, '姓名不能为空').max(50),
   roleId: z.number().int().min(1).max(2),
   isActive: z.boolean(),
+  tenantId: z.coerce.number().int().min(0).optional(),
 })
 
 const resetPasswordSchema = z.object({

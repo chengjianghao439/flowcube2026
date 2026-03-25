@@ -1,0 +1,73 @@
+{
+  "name": "flowcube-desktop",
+  "private": true,
+  "version": "0.1.2",
+  "description": "FlowCube ERP 桌面客户端（Electron）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:renderer": "cd ../frontend && npm run build:electron",
+    "pack": "npm run build:renderer && npx electron-builder --dir",
+    "dist": "npm run build:renderer && npx electron-builder",
+    "dist:win": "npm run build:renderer && npx electron-builder --win",
+    "dist:win:zip": "npm run build:renderer && npx electron-builder --win zip --x64"
+  },
+  "dependencies": {
+    "semver": "^7.6.3"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.flowcube.erp",
+    "productName": "FlowCube ERP",
+    "copyright": "Copyright © FlowCube",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "renderer",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

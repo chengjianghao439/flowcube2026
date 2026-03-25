@@ -29,9 +29,12 @@ function authMiddleware(req, res, next) {
  * 权限校验中间件工厂。
  * 用法：router.delete('/:id', authMiddleware, permissionMiddleware('inventory:delete'), controller.delete)
  * @param {string} permissionCode 格式：[模块]:[动作]，如 inventory:delete
+ * @param {{ superAdminRoleIds?: number[] }} [options] superAdminRoleIds 默认 [1]，拥有任一角色则跳过权限表校验
  */
-function permissionMiddleware(permissionCode) {
+function permissionMiddleware(permissionCode, options = {}) {
+  const superAdminRoleIds = options.superAdminRoleIds ?? [1]
   return (req, res, next) => {
+    if (superAdminRoleIds.includes(req.user?.roleId)) return next()
     const userPermissions = req.user?.permissions ?? []
     if (!userPermissions.includes(permissionCode)) {
       return next(new AppError('无操作权限', 403))

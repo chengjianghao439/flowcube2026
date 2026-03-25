@@ -28,10 +28,6 @@ router.get('/:id/pick-route', ctrl.pickRoute)
 
 router.post('/:id/start', ctrl.start)
 
-router.put('/:id/items/:itemId/picked-qty', vBody(z.object({
-  pickedQty: z.number().nonnegative(),
-})), ctrl.updatePickedQty)
-
 router.post('/:id/finish-picking', ctrl.finishPicking)
 
 router.post('/:id/finish', ctrl.finish)

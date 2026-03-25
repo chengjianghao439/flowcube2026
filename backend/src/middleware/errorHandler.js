@@ -15,7 +15,7 @@ function errorHandler(err, req, res, next) {
   // ── 业务异常（可预期，不记录 error 级别）──────────────────────────────────
   if (err instanceof AppError && err.isOperational) {
     logger.warn(`[AppError] ${err.message}`, { path, userId, refNo, code: err.statusCode }, 'ERR')
-    return errorResponse(res, err.message, err.statusCode)
+    return errorResponse(res, err.message, err.statusCode, err.data ?? null)
   }
 
   // ── MySQL 唯一约束 ────────────────────────────────────────────────────────

@@ -35,13 +35,6 @@ exports.start = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-exports.updatePickedQty = async (req, res, next) => {
-  try {
-    await svc.updatePickedQty(+req.params.id, +req.params.itemId, req.body.pickedQty)
-    return successResponse(res, null, '更新成功')
-  } catch (e) { next(e) }
-}
-
 exports.finishPicking = async (req, res, next) => {
   try {
     await svc.finishPicking(+req.params.id)

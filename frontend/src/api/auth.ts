@@ -20,3 +20,9 @@ export async function getMeApi(): Promise<User> {
   const res = await apiClient.get<ApiResponse<User>>('/auth/me')
   return res.data.data
 }
+
+/** 在旧 Token 仍有效时换新 JWT（含 tenantId），供打印客户端与 Web 升级会话 */
+export async function refreshAccessTokenApi(): Promise<{ token: string }> {
+  const res = await apiClient.post<ApiResponse<{ token: string }>>('/auth/refresh', {}, { skipGlobalError: true })
+  return res.data.data
+}

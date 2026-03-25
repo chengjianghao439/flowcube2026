@@ -3,6 +3,10 @@ const AppError = require('../../utils/AppError')
 
 const { WT_STATUS, isValidTransition } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
+const {
+  assertTaskCheckScanClosure,
+  assertTaskPackagingClosure,
+} = require('../warehouse-tasks/warehouse-tasks.service')
 
 // ─── 查询任务下所有箱子（含明细）────────────────────────────────────────────
 async function listByTask(taskId) {
@@ -51,10 +55,13 @@ async function listByTask(taskId) {
 // ─── 创建新箱子（BOX + 6位 ID）───────────────────────────────────────────────
 async function createPackage(taskId, remark = null) {
   const [[task]] = await pool.query(
-    'SELECT id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL',
+    'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL',
     [taskId],
   )
   if (!task) throw new AppError('任务不存在', 404)
+  if (Number(task.status) !== WT_STATUS.PACKING) {
+    throw new AppError('仅「待打包」任务可创建装箱', 400)
+  }
 
   const [result] = await pool.query(
     'INSERT INTO packages (barcode, warehouse_task_id, remark) VALUES (?, ?, ?)',
@@ -70,10 +77,16 @@ async function createPackage(taskId, remark = null) {
 // ─── 向箱子添加商品 ───────────────────────────────────────────────────────────
 async function addItem(packageId, { productCode, qty }) {
   const [[pkg]] = await pool.query(
-    'SELECT id, status FROM packages WHERE id=?',
+    `SELECT p.id, p.status, p.warehouse_task_id, wt.status AS task_status
+     FROM packages p
+     JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
+     WHERE p.id=?`,
     [packageId],
   )
   if (!pkg) throw new AppError('箱子不存在', 404)
+  if (Number(pkg.task_status) !== WT_STATUS.PACKING) {
+    throw new AppError('任务不在待打包状态，禁止装箱', 400)
+  }
   if (pkg.status === 2) throw new AppError('该箱已完成，无法继续添加商品', 400)
   if (!qty || qty <= 0) throw new AppError('数量必须大于 0', 400)
 
@@ -137,6 +150,15 @@ async function finishPackage(packageId) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+
+    const [[taskRow]] = await conn.query(
+      'SELECT id, status, task_no FROM warehouse_tasks WHERE id=? FOR UPDATE',
+      [pkg.warehouse_task_id],
+    )
+    if (!taskRow || Number(taskRow.status) !== WT_STATUS.PACKING) {
+      throw new AppError('任务不在待打包状态，禁止完成装箱', 400)
+    }
+
     await conn.query('UPDATE packages SET status=2 WHERE id=?', [packageId])
 
     // 检查该任务是否还有未完成的箱子
@@ -147,9 +169,9 @@ async function finishPackage(packageId) {
     let autoPacked = false
     if (remaining === 0) {
       // 所有箱子打包完毕 → 自动推进到「待出库」(5→6)
-      // 先校验迁移合法性（防止任务被并发推进到其他状态）
-      const [[taskRow]] = await conn.query('SELECT status, task_no FROM warehouse_tasks WHERE id=?', [pkg.warehouse_task_id])
-      if (taskRow && isValidTransition(taskRow.status, WT_STATUS.SHIPPING)) {
+      if (taskRow && isValidTransition(Number(taskRow.status), WT_STATUS.SHIPPING)) {
+        await assertTaskCheckScanClosure(conn, pkg.warehouse_task_id)
+        await assertTaskPackagingClosure(conn, pkg.warehouse_task_id)
         const [r] = await conn.query(
           'UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?',
           [WT_STATUS.SHIPPING, pkg.warehouse_task_id, WT_STATUS.PACKING],

@@ -55,6 +55,25 @@ jobs:
         working-directory: ./desktop
         run: npm run dist:win
 
+      - name: Rename output files (remove spaces)
+        working-directory: ./desktop
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path release -Filter "*.exe" | ForEach-Object {
+            $newName = $_.Name -replace ' ', '-'
+            if ($_.Name -ne $newName) {
+              Move-Item $_.FullName "release/$newName"
+              Write-Host "Renamed: $($_.Name) -> $newName"
+            }
+          }
+          Get-ChildItem -Path release -Filter "*.zip" | ForEach-Object {
+            $newName = $_.Name -replace ' ', '-'
+            if ($_.Name -ne $newName) {
+              Move-Item $_.FullName "release/$newName"
+              Write-Host "Renamed: $($_.Name) -> $newName"
+            }
+          }
+
       - name: List built files
         run: Get-ChildItem -Path desktop/release -Filter "*.exe" | Select-Object Name, Length
         shell: pwsh

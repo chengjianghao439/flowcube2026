@@ -27,7 +27,7 @@
 
 const AppError = require('../utils/AppError')
 const { markFulfilled } = require('./reservationEngine')
-const { deductFromContainers, syncStockFromContainers } = require('./containerEngine')
+const { deductFromContainers, deductFromTaskLockedContainers, syncStockFromContainers } = require('./containerEngine')
 
 /**
  * 变动类型常量（对应 inventory_logs.move_type）
@@ -105,6 +105,7 @@ const MIGRATED_GUIDE = {
  * @param {string} params.operatorName
  * @param {string} [params.reservationRefType]
  * @param {number} [params.reservationRefId]
+ * @param {number} [params.lockedByTaskId] - 若传入则仅从 locked_by_task_id 匹配的容器扣减（销售任务出库）
  *
  * @returns {{ before: number, after: number }}
  * @throws {AppError} 库存不足 / 类型已迁移
@@ -115,6 +116,7 @@ async function moveStock(conn, {
   refType, refId, refNo,
   remark = null, operatorId, operatorName,
   reservationRefType = null, reservationRefId = null,
+  lockedByTaskId = null,
 }) {
   // ── 拦截所有已迁移类型，防止误调用 ─────────────────────────────────────────
   if (MIGRATED_TYPES.has(moveType)) {
@@ -135,8 +137,13 @@ async function moveStock(conn, {
     )
     const before = stockRow ? Number(stockRow.quantity) : 0
 
-    // 2. FIFO 容器扣减（库存不足时抛出）
-    await deductFromContainers(conn, { productId, productName, warehouseId, qty: Math.abs(qty) })
+    // 2. 容器扣减：任务出库且指定 lockedByTaskId 时仅扣本任务锁定容器，否则 FIFO
+    const absQty = Math.abs(qty)
+    const deducted = lockedByTaskId
+      ? await deductFromTaskLockedContainers(conn, {
+        productId, productName, warehouseId, qty: absQty, taskId: lockedByTaskId,
+      })
+      : await deductFromContainers(conn, { productId, productName, warehouseId, qty: absQty })
 
     // 3. 汇总容器 → 刷新 inventory_stock 缓存
     const after = await syncStockFromContainers(conn, productId, warehouseId)
@@ -144,7 +151,7 @@ async function moveStock(conn, {
     // 4. 减少 reserved；标记预占为已履行
     await conn.query(
       'UPDATE inventory_stock SET reserved=GREATEST(0, reserved-?) WHERE product_id=? AND warehouse_id=?',
-      [Math.abs(qty), productId, warehouseId]
+      [absQty, productId, warehouseId]
     )
     if (reservationRefType && reservationRefId) {
       await markFulfilled(conn, reservationRefType, reservationRefId, productId, warehouseId)
@@ -156,18 +163,48 @@ async function moveStock(conn, {
       [productId, warehouseId]
     )
 
-    // 6. 写日志
+    // 6. 写日志（按实际扣减容器分行记录，便于追溯 container_id）
     const logRemark = remark || `${MOVE_TYPE_LABEL[moveType]} ${refNo}`
-    await conn.query(
-      `INSERT INTO inventory_logs
-         (move_type, type, product_id, warehouse_id, supplier_id,
-          quantity, before_qty, after_qty, unit_price,
-          ref_type, ref_id, ref_no, remark, operator_id, operator_name)
-       VALUES (?,2,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [moveType, productId, warehouseId, supplierId,
-       Math.abs(qty), before, after, unitPrice,
-       refType, refId, refNo, logRemark, operatorId, operatorName]
-    )
+    const logSourceType = lockedByTaskId ? 'sale_task' : refType
+    const logSourceRefId = lockedByTaskId ? lockedByTaskId : refId
+
+    if (lockedByTaskId && deducted.length > 1) {
+      let runningBefore = before
+      for (const d of deducted) {
+        const chunkAfter = runningBefore - d.taken
+        await conn.query(
+          `INSERT INTO inventory_logs
+             (move_type, type, product_id, warehouse_id, supplier_id,
+              quantity, before_qty, after_qty, unit_price,
+              ref_type, ref_id, ref_no,
+              container_id, log_source_type, log_source_ref_id,
+              remark, operator_id, operator_name)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [moveType, 2, productId, warehouseId, supplierId,
+            d.taken, runningBefore, chunkAfter, unitPrice,
+            refType, refId, refNo,
+            d.containerId, logSourceType, logSourceRefId,
+            logRemark, operatorId, operatorName],
+        )
+        runningBefore = chunkAfter
+      }
+    } else {
+      const primaryContainerId = deducted[0]?.containerId ?? null
+      await conn.query(
+        `INSERT INTO inventory_logs
+           (move_type, type, product_id, warehouse_id, supplier_id,
+            quantity, before_qty, after_qty, unit_price,
+            ref_type, ref_id, ref_no,
+            container_id, log_source_type, log_source_ref_id,
+            remark, operator_id, operator_name)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [moveType, 2, productId, warehouseId, supplierId,
+          absQty, before, after, unitPrice,
+          refType, refId, refNo,
+          primaryContainerId, logSourceType, logSourceRefId,
+          logRemark, operatorId, operatorName],
+      )
+    }
 
     return { before, after }
   }

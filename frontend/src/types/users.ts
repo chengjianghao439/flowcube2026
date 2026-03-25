@@ -5,6 +5,7 @@ export interface SysUser {
   roleId: number
   roleName: string
   isActive: boolean
+  tenantId: number
   createdAt: string
 }
 
@@ -13,10 +14,12 @@ export interface CreateUserParams {
   password: string
   realName: string
   roleId: number
+  tenantId?: number
 }
 
 export interface UpdateUserParams {
   realName: string
   roleId: number
   isActive: boolean
+  tenantId?: number
 }

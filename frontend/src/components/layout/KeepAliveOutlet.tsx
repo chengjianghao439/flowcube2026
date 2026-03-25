@@ -60,6 +60,7 @@ const PATH_PERMS: Record<string, PermCode> = {
   '/price-lists':               'page:sale',
   '/settings/print-templates':  'page:settings',
   '/settings/printers':          'page:settings',
+  '/settings/print-tenant':      'page:settings',
 }
 
 // ── 固定路径 → 组件映射（代码分割仍然有效）────────────────────────────────────
@@ -95,11 +96,13 @@ const PAGE_MAP: Record<string, React.LazyExoticComponent<React.ComponentType>> =
   '/price-lists':                lazy(() => import('@/pages/price-lists')),
   '/settings/print-templates':  lazy(() => import('@/pages/settings/print-templates')),
   '/settings/printers':          lazy(() => import('@/pages/settings/printers')),
+  '/settings/print-tenant':     lazy(() => import('@/pages/settings/print-tenant')),
 }
 
 // ── 动态路由：模块级惰性加载（注意：必须在组件外声明，防止每次渲染重新 lazy） ──
 const SaleFormPage           = lazy(() => import('@/pages/sale/form'))
 const PurchaseFormPage       = lazy(() => import('@/pages/purchase/form'))
+const InboundTaskDetailPage  = lazy(() => import('@/pages/inbound-tasks/detail'))
 const PrintTemplateEditorPage = lazy(() => import('@/pages/settings/print-templates/editor'))
 const PdaWavePage            = lazy(() => import('@/pages/pda/wave'))
 
@@ -123,6 +126,12 @@ const PATH_PATTERNS: PathPattern[] = [
     perm: 'page:purchase',
     component: PurchaseFormPage,
     defaultTitle: (path) => path === '/purchase/new' ? '新建采购单' : `采购单 #${path.split('/').pop()}`,
+  },
+  {
+    pattern: /^\/inbound-tasks\/\d+$/,
+    perm: 'page:warehouse-tasks',
+    component: InboundTaskDetailPage,
+    defaultTitle: (path) => `入库任务 #${path.split('/').pop()}`,
   },
   {
     pattern: /^\/settings\/print-templates\/(new|\d+)$/,

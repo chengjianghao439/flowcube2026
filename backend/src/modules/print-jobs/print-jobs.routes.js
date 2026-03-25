@@ -1,18 +1,100 @@
 const { Router } = require('express')
+const { z } = require('zod')
 const ctrl = require('./print-jobs.controller')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, permissionMiddleware } = require('../../middleware/auth')
+const { loadRolePermissions } = require('../../middleware/loadRolePermissions')
+const {
+  validateListenPrinterCode,
+  validateJobPrinterHeader,
+} = require('./print-jobs.middleware')
+
 const router = Router()
 
-// SSE 监听端点（打印客户端使用，无需 JWT — 通过 printerCode 鉴权）
-router.get('/listen/:printerCode', ctrl.listen)
+function validateBody(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.body)
+    if (!result.success) {
+      const message = result.error.errors.map((e) => e.message).join('；')
+      return res.status(400).json({ success: false, message, data: null })
+    }
+    req.body = result.data
+    next()
+  }
+}
 
-// 以下需要登录
+const nullableInt = z.union([z.coerce.number().int().min(1).max(10_000_000), z.null()])
+const rate01 = z.union([z.coerce.number().min(0).max(1), z.null()])
+const coeff = z.union([z.coerce.number().min(0).max(20), z.null()])
+const tenantSettingsPutSchema = z.object({
+  tenantId: z.coerce.number().int().min(0).optional(),
+  maxQueueJobs: nullableInt.optional(),
+  maxConcurrentPrinting: nullableInt.optional(),
+  explorationMode: z.enum(['adaptive', 'fixed']).optional(),
+  explorationRate: rate01.optional(),
+  explorationMin: rate01.optional(),
+  explorationMax: rate01.optional(),
+  explorationBase: rate01.optional(),
+  explorationKErr: coeff.optional(),
+  explorationKLat: coeff.optional(),
+  explorationLatNormMs: z.union([z.coerce.number().int().min(1000).max(3_600_000), z.null()]).optional(),
+  weightErr: coeff.optional(),
+  weightLat: coeff.optional(),
+  weightHb: coeff.optional(),
+  latScoreScaleMs: z.union([z.coerce.number().int().min(1000).max(3_600_000), z.null()]).optional(),
+  monthlyPrintQuota: nullableInt.optional(),
+  policyTemplate: z.union([z.string().max(32), z.null()]).optional(),
+})
+
+const applyTemplateSchema = z.object({
+  template: z.enum(['stable', 'speed', 'balanced']),
+  tenantId: z.coerce.number().int().min(0).optional(),
+})
+
+const printClientPerm = permissionMiddleware('print:client', { superAdminRoleIds: [1] })
+
+// SSE：JWT + print:client + 打印机编码存在
+router.get(
+  '/listen/:printerCode',
+  authMiddleware,
+  loadRolePermissions,
+  printClientPerm,
+  validateListenPrinterCode,
+  ctrl.listen,
+)
+
 router.use(authMiddleware)
-router.get('/',                ctrl.list)
-router.get('/:id',             ctrl.detail)
-router.post('/',               ctrl.create)
-router.post('/:id/complete',   ctrl.complete)
-router.post('/:id/fail',       ctrl.fail)
-router.post('/:id/retry',      ctrl.retry)
+router.get('/policy-templates', ctrl.policyTemplatesList)
+router.post(
+  '/tenant-settings/apply-template',
+  validateBody(applyTemplateSchema),
+  ctrl.tenantSettingsApplyTemplate,
+)
+router.get('/tenant-billing', ctrl.tenantBilling)
+router.get('/alerts', ctrl.alertsList)
+router.post('/alerts/:id/ack', ctrl.alertAck)
+router.get('/tenant-dashboard', ctrl.tenantDashboard)
+router.get('/tenants-overview', ctrl.tenantsOverview)
+router.get('/tenant-settings', ctrl.tenantSettingsGet)
+router.put('/tenant-settings', validateBody(tenantSettingsPutSchema), ctrl.tenantSettingsPut)
+router.get('/', ctrl.list)
+router.get('/stats', ctrl.stats)
+router.get('/printer-health', ctrl.printerHealth)
+router.get('/:id', ctrl.detail)
+router.post('/', ctrl.create)
+router.post(
+  '/:id/complete',
+  loadRolePermissions,
+  printClientPerm,
+  validateJobPrinterHeader,
+  ctrl.complete,
+)
+router.post(
+  '/:id/fail',
+  loadRolePermissions,
+  printClientPerm,
+  validateJobPrinterHeader,
+  ctrl.fail,
+)
+router.post('/:id/retry', ctrl.retry)
 
 module.exports = router

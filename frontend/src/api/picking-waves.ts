@@ -45,6 +45,15 @@ export const WAVE_PRIORITY_COLOR: Record<WavePriority, string> = {
   1: 'text-red-600', 2: 'text-gray-600', 3: 'text-gray-400',
 }
 
+/** 波次内可扫码的仓库任务明细行（按任务顺序分配拣货量） */
+export interface WavePickLine {
+  taskId: number
+  itemId: number
+  productId: number
+  requiredQty: number
+  pickedQty: number
+}
+
 export interface PickingWave {
   id: number
   waveNo: string
@@ -65,6 +74,8 @@ export interface PickingWave {
   pickedQty?: number
   tasks?: WaveTask[]
   items?: WaveItem[]
+  /** 后端按任务顺序展开，用于将扫码归属到正确的 warehouse_task_items */
+  pickLines?: WavePickLine[]
 }
 
 export interface WaveRouteContainer {
@@ -106,9 +117,6 @@ export const createWaveApi = (taskIds: number[], priority?: number, remark?: str
 
 export const startWaveApi = (id: number) =>
   client.post<ApiResponse<null>>(`/picking-waves/${id}/start`)
-
-export const updateWavePickedQtyApi = (waveId: number, itemId: number, pickedQty: number) =>
-  client.put<ApiResponse<null>>(`/picking-waves/${waveId}/items/${itemId}/picked-qty`, { pickedQty })
 
 export const finishPickingApi = (id: number) =>
   client.post<ApiResponse<null>>(`/picking-waves/${id}/finish-picking`)

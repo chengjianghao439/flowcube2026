@@ -12,6 +12,9 @@ export interface InventoryLog {
   quantity: number; beforeQty: number; afterQty: number
   unitPrice: number | null; remark: string | null
   operatorId: number; operatorName: string; createdAt: string
+  containerId?: number | null
+  logSourceType?: string | null
+  logSourceRefId?: number | null
 }
 
 export interface StockChangeParams {

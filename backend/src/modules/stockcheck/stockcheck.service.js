@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { adjustContainersForStockcheck } = require('../../engine/containerEngine')
+const { adjustContainersForStockcheck, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 
 const STATUS = { 1:'进行中', 2:'已完成', 3:'已取消' }
@@ -74,7 +74,7 @@ async function submit(id, operator) {
       if (item.diffQty === 0) continue
 
       // 容器路径：盘盈创建新容器，盘亏 FIFO 扣减容器，同步刷新缓存
-      const { before, after } = await adjustContainersForStockcheck(conn, {
+      const { before, after, createdContainerId, primaryDeductContainerId } = await adjustContainersForStockcheck(conn, {
         productId:    item.productId,
         productName:  item.productName,
         warehouseId:  check.warehouseId,
@@ -86,20 +86,24 @@ async function submit(id, operator) {
         remark:       `盘点调整 ${check.checkNo}`,
       })
 
+      const containerId = item.diffQty > 0 ? createdContainerId : primaryDeductContainerId
+
       // 写库存变动日志
       await conn.query(
         `INSERT INTO inventory_logs
            (move_type, type, product_id, warehouse_id,
             quantity, before_qty, after_qty,
             ref_type, ref_id, ref_no,
+            container_id, log_source_type, log_source_ref_id,
             remark, operator_id, operator_name)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           MOVE_TYPE.STOCKCHECK,
           item.diffQty > 0 ? 1 : 2,     // 盘盈=1(入库方向), 盘亏=2(出库方向)
           item.productId, check.warehouseId,
           Math.abs(item.diffQty), before, after,
           'stockcheck', check.id, check.checkNo,
+          containerId, SOURCE_TYPE.STOCKCHECK, check.id,
           `盘点调整 ${check.checkNo}（差异 ${item.diffQty > 0 ? '+' : ''}${item.diffQty}）`,
           operator.userId, operator.realName,
         ]

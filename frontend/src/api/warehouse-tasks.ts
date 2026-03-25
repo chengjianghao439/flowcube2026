@@ -91,6 +91,7 @@ export const assignTaskApi = (id: number, userId: number, userName: string) =>
 export const startPickingApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/start-picking`, {}, { headers: { 'X-Client': 'pda' } })
 
+/** @deprecated 已拣数量仅由拣货扫码累加，勿调用 */
 export const updatePickedQtyApi = (taskId: number, itemId: number, pickedQty: number) =>
   client.put(`/warehouse-tasks/${taskId}/items/${itemId}/picked-qty`, { pickedQty })
 
@@ -101,7 +102,10 @@ export const sortDoneApi = (id: number, items?: { itemId: number; sortedQty: num
   client.put(`/warehouse-tasks/${id}/sort-done`, { items: items ?? null }, { headers: { 'X-Client': 'pda' } })
 
 export const checkDoneApi = (id: number) =>
-  client.put(`/warehouse-tasks/${id}/check-done`, {}, { headers: { 'X-Client': 'pda' } })
+  client.put(`/warehouse-tasks/${id}/check-done`, {}, {
+    headers: { 'X-Client': 'pda' },
+    skipGlobalError: true,
+  })
 
 export const packDoneApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/pack-done`, {}, { headers: { 'X-Client': 'pda' } })
@@ -164,8 +168,17 @@ export interface PickRouteData {
 export const getPickRouteApi = (taskId: number) =>
   client.get<ApiResponse<PickRouteData>>(`/warehouse-tasks/${taskId}/pick-route`)
 
-// ── 复核 ─────────────────────────────────────────────────────────────────────
+// ── 复核（须扫描容器，禁止手填明细）──────────────────────────────────────────
 
+/** 复核扫码：确认本任务拣货时扫过的容器 */
+export const submitCheckScanApi = (taskId: number, barcode: string) =>
+  client.post<ApiResponse<{ id: number; allChecked: boolean; itemId: number; qty: number }>>(
+    '/scan-logs/check',
+    { taskId, barcode },
+    { headers: { 'X-Client': 'pda' } },
+  )
+
+/** @deprecated 已改为 submitCheckScanApi */
 export const checkTaskItemsApi = (
   taskId: number,
   items: { itemId: number; checkedQty: number }[],

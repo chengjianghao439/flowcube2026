@@ -40,8 +40,22 @@ const undoSchema = z.object({
 
 router.use(authMiddleware)
 
-// 扫码记录
-router.post('/',             vBody(createSchema), ctrl.create)
+function pdaOnly(req, res, next) {
+  const client = req.headers['x-client'] || ''
+  if (client.toLowerCase() !== 'pda') {
+    return res.status(403).json({ success: false, message: '此操作只能由 PDA 执行', data: null })
+  }
+  next()
+}
+
+const checkScanSchema = z.object({
+  taskId:  z.number().int().positive(),
+  barcode: z.string().min(1),
+})
+
+// 扫码记录（仅 PDA）
+router.post('/',             pdaOnly, vBody(createSchema), ctrl.create)
+router.post('/check',        pdaOnly, vBody(checkScanSchema), ctrl.createCheckScan)
 router.get('/task/:taskId',  ctrl.listByTask)
 
 // 错误日志

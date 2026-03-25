@@ -1,7 +1,19 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { safeJsonParse } = require('../../utils/safeJsonParse')
 
 const TYPE_NAME = { 1: '销售订单', 2: '采购订单', 3: '出库单', 4: '仓库任务单' }
+
+function parseLayoutJson(row) {
+  if (typeof row.layout_json !== 'string') return row.layout_json
+  try {
+    return safeJsonParse(row.layout_json, `print_templates#${row.id} layout_json`, {
+      logBeforeParse: process.env.FLOWCUBE_DEBUG_JSON === '1',
+    })
+  } catch {
+    throw new AppError(`打印模板 #${row.id} 的 layout_json 不是合法 JSON，请检查数据库或重新保存模板`, 500)
+  }
+}
 
 function fmt(row) {
   return {
@@ -10,7 +22,7 @@ function fmt(row) {
     type:       row.type,
     typeName:   TYPE_NAME[row.type] || '未知',
     paperSize:  row.paper_size,
-    layout:     typeof row.layout_json === 'string' ? JSON.parse(row.layout_json) : row.layout_json,
+    layout:     parseLayoutJson(row),
     isDefault:  !!row.is_default,
     createdBy:  row.created_by || null,
     createdAt:  row.created_at,

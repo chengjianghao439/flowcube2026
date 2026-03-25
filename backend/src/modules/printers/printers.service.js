@@ -9,6 +9,8 @@ function fmt(row) {
     name:        row.name,
     code:        row.code,
     type:        row.type,
+    tenantId:    row.tenant_id != null ? Number(row.tenant_id) : 0,
+    warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
     typeName:    TYPE_NAME[row.type] || '其他',
     description: row.description,
     status:      row.status,
@@ -22,54 +24,86 @@ function fmt(row) {
   }
 }
 
-async function findAll({ type } = {}) {
-  const cond   = type ? 'WHERE type=?' : ''
-  const params = type ? [type] : []
+function normTid(tenantId) {
+  const n = Number(tenantId)
+  return Number.isFinite(n) && n >= 0 ? n : 0
+}
+
+async function findAll({ type, tenantId = 0 } = {}) {
+  const tid = normTid(tenantId)
+  const conds = ['(p.tenant_id = ? OR p.tenant_id = 0)']
+  const params = [tid]
+  if (type) {
+    conds.push('p.type=?')
+    params.push(type)
+  }
+  const where = 'WHERE ' + conds.join(' AND ')
   const [rows] = await pool.query(
     `SELECT p.*, pc.alias_name AS client_alias_name, pc.hostname AS client_hostname
      FROM printers p
      LEFT JOIN print_clients pc ON pc.client_id = p.client_id
-     ${cond} ORDER BY p.type, p.id`,
-    params
+     ${where} ORDER BY p.type, p.id`,
+    params,
   )
   return rows.map(fmt)
 }
 
-async function findById(id) {
+async function findById(id, tenantId = 0) {
+  const tid = normTid(tenantId)
   const [[row]] = await pool.query(
     `SELECT p.*, pc.alias_name AS client_alias_name, pc.hostname AS client_hostname
      FROM printers p
      LEFT JOIN print_clients pc ON pc.client_id = p.client_id
-     WHERE p.id=?`,
-    [id]
+     WHERE p.id=? AND (p.tenant_id=? OR p.tenant_id=0)`,
+    [id, tid],
   )
   if (!row) throw new AppError('打印机不存在', 404)
   return fmt(row)
 }
 
-async function create({ name, code, type, description }) {
+async function create({ name, code, type, description, warehouseId }, tenantId = 0) {
+  const tid = normTid(tenantId)
   if (!name) throw new AppError('名称不能为空', 400)
   if (!code) throw new AppError('编码不能为空', 400)
   if (!type) throw new AppError('类型不能为空', 400)
+  const wh =
+    warehouseId != null && warehouseId !== '' && Number.isFinite(Number(warehouseId))
+      ? Number(warehouseId)
+      : null
   const [r] = await pool.query(
-    'INSERT INTO printers (name, code, type, description) VALUES (?,?,?,?)',
-    [name, code, type, description || null]
+    'INSERT INTO printers (name, code, type, warehouse_id, tenant_id, description) VALUES (?,?,?,?,?,?)',
+    [name, code, type, wh, tid, description || null],
   )
-  return findById(r.insertId)
+  return findById(r.insertId, tid)
 }
 
-async function update(id, { name, code, type, description, status }) {
-  await findById(id)
-  await pool.query(
-    'UPDATE printers SET name=?, code=?, type=?, description=?, status=? WHERE id=?',
-    [name, code, type, description || null, status ?? 1, id]
-  )
-  return findById(id)
+async function update(id, { name, code, type, description, status, warehouseId }, tenantId = 0) {
+  const tid = normTid(tenantId)
+  await findById(id, tid)
+  const wh =
+    warehouseId === undefined
+      ? undefined
+      : warehouseId != null && warehouseId !== '' && Number.isFinite(Number(warehouseId))
+        ? Number(warehouseId)
+        : null
+  if (wh !== undefined) {
+    await pool.query(
+      'UPDATE printers SET name=?, code=?, type=?, warehouse_id=?, description=?, status=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
+      [name, code, type, wh, description || null, status ?? 1, id, tid],
+    )
+  } else {
+    await pool.query(
+      'UPDATE printers SET name=?, code=?, type=?, description=?, status=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
+      [name, code, type, description || null, status ?? 1, id, tid],
+    )
+  }
+  return findById(id, tid)
 }
 
-async function remove(id) {
-  await findById(id)
-  await pool.query('DELETE FROM printers WHERE id=?', [id])
+async function remove(id, tenantId = 0) {
+  const tid = normTid(tenantId)
+  await findById(id, tid)
+  await pool.query('DELETE FROM printers WHERE id=? AND (tenant_id=? OR tenant_id=0)', [id, tid])
 }
 
 async function setStatus(id, status) {

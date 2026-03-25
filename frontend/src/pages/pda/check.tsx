@@ -2,12 +2,9 @@
  * PDA 复核作业
  * 路由：/pda/check  或  /pda/check?taskId=X
  *
- * 流程：
- *   Step 1 — 选择待复核任务（status=3 待出库）
- *   Step 2 — 扫描商品条码（PRDxxxxxx）→ 确认 checked_qty
- *   Step 3 — 提交复核 → PUT /api/warehouse-tasks/:id/check
+ * 须扫描拣货阶段使用过的容器条码（CNT），由后端按容器累加 checked_qty；禁止手填。
  */
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
@@ -19,19 +16,17 @@ import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { getTasksApi, getTaskByIdApi, checkTaskItemsApi, checkDoneApi } from '@/api/warehouse-tasks'
+import { getTasksApi, getTaskByIdApi, submitCheckScanApi } from '@/api/warehouse-tasks'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import type { WarehouseTask, WarehouseTaskItem } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 
-// ─── 扩展 item 类型（含 checked_qty）────────────────────────────────────────
 interface CheckItem extends WarehouseTaskItem {
   checkedQty: number
 }
 
 type Step = 'select-task' | 'checking' | 'done'
 
-// ─── 任务选择页 ──────────────────────────────────────────────────────────────
 function TaskSelectStep({
   onSelect,
 }: {
@@ -52,7 +47,7 @@ function TaskSelectStep({
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
           {isLoading && <PdaLoading className="h-40" />}
           {!isLoading && tasks.length === 0 && (
-            <PdaEmptyCard icon="✅" title="暂无待复核任务" description="任务完成拣货后进入此列表" />
+            <PdaEmptyCard icon="✅" title="暂无待复核任务" description="任务完成分拣后进入此列表" />
           )}
 
           {tasks.map(task => {
@@ -82,27 +77,14 @@ function TaskSelectStep({
   )
 }
 
-// ─── 复核明细行 ───────────────────────────────────────────────────────────────
-function CheckItemRow({
-  item,
-  active,
-  checkedQty,
-  onChange,
-}: {
-  item: CheckItem
-  active: boolean
-  checkedQty: number
-  onChange: (qty: number) => void
-}) {
-  const done = checkedQty >= item.requiredQty
+function CheckItemRow({ item }: { item: CheckItem }) {
+  const checkedQty = item.checkedQty ?? 0
+  const matchPick  = checkedQty === item.pickedQty && item.pickedQty > 0
+  const done       = matchPick
 
   return (
     <div className={`rounded-2xl border p-4 transition-all ${
-      active
-        ? 'border-primary bg-primary/5 shadow-sm'
-        : done
-          ? 'border-green-200 bg-green-50/50'
-          : 'border-border bg-card'
+      done ? 'border-green-200 bg-green-50/50' : 'border-border bg-card'
     }`}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
@@ -110,16 +92,13 @@ function CheckItemRow({
           <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
         </div>
         {done
-          ? <Badge className="bg-green-100 text-green-700 border-green-200 ml-2 shrink-0">✓ 已核</Badge>
-          : active
-            ? <Badge className="ml-2 shrink-0">复核中</Badge>
-            : null
-        }
+          ? <Badge className="bg-green-100 text-green-700 border-green-200 ml-2 shrink-0">✓ 已核满</Badge>
+          : null}
       </div>
 
       <div className="flex items-center gap-3 text-sm">
         <div className="text-center">
-          <p className="text-xs text-muted-foreground">应拣</p>
+          <p className="text-xs text-muted-foreground">需求</p>
           <p className="font-bold text-foreground">{item.requiredQty}</p>
         </div>
         <div className="h-6 w-px bg-border" />
@@ -128,23 +107,9 @@ function CheckItemRow({
           <p className="font-semibold text-foreground">{item.pickedQty}</p>
         </div>
         <div className="h-6 w-px bg-border" />
-        <div className="flex-1">
-          <p className="text-xs text-muted-foreground mb-1">复核数量</p>
-          <input
-            type="number"
-            min={0}
-            step="1"
-            value={checkedQty === 0 && !active ? '' : checkedQty}
-            onChange={e => onChange(Math.max(0, Number(e.target.value)))}
-            className={`w-full rounded-xl border px-3 py-1.5 text-right text-base font-bold outline-none transition-colors ${
-              active
-                ? 'border-primary bg-background text-foreground focus:ring-1 focus:ring-primary'
-                : done
-                  ? 'border-green-300 bg-green-50 text-green-800'
-                  : 'border-input bg-background text-foreground'
-            }`}
-            readOnly={!active}
-          />
+        <div className="text-center flex-1">
+          <p className="text-xs text-muted-foreground">已核</p>
+          <p className="font-bold text-primary">{checkedQty}</p>
         </div>
         <span className="text-xs text-muted-foreground shrink-0">{item.unit}</span>
       </div>
@@ -152,7 +117,6 @@ function CheckItemRow({
   )
 }
 
-// ─── 主组件 ──────────────────────────────────────────────────────────────────
 export default function PdaCheckPage() {
   const navigate   = useNavigate()
   const [params]   = useSearchParams()
@@ -162,83 +126,55 @@ export default function PdaCheckPage() {
     params.get('taskId') ? 'checking' : 'select-task',
   )
   const [selectedTask, setSelectedTask] = useState<WarehouseTask | null>(null)
-  const [checkedMap, setCheckedMap]     = useState<Record<number, number>>({})  // itemId → checkedQty
-  const [activeItemId, setActiveItemId] = useState<number | null>(null)
   const [allChecked, setAllChecked]     = useState(false)
 
   const { flash, ok, err } = usePdaFeedback()
 
-  // ── 加载任务详情（含 items）──────────────────────────────────────────────
   const taskId = selectedTask?.id ?? (params.get('taskId') ? Number(params.get('taskId')) : 0)
 
   const { data: taskDetail, isLoading: taskLoading } = useQuery({
     queryKey: ['pda-check-task', taskId],
     queryFn: () => getTaskByIdApi(taskId).then(r => r.data.data!),
     enabled: taskId > 0,
-    onSuccess: (t) => {
-      // 用已有的 checkedQty 初始化 map
-      const init: Record<number, number> = {}
-      t.items?.forEach(i => { init[i.id] = (i as CheckItem).checkedQty ?? 0 })
-      setCheckedMap(init)
-    },
   })
 
   const items: CheckItem[] = (taskDetail?.items ?? []) as CheckItem[]
 
-  // ── 提交复核 mutation ───────────────────────────────────────────────────
-  const submitMut = useMutation({
-    mutationFn: () => checkTaskItemsApi(
-      taskId,
-      items.map(i => ({ itemId: i.id, checkedQty: checkedMap[i.id] ?? 0 })),
-    ),
-    onSuccess: (res) => {
-      const done = res.data.data?.allChecked ?? false
-      setAllChecked(done)
-      qc.invalidateQueries({ queryKey: ['pda-check-tasks'] })
-      setStep('done')
+  const scanMut = useMutation({
+    mutationFn: (barcode: string) => submitCheckScanApi(taskId, barcode),
+    onSuccess: async (res) => {
+      const payload = res.data.data
+      const done = payload?.allChecked ?? false
+      await qc.invalidateQueries({ queryKey: ['pda-check-task', taskId] })
+      await qc.invalidateQueries({ queryKey: ['pda-check-tasks'] })
+      if (done) {
+        setAllChecked(true)
+        setStep('done')
+        ok('✓ 复核完成')
+      } else {
+        ok('✓ 已记录复核扫码')
+      }
     },
     onError: (e: unknown) => {
-      err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '提交失败')
+      err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '复核扫码失败')
     },
   })
 
-  // ── 扫码处理：扫码即自动填入并推进 ──────────────────────────────────────
   const handleScan = useCallback((raw: string) => {
-    const parsed = parseBarcode(raw)
-    if (parsed.type !== 'product') {
-      err('必须扫描商品条码（PRDxxxxxx）')
+    const b = raw.trim()
+    if (!b) return
+    if (parseBarcode(b).type !== 'container') {
+      err('请扫描容器条码（CNTxxxxxx）')
       return
     }
-    const item = items.find(i => i.productCode === raw || i.productCode === raw.toUpperCase())
-    if (!item) {
-      err(`商品 ${raw} 不在此任务中`)
-      return
-    }
-    // 扫码即自动填入应拣数量（无需手动确认）
-    const autoQty = item.pickedQty
-    setCheckedMap(prev => ({
-      ...prev,
-      [item.id]: autoQty,
-    }))
-    setActiveItemId(item.id)
-    ok(`✓ ${item.productName}：已核 ${autoQty} ${item.unit}`)
+    scanMut.mutate(b)
+  }, [err, scanMut])
 
-    // 检查是否全部完成，全部完成时自动提交
-    const updatedMap = { ...checkedMap, [item.id]: autoQty }
-    const allComplete = items.length > 0 && items.every(i => (updatedMap[i.id] ?? 0) >= i.requiredQty)
-    if (allComplete) {
-      setTimeout(() => submitMut.mutate(), 600)
-    }
-  }, [items, checkedMap, ok, err, submitMut])
+  const totalPick   = items.reduce((s, i) => s + i.pickedQty, 0)
+  const totalChecked = items.reduce((s, i) => s + (i.checkedQty ?? 0), 0)
+  const pct         = totalPick > 0 ? Math.min(100, Math.round(totalChecked / totalPick * 100)) : 0
+  const linesDone   = items.length > 0 && items.every(i => (i.checkedQty ?? 0) === i.pickedQty)
 
-  // ── 进度 ──────────────────────────────────────────────────────────────
-  const totalRequired = items.reduce((s, i) => s + i.requiredQty, 0)
-  const totalChecked  = items.reduce((s, i) => s + (checkedMap[i.id] ?? 0), 0)
-  const pct           = totalRequired > 0 ? Math.min(100, Math.round(totalChecked / totalRequired * 100)) : 0
-  const canSubmit     = items.length > 0 && items.every(i => (checkedMap[i.id] ?? 0) >= 0)
-  const allDone       = items.length > 0 && items.every(i => (checkedMap[i.id] ?? 0) >= i.requiredQty)
-
-  // ── 任务选择 ──────────────────────────────────────────────────────────
   if (step === 'select-task') {
     return (
       <TaskSelectStep
@@ -250,19 +186,18 @@ export default function PdaCheckPage() {
     )
   }
 
-  // ── 完成页 ────────────────────────────────────────────────────────────
   if (step === 'done') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
         <div className="text-6xl mb-6">{allChecked ? '✅' : '📋'}</div>
         <h2 className="text-2xl font-bold text-foreground">
-          {allChecked ? '复核完成！' : '复核已保存'}
+          {allChecked ? '复核完成！' : '已保存'}
         </h2>
         <p className="text-muted-foreground mt-2 mb-1">
           任务号：<span className="font-mono font-semibold text-foreground">{taskDetail?.taskNo}</span>
         </p>
         <p className="text-muted-foreground mb-8">
-          {allChecked ? '所有商品已核验，任务进入待打包' : `已复核 ${pct}%，可继续核对`}
+          {allChecked ? '任务已进入待打包' : `进度约 ${pct}%`}
         </p>
         <div className="flex gap-3 w-full max-w-xs">
           {!allChecked && (
@@ -278,7 +213,6 @@ export default function PdaCheckPage() {
     )
   }
 
-  // ── 复核作业页 ────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen flex-col bg-background">
 
@@ -287,13 +221,11 @@ export default function PdaCheckPage() {
         subtitle={taskDetail?.customerName}
         onBack={() => step === 'checking' ? setStep('select-task') : navigate('/pda')}
         right={<Badge className="text-xs">复核中</Badge>}
-        progress={{ current: totalChecked, total: totalRequired, label: '复核进度' }}
+        progress={{ current: totalChecked, total: totalPick || 1, label: '复核进度（对已拣）' }}
       />
 
-      {/* Flash */}
       <PdaFlash flash={flash} />
 
-      {/* 商品列表 */}
       <div className="flex-1 overflow-y-auto pb-48">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
           {taskLoading && (
@@ -302,26 +234,19 @@ export default function PdaCheckPage() {
             </div>
           )}
           {items.map(item => (
-            <CheckItemRow
-              key={item.id}
-              item={item}
-              active={activeItemId === item.id}
-              checkedQty={checkedMap[item.id] ?? 0}
-              onChange={qty => setCheckedMap(prev => ({ ...prev, [item.id]: qty }))}
-            />
+            <CheckItemRow key={item.id} item={item} />
           ))}
+          {!taskLoading && items.length > 0 && linesDone && (
+            <p className="text-center text-xs text-green-600 font-medium">✓ 各明细已核数量已与拣货一致</p>
+          )}
         </div>
       </div>
 
       <PdaBottomBar>
-        <PdaScanner onScan={handleScan} placeholder="扫描商品条码 PRDxxxxxx" disabled={submitMut.isPending} />
-        <div className="flex gap-3">
-          <Button variant="outline" className="flex-1" onClick={() => { setActiveItemId(null); const defaults: Record<number, number> = {}; items.forEach(i => { defaults[i.id] = i.pickedQty }); setCheckedMap(defaults); ok('已按已拣数量填入，请逐项确认') }} disabled={submitMut.isPending}>一键填入</Button>
-          <Button className="flex-1" onClick={() => submitMut.mutate()} disabled={!canSubmit || submitMut.isPending}>
-            {submitMut.isPending ? <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />提交中…</span> : allDone ? '✓ 提交复核' : '保存复核'}
-          </Button>
-        </div>
-        {allDone && <p className="text-center text-xs text-green-600 font-medium">✓ 所有商品已核验完毕，可提交</p>}
+        <PdaScanner onScan={handleScan} placeholder="扫描容器条码 CNTxxxxxx" disabled={scanMut.isPending} />
+        <p className="text-center text-xs text-muted-foreground px-2">
+          请依次扫描拣货时绑定的容器；禁止手改数量
+        </p>
       </PdaBottomBar>
 
     </div>

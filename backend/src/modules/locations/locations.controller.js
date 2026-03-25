@@ -49,4 +49,11 @@ async function findByCode(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { list, detail, create, update, remove, findByCode }
+async function listByWarehouse(req, res, next) {
+  try {
+    const data = await locationsService.findAllByWarehouseId(req.params.warehouseId)
+    return successResponse(res, data, '查询成功')
+  } catch (err) { next(err) }
+}
+
+module.exports = { list, detail, create, update, remove, findByCode, listByWarehouse }

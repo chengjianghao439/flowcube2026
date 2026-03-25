@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import axios from 'axios'
 import { useAuthStore } from '@/store/authStore'
 import { useNetworkStatus } from './useNetworkStatus'
+import { safeJsonParse } from '@/lib/safeJsonParse'
 
 const QUEUE_KEY  = 'pda_offline_queue'
 const MAX_RETRY  = 3
@@ -27,7 +28,9 @@ export interface QueuedOp {
 }
 
 function loadQueue(): QueuedOp[] {
-  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]') } catch { return [] }
+  const raw = localStorage.getItem(QUEUE_KEY) || '[]'
+  const parsed = safeJsonParse<unknown>(raw, QUEUE_KEY, true)
+  return Array.isArray(parsed) ? (parsed as QueuedOp[]) : []
 }
 
 function saveQueue(q: QueuedOp[]) {
@@ -85,11 +88,17 @@ export function useOfflineQueue() {
       setQueue(q => q.map(o => o.id === op.id ? { ...o, status: 'syncing' } : o))
 
       try {
+        const path = op.url.startsWith('/api') ? op.url.slice(4) : op.url
+        const needsPdaHeader =
+          op.method === 'POST' && (path === '/scan-logs' || path.startsWith('/scan-logs/'))
         await axios({
           method:  op.method,
-          url:     `/api${op.url.startsWith('/api') ? op.url.slice(4) : op.url}`,
+          url:     `/api${path}`,
           data:    op.body,
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(needsPdaHeader ? { 'X-Client': 'pda' } : {}),
+          },
           timeout: 10_000,
         })
         // 成功：移除

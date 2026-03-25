@@ -37,7 +37,12 @@ export function ConfirmDialog({
   return (
     <AppDialog
       open={open}
-      onOpenChange={v => { if (!v) onCancel() }}
+      onOpenChange={v => {
+        if (!v) {
+          if (loading) return
+          onCancel()
+        }
+      }}
       dialogId="confirm-dialog"
       resizable={false}
       defaultWidth={440}

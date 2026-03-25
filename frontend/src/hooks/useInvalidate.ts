@@ -104,21 +104,14 @@ const INVALIDATION_MAP = {
     ['purchase'],
   ],
 
-  /** 确认采购单：自动生成入库任务 */
+  /** 确认采购单（不再自动生成入库任务） */
   purchase_confirm: [
     ['purchase'],
-    ['inbound-tasks'],
   ],
 
-  /** 收货入库（旧路径）：库存容器/汇总/流水全部增加，生成应付账款 */
+  /** 采购一键收货已停用，保留 key 避免旧代码引用报错 */
   purchase_receive: [
     ['purchase'],
-    ['inventory-stock'],
-    ['inventory-logs'],
-    ['inventory-overview'],
-    ['inventory-containers'],
-    ['dashboard-summary'],
-    ['payments'],
   ],
 
   /** 取消采购单 */
@@ -128,9 +121,17 @@ const INVALIDATION_MAP = {
 
   // ── 入库任务 ──────────────────────────────────────────────────────────────
 
-  /** 入库任务收货 */
+  /** 新建入库任务 */
+  inbound_create: [
+    ['inbound-tasks'],
+    ['purchase'],
+  ],
+
+  /** 入库任务收货（仅任务与容器，不计库存） */
   inbound_receive: [
     ['inbound-tasks'],
+    ['pda-inbound-tasks'],
+    ['pda-inbound-task'],
   ],
 
   /** 入库任务上架：创建容器 + 库存变化 + 可能完成采购单 */
@@ -145,9 +146,10 @@ const INVALIDATION_MAP = {
     ['payments'],
   ],
 
-  /** 入库任务取消 */
+  /** 入库任务取消：采购单可再次创建入库任务 */
   inbound_cancel: [
     ['inbound-tasks'],
+    ['purchase'],
   ],
 
   // ── 仓库任务 ──────────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@
  *  await print({ printerId: 1, title: '包裹标签', content: html, contentType: 'html' })
  */
 import { useState, useCallback } from 'react'
-import axios from 'axios'
+import apiClient from '@/api/client'
 import { toast } from '@/lib/toast'
 
 interface PrintParams {
@@ -24,7 +24,7 @@ export function usePrint() {
   const print = useCallback(async (params: PrintParams) => {
     setPrinting(true)
     try {
-      const res = await axios.post('/api/print-jobs', {
+      const res = await apiClient.post('/print-jobs', {
         printerId:   params.printerId,
         title:       params.title,
         content:     params.content,

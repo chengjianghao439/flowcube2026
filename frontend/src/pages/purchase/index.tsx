@@ -7,7 +7,8 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { usePurchaseList, useConfirmPurchase, useReceivePurchase, useCancelPurchase, usePurchaseDetail } from '@/hooks/usePurchase'
+import { usePurchaseList, useConfirmPurchase, useCancelPurchase, usePurchaseDetail } from '@/hooks/usePurchase'
+import { useCreateInboundTask } from '@/hooks/useInboundTasks'
 // PurchaseFormDialog 软移除：保留代码，不再渲染（改为独立页面 /purchase/new）
 import PurchaseFormDialog from './components/PurchaseFormDialog'
 import PrintOrderDialog from '@/components/shared/PrintOrderDialog'
@@ -44,21 +45,30 @@ export default function PurchasePage() {
     open: boolean
     title: string
     description: string
+    confirmText?: string
     onConfirm: () => void
   }>({ open: false, title: '', description: '', onConfirm: () => {} })
 
   const { data, isLoading } = usePurchaseList({ page, pageSize: 20, keyword, status: statusFilter || undefined })
   const confirm = useConfirmPurchase()
-  const receive = useReceivePurchase()
+  const createInbound = useCreateInboundTask()
   const cancel = useCancelPurchase()
   const { data: printDetail } = usePurchaseDetail(printId || 0)
 
-  function openConfirm(title: string, description: string, onConfirm: () => void) {
-    setConfirmState({ open: true, title, description, onConfirm })
+  function openConfirm(
+    title: string,
+    description: string,
+    onConfirm: () => void,
+    options?: { confirmText?: string },
+  ) {
+    setConfirmState({ open: true, title, description, onConfirm, confirmText: options?.confirmText })
   }
   function closeConfirm() {
     setConfirmState(s => ({ ...s, open: false }))
   }
+
+  const confirmCreateInboundLoading =
+    createInbound.isPending && confirmState.open && confirmState.title === '创建入库任务'
 
   const selectedList = data?.list.filter(r => selectedIds.has(r.id)) || []
 
@@ -119,14 +129,39 @@ export default function PurchasePage() {
                 确认
               </Button>
             )}
-            {r.status === 2 && (
-              <Button size="sm" disabled={receive.isPending}
+            {r.status === 2 && r.openInboundTaskId && r.openInboundTaskNo && (
+              <Button size="sm" variant="outline"
+                onClick={() => {
+                  const path = `/inbound-tasks/${r.openInboundTaskId}`
+                  addTab({ key: path, title: r.openInboundTaskNo!, path })
+                  navigate(path)
+                }}>
+                {r.openInboundTaskNo}
+              </Button>
+            )}
+            {r.status === 2 && !r.openInboundTaskId && (
+              <Button size="sm" disabled={createInbound.isPending}
                 onClick={() => openConfirm(
-                  '确认收货入库',
-                  '确认后将执行入库操作，库存数量将相应增加。',
-                  () => { closeConfirm(); receive.mutate(r.id) }
+                  '创建入库任务',
+                  '将为此采购单生成入库任务；须收货生成容器并上架后才计入库存。',
+                  () => {
+                    createInbound.mutate(r.id, {
+                      onSuccess: (d) => {
+                        closeConfirm()
+                        toast.success(`入库任务 ${d.taskNo} 已创建`)
+                        const path = `/inbound-tasks/${d.taskId}`
+                        addTab({ key: path, title: d.taskNo, path })
+                        navigate(path)
+                      },
+                      onError: (e: unknown) => {
+                        const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'
+                        toast.error(msg)
+                      },
+                    })
+                  },
+                  { confirmText: '继续' },
                 )}>
-                收货入库
+                创建入库任务
               </Button>
             )}
             {(r.status === 1 || r.status === 2) && (
@@ -150,7 +185,7 @@ export default function PurchasePage() {
     <div className="space-y-4">
       <PageHeader
         title="采购管理"
-        description="采购单创建、确认与收货入库"
+        description="采购单确认后请创建入库任务，收货与上架后计入库存"
         actions={
           <>
             <Button variant="outline"
@@ -253,9 +288,16 @@ export default function PurchasePage() {
         title={confirmState.title}
         description={confirmState.description}
         variant={confirmState.title.includes('取消') ? 'destructive' : 'default'}
-        confirmText={confirmState.title.includes('取消') ? '确认取消' : '确认'}
+        confirmText={
+          confirmState.confirmText
+            ?? (confirmState.title.includes('取消') ? '确认取消' : '确认')
+        }
+        loading={confirmCreateInboundLoading}
         onConfirm={confirmState.onConfirm}
-        onCancel={closeConfirm}
+        onCancel={() => {
+          if (confirmCreateInboundLoading) return
+          closeConfirm()
+        }}
       />
     </div>
   )

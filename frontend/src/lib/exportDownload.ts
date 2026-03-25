@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/store/authStore'
+import { resolveApiFetchUrl } from '@/lib/apiOrigin'
 
 /**
  * 触发后端 xlsx 文件下载
@@ -7,9 +8,15 @@ import { useAuthStore } from '@/store/authStore'
 export async function downloadExport(path: string, params?: Record<string, string>) {
   const token = useAuthStore.getState().token
   const query = params ? '?' + new URLSearchParams(params).toString() : ''
-  const res = await fetch(`/api${path}${query}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  const fetchUrl = resolveApiFetchUrl(path, query)
+  let res: Response
+  try {
+    res = await fetch(fetchUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch {
+    throw new Error('无法连接服务器，请检查网络与服务器地址')
+  }
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.message || '导出失败')

@@ -1,4 +1,5 @@
 const express = require('express')
+const path = require('path')
 const cors = require('cors')
 const helmet = require('helmet')
 const errorHandler    = require('./middleware/errorHandler')
@@ -15,8 +16,13 @@ const app = express()
 // ─── 安全与解析中间件 ─────────────────────────────────────────────────────────
 
 app.use(helmet())
+// Electron 桌面从 file:// 加载时 Origin 常为 null；CORS_ORIGIN=* 或 CORS_REFLECT=1 时回显请求 Origin
+const corsOriginEnv = process.env.CORS_ORIGIN
+const corsReflect = process.env.CORS_REFLECT === '1' || corsOriginEnv === '*'
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: corsReflect
+    ? true
+    : (corsOriginEnv || 'http://localhost:5173'),
   credentials: true,
 }))
 app.use(express.json({ limit: '10mb' }))
@@ -35,54 +41,9 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() })
 })
 
-// 打印客户端注册（无需登录，优先于 printers 模块路由）
-app.post('/api/printers/register-client', async (req, res) => {
-  try {
-    const { pool } = require('./config/db')
-    const { clientId, hostname, printers = [] } = req.body
-    if (!clientId) return res.status(400).json({ success: false, message: 'clientId 必填' })
-
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-      || req.socket?.remoteAddress
-      || null
-
-    // 持久化客户端到数据库
-    await pool.query(
-      `INSERT INTO print_clients (client_id, hostname, ip_address, last_seen, status)
-       VALUES (?, ?, ?, NOW(), 1)
-       ON DUPLICATE KEY UPDATE
-         hostname    = VALUES(hostname),
-         ip_address  = VALUES(ip_address),
-         last_seen   = NOW(),
-         status      = 1`,
-      [clientId, hostname || clientId, ip]
-    )
-
-    // 自动创建或同步打印机
-    for (const p of printers) {
-      if (!p.code && !p.name) continue
-      const code = (p.code || p.name.replace(/[^A-Z0-9]/gi, '_').toUpperCase()).slice(0, 50)
-      const name = p.name || code
-      const [[existing]] = await pool.query('SELECT id FROM printers WHERE code=?', [code])
-      if (existing) {
-        await pool.query(
-          'UPDATE printers SET status=1, client_id=? WHERE id=?',
-          [clientId, existing.id]
-        )
-      } else {
-        await pool.query(
-          'INSERT INTO printers (name, code, type, description, status, source, client_id) VALUES (?,?,1,?,1,?,?)',
-          [name, code, `来自客户端 ${hostname || clientId}`, 'client', clientId]
-        )
-      }
-    }
-
-    console.log(`[打印客户端注册] clientId=${clientId} hostname=${hostname} ip=${ip}`)
-    res.json({ success: true, data: { clientId, registeredAt: new Date().toISOString() } })
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message })
-  }
-})
+// 桌面端安装包等静态资源（与 app-update 清单中的 filename 对应）
+const downloadsDir = path.join(__dirname, '../downloads')
+app.use('/downloads', express.static(downloadsDir))
 
 // ─── 业务路由（按模块在此注册）────────────────────────────────────────────────
 
@@ -120,11 +81,14 @@ app.use('/api/locations',       require('./modules/locations/locations.routes'))
 app.use('/api/racks',           require('./modules/racks/racks.routes'))
 app.use('/api/scan-logs',      require('./modules/scan-logs/scan-logs.routes'))
 app.use('/api/inbound-tasks',  require('./modules/inbound-tasks/inbound-tasks.routes'))
+app.use('/api/admin',         require('./modules/admin/admin.routes'))
+app.use('/api/containers',     require('./modules/containers/containers.routes'))
 app.use('/api/picking-waves',  require('./modules/picking-waves/picking-waves.routes'))
 app.use('/api/packages',       require('./modules/packages/packages.routes'))
 app.use('/api/sorting-bins',   require('./modules/sorting-bins/sorting-bins.routes'))
 app.use('/api/pda',            require('./modules/pda/pda.routes'))
 app.use('/api/printer-bindings', require('./modules/printer-bindings/printer-bindings.routes'))
+app.use('/api/app-update',     require('./modules/app-update/app-update.routes'))
 
 // ─── 404 处理 ─────────────────────────────────────────────────────────────────
 

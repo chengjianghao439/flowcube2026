@@ -8,14 +8,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary'
 import './index.css'
 import AppRouter from './router'
+import AuthTenantSync from '@/components/auth/AuthTenantSync'
+import { Capacitor } from '@capacitor/core'
+import { applyPdaApiBaseFromStorage, installPdaGlobals } from '@/lib/pdaRuntime'
+import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
 
-// ── Capacitor PDA 启动检测：App 内自动跳转 /pda ──────────────────────────────
-// 通过检测 window.Capacitor 判断是否在原生 App 壳内运行
-if ((window as any).Capacitor?.isNativePlatform?.()) {
-  // 如果当前路径不是 /pda 开头，强制跳转
+// ── Capacitor PDA：API 基址（bundled）、ZPL 打印桥、路由入口 ─────────────────
+if (Capacitor.isNativePlatform()) {
+  applyPdaApiBaseFromStorage()
+  installPdaGlobals()
   if (!window.location.pathname.startsWith('/pda')) {
     window.location.replace('/pda')
   }
+} else {
+  // ERP Web / Electron：localStorage flowcube:apiOrigin
+  applyErpApiBaseFromStorage()
 }
 
 // ── React Query 默认配置 ──────────────────────────────────────────────────────
@@ -53,6 +60,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <GlobalErrorBoundary>
       <QueryClientProvider client={queryClient}>
+        <AuthTenantSync />
         <AppRouter />
       </QueryClientProvider>
     </GlobalErrorBoundary>

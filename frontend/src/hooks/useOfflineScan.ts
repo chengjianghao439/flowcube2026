@@ -45,7 +45,7 @@ export function useOfflineScan() {
   const submitScan = useCallback(async (payload: ScanPayload): Promise<void> => {
     if (networkStatus === 'online') {
       try {
-        await client.post('/scan-logs', payload)
+        await client.post('/scan-logs', payload, { headers: { 'X-Client': 'pda' } })
       } catch {
         enqueue({ method: 'POST', url: '/scan-logs', body: payload, label: `扫码记录 ${payload.barcode}` })
       }

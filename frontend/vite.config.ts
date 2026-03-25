@@ -4,13 +4,18 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import legacy from '@vitejs/plugin-legacy'
 
-const isPDA = process.env.BUILD_TARGET === 'pda'
+const isCapacitorBundle = process.env.VITE_CAPACITOR === '1'
+const isElectronBundle = process.env.VITE_ELECTRON === '1'
+const isPDA = process.env.BUILD_TARGET === 'pda' || isCapacitorBundle
+const skipPwa = isPDA || isElectronBundle
 
 export default defineConfig({
+  // Capacitor / Electron 本地文件加载时需相对资源路径
+  base: isCapacitorBundle || isElectronBundle ? './' : '/',
   plugins: [
     react(),
     // PDA 打包时跳过 PWA（Capacitor 原生壳不需要 Service Worker）
-    !isPDA && VitePWA({
+    !skipPwa && VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {

@@ -4,7 +4,12 @@
  * 运行在连接打印机的电脑上，通过 SSE 监听打印任务并执行本地打印
  *
  * 使用方式：
- *   node print-client.js --server http://192.168.8.109:3000 --printer LABEL_01
+ *   node print-client.cjs --server http://192.168.8.109:3000 --printer LABEL_01
+ *
+ * 日志（防占满磁盘）：
+ *   LOG_LEVEL=error | info   默认 error，仅写入错误行；info 时写入全部级别
+ *   LOG_MAX_BYTES            可选，默认 10485760（10MB），超限轮转为 print-client.log.old
+ *   心跳 POST 每 60 秒一次；成功仅在 LOG_LEVEL=info 时记日志，失败始终记 ERROR
  *
  * 安装依赖：
  *   npm install node-fetch@2 node-html-to-image pdf-lib
@@ -25,6 +30,9 @@ const fs       = require('fs')
 const path     = require('path')
 
 // ── 日志系统（控制台 + 文件）──────────────────────────────────────────────────
+// 环境变量：
+//   LOG_LEVEL=error | info   默认 error：仅写入 ERROR；info 时写入 INFO/WARN/ERROR
+//   LOG_MAX_BYTES          默认 10485760（10MB），超过则轮转为 print-client.log.old
 const IS_DEV = process.env.NODE_ENV !== 'production'
 const baseDir = process.cwd()
 const logsDir = path.join(baseDir, 'logs')
@@ -34,13 +42,47 @@ if (!fs.existsSync(logsDir)) {
 }
 
 const logFile = path.join(logsDir, 'print-client.log')
+const LOG_MAX_BYTES = Math.max(1024 * 1024, parseInt(process.env.LOG_MAX_BYTES || String(10 * 1024 * 1024), 10) || 10 * 1024 * 1024)
+const LOG_LEVEL = String(process.env.LOG_LEVEL || 'error').toLowerCase() === 'info' ? 'info' : 'error'
 
 console.log('[启动目录]', process.cwd())
 console.log('[日志目录]', logsDir)
+console.log(`[LOG_LEVEL=${LOG_LEVEL}] [LOG_MAX_BYTES=${LOG_MAX_BYTES}]`)
 
+function shouldEmit(level) {
+  if (LOG_LEVEL === 'info') return true
+  return level === 'ERROR'
+}
+
+/** 超过上限：当前日志重命名为 .old（覆盖旧 .old），新文件下次 append 自动创建 */
+function rotateLogIfNeeded() {
+  try {
+    if (!fs.existsSync(logFile)) return
+    const st = fs.statSync(logFile)
+    if (st.size < LOG_MAX_BYTES) return
+    const oldFile = `${logFile}.old`
+    try {
+      if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile)
+    } catch (_) { /* ignore */ }
+    fs.renameSync(logFile, oldFile)
+  } catch (e) {
+    try {
+      fs.writeFileSync(logFile, '', 'utf8')
+    } catch (_) { /* ignore */ }
+  }
+}
+
+// appendFileSync 仅用于 print-client.log 文本日志；config.json 等结构化数据必须用 writeFileSync 整文件覆盖，禁止向 JSON 文件 append
 function writeLog(level, message) {
+  if (!shouldEmit(level)) return
+  rotateLogIfNeeded()
   const line = `[${new Date().toISOString()}] [${level}] ${message}`
-  fs.appendFileSync(logFile, `${line}\n`, 'utf8')
+  try {
+    fs.appendFileSync(logFile, `${line}\n`, 'utf8')
+  } catch (e) {
+    if (IS_DEV) process.stderr.write(`[log write failed] ${e.message}\n`)
+    return
+  }
   if (IS_DEV) {
     if (level === 'ERROR') process.stderr.write(`${line}\n`)
     else if (level === 'WARN') process.stderr.write(`${line}\n`)
@@ -77,12 +119,32 @@ function ensureConfigFile() {
   return true
 }
 
+function normalizeJsonTextInput(raw) {
+  return String(raw).replace(/^\uFEFF/, '').trim()
+}
+
+/** 单一、干净的 JSON 文档；失败时打完整原始串 */
+function safeParseJsonFile(raw, label) {
+  const normalized = normalizeJsonTextInput(raw)
+  logger.info(`[${label}] 解析前 length=${normalized.length} 前200字符=${JSON.stringify(normalized.slice(0, 200))}`)
+  try {
+    return JSON.parse(normalized)
+  } catch (e) {
+    logger.error(`[${label}] JSON.parse 失败: ${e.message}`)
+    logger.error(`[${label}] 原始全文: ${raw}`)
+    logger.error(`[${label}] 规范化后: ${normalized}`)
+    logger.error(`[${label}] 末尾80字符: ${JSON.stringify(normalized.slice(-80))}`)
+    throw e
+  }
+}
+
 function loadConfig() {
   try {
     const raw = fs.readFileSync(CONFIG_PATH, 'utf8')
-    const parsed = JSON.parse(raw)
+    const parsed = safeParseJsonFile(raw, 'config.json')
     return { ...DEFAULT_CONFIG, ...parsed }
   } catch {
+    logger.error('[config.json] 已回退默认配置，请修复文件为单一合法 JSON 后重启')
     return { ...DEFAULT_CONFIG }
   }
 }
@@ -182,12 +244,19 @@ function connect() {
       buf += chunk.toString()
       const lines = buf.split('\n')
       buf = lines.pop() || ''
-      lines.forEach(line => {
+      lines.forEach((line) => {
         if (line.startsWith('data: ')) {
+          const payload = line.slice(6).trim()
+          if (!payload) return
+          if (LOG_LEVEL === 'info') {
+            logger.info(`[SSE] 解析前 payloadPreview=${JSON.stringify(payload.slice(0, 200))}`)
+          }
           try {
-            const job = JSON.parse(line.slice(6))
+            const job = JSON.parse(payload)
             handleJob(job)
-          } catch { /* 忽略心跳 */ }
+          } catch (e) {
+            logger.error(`[SSE] JSON.parse 失败: ${e.message} 整行=${JSON.stringify(line)} payload=${JSON.stringify(payload)}`)
+          }
         }
       })
     })
@@ -313,9 +382,10 @@ async function heartbeat() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ clientId: CLIENT_ID }),
     })
-    logger.info('[Heartbeat] success')
+    // error 级别默认不写成功心跳；info 级别且定时器已为 60s，此处最多约每分钟一条
+    if (LOG_LEVEL === 'info') logger.info('[Heartbeat] ok')
   } catch (e) {
-    logger.warn(`[Heartbeat] failed: ${e.message || e}`)
+    logger.error(`[Heartbeat] failed: ${e.message || e}`)
     logger.error('❌ 无法连接服务器，请检查：')
     logger.error('1. server 地址是否正确（不能用 localhost）')
     logger.error('2. 是否与服务器在同一局域网')
@@ -338,9 +408,9 @@ async function main() {
   // 2. 向服务器注册
   await registerClient(localPrinters)
 
-  // 3. 启动心跳（每 10 秒）
+  // 3. 启动心跳（每 60 秒；成功日志仅在 LOG_LEVEL=info 时写入，见 heartbeat）
   await heartbeat()
-  setInterval(heartbeat, 10_000)
+  setInterval(heartbeat, 60_000)
 
   // 4. 开始监听打印任务
   connect()
@@ -398,10 +468,10 @@ async function registerClient(localPrinters) {
     if (json.success) {
       logger.info(`[注册成功] clientId=${CLIENT_ID}`)
     } else {
-      logger.warn(`[注册失败] ${json.message}`)
+      logger.error(`[注册失败] ${json.message}`)
     }
   } catch (e) {
-    logger.warn(`[注册跳过] 无法连接服务器：${e.message}`)
+    logger.error(`[注册跳过] 无法连接服务器：${e.message}`)
     logger.error('❌ 无法连接服务器，请检查：')
     logger.error('1. server 地址是否正确（不能用 localhost）')
     logger.error('2. 是否与服务器在同一局域网')

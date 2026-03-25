@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { transferContainers } = require('../../engine/containerEngine')
+const { transferContainers, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const STATUS = { 1:'草稿', 2:'已确认', 3:'已执行', 4:'已取消' }
 
@@ -58,7 +58,7 @@ async function execute(id, operator) {
     for (const item of o.items) {
       // 容器路径：FIFO 扣减源仓库容器 → 目标仓库创建容器（保留批次）→ 双仓缓存同步
       // 可用库存校验（on_hand - reserved）在 transferContainers 内部完成
-      const { fromBefore, fromAfter, toBefore, toAfter } = await transferContainers(conn, {
+      const { fromBefore, fromAfter, toBefore, toAfter, deducted, firstNewContainerId } = await transferContainers(conn, {
         productId:      item.productId,
         productName:    item.productName,
         fromWarehouseId: o.fromWarehouseId,
@@ -70,19 +70,22 @@ async function execute(id, operator) {
         remark:         `调拨 ${o.orderNo}`,
       })
 
+      const outContainerId = deducted[0]?.containerId ?? null
+
       // 写库存变动日志：调拨出（源仓库）
       await conn.query(
         `INSERT INTO inventory_logs
            (move_type, type, product_id, warehouse_id,
             quantity, before_qty, after_qty,
             ref_type, ref_id, ref_no,
+            container_id, log_source_type, log_source_ref_id,
             remark, operator_id, operator_name)
-         VALUES (?,2,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          MOVE_TYPE.TRANSFER_OUT,
-          item.productId, o.fromWarehouseId,
+          MOVE_TYPE.TRANSFER_OUT, 2, item.productId, o.fromWarehouseId,
           item.quantity, fromBefore, fromAfter,
           'transfer', o.id, o.orderNo,
+          outContainerId, SOURCE_TYPE.TRANSFER, o.id,
           `调拨出 ${o.orderNo}`, operator.userId, operator.realName,
         ]
       )
@@ -93,13 +96,14 @@ async function execute(id, operator) {
            (move_type, type, product_id, warehouse_id,
             quantity, before_qty, after_qty,
             ref_type, ref_id, ref_no,
+            container_id, log_source_type, log_source_ref_id,
             remark, operator_id, operator_name)
-         VALUES (?,1,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          MOVE_TYPE.TRANSFER_IN,
-          item.productId, o.toWarehouseId,
+          MOVE_TYPE.TRANSFER_IN, 1, item.productId, o.toWarehouseId,
           item.quantity, toBefore, toAfter,
           'transfer', o.id, o.orderNo,
+          firstNewContainerId, SOURCE_TYPE.TRANSFER, o.id,
           `调拨入 ${o.orderNo}`, operator.userId, operator.realName,
         ]
       )

@@ -1,8 +1,10 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import AppLayout from '@/layouts/AppLayout'
 import PdaLayout from '@/layouts/PdaLayout'
+import PdaConnectionGate from '@/components/pda/PdaConnectionGate'
+import ErpDesktopConnectionGate from '@/components/erp/ErpDesktopConnectionGate'
 
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
 const LoginPage       = lazy(() => import('@/pages/login'))
@@ -62,11 +64,15 @@ function PdaGuestRoute() {
   return <Outlet />
 }
 
+const HistoryRouter = import.meta.env.VITE_ELECTRON === '1' ? HashRouter : BrowserRouter
+
 export default function AppRouter() {
   return (
-    <BrowserRouter>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
+    <HistoryRouter>
+      <PdaConnectionGate>
+        <ErpDesktopConnectionGate>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
           {/* ── ERP 游客路由 ── */}
           <Route element={<ErpGuestRoute />}>
             <Route path="/login" element={<LoginPage />} />
@@ -77,23 +83,26 @@ export default function AppRouter() {
             <Route path="/pda/login" element={<PdaLoginPage />} />
           </Route>
 
-          {/* ── PDA 已登录路由 ── */}
-          <Route element={<PdaProtectedRoute />}>
+          {/*
+            PDA 必须挂在 path="/pda" 树下（相对子路径），不能写一堆绝对路径 /pda/xxx 挂在无 path 的父级上，
+            否则在部分 React Router 版本里会与 ERP 的 path="/*" 抢匹配，误入 AppLayout →「页面未注册」。
+          */}
+          <Route path="/pda" element={<PdaProtectedRoute />}>
             <Route element={<PdaLayout />}>
-              <Route path="/pda"             element={<PdaIndexPage />} />
-              <Route path="/pda/inbound"     element={<PdaInboundPage />} />
-              <Route path="/pda/receive/:id" element={<PdaReceivePage />} />
-              <Route path="/pda/putaway/:id" element={<PdaPutawayPage />} />
-              <Route path="/pda/putaway"     element={<PdaPutawayPage />} />
-              <Route path="/pda/picking"     element={<PdaPickingPage />} />
-              <Route path="/pda/task/:id"    element={<PdaTaskPage />} />
-              <Route path="/pda/check/:id"   element={<PdaCheckPage />} />
-              <Route path="/pda/check"       element={<PdaCheckPage />} />
-              <Route path="/pda/pack/:id"    element={<PdaPackPage />} />
-              <Route path="/pda/pack"        element={<PdaPackPage />} />
-              <Route path="/pda/ship/:id"    element={<PdaShipPage />} />
-              <Route path="/pda/ship"        element={<PdaShipPage />} />
-              <Route path="/pda/sort"        element={<PdaSortPage />} />
+              <Route index element={<PdaIndexPage />} />
+              <Route path="inbound" element={<PdaInboundPage />} />
+              <Route path="receive/:id" element={<PdaReceivePage />} />
+              <Route path="putaway/:id" element={<PdaPutawayPage />} />
+              <Route path="putaway" element={<PdaPutawayPage />} />
+              <Route path="picking" element={<PdaPickingPage />} />
+              <Route path="task/:id" element={<PdaTaskPage />} />
+              <Route path="check/:id" element={<PdaCheckPage />} />
+              <Route path="check" element={<PdaCheckPage />} />
+              <Route path="pack/:id" element={<PdaPackPage />} />
+              <Route path="pack" element={<PdaPackPage />} />
+              <Route path="ship/:id" element={<PdaShipPage />} />
+              <Route path="ship" element={<PdaShipPage />} />
+              <Route path="sort" element={<PdaSortPage />} />
             </Route>
           </Route>
 
@@ -104,8 +113,10 @@ export default function AppRouter() {
 
           <Route path="/403" element={<ForbiddenPage />} />
           <Route path="*"    element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
+          </Routes>
+        </Suspense>
+        </ErpDesktopConnectionGate>
+      </PdaConnectionGate>
+    </HistoryRouter>
   )
 }

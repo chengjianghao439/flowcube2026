@@ -26,11 +26,14 @@ export interface User {
   roleId: number
   roleName: string
   avatar?: string
+  /** 租户/公司 ID，0 表示默认共享租户 */
+  tenantId?: number
 }
 
 export interface TokenPayload {
   userId: number
   roleId: number
+  tenantId?: number
   iat: number
   exp: number
 }

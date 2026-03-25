@@ -17,6 +17,8 @@ interface PdaScannerProps {
   disabled?: boolean
   showTypeHint?: boolean
   autoFocus?: boolean
+  /** false：仅扫码枪，隐藏「手动输入」（上架等强制扫码场景） */
+  allowManualEntry?: boolean
 }
 
 export default function PdaScanner({
@@ -24,6 +26,7 @@ export default function PdaScanner({
   placeholder = '等待扫码...',
   disabled = false,
   showTypeHint = true,
+  allowManualEntry = true,
 }: PdaScannerProps) {
   const manualInputRef = useRef<HTMLInputElement>(null)
   const [manualMode, setManualMode] = useState(false)
@@ -130,19 +133,21 @@ export default function PdaScanner({
                 className="rounded-xl bg-gray-700 px-3 py-2 text-sm text-gray-300 active:scale-95"
               >取消</button>
             </>
-          ) : (
+          ) : allowManualEntry ? (
             <button
               onClick={enterManualMode}
               disabled={disabled}
               className="rounded-xl bg-gray-700 px-3 py-2 text-xs text-gray-300 active:scale-95 disabled:opacity-40 whitespace-nowrap"
             >手动输入</button>
-          )}
+          ) : null}
         </div>
       </div>
 
       {/* 提示文字 */}
       {showTypeHint && !disabled && !manualMode && (
-        <p className="text-center text-xs text-gray-600">对准条码扫描即可，无需点击</p>
+        <p className="text-center text-xs text-gray-600">
+          {allowManualEntry ? '对准条码扫描即可，无需点击' : '请使用扫码枪，勿手填容器 ID'}
+        </p>
       )}
     </div>
   )

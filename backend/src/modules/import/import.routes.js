@@ -5,6 +5,8 @@ const { pool } = require('../../config/db')
 const { authMiddleware } = require('../../middleware/auth')
 const { successResponse } = require('../../utils/response')
 const AppError = require('../../utils/AppError')
+const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { adjustContainerStock, SOURCE_TYPE } = require('../../engine/containerEngine')
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
@@ -74,7 +76,7 @@ router.get('/stock/template', async (req, res) => {
   res.send(buf)
 })
 
-// 库存批量初始化导入
+// 库存批量初始化导入（经容器 + sync，禁止直写 inventory_stock.quantity）
 router.post('/stock', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) throw new AppError('请上传文件', 400)
@@ -84,21 +86,113 @@ router.post('/stock', upload.single('file'), async (req, res, next) => {
     const dataRows = rows.slice(1).filter(r => r[0])
     if (!dataRows.length) throw new AppError('文件无数据行', 400)
 
-    let success = 0, errors = []
+    let batchId
+    try {
+      const [br] = await pool.query(
+        'INSERT INTO inventory_import_batches (file_name, row_count) VALUES (?, 0)',
+        [req.file.originalname || 'stock.xlsx'],
+      )
+      batchId = br.insertId
+    } catch (e) {
+      if (e.code === 'ER_NO_SUCH_TABLE') {
+        throw new AppError('缺少表 inventory_import_batches，请先执行迁移 038_inventory_full_loop_source.sql', 500)
+      }
+      throw e
+    }
+
+    const [[user]] = await pool.query('SELECT real_name FROM sys_users WHERE id=?', [req.user.userId])
+    const operatorName = user?.real_name || '未知'
+
+    let success = 0
+    const errors = []
     for (let i = 0; i < dataRows.length; i++) {
       const [code, warehouseId, qty] = dataRows[i]
-      if (!code || !warehouseId || qty === '') { errors.push(`第${i+2}行：数据不完整`); continue }
+      if (!code || !warehouseId || qty === '') { errors.push(`第${i + 2}行：数据不完整`); continue }
+
+      const rowConn = await pool.getConnection()
       try {
-        const [[prod]] = await pool.query('SELECT id FROM product_items WHERE code=? AND deleted_at IS NULL', [String(code).trim()])
-        if (!prod) { errors.push(`第${i+2}行：商品编码"${code}"不存在`); continue }
-        await pool.query(
-          `INSERT INTO inventory_stock (product_id, warehouse_id, quantity) VALUES (?,?,?) ON DUPLICATE KEY UPDATE quantity=VALUES(quantity)`,
-          [prod.id, +warehouseId, +qty || 0]
+        await rowConn.beginTransaction()
+        const [[prod]] = await rowConn.query(
+          'SELECT id, name, unit FROM product_items WHERE code=? AND deleted_at IS NULL',
+          [String(code).trim()],
         )
+        if (!prod) {
+          errors.push(`第${i + 2}行：商品编码"${code}"不存在`)
+          await rowConn.rollback()
+          continue
+        }
+        const [[wh]] = await rowConn.query(
+          'SELECT id FROM inventory_warehouses WHERE id=? AND deleted_at IS NULL AND is_active=1',
+          [+warehouseId],
+        )
+        if (!wh) {
+          errors.push(`第${i + 2}行：仓库 ${warehouseId} 不存在或已停用`)
+          await rowConn.rollback()
+          continue
+        }
+        const target = Number(qty)
+        if (!Number.isFinite(target) || target < 0) {
+          errors.push(`第${i + 2}行：库存数量无效`)
+          await rowConn.rollback()
+          continue
+        }
+
+        const [[stockRow]] = await rowConn.query(
+          'SELECT COALESCE(quantity,0) AS qty FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
+          [prod.id, +warehouseId],
+        )
+        const current = stockRow ? Number(stockRow.qty) : 0
+        const diff = target - current
+        if (diff === 0) {
+          await rowConn.commit()
+          success++
+          continue
+        }
+
+        const { before, after, createdContainerId, primaryDeductContainerId } = await adjustContainerStock(rowConn, {
+          productId: prod.id,
+          productName: prod.name,
+          warehouseId: +warehouseId,
+          qty: diff,
+          unit: prod.unit,
+          sourceType: SOURCE_TYPE.IMPORT,
+          sourceRefId: batchId,
+          sourceRefType: 'import',
+          sourceRefNo: `IMP${batchId}`,
+          remark: `库存Excel导入 第${i + 2}行`,
+        })
+
+        const containerId = diff > 0 ? createdContainerId : primaryDeductContainerId
+        const logType = diff > 0 ? 1 : 2
+        await rowConn.query(
+          `INSERT INTO inventory_logs
+             (move_type, type, product_id, warehouse_id, supplier_id,
+              quantity, before_qty, after_qty, unit_price,
+              ref_type, ref_id, ref_no,
+              container_id, log_source_type, log_source_ref_id,
+              remark, operator_id, operator_name)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            MOVE_TYPE.STOCKCHECK, logType, prod.id, +warehouseId, null,
+            Math.abs(diff), before, after, null,
+            'import', batchId, `IMP${batchId}`,
+            containerId, SOURCE_TYPE.IMPORT, batchId,
+            `库存Excel导入 第${i + 2}行`, req.user.userId, operatorName,
+          ],
+        )
+
+        await rowConn.commit()
         success++
-      } catch (e) { errors.push(`第${i+2}行：${e.message}`) }
+      } catch (e) {
+        await rowConn.rollback()
+        errors.push(`第${i + 2}行：${e.message}`)
+      } finally {
+        rowConn.release()
+      }
     }
-    return successResponse(res, { success, errors }, `导入完成：成功${success}条${errors.length?`，失败${errors.length}条`:''}`)
+
+    await pool.query('UPDATE inventory_import_batches SET row_count=? WHERE id=?', [success, batchId])
+    return successResponse(res, { batchId, success, errors }, `导入完成：成功${success}条${errors.length ? `，失败${errors.length}条` : ''}`)
   } catch (e) { next(e) }
 })
 

@@ -13,6 +13,19 @@ const create = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
+const createCheckScan = async (req, res, next) => {
+  try {
+    const operator = req.user || {}
+    const data = await svc.createCheckScanLog({
+      taskId: req.body.taskId,
+      barcode: req.body.barcode.trim(),
+      operatorId:   operator.userId,
+      operatorName: operator.realName || operator.username,
+    })
+    return successResponse(res, data, data.allChecked ? '复核完成，已进入待打包' : '复核扫码已记录', 201)
+  } catch (e) { next(e) }
+}
+
 const listByTask = async (req, res, next) => {
   try {
     const data = await svc.findByTask(+req.params.taskId)
@@ -60,4 +73,4 @@ const getAnomalyReport = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { create, listByTask, logError, logUndo, getStats, getAnomalyReport }
+module.exports = { create, createCheckScan, listByTask, logError, logUndo, getStats, getAnomalyReport }
