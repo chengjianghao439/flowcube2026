@@ -18,24 +18,58 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get version from tag
         id: version
         run: |
           $tag = $env:GITHUB_REF_NAME
+          if ([string]::IsNullOrEmpty($tag) -or $tag -eq 'refs/heads/main') {
+            $tag = "v${{ github.event.inputs.version }}"
+            if ([string]::IsNullOrEmpty($tag) -or $tag -eq 'v') {
+              $tag = "v0.1.2"
+            }
+          }
           if ($tag -match '^v(.+)$') {
             $version = $matches[1]
           } else {
             $version = "0.0.0"
+            $tag = "v0.0.0"
           }
           echo "version=$version" >> $env:GITHUB_OUTPUT
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Show directories
+        run: |
+          Write-Host "Current directory: $(Get-Location)"
+          Write-Host "Directories:"
+          Get-ChildItem -Directory | Select-Object Name
+
+      - name: Check frontend exists
+        run: |
+          if (Test-Path "frontend") {
+            Write-Host "frontend/ exists"
+            Get-ChildItem "frontend" | Select-Object Name
+          } else {
+            Write-Host "ERROR: frontend/ not found"
+            exit 1
+          }
+
+      - name: Check desktop exists
+        run: |
+          if (Test-Path "desktop") {
+            Write-Host "desktop/ exists"
+            Get-ChildItem "desktop" | Select-Object Name
+          } else {
+            Write-Host "ERROR: desktop/ not found"
+            exit 1
+          }
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
 
       - name: Install frontend dependencies
         working-directory: ./frontend
@@ -47,6 +81,16 @@ jobs:
         env:
           VITE_ELECTRON: 1
 
+      - name: Verify frontend dist
+        run: |
+          if (Test-Path "frontend/dist") {
+            Write-Host "SUCCESS: frontend/dist exists"
+            Get-ChildItem "frontend/dist" | Select-Object Name
+          } else {
+            Write-Host "ERROR: frontend/dist not found"
+            exit 1
+          }
+
       - name: Install desktop dependencies
         working-directory: ./desktop
         run: npm install
@@ -55,34 +99,39 @@ jobs:
         working-directory: ./desktop
         run: npm run dist:win
 
+      - name: List release directory
+        working-directory: ./desktop
+        run: |
+          if (Test-Path "release") {
+            Write-Host "release/ contents:"
+            Get-ChildItem "release" | Select-Object Name, Length
+          } else {
+            Write-Host "ERROR: release/ not found"
+            exit 1
+          }
+
       - name: Rename output files (remove spaces)
         working-directory: ./desktop
-        shell: pwsh
         run: |
           Get-ChildItem -Path release -Filter "*.exe" | ForEach-Object {
             $newName = $_.Name -replace ' ', '-'
             if ($_.Name -ne $newName) {
-              Move-Item $_.FullName "release/$newName"
+              Move-Item $_.FullName "release/$newName" -Force
               Write-Host "Renamed: $($_.Name) -> $newName"
             }
           }
           Get-ChildItem -Path release -Filter "*.zip" | ForEach-Object {
             $newName = $_.Name -replace ' ', '-'
             if ($_.Name -ne $newName) {
-              Move-Item $_.FullName "release/$newName"
+              Move-Item $_.FullName "release/$newName" -Force
               Write-Host "Renamed: $($_.Name) -> $newName"
             }
           }
 
-      - name: List built files
-        run: Get-ChildItem -Path desktop/release -Filter "*.exe" | Select-Object Name, Length
-        shell: pwsh
-
       - name: Upload EXE to Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ steps.version.outputs.tag }}
           name: FlowCube ERP ${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
@@ -95,7 +144,6 @@ jobs:
 
       - name: Upload artifacts (fallback)
         uses: actions/upload-artifact@v4
-        if: startsWith(github.ref, 'refs/tags/') == false
         with:
           name: FlowCube-Desktop-Setup
           path: desktop/release/*.exe
@@ -103,7 +151,6 @@ jobs:
 
       - name: Upload ZIP artifact (fallback)
         uses: actions/upload-artifact@v4
-        if: startsWith(github.ref, 'refs/tags/') == false
         with:
           name: FlowCube-Desktop-Portable
           path: desktop/release/*.zip
