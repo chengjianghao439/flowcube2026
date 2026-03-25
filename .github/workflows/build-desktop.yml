@@ -19,6 +19,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Get version from tag
+        id: version
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -match '^v(.+)$') {
+            $version = $matches[1]
+          } else {
+            $version = "0.0.0"
+          }
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -43,21 +55,37 @@ jobs:
         working-directory: ./desktop
         run: npm run dist:win
 
-      - name: Upload artifacts
+      - name: List built files
+        run: Get-ChildItem -Path desktop/release -Filter "*.exe" | Select-Object Name, Length
+        shell: pwsh
+
+      - name: Upload EXE to Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: FlowCube ERP ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            desktop/release/*.exe
+            desktop/release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts (fallback)
         uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/') == false
         with:
           name: FlowCube-Desktop-Setup
           path: desktop/release/*.exe
           retention-days: 30
-          if-no-files-found: error
 
-      - name: Upload ZIP artifact
+      - name: Upload ZIP artifact (fallback)
         uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/') == false
         with:
           name: FlowCube-Desktop-Portable
           path: desktop/release/*.zip
           retention-days: 30
-
-      - name: List built files
-        run: Get-ChildItem -Path desktop/release -Filter "*.exe" | Select-Object Name, Length
-        shell: pwsh
