@@ -114,6 +114,7 @@ const registerClient = async (req, res, next) => {
       [clientId, hostname || clientId, ip]
     )
 
+    const assigned = []
     for (const p of printers) {
       if (!p.code && !p.name) continue
       const code = (p.code || p.name.replace(/[^A-Z0-9]/gi, '_').toUpperCase()).slice(0, 50)
@@ -123,19 +124,34 @@ const registerClient = async (req, res, next) => {
         [code, tid, tid],
       )
       if (existing) {
+        const [[prevRow]] = await pool.query('SELECT client_id FROM printers WHERE id=?', [existing.id])
+        const previousClientId = prevRow?.client_id != null ? String(prevRow.client_id) : null
         await pool.query(
           'UPDATE printers SET status=1, client_id=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
           [clientId, existing.id, tid],
         )
+        assigned.push({ code, printerId: existing.id, previousClientId })
       } else {
-        await pool.query(
+        const [ins] = await pool.query(
           'INSERT INTO printers (name, code, type, description, status, source, client_id, tenant_id) VALUES (?,?,1,?,1,?,?,?)',
           [name, code, `来自客户端 ${hostname || clientId}`, 'client', clientId, tid],
         )
+        assigned.push({
+          code,
+          printerId: ins.insertId,
+          previousClientId: null,
+        })
       }
     }
 
-    res.json({ success: true, data: { clientId, registeredAt: new Date().toISOString() } })
+    res.json({
+      success: true,
+      data: {
+        clientId,
+        assigned,
+        registeredAt: new Date().toISOString(),
+      },
+    })
   } catch (e) { next(e) }
 }
 

@@ -258,22 +258,30 @@ async function tenantSettingsPut(req, res, next) {
   }
 }
 
-function listen(req, res) {
-  const { printerCode } = req.params
+function sseHeadersAndHeartbeat(res, onRegister) {
   res.setHeader('Content-Type',  'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection',    'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')  // 禁止 nginx 缓冲
   res.flushHeaders()
 
-  // 心跳每 25 秒发一次，防止代理超时断连
   const heartbeat = setInterval(() => {
     try { res.write(': ping\n\n') } catch { clearInterval(heartbeat) }
   }, 25000)
 
   res.on('close', () => clearInterval(heartbeat))
+  onRegister()
+}
 
-  svc.registerClient(printerCode, res)
+function listen(req, res) {
+  const { printerCode } = req.params
+  sseHeadersAndHeartbeat(res, () => svc.registerClient(printerCode, res))
+}
+
+function listenStation(req, res) {
+  const clientId = req.validatedStationClientId
+  const tenantId = getTenantId(req)
+  sseHeadersAndHeartbeat(res, () => svc.registerStationClient(clientId, tenantId, res))
 }
 
 module.exports = {
@@ -286,6 +294,7 @@ module.exports = {
   fail,
   retry,
   listen,
+  listenStation,
   policyTemplatesList,
   tenantSettingsApplyTemplate,
   tenantBilling,

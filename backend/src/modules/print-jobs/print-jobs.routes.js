@@ -4,6 +4,7 @@ const ctrl = require('./print-jobs.controller')
 const { authMiddleware, permissionMiddleware } = require('../../middleware/auth')
 const { loadRolePermissions } = require('../../middleware/loadRolePermissions')
 const {
+  validateListenStationClientId,
   validateListenPrinterCode,
   validateJobPrinterHeader,
 } = require('./print-jobs.middleware')
@@ -52,7 +53,17 @@ const applyTemplateSchema = z.object({
 
 const printClientPerm = permissionMiddleware('print:client', { superAdminRoleIds: [1] })
 
-// SSE：JWT + print:client + 打印机编码存在
+// SSE（推荐）：工作站 X-Client-Id，与 printers.client_id 一致，无需 URL 里写打印机编码
+router.get(
+  '/listen/station',
+  authMiddleware,
+  loadRolePermissions,
+  printClientPerm,
+  validateListenStationClientId,
+  ctrl.listenStation,
+)
+
+// SSE（兼容）：按打印机编码订阅
 router.get(
   '/listen/:printerCode',
   authMiddleware,

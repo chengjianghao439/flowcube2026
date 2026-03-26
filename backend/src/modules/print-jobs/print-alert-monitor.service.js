@@ -37,7 +37,7 @@ async function tenantIdsToScan() {
     `SELECT DISTINCT tenant_id AS id FROM (
        SELECT tenant_id FROM print_jobs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
        UNION SELECT tenant_id FROM print_tenant_settings
-       UNION SELECT tenant_id FROM print_tenant_billing_monthly WHERE year_month = DATE_FORMAT(NOW(), '%Y-%m')
+       UNION SELECT tenant_id FROM print_tenant_billing_monthly WHERE \`year_month\` = DATE_FORMAT(NOW(), '%Y-%m')
      ) x`,
   )
   return rows.map((r) => Number(r.id)).filter((n) => Number.isFinite(n) && n >= 0)

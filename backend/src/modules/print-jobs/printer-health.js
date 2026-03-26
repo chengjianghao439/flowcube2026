@@ -89,11 +89,20 @@ async function getHealthMap(tenantId, printerIds) {
   const tid = normTenant(tenantId)
   const ids = [...new Set(printerIds.map(Number).filter((n) => n > 0))]
   if (!ids.length) return new Map()
-  const [rows] = await pool.query(
-    `SELECT printer_id, error_rate, avg_latency_ms, sample_count FROM printer_health_stats
-     WHERE tenant_id=? AND printer_id IN (${ids.map(() => '?').join(',')})`,
-    [tid, ...ids],
-  )
+  let rows = []
+  try {
+    ;[rows] = await pool.query(
+      `SELECT printer_id, error_rate, avg_latency_ms, sample_count FROM printer_health_stats
+       WHERE tenant_id=? AND printer_id IN (${ids.map(() => '?').join(',')})`,
+      [tid, ...ids],
+    )
+  } catch (e) {
+    // 未执行 045/047 等迁移时表结构不一致，退化为无历史健康度
+    if (e.code === 'ER_BAD_FIELD_ERROR' || e.code === 'ER_NO_SUCH_TABLE') {
+      return new Map(ids.map((id) => [id, coldEntry()]))
+    }
+    throw e
+  }
   const fromDb = new Map(
     rows.map((r) => {
       const sc = Number(r.sample_count) || 0

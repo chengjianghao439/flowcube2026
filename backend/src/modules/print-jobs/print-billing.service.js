@@ -5,6 +5,11 @@ const { pool } = require('../../config/db')
 
 const STATUS = { PENDING: 0, PRINTING: 1, DONE: 2, FAILED: 3 }
 
+/** 未执行 049/050 等迁移时表不存在，配额逻辑退化为「不限制」而非 500 */
+function isMissingSchemaError(e) {
+  return e && (e.code === 'ER_NO_SUCH_TABLE' || e.code === 'ER_BAD_FIELD_ERROR')
+}
+
 function normTenantId(tenantId) {
   const n = Number(tenantId)
   return Number.isFinite(n) && n >= 0 ? n : 0
@@ -24,7 +29,7 @@ async function recordSuccessfulPrint(tenantId, copies = 1) {
   const ym = currentYearMonth()
   const c = Math.max(1, Number(copies) || 1)
   await pool.query(
-    `INSERT INTO print_tenant_billing_monthly (tenant_id, year_month, job_count, copy_count)
+    `INSERT INTO print_tenant_billing_monthly (tenant_id, \`year_month\`, job_count, copy_count)
      VALUES (?, ?, 1, ?)
      ON DUPLICATE KEY UPDATE
        job_count = job_count + 1,
@@ -37,39 +42,54 @@ async function recordSuccessfulPrint(tenantId, copies = 1) {
 async function getCompletedCopiesThisMonth(tenantId) {
   const tid = normTenantId(tenantId)
   const ym = currentYearMonth()
-  const [[row]] = await pool.query(
-    'SELECT copy_count FROM print_tenant_billing_monthly WHERE tenant_id=? AND year_month=?',
-    [tid, ym],
-  )
-  if (row) return Number(row.copy_count) || 0
-  const [[agg]] = await pool.query(
-    `SELECT COALESCE(SUM(copies), 0) AS c FROM print_jobs
-     WHERE tenant_id=? AND status=? AND acknowledged_at IS NOT NULL
-       AND acknowledged_at >= DATE_FORMAT(NOW(), '%Y-%m-01')`,
-    [tid, STATUS.DONE],
-  )
-  return Number(agg?.c) || 0
+  try {
+    const [[row]] = await pool.query(
+      'SELECT copy_count FROM print_tenant_billing_monthly WHERE tenant_id=? AND `year_month`=?',
+      [tid, ym],
+    )
+    if (row) return Number(row.copy_count) || 0
+    const [[agg]] = await pool.query(
+      `SELECT COALESCE(SUM(copies), 0) AS c FROM print_jobs
+       WHERE tenant_id=? AND status=? AND acknowledged_at IS NOT NULL
+         AND acknowledged_at >= DATE_FORMAT(NOW(), '%Y-%m-01')`,
+      [tid, STATUS.DONE],
+    )
+    return Number(agg?.c) || 0
+  } catch (e) {
+    if (isMissingSchemaError(e)) return 0
+    throw e
+  }
 }
 
 /** 本月创建且仍在排队/打印中的份数（占用月度额度） */
 async function getPipelineCopiesThisMonth(tenantId) {
   const tid = normTenantId(tenantId)
-  const [[agg]] = await pool.query(
-    `SELECT COALESCE(SUM(copies), 0) AS c FROM print_jobs
-     WHERE tenant_id=? AND status IN (?,?)
-       AND created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')`,
-    [tid, STATUS.PENDING, STATUS.PRINTING],
-  )
-  return Number(agg?.c) || 0
+  try {
+    const [[agg]] = await pool.query(
+      `SELECT COALESCE(SUM(copies), 0) AS c FROM print_jobs
+       WHERE tenant_id=? AND status IN (?,?)
+         AND created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')`,
+      [tid, STATUS.PENDING, STATUS.PRINTING],
+    )
+    return Number(agg?.c) || 0
+  } catch (e) {
+    if (isMissingSchemaError(e)) return 0
+    throw e
+  }
 }
 
 async function getQueueDepth(tenantId) {
   const tid = normTenantId(tenantId)
-  const [[row]] = await pool.query(
-    'SELECT COUNT(*) AS c FROM print_jobs WHERE tenant_id=? AND status IN (?,?)',
-    [tid, STATUS.PENDING, STATUS.PRINTING],
-  )
-  return Number(row?.c) || 0
+  try {
+    const [[row]] = await pool.query(
+      'SELECT COUNT(*) AS c FROM print_jobs WHERE tenant_id=? AND status IN (?,?)',
+      [tid, STATUS.PENDING, STATUS.PRINTING],
+    )
+    return Number(row?.c) || 0
+  } catch (e) {
+    if (isMissingSchemaError(e)) return 0
+    throw e
+  }
 }
 
 /**
@@ -119,10 +139,10 @@ async function listMonthlyBilling(tenantId, limitMonths = 12) {
   const tid = normTenantId(tenantId)
   const lim = Math.min(60, Math.max(1, Number(limitMonths) || 12))
   const [rows] = await pool.query(
-    `SELECT year_month, job_count, copy_count, updated_at
+    `SELECT \`year_month\`, job_count, copy_count, updated_at
      FROM print_tenant_billing_monthly
      WHERE tenant_id=?
-     ORDER BY year_month DESC
+     ORDER BY \`year_month\` DESC
      LIMIT ?`,
     [tid, lim],
   )

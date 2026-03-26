@@ -5,7 +5,8 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { getTemplatePayload } = require('./print-policy-templates')
 
-const CACHE_MS = Math.min(300_000, Math.max(5_000, Number(process.env.PRINT_TENANT_POLICY_CACHE_MS) || 30_000))
+/** 略缩短默认 TTL，管理员调整「并发打印上限」等策略后更快生效（仍可用 PRINT_TENANT_POLICY_CACHE_MS 覆盖） */
+const CACHE_MS = Math.min(300_000, Math.max(3_000, Number(process.env.PRINT_TENANT_POLICY_CACHE_MS) || 15_000))
 const cache = new Map() // tenantId -> { at, row }
 
 function envNum(key, def) {
@@ -69,8 +70,13 @@ function mergeRow(row) {
 
 async function fetchRow(tenantId) {
   const tid = normTenantId(tenantId)
-  const [[row]] = await pool.query('SELECT * FROM print_tenant_settings WHERE tenant_id=?', [tid])
-  return row || null
+  try {
+    const [[row]] = await pool.query('SELECT * FROM print_tenant_settings WHERE tenant_id=?', [tid])
+    return row || null
+  } catch (e) {
+    if (e.code === 'ER_NO_SUCH_TABLE') return null
+    throw e
+  }
 }
 
 /**

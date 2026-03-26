@@ -1,7 +1,7 @@
 {
   "name": "flowcube-desktop",
   "private": true,
-  "version": "0.3.11",
+  "version": "0.3.12",
   "description": "FlowCube ERP 桌面客户端（Electron）",
   "main": "main.js",
   "scripts": {

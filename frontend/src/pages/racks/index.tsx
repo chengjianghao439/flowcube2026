@@ -10,14 +10,14 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { getRacksApi, deleteRackApi } from '@/api/racks'
+import { getRacksApi, deleteRackApi, printRackLabelApi } from '@/api/racks'
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import DataTable from '@/components/shared/DataTable'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { TableColumn } from '@/types'
 import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
-import { ChevronDown, Edit2, Trash2 } from 'lucide-react'
+import { ChevronDown, Edit2, Printer, Trash2 } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +63,19 @@ export default function RacksPage() {
       toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败'),
   })
 
+  const printMut = useMutation({
+    mutationFn: (id: number) => printRackLabelApi(id),
+    onSuccess: (d) => {
+      if (!d) return
+      if (d.queued) {
+        toast.success(d.printerCode ? `已入队 → ${d.printerCode}` : '已加入打印队列')
+      } else {
+        toast.warning('未绑定「库存标签」打印机或标签机离线，未创建任务')
+      }
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '打印失败'),
+  })
+
   function handleSearch() {
     setPage(1)
     setKeyword(search)
@@ -91,9 +104,19 @@ export default function RacksPage() {
     {
       key: 'actions',
       title: '操作',
-      width: 120,
+      width: 152,
       render: (_, row) => (
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-end gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            className="px-2"
+            disabled={printMut.isPending && printMut.variables === row.id}
+            onClick={() => printMut.mutate(row.id)}
+          >
+            <Printer className="size-3.5 mr-0.5" />
+            打印
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" disabled={deleteMut.isPending} className="px-2">

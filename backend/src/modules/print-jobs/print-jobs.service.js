@@ -4,7 +4,9 @@
  *
  * 架构：
  *  - PDA / ERP 调用 create() 投入任务
- *  - 桌面端打印客户端通过 SSE 订阅 /api/print-jobs/listen/:printerCode
+ *  - 桌面端打印客户端通过 SSE 订阅：
+ *      - /api/print-jobs/listen/station + 头 X-Client-Id（与 printers.client_id 一致，推荐）
+ *      - 或 /api/print-jobs/listen/:printerCode（兼容旧版）
  *  - 客户端拿到任务后执行本地打印，完成后回调 complete() 或 fail()
  *  - 失败任务最多重试 3 次
  */
@@ -34,6 +36,11 @@ function statusKey(n) {
   return STATUS_KEY[i] ?? 'unknown'
 }
 
+/** mysql2 可能返回 BIGINT；SSE JSON 不能含 BigInt，否则抛错导致整单 500 */
+function jsonForSse(obj) {
+  return JSON.stringify(obj, (_k, v) => (typeof v === 'bigint' ? Number(v) : v))
+}
+
 function printStateLabel(n) {
   switch (Number(n)) {
     case STATUS.PENDING: return '排队中'
@@ -44,8 +51,9 @@ function printStateLabel(n) {
   }
 }
 
-// SSE 客户端注册表：printerCode → Set<res>
+// SSE：按打印机编码（旧版）或按工作站 client_id（新版）
 const sseClients = new Map()
+const sseClientsByClientId = new Map()
 
 async function canTenantStartPrinting(tenantId) {
   const tid = Number(tenantId) >= 0 && Number.isFinite(Number(tenantId)) ? Number(tenantId) : 0
@@ -67,6 +75,10 @@ function parsePriority(raw) {
 
 function num(v) {
   if (v == null) return null
+  if (typeof v === 'bigint') {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
   const n = Number(v)
   return Number.isFinite(n) ? n : null
 }
@@ -279,7 +291,16 @@ async function create({
   }
   const job = await findById(insertId)
 
-  await pushToClients(printer.code, job)
+  try {
+    await pushToClients(printer.code, job)
+  } catch (e) {
+    logger.error(
+      `[print-jobs] pushToClients 失败（任务已入库 id=${insertId}）`,
+      e instanceof Error ? e : new Error(String(e)),
+      { printerCode: printer.code },
+      'PrintJobs',
+    )
+  }
 
   return findById(insertId)
 }
@@ -381,6 +402,17 @@ function registerClient(printerCode, res) {
   })
 }
 
+function registerStationClient(clientId, tenantId, res) {
+  const cid = String(clientId || '').trim()
+  if (!cid) return
+  if (!sseClientsByClientId.has(cid)) sseClientsByClientId.set(cid, new Set())
+  sseClientsByClientId.get(cid).add(res)
+  flushPendingToClientByClientId(cid, tenantId, res)
+  res.on('close', () => {
+    sseClientsByClientId.get(cid)?.delete(res)
+  })
+}
+
 async function flushPendingToClient(printerCode, res) {
   try {
     const [[printer]] = await pool.query('SELECT id FROM printers WHERE code=?', [printerCode])
@@ -404,14 +436,59 @@ async function flushPendingToClient(printerCode, res) {
       if (!ur.affectedRows) continue
       row.status = 1
       row.ack_token = ack
-      res.write(`data: ${JSON.stringify(fmt(row, { includeAckToken: true }))}\n\n`)
+      res.write(`data: ${jsonForSse(fmt(row, { includeAckToken: true }))}\n\n`)
     }
   } catch { /* 静默 */ }
 }
 
+async function flushPendingToClientByClientId(clientId, tenantId, res) {
+  try {
+    const tid = Number(tenantId) >= 0 && Number.isFinite(Number(tenantId)) ? Number(tenantId) : 0
+    const cid = String(clientId || '').trim()
+    const [rows] = await pool.query(
+      `SELECT j.*, p.code AS printer_code, p.name AS printer_name
+       FROM print_jobs j
+       INNER JOIN printers p ON p.id = j.printer_id
+         AND p.client_id = ?
+         AND (p.tenant_id = ? OR p.tenant_id = 0)
+       WHERE j.status = 0 AND j.tenant_id = ?
+         AND (j.expires_at IS NULL OR j.expires_at > NOW())
+       ORDER BY j.priority DESC, j.id ASC`,
+      [cid, tid, tid],
+    )
+    for (const row of rows) {
+      const trow = row.tenant_id != null ? Number(row.tenant_id) : 0
+      if (!(await canTenantStartPrinting(trow))) continue
+      const ack = crypto.randomBytes(16).toString('hex')
+      const [ur] = await pool.query(
+        'UPDATE print_jobs SET status=1, ack_token=?, dispatched_at=NOW() WHERE id=? AND status=0',
+        [ack, row.id],
+      )
+      if (!ur.affectedRows) continue
+      row.status = 1
+      row.ack_token = ack
+      res.write(`data: ${jsonForSse(fmt(row, { includeAckToken: true }))}\n\n`)
+    }
+  } catch { /* 静默 */ }
+}
+
+async function collectSseSubscribersForPrinter(printerCode) {
+  const subs = new Set()
+  const byCode = sseClients.get(printerCode)
+  if (byCode) byCode.forEach((r) => subs.add(r))
+  try {
+    const [[row]] = await pool.query('SELECT client_id FROM printers WHERE code=? LIMIT 1', [printerCode])
+    if (row && row.client_id) {
+      const byC = sseClientsByClientId.get(String(row.client_id))
+      if (byC) byC.forEach((r) => subs.add(r))
+    }
+  } catch { /* 忽略 */ }
+  return subs
+}
+
 async function pushToClients(printerCode, job) {
-  const clients = sseClients.get(printerCode)
-  if (!clients || clients.size === 0) return
+  const clients = await collectSseSubscribersForPrinter(printerCode)
+  if (!clients.size) return
 
   const [[alive]] = await pool.query(
     `SELECT id FROM print_jobs WHERE id=? AND status=? AND (expires_at IS NULL OR expires_at > NOW())`,
@@ -443,7 +520,7 @@ async function pushToClients(printerCode, job) {
     if (raw) payloadJob = fmt(raw, { includeAckToken: true })
   } catch { /* 使用上方合并对象 */ }
 
-  const payload = `data: ${JSON.stringify(payloadJob)}\n\n`
+  const payload = `data: ${jsonForSse(payloadJob)}\n\n`
   clients.forEach((res) => {
     try {
       res.write(payload)
@@ -763,6 +840,7 @@ module.exports = {
   fail,
   retry,
   registerClient,
+  registerStationClient,
   expireStaleJobs,
   getStatsCounts,
   listPrinterHealth,
