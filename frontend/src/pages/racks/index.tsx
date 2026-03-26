@@ -68,7 +68,16 @@ export default function RacksPage() {
     onSuccess: (d) => {
       if (!d) return
       if (d.queued) {
-        toast.success(d.printerCode ? `已入队 → ${d.printerCode}` : '已加入打印队列')
+        const h = d.dispatchHint
+        if (h?.code === 'no_print_client') {
+          toast.warning(h.message || '未检测到在线打印客户端，打印机不会出纸')
+        } else if (h?.code === 'queued_concurrency') {
+          toast.warning(h.message || '任务已入队，因并发上限排队中')
+        } else if (h?.code === 'dispatched') {
+          toast.success(d.printerCode ? `已下发至工作站 → ${d.printerCode}` : '已下发至打印工作站')
+        } else {
+          toast.success(d.printerCode ? `已入队 → ${d.printerCode}` : '已加入打印队列')
+        }
       } else {
         toast.warning('未绑定「库存标签」打印机或标签机离线，未创建任务')
       }

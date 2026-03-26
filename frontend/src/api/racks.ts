@@ -35,11 +35,18 @@ export async function deleteRackApi(id: number): Promise<void> {
   await apiClient.delete(`/racks/${id}`)
 }
 
+export type PrintDispatchHint = {
+  code: string
+  message: string
+  sseClients: number
+}
+
 export interface PrintRackLabelResult {
   queued: boolean
   jobId: number | null
   printerCode: string | null
   printerName: string | null
+  dispatchHint?: PrintDispatchHint | null
 }
 
 export async function printRackLabelApi(id: number): Promise<PrintRackLabelResult> {

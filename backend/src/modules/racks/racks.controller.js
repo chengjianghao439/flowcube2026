@@ -68,15 +68,25 @@ async function printLabel(req, res, next) {
         '未配置标签机或未绑定「库存标签」用途打印机，未创建打印任务',
       )
     }
+    const hint = slim.dispatchHint
+    const msg =
+      hint?.code === 'dispatched'
+        ? '已下发至打印工作站'
+        : hint?.code === 'no_print_client'
+          ? '任务已入队，但未连接打印客户端（详见说明）'
+          : hint?.code === 'queued_concurrency'
+            ? '任务已入队，因并发上限排队中'
+            : '已加入打印队列（按「库存标签 / inventory_label」绑定；需 print-client 在线才能出纸）'
     return successResponse(
       res,
       {
-        queued:      true,
-        jobId:       slim.id,
-        printerCode: slim.printerCode,
-        printerName: slim.printerName,
+        queued:       true,
+        jobId:        slim.id,
+        printerCode:  slim.printerCode,
+        printerName:  slim.printerName,
+        dispatchHint: hint || null,
       },
-      '已加入打印队列（按打印机管理中「库存标签 / inventory_label」绑定出纸）',
+      msg,
     )
   } catch (err) { next(err) }
 }

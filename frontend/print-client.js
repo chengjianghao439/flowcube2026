@@ -23,7 +23,7 @@
  *   未写明的 code 在 ZPL 任务上会回退到 --zpl-host（单机默认可只配默认 host）
  *
  * 打印方式：
- *   - ZPL：按路由表 TCP 发送到斑马（默认端口 9100）
+ *   - ZPL：优先按路由表 TCP 发送到斑马网口（默认端口 9100）；若无 zplHost 但配置了 lp 或 --local-printer（仅 macOS/Linux），则用 lp -o raw 走 CUPS 队列
  *   - HTML：mac/linux 用 lp；Windows 用 Chrome（可配 winPrinter）
  *   - 纯文本：lp（可配 lp）
  */
@@ -32,7 +32,7 @@ const http = require('http')
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
-const { exec } = require('child_process')
+const { exec, execFile } = require('child_process')
 const net = require('net')
 const os = require('os')
 
@@ -468,30 +468,71 @@ async function handleJob(job) {
   }
 }
 
+function printZplTcp(host, port, content) {
+  return new Promise((resolve, reject) => {
+    const sock = new net.Socket()
+    let settled = false
+    const done = (fn, arg) => {
+      if (settled) return
+      settled = true
+      fn(arg)
+    }
+    sock.setTimeout(30_000, () => {
+      sock.destroy()
+      done(reject, new Error(`ZPL 连接超时 ${host}:${port}`))
+    })
+    sock.connect(port, host, () => {
+      sock.write(content, (writeErr) => {
+        if (writeErr) {
+          sock.destroy()
+          return done(reject, writeErr)
+        }
+        sock.end()
+      })
+    })
+    sock.on('close', () => done(resolve))
+    sock.on('error', (e) => done(reject, e))
+  })
+}
+
+/** CUPS 原始作业：适用于仅添加为系统打印队列、无网口 IP 的斑马等 */
+function printZplViaLp(queue, content) {
+  return new Promise((resolve, reject) => {
+    const tmpFile = path.join(os.tmpdir(), `fc_zpl_${Date.now()}.zpl`)
+    fs.writeFileSync(tmpFile, content, 'utf8')
+    execFile('lp', ['-d', queue, '-o', 'raw', tmpFile], (err) => {
+      try {
+        fs.unlinkSync(tmpFile)
+      } catch {
+        /* 忽略 */
+      }
+      if (err) reject(err)
+      else resolve()
+    })
+  })
+}
+
 function printZpl(content, job) {
   const route = resolvePhysicalRoute(job?.printerCode)
   const host = route.zplHost
   const port = route.zplPort
-  return new Promise((resolve, reject) => {
-    if (!host) {
-      return reject(
-        new Error(
-          `ZPL 未配置目标：打印机 ${job?.printerCode || '?'} 请在路由表或 --zpl-host 中指定 host`,
-        ),
-      )
-    }
-    const sock = new net.Socket()
-    sock.setTimeout(30_000, () => {
-      sock.destroy()
-      reject(new Error(`ZPL 连接超时 ${host}:${port}`))
-    })
-    sock.connect(port, host, () => {
-      sock.write(content)
-      sock.end()
-    })
-    sock.on('close', resolve)
-    sock.on('error', reject)
-  })
+  const lpQueue = (route.lp || LOCAL_PRINTER || '').trim()
+
+  if (host) {
+    return printZplTcp(host, port, content)
+  }
+
+  const platform = os.platform()
+  if (lpQueue && platform !== 'win32') {
+    return printZplViaLp(lpQueue, content)
+  }
+
+  return Promise.reject(
+    new Error(
+      `ZPL 未配置目标：打印机 ${job?.printerCode || '?'} 请配置斑马网口：路由/host 或 --zpl-host；` +
+        `或（macOS/Linux）在路由表配置 lp / 使用 --local-printer 指定 CUPS 队列名以 -o raw 发送`,
+    ),
+  )
 }
 
 function printHtml(content, copies = 1, job = {}) {

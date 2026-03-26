@@ -486,6 +486,60 @@ async function collectSseSubscribersForPrinter(printerCode) {
   return subs
 }
 
+/**
+ * 入队后探测任务是否已推送到打印客户端（便于接口区分「仅入库」与「已下发」）
+ * @returns {{ code: string, message: string, sseClients: number }}
+ */
+async function getDispatchHintForJob(printerCode, jobId) {
+  const jid = Number(jobId)
+  if (!Number.isFinite(jid) || jid <= 0) {
+    return { code: 'unknown', message: '', sseClients: 0 }
+  }
+  let code = String(printerCode || '').trim()
+  const job = await findById(jid)
+  if (!job) return { code: 'unknown', message: '任务不存在', sseClients: 0 }
+  if (!code) code = String(job.printerCode || '').trim()
+
+  const st = Number(job.status)
+  if (st === STATUS.PRINTING) {
+    const n = code ? (await collectSseSubscribersForPrinter(code)).size : 0
+    return {
+      code: 'dispatched',
+      message: '已下发至打印工作站，正在打印',
+      sseClients: n,
+    }
+  }
+  if (st === STATUS.DONE) {
+    return { code: 'done', message: '已完成', sseClients: 0 }
+  }
+  if (st === STATUS.FAILED) {
+    return {
+      code: 'failed',
+      message: job.errorMessage ? String(job.errorMessage).slice(0, 200) : '打印失败',
+      sseClients: 0,
+    }
+  }
+  if (st !== STATUS.PENDING) {
+    return { code: 'unknown', message: '', sseClients: 0 }
+  }
+
+  const subs = code ? await collectSseSubscribersForPrinter(code) : new Set()
+  const n = subs.size
+  if (n === 0) {
+    return {
+      code: 'no_print_client',
+      message:
+        '任务已入队，但未检测到在线打印客户端：请在连接打印机的电脑上运行 print-client（/listen/station 或 /listen/:打印机编码），并完成注册',
+      sseClients: 0,
+    }
+  }
+  return {
+    code: 'queued_concurrency',
+    message: '任务已入队，因租户「同时打印中」上限暂时排队，请稍候',
+    sseClients: n,
+  }
+}
+
 async function pushToClients(printerCode, job) {
   const clients = await collectSseSubscribersForPrinter(printerCode)
   if (!clients.size) return
@@ -675,7 +729,7 @@ async function enqueueRackLabelJob(payload) {
     name: row.name,
   })
   try {
-    return await create({
+    const job = await create({
       printerId,
       dispatchReason,
       tenantId: tid,
@@ -688,6 +742,13 @@ async function enqueueRackLabelJob(payload) {
       createdBy: payload.createdBy ?? null,
       jobUniqueKey: payload.jobUniqueKey ?? null,
     })
+    const dispatchHint = await getDispatchHintForJob(job.printerCode, job.id)
+    return {
+      id: job.id,
+      printerCode: job.printerCode,
+      printerName: job.printerName,
+      dispatchHint,
+    }
   } catch (e) {
     if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/i.test(String(e.message))) {
       throw new AppError('打印入库失败：数据库字段异常，请先执行迁移或联系管理员', 503)
@@ -848,6 +909,7 @@ module.exports = {
   parseListStatus,
   enqueueContainerLabelJob,
   enqueueRackLabelJob,
+  getDispatchHintForJob,
   enqueuePackageLabelJob,
   buildContainerLabelZpl,
   buildRackLabelZpl,
