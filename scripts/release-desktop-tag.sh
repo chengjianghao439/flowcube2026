@@ -32,8 +32,8 @@ if git rev-parse "$TAG" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "发布检查: ✅ 允许发布（远程无 ${TAG}、本地无 ${TAG}）"
-echo "📌 创建并推送: $TAG（与 package.json 一致）"
-git tag "$TAG"
-git push origin "$TAG"
-echo "✅ 已推送 $TAG"
+echo "发布检查: 允许发布（远程无 ${TAG}、本地无 ${TAG}）"
+echo "创建并推送: ${TAG}（与 package.json 一致）"
+git tag "${TAG}"
+git push origin "${TAG}"
+echo "已推送 ${TAG}"
