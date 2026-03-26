@@ -131,6 +131,21 @@ async function assignContainerLocation(req, res, next) {
   } catch (e) { next(e) }
 }
 
+async function splitContainer(req, res, next) {
+  try {
+    const id = +req.params.id
+    const { qty, remark, printLabel } = req.body
+    const result = await svc.splitContainerOp(id, {
+      qty,
+      remark,
+      printLabel: !!printLabel,
+      tenantId:   req.user.tenantId ?? 0,
+      userId:     req.user.userId,
+    })
+    return successResponse(res, result, '拆分成功')
+  } catch (e) { next(e) }
+}
+
 module.exports = {
   trace,
   checkConsistency,
@@ -143,4 +158,5 @@ module.exports = {
   containers,
   containerByBarcode,
   assignContainerLocation,
+  splitContainer,
 }

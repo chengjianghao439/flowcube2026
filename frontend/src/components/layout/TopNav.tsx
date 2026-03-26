@@ -56,6 +56,7 @@ export const TOP_NAV_SECTIONS: TopNavSection[] = [
       { label: '商品分类', path: '/categories', perm: 'page:categories' },
       { label: '仓库管理', path: '/warehouses', perm: 'page:warehouses' },
       { label: '库位管理', path: '/locations', perm: 'page:warehouses' },
+      { label: '货架管理', path: '/racks', perm: 'page:warehouses' },
       { label: '库存总览', path: '/inventory/overview', perm: 'page:inventory' },
       { label: '库存管理', path: '/inventory', perm: 'page:inventory' },
       { label: '库存盘点', path: '/stockcheck', perm: 'page:stockcheck' },

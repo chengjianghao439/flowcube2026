@@ -6,6 +6,7 @@
  *   CNTxxxxxx   → type: 'container'  容器条码
  *   LOC-xxx...  → type: 'location'   库位条码
  *   BOXxxxxxx   → type: 'box'        箱号条码
+ *   RCKxxxxxx   → type: 'rack'      货架条码
  *   WAVExxxxxx  → type: 'wave'       波次条码
  *   其他        → type: 'unknown'
  */
@@ -15,6 +16,7 @@ export type BarcodeType =
   | 'container'
   | 'location'
   | 'box'
+  | 'rack'
   | 'wave'
   | 'unknown'
 
@@ -46,6 +48,9 @@ export function parseBarcode(raw: string): ParsedBarcode {
 
   const box = /^BOX(\d+)$/i.exec(s)
   if (box) return { raw: s, type: 'box',       label: '箱号条码',  id: parseInt(box[1],   10), code: s }
+
+  const rck = /^RCK(\d+)$/i.exec(s)
+  if (rck) return { raw: s, type: 'rack',      label: '货架条码',  id: parseInt(rck[1],  10), code: s }
 
   const wave = /^WAVE(\d+)$/i.exec(s)
   if (wave) return { raw: s, type: 'wave',      label: '波次条码',  id: parseInt(wave[1],  10), code: s }

@@ -1,4 +1,5 @@
 const svc = require('./packages.service')
+const printJobs = require('../print-jobs/print-jobs.service')
 const { successResponse } = require('../../utils/response')
 
 async function list(req, res, next) {
@@ -29,8 +30,27 @@ async function addItem(req, res, next) {
 
 async function finish(req, res, next) {
   try {
-    const result = await svc.finishPackage(+req.params.id)
+    const id = +req.params.id
+    const result = await svc.finishPackage(id)
+    try {
+      await printJobs.enqueuePackageLabelJob({
+        packageId: id,
+        tenantId: req.user.tenantId ?? 0,
+        createdBy: req.user.userId,
+      })
+    } catch (_) { /* 打印队列失败不阻断完成装箱 */ }
     return successResponse(res, result, '打包完成')
+  } catch (e) { next(e) }
+}
+
+async function printLabel(req, res, next) {
+  try {
+    const job = await printJobs.enqueuePackageLabelJob({
+      packageId: +req.params.id,
+      tenantId: req.user.tenantId ?? 0,
+      createdBy: req.user.userId,
+    })
+    return successResponse(res, { queued: !!job, job: job ?? null }, job ? '已加入打印队列' : '未配置标签机，未创建打印任务')
   } catch (e) { next(e) }
 }
 
@@ -41,4 +61,4 @@ async function getByBarcode(req, res, next) {
   } catch (e) { next(e) }
 }
 
-module.exports = { list, create, addItem, finish, getByBarcode }
+module.exports = { list, create, addItem, finish, printLabel, getByBarcode }

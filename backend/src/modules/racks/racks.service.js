@@ -6,6 +6,7 @@ function fmt(r) {
     id:           r.id,
     warehouseId:  r.warehouse_id,
     warehouseName: r.warehouse_name || null,
+    barcode:      r.barcode ?? null,
     zone:         r.zone,
     code:         r.code,
     name:         r.name,
@@ -83,7 +84,10 @@ async function create(data) {
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [warehouseId, zone, code, name, maxLevels, maxPositions, remark || null],
   )
-  return findById(result.insertId)
+  const newId = result.insertId
+  const barcode = `RCK${String(newId).padStart(6, '0')}`
+  await pool.query('UPDATE warehouse_racks SET barcode = ? WHERE id = ?', [barcode, newId])
+  return findById(newId)
 }
 
 async function update(id, data) {
@@ -118,4 +122,14 @@ async function softDelete(id) {
   )
 }
 
-module.exports = { findAll, findActive, findById, create, update, softDelete }
+async function enqueuePrintLabel(id, { tenantId = 0, userId = null } = {}) {
+  await findById(id)
+  const { enqueueRackLabelJob } = require('../print-jobs/print-jobs.service')
+  return enqueueRackLabelJob({
+    rackId: id,
+    tenantId,
+    createdBy: userId,
+  })
+}
+
+module.exports = { findAll, findActive, findById, create, update, softDelete, enqueuePrintLabel }

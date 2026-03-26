@@ -17,6 +17,7 @@
  *  pda:checking  复核任务
  *  pda:packing   打包作业
  *  pda:shipping  出库确认
+ *  pda:split     同仓容器拆分
  *  pda:cancel    取消任务（主管专属）
  *  pda:override  强制完成（主管专属）
  */
@@ -32,6 +33,7 @@ export type PdaPerm =
   | 'pda:checking'
   | 'pda:packing'
   | 'pda:shipping'
+  | 'pda:split'
   | 'pda:cancel'
   | 'pda:override'
 
@@ -39,17 +41,17 @@ export type PdaPerm =
 const ROLE_PERMS: Record<PdaRole, PdaPerm[]> = {
   supervisor: [
     'pda:inbound', 'pda:putaway', 'pda:picking', 'pda:sorting',
-    'pda:checking', 'pda:packing', 'pda:shipping',
+    'pda:checking', 'pda:packing', 'pda:shipping', 'pda:split',
     'pda:cancel', 'pda:override',
   ],
   receiver: [
     'pda:inbound',
   ],
   picker: [
-    'pda:picking', 'pda:sorting', 'pda:checking', 'pda:shipping',
+    'pda:picking', 'pda:sorting', 'pda:checking', 'pda:shipping', 'pda:split',
   ],
   packer: [
-    'pda:checking', 'pda:packing', 'pda:shipping',
+    'pda:checking', 'pda:packing', 'pda:shipping', 'pda:split',
   ],
 }
 

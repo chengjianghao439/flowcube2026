@@ -43,5 +43,13 @@ router.put('/containers/:containerId/location',
   vBody(z.object({ locationId: z.number().int().positive('locationId 必须为正整数') })),
   ctrl.assignContainerLocation
 )
+router.post('/containers/:id/split',
+  vBody(z.object({
+    qty: z.number().positive('拆分数量须大于 0'),
+    remark: z.string().max(500).optional(),
+    printLabel: z.boolean().optional(),
+  })),
+  ctrl.splitContainer,
+)
 
 module.exports = router

@@ -6,8 +6,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useMutation } from '@tanstack/react-query'
 import { useCreateRack, useUpdateRack } from '@/hooks/useRacks'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
+import { printRackLabelApi } from '@/api/racks'
+import { toast } from '@/lib/toast'
 import { RACK_STATUS_OPTIONS, type Rack } from '@/types/racks'
 
 interface Props {
@@ -28,6 +31,19 @@ export default function RackFormDialog({ open, onClose, editItem }: Props) {
   const { data: warehouses } = useWarehousesActive()
   const { mutate: create, isPending: creating, error: createError } = useCreateRack()
   const { mutate: update, isPending: updating, error: updateError } = useUpdateRack()
+  const printMut = useMutation({
+    mutationFn: () => {
+      if (!editItem) throw new Error('未选择货架')
+      return printRackLabelApi(editItem.id)
+    },
+    onSuccess: (d) => {
+      if (!d) return
+      if (d.queued) toast.success('已加入打印队列')
+      else toast.warning('未配置标签机，未创建打印任务')
+    },
+    onError: (e: unknown) =>
+      toast.error((e as { message?: string })?.message ?? '打印失败'),
+  })
   const isPending = creating || updating
   const error = createError || updateError
 
@@ -110,6 +126,24 @@ export default function RackFormDialog({ open, onClose, editItem }: Props) {
               </Select>
             )}
           </div>
+
+          {isEdit && editItem?.barcode && (
+            <div className="flex flex-wrap items-end justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">货架条码</Label>
+                <p className="font-mono text-sm font-semibold tracking-tight">{editItem.barcode}</p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={printMut.isPending}
+                onClick={() => printMut.mutate()}
+              >
+                打印货架标
+              </Button>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

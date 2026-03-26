@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { adjustContainerStock, SOURCE_TYPE } = require('../../engine/containerEngine')
+const { adjustContainerStock, SOURCE_TYPE, splitContainer } = require('../../engine/containerEngine')
 
 // ─── 库存查询 ─────────────────────────────────────────────────────────────────
 
@@ -674,6 +674,51 @@ async function assignContainerLocation(containerId, locationId) {
   }
 }
 
+/**
+ * 同仓容器拆分（散件）：单容器扣减并生成新 CNT，可选打印新容器标
+ */
+async function splitContainerOp(containerId, { qty, remark, printLabel, tenantId, userId }) {
+  const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
+  const conn = await pool.getConnection()
+  let result
+  try {
+    await conn.beginTransaction()
+    result = await splitContainer(conn, { containerId, qty, remark })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+
+  if (printLabel) {
+    const [[row]] = await pool.query(
+      `SELECT c.barcode, c.remaining_qty, p.name AS product_name
+       FROM inventory_containers c
+       JOIN product_items p ON p.id = c.product_id
+       WHERE c.id = ?`,
+      [result.newContainerId],
+    )
+    if (row) {
+      const tid = Number(tenantId) >= 0 && Number.isFinite(Number(tenantId)) ? Number(tenantId) : 0
+      await enqueueContainerLabelJob({
+        tenantId: tid,
+        warehouseId: result.warehouseId,
+        data: {
+          container_code: row.barcode,
+          product_name:   row.product_name,
+          qty:            row.remaining_qty,
+        },
+        createdBy: userId ?? null,
+        jobUniqueKey: `split_cnt_${result.newContainerId}`,
+      })
+    }
+  }
+
+  return result
+}
+
 module.exports = {
   getStock,
   getLogs,
@@ -685,4 +730,5 @@ module.exports = {
   resolveSourceDocument,
   getContainerByBarcode,
   assignContainerLocation,
+  splitContainerOp,
 }

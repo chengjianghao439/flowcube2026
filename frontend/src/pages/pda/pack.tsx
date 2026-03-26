@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getTasksApi, packDoneApi } from '@/api/warehouse-tasks'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
-import { getPackagesApi, createPackageApi, addPackageItemApi, finishPackageApi } from '@/api/packages'
+import { getPackagesApi, createPackageApi, addPackageItemApi, finishPackageApi, printPackageLabelApi } from '@/api/packages'
 import type { Package } from '@/api/packages'
 import type { WarehouseTask } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
@@ -54,9 +54,10 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
   )
 }
 
-function PackageCard({ pkg, active, onActivate, onFinish, finishing }: {
+function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabel, printingLabel }: {
   pkg: Package; active: boolean
   onActivate: () => void; onFinish: () => void; finishing: boolean
+  onPrintLabel: () => void; printingLabel: boolean
 }) {
   const [open, setOpen] = useState(active)
   const totalQty = pkg.items.reduce((s, i) => s + i.qty, 0)
@@ -91,8 +92,17 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing }: {
               <p className="font-bold text-primary shrink-0 ml-2">{item.qty} <span className="text-xs font-normal text-muted-foreground">{item.unit}</span></p>
             </div>
           ))}
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full mt-2"
+            onClick={onPrintLabel}
+            disabled={printingLabel}
+          >
+            {printingLabel ? '打印中…' : '🖨 打印箱贴'}
+          </Button>
           {active && pkg.status === 1 && pkg.items.length > 0 && (
-            <Button size="sm" className="w-full mt-2" onClick={onFinish} disabled={finishing}>
+            <Button size="sm" className="w-full mt-1" onClick={onFinish} disabled={finishing}>
               {finishing ? '处理中…' : '✓ 完成此箱'}
             </Button>
           )}
@@ -150,6 +160,15 @@ export default function PdaPackPage() {
       refetch()
     },
     onError: (e: unknown) => err((e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '添加失败'),
+  })
+
+  const printLabelMut = useMutation({
+    mutationFn: (pkgId: number) => printPackageLabelApi(pkgId).then(r => r.data.data!),
+    onSuccess: (d) => {
+      if (d.queued) ok('箱贴已加入打印队列')
+      else ok('未配置标签机，未创建打印任务')
+    },
+    onError: (e: unknown) => err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '打印失败'),
   })
 
   const finishMut = useMutation({
@@ -228,6 +247,8 @@ export default function PdaPackPage() {
               onActivate={() => setActivePackageId(pkg.id)}
               onFinish={() => finishMut.mutate(pkg.id)}
               finishing={finishMut.isPending}
+              onPrintLabel={() => printLabelMut.mutate(pkg.id)}
+              printingLabel={printLabelMut.isPending && printLabelMut.variables === pkg.id}
             />
           ))}
           {packages.length === 0 && !pkgLoading && (

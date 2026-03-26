@@ -38,9 +38,12 @@ export const addPackageItemApi = (
   })
 
 export const finishPackageApi = (packageId: number) =>
-  client.put<ApiResponse<{ id: number; status: number; statusName: string }>>(
+  client.put<ApiResponse<{ id: number; status: number; statusName: string; autoPacked?: boolean }>>(
     `/packages/${packageId}/finish`,
   )
+
+export const printPackageLabelApi = (packageId: number) =>
+  client.post<ApiResponse<{ queued: boolean; job: unknown }>>(`/packages/${packageId}/print-label`)
 
 export interface PackageShipInfo {
   packageId: number

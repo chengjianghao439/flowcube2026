@@ -46,4 +46,7 @@ router.post('/:id/add-item',
 // PUT  /api/packages/:id/finish      — 完成打包
 router.put('/:id/finish', ctrl.finish)
 
+// POST /api/packages/:id/print-label — 补打箱贴
+router.post('/:id/print-label', ctrl.printLabel)
+
 module.exports = router

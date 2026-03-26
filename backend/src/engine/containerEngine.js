@@ -27,19 +27,24 @@ const CONTAINER_STATUS = {
 
 /** 写入 inventory_containers.source_type 的规范取值 */
 const SOURCE_TYPE = {
-  INBOUND_TASK: 'inbound_task',
-  STOCKCHECK:   'stockcheck',
-  TRANSFER:     'transfer',
-  RETURN:       'return',
-  IMPORT:       'import',
-  MANUAL:       'manual',
-  LEGACY:       'legacy',
+  INBOUND_TASK:     'inbound_task',
+  STOCKCHECK:       'stockcheck',
+  TRANSFER:         'transfer',
+  RETURN:           'return',
+  IMPORT:           'import',
+  MANUAL:           'manual',
+  LEGACY:           'legacy',
+  CONTAINER_SPLIT:  'container_split',
 }
 
 const ALLOWED_SOURCE_TYPES = new Set(Object.values(SOURCE_TYPE))
 
-/** 允许 createContainer 直接落 status=ACTIVE(1) 的来源（调拨入、销售退货）；其余须先 4 再 promote */
-const DIRECT_ACTIVE_SOURCE_TYPES = new Set([SOURCE_TYPE.TRANSFER, SOURCE_TYPE.RETURN])
+/** 允许 createContainer 直接落 status=ACTIVE(1) 的来源（调拨入、销售退货、同仓拆分）；其余须先 4 再 promote */
+const DIRECT_ACTIVE_SOURCE_TYPES = new Set([
+  SOURCE_TYPE.TRANSFER,
+  SOURCE_TYPE.RETURN,
+  SOURCE_TYPE.CONTAINER_SPLIT,
+])
 
 const PUTAWAY_DEFAULT_HOURS = 24
 
@@ -632,6 +637,84 @@ async function unlockContainersByTask(conn, taskId) {
   return result.affectedRows
 }
 
+function fmtSqlDate(d) {
+  if (!d) return null
+  if (d instanceof Date) return d.toISOString().slice(0, 10)
+  return String(d).slice(0, 10)
+}
+
+/**
+ * 同仓容器拆分：从单一 ACTIVE 容器扣减数量，生成新容器（继承库位与批次）
+ *
+ * @param {object} conn
+ * @param {{ containerId: number, qty: number, remark?: string|null }} params
+ * @returns {Promise<{ sourceContainerId: number, sourceBarcode: string, sourceRemainingAfter: number, newContainerId: number, newBarcode: string, productId: number, warehouseId: number }>}
+ */
+async function splitContainer(conn, { containerId, qty, remark = null }) {
+  const cid = Number(containerId)
+  const q = Number(qty)
+  if (!Number.isFinite(cid) || cid <= 0) throw new AppError('无效容器 ID', 400)
+  if (!Number.isFinite(q) || q <= 0) throw new AppError('拆分数量须为正数', 400)
+
+  const [[row]] = await conn.query(
+    `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
+            locked_by_task_id, batch_no, mfg_date, exp_date, unit
+     FROM inventory_containers
+     WHERE id = ? AND deleted_at IS NULL
+     FOR UPDATE`,
+    [cid],
+  )
+  if (!row) throw new AppError('容器不存在', 404)
+  if (Number(row.status) !== CONTAINER_STATUS.ACTIVE) {
+    throw new AppError('源容器须为在库(ACTIVE)状态', 400)
+  }
+  if (row.locked_by_task_id != null) {
+    throw new AppError('容器已被任务锁定，不可拆分', 409)
+  }
+  const rem = Number(row.remaining_qty)
+  if (q >= rem) throw new AppError('拆分数量须小于剩余数量', 400)
+
+  const newRem = rem - q
+  const newStatus = newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE
+  await conn.query(
+    'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
+    [newRem, newStatus, cid],
+  )
+
+  const { containerId: newId, barcode: newBc } = await createContainer(conn, {
+    productId:       row.product_id,
+    warehouseId:     row.warehouse_id,
+    initialQty:      q,
+    unit:            row.unit,
+    batchNo:         row.batch_no,
+    mfgDate:         fmtSqlDate(row.mfg_date),
+    expDate:         fmtSqlDate(row.exp_date),
+    sourceType:      SOURCE_TYPE.CONTAINER_SPLIT,
+    sourceRefId:     cid,
+    sourceRefType:   'container_split',
+    remark:          remark || `自 ${row.barcode} 拆分`,
+    locationId:      row.location_id,
+    containerStatus: CONTAINER_STATUS.ACTIVE,
+  })
+
+  await conn.query(
+    'UPDATE inventory_containers SET parent_id = ? WHERE id = ?',
+    [cid, newId],
+  )
+
+  await syncStockFromContainers(conn, row.product_id, row.warehouse_id)
+
+  return {
+    sourceContainerId:   cid,
+    sourceBarcode:         row.barcode,
+    sourceRemainingAfter:  newRem,
+    newContainerId:        newId,
+    newBarcode:            newBc,
+    productId:             row.product_id,
+    warehouseId:           row.warehouse_id,
+  }
+}
+
 module.exports = {
   createContainer,
   promotePendingContainerToActive,
@@ -644,6 +727,7 @@ module.exports = {
   genBarcode,
   lockContainer,
   unlockContainersByTask,
+  splitContainer,
   CONTAINER_STATUS,
   SOURCE_TYPE,
   DIRECT_ACTIVE_SOURCE_TYPES,

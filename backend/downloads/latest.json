@@ -1,5 +1,5 @@
 {
-  "version": "0.3.7",
-  "filename": "FlowCube-ERP-Setup-0.3.7.exe",
+  "version": "0.3.8",
+  "filename": "FlowCube-ERP-Setup-0.3.8.exe",
   "notes": "自动更新：优先 GitHub Release；CI 构建后安装包名为无空格形式，与 /downloads 一致"
 }

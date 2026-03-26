@@ -21,6 +21,7 @@ const PdaReceivePage = lazy(() => import('@/pages/pda/receive'))
 const PdaPutawayPage = lazy(() => import('@/pages/pda/putaway'))
 const PdaCheckPage   = lazy(() => import('@/pages/pda/check'))
 const PdaPackPage    = lazy(() => import('@/pages/pda/pack'))
+const PdaSplitPage   = lazy(() => import('@/pages/pda/split'))
 const PdaShipPage    = lazy(() => import('@/pages/pda/ship'))
 const PdaSortPage    = lazy(() => import('@/pages/pda/sort'))
 
@@ -101,6 +102,7 @@ export default function AppRouter() {
               <Route path="check" element={<PdaCheckPage />} />
               <Route path="pack/:id" element={<PdaPackPage />} />
               <Route path="pack" element={<PdaPackPage />} />
+              <Route path="split" element={<PdaSplitPage />} />
               <Route path="ship/:id" element={<PdaShipPage />} />
               <Route path="ship" element={<PdaShipPage />} />
               <Route path="sort" element={<PdaSortPage />} />

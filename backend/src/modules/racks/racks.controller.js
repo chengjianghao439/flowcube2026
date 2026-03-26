@@ -51,4 +51,14 @@ async function remove(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { list, listActive, detail, create, update, remove }
+async function printLabel(req, res, next) {
+  try {
+    const job = await racksService.enqueuePrintLabel(parseInt(req.params.id, 10), {
+      tenantId: req.user.tenantId ?? 0,
+      userId: req.user.userId,
+    })
+    return successResponse(res, { queued: !!job, job: job ?? null }, job ? '已加入打印队列' : '未配置标签机，未创建打印任务')
+  } catch (err) { next(err) }
+}
+
+module.exports = { list, listActive, detail, create, update, remove, printLabel }

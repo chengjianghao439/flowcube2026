@@ -31,3 +31,20 @@ export const assignContainerLocationApi = async (containerId: number, locationId
     `/inventory/containers/${containerId}/location`,
     { locationId },
   )
+
+export interface SplitContainerResult {
+  sourceContainerId: number
+  sourceBarcode: string
+  sourceRemainingAfter: number
+  newContainerId: number
+  newBarcode: string
+  productId: number
+  warehouseId: number
+}
+
+export const splitContainerApi = async (
+  containerId: number,
+  body: { qty: number; remark?: string; printLabel?: boolean },
+) =>
+  (await apiClient.post<ApiResponse<SplitContainerResult>>(`/inventory/containers/${containerId}/split`, body)).data
+    .data!

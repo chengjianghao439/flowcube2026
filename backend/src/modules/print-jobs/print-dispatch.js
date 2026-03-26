@@ -20,6 +20,7 @@ function tenantSqlParam(tenantId) {
 function normalizeJobType(jobType, contentType) {
   const j = String(jobType || '').trim().toLowerCase()
   if (j === 'container_label') return 'inventory_label'
+  if (j === 'rack_label' || j === 'package_label') return 'inventory_label'
   if (j === 'pda_label' || j === 'label') return 'product_label'
   if (['waybill', 'product_label', 'inventory_label'].includes(j)) return j
   const ct = String(contentType || '').toLowerCase()

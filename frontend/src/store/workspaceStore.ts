@@ -28,6 +28,7 @@ export const PATH_TITLES: Record<string, string> = {
   '/sorting-bins':    '分拣格管理',
   '/wave-scan':       '波次扫码',
   '/locations':       '库位管理',
+  '/racks':           '货架管理',
   '/customers':       '客户管理',
   '/suppliers':       '供应商管理',
   '/carriers':        '承运商管理',

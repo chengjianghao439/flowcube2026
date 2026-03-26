@@ -454,6 +454,30 @@ function buildContainerLabelZpl({ container_code, product_name, qty }) {
   return `^XA^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,24,24^FD${name}^FS^FO32,148^A0N,24,24^FDQTY ${qtyStr}^FS^XZ`
 }
 
+/** ZPL 货架标签 */
+function buildRackLabelZpl({ rack_barcode, rack_code, zone, name }) {
+  const code = String(rack_barcode ?? '').replace(/[\r\n^~]/g, '')
+  const rc = String(rack_code ?? '')
+    .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
+    .slice(0, 28)
+  const z = String(zone ?? '').slice(0, 12)
+  const n = String(name ?? '')
+    .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
+    .slice(0, 20)
+  return `^XA^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,22,22^FD${rc}^FS^FO32,138^A0N,20,20^FD${z} ${n}^FS^XZ`
+}
+
+/** ZPL 物流箱贴 */
+function buildPackageLabelZpl({ box_code, task_no, customer_name, summary }) {
+  const bc = String(box_code ?? '').replace(/[\r\n^~]/g, '')
+  const tn = String(task_no ?? '').slice(0, 24)
+  const cn = String(customer_name ?? '')
+    .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
+    .slice(0, 24)
+  const sm = String(summary ?? '').slice(0, 36)
+  return `^XA^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${bc}^FS^FO32,108^A0N,22,22^FD${tn}^FS^FO32,142^A0N,20,20^FD${cn}^FS^FO32,176^A0N,18,18^FD${sm}^FS^XZ`
+}
+
 /**
  * 解析用于容器标签的打印机：优先环境变量 code，否则第一台「在线 + 标签机 type=1」
  */
@@ -515,6 +539,110 @@ async function enqueueContainerLabelJob(payload) {
     copies: 1,
     createdBy: payload.createdBy ?? null,
     jobUniqueKey: payload.jobUniqueKey,
+  })
+}
+
+/**
+ * 货架条码标签入队
+ * payload: { rackId, tenantId?, createdBy?, jobUniqueKey? }
+ */
+async function enqueueRackLabelJob(payload) {
+  const rackId = payload?.rackId
+  if (!rackId) return null
+  const tid = Number(payload.tenantId) >= 0 && Number.isFinite(Number(payload.tenantId)) ? Number(payload.tenantId) : 0
+  const [[row]] = await pool.query(
+    `SELECT r.id, r.barcode, r.code, r.zone, r.name, r.warehouse_id
+     FROM warehouse_racks r
+     WHERE r.id = ? AND r.deleted_at IS NULL`,
+    [rackId],
+  )
+  if (!row || !row.barcode) return null
+  const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
+  const resolved = await resolvePrinterForJob({
+    tenantId: tid,
+    warehouseId: Number.isFinite(wh) && wh > 0 ? wh : undefined,
+    jobType: 'rack_label',
+    contentType: 'zpl',
+  })
+  let printerId = resolved.printerId
+  let dispatchReason = resolved.dispatchReason || 'fallback'
+  if (!printerId) {
+    printerId = await resolveLabelPrinterId(tid)
+    dispatchReason = 'fallback'
+  }
+  if (!printerId) return null
+  const zpl = buildRackLabelZpl({
+    rack_barcode: row.barcode,
+    rack_code: row.code,
+    zone: row.zone,
+    name: row.name,
+  })
+  return create({
+    printerId,
+    dispatchReason,
+    tenantId: tid,
+    warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
+    jobType: 'rack_label',
+    title: `货架标 ${row.barcode}`,
+    contentType: 'zpl',
+    content: zpl,
+    copies: 1,
+    createdBy: payload.createdBy ?? null,
+    jobUniqueKey: payload.jobUniqueKey ?? null,
+  })
+}
+
+/**
+ * 物流箱贴入队（完成装箱或补打）
+ * payload: { packageId, tenantId?, createdBy?, jobUniqueKey? }
+ */
+async function enqueuePackageLabelJob(payload) {
+  const packageId = payload?.packageId
+  if (!packageId) return null
+  const tid = Number(payload.tenantId) >= 0 && Number.isFinite(Number(payload.tenantId)) ? Number(payload.tenantId) : 0
+  const [[row]] = await pool.query(
+    `SELECT p.id, p.barcode, wt.task_no, wt.customer_name, wt.warehouse_id,
+            (SELECT COUNT(*) FROM package_items pi WHERE pi.package_id = p.id) AS line_count,
+            (SELECT COALESCE(SUM(pi.qty), 0) FROM package_items pi WHERE pi.package_id = p.id) AS total_qty
+     FROM packages p
+     JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
+     WHERE p.id = ?`,
+    [packageId],
+  )
+  if (!row) return null
+  const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
+  const summary = `${Number(row.line_count)} 行 / ${Number(row.total_qty)} 件`
+  const resolved = await resolvePrinterForJob({
+    tenantId: tid,
+    warehouseId: Number.isFinite(wh) && wh > 0 ? wh : undefined,
+    jobType: 'package_label',
+    contentType: 'zpl',
+  })
+  let printerId = resolved.printerId
+  let dispatchReason = resolved.dispatchReason || 'fallback'
+  if (!printerId) {
+    printerId = await resolveLabelPrinterId(tid)
+    dispatchReason = 'fallback'
+  }
+  if (!printerId) return null
+  const zpl = buildPackageLabelZpl({
+    box_code: row.barcode,
+    task_no: row.task_no,
+    customer_name: row.customer_name,
+    summary,
+  })
+  return create({
+    printerId,
+    dispatchReason,
+    tenantId: tid,
+    warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
+    jobType: 'package_label',
+    title: `箱贴 ${row.barcode}`,
+    contentType: 'zpl',
+    content: zpl,
+    copies: 1,
+    createdBy: payload.createdBy ?? null,
+    jobUniqueKey: payload.jobUniqueKey ?? null,
   })
 }
 
@@ -614,5 +742,9 @@ module.exports = {
   STATUS,
   parseListStatus,
   enqueueContainerLabelJob,
+  enqueueRackLabelJob,
+  enqueuePackageLabelJob,
   buildContainerLabelZpl,
+  buildRackLabelZpl,
+  buildPackageLabelZpl,
 }

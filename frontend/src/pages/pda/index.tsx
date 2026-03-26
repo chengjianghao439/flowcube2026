@@ -118,6 +118,7 @@ const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = 
   { icon: '🔀', label: '订单分拣', path: '/pda/sort',      perm: 'pda:sorting'  },
   { icon: '✅', label: '复核任务', path: '/pda/check',     perm: 'pda:checking' },
   { icon: '📦', label: '打包作业', path: '/pda/pack',      perm: 'pda:packing'  },
+  { icon: '✂️', label: '容器拆分', path: '/pda/split',     perm: 'pda:split'    },
   { icon: '🚚', label: '出库确认', path: '/pda/ship',      perm: 'pda:shipping' },
 ]
 

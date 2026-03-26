@@ -2,6 +2,8 @@ export interface Rack {
   id: number
   warehouseId: number
   warehouseName: string | null
+  /** 唯一条码 RCKxxxxxx */
+  barcode: string | null
   zone: string
   code: string
   name: string

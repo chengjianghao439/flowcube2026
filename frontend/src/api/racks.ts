@@ -34,3 +34,8 @@ export async function updateRackApi(id: number, data: UpdateRackParams): Promise
 export async function deleteRackApi(id: number): Promise<void> {
   await apiClient.delete(`/racks/${id}`)
 }
+
+export async function printRackLabelApi(id: number): Promise<{ queued: boolean; job: unknown }> {
+  const res = await apiClient.post<ApiResponse<{ queued: boolean; job: unknown }>>(`/racks/${id}/print-label`)
+  return res.data.data!
+}
