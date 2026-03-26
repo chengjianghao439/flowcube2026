@@ -11,16 +11,14 @@ const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf-8
   version: string
 }
 import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
 import legacy from '@vitejs/plugin-legacy'
 
 const isCapacitorBundle = process.env.VITE_CAPACITOR === '1'
 const isElectronBundle = process.env.VITE_ELECTRON === '1'
 const isPDA = process.env.BUILD_TARGET === 'pda' || isCapacitorBundle
-const skipPwa = isPDA || isElectronBundle
 
 /**
- * 局域网只暴露 5173 时：把浏览器/桌面端带来的 Host（如 192.168.x.x:5173）转发给后端，
+ * 局域网只暴露 5173 时：把 Vite 开发服收到的 Host（如 192.168.x.x:5173）转发给后端，
  * 否则 app-update 会拼出 http://localhost:3000/downloads/…，其它机器去连自己的 localhost 会失败。
  */
 function devProxyToBackend(target: string): ProxyOptions {
@@ -63,46 +61,7 @@ export default defineConfig({
   base: isCapacitorBundle || isElectronBundle ? './' : '/',
   plugins: [
     react(),
-    // PDA 打包时跳过 PWA（Capacitor 原生壳不需要 Service Worker）
-    !skipPwa && VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
-      manifest: {
-        name: 'FlowCube',
-        short_name: 'FlowCube',
-        description: 'FlowCube ERP + WMS 一体化系统',
-        display: 'standalone',
-        orientation: 'portrait',
-        start_url: '/',
-        scope: '/',
-        background_color: '#ffffff',
-        theme_color: '#002FA7',
-        lang: 'zh-CN',
-        icons: [
-          {
-            src: '/icons/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable',
-          },
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable',
-          },
-        ],
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^\/api\//,
-            handler: 'NetworkOnly',
-          },
-        ],
-      },
-    }),
+    // 主交付为 Electron / PDA；不再生成 PWA Service Worker 与 Web 安装 manifest
     // PDA 打包时生成 ES5 兼容代码，支持 Android 5.x WebView
     isPDA && legacy({
       targets: ['Android >= 5'],

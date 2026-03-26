@@ -10,7 +10,6 @@ import ErpApiBaseHotkeyDialog from '@/components/erp/ErpApiBaseHotkeyDialog'
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
 const LoginPage       = lazy(() => import('@/pages/login'))
 const ForbiddenPage   = lazy(() => import('@/pages/403'))
-const SortingBinsPage = lazy(() => import('@/pages/sorting-bins'))
 
 // ── PDA 子系统页面 ────────────────────────────────────────────────────────────
 const PdaLoginPage   = lazy(() => import('@/pages/pda/login'))
