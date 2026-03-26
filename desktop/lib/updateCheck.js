@@ -25,6 +25,24 @@ const QUIT_AFTER_OPEN_MS = 600
 /** 更新流程占用（下载 / 安装确认），防止重复触发 */
 let updateFlowLocked = false
 
+/** GitHub 对短 UA / 仅 HEAD 常返回 403/404；与主进程 GET 下载保持一致 */
+const DOWNLOAD_REQUEST_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 FlowCube-ERP-Desktop',
+  Accept: '*/*',
+}
+
+function isGitHubReleaseOrCdnUrl(urlString) {
+  try {
+    const u = new URL(urlString)
+    if (u.hostname === 'github.com' && u.pathname.includes('/releases/download/')) return true
+    if (u.hostname.endsWith('githubusercontent.com')) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
 function getStatePath(app) {
   return path.join(app.getPath('userData'), IGNORE_STATE_FILE)
 }
@@ -139,7 +157,7 @@ async function downloadUpdateFile(downloadUrl, destPath, signal) {
     method: 'GET',
     redirect: 'follow',
     signal,
-    headers: { 'User-Agent': 'FlowCube-ERP-Desktop/2' },
+    headers: { ...DOWNLOAD_REQUEST_HEADERS },
   })
   if (!res.ok) {
     throw new Error(`HTTP ${res.status} ${res.statusText || ''}`.trim())
@@ -190,8 +208,23 @@ function showBox(parentWindow, options) {
 
 async function probeDownloadUrl(url) {
   try {
+    // GitHub Release 直链对 HEAD 常 404；objects.githubusercontent.com 亦同。用 GET Range 探测首字节。
+    if (isGitHubReleaseOrCdnUrl(url)) {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { ...DOWNLOAD_REQUEST_HEADERS, Range: 'bytes=0-0' },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(HEAD_TIMEOUT_MS),
+      })
+      if (res.ok || res.status === 206) return 'ok'
+      if (res.status === 404) return 'missing'
+      console.warn('[FlowCube] probeDownloadUrl GitHub/CDN 状态:', res.status, url)
+      return 'unknown'
+    }
+
     let res = await fetch(url, {
       method: 'HEAD',
+      headers: { ...DOWNLOAD_REQUEST_HEADERS },
       redirect: 'follow',
       signal: AbortSignal.timeout(HEAD_TIMEOUT_MS),
     })
@@ -199,7 +232,7 @@ async function probeDownloadUrl(url) {
     if (res.status === 405 || res.status === 501) {
       res = await fetch(url, {
         method: 'GET',
-        headers: { Range: 'bytes=0-0' },
+        headers: { ...DOWNLOAD_REQUEST_HEADERS, Range: 'bytes=0-0' },
         redirect: 'follow',
         signal: AbortSignal.timeout(HEAD_TIMEOUT_MS),
       })

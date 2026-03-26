@@ -49,14 +49,17 @@ const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_RE
  */
 async function fetchFromGitHub() {
   const https = require('https')
-  
+  const token = (process.env.GITHUB_TOKEN || '').trim()
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'FlowCube-ERP-Backend',
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
   return new Promise((resolve, reject) => {
-    const req = https.get(GITHUB_API_URL, {
-      headers: {
-        'Accept': 'application/vnd.github+json',
-        'User-Agent': 'FlowCube-ERP'
-      }
-    }, (res) => {
+    const req = https.get(GITHUB_API_URL, { headers }, (res) => {
       let data = ''
       res.on('data', chunk => data += chunk)
       res.on('end', () => {
