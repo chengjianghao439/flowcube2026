@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCheckList, useCreateCheck } from '@/hooks/useStockCheck'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import CheckDetailDialog from './components/CheckDetailDialog'
@@ -64,10 +65,17 @@ export default function StockCheckPage() {
           <form onSubmit={handleCreate} className="space-y-4 py-2">
             <div className="space-y-1">
               <Label>选择仓库 *</Label>
-              <select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={whId} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setWhId(e.target.value)} required>
-                <option value="">请选择</option>
-                {warehouses?.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+              <Select value={whId || '__none__'} onValueChange={v => setWhId(v === '__none__' ? '' : v)}>
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder="请选择" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">请选择</SelectItem>
+                  {warehouses?.map(w => (
+                    <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">系统将自动拉取该仓库所有有库存的商品作为盘点明细</p>
             </div>
             <div className="space-y-1">

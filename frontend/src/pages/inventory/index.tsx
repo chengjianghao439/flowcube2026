@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useStock, useLogs, useOutbound } from '@/hooks/useInventory'
 import { WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import type { StockItem, InventoryLog } from '@/types/inventory'
@@ -111,9 +112,23 @@ export default function InventoryPage() {
       {tab==='logs' && (
         <>
           <FilterCard>
-            <select className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={logType??''} onChange={e=>{setLogType(e.target.value?+e.target.value:null);setLogPage(1)}}>
-              <option value="">全部类型</option><option value="1">入库</option><option value="2">出库</option><option value="3">调整</option>
-            </select>
+            <Select
+              value={logType == null ? '__all__' : String(logType)}
+              onValueChange={v => {
+                setLogType(v === '__all__' ? null : +v)
+                setLogPage(1)
+              }}
+            >
+              <SelectTrigger className="h-9 w-36">
+                <SelectValue placeholder="全部类型" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">全部类型</SelectItem>
+                <SelectItem value="1">入库</SelectItem>
+                <SelectItem value="2">出库</SelectItem>
+                <SelectItem value="3">调整</SelectItem>
+              </SelectContent>
+            </Select>
           </FilterCard>
           <DataTable columns={logCols} data={logs?.list??[]} loading={logLoading} pagination={logs?.pagination} onPageChange={setLogPage} rowKey="id" />
         </>

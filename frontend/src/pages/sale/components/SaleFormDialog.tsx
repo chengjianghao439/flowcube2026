@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCreateSale } from '@/hooks/useSale'
 import { useCustomersActive } from '@/hooks/useCustomers'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
@@ -124,17 +125,31 @@ export default function SaleFormDialog({ open, onClose }: Props) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>客户 *</Label>
-                <select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={customerId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleCustomerChange(e.target.value)} required>
-                  <option value="">请选择</option>
-                  {customers?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <Select value={customerId || '__none__'} onValueChange={v => void handleCustomerChange(v === '__none__' ? '' : v)}>
+                  <SelectTrigger className="h-10 w-full">
+                    <SelectValue placeholder="请选择" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">请选择</SelectItem>
+                    {customers?.map(c => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label>出库仓库 *</Label>
-                <select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={warehouseId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setWarehouseId(e.target.value)} required>
-                  <option value="">请选择</option>
-                  {warehouses?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
+                <Select value={warehouseId || '__none__'} onValueChange={v => setWarehouseId(v === '__none__' ? '' : v)}>
+                  <SelectTrigger className="h-10 w-full">
+                    <SelectValue placeholder="请选择" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">请选择</SelectItem>
+                    {warehouses?.map(w => (
+                      <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label>销售日期</Label>

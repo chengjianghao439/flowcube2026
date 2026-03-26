@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCustomers, useDeleteCustomer } from '@/hooks/useCustomers'
 import CustomerFormDialog from './components/CustomerFormDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -83,10 +84,17 @@ export default function CustomersPage() {
           <DialogHeader><DialogTitle>绑定价格表 — {bindCustomer?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">选择一个价格表绑定到此客户，下销售单时将自动带入专属价格。</p>
-            <select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={selectedListId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedListId(e.target.value)}>
-              <option value="">不使用价格表（默认售价）</option>
-              {priceLists?.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <Select value={selectedListId || '__none__'} onValueChange={v => setSelectedListId(v === '__none__' ? '' : v)}>
+              <SelectTrigger className="h-10 w-full">
+                <SelectValue placeholder="选择价格表" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">不使用价格表（默认售价）</SelectItem>
+                {priceLists?.filter(p => p.isActive).map(p => (
+                  <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {!priceLists?.length && <p className="text-xs text-muted-foreground">暂无可用价格表，请先在「价格管理」中创建。</p>}
           </div>
           <DialogFooter>

@@ -9,6 +9,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   getPrintTenantDashboard,
   getPrintTenantSettings,
@@ -421,17 +422,21 @@ export default function PrintTenantSettingsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>探索模式</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              <Select
                 value={form.explorationMode ?? 'adaptive'}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, explorationMode: e.target.value as 'adaptive' | 'fixed' }))
+                onValueChange={v =>
+                  setForm((f) => ({ ...f, explorationMode: v as 'adaptive' | 'fixed' }))
                 }
                 disabled={!isAdmin}
               >
-                <option value="adaptive">自适应</option>
-                <option value="fixed">固定探索率</option>
-              </select>
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="adaptive">自适应</SelectItem>
+                  <SelectItem value="fixed">固定探索率</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>固定探索率（0~1）</Label>

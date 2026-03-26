@@ -12,6 +12,7 @@ import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/rea
 import { getMyTasksApi, startPickingApi, getTaskByIdApi } from '@/api/warehouse-tasks'
 import type { MyTask, WarehouseTaskItem } from '@/api/warehouse-tasks'
 import { Button } from '@/components/ui/button'
+import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
@@ -193,7 +194,7 @@ export default function PdaPickingPage() {
       qc.invalidateQueries({ queryKey: ['pda-my-tasks'] })
       navigate(`/pda/task/${id}`)
     },
-    onError: () => { alert('操作失败'); setStartingId(null) },
+    onError: () => { toast.error('操作失败'); setStartingId(null) },
   })
 
   function handleTaskStart(t: MyTask) {

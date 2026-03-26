@@ -10,6 +10,8 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { TaskStatCards } from './components/TaskStatCards'
@@ -207,12 +209,26 @@ export default function WarehouseTasksPage() {
   const setPriority  = useMutation({ mutationFn: ({ id, p }: { id: number; p: number }) => updateTaskPriorityApi(id, p), onSuccess: () => qc.invalidateQueries({ queryKey: ['warehouse-tasks'] }) })
 
   const columns: TableColumn<WarehouseTask>[] = [
-    { key: 'priority', title: '优先级', width: 80, render: (v, r) => (
-      <select value={v as number} onChange={e => setPriority.mutate({ id: r.id, p: +e.target.value })}
-        className={`cursor-pointer rounded-full border-0 px-2 py-0.5 text-xs font-medium ${PRIORITY_COLOR[v as 1|2|3]}`}>
-        <option value={1}>紧急</option><option value={2}>普通</option><option value={3}>低</option>
-      </select>
-    )},
+    { key: 'priority', title: '优先级', width: 100, render: (v, r) => {
+      const pri = v as 1 | 2 | 3
+      return (
+        <Select value={String(v)} onValueChange={val => setPriority.mutate({ id: r.id, p: +val })}>
+          <SelectTrigger
+            className={cn(
+              'h-7 w-[4.5rem] cursor-pointer rounded-full border-0 px-2 py-0.5 text-xs font-medium shadow-none [&>svg]:h-3 [&>svg]:w-3',
+              PRIORITY_COLOR[pri],
+            )}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">紧急</SelectItem>
+            <SelectItem value="2">普通</SelectItem>
+            <SelectItem value="3">低</SelectItem>
+          </SelectContent>
+        </Select>
+      )
+    }},
     { key: 'taskNo', title: '任务编号', width: 160 },
     { key: 'saleOrderNo', title: '销售单', width: 160, render: v => <span className="font-mono text-xs">{String(v)}</span> },
     { key: 'customerName', title: '客户' },
@@ -251,10 +267,16 @@ export default function WarehouseTasksPage() {
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
           onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
           className="w-64" />
-        <select className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }}>
-          {WT_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
+          <SelectTrigger className="h-10 w-40">
+            <SelectValue placeholder="全部状态" />
+          </SelectTrigger>
+          <SelectContent>
+            {WT_STATUS_OPTIONS.map(o => (
+              <SelectItem key={o.value || '__all__'} value={o.value || '__all__'}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
         {(keyword || statusFilter) && <Button variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setPage(1) }}>清除</Button>}
       </div>

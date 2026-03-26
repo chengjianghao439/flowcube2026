@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getPurchaseReturnsApi, createPurchaseReturnApi, confirmPurchaseReturnApi, executePurchaseReturnApi, cancelPurchaseReturnApi, getSaleReturnsApi, createSaleReturnApi, confirmSaleReturnApi, executeSaleReturnApi, cancelSaleReturnApi } from '@/api/returns'
 import { downloadExport } from '@/lib/exportDownload'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -34,7 +35,10 @@ function ReturnForm({ type, onClose, onSuccess }: { type:'purchase'|'sale'; onCl
 
   const addItem=()=>{setCounter(c=>c+1);setItems(p=>[...p,{_key:counter,productId:0,productCode:'',productName:'',unit:'',quantity:1,unitPrice:0}])}
   const removeItem=(k:number)=>setItems(p=>p.filter(i=>i._key!==k))
-  const selectProduct=(k:number,pid:string)=>{const p=products?.list.find(p=>String(p.id)===pid);if(p)setItems(prev=>prev.map(i=>i._key===k?{...i,productId:p.id,productCode:p.code,productName:p.name,unit:p.unit,unitPrice:type==='purchase'?(p.costPrice||0):(p.salePrice||0)}:i))}
+  const selectProduct=(k:number,pid:string)=>{
+    if(!pid||pid==='__none__'){ setItems(prev=>prev.map(i=>i._key===k?{...i,productId:0,productCode:'',productName:'',unit:'',unitPrice:0}:i)); return }
+    const p=products?.list.find(x=>String(x.id)===pid); if(p) setItems(prev=>prev.map(i=>i._key===k?{...i,productId:p.id,productCode:p.code,productName:p.name,unit:p.unit,unitPrice:type==='purchase'?(p.costPrice||0):(p.salePrice||0)}:i))
+  }
   const updateItem=(k:number,f:string,v:number)=>setItems(p=>p.map(i=>i._key===k?{...i,[f]:v}:i))
 
   const handleSubmit=async(e:React.FormEvent)=>{
@@ -61,11 +65,25 @@ function ReturnForm({ type, onClose, onSuccess }: { type:'purchase'|'sale'; onCl
     <form onSubmit={handleSubmit} className="space-y-4 py-2">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1"><Label>{type==='purchase'?'供应商':'客户'} *</Label>
-          <select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={partyId} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>setPartyId(e.target.value)} required>
-            <option value="">请选择</option>{partyList?.map((p:{ id:number; name:string })=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+          <Select value={partyId || '__none__'} onValueChange={v => setPartyId(v === '__none__' ? '' : v)}>
+            <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">请选择</SelectItem>
+              {partyList?.map((p: { id: number; name: string }) => (
+                <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select></div>
         <div className="space-y-1"><Label>仓库 *</Label>
-          <select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={whId} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>setWhId(e.target.value)} required>
-            <option value="">请选择</option>{warehouses?.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></div>
+          <Select value={whId || '__none__'} onValueChange={v => setWhId(v === '__none__' ? '' : v)}>
+            <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">请选择</SelectItem>
+              {warehouses?.map(w => (
+                <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select></div>
         <div className="space-y-1"><Label>关联原单号</Label><Input value={orderNo} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setOrderNo(e.target.value)} placeholder="选填" /></div>
         <div className="space-y-1"><Label>备注</Label><Input value={remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setRemark(e.target.value)} /></div>
       </div>
@@ -74,8 +92,16 @@ function ReturnForm({ type, onClose, onSuccess }: { type:'purchase'|'sale'; onCl
         {!items.length&&<p className="text-sm text-muted-foreground text-center py-4 border rounded">暂无明细</p>}
         {items.map(item=>(
           <div key={item._key} className="grid grid-cols-12 gap-2 mb-2 items-center">
-            <div className="col-span-4"><select className="w-full border rounded px-2 py-1.5 text-sm" value={item.productId||''} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>selectProduct(item._key,e.target.value)}>
-              <option value="">选择商品</option>{products?.list.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+            <div className="col-span-4">
+              <Select value={item.productId ? String(item.productId) : '__none__'} onValueChange={v => selectProduct(item._key, v)}>
+                <SelectTrigger className="w-full h-9 text-sm"><SelectValue placeholder="选择商品" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">选择商品</SelectItem>
+                  {products?.list.map(p => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select></div>
             <div className="col-span-1 text-sm text-center text-muted-foreground">{item.unit||'-'}</div>
             <div className="col-span-3"><Input type="number" min="0.01" step="0.01" placeholder="数量" value={item.quantity} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>updateItem(item._key,'quantity',+e.target.value)} className="text-sm" /></div>
             <div className="col-span-3"><Input type="number" min="0" step="0.01" placeholder="单价" value={item.unitPrice} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>updateItem(item._key,'unitPrice',+e.target.value)} className="text-sm" /></div>

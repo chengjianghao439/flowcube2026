@@ -16,6 +16,7 @@ import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
 import { Label }   from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -253,27 +254,31 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
           </div>
           <div className="space-y-1.5">
             <Label>承运商</Label>
-            <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              value={carrierId}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCarrierId(e.target.value)}
-            >
-              <option value="">{carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'}</option>
-              {carrierOptions.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
-            </select>
+            <Select value={carrierId || '__none__'} onValueChange={v => setCarrierId(v === '__none__' ? '' : v)}>
+              <SelectTrigger className="h-10 w-full">
+                <SelectValue placeholder={carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'}</SelectItem>
+                {carrierOptions.map(c => (
+                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
             <Label>运费方式</Label>
-            <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              value={freightType}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFreightType(e.target.value)}
-            >
-              <option value="">请选择</option>
-              <option value="1">寄付</option>
-              <option value="2">到付</option>
-              <option value="3">第三方付</option>
-            </select>
+            <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)}>
+              <SelectTrigger className="h-10 w-full">
+                <SelectValue placeholder="请选择" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">请选择</SelectItem>
+                <SelectItem value="1">寄付</SelectItem>
+                <SelectItem value="2">到付</SelectItem>
+                <SelectItem value="3">第三方付</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
             <Label>收货人</Label>
@@ -598,27 +603,31 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
           </div>
           <div className="space-y-1.5">
             <Label>承运商</Label>
-            <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              value={carrierId}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCarrierId(e.target.value)}
-            >
-              <option value="">{carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'}</option>
-              {carrierOptions.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
-            </select>
+            <Select value={carrierId || '__none__'} onValueChange={v => setCarrierId(v === '__none__' ? '' : v)}>
+              <SelectTrigger className="h-10 w-full">
+                <SelectValue placeholder={carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'}</SelectItem>
+                {carrierOptions.map(c => (
+                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
             <Label>运费方式</Label>
-            <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              value={freightType}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFreightType(e.target.value)}
-            >
-              <option value="">请选择</option>
-              <option value="1">寄付</option>
-              <option value="2">到付</option>
-              <option value="3">第三方付</option>
-            </select>
+            <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)}>
+              <SelectTrigger className="h-10 w-full">
+                <SelectValue placeholder="请选择" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">请选择</SelectItem>
+                <SelectItem value="1">寄付</SelectItem>
+                <SelectItem value="2">到付</SelectItem>
+                <SelectItem value="3">第三方付</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
             <Label>收货人</Label>

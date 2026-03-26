@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import {
   useInboundTaskDetail,
   useInboundTaskContainers,
@@ -53,6 +54,7 @@ export default function InboundTaskDetailPage() {
   const cancelMut = useCancelInbound()
 
   const [lineQty, setLineQty] = useState<Record<number, string>>({})
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
 
   function closeTab() {
     const { removeTab, tabs } = useWorkspaceStore.getState()
@@ -129,13 +131,7 @@ export default function InboundTaskDetailPage() {
                 variant="destructive"
                 size="sm"
                 disabled={cancelMut.isPending}
-                onClick={() => {
-                  if (!confirm('确定取消该入库任务？')) return
-                  cancelMut.mutate(validId, {
-                    onSuccess: () => { toast.success('已取消'); closeTab() },
-                    onError: () => toast.error('取消失败'),
-                  })
-                }}
+                onClick={() => setCancelConfirmOpen(true)}
               >
                 取消任务
               </Button>
@@ -268,6 +264,27 @@ export default function InboundTaskDetailPage() {
           </ul>
         )}
       </Section>
+
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        title="取消入库任务"
+        description="确定取消该入库任务？取消后需重新创建任务才能继续收货。"
+        variant="destructive"
+        confirmText="确定取消"
+        loading={cancelMut.isPending}
+        onConfirm={() => {
+          if (!validId) return
+          cancelMut.mutate(validId, {
+            onSuccess: () => {
+              setCancelConfirmOpen(false)
+              toast.success('已取消')
+              closeTab()
+            },
+            onError: () => toast.error('取消失败'),
+          })
+        }}
+        onCancel={() => setCancelConfirmOpen(false)}
+      />
     </div>
   )
 }

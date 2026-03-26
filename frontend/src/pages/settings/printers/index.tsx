@@ -6,6 +6,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/api/client'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 
 const TYPE_LABEL: Record<number, string> = {
@@ -99,6 +101,7 @@ export default function PrintersPage() {
   const [editId, setEditId] = useState<number | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [bindTarget, setBindTarget] = useState<Printer | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Printer | null>(null)
   const [aliasDraft, setAliasDraft] = useState<Record<string, string>>({})
 
   const { data: printers = [], isLoading } = useQuery<Printer[]>({
@@ -200,11 +203,19 @@ export default function PrintersPage() {
             </div>
             <div>
               <label className="text-label mb-1 block">类型 *</label>
-              <select className="input w-full" value={form.type} onChange={e => setForm(f => ({ ...f, type: +e.target.value }))}>
-                <option value={1}>标签打印机</option>
-                <option value={2}>面单打印机</option>
-                <option value={3}>A4打印机</option>
-              </select>
+              <Select
+                value={String(form.type)}
+                onValueChange={v => setForm(f => ({ ...f, type: +v as 1 | 2 | 3 }))}
+              >
+                <SelectTrigger className="input w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">标签打印机</SelectItem>
+                  <SelectItem value="2">面单打印机</SelectItem>
+                  <SelectItem value="3">A4打印机</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="text-label mb-1 block">备注</label>
@@ -287,7 +298,7 @@ export default function PrintersPage() {
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => openEdit(p)}>编辑</Button>
-                    <Button size="sm" variant="destructive" onClick={() => { if (confirm('确认删除？')) del.mutate(p.id) }}>删除</Button>
+                    <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(p)}>删除</Button>
                   </div>
                 </td>
               </tr>
@@ -304,6 +315,20 @@ export default function PrintersPage() {
           onClose={() => setBindTarget(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="确认删除"
+        description={deleteTarget ? `确定删除打印机「${deleteTarget.name}」(${deleteTarget.code})？` : ''}
+        variant="destructive"
+        confirmText="删除"
+        loading={del.isPending}
+        onConfirm={() => {
+          if (!deleteTarget) return
+          del.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) })
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

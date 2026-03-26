@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getPriceListsApi, createPriceListApi, deletePriceListApi, getPriceListItemsApi, updatePriceListItemsApi } from '@/api/price-lists'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
@@ -34,7 +35,11 @@ export default function PriceListsPage() {
   const addRow = () => { setCounter(c => c + 1); setItems(p => [...p, { _key: counter, id: 0, productId: 0, productCode: '', productName: '', unit: '', salePrice: 0 }]) }
   const removeRow = (k: number) => setItems(p => p.filter(i => i._key !== k))
   const selectProduct = (k: number, pid: string) => {
-    const p = products?.list.find(p => String(p.id) === pid)
+    if (!pid || pid === '__none__') {
+      setItems(prev => prev.map(i => i._key === k ? { ...i, productId: 0, productCode: '', productName: '', unit: '', salePrice: 0 } : i))
+      return
+    }
+    const p = products?.list.find(x => String(x.id) === pid)
     if (p) setItems(prev => prev.map(i => i._key === k ? { ...i, productId: p.id, productCode: p.code, productName: p.name, unit: p.unit, salePrice: p.salePrice || 0 } : i))
   }
   const updatePrice = (k: number, v: number) => setItems(p => p.map(i => i._key === k ? { ...i, salePrice: v } : i))
@@ -97,9 +102,15 @@ export default function PriceListsPage() {
                     {items.map(item => (
                       <tr key={item._key} className="border-t">
                         <td className="px-4 py-2">
-                          <select className="w-full border rounded px-2 py-1.5 text-sm" value={item.productId || ''} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => selectProduct(item._key, e.target.value)}>
-                            <option value="">选择商品</option>{products?.list.map(p => <option key={p.id} value={p.id}>{p.name}（{p.code}）</option>)}
-                          </select>
+                          <Select value={item.productId ? String(item.productId) : '__none__'} onValueChange={v => selectProduct(item._key, v)}>
+                            <SelectTrigger className="w-full h-9 text-sm"><SelectValue placeholder="选择商品" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">选择商品</SelectItem>
+                              {products?.list.map(p => (
+                                <SelectItem key={p.id} value={String(p.id)}>{p.name}（{p.code}）</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </td>
                         <td className="px-4 py-2 text-muted-foreground text-center">{item.unit || '-'}</td>
                         <td className="px-4 py-2">

@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCreateLocation, useUpdateLocation } from '@/hooks/useLocations'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { LOCATION_STATUS_OPTIONS, type Location } from '@/types/locations'
@@ -14,8 +15,6 @@ interface Props {
   onClose: () => void
   editItem?: Location | null
 }
-
-const SELECT_CLS = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring'
 
 const defaultForm = {
   warehouseId: 0,
@@ -121,15 +120,21 @@ export default function LocationFormDialog({ open, onClose, editItem }: Props) {
             {isEdit ? (
               <Input value={editItem?.warehouseName ?? ''} disabled className="bg-muted/50 text-sm" />
             ) : (
-              <select
-                className={SELECT_CLS}
-                value={form.warehouseId || ''}
-                onChange={e => set('warehouseId', +e.target.value)}
+              <Select
+                value={form.warehouseId ? String(form.warehouseId) : '__none__'}
+                onValueChange={v => set('warehouseId', v === '__none__' ? 0 : +v)}
                 disabled={isPending}
               >
-                <option value="">请选择仓库</option>
-                {warehouses?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue placeholder="请选择仓库" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">请选择仓库</SelectItem>
+                  {warehouses?.map(w => (
+                    <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
 
@@ -213,16 +218,16 @@ export default function LocationFormDialog({ open, onClose, editItem }: Props) {
             {isEdit && (
               <div className="space-y-2">
                 <Label>状态</Label>
-                <select
-                  className={SELECT_CLS}
-                  value={form.status}
-                  onChange={e => set('status', +e.target.value)}
-                  disabled={isPending}
-                >
-                  {LOCATION_STATUS_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
+                <Select value={String(form.status)} onValueChange={v => set('status', +v)} disabled={isPending}>
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LOCATION_STATUS_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>

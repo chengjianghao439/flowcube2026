@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input }  from '@/components/ui/input'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface SaleFiltersProps {
   search: string
@@ -43,16 +44,19 @@ export function SaleFilters({
           />
         </div>
 
-        {/* 状态筛选 */}
-        <select
-          value={statusFilter}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onStatusFilterChange(e.target.value)}
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        <Select
+          value={statusFilter || '__all__'}
+          onValueChange={v => onStatusFilterChange(v === '__all__' ? '' : v)}
         >
-          {STATUS_OPTIONS.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue placeholder="全部状态" />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_OPTIONS.map(o => (
+              <SelectItem key={o.value || '__all__'} value={o.value || '__all__'}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <Button size="sm" variant="outline" onClick={onSearch}>搜索</Button>
         <Button size="sm" variant="ghost"   onClick={onReset}>重置</Button>

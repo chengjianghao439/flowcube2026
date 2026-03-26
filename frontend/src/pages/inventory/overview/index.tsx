@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { Package, Warehouse, Lock, CheckCircle } from 'lucide-react'
 import { Button }         from '@/components/ui/button'
 import { Input }          from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useInventoryOverview } from '@/hooks/useInventory'
 import { useCategoryFlat }      from '@/hooks/useCategories'
 import { useWarehousesActive }  from '@/hooks/useWarehouses'
@@ -71,16 +72,6 @@ export default function InventoryOverviewPage() {
 
   function doSearch() {
     setKeyword(search)
-    setPage(1)
-  }
-
-  function handleWarehouseChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    setWarehouseId(e.target.value ? +e.target.value : null)
-    setPage(1)
-  }
-
-  function handleCategoryChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    setCategoryId(e.target.value ? +e.target.value : null)
     setPage(1)
   }
 
@@ -148,29 +139,43 @@ export default function InventoryOverviewPage() {
 
           <div className="h-5 w-px bg-border" />
 
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            value={categoryId ?? ''}
-            onChange={handleCategoryChange}
+          <Select
+            value={categoryId == null ? '__all__' : String(categoryId)}
+            onValueChange={v => {
+              setCategoryId(v === '__all__' ? null : +v)
+              setPage(1)
+            }}
           >
-            <option value="">全部分类</option>
-            {(categories ?? []).map(c => (
-              <option key={c.id} value={c.id}>
-                {'　'.repeat(c.level - 1)}{c.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-10 w-48">
+              <SelectValue placeholder="全部分类" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部分类</SelectItem>
+              {(categories ?? []).map(c => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {'　'.repeat(c.level - 1)}{c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            value={warehouseId ?? ''}
-            onChange={handleWarehouseChange}
+          <Select
+            value={warehouseId == null ? '__all__' : String(warehouseId)}
+            onValueChange={v => {
+              setWarehouseId(v === '__all__' ? null : +v)
+              setPage(1)
+            }}
           >
-            <option value="">全部仓库</option>
-            {(warehouses ?? []).map(w => (
-              <option key={w.id} value={w.id}>{w.name}</option>
-            ))}
-          </select>
+            <SelectTrigger className="h-10 w-44">
+              <SelectValue placeholder="全部仓库" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部仓库</SelectItem>
+              {(warehouses ?? []).map(w => (
+                <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {(keyword || warehouseId || categoryId) && (
             <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={handleReset}>

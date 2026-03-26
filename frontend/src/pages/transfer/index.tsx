@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getTransferListApi, createTransferApi, confirmTransferApi, executeTransferApi, cancelTransferApi } from '@/api/transfer'
 import { downloadExport } from '@/lib/exportDownload'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -43,7 +44,10 @@ export default function TransferPage() {
 
   const addItem=()=>{setCounter(c=>c+1);setItems(p=>[...p,{_key:counter,productId:0,productCode:'',productName:'',unit:'',quantity:1,remark:''}])}
   const removeItem=(k:number)=>setItems(p=>p.filter(i=>i._key!==k))
-  const selectProduct=(k:number,pid:string)=>{ const p=products?.list.find(p=>String(p.id)===pid); if(p) setItems(prev=>prev.map(i=>i._key===k?{...i,productId:p.id,productCode:p.code,productName:p.name,unit:p.unit}:i)) }
+  const selectProduct=(k:number,pid:string)=>{
+    if(!pid||pid==='__none__'){ setItems(prev=>prev.map(i=>i._key===k?{...i,productId:0,productCode:'',productName:'',unit:''}:i)); return }
+    const p=products?.list.find(x=>String(x.id)===pid); if(p) setItems(prev=>prev.map(i=>i._key===k?{...i,productId:p.id,productCode:p.code,productName:p.name,unit:p.unit}:i))
+  }
   const updateQty=(k:number,v:number)=>setItems(p=>p.map(i=>i._key===k?{...i,quantity:v}:i))
 
   const handleSubmit=async(e:React.FormEvent)=>{ e.preventDefault()
@@ -104,11 +108,25 @@ export default function TransferPage() {
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1"><Label>源仓库 *</Label>
-                <select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={fromWh} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>setFromWh(e.target.value)} required>
-                  <option value="">请选择</option>{warehouses?.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></div>
+                <Select value={fromWh || '__none__'} onValueChange={v => setFromWh(v === '__none__' ? '' : v)}>
+                  <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">请选择</SelectItem>
+                    {warehouses?.map(w => (
+                      <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select></div>
               <div className="space-y-1"><Label>目标仓库 *</Label>
-                <select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={toWh} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>setToWh(e.target.value)} required>
-                  <option value="">请选择</option>{warehouses?.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></div>
+                <Select value={toWh || '__none__'} onValueChange={v => setToWh(v === '__none__' ? '' : v)}>
+                  <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">请选择</SelectItem>
+                    {warehouses?.map(w => (
+                      <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select></div>
               <div className="col-span-2 space-y-1"><Label>备注</Label><Input value={remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setRemark(e.target.value)} /></div>
             </div>
             <div>
@@ -116,8 +134,16 @@ export default function TransferPage() {
               {!items.length&&<p className="text-sm text-muted-foreground text-center py-4 border rounded">暂无明细</p>}
               {items.map(item=>(
                 <div key={item._key} className="grid grid-cols-12 gap-2 mb-2 items-center">
-                  <div className="col-span-5"><select className="w-full border rounded px-2 py-1.5 text-sm" value={item.productId||''} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>selectProduct(item._key,e.target.value)}>
-                    <option value="">选择商品</option>{products?.list.map(p=><option key={p.id} value={p.id}>{p.name}({p.code})</option>)}</select></div>
+                  <div className="col-span-5">
+                    <Select value={item.productId ? String(item.productId) : '__none__'} onValueChange={v => selectProduct(item._key, v)}>
+                      <SelectTrigger className="w-full h-9 text-sm"><SelectValue placeholder="选择商品" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">选择商品</SelectItem>
+                        {products?.list.map(p => (
+                          <SelectItem key={p.id} value={String(p.id)}>{p.name}({p.code})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select></div>
                   <div className="col-span-2 text-sm text-muted-foreground text-center">{item.unit||'-'}</div>
                   <div className="col-span-4"><Input type="number" min="0.01" step="0.01" placeholder="数量" value={item.quantity} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>updateQty(item._key,+e.target.value)} className="text-sm" /></div>
                   <div className="col-span-1 text-right"><Button type="button" size="sm" variant="ghost" className="text-red-500 px-2" onClick={()=>removeItem(item._key)}>✕</Button></div>

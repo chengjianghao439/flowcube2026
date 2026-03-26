@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getPaymentsApi, payApi, getEntriesApi } from '@/api/payments'
 import type { PaymentRecord, PaymentEntry } from '@/api/payments'
 import type { TableColumn } from '@/types'
@@ -86,9 +87,17 @@ export default function PaymentsPage() {
       </div>
 
       <FilterCard>
-        <select className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={statusFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setStatusFilter(e.target.value); setPage(1) }}>
-          <option value="">全部状态</option><option value="1">未付</option><option value="2">部分付</option><option value="3">已付清</option>
-        </select>
+        <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue placeholder="全部状态" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">全部状态</SelectItem>
+            <SelectItem value="1">未付</SelectItem>
+            <SelectItem value="2">部分付</SelectItem>
+            <SelectItem value="3">已付清</SelectItem>
+          </SelectContent>
+        </Select>
         {statusFilter && <Button size="sm" variant="ghost" onClick={() => { setStatusFilter(''); setPage(1) }}>重置</Button>}
       </FilterCard>
 
@@ -109,9 +118,18 @@ export default function PaymentsPage() {
               <div className="space-y-1"><Label>金额 *</Label><Input type="number" min="0.01" step="0.01" value={payAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPayAmount(e.target.value)} required /></div>
               <div className="space-y-1"><Label>日期 *</Label><Input type="date" value={payDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPayDate(e.target.value)} required /></div>
               <div className="space-y-1"><Label>方式</Label>
-                <select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={payMethod} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPayMethod(e.target.value)}>
-                  <option>转账</option><option>现金</option><option>支票</option><option>网银</option><option>其他</option>
-                </select>
+                <Select value={payMethod} onValueChange={setPayMethod}>
+                  <SelectTrigger className="h-10 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="转账">转账</SelectItem>
+                    <SelectItem value="现金">现金</SelectItem>
+                    <SelectItem value="支票">支票</SelectItem>
+                    <SelectItem value="网银">网银</SelectItem>
+                    <SelectItem value="其他">其他</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1"><Label>备注</Label><Input value={payRemark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPayRemark(e.target.value)} /></div>
             </div>

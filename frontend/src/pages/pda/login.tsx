@@ -44,7 +44,7 @@ export default function PdaLoginPage() {
   function saveApiServer() {
     const o = normalizePdaApiOrigin(apiOrigin)
     if (!o) {
-      window.alert('请填写后端地址，例如：http://192.168.1.10:3000（不要带 /api）')
+      toast.error('请填写后端地址，例如：http://192.168.1.10:3000（不要带 /api）')
       return
     }
     localStorage.setItem(PDA_API_ORIGIN_KEY, o)
@@ -52,7 +52,7 @@ export default function PdaLoginPage() {
     if (pid && /^\d+$/.test(pid)) {
       localStorage.setItem(PDA_LABEL_PRINTER_ID_KEY, pid)
     } else if (pid) {
-      window.alert('标签打印机 ID 须为数字（与 ERP 打印机管理中的 ID 一致）')
+      toast.error('标签打印机 ID 须为数字（与 ERP 打印机管理中的 ID 一致）')
       return
     } else {
       localStorage.removeItem(PDA_LABEL_PRINTER_ID_KEY)

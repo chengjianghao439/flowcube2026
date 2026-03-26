@@ -12,6 +12,7 @@ import { useProducts, useCategories, useCreateProduct, useUpdateProduct, useDele
 import { downloadExport } from '@/lib/exportDownload'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { LimitedInput } from '@/components/shared/LimitedInput'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
 import client from '@/api/client'
 import type { Product } from '@/types/products'
@@ -95,10 +96,23 @@ export default function ProductsPage() {
 
       <FilterCard>
         <Input placeholder="搜索编码/名称/条码" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&(setPage(1),setKeyword(search))} className="h-9 w-60" />
-        <select className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={catFilter??''} onChange={e=>{ setCatFilter(e.target.value?+e.target.value:null); setPage(1) }}>
-          <option value="">全部分类</option>
-          {categories?.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <Select
+          value={catFilter == null ? '__all__' : String(catFilter)}
+          onValueChange={v => {
+            setCatFilter(v === '__all__' ? null : +v)
+            setPage(1)
+          }}
+        >
+          <SelectTrigger className="h-9 w-44">
+            <SelectValue placeholder="全部分类" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">全部分类</SelectItem>
+            {categories?.map(c => (
+              <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button size="sm" variant="outline" onClick={()=>{setPage(1);setKeyword(search)}}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('');setPage(1)}}>重置</Button>}
       </FilterCard>
@@ -118,10 +132,21 @@ export default function ProductsPage() {
               )}
               <div className="space-y-2"><Label>名称 *</Label><Input value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} disabled={isPending}/></div>
               <div className="space-y-2"><Label>分类</Label>
-                <select className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" value={form.categoryId??''} onChange={e=>set('categoryId',e.target.value?+e.target.value:null)} disabled={isPending}>
-                  <option value="">无分类</option>
-                  {categories?.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <Select
+                  value={form.categoryId == null ? '__none__' : String(form.categoryId)}
+                  onValueChange={v => set('categoryId', v === '__none__' ? null : +v)}
+                  disabled={isPending}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="无分类" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">无分类</SelectItem>
+                    {categories?.map(c => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2"><Label>单位</Label><Input value={form.unit} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('unit',e.target.value)} disabled={isPending} placeholder="个"/></div>
               <div className="space-y-2"><Label>规格型号</Label><LimitedInput maxLength={5} value={form.spec} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('spec',e.target.value)} disabled={isPending}/></div>

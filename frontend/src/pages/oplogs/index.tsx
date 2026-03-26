@@ -5,6 +5,7 @@ import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getOpLogsApi, clearLogsApi } from '@/api/oplogs'
 import { usePermission } from '@/hooks/usePermission'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -44,10 +45,17 @@ export default function OpLogsPage() {
       <div className="flex gap-2 flex-wrap">
         <Input placeholder="搜索用户/路径..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} className="w-56"
           onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }} />
-        <select className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring" value={module} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setModule(e.target.value); setPage(1) }}>
-          <option value="">全部模块</option>
-          {Object.entries(MODULE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        <Select value={module || '__all__'} onValueChange={v => { setModule(v === '__all__' ? '' : v); setPage(1) }}>
+          <SelectTrigger className="h-10 w-40">
+            <SelectValue placeholder="全部模块" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">全部模块</SelectItem>
+            {Object.entries(MODULE_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
       </div>
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} pagination={data?.pagination} onPageChange={setPage} />

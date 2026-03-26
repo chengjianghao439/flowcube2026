@@ -7,6 +7,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePurchaseList, useConfirmPurchase, useCancelPurchase, usePurchaseDetail } from '@/hooks/usePurchase'
 import { useCreateInboundTask } from '@/hooks/useInboundTasks'
 // PurchaseFormDialog 软移除：保留代码，不再渲染（改为独立页面 /purchase/new）
@@ -206,17 +207,18 @@ export default function PurchasePage() {
           className="h-9 w-56"
           onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
         />
-        <select
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          value={statusFilter}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setStatusFilter(e.target.value); setPage(1) }}
-        >
-          <option value="">全部状态</option>
-          <option value="1">草稿</option>
-          <option value="2">已确认</option>
-          <option value="3">已收货</option>
-          <option value="4">已取消</option>
-        </select>
+        <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue placeholder="全部状态" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">全部状态</SelectItem>
+            <SelectItem value="1">草稿</SelectItem>
+            <SelectItem value="2">已确认</SelectItem>
+            <SelectItem value="3">已收货</SelectItem>
+            <SelectItem value="4">已取消</SelectItem>
+          </SelectContent>
+        </Select>
         <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
       </FilterCard>

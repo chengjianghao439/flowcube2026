@@ -20,6 +20,7 @@ import {
 import { getPrintTemplateDetailApi, createPrintTemplateApi, updatePrintTemplateApi } from '@/api/print-templates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import type { PaperSize, TemplateElement, TemplateLayout, TemplateType } from '@/types/print-template'
@@ -598,24 +599,28 @@ export default function PrintTemplateEditor() {
         />
 
         {/* 类型 */}
-        <select
-          value={type}
-          onChange={e => setType(+e.target.value as TemplateType)}
-          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-        >
-          {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+        <Select value={String(type)} onValueChange={v => setType(+v as TemplateType)}>
+          <SelectTrigger className="h-8 w-[9rem] px-2 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TEMPLATE_TYPES.map(t => (
+              <SelectItem key={t.value} value={String(t.value)}>{t.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         {/* 纸张 */}
-        <select
-          value={paperSize}
-          onChange={e => setPaperSize(e.target.value as PaperSize)}
-          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-        >
-          {Object.entries(PAPER_SIZES).map(([k, v]) => (
-            <option key={k} value={k}>{v.label}</option>
-          ))}
-        </select>
+        <Select value={paperSize} onValueChange={v => setPaperSize(v as PaperSize)}>
+          <SelectTrigger className="h-8 min-w-[10rem] px-2 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(PAPER_SIZES).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <div className="ml-auto flex items-center gap-2">
           {/* 元素计数 */}
