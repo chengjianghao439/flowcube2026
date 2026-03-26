@@ -14,13 +14,28 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 
 const app = express()
 
-// ─── 安全与解析中间件 ─────────────────────────────────────────────────────────
+const isProd = process.env.NODE_ENV === 'production'
 
-app.use(helmet())
+// ─── 安全与解析中间件 ─────────────────────────────────────────────────────────
+// 本地 http://127.0.0.1 开发时，Helmet 默认 CSP 含 upgrade-insecure-requests，浏览器会把
+// http 整页导航升级为 https，本地无证书则显示「无法访问」；curl 不受 CSP 影响故仍能访问。
+app.use(
+  helmet(
+    isProd
+      ? {}
+      : {
+          contentSecurityPolicy: {
+            directives: {
+              upgradeInsecureRequests: null,
+            },
+          },
+          strictTransportSecurity: false,
+        },
+  ),
+)
 // Electron 桌面请求常见 Origin: null；仅配 CORS_ORIGIN=http://localhost:5173 会拒绝桌面端
 const corsOriginEnv = (process.env.CORS_ORIGIN || '').trim()
 const corsReflect = process.env.CORS_REFLECT === '1' || corsOriginEnv === '*'
-const isProd = process.env.NODE_ENV === 'production'
 const allowNullOrigin =
   corsReflect ||
   corsOriginEnv === '*' ||
