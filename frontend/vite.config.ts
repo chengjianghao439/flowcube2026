@@ -1,7 +1,10 @@
 import path from 'path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import type { IncomingMessage } from 'node:http'
+import type { ClientRequest } from 'node:http'
 import { defineConfig } from 'vite'
+import type { ProxyOptions } from 'vite'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf-8')) as {
@@ -15,6 +18,26 @@ const isCapacitorBundle = process.env.VITE_CAPACITOR === '1'
 const isElectronBundle = process.env.VITE_ELECTRON === '1'
 const isPDA = process.env.BUILD_TARGET === 'pda' || isCapacitorBundle
 const skipPwa = isPDA || isElectronBundle
+
+/**
+ * 局域网只暴露 5173 时：把浏览器/桌面端带来的 Host（如 192.168.x.x:5173）转发给后端，
+ * 否则 app-update 会拼出 http://localhost:3000/downloads/…，其它机器去连自己的 localhost 会失败。
+ */
+function devProxyToBackend(target: string): ProxyOptions {
+  return {
+    target,
+    changeOrigin: true,
+    configure(proxy) {
+      proxy.on('proxyReq', (proxyReq: ClientRequest, req: IncomingMessage) => {
+        const host = req.headers.host
+        if (host) {
+          proxyReq.setHeader('x-forwarded-host', host)
+          proxyReq.setHeader('x-forwarded-proto', 'http')
+        }
+      })
+    },
+  }
+}
 
 /** Electron 安装包版本以 desktop/package.json 为准，避免界面仍显示 frontend 旧号 */
 function resolveInjectedAppVersion(): string {
@@ -100,29 +123,17 @@ export default defineConfig({
     port: 5173,
     host: true,
     proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      // 安装包等静态文件由 Express 的 /downloads 提供；勿用 5173 直连（否则 Vite 无此路径）
-      '/downloads': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
+      '/api': devProxyToBackend('http://localhost:3000'),
+      // 安装包由后端 /downloads 提供；经此处代理后，与 /api 共用「单一入口」5173
+      '/downloads': devProxyToBackend('http://localhost:3000'),
     },
   },
   preview: {
     port: 4173,
     host: true,
     proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/downloads': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
+      '/api': devProxyToBackend('http://localhost:3000'),
+      '/downloads': devProxyToBackend('http://localhost:3000'),
     },
   },
 })
