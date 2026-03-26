@@ -5,7 +5,20 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '可选。填写如 0.3.2；留空则使用 desktop/package.json 的 version（手动运行不会创建 GitHub Release，仅 tag 推送会发版）'
+        description: '可选。填写如 0.3.2；留空则使用 desktop/package.json 的 version（与 checkout 的 main 上版本一致时最省事）'
+        required: false
+        type: string
+      attach_to_github_release:
+        description: '构建完成后将 desktop/release/*.exe 上传到已有 GitHub Release（下方填写 release_tag，如 v0.3.13）'
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: '已有 Release 的 tag（仅当勾选 attach_to_github_release 时必填），例如 v0.3.13'
+        required: false
+        type: string
+      checkout_ref:
+        description: '可选。检出引用（补发某版本 exe 时填对应 tag，如 v0.3.13；留空则用运行界面所选分支）'
         required: false
         type: string
   push:
@@ -27,6 +40,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.checkout_ref != '' && github.event.inputs.checkout_ref || github.ref }}
 
       - name: Print commit info
         shell: bash
@@ -405,7 +419,7 @@ jobs:
           done
           echo "=== 上传完成；HTTP 示例: https://<API域名>/downloads/<文件名>（与 backend app.use('/downloads') 一致）==="
 
-      # 仅推送 git tag 时创建/更新 GitHub Release（与 npm run release:tag-desktop 流程一致）；手动运行可构建 artifact、不发 Release
+      # 推送 git tag：创建/更新 GitHub Release 并附上 exe
       - name: Upload EXE to Release
         if: ${{ github.ref_type == 'tag' }}
         uses: softprops/action-gh-release@v2
@@ -416,6 +430,18 @@ jobs:
           prerelease: false
           generate_release_notes: true
           make_latest: 'true'
+          fail_on_unmatched_files: true
+          files: desktop/release/*.exe
+
+      # 手动运行：补传 exe 到已存在的 Release（例如先用 gh release create 建了空 Release、或 tag 构建失败）
+      - name: Upload EXE to existing Release (workflow_dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.attach_to_github_release == 'true' && github.event.inputs.release_tag != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: false
           fail_on_unmatched_files: true
           files: desktop/release/*.exe
 
