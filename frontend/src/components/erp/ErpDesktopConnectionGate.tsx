@@ -1,5 +1,5 @@
 /**
- * Electron 打包（VITE_ELECTRON）：已保存 flowcube:apiOrigin 时启动先探测 /api/health，
+ * Electron 打包（VITE_ELECTRON）：已配置 API 根地址时启动先探测 /api/health；
  * 失败则阻断进入业务页，引导至登录页修改地址（登录页始终可访问）。
  */
 import { useEffect, useState } from 'react'
@@ -61,11 +61,13 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
         <p className="text-base font-medium text-destructive">无法连接服务器，请检查地址与网络</p>
         <p className="max-w-md text-xs text-muted-foreground">
-          已保存的 API 根地址（flowcube:apiOrigin）无法访问 /api/health。请确认后端已启动，且环境变量 CORS_REFLECT=1 或 CORS_ORIGIN=*（桌面端 Origin 为 null）。
+          当前保存的 API 地址无法访问 /api/health。请确认后端已启动，且 CORS 允许桌面端（Origin 为 null）。可在任意界面按{' '}
+          <kbd className="rounded border px-1">Ctrl</kbd>+<kbd className="rounded border px-1">Shift</kbd>+
+          <kbd className="rounded border px-1">S</kbd> 修改 API 根地址。
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           <Button type="button" variant="default" onClick={() => navigate('/login', { replace: true })}>
-            前往登录页修改地址
+            前往登录页
           </Button>
           <Button type="button" variant="outline" onClick={() => setTick((t) => t + 1)}>
             重试

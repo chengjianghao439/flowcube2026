@@ -5,6 +5,7 @@ import AppLayout from '@/layouts/AppLayout'
 import PdaLayout from '@/layouts/PdaLayout'
 import PdaConnectionGate from '@/components/pda/PdaConnectionGate'
 import ErpDesktopConnectionGate from '@/components/erp/ErpDesktopConnectionGate'
+import ErpApiBaseHotkeyDialog from '@/components/erp/ErpApiBaseHotkeyDialog'
 
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
 const LoginPage       = lazy(() => import('@/pages/login'))
@@ -71,6 +72,7 @@ export default function AppRouter() {
     <HistoryRouter>
       <PdaConnectionGate>
         <ErpDesktopConnectionGate>
+        <ErpApiBaseHotkeyDialog />
         <Suspense fallback={<PageLoader />}>
           <Routes>
           {/* ── ERP 游客路由 ── */}

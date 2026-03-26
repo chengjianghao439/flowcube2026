@@ -1,5 +1,12 @@
 import path from 'path'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf-8')) as {
+  version: string
+}
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import legacy from '@vitejs/plugin-legacy'
@@ -10,6 +17,9 @@ const isPDA = process.env.BUILD_TARGET === 'pda' || isCapacitorBundle
 const skipPwa = isPDA || isElectronBundle
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   // Capacitor / Electron 本地文件加载时需相对资源路径
   base: isCapacitorBundle || isElectronBundle ? './' : '/',
   plugins: [

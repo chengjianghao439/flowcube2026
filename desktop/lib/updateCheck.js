@@ -6,6 +6,15 @@ const { pipeline } = require('stream/promises')
 const { Readable, Transform } = require('stream')
 const semver = require('semver')
 
+/** 调试：设为 1 时跳过版本比较，只要接口与下载地址有效即弹更新提示 */
+const FORCE_UPDATE = process.env.FORCE_UPDATE === '1'
+
+/**
+ * 诊断模式（默认关闭）：开启后强制弹窗 + 跳过版本判断，仅用于排障。
+ * 启用：FLOWCUBE_UPDATE_DIAG=1
+ */
+const UPDATE_DIAG_MODE = process.env.FLOWCUBE_UPDATE_DIAG === '1'
+
 const IGNORE_STATE_FILE = 'app-update-state.json'
 const HEAD_TIMEOUT_MS = 12_000
 const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000
@@ -66,6 +75,25 @@ function isValidDownloadUrl(url) {
   } catch {
     return false
   }
+}
+
+/**
+ * 解析最终下载 URL：优先接口绝对地址；否则相对路径拼 origin；再用 filename 拼 /downloads/
+ */
+function resolveDownloadUrl(payload, origin) {
+  const base = String(origin || '').replace(/\/$/, '')
+  let url = typeof payload.url === 'string' ? payload.url.trim() : ''
+  if (isValidDownloadUrl(url)) return url
+  if (url.startsWith('/')) {
+    const built = `${base}${url}`
+    if (isValidDownloadUrl(built)) return built
+  }
+  const fn = typeof payload.filename === 'string' ? payload.filename.trim() : ''
+  if (fn && base) {
+    const built = `${base}/downloads/${encodeURIComponent(fn)}`
+    if (isValidDownloadUrl(built)) return built
+  }
+  return ''
 }
 
 /**
@@ -181,7 +209,8 @@ async function probeDownloadUrl(url) {
     }
     if (res.status === 404) return 'missing'
     return 'unknown'
-  } catch {
+  } catch (err) {
+    console.warn('[FlowCube] probeDownloadUrl 异常:', err && err.message ? err.message : err)
     return 'unknown'
   }
 }
@@ -354,8 +383,125 @@ function buildNotesDetail(notes) {
   return '更新内容：\n暂无说明'
 }
 
+/**
+ * 强制诊断：不依赖 semver，一定走 fetch + 打全量日志 + 无条件弹窗（用于定位为何未弹窗）。
+ */
+async function runDiagnosticUpdateCheck(app, parentWindow, origin) {
+  const base = origin.replace(/\/$/, '')
+  const endpoint = `${base}/api/app-update/latest`
+
+  console.log('[FlowCube] 【诊断】开始检查更新')
+  console.log('[FlowCube] 【诊断】API 根:', base)
+  console.log('[FlowCube] 【诊断】完整请求 URL:', endpoint)
+  console.log('[FlowCube] ⚠️ 强制触发更新（已跳过版本比较）')
+
+  const needUpdate = true
+  console.log('[FlowCube] 【诊断】needUpdate (固定):', needUpdate)
+
+  let latest = {
+    _diag: true,
+    _endpoint: endpoint,
+    _error: null,
+    version: null,
+    notes: null,
+    url: null,
+    filename: null,
+  }
+
+  try {
+    const res = await fetch(endpoint)
+    console.log('[FlowCube] 【诊断】fetch 完成 | HTTP:', res.status, res.statusText)
+
+    let body
+    try {
+      body = await res.json()
+    } catch (parseErr) {
+      latest._error = `响应非 JSON: ${parseErr && parseErr.message}`
+      console.error('[FlowCube] 【诊断】解析 JSON 失败:', parseErr)
+      body = null
+    }
+
+    console.log('[FlowCube] 接口返回数据(原始):', body)
+
+    if (body && body.data != null && typeof body.data === 'object') {
+      const d = body.data
+      latest = {
+        ...latest,
+        version: d.version != null ? d.version : null,
+        notes: d.notes != null ? d.notes : null,
+        url: d.url != null ? d.url : null,
+        filename: d.filename != null ? d.filename : null,
+      }
+    } else if (body && typeof body === 'object') {
+      latest = {
+        ...latest,
+        version: body.version != null ? body.version : null,
+        notes: body.notes != null ? body.notes : null,
+        url: body.url != null ? body.url : null,
+        filename: body.filename != null ? body.filename : null,
+      }
+    }
+
+    let url =
+      typeof latest.url === 'string' && latest.url.trim()
+        ? latest.url.trim()
+        : ''
+    const fn =
+      typeof latest.filename === 'string' && latest.filename.trim()
+        ? latest.filename.trim()
+        : ''
+
+    if (!url && fn) {
+      url = `${base}/downloads/${encodeURIComponent(fn)}`
+      latest._constructedUrl = true
+    } else if (url && url.startsWith('/') && !/^https?:\/\//i.test(url)) {
+      url = `${base}${url}`
+      latest._constructedUrl = true
+    } else if (url && !/^https?:\/\//i.test(url) && fn) {
+      url = `${base}/downloads/${encodeURIComponent(fn)}`
+      latest._constructedUrl = true
+    }
+
+    latest._finalDownloadUrl = url || null
+    console.log('[FlowCube] 接口返回数据(latest):', latest)
+    console.log('[FlowCube] 最终下载地址:', latest._finalDownloadUrl || '(无)')
+  } catch (err) {
+    latest._error = err && err.message ? err.message : String(err)
+    console.error('[FlowCube] 【诊断】fetch 异常:', err)
+  }
+
+  const boxOpts = {
+    type: 'info',
+    title: 'FlowCube 更新诊断',
+    message: '检测到更新（强制模式）',
+    detail: JSON.stringify(latest, null, 2).slice(0, 32000),
+    buttons: ['确定'],
+  }
+  if (parentWindow && !parentWindow.isDestroyed()) {
+    await dialog.showMessageBox(parentWindow, boxOpts)
+  } else {
+    await dialog.showMessageBox(boxOpts)
+  }
+  console.log('[FlowCube] 已强制弹出更新窗口')
+}
+
 async function checkAppUpdate(app, parentWindow, apiOriginFn) {
   const origin = apiOriginFn().replace(/\/$/, '')
+  console.log('[FlowCube] 开始检查更新 | API 根:', origin)
+
+  if (UPDATE_DIAG_MODE) {
+    try {
+      await runDiagnosticUpdateCheck(app, parentWindow, origin)
+    } catch (err) {
+      console.error('[FlowCube] 【诊断】runDiagnosticUpdateCheck 失败:', err)
+    }
+    return
+  }
+
+  if (FORCE_UPDATE) {
+    console.log('[FlowCube] FORCE_UPDATE=1，版本比较将跳过（仅用于调试）')
+  }
+
   try {
     if (updateFlowLocked) {
       await showBox(parentWindow, {
@@ -369,42 +515,117 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn) {
       return
     }
 
-    const res = await fetch(`${origin}/api/app-update/latest`)
-    if (!res.ok) return
-    const body = await res.json()
-    const payload = body && body.data != null ? body.data : body
-    const latest = typeof payload.version === 'string' ? payload.version.trim() : ''
-    const url = typeof payload.url === 'string' ? payload.url.trim() : ''
-    const notes = typeof payload.notes === 'string' ? payload.notes : ''
+    const endpoint = `${origin}/api/app-update/latest`
+    const res = await fetch(endpoint)
+    console.log('[FlowCube] 更新接口 HTTP:', res.status, res.statusText, '|', endpoint)
 
-    if (!latest) {
-      console.warn('[FlowCube] 更新检查：缺少版本号')
+    if (!res.ok) {
+      console.error('[FlowCube] 更新接口请求失败，状态码:', res.status)
       return
     }
-    if (!isValidDownloadUrl(url)) {
-      console.warn('[FlowCube] 更新检查：下载地址无效或协议不支持（需 http/https）')
+
+    const body = await res.json()
+    console.log('[FlowCube] 接口返回:', JSON.stringify(body))
+
+    if (body && body.success === false) {
+      console.error('[FlowCube] 接口 success=false:', body.message || body)
+      return
+    }
+
+    const payload = body && body.data != null ? body.data : body
+    const latest = typeof payload.version === 'string' ? payload.version.trim() : ''
+    const notes = typeof payload.notes === 'string' ? payload.notes : ''
+
+    const resolvedUrl = resolveDownloadUrl(
+      { url: payload.url, filename: payload.filename },
+      origin,
+    )
+
+    console.log('[FlowCube] 解析后下载 URL:', resolvedUrl || '(无)')
+
+    if (!latest) {
+      console.warn('[FlowCube] 更新检查中止：缺少版本号')
       return
     }
 
     const current = app.getVersion()
-    if (!isRemoteVersionNewer(current, latest)) return
+    const cSem = semver.coerce(current)
+    const lSem = semver.coerce(latest)
+    const semverGt =
+      cSem && lSem ? semver.gt(lSem, cSem) : isRemoteVersionNewer(current, latest)
+
+    console.log('[FlowCube] 当前版本:', current)
+    console.log('[FlowCube] 最新版本:', latest)
+    console.log(
+      '[FlowCube] 是否需要更新(semver.gt):',
+      semverGt,
+      '| coerce 当前:',
+      cSem ? cSem.version : '(无法解析)',
+      '| coerce 最新:',
+      lSem ? lSem.version : '(无法解析)',
+    )
+
+    const needUpdate = FORCE_UPDATE || semverGt
+    console.log('[FlowCube] 是否需要更新(最终):', needUpdate, FORCE_UPDATE ? '(含 FORCE_UPDATE)' : '')
+
+    if (!needUpdate) {
+      console.log('[FlowCube] 不弹窗：当前已是最新或未启用强制更新')
+      return
+    }
+
+    if (!isValidDownloadUrl(resolvedUrl)) {
+      console.error(
+        '[FlowCube] 更新检查中止：下载地址无效（需完整 http/https）。payload.url / filename 均未解析出可用链接。',
+      )
+      if (FORCE_UPDATE) {
+        await showBox(parentWindow, {
+          type: 'warning',
+          title: 'FlowCube 更新（调试）',
+          message: 'FORCE_UPDATE=1 已开启，但接口未返回可下载的安装包链接。',
+          detail: '请检查后端 latest.json 的 url / filename，或设置 APP_PUBLIC_URL。',
+          buttons: ['确定'],
+          defaultId: 0,
+          noLink: true,
+        })
+      }
+      return
+    }
 
     const ignored = await loadIgnoredVersions(app)
-    if (ignored.includes(latest)) return
+    if (ignored.includes(latest) && !FORCE_UPDATE) {
+      console.log('[FlowCube] 用户已忽略版本:', latest)
+      return
+    }
 
-    const probe = await probeDownloadUrl(url)
+    try {
+      new URL(resolvedUrl)
+    } catch (e) {
+      console.error('[FlowCube] new URL 解析失败:', e)
+      return
+    }
+
+    const probe = await probeDownloadUrl(resolvedUrl)
+    console.log('[FlowCube] 下载链接探测结果:', probe, '|', resolvedUrl)
+
     if (probe === 'missing') {
-      console.warn('[FlowCube] 更新检查：下载链接不可用（远程返回不存在）', url)
+      console.error('[FlowCube] 更新检查中止：远程文件不存在 (404)', resolvedUrl)
       return
     }
     if (probe === 'unknown') {
-      console.warn('[FlowCube] 更新检查：无法确认文件是否存在，仍提示用户（可能为网络限制）', url)
+      console.warn(
+        '[FlowCube] 无法确认文件是否存在（HEAD 受限等），仍尝试提示用户:',
+        resolvedUrl,
+      )
     }
+
+    console.log('[FlowCube] 弹出更新提示')
 
     const boxOptions = {
       type: 'info',
-      title: '发现新版本',
-      message: `新版本 ${latest} 已发布（当前 ${current}）。`,
+      title: FORCE_UPDATE ? '发现新版本（调试强制）' : '发现新版本',
+      message: FORCE_UPDATE
+        ? `【调试】将显示更新流程（当前 ${current}，服务端标记 ${latest}）。`
+        : `新版本 ${latest} 已发布（当前 ${current}）。`,
       detail: buildNotesDetail(notes),
       buttons: ['立即更新', '忽略此版本', '稍后提醒'],
       defaultId: 0,
@@ -417,12 +638,12 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn) {
         : await dialog.showMessageBox(boxOptions)
 
     if (result.response === 0) {
-      await startUpdateDownload(app, parentWindow, url)
-    } else if (result.response === 1) {
+      await startUpdateDownload(app, parentWindow, resolvedUrl)
+    } else if (result.response === 1 && !FORCE_UPDATE) {
       await ignoreVersion(app, latest)
     }
   } catch (err) {
-    console.warn('[FlowCube] 检查更新失败:', err && err.message ? err.message : err)
+    console.error('[FlowCube] 更新失败:', err)
   }
 }
 

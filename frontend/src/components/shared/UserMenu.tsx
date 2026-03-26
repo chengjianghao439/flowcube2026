@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import client from '@/api/client'
 import { toast } from '@/lib/toast'
+import { performSessionLogout } from '@/lib/authSession'
 
 export default function UserMenu() {
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
   const [pwdOpen, setPwdOpen] = useState(false)
+  const [logoutOpen, setLogoutOpen] = useState(false)
   const [oldPwd, setOldPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [confirmPwd, setConfirmPwd] = useState('')
@@ -21,7 +23,7 @@ export default function UserMenu() {
     onSuccess: () => {
       setPwdOpen(false); setOldPwd(''); setNewPwd(''); setConfirmPwd('')
       toast.success('密码修改成功，即将退出登录')
-      setTimeout(logout, 1000)
+      setTimeout(() => performSessionLogout(), 1000)
     },
   })
 
@@ -61,7 +63,14 @@ export default function UserMenu() {
                 <span>🔑</span> 修改密码
               </button>
               <div className="border-t my-1" />
-              <button onClick={logout} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setLogoutOpen(true)
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
+              >
                 <span>↩️</span> 退出登录
               </button>
             </div>
@@ -70,6 +79,32 @@ export default function UserMenu() {
       )}
 
       {/* 修改密码弹窗 */}
+      <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>退出系统</DialogTitle>
+            <DialogDescription>
+              确定要退出系统吗？未保存的数据可能会丢失。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setLogoutOpen(false)}>
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                setLogoutOpen(false)
+                performSessionLogout()
+              }}
+            >
+              确定退出
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={pwdOpen} onOpenChange={setPwdOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>修改密码</DialogTitle></DialogHeader>

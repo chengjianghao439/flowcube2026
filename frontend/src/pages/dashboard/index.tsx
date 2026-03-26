@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { useDashboardSummary, useLowStock, useTrend, useTopStock, usePdaPerformance } from '@/hooks/useDashboard'
 import { Badge } from '@/components/ui/badge'
+import DashboardVersionCard from '@/components/dashboard/DashboardVersionCard'
 
 // ── StatCard ──────────────────────────────────────────────────────────────────
 
@@ -103,6 +104,8 @@ export default function DashboardPage() {
         <h1 className="text-page-title">仪表盘</h1>
         <p className="text-muted-body mt-1">FlowCube ERP · 数据总览</p>
       </div>
+
+      <DashboardVersionCard />
 
       {/* 统计卡片行 */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">

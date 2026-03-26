@@ -5,6 +5,35 @@ const { successResponse } = require('../../utils/response')
 
 const router = express.Router()
 
+/**
+ * 为 Electron / 客户端生成可请求的绝对下载地址（相对路径或仅 filename 时补全）。
+ */
+function absolutizeUpdateAssetUrl(req, url, filename) {
+  let pathPart = null
+  const rawUrl = typeof url === 'string' ? url.trim() : ''
+  if (rawUrl) {
+    if (/^https?:\/\//i.test(rawUrl)) return rawUrl
+    pathPart = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`
+  } else if (filename && String(filename).trim()) {
+    pathPart = `/downloads/${encodeURIComponent(String(filename).trim())}`
+  }
+  if (!pathPart) return null
+
+  const envBase = (process.env.APP_PUBLIC_URL || '').trim().replace(/\/$/, '')
+  if (envBase) {
+    return `${envBase}${pathPart}`
+  }
+  const host = req.get('x-forwarded-host') || req.get('host') || '127.0.0.1:3000'
+  let proto = 'http'
+  const xfProto = req.get('x-forwarded-proto')
+  if (xfProto) {
+    proto = xfProto.split(',')[0].trim()
+  } else if (req.protocol) {
+    proto = String(req.protocol).replace(/:?$/, '')
+  }
+  return `${proto}://${host}${pathPart}`
+}
+
 const defaultDownloadsDir = path.join(__dirname, '../../../downloads')
 const DOWNLOADS_DIR = process.env.APP_UPDATE_DOWNLOADS_DIR || defaultDownloadsDir
 const MANIFEST_PATH =
@@ -51,7 +80,12 @@ async function fetchFromGitHub() {
           // 使用 release body 作为 notes，如果没有则使用 tag
           const notes = release.body || `FlowCube ERP v${version} 发布`
           
-          resolve({ version, url, notes })
+          resolve({
+            version,
+            url,
+            filename: asset?.name || null,
+            notes,
+          })
         } catch (e) {
           reject(e)
         }
@@ -73,16 +107,14 @@ async function fetchFromLocal() {
   const raw = await fs.readFile(MANIFEST_PATH, 'utf8')
   const manifest = JSON.parse(raw)
   
-  let url = manifest.url
-  if (!url && manifest.filename) {
-    const base = process.env.APP_PUBLIC_URL || ''
-    url = `${base}/downloads/${manifest.filename}`
-  }
-  
+  const url = manifest.url ? String(manifest.url).trim() : ''
+  const filename = manifest.filename ? String(manifest.filename).trim() : ''
+
   return {
     version: manifest.version,
-    url,
-    notes: manifest.notes || ''
+    url: url || null,
+    filename: filename || null,
+    notes: manifest.notes || '',
   }
 }
 
@@ -122,19 +154,14 @@ router.get('/latest', async (req, res, next) => {
         data: null,
       })
     }
-    
-    if (!data.url) {
-      return res.status(500).json({
-        success: false,
-        message: '下载链接无效',
-        data: null,
-      })
-    }
-    
+
+    const absoluteUrl = absolutizeUpdateAssetUrl(req, data.url, data.filename)
+
     return successResponse(res, {
       version: data.version,
-      url: data.url,
-      notes: data.notes
+      notes: data.notes || '',
+      url: absoluteUrl,
+      filename: data.filename || null,
     }, 'ok')
   } catch (e) {
     next(e)

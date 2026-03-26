@@ -1,31 +1,26 @@
 /**
- * ERP / 桌面端：后端 HTTP 根地址（localStorage），与 PDA 的 flowcube:pdaApiOrigin 分离。
+ * ERP / 桌面端：后端 HTTP 根地址；存储键为 API_BASE_URL（见 @/config/api），兼容旧键 flowcube:apiOrigin。
  */
 import apiClient from '@/api/client'
+import {
+  getEffectiveApiOrigin,
+  getApiBase,
+  normalizeApiBase,
+  setApiBase,
+} from '@/config/api'
 
 export const FLOWCUBE_API_ORIGIN_KEY = 'flowcube:apiOrigin'
 
-/** 与 PDA normalize 一致：得到 protocol//host，不含路径、不含末尾 / */
 export function normalizeApiOrigin(raw: string): string {
-  const t = raw.trim().replace(/\/$/, '')
-  if (!t) return ''
-  try {
-    const u = new URL(t.startsWith('http') ? t : `http://${t}`)
-    return `${u.protocol}//${u.host}`
-  } catch {
-    return ''
-  }
+  return normalizeApiBase(raw)
 }
 
 export function getStoredApiOrigin(): string {
-  const raw = localStorage.getItem(FLOWCUBE_API_ORIGIN_KEY)?.trim() ?? ''
-  return raw ? normalizeApiOrigin(raw) : ''
+  return getEffectiveApiOrigin() ?? ''
 }
 
 export function setStoredApiOrigin(raw: string): void {
-  const o = normalizeApiOrigin(raw)
-  if (o) localStorage.setItem(FLOWCUBE_API_ORIGIN_KEY, raw.trim())
-  else localStorage.removeItem(FLOWCUBE_API_ORIGIN_KEY)
+  setApiBase(raw)
 }
 
 /** 当前页面是否为 file://（Electron 加载本地 dist） */
@@ -35,20 +30,17 @@ export function isFileProtocol(): boolean {
 }
 
 /**
- * 根据 localStorage 同步 axios baseURL。
- * - 已配置 apiOrigin：始终使用 `${origin}/api`
- * - 未配置且非 file：保持默认 `/api`（Vite 代理 / 同源部署）
- * - 未配置且 file：保持 `/api`（无效，需在登录页填写服务器地址）
+ * 根据本地配置同步 axios baseURL。
+ * - 已配置或 file:// 默认：使用绝对 `${origin}/api`
+ * - 浏览器未配置：相对 `/api`
  */
 export function applyErpApiBaseFromStorage(): void {
-  const origin = getStoredApiOrigin()
-  if (origin) {
-    apiClient.defaults.baseURL = `${origin}/api`
+  const origin = getEffectiveApiOrigin()
+  if (!origin) {
+    apiClient.defaults.baseURL = '/api'
     return
   }
-  if (!isFileProtocol()) {
-    apiClient.defaults.baseURL = '/api'
-  }
+  apiClient.defaults.baseURL = `${origin}/api`
 }
 
 /** 健康检查 URL（与 axios base 一致，供心跳等使用） */
@@ -58,17 +50,15 @@ export function getApiHealthUrl(): string {
   if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
     return `${window.location.origin}${base}/health`
   }
-  const o = getStoredApiOrigin()
-  if (o) return `${o}${base}/health`
-  return `${base}/health`
+  const o = getEffectiveApiOrigin() ?? getApiBase()
+  return `${o}${base}/health`
 }
 
 /** 已配置 apiOrigin 时探测 /api/health（桌面端门控） */
 export async function checkErpApiHealth(): Promise<boolean> {
-  const origin = getStoredApiOrigin()
-  if (!origin) return true
+  const url = getApiHealthUrl()
   try {
-    const res = await fetch(`${origin}/api/health`, { method: 'GET', cache: 'no-store' })
+    const res = await fetch(url, { method: 'GET', cache: 'no-store' })
     if (!res.ok) return false
     const j = (await res.json()) as { success?: boolean; status?: string }
     return j?.success === true && j?.status === 'ok'
@@ -89,7 +79,6 @@ export function resolveApiFetchUrl(path: string, query = ''): string {
     const og = window.location.origin
     if (og && og !== 'null') return `${og}${rel}`
   }
-  const o = getStoredApiOrigin()
-  if (o) return `${o}${rel}`
-  return rel
+  const o = getEffectiveApiOrigin() ?? getApiBase()
+  return `${o}${rel}`
 }

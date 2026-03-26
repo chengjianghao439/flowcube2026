@@ -12,17 +12,20 @@ import AuthTenantSync from '@/components/auth/AuthTenantSync'
 import { Capacitor } from '@capacitor/core'
 import { applyPdaApiBaseFromStorage, installPdaGlobals } from '@/lib/pdaRuntime'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
+import { bootstrapErpApiConnection } from '@/lib/erpApiBootstrap'
 
 // ── Capacitor PDA：API 基址（bundled）、ZPL 打印桥、路由入口 ─────────────────
-if (Capacitor.isNativePlatform()) {
-  applyPdaApiBaseFromStorage()
-  installPdaGlobals()
-  if (!window.location.pathname.startsWith('/pda')) {
-    window.location.replace('/pda')
+async function boot(): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    applyPdaApiBaseFromStorage()
+    installPdaGlobals()
+    if (!window.location.pathname.startsWith('/pda')) {
+      window.location.replace('/pda')
+    }
+    return
   }
-} else {
-  // ERP Web / Electron：localStorage flowcube:apiOrigin
   applyErpApiBaseFromStorage()
+  await bootstrapErpApiConnection()
 }
 
 // ── React Query 默认配置 ──────────────────────────────────────────────────────
@@ -55,14 +58,17 @@ window.addEventListener('unhandledrejection', (event) => {
   event.preventDefault()
 })
 
-// ── 渲染入口 ─────────────────────────────────────────────────────────────────
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <GlobalErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <AuthTenantSync />
-        <AppRouter />
-      </QueryClientProvider>
-    </GlobalErrorBoundary>
-  </StrictMode>,
-)
+// ── 渲染入口（ERP 先静默探测 API，再挂载）────────────────────────────────────
+const rootEl = document.getElementById('root')!
+void boot().then(() => {
+  createRoot(rootEl).render(
+    <StrictMode>
+      <GlobalErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <AuthTenantSync />
+          <AppRouter />
+        </QueryClientProvider>
+      </GlobalErrorBoundary>
+    </StrictMode>,
+  )
+})

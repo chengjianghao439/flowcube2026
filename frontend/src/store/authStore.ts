@@ -23,6 +23,11 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        try {
+          localStorage.removeItem('flowcube-auth')
+        } catch {
+          /* ignore */
+        }
         set({ token: null, user: null, isAuthenticated: false })
       },
 

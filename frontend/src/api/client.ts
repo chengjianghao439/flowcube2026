@@ -2,7 +2,13 @@ import axios from 'axios'
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/lib/toast'
-import { redirectToLoginAfterUnauthorized } from '@/lib/authRedirect'
+import { performSessionLogout } from '@/lib/authSession'
+import {
+  collectErpApiFallbackCandidates,
+  normalizeApiBase,
+  probeErpApiOrigin,
+  setApiBase,
+} from '@/config/api'
 
 interface PrintQuotaErrorPayload {
   code?: string
@@ -42,7 +48,44 @@ function formatPrintQuotaToast(message: string, p: PrintQuotaErrorPayload) {
 declare module 'axios' {
   interface AxiosRequestConfig {
     skipGlobalError?: boolean
+    /** ERP API fallback 已尝试过，避免循环重试 */
+    _erpApiFallbackTried?: boolean
   }
+}
+
+function originFromAxiosConfig(config: InternalAxiosRequestConfig): string | null {
+  const base = (config.baseURL ?? apiClient.defaults.baseURL ?? '/api') as string
+  if (base.startsWith('http')) {
+    try {
+      const u = new URL(base)
+      return `${u.protocol}//${u.host}`
+    } catch {
+      return null
+    }
+  }
+  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
+    return window.location.origin
+  }
+  return null
+}
+
+async function tryErpApiFallbackAndRetry(config: InternalAxiosRequestConfig): Promise<boolean> {
+  if (config._erpApiFallbackTried) return false
+  config._erpApiFallbackTried = true
+
+  const failedOrigin = originFromAxiosConfig(config)
+  for (const origin of collectErpApiFallbackCandidates()) {
+    const n = normalizeApiBase(origin)
+    if (!n) continue
+    if (failedOrigin && n === failedOrigin) continue
+    if (!(await probeErpApiOrigin(n))) continue
+    setApiBase(n)
+    const nextBase = `${n}/api`
+    apiClient.defaults.baseURL = nextBase
+    config.baseURL = nextBase
+    return true
+  }
+  return false
 }
 
 const apiClient = axios.create({
@@ -66,14 +109,27 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ message?: string; data?: PrintQuotaErrorPayload }>) => {
+  async (error: AxiosError<{ message?: string; data?: PrintQuotaErrorPayload }>) => {
     const status  = error.response?.status
     const code    = error.code
     const rawMsg  = error.message
+    const cfg     = error.config as InternalAxiosRequestConfig | undefined
+
+    if (
+      cfg
+      && status == null
+      && (code === 'ERR_NETWORK' || rawMsg === 'Network Error')
+    ) {
+      const switched = await tryErpApiFallbackAndRetry(cfg)
+      if (switched) {
+        return apiClient.request(cfg)
+      }
+    }
+
     let message =
       error.response?.data?.message
       ?? (status == null && (code === 'ERR_NETWORK' || rawMsg === 'Network Error')
-        ? '无法连接服务器，请检查网络与 API 地址（flowcube:apiOrigin）'
+        ? '无法连接服务器，请检查网络与后端地址（Ctrl+Shift+S 可配置 API）'
         : null)
       ?? (code === 'ECONNABORTED' ? '请求超时，请稍后重试' : null)
       ?? rawMsg
@@ -81,8 +137,7 @@ apiClient.interceptors.response.use(
     const payload = error.response?.data?.data
 
     if (status === 401) {
-      useAuthStore.getState().logout()
-      redirectToLoginAfterUnauthorized()
+      performSessionLogout()
       return Promise.reject(new Error(message))
     }
 

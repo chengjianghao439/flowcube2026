@@ -1,16 +1,17 @@
 {
   "name": "flowcube-desktop",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.3.3",
   "description": "FlowCube ERP 桌面客户端（Electron）",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "prebuild": "bash ../scripts/git-sync-check.sh",
     "build:renderer": "cd ../frontend && npm run build:electron",
-    "pack": "npm run build:renderer && npx electron-builder --dir",
-    "dist": "npm run build:renderer && npx electron-builder",
-    "dist:win": "npm run build:renderer && npx electron-builder --win",
-    "dist:win:zip": "npm run build:renderer && npx electron-builder --win zip --x64"
+    "pack": "npm run prebuild && npm run build:renderer && npx electron-builder --dir",
+    "dist": "npm run prebuild && npm run build:renderer && npx electron-builder",
+    "dist:win": "npm run prebuild && npm run build:renderer && npx electron-builder --win",
+    "dist:win:zip": "npm run prebuild && npm run build:renderer && npx electron-builder --win zip --x64"
   },
   "dependencies": {
     "semver": "^7.6.3"
@@ -27,9 +28,11 @@
       "output": "release"
     },
     "files": [
+      "package.json",
       "main.js",
       "preload.js",
-      "lib/**/*.js"
+      "lib/**/*.js",
+      ".git-build-sha"
     ],
     "extraResources": [
       {

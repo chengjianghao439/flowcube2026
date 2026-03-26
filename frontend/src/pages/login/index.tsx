@@ -1,13 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useLogin } from '@/hooks/useAuth'
-import {
-  FLOWCUBE_API_ORIGIN_KEY,
-  applyErpApiBaseFromStorage,
-  isFileProtocol,
-  normalizeApiOrigin,
-  setStoredApiOrigin,
-} from '@/lib/apiOrigin'
-import { toast } from '@/lib/toast'
+import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
+
+const IS_ELECTRON_DESKTOP = import.meta.env.VITE_ELECTRON === '1'
 
 export default function LoginPage() {
   const { mutate: login, isPending, error } = useLogin()
@@ -16,25 +11,13 @@ export default function LoginPage() {
   const [password,     setPassword]     = useState('')
   const [remember,     setRemember]     = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [serverOrigin, setServerOrigin] = useState('')
-
-  useEffect(() => {
-    setServerOrigin(localStorage.getItem(FLOWCUBE_API_ORIGIN_KEY)?.trim() ?? '')
-  }, [])
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!username.trim() || !password.trim()) return
 
-    const norm = normalizeApiOrigin(serverOrigin)
-    if (isFileProtocol() && !norm) {
-      toast.error('请先填写服务器地址（含端口，例如 http://192.168.1.10:3000）')
-      return
-    }
-    if (norm) setStoredApiOrigin(serverOrigin)
-    else setStoredApiOrigin('')
+    // API 根地址由构建期 VITE_ERP_PRODUCTION_ORIGIN、启动时 bootstrap、本机已存配置决定，无需在登录页填写
     applyErpApiBaseFromStorage()
-
     login({ username, password })
   }
 
@@ -125,6 +108,15 @@ export default function LoginPage() {
           <div className="mb-10">
             <h3 className="mb-2 text-3xl font-bold text-slate-900 dark:text-white">欢迎登录</h3>
             <p className="text-slate-500 dark:text-slate-400">请输入账号信息登录系统</p>
+            {IS_ELECTRON_DESKTOP && (
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                服务器地址已随安装包配置；若无法连接，请按{' '}
+                <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">Ctrl</kbd>+
+                <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">Shift</kbd>+
+                <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">S</kbd>{' '}
+                修改。
+              </p>
+            )}
           </div>
 
           {/* 错误提示 */}
@@ -136,37 +128,6 @@ export default function LoginPage() {
 
           {/* 登录表单 */}
           <form className="space-y-6" onSubmit={handleSubmit} noValidate>
-
-            {/* 服务器地址（桌面端 / 远程 API 必填或推荐） */}
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300" htmlFor="serverOrigin">
-                服务器地址
-                {isFileProtocol() ? (
-                  <span className="ml-1 font-normal text-amber-600 dark:text-amber-400">（桌面版必填）</span>
-                ) : (
-                  <span className="ml-1 font-normal text-slate-400">（可选）</span>
-                )}
-              </label>
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] text-slate-400">
-                  dns
-                </span>
-                <input
-                  id="serverOrigin"
-                  name="serverOrigin"
-                  type="text"
-                  placeholder="http://192.168.1.10:3000（不要带 /api）"
-                  autoComplete="off"
-                  value={serverOrigin}
-                  onChange={(e) => setServerOrigin(e.target.value)}
-                  disabled={isPending}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-slate-900 outline-none placeholder:text-slate-400 transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white"
-                />
-              </div>
-              <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-                连接信息保存在本机 localStorage（键名 {FLOWCUBE_API_ORIGIN_KEY}）；浏览器访问时可留空以使用当前站点 /api。
-              </p>
-            </div>
 
             {/* 账号 */}
             <div>
@@ -251,12 +212,7 @@ export default function LoginPage() {
             {/* 提交按钮 */}
             <button
               type="submit"
-              disabled={
-                isPending
-                || !username.trim()
-                || !password.trim()
-                || (isFileProtocol() && !normalizeApiOrigin(serverOrigin))
-              }
+              disabled={isPending || !username.trim() || !password.trim()}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 font-bold text-white transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPending ? (
