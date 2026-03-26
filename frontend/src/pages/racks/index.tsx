@@ -94,26 +94,26 @@ export default function RacksPage() {
     {
       key: 'actions',
       title: '操作',
-      width: 220,
+      width: 260,
       render: (_, row) => (
-        <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
-          <Button size="sm" variant="outline" className="w-full sm:w-auto shrink-0" onClick={() => { setEditItem(row); setFormOpen(true) }}>
+        <div className="flex max-w-[min(100%,320px)] flex-nowrap items-center justify-start gap-1 overflow-x-auto py-0.5">
+          <Button size="sm" variant="outline" className="h-8 shrink-0 px-2 text-xs" onClick={() => { setEditItem(row); setFormOpen(true) }}>
             编辑
           </Button>
           <Button
             size="sm"
             variant="secondary"
-            className="w-full gap-1 sm:w-auto shrink-0"
+            className="h-8 shrink-0 gap-0.5 px-2 text-xs"
             disabled={!row.barcode || printMut.isPending}
             onClick={() => printMut.mutate(row.id)}
           >
-            <Printer className="h-3.5 w-3.5 shrink-0" />
-            打印标
+            <Printer className="h-3 w-3 shrink-0" />
+            打印
           </Button>
           <Button
             size="sm"
             variant="destructive"
-            className="w-full sm:w-auto shrink-0"
+            className="h-8 shrink-0 px-2 text-xs"
             disabled={deleteMut.isPending}
             onClick={() => setDeleteTarget(row)}
           >

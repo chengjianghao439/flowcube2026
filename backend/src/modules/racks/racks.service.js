@@ -279,7 +279,7 @@ async function enqueuePrintLabel(id, { tenantId = 0, userId = null } = {}) {
   })
   if (!job) return null
   return {
-    id:          job.id,
+    id:          job.id != null ? Number(job.id) : null,
     printerCode: job.printerCode ?? null,
     printerName: job.printerName ?? null,
   }

@@ -4,20 +4,27 @@ import { loginApi, getMeApi, type LoginParams } from '@/api/auth'
 import { useAuthStore } from '@/store/authStore'
 import { persistErpApiBaseAfterLogin } from '@/config/api'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
+import { persistLoginSuccess } from '@/lib/loginCredentials'
 
-type LoginWithRemember = LoginParams & { remember?: boolean }
+/** rememberPassword：是否在本机保存密码（与 JWT 会话无关） */
+export type LoginMutationVars = LoginParams & { rememberPassword?: boolean }
 
 export function useLogin(redirectTo = '/dashboard') {
   const { login } = useAuthStore()
   const navigate = useNavigate()
 
   return useMutation({
-    mutationFn: ({ username, password }: LoginWithRemember) =>
+    mutationFn: ({ username, password }: LoginMutationVars) =>
       loginApi({ username, password }),
     onSuccess: (data, variables) => {
       persistErpApiBaseAfterLogin()
       applyErpApiBaseFromStorage()
-      login(data.token, data.user, variables.remember ?? false)
+      login(data.token, data.user)
+      persistLoginSuccess(
+        variables.username,
+        variables.password,
+        !!variables.rememberPassword,
+      )
       navigate(redirectTo, { replace: true })
     },
   })

@@ -10,6 +10,7 @@ import {
   normalizePdaApiOrigin,
   tryParseScannedServerUrl,
 } from '@/lib/pdaRuntime'
+import { loadSavedLoginForm } from '@/lib/loginCredentials'
 
 export default function PdaLoginPage() {
   const { mutate: login, isPending, error } = useLogin('/pda')
@@ -19,8 +20,11 @@ export default function PdaLoginPage() {
   const [apiOrigin, setApiOrigin] = useState('')
   const [labelPrinterId, setLabelPrinterId] = useState('')
   const [scanServerMode, setScanServerMode] = useState(false)
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState(() => loadSavedLoginForm().username)
+  const [password, setPassword] = useState(() => loadSavedLoginForm().password)
+  const [rememberPassword, setRememberPassword] = useState(
+    () => loadSavedLoginForm().rememberPassword,
+  )
   const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
@@ -63,7 +67,7 @@ export default function PdaLoginPage() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!username.trim() || !password.trim()) return
-    login({ username, password, remember: true })
+    login({ username, password, rememberPassword })
   }
 
   return (
@@ -199,6 +203,23 @@ export default function PdaLoginPage() {
               </button>
             </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="pda-remember-password"
+              type="checkbox"
+              checked={rememberPassword}
+              onChange={(e) => setRememberPassword(e.target.checked)}
+              disabled={isPending}
+              className="h-4 w-4 rounded border-slate-500 bg-slate-700 text-primary focus:ring-primary"
+            />
+            <label htmlFor="pda-remember-password" className="text-sm text-slate-400">
+              在本机记住密码
+            </label>
+          </div>
+          <p className="text-[11px] leading-snug text-slate-500">
+            退出或关闭应用后需重新登录；勾选则保存密码便于下次填写。
+          </p>
 
           {/* 提交 */}
           <button

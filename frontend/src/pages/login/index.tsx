@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import { useLogin } from '@/hooks/useAuth'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
+import { loadSavedLoginForm } from '@/lib/loginCredentials'
 
 const IS_ELECTRON_DESKTOP = import.meta.env.VITE_ELECTRON === '1'
 
 export default function LoginPage() {
   const { mutate: login, isPending, error } = useLogin()
 
-  const [username,     setUsername]     = useState('')
-  const [password,     setPassword]     = useState('')
-  const [remember,     setRemember]     = useState(false)
+  const [username, setUsername] = useState(() => loadSavedLoginForm().username)
+  const [password, setPassword] = useState(() => loadSavedLoginForm().password)
+  const [rememberPassword, setRememberPassword] = useState(
+    () => loadSavedLoginForm().rememberPassword,
+  )
   const [showPassword, setShowPassword] = useState(false)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -18,7 +21,7 @@ export default function LoginPage() {
 
     // API 根地址由构建期 VITE_ERP_PRODUCTION_ORIGIN、启动时 bootstrap、本机已存配置决定，无需在登录页填写
     applyErpApiBaseFromStorage()
-    login({ username, password, remember })
+    login({ username, password, rememberPassword })
   }
 
   return (
@@ -195,21 +198,21 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* 记住我 */}
+            {/* 记住密码：仅填充表单；登录态仅存当前会话，退出或关闭应用后须重新登录 */}
             <div className="flex items-center gap-2">
               <input
-                id="remember"
+                id="rememberPassword"
                 type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
+                checked={rememberPassword}
+                onChange={(e) => setRememberPassword(e.target.checked)}
                 className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
               />
-              <label className="text-sm text-slate-600 dark:text-slate-400" htmlFor="remember">
-                在本机记住登录（关闭应用后仍保持登录）
+              <label className="text-sm text-slate-600 dark:text-slate-400" htmlFor="rememberPassword">
+                在本机记住密码
               </label>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-500">
-              不勾选则关闭应用后需重新输入密码。
+              登录成功后会记住账号；勾选则同时保存密码（本机）。退出或关闭应用后需重新登录。
             </p>
 
             {/* 提交按钮 */}

@@ -65,19 +65,25 @@ function parsePriority(raw) {
   return 0
 }
 
+function num(v) {
+  if (v == null) return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
 function fmt(row, { includeAckToken = false } = {}) {
   const st = Number(row.status)
   const pr = Number(row.priority ?? 0)
   const o = {
-    id:           row.id,
-    printerId:    row.printer_id,
+    id:           num(row.id),
+    printerId:    num(row.printer_id),
     printerCode:  row.printer_code,
     printerName:  row.printer_name,
-    templateId:   row.template_id,
+    templateId:   num(row.template_id),
     title:        row.title,
     contentType:  row.content_type,
     content:      row.content,
-    copies:       row.copies,
+    copies:       row.copies != null ? Number(row.copies) : 0,
     priority:     pr,
     priorityKey:  pr === 1 ? 'high' : 'normal',
     jobType:      row.job_type ?? null,
@@ -86,14 +92,14 @@ function fmt(row, { includeAckToken = false } = {}) {
     status:       st,
     statusKey:    statusKey(st),
     printStateLabel: printStateLabel(st),
-    retryCount:   row.retry_count,
+    retryCount:   row.retry_count != null ? Number(row.retry_count) : 0,
     errorMessage: row.error_message,
     expiresAt:    row.expires_at ?? null,
     acknowledgedAt: row.acknowledged_at ?? null,
     jobUniqueKey: row.job_unique_key ?? null,
     dispatchReason: row.dispatch_reason ?? null,
     dispatchedAt: row.dispatched_at ?? null,
-    createdBy:    row.created_by,
+    createdBy:    num(row.created_by),
     createdAt:    row.created_at,
   }
   if (includeAckToken && row.ack_token) o.ackToken = row.ack_token
