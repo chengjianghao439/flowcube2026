@@ -185,7 +185,7 @@ async function create({
        ORDER BY id DESC LIMIT 1`,
       [jobUniqueKey, STATUS.PENDING, STATUS.PRINTING, STATUS.DONE, warehouseId, jobTypeNorm, tid],
     )
-    if (dup) return findById(dup.id)
+    if (dup && dup.id != null) return findById(Number(dup.id))
   }
 
   const explicitPrinter =
@@ -273,11 +273,15 @@ async function create({
       ttl,
     ],
   )
-  const job = await findById(r.insertId)
+  const insertId = r.insertId != null ? Number(r.insertId) : NaN
+  if (!Number.isFinite(insertId) || insertId <= 0) {
+    throw new AppError('创建打印任务失败（无法解析任务 ID）', 500)
+  }
+  const job = await findById(insertId)
 
   await pushToClients(printer.code, job)
 
-  return findById(r.insertId)
+  return findById(insertId)
 }
 
 // ── 打印客户端回调：完成 ──────────────────────────────────────────────────────

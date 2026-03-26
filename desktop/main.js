@@ -1,10 +1,13 @@
 console.log('🔥 当前 main.js 已加载')
 
-const { app, BrowserWindow, dialog, Menu, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
-const { checkAppUpdate } = require('./lib/updateCheck')
+const { checkAppUpdate, attachDesktopDialogIpc } = require('./lib/updateCheck')
+
+/** 用户已在渲染层确认退出，允许真正关闭窗口（与 ipc flowcube:close-accept 共用） */
+const closeAllowed = new WeakSet()
 
 function readEmbeddedBuildCommit() {
   try {
@@ -77,6 +80,34 @@ ipcMain.on('flowcube:api-origin-ready', (event, origin) => {
   if (win && !win.isDestroyed()) triggerPackagedUpdateCheck(win, origin)
 })
 
+ipcMain.on('flowcube:close-accept', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win || win.isDestroyed()) return
+  closeAllowed.add(win)
+  win.close()
+})
+
+/** 枚举本机已安装打印机（与系统「打印机与扫描仪」一致），供添加打印机仅从列表选择 */
+ipcMain.handle('flowcube:get-system-printers', async (event) => {
+  const wc = event.sender
+  if (!wc || typeof wc.getPrintersAsync !== 'function') {
+    return []
+  }
+  try {
+    const list = await wc.getPrintersAsync()
+    return (list || []).map((p) => ({
+      name: p.name,
+      displayName: p.displayName || p.name,
+      description: p.description || '',
+      status: p.status,
+      isDefault: !!p.isDefault,
+    }))
+  } catch (e) {
+    console.error('[flowcube:get-system-printers]', e)
+    return []
+  }
+})
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -91,23 +122,10 @@ function createWindow() {
     },
   })
 
-  let allowCloseWithoutConfirm = false
-  win.on('close', async (e) => {
-    if (allowCloseWithoutConfirm) return
+  win.on('close', (e) => {
+    if (closeAllowed.has(win)) return
     e.preventDefault()
-    const { response } = await dialog.showMessageBox(win, {
-      type: 'question',
-      buttons: ['取消', '退出应用'],
-      defaultId: 0,
-      cancelId: 0,
-      title: '退出 FlowCube',
-      message: '确定要退出 FlowCube ERP 吗？',
-      noLink: true,
-    })
-    if (response === 1) {
-      allowCloseWithoutConfirm = true
-      win.close()
-    }
+    win.webContents.send('flowcube:close-request')
   })
 
   win.once('ready-to-show', () => {
@@ -152,6 +170,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  attachDesktopDialogIpc()
+
   // 去掉默认「文件 / 编辑 / 视图…」等系统菜单栏（Windows/Linux）；界面以 Web 为准
   Menu.setApplicationMenu(null)
 

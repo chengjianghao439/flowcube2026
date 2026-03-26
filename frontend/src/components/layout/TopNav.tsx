@@ -10,7 +10,6 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePermission } from '@/hooks/usePermission'
 import { useWorkspaceStore, PATH_TITLES } from '@/store/workspaceStore'
-import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import type { PermCode } from '@/lib/permissions'
 
 export type NavChildItem = { label: string; path: string; perm: PermCode }
@@ -249,26 +248,12 @@ export function TopNav() {
   const { addTab } = useWorkspaceStore()
   const pathname = location.pathname
 
+  /** 打开/激活目标页：不因未保存草稿拦截；与 WorkspaceTabs 一致，由 KeepAlive 保留表单状态 */
   const navigateWithGuard = useCallback(
     (path: string) => {
-      function doNavigate() {
-        const title = PATH_TITLES[path] ?? path
-        addTab({ key: path, title, path })
-        navigate(path)
-      }
-
-      const dirtyStore = useDirtyGuardStore.getState()
-      const currentActiveKey = useWorkspaceStore.getState().activeKey
-
-      if (dirtyStore.isTabDirty(currentActiveKey)) {
-        dirtyStore.showConfirm('当前内容尚未保存，确定离开吗？', () => {
-          dirtyStore.setBypassNextBlock(true)
-          doNavigate()
-        })
-        return
-      }
-
-      doNavigate()
+      const title = PATH_TITLES[path] ?? path
+      addTab({ key: path, title, path })
+      navigate(path)
     },
     [addTab, navigate]
   )

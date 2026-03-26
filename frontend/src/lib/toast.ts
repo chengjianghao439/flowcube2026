@@ -23,19 +23,28 @@ export function _registerToastFn(fn: AddToastFn): void {
   _addFn = fn
 }
 
+/** 与 AppToast 内逻辑一致：合法时长 1.5s～120s，非法则用各类型默认 */
+export function resolveToastDurationMs(type: ToastType, duration?: number): number {
+  const fallback = type === 'error' ? 4000 : 3000
+  if (duration === undefined) return fallback
+  const n = Number(duration)
+  if (!Number.isFinite(n) || n <= 0) return fallback
+  return Math.min(Math.max(n, 1500), 120_000)
+}
+
 function add(type: ToastType, message: string, duration?: number): void {
   if (!_addFn) {
     // AppToast 未挂载（如在路由守卫层触发），静默忽略
     return
   }
-  _addFn(type, message, duration)
+  _addFn(type, message, resolveToastDurationMs(type, duration))
 }
 
 export const toast = {
   /** 绿色成功提示，默认 3 秒自动关闭 */
   success: (message: string, duration?: number) => add('success', message, duration),
   /** 红色失败提示，默认 4 秒自动关闭 */
-  error:   (message: string, duration?: number) => add('error', message, duration ?? 4000),
+  error:   (message: string, duration?: number) => add('error', message, duration),
   /** 橙色警告提示，默认 3 秒自动关闭 */
   warning: (message: string, duration?: number) => add('warning', message, duration),
 }

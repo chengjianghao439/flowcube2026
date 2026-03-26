@@ -1,4 +1,4 @@
-const { dialog, shell } = require('electron')
+const { dialog, shell, ipcMain } = require('electron')
 const fs = require('fs').promises
 const fssync = require('fs')
 const path = require('path')
@@ -204,11 +204,62 @@ async function downloadUpdateFile(downloadUrl, destPath, signal) {
   console.log('[FlowCube] 更新包已保存:', destPath)
 }
 
+/** 主进程等待渲染层 AppDialog 响应（替代系统 showMessageBox） */
+const pendingDesktopDialogs = new Map()
+
+async function showBoxRenderer(parentWindow, options) {
+  return new Promise((resolve) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const timeout = setTimeout(() => {
+      pendingDesktopDialogs.delete(id)
+      dialog
+        .showMessageBox(parentWindow, options)
+        .then(resolve)
+        .catch(() => resolve({ response: 0 }))
+    }, 120000)
+    pendingDesktopDialogs.set(id, {
+      resolve: (v) => {
+        clearTimeout(timeout)
+        resolve(v)
+      },
+    })
+    parentWindow.webContents.send('desktop-show-message-box', {
+      id,
+      type: options.type || 'info',
+      title: options.title || '',
+      message: options.message || '',
+      detail: options.detail || '',
+      buttons: options.buttons && options.buttons.length ? options.buttons : ['确定'],
+      defaultId: options.defaultId ?? 0,
+      cancelId: options.cancelId ?? 0,
+    })
+  })
+}
+
 function showBox(parentWindow, options) {
-  if (parentWindow && !parentWindow.isDestroyed()) {
-    return dialog.showMessageBox(parentWindow, options)
+  if (
+    parentWindow &&
+    !parentWindow.isDestroyed() &&
+    parentWindow.webContents &&
+    !parentWindow.webContents.isDestroyed()
+  ) {
+    return showBoxRenderer(parentWindow, options)
   }
-  return dialog.showMessageBox(options)
+  return dialog.showMessageBox(parentWindow || undefined, options)
+}
+
+let ipcDesktopDialogAttached = false
+function attachDesktopDialogIpc() {
+  if (ipcDesktopDialogAttached) return
+  ipcDesktopDialogAttached = true
+  ipcMain.on('desktop-message-box-response', (event, { id, response }) => {
+    if (typeof id !== 'string' || typeof response !== 'number') return
+    const p = pendingDesktopDialogs.get(id)
+    if (p) {
+      p.resolve({ response })
+      pendingDesktopDialogs.delete(id)
+    }
+  })
 }
 
 async function probeDownloadUrl(url) {
@@ -515,11 +566,7 @@ async function runDiagnosticUpdateCheck(app, parentWindow, origin) {
     detail: JSON.stringify(latest, null, 2).slice(0, 32000),
     buttons: ['确定'],
   }
-  if (parentWindow && !parentWindow.isDestroyed()) {
-    await dialog.showMessageBox(parentWindow, boxOpts)
-  } else {
-    await dialog.showMessageBox(boxOpts)
-  }
+  await showBox(parentWindow, boxOpts)
   console.log('[FlowCube] 已强制弹出更新窗口')
 }
 
@@ -670,10 +717,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn) {
       cancelId: 2,
       noLink: true,
     }
-    const result =
-      parentWindow && !parentWindow.isDestroyed()
-        ? await dialog.showMessageBox(parentWindow, boxOptions)
-        : await dialog.showMessageBox(boxOptions)
+    const result = await showBox(parentWindow, boxOptions)
 
     if (result.response === 0) {
       await startUpdateDownload(app, parentWindow, resolvedUrl)
@@ -687,6 +731,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn) {
 
 module.exports = {
   checkAppUpdate,
+  attachDesktopDialogIpc,
   /** 供测试或后续自动下载模块复用 */
   isRemoteVersionNewer,
   isValidDownloadUrl,

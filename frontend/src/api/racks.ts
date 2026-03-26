@@ -43,8 +43,23 @@ export interface PrintRackLabelResult {
 }
 
 export async function printRackLabelApi(id: number): Promise<PrintRackLabelResult> {
-  const res = await apiClient.post<ApiResponse<PrintRackLabelResult>>(`/racks/${id}/print-label`)
-  return res.data.data!
+  const res = await apiClient.post<ApiResponse<PrintRackLabelResult>>(
+    `/racks/${Number(id)}/print-label`,
+    {},
+    { skipGlobalError: true },
+  )
+  const body = res.data
+  if (!body.success) {
+    throw new Error(body.message || '打印失败')
+  }
+  return (
+    body.data ?? {
+      queued: false,
+      jobId: null,
+      printerCode: null,
+      printerName: null,
+    }
+  )
 }
 
 export type RackScanHintResult = {

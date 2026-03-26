@@ -1,5 +1,5 @@
 {
-  "version": "0.3.10",
-  "filename": "FlowCube-ERP-Setup-0.3.10.exe",
-  "notes": "【v0.3.10 主要更新】\n\n• 登录：JWT 仅存当前会话，关闭后需重新登录；本机默认记住用户名，可选「在本机记住密码」。\n• ERP 与 PDA 登录页已对齐。\n• 打印任务/货架打印入队：修复大整型 ID 序列化问题。\n• 货架列表操作列单行横向滚动、「打印」按钮文案优化。\n\n详见 docs/releases/v0.3.10.md。"
+  "version": "0.3.11",
+  "filename": "FlowCube-ERP-Setup-0.3.11.exe",
+  "notes": "【v0.3.11 主要更新】\n\n• 打印机：桌面端仅从本机系统已安装列表添加，取消手写添加/编辑；Electron 枚举打印机。\n• 数据库：可选迁移 052（printers.source）。\n• 桌面更新、Toast/布局、货架等体验优化。\n\n详见 docs/releases/v0.3.11.md。"
 }

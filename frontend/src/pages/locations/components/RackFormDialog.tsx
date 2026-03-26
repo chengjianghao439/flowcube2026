@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useMutation } from '@tanstack/react-query'
+import { Printer } from 'lucide-react'
 import { useCreateRack, useUpdateRack } from '@/hooks/useRacks'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { printRackLabelApi, scanRackHintApi } from '@/api/racks'
@@ -35,15 +36,18 @@ export default function RackFormDialog({ open, onClose, editItem }: Props) {
   const printMut = useMutation({
     mutationFn: () => {
       if (!editItem) throw new Error('未选择货架')
-      return printRackLabelApi(editItem.id)
+      return printRackLabelApi(Number(editItem.id))
     },
     onSuccess: (d) => {
       if (!d) return
-      if (d.queued) toast.success('已加入打印队列')
-      else toast.warning('未配置标签机，未创建打印任务')
+      if (d.queued) {
+        toast.success(d.printerCode ? `已入队 → ${d.printerCode}` : '已加入打印队列')
+      } else {
+        toast.warning('未绑定「库存标签」打印机或标签机离线，未创建任务')
+      }
     },
     onError: (e: unknown) =>
-      toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '打印失败'),
+      toast.error(e instanceof Error ? e.message : '打印失败'),
   })
 
   const hintMut = useMutation({
@@ -145,25 +149,6 @@ export default function RackFormDialog({ open, onClose, editItem }: Props) {
               </Select>
             )}
           </div>
-
-          {isEdit && editItem?.barcode && (
-            <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0 space-y-1">
-                <Label className="text-xs text-muted-foreground">货架条码</Label>
-                <p className="break-all font-mono text-sm font-semibold tracking-tight">{editItem.barcode}</p>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="w-full shrink-0 sm:w-auto"
-                disabled={printMut.isPending}
-                onClick={() => printMut.mutate()}
-              >
-                打印货架标
-              </Button>
-            </div>
-          )}
 
           {!isEdit && (
             <div className="space-y-2 rounded-lg border border-dashed border-border bg-muted/15 px-3 py-3">
@@ -290,6 +275,33 @@ export default function RackFormDialog({ open, onClose, editItem }: Props) {
               disabled={isPending}
             />
           </div>
+
+          {isEdit && editItem && (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-3">
+              <Label className="text-xs text-muted-foreground">货架标签打印</Label>
+              {editItem.barcode ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-[11px] text-muted-foreground">RCK 条码</p>
+                    <p className="break-all font-mono text-sm font-semibold tracking-tight">{editItem.barcode}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="w-full shrink-0 sm:w-auto"
+                    disabled={printMut.isPending}
+                    onClick={() => printMut.mutate()}
+                  >
+                    <Printer className="mr-1.5 size-3.5" />
+                    打印货架标
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">暂无条码，请先保存货架信息后再试。</p>
+              )}
+            </div>
+          )}
 
           {error && (
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">

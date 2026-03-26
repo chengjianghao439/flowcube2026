@@ -18,6 +18,7 @@
 
 import { useEffect } from 'react'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
+import { consumeAllowUnloadOnce } from '@/lib/electronUnloadGate'
 
 export function useDirtyGuard(tabPath: string, isDirty: boolean) {
   const setDirty = useDirtyGuardStore(s => s.setDirty)
@@ -36,12 +37,12 @@ export function useDirtyGuard(tabPath: string, isDirty: boolean) {
     }
   }, [tabPath, setDirty])
 
-  // 浏览器刷新 / 关闭标签页保护
+  // 浏览器刷新 / 关闭标签页保护（Electron 内由主进程 + DesktopQuitDialog 处理关闭，此处用闸门避免二次原生提示）
   useEffect(() => {
     if (!isDirty) return
     const handler = (e: BeforeUnloadEvent) => {
+      if (consumeAllowUnloadOnce()) return
       e.preventDefault()
-      // 部分浏览器仍需设置 returnValue 才能显示原生提示
       e.returnValue = ''
     }
     window.addEventListener('beforeunload', handler)

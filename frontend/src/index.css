@@ -192,3 +192,13 @@ html {
   touch-action: manipulation;
 }
 
+/* AppToast 底部倒计时条（与关闭时长同步） */
+@keyframes fc-toast-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+

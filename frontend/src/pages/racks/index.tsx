@@ -10,14 +10,21 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { getRacksApi, printRackLabelApi, deleteRackApi } from '@/api/racks'
+import { getRacksApi, deleteRackApi } from '@/api/racks'
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import DataTable from '@/components/shared/DataTable'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { TableColumn } from '@/types'
 import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
-import { Printer } from 'lucide-react'
+import { ChevronDown, Edit2, Trash2 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export default function RacksPage() {
   const qc = useQueryClient()
@@ -43,16 +50,6 @@ export default function RacksPage() {
   const { data: whData } = useQuery({
     queryKey: ['warehouses-simple'],
     queryFn: () => getWarehousesActiveApi().then(r => r ?? []),
-  })
-
-  const printMut = useMutation({
-    mutationFn: (id: number) => printRackLabelApi(id),
-    onSuccess: (d) => {
-      if (d.queued) toast.success(d.printerCode ? `已入队 → ${d.printerCode}` : '已加入打印队列')
-      else toast.warning('未绑定「库存标签」打印机或标签机离线，未创建任务')
-    },
-    onError: (e: unknown) =>
-      toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '打印失败'),
   })
 
   const deleteMut = useMutation({
@@ -94,31 +91,37 @@ export default function RacksPage() {
     {
       key: 'actions',
       title: '操作',
-      width: 260,
+      width: 120,
       render: (_, row) => (
-        <div className="flex max-w-[min(100%,320px)] flex-nowrap items-center justify-start gap-1 overflow-x-auto py-0.5">
-          <Button size="sm" variant="outline" className="h-8 shrink-0 px-2 text-xs" onClick={() => { setEditItem(row); setFormOpen(true) }}>
-            编辑
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="h-8 shrink-0 gap-0.5 px-2 text-xs"
-            disabled={!row.barcode || printMut.isPending}
-            onClick={() => printMut.mutate(row.id)}
-          >
-            <Printer className="h-3 w-3 shrink-0" />
-            打印
-          </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            className="h-8 shrink-0 px-2 text-xs"
-            disabled={deleteMut.isPending}
-            onClick={() => setDeleteTarget(row)}
-          >
-            删除
-          </Button>
+        <div className="flex items-center justify-end gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" disabled={deleteMut.isPending} className="px-2">
+                更多
+                <ChevronDown className="ml-0.5 size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setEditItem(row)
+                  setFormOpen(true)
+                }}
+              >
+                <Edit2 className="size-4" />
+                编辑
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                disabled={deleteMut.isPending}
+                onClick={() => setDeleteTarget(row)}
+              >
+                <Trash2 className="size-4" />
+                删除
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },

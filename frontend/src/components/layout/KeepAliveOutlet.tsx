@@ -14,8 +14,8 @@
  *   （页面组件用 useContext(TabPathContext) 读取，无需依赖 useLocation）
  *
  * Dirty Guard（Layer 2 兜底）：
- * - 使用 React Router v6 useBlocker 拦截浏览器前进/后退等外部导航
- * - Layer1（WorkspaceTabs / AppLayout）已处理的导航通过 bypassNextBlock 标志跳过
+ * - 监听 popstate，浏览器前进/后退若离开有未保存内容的激活 tab 会确认
+ * - 工作区切换标签、顶栏导航不拦截（KeepAlive 保留草稿）
  */
 
 import { lazy, Suspense, useEffect, useRef } from 'react'

@@ -61,7 +61,7 @@ async function findById(id, tenantId = 0) {
   return fmt(row)
 }
 
-async function create({ name, code, type, description, warehouseId }, tenantId = 0) {
+async function create({ name, code, type, description, warehouseId, source }, tenantId = 0) {
   const tid = normTid(tenantId)
   if (!name) throw new AppError('名称不能为空', 400)
   if (!code) throw new AppError('编码不能为空', 400)
@@ -70,9 +70,11 @@ async function create({ name, code, type, description, warehouseId }, tenantId =
     warehouseId != null && warehouseId !== '' && Number.isFinite(Number(warehouseId))
       ? Number(warehouseId)
       : null
+  const src =
+    source === 'local_desktop' || source === 'client' || source === 'manual' ? source : null
   const [r] = await pool.query(
-    'INSERT INTO printers (name, code, type, warehouse_id, tenant_id, description) VALUES (?,?,?,?,?,?)',
-    [name, code, type, wh, tid, description || null],
+    'INSERT INTO printers (name, code, type, warehouse_id, tenant_id, description, source) VALUES (?,?,?,?,?,?,?)',
+    [name, code, type, wh, tid, description || null, src],
   )
   return findById(r.insertId, tid)
 }
