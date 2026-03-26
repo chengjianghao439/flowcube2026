@@ -72,6 +72,25 @@ function createWindow() {
     },
   })
 
+  let allowCloseWithoutConfirm = false
+  win.on('close', async (e) => {
+    if (allowCloseWithoutConfirm) return
+    e.preventDefault()
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'question',
+      buttons: ['取消', '退出应用'],
+      defaultId: 0,
+      cancelId: 0,
+      title: '退出 FlowCube',
+      message: '确定要退出 FlowCube ERP 吗？',
+      noLink: true,
+    })
+    if (response === 1) {
+      allowCloseWithoutConfirm = true
+      win.close()
+    }
+  })
+
   win.once('ready-to-show', () => {
     win.show()
   })

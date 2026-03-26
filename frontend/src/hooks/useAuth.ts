@@ -5,16 +5,19 @@ import { useAuthStore } from '@/store/authStore'
 import { persistErpApiBaseAfterLogin } from '@/config/api'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
 
+type LoginWithRemember = LoginParams & { remember?: boolean }
+
 export function useLogin(redirectTo = '/dashboard') {
   const { login } = useAuthStore()
   const navigate = useNavigate()
 
   return useMutation({
-    mutationFn: (params: LoginParams) => loginApi(params),
-    onSuccess: (data) => {
+    mutationFn: ({ username, password }: LoginWithRemember) =>
+      loginApi({ username, password }),
+    onSuccess: (data, variables) => {
       persistErpApiBaseAfterLogin()
       applyErpApiBaseFromStorage()
-      login(data.token, data.user)
+      login(data.token, data.user, variables.remember ?? false)
       navigate(redirectTo, { replace: true })
     },
   })

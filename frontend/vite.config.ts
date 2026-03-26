@@ -16,9 +16,25 @@ const isElectronBundle = process.env.VITE_ELECTRON === '1'
 const isPDA = process.env.BUILD_TARGET === 'pda' || isCapacitorBundle
 const skipPwa = isPDA || isElectronBundle
 
+/** Electron 安装包版本以 desktop/package.json 为准，避免界面仍显示 frontend 旧号 */
+function resolveInjectedAppVersion(): string {
+  if (isElectronBundle) {
+    try {
+      const desktopPkg = JSON.parse(
+        readFileSync(path.join(__dirname, '../desktop/package.json'), 'utf-8'),
+      ) as { version?: string }
+      const v = desktopPkg.version?.trim()
+      if (v) return v
+    } catch {
+      /* 回退到 frontend */
+    }
+  }
+  return pkg.version
+}
+
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_VERSION__: JSON.stringify(resolveInjectedAppVersion()),
   },
   // Capacitor / Electron 本地文件加载时需相对资源路径
   base: isCapacitorBundle || isElectronBundle ? './' : '/',

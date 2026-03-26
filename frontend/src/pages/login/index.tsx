@@ -18,7 +18,7 @@ export default function LoginPage() {
 
     // API 根地址由构建期 VITE_ERP_PRODUCTION_ORIGIN、启动时 bootstrap、本机已存配置决定，无需在登录页填写
     applyErpApiBaseFromStorage()
-    login({ username, password })
+    login({ username, password, remember })
   }
 
   return (
@@ -205,9 +205,12 @@ export default function LoginPage() {
                 className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
               />
               <label className="text-sm text-slate-600 dark:text-slate-400" htmlFor="remember">
-                30 天内保持登录状态
+                在本机记住登录（关闭应用后仍保持登录）
               </label>
             </div>
+            <p className="text-xs text-slate-500 dark:text-slate-500">
+              不勾选则关闭应用后需重新输入密码。
+            </p>
 
             {/* 提交按钮 */}
             <button

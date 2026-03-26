@@ -26,6 +26,36 @@ export function normalizeApiBase(raw: string): string {
 }
 
 /**
+ * 仅本机 localhost / 127.0.0.1 的 Vite :5173/:4173。
+ * 在 Electron 安装包内无效（无本机 Vite）。局域网 IP 的 :5173（如 192.168.x.x）是访问 Mac 上 Vite 代理，应保留。
+ */
+export function isStaleLocalViteProxyOrigin(raw: string): boolean {
+  const n = normalizeApiBase(raw)
+  if (!n) return false
+  try {
+    const u = new URL(n)
+    const p = u.port || (u.protocol === 'https:' ? '443' : '80')
+    if (p !== '5173' && p !== '4173') return false
+    const h = u.hostname.toLowerCase()
+    return h === 'localhost' || h === '127.0.0.1'
+  } catch {
+    return false
+  }
+}
+
+/** 安装包启动时移除误同步的「本机」Vite 地址，避免连错 */
+export function clearElectronStaleViteOrigins(): void {
+  if (import.meta.env.VITE_ELECTRON !== '1') return
+  if (typeof localStorage === 'undefined') return
+  for (const key of [API_BASE_STORAGE_KEY, LEGACY_ERP_ORIGIN_KEY]) {
+    const raw = localStorage.getItem(key)?.trim()
+    if (raw && isStaleLocalViteProxyOrigin(raw)) {
+      localStorage.removeItem(key)
+    }
+  }
+}
+
+/**
  * 按当前页面 hostname 推断默认 API 根：
  * - Electron / file://：页面无 hostname，优先 VITE_ERP_PRODUCTION_ORIGIN（打包时注入），否则 localhost:3000
  * - Vite dev(5173) / preview(4173)：统一用当前页面 origin，API 走 /api 代理（局域网用 Mac IP 打开时勿直连 :3000，否则连到访问者本机或未监听端口）
@@ -127,11 +157,17 @@ export function getApiBase(): string {
   const v = localStorage.getItem(API_BASE_STORAGE_KEY)?.trim()
   if (v) {
     const n = normalizeApiBase(v)
+    if (n && import.meta.env.VITE_ELECTRON === '1' && isStaleLocalViteProxyOrigin(v)) {
+      return getDynamicDefaultApi()
+    }
     return n || getDynamicDefaultApi()
   }
   const leg = localStorage.getItem(LEGACY_ERP_ORIGIN_KEY)?.trim()
   if (leg) {
     const n = normalizeApiBase(leg)
+    if (n && import.meta.env.VITE_ELECTRON === '1' && isStaleLocalViteProxyOrigin(leg)) {
+      return getDynamicDefaultApi()
+    }
     if (n) return n
   }
   return getDynamicDefaultApi()
@@ -160,11 +196,19 @@ export function getEffectiveApiOrigin(): string | null {
   const v = localStorage.getItem(API_BASE_STORAGE_KEY)?.trim()
   if (v) {
     const n = normalizeApiBase(v)
+    if (import.meta.env.VITE_ELECTRON === '1' && isStaleLocalViteProxyOrigin(v)) {
+      const d = normalizeApiBase(getDynamicDefaultApi())
+      return d || null
+    }
     return n || null
   }
   const leg = localStorage.getItem(LEGACY_ERP_ORIGIN_KEY)?.trim()
   if (leg) {
     const n = normalizeApiBase(leg)
+    if (import.meta.env.VITE_ELECTRON === '1' && isStaleLocalViteProxyOrigin(leg)) {
+      const d = normalizeApiBase(getDynamicDefaultApi())
+      return d || null
+    }
     if (n) return n
   }
   if (!isFileProtocol()) return null

@@ -63,7 +63,7 @@ export default function PdaLoginPage() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!username.trim() || !password.trim()) return
-    login({ username, password })
+    login({ username, password, remember: true })
   }
 
   return (

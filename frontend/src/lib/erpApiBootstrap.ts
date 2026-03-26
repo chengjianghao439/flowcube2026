@@ -3,6 +3,7 @@
  */
 import apiClient from '@/api/client'
 import {
+  clearElectronStaleViteOrigins,
   collectErpApiFallbackCandidates,
   probeErpApiOrigin,
   probeRelativeErpApi,
@@ -11,6 +12,7 @@ import {
 import { applyErpApiBaseFromStorage, isFileProtocol } from '@/lib/apiOrigin'
 
 export async function bootstrapErpApiConnection(): Promise<void> {
+  clearElectronStaleViteOrigins()
   applyErpApiBaseFromStorage()
 
   if (!isFileProtocol()) {

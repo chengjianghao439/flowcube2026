@@ -60,8 +60,14 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
         <p className="text-base font-medium text-destructive">无法连接服务器，请检查地址与网络</p>
+        <p className="max-w-md break-all font-mono text-xs text-muted-foreground">
+          正在连接：<span className="text-foreground">{origin}</span>
+        </p>
         <p className="max-w-md text-xs text-muted-foreground">
-          当前保存的 API 地址无法访问 /api/health。请确认后端已启动，且 CORS 允许桌面端（Origin 为 null）。可在任意界面按{' '}
+          若填的是本机 <code className="rounded border px-0.5">localhost:5173</code>，安装包会改回默认；局域网{' '}
+          <code className="rounded border px-0.5">192.168.x.x:5173</code> 表示连 Mac 上 Vite 代理，可保留。请确认后端已启动，服务器上设置{' '}
+          <code className="rounded border px-0.5">CORS_REFLECT=1</code> 或{' '}
+          <code className="rounded border px-0.5">CORS_ORIGIN=*</code> 以允许桌面端（Origin 为 null）。可按{' '}
           <kbd className="rounded border px-1">Ctrl</kbd>+<kbd className="rounded border px-1">Shift</kbd>+
           <kbd className="rounded border px-1">S</kbd> 修改 API 根地址。
         </p>

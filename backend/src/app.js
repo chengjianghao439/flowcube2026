@@ -17,13 +17,28 @@ const app = express()
 // ─── 安全与解析中间件 ─────────────────────────────────────────────────────────
 
 app.use(helmet())
-// Electron 桌面从 file:// 加载时 Origin 常为 null；CORS_ORIGIN=* 或 CORS_REFLECT=1 时回显请求 Origin
-const corsOriginEnv = process.env.CORS_ORIGIN
+// Electron 桌面请求常见 Origin: null；仅配 CORS_ORIGIN=http://localhost:5173 会拒绝桌面端
+const corsOriginEnv = (process.env.CORS_ORIGIN || '').trim()
 const corsReflect = process.env.CORS_REFLECT === '1' || corsOriginEnv === '*'
+const isProd = process.env.NODE_ENV === 'production'
+const allowNullOrigin =
+  corsReflect ||
+  corsOriginEnv === '*' ||
+  process.env.CORS_ALLOW_NULL_ORIGIN === '1' ||
+  (!isProd && process.env.CORS_ALLOW_NULL_ORIGIN !== '0')
+const staticAllowed = corsOriginEnv || 'http://localhost:5173'
 app.use(cors({
   origin: corsReflect
     ? true
-    : (corsOriginEnv || 'http://localhost:5173'),
+    : (origin, callback) => {
+        if (!origin) {
+          return callback(null, allowNullOrigin)
+        }
+        if (origin === staticAllowed) {
+          return callback(null, true)
+        }
+        return callback(null, false)
+      },
   credentials: true,
 }))
 app.use(express.json({ limit: '10mb' }))
