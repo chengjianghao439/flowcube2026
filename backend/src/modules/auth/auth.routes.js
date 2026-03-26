@@ -1,9 +1,23 @@
 const { Router } = require('express')
+const rateLimit = require('express-rate-limit')
 const { z } = require('zod')
 const authController = require('./auth.controller')
 const { authMiddleware } = require('../../middleware/auth')
 
 const router = Router()
+
+const loginWindowMs = Number(process.env.AUTH_LOGIN_WINDOW_MS || `${15 * 60 * 1000}`)
+const loginMaxPerIp = Number(process.env.AUTH_LOGIN_MAX_PER_IP || '300')
+
+const loginLimiter = rateLimit({
+  windowMs: Number.isFinite(loginWindowMs) && loginWindowMs > 0 ? loginWindowMs : 15 * 60 * 1000,
+  max: Number.isFinite(loginMaxPerIp) && loginMaxPerIp > 0 ? loginMaxPerIp : 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ success: false, message: '登录尝试过于频繁，请稍后再试', data: null })
+  },
+})
 
 const loginSchema = z.object({
   username: z.string().min(1, '账号不能为空'),
@@ -22,8 +36,8 @@ function validateBody(schema) {
   }
 }
 
-// POST /api/auth/login — 公开接口
-router.post('/login', validateBody(loginSchema), authController.login)
+// POST /api/auth/login — 公开接口（限流；反代后需 TRUST_PROXY=1 以便按真实 IP 计数）
+router.post('/login', loginLimiter, validateBody(loginSchema), authController.login)
 
 // GET /api/auth/me — 需要认证
 router.get('/me', authMiddleware, authController.getMe)

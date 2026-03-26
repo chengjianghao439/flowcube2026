@@ -8,19 +8,40 @@
  *
  * 每轮结束后全局一致性校验（容器/库存/预占三不变量）
  *
+ * export TEST_DB_PASSWORD='你的MySQL密码'
  * node tests/concurrency.stress.test.js
+ *
+ * 可选：TEST_DB_HOST、TEST_DB_USER、TEST_DB_NAME；API：TEST_API_HOST、TEST_API_PORT
  */
 
 'use strict'
 
+const path = require('path')
+
 // ─── 依赖 ────────────────────────────────────────────────────────────────────
 
-const mysql2 = require('/Users/chengjianghao/flowcube/backend/node_modules/mysql2/promise')
+const mysql2 = require(path.join(__dirname, '..', 'backend', 'node_modules', 'mysql2', 'promise'))
 
 // ─── 配置 ────────────────────────────────────────────────────────────────────
 
-const BASE    = 'http://localhost:3000'
-const DB_CFG  = { host: '127.0.0.1', user: 'root', password: '1513cheng', database: 'flowcube' }
+const TEST_DB_PASSWORD = process.env.TEST_DB_PASSWORD
+if (!TEST_DB_PASSWORD) {
+  process.stderr.write(
+    '❌ 未设置 TEST_DB_PASSWORD。示例：export TEST_DB_PASSWORD=你的本地MySQL密码\n',
+  )
+  process.exit(1)
+}
+
+const API_HOST = process.env.TEST_API_HOST || 'localhost'
+const API_PORT = Number(process.env.TEST_API_PORT || '3000')
+const BASE = `http://${API_HOST}:${API_PORT}`
+
+const DB_CFG = {
+  host: process.env.TEST_DB_HOST || '127.0.0.1',
+  user: process.env.TEST_DB_USER || 'root',
+  password: TEST_DB_PASSWORD,
+  database: process.env.TEST_DB_NAME || 'flowcube',
+}
 const ROUNDS  = 50       // 每个场景循环次数
 const DELAY_MIN = 10     // 最小延迟 ms
 const DELAY_MAX = 100    // 最大延迟 ms

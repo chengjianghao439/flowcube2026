@@ -141,13 +141,17 @@ try {
 }
 
 app.get(/^\/downloads\/?$/, (req, res) => {
+  // 生产环境关闭目录列举，避免暴露文件名与路径信息；直链 /downloads/*.exe 仍由 static 提供
+  if (isProd) {
+    return res.status(404).json({ success: false, message: '接口不存在', data: null })
+  }
   try {
     const files = fs.readdirSync(downloadsPath).filter((n) => !n.startsWith('.'))
     res.set('Cache-Control', 'no-store')
     res.json({
       success: true,
       message: 'ok',
-      data: { path: downloadsPath, files },
+      data: { files },
     })
   } catch (e) {
     res.status(500).json({ success: false, message: e.message, data: null })

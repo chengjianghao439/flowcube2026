@@ -22,17 +22,37 @@
  *
  * 运行方式：
  *   cd /Users/chengjianghao/flowcube
+ *   export TEST_DB_PASSWORD='你的MySQL密码'
  *   node tests/integration.test.js
+ *
+ * 可选：TEST_DB_HOST、TEST_DB_USER、TEST_DB_NAME、TEST_API_HOST、TEST_API_PORT
  */
 
 'use strict'
 
+const path = require('path')
 const http = require('http')
 
 // ─── 配置 ───────────────────────────────────────────────────────────────────
 
-const BASE    = 'http://localhost:3000'
-const DB_CFG  = { host: '127.0.0.1', user: 'root', password: '1513cheng', database: 'flowcube' }
+const TEST_DB_PASSWORD = process.env.TEST_DB_PASSWORD
+if (!TEST_DB_PASSWORD) {
+  process.stderr.write(
+    '❌ 未设置 TEST_DB_PASSWORD。示例：export TEST_DB_PASSWORD=你的本地MySQL密码\n',
+  )
+  process.exit(1)
+}
+
+const API_HOST = process.env.TEST_API_HOST || 'localhost'
+const API_PORT = Number(process.env.TEST_API_PORT || '3000')
+const BASE = `http://${API_HOST}:${API_PORT}`
+
+const DB_CFG = {
+  host: process.env.TEST_DB_HOST || '127.0.0.1',
+  user: process.env.TEST_DB_USER || 'root',
+  password: TEST_DB_PASSWORD,
+  database: process.env.TEST_DB_NAME || 'flowcube',
+}
 const TEST_PURCHASE_QTY = 50    // 采购入库数量
 const TEST_SALE_QTY     = 20    // 销售出库数量
 const TEST_TRANSFER_QTY = 10    // 调拨数量
@@ -63,8 +83,8 @@ async function req(method, path, body, authToken) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : null
     const options = {
-      hostname: 'localhost',
-      port: 3000,
+      hostname: API_HOST,
+      port: API_PORT,
       path,
       method,
       headers: {
@@ -115,7 +135,7 @@ async function main() {
   // ── 初始化数据库连接 ────────────────────────────────────────────────────────
   try {
     // 动态加载 mysql2（使用 backend 目录下的依赖）
-    const mysql2 = require('/Users/chengjianghao/flowcube/backend/node_modules/mysql2/promise')
+    const mysql2 = require(path.join(__dirname, '..', 'backend', 'node_modules', 'mysql2', 'promise'))
     db = await mysql2.createConnection(DB_CFG)
     log('📦 数据库连接成功\n')
   } catch (e) {
