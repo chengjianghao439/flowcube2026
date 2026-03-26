@@ -6,16 +6,46 @@ const { successResponse } = require('../../utils/response')
 const router = express.Router()
 
 /**
+ * GitHub Release 直链 / CDN：境内用户直连常失败，应由同域 /downloads/ 提供安装包。
+ * 设为 1 时仍向客户端返回 GitHub 绝对地址（适合境外或已可直连 GitHub 的环境）。
+ */
+const USE_GITHUB_DIRECT_URL = String(process.env.APP_UPDATE_USE_GITHUB_DIRECT_URL || '').trim() === '1'
+
+function isGitHubReleaseOrCdnUrl(urlString) {
+  try {
+    const u = new URL(urlString)
+    if (u.hostname === 'github.com' && u.pathname.includes('/releases/download/')) return true
+    if (u.hostname.endsWith('githubusercontent.com')) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
+/**
  * 为 Electron / 客户端生成可请求的绝对下载地址（相对路径或仅 filename 时补全）。
+ * 从 GitHub API 拿到的 browser_download_url 默认不直接下发，改为同域 /downloads/（需服务器已部署 exe）。
  */
 function absolutizeUpdateAssetUrl(req, url, filename) {
   let pathPart = null
   const rawUrl = typeof url === 'string' ? url.trim() : ''
+  const fn = filename && String(filename).trim() ? String(filename).trim() : ''
+
   if (rawUrl) {
-    if (/^https?:\/\//i.test(rawUrl)) return rawUrl
-    pathPart = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`
-  } else if (filename && String(filename).trim()) {
-    pathPart = `/downloads/${encodeURIComponent(String(filename).trim())}`
+    if (/^https?:\/\//i.test(rawUrl)) {
+      const allowGithub = USE_GITHUB_DIRECT_URL || !isGitHubReleaseOrCdnUrl(rawUrl)
+      if (allowGithub) return rawUrl
+      // 有 filename 时走自有域名静态文件，避免客户端直连 GitHub
+      if (fn) {
+        pathPart = `/downloads/${encodeURIComponent(fn)}`
+      } else {
+        return rawUrl
+      }
+    } else {
+      pathPart = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`
+    }
+  } else if (fn) {
+    pathPart = `/downloads/${encodeURIComponent(fn)}`
   }
   if (!pathPart) return null
 

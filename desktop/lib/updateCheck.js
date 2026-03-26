@@ -97,16 +97,21 @@ function isValidDownloadUrl(url) {
 
 /**
  * 解析最终下载 URL：优先接口绝对地址；否则相对路径拼 origin；再用 filename 拼 /downloads/
+ * 若接口返回 GitHub 直链，改为同域 /downloads/，避免境内网络无法直连 GitHub。
  */
 function resolveDownloadUrl(payload, origin) {
   const base = String(origin || '').replace(/\/$/, '')
   let url = typeof payload.url === 'string' ? payload.url.trim() : ''
+  const fn = typeof payload.filename === 'string' ? payload.filename.trim() : ''
+  if (isValidDownloadUrl(url) && isGitHubReleaseOrCdnUrl(url) && fn && base) {
+    const sameOrigin = `${base}/downloads/${encodeURIComponent(fn)}`
+    if (isValidDownloadUrl(sameOrigin)) return sameOrigin
+  }
   if (isValidDownloadUrl(url)) return url
   if (url.startsWith('/')) {
     const built = `${base}${url}`
     if (isValidDownloadUrl(built)) return built
   }
-  const fn = typeof payload.filename === 'string' ? payload.filename.trim() : ''
   if (fn && base) {
     const built = `${base}/downloads/${encodeURIComponent(fn)}`
     if (isValidDownloadUrl(built)) return built
