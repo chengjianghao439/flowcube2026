@@ -1,8 +1,7 @@
 /**
- * WorkspaceTabs — 内联标签栏
+ * WorkspaceTabs — 工作区标签栏
  *
- * 设计为在 TopNav 单行内使用（flex-1 子元素）。
- * 不带外层高度或 border-b，由父容器控制垂直居中。
+ * 位于 AppLayout 第二行（TopNav 下方），独占宽度；父级控制背景与边框。
  *
  * 行为：
  * - 标签溢出时横向滚动（scrollbar-none）
@@ -119,7 +118,7 @@ export function WorkspaceTabs() {
   }
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-0">
+    <div className="flex w-full min-w-0 items-center gap-0">
       {/* 可横向滚动的标签列表 */}
       <div
         ref={scrollRef}

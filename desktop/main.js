@@ -1,6 +1,6 @@
 console.log('🔥 当前 main.js 已加载')
 
-const { app, BrowserWindow, dialog } = require('electron')
+const { app, BrowserWindow, dialog, Menu } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
@@ -126,6 +126,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // 去掉默认「文件 / 编辑 / 视图…」等系统菜单栏（Windows/Linux）；界面以 Web 为准
+  Menu.setApplicationMenu(null)
+
   createWindow()
 
   console.log('🚀 应用已启动')

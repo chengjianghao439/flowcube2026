@@ -11,7 +11,6 @@ import { cn } from '@/lib/utils'
 import { usePermission } from '@/hooks/usePermission'
 import { useWorkspaceStore, PATH_TITLES } from '@/store/workspaceStore'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
-import { toast } from '@/lib/toast'
 import type { PermCode } from '@/lib/permissions'
 
 export type NavChildItem = { label: string; path: string; perm: PermCode }
@@ -246,19 +245,14 @@ export function TopNav() {
   const { can } = usePermission()
   const navigate = useNavigate()
   const location = useLocation()
-  const { addTab, setActive } = useWorkspaceStore()
+  const { addTab } = useWorkspaceStore()
   const pathname = location.pathname
 
   const navigateWithGuard = useCallback(
     (path: string) => {
       function doNavigate() {
         const title = PATH_TITLES[path] ?? path
-        const ok = addTab({ key: path, title, path })
-        if (!ok) {
-          const existing = useWorkspaceStore.getState().tabs.find((t) => t.key === path)
-          if (existing) setActive(path)
-          else toast.warning('标签已达上限（10个），请先关闭一些标签')
-        }
+        addTab({ key: path, title, path })
         navigate(path)
       }
 
@@ -275,7 +269,7 @@ export function TopNav() {
 
       doNavigate()
     },
-    [addTab, navigate, setActive]
+    [addTab, navigate]
   )
 
   const nodes: ReactNode[] = []

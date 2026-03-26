@@ -54,12 +54,10 @@ export const HOME_TAB: WorkspaceTab = {
   closable: false,
 }
 
-const MAX_TABS = 10
-
 interface WorkspaceState {
   tabs: WorkspaceTab[]
   activeKey: string
-  /** 添加标签，若已存在则激活；超出上限返回 false */
+  /** 添加标签，若已存在则激活并返回 true */
   addTab: (tab: Omit<WorkspaceTab, 'closable'>) => boolean
   /** 关闭标签，返回关闭后应激活的 key */
   removeTab: (key: string) => string
@@ -80,7 +78,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           set({ activeKey: tab.key })
           return true
         }
-        if (tabs.length >= MAX_TABS) return false
         set({
           tabs: [...tabs, { ...tab, closable: true }],
           activeKey: tab.key,

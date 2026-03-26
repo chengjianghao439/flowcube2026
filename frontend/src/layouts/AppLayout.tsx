@@ -12,25 +12,29 @@ export default function AppLayout() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       {/*
-        顶栏：Logo + 水平 TopNav + 工作区标签 + 工具区（现代 SaaS）
+        顶栏两行：① Logo + TopNav（系统菜单）+ 工具区 ② 工作区标签（独占一行，避免与菜单挤在同一行）
       */}
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
-        <div className="flex shrink-0 items-center pr-2">
-          <span className="text-base font-bold tracking-tight text-foreground">
-            FlowCube ERP
-          </span>
+      <header className="flex shrink-0 flex-col border-b border-border bg-background">
+        <div className="flex h-12 shrink-0 items-center gap-2 px-3">
+          <div className="flex shrink-0 items-center pr-1">
+            <span className="text-base font-bold tracking-tight text-foreground">
+              FlowCube ERP
+            </span>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <TopNav />
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3">
+            <GlobalSearch />
+            <NotificationBell />
+            <UserMenu />
+          </div>
         </div>
 
-        <TopNav />
-
-        <div className="flex min-w-0 flex-1 items-center self-stretch px-1">
+        <div className="flex min-h-9 w-full min-w-0 items-center border-t border-border/60 bg-muted/20 px-2 py-0.5">
           <WorkspaceTabs />
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3">
-          <GlobalSearch />
-          <NotificationBell />
-          <UserMenu />
         </div>
       </header>
 
