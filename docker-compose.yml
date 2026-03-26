@@ -40,8 +40,13 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
       JWT_EXPIRES_IN: 7d
       CORS_ORIGIN: http://localhost
+      # 桌面端更新：同域下载安装包（与仓库根 .env 中 APP_PUBLIC_URL 一致）
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
     ports:
       - "3000:3000"
+    volumes:
+      # 安装包 .exe 不入库，挂到宿主机便于上传/替换
+      - ./backend/downloads:/app/downloads
 
   frontend:
     build:
