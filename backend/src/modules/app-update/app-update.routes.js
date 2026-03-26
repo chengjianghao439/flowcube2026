@@ -74,6 +74,25 @@ const GITHUB_OWNER = process.env.GITHUB_OWNER || 'chengjianghao439'
 const GITHUB_REPO = process.env.GITHUB_REPO || 'flowcube2026'
 const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
 
+/** 去掉 GitHub 自动生成的 Full Changelog / compare 链接等多余行，便于仪表盘展示 */
+function sanitizeReleaseNotes(body) {
+  if (!body || typeof body !== 'string') return ''
+  return body
+    .split(/\r?\n/)
+    .filter((line) => {
+      const s = line.trim()
+      if (!s) return true
+      if (/^\*\*full changelog\*\*/i.test(s)) return false
+      if (/full changelog/i.test(s)) return false
+      if (/github\.com\/[^/]+\/[^/]+\/compare\//i.test(s)) return false
+      if (/^compare:\s*https?:/i.test(s)) return false
+      return true
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 /**
  * 从 GitHub API 获取最新 release 信息
  */
@@ -110,9 +129,11 @@ async function fetchFromGitHub() {
           const asset = exeAsset || zipAsset
           const url = asset?.browser_download_url || null
           
-          // 使用 release body 作为 notes，如果没有则使用 tag
-          const notes = release.body || `FlowCube ERP v${version} 发布`
-          
+          // 使用 release body；净化后过短则仅占位（后续可与本地 manifest 合并）
+          const rawBody = release.body || ''
+          let notes = sanitizeReleaseNotes(rawBody)
+          if (!notes) notes = `FlowCube ERP v${version} 已发布`
+
           resolve({
             version,
             url,
@@ -158,20 +179,22 @@ async function fetchFromLocal() {
 router.get('/latest', async (req, res, next) => {
   try {
     let data
-    
+    let local = null
+    try {
+      local = await fetchFromLocal()
+    } catch (_) { /* 本地无 manifest 时忽略 */ }
+
     // 优先尝试从 GitHub 获取
     try {
       data = await fetchFromGitHub()
       console.log('[app-update] Fetched from GitHub:', data.version)
     } catch (githubErr) {
       console.warn('[app-update] GitHub fetch failed:', githubErr.message)
-      
-      // 回退到本地
-      try {
-        data = await fetchFromLocal()
-        console.log('[app-update] Fetched from local:', data.version)
-      } catch (localErr) {
-        console.error('[app-update] Local fetch also failed:', localErr.message)
+
+      if (local && local.version) {
+        data = local
+        console.log('[app-update] Using local manifest:', data.version)
+      } else {
         return res.status(404).json({
           success: false,
           message: '暂无发布版本',
@@ -179,7 +202,7 @@ router.get('/latest', async (req, res, next) => {
         })
       }
     }
-    
+
     if (!data.version) {
       return res.status(500).json({
         success: false,
@@ -188,11 +211,27 @@ router.get('/latest', async (req, res, next) => {
       })
     }
 
+    let notes = sanitizeReleaseNotes(data.notes || '')
+    if (
+      local &&
+      local.version &&
+      String(local.version) === String(data.version) &&
+      local.notes &&
+      String(local.notes).trim().length > notes.length
+    ) {
+      notes = String(local.notes).trim()
+    } else if ((!notes || notes.length < 40) && local && local.notes && String(local.notes).trim()) {
+      const ln = String(local.notes).trim()
+      if (!local.version || String(local.version) === String(data.version)) {
+        notes = ln
+      }
+    }
+
     const absoluteUrl = absolutizeUpdateAssetUrl(req, data.url, data.filename)
 
     return successResponse(res, {
       version: data.version,
-      notes: data.notes || '',
+      notes: notes || '',
       url: absoluteUrl,
       filename: data.filename || null,
     }, 'ok')

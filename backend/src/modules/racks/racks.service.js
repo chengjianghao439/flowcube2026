@@ -86,7 +86,14 @@ async function create(data) {
   )
   const newId = result.insertId
   const barcode = `RCK${String(newId).padStart(6, '0')}`
-  await pool.query('UPDATE warehouse_racks SET barcode = ? WHERE id = ?', [barcode, newId])
+  try {
+    await pool.query('UPDATE warehouse_racks SET barcode = ? WHERE id = ?', [barcode, newId])
+  } catch (e) {
+    if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column ['`]?barcode/i.test(String(e.message))) {
+      throw new AppError('数据库缺少货架条码字段，请先执行迁移 backend/src/database/051_warehouse_racks_barcode.sql', 503)
+    }
+    throw e
+  }
   return findById(newId)
 }
 
@@ -114,22 +121,177 @@ async function update(id, data) {
   return findById(id)
 }
 
+/**
+ * 校验货架可删：库位表 rack 字段与货架 code 一致时视为绑定；相关库位上仍有在库容器则禁止删除
+ */
+async function assertRackSafeToDelete(rack) {
+  const wid = Number(rack.warehouseId)
+  const rackCode = String(rack.code || '').trim()
+  if (!wid || !rackCode) throw new AppError('货架数据不完整', 400)
+
+  const [[locRow]] = await pool.query(
+    `SELECT COUNT(*) AS c FROM warehouse_locations
+     WHERE warehouse_id = ? AND deleted_at IS NULL
+       AND rack IS NOT NULL AND TRIM(rack) = ?`,
+    [wid, rackCode],
+  )
+  const locCnt = Number(locRow.c)
+  if (locCnt > 0) {
+    throw new AppError(
+      `无法删除：仍有 ${locCnt} 个库位的「货架」字段指向编码「${rackCode}」，请先调整库位后再删`,
+      400,
+    )
+  }
+
+  const [[cntRow]] = await pool.query(
+    `SELECT COUNT(*) AS c
+     FROM inventory_containers c
+     JOIN warehouse_locations wl ON wl.id = c.location_id AND wl.deleted_at IS NULL
+     WHERE c.warehouse_id = ? AND c.deleted_at IS NULL AND c.status = 1 AND c.remaining_qty > 0
+       AND wl.rack IS NOT NULL AND TRIM(wl.rack) = ?`,
+    [wid, rackCode],
+  )
+  const cnt = Number(cntRow.c)
+  if (cnt > 0) {
+    throw new AppError(
+      `无法删除：该货架相关库位上仍有 ${cnt} 个在库容器（含商品库存），请先移库或出库后再删`,
+      400,
+    )
+  }
+}
+
 async function softDelete(id) {
-  await findById(id)
+  const rack = await findById(id)
+  await assertRackSafeToDelete(rack)
   await pool.query(
     'UPDATE warehouse_racks SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL',
     [id],
   )
 }
 
+/**
+ * 新建货架前扫描提示：RCK 冲突、PRD/CNT/商品编码 与 rack 维度上在库关系
+ */
+async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }) {
+  const wid = Number(warehouseId)
+  const code = String(rackCode || '').trim()
+  const raw = String(scanRaw || '').trim()
+  if (!wid || !code || !raw) {
+    return { kind: 'invalid', message: '请先选择仓库、填写货架编码，再扫描' }
+  }
+
+  const up = raw.toUpperCase()
+
+  const rck = /^RCK(\d+)$/i.exec(raw)
+  if (rck) {
+    try {
+      const [[existing]] = await pool.query(
+        `SELECT id, code FROM warehouse_racks WHERE UPPER(barcode) = ? AND deleted_at IS NULL`,
+        [up],
+      )
+      if (existing && (!excludeRackId || Number(existing.id) !== Number(excludeRackId))) {
+        return {
+          kind:    'warn',
+          message: `该货架条码已存在（货架编码：${existing.code}），请勿重复使用`,
+        }
+      }
+    } catch (e) {
+      if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column ['`]?barcode/i.test(String(e.message))) {
+        return { kind: 'invalid', message: '数据库未迁移货架条码字段，无法校验 RCK' }
+      }
+      throw e
+    }
+    return { kind: 'ok', message: '条码可用；保存后将自动生成 RCK 条码' }
+  }
+
+  const prd = /^PRD(\d+)$/i.exec(raw)
+  if (prd) {
+    const pid = Number(prd[1])
+    const [[cnt]] = await pool.query(
+      `SELECT COUNT(*) AS c FROM inventory_containers c
+       JOIN warehouse_locations wl ON wl.id = c.location_id AND wl.deleted_at IS NULL
+       WHERE c.warehouse_id = ? AND c.product_id = ? AND c.status = 1 AND c.deleted_at IS NULL
+         AND c.remaining_qty > 0 AND wl.rack IS NOT NULL AND TRIM(wl.rack) = ?`,
+      [wid, pid, code],
+    )
+    if (Number(cnt.c) > 0) {
+      return {
+        kind:    'binding',
+        message: `该商品（PRD）在货架编码「${code}」相关库位仍有在库容器，保存前请确认；若删除旧货架需先移库`,
+      }
+    }
+    return { kind: 'ok', message: '未发现该商品在此货架维度上的在库容器' }
+  }
+
+  const cntM = /^CNT(\d+)$/i.exec(raw)
+  if (cntM) {
+    const [[c]] = await pool.query(
+      `SELECT c.barcode, wl.rack FROM inventory_containers c
+       LEFT JOIN warehouse_locations wl ON wl.id = c.location_id AND wl.deleted_at IS NULL
+       WHERE c.warehouse_id = ? AND UPPER(c.barcode) = ? AND c.deleted_at IS NULL`,
+      [wid, up],
+    )
+    if (c && c.rack != null && String(c.rack).trim() === code) {
+      return {
+        kind:    'binding',
+        message: `容器 ${c.barcode} 已位于「货架=${code}」的库位上，请注意与新建货架的关系`,
+      }
+    }
+    if (c && c.rack != null && String(c.rack).trim() !== code) {
+      return {
+        kind: 'ok',
+        message: `容器 ${c.barcode} 所在库位货架字段为「${String(c.rack).trim()}」，与当前编码 ${code} 不一致`,
+      }
+    }
+    return { kind: 'ok', message: '未找到该容器或暂无库位货架信息' }
+  }
+
+  const [[prod]] = await pool.query(
+    'SELECT id, code, name FROM product_items WHERE (code = ? OR CAST(id AS CHAR) = ?) AND deleted_at IS NULL LIMIT 1',
+    [raw, raw],
+  )
+  if (prod) {
+    const [[c2]] = await pool.query(
+      `SELECT COUNT(*) AS c FROM inventory_containers c
+       JOIN warehouse_locations wl ON wl.id = c.location_id AND wl.deleted_at IS NULL
+       WHERE c.warehouse_id = ? AND c.product_id = ? AND c.status = 1 AND c.deleted_at IS NULL
+         AND c.remaining_qty > 0 AND wl.rack IS NOT NULL AND TRIM(wl.rack) = ?`,
+      [wid, prod.id, code],
+    )
+    if (Number(c2.c) > 0) {
+      return {
+        kind:    'binding',
+        message: `商品「${prod.name}」在货架「${code}」相关库位仍有在库，若需调整库存请先移库`,
+      }
+    }
+  }
+
+  return { kind: 'ok', message: '未识别为 RCK/PRD/CNT 或仓库内商品编码，无额外绑定提示' }
+}
+
 async function enqueuePrintLabel(id, { tenantId = 0, userId = null } = {}) {
   await findById(id)
   const { enqueueRackLabelJob } = require('../print-jobs/print-jobs.service')
-  return enqueueRackLabelJob({
+  const job = await enqueueRackLabelJob({
     rackId: id,
     tenantId,
     createdBy: userId,
   })
+  if (!job) return null
+  return {
+    id:          job.id,
+    printerCode: job.printerCode ?? null,
+    printerName: job.printerName ?? null,
+  }
 }
 
-module.exports = { findAll, findActive, findById, create, update, softDelete, enqueuePrintLabel }
+module.exports = {
+  findAll,
+  findActive,
+  findById,
+  create,
+  update,
+  softDelete,
+  scanHint,
+  enqueuePrintLabel,
+}

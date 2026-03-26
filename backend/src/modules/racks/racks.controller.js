@@ -53,12 +53,39 @@ async function remove(req, res, next) {
 
 async function printLabel(req, res, next) {
   try {
-    const job = await racksService.enqueuePrintLabel(parseInt(req.params.id, 10), {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: '无效的货架 ID', data: null })
+    }
+    const slim = await racksService.enqueuePrintLabel(id, {
       tenantId: req.user.tenantId ?? 0,
       userId: req.user.userId,
     })
-    return successResponse(res, { queued: !!job, job: job ?? null }, job ? '已加入打印队列' : '未配置标签机，未创建打印任务')
+    if (!slim) {
+      return successResponse(
+        res,
+        { queued: false, jobId: null, printerCode: null, printerName: null },
+        '未配置标签机或未绑定「库存标签」用途打印机，未创建打印任务',
+      )
+    }
+    return successResponse(
+      res,
+      {
+        queued:      true,
+        jobId:       slim.id,
+        printerCode: slim.printerCode,
+        printerName: slim.printerName,
+      },
+      '已加入打印队列（按打印机管理中「库存标签 / inventory_label」绑定出纸）',
+    )
   } catch (err) { next(err) }
 }
 
-module.exports = { list, listActive, detail, create, update, remove, printLabel }
+async function scanHint(req, res, next) {
+  try {
+    const result = await racksService.scanHint(req.body)
+    return successResponse(res, result, 'ok')
+  } catch (err) { next(err) }
+}
+
+module.exports = { list, listActive, detail, create, update, remove, printLabel, scanHint }

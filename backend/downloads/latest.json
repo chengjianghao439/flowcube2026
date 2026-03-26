@@ -1,5 +1,5 @@
 {
-  "version": "0.3.8",
-  "filename": "FlowCube-ERP-Setup-0.3.8.exe",
-  "notes": "自动更新：优先 GitHub Release；CI 构建后安装包名为无空格形式，与 /downloads 一致"
+  "version": "0.3.9",
+  "filename": "FlowCube-ERP-Setup-0.3.9.exe",
+  "notes": "【v0.3.9 主要更新】\n\n• 货架管理：支持删除；删除前校验库位与在库容器；新增扫码校验（RCK/PRD/CNT/商品编码）。\n• 货架打印：走打印机「库存标签 inventory_label」绑定；修复异常与接口返回。\n• 表格与货架页操作按钮布局优化。\n• 仪表盘版本说明：过滤 GitHub Full Changelog 冗余行，并与本文件 notes 合并展示。\n\n须执行迁移 051（若未做）；详见 docs/releases/v0.3.9.md。"
 }

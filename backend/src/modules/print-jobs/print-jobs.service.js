@@ -550,18 +550,28 @@ async function enqueueRackLabelJob(payload) {
   const rackId = payload?.rackId
   if (!rackId) return null
   const tid = Number(payload.tenantId) >= 0 && Number.isFinite(Number(payload.tenantId)) ? Number(payload.tenantId) : 0
-  const [[row]] = await pool.query(
-    `SELECT r.id, r.barcode, r.code, r.zone, r.name, r.warehouse_id
-     FROM warehouse_racks r
-     WHERE r.id = ? AND r.deleted_at IS NULL`,
-    [rackId],
-  )
+  let row
+  try {
+    const [rows] = await pool.query(
+      `SELECT r.id, r.barcode, r.code, r.zone, r.name, r.warehouse_id
+       FROM warehouse_racks r
+       WHERE r.id = ? AND r.deleted_at IS NULL`,
+      [rackId],
+    )
+    row = rows[0]
+  } catch (e) {
+    if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column ['`]?barcode/i.test(String(e.message))) {
+      throw new AppError('数据库缺少 warehouse_racks.barcode，请执行迁移 051_warehouse_racks_barcode.sql', 503)
+    }
+    throw e
+  }
   if (!row || !row.barcode) return null
   const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
+  // 与打印机管理中「库存标签」绑定一致（inventory_label），勿单独使用未绑定的 rack_label
   const resolved = await resolvePrinterForJob({
     tenantId: tid,
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : undefined,
-    jobType: 'rack_label',
+    jobType: 'inventory_label',
     contentType: 'zpl',
   })
   let printerId = resolved.printerId
@@ -577,19 +587,26 @@ async function enqueueRackLabelJob(payload) {
     zone: row.zone,
     name: row.name,
   })
-  return create({
-    printerId,
-    dispatchReason,
-    tenantId: tid,
-    warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
-    jobType: 'rack_label',
-    title: `货架标 ${row.barcode}`,
-    contentType: 'zpl',
-    content: zpl,
-    copies: 1,
-    createdBy: payload.createdBy ?? null,
-    jobUniqueKey: payload.jobUniqueKey ?? null,
-  })
+  try {
+    return await create({
+      printerId,
+      dispatchReason,
+      tenantId: tid,
+      warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
+      jobType: 'inventory_label',
+      title: `货架标 ${row.barcode}`,
+      contentType: 'zpl',
+      content: zpl,
+      copies: 1,
+      createdBy: payload.createdBy ?? null,
+      jobUniqueKey: payload.jobUniqueKey ?? null,
+    })
+  } catch (e) {
+    if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/i.test(String(e.message))) {
+      throw new AppError('打印入库失败：数据库字段异常，请先执行迁移或联系管理员', 503)
+    }
+    throw e
+  }
 }
 
 /**

@@ -10,9 +10,10 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { getRacksApi, printRackLabelApi } from '@/api/racks'
+import { getRacksApi, printRackLabelApi, deleteRackApi } from '@/api/racks'
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import DataTable from '@/components/shared/DataTable'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { TableColumn } from '@/types'
 import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
@@ -26,6 +27,7 @@ export default function RacksPage() {
   const [warehouseFilter, setWarehouseFilter] = useState<string>('')
   const [formOpen, setFormOpen] = useState(false)
   const [editItem, setEditItem] = useState<Rack | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Rack | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['racks', keyword, warehouseFilter, page],
@@ -46,11 +48,22 @@ export default function RacksPage() {
   const printMut = useMutation({
     mutationFn: (id: number) => printRackLabelApi(id),
     onSuccess: (d) => {
-      if (d.queued) toast.success('已加入打印队列')
-      else toast.warning('未配置标签机，未创建打印任务')
+      if (d.queued) toast.success(d.printerCode ? `已入队 → ${d.printerCode}` : '已加入打印队列')
+      else toast.warning('未绑定「库存标签」打印机或标签机离线，未创建任务')
     },
     onError: (e: unknown) =>
       toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '打印失败'),
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => deleteRackApi(id),
+    onSuccess: () => {
+      toast.success('已删除')
+      setDeleteTarget(null)
+      qc.invalidateQueries({ queryKey: ['racks'] })
+    },
+    onError: (e: unknown) =>
+      toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败'),
   })
 
   function handleSearch() {
@@ -79,23 +92,32 @@ export default function RacksPage() {
       ),
     },
     {
-      key: 'id',
+      key: 'actions',
       title: '操作',
-      width: 160,
+      width: 220,
       render: (_, row) => (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => { setEditItem(row); setFormOpen(true) }}>
+        <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button size="sm" variant="outline" className="w-full sm:w-auto shrink-0" onClick={() => { setEditItem(row); setFormOpen(true) }}>
             编辑
           </Button>
           <Button
             size="sm"
             variant="secondary"
-            className="gap-1"
+            className="w-full gap-1 sm:w-auto shrink-0"
             disabled={!row.barcode || printMut.isPending}
             onClick={() => printMut.mutate(row.id)}
           >
-            <Printer className="h-3.5 w-3.5" />
+            <Printer className="h-3.5 w-3.5 shrink-0" />
             打印标
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="w-full sm:w-auto shrink-0"
+            disabled={deleteMut.isPending}
+            onClick={() => setDeleteTarget(row)}
+          >
+            删除
           </Button>
         </div>
       ),
@@ -147,6 +169,21 @@ export default function RacksPage() {
         open={formOpen}
         onClose={() => { setFormOpen(false); setEditItem(null); qc.invalidateQueries({ queryKey: ['racks'] }) }}
         editItem={editItem}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="删除货架"
+        description={
+          deleteTarget
+            ? `确定删除货架「${deleteTarget.code}」吗？若库位或库存仍指向该货架编码，将禁止删除。`
+            : ''
+        }
+        variant="destructive"
+        confirmText="删除"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        loading={deleteMut.isPending}
       />
     </div>
   )

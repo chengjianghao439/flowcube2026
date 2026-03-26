@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useMutation } from '@tanstack/react-query'
 import { useCreateRack, useUpdateRack } from '@/hooks/useRacks'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
-import { printRackLabelApi } from '@/api/racks'
+import { printRackLabelApi, scanRackHintApi } from '@/api/racks'
 import { toast } from '@/lib/toast'
 import { RACK_STATUS_OPTIONS, type Rack } from '@/types/racks'
 
@@ -27,6 +27,7 @@ const defaultForm = {
 export default function RackFormDialog({ open, onClose, editItem }: Props) {
   const isEdit = !!editItem
   const [form, setForm] = useState(defaultForm)
+  const [scanRaw, setScanRaw] = useState('')
 
   const { data: warehouses } = useWarehousesActive()
   const { mutate: create, isPending: creating, error: createError } = useCreateRack()
@@ -42,7 +43,24 @@ export default function RackFormDialog({ open, onClose, editItem }: Props) {
       else toast.warning('未配置标签机，未创建打印任务')
     },
     onError: (e: unknown) =>
-      toast.error((e as { message?: string })?.message ?? '打印失败'),
+      toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '打印失败'),
+  })
+
+  const hintMut = useMutation({
+    mutationFn: () =>
+      scanRackHintApi({
+        warehouseId: form.warehouseId,
+        rackCode:    form.code,
+        scanRaw:     scanRaw.trim(),
+        excludeRackId: editItem?.id,
+      }),
+    onSuccess: (res) => {
+      if (res.kind === 'binding' || res.kind === 'warn') toast.warning(res.message)
+      else if (res.kind === 'invalid') toast.error(res.message)
+      else toast.success(res.message)
+    },
+    onError: (e: unknown) =>
+      toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '扫描校验失败'),
   })
   const isPending = creating || updating
   const error = createError || updateError
@@ -62,6 +80,7 @@ export default function RackFormDialog({ open, onClose, editItem }: Props) {
     } else {
       setForm(defaultForm)
     }
+    setScanRaw('')
   }, [editItem, open])
 
   function set(field: string, value: string | number) {
@@ -128,20 +147,66 @@ export default function RackFormDialog({ open, onClose, editItem }: Props) {
           </div>
 
           {isEdit && editItem?.barcode && (
-            <div className="flex flex-wrap items-end justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
-              <div className="space-y-1">
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-1">
                 <Label className="text-xs text-muted-foreground">货架条码</Label>
-                <p className="font-mono text-sm font-semibold tracking-tight">{editItem.barcode}</p>
+                <p className="break-all font-mono text-sm font-semibold tracking-tight">{editItem.barcode}</p>
               </div>
               <Button
                 type="button"
                 size="sm"
                 variant="secondary"
+                className="w-full shrink-0 sm:w-auto"
                 disabled={printMut.isPending}
                 onClick={() => printMut.mutate()}
               >
                 打印货架标
               </Button>
+            </div>
+          )}
+
+          {!isEdit && (
+            <div className="space-y-2 rounded-lg border border-dashed border-border bg-muted/15 px-3 py-3">
+              <Label className="text-xs text-muted-foreground">扫码校验（选填）</Label>
+              <p className="text-xs text-muted-foreground">
+                填写仓库与货架编码后，可扫 RCK / PRD / CNT 或商品编码，检查条码冲突或在库绑定提示。
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  value={scanRaw}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setScanRaw(e.target.value)}
+                  placeholder="扫描或粘贴条码后回车"
+                  disabled={isPending || hintMut.isPending}
+                  className="font-mono text-sm"
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter' && scanRaw.trim()) {
+                      e.preventDefault()
+                      if (!form.warehouseId || !form.code.trim()) {
+                        toast.warning('请先选择仓库并填写货架编码')
+                        return
+                      }
+                      hintMut.mutate()
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full shrink-0 sm:w-40"
+                  disabled={isPending || hintMut.isPending || !form.warehouseId || !form.code.trim()}
+                  onClick={() => {
+                    const s = scanRaw.trim()
+                    if (!s) { toast.warning('请先输入或扫描条码'); return }
+                    if (!form.warehouseId || !form.code.trim()) {
+                      toast.warning('请先选择仓库并填写货架编码')
+                      return
+                    }
+                    hintMut.mutate()
+                  }}
+                >
+                  {hintMut.isPending ? '校验中…' : '校验'}
+                </Button>
+              </div>
             </div>
           )}
 

@@ -35,7 +35,29 @@ export async function deleteRackApi(id: number): Promise<void> {
   await apiClient.delete(`/racks/${id}`)
 }
 
-export async function printRackLabelApi(id: number): Promise<{ queued: boolean; job: unknown }> {
-  const res = await apiClient.post<ApiResponse<{ queued: boolean; job: unknown }>>(`/racks/${id}/print-label`)
+export interface PrintRackLabelResult {
+  queued: boolean
+  jobId: number | null
+  printerCode: string | null
+  printerName: string | null
+}
+
+export async function printRackLabelApi(id: number): Promise<PrintRackLabelResult> {
+  const res = await apiClient.post<ApiResponse<PrintRackLabelResult>>(`/racks/${id}/print-label`)
+  return res.data.data!
+}
+
+export type RackScanHintResult = {
+  kind: 'invalid' | 'ok' | 'warn' | 'binding'
+  message: string
+}
+
+export async function scanRackHintApi(body: {
+  warehouseId: number
+  rackCode: string
+  scanRaw: string
+  excludeRackId?: number
+}): Promise<RackScanHintResult> {
+  const res = await apiClient.post<ApiResponse<RackScanHintResult>>('/racks/scan-hint', body)
   return res.data.data!
 }

@@ -76,7 +76,9 @@ export default function DataTable<T extends object>({
                 <th
                   key={String(col.key)}
                   className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground ${
-                    isAction(String(col.key), col.title) ? 'sticky right-0 bg-muted/30' : ''
+                    isAction(String(col.key), col.title)
+                      ? 'sticky right-0 z-20 min-w-[200px] bg-muted/30 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
+                      : ''
                   }`}
                   style={col.width ? { width: col.width } : undefined}
                 >
@@ -90,9 +92,9 @@ export default function DataTable<T extends object>({
               // Skeleton rows
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b border-border last:border-0">
-                  {selectable && <td className="px-4 h-12" />}
+                  {selectable && <td className="px-4 min-h-12 py-3" />}
                   {columns.map((col) => (
-                    <td key={String(col.key)} className="px-4 h-12">
+                    <td key={String(col.key)} className="px-4 min-h-12 py-3">
                       <div className="h-3.5 w-3/4 animate-pulse rounded bg-muted" />
                     </td>
                   ))}
@@ -115,7 +117,7 @@ export default function DataTable<T extends object>({
                   <tr
                     key={String(row[rowKey])}
                     onDoubleClick={onRowDoubleClick ? () => onRowDoubleClick(row) : undefined}
-                    className={`h-12 border-b border-border last:border-0 transition-colors ${
+                    className={`min-h-12 border-b border-border last:border-0 transition-colors ${
                       isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'
                     } ${onRowDoubleClick ? 'cursor-pointer' : ''}`}
                   >
@@ -133,10 +135,10 @@ export default function DataTable<T extends object>({
                       <td
                         key={String(col.key)}
                         onDoubleClick={isAction(String(col.key), col.title) ? e => e.stopPropagation() : undefined}
-                        className={`px-4 text-foreground ${
+                        className={`px-4 text-foreground align-top ${
                           isAction(String(col.key), col.title)
-                            ? 'sticky right-0 bg-card group-hover:bg-muted/30'
-                            : ''
+                            ? 'sticky right-0 z-10 min-w-[200px] bg-card py-3 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.08)] group-hover:bg-muted/30'
+                            : 'py-3'
                         }`}
                       >
                         {col.render
