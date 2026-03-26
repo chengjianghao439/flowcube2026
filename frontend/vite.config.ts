@@ -104,6 +104,11 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      // 安装包等静态文件由 Express 的 /downloads 提供；勿用 5173 直连（否则 Vite 无此路径）
+      '/downloads': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
     },
   },
   preview: {
@@ -111,6 +116,10 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/downloads': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
