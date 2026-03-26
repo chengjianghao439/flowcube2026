@@ -73,10 +73,14 @@ export default function AppRouter() {
   return (
     <HistoryRouter>
       <PdaConnectionGate>
-        <ErpDesktopConnectionGate>
+        {/*
+          桌面：Quit / 主进程 MessageBox / API 热键 必须挂在 ErpDesktopConnectionGate 之外。
+          否则「正在连接服务器…」阶段 Gate 整段 return，桥接未挂载，自动更新等 IPC 弹窗会丢失（表现为更新提示不稳定）。
+        */}
         <DesktopQuitDialog />
         <DesktopMessageBoxBridge />
         <ErpApiBaseHotkeyDialog />
+        <ErpDesktopConnectionGate>
         <Suspense fallback={<PageLoader />}>
           <Routes>
           {/* ── ERP 游客路由 ── */}

@@ -61,6 +61,12 @@ async function getRendererApiOrigin(win) {
   return normalizeApiOrigin(raw)
 }
 
+/** 等渲染进程挂上 DesktopMessageBoxBridge（useEffect）后再弹更新窗；过短会丢 IPC */
+const PACKAGED_UPDATE_CHECK_DELAY_MS = Math.min(
+  30_000,
+  Math.max(800, Number(process.env.FLOWCUBE_UPDATE_CHECK_DELAY_MS) || 1800),
+)
+
 /** 安装包仅触发一次自动更新检查（IPC 优先，避免引导写入 localStorage 晚于主进程定时器） */
 let packagedUpdateCheckStarted = false
 function triggerPackagedUpdateCheck(win, originRaw) {
@@ -72,7 +78,7 @@ function triggerPackagedUpdateCheck(win, originRaw) {
     checkAppUpdate(app, win, () => origin).catch((err) => {
       console.error('[FlowCube] 自动更新检查失败:', err)
     })
-  }, 500)
+  }, PACKAGED_UPDATE_CHECK_DELAY_MS)
 }
 
 ipcMain.on('flowcube:api-origin-ready', (event, origin) => {

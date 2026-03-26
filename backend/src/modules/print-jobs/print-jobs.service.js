@@ -474,10 +474,23 @@ async function flushPendingToClientByClientId(clientId, tenantId, res) {
 
 async function collectSseSubscribersForPrinter(printerCode) {
   const subs = new Set()
-  const byCode = sseClients.get(printerCode)
-  if (byCode) byCode.forEach((r) => subs.add(r))
+  const pc = String(printerCode || '').trim()
+  if (pc) {
+    const byCode = sseClients.get(pc)
+    if (byCode) byCode.forEach((r) => subs.add(r))
+    // 兼容：旧版 listen 曾用 URL 片段作键，与库中 code 大小写不一致时仍能匹配
+    if (subs.size === 0) {
+      const lower = pc.toLowerCase()
+      for (const [k, set] of sseClients.entries()) {
+        if (String(k).toLowerCase() === lower) {
+          set.forEach((r) => subs.add(r))
+          break
+        }
+      }
+    }
+  }
   try {
-    const [[row]] = await pool.query('SELECT client_id FROM printers WHERE code=? LIMIT 1', [printerCode])
+    const [[row]] = await pool.query('SELECT client_id FROM printers WHERE code=? LIMIT 1', [pc])
     if (row && row.client_id) {
       const byC = sseClientsByClientId.get(String(row.client_id))
       if (byC) byC.forEach((r) => subs.add(r))

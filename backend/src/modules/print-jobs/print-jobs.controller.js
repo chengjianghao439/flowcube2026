@@ -274,7 +274,9 @@ function sseHeadersAndHeartbeat(res, onRegister) {
 }
 
 function listen(req, res) {
-  const { printerCode } = req.params
+  // 必须用库里的规范 code 注册 SSE，与 pushToClients / collectSseSubscribers 一致。
+  // 否则在 MySQL 大小写不敏感校对下，URL 为 label_01、库中为 LABEL_01 时会注册到错误键，表现为「已连接仍提示无客户端」。
+  const printerCode = req.validatedPrinterCode || String(req.params.printerCode || '').trim()
   sseHeadersAndHeartbeat(res, () => svc.registerClient(printerCode, res))
 }
 
