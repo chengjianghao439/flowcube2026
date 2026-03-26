@@ -14,6 +14,12 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 
 const app = express()
 
+// 位于 Nginx / 负载均衡后时开启，否则 req.protocol 多为 http，拼出的安装包下载地址会变成 http://，
+// 公网若仅开放 443，Windows 客户端更新下载会失败（0.3.x 等旧版依赖接口返回的可访问 URL）。
+if (['1', 'true', 'yes'].includes(String(process.env.TRUST_PROXY || '').toLowerCase())) {
+  app.set('trust proxy', 1)
+}
+
 const isProd = process.env.NODE_ENV === 'production'
 
 // ─── 安全与解析中间件 ─────────────────────────────────────────────────────────
