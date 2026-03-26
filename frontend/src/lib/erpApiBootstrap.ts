@@ -5,11 +5,24 @@ import apiClient from '@/api/client'
 import {
   clearElectronStaleViteOrigins,
   collectErpApiFallbackCandidates,
+  getApiBase,
   probeErpApiOrigin,
   probeRelativeErpApi,
   setApiBase,
 } from '@/config/api'
 import { applyErpApiBaseFromStorage, isFileProtocol } from '@/lib/apiOrigin'
+
+/** 供桌面主进程在 ERP 引导结束后触发自动更新（与 localStorage 写入时序对齐） */
+function notifyDesktopApiOriginReady(): void {
+  if (typeof window === 'undefined') return
+  const d = window.flowcubeDesktop
+  if (!d?.notifyApiOriginReady) return
+  try {
+    d.notifyApiOriginReady(getApiBase())
+  } catch {
+    /* ignore */
+  }
+}
 
 export async function bootstrapErpApiConnection(): Promise<void> {
   clearElectronStaleViteOrigins()
@@ -18,7 +31,10 @@ export async function bootstrapErpApiConnection(): Promise<void> {
   if (!isFileProtocol()) {
     const base = (apiClient.defaults.baseURL || '').replace(/\/$/, '')
     if (base === '/api') {
-      if (await probeRelativeErpApi()) return
+      if (await probeRelativeErpApi()) {
+        notifyDesktopApiOriginReady()
+        return
+      }
     }
   }
 
@@ -26,7 +42,9 @@ export async function bootstrapErpApiConnection(): Promise<void> {
     if (await probeErpApiOrigin(origin)) {
       setApiBase(origin)
       applyErpApiBaseFromStorage()
+      notifyDesktopApiOriginReady()
       return
     }
   }
+  notifyDesktopApiOriginReady()
 }

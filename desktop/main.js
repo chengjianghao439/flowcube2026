@@ -1,6 +1,6 @@
 console.log('🔥 当前 main.js 已加载')
 
-const { app, BrowserWindow, dialog, Menu } = require('electron')
+const { app, BrowserWindow, dialog, Menu, ipcMain } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
@@ -58,6 +58,25 @@ async function getRendererApiOrigin(win) {
   return normalizeApiOrigin(raw)
 }
 
+/** 安装包仅触发一次自动更新检查（IPC 优先，避免引导写入 localStorage 晚于主进程定时器） */
+let packagedUpdateCheckStarted = false
+function triggerPackagedUpdateCheck(win, originRaw) {
+  if (!app.isPackaged || packagedUpdateCheckStarted) return
+  const origin = normalizeApiOrigin(originRaw)
+  if (!origin) return
+  packagedUpdateCheckStarted = true
+  setTimeout(() => {
+    checkAppUpdate(app, win, () => origin).catch((err) => {
+      console.error('[FlowCube] 自动更新检查失败:', err)
+    })
+  }, 500)
+}
+
+ipcMain.on('flowcube:api-origin-ready', (event, origin) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (win && !win.isDestroyed()) triggerPackagedUpdateCheck(win, origin)
+})
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -104,21 +123,28 @@ function createWindow() {
   if (app.isPackaged) {
     win.webContents.once('did-finish-load', () => {
       setTimeout(async () => {
+        if (packagedUpdateCheckStarted) return
         try {
           let origin = await getRendererApiOrigin(win)
           if (!origin) {
-            await new Promise((r) => setTimeout(r, 2000))
+            await new Promise((r) => setTimeout(r, 3000))
             origin = await getRendererApiOrigin(win)
           }
           if (!origin) {
-            console.warn('[FlowCube] 更新检查跳过：渲染进程未配置 API 根地址（API_BASE_URL）')
+            await new Promise((r) => setTimeout(r, 5000))
+            origin = await getRendererApiOrigin(win)
+          }
+          if (!origin) {
+            console.warn(
+              '[FlowCube] 更新检查跳过：渲染进程未配置 API 根地址（API_BASE_URL）；请确认已保存 ERP API 设置',
+            )
             return
           }
-          await checkAppUpdate(app, win, () => origin)
+          triggerPackagedUpdateCheck(win, origin)
         } catch (err) {
-          console.error('[FlowCube] 自动更新检查失败:', err)
+          console.error('[FlowCube] 自动更新检查（fallback）失败:', err)
         }
-      }, 3500)
+      }, 8000)
     })
   }
 
