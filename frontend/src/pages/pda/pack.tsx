@@ -187,7 +187,9 @@ export default function PdaPackPage() {
           return
         }
         if (isDesktopLocalPrintError(local)) {
-          err(local.error)
+          err(
+            `${local.error} PDA 仅提交任务；请在已安装 FlowCube 桌面端、且连接标签机的电脑上登录 ERP 执行打印，或检查打印机名称与 RAW 驱动。`,
+          )
           return
         }
       }

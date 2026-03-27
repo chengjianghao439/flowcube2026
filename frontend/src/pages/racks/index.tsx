@@ -22,6 +22,7 @@ import {
   isDesktopLocalPrintError,
   tryDesktopLocalZplThenComplete,
 } from '@/lib/desktopLocalPrint'
+import { printRackLabelWithSystemDialog } from '@/lib/printRackLabelHtml'
 import { ChevronDown, Edit2, Printer, Trash2 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -84,7 +85,9 @@ export default function RacksPage() {
           return
         }
         if (isDesktopLocalPrintError(local)) {
-          toast.error(local.error)
+          toast.error(
+            `${local.error}。若本机 RAW 标签机不可用，请点「打印」→「系统打印对话框（HTML）」用任意打印机输出。`,
+          )
           return
         }
         if (local === 'skipped' && !isDesktopLocalPrintAvailable()) {
@@ -141,16 +144,34 @@ export default function RacksPage() {
       width: 152,
       render: (_, row) => (
         <div className="flex items-center justify-end gap-1 shrink-0">
-          <Button
-            size="sm"
-            variant="outline"
-            className="px-2"
-            disabled={printMut.isPending && printMut.variables === row.id}
-            onClick={() => printMut.mutate(row.id)}
-          >
-            <Printer className="size-3.5 mr-0.5" />
-            打印
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="px-2"
+                disabled={printMut.isPending && printMut.variables === row.id}
+              >
+                <Printer className="size-3.5 mr-0.5" />
+                打印
+                <ChevronDown className="ml-0.5 size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => printMut.mutate(row.id)}>
+                本机标签机（ZPL 入队）
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  const r = printRackLabelWithSystemDialog(row)
+                  if (!r.ok) toast.warning(r.reason)
+                  else toast.success('已打开系统打印对话框（与销售单打印相同方式）')
+                }}
+              >
+                系统打印对话框（HTML）
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" disabled={deleteMut.isPending} className="px-2">

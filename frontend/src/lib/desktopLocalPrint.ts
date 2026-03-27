@@ -29,6 +29,16 @@ export function hasDesktopZplTargetConfigured(printerName?: string | null): bool
   return Boolean(printerName != null && String(printerName).trim())
 }
 
+/** 送 RAW 前校验 ZPL 片段，避免空内容或残缺模板导致 silent 失败 */
+export function validateZplForLocalPrint(content: string | null | undefined): string | null {
+  const s = content != null ? String(content).trim() : ''
+  if (!s) return 'ZPL 内容为空，无法本机打印'
+  if (!s.includes('^XA') || !s.includes('^XZ')) {
+    return 'ZPL 不完整（缺少 ^XA / ^XZ），无法送 RAW。请检查打印模板或联系管理员'
+  }
+  return null
+}
+
 export async function printZplOnDesktop(
   content: string,
   opts: { printerName: string | null | undefined },
@@ -52,7 +62,7 @@ function formatDesktopPrintCatch(e: unknown): string {
   }
   const s = String(e ?? '').trim()
   if (s && s !== '[object Object]') return s
-  return '本机打印失败（可打开桌面端开发者工具或主进程控制台查看详情）'
+  return '本机 RAW 打印失败：未收到具体原因。请打开桌面端主进程控制台，或核对打印机名称与 RAW 驱动。'
 }
 
 export type DesktopLocalPrintResult = 'skipped' | 'ok' | { error: string }
@@ -77,11 +87,13 @@ export async function tryDesktopLocalZplThenComplete(opts: {
   if (!hasDesktopZplTargetConfigured(printerName)) {
     return {
       error:
-        'ERP 中该打印机未配置显示名称。请在「打印机管理」用「从本机添加」添加标签机并绑定「库存标签」用途，名称须与系统打印机一致。',
+        'ERP 中该打印机未配置本机队列名称。请在「设置 → 打印机管理」使用「从本机添加」选择标签机，并绑定「库存标签」等用途；名称必须与 Windows/系统「打印机」列表中的名称完全一致。',
     }
   }
+  const zplErr = validateZplForLocalPrint(content)
+  if (zplErr) return { error: zplErr }
   try {
-    await printZplOnDesktop(content, { printerName })
+    await printZplOnDesktop(String(content).trim(), { printerName })
     await apiClient.post(`/print-jobs/${Number(jobId)}/complete-local`, {})
     return 'ok'
   } catch (e) {
