@@ -192,6 +192,18 @@ export default function PdaPackPage() {
           )
           return
         }
+        if (local === 'skipped_no_desktop') {
+          err(
+            '当前浏览器未连接本机打印桥接（非桌面端或未注入 flowcubeDesktop），箱贴不会在本机出纸；任务已在服务器入队，请到装了 FlowCube 桌面端且挂了标签机的电脑登录后处理「打印任务」。',
+          )
+          return
+        }
+        if (local === 'skipped_no_payload') {
+          err(
+            '任务已入队，但响应中缺少 ZPL 或任务 ID，本机未送 RAW。请重试或在桌面端「打印任务」中处理，并检查网络/网关是否截断响应。',
+          )
+          return
+        }
       }
       if (d.queued) ok('箱贴已加入打印队列')
       else ok('未配置标签机，未创建打印任务')

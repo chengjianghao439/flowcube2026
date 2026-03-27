@@ -1,5 +1,5 @@
 {
-  "version": "0.3.27",
-  "filename": "FlowCube-ERP-Setup-0.3.27.exe",
-  "notes": "【v0.3.27 主要更新】\n\n• Windows 本机 ZPL RAW：校验 WritePrinter 写入字节数完整，避免误报成功。\n\n详见 docs/releases/v0.3.27.md。"
+  "version": "0.3.28",
+  "filename": "FlowCube-ERP-Setup-0.3.28.exe",
+  "notes": "【v0.3.28 主要更新】\n\n• 本机 ZPL：区分无桥接与缺 ZPL/任务 ID，避免误报「已入队」；货架与 PDA 箱贴提示一致。\n\n详见 docs/releases/v0.3.28.md。"
 }

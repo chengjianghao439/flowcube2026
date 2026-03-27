@@ -65,7 +65,12 @@ function formatDesktopPrintCatch(e: unknown): string {
   return '本机 RAW 打印失败：未收到具体原因。请打开桌面端主进程控制台，或核对打印机名称与 RAW 驱动。'
 }
 
-export type DesktopLocalPrintResult = 'skipped' | 'ok' | { error: string }
+/** skipped_no_desktop：非桌面端或未注入 flowcubeDesktop；skipped_no_payload：桌面端可用但接口未带回 zpl/jobId，未送 RAW */
+export type DesktopLocalPrintResult =
+  | 'skipped_no_desktop'
+  | 'skipped_no_payload'
+  | 'ok'
+  | { error: string }
 
 export function isDesktopLocalPrintError(
   r: DesktopLocalPrintResult,
@@ -79,10 +84,10 @@ export async function tryDesktopLocalZplThenComplete(opts: {
   contentType?: string | null
   printerName?: string | null
 }): Promise<DesktopLocalPrintResult> {
-  if (!isDesktopLocalPrintAvailable()) return 'skipped'
+  if (!isDesktopLocalPrintAvailable()) return 'skipped_no_desktop'
   const { jobId, content, contentType, printerName } = opts
   if (!content || contentType !== 'zpl' || jobId == null || !Number.isFinite(Number(jobId))) {
-    return 'skipped'
+    return 'skipped_no_payload'
   }
   if (!hasDesktopZplTargetConfigured(printerName)) {
     return {

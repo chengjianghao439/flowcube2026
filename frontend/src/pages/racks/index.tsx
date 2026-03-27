@@ -17,11 +17,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { TableColumn } from '@/types'
 import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
-import {
-  isDesktopLocalPrintAvailable,
-  isDesktopLocalPrintError,
-  tryDesktopLocalZplThenComplete,
-} from '@/lib/desktopLocalPrint'
+import { isDesktopLocalPrintError, tryDesktopLocalZplThenComplete } from '@/lib/desktopLocalPrint'
 import { ChevronDown, Edit2, Printer, Trash2 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -87,9 +83,15 @@ export default function RacksPage() {
           toast.error(local.error)
           return
         }
-        if (local === 'skipped' && !isDesktopLocalPrintAvailable()) {
+        if (local === 'skipped_no_desktop') {
           toast.warning(
             '当前不是 FlowCube 桌面端（或未加载本机打印桥接），标签机不会出纸。请使用桌面安装包打开 ERP；若已在桌面端内，请重启应用或检查是否被安全软件拦截预加载脚本。任务已在服务器入队。',
+          )
+          return
+        }
+        if (local === 'skipped_no_payload') {
+          toast.warning(
+            '任务已在服务器入队，但响应中缺少可本机打印的 ZPL 或任务 ID，本机未送 RAW，Windows 打印队列中不会看到作业。请刷新页面重试，或检查网关/代理是否截断 JSON；也可在「打印任务」中处理。',
           )
           return
         }
