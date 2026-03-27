@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 import { useAuthStore } from '@/store/authStore'
 import AppLayout from '@/layouts/AppLayout'
 import PdaLayout from '@/layouts/PdaLayout'
@@ -67,7 +68,7 @@ function PdaGuestRoute() {
   return <Outlet />
 }
 
-const HistoryRouter = import.meta.env.VITE_ELECTRON === '1' ? HashRouter : BrowserRouter
+const HistoryRouter = IS_ELECTRON_DESKTOP ? HashRouter : BrowserRouter
 
 export default function AppRouter() {
   return (

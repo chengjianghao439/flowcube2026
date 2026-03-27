@@ -19,9 +19,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
+import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 import { ensureUniquePrinterCode, systemNameToPrinterCode } from '@/utils/printerCode'
-
-const IS_ELECTRON_DESKTOP = import.meta.env.VITE_ELECTRON === '1'
 
 const TYPE_LABEL: Record<number, string> = {
   1: '标签打印机',

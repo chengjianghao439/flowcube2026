@@ -1,16 +1,17 @@
 /**
- * Electron 打包（VITE_ELECTRON）：已配置 API 根地址时启动先探测 /api/health；
+ * Electron 打包：已配置 API 根地址时启动先探测 /api/health；
  * 失败则阻断进入业务页，引导至登录页修改地址（登录页始终可访问）。
  */
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { checkErpApiHealth, getStoredApiOrigin } from '@/lib/apiOrigin'
+import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 import { Button } from '@/components/ui/button'
 
 type Phase = 'ok' | 'checking' | 'fail'
 
 function initialPhase(): Phase {
-  if (import.meta.env.VITE_ELECTRON !== '1') return 'ok'
+  if (!IS_ELECTRON_DESKTOP) return 'ok'
   return getStoredApiOrigin() ? 'checking' : 'ok'
 }
 
@@ -21,7 +22,7 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    if (import.meta.env.VITE_ELECTRON !== '1') return
+    if (!IS_ELECTRON_DESKTOP) return
     let cancelled = false
     void (async () => {
       const origin = getStoredApiOrigin()
@@ -39,7 +40,7 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
     }
   }, [location.pathname, tick])
 
-  if (import.meta.env.VITE_ELECTRON !== '1') return <>{children}</>
+  if (!IS_ELECTRON_DESKTOP) return <>{children}</>
 
   const origin = getStoredApiOrigin()
   const onLogin = location.pathname === '/login'

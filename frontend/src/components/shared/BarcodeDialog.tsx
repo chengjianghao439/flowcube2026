@@ -3,6 +3,7 @@ import Barcode from 'react-barcode'
 import { QRCodeSVG } from 'qrcode.react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { printHtmlDocument } from '@/lib/printHtmlDocument'
 
 interface Props {
   open: boolean
@@ -19,9 +20,7 @@ export default function BarcodeDialog({ open, onClose, product, copies = 1 }: Pr
   const handlePrint = () => {
     const content = printRef.current?.innerHTML
     if (!content) return
-    const w = window.open('', '_blank', 'width=600,height=500')
-    if (!w) return
-    w.document.write(`<!DOCTYPE html><html><head><title>标签打印</title><style>
+    printHtmlDocument(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>标签打印</title><style>
       body{font-family:'PingFang SC',sans-serif;margin:0;padding:16px}
       .label{display:inline-block;border:1px solid #ddd;border-radius:4px;padding:10px 14px;margin:6px;width:200px;vertical-align:top;text-align:center}
       .product-name{font-size:12px;font-weight:600;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -33,7 +32,6 @@ export default function BarcodeDialog({ open, onClose, product, copies = 1 }: Pr
     </style></head><body>
     ${Array(copies).fill(`<div class="label">${content}</div>`).join('')}
     </body></html>`)
-    w.document.close(); w.focus(); w.print(); w.close()
   }
 
   return (

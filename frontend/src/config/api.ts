@@ -1,6 +1,8 @@
 /**
  * ERP API 根地址（不含 /api）。支持按 hostname 动态默认、多地址探测与 fallback。
  */
+import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+
 export const API_BASE_STORAGE_KEY = 'API_BASE_URL'
 
 /** 旧版键名，读取时兼容；写入统一用 API_BASE_URL */
@@ -45,7 +47,7 @@ export function isStaleLocalViteProxyOrigin(raw: string): boolean {
 
 /** 安装包启动时移除误同步的「本机」Vite 地址，避免连错 */
 export function clearElectronStaleViteOrigins(): void {
-  if (import.meta.env.VITE_ELECTRON !== '1') return
+  if (!IS_ELECTRON_DESKTOP) return
   if (typeof localStorage === 'undefined') return
   for (const key of [API_BASE_STORAGE_KEY, LEGACY_ERP_ORIGIN_KEY]) {
     const raw = localStorage.getItem(key)?.trim()
@@ -70,8 +72,7 @@ export function getDynamicDefaultApi(): string {
   const prodFallback =
     normalizeApiBase(envProdRaw || PRODUCTION_ERP_FALLBACK) || PRODUCTION_ERP_FALLBACK
 
-  const isElectronBundle = import.meta.env.VITE_ELECTRON === '1'
-  if (isFileProtocol() || isElectronBundle) {
+  if (isFileProtocol() || IS_ELECTRON_DESKTOP) {
     if (envProd) return envProd
     return 'http://localhost:3000'
   }
@@ -157,7 +158,7 @@ export function getApiBase(): string {
   const v = localStorage.getItem(API_BASE_STORAGE_KEY)?.trim()
   if (v) {
     const n = normalizeApiBase(v)
-    if (n && import.meta.env.VITE_ELECTRON === '1' && isStaleLocalViteProxyOrigin(v)) {
+    if (n && IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(v)) {
       return getDynamicDefaultApi()
     }
     return n || getDynamicDefaultApi()
@@ -165,7 +166,7 @@ export function getApiBase(): string {
   const leg = localStorage.getItem(LEGACY_ERP_ORIGIN_KEY)?.trim()
   if (leg) {
     const n = normalizeApiBase(leg)
-    if (n && import.meta.env.VITE_ELECTRON === '1' && isStaleLocalViteProxyOrigin(leg)) {
+    if (n && IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(leg)) {
       return getDynamicDefaultApi()
     }
     if (n) return n
@@ -196,7 +197,7 @@ export function getEffectiveApiOrigin(): string | null {
   const v = localStorage.getItem(API_BASE_STORAGE_KEY)?.trim()
   if (v) {
     const n = normalizeApiBase(v)
-    if (import.meta.env.VITE_ELECTRON === '1' && isStaleLocalViteProxyOrigin(v)) {
+    if (IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(v)) {
       const d = normalizeApiBase(getDynamicDefaultApi())
       return d || null
     }
@@ -205,7 +206,7 @@ export function getEffectiveApiOrigin(): string | null {
   const leg = localStorage.getItem(LEGACY_ERP_ORIGIN_KEY)?.trim()
   if (leg) {
     const n = normalizeApiBase(leg)
-    if (import.meta.env.VITE_ELECTRON === '1' && isStaleLocalViteProxyOrigin(leg)) {
+    if (IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(leg)) {
       const d = normalizeApiBase(getDynamicDefaultApi())
       return d || null
     }

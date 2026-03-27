@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { useLogin } from '@/hooks/useAuth'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
 import { loadSavedLoginForm } from '@/lib/loginCredentials'
-
-const IS_ELECTRON_DESKTOP = import.meta.env.VITE_ELECTRON === '1'
+import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 
 export default function LoginPage() {
   const { mutate: login, isPending, error } = useLogin()

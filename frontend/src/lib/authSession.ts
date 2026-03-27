@@ -1,11 +1,12 @@
 /**
  * 登录态持久化与整页跳转退出（replace，防止浏览器返回进入已退出系统）。
  */
+import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 import { useAuthStore } from '@/store/authStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 
 function routeLooksLikePda(): boolean {
-  if (import.meta.env.VITE_ELECTRON === '1') {
+  if (IS_ELECTRON_DESKTOP) {
     const h = (window.location.hash.replace(/^#/, '').split('?')[0] || '/').trim()
     return h.startsWith('/pda')
   }
@@ -25,7 +26,7 @@ export function clearAuthPersistedState(): void {
 export function redirectReplaceToLogin(): void {
   const loginPath = routeLooksLikePda() ? '/pda/login' : '/login'
 
-  if (import.meta.env.VITE_ELECTRON === '1') {
+  if (IS_ELECTRON_DESKTOP) {
     const prefix = window.location.href.split('#')[0]
     window.location.replace(`${prefix}#${loginPath}`)
     return

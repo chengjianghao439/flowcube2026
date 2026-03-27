@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { escapeHtmlText, printHtmlDocument } from '@/lib/printHtmlDocument'
 
 interface OrderItem { productCode:string; productName:string; unit:string; quantity:number; unitPrice:number; amount:number; remark?:string }
 interface PrintOrderData {
@@ -19,9 +20,8 @@ export default function PrintOrderDialog({ open, onClose, data }: Props) {
   const handlePrint = () => {
     const content = printRef.current?.innerHTML
     if (!content) return
-    const w = window.open('', '_blank', 'width=800,height=600')
-    if (!w) return
-    w.document.write(`<!DOCTYPE html><html><head><title>${data?.orderNo}</title><style>
+    const title = escapeHtmlText(data?.orderNo ?? '单据')
+    printHtmlDocument(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${title}</title><style>
       body{font-family:'PingFang SC',Microsoft YaHei,sans-serif;padding:24px;color:#000;font-size:13px}
       h2{text-align:center;font-size:18px;margin-bottom:4px}
       .subtitle{text-align:center;color:#555;margin-bottom:16px;font-size:12px}
@@ -35,8 +35,6 @@ export default function PrintOrderDialog({ open, onClose, data }: Props) {
       .sign-line{border-bottom:1px solid #000;margin-top:24px;margin-bottom:4px}
       @media print{body{padding:0}}
     </style></head><body>${content}</body></html>`)
-    w.document.close()
-    w.focus(); w.print(); w.close()
   }
 
   if (!data) return null

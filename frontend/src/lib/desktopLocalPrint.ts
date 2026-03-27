@@ -3,15 +3,16 @@
  * 无需任何网口或 IP 配置；名称须与「从本机添加」时一致
  */
 import apiClient from '@/api/client'
+import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 
 export function desktopLocalPrintRequestHeaders(): Record<string, string> {
-  if (import.meta.env.VITE_ELECTRON !== '1') return {}
+  if (!IS_ELECTRON_DESKTOP) return {}
   return { 'X-Flowcube-Desktop-Local-Print': '1' }
 }
 
 export function isDesktopLocalPrintAvailable(): boolean {
   return (
-    import.meta.env.VITE_ELECTRON === '1' &&
+    IS_ELECTRON_DESKTOP &&
     typeof window !== 'undefined' &&
     typeof window.flowcubeDesktop?.printZpl === 'function'
   )
