@@ -28,6 +28,18 @@ function validateLayout(type, layout) {
       if (layout.elements.length === 0) {
         throw new AppError('标签模板至少包含一个画布元素', 400)
       }
+      if (layout.canvasWidthMm != null) {
+        const w = Number(layout.canvasWidthMm)
+        if (!Number.isFinite(w) || w < 30 || w > 120) {
+          throw new AppError('标签模板纸宽须在 30–120 mm', 400)
+        }
+      }
+      if (layout.canvasHeightMm != null) {
+        const h = Number(layout.canvasHeightMm)
+        if (!Number.isFinite(h) || h < 40 || h > 500) {
+          throw new AppError('标签模板纸高须在 40–500 mm', 400)
+        }
+      }
       return
     }
     throw new AppError('标签模板须使用画布布局（elements）或兼容的 ZPL 正文（format=zpl）', 400)

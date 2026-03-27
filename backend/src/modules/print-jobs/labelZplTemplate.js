@@ -41,10 +41,16 @@ function applyZplTemplate(body, vars) {
  * @param {string} paperSize thermal80 | thermal58
  * @returns {string|null}
  */
+function resolveLabelWidthMm(layout, paperSize) {
+  const n = Number(layout?.canvasWidthMm)
+  if (Number.isFinite(n) && n >= 30 && n <= 120) return Math.round(n)
+  return paperSize === 'thermal58' ? 58 : 80
+}
+
 function generateZplFromElements(layout, vars, paperSize) {
   const elements = layout?.elements
   if (!Array.isArray(elements) || elements.length === 0) return null
-  const paperWmm = paperSize === 'thermal58' ? 58 : 80
+  const paperWmm = resolveLabelWidthMm(layout, paperSize)
   const widthDots = Math.round(paperWmm * MM_TO_DOT)
   const sorted = [...elements]
     .filter(e => e && e.type !== 'divider' && e.type !== 'table')

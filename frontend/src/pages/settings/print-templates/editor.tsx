@@ -492,6 +492,9 @@ export default function PrintTemplateEditor() {
   const [type,       setType]       = useState<TemplateType>(1)
   const [paperSize,  setPaperSize]  = useState<PaperSize>('A4')
   const [elements,   setElements]   = useState<TemplateElement[]>([])
+  /** 标签类型 5–9：画布纸张（mm），与 layout.canvasWidthMm/HeightMm 同步 */
+  const [canvasWidthMm,  setCanvasWidthMm]  = useState(80)
+  const [canvasHeightMm, setCanvasHeightMm] = useState(200)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [preview,    setPreview]    = useState(false)
   const [hydrated,   setHydrated]   = useState(isNew)
@@ -505,8 +508,20 @@ export default function PrintTemplateEditor() {
       if (isZplTemplateLayout(remote.layout)) {
         setElements(cloneDefaultLabelElements(remote.type))
         toast.warning('原 ZPL 文本模板已切换为可视化布局，保存后即按新格式存储')
+        if (isZplLabelType(remote.type)) {
+          setCanvasWidthMm(80)
+          setCanvasHeightMm(200)
+        }
       } else {
         setElements(Array.isArray(remote.layout.elements) ? remote.layout.elements : [])
+        if (isZplLabelType(remote.type)) {
+          const lo = remote.layout as { canvasWidthMm?: number; canvasHeightMm?: number }
+          const p = PAPER_SIZES[remote.paperSize] ?? PAPER_SIZES.thermal80
+          const cw = typeof lo.canvasWidthMm === 'number' ? lo.canvasWidthMm : p.w
+          const ch = typeof lo.canvasHeightMm === 'number' ? lo.canvasHeightMm : p.h
+          setCanvasWidthMm(Math.min(120, Math.max(30, cw)))
+          setCanvasHeightMm(Math.min(500, Math.max(40, ch)))
+        }
       }
       setHydrated(true)
     }
@@ -518,12 +533,17 @@ export default function PrintTemplateEditor() {
     setType(next)
     if (isZplLabelType(next)) {
       setPaperSize('thermal80')
+      setCanvasWidthMm(80)
+      setCanvasHeightMm(200)
       setElements(cloneDefaultLabelElements(next))
       setSelectedId(null)
     } else {
       if (isZplLabelType(prev)) {
         setElements([])
         setSelectedId(null)
+        setPaperSize('A4')
+        setCanvasWidthMm(80)
+        setCanvasHeightMm(200)
       }
     }
   }
@@ -558,12 +578,18 @@ export default function PrintTemplateEditor() {
   const isPending = createMut.isPending || updateMut.isPending
 
   // ── Helpers ──────────────────────────────────────────────────
-  const paper = PAPER_SIZES[paperSize]
+  const safeCw = Number.isFinite(canvasWidthMm) ? canvasWidthMm : 80
+  const safeCh = Number.isFinite(canvasHeightMm) ? canvasHeightMm : 200
+  const paper = isZplLabelType(type)
+    ? {
+        w: Math.min(120, Math.max(30, safeCw)),
+        h: Math.min(500, Math.max(40, safeCh)),
+        label: `${Math.min(120, Math.max(30, safeCw))}×${Math.min(500, Math.max(40, safeCh))} mm`,
+      }
+    : PAPER_SIZES[paperSize]
   const canvasW = paper.w * MM_PX
   const canvasH = paper.h * MM_PX
-  const paperSelectEntries = Object.entries(PAPER_SIZES).filter(([k]) =>
-    isZplLabelType(type) ? k === 'thermal80' || k === 'thermal58' : true,
-  )
+  const paperSelectEntries = Object.entries(PAPER_SIZES)
 
   const selected = elements.find(e => e.id === selectedId) ?? null
 
@@ -594,11 +620,18 @@ export default function PrintTemplateEditor() {
       toast.error('标签模板至少需要一个画布元素')
       return
     }
-    const layout: TemplateLayout = { elements }
+    const cw = Math.min(120, Math.max(30, Math.round(canvasWidthMm)))
+    const ch = Math.min(500, Math.max(40, Math.round(canvasHeightMm)))
+    const derivedPaper: PaperSize = isZplLabelType(type)
+      ? (cw >= 69 ? 'thermal80' : 'thermal58')
+      : paperSize
+    const layout: TemplateLayout = isZplLabelType(type)
+      ? { elements, canvasWidthMm: cw, canvasHeightMm: ch }
+      : { elements }
     if (isNew) {
-      createMut.mutate({ name, type, paperSize, layout })
+      createMut.mutate({ name, type, paperSize: derivedPaper, layout })
     } else {
-      updateMut.mutate({ id: +id!, name, type, paperSize, layout })
+      updateMut.mutate({ id: +id!, name, type, paperSize: derivedPaper, layout })
     }
   }
 
@@ -726,16 +759,64 @@ export default function PrintTemplateEditor() {
             </SelectContent>
           </Select>
 
-          <Select value={paperSize} onValueChange={v => setPaperSize(v as PaperSize)}>
-            <SelectTrigger className="h-9 min-w-[10rem] px-2 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {paperSelectEntries.map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {isZplLabelType(type) ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground shrink-0">纸张 (mm)</span>
+              <Input
+                type="number"
+                min={30}
+                max={120}
+                step={1}
+                value={canvasWidthMm}
+                onChange={e => setCanvasWidthMm(Number(e.target.value))}
+                onBlur={() => setCanvasWidthMm(w => Math.min(120, Math.max(30, Math.round(Number(w) || 80))))}
+                className="h-9 w-[4.25rem] text-sm tabular-nums"
+                title="宽度 mm"
+              />
+              <span className="text-muted-foreground">×</span>
+              <Input
+                type="number"
+                min={40}
+                max={500}
+                step={1}
+                value={canvasHeightMm}
+                onChange={e => setCanvasHeightMm(Number(e.target.value))}
+                onBlur={() => setCanvasHeightMm(h => Math.min(500, Math.max(40, Math.round(Number(h) || 200))))}
+                className="h-9 w-[4.25rem] text-sm tabular-nums"
+                title="高度 mm"
+              />
+              <span className="text-xs text-muted-foreground">宽×高</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => { setCanvasWidthMm(80); setCanvasHeightMm(200) }}
+              >
+                80×200
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => { setCanvasWidthMm(58); setCanvasHeightMm(150) }}
+              >
+                58×150
+              </Button>
+            </div>
+          ) : (
+            <Select value={paperSize} onValueChange={v => setPaperSize(v as PaperSize)}>
+              <SelectTrigger className="h-9 min-w-[10rem] px-2 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {paperSelectEntries.map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           {isZplLabelType(type) && (
             <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={restoreLabelLayout}>

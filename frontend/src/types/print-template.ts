@@ -18,9 +18,9 @@ export interface TemplateElement {
   tableColumns?: string[]
 }
 
-/** 单据画布模板 | ZPL 标签模板 */
+/** 单据画布模板 | ZPL 标签模板（标签可选手动纸张宽高 mm，供画布与打印 ^PW） */
 export type TemplateLayout =
-  | { elements: TemplateElement[] }
+  | { elements: TemplateElement[]; canvasWidthMm?: number; canvasHeightMm?: number }
   | { format: 'zpl'; body: string }
 
 export function isZplTemplateLayout(layout: TemplateLayout | unknown): layout is { format: 'zpl'; body: string } {
