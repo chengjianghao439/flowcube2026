@@ -1,4 +1,5 @@
 import apiClient from './client'
+import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
 import type { ApiResponse, PaginatedData, QueryParams } from '@/types'
 import type { Rack, CreateRackParams, UpdateRackParams } from '@/types/racks'
 
@@ -47,13 +48,16 @@ export interface PrintRackLabelResult {
   printerCode: string | null
   printerName: string | null
   dispatchHint?: PrintDispatchHint | null
+  /** 仅请求头含 X-Flowcube-Desktop-Local-Print: 1 时返回，供本机直连 */
+  contentType?: string | null
+  content?: string | null
 }
 
 export async function printRackLabelApi(id: number): Promise<PrintRackLabelResult> {
   const res = await apiClient.post<ApiResponse<PrintRackLabelResult>>(
     `/racks/${Number(id)}/print-label`,
     {},
-    { skipGlobalError: true },
+    { skipGlobalError: true, headers: desktopLocalPrintRequestHeaders() },
   )
   const body = res.data
   if (!body.success) {

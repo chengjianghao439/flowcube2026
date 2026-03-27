@@ -17,6 +17,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { TableColumn } from '@/types'
 import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
+import { tryDesktopLocalZplThenComplete } from '@/lib/desktopLocalPrint'
 import { ChevronDown, Edit2, Printer, Trash2 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -65,9 +66,22 @@ export default function RacksPage() {
 
   const printMut = useMutation({
     mutationFn: (id: number) => printRackLabelApi(id),
-    onSuccess: (d) => {
+    onSuccess: async (d) => {
       if (!d) return
       if (d.queued) {
+        const local = await tryDesktopLocalZplThenComplete({
+          jobId: d.jobId,
+          content: d.content,
+          contentType: d.contentType,
+        })
+        if (local === 'ok') {
+          toast.success('已从本机打印货架标签并核销队列')
+          return
+        }
+        if (local === 'error') {
+          toast.error('本机打印失败，任务仍在队列中，可检查设置中的 ZPL 网口或重试')
+          return
+        }
         const h = d.dispatchHint
         if (h?.code === 'no_print_client') {
           toast.warning(h.message || '未检测到在线打印客户端，打印机不会出纸')

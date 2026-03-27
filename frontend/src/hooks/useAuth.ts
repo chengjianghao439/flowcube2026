@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore'
 import { persistErpApiBaseAfterLogin } from '@/config/api'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
 import { persistLoginSuccess } from '@/lib/loginCredentials'
+import { useWorkspaceStore } from '@/store/workspaceStore'
 
 /** rememberPassword：是否在本机保存密码（与 JWT 会话无关） */
 export type LoginMutationVars = LoginParams & { rememberPassword?: boolean }
@@ -19,6 +20,7 @@ export function useLogin(redirectTo = '/dashboard') {
     onSuccess: (data, variables) => {
       persistErpApiBaseAfterLogin()
       applyErpApiBaseFromStorage()
+      useWorkspaceStore.getState().closeAll()
       login(data.token, data.user)
       persistLoginSuccess(
         variables.username,

@@ -21,6 +21,7 @@ import { getPackagesApi, createPackageApi, addPackageItemApi, finishPackageApi, 
 import type { Package } from '@/api/packages'
 import type { WarehouseTask } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
+import { tryDesktopLocalZplThenComplete } from '@/lib/desktopLocalPrint'
 
 function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) {
   const navigate = useNavigate()
@@ -164,7 +165,23 @@ export default function PdaPackPage() {
 
   const printLabelMut = useMutation({
     mutationFn: (pkgId: number) => printPackageLabelApi(pkgId).then(r => r.data.data!),
-    onSuccess: (d) => {
+    onSuccess: async (d) => {
+      if (d.queued && d.job && typeof d.job === 'object') {
+        const job = d.job as { id?: number; content?: string; contentType?: string }
+        const local = await tryDesktopLocalZplThenComplete({
+          jobId: job.id,
+          content: job.content,
+          contentType: job.contentType,
+        })
+        if (local === 'ok') {
+          ok('箱贴已从本机打印')
+          return
+        }
+        if (local === 'error') {
+          err('本机打印失败，任务仍在队列中')
+          return
+        }
+      }
       if (d.queued) ok('箱贴已加入打印队列')
       else ok('未配置标签机，未创建打印任务')
     },

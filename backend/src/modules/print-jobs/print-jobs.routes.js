@@ -3,11 +3,7 @@ const { z } = require('zod')
 const ctrl = require('./print-jobs.controller')
 const { authMiddleware, permissionMiddleware } = require('../../middleware/auth')
 const { loadRolePermissions } = require('../../middleware/loadRolePermissions')
-const {
-  validateListenStationClientId,
-  validateListenPrinterCode,
-  validateJobPrinterHeader,
-} = require('./print-jobs.middleware')
+const { validateJobPrinterHeader } = require('./print-jobs.middleware')
 
 const router = Router()
 
@@ -53,26 +49,6 @@ const applyTemplateSchema = z.object({
 
 const printClientPerm = permissionMiddleware('print:client', { superAdminRoleIds: [1] })
 
-// SSE（推荐）：工作站 X-Client-Id，与 printers.client_id 一致，无需 URL 里写打印机编码
-router.get(
-  '/listen/station',
-  authMiddleware,
-  loadRolePermissions,
-  printClientPerm,
-  validateListenStationClientId,
-  ctrl.listenStation,
-)
-
-// SSE（兼容）：按打印机编码订阅
-router.get(
-  '/listen/:printerCode',
-  authMiddleware,
-  loadRolePermissions,
-  printClientPerm,
-  validateListenPrinterCode,
-  ctrl.listen,
-)
-
 router.use(authMiddleware)
 router.get('/policy-templates', ctrl.policyTemplatesList)
 router.post(
@@ -92,6 +68,7 @@ router.get('/stats', ctrl.stats)
 router.get('/printer-health', ctrl.printerHealth)
 router.get('/:id', ctrl.detail)
 router.post('/', ctrl.create)
+router.post('/:id/complete-local', ctrl.completeLocal)
 router.post(
   '/:id/complete',
   loadRolePermissions,

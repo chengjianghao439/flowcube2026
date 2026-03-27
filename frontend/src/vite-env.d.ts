@@ -41,5 +41,12 @@ interface Window {
         isDefault: boolean
       }>
     >
+    /** 主进程：ZPL → 网口 TCP 或 CUPS raw */
+    printZpl?: (opts: {
+      content: string
+      host?: string
+      port?: number
+      lpQueue?: string
+    }) => Promise<null>
   }
 }

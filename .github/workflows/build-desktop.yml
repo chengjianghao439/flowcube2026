@@ -66,7 +66,7 @@ jobs:
           Write-Host "=== START step: Print workflow info ==="
           Write-Host "========================================"
           Write-Host "  FlowCube — DESKTOP BUILD (Electron)"
-          Write-Host "  (NOT print-client / NOT other workflows)"
+          Write-Host "  (desktop workflow only)"
           Write-Host "========================================"
           Write-Host "Running Desktop Build Workflow"
           Write-Host "Ref: ${{ github.ref }}"

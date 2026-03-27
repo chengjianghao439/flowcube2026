@@ -1,4 +1,5 @@
 import client from './client'
+import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
 import type { ApiResponse } from '@/types'
 
 export interface PackageItem {
@@ -43,7 +44,9 @@ export const finishPackageApi = (packageId: number) =>
   )
 
 export const printPackageLabelApi = (packageId: number) =>
-  client.post<ApiResponse<{ queued: boolean; job: unknown }>>(`/packages/${packageId}/print-label`)
+  client.post<ApiResponse<{ queued: boolean; job: unknown }>>(`/packages/${packageId}/print-label`, undefined, {
+    headers: desktopLocalPrintRequestHeaders(),
+  })
 
 export interface PackageShipInfo {
   packageId: number

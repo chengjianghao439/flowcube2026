@@ -57,9 +57,12 @@ async function printLabel(req, res, next) {
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ success: false, message: '无效的货架 ID', data: null })
     }
+    const includePrintPayload =
+      String(req.headers['x-flowcube-desktop-local-print'] || '').trim() === '1'
     const slim = await racksService.enqueuePrintLabel(id, {
       tenantId: req.user?.tenantId ?? 0,
       userId: req.user?.userId ?? null,
+      includePrintPayload,
     })
     if (!slim) {
       return successResponse(
@@ -76,7 +79,7 @@ async function printLabel(req, res, next) {
           ? '任务已入队，但未连接打印客户端（详见说明）'
           : hint?.code === 'queued_concurrency'
             ? '任务已入队，因并发上限排队中'
-            : '已加入打印队列（按「库存标签 / inventory_label」绑定；需 print-client 在线才能出纸）'
+            : '已加入打印队列（按「库存标签」绑定；请使用 FlowCube 桌面端本机直连出纸）'
     return successResponse(
       res,
       {
@@ -85,6 +88,8 @@ async function printLabel(req, res, next) {
         printerCode:  slim.printerCode,
         printerName:  slim.printerName,
         dispatchHint: hint || null,
+        contentType:  slim.contentType ?? null,
+        content:      slim.content ?? null,
       },
       msg,
     )

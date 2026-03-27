@@ -75,6 +75,18 @@ async function complete(req, res, next) {
   }
 }
 
+/** 桌面端本机打印后核销队列（普通登录用户，无需 print:client） */
+async function completeLocal(req, res, next) {
+  try {
+    res.json({
+      success: true,
+      data: await svc.completeLocalDesktop(+req.params.id, { tenantId: getTenantId(req) }),
+    })
+  } catch (e) {
+    next(e)
+  }
+}
+
 async function fail(req, res, next) {
   try {
     res.json({
@@ -178,11 +190,6 @@ async function alertAck(req, res, next) {
   }
 }
 
-/**
- * SSE 长连接 — 打印客户端监听
- * GET /api/print-jobs/listen/:printerCode
- * 连接后立即推送待打印任务，新任务到来时实时推送
- */
 async function tenantDashboard(req, res, next) {
   try {
     const tid = resolveTargetTenantId(req)
@@ -258,34 +265,6 @@ async function tenantSettingsPut(req, res, next) {
   }
 }
 
-function sseHeadersAndHeartbeat(res, onRegister) {
-  res.setHeader('Content-Type',  'text/event-stream')
-  res.setHeader('Cache-Control', 'no-cache')
-  res.setHeader('Connection',    'keep-alive')
-  res.setHeader('X-Accel-Buffering', 'no')  // 禁止 nginx 缓冲
-  res.flushHeaders()
-
-  const heartbeat = setInterval(() => {
-    try { res.write(': ping\n\n') } catch { clearInterval(heartbeat) }
-  }, 25000)
-
-  res.on('close', () => clearInterval(heartbeat))
-  onRegister()
-}
-
-function listen(req, res) {
-  // 必须用库里的规范 code 注册 SSE，与 pushToClients / collectSseSubscribers 一致。
-  // 否则在 MySQL 大小写不敏感校对下，URL 为 label_01、库中为 LABEL_01 时会注册到错误键，表现为「已连接仍提示无客户端」。
-  const printerCode = req.validatedPrinterCode || String(req.params.printerCode || '').trim()
-  sseHeadersAndHeartbeat(res, () => svc.registerClient(printerCode, res))
-}
-
-function listenStation(req, res) {
-  const clientId = req.validatedStationClientId
-  const tenantId = getTenantId(req)
-  sseHeadersAndHeartbeat(res, () => svc.registerStationClient(clientId, tenantId, res))
-}
-
 module.exports = {
   list,
   detail,
@@ -293,10 +272,9 @@ module.exports = {
   stats,
   printerHealth,
   complete,
+  completeLocal,
   fail,
   retry,
-  listen,
-  listenStation,
   policyTemplatesList,
   tenantSettingsApplyTemplate,
   tenantBilling,

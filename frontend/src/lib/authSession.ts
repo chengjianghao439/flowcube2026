@@ -2,6 +2,7 @@
  * 登录态持久化与整页跳转退出（replace，防止浏览器返回进入已退出系统）。
  */
 import { useAuthStore } from '@/store/authStore'
+import { useWorkspaceStore } from '@/store/workspaceStore'
 
 function routeLooksLikePda(): boolean {
   if (import.meta.env.VITE_ELECTRON === '1') {
@@ -13,6 +14,7 @@ function routeLooksLikePda(): boolean {
 
 /** 仅清状态（不跳转），等同于 store.logout */
 export function clearAuthPersistedState(): void {
+  useWorkspaceStore.getState().closeAll()
   useAuthStore.getState().logout()
 }
 
@@ -36,6 +38,7 @@ export function redirectReplaceToLogin(): void {
 
 /** 清状态并整页 replace 到登录（401、主动退出等） */
 export function performSessionLogout(): void {
+  useWorkspaceStore.getState().closeAll()
   useAuthStore.getState().logout()
   redirectReplaceToLogin()
 }

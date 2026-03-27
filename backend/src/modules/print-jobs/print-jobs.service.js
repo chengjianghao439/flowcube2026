@@ -3,11 +3,10 @@
  * 打印任务队列服务
  *
  * 架构：
- *  - PDA / ERP 调用 create() 投入任务
- *  - 桌面端打印客户端通过 SSE 订阅：
- *      - /api/print-jobs/listen/station + 头 X-Client-Id（与 printers.client_id 一致，推荐）
- *      - 或 /api/print-jobs/listen/:printerCode（兼容旧版）
- *  - 客户端拿到任务后执行本地打印，完成后回调 complete() 或 fail()
+ *  - PDA / ERP 调用 create() 入队（审计、配额、绑定）
+ *  - FlowCube 桌面端可本机直连 ZPL 出纸后 POST /print-jobs/:id/complete-local 核销
+ *  - 独立 print-client（SSE/轮询）已移除
+ *  - 仍保留 complete / fail（print:client）供自动化或兼容旧集成
  *  - 失败任务最多重试 3 次
  */
 const crypto = require('crypto')
@@ -36,11 +35,6 @@ function statusKey(n) {
   return STATUS_KEY[i] ?? 'unknown'
 }
 
-/** mysql2 可能返回 BIGINT；SSE JSON 不能含 BigInt，否则抛错导致整单 500 */
-function jsonForSse(obj) {
-  return JSON.stringify(obj, (_k, v) => (typeof v === 'bigint' ? Number(v) : v))
-}
-
 function printStateLabel(n) {
   switch (Number(n)) {
     case STATUS.PENDING: return '排队中'
@@ -50,10 +44,6 @@ function printStateLabel(n) {
     default: return '未知'
   }
 }
-
-// SSE：按打印机编码（旧版）或按工作站 client_id（新版）
-const sseClients = new Map()
-const sseClientsByClientId = new Map()
 
 async function canTenantStartPrinting(tenantId) {
   const tid = Number(tenantId) >= 0 && Number.isFinite(Number(tenantId)) ? Number(tenantId) : 0
@@ -342,6 +332,36 @@ async function complete(id, { ackToken } = {}, { tenantId } = {}) {
   return findById(id, { tenantId })
 }
 
+/**
+ * ERP 桌面端本机出纸后核销：仅允许仍为「待打印」且未生成 ack_token 的任务（未被打印工作站领取）
+ */
+async function completeLocalDesktop(id, { tenantId } = {}) {
+  const job = await findById(id, { tenantId })
+  if (job.status === STATUS.DONE) return job
+  if (job.status === STATUS.FAILED) {
+    throw new AppError('任务已失败，无法核销', 400)
+  }
+  if (job.status === STATUS.PRINTING) {
+    throw new AppError('任务已被打印工作站领取，无法本机核销', 409)
+  }
+  if (job.status !== STATUS.PENDING) {
+    throw new AppError('无法核销该任务', 400)
+  }
+  const [[sec]] = await pool.query('SELECT ack_token FROM print_jobs WHERE id=?', [id])
+  if (sec?.ack_token) {
+    throw new AppError('任务已下发至工作站，请使用打印客户端确认完成', 409)
+  }
+  const [ur] = await pool.query(
+    'UPDATE print_jobs SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW() WHERE id=? AND tenant_id=? AND status=?',
+    [STATUS.DONE, id, job.tenantId, STATUS.PENDING],
+  )
+  if (!ur.affectedRows) {
+    throw new AppError('任务状态已变更，请刷新后重试', 409)
+  }
+  await recordSuccessfulPrint(job.tenantId, job.copies).catch(() => {})
+  return findById(id, { tenantId })
+}
+
 // ── 打印客户端回调：失败 ──────────────────────────────────────────────────────
 
 async function fail(id, errorMessage, { tenantId } = {}) {
@@ -388,119 +408,8 @@ async function retry(id, { tenantId } = {}) {
   return updated
 }
 
-// ── SSE：注册客户端 ───────────────────────────────────────────────────────────
-
-function registerClient(printerCode, res) {
-  if (!sseClients.has(printerCode)) sseClients.set(printerCode, new Set())
-  sseClients.get(printerCode).add(res)
-
-  // 连接后立即推送队列中待打印任务
-  flushPendingToClient(printerCode, res)
-
-  res.on('close', () => {
-    sseClients.get(printerCode)?.delete(res)
-  })
-}
-
-function registerStationClient(clientId, tenantId, res) {
-  const cid = String(clientId || '').trim()
-  if (!cid) return
-  if (!sseClientsByClientId.has(cid)) sseClientsByClientId.set(cid, new Set())
-  sseClientsByClientId.get(cid).add(res)
-  flushPendingToClientByClientId(cid, tenantId, res)
-  res.on('close', () => {
-    sseClientsByClientId.get(cid)?.delete(res)
-  })
-}
-
-async function flushPendingToClient(printerCode, res) {
-  try {
-    const [[printer]] = await pool.query('SELECT id FROM printers WHERE code=?', [printerCode])
-    if (!printer) return
-    const [rows] = await pool.query(
-      `SELECT j.*, p.code AS printer_code, p.name AS printer_name
-       FROM print_jobs j LEFT JOIN printers p ON p.id=j.printer_id
-       WHERE j.printer_id=? AND j.status=0
-         AND (j.expires_at IS NULL OR j.expires_at > NOW())
-       ORDER BY j.priority DESC, j.id ASC`,
-      [printer.id],
-    )
-    for (const row of rows) {
-      const trow = row.tenant_id != null ? Number(row.tenant_id) : 0
-      if (!(await canTenantStartPrinting(trow))) continue
-      const ack = crypto.randomBytes(16).toString('hex')
-      const [ur] = await pool.query(
-        'UPDATE print_jobs SET status=1, ack_token=?, dispatched_at=NOW() WHERE id=? AND status=0',
-        [ack, row.id],
-      )
-      if (!ur.affectedRows) continue
-      row.status = 1
-      row.ack_token = ack
-      res.write(`data: ${jsonForSse(fmt(row, { includeAckToken: true }))}\n\n`)
-    }
-  } catch { /* 静默 */ }
-}
-
-async function flushPendingToClientByClientId(clientId, tenantId, res) {
-  try {
-    const tid = Number(tenantId) >= 0 && Number.isFinite(Number(tenantId)) ? Number(tenantId) : 0
-    const cid = String(clientId || '').trim()
-    const [rows] = await pool.query(
-      `SELECT j.*, p.code AS printer_code, p.name AS printer_name
-       FROM print_jobs j
-       INNER JOIN printers p ON p.id = j.printer_id
-         AND p.client_id = ?
-         AND (p.tenant_id = ? OR p.tenant_id = 0)
-       WHERE j.status = 0 AND j.tenant_id = ?
-         AND (j.expires_at IS NULL OR j.expires_at > NOW())
-       ORDER BY j.priority DESC, j.id ASC`,
-      [cid, tid, tid],
-    )
-    for (const row of rows) {
-      const trow = row.tenant_id != null ? Number(row.tenant_id) : 0
-      if (!(await canTenantStartPrinting(trow))) continue
-      const ack = crypto.randomBytes(16).toString('hex')
-      const [ur] = await pool.query(
-        'UPDATE print_jobs SET status=1, ack_token=?, dispatched_at=NOW() WHERE id=? AND status=0',
-        [ack, row.id],
-      )
-      if (!ur.affectedRows) continue
-      row.status = 1
-      row.ack_token = ack
-      res.write(`data: ${jsonForSse(fmt(row, { includeAckToken: true }))}\n\n`)
-    }
-  } catch { /* 静默 */ }
-}
-
-async function collectSseSubscribersForPrinter(printerCode) {
-  const subs = new Set()
-  const pc = String(printerCode || '').trim()
-  if (pc) {
-    const byCode = sseClients.get(pc)
-    if (byCode) byCode.forEach((r) => subs.add(r))
-    // 兼容：旧版 listen 曾用 URL 片段作键，与库中 code 大小写不一致时仍能匹配
-    if (subs.size === 0) {
-      const lower = pc.toLowerCase()
-      for (const [k, set] of sseClients.entries()) {
-        if (String(k).toLowerCase() === lower) {
-          set.forEach((r) => subs.add(r))
-          break
-        }
-      }
-    }
-  }
-  try {
-    const [[row]] = await pool.query('SELECT client_id FROM printers WHERE code=? LIMIT 1', [pc])
-    if (row && row.client_id) {
-      const byC = sseClientsByClientId.get(String(row.client_id))
-      if (byC) byC.forEach((r) => subs.add(r))
-    }
-  } catch { /* 忽略 */ }
-  return subs
-}
-
 /**
- * 入队后探测任务是否已推送到打印客户端（便于接口区分「仅入库」与「已下发」）
+ * 入队后给前端的提示（独立 print-client 已移除；桌面端走本机直连 + complete-local）
  * @returns {{ code: string, message: string, sseClients: number }}
  */
 async function getDispatchHintForJob(printerCode, jobId) {
@@ -515,11 +424,10 @@ async function getDispatchHintForJob(printerCode, jobId) {
 
   const st = Number(job.status)
   if (st === STATUS.PRINTING) {
-    const n = code ? (await collectSseSubscribersForPrinter(code)).size : 0
     return {
       code: 'dispatched',
-      message: '已下发至打印工作站，正在打印',
-      sseClients: n,
+      message: '任务处于打印中（例如已下发至外部集成），请等待核销',
+      sseClients: 0,
     }
   }
   if (st === STATUS.DONE) {
@@ -536,65 +444,25 @@ async function getDispatchHintForJob(printerCode, jobId) {
     return { code: 'unknown', message: '', sseClients: 0 }
   }
 
-  const subs = code ? await collectSseSubscribersForPrinter(code) : new Set()
-  const n = subs.size
-  if (n === 0) {
+  const tid = job.tenantId != null ? Number(job.tenantId) : 0
+  if (!(await canTenantStartPrinting(tid))) {
     return {
-      code: 'no_print_client',
-      message:
-        '任务已入队，但未检测到在线打印客户端：请在连接打印机的电脑上运行 print-client（/listen/station 或 /listen/:打印机编码），并完成注册',
+      code: 'queued_concurrency',
+      message: '任务已入队，因租户「同时打印中」上限暂时排队，请稍候',
       sseClients: 0,
     }
   }
   return {
-    code: 'queued_concurrency',
-    message: '任务已入队，因租户「同时打印中」上限暂时排队，请稍候',
-    sseClients: n,
+    code: 'no_print_client',
+    message:
+      '任务已入队。请使用 FlowCube 桌面端，在「设置 → 打印机管理」配置本机 ZPL 网口/CUPS 后执行打印；桌面端将本机出纸并自动核销队列。',
+    sseClients: 0,
   }
 }
 
-async function pushToClients(printerCode, job) {
-  const clients = await collectSseSubscribersForPrinter(printerCode)
-  if (!clients.size) return
-
-  const [[alive]] = await pool.query(
-    `SELECT id FROM print_jobs WHERE id=? AND status=? AND (expires_at IS NULL OR expires_at > NOW())`,
-    [job.id, STATUS.PENDING],
-  )
-  if (!alive) return
-
-  const tid = job.tenantId != null ? Number(job.tenantId) : 0
-  if (!(await canTenantStartPrinting(tid))) return
-
-  const ack = crypto.randomBytes(16).toString('hex')
-  await pool.query(
-    'UPDATE print_jobs SET status=?, ack_token=?, dispatched_at=NOW() WHERE id=? AND status=?',
-    [STATUS.PRINTING, ack, job.id, STATUS.PENDING],
-  )
-  let payloadJob = {
-    ...job,
-    status: STATUS.PRINTING,
-    statusKey: 'printing',
-    printStateLabel: '打印中',
-    ackToken: ack,
-  }
-  try {
-    const [[raw]] = await pool.query(
-      `SELECT j.*, p.code AS printer_code, p.name AS printer_name
-       FROM print_jobs j LEFT JOIN printers p ON p.id=j.printer_id WHERE j.id=?`,
-      [job.id],
-    )
-    if (raw) payloadJob = fmt(raw, { includeAckToken: true })
-  } catch { /* 使用上方合并对象 */ }
-
-  const payload = `data: ${jsonForSse(payloadJob)}\n\n`
-  clients.forEach((res) => {
-    try {
-      res.write(payload)
-    } catch {
-      clients.delete(res)
-    }
-  })
+/** 原 SSE 推送入口；独立打印客户端已移除，此处不再下发 */
+async function pushToClients(_printerCode, _job) {
+  return
 }
 
 /** ZPL 容器标签（Code128），供斑马等标签机 */
@@ -698,7 +566,7 @@ async function enqueueContainerLabelJob(payload) {
 
 /**
  * 货架条码标签入队
- * payload: { rackId, tenantId?, createdBy?, jobUniqueKey? }
+ * payload: { rackId, tenantId?, createdBy?, jobUniqueKey?, includePrintPayload? }
  */
 async function enqueueRackLabelJob(payload) {
   const rackId = payload?.rackId
@@ -756,12 +624,17 @@ async function enqueueRackLabelJob(payload) {
       jobUniqueKey: payload.jobUniqueKey ?? null,
     })
     const dispatchHint = await getDispatchHintForJob(job.printerCode, job.id)
-    return {
+    const out = {
       id: job.id,
       printerCode: job.printerCode,
       printerName: job.printerName,
       dispatchHint,
     }
+    if (payload.includePrintPayload) {
+      out.contentType = 'zpl'
+      out.content = zpl
+    }
+    return out
   } catch (e) {
     if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/i.test(String(e.message))) {
       throw new AppError('打印入库失败：数据库字段异常，请先执行迁移或联系管理员', 503)
@@ -909,12 +782,11 @@ module.exports = {
   findById,
   create,
   complete,
+  completeLocalDesktop,
   normalizeJobType,
   resolvePrinterForJob,
   fail,
   retry,
-  registerClient,
-  registerStationClient,
   expireStaleJobs,
   getStatsCounts,
   listPrinterHealth,

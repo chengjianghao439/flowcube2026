@@ -38,7 +38,7 @@ function defaultDispatchPolicy() {
 }
 
 /**
- * 心跳分：30s 内满分，随时间指数衰减（依赖 print_clients.last_seen）
+ * 心跳分：30s 内满分，随时间指数衰减（依赖 print_clients.last_seen；独立打印客户端已移除，表可为历史数据）
  * @param {Date|string|null} lastSeen
  * @returns {number} 0~1
  */

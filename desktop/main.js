@@ -5,6 +5,7 @@ const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
 const { checkAppUpdate, attachDesktopDialogIpc } = require('./lib/updateCheck')
+const { printZpl } = require('./lib/localPrint')
 
 /** 用户已在渲染层确认退出，允许真正关闭窗口（与 ipc flowcube:close-accept 共用） */
 const closeAllowed = new WeakSet()
@@ -112,6 +113,12 @@ ipcMain.handle('flowcube:get-system-printers', async (event) => {
     console.error('[flowcube:get-system-printers]', e)
     return []
   }
+})
+
+/** 本机直连：将 ZPL 发往网口斑马或 CUPS raw 队列 */
+ipcMain.handle('flowcube:print-zpl', async (_event, opts) => {
+  await printZpl(opts || {})
+  return null
 })
 
 function createWindow() {

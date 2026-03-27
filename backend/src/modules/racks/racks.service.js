@@ -269,13 +269,14 @@ async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }
   return { kind: 'ok', message: '未识别为 RCK/PRD/CNT 或仓库内商品编码，无额外绑定提示' }
 }
 
-async function enqueuePrintLabel(id, { tenantId = 0, userId = null } = {}) {
+async function enqueuePrintLabel(id, { tenantId = 0, userId = null, includePrintPayload = false } = {}) {
   await findById(id)
   const { enqueueRackLabelJob } = require('../print-jobs/print-jobs.service')
   const job = await enqueueRackLabelJob({
     rackId: id,
     tenantId,
     createdBy: userId,
+    includePrintPayload,
   })
   if (!job) return null
   return {
@@ -283,6 +284,8 @@ async function enqueuePrintLabel(id, { tenantId = 0, userId = null } = {}) {
     printerCode:   job.printerCode ?? null,
     printerName:   job.printerName ?? null,
     dispatchHint:  job.dispatchHint ?? null,
+    contentType:   job.contentType ?? null,
+    content:       job.content ?? null,
   }
 }
 
