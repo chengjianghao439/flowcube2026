@@ -21,6 +21,11 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 import { ensureUniquePrinterCode, systemNameToPrinterCode } from '@/utils/printerCode'
+import {
+  normalizeSystemPrinterName,
+  pickSystemPrinterRow,
+  type SystemPrinterRow,
+} from '@/utils/printerName'
 
 const TYPE_LABEL: Record<number, string> = {
   1: '标签打印机',
@@ -59,14 +64,6 @@ interface Printer {
 }
 
 type BindingMap = Record<string, { print_type: string; printer_code: string; printer_name: string }>
-
-type SystemPrinterRow = {
-  name: string
-  displayName: string
-  description: string
-  status: number
-  isDefault: boolean
-}
 
 interface BindDialogProps {
   printer: Printer
@@ -140,7 +137,11 @@ export default function PrintersPage() {
   })
 
   const existingCodes = useMemo(() => new Set(printers.map(p => p.code)), [printers])
-  const existingNames = useMemo(() => new Set(printers.map(p => p.name)), [printers])
+  /** 与 RAW 打印侧规范化一致，避免「已添加」与系统枚举因 Unicode 不一致漏判 */
+  const existingNamesNormalized = useMemo(
+    () => new Set(printers.map(p => normalizeSystemPrinterName(p.name))),
+    [printers],
+  )
 
   const { data: bindings = {} } = useQuery<BindingMap>({
     queryKey: ['printer-bindings'],
@@ -156,9 +157,19 @@ export default function PrintersPage() {
     setListLoading(true)
     setListError(null)
     try {
-      const list = await window.flowcubeDesktop!.getSystemPrinters!()
-      setSystemList(Array.isArray(list) ? list : [])
-      if (!list?.length) {
+      const raw = await window.flowcubeDesktop!.getSystemPrinters!()
+      const list = (Array.isArray(raw) ? raw : []).filter(
+        (p): p is SystemPrinterRow =>
+          !!p &&
+          typeof p.name === 'string' &&
+          normalizeSystemPrinterName(p.name).length > 0,
+      )
+      setSystemList(list)
+      setSelectedName(prev => {
+        if (!prev) return ''
+        return list.some(q => q.name === prev) ? prev : ''
+      })
+      if (!list.length) {
         setListError('未检测到本机打印机，请在系统设置中先安装打印机后再试。')
       }
     } catch {
@@ -251,12 +262,12 @@ export default function PrintersPage() {
       toast.error('无法再次确认本机打印机列表，请重试')
       return
     }
-    const allowed = new Set(fresh.map(p => p.name))
-    if (!allowed.has(selectedName)) {
+    const picked = pickSystemPrinterRow(fresh, selectedName)
+    if (!picked) {
       toast.error('所选打印机不在当前系统已安装列表中，请重新选择或刷新列表')
       return
     }
-    const name = selectedName
+    const name = picked.name
     const baseCode = systemNameToPrinterCode(name)
     const code = ensureUniquePrinterCode(baseCode, existingCodes)
     const description = `本机系统打印机`
@@ -274,9 +285,9 @@ export default function PrintersPage() {
   const selectableSystemPrinters = useMemo(() => {
     return systemList.map(row => ({
       ...row,
-      alreadyInErp: existingNames.has(row.name),
+      alreadyInErp: existingNamesNormalized.has(normalizeSystemPrinterName(row.name)),
     }))
-  }, [systemList, existingNames])
+  }, [systemList, existingNamesNormalized])
 
   return (
     <div className="space-y-6">

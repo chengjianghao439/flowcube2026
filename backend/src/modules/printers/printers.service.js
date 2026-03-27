@@ -61,9 +61,35 @@ async function findById(id, tenantId = 0) {
   return fmt(row)
 }
 
+function normalizePrinterName(raw) {
+  return String(raw ?? '')
+    .normalize('NFC')
+    .trim()
+    .replace(/\u00a0/g, ' ')
+    .replace(/\u200b/g, '')
+}
+
+/** printers.code 表级全局唯一；前端仅按当前租户列表去重，跨租户需在此再分配 */
+async function allocateUniqueCodeGlobally(baseCode) {
+  const b = String(baseCode || '').trim().slice(0, 50)
+  if (!b) throw new AppError('编码不能为空', 400)
+  let candidate = b
+  let n = 2
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const [[exists]] = await pool.query('SELECT id FROM printers WHERE code=? LIMIT 1', [candidate])
+    if (!exists) return candidate
+    const suffix = `_${n}`
+    candidate = (b.slice(0, Math.max(0, 50 - suffix.length)) + suffix).slice(0, 50)
+    n += 1
+    if (n > 502) throw new AppError('无法生成唯一打印机编码', 500)
+  }
+}
+
 async function create({ name, code, type, description, warehouseId, source }, tenantId = 0) {
   const tid = normTid(tenantId)
-  if (!name) throw new AppError('名称不能为空', 400)
+  const nameNorm = normalizePrinterName(name)
+  if (!nameNorm) throw new AppError('名称不能为空', 400)
   if (!code) throw new AppError('编码不能为空', 400)
   if (!type) throw new AppError('类型不能为空', 400)
   const wh =
@@ -72,16 +98,19 @@ async function create({ name, code, type, description, warehouseId, source }, te
       : null
   const src =
     source === 'local_desktop' || source === 'client' || source === 'manual' ? source : null
+  const finalCode = await allocateUniqueCodeGlobally(code)
   const [r] = await pool.query(
     'INSERT INTO printers (name, code, type, warehouse_id, tenant_id, description, source) VALUES (?,?,?,?,?,?,?)',
-    [name, code, type, wh, tid, description || null, src],
+    [nameNorm, finalCode, type, wh, tid, description || null, src],
   )
   return findById(r.insertId, tid)
 }
 
 async function update(id, { name, code, type, description, status, warehouseId }, tenantId = 0) {
   const tid = normTid(tenantId)
-  await findById(id, tid)
+  const existing = await findById(id, tid)
+  const nameVal = name !== undefined ? normalizePrinterName(name) : existing.name
+  if (name !== undefined && !nameVal) throw new AppError('名称不能为空', 400)
   const wh =
     warehouseId === undefined
       ? undefined
@@ -91,12 +120,12 @@ async function update(id, { name, code, type, description, status, warehouseId }
   if (wh !== undefined) {
     await pool.query(
       'UPDATE printers SET name=?, code=?, type=?, warehouse_id=?, description=?, status=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
-      [name, code, type, wh, description || null, status ?? 1, id, tid],
+      [nameVal, code, type, wh, description || null, status ?? 1, id, tid],
     )
   } else {
     await pool.query(
       'UPDATE printers SET name=?, code=?, type=?, description=?, status=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
-      [name, code, type, description || null, status ?? 1, id, tid],
+      [nameVal, code, type, description || null, status ?? 1, id, tid],
     )
   }
   return findById(id, tid)

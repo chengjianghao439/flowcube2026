@@ -7,6 +7,56 @@ const { pathToFileURL } = require('url')
 const { checkAppUpdate } = require('./lib/updateCheck')
 const { printZpl } = require('./lib/localPrint')
 
+/** 与 Chromium 枚举一致，避免 PowerShell Get-Printer 与 OpenPrinter 名称不一致导致误拒 */
+function normalizeQueueLabel(s) {
+  return String(s ?? '')
+    .trim()
+    .replace(/\u00a0/g, ' ')
+    .replace(/\u200b/g, '')
+}
+
+/**
+ * 将 ERP 传入的名称解析为当前 webContents 可见的系统打印机名（与「打印机管理」同源）
+ * @returns {Promise<string>}
+ */
+async function resolveCanonicalPrinterNameForRaw(event, requestedName) {
+  const raw = normalizeQueueLabel(requestedName)
+  if (!raw) return raw
+  const wc = event.sender
+  if (!wc || typeof wc.getPrintersAsync !== 'function') {
+    return raw
+  }
+  let list = []
+  try {
+    list = await wc.getPrintersAsync()
+  } catch (e) {
+    console.warn('[FlowCube] getPrintersAsync 失败，使用原始打印机名:', e?.message || e)
+    return raw
+  }
+  const printers = Array.isArray(list) ? list : []
+  if (printers.length === 0) {
+    return raw
+  }
+  const target = raw.toLowerCase()
+  for (const p of printers) {
+    if (normalizeQueueLabel(p.name).toLowerCase() === target) {
+      return p.name
+    }
+  }
+  for (const p of printers) {
+    const d = normalizeQueueLabel(p.displayName || '')
+    if (d && d.toLowerCase() === target) {
+      return p.name
+    }
+  }
+  const names = printers.map((p) => p.name).filter(Boolean)
+  const sample = names.slice(0, 14).join('、')
+  const more = names.length > 14 ? ` … 共 ${names.length} 台` : ''
+  throw new Error(
+    `找不到打印机「${raw}」。请打开「设置 → 打印机管理」，用「从本机添加」重新选择标签机，勿手改打印机名称；须与下列系统名称之一完全一致：${sample}${more}`,
+  )
+}
+
 /** 用户已在渲染层确认退出，允许真正关闭窗口（与 ipc flowcube:close-accept 共用） */
 const closeAllowed = new WeakSet()
 
@@ -135,9 +185,13 @@ ipcMain.handle('flowcube:get-system-printers', async (event) => {
 })
 
 /** 本机直连：按打印机名称 RAW 出 ZPL（Windows WinSpool / macOS·Linux lp） */
-ipcMain.handle('flowcube:print-zpl', async (_event, opts) => {
+ipcMain.handle('flowcube:print-zpl', async (event, opts) => {
   try {
-    await printZpl(opts || {})
+    const o = opts && typeof opts === 'object' ? { ...opts } : {}
+    if (o.printerName != null) {
+      o.printerName = await resolveCanonicalPrinterNameForRaw(event, o.printerName)
+    }
+    await printZpl(o)
     return null
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
