@@ -45,8 +45,14 @@ function formatDesktopPrintCatch(e: unknown): string {
     const m = (e.response?.data as { message?: string } | undefined)?.message
     return (m || e.message || '').trim() || '网络或接口错误'
   }
-  if (e instanceof Error) return e.message.trim() || '未知错误'
-  return String(e || '未知错误')
+  if (e instanceof Error && e.message.trim()) return e.message.trim()
+  if (e && typeof e === 'object' && 'message' in e) {
+    const m = (e as { message?: unknown }).message
+    if (typeof m === 'string' && m.trim()) return m.trim()
+  }
+  const s = String(e ?? '').trim()
+  if (s && s !== '[object Object]') return s
+  return '本机打印失败（可打开桌面端开发者工具或主进程控制台查看详情）'
 }
 
 export type DesktopLocalPrintResult = 'skipped' | 'ok' | { error: string }

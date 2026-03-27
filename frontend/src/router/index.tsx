@@ -6,8 +6,7 @@ import PdaLayout from '@/layouts/PdaLayout'
 import PdaConnectionGate from '@/components/pda/PdaConnectionGate'
 import ErpDesktopConnectionGate from '@/components/erp/ErpDesktopConnectionGate'
 import ErpApiBaseHotkeyDialog from '@/components/erp/ErpApiBaseHotkeyDialog'
-import { DesktopQuitDialog } from '@/components/desktop/DesktopQuitDialog'
-import { DesktopMessageBoxBridge } from '@/components/desktop/DesktopMessageBoxBridge'
+import { DesktopQuitUnloadBridge } from '@/components/desktop/DesktopQuitUnloadBridge'
 
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
 const LoginPage       = lazy(() => import('@/pages/login'))
@@ -72,11 +71,9 @@ export default function AppRouter() {
     <HashRouter>
       <PdaConnectionGate>
         {/*
-          桌面：Quit / 主进程 MessageBox / API 热键 必须挂在 ErpDesktopConnectionGate 之外。
-          否则「正在连接服务器…」阶段 Gate 整段 return，桥接未挂载，自动更新等 IPC 弹窗会丢失（表现为更新提示不稳定）。
+          桌面：beforeunload 闸门 / API 热键 必须挂在 ErpDesktopConnectionGate 之外。
         */}
-        <DesktopQuitDialog />
-        <DesktopMessageBoxBridge />
+        <DesktopQuitUnloadBridge />
         <ErpApiBaseHotkeyDialog />
         <ErpDesktopConnectionGate>
         <Suspense fallback={<PageLoader />}>

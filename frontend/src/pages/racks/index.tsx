@@ -18,6 +18,7 @@ import type { TableColumn } from '@/types'
 import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
 import {
+  isDesktopLocalPrintAvailable,
   isDesktopLocalPrintError,
   tryDesktopLocalZplThenComplete,
 } from '@/lib/desktopLocalPrint'
@@ -84,6 +85,12 @@ export default function RacksPage() {
         }
         if (isDesktopLocalPrintError(local)) {
           toast.error(local.error)
+          return
+        }
+        if (local === 'skipped' && !isDesktopLocalPrintAvailable()) {
+          toast.warning(
+            '当前不是 FlowCube 桌面端（或未加载本机打印桥接），标签机不会出纸。请使用桌面安装包打开 ERP；若已在桌面端内，请重启应用或检查是否被安全软件拦截预加载脚本。任务已在服务器入队。',
+          )
           return
         }
         const h = d.dispatchHint

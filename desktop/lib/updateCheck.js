@@ -1,4 +1,4 @@
-const { dialog, shell, ipcMain } = require('electron')
+const { dialog, shell } = require('electron')
 const fs = require('fs').promises
 const fssync = require('fs')
 const path = require('path')
@@ -204,62 +204,15 @@ async function downloadUpdateFile(downloadUrl, destPath, signal) {
   console.log('[FlowCube] 更新包已保存:', destPath)
 }
 
-/** 主进程等待渲染层 AppDialog 响应（替代系统 showMessageBox） */
-const pendingDesktopDialogs = new Map()
-
-async function showBoxRenderer(parentWindow, options) {
-  return new Promise((resolve) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const timeout = setTimeout(() => {
-      pendingDesktopDialogs.delete(id)
-      dialog
-        .showMessageBox(parentWindow, options)
-        .then(resolve)
-        .catch(() => resolve({ response: 0 }))
-    }, 120000)
-    pendingDesktopDialogs.set(id, {
-      resolve: (v) => {
-        clearTimeout(timeout)
-        resolve(v)
-      },
-    })
-    parentWindow.webContents.send('desktop-show-message-box', {
-      id,
-      type: options.type || 'info',
-      title: options.title || '',
-      message: options.message || '',
-      detail: options.detail || '',
-      buttons: options.buttons && options.buttons.length ? options.buttons : ['确定'],
-      defaultId: options.defaultId ?? 0,
-      cancelId: options.cancelId ?? 0,
-    })
-  })
-}
-
 function showBox(parentWindow, options) {
-  if (
+  const parent =
     parentWindow &&
     !parentWindow.isDestroyed() &&
     parentWindow.webContents &&
     !parentWindow.webContents.isDestroyed()
-  ) {
-    return showBoxRenderer(parentWindow, options)
-  }
-  return dialog.showMessageBox(parentWindow || undefined, options)
-}
-
-let ipcDesktopDialogAttached = false
-function attachDesktopDialogIpc() {
-  if (ipcDesktopDialogAttached) return
-  ipcDesktopDialogAttached = true
-  ipcMain.on('desktop-message-box-response', (event, { id, response }) => {
-    if (typeof id !== 'string' || typeof response !== 'number') return
-    const p = pendingDesktopDialogs.get(id)
-    if (p) {
-      p.resolve({ response })
-      pendingDesktopDialogs.delete(id)
-    }
-  })
+      ? parentWindow
+      : undefined
+  return dialog.showMessageBox(parent, options)
 }
 
 async function probeDownloadUrl(url) {
@@ -731,7 +684,6 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn) {
 
 module.exports = {
   checkAppUpdate,
-  attachDesktopDialogIpc,
   /** 供测试或后续自动下载模块复用 */
   isRemoteVersionNewer,
   isValidDownloadUrl,

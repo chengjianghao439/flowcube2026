@@ -67,7 +67,12 @@ function fmt(row, { includeAckToken = false } = {}) {
     id:           num(row.id),
     printerId:    num(row.printer_id),
     printerCode:  row.printer_code,
-    printerName:  row.printer_name,
+    // 本机 RAW 需队列名：库内 name 为空时用 code 兜底
+    printerName:  (() => {
+      const n = row.printer_name != null ? String(row.printer_name).trim() : ''
+      const c = row.printer_code != null ? String(row.printer_code).trim() : ''
+      return n || c || null
+    })(),
     templateId:   num(row.template_id),
     title:        row.title,
     contentType:  row.content_type,

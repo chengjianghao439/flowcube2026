@@ -1,11 +1,11 @@
-/** 主进程 showMessageBox 映射到渲染层 AppDialog */
-export interface DesktopMessageBoxPayload {
-  id: string
+/** 与 preload `showMessageBox` / 主进程 dialog.showMessageBox 对齐的载荷 */
+export interface DesktopShowMessageBoxPayload {
   type?: 'none' | 'info' | 'error' | 'question' | 'warning'
-  title: string
-  message: string
+  title?: string
+  message?: string
   detail?: string
-  buttons: string[]
+  buttons?: string[]
   defaultId?: number
   cancelId?: number
+  noLink?: boolean
 }

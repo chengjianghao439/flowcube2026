@@ -10,6 +10,7 @@
  */
 
 import { create } from 'zustand'
+import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 
 interface PendingConfirm {
   message: string
@@ -69,8 +70,31 @@ export const useDirtyGuardStore = create<DirtyGuardState>((set, get) => ({
 
   hasAnyDirtyIn: (paths) => paths.some(p => !!get().dirtyTabs[p]),
 
-  showConfirm: (message, onConfirm, onCancel = () => {}) =>
-    set({ pendingConfirm: { message, onConfirm, onCancel } }),
+  showConfirm: (message, onConfirm, onCancel = () => {}) => {
+    if (
+      IS_ELECTRON_DESKTOP &&
+      typeof window !== 'undefined' &&
+      typeof window.flowcubeDesktop?.showMessageBox === 'function'
+    ) {
+      void window.flowcubeDesktop
+        .showMessageBox!({
+          type: 'question',
+          title: '离开确认',
+          message,
+          buttons: ['确定离开', '继续编辑'],
+          defaultId: 1,
+          cancelId: 1,
+          noLink: true,
+        })
+        .then(({ response }) => {
+          if (response === 0) onConfirm()
+          else onCancel()
+        })
+        .catch(() => onCancel())
+      return
+    }
+    set({ pendingConfirm: { message, onConfirm, onCancel } })
+  },
 
   resolveConfirm: (ok) => {
     const { pendingConfirm } = get()

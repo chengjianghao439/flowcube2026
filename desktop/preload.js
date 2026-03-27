@@ -9,26 +9,13 @@ contextBridge.exposeInMainWorld('flowcubeDesktop', {
   notifyApiOriginReady: (origin) => {
     ipcRenderer.send('flowcube:api-origin-ready', origin)
   },
-  onCloseRequest: (cb) => {
-    const listener = () => {
-      cb()
-    }
-    ipcRenderer.on('flowcube:close-request', listener)
-    return () => ipcRenderer.removeListener('flowcube:close-request', listener)
-  },
+  /** 渲染层在已自行确认后请求关闭（如将来菜单「退出」） */
   acceptClose: () => {
     ipcRenderer.send('flowcube:close-accept')
   },
-  onDesktopMessageBox: (cb) => {
-    const listener = (_e, payload) => {
-      cb(payload)
-    }
-    ipcRenderer.on('desktop-show-message-box', listener)
-    return () => ipcRenderer.removeListener('desktop-show-message-box', listener)
-  },
-  sendDesktopMessageBoxResponse: (id, response) => {
-    ipcRenderer.send('desktop-message-box-response', { id, response })
-  },
+  /** 系统原生 messageBox；返回 { response: 按钮索引 } */
+  showMessageBox: (payload) =>
+    ipcRenderer.invoke('flowcube:show-message-box', payload),
   /** 主进程枚举当前系统已安装打印机（仅桌面端） */
   getSystemPrinters: () => ipcRenderer.invoke('flowcube:get-system-printers'),
   /**

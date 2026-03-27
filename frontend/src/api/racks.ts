@@ -48,7 +48,7 @@ export interface PrintRackLabelResult {
   printerCode: string | null
   printerName: string | null
   dispatchHint?: PrintDispatchHint | null
-  /** 仅请求头含 X-Flowcube-Desktop-Local-Print: 1 时返回，供本机直连 */
+  /** 入队成功时返回 ZPL，供桌面端本机 RAW 出纸 */
   contentType?: string | null
   content?: string | null
 }

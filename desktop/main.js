@@ -1,10 +1,10 @@
 console.log('🔥 当前 main.js 已加载')
 
-const { app, BrowserWindow, Menu, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
-const { checkAppUpdate, attachDesktopDialogIpc } = require('./lib/updateCheck')
+const { checkAppUpdate } = require('./lib/updateCheck')
 const { printZpl } = require('./lib/localPrint')
 
 /** 用户已在渲染层确认退出，允许真正关闭窗口（与 ipc flowcube:close-accept 共用） */
@@ -62,7 +62,7 @@ async function getRendererApiOrigin(win) {
   return normalizeApiOrigin(raw)
 }
 
-/** 等渲染进程挂上 DesktopMessageBoxBridge（useEffect）后再弹更新窗；过短会丢 IPC */
+/** 打包后自动更新检查延迟：给引导写入 API 根地址留时间 */
 const PACKAGED_UPDATE_CHECK_DELAY_MS = Math.min(
   30_000,
   Math.max(800, Number(process.env.FLOWCUBE_UPDATE_CHECK_DELAY_MS) || 1800),
@@ -94,6 +94,25 @@ ipcMain.on('flowcube:close-accept', (event) => {
   win.close()
 })
 
+/** 渲染进程请求系统原生提示框（离开确认、confirmAction 等） */
+ipcMain.handle('flowcube:show-message-box', async (event, payload) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  const parent = win && !win.isDestroyed() ? win : null
+  const p = payload && typeof payload === 'object' ? payload : {}
+  const options = {
+    type: p.type || 'none',
+    title: typeof p.title === 'string' ? p.title : '',
+    message: typeof p.message === 'string' ? p.message : '',
+    buttons:
+      Array.isArray(p.buttons) && p.buttons.length ? p.buttons : ['确定'],
+    defaultId: typeof p.defaultId === 'number' ? p.defaultId : 0,
+    noLink: p.noLink !== false,
+  }
+  if (typeof p.detail === 'string' && p.detail) options.detail = p.detail
+  if (typeof p.cancelId === 'number') options.cancelId = p.cancelId
+  return dialog.showMessageBox(parent, options)
+})
+
 /** 枚举本机已安装打印机（与系统「打印机与扫描仪」一致），供添加打印机仅从列表选择 */
 ipcMain.handle('flowcube:get-system-printers', async (event) => {
   const wc = event.sender
@@ -117,8 +136,13 @@ ipcMain.handle('flowcube:get-system-printers', async (event) => {
 
 /** 本机直连：按打印机名称 RAW 出 ZPL（Windows WinSpool / macOS·Linux lp） */
 ipcMain.handle('flowcube:print-zpl', async (_event, opts) => {
-  await printZpl(opts || {})
-  return null
+  try {
+    await printZpl(opts || {})
+    return null
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error((msg || '').trim() || '本机 RAW 打印失败')
+  }
 })
 
 function createWindow() {
@@ -138,7 +162,28 @@ function createWindow() {
   win.on('close', (e) => {
     if (closeAllowed.has(win)) return
     e.preventDefault()
-    win.webContents.send('flowcube:close-request')
+    void (async () => {
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'question',
+        buttons: ['退出应用', '取消'],
+        defaultId: 1,
+        cancelId: 1,
+        title: '退出 FlowCube',
+        message: '确定要退出 FlowCube ERP 吗？',
+        noLink: true,
+      })
+      if (response !== 0) return
+      try {
+        await win.webContents.executeJavaScript(
+          `window.dispatchEvent(new CustomEvent('flowcube-quit-confirmed'))`,
+          true,
+        )
+      } catch {
+        /* 页面未就绪等 */
+      }
+      closeAllowed.add(win)
+      win.close()
+    })()
   })
 
   win.once('ready-to-show', () => {
@@ -183,8 +228,6 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  attachDesktopDialogIpc()
-
   // 去掉默认「文件 / 编辑 / 视图…」等系统菜单栏（Windows/Linux）；界面以 Web 为准
   Menu.setApplicationMenu(null)
 

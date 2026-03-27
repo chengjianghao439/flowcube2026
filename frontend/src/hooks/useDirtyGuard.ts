@@ -37,7 +37,7 @@ export function useDirtyGuard(tabPath: string, isDirty: boolean) {
     }
   }, [tabPath, setDirty])
 
-  // 浏览器刷新 / 关闭标签页保护（Electron 内由主进程 + DesktopQuitDialog 处理关闭，此处用闸门避免二次原生提示）
+  // 浏览器刷新 / 关闭标签页保护（Electron 内主进程退出确认后会 dispatch 事件放行一次，避免二次原生离开提示）
   useEffect(() => {
     if (!isDirty) return
     const handler = (e: BeforeUnloadEvent) => {
