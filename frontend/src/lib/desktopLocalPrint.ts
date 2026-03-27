@@ -39,6 +39,17 @@ export function validateZplForLocalPrint(content: string | null | undefined): st
   return null
 }
 
+/** TSPL（TSC/佳博等）本机 RAW 校验 */
+export function validateTsplForLocalPrint(content: string | null | undefined): string | null {
+  const s = content != null ? String(content).trim() : ''
+  if (!s) return 'TSPL 内容为空，无法本机打印'
+  const u = s.toUpperCase()
+  if (!u.includes('SIZE') || !u.includes('CLS') || !u.includes('PRINT')) {
+    return 'TSPL 不完整（应含 SIZE、CLS、PRINT），无法送 RAW。请检查模板或打印机「指令集」是否为 TSPL'
+  }
+  return null
+}
+
 export async function printZplOnDesktop(
   content: string,
   opts: { printerName: string | null | undefined },
@@ -86,7 +97,8 @@ export async function tryDesktopLocalZplThenComplete(opts: {
 }): Promise<DesktopLocalPrintResult> {
   if (!isDesktopLocalPrintAvailable()) return 'skipped_no_desktop'
   const { jobId, content, contentType, printerName } = opts
-  if (!content || contentType !== 'zpl' || jobId == null || !Number.isFinite(Number(jobId))) {
+  const ct = String(contentType || '').toLowerCase()
+  if (!content || (ct !== 'zpl' && ct !== 'tspl') || jobId == null || !Number.isFinite(Number(jobId))) {
     return 'skipped_no_payload'
   }
   if (!hasDesktopZplTargetConfigured(printerName)) {
@@ -95,8 +107,8 @@ export async function tryDesktopLocalZplThenComplete(opts: {
         'ERP 中该打印机未配置本机队列名称。请在「设置 → 打印机管理」使用「从本机添加」选择标签机，并绑定「库存标签」等用途；名称必须与 Windows/系统「打印机」列表中的名称完全一致。',
     }
   }
-  const zplErr = validateZplForLocalPrint(content)
-  if (zplErr) return { error: zplErr }
+  const rawErr = ct === 'tspl' ? validateTsplForLocalPrint(content) : validateZplForLocalPrint(content)
+  if (rawErr) return { error: rawErr }
   try {
     await printZplOnDesktop(String(content).trim(), { printerName })
     await apiClient.post(`/print-jobs/${Number(jobId)}/complete-local`, {})

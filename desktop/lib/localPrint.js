@@ -127,8 +127,11 @@ async function printZpl(opts) {
   if (!printerName) {
     throw new Error('缺少打印机名称：请在 ERP「打印机管理」用「从本机添加」添加标签机并绑定用途。')
   }
-  if (!content.includes('^XA') || !content.includes('^XZ')) {
-    throw new Error('ZPL 格式异常：缺少 ^XA 或 ^XZ，请检查模板或联系管理员')
+  const isZpl = content.includes('^XA') && content.includes('^XZ')
+  const u = content.toUpperCase()
+  const isTspl = u.includes('SIZE') && u.includes('CLS') && u.includes('PRINT')
+  if (!isZpl && !isTspl) {
+    throw new Error('RAW 格式异常：须为 ZPL（^XA…^XZ）或 TSPL（含 SIZE、CLS、PRINT），请检查模板或打印机指令集设置')
   }
   const platform = os.platform()
   if (platform === 'win32') {

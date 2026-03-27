@@ -28,7 +28,7 @@ function normalizeJobType(jobType, contentType) {
     return j
   }
   const ct = String(contentType || '').toLowerCase()
-  if (ct === 'zpl') return 'product_label'
+  if (ct === 'zpl' || ct === 'tspl') return 'product_label'
   return j || 'product_label'
 }
 
@@ -68,7 +68,7 @@ async function fetchBindingCandidates(printType, tenantId, whNum) {
 
 function printerTypeForContentType(contentType) {
   const ct = String(contentType || '').toLowerCase()
-  if (ct === 'zpl') return 1
+  if (ct === 'zpl' || ct === 'tspl') return 1
   if (ct === 'html' || ct === 'pdf') return 3
   return 1
 }

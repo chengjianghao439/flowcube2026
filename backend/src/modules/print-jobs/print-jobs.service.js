@@ -15,6 +15,12 @@ const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { resolvePrinterForJob, normalizeJobType } = require('./print-dispatch')
 const { getLabelZplFromDefaultTemplate } = require('./labelZplTemplate')
+const {
+  buildRackLabelTspl,
+  buildContainerLabelTspl,
+  buildPackageLabelTspl,
+  getLabelTsplFromDefaultTemplate,
+} = require('./labelTsplTemplate')
 const { recordPrintSuccess, recordPrintFailure } = require('./printer-health')
 
 const STATUS = { PENDING: 0, PRINTING: 1, DONE: 2, FAILED: 3 }
@@ -450,6 +456,17 @@ function buildPackageLabelZpl({ box_code, task_no, customer_name, summary }) {
 }
 
 /**
+ * 与 printers.label_raw_format 一致：佳博等用 tspl
+ */
+async function getPrinterLabelRawFormat(printerId) {
+  const id = Number(printerId)
+  if (!Number.isFinite(id) || id <= 0) return 'zpl'
+  const [[row]] = await pool.query('SELECT label_raw_format FROM printers WHERE id=?', [id])
+  const f = String(row?.label_raw_format || 'zpl').toLowerCase()
+  return f === 'tspl' ? 'tspl' : 'zpl'
+}
+
+/**
  * 解析用于容器标签的打印机：优先环境变量 code，否则第一台「在线 + 标签机 type=1」
  */
 async function resolveLabelPrinterId(tenantId = 0) {
@@ -498,13 +515,21 @@ async function enqueueContainerLabelJob(payload) {
     product_name: data.product_name,
     qty: data.qty,
   }
-  const customZpl = await getLabelZplFromDefaultTemplate(6, vars)
-  const zpl = customZpl
-    ?? buildContainerLabelZpl({
-        container_code: data.container_code,
-        product_name: data.product_name,
-        qty: data.qty,
-      })
+  const labelFmt = await getPrinterLabelRawFormat(printerId)
+  const useTspl = labelFmt === 'tspl'
+  const labelBody = useTspl
+    ? (await getLabelTsplFromDefaultTemplate(6, vars))
+      ?? buildContainerLabelTspl({
+          container_code: data.container_code,
+          product_name: data.product_name,
+          qty: data.qty,
+        })
+    : (await getLabelZplFromDefaultTemplate(6, vars))
+      ?? buildContainerLabelZpl({
+          container_code: data.container_code,
+          product_name: data.product_name,
+          qty: data.qty,
+        })
   return create({
     printerId,
     dispatchReason,
@@ -512,8 +537,8 @@ async function enqueueContainerLabelJob(payload) {
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
     jobType: 'container_label',
     title: `容器标 ${data.container_code}`,
-    contentType: 'zpl',
-    content: zpl,
+    contentType: useTspl ? 'tspl' : 'zpl',
+    content: labelBody,
     copies: 1,
     createdBy: payload.createdBy ?? null,
     jobUniqueKey: payload.jobUniqueKey,
@@ -565,14 +590,23 @@ async function enqueueRackLabelJob(payload) {
     zone: row.zone,
     name: row.name,
   }
-  const customZpl = await getLabelZplFromDefaultTemplate(5, vars)
-  const zpl = customZpl
-    ?? buildRackLabelZpl({
-        rack_barcode: row.barcode,
-        rack_code: row.code,
-        zone: row.zone,
-        name: row.name,
-      })
+  const labelFmt = await getPrinterLabelRawFormat(printerId)
+  const useTspl = labelFmt === 'tspl'
+  const labelBody = useTspl
+    ? (await getLabelTsplFromDefaultTemplate(5, vars))
+      ?? buildRackLabelTspl({
+          rack_barcode: row.barcode,
+          rack_code: row.code,
+          zone: row.zone,
+          name: row.name,
+        })
+    : (await getLabelZplFromDefaultTemplate(5, vars))
+      ?? buildRackLabelZpl({
+          rack_barcode: row.barcode,
+          rack_code: row.code,
+          zone: row.zone,
+          name: row.name,
+        })
   try {
     const job = await create({
       printerId,
@@ -581,8 +615,8 @@ async function enqueueRackLabelJob(payload) {
       warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
       jobType: 'rack_label',
       title: `货架标 ${row.barcode}`,
-      contentType: 'zpl',
-      content: zpl,
+      contentType: useTspl ? 'tspl' : 'zpl',
+      content: labelBody,
       copies: 1,
       createdBy: payload.createdBy ?? null,
       jobUniqueKey: payload.jobUniqueKey ?? null,
@@ -594,8 +628,8 @@ async function enqueueRackLabelJob(payload) {
       printerCode: job.printerCode,
       printerName: job.printerName,
       dispatchHint,
-      contentType: 'zpl',
-      content: zpl,
+      contentType: useTspl ? 'tspl' : 'zpl',
+      content: labelBody,
     }
   } catch (e) {
     if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/i.test(String(e.message))) {
@@ -644,14 +678,23 @@ async function enqueuePackageLabelJob(payload) {
     customer_name: row.customer_name,
     summary,
   }
-  const customZpl = await getLabelZplFromDefaultTemplate(7, vars)
-  const zpl = customZpl
-    ?? buildPackageLabelZpl({
-        box_code: row.barcode,
-        task_no: row.task_no,
-        customer_name: row.customer_name,
-        summary,
-      })
+  const labelFmt = await getPrinterLabelRawFormat(printerId)
+  const useTspl = labelFmt === 'tspl'
+  const labelBody = useTspl
+    ? (await getLabelTsplFromDefaultTemplate(7, vars))
+      ?? buildPackageLabelTspl({
+          box_code: row.barcode,
+          task_no: row.task_no,
+          customer_name: row.customer_name,
+          summary,
+        })
+    : (await getLabelZplFromDefaultTemplate(7, vars))
+      ?? buildPackageLabelZpl({
+          box_code: row.barcode,
+          task_no: row.task_no,
+          customer_name: row.customer_name,
+          summary,
+        })
   return create({
     printerId,
     dispatchReason,
@@ -659,8 +702,8 @@ async function enqueuePackageLabelJob(payload) {
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
     jobType: 'package_label',
     title: `箱贴 ${row.barcode}`,
-    contentType: 'zpl',
-    content: zpl,
+    contentType: useTspl ? 'tspl' : 'zpl',
+    content: labelBody,
     copies: 1,
     createdBy: payload.createdBy ?? null,
     jobUniqueKey: payload.jobUniqueKey ?? null,

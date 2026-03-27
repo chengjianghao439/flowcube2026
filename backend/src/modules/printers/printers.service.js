@@ -4,11 +4,13 @@ const AppError = require('../../utils/AppError')
 const TYPE_NAME = { 1: '标签打印机', 2: '面单打印机', 3: 'A4打印机' }
 
 function fmt(row) {
+  const lr = String(row.label_raw_format || 'zpl').toLowerCase()
   return {
     id:          row.id,
     name:        row.name,
     code:        row.code,
     type:        row.type,
+    labelRawFormat: lr === 'tspl' ? 'tspl' : 'zpl',
     tenantId:    row.tenant_id != null ? Number(row.tenant_id) : 0,
     warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
     typeName:    TYPE_NAME[row.type] || '其他',
@@ -86,7 +88,7 @@ async function allocateUniqueCodeGlobally(baseCode) {
   }
 }
 
-async function create({ name, code, type, description, warehouseId, source }, tenantId = 0) {
+async function create({ name, code, type, description, warehouseId, source, labelRawFormat }, tenantId = 0) {
   const tid = normTid(tenantId)
   const nameNorm = normalizePrinterName(name)
   if (!nameNorm) throw new AppError('名称不能为空', 400)
@@ -98,19 +100,24 @@ async function create({ name, code, type, description, warehouseId, source }, te
       : null
   const src =
     source === 'local_desktop' || source === 'client' || source === 'manual' ? source : null
+  const lr = String(labelRawFormat || '').toLowerCase() === 'tspl' ? 'tspl' : 'zpl'
   const finalCode = await allocateUniqueCodeGlobally(code)
   const [r] = await pool.query(
-    'INSERT INTO printers (name, code, type, warehouse_id, tenant_id, description, source) VALUES (?,?,?,?,?,?,?)',
-    [nameNorm, finalCode, type, wh, tid, description || null, src],
+    'INSERT INTO printers (name, code, type, label_raw_format, warehouse_id, tenant_id, description, source) VALUES (?,?,?,?,?,?,?,?)',
+    [nameNorm, finalCode, type, lr, wh, tid, description || null, src],
   )
   return findById(r.insertId, tid)
 }
 
-async function update(id, { name, code, type, description, status, warehouseId }, tenantId = 0) {
+async function update(id, { name, code, type, description, status, warehouseId, labelRawFormat }, tenantId = 0) {
   const tid = normTid(tenantId)
   const existing = await findById(id, tid)
   const nameVal = name !== undefined ? normalizePrinterName(name) : existing.name
   if (name !== undefined && !nameVal) throw new AppError('名称不能为空', 400)
+  const lrVal =
+    labelRawFormat !== undefined
+      ? (String(labelRawFormat).toLowerCase() === 'tspl' ? 'tspl' : 'zpl')
+      : (existing.labelRawFormat || 'zpl')
   const wh =
     warehouseId === undefined
       ? undefined
@@ -119,13 +126,13 @@ async function update(id, { name, code, type, description, status, warehouseId }
         : null
   if (wh !== undefined) {
     await pool.query(
-      'UPDATE printers SET name=?, code=?, type=?, warehouse_id=?, description=?, status=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
-      [nameVal, code, type, wh, description || null, status ?? 1, id, tid],
+      'UPDATE printers SET name=?, code=?, type=?, warehouse_id=?, description=?, status=?, label_raw_format=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
+      [nameVal, code, type, wh, description || null, status ?? 1, lrVal, id, tid],
     )
   } else {
     await pool.query(
-      'UPDATE printers SET name=?, code=?, type=?, description=?, status=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
-      [nameVal, code, type, description || null, status ?? 1, id, tid],
+      'UPDATE printers SET name=?, code=?, type=?, description=?, status=?, label_raw_format=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
+      [nameVal, code, type, description || null, status ?? 1, lrVal, id, tid],
     )
   }
   return findById(id, tid)

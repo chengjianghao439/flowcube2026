@@ -13,7 +13,7 @@ interface PrintParams {
   printerId: number
   title: string
   content: string
-  contentType?: 'html' | 'zpl' | 'text'
+  contentType?: 'html' | 'zpl' | 'tspl' | 'text'
   copies?: number
   templateId?: number
 }

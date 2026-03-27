@@ -56,8 +56,11 @@ interface Printer {
   code: string
   type: number
   typeName: string
+  /** 本机 RAW：zpl 斑马系；tspl 佳博 TSC 等 */
+  labelRawFormat?: 'zpl' | 'tspl'
   description: string
   status: number
+  warehouseId?: number | null
   source?: string
   clientId?: string
   clientAliasName?: string | null
@@ -165,6 +168,26 @@ export default function PrintersPage() {
   const { data: bindings = {} } = useQuery<BindingMap>({
     queryKey: ['printer-bindings'],
     queryFn: () => apiClient.get('/printer-bindings').then(r => r.data.data),
+  })
+
+  const updateLabelFmt = useMutation({
+    mutationFn: async (printer: Printer) => {
+      await apiClient.put(`/printers/${printer.id}`, {
+        name: printer.name,
+        code: printer.code,
+        type: printer.type,
+        description: printer.description ?? '',
+        status: printer.status,
+        warehouseId: printer.warehouseId ?? null,
+        labelRawFormat: printer.labelRawFormat ?? 'zpl',
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['printers'] })
+      toast.success('已更新 RAW 指令集')
+    },
+    onError: (e: unknown) =>
+      toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'),
   })
 
   const loadSystemPrinters = useCallback(async () => {
@@ -427,6 +450,12 @@ export default function PrintersPage() {
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">名称</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">编码</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">类型</th>
+              <th
+                className="px-4 py-3 text-left font-medium text-muted-foreground"
+                title="本机 RAW：ZPL 适用于斑马等；TSPL 适用于佳博 TSC 等"
+              >
+                RAW
+              </th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">状态</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">来源</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">所属设备</th>
@@ -436,10 +465,10 @@ export default function PrintersPage() {
           </thead>
           <tbody className="divide-y divide-border">
             {isLoading && (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">加载中...</td></tr>
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">加载中...</td></tr>
             )}
             {!isLoading && printers.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">暂无打印机</td></tr>
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">暂无打印机</td></tr>
             )}
             {printers.map(p => (
               <tr key={p.id} className="hover:bg-muted/20">
@@ -450,6 +479,23 @@ export default function PrintersPage() {
                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code}</td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[p.type]}`}>{TYPE_LABEL[p.type]}</span>
+                </td>
+                <td className="px-4 py-3">
+                  <Select
+                    value={p.labelRawFormat ?? 'zpl'}
+                    onValueChange={v =>
+                      updateLabelFmt.mutate({ ...p, labelRawFormat: v as 'zpl' | 'tspl' })
+                    }
+                    disabled={updateLabelFmt.isPending}
+                  >
+                    <SelectTrigger className="h-8 w-[92px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="zpl">ZPL</SelectItem>
+                      <SelectItem value="tspl">TSPL</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </td>
                 <td className="px-4 py-3">
                   <button onClick={() => toggleStatus.mutate(p)} className="flex items-center gap-1.5">
