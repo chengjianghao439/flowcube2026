@@ -11,7 +11,7 @@
 
 - 触发：`push` 到 `v*` **tag**（推荐发版路径）、或 `push` 到 `main`（验证构建）、或 Actions 里 **手动运行**（仅产物/artifact，**不**创建 Release）。
 - Runner：`windows-latest`。
-- 步骤概要：`npm ci`（frontend → desktop）→ `build:electron` → `dist:win`（electron-builder NSIS）→ 将 `desktop/release/*.exe` 上传 **GitHub Release**（**仅 tag 推送**）。
+- 步骤概要：`npm ci`（frontend → desktop）→ `npm run build`（frontend，桌面包）→ `dist:win`（electron-builder NSIS）→ 将 `desktop/release/*.exe` 上传 **GitHub Release**（**仅 tag 推送**）。
 - 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
 
@@ -22,10 +22,10 @@
 Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默认连 `http://localhost:3000`，正式用户必须在登录前改地址。
 
 - 在 GitHub 仓库 **Settings → Secrets and variables → Actions → Variables** 新增 **`VITE_ERP_PRODUCTION_ORIGIN`**，值为后端根地址，例如 `https://api.example.com`（**不要**带 `/api`）。
-- **Build Desktop Installer** 工作流在 `npm run build:electron` 时已传入该变量；重新打 tag 构建的安装包将登录页**预填**该地址。
+- **Build Desktop Installer** 工作流在 `npm run build`（frontend）时已传入该变量；重新打 tag 构建的安装包将登录页**预填**该地址。
 - 仍可在登录页「服务器地址」或 **Ctrl+Shift+S** 修改为其它环境。
 
-本地桌面打包示例：`VITE_ERP_PRODUCTION_ORIGIN=https://api.example.com npm run build:electron`（在 `frontend` 目录）。
+本地桌面打包示例：`VITE_ERP_PRODUCTION_ORIGIN=https://api.example.com npm run build`（在 `frontend` 目录）。
 
 ## 推荐发布流程（须按顺序）
 

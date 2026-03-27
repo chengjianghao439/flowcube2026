@@ -21,7 +21,10 @@ import { getPackagesApi, createPackageApi, addPackageItemApi, finishPackageApi, 
 import type { Package } from '@/api/packages'
 import type { WarehouseTask } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
-import { tryDesktopLocalZplThenComplete } from '@/lib/desktopLocalPrint'
+import {
+  isDesktopLocalPrintError,
+  tryDesktopLocalZplThenComplete,
+} from '@/lib/desktopLocalPrint'
 
 function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) {
   const navigate = useNavigate()
@@ -167,7 +170,12 @@ export default function PdaPackPage() {
     mutationFn: (pkgId: number) => printPackageLabelApi(pkgId).then(r => r.data.data!),
     onSuccess: async (d) => {
       if (d.queued && d.job && typeof d.job === 'object') {
-        const job = d.job as { id?: number; content?: string; contentType?: string }
+        const job = d.job as {
+          id?: number
+          content?: string
+          contentType?: string
+          printerName?: string | null
+        }
         const local = await tryDesktopLocalZplThenComplete({
           jobId: job.id,
           content: job.content,
@@ -178,8 +186,8 @@ export default function PdaPackPage() {
           ok('箱贴已从本机打印')
           return
         }
-        if (local === 'error') {
-          err('本机打印失败，任务仍在队列中')
+        if (isDesktopLocalPrintError(local)) {
+          err(local.error)
           return
         }
       }

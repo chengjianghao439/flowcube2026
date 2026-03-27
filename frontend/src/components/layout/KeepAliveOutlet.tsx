@@ -227,8 +227,7 @@ export function KeepAliveOutlet() {
   /**
    * Dirty Guard — Layer 2：兜底拦截浏览器前进/后退
    *
-   * 注意：useBlocker 仅支持 Data Router（createBrowserRouter），
-   * 项目使用组件式 BrowserRouter，改用 popstate 事件监听实现相同效果。
+   * 注意：useBlocker 仅支持 Data Router；项目使用 HashRouter + popstate 实现离开确认。
    *
    * 工作流程：
    * 1. popstate 触发时 URL 已变，用 replaceState 恢复原 URL

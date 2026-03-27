@@ -57,12 +57,9 @@ async function printLabel(req, res, next) {
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ success: false, message: '无效的货架 ID', data: null })
     }
-    const includePrintPayload =
-      String(req.headers['x-flowcube-desktop-local-print'] || '').trim() === '1'
     const slim = await racksService.enqueuePrintLabel(id, {
       tenantId: req.user?.tenantId ?? 0,
       userId: req.user?.userId ?? null,
-      includePrintPayload,
     })
     if (!slim) {
       return successResponse(

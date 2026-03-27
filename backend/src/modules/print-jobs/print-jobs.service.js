@@ -510,7 +510,7 @@ async function enqueueContainerLabelJob(payload) {
 
 /**
  * 货架条码标签入队
- * payload: { rackId, tenantId?, createdBy?, jobUniqueKey?, includePrintPayload? }
+ * payload: { rackId, tenantId?, createdBy?, jobUniqueKey? }
  */
 async function enqueueRackLabelJob(payload) {
   const rackId = payload?.rackId
@@ -568,17 +568,15 @@ async function enqueueRackLabelJob(payload) {
       jobUniqueKey: payload.jobUniqueKey ?? null,
     })
     const dispatchHint = await getDispatchHintForJob(job.printerCode, job.id)
-    const out = {
+    // 始终附带 ZPL：桌面端本机 RAW 出纸需要；仅登录用户可调此接口，不依赖自定义头
+    return {
       id: job.id,
       printerCode: job.printerCode,
       printerName: job.printerName,
       dispatchHint,
+      contentType: 'zpl',
+      content: zpl,
     }
-    if (payload.includePrintPayload) {
-      out.contentType = 'zpl'
-      out.content = zpl
-    }
-    return out
   } catch (e) {
     if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/i.test(String(e.message))) {
       throw new AppError('打印入库失败：数据库字段异常，请先执行迁移或联系管理员', 503)

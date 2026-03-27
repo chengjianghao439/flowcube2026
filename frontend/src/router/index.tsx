@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import AppLayout from '@/layouts/AppLayout'
 import PdaLayout from '@/layouts/PdaLayout'
@@ -68,11 +67,9 @@ function PdaGuestRoute() {
   return <Outlet />
 }
 
-const HistoryRouter = IS_ELECTRON_DESKTOP ? HashRouter : BrowserRouter
-
 export default function AppRouter() {
   return (
-    <HistoryRouter>
+    <HashRouter>
       <PdaConnectionGate>
         {/*
           桌面：Quit / 主进程 MessageBox / API 热键 必须挂在 ErpDesktopConnectionGate 之外。
@@ -129,6 +126,6 @@ export default function AppRouter() {
         </Suspense>
         </ErpDesktopConnectionGate>
       </PdaConnectionGate>
-    </HistoryRouter>
+    </HashRouter>
   )
 }

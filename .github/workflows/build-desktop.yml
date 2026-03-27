@@ -226,10 +226,10 @@ jobs:
           VITE_ERP_PRODUCTION_ORIGIN: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
         run: |
           set -euo pipefail
-          echo "=== STEP: Build frontend — START (npm run build:electron) ==="
+          echo "=== STEP: Build frontend — START (npm run build) ==="
           pwd
           ls -la
-          npm run build:electron
+          npm run build
           echo "=== STEP: Build frontend — END (success) ==="
           pwd
           ls -la
@@ -239,7 +239,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== DEBUG checkpoint: after build:electron ==="
+          echo "=== DEBUG checkpoint: after frontend build ==="
           pwd
           ls -la frontend/dist | head -30
 

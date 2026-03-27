@@ -19,8 +19,10 @@ async function boot(): Promise<void> {
   if (Capacitor.isNativePlatform()) {
     applyPdaApiBaseFromStorage()
     installPdaGlobals()
-    if (!window.location.pathname.startsWith('/pda')) {
-      window.location.replace('/pda')
+    const inHash = (window.location.hash.replace(/^#/, '').split('?')[0] || '/').trim()
+    if (!inHash.startsWith('/pda')) {
+      const prefix = window.location.href.split('#')[0]
+      window.location.replace(`${prefix}#/pda`)
     }
     return
   }

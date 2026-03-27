@@ -17,7 +17,10 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { TableColumn } from '@/types'
 import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
-import { tryDesktopLocalZplThenComplete } from '@/lib/desktopLocalPrint'
+import {
+  isDesktopLocalPrintError,
+  tryDesktopLocalZplThenComplete,
+} from '@/lib/desktopLocalPrint'
 import { ChevronDown, Edit2, Printer, Trash2 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -79,10 +82,8 @@ export default function RacksPage() {
           toast.success('已从本机打印货架标签并核销队列')
           return
         }
-        if (local === 'error') {
-          toast.error(
-            '本机打印失败，任务仍在队列中。请确认打印机是通过「从本机添加」添加的，且 ERP 中的名称与系统里一致。',
-          )
+        if (isDesktopLocalPrintError(local)) {
+          toast.error(local.error)
           return
         }
         const h = d.dispatchHint
