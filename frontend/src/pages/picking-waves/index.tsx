@@ -18,6 +18,7 @@ import {
   type PickingWave, type WaveStatus,
 } from '@/api/picking-waves'
 import DataTable from '@/components/shared/DataTable'
+import { confirmAction } from '@/lib/confirm'
 import type { TableColumn } from '@/types'
 
 const STATUS_VARIANT: Record<WaveStatus, 'default'|'secondary'|'outline'|'destructive'> = {
@@ -154,7 +155,25 @@ export default function PickingWavesPage() {
             {detail?.status === 1 && <Button onClick={() => startMut.mutate(detail.id)} disabled={startMut.isPending}>开始拣货</Button>}
             {detail?.status === 2 && <Button onClick={() => finishPickMut.mutate(detail.id)} disabled={finishPickMut.isPending}>完成拣货</Button>}
             {detail?.status === 3 && <Button onClick={() => finishMut.mutate(detail.id)} disabled={finishMut.isPending}>完成波次</Button>}
-            {detail && [1,2,3].includes(detail.status) && <Button variant="destructive" onClick={() => cancelMut.mutate(detail.id)} disabled={cancelMut.isPending}>取消</Button>}
+            {detail && [1, 2, 3].includes(detail.status) && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  const id = detail.id
+                  const waveNo = detail.waveNo
+                  confirmAction({
+                    title: '取消波次',
+                    description: `确定取消波次「${waveNo}」吗？此操作不可随意撤销。`,
+                    variant: 'destructive',
+                    confirmText: '取消波次',
+                    onConfirm: () => cancelMut.mutate(id),
+                  })
+                }}
+                disabled={cancelMut.isPending}
+              >
+                取消
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setDetailWave(null)}>关闭</Button>
           </DialogFooter>
         </DialogContent>

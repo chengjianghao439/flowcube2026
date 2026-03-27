@@ -2,7 +2,33 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
 
-const TYPE_NAME = { 1: '销售订单', 2: '采购订单', 3: '出库单', 4: '仓库任务单' }
+const TYPE_NAME = {
+  1: '销售订单',
+  2: '采购订单',
+  3: '出库单',
+  4: '仓库任务单',
+  5: '货架标签(ZPL)',
+  6: '散件容器标签(ZPL)',
+  7: '物流箱贴(ZPL)',
+  8: '商品标签(ZPL)',
+  9: '库存标签(ZPL)',
+}
+
+function validateLayout(type, layout) {
+  const t = Number(type)
+  if (t >= 5 && t <= 9) {
+    if (!layout || layout.format !== 'zpl' || typeof layout.body !== 'string' || !layout.body.trim()) {
+      throw new AppError('ZPL 标签模板须填写 ZPL 正文（layout.format=zpl 且 body 非空）', 400)
+    }
+    if (!String(layout.body).includes('^XA')) {
+      throw new AppError('ZPL 正文须包含 ^XA 起始指令', 400)
+    }
+    return
+  }
+  if (!layout || !Array.isArray(layout.elements)) {
+    throw new AppError('布局须包含 elements 数组', 400)
+  }
+}
 
 function parseLayoutJson(row) {
   if (typeof row.layout_json !== 'string') return row.layout_json
@@ -44,21 +70,28 @@ async function findById(id) {
 }
 
 async function create({ name, type, paperSize, layout, createdBy }) {
-  if (!name)   throw new AppError('模板名称不能为空', 400)
-  if (!type)   throw new AppError('请选择模板类型', 400)
-  if (!layout) throw new AppError('布局不能为空', 400)
+  if (!name) throw new AppError('模板名称不能为空', 400)
+  if (!type) throw new AppError('请选择模板类型', 400)
+  validateLayout(type, layout)
+  const t = Number(type)
+  const paper =
+    t >= 5 && t <= 9 ? paperSize || 'thermal80' : paperSize || 'A4'
   const [r] = await pool.query(
     `INSERT INTO print_templates (name, type, paper_size, layout_json, created_by) VALUES (?,?,?,?,?)`,
-    [name, type, paperSize || 'A4', JSON.stringify(layout), createdBy || null]
+    [name, type, paper, JSON.stringify(layout), createdBy || null]
   )
   return { id: r.insertId }
 }
 
 async function update(id, { name, type, paperSize, layout }) {
   await findById(id)
+  validateLayout(type, layout)
+  const t = Number(type)
+  const paper =
+    t >= 5 && t <= 9 ? paperSize || 'thermal80' : paperSize || 'A4'
   await pool.query(
     `UPDATE print_templates SET name=?, type=?, paper_size=?, layout_json=? WHERE id=?`,
-    [name, type, paperSize || 'A4', JSON.stringify(layout), id]
+    [name, type, paper, JSON.stringify(layout), id]
   )
 }
 

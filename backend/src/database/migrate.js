@@ -208,6 +208,51 @@ async function seedDefaultPrintTemplates(conn) {
         ]
       },
     },
+    {
+      name:      '默认货架标签模板',
+      type:      5,
+      paperSize: 'thermal80',
+      layout: {
+        format: 'zpl',
+        body:   '^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD{{rack_barcode}}^FS^FO32,108^A0N,22,22^FD{{rack_code}}^FS^FO32,138^A0N,20,20^FD{{zone}} {{name}}^FS^XZ',
+      },
+    },
+    {
+      name:      '默认散件容器标签模板',
+      type:      6,
+      paperSize: 'thermal80',
+      layout: {
+        format: 'zpl',
+        body:   '^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD{{container_code}}^FS^FO32,108^A0N,24,24^FD{{product_name}}^FS^FO32,148^A0N,24,24^FDQTY {{qty}}^FS^XZ',
+      },
+    },
+    {
+      name:      '默认物流箱贴标签模板',
+      type:      7,
+      paperSize: 'thermal80',
+      layout: {
+        format: 'zpl',
+        body:   '^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD{{box_code}}^FS^FO32,108^A0N,22,22^FD{{task_no}}^FS^FO32,142^A0N,20,20^FD{{customer_name}}^FS^FO32,176^A0N,18,18^FD{{summary}}^FS^XZ',
+      },
+    },
+    {
+      name:      '默认商品标签模板',
+      type:      8,
+      paperSize: 'thermal80',
+      layout: {
+        format: 'zpl',
+        body:   '^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD{{product_code}}^FS^FO32,108^A0N,24,24^FD{{product_name}}^FS^FO32,148^A0N,22,22^FD{{spec}}^FS^XZ',
+      },
+    },
+    {
+      name:      '默认库存标签模板',
+      type:      9,
+      paperSize: 'thermal80',
+      layout: {
+        format: 'zpl',
+        body:   '^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD{{sku}}^FS^FO32,108^A0N,24,24^FD{{product_name}}^FS^FO32,148^A0N,22,22^FD{{qty}} {{warehouse}}^FS^XZ',
+      },
+    },
   ]
 
   for (const seed of SEEDS) {

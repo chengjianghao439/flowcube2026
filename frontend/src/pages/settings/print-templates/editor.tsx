@@ -24,6 +24,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import type { PaperSize, TemplateElement, TemplateLayout, TemplateType } from '@/types/print-template'
+import { isZplTemplateLayout } from '@/types/print-template'
+import {
+  TEMPLATE_ZPL_DEFAULTS,
+  ZPL_PLACEHOLDER_ROWS,
+  ZPL_PREVIEW_SAMPLE,
+  applyZplPreview,
+} from '@/constants/labelZplDefaults'
 
 // ──────────────────────────────────────────────────────────────────────────
 // Constants
@@ -44,7 +51,16 @@ const TEMPLATE_TYPES: { value: TemplateType; label: string }[] = [
   { value: 2, label: '采购订单' },
   { value: 3, label: '出库单' },
   { value: 4, label: '仓库任务单' },
+  { value: 5, label: '货架标签 (ZPL)' },
+  { value: 6, label: '散件容器标签 (ZPL)' },
+  { value: 7, label: '物流箱贴 (ZPL)' },
+  { value: 8, label: '商品标签 (ZPL)' },
+  { value: 9, label: '库存标签 (ZPL)' },
 ]
+
+function isZplLabelType(t: number): t is 5 | 6 | 7 | 8 | 9 {
+  return t >= 5 && t <= 9
+}
 
 interface FieldDef {
   key: string
@@ -417,6 +433,7 @@ export default function PrintTemplateEditor() {
   const [type,       setType]       = useState<TemplateType>(1)
   const [paperSize,  setPaperSize]  = useState<PaperSize>('A4')
   const [elements,   setElements]   = useState<TemplateElement[]>([])
+  const [zplBody,    setZplBody]    = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [preview,    setPreview]    = useState(false)
   const [hydrated,   setHydrated]   = useState(isNew)
@@ -427,10 +444,34 @@ export default function PrintTemplateEditor() {
       setName(remote.name)
       setType(remote.type)
       setPaperSize(remote.paperSize)
-      setElements(remote.layout.elements)
+      if (isZplTemplateLayout(remote.layout)) {
+        setZplBody(remote.layout.body)
+        setElements([])
+      } else {
+        setElements(Array.isArray(remote.layout.elements) ? remote.layout.elements : [])
+        setZplBody('')
+      }
       setHydrated(true)
     }
   }, [remote, hydrated])
+
+  function handleTypeChange(v: string) {
+    const next = +v as TemplateType
+    const prev = type
+    setType(next)
+    if (isZplLabelType(next)) {
+      setPaperSize('thermal80')
+      setZplBody(TEMPLATE_ZPL_DEFAULTS[next] ?? '')
+      setElements([])
+      setSelectedId(null)
+    } else {
+      setZplBody('')
+      if (isZplLabelType(prev)) {
+        setElements([])
+        setSelectedId(null)
+      }
+    }
+  }
 
   // ── Drag state refs ──────────────────────────────────────────
   const canvasRef      = useRef<HTMLDivElement>(null)
@@ -465,6 +506,9 @@ export default function PrintTemplateEditor() {
   const paper = PAPER_SIZES[paperSize]
   const canvasW = paper.w * MM_PX
   const canvasH = paper.h * MM_PX
+  const paperSelectEntries = Object.entries(PAPER_SIZES).filter(([k]) =>
+    isZplLabelType(type) ? k === 'thermal80' || k === 'thermal58' : true,
+  )
 
   const selected = elements.find(e => e.id === selectedId) ?? null
 
@@ -486,6 +530,20 @@ export default function PrintTemplateEditor() {
   }
 
   function handleSave() {
+    if (isZplLabelType(type)) {
+      const body = zplBody.trim()
+      if (!body.includes('^XA')) {
+        toast.error('ZPL 正文须包含 ^XA 起始指令')
+        return
+      }
+      const layout: TemplateLayout = { format: 'zpl', body }
+      if (isNew) {
+        createMut.mutate({ name, type, paperSize, layout })
+      } else {
+        updateMut.mutate({ id: +id!, name, type, paperSize, layout })
+      }
+      return
+    }
     const layout: TemplateLayout = { elements }
     if (isNew) {
       createMut.mutate({ name, type, paperSize, layout })
@@ -599,8 +657,8 @@ export default function PrintTemplateEditor() {
         />
 
         {/* 类型 */}
-        <Select value={String(type)} onValueChange={v => setType(+v as TemplateType)}>
-          <SelectTrigger className="h-8 w-[9rem] px-2 text-sm">
+        <Select value={String(type)} onValueChange={handleTypeChange}>
+          <SelectTrigger className="h-8 w-[11rem] px-2 text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -616,15 +674,19 @@ export default function PrintTemplateEditor() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(PAPER_SIZES).map(([k, v]) => (
+            {paperSelectEntries.map(([k, v]) => (
               <SelectItem key={k} value={k}>{v.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* 元素计数 */}
-          <span className="text-xs text-muted-foreground">{elements.length} 个元素</span>
+          {!isZplLabelType(type) && (
+            <span className="text-xs text-muted-foreground">{elements.length} 个元素</span>
+          )}
+          {isZplLabelType(type) && (
+            <span className="text-xs text-muted-foreground">ZPL · {zplBody.length} 字符</span>
+          )}
 
           {/* 预览切换 */}
           <Button
@@ -634,7 +696,9 @@ export default function PrintTemplateEditor() {
             onClick={() => { setPreview(p => !p); setSelectedId(null) }}
           >
             {preview ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            {preview ? '退出预览' : '预览'}
+            {isZplLabelType(type)
+              ? (preview ? '返回编辑' : '示例替换')
+              : (preview ? '退出预览' : '预览')}
           </Button>
 
           {/* 保存 */}
@@ -647,81 +711,133 @@ export default function PrintTemplateEditor() {
 
       {/* ── Body ── */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Left: Palette */}
-        {!preview && <PalettePanel onDragStart={handlePaletteDragStart} />}
-
-        {/* Center: Canvas — min-w-0 允许 flex 容器正确收缩，画布可滚动 */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center overflow-auto bg-muted/40 p-8 gap-4">
-          {preview && (
-            <div className="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary">
-              <Eye className="size-3.5" />
-              预览模式 — 显示示例数据
-            </div>
-          )}
-          {!preview && (
-            <p className="text-xs text-muted-foreground">
-              从左侧拖拽字段到画布 · 点击选中元素后可拖动位置或在右侧修改属性 · <kbd className="rounded border px-1">Delete</kbd> 删除
-            </p>
-          )}
-
-          {/* Paper canvas */}
-          <div
-            ref={canvasRef}
-            style={{ width: canvasW, height: canvasH, position: 'relative' }}
-            className={`shrink-0 bg-white shadow-xl ring-1 ring-border/30 ${!preview ? 'cursor-crosshair' : ''}`}
-            onDragOver={handleCanvasDragOver}
-            onDrop={handleCanvasDrop}
-            onClick={() => { if (!draggingElId.current) setSelectedId(null) }}
-          >
-            {/* Grid overlay */}
-            {!preview && (
-              <svg
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }}
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <defs>
-                  <pattern id="grid" width={5 * MM_PX} height={5 * MM_PX} patternUnits="userSpaceOnUse">
-                    <path d={`M ${5 * MM_PX} 0 L 0 0 0 ${5 * MM_PX}`} fill="none" stroke="hsl(var(--muted-foreground)/0.12)" strokeWidth="0.5" />
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#grid)" />
-              </svg>
-            )}
-
-            {/* Elements */}
-            {elements.map(el => (
-              <ElementNode
-                key={el.id}
-                el={el}
-                selected={selectedId === el.id}
-                preview={preview}
-                onMouseDown={e => handleElementMouseDown(e, el)}
-                onClick={e => { e.stopPropagation(); setSelectedId(el.id) }}
-              />
-            ))}
-
-            {/* Empty hint */}
-            {elements.length === 0 && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground/40 pointer-events-none">
-                <Table2 className="size-10" />
-                <p className="text-sm">从左侧拖拽字段到这里</p>
+        {isZplLabelType(type) ? (
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div className="flex w-52 shrink-0 flex-col overflow-hidden border-r bg-muted/20">
+              <div className="border-b px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">占位符</p>
+                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                  使用双花括号包裹下列键名，保存后打印时替换为实际值。
+                </p>
               </div>
-            )}
+              <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+                {(ZPL_PLACEHOLDER_ROWS[type] ?? []).map(row => (
+                  <div key={row.key} className="text-xs font-mono">
+                    <span className="text-primary">{`{{${row.key}}}`}</span>
+                    <span className="ml-2 text-muted-foreground">{row.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t p-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setZplBody(TEMPLATE_ZPL_DEFAULTS[type] ?? '')}
+                >
+                  恢复默认 ZPL
+                </Button>
+              </div>
+            </div>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden bg-muted/40 p-6">
+              <p className="shrink-0 text-xs text-muted-foreground">
+                ZPL 正文须含 ^XA … ^XZ；中文建议含 ^CI28（UTF-8 需打印机支持）。
+              </p>
+              {preview ? (
+                <pre className="min-h-0 flex-1 overflow-auto rounded-lg border bg-background p-4 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+                  {applyZplPreview(zplBody, ZPL_PREVIEW_SAMPLE[type] ?? {})}
+                </pre>
+              ) : (
+                <textarea
+                  value={zplBody}
+                  onChange={e => setZplBody(e.target.value)}
+                  className="min-h-0 flex-1 resize-none rounded-lg border bg-background p-4 font-mono text-xs leading-relaxed"
+                  spellCheck={false}
+                  placeholder="^XA..."
+                />
+              )}
+            </div>
           </div>
+        ) : (
+          <>
+            {/* Left: Palette */}
+            {!preview && <PalettePanel onDragStart={handlePaletteDragStart} />}
 
-          {/* Print helper info */}
-          <p className="text-xs text-muted-foreground">
-            {paper.label} · {paper.w} × {paper.h} mm
-          </p>
-        </div>
+            {/* Center: Canvas — min-w-0 允许 flex 容器正确收缩，画布可滚动 */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center overflow-auto bg-muted/40 p-8 gap-4">
+              {preview && (
+                <div className="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary">
+                  <Eye className="size-3.5" />
+                  预览模式 — 显示示例数据
+                </div>
+              )}
+              {!preview && (
+                <p className="text-xs text-muted-foreground">
+                  从左侧拖拽字段到画布 · 点击选中元素后可拖动位置或在右侧修改属性 · <kbd className="rounded border px-1">Delete</kbd> 删除
+                </p>
+              )}
 
-        {/* Right: Properties */}
-        {!preview && (
-          <PropertiesPanel
-            el={selected}
-            onChange={patchElement}
-            onDelete={deleteElement}
-          />
+              {/* Paper canvas */}
+              <div
+                ref={canvasRef}
+                style={{ width: canvasW, height: canvasH, position: 'relative' }}
+                className={`shrink-0 bg-white shadow-xl ring-1 ring-border/30 ${!preview ? 'cursor-crosshair' : ''}`}
+                onDragOver={handleCanvasDragOver}
+                onDrop={handleCanvasDrop}
+                onClick={() => { if (!draggingElId.current) setSelectedId(null) }}
+              >
+                {/* Grid overlay */}
+                {!preview && (
+                  <svg
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }}
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <defs>
+                      <pattern id="grid" width={5 * MM_PX} height={5 * MM_PX} patternUnits="userSpaceOnUse">
+                        <path d={`M ${5 * MM_PX} 0 L 0 0 0 ${5 * MM_PX}`} fill="none" stroke="hsl(var(--muted-foreground)/0.12)" strokeWidth="0.5" />
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+                  </svg>
+                )}
+
+                {/* Elements */}
+                {elements.map(el => (
+                  <ElementNode
+                    key={el.id}
+                    el={el}
+                    selected={selectedId === el.id}
+                    preview={preview}
+                    onMouseDown={e => handleElementMouseDown(e, el)}
+                    onClick={e => { e.stopPropagation(); setSelectedId(el.id) }}
+                  />
+                ))}
+
+                {/* Empty hint */}
+                {elements.length === 0 && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground/40 pointer-events-none">
+                    <Table2 className="size-10" />
+                    <p className="text-sm">从左侧拖拽字段到这里</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Print helper info */}
+              <p className="text-xs text-muted-foreground">
+                {paper.label} · {paper.w} × {paper.h} mm
+              </p>
+            </div>
+
+            {/* Right: Properties */}
+            {!preview && (
+              <PropertiesPanel
+                el={selected}
+                onChange={patchElement}
+                onDelete={deleteElement}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

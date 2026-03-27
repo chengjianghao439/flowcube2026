@@ -1,5 +1,5 @@
 export type PaperSize = 'A4' | 'A5' | 'A6' | 'thermal80' | 'thermal58'
-export type TemplateType = 1 | 2 | 3 | 4
+export type TemplateType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
 export interface TemplateElement {
   id: string
@@ -18,8 +18,18 @@ export interface TemplateElement {
   tableColumns?: string[]
 }
 
-export interface TemplateLayout {
-  elements: TemplateElement[]
+/** 单据画布模板 | ZPL 标签模板 */
+export type TemplateLayout =
+  | { elements: TemplateElement[] }
+  | { format: 'zpl'; body: string }
+
+export function isZplTemplateLayout(layout: TemplateLayout | unknown): layout is { format: 'zpl'; body: string } {
+  return (
+    typeof layout === 'object' &&
+    layout !== null &&
+    (layout as { format?: string }).format === 'zpl' &&
+    typeof (layout as { body?: unknown }).body === 'string'
+  )
 }
 
 export interface PrintTemplate {

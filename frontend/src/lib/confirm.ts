@@ -1,6 +1,8 @@
 /**
  * confirmAction — 命令式全局确认弹窗 API
  *
+ * 桌面端（Electron）由 GlobalConfirmDialog → ConfirmDialog 走系统原生 messageBox。
+ *
  * 使用方式（与 toast 相同风格，无需在组件内维护 open 状态）：
  *
  * ```tsx

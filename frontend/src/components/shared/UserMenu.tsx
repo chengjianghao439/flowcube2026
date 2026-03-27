@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import client from '@/api/client'
 import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
+import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 
 export default function UserMenu() {
   const { user } = useAuthStore()
@@ -67,6 +68,23 @@ export default function UserMenu() {
                 type="button"
                 onClick={() => {
                   setMenuOpen(false)
+                  if (
+                    IS_ELECTRON_DESKTOP &&
+                    typeof window.flowcubeDesktop?.showMessageBox === 'function'
+                  ) {
+                    void window.flowcubeDesktop.showMessageBox({
+                      type: 'question',
+                      title: '退出系统',
+                      message: '确定要退出系统吗？未保存的数据可能会丢失。',
+                      buttons: ['确定退出', '取消'],
+                      defaultId: 0,
+                      cancelId: 1,
+                      noLink: true,
+                    }).then(({ response }) => {
+                      if (response === 0) performSessionLogout()
+                    })
+                    return
+                  }
                   setLogoutOpen(true)
                 }}
                 className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
@@ -78,7 +96,7 @@ export default function UserMenu() {
         </>
       )}
 
-      {/* 修改密码弹窗 */}
+      {/* 浏览器端退出确认（桌面端走原生 messageBox） */}
       <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>

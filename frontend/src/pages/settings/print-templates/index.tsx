@@ -48,7 +48,8 @@ export default function PrintTemplatesPage() {
 
   const columns: TableColumn<PrintTemplate>[] = [
     { key: 'name',      title: '模板名称' },
-    { key: 'type',      title: '类型', width: 100 },
+    { key: 'typeName',  title: '类型', width: 160,
+      render: (_, row) => row.typeName || String(row.type) },
     { key: 'isDefault', title: '默认', width: 80,
       render: v => v ? <Badge variant="default">默认</Badge> : <span className="text-muted-foreground">—</span> },
     { key: 'createdAt', title: '创建时间', width: 160,

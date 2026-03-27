@@ -9,6 +9,7 @@
  */
 
 import type { TemplateLayout, TemplateElement } from '@/types/print-template'
+import { isZplTemplateLayout } from '@/types/print-template'
 import type { SaleOrder } from '@/types/sale'
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
@@ -209,6 +210,23 @@ interface Props {
 
 export default function TemplateRenderer({ layout, paperSize, order }: Props) {
   const paper = PAPER_MM[paperSize] ?? PAPER_MM.A4
+
+  if (isZplTemplateLayout(layout)) {
+    return (
+      <div
+        style={{
+          padding:    24,
+          maxWidth:   px(paper.w),
+          minHeight:  px(40),
+          background: '#fff',
+          fontSize:   12,
+          color:      '#666',
+        }}
+      >
+        当前为 ZPL 标签模板，请在业务（PDA / 打印任务）中发送至热敏打印机；此预览仅适用于画布类单据模板。
+      </div>
+    )
+  }
 
   return (
     <div

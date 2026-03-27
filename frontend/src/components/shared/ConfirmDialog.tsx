@@ -1,15 +1,17 @@
 /**
  * ConfirmDialog — 全系统通用确认弹窗
  *
- * 基于 AppDialog，尺寸固定（不可拖拽 resize），保持原有 API 完全不变。
+ * - **Electron 桌面端**：使用主进程 `dialog.showMessageBox`（与系统原生一致），不渲染 AppDialog。
+ * - **浏览器 / 无桥接**：使用 AppDialog（可拖拽、与现有布局一致）。
  *
- * API（与迁移前完全一致）：
- *   open, title, description, confirmText, cancelText, variant, loading, onConfirm, onCancel
+ * API 不变：open, title, description, confirmText, cancelText, variant, loading, onConfirm, onCancel
  */
 
+import { useEffect, useRef } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AppDialog } from '@/components/shared/AppDialog'
+import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -23,17 +25,64 @@ interface ConfirmDialogProps {
   onCancel: () => void
 }
 
+function useNativeConfirmAvailable(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    IS_ELECTRON_DESKTOP &&
+    typeof window.flowcubeDesktop?.showMessageBox === 'function'
+  )
+}
+
 export function ConfirmDialog({
   open,
   title,
   description,
   confirmText = '确认',
-  cancelText  = '取消',
-  variant     = 'default',
-  loading     = false,
+  cancelText = '取消',
+  variant = 'default',
+  loading = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const native = useNativeConfirmAvailable()
+  const handledRef = useRef(false)
+
+  useEffect(() => {
+    if (!native) return
+    if (!open) {
+      handledRef.current = false
+      return
+    }
+    if (handledRef.current) return
+    handledRef.current = true
+    let cancelled = false
+    void window.flowcubeDesktop!
+      .showMessageBox!({
+        type: variant === 'destructive' ? 'warning' : 'question',
+        title,
+        message: description,
+        buttons: [confirmText, cancelText],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      })
+      .then(({ response }) => {
+        if (cancelled) return
+        if (response === 0) onConfirm()
+        else onCancel()
+      })
+      .catch(() => {
+        if (!cancelled) onCancel()
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, native, title, description, confirmText, cancelText, variant, onConfirm, onCancel])
+
+  if (native) {
+    return null
+  }
+
   return (
     <AppDialog
       open={open}
@@ -68,7 +117,6 @@ export function ConfirmDialog({
         </div>
       }
     >
-      {/* Body：description 文字，带自动滚动 */}
       <div className="overflow-auto px-5 py-4 text-sm text-muted-foreground">
         {description}
       </div>

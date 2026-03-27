@@ -14,6 +14,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { resolvePrinterForJob, normalizeJobType } = require('./print-dispatch')
+const { applyZplTemplate, getDefaultZplBody } = require('./labelZplTemplate')
 const { recordPrintSuccess, recordPrintFailure } = require('./printer-health')
 
 const STATUS = { PENDING: 0, PRINTING: 1, DONE: 2, FAILED: 3 }
@@ -421,7 +422,7 @@ function buildContainerLabelZpl({ container_code, product_name, qty }) {
     .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
   const q = Number(qty)
   const qtyStr = Number.isFinite(q) ? String(q) : String(qty ?? '')
-  return `^XA^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,24,24^FD${name}^FS^FO32,148^A0N,24,24^FDQTY ${qtyStr}^FS^XZ`
+  return `^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,24,24^FD${name}^FS^FO32,148^A0N,24,24^FDQTY ${qtyStr}^FS^XZ`
 }
 
 /** ZPL 货架标签 */
@@ -434,7 +435,7 @@ function buildRackLabelZpl({ rack_barcode, rack_code, zone, name }) {
   const n = String(name ?? '')
     .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
     .slice(0, 20)
-  return `^XA^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,22,22^FD${rc}^FS^FO32,138^A0N,20,20^FD${z} ${n}^FS^XZ`
+  return `^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,22,22^FD${rc}^FS^FO32,138^A0N,20,20^FD${z} ${n}^FS^XZ`
 }
 
 /** ZPL 物流箱贴 */
@@ -445,7 +446,7 @@ function buildPackageLabelZpl({ box_code, task_no, customer_name, summary }) {
     .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
     .slice(0, 24)
   const sm = String(summary ?? '').slice(0, 36)
-  return `^XA^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${bc}^FS^FO32,108^A0N,22,22^FD${tn}^FS^FO32,142^A0N,20,20^FD${cn}^FS^FO32,176^A0N,18,18^FD${sm}^FS^XZ`
+  return `^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${bc}^FS^FO32,108^A0N,22,22^FD${tn}^FS^FO32,142^A0N,20,20^FD${cn}^FS^FO32,176^A0N,18,18^FD${sm}^FS^XZ`
 }
 
 /**
@@ -492,11 +493,19 @@ async function enqueueContainerLabelJob(payload) {
     dispatchReason = 'fallback'
   }
   if (!printerId) return null
-  const zpl = buildContainerLabelZpl({
+  const vars = {
     container_code: data.container_code,
     product_name: data.product_name,
     qty: data.qty,
-  })
+  }
+  const customBody = await getDefaultZplBody(6)
+  const zpl = customBody
+    ? applyZplTemplate(customBody, vars)
+    : buildContainerLabelZpl({
+        container_code: data.container_code,
+        product_name: data.product_name,
+        qty: data.qty,
+      })
   return create({
     printerId,
     dispatchReason,
@@ -551,12 +560,21 @@ async function enqueueRackLabelJob(payload) {
     dispatchReason = 'fallback'
   }
   if (!printerId) return null
-  const zpl = buildRackLabelZpl({
+  const vars = {
     rack_barcode: row.barcode,
     rack_code: row.code,
     zone: row.zone,
     name: row.name,
-  })
+  }
+  const customBody = await getDefaultZplBody(5)
+  const zpl = customBody
+    ? applyZplTemplate(customBody, vars)
+    : buildRackLabelZpl({
+        rack_barcode: row.barcode,
+        rack_code: row.code,
+        zone: row.zone,
+        name: row.name,
+      })
   try {
     const job = await create({
       printerId,
@@ -622,12 +640,21 @@ async function enqueuePackageLabelJob(payload) {
     dispatchReason = 'fallback'
   }
   if (!printerId) return null
-  const zpl = buildPackageLabelZpl({
+  const vars = {
     box_code: row.barcode,
     task_no: row.task_no,
     customer_name: row.customer_name,
     summary,
-  })
+  }
+  const customBody = await getDefaultZplBody(7)
+  const zpl = customBody
+    ? applyZplTemplate(customBody, vars)
+    : buildPackageLabelZpl({
+        box_code: row.barcode,
+        task_no: row.task_no,
+        customer_name: row.customer_name,
+        summary,
+      })
   return create({
     printerId,
     dispatchReason,
