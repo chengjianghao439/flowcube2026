@@ -10,7 +10,13 @@ const { pool } = require('../../config/db')
 const { getTenantId } = require('../../utils/tenantScope')
 const router = Router()
 
-const VALID_TYPES = ['waybill', 'product_label', 'inventory_label']
+const VALID_TYPES = [
+  'waybill',
+  'product_label',
+  'inventory_label',
+  'rack_label',
+  'container_label',
+]
 
 router.use(authMiddleware)
 
@@ -78,6 +84,9 @@ router.put('/:type', async (req, res, next) => {
 router.delete('/:type', async (req, res, next) => {
   try {
     const { type } = req.params
+    if (!VALID_TYPES.includes(type)) {
+      return res.status(400).json({ success: false, message: '无效的打印类型' })
+    }
     const whQ = req.query.warehouseId
     const warehouseId = whQ != null && whQ !== '' ? Number(whQ) : 0
     const tid = getTenantId(req)

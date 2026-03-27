@@ -27,6 +27,7 @@ import {
   type SystemPrinterRow,
 } from '@/utils/printerName'
 
+/** 打印机硬件分类（与「绑定用途」独立：用途决定业务走哪台机；类型用于列表展示与无绑定时的兜底调度） */
 const TYPE_LABEL: Record<number, string> = {
   1: '标签打印机',
   2: '面单打印机',
@@ -40,9 +41,11 @@ const TYPE_COLOR: Record<number, string> = {
 }
 
 const BIND_TYPES = [
-  { key: 'waybill', label: '面单打印机' },
-  { key: 'product_label', label: '商品标签机' },
-  { key: 'inventory_label', label: '库存标签机' },
+  { key: 'waybill', label: '电子面单', desc: '快递面单等' },
+  { key: 'product_label', label: '商品标签', desc: '商品条码、PDA 商品标等' },
+  { key: 'inventory_label', label: '库存标签', desc: '库存盘点、通用库存 ZPL' },
+  { key: 'rack_label', label: '货架标签', desc: '货架仓位条码；未单独绑定时使用「库存标签」绑定' },
+  { key: 'container_label', label: '散件容器标签', desc: '入库容器等；未单独绑定时使用「库存标签」绑定' },
 ] as const
 
 type BindType = (typeof BIND_TYPES)[number]['key']
@@ -68,17 +71,25 @@ type BindingMap = Record<string, { print_type: string; printer_code: string; pri
 interface BindDialogProps {
   printer: Printer
   bindings: BindingMap
-  onBind: (type: BindType, printer: Printer) => void
+  /** 已绑定本机时再次点击同项 → 解除绑定 */
+  onToggleBind: (type: BindType, printer: Printer) => void
+  busy: boolean
   onClose: () => void
 }
 
-function BindDialog({ printer, bindings, onBind, onClose }: BindDialogProps) {
+function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="w-80 rounded-2xl border border-border bg-card p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-        <p className="mb-1 font-semibold text-foreground">绑定打印机用途</p>
-        <p className="mb-4 text-sm text-muted-foreground">
+      <div
+        className="w-[22rem] max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <p className="mb-1 font-semibold text-foreground">绑定业务用途</p>
+        <p className="mb-1 text-sm text-muted-foreground">
           {printer.name} <span className="font-mono text-xs">({printer.code})</span>
+        </p>
+        <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+          与添加打印机时的「设备类型」不同：此处指定各业务场景使用哪台机。已绑定本项时再次点击可解除绑定。
         </p>
         <div className="space-y-2">
           {BIND_TYPES.map(t => {
@@ -87,23 +98,31 @@ function BindDialog({ printer, bindings, onBind, onClose }: BindDialogProps) {
             return (
               <button
                 key={t.key}
-                onClick={() => onBind(t.key, printer)}
+                type="button"
+                disabled={busy}
+                onClick={() => onToggleBind(t.key, printer)}
                 className={[
-                  'w-full rounded-xl border px-4 py-3 text-left text-sm transition-colors',
-                  isBound ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-border hover:bg-muted/40',
+                  'w-full rounded-xl border px-4 py-3 text-left text-sm transition-colors disabled:opacity-60',
+                  isBound ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-border hover:bg-muted/40',
                 ].join(' ')}
               >
-                <span className="font-medium">{t.label}</span>
+                <div className="font-medium">{t.label}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground leading-snug">{t.desc}</div>
                 {currentCode && !isBound && (
-                  <span className="ml-2 text-xs text-muted-foreground">（当前：{currentCode}）</span>
+                  <div className="mt-1 text-xs text-amber-700">当前已绑：{currentCode}</div>
                 )}
-                {isBound && <span className="ml-2 text-xs">✓ 已绑定</span>}
+                {isBound && <div className="mt-1 text-xs font-medium text-blue-700">✓ 已绑定本机 · 再点解除</div>}
               </button>
             )
           })}
         </div>
-        <button onClick={onClose} className="mt-4 w-full text-sm text-muted-foreground hover:text-foreground">
-          取消
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          className="mt-4 w-full text-sm text-muted-foreground hover:text-foreground disabled:opacity-60"
+        >
+          关闭
         </button>
       </div>
     </div>
@@ -221,10 +240,30 @@ export default function PrintersPage() {
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['printer-bindings'] })
       toast.success(`已绑定 ${vars.printer.code} → ${BIND_TYPES.find(t => t.key === vars.type)?.label}`)
-      setBindTarget(null)
     },
     onError: (e: any) => toast.error(e?.response?.data?.message || '绑定失败'),
   })
+
+  const unbindMutation = useMutation({
+    mutationFn: (type: BindType) => apiClient.delete(`/printer-bindings/${encodeURIComponent(type)}`),
+    onSuccess: (_, type) => {
+      qc.invalidateQueries({ queryKey: ['printer-bindings'] })
+      toast.success(`已解除「${BIND_TYPES.find(t => t.key === type)?.label}」绑定`)
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message || '解除绑定失败'),
+  })
+
+  const bindBusy = bindMutation.isPending || unbindMutation.isPending
+
+  function togglePrinterBinding(type: BindType, printer: Printer) {
+    const row = bindings[type]
+    const isBoundHere = row?.printer_code === printer.code
+    if (isBoundHere) {
+      unbindMutation.mutate(type)
+    } else {
+      bindMutation.mutate({ type, printer })
+    }
+  }
 
   const aliasMutation = useMutation({
     mutationFn: ({ clientId, aliasName }: { clientId: string; aliasName: string }) =>
@@ -337,17 +376,20 @@ export default function PrintersPage() {
                   </Select>
                 </div>
                 <div>
-                  <label className="text-label mb-1 block">类型 *</label>
+                  <label className="text-label mb-1 block">设备类型 *</label>
                   <Select value={String(addType)} onValueChange={v => setAddType(+v as 1 | 2 | 3)}>
                     <SelectTrigger className="input w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">标签打印机</SelectItem>
+                      <SelectItem value="1">标签打印机（ZPL 热敏等）</SelectItem>
                       <SelectItem value="2">面单打印机</SelectItem>
-                      <SelectItem value="3">A4打印机</SelectItem>
+                      <SelectItem value="3">A4 / 文档打印机</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                    此为硬件分类，与下方列表中的「绑定用途」无关。实际打印走哪台机请在添加后使用「绑定用途」指定（如商品标签、货架标签等）。
+                  </p>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   保存时将自动生成符合规则的编码，并与列表中已有编码去重。
@@ -455,7 +497,8 @@ export default function PrintersPage() {
         <BindDialog
           printer={bindTarget}
           bindings={bindings}
-          onBind={(type, printer) => bindMutation.mutate({ type, printer })}
+          busy={bindBusy}
+          onToggleBind={(type, printer) => togglePrinterBinding(type, printer)}
           onClose={() => setBindTarget(null)}
         />
       )}

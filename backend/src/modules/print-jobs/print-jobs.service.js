@@ -482,7 +482,7 @@ async function enqueueContainerLabelJob(payload) {
   const resolved = await resolvePrinterForJob({
     tenantId: tid,
     warehouseId: wh ?? undefined,
-    jobType: 'inventory_label',
+    jobType: 'container_label',
     contentType: 'zpl',
   })
   let printerId = resolved.printerId
@@ -502,7 +502,7 @@ async function enqueueContainerLabelJob(payload) {
     dispatchReason,
     tenantId: tid,
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
-    jobType: 'inventory_label',
+    jobType: 'container_label',
     title: `容器标 ${data.container_code}`,
     contentType: 'zpl',
     content: zpl,
@@ -537,11 +537,11 @@ async function enqueueRackLabelJob(payload) {
   }
   if (!row || !row.barcode) return null
   const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
-  // 与打印机管理中「库存标签」绑定一致（inventory_label），勿单独使用未绑定的 rack_label
+  // 优先使用「货架标签」绑定，未配置时调度回退到「库存标签」绑定（见 print-dispatch bindingFallbackChain）
   const resolved = await resolvePrinterForJob({
     tenantId: tid,
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : undefined,
-    jobType: 'inventory_label',
+    jobType: 'rack_label',
     contentType: 'zpl',
   })
   let printerId = resolved.printerId
@@ -563,7 +563,7 @@ async function enqueueRackLabelJob(payload) {
       dispatchReason,
       tenantId: tid,
       warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
-      jobType: 'inventory_label',
+      jobType: 'rack_label',
       title: `货架标 ${row.barcode}`,
       contentType: 'zpl',
       content: zpl,

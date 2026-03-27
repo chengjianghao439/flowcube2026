@@ -16,16 +16,54 @@ function tenantSqlParam(tenantId) {
   return t
 }
 
-/** contentType / 业务 type → printer_bindings.print_type */
+/** contentType / 业务 type → printer_bindings.print_type（可与绑定表 rack_label/container_label 等对应） */
 function normalizeJobType(jobType, contentType) {
   const j = String(jobType || '').trim().toLowerCase()
-  if (j === 'container_label') return 'inventory_label'
-  if (j === 'rack_label' || j === 'package_label') return 'inventory_label'
+  if (j === 'container_label') return 'container_label'
+  if (j === 'rack_label' || j === 'package_label') return 'rack_label'
   if (j === 'pda_label' || j === 'label') return 'product_label'
-  if (['waybill', 'product_label', 'inventory_label'].includes(j)) return j
+  if (
+    ['waybill', 'product_label', 'inventory_label', 'rack_label', 'container_label'].includes(j)
+  ) {
+    return j
+  }
   const ct = String(contentType || '').toLowerCase()
   if (ct === 'zpl') return 'product_label'
   return j || 'product_label'
+}
+
+/** 专用绑定无配置时回退到 inventory_label，兼容旧租户仅绑「库存标签机」 */
+function bindingFallbackChain(primary) {
+  const map = {
+    rack_label: ['rack_label', 'inventory_label'],
+    container_label: ['container_label', 'inventory_label'],
+    waybill: ['waybill'],
+    product_label: ['product_label'],
+    inventory_label: ['inventory_label'],
+  }
+  return map[primary] || [primary]
+}
+
+async function fetchBindingCandidates(printType, tenantId, whNum) {
+  const tid = tenantSqlParam(tenantId)
+  const params = [printType, tid, tid]
+  let sql = `SELECT b.printer_id FROM printer_bindings b
+     WHERE b.print_type = ? AND (b.tenant_id = ? OR b.tenant_id = 0)`
+  if (whNum) {
+    sql += ` AND (b.warehouse_id = 0 OR b.warehouse_id = ?)`
+    params.push(whNum)
+  } else {
+    sql += ` AND b.warehouse_id = 0`
+  }
+  if (whNum) {
+    sql += ` ORDER BY CASE WHEN b.warehouse_id = ? THEN 0 ELSE 1 END, CASE WHEN b.tenant_id = ? THEN 0 ELSE 1 END, b.printer_id ASC`
+    params.push(whNum, tid)
+  } else {
+    sql += ` ORDER BY CASE WHEN b.tenant_id = ? THEN 0 ELSE 1 END, b.printer_id ASC`
+    params.push(tid)
+  }
+  const [bindRows] = await pool.query(sql, params)
+  return bindRows.map((r) => Number(r.printer_id)).filter(Boolean)
 }
 
 function printerTypeForContentType(contentType) {
@@ -67,25 +105,15 @@ async function resolvePrinterForJob({ tenantId = 0, warehouseId, jobType, conten
   let fromBinding = false
 
   if (ptype) {
-    const params = [ptype, tid, tid]
-    let sql = `SELECT b.printer_id FROM printer_bindings b
-     WHERE b.print_type = ? AND (b.tenant_id = ? OR b.tenant_id = 0)`
-    if (whNum) {
-      sql += ` AND (b.warehouse_id = 0 OR b.warehouse_id = ?)`
-      params.push(whNum)
-    } else {
-      sql += ` AND b.warehouse_id = 0`
+    const chain = bindingFallbackChain(ptype)
+    for (const pt of chain) {
+      const ids = await fetchBindingCandidates(pt, tid, whNum)
+      if (ids.length) {
+        candidates = ids
+        fromBinding = true
+        break
+      }
     }
-    if (whNum) {
-      sql += ` ORDER BY CASE WHEN b.warehouse_id = ? THEN 0 ELSE 1 END, CASE WHEN b.tenant_id = ? THEN 0 ELSE 1 END, b.printer_id ASC`
-      params.push(whNum, tid)
-    } else {
-      sql += ` ORDER BY CASE WHEN b.tenant_id = ? THEN 0 ELSE 1 END, b.printer_id ASC`
-      params.push(tid)
-    }
-    const [bindRows] = await pool.query(sql, params)
-    candidates = bindRows.map((r) => Number(r.printer_id)).filter(Boolean)
-    fromBinding = candidates.length > 0
   }
 
   if (!candidates.length) {
