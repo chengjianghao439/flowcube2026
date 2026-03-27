@@ -115,7 +115,7 @@ ipcMain.handle('flowcube:get-system-printers', async (event) => {
   }
 })
 
-/** 本机直连：将 ZPL 发往网口斑马或 CUPS raw 队列 */
+/** 本机直连：按打印机名称 RAW 出 ZPL（Windows WinSpool / macOS·Linux lp） */
 ipcMain.handle('flowcube:print-zpl', async (_event, opts) => {
   await printZpl(opts || {})
   return null

@@ -172,6 +172,7 @@ export default function PdaPackPage() {
           jobId: job.id,
           content: job.content,
           contentType: job.contentType,
+          printerName: job.printerName,
         })
         if (local === 'ok') {
           ok('箱贴已从本机打印')

@@ -3,7 +3,7 @@
  * 打印任务队列服务
  *
  * 架构：
- *  - PDA / ERP 调用 create() 入队（审计、配额、绑定）
+ *  - PDA / ERP 调用 create() 入队（绑定打印机）
  *  - FlowCube 桌面端可本机直连 ZPL 出纸后 POST /print-jobs/:id/complete-local 核销
  *  - 独立 print-client（SSE/轮询）已移除
  *  - 仍保留 complete / fail（print:client）供自动化或兼容旧集成
@@ -15,8 +15,6 @@ const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { resolvePrinterForJob, normalizeJobType } = require('./print-dispatch')
 const { recordPrintSuccess, recordPrintFailure } = require('./printer-health')
-const { getTenantPrintPolicy } = require('./print-tenant-settings.service')
-const { getQuotaUsageSnapshot, recordSuccessfulPrint } = require('./print-billing.service')
 
 const STATUS = { PENDING: 0, PRINTING: 1, DONE: 2, FAILED: 3 }
 const MAX_RETRY = 3
@@ -43,17 +41,6 @@ function printStateLabel(n) {
     case STATUS.FAILED: return '打印失败'
     default: return '未知'
   }
-}
-
-async function canTenantStartPrinting(tenantId) {
-  const tid = Number(tenantId) >= 0 && Number.isFinite(Number(tenantId)) ? Number(tenantId) : 0
-  const pol = await getTenantPrintPolicy(tid)
-  if (pol.maxConcurrentPrinting == null) return true
-  const [[r]] = await pool.query(
-    'SELECT COUNT(*) AS c FROM print_jobs WHERE tenant_id=? AND status=?',
-    [tid, STATUS.PRINTING],
-  )
-  return Number(r.c) < pol.maxConcurrentPrinting
 }
 
 function parsePriority(raw) {
@@ -221,39 +208,6 @@ async function create({
   )
   if (!printer) throw new AppError('打印机不存在', 400)
 
-  const qpol = await getTenantPrintPolicy(tid)
-  const quotaSnap = await getQuotaUsageSnapshot(tid, copies, {
-    maxQueueJobs: qpol.maxQueueJobs,
-    monthlyPrintQuota: qpol.monthlyPrintQuota,
-  })
-
-  if (qpol.maxQueueJobs != null && quotaSnap.queue.current >= qpol.maxQueueJobs) {
-    throw new AppError(
-      `租户打印队列已满（当前 ${quotaSnap.queue.current}/${qpol.maxQueueJobs}，剩余 ${quotaSnap.queue.remaining ?? 0}）`,
-      429,
-      {
-        code: 'PRINT_QUEUE_FULL',
-        hint: '请等待任务完成或联系管理员提升队列配额',
-        usage: quotaSnap,
-      },
-    )
-  }
-
-  if (
-    qpol.monthlyPrintQuota != null &&
-    quotaSnap.monthly.afterNewJobCopies > qpol.monthlyPrintQuota
-  ) {
-    throw new AppError(
-      `本月打印额度不足（已占用 ${quotaSnap.monthly.committedCopies}，本次 ${copies}，月度上限 ${qpol.monthlyPrintQuota}）`,
-      429,
-      {
-        code: 'PRINT_MONTHLY_QUOTA',
-        hint: '额度按自然月统计（成功印量+在途）；下月自动重置或联系管理员加量',
-        usage: quotaSnap,
-      },
-    )
-  }
-
   const ttl = ttlMinutes()
   const [r] = await pool.query(
     `INSERT INTO print_jobs (printer_id, template_id, title, content_type, content, copies, priority, job_type, warehouse_id, tenant_id, job_unique_key, dispatch_reason, created_by, expires_at)
@@ -325,7 +279,6 @@ async function complete(id, { ackToken } = {}, { tenantId } = {}) {
     'UPDATE print_jobs SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW() WHERE id=? AND tenant_id=?',
     [STATUS.DONE, id, job.tenantId],
   )
-  await recordSuccessfulPrint(job.tenantId, job.copies).catch(() => {})
   if (latRow?.printer_id && latencyMs != null) {
     await recordPrintSuccess(latRow.printer_id, latencyMs, job.tenantId).catch(() => {})
   }
@@ -358,7 +311,6 @@ async function completeLocalDesktop(id, { tenantId } = {}) {
   if (!ur.affectedRows) {
     throw new AppError('任务状态已变更，请刷新后重试', 409)
   }
-  await recordSuccessfulPrint(job.tenantId, job.copies).catch(() => {})
   return findById(id, { tenantId })
 }
 
@@ -444,18 +396,10 @@ async function getDispatchHintForJob(printerCode, jobId) {
     return { code: 'unknown', message: '', sseClients: 0 }
   }
 
-  const tid = job.tenantId != null ? Number(job.tenantId) : 0
-  if (!(await canTenantStartPrinting(tid))) {
-    return {
-      code: 'queued_concurrency',
-      message: '任务已入队，因租户「同时打印中」上限暂时排队，请稍候',
-      sseClients: 0,
-    }
-  }
   return {
     code: 'no_print_client',
     message:
-      '任务已入队。请使用 FlowCube 桌面端，在「设置 → 打印机管理」配置本机 ZPL 网口/CUPS 后执行打印；桌面端将本机出纸并自动核销队列。',
+      '任务已入队。请使用 FlowCube 桌面端，在「打印机管理」通过「从本机添加」绑定标签机并绑定用途后，再执行打印；桌面端将按打印机名称本机出纸并核销队列。',
     sseClients: 0,
   }
 }

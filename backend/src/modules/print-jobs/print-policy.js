@@ -1,6 +1,6 @@
 /**
  * 自适应调度策略：探索率、设备综合分（错误率 / 延迟 / 心跳）
- * policy 对象由 print-tenant-settings.mergeRow / env 默认值构造
+ * 数值由环境变量（PRINT_EXPLORATION_*、PRINT_SCORE_* 等）与 defaultDispatchPolicy() 提供
  */
 
 const COLD_BONUS = Number(process.env.PRINT_SCORE_COLD_BONUS) || 0.12

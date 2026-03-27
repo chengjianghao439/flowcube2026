@@ -61,7 +61,6 @@ const PATH_PERMS: Record<string, PermCode> = {
   '/price-lists':               'page:sale',
   '/settings/print-templates':  'page:settings',
   '/settings/printers':          'page:settings',
-  '/settings/print-tenant':      'page:settings',
 }
 
 // ── 固定路径 → 组件映射（代码分割仍然有效）────────────────────────────────────
@@ -98,7 +97,6 @@ const PAGE_MAP: Record<string, React.LazyExoticComponent<React.ComponentType>> =
   '/price-lists':                lazy(() => import('@/pages/price-lists')),
   '/settings/print-templates':  lazy(() => import('@/pages/settings/print-templates')),
   '/settings/printers':          lazy(() => import('@/pages/settings/printers')),
-  '/settings/print-tenant':     lazy(() => import('@/pages/settings/print-tenant')),
 }
 
 // ── 动态路由：模块级惰性加载（注意：必须在组件外声明，防止每次渲染重新 lazy） ──

@@ -32,8 +32,8 @@ contextBridge.exposeInMainWorld('flowcubeDesktop', {
   /** 主进程枚举当前系统已安装打印机（仅桌面端） */
   getSystemPrinters: () => ipcRenderer.invoke('flowcube:get-system-printers'),
   /**
-   * 本机 ZPL：host+port 为网口斑马；macOS/Linux 可仅用 lpQueue（lp -o raw）
-   * @param {{ content: string, host?: string, port?: number, lpQueue?: string }} opts
+   * 本机 ZPL：printerName 与「打印机管理」中名称一致（从本机添加时的系统打印机名）
+   * @param {{ content: string, printerName: string }} opts
    */
   printZpl: (opts) => ipcRenderer.invoke('flowcube:print-zpl', opts),
 })

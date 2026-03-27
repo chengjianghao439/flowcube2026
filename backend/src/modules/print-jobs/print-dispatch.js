@@ -1,14 +1,14 @@
 /**
- * 多租户打印调度：绑定/兜底 → 本租户负载 → 设备分（错误率/延迟/心跳）→ 自适应探索选次优
+ * 打印调度：绑定/兜底 → 本租户负载 → 设备分（错误率/延迟/心跳）→ 自适应探索选次优（策略见 print-policy 环境变量）
  */
 const { pool } = require('../../config/db')
 const { getHealthMap } = require('./printer-health')
-const { getTenantPrintPolicy } = require('./print-tenant-settings.service')
 const {
   heartbeatScore,
   printerScore,
   computeExplorationRate,
   pickWithExploration,
+  defaultDispatchPolicy,
 } = require('./print-policy')
 
 function tenantSqlParam(tenantId) {
@@ -105,7 +105,7 @@ async function resolvePrinterForJob({ tenantId = 0, warehouseId, jobType, conten
   if (!candidates.length) return { printerId: null, dispatchReason: null }
 
   const uniq = [...new Set(candidates)]
-  const dispatchPolicy = await getTenantPrintPolicy(tid)
+  const dispatchPolicy = defaultDispatchPolicy()
   const healthMap = await getHealthMap(tid, uniq)
   const explorationRate = computeExplorationRate(healthMap, uniq, dispatchPolicy)
   const hbMap = await fetchHeartbeatMap(uniq)

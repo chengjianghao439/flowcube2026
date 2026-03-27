@@ -45,7 +45,6 @@ export const PATH_TITLES: Record<string, string> = {
   '/price-lists':          '价格管理',
   '/settings/print-templates': '打印模板',
   '/settings/printers':         '打印机管理',
-  '/settings/print-tenant':     '打印租户运营',
 }
 
 export const HOME_TAB: WorkspaceTab = {

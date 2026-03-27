@@ -20,11 +20,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { ensureUniquePrinterCode, systemNameToPrinterCode } from '@/utils/printerCode'
-import {
-  DESKTOP_LOCAL_ZPL_HOST_KEY,
-  DESKTOP_LOCAL_ZPL_LP_KEY,
-  DESKTOP_LOCAL_ZPL_PORT_KEY,
-} from '@/lib/desktopLocalPrint'
 
 const IS_ELECTRON_DESKTOP = import.meta.env.VITE_ELECTRON === '1'
 
@@ -136,9 +131,6 @@ export default function PrintersPage() {
   const [bindTarget, setBindTarget] = useState<Printer | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Printer | null>(null)
   const [aliasDraft, setAliasDraft] = useState<Record<string, string>>({})
-  const [zplHost, setZplHost] = useState('')
-  const [zplPort, setZplPort] = useState('9100')
-  const [zplLp, setZplLp] = useState('')
 
   const canUseSystemPrinters =
     IS_ELECTRON_DESKTOP && typeof window.flowcubeDesktop?.getSystemPrinters === 'function'
@@ -185,20 +177,6 @@ export default function PrintersPage() {
       setAddType(1)
     }
   }, [showAddDialog, canUseSystemPrinters, loadSystemPrinters])
-
-  useEffect(() => {
-    if (!IS_ELECTRON_DESKTOP || typeof localStorage === 'undefined') return
-    setZplHost(localStorage.getItem(DESKTOP_LOCAL_ZPL_HOST_KEY) || '')
-    setZplPort(localStorage.getItem(DESKTOP_LOCAL_ZPL_PORT_KEY) || '9100')
-    setZplLp(localStorage.getItem(DESKTOP_LOCAL_ZPL_LP_KEY) || '')
-  }, [])
-
-  function saveDesktopZplSettings() {
-    localStorage.setItem(DESKTOP_LOCAL_ZPL_HOST_KEY, zplHost.trim())
-    localStorage.setItem(DESKTOP_LOCAL_ZPL_PORT_KEY, (zplPort.trim() || '9100').slice(0, 12))
-    localStorage.setItem(DESKTOP_LOCAL_ZPL_LP_KEY, zplLp.trim())
-    toast.success('本机直连出纸设置已保存')
-  }
 
   const addPrinter = useMutation({
     mutationFn: async (payload: { name: string; code: string; type: number; description: string | null }) => {
@@ -309,47 +287,12 @@ export default function PrintersPage() {
       </div>
 
       {IS_ELECTRON_DESKTOP && (
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-          <div>
-            <h3 className="font-semibold text-foreground">本机直连出纸（ZPL）</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              在运行本桌面端的电脑上直接打印货架标、箱贴等 ZPL。Windows
-              请填写斑马网口 IP（默认端口 9100）；macOS / Linux 可填写 CUPS 队列名，使用{' '}
-              <span className="font-mono text-xs">lp -o raw</span> 发送，也可仅用网口 IP。
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-1">
-              <label className="text-label mb-1 block">ZPL 网口 IP</label>
-              <Input
-                value={zplHost}
-                onChange={e => setZplHost(e.target.value)}
-                placeholder="如 192.168.8.50"
-                autoComplete="off"
-              />
-            </div>
-            <div>
-              <label className="text-label mb-1 block">端口</label>
-              <Input
-                value={zplPort}
-                onChange={e => setZplPort(e.target.value)}
-                placeholder="9100"
-                autoComplete="off"
-              />
-            </div>
-            <div className="sm:col-span-1">
-              <label className="text-label mb-1 block">CUPS 队列（可选）</label>
-              <Input
-                value={zplLp}
-                onChange={e => setZplLp(e.target.value)}
-                placeholder="如 Zebra_ZD420"
-                autoComplete="off"
-              />
-            </div>
-          </div>
-          <Button type="button" variant="secondary" onClick={saveDesktopZplSettings}>
-            保存本机出纸设置
-          </Button>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h3 className="font-semibold text-foreground">本机打印标签（ZPL）</h3>
+          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+            无需填写任何网络地址。请使用下方「从本机添加」，在系统已安装的打印机里选中您的标签机，并在用途中绑定「库存标签」等；打印时软件会按该打印机在系统中的名称自动出纸。请勿随意修改 ERP
+            里该打印机的「名称」，以免与系统不一致导致打不出来。
+          </p>
         </div>
       )}
 

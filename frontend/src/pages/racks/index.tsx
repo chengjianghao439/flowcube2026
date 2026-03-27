@@ -73,13 +73,16 @@ export default function RacksPage() {
           jobId: d.jobId,
           content: d.content,
           contentType: d.contentType,
+          printerName: d.printerName,
         })
         if (local === 'ok') {
           toast.success('已从本机打印货架标签并核销队列')
           return
         }
         if (local === 'error') {
-          toast.error('本机打印失败，任务仍在队列中，可检查设置中的 ZPL 网口或重试')
+          toast.error(
+            '本机打印失败，任务仍在队列中。请确认打印机是通过「从本机添加」添加的，且 ERP 中的名称与系统里一致。',
+          )
           return
         }
         const h = d.dispatchHint

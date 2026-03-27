@@ -93,7 +93,6 @@ export const TOP_NAV_SECTIONS: TopNavSection[] = [
       { label: '系统设置', path: '/settings', perm: 'page:settings' },
       { label: '打印模板', path: '/settings/print-templates', perm: 'page:settings' },
       { label: '打印机管理', path: '/settings/printers', perm: 'page:settings' },
-      { label: '打印租户运营', path: '/settings/print-tenant', perm: 'page:settings' },
     ],
   },
 ]
