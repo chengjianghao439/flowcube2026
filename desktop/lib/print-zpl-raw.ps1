@@ -64,6 +64,8 @@ public static class FlowCubeRawPrint {
           int written;
           if (!WritePrinter(h, p, bytes.Length, out written))
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+          if (written != bytes.Length)
+            throw new System.InvalidOperationException("WritePrinter 写入字节数不完整: " + written + "/" + bytes.Length);
         } finally {
           Marshal.FreeCoTaskMem(p);
         }

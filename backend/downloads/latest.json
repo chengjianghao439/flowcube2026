@@ -1,5 +1,5 @@
 {
-  "version": "0.3.26",
-  "filename": "FlowCube-ERP-Setup-0.3.26.exe",
-  "notes": "【v0.3.26 主要更新】\n\n• 标签打印模板：可手动设置纸张宽×高（mm），保存至 layout；ZPL 打印宽度与画布一致。\n\n详见 docs/releases/v0.3.26.md。"
+  "version": "0.3.27",
+  "filename": "FlowCube-ERP-Setup-0.3.27.exe",
+  "notes": "【v0.3.27 主要更新】\n\n• Windows 本机 ZPL RAW：校验 WritePrinter 写入字节数完整，避免误报成功。\n\n详见 docs/releases/v0.3.27.md。"
 }
