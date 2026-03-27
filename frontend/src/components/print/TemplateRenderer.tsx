@@ -75,6 +75,16 @@ function ElementNode({ el, order }: { el: TemplateElement; order: SaleOrder }) {
     lineHeight: 1.3,
   }
 
+  // ── 条码占位（销售单模板通常不含；标签模板预览用 resolveField 为空时显示标签名） ──
+  if (el.type === 'barcode') {
+    const v = resolveField(el.fieldKey, order) || el.label
+    return (
+      <div style={{ ...base, fontFamily: 'monospace', fontSize: '9pt', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #bbb' }}>
+        {v}
+      </div>
+    )
+  }
+
   // ── 分隔线 ──
   if (el.type === 'divider') {
     return (

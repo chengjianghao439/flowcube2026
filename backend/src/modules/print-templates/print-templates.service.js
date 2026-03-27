@@ -17,13 +17,20 @@ const TYPE_NAME = {
 function validateLayout(type, layout) {
   const t = Number(type)
   if (t >= 5 && t <= 9) {
-    if (!layout || layout.format !== 'zpl' || typeof layout.body !== 'string' || !layout.body.trim()) {
-      throw new AppError('ZPL 标签模板须填写 ZPL 正文（layout.format=zpl 且 body 非空）', 400)
+    if (!layout) throw new AppError('布局不能为空', 400)
+    if (layout.format === 'zpl' && typeof layout.body === 'string' && layout.body.trim()) {
+      if (!String(layout.body).includes('^XA')) {
+        throw new AppError('ZPL 正文须包含 ^XA 起始指令', 400)
+      }
+      return
     }
-    if (!String(layout.body).includes('^XA')) {
-      throw new AppError('ZPL 正文须包含 ^XA 起始指令', 400)
+    if (Array.isArray(layout.elements)) {
+      if (layout.elements.length === 0) {
+        throw new AppError('标签模板至少包含一个画布元素', 400)
+      }
+      return
     }
-    return
+    throw new AppError('标签模板须使用画布布局（elements）或兼容的 ZPL 正文（format=zpl）', 400)
   }
   if (!layout || !Array.isArray(layout.elements)) {
     throw new AppError('布局须包含 elements 数组', 400)

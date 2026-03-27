@@ -3,7 +3,7 @@ export type TemplateType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
 export interface TemplateElement {
   id: string
-  type: 'text' | 'table' | 'divider' | 'title'
+  type: 'text' | 'table' | 'divider' | 'title' | 'barcode'
   fieldKey: string
   label: string
   x: number        // mm from canvas left

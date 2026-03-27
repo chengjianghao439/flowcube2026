@@ -1,5 +1,5 @@
 {
-  "version": "0.3.24",
-  "filename": "FlowCube-ERP-Setup-0.3.24.exe",
-  "notes": "【v0.3.24 主要更新】\n\n• ZPL 标签模板（货架/散件容器/物流箱贴/商品/库存）：设置中可编辑 ZPL 与占位符；迁移种入默认模板。\n• 打印任务优先使用对应类型的默认 ZPL 模板，避免空白或不一致。\n• 确认框与部分页面交互优化。\n\n详见 docs/releases/v0.3.24.md。"
+  "version": "0.3.25",
+  "filename": "FlowCube-ERP-Setup-0.3.25.exe",
+  "notes": "【v0.3.25 主要更新】\n\n• 标签打印模板（5–9）：与销售单相同的拖拽画布（条码+文字），后端按画布生成 ZPL。\n• 打印模板编辑页：PageHeader+卡片布局；列表编辑/删除按钮与仓库等一致。\n• 兼容旧版 ZPL 文本存储；迁移默认种子改为画布。\n\n详见 docs/releases/v0.3.25.md。"
 }

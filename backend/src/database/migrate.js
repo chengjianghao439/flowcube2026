@@ -213,8 +213,12 @@ async function seedDefaultPrintTemplates(conn) {
       type:      5,
       paperSize: 'thermal80',
       layout: {
-        format: 'zpl',
-        body:   '^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD{{rack_barcode}}^FS^FO32,108^A0N,22,22^FD{{rack_code}}^FS^FO32,138^A0N,20,20^FD{{zone}} {{name}}^FS^XZ',
+        elements: [
+          { id: 'lb5_bc', type: 'barcode', fieldKey: 'rack_barcode', label: '货架条码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb5_rc', type: 'text', fieldKey: 'rack_code', label: '货架编码', x: 4, y: 22, width: 72, height: 7, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb5_z', type: 'text', fieldKey: 'zone', label: '库区', x: 4, y: 32, width: 72, height: 7, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb5_n', type: 'text', fieldKey: 'name', label: '名称', x: 4, y: 41, width: 72, height: 14, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+        ],
       },
     },
     {
@@ -222,8 +226,11 @@ async function seedDefaultPrintTemplates(conn) {
       type:      6,
       paperSize: 'thermal80',
       layout: {
-        format: 'zpl',
-        body:   '^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD{{container_code}}^FS^FO32,108^A0N,24,24^FD{{product_name}}^FS^FO32,148^A0N,24,24^FDQTY {{qty}}^FS^XZ',
+        elements: [
+          { id: 'lb6_bc', type: 'barcode', fieldKey: 'container_code', label: '容器条码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb6_pn', type: 'text', fieldKey: 'product_name', label: '品名', x: 4, y: 22, width: 72, height: 10, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb6_q', type: 'text', fieldKey: 'qty', label: '数量', x: 4, y: 36, width: 72, height: 7, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+        ],
       },
     },
     {
@@ -231,8 +238,12 @@ async function seedDefaultPrintTemplates(conn) {
       type:      7,
       paperSize: 'thermal80',
       layout: {
-        format: 'zpl',
-        body:   '^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD{{box_code}}^FS^FO32,108^A0N,22,22^FD{{task_no}}^FS^FO32,142^A0N,20,20^FD{{customer_name}}^FS^FO32,176^A0N,18,18^FD{{summary}}^FS^XZ',
+        elements: [
+          { id: 'lb7_bc', type: 'barcode', fieldKey: 'box_code', label: '箱码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb7_tn', type: 'text', fieldKey: 'task_no', label: '任务号', x: 4, y: 22, width: 72, height: 7, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb7_cn', type: 'text', fieldKey: 'customer_name', label: '客户', x: 4, y: 32, width: 72, height: 8, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb7_sm', type: 'text', fieldKey: 'summary', label: '摘要', x: 4, y: 43, width: 72, height: 14, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+        ],
       },
     },
     {
@@ -240,8 +251,11 @@ async function seedDefaultPrintTemplates(conn) {
       type:      8,
       paperSize: 'thermal80',
       layout: {
-        format: 'zpl',
-        body:   '^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD{{product_code}}^FS^FO32,108^A0N,24,24^FD{{product_name}}^FS^FO32,148^A0N,22,22^FD{{spec}}^FS^XZ',
+        elements: [
+          { id: 'lb8_bc', type: 'barcode', fieldKey: 'product_code', label: '商品条码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb8_pn', type: 'text', fieldKey: 'product_name', label: '商品名称', x: 4, y: 22, width: 72, height: 10, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb8_sp', type: 'text', fieldKey: 'spec', label: '规格', x: 4, y: 36, width: 72, height: 7, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+        ],
       },
     },
     {
@@ -249,8 +263,12 @@ async function seedDefaultPrintTemplates(conn) {
       type:      9,
       paperSize: 'thermal80',
       layout: {
-        format: 'zpl',
-        body:   '^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD{{sku}}^FS^FO32,108^A0N,24,24^FD{{product_name}}^FS^FO32,148^A0N,22,22^FD{{qty}} {{warehouse}}^FS^XZ',
+        elements: [
+          { id: 'lb9_bc', type: 'barcode', fieldKey: 'sku', label: 'SKU 条码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb9_pn', type: 'text', fieldKey: 'product_name', label: '品名', x: 4, y: 22, width: 72, height: 10, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb9_q', type: 'text', fieldKey: 'qty', label: '数量', x: 4, y: 36, width: 36, height: 7, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb9_wh', type: 'text', fieldKey: 'warehouse', label: '仓库', x: 42, y: 36, width: 34, height: 7, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+        ],
       },
     },
   ]

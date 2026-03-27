@@ -58,8 +58,8 @@ export default function PrintTemplatesPage() {
       key: 'id', title: '操作', width: 140,
       render: (_, row) => (
         <div className="flex gap-2">
-          <Button size="sm" variant="ghost" onClick={() => goToEdit(row)}>编辑</Button>
-          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
+          <Button size="sm" variant="outline" onClick={() => goToEdit(row)}>编辑</Button>
+          <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
         </div>
       ),
     },

@@ -14,7 +14,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { resolvePrinterForJob, normalizeJobType } = require('./print-dispatch')
-const { applyZplTemplate, getDefaultZplBody } = require('./labelZplTemplate')
+const { getLabelZplFromDefaultTemplate } = require('./labelZplTemplate')
 const { recordPrintSuccess, recordPrintFailure } = require('./printer-health')
 
 const STATUS = { PENDING: 0, PRINTING: 1, DONE: 2, FAILED: 3 }
@@ -498,10 +498,9 @@ async function enqueueContainerLabelJob(payload) {
     product_name: data.product_name,
     qty: data.qty,
   }
-  const customBody = await getDefaultZplBody(6)
-  const zpl = customBody
-    ? applyZplTemplate(customBody, vars)
-    : buildContainerLabelZpl({
+  const customZpl = await getLabelZplFromDefaultTemplate(6, vars)
+  const zpl = customZpl
+    ?? buildContainerLabelZpl({
         container_code: data.container_code,
         product_name: data.product_name,
         qty: data.qty,
@@ -566,10 +565,9 @@ async function enqueueRackLabelJob(payload) {
     zone: row.zone,
     name: row.name,
   }
-  const customBody = await getDefaultZplBody(5)
-  const zpl = customBody
-    ? applyZplTemplate(customBody, vars)
-    : buildRackLabelZpl({
+  const customZpl = await getLabelZplFromDefaultTemplate(5, vars)
+  const zpl = customZpl
+    ?? buildRackLabelZpl({
         rack_barcode: row.barcode,
         rack_code: row.code,
         zone: row.zone,
@@ -646,10 +644,9 @@ async function enqueuePackageLabelJob(payload) {
     customer_name: row.customer_name,
     summary,
   }
-  const customBody = await getDefaultZplBody(7)
-  const zpl = customBody
-    ? applyZplTemplate(customBody, vars)
-    : buildPackageLabelZpl({
+  const customZpl = await getLabelZplFromDefaultTemplate(7, vars)
+  const zpl = customZpl
+    ?? buildPackageLabelZpl({
         box_code: row.barcode,
         task_no: row.task_no,
         customer_name: row.customer_name,
