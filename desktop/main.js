@@ -4,7 +4,7 @@ const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
-const { checkAppUpdate } = require('./lib/updateCheck')
+const { checkAppUpdate, startUpdateDownload, ignoreVersion, isValidDownloadUrl } = require('./lib/updateCheck')
 const { printZpl } = require('./lib/localPrint')
 
 /** 与 Chromium 枚举一致，避免 PowerShell Get-Printer 与 OpenPrinter 名称不一致导致误拒 */
@@ -126,7 +126,7 @@ function triggerPackagedUpdateCheck(win, originRaw) {
   if (!origin) return
   packagedUpdateCheckStarted = true
   setTimeout(() => {
-    checkAppUpdate(app, win, () => origin).catch((err) => {
+    checkAppUpdate(app, win, () => origin, { ui: 'ipc' }).catch((err) => {
       console.error('[FlowCube] 自动更新检查失败:', err)
     })
   }, PACKAGED_UPDATE_CHECK_DELAY_MS)
@@ -135,6 +135,25 @@ function triggerPackagedUpdateCheck(win, originRaw) {
 ipcMain.on('flowcube:api-origin-ready', (event, origin) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (win && !win.isDestroyed()) triggerPackagedUpdateCheck(win, origin)
+})
+
+ipcMain.handle('flowcube:get-app-version', () => app.getVersion())
+
+ipcMain.handle('flowcube:is-packaged', () => app.isPackaged)
+
+ipcMain.handle('flowcube:start-update-download', async (event, downloadUrl) => {
+  const url = typeof downloadUrl === 'string' ? downloadUrl.trim() : ''
+  if (!isValidDownloadUrl(url)) {
+    throw new Error('无效的下载地址')
+  }
+  const win = BrowserWindow.fromWebContents(event.sender)
+  await startUpdateDownload(app, win, url)
+})
+
+ipcMain.handle('flowcube:ignore-update-version', async (_event, version) => {
+  const v = typeof version === 'string' ? version.trim() : ''
+  if (!v) return
+  await ignoreVersion(app, v)
 })
 
 ipcMain.on('flowcube:close-accept', (event) => {

@@ -14,6 +14,18 @@ interface Window {
   /** Electron 预加载脚本注入 */
   flowcubeDesktop?: {
     isDesktop: boolean
+    /** 主进程发现新版本时推送；返回取消订阅函数 */
+    subscribeUpdateAvailable?: (cb: (payload: {
+      version: string
+      notes: string
+      downloadUrl: string
+      current: string
+      forceDebug?: boolean
+    }) => void) => () => void
+    getAppVersion?: () => Promise<string>
+    isPackaged?: () => Promise<boolean>
+    startUpdateDownload?: (downloadUrl: string) => Promise<void>
+    ignoreUpdateVersion?: (version: string) => Promise<void>
     notifyApiOriginReady?: (origin: string) => void
     /** 渲染层已确认后通知主进程关闭窗口 */
     acceptClose?: () => void

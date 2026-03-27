@@ -5,6 +5,25 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('flowcubeDesktop', {
   isDesktop: true,
+  /** 订阅主进程推送的可用更新（仅打包安装版） */
+  subscribeUpdateAvailable: (cb) => {
+    if (typeof cb !== 'function') return () => {}
+    const handler = (_event, payload) => {
+      try {
+        cb(payload)
+      } catch {
+        /* ignore */
+      }
+    }
+    ipcRenderer.on('flowcube:update-available', handler)
+    return () => ipcRenderer.removeListener('flowcube:update-available', handler)
+  },
+  getAppVersion: () => ipcRenderer.invoke('flowcube:get-app-version'),
+  isPackaged: () => ipcRenderer.invoke('flowcube:is-packaged'),
+  startUpdateDownload: (downloadUrl) =>
+    ipcRenderer.invoke('flowcube:start-update-download', downloadUrl),
+  ignoreUpdateVersion: (version) =>
+    ipcRenderer.invoke('flowcube:ignore-update-version', version),
   /** ERP 引导完成后的 API 根，供主进程触发自动更新（避免早于 localStorage 写入的竞态） */
   notifyApiOriginReady: (origin) => {
     ipcRenderer.send('flowcube:api-origin-ready', origin)

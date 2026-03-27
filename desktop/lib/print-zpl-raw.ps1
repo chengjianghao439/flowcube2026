@@ -1,12 +1,21 @@
 # FlowCube：将 ZPL 字节以 RAW 作业提交到本机已安装的打印机（WinSpool）
+# 打印机名由 Node 进程环境变量 FC_PRINTER_NAME 传入（UTF-16 环境块，避免命令行中文损坏）
 param(
-  [Parameter(Mandatory = $true)][string]$PrinterName,
   [Parameter(Mandatory = $true)][string]$ZplPath
 )
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $ZplPath)) {
-  Write-Error "ZPL 文件不存在: $ZplPath"
+  Write-Error "ZPL file not found"
   exit 2
+}
+if ([string]::IsNullOrEmpty($env:FC_PRINTER_NAME)) {
+  $PrinterName = ''
+} else {
+  $PrinterName = $env:FC_PRINTER_NAME.Trim()
+}
+if ([string]::IsNullOrWhiteSpace($PrinterName)) {
+  Write-Error "FC_PRINTER_NAME missing or empty"
+  exit 3
 }
 $bytes = [System.IO.File]::ReadAllBytes($ZplPath)
 
@@ -37,7 +46,7 @@ public static class FlowCubeRawPrint {
   public static void Send(string printerName, byte[] bytes) {
     IntPtr h = IntPtr.Zero;
     if (!OpenPrinter(printerName, out h, IntPtr.Zero))
-      throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "OpenPrinter 失败，请核对打印机名称是否与系统「打印机」中一致");
+      throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
     try {
       var di = new DOCINFO {
         pDocName = "FlowCube ZPL",
@@ -45,16 +54,16 @@ public static class FlowCubeRawPrint {
         pDatatype = "RAW"
       };
       if (!StartDocPrinter(h, 1, di))
-        throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "StartDocPrinter 失败");
+        throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
       try {
         if (!StartPagePrinter(h))
-          throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "StartPagePrinter 失败");
+          throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
         IntPtr p = Marshal.AllocCoTaskMem(bytes.Length);
         try {
           Marshal.Copy(bytes, 0, p, bytes.Length);
           int written;
           if (!WritePrinter(h, p, bytes.Length, out written))
-            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "WritePrinter 失败");
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
         } finally {
           Marshal.FreeCoTaskMem(p);
         }

@@ -21,6 +21,8 @@ const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000
 const MAX_DOWNLOAD_RETRIES = 3
 /** 留给系统拉起 NSIS / exe 安装器后再退出，避免安装程序尚未启动就释放句柄 */
 const QUIT_AFTER_OPEN_MS = 600
+/** 渲染进程挂载监听后再发送，避免错过 flowcube:update-available */
+const IPC_UPDATE_NOTIFY_DELAY_MS = 2000
 
 /** 更新流程占用（下载 / 安装确认），防止重复触发 */
 let updateFlowLocked = false
@@ -523,9 +525,13 @@ async function runDiagnosticUpdateCheck(app, parentWindow, origin) {
   console.log('[FlowCube] 已强制弹出更新窗口')
 }
 
-async function checkAppUpdate(app, parentWindow, apiOriginFn) {
+/**
+ * @param {{ ui?: 'native' | 'ipc' }} [options] ui=ipc 时由渲染进程全局弹窗承接，主进程仅发 IPC
+ */
+async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
+  const ui = options.ui === 'ipc' ? 'ipc' : 'native'
   const origin = apiOriginFn().replace(/\/$/, '')
-  console.log('[FlowCube] 开始检查更新 | API 根:', origin)
+  console.log('[FlowCube] 开始检查更新 | API 根:', origin, '| UI:', ui)
 
   if (UPDATE_DIAG_MODE) {
     try {
@@ -656,26 +662,72 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn) {
       )
     }
 
-    console.log('[FlowCube] 弹出更新提示')
+    console.log('[FlowCube] 弹出更新提示（', ui, '）')
 
-    const boxOptions = {
-      type: 'info',
-      title: FORCE_UPDATE ? '发现新版本（调试强制）' : '发现新版本',
-      message: FORCE_UPDATE
-        ? `【调试】将显示更新流程（当前 ${current}，服务端标记 ${latest}）。`
-        : `新版本 ${latest} 已发布（当前 ${current}）。`,
-      detail: buildNotesDetail(notes),
-      buttons: ['立即更新', '忽略此版本', '稍后提醒'],
-      defaultId: 0,
-      cancelId: 2,
-      noLink: true,
-    }
-    const result = await showBox(parentWindow, boxOptions)
+    if (ui === 'ipc') {
+      const wc =
+        parentWindow &&
+        !parentWindow.isDestroyed() &&
+        parentWindow.webContents &&
+        !parentWindow.webContents.isDestroyed()
+          ? parentWindow.webContents
+          : null
+      if (wc) {
+        const payload = {
+          version: latest,
+          notes,
+          downloadUrl: resolvedUrl,
+          current,
+          forceDebug: !!FORCE_UPDATE,
+        }
+        setTimeout(() => {
+          try {
+            if (!wc.isDestroyed()) wc.send('flowcube:update-available', payload)
+          } catch (e) {
+            console.error('[FlowCube] 发送更新 IPC 失败:', e)
+          }
+        }, IPC_UPDATE_NOTIFY_DELAY_MS)
+      } else {
+        console.warn('[FlowCube] 无可用 webContents，回退为原生弹窗')
+        const boxOptions = {
+          type: 'info',
+          title: FORCE_UPDATE ? '发现新版本（调试强制）' : '发现新版本',
+          message: FORCE_UPDATE
+            ? `【调试】将显示更新流程（当前 ${current}，服务端标记 ${latest}）。`
+            : `新版本 ${latest} 已发布（当前 ${current}）。`,
+          detail: buildNotesDetail(notes),
+          buttons: ['立即更新', '忽略此版本', '稍后提醒'],
+          defaultId: 0,
+          cancelId: 2,
+          noLink: true,
+        }
+        const result = await showBox(parentWindow, boxOptions)
+        if (result.response === 0) {
+          await startUpdateDownload(app, parentWindow, resolvedUrl)
+        } else if (result.response === 1 && !FORCE_UPDATE) {
+          await ignoreVersion(app, latest)
+        }
+      }
+    } else {
+      const boxOptions = {
+        type: 'info',
+        title: FORCE_UPDATE ? '发现新版本（调试强制）' : '发现新版本',
+        message: FORCE_UPDATE
+          ? `【调试】将显示更新流程（当前 ${current}，服务端标记 ${latest}）。`
+          : `新版本 ${latest} 已发布（当前 ${current}）。`,
+        detail: buildNotesDetail(notes),
+        buttons: ['立即更新', '忽略此版本', '稍后提醒'],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      }
+      const result = await showBox(parentWindow, boxOptions)
 
-    if (result.response === 0) {
-      await startUpdateDownload(app, parentWindow, resolvedUrl)
-    } else if (result.response === 1 && !FORCE_UPDATE) {
-      await ignoreVersion(app, latest)
+      if (result.response === 0) {
+        await startUpdateDownload(app, parentWindow, resolvedUrl)
+      } else if (result.response === 1 && !FORCE_UPDATE) {
+        await ignoreVersion(app, latest)
+      }
     }
   } catch (err) {
     console.error('[FlowCube] 更新失败:', err)
@@ -688,4 +740,5 @@ module.exports = {
   isRemoteVersionNewer,
   isValidDownloadUrl,
   startUpdateDownload,
+  ignoreVersion,
 }

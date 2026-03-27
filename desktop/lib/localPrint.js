@@ -38,6 +38,17 @@ function printZplViaLp(queue, content) {
   })
 }
 
+/** 将 stderr/stdout 转为可读字符串（Windows 上 PowerShell 常为系统代码页，避免全乱码） */
+function decodeWindowsProcessOutput(buf) {
+  if (buf == null || buf.length === 0) return ''
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf))
+  try {
+    return new TextDecoder('utf-8', { fatal: false }).decode(b)
+  } catch {
+    return b.toString('utf8')
+  }
+}
+
 function printZplWindowsRaw(printerName, content) {
   const name = String(printerName || '').trim()
   if (!name) throw new Error('打印机名称为空')
@@ -57,34 +68,39 @@ function printZplWindowsRaw(printerName, content) {
     tmpPs1 = path.join(os.tmpdir(), `fc_raw_${Date.now()}.ps1`)
     fs.writeFileSync(tmpPs1, scriptText, 'utf8')
 
-    execFileSync(
-      powershellExe(),
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        tmpPs1,
-        '-PrinterName',
-        name,
-        '-ZplPath',
-        tmpZpl,
-      ],
-      { encoding: 'utf8', maxBuffer: 1024 * 1024, windowsHide: true },
-    )
-  } catch (e) {
-    const stderr =
-      e && typeof e.stderr !== 'undefined'
-        ? Buffer.isBuffer(e.stderr)
-          ? e.stderr.toString('utf8')
-          : String(e.stderr)
-        : ''
-    const combined = (stderr || e?.message || '').trim()
-    throw new Error(
-      combined ||
-        'Windows RAW 打印失败。请核对打印机名称、驱动是否支持 RAW（推荐 ZDesigner），并查看主进程日志。',
-    )
+    try {
+      execFileSync(
+        powershellExe(),
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          tmpPs1,
+          '-ZplPath',
+          tmpZpl,
+        ],
+        {
+          maxBuffer: 1024 * 1024,
+          windowsHide: true,
+          encoding: 'buffer',
+          env: {
+            ...process.env,
+            /** UTF-16 进程环境块，比命令行参数更可靠传递中文打印机名 */
+            FC_PRINTER_NAME: name,
+          },
+        },
+      )
+    } catch (e) {
+      const stderr = decodeWindowsProcessOutput(e?.stderr)
+      const stdout = decodeWindowsProcessOutput(e?.stdout)
+      const combined = (stderr || stdout || e?.message || '').trim()
+      throw new Error(
+        combined ||
+          'Windows RAW 打印失败。请核对打印机名称、驱动是否支持 RAW（推荐 ZDesigner），并查看主进程日志。',
+      )
+    }
   } finally {
     try {
       fs.unlinkSync(tmpZpl)
