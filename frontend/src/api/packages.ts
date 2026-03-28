@@ -1,6 +1,5 @@
 import client from './client'
 import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
-import type { DesktopPrinterCompat } from '@/lib/desktopLocalPrint'
 import type { ApiResponse } from '@/types'
 
 export interface PackageItem {
@@ -52,7 +51,6 @@ export const printPackageLabelApi = (packageId: number) =>
       content?: string
       contentType?: string
       printerName?: string | null
-      printerCompat?: DesktopPrinterCompat | null
     } | unknown
   }>>(`/packages/${packageId}/print-label`, undefined, {
     headers: desktopLocalPrintRequestHeaders(),

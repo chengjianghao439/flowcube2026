@@ -51,14 +51,6 @@ interface Window {
       }>
     >
     /** 主进程：按 printerName 本机 RAW 出 ZPL / TSPL */
-    printZpl?: (opts: {
-      content: string
-      printerName: string
-      printerCompat?: {
-        tsplWireEncoding?: 'auto' | 'utf8' | 'gb18030' | null
-        tsplLineEnding?: 'auto' | 'native' | 'crlf' | null
-        tsplCodepagePolicy?: 'auto' | 'keep' | 'omit' | null
-      } | null
-    }) => Promise<null>
+    printZpl?: (opts: { content: string; printerName: string }) => Promise<null>
   }
 }

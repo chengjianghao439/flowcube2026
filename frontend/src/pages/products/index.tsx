@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react'
-import BarcodeDialog from '@/components/shared/BarcodeDialog'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
@@ -15,6 +14,11 @@ import { LimitedInput } from '@/components/shared/LimitedInput'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
 import client from '@/api/client'
+import { printProductLabelApi } from '@/api/products'
+import {
+  isDesktopLocalPrintError,
+  tryDesktopLocalZplThenComplete,
+} from '@/lib/desktopLocalPrint'
 import type { Product } from '@/types/products'
 import type { TableColumn } from '@/types'
 
@@ -27,7 +31,6 @@ export default function ProductsPage() {
   const [form, setForm] = useState(emptyProd)
   const [newCat, setNewCat] = useState(''); const [catOpen, setCatOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
-  const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null)
   const [confirmProduct, setConfirmProduct] = useState<Product | null>(null)
   const [confirmCat, setConfirmCat] = useState<{id:number;name:string} | null>(null)
   const [importing, setImporting] = useState(false)
@@ -56,6 +59,47 @@ export default function ProductsPage() {
   const isPending = creating || updating
   const set = (k:string, v:unknown) => setForm(f=>({...f,[k]:v}))
 
+  async function handlePrintProductLabel(p: Product) {
+    try {
+      const d = await printProductLabelApi(p.id)
+      if (!d) return
+      if (d.queued) {
+        const local = await tryDesktopLocalZplThenComplete({
+          jobId: d.jobId,
+          content: d.content,
+          contentType: d.contentType,
+          printerName: d.printerName,
+        })
+        if (local === 'ok') {
+          toast.success(d.printerName ? `已向 ${d.printerName} 提交商品标签` : '已提交商品标签')
+          return
+        }
+        if (isDesktopLocalPrintError(local)) {
+          toast.error(local.error)
+          return
+        }
+        if (local === 'skipped_no_desktop') {
+          toast.warning('任务已入队，请在 FlowCube 桌面端登录同一服务器后执行打印。')
+          return
+        }
+        if (local === 'skipped_no_payload') {
+          toast.warning('任务已入队，但响应中缺少本机打印内容，请在打印任务中处理。')
+          return
+        }
+        const h = d.dispatchHint
+        if (h?.message) {
+          toast.warning(h.message)
+          return
+        }
+        toast.success(d.printerCode ? `已加入打印队列 → ${d.printerCode}` : '已加入打印队列')
+        return
+      }
+      toast.warning('未绑定「商品标签」打印机，未创建打印任务')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : '打印失败')
+    }
+  }
+
   function openCreate() { setEdit(null); setForm(emptyProd); setOpen(true) }
   function openEdit(p:Product) { setEdit(p); setForm({ name:p.name, categoryId:p.categoryId, unit:p.unit, spec:p.spec??'', barcode:p.barcode??'', costPrice:p.costPrice!=null?String(p.costPrice):'', salePrice:p.salePrice!=null?String(p.salePrice):'', remark:p.remark??'', isActive:p.isActive }); setOpen(true) }
   function handleSubmit(e:React.FormEvent<HTMLFormElement>) {
@@ -77,7 +121,7 @@ export default function ProductsPage() {
     { key:'id', title:'操作', width:200, render:(_,r)=>(
       <div className="flex gap-1 flex-wrap">
         <Button size="sm" variant="outline" onClick={()=>openEdit(r)}>编辑</Button>
-        <Button size="sm" variant="outline" onClick={()=>setBarcodeProduct(r)}>标签</Button>
+        <Button size="sm" variant="outline" onClick={()=>void handlePrintProductLabel(r)}>标签</Button>
         <Button size="sm" variant="destructive" onClick={()=>setConfirmProduct(r)}>删除</Button>
       </div>
     )},
@@ -217,8 +261,6 @@ export default function ProductsPage() {
           <DialogFooter><Button variant="outline" onClick={()=>{ setImportOpen(false); setImportResult(null) }}>关闭</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <BarcodeDialog open={!!barcodeProduct} onClose={()=>setBarcodeProduct(null)} product={barcodeProduct ? { ...barcodeProduct, salePrice: barcodeProduct.salePrice ?? undefined } : null} />
       <ConfirmDialog
         open={!!confirmProduct}
         title="确认删除商品"

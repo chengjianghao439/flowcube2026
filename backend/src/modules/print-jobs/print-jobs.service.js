@@ -19,6 +19,7 @@ const {
   buildRackLabelTspl,
   buildContainerLabelTspl,
   buildPackageLabelTspl,
+  buildProductLabelTspl,
   getLabelTsplFromDefaultTemplate,
 } = require('./labelTsplTemplate')
 const { recordPrintSuccess, recordPrintFailure } = require('./printer-health')
@@ -79,20 +80,6 @@ function fmt(row, { includeAckToken = false } = {}) {
       row.printer_name != null && String(row.printer_name).trim()
         ? String(row.printer_name).trim()
         : null,
-    printerCompat: {
-      tsplWireEncoding:
-        row.printer_tspl_wire_encoding != null
-          ? String(row.printer_tspl_wire_encoding).trim().toLowerCase()
-          : 'auto',
-      tsplLineEnding:
-        row.printer_tspl_line_ending != null
-          ? String(row.printer_tspl_line_ending).trim().toLowerCase()
-          : 'auto',
-      tsplCodepagePolicy:
-        row.printer_tspl_codepage_policy != null
-          ? String(row.printer_tspl_codepage_policy).trim().toLowerCase()
-          : 'auto',
-    },
     templateId:   num(row.template_id),
     title:        row.title,
     contentType:  row.content_type,
@@ -132,10 +119,7 @@ async function findAll({ printerId, status, page = 1, pageSize = 50, tenantId = 
   const where = 'WHERE ' + conds.join(' AND ')
   const offset = (page - 1) * pageSize
   const [rows] = await pool.query(
-    `SELECT j.*, p.code AS printer_code, p.name AS printer_name,
-            p.tspl_wire_encoding AS printer_tspl_wire_encoding,
-            p.tspl_line_ending AS printer_tspl_line_ending,
-            p.tspl_codepage_policy AS printer_tspl_codepage_policy
+    `SELECT j.*, p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j
      LEFT JOIN printers p ON p.id = j.printer_id
      ${where} ORDER BY j.priority DESC, j.id DESC LIMIT ? OFFSET ?`,
@@ -148,10 +132,7 @@ async function findAll({ printerId, status, page = 1, pageSize = 50, tenantId = 
 }
 
 async function findById(id, { tenantId } = {}) {
-  let sql = `SELECT j.*, p.code AS printer_code, p.name AS printer_name,
-                    p.tspl_wire_encoding AS printer_tspl_wire_encoding,
-                    p.tspl_line_ending AS printer_tspl_line_ending,
-                    p.tspl_codepage_policy AS printer_tspl_codepage_policy
+  let sql = `SELECT j.*, p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j LEFT JOIN printers p ON p.id = j.printer_id
      WHERE j.id=?`
   const params = [id]
@@ -475,8 +456,21 @@ function buildPackageLabelZpl({ box_code, task_no, customer_name, summary }) {
   return `^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${bc}^FS^FO32,108^A0N,22,22^FD${tn}^FS^FO32,142^A0N,20,20^FD${cn}^FS^FO32,176^A0N,18,18^FD${sm}^FS^XZ`
 }
 
+function buildProductLabelZpl({ product_code, product_name, spec, unit, price }) {
+  const code = String(product_code ?? '').replace(/[\r\n^~]/g, '')
+  const name = String(product_name ?? '')
+    .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
+    .slice(0, 24)
+  const sp = String(spec ?? '')
+    .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
+    .slice(0, 20)
+  const meta = [unit ? `/${unit}` : '', price ? `¥${price}` : ''].join(' ').trim()
+  const metaSafe = meta.replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?').slice(0, 20)
+  return `^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,22,22^FD${name}^FS${sp ? `^FO32,142^A0N,20,20^FD${sp}^FS` : ''}${metaSafe ? `^FO32,176^A0N,18,18^FD${metaSafe}^FS` : ''}^XZ`
+}
+
 /**
- * 与 printers.label_raw_format 一致：佳博等用 tspl
+ * 与 printers.label_raw_format 一致：TSPL 标签机用 tspl
  */
 async function getPrinterLabelRawFormat(printerId) {
   const id = Number(printerId)
@@ -647,7 +641,6 @@ async function enqueueRackLabelJob(payload) {
       id: job.id,
       printerCode: job.printerCode,
       printerName: job.printerName,
-      printerCompat: job.printerCompat,
       dispatchHint,
       contentType: useTspl ? 'tspl' : 'zpl',
       content: labelBody,
@@ -729,6 +722,74 @@ async function enqueuePackageLabelJob(payload) {
     createdBy: payload.createdBy ?? null,
     jobUniqueKey: payload.jobUniqueKey ?? null,
   })
+}
+
+/**
+ * 商品标签入队
+ * payload: { productId, tenantId?, createdBy?, jobUniqueKey? }
+ */
+async function enqueueProductLabelJob(payload) {
+  const productId = payload?.productId
+  if (!productId) return null
+  const tid = Number(payload.tenantId) >= 0 && Number.isFinite(Number(payload.tenantId)) ? Number(payload.tenantId) : 0
+  const [[row]] = await pool.query(
+    `SELECT p.id, p.code, p.name, p.spec, p.unit, p.sale_price
+     FROM product_items p
+     WHERE p.id = ? AND p.deleted_at IS NULL`,
+    [productId],
+  )
+  if (!row) return null
+
+  const resolved = await resolvePrinterForJob({
+    tenantId: tid,
+    jobType: 'product_label',
+    contentType: 'zpl',
+  })
+  let printerId = resolved.printerId
+  let dispatchReason = resolved.dispatchReason || 'fallback'
+  if (!printerId) {
+    printerId = await resolveLabelPrinterId(tid)
+    dispatchReason = 'fallback'
+  }
+  if (!printerId) return null
+
+  const vars = {
+    product_code: row.code,
+    product_name: row.name,
+    spec: row.spec,
+    unit: row.unit,
+    price: row.sale_price != null ? Number(row.sale_price).toFixed(2) : '',
+  }
+  const labelFmt = await getPrinterLabelRawFormat(printerId)
+  const useTspl = labelFmt === 'tspl'
+  const labelBody = useTspl
+    ? (await getLabelTsplFromDefaultTemplate(8, vars))
+      ?? buildProductLabelTspl(vars)
+    : (await getLabelZplFromDefaultTemplate(8, vars))
+      ?? buildProductLabelZpl(vars)
+
+  const job = await create({
+    printerId,
+    dispatchReason,
+    tenantId: tid,
+    warehouseId: null,
+    jobType: 'product_label',
+    title: `商品标签 ${row.code}`,
+    contentType: useTspl ? 'tspl' : 'zpl',
+    content: labelBody,
+    copies: 1,
+    createdBy: payload.createdBy ?? null,
+    jobUniqueKey: payload.jobUniqueKey ?? null,
+  })
+  const dispatchHint = await getDispatchHintForJob(job.printerCode, job.id)
+  return {
+    id: job.id,
+    printerCode: job.printerCode,
+    printerName: job.printerName,
+    dispatchHint,
+    contentType: useTspl ? 'tspl' : 'zpl',
+    content: labelBody,
+  }
 }
 
 /** 将超时仍处 pending/printing 的任务标为失败（无可用打印机在规定时间内完成） */
@@ -828,9 +889,11 @@ module.exports = {
   parseListStatus,
   enqueueContainerLabelJob,
   enqueueRackLabelJob,
+  enqueueProductLabelJob,
   getDispatchHintForJob,
   enqueuePackageLabelJob,
   buildContainerLabelZpl,
   buildRackLabelZpl,
+  buildProductLabelZpl,
   buildPackageLabelZpl,
 }

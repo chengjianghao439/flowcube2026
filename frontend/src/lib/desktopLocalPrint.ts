@@ -50,7 +50,7 @@ export function validateZplForLocalPrint(content: string | null | undefined): st
   return null
 }
 
-/** TSPL（TSC/佳博等）本机 RAW 校验 */
+/** TSPL 本机 RAW 校验 */
 export function validateTsplForLocalPrint(content: string | null | undefined): string | null {
   const s = content != null ? String(content).trim() : ''
   if (!s) return 'TSPL 内容为空，无法本机打印'
@@ -63,16 +63,12 @@ export function validateTsplForLocalPrint(content: string | null | undefined): s
 
 export async function printZplOnDesktop(
   content: string,
-  opts: {
-    printerName: string | null | undefined
-    printerCompat?: DesktopPrinterCompat | null
-  },
+  opts: { printerName: string | null | undefined },
 ): Promise<void> {
   const printerName = opts.printerName != null ? String(opts.printerName).trim() : ''
   await window.flowcubeDesktop!.printZpl!({
     content,
     printerName,
-    printerCompat: opts.printerCompat ?? null,
   })
 }
 
@@ -89,12 +85,6 @@ function formatDesktopPrintCatch(e: unknown): string {
   const s = String(e ?? '').trim()
   if (s && s !== '[object Object]') return s
   return '本机 RAW 打印失败：未收到具体原因。请打开桌面端主进程控制台，或核对打印机名称与 RAW 驱动。'
-}
-
-export interface DesktopPrinterCompat {
-  tsplWireEncoding?: 'auto' | 'utf8' | 'gb18030' | null
-  tsplLineEnding?: 'auto' | 'native' | 'crlf' | null
-  tsplCodepagePolicy?: 'auto' | 'keep' | 'omit' | null
 }
 
 /** skipped_no_desktop：非桌面端或未注入 flowcubeDesktop；skipped_no_payload：桌面端可用但接口未带回 zpl/jobId，未送 RAW */
@@ -115,10 +105,9 @@ export async function tryDesktopLocalZplThenComplete(opts: {
   content?: string | null
   contentType?: string | null
   printerName?: string | null
-  printerCompat?: DesktopPrinterCompat | null
 }): Promise<DesktopLocalPrintResult> {
   if (!isDesktopLocalPrintAvailable()) return 'skipped_no_desktop'
-  const { jobId, content, contentType, printerName, printerCompat } = opts
+  const { jobId, content, contentType, printerName } = opts
   const ct = String(contentType || '').toLowerCase()
   if (!content || (ct !== 'zpl' && ct !== 'tspl') || jobId == null || !Number.isFinite(Number(jobId))) {
     return 'skipped_no_payload'
@@ -155,7 +144,7 @@ export async function tryDesktopLocalZplThenComplete(opts: {
   const rawErr = ct === 'tspl' ? validateTsplForLocalPrint(content) : validateZplForLocalPrint(content)
   if (rawErr) return { error: rawErr }
   try {
-    await printZplOnDesktop(String(content).trim(), { printerName, printerCompat })
+    await printZplOnDesktop(String(content).trim(), { printerName })
     await apiClient.post(`/print-jobs/${Number(jobId)}/complete-local`, {})
     return 'ok'
   } catch (e) {

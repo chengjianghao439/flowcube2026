@@ -1,6 +1,5 @@
 import apiClient from './client'
 import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
-import type { DesktopPrinterCompat } from '@/lib/desktopLocalPrint'
 import type { ApiResponse, PaginatedData, QueryParams } from '@/types'
 import type { Rack, CreateRackParams, UpdateRackParams } from '@/types/racks'
 
@@ -48,7 +47,6 @@ export interface PrintRackLabelResult {
   jobId: number | null
   printerCode: string | null
   printerName: string | null
-  printerCompat?: DesktopPrinterCompat | null
   dispatchHint?: PrintDispatchHint | null
   /** 入队成功时返回 ZPL，供桌面端本机 RAW 出纸 */
   contentType?: string | null

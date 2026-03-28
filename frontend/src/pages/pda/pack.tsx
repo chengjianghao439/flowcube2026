@@ -175,14 +175,12 @@ export default function PdaPackPage() {
           content?: string
           contentType?: string
           printerName?: string | null
-          printerCompat?: import('@/lib/desktopLocalPrint').DesktopPrinterCompat | null
         }
         const local = await tryDesktopLocalZplThenComplete({
           jobId: job.id,
           content: job.content,
           contentType: job.contentType,
           printerName: job.printerName,
-          printerCompat: job.printerCompat,
         })
         if (local === 'ok') {
           ok(

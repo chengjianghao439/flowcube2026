@@ -78,12 +78,11 @@ export default function RacksPage() {
           content: d.content,
           contentType: d.contentType,
           printerName: d.printerName,
-          printerCompat: d.printerCompat,
         })
         if (local === 'ok') {
           const q = d.printerName ? `「${d.printerName}」` : '本机打印机'
           toast.success(
-            `已向 ${q} 提交 RAW 并核销队列。请到 Windows「设备和打印机」中打开同名打印机的队列查看是否有瞬间出现的作业；若始终为空请看页顶提示确认是否在用桌面客户端。佳博 TSPL 请保持 RAW=TSPL 与官方热敏驱动；Zebra 才用 ZPL。`,
+            `已向 ${q} 提交 RAW 并核销队列。请到 Windows「设备和打印机」中打开同名打印机的队列查看是否有瞬间出现的作业；若始终为空请看页顶提示确认是否在用桌面客户端。`,
           )
           return
         }
@@ -218,7 +217,7 @@ export default function RacksPage() {
               检测到在普通浏览器中打开，不会调用 Windows
               打印队列，故「打印队列里什么也没有」是正常现象。请安装并打开
               <strong> FlowCube ERP 桌面客户端</strong>
-              ，在桌面程序里登录同一服务器后再点「打印」；佳博 TSPL 仍须在「打印机管理」中选 TSPL 并完成「从本机添加」。
+              ，在桌面程序里登录同一服务器后再点「打印」。
             </>
           ) : (
             <>

@@ -1,4 +1,5 @@
 import apiClient from './client'
+import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
 import type { ApiResponse, PaginatedData, QueryParams } from '@/types'
 import type { Product, ProductCategory, ProductOption, CreateProductParams, UpdateProductParams, ProductFinderResult, ProductFinderParams } from '@/types/products'
 
@@ -15,3 +16,16 @@ export const getProductsActiveApi = async () => (await apiClient.get<ApiResponse
 export const createProductApi     = async (d: CreateProductParams) => (await apiClient.post<ApiResponse<{id:number}>>('/products', d)).data.data
 export const updateProductApi     = async (id:number, d: UpdateProductParams) => { await apiClient.put(`/products/${id}`, d) }
 export const deleteProductApi     = async (id:number) => { await apiClient.delete(`/products/${id}`) }
+export const printProductLabelApi = async (id: number) =>
+  (await apiClient.post<ApiResponse<{
+    queued: boolean
+    jobId: number | null
+    printerCode: string | null
+    printerName: string | null
+    dispatchHint?: { code: string; message: string; sseClients: number } | null
+    contentType?: string | null
+    content?: string | null
+  }>>(`/products/${id}/print-label`, {}, {
+    skipGlobalError: true,
+    headers: desktopLocalPrintRequestHeaders(),
+  })).data.data

@@ -6,7 +6,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/api/client'
-import type { DesktopPrinterCompat } from '@/lib/desktopLocalPrint'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -57,7 +56,7 @@ interface Printer {
   code: string
   type: number
   typeName: string
-  /** 本机 RAW：zpl 斑马系；tspl 佳博 TSC 等 */
+  /** 本机 RAW：zpl 斑马系；tspl 通用 TSPL 标签机 */
   labelRawFormat?: 'zpl' | 'tspl'
   description: string
   status: number
@@ -67,41 +66,10 @@ interface Printer {
   clientAliasName?: string | null
   clientHostname?: string | null
   clientDisplayName?: string | null
-  tsplWireEncoding?: 'auto' | 'utf8' | 'gb18030'
-  tsplLineEnding?: 'auto' | 'native' | 'crlf'
-  tsplCodepagePolicy?: 'auto' | 'keep' | 'omit'
   createdAt: string
 }
 
 type BindingMap = Record<string, { print_type: string; printer_code: string; printer_name: string }>
-
-const TSPL_WIRE_ENCODING_LABEL: Record<NonNullable<DesktopPrinterCompat['tsplWireEncoding']>, string> = {
-  auto: '自动',
-  utf8: 'UTF-8',
-  gb18030: 'GB18030',
-}
-
-const TSPL_LINE_ENDING_LABEL: Record<NonNullable<DesktopPrinterCompat['tsplLineEnding']>, string> = {
-  auto: '自动',
-  native: '保持原样',
-  crlf: '强制 CRLF',
-}
-
-const TSPL_CODEPAGE_LABEL: Record<NonNullable<DesktopPrinterCompat['tsplCodepagePolicy']>, string> = {
-  auto: '自动',
-  keep: '保留',
-  omit: '去掉',
-}
-
-/** 仅 ASCII + 内置字体 "3" + Code128，用于区分「驱动 RAW」与「中文/字库模板」问题 */
-const TSPL_ASCII_SELFTEST = `SIZE 40 mm,30 mm
-GAP 3 mm,0 mm
-DIRECTION 0
-REFERENCE 0,0
-CLS
-TEXT 10,10,"3",0,1,1,"FLOWCUBE"
-BARCODE 10,80,"128",60,1,0,2,2,"12345678"
-PRINT 1`
 
 interface BindDialogProps {
   printer: Printer
@@ -179,10 +147,8 @@ export default function PrintersPage() {
   const [selectedName, setSelectedName] = useState<string>('')
   const [addType, setAddType] = useState<1 | 2 | 3>(1)
   const [bindTarget, setBindTarget] = useState<Printer | null>(null)
-  const [compatTarget, setCompatTarget] = useState<Printer | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Printer | null>(null)
   const [aliasDraft, setAliasDraft] = useState<Record<string, string>>({})
-  const [tsplSelftestName, setTsplSelftestName] = useState('')
 
   const canUseSystemPrinters =
     IS_ELECTRON_DESKTOP && typeof window.flowcubeDesktop?.getSystemPrinters === 'function'
@@ -193,10 +159,6 @@ export default function PrintersPage() {
   })
 
   const existingCodes = useMemo(() => new Set(printers.map(p => p.code)), [printers])
-  const tsplPrinters = useMemo(
-    () => printers.filter(p => p.labelRawFormat === 'tspl' && p.status === 1),
-    [printers],
-  )
   /** 与 RAW 打印侧规范化一致，避免「已添加」与系统枚举因 Unicode 不一致漏判 */
   const existingNamesNormalized = useMemo(
     () => new Set(printers.map(p => normalizeSystemPrinterName(p.name))),
@@ -218,9 +180,6 @@ export default function PrintersPage() {
         status: printer.status,
         warehouseId: printer.warehouseId ?? null,
         labelRawFormat: printer.labelRawFormat ?? 'zpl',
-        tsplWireEncoding: printer.tsplWireEncoding ?? 'auto',
-        tsplLineEnding: printer.tsplLineEnding ?? 'auto',
-        tsplCodepagePolicy: printer.tsplCodepagePolicy ?? 'auto',
       })
     },
     onSuccess: () => {
@@ -271,47 +230,6 @@ export default function PrintersPage() {
     }
   }, [showAddDialog, canUseSystemPrinters, loadSystemPrinters])
 
-  useEffect(() => {
-    if (!tsplPrinters.length) return
-    setTsplSelftestName(prev =>
-      prev && tsplPrinters.some(p => p.name === prev) ? prev : tsplPrinters[0].name,
-    )
-  }, [tsplPrinters])
-
-  const canTsplSelftest =
-    IS_ELECTRON_DESKTOP && typeof window.flowcubeDesktop?.printZpl === 'function'
-
-  async function sendTsplAsciiSelftest() {
-    const name = tsplSelftestName.trim()
-    if (!name) {
-      toast.error('请先在列表中选择一台 RAW=TSPL 的打印机')
-      return
-    }
-    const printer = tsplPrinters.find(p => p.name === name)
-    try {
-      await window.flowcubeDesktop!.printZpl!({
-        content: TSPL_ASCII_SELFTEST,
-        printerName: name,
-        printerCompat: printer
-          ? {
-              tsplWireEncoding: printer.tsplWireEncoding ?? 'auto',
-              tsplLineEnding: printer.tsplLineEnding ?? 'auto',
-              tsplCodepagePolicy: printer.tsplCodepagePolicy ?? 'auto',
-            }
-          : null,
-      })
-      toast.success(
-        '已提交仅英文与条码的 TSPL 自检。若仍不出纸，重点检查驱动是否支持 RAW、打印机是否暂停；若出自检纸，再排查业务标签里的中文/字库。',
-      )
-    } catch (e: unknown) {
-      const msg =
-        (e instanceof Error && e.message) ||
-        (e as { message?: string })?.message ||
-        '本机 RAW 发送失败'
-      toast.error(String(msg).trim() || '本机 RAW 发送失败')
-    }
-  }
-
   const addPrinter = useMutation({
     mutationFn: async (payload: { name: string; code: string; type: number; description: string | null }) => {
       await apiClient.post('/printers', { ...payload, source: 'local_desktop' })
@@ -359,29 +277,6 @@ export default function PrintersPage() {
   })
 
   const bindBusy = bindMutation.isPending || unbindMutation.isPending
-
-  const updateTsplCompat = useMutation({
-    mutationFn: async (printer: Printer) => {
-      await apiClient.put(`/printers/${printer.id}`, {
-        name: printer.name,
-        code: printer.code,
-        type: printer.type,
-        description: printer.description ?? '',
-        status: printer.status,
-        warehouseId: printer.warehouseId ?? null,
-        labelRawFormat: printer.labelRawFormat ?? 'zpl',
-        tsplWireEncoding: printer.tsplWireEncoding ?? 'auto',
-        tsplLineEnding: printer.tsplLineEnding ?? 'auto',
-        tsplCodepagePolicy: printer.tsplCodepagePolicy ?? 'auto',
-      })
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['printers'] })
-      toast.success('已保存打印兼容设置')
-      setCompatTarget(null)
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.message || '保存失败'),
-  })
 
   function togglePrinterBinding(type: BindType, printer: Printer) {
     const row = bindings[type]
@@ -465,37 +360,11 @@ export default function PrintersPage() {
 
       {IS_ELECTRON_DESKTOP && (
         <div className="rounded-xl border border-border bg-card p-4">
-          <h3 className="font-semibold text-foreground">本机打印标签（RAW：ZPL / TSPL）</h3>
+          <h3 className="font-semibold text-foreground">本机打印标签（RAW）</h3>
           <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
             无需填写任何网络地址。请使用下方「从本机添加」，在系统已安装的打印机里选中您的标签机，并在用途中绑定「库存标签」等；打印时软件会按该打印机在系统中的名称自动出纸。请勿随意修改 ERP
             里该打印机的「名称」，以免与系统不一致导致打不出来。
           </p>
-          {canTsplSelftest && tsplPrinters.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
-              <div className="min-w-[200px] flex-1">
-                <label className="text-label mb-1 block">TSPL 自检（仅 ASCII）</label>
-                <Select value={tsplSelftestName} onValueChange={setTsplSelftestName}>
-                  <SelectTrigger className="input w-full h-9">
-                    <SelectValue placeholder="选择 RAW=TSPL 的打印机" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tsplPrinters.map(p => (
-                      <SelectItem key={p.id} value={p.name}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="button" variant="secondary" className="shrink-0" onClick={() => void sendTsplAsciiSelftest()}>
-                发送 TSPL 自检
-              </Button>
-              <p className="w-full text-xs leading-relaxed text-muted-foreground">
-                系统「测试页」能印但业务标签不印时：先点此。若仍不出纸，为 Windows 驱动/RAW
-                通道问题；若出纸，再查中文内容、模板字库（如 TSS24.BF2）或纸张 GAP。
-              </p>
-            </div>
-          )}
         </div>
       )}
 
@@ -583,7 +452,7 @@ export default function PrintersPage() {
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">类型</th>
               <th
                 className="px-4 py-3 text-left font-medium text-muted-foreground"
-                title="本机 RAW：ZPL 适用于斑马等；TSPL 适用于佳博 TSC 等"
+                title="本机 RAW：ZPL 适用于斑马等；TSPL 适用于通用 TSPL 标签机"
               >
                 RAW
               </th>
@@ -658,16 +527,8 @@ export default function PrintersPage() {
                   ) : '-'}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setBindTarget(p)}>绑定用途</Button>
-                    <Button size="sm" variant="outline" onClick={() => setCompatTarget(p)}>兼容</Button>
-                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setBindTarget(p)}>绑定用途</Button>
                   {getBoundLabels(p.code) && <div className="mt-1 text-xs text-blue-700">{getBoundLabels(p.code)}</div>}
-                  {p.labelRawFormat === 'tspl' && (
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {TSPL_WIRE_ENCODING_LABEL[p.tsplWireEncoding ?? 'auto']} / {TSPL_LINE_ENDING_LABEL[p.tsplLineEnding ?? 'auto']} / {TSPL_CODEPAGE_LABEL[p.tsplCodepagePolicy ?? 'auto']}
-                    </div>
-                  )}
                 </td>
                 <td className="px-4 py-3">
                   <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(p)}>删除</Button>
@@ -687,93 +548,6 @@ export default function PrintersPage() {
           onClose={() => setBindTarget(null)}
         />
       )}
-
-      <Dialog open={!!compatTarget} onOpenChange={(open) => { if (!open) setCompatTarget(null) }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>打印兼容设置</DialogTitle>
-            <DialogDescription>
-              按打印机保存 TSPL 兼容参数，避免依赖整台电脑的环境变量。对新接入的标签机，只需在这里调，不影响其它打印机。
-            </DialogDescription>
-          </DialogHeader>
-          {compatTarget && (
-            <div className="space-y-4">
-              <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
-                <div className="font-medium text-foreground">{compatTarget.name}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  RAW={compatTarget.labelRawFormat ?? 'zpl'} · 编码 {compatTarget.code}
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <label className="text-label mb-1 block">TSPL 字节编码</label>
-                  <Select
-                    value={compatTarget.tsplWireEncoding ?? 'auto'}
-                    onValueChange={v => setCompatTarget(s => s ? { ...s, tsplWireEncoding: v as Printer['tsplWireEncoding'] } : s)}
-                  >
-                    <SelectTrigger className="input w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">自动</SelectItem>
-                      <SelectItem value="utf8">UTF-8</SelectItem>
-                      <SelectItem value="gb18030">GB18030</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-label mb-1 block">TSPL 换行</label>
-                  <Select
-                    value={compatTarget.tsplLineEnding ?? 'auto'}
-                    onValueChange={v => setCompatTarget(s => s ? { ...s, tsplLineEnding: v as Printer['tsplLineEnding'] } : s)}
-                  >
-                    <SelectTrigger className="input w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">自动</SelectItem>
-                      <SelectItem value="native">保持原样</SelectItem>
-                      <SelectItem value="crlf">强制 CRLF</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-label mb-1 block">CODEPAGE 行</label>
-                  <Select
-                    value={compatTarget.tsplCodepagePolicy ?? 'auto'}
-                    onValueChange={v => setCompatTarget(s => s ? { ...s, tsplCodepagePolicy: v as Printer['tsplCodepagePolicy'] } : s)}
-                  >
-                    <SelectTrigger className="input w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">自动</SelectItem>
-                      <SelectItem value="keep">保留</SelectItem>
-                      <SelectItem value="omit">去掉</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs leading-relaxed text-muted-foreground">
-                推荐先保持“自动”。
-                若某台佳博/TSC 出现“Windows 队列成功但不出纸”，优先尝试把字节编码改成 GB18030；若仍异常，再尝试强制 CRLF 或去掉 CODEPAGE 行。
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setCompatTarget(null)} disabled={updateTsplCompat.isPending}>
-              取消
-            </Button>
-            <Button
-              type="button"
-              onClick={() => compatTarget && updateTsplCompat.mutate(compatTarget)}
-              disabled={!compatTarget || updateTsplCompat.isPending}
-            >
-              {updateTsplCompat.isPending ? '保存中…' : '保存'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ConfirmDialog
         open={!!deleteTarget}

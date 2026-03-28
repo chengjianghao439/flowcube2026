@@ -154,6 +154,21 @@ function buildPackageLabelTspl({ box_code, task_no, customer_name, summary }) {
   ].join('\n')
 }
 
+function buildProductLabelTspl({ product_code, product_name, spec, unit, price }) {
+  const code = String(product_code ?? '').replace(/[\r\n"\\]/g, '')
+  const name = sanitizeTsplValue(String(product_name ?? '').slice(0, 24))
+  const specLine = sanitizeTsplValue(String(spec ?? '').slice(0, 20))
+  const meta = [unit ? `/${unit}` : '', price ? `¥${price}` : ''].join(' ').trim()
+  return [
+    ...tsplHeaderLines('SIZE 60 mm,40 mm'),
+    `BARCODE 40,20,"128",72,1,0,2,2,"${code}"`,
+    `TEXT 40,104,"${TSPL_TEXT_FONT}",0,1,1,"${name}"`,
+    ...(specLine ? [`TEXT 40,144,"${TSPL_TEXT_FONT}",0,1,1,"${specLine}"`] : []),
+    ...(meta ? [`TEXT 40,184,"${TSPL_TEXT_FONT}",0,1,1,"${meta}"`] : []),
+    'PRINT 1',
+  ].join('\n')
+}
+
 /**
  * @param {number} templateType 5–9
  * @param {Record<string, string|number|null|undefined>} vars
@@ -188,6 +203,7 @@ module.exports = {
   buildRackLabelTspl,
   buildContainerLabelTspl,
   buildPackageLabelTspl,
+  buildProductLabelTspl,
   getLabelTsplFromDefaultTemplate,
   applyTsplTemplate,
   generateTsplFromElements,

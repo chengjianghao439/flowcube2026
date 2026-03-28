@@ -204,8 +204,20 @@ async function softDelete(id) {
   await pool.query('UPDATE product_items SET deleted_at=NOW() WHERE id=? AND deleted_at IS NULL',[id])
 }
 
+async function enqueueLabel(id, { tenantId = 0, createdBy = null } = {}) {
+  await findById(id)
+  const printJobs = require('../print-jobs/print-jobs.service')
+  return printJobs.enqueueProductLabelJob({
+    productId: id,
+    tenantId,
+    createdBy,
+    jobUniqueKey: `product_label:${id}:${Date.now()}`,
+  })
+}
+
 module.exports = {
   getCategoryList, createCategory, updateCategory, deleteCategory,
   findAll, findAllActive, findById, create, update, softDelete,
+  enqueueLabel,
   findForFinder,
 }

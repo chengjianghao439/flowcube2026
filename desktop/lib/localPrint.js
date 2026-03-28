@@ -22,47 +22,6 @@ function stripUtf8Bom(s) {
   return t
 }
 
-/** 部分 TSC/佳博固件只认 LF，部分只认 CRLF；默认不改写（与 v0.3.30 及更早行为一致）。需 CRLF 时在桌面快捷方式或系统环境变量设置 FLOWCUBE_TSPL_CRLF=1 */
-function normalizeTsplLineEndingsToCrlf(s) {
-  return String(s)
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .join('\r\n')
-}
-
-function shouldUseTsplCrlf() {
-  const v = String(process.env.FLOWCUBE_TSPL_CRLF || '').trim().toLowerCase()
-  return v === '1' || v === 'true' || v === 'yes'
-}
-
-function resolveTsplLineEnding(pref) {
-  const v = String(pref || '').trim().toLowerCase()
-  if (v === 'crlf') return 'crlf'
-  if (v === 'native') return 'native'
-  return shouldUseTsplCrlf() ? 'crlf' : 'native'
-}
-
-/** 部分佳博机型不认 CODEPAGE 行，解析失败则 Windows 仍显示已打印但不出纸；设 1 可去掉所有 CODEPAGE 再发 GB18030 */
-function shouldOmitTsplCodepage() {
-  const v = String(process.env.FLOWCUBE_TSPL_OMIT_CODEPAGE || '').trim().toLowerCase()
-  return v === '1' || v === 'true' || v === 'yes'
-}
-
-function resolveTsplCodepagePolicy(pref) {
-  const v = String(pref || '').trim().toLowerCase()
-  if (v === 'omit') return 'omit'
-  if (v === 'keep') return 'keep'
-  return shouldOmitTsplCodepage() ? 'omit' : 'keep'
-}
-
-function omitTsplCodepageLines(content) {
-  return String(content)
-    .split(/\r?\n/)
-    .filter((line) => !/^\s*CODEPAGE\s+/i.test(line))
-    .join('\n')
-}
-
 function printZplViaLp(queue, content) {
   return new Promise((resolve, reject) => {
     const tmpFile = path.join(os.tmpdir(), `fc_desktop_zpl_${Date.now()}.zpl`)
@@ -90,35 +49,8 @@ function decodeWindowsProcessOutput(buf) {
   }
 }
 
-/**
- * TSPL 发往 Windows 时的字节编码。
- * 默认 **UTF-8**（无 CODEPAGE 时）：多款佳博 USB RAW 对整包 GB18030 与固件默认解析易不一致，表现为队列成功但不出纸。
- * 脚本中含 **CODEPAGE 936/86** 或 **FLOWCUBE_TSPL_BYTES=gb18030** 时用 GB18030。
- */
-function inferTsplWireEncoding(content, pref) {
-  const direct = String(pref || '').trim().toLowerCase()
-  if (direct === 'utf8' || direct === 'utf-8') return 'utf8'
-  if (direct === 'gbk' || direct === 'gb18030') return 'gb18030'
-  const env = String(process.env.FLOWCUBE_TSPL_BYTES || '').trim().toLowerCase()
-  if (env === 'utf8' || env === 'utf-8') return 'utf8'
-  if (env === 'gbk' || env === 'gb18030') return 'gb18030'
-  const u = String(content).toUpperCase()
-  if (/\bCODEPAGE\s+65001\b/.test(u) || /\bCODEPAGE\s+UTF/.test(u)) return 'utf8'
-  if (/\bCODEPAGE\s+936\b/.test(u) || /\bCODEPAGE\s+86\b/.test(u)) return 'gb18030'
-  return 'utf8'
-}
-
-function bufferForWindowsRaw(stringContent, isTspl, tsplWireEncoding) {
-  if (!isTspl) return Buffer.from(stringContent, 'utf8')
-  if (inferTsplWireEncoding(stringContent, tsplWireEncoding) === 'utf8') {
-    return Buffer.from(stringContent, 'utf8')
-  }
-  try {
-    const iconv = require('iconv-lite')
-    return iconv.encode(stringContent, 'gb18030')
-  } catch {
-    return Buffer.from(stringContent, 'utf8')
-  }
+function bufferForWindowsRaw(stringContent) {
+  return Buffer.from(stringContent, 'utf8')
 }
 
 function printZplWindowsRaw(printerName, payload) {
@@ -191,15 +123,7 @@ function printZplWindowsRaw(printerName, payload) {
 }
 
 /**
- * @param {{
- *   content: string,
- *   printerName: string,
- *   printerCompat?: {
- *     tsplWireEncoding?: string,
- *     tsplLineEnding?: string,
- *     tsplCodepagePolicy?: string,
- *   } | null
- * }} opts
+ * @param {{ content: string, printerName: string }} opts
  */
 async function printZpl(opts) {
   let content = stripUtf8Bom(String(opts?.content ?? '').trim())
@@ -211,33 +135,15 @@ async function printZpl(opts) {
   const isZpl = content.includes('^XA') && content.includes('^XZ')
   const u = content.toUpperCase()
   const isTspl = u.includes('SIZE') && u.includes('CLS') && u.includes('PRINT')
-  const compat = opts?.printerCompat && typeof opts.printerCompat === 'object'
-    ? opts.printerCompat
-    : null
-  const tsplLineEnding = resolveTsplLineEnding(compat?.tsplLineEnding)
-  const tsplCodepagePolicy = resolveTsplCodepagePolicy(compat?.tsplCodepagePolicy)
-  const tsplWireEncoding = compat?.tsplWireEncoding
-  if (isTspl && tsplLineEnding === 'crlf') {
-    content = normalizeTsplLineEndingsToCrlf(content)
-  }
-  if (isTspl && tsplCodepagePolicy === 'omit') {
-    content = omitTsplCodepageLines(content)
-  }
   if (!isZpl && !isTspl) {
     throw new Error('RAW 格式异常：须为 ZPL（^XA…^XZ）或 TSPL（含 SIZE、CLS、PRINT），请检查模板或打印机指令集设置')
   }
   const kind = isZpl ? 'ZPL' : 'TSPL'
   const platform = os.platform()
-  const winPayload =
-    platform === 'win32' ? bufferForWindowsRaw(content, isTspl, tsplWireEncoding) : null
+  const winPayload = platform === 'win32' ? bufferForWindowsRaw(content) : null
   try {
-    const tsplEol = isTspl ? tsplLineEnding : ''
-    const extra = tsplEol ? ` TSPL_EOL=${tsplEol}` : ''
-    const omitCp = isTspl && tsplCodepagePolicy === 'omit' ? ' omit_cp=1' : ''
-    const encExtra =
-      platform === 'win32' && isTspl ? ` enc=${inferTsplWireEncoding(content, tsplWireEncoding)}` : ''
     const n = winPayload ? winPayload.length : Buffer.byteLength(content, 'utf8')
-    console.log(`[FlowCube RAW] ${kind} ${n} bytes → ${printerName}${extra}${encExtra}${omitCp}`)
+    console.log(`[FlowCube RAW] ${kind} ${n} bytes → ${printerName}`)
   } catch {
     /* 忽略 */
   }
