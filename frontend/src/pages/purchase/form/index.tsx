@@ -316,7 +316,7 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
   }
 
   const confirmLoading =
-    createInboundMut.isPending && confirmState.open && confirmState.title === '创建入库任务'
+    createInboundMut.isPending && confirmState.open && confirmState.title === '创建收货订单'
 
   if (isLoading) {
     return (
@@ -372,20 +372,20 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
                   addTab({ key: path, title: order.openInboundTaskNo!, path })
                   navigate(path)
                 }}>
-                入库任务 {order.openInboundTaskNo}
+                收货订单 {order.openInboundTaskNo}
               </Button>
             )}
             {canCreateInbound && (
               <Button disabled={isPending || createInboundMut.isPending}
                 onClick={() => ask(
-                  '创建入库任务',
-                  '确认后将为该采购单生成入库任务；收货将产生待上架容器，上架后才计入库存。',
+                  '创建收货订单',
+                  '确认后将为该采购单生成收货订单（入库任务）；收货将产生待上架容器，上架后才计入库存。',
                   'default',
                   () => {
                     createInboundMut.mutate(order.id, {
                       onSuccess: (d) => {
                         setConfirmState(s => ({ ...s, open: false }))
-                        toast.success(`入库任务 ${d.taskNo} 已创建`)
+                        toast.success(`收货订单 ${d.taskNo} 已创建`)
                         const path = `/inbound-tasks/${d.taskId}`
                         addTab({ key: path, title: d.taskNo, path })
                         navigate(path)
@@ -398,7 +398,7 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
                   },
                   '继续',
                 )}>
-                创建入库任务
+                创建收货订单
               </Button>
             )}
             <Button variant="outline" onClick={closeTab}>关闭</Button>

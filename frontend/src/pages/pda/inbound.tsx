@@ -56,7 +56,7 @@ export default function PdaInboundPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PdaHeader title="收货入库" onBack={() => navigate('/pda')} right={<PdaRefreshButton onRefresh={() => refetch()} />} />
+      <PdaHeader title="收货订单" onBack={() => navigate('/pda')} right={<PdaRefreshButton onRefresh={() => refetch()} />} />
       <div className="max-w-md mx-auto px-4 py-5 space-y-4">
         <p className="text-xs text-muted-foreground">{tasks.length} 个待处理任务</p>
         {isLoading && <PdaLoading className="h-32" />}

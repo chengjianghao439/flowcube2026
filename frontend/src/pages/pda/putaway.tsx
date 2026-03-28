@@ -1,5 +1,5 @@
 /**
- * PDA 上架（入库任务）— 路由 /pda/putaway/:id
+ * PDA 上架（收货订单）— 路由 /pda/putaway/:id
  * 扫容器 CNT → 扫库位 LOC → 调用 POST /inbound-tasks/:id/putaway
  */
 import { useMemo } from 'react'
@@ -36,7 +36,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
       <PdaHeader
         title="上架入库"
         subtitle={`任务 #${taskId}`}
-        backLabel="← 收货列表"
+        backLabel="← 收货订单"
         onBack={() => navigate('/pda/inbound')}
         right={<span className="text-xs text-muted-foreground">上架</span>}
       />
@@ -89,7 +89,7 @@ export default function PdaPutawayPage() {
   if (!taskId) {
     return (
       <div className="min-h-screen bg-background p-6 text-center text-muted-foreground">
-        <p>请从「收货入库」列表选择任务进入上架</p>
+        <p>请从「收货订单」列表选择任务进入上架</p>
         <button type="button" className="mt-4 text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回</button>
       </div>
     )

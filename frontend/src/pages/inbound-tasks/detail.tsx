@@ -1,5 +1,5 @@
 /**
- * 入库任务详情 — 收货 / 上架 / 容器列表
+ * 收货订单详情 — 收货 / 上架 / 容器列表
  * 路由：/inbound-tasks/:id（多标签）
  */
 import { useContext, useState } from 'react'
@@ -117,7 +117,7 @@ export default function InboundTaskDetailPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={`入库任务 ${task.taskNo}`}
+        title={`收货订单 ${task.taskNo}`}
         description={
           <span className="flex flex-wrap items-center gap-2">
             <Badge variant={INBOUND_STATUS_VARIANT[task.status]}>{INBOUND_STATUS_LABEL[task.status]}</Badge>
@@ -267,8 +267,8 @@ export default function InboundTaskDetailPage() {
 
       <ConfirmDialog
         open={cancelConfirmOpen}
-        title="取消入库任务"
-        description="确定取消该入库任务？取消后需重新创建任务才能继续收货。"
+        title="取消收货订单"
+        description="确定取消该收货订单？取消后需重新创建收货订单才能继续收货。"
         variant="destructive"
         confirmText="确定取消"
         loading={cancelMut.isPending}

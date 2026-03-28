@@ -26,7 +26,8 @@ export const TOP_NAV_SECTIONS: TopNavSection[] = [
     label: '采购',
     children: [
       { label: '供应商管理', path: '/suppliers', perm: 'page:suppliers' },
-      { label: '采购管理', path: '/purchase', perm: 'page:purchase' },
+      { label: '采购订单', path: '/purchase', perm: 'page:purchase' },
+      { label: '收货订单', path: '/inbound-tasks', perm: 'page:inbound' },
     ],
   },
   {
@@ -67,7 +68,6 @@ export const TOP_NAV_SECTIONS: TopNavSection[] = [
     label: '仓库任务',
     children: [
       { label: '出库看板', path: '/warehouse-tasks', perm: 'page:warehouse-tasks' },
-      { label: '入库任务', path: '/inbound-tasks', perm: 'page:warehouse-tasks' },
       { label: '波次拣货', path: '/picking-waves', perm: 'page:warehouse-tasks' },
       { label: '分拣格管理', path: '/sorting-bins', perm: 'page:warehouse-tasks' },
       { label: '波次扫码', path: '/wave-scan', perm: 'page:warehouse-tasks' },

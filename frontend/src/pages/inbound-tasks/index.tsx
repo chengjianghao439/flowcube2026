@@ -1,5 +1,5 @@
 /**
- * 入库任务管理页
+ * 收货订单列表（采购入库 / inbound_tasks）
  * 路由：/inbound-tasks
  */
 import { useState } from 'react'
@@ -60,7 +60,7 @@ export default function InboundTasksPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="入库任务" description="采购入库：收货生成容器 → 上架计入库存" />
+      <PageHeader title="收货订单" description="与采购订单分开管理：收货生成容器 → PDA 或仓库上架后计入库存" />
 
       <FilterCard>
         <div className="flex flex-wrap gap-3 items-end">

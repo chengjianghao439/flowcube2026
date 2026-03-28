@@ -1,5 +1,5 @@
 {
-  "version": "0.3.40",
-  "filename": "Jixu-Flow-Setup-0.3.40.exe",
-  "notes": "【v0.3.40 主要更新】\n\n• 后端：MySQL 连接建立后强制 SET NAMES utf8mb4，减轻中文姓名等字段乱码。\n• 后端：区分缺表/缺列错误提示；可选 APP_EXPOSE_ERRORS=1 便于排查「服务器内部错误」。\n• 自动更新：latest.json 与 GitHub 同版本时优先使用本地 filename，避免安装包名不一致导致更新下载失败。\n• 运维：仓库内提供全库备份/恢复脚本（scripts/）。\n\n桌面端沿用 v0.3.39：已保存 API 根地址时不会被错误切换至本机空库。首次连生产请 Ctrl+Shift+S 核对 API。"
+  "version": "0.3.41",
+  "filename": "Jixu-Flow-Setup-0.3.41.exe",
+  "notes": "【v0.3.41 主要更新】\n\n• ERP：采购订单与收货订单分离——顶栏「采购」下含「采购订单」与「收货订单」；收货列表不再放在「仓库任务」中。\n• 权限：新增页面权限 page:inbound（收货订单）；采购员/仓库/只读等角色按前端配置可访问；数据库迁移 057 为对应角色写入 sys_role_permissions。\n• 文案：采购单创建「收货订单」、PDA 列表等与业务用语统一。\n\n发版后请执行数据库迁移并部署 backend/downloads/latest.json 与同版本 exe。"
 }

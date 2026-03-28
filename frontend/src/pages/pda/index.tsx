@@ -112,7 +112,7 @@ function TaskCard({ task, onGo }: { task: UnifiedTask; onGo: () => void }) {
 
 // ── 作业入口（带权限过滤）────────────────────────────────────────────────────
 const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = [
-  { icon: '📥', label: '收货入库', path: '/pda/inbound',  perm: 'pda:inbound'  },
+  { icon: '📥', label: '收货订单', path: '/pda/inbound',  perm: 'pda:inbound'  },
   { icon: '📤', label: '上架作业', path: '/pda/putaway',  perm: 'pda:putaway'  },
   { icon: '🗂️', label: '拣货任务', path: '/pda/picking',  perm: 'pda:picking'  },
   { icon: '🔀', label: '订单分拣', path: '/pda/sort',      perm: 'pda:sorting'  },

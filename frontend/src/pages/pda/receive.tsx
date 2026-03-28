@@ -45,7 +45,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       <PdaHeader
         title={task.taskNo}
         subtitle={task.supplierName ?? undefined}
-        backLabel="← 收货列表"
+        backLabel="← 收货订单"
         onBack={() => navigate('/pda/inbound')}
         right={<span className="text-xs text-muted-foreground">收货</span>}
       />

@@ -80,7 +80,7 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="库存管理" description="库存查询；采购入库请走「入库任务」上架后计入库存" actions={
+      <PageHeader title="库存管理" description="库存查询；采购入库请走「收货订单」上架后计入库存" actions={
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={()=>downloadExport(tab==='stock'?'/export/stock':'/export/inventory-logs').catch(e=>toast.error((e as Error).message))}>导出 Excel</Button>
           <Button variant="outline" onClick={()=>openOp('outbound')}>出库</Button>

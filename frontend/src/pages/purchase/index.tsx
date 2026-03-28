@@ -69,7 +69,7 @@ export default function PurchasePage() {
   }
 
   const confirmCreateInboundLoading =
-    createInbound.isPending && confirmState.open && confirmState.title === '创建入库任务'
+    createInbound.isPending && confirmState.open && confirmState.title === '创建收货订单'
 
   const selectedList = data?.list.filter(r => selectedIds.has(r.id)) || []
 
@@ -143,13 +143,13 @@ export default function PurchasePage() {
             {r.status === 2 && !r.openInboundTaskId && (
               <Button size="sm" disabled={createInbound.isPending}
                 onClick={() => openConfirm(
-                  '创建入库任务',
-                  '将为此采购单生成入库任务；须收货生成容器并上架后才计入库存。',
+                  '创建收货订单',
+                  '将为此采购单生成收货订单（入库任务）；须收货生成容器并上架后才计入库存。',
                   () => {
                     createInbound.mutate(r.id, {
                       onSuccess: (d) => {
                         closeConfirm()
-                        toast.success(`入库任务 ${d.taskNo} 已创建`)
+                        toast.success(`收货订单 ${d.taskNo} 已创建`)
                         const path = `/inbound-tasks/${d.taskId}`
                         addTab({ key: path, title: d.taskNo, path })
                         navigate(path)
@@ -162,7 +162,7 @@ export default function PurchasePage() {
                   },
                   { confirmText: '继续' },
                 )}>
-                创建入库任务
+                创建收货订单
               </Button>
             )}
             {(r.status === 1 || r.status === 2) && (
@@ -185,8 +185,8 @@ export default function PurchasePage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="采购管理"
-        description="采购单确认后请创建入库任务，收货与上架后计入库存"
+        title="采购订单"
+        description="采购单与收货订单分开管理：确认采购单后请创建收货订单，收货与上架后计入库存"
         actions={
           <>
             <Button variant="outline"
