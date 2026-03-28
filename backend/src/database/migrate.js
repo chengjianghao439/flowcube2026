@@ -34,6 +34,71 @@ async function runMigrations() {
       .filter(f => f.endsWith('.sql'))
       .sort()
 
+    // ── 货架主数据表（供 051 迁移与业务查询依赖）──────────────────────────────
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS warehouse_racks (
+        id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        warehouse_id BIGINT UNSIGNED NOT NULL              COMMENT '所属仓库',
+        zone         VARCHAR(20)     NOT NULL DEFAULT ''   COMMENT '库区，如 A / B',
+        code         VARCHAR(50)     NOT NULL              COMMENT '货架编码，如 A01',
+        name         VARCHAR(100)    NOT NULL DEFAULT ''   COMMENT '货架名称',
+        max_levels   TINYINT UNSIGNED NOT NULL DEFAULT 5   COMMENT '最大层数',
+        max_positions TINYINT UNSIGNED NOT NULL DEFAULT 10 COMMENT '每层最大位数',
+        status       TINYINT(1)      NOT NULL DEFAULT 1    COMMENT '1=启用 2=停用',
+        remark       VARCHAR(200)    DEFAULT NULL,
+        deleted_at   DATETIME        DEFAULT NULL,
+        created_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_rack_code (warehouse_id, code),
+        INDEX idx_rack_warehouse (warehouse_id),
+        INDEX idx_rack_zone (warehouse_id, zone)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='货架主数据'
+    `)
+
+    // 先执行按编号排序的 SQL 建表迁移，保证基础表存在后再做增量 ALTER
+    let ran = 0
+    for (const file of files) {
+      const [[existing]] = await conn.query(
+        'SELECT id FROM db_migrations WHERE filename=?', [file]
+      )
+      if (existing) continue
+
+      const sql = fs.readFileSync(path.join(dir, file), 'utf8')
+      await conn.query(sql)
+      await conn.query('INSERT INTO db_migrations (filename) VALUES (?)', [file])
+      console.log(`[Migrate] ✓ ${file}`)
+      ran++
+    }
+
+    if (ran === 0) {
+      console.log('[Migrate] 所有迁移均已执行，无需更新')
+    } else {
+      console.log(`[Migrate] 完成，共执行 ${ran} 个迁移文件`)
+    }
+
+    // ── 货架主数据表（供 051 迁移与业务查询依赖）──────────────────────────────
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS warehouse_racks (
+        id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        warehouse_id BIGINT UNSIGNED NOT NULL              COMMENT '所属仓库',
+        zone         VARCHAR(20)     NOT NULL DEFAULT ''   COMMENT '库区，如 A / B',
+        code         VARCHAR(50)     NOT NULL              COMMENT '货架编码，如 A01',
+        name         VARCHAR(100)    NOT NULL DEFAULT ''   COMMENT '货架名称',
+        max_levels   TINYINT UNSIGNED NOT NULL DEFAULT 5   COMMENT '最大层数',
+        max_positions TINYINT UNSIGNED NOT NULL DEFAULT 10 COMMENT '每层最大位数',
+        status       TINYINT(1)      NOT NULL DEFAULT 1    COMMENT '1=启用 2=停用',
+        remark       VARCHAR(200)    DEFAULT NULL,
+        deleted_at   DATETIME        DEFAULT NULL,
+        created_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_rack_code (warehouse_id, code),
+        INDEX idx_rack_warehouse (warehouse_id),
+        INDEX idx_rack_zone (warehouse_id, zone)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='货架主数据'
+    `)
+
     // 动态 ALTER TABLE：为 sale_customers 添加价格表字段
     await safeAlter(conn, `ALTER TABLE sale_customers ADD COLUMN price_list_id BIGINT UNSIGNED DEFAULT NULL AFTER is_active`)
     await safeAlter(conn, `ALTER TABLE sale_customers ADD COLUMN price_list_name VARCHAR(100) DEFAULT NULL AFTER price_list_id`)
@@ -111,27 +176,6 @@ async function runMigrations() {
     await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN receiver_phone   VARCHAR(11)  DEFAULT NULL COMMENT '收货电话'`)
     await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN receiver_address VARCHAR(30)  DEFAULT NULL COMMENT '收货地址'`)
     await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN remark           VARCHAR(30)  DEFAULT NULL COMMENT '备注'`)
-
-    // ── 执行 SQL 迁移文件 ──────────────────────────────────────────────────────
-    let ran = 0
-    for (const file of files) {
-      const [[existing]] = await conn.query(
-        'SELECT id FROM db_migrations WHERE filename=?', [file]
-      )
-      if (existing) continue
-
-      const sql = fs.readFileSync(path.join(dir, file), 'utf8')
-      await conn.query(sql)
-      await conn.query('INSERT INTO db_migrations (filename) VALUES (?)', [file])
-      console.log(`[Migrate] ✓ ${file}`)
-      ran++
-    }
-
-    if (ran === 0) {
-      console.log('[Migrate] 所有迁移均已执行，无需更新')
-    } else {
-      console.log(`[Migrate] 完成，共执行 ${ran} 个迁移文件`)
-    }
 
     // 为 picking_waves 添加优先级字段（表由 025 创建，需在 SQL 执行后）
     await safeAlter(conn, `ALTER TABLE picking_waves ADD COLUMN priority TINYINT UNSIGNED NOT NULL DEFAULT 2 COMMENT '1紧急 2普通 3低' AFTER status`)
