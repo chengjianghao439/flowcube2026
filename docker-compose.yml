@@ -31,15 +31,18 @@ services:
       mysql:
         condition: service_healthy
     environment:
+      NODE_ENV: production
       PORT: 3000
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: ${DB_USER:-flowcube}
       DB_PASSWORD: ${DB_PASSWORD:-flowcube123}
       DB_NAME: ${DB_NAME:-flowcube}
-      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
+      # app.js 要求长度 ≥32；仅本地试跑可用默认值，上线必须在 .env 覆盖
+      JWT_SECRET: ${JWT_SECRET:-flowcube-docker-dev-only-secret-32chars-min}
       JWT_EXPIRES_IN: 7d
-      CORS_ORIGIN: http://localhost
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
       # 桌面端更新：同域下载安装包（与仓库根 .env 中 APP_PUBLIC_URL 一致）
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
     ports:
