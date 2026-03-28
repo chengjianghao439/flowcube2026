@@ -6,6 +6,7 @@ import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
 import {
   collectErpApiFallbackCandidates,
+  hasUserConfiguredApiOrigin,
   normalizeApiBase,
   probeErpApiOrigin,
   setApiBase,
@@ -84,6 +85,7 @@ async function tryErpApiFallbackAndRetry(config: InternalAxiosRequestConfig): Pr
   if (config._erpApiFallbackTried) return false
   config._erpApiFallbackTried = true
   if (isNativePdaNoViteLive()) return false
+  if (hasUserConfiguredApiOrigin()) return false
 
   const failedOrigin = originFromAxiosConfig(config)
   for (const origin of collectErpApiFallbackCandidates()) {

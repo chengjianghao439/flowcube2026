@@ -14,6 +14,9 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 
 const app = express()
 
+// 统一声明 JSON 输出为 UTF-8，避免部分客户端按本地代码页误解析中文
+app.set('json charset', 'utf-8')
+
 // 位于 Nginx / 负载均衡后时开启，否则 req.protocol 多为 http，拼出的安装包下载地址会变成 http://，
 // 公网若仅开放 443，Windows 客户端更新下载会失败（0.3.x 等旧版依赖接口返回的可访问 URL）。
 if (['1', 'true', 'yes'].includes(String(process.env.TRUST_PROXY || '').toLowerCase())) {

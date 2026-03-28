@@ -1,7 +1,7 @@
 {
   "name": "flowcube-desktop",
   "private": true,
-  "version": "0.3.38",
+  "version": "0.3.39",
   "description": "极序 Flow 桌面客户端（Electron）",
   "main": "main.js",
   "scripts": {

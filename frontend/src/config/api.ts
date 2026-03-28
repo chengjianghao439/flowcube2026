@@ -174,6 +174,33 @@ export function getApiBase(): string {
   return getDynamicDefaultApi()
 }
 
+/**
+ * 用户是否曾在本机显式保存过后端根地址（设置 / 登录固化 / 旧版引导写入）。
+ * 用于桌面端：避免启动探测或 axios 网络重试时「本机 localhost 先连通」覆盖用户真实服务器，导致空库与乱码感知的错配数据。
+ */
+export function hasUserConfiguredApiOrigin(): boolean {
+  if (typeof localStorage === 'undefined') return false
+  const a = localStorage.getItem(API_BASE_STORAGE_KEY)?.trim()
+  const b = localStorage.getItem(LEGACY_ERP_ORIGIN_KEY)?.trim()
+  return Boolean((a && normalizeApiBase(a)) || (b && normalizeApiBase(b)))
+}
+
+/** 仅已写入 localStorage 的地址（去重、归一化），主键优先于旧键 */
+export function getUserConfiguredApiOriginsInOrder(): string[] {
+  if (typeof localStorage === 'undefined') return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  const push = (raw: string | null | undefined) => {
+    const n = raw ? normalizeApiBase(raw) : ''
+    if (!n || seen.has(n)) return
+    seen.add(n)
+    out.push(n)
+  }
+  push(localStorage.getItem(API_BASE_STORAGE_KEY))
+  push(localStorage.getItem(LEGACY_ERP_ORIGIN_KEY))
+  return out
+}
+
 export function setApiBase(url: string): void {
   if (!url.trim()) {
     localStorage.removeItem(API_BASE_STORAGE_KEY)

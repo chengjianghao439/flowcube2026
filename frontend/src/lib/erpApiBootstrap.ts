@@ -6,6 +6,8 @@ import {
   clearElectronStaleViteOrigins,
   collectErpApiFallbackCandidates,
   getApiBase,
+  getUserConfiguredApiOriginsInOrder,
+  hasUserConfiguredApiOrigin,
   probeErpApiOrigin,
   probeRelativeErpApi,
   setApiBase,
@@ -36,6 +38,19 @@ export async function bootstrapErpApiConnection(): Promise<void> {
         return
       }
     }
+  }
+
+  if (hasUserConfiguredApiOrigin()) {
+    for (const origin of getUserConfiguredApiOriginsInOrder()) {
+      if (await probeErpApiOrigin(origin)) {
+        setApiBase(origin)
+        applyErpApiBaseFromStorage()
+        notifyDesktopApiOriginReady()
+        return
+      }
+    }
+    notifyDesktopApiOriginReady()
+    return
   }
 
   for (const origin of collectErpApiFallbackCandidates()) {
