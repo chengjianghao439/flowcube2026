@@ -63,14 +63,40 @@ function decodeWindowsProcessOutput(buf) {
   }
 }
 
-function printZplWindowsRaw(printerName, content) {
+/**
+ * TSPL 发往 Windows 时的字节编码。默认 GB18030（配 CODEPAGE 936）；脚本中含 UTF-8 代码页或设 FLOWCUBE_TSPL_BYTES=utf8 则送 UTF-8。
+ */
+function inferTsplWireEncoding(content) {
+  const env = String(process.env.FLOWCUBE_TSPL_BYTES || '').trim().toLowerCase()
+  if (env === 'utf8' || env === 'utf-8') return 'utf8'
+  if (env === 'gbk' || env === 'gb18030') return 'gb18030'
+  const u = String(content).toUpperCase()
+  if (/\bCODEPAGE\s+65001\b/.test(u) || /\bCODEPAGE\s+UTF/.test(u)) return 'utf8'
+  return 'gb18030'
+}
+
+function bufferForWindowsRaw(stringContent, isTspl) {
+  if (!isTspl) return Buffer.from(stringContent, 'utf8')
+  if (inferTsplWireEncoding(stringContent) === 'utf8') {
+    return Buffer.from(stringContent, 'utf8')
+  }
+  try {
+    const iconv = require('iconv-lite')
+    return iconv.encode(stringContent, 'gb18030')
+  } catch {
+    return Buffer.from(stringContent, 'utf8')
+  }
+}
+
+function printZplWindowsRaw(printerName, payload) {
   const name = String(printerName || '').trim()
   if (!name) throw new Error('打印机名称为空')
+  const buf = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload ?? ''), 'utf8')
   const tmpZpl = path.join(
     os.tmpdir(),
     `fc_zpl_${Date.now()}_${Math.random().toString(36).slice(2, 10)}.zpl`,
   )
-  fs.writeFileSync(tmpZpl, Buffer.from(content, 'utf8'), { flag: 'w' })
+  fs.writeFileSync(tmpZpl, buf, { flag: 'w' })
 
   const bundled = path.join(__dirname, 'print-zpl-raw.ps1')
   let tmpPs1 = null
@@ -151,18 +177,20 @@ async function printZpl(opts) {
     throw new Error('RAW 格式异常：须为 ZPL（^XA…^XZ）或 TSPL（含 SIZE、CLS、PRINT），请检查模板或打印机指令集设置')
   }
   const kind = isZpl ? 'ZPL' : 'TSPL'
+  const platform = os.platform()
+  const winPayload = platform === 'win32' ? bufferForWindowsRaw(content, isTspl) : null
   try {
     const tsplEol = isTspl ? (shouldUseTsplCrlf() ? 'CRLF' : 'native') : ''
     const extra = tsplEol ? ` TSPL_EOL=${tsplEol}` : ''
-    console.log(
-      `[FlowCube RAW] ${kind} ${Buffer.byteLength(content, 'utf8')} bytes → ${printerName}${extra}`,
-    )
+    const encExtra =
+      platform === 'win32' && isTspl ? ` enc=${inferTsplWireEncoding(content)}` : ''
+    const n = winPayload ? winPayload.length : Buffer.byteLength(content, 'utf8')
+    console.log(`[FlowCube RAW] ${kind} ${n} bytes → ${printerName}${extra}${encExtra}`)
   } catch {
     /* 忽略 */
   }
-  const platform = os.platform()
   if (platform === 'win32') {
-    printZplWindowsRaw(printerName, content)
+    printZplWindowsRaw(printerName, winPayload || Buffer.from(content, 'utf8'))
     return
   }
   try {

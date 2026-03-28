@@ -32,6 +32,25 @@ function applyTsplTemplate(body, vars) {
 /** 中文常用点阵字体（TSC 兼容机）；若无此字库可改用 font "3" 仅英文 */
 const TSPL_TEXT_FONT = 'TSS24.BF2'
 
+/** 与 Windows 桌面端 GB18030 下发一致；佳博/TSC 中文 TEXT 需与数据编码匹配 */
+function tsplHeaderLines(sizeMmLine) {
+  return [
+    sizeMmLine,
+    'GAP 2 mm,0 mm',
+    'DIRECTION 0',
+    'REFERENCE 0,0',
+    'CODEPAGE 936',
+    'CLS',
+  ]
+}
+
+/** 自定义 TSPL body 未写 CODEPAGE 时插入 936，与桌面端 GBK 下发一致 */
+function ensureTsplCodepage936(script) {
+  const s = String(script ?? '')
+  if (/\bCODEPAGE\s/i.test(s)) return s
+  return s.replace(/(\r?\n|^)(CLS)(\r?\n|$)/im, '$1CODEPAGE 936\n$2$3')
+}
+
 function buildRackLabelTspl({ rack_barcode, rack_code, zone, name }) {
   const code = String(rack_barcode ?? '').replace(/[\r\n"\\]/g, '')
   const rc = sanitizeTsplValue(String(rack_code ?? '').slice(0, 28))
@@ -39,11 +58,7 @@ function buildRackLabelTspl({ rack_barcode, rack_code, zone, name }) {
   const n = sanitizeTsplValue(String(name ?? '').slice(0, 20))
   const line3 = `${z} ${n}`.trim()
   const lines = [
-    'SIZE 60 mm,40 mm',
-    'GAP 2 mm,0 mm',
-    'DIRECTION 0',
-    'REFERENCE 0,0',
-    'CLS',
+    ...tsplHeaderLines('SIZE 60 mm,40 mm'),
     `BARCODE 40,24,"128",72,1,0,2,2,"${code}"`,
     `TEXT 40,108,"${TSPL_TEXT_FONT}",0,1,1,"${rc}"`,
   ]
@@ -58,11 +73,7 @@ function buildContainerLabelTspl({ container_code, product_name, qty }) {
   const q = Number(qty)
   const qtyStr = sanitizeTsplValue(Number.isFinite(q) ? String(q) : String(qty ?? ''))
   return [
-    'SIZE 60 mm,40 mm',
-    'GAP 2 mm,0 mm',
-    'DIRECTION 0',
-    'REFERENCE 0,0',
-    'CLS',
+    ...tsplHeaderLines('SIZE 60 mm,40 mm'),
     `BARCODE 40,24,"128",72,1,0,2,2,"${code}"`,
     `TEXT 40,108,"${TSPL_TEXT_FONT}",0,1,1,"${name}"`,
     `TEXT 40,148,"${TSPL_TEXT_FONT}",0,1,1,"QTY ${qtyStr}"`,
@@ -106,13 +117,7 @@ function generateTsplFromElements(layout, vars, paperSize) {
     .sort((a, b) => (a.y || 0) - (b.y || 0) || (a.x || 0) - (b.x || 0))
 
   let segments = 0
-  const lines = [
-    `SIZE ${wMm} mm,${hMm} mm`,
-    'GAP 2 mm,0 mm',
-    'DIRECTION 0',
-    'REFERENCE 0,0',
-    'CLS',
-  ]
+  const lines = [...tsplHeaderLines(`SIZE ${wMm} mm,${hMm} mm`)]
 
   for (const el of sorted) {
     const x = Math.round((el.x || 0) * MM_TO_DOT)
@@ -145,11 +150,7 @@ function buildPackageLabelTspl({ box_code, task_no, customer_name, summary }) {
   const cn = sanitizeTsplValue(String(customer_name ?? '').slice(0, 24))
   const sm = sanitizeTsplValue(String(summary ?? '').slice(0, 36))
   return [
-    'SIZE 60 mm,40 mm',
-    'GAP 2 mm,0 mm',
-    'DIRECTION 0',
-    'REFERENCE 0,0',
-    'CLS',
+    ...tsplHeaderLines('SIZE 60 mm,40 mm'),
     `BARCODE 40,20,"128",72,1,0,2,2,"${bc}"`,
     `TEXT 40,104,"${TSPL_TEXT_FONT}",0,1,1,"${tn}"`,
     `TEXT 40,144,"${TSPL_TEXT_FONT}",0,1,1,"${cn}"`,
@@ -180,7 +181,7 @@ async function getLabelTsplFromDefaultTemplate(templateType, vars) {
     }
   }
   if (layout?.format === 'tspl' && typeof layout.body === 'string' && layout.body.trim()) {
-    return applyTsplTemplate(layout.body.trim(), vars)
+    return ensureTsplCodepage936(applyTsplTemplate(layout.body.trim(), vars))
   }
   if (Array.isArray(layout?.elements)) {
     return generateTsplFromElements(layout, vars, paperSize)

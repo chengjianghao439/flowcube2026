@@ -83,3 +83,11 @@ SKIP_GIT_SYNC_CHECK=1 npm run dist:win --prefix desktop
 若某台 TSC/佳博在 **默认（保持模板原始换行）** 下不出纸，可仅为该电脑设置环境变量 **`FLOWCUBE_TSPL_CRLF=1`** 后重启 FlowCube 桌面端，再试打印；多数机型不需要此项。
 
 若 **强制 CRLF** 后反而从「能印」变成「不印」，请 **去掉** 该变量或设为 `0`。
+
+## 本机 TSPL 中文编码（佳博 / TSC）
+
+服务端生成的 TSPL 会带 **`CODEPAGE 936`**，Windows 桌面端默认将整段脚本转为 **GB18030** 再送 RAW（与中文 `TEXT`、字库 `TSS24.BF2` 常见组合一致）。若队列有作业却不出纸，可先升级到此逻辑后再试。
+
+若固件明确走 UTF-8（脚本内为 `CODEPAGE UTF-8` / `65001` 等），桌面端会自动改送 UTF-8，无需改模板。
+
+也可手动指定：**`FLOWCUBE_TSPL_BYTES=utf8`** 或 **`gb18030`** 覆盖自动推断。
