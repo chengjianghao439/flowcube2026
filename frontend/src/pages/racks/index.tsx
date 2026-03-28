@@ -17,7 +17,11 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { TableColumn } from '@/types'
 import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
-import { isDesktopLocalPrintError, tryDesktopLocalZplThenComplete } from '@/lib/desktopLocalPrint'
+import {
+  getLocalPrintEnvironmentKind,
+  isDesktopLocalPrintError,
+  tryDesktopLocalZplThenComplete,
+} from '@/lib/desktopLocalPrint'
 import { ChevronDown, Edit2, Printer, Trash2 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -76,8 +80,9 @@ export default function RacksPage() {
           printerName: d.printerName,
         })
         if (local === 'ok') {
+          const q = d.printerName ? `「${d.printerName}」` : '本机打印机'
           toast.success(
-            '已向本机打印机提交 RAW 作业并核销队列。若未出纸，请在「打印机管理」核对标签机的指令集（Zebra 用 ZPL，TSC/佳博用 TSPL）与 ZDesigner 等 RAW 驱动；并在系统打印队列中查看该任务是否报错。',
+            `已向 ${q} 提交 RAW 并核销队列。请到 Windows「设备和打印机」中打开同名打印机的队列查看是否有瞬间出现的作业；若始终为空请看页顶提示确认是否在用桌面客户端。佳博 TSPL 请保持 RAW=TSPL 与官方热敏驱动；Zebra 才用 ZPL。`,
           )
           return
         }
@@ -87,7 +92,7 @@ export default function RacksPage() {
         }
         if (local === 'skipped_no_desktop') {
           toast.warning(
-            '当前不是 FlowCube 桌面端（或未加载本机打印桥接），标签机不会出纸。请使用桌面安装包打开 ERP；若已在桌面端内，请重启应用或检查是否被安全软件拦截预加载脚本。任务已在服务器入队。',
+            '未连接本机打印桥接：若您是用 Chrome / Edge 直接打开网页，Windows 打印队列里不会出现任何作业，标签机也不会动——请改用「FlowCube ERP」桌面安装包登录同一地址再试。若已是桌面端，请重启应用，或在开发者工具控制台执行 typeof window.flowcubeDesktop?.printZpl 应为 function。任务已在服务器入队。',
           )
           return
         }
@@ -118,6 +123,8 @@ export default function RacksPage() {
     setPage(1)
     setKeyword(search)
   }
+
+  const localPrintEnv = getLocalPrintEnvironmentKind()
 
   const columns: TableColumn<Rack>[] = [
     {
@@ -195,6 +202,33 @@ export default function RacksPage() {
         description="货架唯一条码（RCK）与标签打印"
         actions={<Button onClick={() => { setEditItem(null); setFormOpen(true) }}>+ 新建货架</Button>}
       />
+
+      {localPrintEnv !== 'ok' && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm leading-relaxed ${
+            localPrintEnv === 'electron_no_bridge'
+              ? 'border-destructive/50 bg-destructive/5 text-destructive'
+              : 'border-amber-500/50 bg-amber-500/5 text-amber-950 dark:text-amber-100'
+          }`}
+        >
+          {localPrintEnv === 'browser' ? (
+            <>
+              <strong>当前页面无法本机出纸：</strong>
+              检测到在普通浏览器中打开，不会调用 Windows
+              打印队列，故「打印队列里什么也没有」是正常现象。请安装并打开
+              <strong> FlowCube ERP 桌面客户端</strong>
+              ，在桌面程序里登录同一服务器后再点「打印」；佳博 TSPL 仍须在「打印机管理」中选 TSPL 并完成「从本机添加」。
+            </>
+          ) : (
+            <>
+              <strong>桌面端未加载本机打印桥接：</strong>
+              无法向标签机送 RAW。请完全退出后重启 FlowCube；仍不行请检查安全软件是否拦截预加载脚本。在控制台执行{' '}
+              <code className="rounded bg-muted px-1">typeof window.flowcubeDesktop?.printZpl</code> 应显示{' '}
+              <code className="rounded bg-muted px-1">&quot;function&quot;</code>。
+            </>
+          )}
+        </div>
+      )}
 
       <FilterCard>
         <div className="flex flex-wrap gap-3 items-end">

@@ -25,6 +25,17 @@ export function isDesktopLocalPrintAvailable(): boolean {
   )
 }
 
+/** 本机 RAW 能否执行：浏览器内永远为 browser；桌面包内若预加载失败则为 electron_no_bridge */
+export function getLocalPrintEnvironmentKind():
+  | 'ok'
+  | 'browser'
+  | 'electron_no_bridge' {
+  if (typeof window === 'undefined') return 'browser'
+  if (isDesktopLocalPrintAvailable()) return 'ok'
+  if (IS_ELECTRON_DESKTOP) return 'electron_no_bridge'
+  return 'browser'
+}
+
 export function hasDesktopZplTargetConfigured(printerName?: string | null): boolean {
   return Boolean(printerName != null && String(printerName).trim())
 }
