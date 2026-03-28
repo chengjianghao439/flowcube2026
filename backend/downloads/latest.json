@@ -1,5 +1,5 @@
 {
-  "version": "0.3.30",
-  "filename": "FlowCube-ERP-Setup-0.3.30.exe",
-  "notes": "【v0.3.30 主要更新】\n\n• TSPL：画布 elements 生成 TSPL；打印预览缩放（销售/采购/条码）；模板编辑器画布缩放。\n\n详见 docs/releases/v0.3.30.md。"
+  "version": "0.3.31",
+  "filename": "FlowCube-ERP-Setup-0.3.31.exe",
+  "notes": "【v0.3.31 主要更新】\n\n• 桌面本机 RAW：TSPL 送打印前统一 CRLF；日志输出字节数。\n• 货架/箱贴：成功提示标明已提交 RAW，并提示核对 ZPL/TSPL 与打印队列。\n\n详见 docs/releases/v0.3.31.md。"
 }

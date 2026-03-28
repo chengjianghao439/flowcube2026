@@ -22,6 +22,15 @@ function stripUtf8Bom(s) {
   return t
 }
 
+/** 部分 TSC/佳博固件对 LF-only 的 TSPL 不执行，送 WinSpool/CUPS 前统一 CRLF */
+function normalizeTsplLineEndingsToCrlf(s) {
+  return String(s)
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .join('\r\n')
+}
+
 function printZplViaLp(queue, content) {
   return new Promise((resolve, reject) => {
     const tmpFile = path.join(os.tmpdir(), `fc_desktop_zpl_${Date.now()}.zpl`)
@@ -130,8 +139,17 @@ async function printZpl(opts) {
   const isZpl = content.includes('^XA') && content.includes('^XZ')
   const u = content.toUpperCase()
   const isTspl = u.includes('SIZE') && u.includes('CLS') && u.includes('PRINT')
+  if (isTspl) {
+    content = normalizeTsplLineEndingsToCrlf(content)
+  }
   if (!isZpl && !isTspl) {
     throw new Error('RAW 格式异常：须为 ZPL（^XA…^XZ）或 TSPL（含 SIZE、CLS、PRINT），请检查模板或打印机指令集设置')
+  }
+  const kind = isZpl ? 'ZPL' : 'TSPL'
+  try {
+    console.log(`[FlowCube RAW] ${kind} ${Buffer.byteLength(content, 'utf8')} bytes → ${printerName}`)
+  } catch {
+    /* 忽略 */
   }
   const platform = os.platform()
   if (platform === 'win32') {

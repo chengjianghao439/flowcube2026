@@ -183,7 +183,9 @@ export default function PdaPackPage() {
           printerName: job.printerName,
         })
         if (local === 'ok') {
-          ok('箱贴已从本机打印')
+          ok(
+            '已向本机提交箱贴 RAW 并核销队列。若未出纸，请核对打印机指令集 ZPL/TSPL 是否与机型一致，并查看系统打印队列。',
+          )
           return
         }
         if (isDesktopLocalPrintError(local)) {

@@ -76,7 +76,9 @@ export default function RacksPage() {
           printerName: d.printerName,
         })
         if (local === 'ok') {
-          toast.success('已从本机打印货架标签并核销队列')
+          toast.success(
+            '已向本机打印机提交 RAW 作业并核销队列。若未出纸，请在「打印机管理」核对标签机的指令集（Zebra 用 ZPL，TSC/佳博用 TSPL）与 ZDesigner 等 RAW 驱动；并在系统打印队列中查看该任务是否报错。',
+          )
           return
         }
         if (isDesktopLocalPrintError(local)) {
