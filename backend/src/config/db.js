@@ -13,6 +13,11 @@ const pool = mysql.createPool({
   charset: 'utf8mb4',
 })
 
+/** 会话字符集与排序规则，避免极少数环境下连接未按 utf8mb4 解释中文（姓名乱码、排序异常） */
+pool.on('connection', (connection) => {
+  void connection.query('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
+})
+
 async function testConnection() {
   try {
     const conn = await pool.getConnection()

@@ -37,9 +37,32 @@ function errorHandler(err, req, res, next) {
     return errorResponse(res, message, 400)
   }
 
+  if (err.code === 'ER_NO_SUCH_TABLE') {
+    logger.error(`[MySQL] 缺表: ${err.message}`, err, { path, userId }, 'DB')
+    return errorResponse(
+      res,
+      '数据库缺少业务表（可能未执行迁移或库为新库）。请在后端日志中确认迁移是否成功，或从旧环境恢复数据备份。',
+      500,
+    )
+  }
+
+  if (err.code === 'ER_BAD_FIELD_ERROR') {
+    logger.error(`[MySQL] 缺列: ${err.message}`, err, { path, userId }, 'DB')
+    return errorResponse(
+      res,
+      '数据库字段与当前程序版本不一致（请先部署最新代码并确保迁移已跑完）。详情见后端日志。',
+      500,
+    )
+  }
+
   // ── 未知错误（记录完整堆栈）──────────────────────────────────────────────
   logger.error(`[Unhandled] ${err.message || '未知错误'}`, err, { path, userId, refNo }, 'ERR')
-  return errorResponse(res, '服务器内部错误', 500)
+  const expose = ['1', 'true', 'yes'].includes(String(process.env.APP_EXPOSE_ERRORS || '').toLowerCase())
+  const message =
+    expose && err.message
+      ? `${err.message}${err.code ? ` (${err.code})` : ''}`.trim()
+      : '服务器内部错误'
+  return errorResponse(res, message, 500)
 }
 
 module.exports = errorHandler
