@@ -86,7 +86,7 @@ SKIP_GIT_SYNC_CHECK=1 npm run dist:win --prefix desktop
 
 ## 本机 TSPL 中文编码（佳博 / TSC）
 
-**默认不在 TSPL 里插入 `CODEPAGE` 行**（佳博部分固件不认时会整单不执行，而 Windows 仍显示已打印）。**Windows 桌面端**仍将整段脚本按 **GB18030** 编码送 RAW。
+**默认不在 TSPL 里插入 `CODEPAGE` 行**（佳博部分固件不认时会整单不执行，而 Windows 仍显示已打印）。**Windows 桌面端**对 TSPL 默认按 **UTF-8** 送 RAW；脚本含 **`CODEPAGE 936`**（或 **86**）或设置 **`FLOWCUBE_TSPL_BYTES=gb18030`** 时改为 **GB18030**。
 
 - 若固件 **必须** 声明代码页，请在 **打印模板 body** 中自行写 `CODEPAGE …`（并与 `FLOWCUBE_TSPL_BYTES` 一致）。
 - 脚本中含 **UTF-8** 类 `CODEPAGE` 时，桌面端自动改送 UTF-8。

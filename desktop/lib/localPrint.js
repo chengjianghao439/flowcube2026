@@ -77,7 +77,9 @@ function decodeWindowsProcessOutput(buf) {
 }
 
 /**
- * TSPL 发往 Windows 时的字节编码。默认 GB18030（与常见中文点阵字库）；脚本中含 UTF-8 类 CODEPAGE 或设 FLOWCUBE_TSPL_BYTES=utf8 则送 UTF-8。
+ * TSPL 发往 Windows 时的字节编码。
+ * 默认 **UTF-8**（无 CODEPAGE 时）：多款佳博 USB RAW 对整包 GB18030 与固件默认解析易不一致，表现为队列成功但不出纸。
+ * 脚本中含 **CODEPAGE 936/86** 或 **FLOWCUBE_TSPL_BYTES=gb18030** 时用 GB18030。
  */
 function inferTsplWireEncoding(content) {
   const env = String(process.env.FLOWCUBE_TSPL_BYTES || '').trim().toLowerCase()
@@ -85,7 +87,8 @@ function inferTsplWireEncoding(content) {
   if (env === 'gbk' || env === 'gb18030') return 'gb18030'
   const u = String(content).toUpperCase()
   if (/\bCODEPAGE\s+65001\b/.test(u) || /\bCODEPAGE\s+UTF/.test(u)) return 'utf8'
-  return 'gb18030'
+  if (/\bCODEPAGE\s+936\b/.test(u) || /\bCODEPAGE\s+86\b/.test(u)) return 'gb18030'
+  return 'utf8'
 }
 
 function bufferForWindowsRaw(stringContent, isTspl) {

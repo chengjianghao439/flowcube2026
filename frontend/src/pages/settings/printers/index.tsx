@@ -71,6 +71,16 @@ interface Printer {
 
 type BindingMap = Record<string, { print_type: string; printer_code: string; printer_name: string }>
 
+/** 仅 ASCII + 内置字体 "3" + Code128，用于区分「驱动 RAW」与「中文/字库模板」问题 */
+const TSPL_ASCII_SELFTEST = `SIZE 40 mm,30 mm
+GAP 3 mm,0 mm
+DIRECTION 0
+REFERENCE 0,0
+CLS
+TEXT 10,10,"3",0,1,1,"FLOWCUBE"
+BARCODE 10,80,"128",60,1,0,2,2,"12345678"
+PRINT 1`
+
 interface BindDialogProps {
   printer: Printer
   bindings: BindingMap
@@ -149,6 +159,7 @@ export default function PrintersPage() {
   const [bindTarget, setBindTarget] = useState<Printer | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Printer | null>(null)
   const [aliasDraft, setAliasDraft] = useState<Record<string, string>>({})
+  const [tsplSelftestName, setTsplSelftestName] = useState('')
 
   const canUseSystemPrinters =
     IS_ELECTRON_DESKTOP && typeof window.flowcubeDesktop?.getSystemPrinters === 'function'
@@ -159,6 +170,10 @@ export default function PrintersPage() {
   })
 
   const existingCodes = useMemo(() => new Set(printers.map(p => p.code)), [printers])
+  const tsplPrinters = useMemo(
+    () => printers.filter(p => p.labelRawFormat === 'tspl' && p.status === 1),
+    [printers],
+  )
   /** 与 RAW 打印侧规范化一致，避免「已添加」与系统枚举因 Unicode 不一致漏判 */
   const existingNamesNormalized = useMemo(
     () => new Set(printers.map(p => normalizeSystemPrinterName(p.name))),
@@ -229,6 +244,39 @@ export default function PrintersPage() {
       setAddType(1)
     }
   }, [showAddDialog, canUseSystemPrinters, loadSystemPrinters])
+
+  useEffect(() => {
+    if (!tsplPrinters.length) return
+    setTsplSelftestName(prev =>
+      prev && tsplPrinters.some(p => p.name === prev) ? prev : tsplPrinters[0].name,
+    )
+  }, [tsplPrinters])
+
+  const canTsplSelftest =
+    IS_ELECTRON_DESKTOP && typeof window.flowcubeDesktop?.printZpl === 'function'
+
+  async function sendTsplAsciiSelftest() {
+    const name = tsplSelftestName.trim()
+    if (!name) {
+      toast.error('请先在列表中选择一台 RAW=TSPL 的打印机')
+      return
+    }
+    try {
+      await window.flowcubeDesktop!.printZpl!({
+        content: TSPL_ASCII_SELFTEST,
+        printerName: name,
+      })
+      toast.success(
+        '已提交仅英文与条码的 TSPL 自检。若仍不出纸，重点检查驱动是否支持 RAW、打印机是否暂停；若出自检纸，再排查业务标签里的中文/字库。',
+      )
+    } catch (e: unknown) {
+      const msg =
+        (e instanceof Error && e.message) ||
+        (e as { message?: string })?.message ||
+        '本机 RAW 发送失败'
+      toast.error(String(msg).trim() || '本机 RAW 发送失败')
+    }
+  }
 
   const addPrinter = useMutation({
     mutationFn: async (payload: { name: string; code: string; type: number; description: string | null }) => {
@@ -360,11 +408,37 @@ export default function PrintersPage() {
 
       {IS_ELECTRON_DESKTOP && (
         <div className="rounded-xl border border-border bg-card p-4">
-          <h3 className="font-semibold text-foreground">本机打印标签（ZPL）</h3>
+          <h3 className="font-semibold text-foreground">本机打印标签（RAW：ZPL / TSPL）</h3>
           <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
             无需填写任何网络地址。请使用下方「从本机添加」，在系统已安装的打印机里选中您的标签机，并在用途中绑定「库存标签」等；打印时软件会按该打印机在系统中的名称自动出纸。请勿随意修改 ERP
             里该打印机的「名称」，以免与系统不一致导致打不出来。
           </p>
+          {canTsplSelftest && tsplPrinters.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+              <div className="min-w-[200px] flex-1">
+                <label className="text-label mb-1 block">TSPL 自检（仅 ASCII）</label>
+                <Select value={tsplSelftestName} onValueChange={setTsplSelftestName}>
+                  <SelectTrigger className="input w-full h-9">
+                    <SelectValue placeholder="选择 RAW=TSPL 的打印机" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tsplPrinters.map(p => (
+                      <SelectItem key={p.id} value={p.name}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="button" variant="secondary" className="shrink-0" onClick={() => void sendTsplAsciiSelftest()}>
+                发送 TSPL 自检
+              </Button>
+              <p className="w-full text-xs leading-relaxed text-muted-foreground">
+                系统「测试页」能印但业务标签不印时：先点此。若仍不出纸，为 Windows 驱动/RAW
+                通道问题；若出纸，再查中文内容、模板字库（如 TSS24.BF2）或纸张 GAP。
+              </p>
+            </div>
+          )}
         </div>
       )}
 
