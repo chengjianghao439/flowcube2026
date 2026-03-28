@@ -17,6 +17,9 @@ frontend/.pda-server-url
 logs/
 TEMP_BRAND_SYNC/
 
+# 本地/服务器全库备份（勿提交）
+flowcube_backup.sql
+
 # 安装包/压缩包体积大，勿提交（由 CI 或服务器生成）
 backend/downloads/*.zip
 backend/downloads/*.exe
