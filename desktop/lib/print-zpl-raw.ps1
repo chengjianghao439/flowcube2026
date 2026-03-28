@@ -1,4 +1,4 @@
-# FlowCube：将 ZPL 字节以 RAW 作业提交到本机已安装的打印机（WinSpool）
+# FlowCube：将 ZPL/TSPL 字节以 RAW 作业提交到本机已安装的打印机（WinSpool）
 # 打印机名由 Node 进程环境变量 FC_PRINTER_NAME 传入（UTF-16 环境块，避免命令行中文损坏）
 param(
   [Parameter(Mandatory = $true)][string]$ZplPath
@@ -49,7 +49,7 @@ public static class FlowCubeRawPrint {
       throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
     try {
       var di = new DOCINFO {
-        pDocName = "FlowCube ZPL",
+        pDocName = "FlowCube RAW",
         pOutputFile = null,
         pDatatype = "RAW"
       };

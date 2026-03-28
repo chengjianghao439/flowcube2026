@@ -36,6 +36,19 @@ function shouldUseTsplCrlf() {
   return v === '1' || v === 'true' || v === 'yes'
 }
 
+/** 部分佳博机型不认 CODEPAGE 行，解析失败则 Windows 仍显示已打印但不出纸；设 1 可去掉所有 CODEPAGE 再发 GB18030 */
+function shouldOmitTsplCodepage() {
+  const v = String(process.env.FLOWCUBE_TSPL_OMIT_CODEPAGE || '').trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
+}
+
+function omitTsplCodepageLines(content) {
+  return String(content)
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*CODEPAGE\s+/i.test(line))
+    .join('\n')
+}
+
 function printZplViaLp(queue, content) {
   return new Promise((resolve, reject) => {
     const tmpFile = path.join(os.tmpdir(), `fc_desktop_zpl_${Date.now()}.zpl`)
@@ -173,6 +186,9 @@ async function printZpl(opts) {
   if (isTspl && shouldUseTsplCrlf()) {
     content = normalizeTsplLineEndingsToCrlf(content)
   }
+  if (isTspl && shouldOmitTsplCodepage()) {
+    content = omitTsplCodepageLines(content)
+  }
   if (!isZpl && !isTspl) {
     throw new Error('RAW 格式异常：须为 ZPL（^XA…^XZ）或 TSPL（含 SIZE、CLS、PRINT），请检查模板或打印机指令集设置')
   }
@@ -182,10 +198,11 @@ async function printZpl(opts) {
   try {
     const tsplEol = isTspl ? (shouldUseTsplCrlf() ? 'CRLF' : 'native') : ''
     const extra = tsplEol ? ` TSPL_EOL=${tsplEol}` : ''
+    const omitCp = isTspl && shouldOmitTsplCodepage() ? ' omit_cp=1' : ''
     const encExtra =
       platform === 'win32' && isTspl ? ` enc=${inferTsplWireEncoding(content)}` : ''
     const n = winPayload ? winPayload.length : Buffer.byteLength(content, 'utf8')
-    console.log(`[FlowCube RAW] ${kind} ${n} bytes → ${printerName}${extra}${encExtra}`)
+    console.log(`[FlowCube RAW] ${kind} ${n} bytes → ${printerName}${extra}${encExtra}${omitCp}`)
   } catch {
     /* 忽略 */
   }

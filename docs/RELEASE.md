@@ -91,3 +91,9 @@ SKIP_GIT_SYNC_CHECK=1 npm run dist:win --prefix desktop
 若固件明确走 UTF-8（脚本内为 `CODEPAGE UTF-8` / `65001` 等），桌面端会自动改送 UTF-8，无需改模板。
 
 也可手动指定：**`FLOWCUBE_TSPL_BYTES=utf8`** 或 **`gb18030`** 覆盖自动推断。
+
+若升级后出现 **队列显示已打印但不出纸**（尤其佳博），可尝试在系统环境变量中设 **`FLOWCUBE_TSPL_OMIT_CODEPAGE=1`** 后重启桌面端，以去掉脚本中的 `CODEPAGE` 行再送 RAW（部分固件不认该指令）。
+
+**说明**：Windows 队列里作业标题曾为「FlowCube **ZPL**」，仅表示由 FlowCube 提交，**不代表**内容为 ZPL；新版本已改为「FlowCube **RAW**」以免误判。
+
+**重启电脑后异常**：先检查打印机是否 **就绪 / 未脱机**、**USB/电源**，在「服务」中重启 **Print Spooler**，或删除该打印机队列中所有文档后再试。
