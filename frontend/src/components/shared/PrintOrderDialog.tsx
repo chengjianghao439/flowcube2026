@@ -1,11 +1,15 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { escapeHtmlText, printHtmlDocument } from '@/lib/printHtmlDocument'
+import { PrintPreviewZoomControls } from '@/components/shared/PrintPreviewZoomControls'
 
 interface OrderItem { productCode:string; productName:string; unit:string; quantity:number; unitPrice:number; amount:number; remark?:string }
 interface PrintOrderData {
-  orderNo: string; type: '采购单'|'销售单'; status: string
+  orderNo: string
+  /** 采购/销售/出库/仓库任务等（仅展示标题，打印 HTML 与模板系统无关） */
+  type: '采购单' | '销售单' | '出库单' | '仓库任务单' | string
+  status: string
   partyLabel: string; partyName: string
   warehouseName: string; date?: string
   totalAmount: number; operatorName: string; createdAt: string
@@ -16,6 +20,11 @@ interface Props { open: boolean; onClose: () => void; data?: PrintOrderData | nu
 
 export default function PrintOrderDialog({ open, onClose, data }: Props) {
   const printRef = useRef<HTMLDivElement>(null)
+  const [previewZoom, setPreviewZoom] = useState(1)
+
+  useEffect(() => {
+    if (open && data?.orderNo) setPreviewZoom(1)
+  }, [open, data?.orderNo])
 
   const handlePrint = () => {
     const content = printRef.current?.innerHTML
@@ -41,8 +50,20 @@ export default function PrintOrderDialog({ open, onClose, data }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <div ref={printRef}>
+      <DialogContent className="flex max-w-3xl max-h-[90vh] flex-col gap-3 overflow-hidden">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+          <span className="text-xs text-muted-foreground">打印前可放大预览；实际打印为原始版式</span>
+          <PrintPreviewZoomControls value={previewZoom} onChange={setPreviewZoom} />
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted/20 p-4">
+          <div className="flex min-w-0 justify-center">
+            <div
+              style={{
+                transform: `scale(${previewZoom})`,
+                transformOrigin: 'top center',
+              }}
+            >
+              <div ref={printRef} className="bg-white p-6 shadow-sm">
           <h2>{data.type}</h2>
           <p className="subtitle">单号：{data.orderNo} &nbsp;|&nbsp; 状态：{data.status}</p>
           <div className="info-grid">
@@ -70,8 +91,11 @@ export default function PrintOrderDialog({ open, onClose, data }: Props) {
             <div><div className="sign-line"></div><p>审核人</p></div>
             <div><div className="sign-line"></div><p>收货/发货签字</p></div>
           </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+        <div className="flex shrink-0 justify-end gap-2 border-t border-border pt-3">
           <Button variant="outline" onClick={onClose}>关闭</Button>
           <Button onClick={handlePrint}>打印</Button>
         </div>

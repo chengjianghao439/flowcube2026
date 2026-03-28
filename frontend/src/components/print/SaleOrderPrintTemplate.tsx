@@ -14,10 +14,11 @@
  *   SaleOrderPrintTemplate  — 兜底静态组件，在无数据库模板时使用。
  */
 
-import { createPortal } from 'react-dom'
-import { useEffect, useState } from 'react'
+import { createPortal, flushSync } from 'react-dom'
+import { useEffect, useRef, useState } from 'react'
 import { Printer, X, ChevronDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { PrintPreviewZoomControls } from '@/components/shared/PrintPreviewZoomControls'
 import { getPrintTemplateListApi } from '@/api/print-templates'
 import TemplateRenderer from './TemplateRenderer'
 import type { SaleOrder, SaleOrderItem } from '@/types/sale'
@@ -31,7 +32,7 @@ const PRINT_CSS = `
   body > *:not(#fc-print-root) { display: none !important; }
   #fc-print-root   { position: static !important; overflow: visible !important; background: #fff !important; }
   #fc-print-tb     { display: none !important; }
-  #fc-print-page   { box-shadow: none !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; }
+  #fc-print-page   { box-shadow: none !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; transform: none !important; }
   @page            { size: A4; margin: 0; }
 }
 `
@@ -48,6 +49,10 @@ export function PrintPreviewOverlay({ order, onClose }: OverlayProps) {
   const [selected,    setSelected]    = useState<PrintTemplate | null>(null)
   const [loading,     setLoading]     = useState(true)
   const [showPicker,  setShowPicker]  = useState(false)
+  const [docZoom, setDocZoom]        = useState(1)
+  const prePrintZoomRef             = useRef(1)
+  const docZoomRef                  = useRef(1)
+  docZoomRef.current = docZoom
 
   // 注入 @media print 样式
   useEffect(() => {
@@ -58,6 +63,22 @@ export function PrintPreviewOverlay({ order, onClose }: OverlayProps) {
       document.head.appendChild(el)
     }
     return () => { document.getElementById(PRINT_STYLE_ID)?.remove() }
+  }, [])
+
+  useEffect(() => {
+    const before = () => {
+      prePrintZoomRef.current = docZoomRef.current
+      flushSync(() => setDocZoom(1))
+    }
+    const after = () => {
+      flushSync(() => setDocZoom(prePrintZoomRef.current))
+    }
+    window.addEventListener('beforeprint', before)
+    window.addEventListener('afterprint', after)
+    return () => {
+      window.removeEventListener('beforeprint', before)
+      window.removeEventListener('afterprint', after)
+    }
   }, [])
 
   // 加载「销售订单」类型模板
@@ -141,6 +162,11 @@ export function PrintPreviewOverlay({ order, onClose }: OverlayProps) {
           )}
         </div>
 
+        {/* 中：预览缩放 */}
+        <div style={{ flexShrink: 0 }}>
+          <PrintPreviewZoomControls value={docZoom} onChange={setDocZoom} compact />
+        </div>
+
         {/* 右：操作按钮 */}
         <div style={{ display: 'flex', gap: 8 }}>
           <Button size="sm" onClick={() => window.print()} disabled={!selected}>
@@ -170,6 +196,7 @@ export function PrintPreviewOverlay({ order, onClose }: OverlayProps) {
               layout={selected.layout}
               paperSize={selected.paperSize}
               order={order}
+              displayScale={docZoom}
             />
           </div>
         ) : (

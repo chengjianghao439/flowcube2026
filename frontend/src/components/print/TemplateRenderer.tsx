@@ -58,16 +58,23 @@ function resolveField(fieldKey: string, order: SaleOrder): string {
 
 // ─── 单个元素渲染 ─────────────────────────────────────────────────────────────
 
-function px(mm: number) { return mm * MM_PX }
-
-function ElementNode({ el, order }: { el: TemplateElement; order: SaleOrder }) {
+function ElementNode({
+  el,
+  order,
+  scale,
+}: {
+  el: TemplateElement
+  order: SaleOrder
+  scale: number
+}) {
+  const px = (mm: number) => mm * MM_PX * scale
   const base: React.CSSProperties = {
     position:   'absolute',
     left:       px(el.x),
     top:        px(el.y),
     width:      px(el.width),
     height:     px(el.height),
-    fontSize:   `${el.fontSize}pt`,
+    fontSize:   `${el.fontSize * scale}pt`,
     fontWeight: el.fontWeight,
     textAlign:  el.textAlign,
     overflow:   'hidden',
@@ -79,7 +86,7 @@ function ElementNode({ el, order }: { el: TemplateElement; order: SaleOrder }) {
   if (el.type === 'barcode') {
     const v = resolveField(el.fieldKey, order) || el.label
     return (
-      <div style={{ ...base, fontFamily: 'monospace', fontSize: '9pt', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #bbb' }}>
+      <div style={{ ...base, fontFamily: 'monospace', fontSize: `${9 * scale}pt`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #bbb' }}>
         {v}
       </div>
     )
@@ -114,7 +121,7 @@ function ElementNode({ el, order }: { el: TemplateElement; order: SaleOrder }) {
           style={{
             width: '100%',
             borderCollapse: 'collapse',
-            fontSize: `${el.fontSize}pt`,
+            fontSize: `${el.fontSize * scale}pt`,
             fontFamily: 'inherit',
           }}
         >
@@ -216,18 +223,21 @@ interface Props {
   layout:    TemplateLayout
   paperSize: string
   order:     SaleOrder
+  /** 屏幕预览放大（1=物理 mm 换算；打印前应恢复为 1） */
+  displayScale?: number
 }
 
-export default function TemplateRenderer({ layout, paperSize, order }: Props) {
+export default function TemplateRenderer({ layout, paperSize, order, displayScale = 1 }: Props) {
   const paper = PAPER_MM[paperSize] ?? PAPER_MM.A4
+  const scale = displayScale
 
   if (isZplTemplateLayout(layout)) {
     return (
       <div
         style={{
           padding:    24,
-          maxWidth:   px(paper.w),
-          minHeight:  px(40),
+          maxWidth:   px(paper.w * scale),
+          minHeight:  px(40 * scale),
           background: '#fff',
           fontSize:   12,
           color:      '#666',
@@ -238,21 +248,22 @@ export default function TemplateRenderer({ layout, paperSize, order }: Props) {
     )
   }
 
+  const pw = (mm: number) => mm * MM_PX * scale
   return (
     <div
       style={{
         position:   'relative',
-        width:      px(paper.w),
-        height:     px(paper.h),
+        width:      pw(paper.w),
+        height:     pw(paper.h),
         background: '#fff',
         overflow:   'hidden',
         fontFamily: "'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif",
-        fontSize:   '9pt',
+        fontSize:   `${9 * scale}pt`,
         color:      '#000',
       }}
     >
       {layout.elements.map(el => (
-        <ElementNode key={el.id} el={el} order={order} />
+        <ElementNode key={el.id} el={el} order={order} scale={scale} />
       ))}
     </div>
   )

@@ -16,6 +16,7 @@ import {
   Save, Eye, EyeOff, Trash2, Loader2,
   AlignLeft, AlignCenter, AlignRight, Bold,
   Table2, Type, SeparatorHorizontal, Barcode, RotateCcw,
+  ZoomIn, ZoomOut,
 } from 'lucide-react'
 import { getPrintTemplateDetailApi, createPrintTemplateApi, updatePrintTemplateApi } from '@/api/print-templates'
 import { Button } from '@/components/ui/button'
@@ -33,6 +34,14 @@ import { DEFAULT_LABEL_ELEMENTS, LABEL_PREVIEW_SAMPLE } from '@/constants/labelZ
 
 const MM_PX = 3.0 // 1mm → px，编辑器显示比例（3.0 在 13 寸屏可完整显示 A4 三栏）
 
+const EDITOR_ZOOM_MIN = 0.35
+const EDITOR_ZOOM_MAX = 3
+const EDITOR_ZOOM_STEP = 0.1
+
+function clampEditorZoom(z: number) {
+  return Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, Math.round(z * 100) / 100))
+}
+
 const PAPER_SIZES: Record<PaperSize, { w: number; h: number; label: string }> = {
   A4:        { w: 210, h: 297, label: 'A4 (210×297mm)' },
   A5:        { w: 148, h: 210, label: 'A5 (148×210mm)' },
@@ -46,11 +55,11 @@ const TEMPLATE_TYPES: { value: TemplateType; label: string }[] = [
   { value: 2, label: '采购订单' },
   { value: 3, label: '出库单' },
   { value: 4, label: '仓库任务单' },
-  { value: 5, label: '货架标签 (ZPL)' },
-  { value: 6, label: '散件容器标签 (ZPL)' },
-  { value: 7, label: '物流箱贴 (ZPL)' },
-  { value: 8, label: '商品标签 (ZPL)' },
-  { value: 9, label: '库存标签 (ZPL)' },
+  { value: 5, label: '货架标签 (画布)' },
+  { value: 6, label: '散件容器标签 (画布)' },
+  { value: 7, label: '物流箱贴 (画布)' },
+  { value: 8, label: '商品标签 (画布)' },
+  { value: 9, label: '库存标签 (画布)' },
 ]
 
 function isZplLabelType(t: number): t is 5 | 6 | 7 | 8 | 9 {
@@ -228,12 +237,14 @@ interface ElementNodeProps {
   selected: boolean
   preview: boolean
   previewData: Record<string, string>
+  /** mm → 画布 px（已含 MM_PX × 缩放） */
+  scale: number
   onMouseDown: (e: React.MouseEvent) => void
   onClick: (e: React.MouseEvent) => void
 }
 
-function ElementNode({ el, selected, preview, previewData, onMouseDown, onClick }: ElementNodeProps) {
-  const px = (mm: number) => mm * MM_PX
+function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, onClick }: ElementNodeProps) {
+  const px = (mm: number) => mm * scale
   const sampleVal = previewData[el.fieldKey] ?? el.label
 
   const style: React.CSSProperties = {
@@ -498,6 +509,8 @@ export default function PrintTemplateEditor() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [preview,    setPreview]    = useState(false)
   const [hydrated,   setHydrated]   = useState(isNew)
+  /** 画布仅影响显示与拖拽换算，不改变存库的 mm 坐标 */
+  const [editorZoom, setEditorZoom] = useState(1)
 
   // Load remote template once
   useEffect(() => {
@@ -587,8 +600,9 @@ export default function PrintTemplateEditor() {
         label: `${Math.min(120, Math.max(30, safeCw))}×${Math.min(500, Math.max(40, safeCh))} mm`,
       }
     : PAPER_SIZES[paperSize]
-  const canvasW = paper.w * MM_PX
-  const canvasH = paper.h * MM_PX
+  const canvasScale = MM_PX * editorZoom
+  const canvasW = paper.w * canvasScale
+  const canvasH = paper.h * canvasScale
   const paperSelectEntries = Object.entries(PAPER_SIZES)
 
   const selected = elements.find(e => e.id === selectedId) ?? null
@@ -665,8 +679,8 @@ export default function PrintTemplateEditor() {
     const rect = canvasRef.current!.getBoundingClientRect()
     const xPx  = e.clientX - rect.left
     const yPx  = e.clientY - rect.top
-    const xMm  = Math.max(0, xPx / MM_PX - field.defaultW / 2)
-    const yMm  = Math.max(0, yPx / MM_PX - field.defaultH / 2)
+    const xMm  = Math.max(0, xPx / canvasScale - field.defaultW / 2)
+    const yMm  = Math.max(0, yPx / canvasScale - field.defaultH / 2)
 
     const newEl = mkElement(field, xMm, yMm)
     setElements(prev => [...prev, newEl])
@@ -685,8 +699,8 @@ export default function PrintTemplateEditor() {
     dragStartEl.current    = { x: el.x, y: el.y }
 
     function onMouseMove(me: MouseEvent) {
-      const dxMm = (me.clientX - dragStartMouse.current.x) / MM_PX
-      const dyMm = (me.clientY - dragStartMouse.current.y) / MM_PX
+      const dxMm = (me.clientX - dragStartMouse.current.x) / canvasScale
+      const dyMm = (me.clientY - dragStartMouse.current.y) / canvasScale
       const newX  = Math.max(0, dragStartEl.current.x + dxMm)
       const newY  = Math.max(0, dragStartEl.current.y + dyMm)
       setElements(prev => prev.map(e => e.id === draggingElId.current ? { ...e, x: newX, y: newY } : e))
@@ -735,7 +749,7 @@ export default function PrintTemplateEditor() {
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden px-4 pb-4 pt-2">
       <PageHeader
         title={isNew ? '新建打印模板' : `编辑打印模板 #${id}`}
-        description="拖拽字段到画布编排版式；热敏标签与单据均使用毫米坐标，保存后用于打印。"
+        description="拖拽字段到画布编排版式；热敏标签与单据均使用毫米坐标；标签打印为 ZPL 或 TSPL 由打印机 RAW 设置决定。工具栏「画布」可缩放以便编辑。"
         actions={<Button variant="outline" size="sm" onClick={goBack}>返回列表</Button>}
       />
 
@@ -828,6 +842,45 @@ export default function PrintTemplateEditor() {
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">{elements.length} 个元素</span>
 
+            <div className="flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5">
+              <span className="text-[10px] text-muted-foreground px-0.5">画布</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                disabled={editorZoom <= EDITOR_ZOOM_MIN + 1e-6}
+                onClick={() => setEditorZoom(z => clampEditorZoom(z - EDITOR_ZOOM_STEP))}
+                title="缩小"
+              >
+                <ZoomOut className="size-3.5" />
+              </Button>
+              <span className="min-w-[2.75rem] text-center text-[11px] tabular-nums text-muted-foreground">
+                {Math.round(editorZoom * 100)}%
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                disabled={editorZoom >= EDITOR_ZOOM_MAX - 1e-6}
+                onClick={() => setEditorZoom(z => clampEditorZoom(z + EDITOR_ZOOM_STEP))}
+                title="放大"
+              >
+                <ZoomIn className="size-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-1.5 text-[10px]"
+                onClick={() => setEditorZoom(1)}
+                title="100%"
+              >
+                重置
+              </Button>
+            </div>
+
             <Button
               size="sm"
               variant={preview ? 'default' : 'outline'}
@@ -864,8 +917,8 @@ export default function PrintTemplateEditor() {
             {!preview && (
               <p className="text-xs text-muted-foreground text-center max-w-xl">
                 {isZplLabelType(type)
-                  ? '从左侧拖拽字段到画布 · 打印时由系统按位置生成 ZPL · 点击选中后可拖动或在右侧改属性 · '
-                  : '从左侧拖拽字段到画布 · 点击选中元素后可拖动位置或在右侧修改属性 · '}
+                  ? '从左侧拖拽字段到画布 · 打印时按毫米坐标生成 ZPL 或 TSPL（取决于打印机 RAW 设置）· 工具栏可放大画布 · '
+                  : '从左侧拖拽字段到画布 · 点击选中元素后可拖动位置或在右侧修改属性 · 工具栏可放大画布 · '}
                 <kbd className="rounded border px-1">Delete</kbd> 删除
               </p>
             )}
@@ -884,8 +937,8 @@ export default function PrintTemplateEditor() {
                   xmlns="http://www.w3.org/2000/svg"
                 >
                   <defs>
-                    <pattern id={`grid-${gridPatternUid}`} width={5 * MM_PX} height={5 * MM_PX} patternUnits="userSpaceOnUse">
-                      <path d={`M ${5 * MM_PX} 0 L 0 0 0 ${5 * MM_PX}`} fill="none" stroke="hsl(var(--muted-foreground)/0.12)" strokeWidth="0.5" />
+                    <pattern id={`grid-${gridPatternUid}`} width={5 * canvasScale} height={5 * canvasScale} patternUnits="userSpaceOnUse">
+                      <path d={`M ${5 * canvasScale} 0 L 0 0 0 ${5 * canvasScale}`} fill="none" stroke="hsl(var(--muted-foreground)/0.12)" strokeWidth="0.5" />
                     </pattern>
                   </defs>
                   <rect width="100%" height="100%" fill={`url(#grid-${gridPatternUid})`} />
@@ -899,6 +952,7 @@ export default function PrintTemplateEditor() {
                   selected={selectedId === el.id}
                   preview={preview}
                   previewData={previewData}
+                  scale={canvasScale}
                   onMouseDown={e => handleElementMouseDown(e, el)}
                   onClick={e => { e.stopPropagation(); setSelectedId(el.id) }}
                 />

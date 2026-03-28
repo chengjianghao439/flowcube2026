@@ -1,9 +1,10 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Barcode from 'react-barcode'
 import { QRCodeSVG } from 'qrcode.react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { printHtmlDocument } from '@/lib/printHtmlDocument'
+import { PrintPreviewZoomControls } from '@/components/shared/PrintPreviewZoomControls'
 
 interface Props {
   open: boolean
@@ -14,6 +15,11 @@ interface Props {
 
 export default function BarcodeDialog({ open, onClose, product, copies = 1 }: Props) {
   const printRef = useRef<HTMLDivElement>(null)
+  const [previewZoom, setPreviewZoom] = useState(1)
+
+  useEffect(() => {
+    if (open && product?.id) setPreviewZoom(1)
+  }, [open, product?.id])
 
   if (!product) return null
 
@@ -38,9 +44,18 @@ export default function BarcodeDialog({ open, onClose, product, copies = 1 }: Pr
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>商品标签 — {product.name}</DialogTitle></DialogHeader>
-        <div className="flex flex-col items-center space-y-4 py-4">
-          {/* 标签预览 */}
-          <div ref={printRef} className="border rounded-lg p-4 w-52 flex flex-col items-center bg-white shadow-sm">
+        <div className="flex items-center justify-end gap-2 pb-1">
+          <PrintPreviewZoomControls value={previewZoom} onChange={setPreviewZoom} />
+        </div>
+        <div className="flex max-h-[70vh] flex-col items-center space-y-4 overflow-auto py-2">
+          <div
+            className="flex justify-center"
+            style={{
+              transform: `scale(${previewZoom})`,
+              transformOrigin: 'top center',
+            }}
+          >
+          <div ref={printRef} className="flex w-52 flex-col items-center rounded-lg border bg-white p-4 shadow-sm">
             <p className="font-semibold text-sm text-center mb-1 w-full truncate">{product.name}</p>
             <p className="text-xs text-muted-foreground mb-3">{product.code}</p>
             {/* 条形码 */}
@@ -52,6 +67,7 @@ export default function BarcodeDialog({ open, onClose, product, copies = 1 }: Pr
             {product.salePrice !== undefined && product.salePrice > 0 && (
               <p className="price mt-2">¥{product.salePrice.toFixed(2)} <span className="unit">/{product.unit}</span></p>
             )}
+          </div>
           </div>
           <p className="text-xs text-muted-foreground">条形码 + QR码（含商品ID/编码）</p>
         </div>
