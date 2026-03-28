@@ -1,5 +1,5 @@
 {
-  "version": "0.3.33",
-  "filename": "FlowCube-ERP-Setup-0.3.33.exe",
-  "notes": "【v0.3.33 主要更新】\n\n• TSPL：生成脚本增加 CODEPAGE 936；Windows 桌面端默认以 GB18030 送 RAW（佳博/TSC 中文）。\n• 依赖 iconv-lite；支持 FLOWCUBE_TSPL_BYTES 与 UTF CODEPAGE 自动/手动选 UTF-8。\n\n详见 docs/releases/v0.3.33.md。"
+  "version": "0.3.34",
+  "filename": "FlowCube-ERP-Setup-0.3.34.exe",
+  "notes": "【v0.3.34 主要更新】\n\n• TSPL：服务端默认不再插入 CODEPAGE；桌面仍默认 GB18030 RAW。\n• 队列作业名改为 FlowCube RAW；支持 FLOWCUBE_TSPL_OMIT_CODEPAGE。\n\n详见 docs/releases/v0.3.34.md。"
 }
