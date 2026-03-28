@@ -227,13 +227,28 @@ router.get('/latest', async (req, res, next) => {
       }
     }
 
-    const absoluteUrl = absolutizeUpdateAssetUrl(req, data.url, data.filename)
+    // GitHub 资产名与服务器 static 文件名可能不一致（如 CI 产出「-Flow-Setup-x.exe」）；
+    // 若本地 manifest 版本与 GitHub 一致且提供了 filename，优先用本地拼 /downloads/，避免 404。
+    let serveFilename = data.filename || null
+    let urlForResolve = data.url
+    const localFn = local && local.filename ? String(local.filename).trim() : ''
+    if (
+      local &&
+      local.version &&
+      String(local.version) === String(data.version) &&
+      localFn
+    ) {
+      serveFilename = localFn
+      urlForResolve = ''
+    }
+
+    const absoluteUrl = absolutizeUpdateAssetUrl(req, urlForResolve, serveFilename)
 
     return successResponse(res, {
       version: data.version,
       notes: notes || '',
       url: absoluteUrl,
-      filename: data.filename || null,
+      filename: serveFilename,
     }, 'ok')
   } catch (e) {
     next(e)
