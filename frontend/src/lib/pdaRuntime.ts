@@ -3,6 +3,7 @@
  */
 import { Capacitor } from '@capacitor/core'
 import apiClient from '@/api/client'
+import { API_BASE_STORAGE_KEY } from '@/config/api'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/lib/toast'
 
@@ -38,13 +39,38 @@ export function isPdaViteLiveHost(): boolean {
   return (p === '5173' || p === '4173') && window.location.pathname.startsWith('/pda')
 }
 
+/** APK 构建时注入的默认后端根（与桌面共用 VITE_ERP_PRODUCTION_ORIGIN） */
+export function getBuiltPdaDefaultApiOrigin(): string {
+  const raw = import.meta.env.VITE_ERP_PRODUCTION_ORIGIN?.trim()
+  if (!raw) return ''
+  return normalizePdaApiOrigin(raw)
+}
+
+/**
+ * 独立 App 实际使用的 API 根（不写 https://localhost）。
+ * 顺序：flowcube:pdaApiOrigin → API_BASE_URL（与其它端统一）→ 构建期 VITE_ERP_PRODUCTION_ORIGIN
+ */
+export function getResolvedPdaApiOrigin(): string {
+  if (typeof window === 'undefined') return ''
+  const a = localStorage.getItem(PDA_API_ORIGIN_KEY)?.trim()
+  if (a) {
+    const o = normalizePdaApiOrigin(a)
+    if (o) return o
+  }
+  const b = localStorage.getItem(API_BASE_STORAGE_KEY)?.trim()
+  if (b) {
+    const o = normalizePdaApiOrigin(b)
+    if (o) return o
+  }
+  return getBuiltPdaDefaultApiOrigin()
+}
+
 /** 根据 localStorage 设置 axios 基址（独立 APK bundled；Live 开发不覆盖） */
 export function applyPdaApiBaseFromStorage(): void {
   if (!Capacitor.isNativePlatform()) return
   if (isPdaViteLiveHost()) return
 
-  const raw = localStorage.getItem(PDA_API_ORIGIN_KEY)?.trim()
-  const origin = raw ? normalizePdaApiOrigin(raw) : ''
+  const origin = getResolvedPdaApiOrigin()
   if (origin) {
     apiClient.defaults.baseURL = `${origin}/api`
   }
@@ -53,9 +79,8 @@ export function applyPdaApiBaseFromStorage(): void {
 /** 独立 App 已配置 API 根时检测后端是否可达（GET /api/health，无需登录） */
 export async function checkPdaApiHealth(): Promise<boolean> {
   if (!Capacitor.isNativePlatform() || isPdaViteLiveHost()) return true
-  const raw = localStorage.getItem(PDA_API_ORIGIN_KEY)?.trim()
-  const origin = raw ? normalizePdaApiOrigin(raw) : ''
-  if (!origin) return true
+  const origin = getResolvedPdaApiOrigin()
+  if (!origin) return false
   try {
     const res = await fetch(`${origin}/api/health`, { method: 'GET', cache: 'no-store' })
     if (!res.ok) return false

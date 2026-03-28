@@ -6,6 +6,7 @@ import PdaScanner from '@/components/pda/PdaScanner'
 import {
   PDA_API_ORIGIN_KEY,
   PDA_LABEL_PRINTER_ID_KEY,
+  getResolvedPdaApiOrigin,
   isPdaViteLiveHost,
   normalizePdaApiOrigin,
   tryParseScannedServerUrl,
@@ -28,7 +29,7 @@ export default function PdaLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
-    setApiOrigin(localStorage.getItem(PDA_API_ORIGIN_KEY) ?? '')
+    setApiOrigin(getResolvedPdaApiOrigin())
     setLabelPrinterId(localStorage.getItem(PDA_LABEL_PRINTER_ID_KEY) ?? '')
   }, [])
 
@@ -100,7 +101,9 @@ export default function PdaLoginPage() {
             <div className="rounded-xl border border-amber-600/40 bg-amber-950/30 px-4 py-3 space-y-2">
               <p className="text-xs font-medium text-amber-200/90">独立 App：请配置后端 API</p>
               <p className="text-[11px] text-amber-200/60 leading-snug">
-                填写运行 FlowCube 后端的电脑地址与端口（默认 3000），保存后会重新加载页面。
+                填写运行 FlowCube 后端的电脑地址与端口（默认 3000），不要带 <code className="text-amber-100/80">/api</code>
+                。若打包时已配置 <code className="text-amber-100/80">VITE_ERP_PRODUCTION_ORIGIN</code>，此处会预填；仍连不上请改为局域网
+                IP（勿用 localhost）。保存后会重新加载。
               </p>
               <input
                 type="url"

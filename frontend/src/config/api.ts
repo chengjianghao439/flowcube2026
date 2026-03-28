@@ -1,7 +1,7 @@
 /**
  * ERP API 根地址（不含 /api）。支持按 hostname 动态默认、多地址探测与 fallback。
  */
-import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { IS_CAPACITOR_PDA, IS_ELECTRON_DESKTOP } from '@/lib/platform'
 
 export const API_BASE_STORAGE_KEY = 'API_BASE_URL'
 
@@ -225,6 +225,8 @@ export function persistErpApiBaseAfterLogin(): void {
     return
   }
   if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
+    // Capacitor WebView 的 origin 不是后端（多为 https://localhost），禁止写入以免污染 API_BASE_URL
+    if (IS_CAPACITOR_PDA) return
     setApiBase(window.location.origin)
   }
 }

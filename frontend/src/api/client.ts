@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios'
+import { Capacitor } from '@capacitor/core'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
@@ -9,6 +10,16 @@ import {
   probeErpApiOrigin,
   setApiBase,
 } from '@/config/api'
+
+/** 独立 APK：勿走 ERP 浏览器的候选地址回退（易误连占位域名或 localhost） */
+function isNativePdaNoViteLive(): boolean {
+  if (typeof window === 'undefined') return false
+  if (!Capacitor.isNativePlatform()) return false
+  const port = window.location.port
+  const path = window.location.pathname || ''
+  if ((port === '5173' || port === '4173') && path.startsWith('/pda')) return false
+  return true
+}
 
 interface PrintQuotaErrorPayload {
   code?: string
@@ -72,6 +83,7 @@ function originFromAxiosConfig(config: InternalAxiosRequestConfig): string | nul
 async function tryErpApiFallbackAndRetry(config: InternalAxiosRequestConfig): Promise<boolean> {
   if (config._erpApiFallbackTried) return false
   config._erpApiFallbackTried = true
+  if (isNativePdaNoViteLive()) return false
 
   const failedOrigin = originFromAxiosConfig(config)
   for (const origin of collectErpApiFallbackCandidates()) {
@@ -129,7 +141,9 @@ apiClient.interceptors.response.use(
     let message =
       error.response?.data?.message
       ?? (status == null && (code === 'ERR_NETWORK' || rawMsg === 'Network Error')
-        ? '无法连接服务器，请检查网络与后端地址（Ctrl+Shift+S 可配置 API）'
+        ? isNativePdaNoViteLive()
+          ? '无法连接服务器，请在 PDA 登录页填写后端地址（如 http://192.168.x.x:3000，不要带 /api）'
+          : '无法连接服务器，请检查网络与后端地址（Ctrl+Shift+S 可配置 API）'
         : null)
       ?? (code === 'ECONNABORTED' ? '请求超时，请稍后重试' : null)
       ?? rawMsg

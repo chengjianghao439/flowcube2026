@@ -4,7 +4,10 @@ declare const __APP_VERSION__: string
 
 interface ImportMetaEnv {
   readonly VITE_ELECTRON?: string
-  /** 非 192.168 / localhost 的页面 hostname 对应的 ERP API 生产根地址，如 https://api.example.com */
+  /**
+   * ERP 生产 API 根（不含 /api）。桌面安装包登录预填、**安卓 PDA APK** 在未填 flowcube:pdaApiOrigin 时也用作默认后端。
+   * 例：https://api.example.com 或 http://192.168.1.10:3000
+   */
   readonly VITE_ERP_PRODUCTION_ORIGIN?: string
 }
 
