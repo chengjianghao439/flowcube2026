@@ -107,6 +107,29 @@ export async function tryDesktopLocalZplThenComplete(opts: {
         'ERP 中该打印机未配置本机队列名称。请在「设置 → 打印机管理」使用「从本机添加」选择标签机，并绑定「库存标签」等用途；名称必须与 Windows/系统「打印机」列表中的名称完全一致。',
     }
   }
+  const body = String(content).trimStart()
+  const bodyU = body.toUpperCase()
+  const looksZpl = body.includes('^XA') && body.includes('^XZ')
+  const looksTspl =
+    bodyU.includes('SIZE') && bodyU.includes('CLS') && bodyU.includes('PRINT')
+  if (ct === 'tspl' && looksZpl) {
+    return {
+      error:
+        '下发内容为 ZPL（含 ^XA/^XZ），但当前按 TSPL 标记。请在「打印机管理」将该标签机的 **RAW 指令集** 改为 **ZPL** 并保存；若已改过仍如此，请硬刷新浏览器（Ctrl+Shift+R）或检查是否连错环境/数据库。',
+    }
+  }
+  if (
+    ct === 'zpl' &&
+    /^\s*SIZE\s+/i.test(body) &&
+    bodyU.includes('PRINT') &&
+    bodyU.includes('CLS') &&
+    !looksZpl
+  ) {
+    return {
+      error:
+        '下发内容为 TSPL（以 SIZE 开头），但当前按 ZPL 标记。请在「打印机管理」将 **RAW 指令集** 改为 **TSPL** 并保存后再打印。',
+    }
+  }
   const rawErr = ct === 'tspl' ? validateTsplForLocalPrint(content) : validateZplForLocalPrint(content)
   if (rawErr) return { error: rawErr }
   try {

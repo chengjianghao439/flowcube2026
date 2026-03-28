@@ -77,3 +77,9 @@ SKIP_GIT_SYNC_CHECK=1 npm run dist:win --prefix desktop
 ```
 
 不推荐用于正式发布。
+
+## 本机标签 RAW（TSPL）换行
+
+若某台 TSC/佳博在 **默认（保持模板原始换行）** 下不出纸，可仅为该电脑设置环境变量 **`FLOWCUBE_TSPL_CRLF=1`** 后重启 FlowCube 桌面端，再试打印；多数机型不需要此项。
+
+若 **强制 CRLF** 后反而从「能印」变成「不印」，请 **去掉** 该变量或设为 `0`。

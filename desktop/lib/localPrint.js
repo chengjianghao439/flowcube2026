@@ -22,13 +22,18 @@ function stripUtf8Bom(s) {
   return t
 }
 
-/** 部分 TSC/佳博固件对 LF-only 的 TSPL 不执行，送 WinSpool/CUPS 前统一 CRLF */
+/** 部分 TSC/佳博固件只认 LF，部分只认 CRLF；默认不改写（与 v0.3.30 及更早行为一致）。需 CRLF 时在桌面快捷方式或系统环境变量设置 FLOWCUBE_TSPL_CRLF=1 */
 function normalizeTsplLineEndingsToCrlf(s) {
   return String(s)
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .split('\n')
     .join('\r\n')
+}
+
+function shouldUseTsplCrlf() {
+  const v = String(process.env.FLOWCUBE_TSPL_CRLF || '').trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
 }
 
 function printZplViaLp(queue, content) {
@@ -139,7 +144,7 @@ async function printZpl(opts) {
   const isZpl = content.includes('^XA') && content.includes('^XZ')
   const u = content.toUpperCase()
   const isTspl = u.includes('SIZE') && u.includes('CLS') && u.includes('PRINT')
-  if (isTspl) {
+  if (isTspl && shouldUseTsplCrlf()) {
     content = normalizeTsplLineEndingsToCrlf(content)
   }
   if (!isZpl && !isTspl) {
@@ -147,7 +152,11 @@ async function printZpl(opts) {
   }
   const kind = isZpl ? 'ZPL' : 'TSPL'
   try {
-    console.log(`[FlowCube RAW] ${kind} ${Buffer.byteLength(content, 'utf8')} bytes → ${printerName}`)
+    const tsplEol = isTspl ? (shouldUseTsplCrlf() ? 'CRLF' : 'native') : ''
+    const extra = tsplEol ? ` TSPL_EOL=${tsplEol}` : ''
+    console.log(
+      `[FlowCube RAW] ${kind} ${Buffer.byteLength(content, 'utf8')} bytes → ${printerName}${extra}`,
+    )
   } catch {
     /* 忽略 */
   }
