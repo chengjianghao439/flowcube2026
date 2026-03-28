@@ -2,7 +2,7 @@
   "name": "flowcube-desktop",
   "private": true,
   "version": "0.3.37",
-  "description": "FlowCube ERP 桌面客户端（Electron）",
+  "description": "极序 Flow 桌面客户端（Electron）",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -23,8 +23,8 @@
   },
   "build": {
     "appId": "com.flowcube.erp",
-    "productName": "FlowCube ERP",
-    "copyright": "Copyright © FlowCube",
+    "productName": "极序 Flow",
+    "copyright": "Copyright © 极序 Flow",
     "directories": {
       "output": "release"
     },

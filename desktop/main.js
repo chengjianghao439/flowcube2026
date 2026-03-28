@@ -241,8 +241,8 @@ function createWindow() {
         buttons: ['退出应用', '取消'],
         defaultId: 1,
         cancelId: 1,
-        title: '退出 FlowCube',
-        message: '确定要退出 FlowCube ERP 吗？',
+        title: '退出极序 Flow',
+        message: '确定要退出极序 Flow吗？',
         noLink: true,
       })
       if (response !== 0) return

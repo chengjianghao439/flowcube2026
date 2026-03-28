@@ -34,7 +34,7 @@ export default function LoginPage() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
             <span className="material-symbols-outlined text-[20px]">layers</span>
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">FlowCube</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">极序 Flow</h1>
           <div className="absolute -bottom-4 left-11 whitespace-nowrap text-[10px] font-medium uppercase tracking-widest text-slate-400">
             企业管理系统
           </div>
@@ -100,7 +100,7 @@ export default function LoginPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
               <span className="material-symbols-outlined text-[20px]">layers</span>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">FlowCube</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">极序 Flow</h1>
             <div className="absolute -bottom-4 left-11 whitespace-nowrap text-[10px] font-medium uppercase tracking-widest text-slate-400">
               企业管理系统
             </div>

@@ -18,7 +18,7 @@ export default function AppLayout() {
         <div className="flex h-12 shrink-0 items-center gap-2 px-3">
           <div className="flex shrink-0 items-center pr-1">
             <span className="text-base font-bold tracking-tight text-foreground">
-              FlowCube ERP
+              极序 Flow
             </span>
           </div>
 

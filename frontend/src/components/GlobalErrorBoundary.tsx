@@ -95,7 +95,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
           </div>
         </div>
 
-        <p className="mt-4 text-xs text-muted-foreground">FlowCube ERP · 错误已被记录</p>
+        <p className="mt-4 text-xs text-muted-foreground">极序 Flow · 错误已被记录</p>
       </div>
     )
   }

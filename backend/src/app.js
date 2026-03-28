@@ -70,7 +70,7 @@ app.use(opLogger)
 // ─── 健康检查 ─────────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
-  res.json({ success: true, message: 'FlowCube API is running', data: null })
+  res.json({ success: true, message: '极序 Flow API is running', data: null })
 })
 
 // /api/health — PDA 网络状态检测（无需登录，高优先级）
