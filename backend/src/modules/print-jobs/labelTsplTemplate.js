@@ -32,23 +32,18 @@ function applyTsplTemplate(body, vars) {
 /** 中文常用点阵字体（TSC 兼容机）；若无此字库可改用 font "3" 仅英文 */
 const TSPL_TEXT_FONT = 'TSS24.BF2'
 
-/** 与 Windows 桌面端 GB18030 下发一致；佳博/TSC 中文 TEXT 需与数据编码匹配 */
+/**
+ * 标准 TSPL 头。不显式插入 CODEPAGE：佳博等机型对 CODEPAGE 支持不一，易导致「队列成功但不出纸」；
+ * Windows 桌面端仍默认以 GB18030 发中文（见 desktop/lib/localPrint.js）。若固件需要，可在打印模板 body 中自行加 CODEPAGE。
+ */
 function tsplHeaderLines(sizeMmLine) {
   return [
     sizeMmLine,
     'GAP 2 mm,0 mm',
     'DIRECTION 0',
     'REFERENCE 0,0',
-    'CODEPAGE 936',
     'CLS',
   ]
-}
-
-/** 自定义 TSPL body 未写 CODEPAGE 时插入 936，与桌面端 GBK 下发一致 */
-function ensureTsplCodepage936(script) {
-  const s = String(script ?? '')
-  if (/\bCODEPAGE\s/i.test(s)) return s
-  return s.replace(/(\r?\n|^)(CLS)(\r?\n|$)/im, '$1CODEPAGE 936\n$2$3')
 }
 
 function buildRackLabelTspl({ rack_barcode, rack_code, zone, name }) {
@@ -181,7 +176,7 @@ async function getLabelTsplFromDefaultTemplate(templateType, vars) {
     }
   }
   if (layout?.format === 'tspl' && typeof layout.body === 'string' && layout.body.trim()) {
-    return ensureTsplCodepage936(applyTsplTemplate(layout.body.trim(), vars))
+    return applyTsplTemplate(layout.body.trim(), vars)
   }
   if (Array.isArray(layout?.elements)) {
     return generateTsplFromElements(layout, vars, paperSize)

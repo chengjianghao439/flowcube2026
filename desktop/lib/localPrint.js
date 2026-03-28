@@ -77,7 +77,7 @@ function decodeWindowsProcessOutput(buf) {
 }
 
 /**
- * TSPL 发往 Windows 时的字节编码。默认 GB18030（配 CODEPAGE 936）；脚本中含 UTF-8 代码页或设 FLOWCUBE_TSPL_BYTES=utf8 则送 UTF-8。
+ * TSPL 发往 Windows 时的字节编码。默认 GB18030（与常见中文点阵字库）；脚本中含 UTF-8 类 CODEPAGE 或设 FLOWCUBE_TSPL_BYTES=utf8 则送 UTF-8。
  */
 function inferTsplWireEncoding(content) {
   const env = String(process.env.FLOWCUBE_TSPL_BYTES || '').trim().toLowerCase()

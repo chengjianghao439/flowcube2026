@@ -86,14 +86,13 @@ SKIP_GIT_SYNC_CHECK=1 npm run dist:win --prefix desktop
 
 ## 本机 TSPL 中文编码（佳博 / TSC）
 
-服务端生成的 TSPL 会带 **`CODEPAGE 936`**，Windows 桌面端默认将整段脚本转为 **GB18030** 再送 RAW（与中文 `TEXT`、字库 `TSS24.BF2` 常见组合一致）。若队列有作业却不出纸，可先升级到此逻辑后再试。
+**默认不在 TSPL 里插入 `CODEPAGE` 行**（佳博部分固件不认时会整单不执行，而 Windows 仍显示已打印）。**Windows 桌面端**仍将整段脚本按 **GB18030** 编码送 RAW。
 
-若固件明确走 UTF-8（脚本内为 `CODEPAGE UTF-8` / `65001` 等），桌面端会自动改送 UTF-8，无需改模板。
+- 若固件 **必须** 声明代码页，请在 **打印模板 body** 中自行写 `CODEPAGE …`（并与 `FLOWCUBE_TSPL_BYTES` 一致）。
+- 脚本中含 **UTF-8** 类 `CODEPAGE` 时，桌面端自动改送 UTF-8。
+- 环境变量 **`FLOWCUBE_TSPL_BYTES=utf8`** 或 **`gb18030`** 可强制字节编码。
+- 仍含 `CODEPAGE` 且不出纸时，可试 **`FLOWCUBE_TSPL_OMIT_CODEPAGE=1`** 去掉所有 `CODEPAGE` 行。
 
-也可手动指定：**`FLOWCUBE_TSPL_BYTES=utf8`** 或 **`gb18030`** 覆盖自动推断。
+**说明**：队列中「FlowCube **RAW**」仅表示本软件提交的假脱机作业，**不是** ZPL 协议名。
 
-若升级后出现 **队列显示已打印但不出纸**（尤其佳博），可尝试在系统环境变量中设 **`FLOWCUBE_TSPL_OMIT_CODEPAGE=1`** 后重启桌面端，以去掉脚本中的 `CODEPAGE` 行再送 RAW（部分固件不认该指令）。
-
-**说明**：Windows 队列里作业标题曾为「FlowCube **ZPL**」，仅表示由 FlowCube 提交，**不代表**内容为 ZPL；新版本已改为「FlowCube **RAW**」以免误判。
-
-**重启电脑后异常**：先检查打印机是否 **就绪 / 未脱机**、**USB/电源**，在「服务」中重启 **Print Spooler**，或删除该打印机队列中所有文档后再试。
+**测试页能打、FlowCube 不打**：多属 **RAW 指令/编码** 问题；可重启 **Print Spooler**、清空队列后更新后端与本机桌面端再试。
