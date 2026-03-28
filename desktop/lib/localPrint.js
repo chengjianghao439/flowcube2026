@@ -36,10 +36,24 @@ function shouldUseTsplCrlf() {
   return v === '1' || v === 'true' || v === 'yes'
 }
 
+function resolveTsplLineEnding(pref) {
+  const v = String(pref || '').trim().toLowerCase()
+  if (v === 'crlf') return 'crlf'
+  if (v === 'native') return 'native'
+  return shouldUseTsplCrlf() ? 'crlf' : 'native'
+}
+
 /** 部分佳博机型不认 CODEPAGE 行，解析失败则 Windows 仍显示已打印但不出纸；设 1 可去掉所有 CODEPAGE 再发 GB18030 */
 function shouldOmitTsplCodepage() {
   const v = String(process.env.FLOWCUBE_TSPL_OMIT_CODEPAGE || '').trim().toLowerCase()
   return v === '1' || v === 'true' || v === 'yes'
+}
+
+function resolveTsplCodepagePolicy(pref) {
+  const v = String(pref || '').trim().toLowerCase()
+  if (v === 'omit') return 'omit'
+  if (v === 'keep') return 'keep'
+  return shouldOmitTsplCodepage() ? 'omit' : 'keep'
 }
 
 function omitTsplCodepageLines(content) {
@@ -81,7 +95,10 @@ function decodeWindowsProcessOutput(buf) {
  * 默认 **UTF-8**（无 CODEPAGE 时）：多款佳博 USB RAW 对整包 GB18030 与固件默认解析易不一致，表现为队列成功但不出纸。
  * 脚本中含 **CODEPAGE 936/86** 或 **FLOWCUBE_TSPL_BYTES=gb18030** 时用 GB18030。
  */
-function inferTsplWireEncoding(content) {
+function inferTsplWireEncoding(content, pref) {
+  const direct = String(pref || '').trim().toLowerCase()
+  if (direct === 'utf8' || direct === 'utf-8') return 'utf8'
+  if (direct === 'gbk' || direct === 'gb18030') return 'gb18030'
   const env = String(process.env.FLOWCUBE_TSPL_BYTES || '').trim().toLowerCase()
   if (env === 'utf8' || env === 'utf-8') return 'utf8'
   if (env === 'gbk' || env === 'gb18030') return 'gb18030'
@@ -91,9 +108,9 @@ function inferTsplWireEncoding(content) {
   return 'utf8'
 }
 
-function bufferForWindowsRaw(stringContent, isTspl) {
+function bufferForWindowsRaw(stringContent, isTspl, tsplWireEncoding) {
   if (!isTspl) return Buffer.from(stringContent, 'utf8')
-  if (inferTsplWireEncoding(stringContent) === 'utf8') {
+  if (inferTsplWireEncoding(stringContent, tsplWireEncoding) === 'utf8') {
     return Buffer.from(stringContent, 'utf8')
   }
   try {
@@ -174,7 +191,15 @@ function printZplWindowsRaw(printerName, payload) {
 }
 
 /**
- * @param {{ content: string, printerName: string }} opts
+ * @param {{
+ *   content: string,
+ *   printerName: string,
+ *   printerCompat?: {
+ *     tsplWireEncoding?: string,
+ *     tsplLineEnding?: string,
+ *     tsplCodepagePolicy?: string,
+ *   } | null
+ * }} opts
  */
 async function printZpl(opts) {
   let content = stripUtf8Bom(String(opts?.content ?? '').trim())
@@ -186,10 +211,16 @@ async function printZpl(opts) {
   const isZpl = content.includes('^XA') && content.includes('^XZ')
   const u = content.toUpperCase()
   const isTspl = u.includes('SIZE') && u.includes('CLS') && u.includes('PRINT')
-  if (isTspl && shouldUseTsplCrlf()) {
+  const compat = opts?.printerCompat && typeof opts.printerCompat === 'object'
+    ? opts.printerCompat
+    : null
+  const tsplLineEnding = resolveTsplLineEnding(compat?.tsplLineEnding)
+  const tsplCodepagePolicy = resolveTsplCodepagePolicy(compat?.tsplCodepagePolicy)
+  const tsplWireEncoding = compat?.tsplWireEncoding
+  if (isTspl && tsplLineEnding === 'crlf') {
     content = normalizeTsplLineEndingsToCrlf(content)
   }
-  if (isTspl && shouldOmitTsplCodepage()) {
+  if (isTspl && tsplCodepagePolicy === 'omit') {
     content = omitTsplCodepageLines(content)
   }
   if (!isZpl && !isTspl) {
@@ -197,13 +228,14 @@ async function printZpl(opts) {
   }
   const kind = isZpl ? 'ZPL' : 'TSPL'
   const platform = os.platform()
-  const winPayload = platform === 'win32' ? bufferForWindowsRaw(content, isTspl) : null
+  const winPayload =
+    platform === 'win32' ? bufferForWindowsRaw(content, isTspl, tsplWireEncoding) : null
   try {
-    const tsplEol = isTspl ? (shouldUseTsplCrlf() ? 'CRLF' : 'native') : ''
+    const tsplEol = isTspl ? tsplLineEnding : ''
     const extra = tsplEol ? ` TSPL_EOL=${tsplEol}` : ''
-    const omitCp = isTspl && shouldOmitTsplCodepage() ? ' omit_cp=1' : ''
+    const omitCp = isTspl && tsplCodepagePolicy === 'omit' ? ' omit_cp=1' : ''
     const encExtra =
-      platform === 'win32' && isTspl ? ` enc=${inferTsplWireEncoding(content)}` : ''
+      platform === 'win32' && isTspl ? ` enc=${inferTsplWireEncoding(content, tsplWireEncoding)}` : ''
     const n = winPayload ? winPayload.length : Buffer.byteLength(content, 'utf8')
     console.log(`[FlowCube RAW] ${kind} ${n} bytes → ${printerName}${extra}${encExtra}${omitCp}`)
   } catch {

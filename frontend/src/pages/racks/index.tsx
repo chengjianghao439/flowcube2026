@@ -78,6 +78,7 @@ export default function RacksPage() {
           content: d.content,
           contentType: d.contentType,
           printerName: d.printerName,
+          printerCompat: d.printerCompat,
         })
         if (local === 'ok') {
           const q = d.printerName ? `「${d.printerName}」` : '本机打印机'

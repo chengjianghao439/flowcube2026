@@ -2,6 +2,14 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 
 const TYPE_NAME = { 1: '标签打印机', 2: '面单打印机', 3: 'A4打印机' }
+const TSPL_WIRE_ENCODINGS = new Set(['auto', 'utf8', 'gb18030'])
+const TSPL_LINE_ENDINGS = new Set(['auto', 'native', 'crlf'])
+const TSPL_CODEPAGE_POLICIES = new Set(['auto', 'keep', 'omit'])
+
+function normalizeEnum(raw, allowed, fallback) {
+  const s = String(raw || '').trim().toLowerCase()
+  return allowed.has(s) ? s : fallback
+}
 
 function fmt(row) {
   const lr = String(row.label_raw_format || 'zpl').toLowerCase()
@@ -21,6 +29,9 @@ function fmt(row) {
     clientAliasName: row.client_alias_name,
     clientHostname: row.client_hostname,
     clientDisplayName: row.client_alias_name || row.client_hostname || row.client_id || null,
+    tsplWireEncoding: normalizeEnum(row.tspl_wire_encoding, TSPL_WIRE_ENCODINGS, 'auto'),
+    tsplLineEnding: normalizeEnum(row.tspl_line_ending, TSPL_LINE_ENDINGS, 'auto'),
+    tsplCodepagePolicy: normalizeEnum(row.tspl_codepage_policy, TSPL_CODEPAGE_POLICIES, 'auto'),
     createdAt:   row.created_at,
     updatedAt:   row.updated_at,
   }
@@ -88,7 +99,18 @@ async function allocateUniqueCodeGlobally(baseCode) {
   }
 }
 
-async function create({ name, code, type, description, warehouseId, source, labelRawFormat }, tenantId = 0) {
+async function create({
+  name,
+  code,
+  type,
+  description,
+  warehouseId,
+  source,
+  labelRawFormat,
+  tsplWireEncoding: tsplWireEncodingRaw,
+  tsplLineEnding: tsplLineEndingRaw,
+  tsplCodepagePolicy: tsplCodepagePolicyRaw,
+}, tenantId = 0) {
   const tid = normTid(tenantId)
   const nameNorm = normalizePrinterName(name)
   if (!nameNorm) throw new AppError('名称不能为空', 400)
@@ -101,15 +123,31 @@ async function create({ name, code, type, description, warehouseId, source, labe
   const src =
     source === 'local_desktop' || source === 'client' || source === 'manual' ? source : null
   const lr = String(labelRawFormat || '').toLowerCase() === 'tspl' ? 'tspl' : 'zpl'
+  const tsplWireEncoding = normalizeEnum(tsplWireEncodingRaw, TSPL_WIRE_ENCODINGS, 'auto')
+  const tsplLineEnding = normalizeEnum(tsplLineEndingRaw, TSPL_LINE_ENDINGS, 'auto')
+  const tsplCodepagePolicy = normalizeEnum(tsplCodepagePolicyRaw, TSPL_CODEPAGE_POLICIES, 'auto')
   const finalCode = await allocateUniqueCodeGlobally(code)
   const [r] = await pool.query(
-    'INSERT INTO printers (name, code, type, label_raw_format, warehouse_id, tenant_id, description, source) VALUES (?,?,?,?,?,?,?,?)',
-    [nameNorm, finalCode, type, lr, wh, tid, description || null, src],
+    `INSERT INTO printers
+      (name, code, type, label_raw_format, tspl_wire_encoding, tspl_line_ending, tspl_codepage_policy, warehouse_id, tenant_id, description, source)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [nameNorm, finalCode, type, lr, tsplWireEncoding, tsplLineEnding, tsplCodepagePolicy, wh, tid, description || null, src],
   )
   return findById(r.insertId, tid)
 }
 
-async function update(id, { name, code, type, description, status, warehouseId, labelRawFormat }, tenantId = 0) {
+async function update(id, {
+  name,
+  code,
+  type,
+  description,
+  status,
+  warehouseId,
+  labelRawFormat,
+  tsplWireEncoding: tsplWireEncodingRaw,
+  tsplLineEnding: tsplLineEndingRaw,
+  tsplCodepagePolicy: tsplCodepagePolicyRaw,
+}, tenantId = 0) {
   const tid = normTid(tenantId)
   const existing = await findById(id, tid)
   const nameVal = name !== undefined ? normalizePrinterName(name) : existing.name
@@ -118,6 +156,18 @@ async function update(id, { name, code, type, description, status, warehouseId, 
     labelRawFormat !== undefined
       ? (String(labelRawFormat).toLowerCase() === 'tspl' ? 'tspl' : 'zpl')
       : (existing.labelRawFormat || 'zpl')
+  const tsplWireEncoding =
+    tsplWireEncodingRaw !== undefined
+      ? normalizeEnum(tsplWireEncodingRaw, TSPL_WIRE_ENCODINGS, 'auto')
+      : normalizeEnum(existing.tsplWireEncoding, TSPL_WIRE_ENCODINGS, 'auto')
+  const tsplLineEnding =
+    tsplLineEndingRaw !== undefined
+      ? normalizeEnum(tsplLineEndingRaw, TSPL_LINE_ENDINGS, 'auto')
+      : normalizeEnum(existing.tsplLineEnding, TSPL_LINE_ENDINGS, 'auto')
+  const tsplCodepagePolicy =
+    tsplCodepagePolicyRaw !== undefined
+      ? normalizeEnum(tsplCodepagePolicyRaw, TSPL_CODEPAGE_POLICIES, 'auto')
+      : normalizeEnum(existing.tsplCodepagePolicy, TSPL_CODEPAGE_POLICIES, 'auto')
   const wh =
     warehouseId === undefined
       ? undefined
@@ -126,13 +176,17 @@ async function update(id, { name, code, type, description, status, warehouseId, 
         : null
   if (wh !== undefined) {
     await pool.query(
-      'UPDATE printers SET name=?, code=?, type=?, warehouse_id=?, description=?, status=?, label_raw_format=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
-      [nameVal, code, type, wh, description || null, status ?? 1, lrVal, id, tid],
+      `UPDATE printers
+       SET name=?, code=?, type=?, warehouse_id=?, description=?, status=?, label_raw_format=?, tspl_wire_encoding=?, tspl_line_ending=?, tspl_codepage_policy=?
+       WHERE id=? AND (tenant_id=? OR tenant_id=0)`,
+      [nameVal, code, type, wh, description || null, status ?? 1, lrVal, tsplWireEncoding, tsplLineEnding, tsplCodepagePolicy, id, tid],
     )
   } else {
     await pool.query(
-      'UPDATE printers SET name=?, code=?, type=?, description=?, status=?, label_raw_format=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
-      [nameVal, code, type, description || null, status ?? 1, lrVal, id, tid],
+      `UPDATE printers
+       SET name=?, code=?, type=?, description=?, status=?, label_raw_format=?, tspl_wire_encoding=?, tspl_line_ending=?, tspl_codepage_policy=?
+       WHERE id=? AND (tenant_id=? OR tenant_id=0)`,
+      [nameVal, code, type, description || null, status ?? 1, lrVal, tsplWireEncoding, tsplLineEnding, tsplCodepagePolicy, id, tid],
     )
   }
   return findById(id, tid)

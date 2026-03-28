@@ -79,6 +79,20 @@ function fmt(row, { includeAckToken = false } = {}) {
       row.printer_name != null && String(row.printer_name).trim()
         ? String(row.printer_name).trim()
         : null,
+    printerCompat: {
+      tsplWireEncoding:
+        row.printer_tspl_wire_encoding != null
+          ? String(row.printer_tspl_wire_encoding).trim().toLowerCase()
+          : 'auto',
+      tsplLineEnding:
+        row.printer_tspl_line_ending != null
+          ? String(row.printer_tspl_line_ending).trim().toLowerCase()
+          : 'auto',
+      tsplCodepagePolicy:
+        row.printer_tspl_codepage_policy != null
+          ? String(row.printer_tspl_codepage_policy).trim().toLowerCase()
+          : 'auto',
+    },
     templateId:   num(row.template_id),
     title:        row.title,
     contentType:  row.content_type,
@@ -118,7 +132,10 @@ async function findAll({ printerId, status, page = 1, pageSize = 50, tenantId = 
   const where = 'WHERE ' + conds.join(' AND ')
   const offset = (page - 1) * pageSize
   const [rows] = await pool.query(
-    `SELECT j.*, p.code AS printer_code, p.name AS printer_name
+    `SELECT j.*, p.code AS printer_code, p.name AS printer_name,
+            p.tspl_wire_encoding AS printer_tspl_wire_encoding,
+            p.tspl_line_ending AS printer_tspl_line_ending,
+            p.tspl_codepage_policy AS printer_tspl_codepage_policy
      FROM print_jobs j
      LEFT JOIN printers p ON p.id = j.printer_id
      ${where} ORDER BY j.priority DESC, j.id DESC LIMIT ? OFFSET ?`,
@@ -131,7 +148,10 @@ async function findAll({ printerId, status, page = 1, pageSize = 50, tenantId = 
 }
 
 async function findById(id, { tenantId } = {}) {
-  let sql = `SELECT j.*, p.code AS printer_code, p.name AS printer_name
+  let sql = `SELECT j.*, p.code AS printer_code, p.name AS printer_name,
+                    p.tspl_wire_encoding AS printer_tspl_wire_encoding,
+                    p.tspl_line_ending AS printer_tspl_line_ending,
+                    p.tspl_codepage_policy AS printer_tspl_codepage_policy
      FROM print_jobs j LEFT JOIN printers p ON p.id = j.printer_id
      WHERE j.id=?`
   const params = [id]
@@ -627,6 +647,7 @@ async function enqueueRackLabelJob(payload) {
       id: job.id,
       printerCode: job.printerCode,
       printerName: job.printerName,
+      printerCompat: job.printerCompat,
       dispatchHint,
       contentType: useTspl ? 'tspl' : 'zpl',
       content: labelBody,
