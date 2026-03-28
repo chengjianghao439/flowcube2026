@@ -1,5 +1,5 @@
 {
-  "version": "0.3.35",
-  "filename": "FlowCube-ERP-Setup-0.3.35.exe",
-  "notes": "【v0.3.35 主要更新】\n\n• Windows TSPL：无 CODEPAGE 936/86 时默认 UTF-8 RAW；936/86 或 FLOWCUBE_TSPL_BYTES=gb18030 仍为 GB18030。\n• 打印机管理：TSPL 仅 ASCII 自检按钮。\n\n详见 docs/releases/v0.3.35.md。"
+  "version": "0.3.37",
+  "filename": "FlowCube-ERP-Setup-0.3.37.exe",
+  "notes": "【v0.3.37 主要更新】\n\n• 商品管理里的标签打印已接入正式打印链路。\n• 支持按打印模板与打印机绑定分发打印任务。\n• 服务器已支持同域安装包下载与桌面端自动更新。\n\n安装后客户端将直接连接服务器使用，不需要 Mac 持续启动前后端。"
 }
