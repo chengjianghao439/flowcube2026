@@ -1,15 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { useLogin } from '@/hooks/useAuth'
-import { toast } from '@/lib/toast'
-import PdaScanner from '@/components/pda/PdaScanner'
 import {
-  PDA_API_ORIGIN_KEY,
-  PDA_LABEL_PRINTER_ID_KEY,
   getResolvedPdaApiOrigin,
   isPdaViteLiveHost,
-  normalizePdaApiOrigin,
-  tryParseScannedServerUrl,
 } from '@/lib/pdaRuntime'
 import { loadSavedLoginForm } from '@/lib/loginCredentials'
 
@@ -19,9 +13,6 @@ export default function PdaLoginPage() {
   const showApiConfig = Capacitor.isNativePlatform() && !isPdaViteLiveHost()
 
   const [apiOrigin, setApiOrigin] = useState('')
-  const [labelPrinterId, setLabelPrinterId] = useState('')
-  const [showAdvancedConfig, setShowAdvancedConfig] = useState(false)
-  const [scanServerMode, setScanServerMode] = useState(false)
   const [username, setUsername] = useState(() => loadSavedLoginForm().username)
   const [password, setPassword] = useState(() => loadSavedLoginForm().password)
   const [rememberPassword, setRememberPassword] = useState(
@@ -32,41 +23,7 @@ export default function PdaLoginPage() {
   useEffect(() => {
     const resolvedOrigin = getResolvedPdaApiOrigin()
     setApiOrigin(resolvedOrigin)
-    setLabelPrinterId(localStorage.getItem(PDA_LABEL_PRINTER_ID_KEY) ?? '')
-    setShowAdvancedConfig(!resolvedOrigin)
   }, [])
-
-  function applyScannedServerUrl(code: string) {
-    const url = tryParseScannedServerUrl(code)
-    if (!url) {
-      toast.error('未识别为服务器地址，请扫含 http:// 或 https:// 的二维码')
-      return
-    }
-    localStorage.setItem(PDA_API_ORIGIN_KEY, url)
-    setApiOrigin(url)
-    setScanServerMode(false)
-    toast.success('已保存服务器地址')
-    window.location.reload()
-  }
-
-  function saveApiServer() {
-    const o = normalizePdaApiOrigin(apiOrigin)
-    if (!o) {
-      toast.error('请填写后端地址，例如：http://192.168.1.10:3000（不要带 /api）')
-      return
-    }
-    localStorage.setItem(PDA_API_ORIGIN_KEY, o)
-    const pid = labelPrinterId.trim()
-    if (pid && /^\d+$/.test(pid)) {
-      localStorage.setItem(PDA_LABEL_PRINTER_ID_KEY, pid)
-    } else if (pid) {
-      toast.error('标签打印机 ID 须为数字（与 ERP 打印机管理中的 ID 一致）')
-      return
-    } else {
-      localStorage.removeItem(PDA_LABEL_PRINTER_ID_KEY)
-    }
-    window.location.reload()
-  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -101,85 +58,15 @@ export default function PdaLoginPage() {
         <form className="space-y-5" onSubmit={handleSubmit} noValidate>
 
           {showApiConfig && (
-            <div className="rounded-xl border border-amber-600/40 bg-amber-950/30 px-4 py-3 space-y-2">
-              <p className="text-xs font-medium text-amber-200/90">独立 App：默认已带服务器配置</p>
-              {apiOrigin && !showAdvancedConfig ? (
-                <>
-                  <p className="text-[11px] text-amber-200/70 leading-snug">
-                    当前默认后端：
-                    <span className="ml-1 font-mono text-amber-100/90">{apiOrigin}</span>
-                  </p>
-                  <p className="text-[11px] text-amber-200/60 leading-snug">
-                    标签打印机 ID 会在登录后优先自动读取后端的容器标签绑定；只有没有配置绑定时，才需要手动填写。
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowAdvancedConfig(true)}
-                    className="w-full rounded-lg border border-amber-600/50 py-2 text-sm font-medium text-amber-100 active:scale-[0.99]"
-                  >
-                    打开高级设置
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-[11px] text-amber-200/60 leading-snug">
-                    填写运行极序 Flow 后端的电脑地址与端口（默认 3000），不要带 <code className="text-amber-100/80">/api</code>
-                    。若打包时已配置 <code className="text-amber-100/80">VITE_ERP_PRODUCTION_ORIGIN</code>，此处会预填；仍连不上请改为局域网
-                    IP（勿用 localhost）。保存后会重新加载。
-                  </p>
-                  <input
-                    type="url"
-                    inputMode="url"
-                    placeholder="http://192.168.1.10:3000"
-                    value={apiOrigin}
-                    onChange={(e) => setApiOrigin(e.target.value)}
-                    className="w-full rounded-lg border border-amber-800/50 bg-slate-900/80 px-3 py-2.5 text-sm text-white placeholder:text-amber-200/30 outline-none focus:border-amber-500"
-                  />
-                  <label className="block text-[11px] font-medium text-amber-200/80" htmlFor="pda-label-printer">
-                    标签打印机 ID（可留空；登录后优先自动读取）
-                  </label>
-                  <input
-                    id="pda-label-printer"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="例如 1（见 ERP → 打印机管理）"
-                    value={labelPrinterId}
-                    onChange={(e) => setLabelPrinterId(e.target.value.replace(/\D/g, ''))}
-                    className="w-full rounded-lg border border-amber-800/50 bg-slate-900/80 px-3 py-2.5 text-sm text-white placeholder:text-amber-200/30 outline-none focus:border-amber-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setScanServerMode((v) => !v)}
-                    className="w-full rounded-lg border border-amber-600/50 py-2 text-sm font-medium text-amber-100 active:scale-[0.99]"
-                  >
-                    {scanServerMode ? '取消扫码配置' : '扫码配置服务器地址'}
-                  </button>
-                  {scanServerMode && (
-                    <div className="rounded-lg border border-amber-800/40 bg-slate-950/50 p-2">
-                      <p className="text-[10px] text-amber-200/70 mb-2 px-1">请扫包含后端根地址的二维码（内容形如 http://IP:3000）</p>
-                      <PdaScanner
-                        onScan={applyScannedServerUrl}
-                        placeholder="等待扫描服务器二维码…"
-                        allowManualEntry={false}
-                      />
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={saveApiServer}
-                    className="w-full rounded-lg bg-amber-700/90 py-2 text-sm font-semibold text-white active:scale-[0.99]"
-                  >
-                    保存并重新加载
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new Event('pda:check-update'))}
-                className="w-full rounded-lg border border-amber-600/50 py-2 text-sm font-medium text-amber-100 active:scale-[0.99]"
-              >
-                手动检查更新
-              </button>
+            <div className="space-y-2 rounded-xl border border-amber-600/40 bg-amber-950/30 px-4 py-3">
+              <p className="text-xs font-medium text-amber-200/90">独立 App：服务器地址已内置</p>
+              <p className="text-[11px] leading-snug text-amber-200/70">
+                当前连接后端：
+                <span className="ml-1 font-mono text-amber-100/90">{apiOrigin || '未写入构建配置'}</span>
+              </p>
+              <p className="text-[11px] leading-snug text-amber-200/60">
+                PDA 不再提供手动修改 API 的入口。标签打印机会在登录后自动读取后端的容器标签绑定，无需在设备上手动填写。
+              </p>
             </div>
           )}
 
@@ -197,7 +84,7 @@ export default function PdaLoginPage() {
                 type="text"
                 placeholder="请输入账号"
                 autoComplete="username"
-                autoFocus={!showApiConfig || !scanServerMode}
+                autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isPending}
@@ -282,11 +169,10 @@ export default function PdaLoginPage() {
 
       <details className="mt-6 w-full max-w-sm rounded-xl border border-slate-700/80 bg-slate-900/40 px-4 py-3 text-left">
         <summary className="cursor-pointer text-xs font-medium text-slate-400">
-          套壳 App 白屏 / 换过电脑 IP？
+          独立 App 连不上服务器？
         </summary>
         <p className="mt-3 text-xs leading-relaxed text-slate-500">
-          <strong className="text-slate-400">独立 APK</strong>：前端已打进安装包，只需在上方填<strong className="text-slate-400">后端</strong>
-          地址；重新打包请执行 <code className="rounded bg-slate-800 px-1 text-slate-300">npm run pda:sync</code>。
+          <strong className="text-slate-400">独立 APK</strong>：前端和服务器地址都已打进安装包，若服务器域名或 IP 变更，需要重新打包并重新安装新 APK。
           <br />
           <strong className="text-slate-400">开发热更新</strong>：在电脑执行{' '}
           <code className="rounded bg-slate-800 px-1 text-slate-300">npm run pda:sync:live</code>

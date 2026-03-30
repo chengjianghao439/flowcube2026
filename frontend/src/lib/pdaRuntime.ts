@@ -48,10 +48,14 @@ export function getBuiltPdaDefaultApiOrigin(): string {
 
 /**
  * 独立 App 实际使用的 API 根（不写 https://localhost）。
- * 顺序：flowcube:pdaApiOrigin → API_BASE_URL（与其它端统一）→ 构建期 VITE_ERP_PRODUCTION_ORIGIN
+ * 原生 PDA 优先使用打包时内置的后端地址，避免旧版残留 localStorage 把正确地址覆盖掉。
  */
 export function getResolvedPdaApiOrigin(): string {
   if (typeof window === 'undefined') return ''
+  const built = getBuiltPdaDefaultApiOrigin()
+  if (Capacitor.isNativePlatform() && !isPdaViteLiveHost() && built) {
+    return built
+  }
   const a = localStorage.getItem(PDA_API_ORIGIN_KEY)?.trim()
   if (a) {
     const o = normalizePdaApiOrigin(a)
@@ -62,7 +66,7 @@ export function getResolvedPdaApiOrigin(): string {
     const o = normalizePdaApiOrigin(b)
     if (o) return o
   }
-  return getBuiltPdaDefaultApiOrigin()
+  return built
 }
 
 /** 将服务端返回的相对地址补成 PDA 可访问的绝对地址 */
@@ -98,6 +102,7 @@ export function applyPdaApiBaseFromStorage(): void {
   const origin = getResolvedPdaApiOrigin()
   if (origin) {
     apiClient.defaults.baseURL = `${origin}/api`
+    localStorage.setItem(PDA_API_ORIGIN_KEY, origin)
   }
 }
 
@@ -195,7 +200,7 @@ export function installPdaGlobals(): void {
     }
     const pid = readStoredPdaPrinterId() ?? await syncPdaLabelPrinterBinding()
     if (!pid) {
-      toast.error('未配置标签打印机 ID，请在登录页填写')
+      toast.error('未找到容器标签打印机绑定，请先在后台打印机管理中配置')
       return
     }
     try {
