@@ -74,6 +74,25 @@ const GITHUB_OWNER = process.env.GITHUB_OWNER || 'chengjianghao439'
 const GITHUB_REPO = process.env.GITHUB_REPO || 'flowcube2026'
 const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
 
+function normalizeVersion(v) {
+  return String(v || '')
+    .trim()
+    .replace(/^v/i, '')
+}
+
+function compareVersions(a, b) {
+  const pa = normalizeVersion(a).split('.').map((item) => Number.parseInt(item, 10) || 0)
+  const pb = normalizeVersion(b).split('.').map((item) => Number.parseInt(item, 10) || 0)
+  const len = Math.max(pa.length, pb.length)
+  for (let i = 0; i < len; i += 1) {
+    const av = pa[i] || 0
+    const bv = pb[i] || 0
+    if (av > bv) return 1
+    if (av < bv) return -1
+  }
+  return 0
+}
+
 /** 去掉 GitHub 自动生成的 Full Changelog / compare 链接等多余行，便于仪表盘展示 */
 function sanitizeReleaseNotes(body) {
   if (!body || typeof body !== 'string') return ''
@@ -178,7 +197,7 @@ async function fetchFromLocal() {
  */
 router.get('/latest', async (req, res, next) => {
   try {
-    let data
+    let data = null
     let local = null
     try {
       local = await fetchFromLocal()
@@ -201,6 +220,15 @@ router.get('/latest', async (req, res, next) => {
           data: null,
         })
       }
+    }
+
+    if (
+      local &&
+      local.version &&
+      (!data || !data.version || compareVersions(local.version, data.version) > 0)
+    ) {
+      data = local
+      console.log('[app-update] Prefer newer local manifest:', data.version)
     }
 
     if (!data.version) {
