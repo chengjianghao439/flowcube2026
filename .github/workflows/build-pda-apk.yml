@@ -59,7 +59,38 @@ jobs:
           FLOWCUBE_UPLOAD_STORE_PASSWORD: ${{ secrets.PDA_SIGNING_STORE_PASSWORD }}
           FLOWCUBE_UPLOAD_KEY_ALIAS: ${{ secrets.PDA_SIGNING_KEY_ALIAS }}
           FLOWCUBE_UPLOAD_KEY_PASSWORD: ${{ secrets.PDA_SIGNING_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease
+        run: ./gradlew clean assembleRelease
+
+      - name: Verify APK version
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="frontend/android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$APK_PATH"
+          EXPECTED_NAME="$(python3 - <<'PY'
+import re, pathlib
+text = pathlib.Path('frontend/android/app/build.gradle').read_text()
+m = re.search(r'versionName\\s+\"([^\"]+)\"', text)
+print(m.group(1) if m else '')
+PY
+)"
+          EXPECTED_CODE="$(python3 - <<'PY'
+import re, pathlib
+text = pathlib.Path('frontend/android/app/build.gradle').read_text()
+m = re.search(r'versionCode\\s+(\\d+)', text)
+print(m.group(1) if m else '')
+PY
+)"
+          test -n "$EXPECTED_NAME"
+          test -n "$EXPECTED_CODE"
+          APKANALYZER="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}" -name apkanalyzer | head -n 1)"
+          test -n "$APKANALYZER"
+          ACTUAL_NAME="$("$APKANALYZER" manifest version-name "$APK_PATH")"
+          ACTUAL_CODE="$("$APKANALYZER" manifest version-code "$APK_PATH")"
+          echo "Expected versionName=$EXPECTED_NAME versionCode=$EXPECTED_CODE"
+          echo "Actual   versionName=$ACTUAL_NAME versionCode=$ACTUAL_CODE"
+          test "$ACTUAL_NAME" = "$EXPECTED_NAME"
+          test "$ACTUAL_CODE" = "$EXPECTED_CODE"
 
       - name: Rename APK
         run: |
