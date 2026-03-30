@@ -44,14 +44,27 @@ jobs:
           VITE_ERP_PRODUCTION_ORIGIN: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
         run: npm run pda:sync
 
-      - name: Build debug APK
+      - name: Prepare Android signing keystore
+        working-directory: ./frontend/android/app
+        env:
+          PDA_SIGNING_KEYSTORE_BASE64: ${{ secrets.PDA_SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$PDA_SIGNING_KEYSTORE_BASE64"
+          printf '%s' "$PDA_SIGNING_KEYSTORE_BASE64" | base64 --decode > flowcube-release.keystore
+
+      - name: Build release APK
         working-directory: ./frontend/android
-        run: ./gradlew assembleDebug
+        env:
+          FLOWCUBE_UPLOAD_STORE_FILE: app/flowcube-release.keystore
+          FLOWCUBE_UPLOAD_STORE_PASSWORD: ${{ secrets.PDA_SIGNING_STORE_PASSWORD }}
+          FLOWCUBE_UPLOAD_KEY_ALIAS: ${{ secrets.PDA_SIGNING_KEY_ALIAS }}
+          FLOWCUBE_UPLOAD_KEY_PASSWORD: ${{ secrets.PDA_SIGNING_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
 
       - name: Rename APK
         run: |
           mkdir -p out
-          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk "out/FlowCubePDA-${GITHUB_SHA::7}.apk"
+          cp frontend/android/app/build/outputs/apk/release/app-release.apk "out/FlowCubePDA-${GITHUB_SHA::7}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
