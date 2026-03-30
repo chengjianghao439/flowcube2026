@@ -42,6 +42,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-flowcube-docker-dev-only-secret-32chars-min}
       JWT_EXPIRES_IN: 7d
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      CORS_REFLECT: ${CORS_REFLECT:-0}
+      CORS_ALLOW_NULL_ORIGIN: ${CORS_ALLOW_NULL_ORIGIN:-0}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       # 桌面端更新：同域下载安装包（与仓库根 .env 中 APP_PUBLIC_URL 一致）
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
