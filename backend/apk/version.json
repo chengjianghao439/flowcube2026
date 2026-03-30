@@ -1,7 +1,7 @@
 {
-  "version": "1.1.6",
-  "versionCode": 8,
+  "version": "1.1.7",
+  "versionCode": 9,
   "filename": "app-release.apk",
-  "releaseNote": "修复桌面端版本检测；PDA 更新改为应用内下载进度与安装界面，不再跳浏览器。",
-  "publishedAt": "2026-03-30T19:00:00.000Z"
+  "releaseNote": "修复 PDA 安装包内置服务器地址，恢复服务器连接；保留应用内下载与安装更新。",
+  "publishedAt": "2026-03-30T19:35:00.000Z"
 }
