@@ -185,7 +185,16 @@ export default function PdaWorkbench() {
       <OnboardingGate />
       <div className="border-b border-border bg-card px-4 pt-4 pb-4">
         <div className="max-w-md mx-auto">
-          <p className="text-xs font-mono text-muted-foreground tracking-wider uppercase">FlowCube WMS</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-mono text-muted-foreground tracking-wider uppercase">FlowCube WMS</p>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('pda:check-update'))}
+              className="rounded-full border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground active:scale-95"
+            >
+              检查更新
+            </button>
+          </div>
           <div className="mt-1 flex items-center justify-between">
             <h1 className="text-xl font-semibold text-foreground">{greeting}，{user?.username ?? '操作员'}</h1>
             <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${roleColor}`}>{roleIcon} {roleLabel}</span>
@@ -253,4 +262,3 @@ export default function PdaWorkbench() {
     </div>
   )
 }
-

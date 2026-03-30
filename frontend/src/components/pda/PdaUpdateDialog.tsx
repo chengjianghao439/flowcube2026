@@ -2,7 +2,9 @@
  * PdaUpdateDialog — PDA App 升级提示弹窗
  */
 import { useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import type { PdaVersionInfo } from '@/hooks/usePdaUpdate'
+import { toast } from '@/lib/toast'
 
 interface Props {
   version: PdaVersionInfo
@@ -24,6 +26,19 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
     setError(null)
     setProgress(0)
     try {
+      if (Capacitor.isNativePlatform()) {
+        const a = document.createElement('a')
+        a.href = version.downloadUrl
+        a.target = '_blank'
+        a.rel = 'noopener noreferrer'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        setProgress(100)
+        toast.success('已打开更新下载页，请按系统提示完成安装')
+        return
+      }
+
       const response = await fetch(version.downloadUrl)
       if (!response.ok) throw new Error('下载失败')
       const contentLength = parseInt(response.headers.get('content-length') || '0', 10)
@@ -50,6 +65,7 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
       setProgress(100)
     } catch (e) {
       setError(e instanceof Error ? e.message : '下载失败，请重试')
+    } finally {
       setDownloading(false)
     }
   }
@@ -85,7 +101,9 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
         )}
         {progress === 100 && (
           <div className="mb-4 rounded-xl border border-green-700/40 bg-green-950/30 p-3 text-center">
-            <p className="text-sm text-green-400">✅ 下载完成，请确认安装</p>
+            <p className="text-sm text-green-400">
+              {Capacitor.isNativePlatform() ? '✅ 已打开系统下载页，请完成安装' : '✅ 下载完成，请确认安装'}
+            </p>
           </div>
         )}
         {error && (
@@ -100,7 +118,7 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
               disabled={downloading}
               className="flex-1 rounded-xl bg-blue-600 py-3 font-bold text-white active:scale-95 disabled:opacity-60"
             >
-              {downloading ? `下载中 ${progress}%` : '立即更新'}
+              {downloading ? (Capacitor.isNativePlatform() ? '正在打开下载页…' : `下载中 ${progress}%`) : '立即更新'}
             </button>
           )}
           <button

@@ -149,6 +149,13 @@ export default function PdaLoginPage() {
               >
                 保存并重新加载
               </button>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event('pda:check-update'))}
+                className="w-full rounded-lg border border-amber-600/50 py-2 text-sm font-medium text-amber-100 active:scale-[0.99]"
+              >
+                手动检查更新
+              </button>
             </div>
           )}
 

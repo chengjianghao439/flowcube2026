@@ -19,7 +19,7 @@ import PdaErrorBoundary from '@/components/pda/PdaErrorBoundary'
 export default function PdaLayout() {
   const location = useLocation()
   const navigate  = useNavigate()
-  const { newVersion, dismiss } = usePdaUpdate()
+  const { newVersion, dismiss, checkUpdate } = usePdaUpdate()
 
   // ── viewport meta 动态修正（禁止缩放，防止扫码后页面跳动）────────────
   useEffect(() => {
@@ -55,6 +55,12 @@ export default function PdaLayout() {
     window.addEventListener('popstate', handleBack)
     return () => window.removeEventListener('popstate', handleBack)
   }, [location.pathname])
+
+  useEffect(() => {
+    const onManualCheck = () => { void checkUpdate({ manual: true }) }
+    window.addEventListener('pda:check-update', onManualCheck as EventListener)
+    return () => window.removeEventListener('pda:check-update', onManualCheck as EventListener)
+  }, [checkUpdate])
 
   return (
     <>

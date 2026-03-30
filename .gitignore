@@ -23,6 +23,7 @@ flowcube_backup.sql
 # 安装包/压缩包体积大，勿提交（由 CI 或服务器生成）
 backend/downloads/*.zip
 backend/downloads/*.exe
+backend/apk/*.apk
 
 # 测试种子脚本（含数据库凭据，仅在本地使用）
 tests/seedTestData.js

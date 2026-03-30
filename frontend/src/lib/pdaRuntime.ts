@@ -65,6 +65,31 @@ export function getResolvedPdaApiOrigin(): string {
   return getBuiltPdaDefaultApiOrigin()
 }
 
+/** 将服务端返回的相对地址补成 PDA 可访问的绝对地址 */
+export function resolvePdaServerUrl(pathOrUrl: string): string {
+  const raw = pathOrUrl.trim()
+  if (!raw) return ''
+  if (/^https?:\/\//i.test(raw)) return raw
+  if (raw.startsWith('//')) {
+    if (typeof window !== 'undefined' && window.location?.protocol) {
+      return `${window.location.protocol}${raw}`
+    }
+    return `https:${raw}`
+  }
+
+  if (raw.startsWith('/')) {
+    if (Capacitor.isNativePlatform() && !isPdaViteLiveHost()) {
+      const origin = getResolvedPdaApiOrigin()
+      if (origin) return `${origin}${raw}`
+    }
+    if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
+      return `${window.location.origin}${raw}`
+    }
+  }
+
+  return raw
+}
+
 /** 根据 localStorage 设置 axios 基址（独立 APK bundled；Live 开发不覆盖） */
 export function applyPdaApiBaseFromStorage(): void {
   if (!Capacitor.isNativePlatform()) return
