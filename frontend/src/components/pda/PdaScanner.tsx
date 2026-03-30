@@ -75,10 +75,8 @@ export default function PdaScanner({
   }
 
   return (
-    <div className="space-y-2">
-
-      {/* ── 扫码状态显示区 ── */}
-      <div className={`flex flex-col gap-3 rounded-2xl border px-4 py-4 shadow-sm transition-all ${
+    <div>
+      <div className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition-all ${
         flash
           ? 'border-emerald-300 bg-emerald-50'
           : disabled
@@ -87,69 +85,55 @@ export default function PdaScanner({
           ? 'border-amber-300 bg-amber-50'
           : 'border-border bg-card'
       }`}>
-        <div className="flex items-start gap-3">
-          <span className="shrink-0 rounded-2xl bg-background px-3 py-2 text-2xl shadow-sm">
-            {disabled ? '⏳' : manualMode ? '⌨️' : flash ? '✅' : '📷'}
-          </span>
+        <span className="shrink-0 text-xl">
+          {disabled ? '⏳' : manualMode ? '⌨️' : flash ? '✅' : '📷'}
+        </span>
 
-          <div className="min-w-0 flex-1">
-            {manualMode ? (
-              <input
-                ref={manualInputRef}
-                data-scanner-manual="true"
-                value={manualValue}
-                onChange={e => setManualValue(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); commitManual() }
-                  if (e.key === 'Escape') exitManualMode()
-                }}
-                placeholder="输入条码后按回车"
-                className="w-full rounded-xl border border-amber-200 bg-white px-3 py-3 text-base text-foreground outline-none placeholder:text-amber-700/50 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
-                autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
-              />
-            ) : (
-              <>
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  {disabled ? 'Processing' : manualMode ? 'Manual' : 'Scanner Ready'}
-                </p>
-                <p className={`mt-1 break-words text-sm leading-6 ${
-                  flash ? 'font-semibold text-emerald-700' : disabled ? 'text-slate-500' : 'text-foreground'
-                }`}>
-                  {flash && lastCode ? `已识别：${lastCode}` : disabled ? '正在处理扫码结果…' : placeholder}
-                </p>
-              </>
-            )}
-          </div>
+        <div className="min-w-0 flex-1">
+          {manualMode ? (
+            <input
+              ref={manualInputRef}
+              data-scanner-manual="true"
+              value={manualValue}
+              onChange={e => setManualValue(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); commitManual() }
+                if (e.key === 'Escape') exitManualMode()
+              }}
+              placeholder="输入条码后按回车"
+              className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+            />
+          ) : (
+            <p className={`break-words text-sm leading-6 ${
+              flash ? 'font-medium text-emerald-700' : disabled ? 'text-slate-500' : 'text-foreground'
+            }`}>
+              {flash && lastCode ? `已识别：${lastCode}` : disabled ? '正在处理扫码结果…' : placeholder}
+            </p>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {showTypeHint && !disabled && !manualMode && (
-            <span className="inline-flex max-w-full items-center rounded-full bg-muted px-3 py-1 text-xs leading-5 text-muted-foreground">
-              {allowManualEntry ? '对准条码直接扫描，无需点击输入框' : '请使用扫码枪扫描容器条码，不支持手动填写'}
-            </span>
-          )}
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            {manualMode ? (
-              <>
-                {manualValue.trim() && (
-                  <button
-                    onClick={commitManual}
-                    className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground active:scale-95"
-                  >确认</button>
-                )}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {manualMode ? (
+            <>
+              {manualValue.trim() && (
                 <button
-                  onClick={exitManualMode}
-                  className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground active:scale-95"
-                >取消</button>
-              </>
-            ) : allowManualEntry ? (
+                  onClick={commitManual}
+                  className="rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground active:scale-95"
+                >确认</button>
+              )}
               <button
-                onClick={enterManualMode}
-                disabled={disabled}
-                className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground active:scale-95 disabled:opacity-40 whitespace-nowrap"
-              >手动输入</button>
-            ) : null}
-          </div>
+                onClick={exitManualMode}
+                className="rounded-xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground active:scale-95"
+              >取消</button>
+            </>
+          ) : allowManualEntry ? (
+            <button
+              onClick={enterManualMode}
+              disabled={disabled}
+              className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground active:scale-95 disabled:opacity-40 whitespace-nowrap"
+            >手动输入</button>
+          ) : null}
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 {
-  "version": "1.1.10",
-  "versionCode": 12,
+  "version": "1.1.11",
+  "versionCode": 13,
   "filename": "app-release.apk",
-  "releaseNote": "统一极序 Flow 品牌名；去掉登录页多余提示；更新弹窗改为浅色风格。",
-  "publishedAt": "2026-03-30T20:40:00.000Z"
+  "releaseNote": "简化通用扫码框样式，减少多余提示，更贴近收货订单等页面的轻量操作感。",
+  "publishedAt": "2026-03-30T20:55:00.000Z"
 }
