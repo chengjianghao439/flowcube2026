@@ -1,34 +1,16 @@
-import { useEffect, useState } from 'react'
-import { Capacitor } from '@capacitor/core'
+import { useState } from 'react'
 import { useLogin } from '@/hooks/useAuth'
-import {
-  isPdaViteLiveHost,
-  resolveHealthyPdaApiOrigin,
-} from '@/lib/pdaRuntime'
 import { loadSavedLoginForm } from '@/lib/loginCredentials'
 
 export default function PdaLoginPage() {
   const { mutate: login, isPending, error } = useLogin('/pda')
 
-  const showApiConfig = Capacitor.isNativePlatform() && !isPdaViteLiveHost()
-
-  const [apiOrigin, setApiOrigin] = useState('')
   const [username, setUsername] = useState(() => loadSavedLoginForm().username)
   const [password, setPassword] = useState(() => loadSavedLoginForm().password)
   const [rememberPassword, setRememberPassword] = useState(
     () => loadSavedLoginForm().rememberPassword,
   )
   const [showPassword, setShowPassword] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    void resolveHealthyPdaApiOrigin().then((resolvedOrigin) => {
-      if (!cancelled) setApiOrigin(resolvedOrigin)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -44,7 +26,7 @@ export default function PdaLoginPage() {
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/20">
           <span className="material-symbols-outlined text-[32px]">barcode_scanner</span>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">极序 Flow PDA</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">极序 Flow</h1>
         <p className="text-sm text-muted-foreground">仓库作业终端</p>
       </div>
 
@@ -61,20 +43,6 @@ export default function PdaLoginPage() {
         )}
 
         <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-
-          {showApiConfig && (
-          <div className="space-y-2 rounded-xl border border-amber-600/40 bg-amber-950/30 px-4 py-3">
-              <p className="text-xs font-medium text-amber-900">独立 App：服务器地址已内置</p>
-              <p className="text-[11px] leading-snug text-amber-800/80">
-                当前连接后端：
-                <span className="ml-1 font-mono text-amber-950">{apiOrigin || '未写入构建配置'}</span>
-              </p>
-              <p className="text-[11px] leading-snug text-amber-800/70">
-                PDA 仅使用安装包内置的服务器地址。标签打印机会在登录后自动读取后端的容器标签绑定，无需在设备上手动填写。
-              </p>
-            </div>
-          )}
-
           {/* 账号 */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="pda-username">
@@ -171,21 +139,6 @@ export default function PdaLoginPage() {
 
         </form>
       </div>
-
-      <details className="mt-6 w-full max-w-sm rounded-2xl border border-border bg-card/80 px-4 py-3 text-left shadow-sm">
-        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-          独立 App 连不上服务器？
-        </summary>
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          <strong className="text-foreground">独立 APK</strong>：前端和服务器地址都已打进安装包。若服务器地址变化，需要重新打包并重新安装新 APK。
-        </p>
-      </details>
-
-      {/* 底部提示 */}
-      <p className="mt-6 text-xs text-muted-foreground">
-        ERP 管理后台请访问{' '}
-        <a href="/login" className="text-foreground underline hover:text-primary">/login</a>
-      </p>
     </div>
   )
 }

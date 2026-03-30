@@ -1,7 +1,7 @@
 {
-  "version": "1.1.9",
-  "versionCode": 11,
+  "version": "1.1.10",
+  "versionCode": 12,
   "filename": "app-release.apk",
-  "releaseNote": "优化通用扫码提示框样式，避免窄屏溢出；修复 PDA 登录页残留深色主题。",
-  "publishedAt": "2026-03-30T20:20:00.000Z"
+  "releaseNote": "统一极序 Flow 品牌名；去掉登录页多余提示；更新弹窗改为浅色风格。",
+  "publishedAt": "2026-03-30T20:40:00.000Z"
 }

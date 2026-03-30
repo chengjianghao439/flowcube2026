@@ -3,7 +3,7 @@ import { CapacitorConfig } from '@capacitor/cli'
 /** PDA 仅使用内置 webDir(dist) 资源。 */
 const config: CapacitorConfig = {
   appId: 'com.flowcube.pda',
-  appName: 'FlowCube PDA',
+  appName: '极序 Flow',
   webDir: 'dist',
 
   android: {

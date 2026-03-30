@@ -8,7 +8,7 @@ const STORAGE_KEY = 'pda_onboarded'
 const STEPS = [
   {
     icon: '👋',
-    title: '欢迎使用 极序 Flow PDA',
+    title: '欢迎使用 极序 Flow',
     desc: '这是一套专为仓库设计的手持终端系统，帮助您快速完成拣货、收货、打包、出库作业。',
     hint: '跟着引导，5 分钟学会所有操作',
   },
