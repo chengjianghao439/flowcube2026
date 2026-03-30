@@ -37,21 +37,21 @@ export default function PdaLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-6 font-display">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 font-display">
 
       {/* Logo */}
       <div className="mb-8 flex flex-col items-center gap-2">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/30">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/20">
           <span className="material-symbols-outlined text-[32px]">barcode_scanner</span>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">极序 Flow PDA</h1>
-        <p className="text-sm text-slate-400">仓库作业终端</p>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">极序 Flow PDA</h1>
+        <p className="text-sm text-muted-foreground">仓库作业终端</p>
       </div>
 
       {/* Card */}
-      <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-800 p-8 shadow-2xl">
+      <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 shadow-xl shadow-slate-200/70">
 
-        <h2 className="mb-6 text-center text-xl font-bold text-white">操作员登录</h2>
+        <h2 className="mb-6 text-center text-xl font-bold text-foreground">操作员登录</h2>
 
         {/* 错误提示 */}
         {error && (
@@ -63,13 +63,13 @@ export default function PdaLoginPage() {
         <form className="space-y-5" onSubmit={handleSubmit} noValidate>
 
           {showApiConfig && (
-            <div className="space-y-2 rounded-xl border border-amber-600/40 bg-amber-950/30 px-4 py-3">
-              <p className="text-xs font-medium text-amber-200/90">独立 App：服务器地址已内置</p>
-              <p className="text-[11px] leading-snug text-amber-200/70">
+          <div className="space-y-2 rounded-xl border border-amber-600/40 bg-amber-950/30 px-4 py-3">
+              <p className="text-xs font-medium text-amber-900">独立 App：服务器地址已内置</p>
+              <p className="text-[11px] leading-snug text-amber-800/80">
                 当前连接后端：
-                <span className="ml-1 font-mono text-amber-100/90">{apiOrigin || '未写入构建配置'}</span>
+                <span className="ml-1 font-mono text-amber-950">{apiOrigin || '未写入构建配置'}</span>
               </p>
-              <p className="text-[11px] leading-snug text-amber-200/60">
+              <p className="text-[11px] leading-snug text-amber-800/70">
                 PDA 仅使用安装包内置的服务器地址。标签打印机会在登录后自动读取后端的容器标签绑定，无需在设备上手动填写。
               </p>
             </div>
@@ -77,11 +77,11 @@ export default function PdaLoginPage() {
 
           {/* 账号 */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-300" htmlFor="pda-username">
+            <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="pda-username">
               登录账号
             </label>
             <div className="relative">
-              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[20px] text-slate-500">
+              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[20px] text-muted-foreground">
                 person
               </span>
               <input
@@ -93,18 +93,18 @@ export default function PdaLoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isPending}
-                className="w-full rounded-xl border border-slate-600 bg-slate-700/60 py-3 pl-10 pr-4 text-white outline-none placeholder:text-slate-500 transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+                className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-4 text-foreground outline-none placeholder:text-muted-foreground transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
               />
             </div>
           </div>
 
           {/* 密码 */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-300" htmlFor="pda-password">
+            <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="pda-password">
               登录密码
             </label>
             <div className="relative">
-              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[20px] text-slate-500">
+              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[20px] text-muted-foreground">
                 lock
               </span>
               <input
@@ -115,12 +115,12 @@ export default function PdaLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isPending}
-                className="w-full rounded-xl border border-slate-600 bg-slate-700/60 py-3 pl-10 pr-12 text-white outline-none placeholder:text-slate-500 transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+                className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-12 text-foreground outline-none placeholder:text-muted-foreground transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
               />
               <button
                 type="button"
                 tabIndex={-1}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 transition-colors hover:text-slate-300"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => setShowPassword((v) => !v)}
               >
                 <span className="material-symbols-outlined text-[20px]">
@@ -137,13 +137,13 @@ export default function PdaLoginPage() {
               checked={rememberPassword}
               onChange={(e) => setRememberPassword(e.target.checked)}
               disabled={isPending}
-              className="h-4 w-4 rounded border-slate-500 bg-slate-700 text-primary focus:ring-primary"
+              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-primary"
             />
-            <label htmlFor="pda-remember-password" className="text-sm text-slate-400">
+            <label htmlFor="pda-remember-password" className="text-sm text-muted-foreground">
               在本机记住密码
             </label>
           </div>
-          <p className="text-[11px] leading-snug text-slate-500">
+          <p className="text-[11px] leading-snug text-muted-foreground">
             退出或关闭应用后需重新登录；勾选则保存密码便于下次填写。
           </p>
 
@@ -172,19 +172,19 @@ export default function PdaLoginPage() {
         </form>
       </div>
 
-      <details className="mt-6 w-full max-w-sm rounded-xl border border-slate-700/80 bg-slate-900/40 px-4 py-3 text-left">
-        <summary className="cursor-pointer text-xs font-medium text-slate-400">
+      <details className="mt-6 w-full max-w-sm rounded-2xl border border-border bg-card/80 px-4 py-3 text-left shadow-sm">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
           独立 App 连不上服务器？
         </summary>
-        <p className="mt-3 text-xs leading-relaxed text-slate-500">
-          <strong className="text-slate-400">独立 APK</strong>：前端和服务器地址都已打进安装包。若服务器地址变化，需要重新打包并重新安装新 APK。
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+          <strong className="text-foreground">独立 APK</strong>：前端和服务器地址都已打进安装包。若服务器地址变化，需要重新打包并重新安装新 APK。
         </p>
       </details>
 
       {/* 底部提示 */}
-      <p className="mt-6 text-xs text-slate-600">
+      <p className="mt-6 text-xs text-muted-foreground">
         ERP 管理后台请访问{' '}
-        <a href="/login" className="text-slate-500 underline hover:text-slate-400">/login</a>
+        <a href="/login" className="text-foreground underline hover:text-primary">/login</a>
       </p>
     </div>
   )

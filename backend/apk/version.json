@@ -1,7 +1,7 @@
 {
-  "version": "1.1.8",
-  "versionCode": 10,
+  "version": "1.1.9",
+  "versionCode": 11,
   "filename": "app-release.apk",
-  "releaseNote": "修复 PDA 页面无法下滑，恢复长页面内容滚动；保留服务器连接与应用内更新。",
-  "publishedAt": "2026-03-30T19:55:00.000Z"
+  "releaseNote": "优化通用扫码提示框样式，避免窄屏溢出；修复 PDA 登录页残留深色主题。",
+  "publishedAt": "2026-03-30T20:20:00.000Z"
 }

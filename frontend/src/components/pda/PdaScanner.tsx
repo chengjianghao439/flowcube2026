@@ -78,77 +78,80 @@ export default function PdaScanner({
     <div className="space-y-2">
 
       {/* ── 扫码状态显示区 ── */}
-      <div className={`flex items-center gap-3 rounded-2xl border-2 px-4 py-4 transition-all ${
+      <div className={`flex flex-col gap-3 rounded-2xl border px-4 py-4 shadow-sm transition-all ${
         flash
-          ? 'border-blue-400 bg-blue-950/30'
+          ? 'border-emerald-300 bg-emerald-50'
           : disabled
-          ? 'border-gray-700 bg-gray-900/30'
+          ? 'border-slate-200 bg-slate-100'
           : manualMode
-          ? 'border-amber-500 bg-amber-950/20'
-          : 'border-gray-600 bg-gray-900/20'
+          ? 'border-amber-300 bg-amber-50'
+          : 'border-border bg-card'
       }`}>
-        {/* 状态图标 */}
-        <span className="text-2xl shrink-0">
-          {disabled ? '⏳' : manualMode ? '⌨️' : flash ? '✅' : '📷'}
-        </span>
+        <div className="flex items-start gap-3">
+          <span className="shrink-0 rounded-2xl bg-background px-3 py-2 text-2xl shadow-sm">
+            {disabled ? '⏳' : manualMode ? '⌨️' : flash ? '✅' : '📷'}
+          </span>
 
-        {/* 状态文字 */}
-        <div className="flex-1 min-w-0">
-          {manualMode ? (
-            // 手动输入框（data-scanner-manual 标记，usePdaScanner 不拦截此 input 的事件）
-            <input
-              ref={manualInputRef}
-              data-scanner-manual="true"
-              value={manualValue}
-              onChange={e => setManualValue(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { e.preventDefault(); commitManual() }
-                if (e.key === 'Escape') exitManualMode()
-              }}
-              placeholder="输入条码后按回车"
-              className="w-full bg-transparent text-base text-white placeholder-amber-600/60 outline-none"
-              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
-            />
-          ) : (
-            <p className={`text-base truncate ${
-              flash ? 'text-blue-300 font-semibold' : 'text-gray-400'
-            }`}>
-              {flash && lastCode ? `✓ ${lastCode}` : disabled ? '处理中…' : placeholder}
-            </p>
-          )}
+          <div className="min-w-0 flex-1">
+            {manualMode ? (
+              <input
+                ref={manualInputRef}
+                data-scanner-manual="true"
+                value={manualValue}
+                onChange={e => setManualValue(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitManual() }
+                  if (e.key === 'Escape') exitManualMode()
+                }}
+                placeholder="输入条码后按回车"
+                className="w-full rounded-xl border border-amber-200 bg-white px-3 py-3 text-base text-foreground outline-none placeholder:text-amber-700/50 focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+              />
+            ) : (
+              <>
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  {disabled ? 'Processing' : manualMode ? 'Manual' : 'Scanner Ready'}
+                </p>
+                <p className={`mt-1 break-words text-sm leading-6 ${
+                  flash ? 'font-semibold text-emerald-700' : disabled ? 'text-slate-500' : 'text-foreground'
+                }`}>
+                  {flash && lastCode ? `已识别：${lastCode}` : disabled ? '正在处理扫码结果…' : placeholder}
+                </p>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* 操作按钮 */}
-        <div className="shrink-0 flex items-center gap-2">
-          {manualMode ? (
-            <>
-              {manualValue.trim() && (
+        <div className="flex flex-wrap items-center gap-2">
+          {showTypeHint && !disabled && !manualMode && (
+            <span className="inline-flex max-w-full items-center rounded-full bg-muted px-3 py-1 text-xs leading-5 text-muted-foreground">
+              {allowManualEntry ? '对准条码直接扫描，无需点击输入框' : '请使用扫码枪扫描容器条码，不支持手动填写'}
+            </span>
+          )}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {manualMode ? (
+              <>
+                {manualValue.trim() && (
+                  <button
+                    onClick={commitManual}
+                    className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground active:scale-95"
+                  >确认</button>
+                )}
                 <button
-                  onClick={commitManual}
-                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white active:scale-95"
-                >确认</button>
-              )}
+                  onClick={exitManualMode}
+                  className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground active:scale-95"
+                >取消</button>
+              </>
+            ) : allowManualEntry ? (
               <button
-                onClick={exitManualMode}
-                className="rounded-xl bg-gray-700 px-3 py-2 text-sm text-gray-300 active:scale-95"
-              >取消</button>
-            </>
-          ) : allowManualEntry ? (
-            <button
-              onClick={enterManualMode}
-              disabled={disabled}
-              className="rounded-xl bg-gray-700 px-3 py-2 text-xs text-gray-300 active:scale-95 disabled:opacity-40 whitespace-nowrap"
-            >手动输入</button>
-          ) : null}
+                onClick={enterManualMode}
+                disabled={disabled}
+                className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground active:scale-95 disabled:opacity-40 whitespace-nowrap"
+              >手动输入</button>
+            ) : null}
+          </div>
         </div>
       </div>
-
-      {/* 提示文字 */}
-      {showTypeHint && !disabled && !manualMode && (
-        <p className="text-center text-xs text-gray-600">
-          {allowManualEntry ? '对准条码扫描即可，无需点击' : '请使用扫码枪，勿手填容器 ID'}
-        </p>
-      )}
     </div>
   )
 }
