@@ -127,7 +127,7 @@ public class PdaAppUpdatePlugin extends Plugin {
                     Uri.parse("package:" + getContext().getPackageName())
                 );
                 settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                getActivity().runOnUiThread(() -> startActivity(settingsIntent));
+                getActivity().runOnUiThread(() -> getActivity().startActivity(settingsIntent));
                 emitProgress("permission_required", 100, "请允许安装未知来源应用后，再次点击更新");
                 return;
             }
@@ -146,7 +146,7 @@ public class PdaAppUpdatePlugin extends Plugin {
 
         getActivity().runOnUiThread(() -> {
             emitProgress("installing", 100, "已打开安装界面，请按系统提示完成安装");
-            startActivity(installIntent);
+            getActivity().startActivity(installIntent);
         });
     }
 
