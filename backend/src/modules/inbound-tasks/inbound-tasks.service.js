@@ -35,15 +35,35 @@ const fmt = r => ({
 })
 
 const fmtItem = r => ({
-  id:          r.id,
-  taskId:      r.task_id,
-  productId:   r.product_id,
-  productCode: r.product_code || null,
-  productName: r.product_name,
-  unit:        r.unit || null,
-  orderedQty:  Number(r.ordered_qty),
-  receivedQty: Number(r.received_qty),
-  putawayQty:  Number(r.putaway_qty),
+  id:              r.id,
+  taskId:          r.task_id,
+  purchaseOrderId: r.purchase_order_id != null ? Number(r.purchase_order_id) : null,
+  purchaseOrderNo: r.purchase_order_no || null,
+  purchaseItemId:  r.purchase_item_id != null ? Number(r.purchase_item_id) : null,
+  productId:       r.product_id,
+  productCode:     r.product_code || null,
+  productName:     r.product_name,
+  unit:            r.unit || null,
+  orderedQty:      Number(r.ordered_qty),
+  receivedQty:     Number(r.received_qty),
+  putawayQty:      Number(r.putaway_qty),
+})
+
+const fmtPurchasableItem = r => ({
+  purchaseItemId:  Number(r.purchase_item_id),
+  purchaseOrderId: Number(r.purchase_order_id),
+  purchaseOrderNo: r.purchase_order_no,
+  supplierId:      Number(r.supplier_id),
+  supplierName:    r.supplier_name,
+  warehouseId:     Number(r.warehouse_id),
+  warehouseName:   r.warehouse_name,
+  productId:       Number(r.product_id),
+  productCode:     r.product_code,
+  productName:     r.product_name,
+  unit:            r.unit || null,
+  orderedQty:      Number(r.ordered_qty),
+  assignedQty:     Number(r.assigned_qty),
+  remainingQty:    Number(r.remaining_qty),
 })
 
 function fmtContainer(r) {
@@ -93,6 +113,64 @@ async function findById(id) {
   return task
 }
 
+async function findPurchasableItems({ supplierId, keyword = '' }) {
+  const supplierIdN = Number(supplierId)
+  if (!Number.isFinite(supplierIdN) || supplierIdN <= 0) throw new AppError('请选择供应商', 400)
+
+  const like = `%${keyword}%`
+  const [rows] = await pool.query(
+    `SELECT
+        poi.id AS purchase_item_id,
+        po.id AS purchase_order_id,
+        po.order_no AS purchase_order_no,
+        po.supplier_id,
+        po.supplier_name,
+        po.warehouse_id,
+        po.warehouse_name,
+        poi.product_id,
+        poi.product_code,
+        poi.product_name,
+        poi.unit,
+        poi.quantity AS ordered_qty,
+        COALESCE(SUM(
+          CASE
+            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
+            ELSE iti.ordered_qty
+          END
+        ), 0) AS assigned_qty,
+        poi.quantity - COALESCE(SUM(
+          CASE
+            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
+            ELSE iti.ordered_qty
+          END
+        ), 0) AS remaining_qty
+      FROM purchase_order_items poi
+      INNER JOIN purchase_orders po
+        ON po.id = poi.order_id
+       AND po.deleted_at IS NULL
+       AND po.status = 2
+      LEFT JOIN inbound_task_items iti
+        ON iti.purchase_item_id = poi.id
+      LEFT JOIN inbound_tasks it
+        ON it.id = iti.task_id
+      WHERE po.supplier_id = ?
+        AND (
+          poi.product_code LIKE ?
+          OR poi.product_name LIKE ?
+          OR po.order_no LIKE ?
+        )
+      GROUP BY
+        poi.id, po.id, po.order_no, po.supplier_id, po.supplier_name,
+        po.warehouse_id, po.warehouse_name,
+        poi.product_id, poi.product_code, poi.product_name, poi.unit, poi.quantity
+      HAVING remaining_qty > 0
+      ORDER BY po.created_at ASC, poi.id ASC`,
+    [supplierIdN, like, like, like],
+  )
+
+  return rows.map(fmtPurchasableItem)
+}
+
 /**
  * 按采购单创建入库任务（采购单须已确认 status=2，且不存在未完结任务）
  */
@@ -121,11 +199,139 @@ async function createFromPoId(purchaseOrderId) {
     const taskId = r.insertId
     for (const item of order.items) {
       await conn.query(
-        `INSERT INTO inbound_task_items (task_id, product_id, product_code, product_name, unit, ordered_qty)
-         VALUES (?,?,?,?,?,?)`,
-        [taskId, item.productId, item.productCode, item.productName, item.unit, item.quantity],
+        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, unit, ordered_qty)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+        [taskId, order.id, order.orderNo, item.id, item.productId, item.productCode, item.productName, item.unit, item.quantity],
       )
     }
+    await conn.commit()
+    return { taskId, taskNo }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
+async function createManualTask({ supplierId, supplierName, remark, items }) {
+  const supplierIdN = Number(supplierId)
+  if (!Number.isFinite(supplierIdN) || supplierIdN <= 0) throw new AppError('请选择供应商', 400)
+  if (!supplierName?.trim()) throw new AppError('供应商名称不能为空', 400)
+  if (!Array.isArray(items) || items.length === 0) throw new AppError('请至少选择一条采购明细', 400)
+
+  const normalized = items.map(item => ({
+    purchaseItemId: Number(item.purchaseItemId),
+    qty: Number(item.qty),
+  }))
+
+  if (normalized.some(item => !Number.isFinite(item.purchaseItemId) || item.purchaseItemId <= 0)) {
+    throw new AppError('采购明细无效', 400)
+  }
+  if (normalized.some(item => !Number.isFinite(item.qty) || item.qty <= 0)) {
+    throw new AppError('收货数量必须大于 0', 400)
+  }
+
+  const purchaseItemIds = [...new Set(normalized.map(item => item.purchaseItemId))]
+  const placeholders = purchaseItemIds.map(() => '?').join(',')
+  const [rows] = await pool.query(
+    `SELECT
+        poi.id AS purchase_item_id,
+        po.id AS purchase_order_id,
+        po.order_no AS purchase_order_no,
+        po.supplier_id,
+        po.supplier_name,
+        po.warehouse_id,
+        po.warehouse_name,
+        poi.product_id,
+        poi.product_code,
+        poi.product_name,
+        poi.unit,
+        poi.quantity AS ordered_qty,
+        COALESCE(SUM(
+          CASE
+            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
+            ELSE iti.ordered_qty
+          END
+        ), 0) AS assigned_qty
+      FROM purchase_order_items poi
+      INNER JOIN purchase_orders po
+        ON po.id = poi.order_id
+       AND po.deleted_at IS NULL
+       AND po.status = 2
+      LEFT JOIN inbound_task_items iti
+        ON iti.purchase_item_id = poi.id
+      LEFT JOIN inbound_tasks it
+        ON it.id = iti.task_id
+      WHERE po.supplier_id = ?
+        AND poi.id IN (${placeholders})
+      GROUP BY
+        poi.id, po.id, po.order_no, po.supplier_id, po.supplier_name,
+        po.warehouse_id, po.warehouse_name,
+        poi.product_id, poi.product_code, poi.product_name, poi.unit, poi.quantity`,
+    [supplierIdN, ...purchaseItemIds],
+  )
+
+  if (rows.length !== purchaseItemIds.length) throw new AppError('存在不可用的采购明细，请刷新后重试', 400)
+
+  const candidateMap = new Map(rows.map(row => [Number(row.purchase_item_id), fmtPurchasableItem({
+    ...row,
+    remaining_qty: Number(row.ordered_qty) - Number(row.assigned_qty),
+  })]))
+
+  const warehouseIds = new Set()
+  const taskItems = normalized.map(item => {
+    const candidate = candidateMap.get(item.purchaseItemId)
+    if (!candidate) throw new AppError('存在不可用的采购明细，请刷新后重试', 400)
+    if (candidate.remainingQty < item.qty) {
+      throw new AppError(`${candidate.productName} 超出可建单数量，最多还能建 ${candidate.remainingQty}`, 400)
+    }
+    warehouseIds.add(candidate.warehouseId)
+    return {
+      ...candidate,
+      qty: item.qty,
+    }
+  })
+
+  if (warehouseIds.size !== 1) throw new AppError('同一张收货单仅支持同仓到货，请按仓库分别建单', 400)
+
+  const warehouseId = taskItems[0].warehouseId
+  const warehouseName = taskItems[0].warehouseName
+  const purchaseOrders = [...new Set(taskItems.map(item => `${item.purchaseOrderId}:${item.purchaseOrderNo}`))]
+  const headerPurchaseOrderId = purchaseOrders.length === 1 ? taskItems[0].purchaseOrderId : null
+  const headerPurchaseOrderNo = purchaseOrders.length === 1
+    ? taskItems[0].purchaseOrderNo
+    : `${purchaseOrders.length} 单混合`
+
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const taskNo = await genTaskNo(conn)
+    const [r] = await conn.query(
+      `INSERT INTO inbound_tasks (task_no, purchase_order_id, purchase_order_no, supplier_name, warehouse_id, warehouse_name, status, remark)
+       VALUES (?,?,?,?,?,?,1,?)`,
+      [taskNo, headerPurchaseOrderId, headerPurchaseOrderNo, supplierName.trim(), warehouseId, warehouseName, remark?.trim() || null],
+    )
+    const taskId = r.insertId
+
+    for (const item of taskItems) {
+      await conn.query(
+        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, unit, ordered_qty)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+        [
+          taskId,
+          item.purchaseOrderId,
+          item.purchaseOrderNo,
+          item.purchaseItemId,
+          item.productId,
+          item.productCode,
+          item.productName,
+          item.unit,
+          item.qty,
+        ],
+      )
+    }
+
     await conn.commit()
     return { taskId, taskNo }
   } catch (e) {
@@ -160,22 +366,34 @@ function distributeQtyToLines(taskItems, productId, qty) {
 }
 
 /**
- * 逐包收货：单次请求只收一包，生成一个待上架容器（status=PENDING_PUTAWAY=4），并尝试排队打印标签
- * body: { productId, qty } — qty 为本包数量，累计 received 不得超过 ordered
+ * 收货：支持旧版单包 { productId, qty }，也支持同商品多箱 { productId, packages:[{ qty }] }
  */
-async function receive(taskId, { productId, qty }, { userId, tenantId = 0 } = {}) {
+async function receive(taskId, payload, { userId, tenantId = 0 } = {}) {
+  const { productId, qty, packages: rawPackages } = payload
   const productIdN = Number(productId)
-  const qtyN = Number(qty)
+  const packages = Array.isArray(rawPackages) && rawPackages.length
+    ? rawPackages
+    : [{ qty }]
+  const normalizedPackages = packages.map((pkg, index) => ({
+    lineNo: index + 1,
+    qty: Number(pkg.qty),
+  }))
+  const totalQty = normalizedPackages.reduce((sum, pkg) => sum + pkg.qty, 0)
+
   if (!Number.isFinite(productIdN) || productIdN <= 0) throw new AppError('请选择有效商品', 400)
-  if (!Number.isFinite(qtyN) || qtyN <= 0) throw new AppError('数量必须大于 0', 400)
+  if (!normalizedPackages.length) throw new AppError('请至少填写一箱数量', 400)
+  if (normalizedPackages.some(pkg => !Number.isFinite(pkg.qty) || pkg.qty <= 0)) throw new AppError('箱数量必须大于 0', 400)
 
   const conn = await pool.getConnection()
   let result = {
     containerCode: null,
     containerId: null,
     productName: '',
-    qty: qtyN,
+    qty: totalQty,
+    totalQty,
     printJobId: null,
+    printJobIds: [],
+    containers: [],
   }
   try {
     await conn.beginTransaction()
@@ -202,7 +420,7 @@ async function receive(taskId, { productId, qty }, { userId, tenantId = 0 } = {}
     const warehouseId = Number(taskRow.warehouse_id)
     const taskNo = taskRow.task_no
 
-    const updates = distributeQtyToLines(taskItems, productIdN, qtyN)
+    const updates = distributeQtyToLines(taskItems, productIdN, totalQty)
     for (const u of updates) {
       await conn.query(
         'UPDATE inbound_task_items SET received_qty = received_qty + ? WHERE id = ?',
@@ -216,20 +434,28 @@ async function receive(taskId, { productId, qty }, { userId, tenantId = 0 } = {}
     const unit = line?.unit || null
     const productName = line?.productName || ''
 
-    const { containerId, barcode } = await createContainer(conn, {
-      productId:       productIdN,
-      warehouseId,
-      initialQty:      qtyN,
-      unit,
-      locationId:      null,
-      inboundTaskId:   taskId,
-      containerStatus: CONTAINER_STATUS.PENDING_PUTAWAY,
-      sourceType:      SOURCE_TYPE.INBOUND_TASK,
-      sourceRefId:     taskId,
-      sourceRefType:   'inbound_task',
-      sourceRefNo:     taskNo,
-      remark:          `收货待上架 ${taskNo}`,
-    })
+    const containers = []
+    for (const pkg of normalizedPackages) {
+      const { containerId, barcode } = await createContainer(conn, {
+        productId:       productIdN,
+        warehouseId,
+        initialQty:      pkg.qty,
+        unit,
+        locationId:      null,
+        inboundTaskId:   taskId,
+        containerStatus: CONTAINER_STATUS.PENDING_PUTAWAY,
+        sourceType:      SOURCE_TYPE.INBOUND_TASK,
+        sourceRefId:     taskId,
+        sourceRefType:   'inbound_task',
+        sourceRefNo:     taskNo,
+        remark:          `收货待上架 ${taskNo} 第${pkg.lineNo}箱`,
+      })
+      containers.push({
+        containerId,
+        containerCode: barcode,
+        qty: pkg.qty,
+      })
+    }
 
     const [updatedItems] = await conn.query('SELECT * FROM inbound_task_items WHERE task_id = ?', [taskId])
     const allReceived = updatedItems.every(i => Number(i.received_qty) >= Number(i.ordered_qty))
@@ -242,12 +468,15 @@ async function receive(taskId, { productId, qty }, { userId, tenantId = 0 } = {}
     await conn.commit()
 
     result = {
-      containerCode: barcode,
-      containerId,
+      containerCode: containers[0]?.containerCode ?? null,
+      containerId: containers[0]?.containerId ?? null,
       productName,
-      qty: qtyN,
+      qty: totalQty,
+      totalQty,
       warehouseId,
       printJobId: null,
+      printJobIds: [],
+      containers,
     }
   } catch (e) {
     await conn.rollback()
@@ -258,18 +487,21 @@ async function receive(taskId, { productId, qty }, { userId, tenantId = 0 } = {}
 
   try {
     const printJobs = require('../print-jobs/print-jobs.service')
-    const job = await printJobs.enqueueContainerLabelJob({
-      type: 'container_label',
-      tenantId: Number(tenantId) >= 0 ? Number(tenantId) : 0,
-      warehouseId: result.warehouseId,
-      data: {
-        container_code: result.containerCode,
-        product_name:   result.productName,
-        qty:            result.qty,
-      },
-      createdBy: userId ?? null,
-    })
-    if (job?.id) result.printJobId = job.id
+    for (const container of result.containers) {
+      const job = await printJobs.enqueueContainerLabelJob({
+        type: 'container_label',
+        tenantId: Number(tenantId) >= 0 ? Number(tenantId) : 0,
+        warehouseId: result.warehouseId,
+        data: {
+          container_code: container.containerCode,
+          product_name:   result.productName,
+          qty:            container.qty,
+        },
+        createdBy: userId ?? null,
+      })
+      if (job?.id) result.printJobIds.push(job.id)
+    }
+    result.printJobId = result.printJobIds[0] ?? null
   } catch (e) {
     logger.warn(`[inbound receive] 打印队列失败（收货已成功）: ${e.message}`)
   }
@@ -431,21 +663,53 @@ async function tryFinishTask(conn, taskId) {
 
   await conn.query('UPDATE inbound_tasks SET status = 4 WHERE id = ? AND status = 3', [taskId])
 
-  const [[task]] = await conn.query(
-    'SELECT purchase_order_id FROM inbound_tasks WHERE id = ?',
+  const [poRows] = await conn.query(
+    `SELECT DISTINCT purchase_order_id
+     FROM inbound_task_items
+     WHERE task_id = ? AND purchase_order_id IS NOT NULL`,
     [taskId],
   )
-  if (task?.purchase_order_id) {
-    await conn.query('UPDATE purchase_orders SET status = 3 WHERE id = ? AND status = 2', [task.purchase_order_id])
-    const [[po]] = await conn.query('SELECT * FROM purchase_orders WHERE id = ?', [task.purchase_order_id])
-    if (po) {
-      await conn.query(
-        `INSERT IGNORE INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,due_date)
-         VALUES (1,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL 30 DAY))`,
-        [po.id, po.order_no, po.supplier_name, Number(po.total_amount), Number(po.total_amount)],
-      )
-    }
+
+  for (const row of poRows) {
+    await syncPurchaseOrderStatus(conn, Number(row.purchase_order_id))
   }
+}
+
+async function syncPurchaseOrderStatus(conn, purchaseOrderId) {
+  if (!Number.isFinite(purchaseOrderId) || purchaseOrderId <= 0) return
+
+  const [rows] = await conn.query(
+    `SELECT
+        poi.id,
+        poi.quantity,
+        COALESCE(SUM(
+          CASE
+            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
+            ELSE iti.putaway_qty
+          END
+        ), 0) AS putaway_qty
+      FROM purchase_order_items poi
+      LEFT JOIN inbound_task_items iti
+        ON iti.purchase_item_id = poi.id
+      LEFT JOIN inbound_tasks it
+        ON it.id = iti.task_id
+      WHERE poi.order_id = ?
+      GROUP BY poi.id, poi.quantity`,
+    [purchaseOrderId],
+  )
+
+  const completed = rows.length > 0 && rows.every(row => Number(row.putaway_qty) >= Number(row.quantity))
+  if (!completed) return
+
+  await conn.query('UPDATE purchase_orders SET status = 3 WHERE id = ? AND status = 2', [purchaseOrderId])
+  const [[po]] = await conn.query('SELECT * FROM purchase_orders WHERE id = ?', [purchaseOrderId])
+  if (!po) return
+
+  await conn.query(
+    `INSERT IGNORE INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,due_date)
+     VALUES (1,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL 30 DAY))`,
+    [po.id, po.order_no, po.supplier_name, Number(po.total_amount), Number(po.total_amount)],
+  )
 }
 
 /** 刷新待上架超时标记（按 putaway_deadline_at 或创建超过 24h） */
@@ -514,7 +778,9 @@ async function cancel(taskId) {
 module.exports = {
   findAll,
   findById,
+  findPurchasableItems,
   createFromPoId,
+  createManualTask,
   receive,
   putaway,
   listContainers,

@@ -9,9 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePurchaseList, useConfirmPurchase, useCancelPurchase, usePurchaseDetail } from '@/hooks/usePurchase'
-import { useCreateInboundTask } from '@/hooks/useInboundTasks'
-// PurchaseFormDialog 软移除：保留代码，不再渲染（改为独立页面 /purchase/new）
-import PurchaseFormDialog from './components/PurchaseFormDialog'
 import PrintOrderDialog from '@/components/shared/PrintOrderDialog'
 import { downloadExport } from '@/lib/exportDownload'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -52,7 +49,6 @@ export default function PurchasePage() {
 
   const { data, isLoading } = usePurchaseList({ page, pageSize: 20, keyword, status: statusFilter || undefined })
   const confirm = useConfirmPurchase()
-  const createInbound = useCreateInboundTask()
   const cancel = useCancelPurchase()
   const { data: printDetail } = usePurchaseDetail(printId || 0)
 
@@ -68,18 +64,15 @@ export default function PurchasePage() {
     setConfirmState(s => ({ ...s, open: false }))
   }
 
-  const confirmCreateInboundLoading =
-    createInbound.isPending && confirmState.open && confirmState.title === '创建收货订单'
-
   const selectedList = data?.list.filter(r => selectedIds.has(r.id)) || []
 
   const batchConfirm = async () => {
     if (!selectedList.length) return
     const canConfirm = selectedList.filter(r => r.status === 1)
-    if (!canConfirm.length) { toast.warning('所选单据中没有可确认的草稿'); return }
+    if (!canConfirm.length) { toast.warning('所选单据中没有可提交的草稿'); return }
     openConfirm(
-      '批量确认采购单',
-      `确认批量确认 ${canConfirm.length} 笔采购单？`,
+      '批量提交采购单',
+      `确认批量提交 ${canConfirm.length} 笔采购单？`,
       async () => {
         closeConfirm()
         setBatchLoading(true)
@@ -127,42 +120,7 @@ export default function PurchasePage() {
             {r.status === 1 && (
               <Button size="sm" variant="outline" disabled={confirm.isPending}
                 onClick={() => confirm.mutate(r.id)}>
-                确认
-              </Button>
-            )}
-            {r.status === 2 && r.openInboundTaskId && r.openInboundTaskNo && (
-              <Button size="sm" variant="outline"
-                onClick={() => {
-                  const path = `/inbound-tasks/${r.openInboundTaskId}`
-                  addTab({ key: path, title: r.openInboundTaskNo!, path })
-                  navigate(path)
-                }}>
-                {r.openInboundTaskNo}
-              </Button>
-            )}
-            {r.status === 2 && !r.openInboundTaskId && (
-              <Button size="sm" disabled={createInbound.isPending}
-                onClick={() => openConfirm(
-                  '创建收货订单',
-                  '将为此采购单生成收货订单（入库任务）；须收货生成容器并上架后才计入库存。',
-                  () => {
-                    createInbound.mutate(r.id, {
-                      onSuccess: (d) => {
-                        closeConfirm()
-                        toast.success(`收货订单 ${d.taskNo} 已创建`)
-                        const path = `/inbound-tasks/${d.taskId}`
-                        addTab({ key: path, title: d.taskNo, path })
-                        navigate(path)
-                      },
-                      onError: (e: unknown) => {
-                        const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'
-                        toast.error(msg)
-                      },
-                    })
-                  },
-                  { confirmText: '继续' },
-                )}>
-                创建收货订单
+                提交
               </Button>
             )}
             {(r.status === 1 || r.status === 2) && (
@@ -186,7 +144,7 @@ export default function PurchasePage() {
     <div className="space-y-4">
       <PageHeader
         title="采购订单"
-        description="采购单与收货订单分开管理：确认采购单后请创建收货订单，收货与上架后计入库存"
+        description="采购单仅管理计划与提交流程；后续将按供应商到货创建独立收货入库单"
         actions={
           <>
             <Button variant="outline"
@@ -214,8 +172,7 @@ export default function PurchasePage() {
           <SelectContent>
             <SelectItem value="__all__">全部状态</SelectItem>
             <SelectItem value="1">草稿</SelectItem>
-            <SelectItem value="2">已确认</SelectItem>
-            <SelectItem value="3">已收货</SelectItem>
+            <SelectItem value="2">已提交</SelectItem>
             <SelectItem value="4">已取消</SelectItem>
           </SelectContent>
         </Select>
@@ -229,7 +186,7 @@ export default function PurchasePage() {
           <span className="text-sm font-medium text-foreground">已选 {selectedIds.size} 条</span>
           <div className="h-4 w-px bg-border" />
           <Button size="sm" variant="outline" onClick={batchConfirm} disabled={batchLoading}>
-            {batchLoading ? '处理中...' : '批量确认'}
+            {batchLoading ? '处理中...' : '批量提交'}
           </Button>
           <Button size="sm" variant="destructive" onClick={batchCancel} disabled={batchLoading}>
             {batchLoading ? '处理中...' : '批量取消'}
@@ -254,9 +211,6 @@ export default function PurchasePage() {
         onSelectChange={setSelectedIds}
         onRowDoubleClick={goToDetail}
       />
-
-      {/* PurchaseFormDialog 已软移除，改为独立页面 /purchase/new；代码保留供回滚 */}
-      {false && <PurchaseFormDialog open={false} onClose={() => {}} />}
 
       <PrintOrderDialog
         open={!!printId}
@@ -294,12 +248,9 @@ export default function PurchasePage() {
           confirmState.confirmText
             ?? (confirmState.title.includes('取消') ? '确认取消' : '确认')
         }
-        loading={confirmCreateInboundLoading}
+        loading={false}
         onConfirm={confirmState.onConfirm}
-        onCancel={() => {
-          if (confirmCreateInboundLoading) return
-          closeConfirm()
-        }}
+        onCancel={closeConfirm}
       />
     </div>
   )

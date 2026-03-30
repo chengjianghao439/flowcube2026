@@ -11,6 +11,9 @@ export const INBOUND_STATUS_VARIANT: Record<InboundTaskStatus, 'default' | 'seco
 export interface InboundTaskItem {
   id: number
   taskId: number
+  purchaseOrderId: number | null
+  purchaseOrderNo: string | null
+  purchaseItemId: number | null
   productId: number
   productCode: string | null
   productName: string
@@ -42,15 +45,25 @@ export interface InboundTask {
 /** 逐包收货：单次一包，生成一个待上架容器并排队打印标签 */
 export interface ReceiveParams {
   productId: number
-  qty: number
+  qty?: number
+  packages?: Array<{
+    qty: number
+  }>
 }
 
 export interface ReceivePackageResult {
-  containerCode: string
-  containerId: number
+  containerCode: string | null
+  containerId: number | null
   productName: string
   qty: number
+  totalQty?: number
   printJobId: number | null
+  printJobIds?: number[]
+  containers?: Array<{
+    containerCode: string
+    containerId: number
+    qty: number
+  }>
 }
 
 /** 上架：单容器单库位 */
@@ -82,4 +95,31 @@ export interface InboundContainersResult {
 export interface CreateInboundTaskResult {
   taskId: number
   taskNo: string
+}
+
+export interface CreateInboundTaskParams {
+  supplierId: number
+  supplierName: string
+  remark?: string
+  items: Array<{
+    purchaseItemId: number
+    qty: number
+  }>
+}
+
+export interface InboundPurchaseCandidate {
+  purchaseItemId: number
+  purchaseOrderId: number
+  purchaseOrderNo: string
+  supplierId: number
+  supplierName: string
+  warehouseId: number
+  warehouseName: string
+  productId: number
+  productCode: string
+  productName: string
+  unit: string | null
+  orderedQty: number
+  assignedQty: number
+  remainingQty: number
 }

@@ -27,7 +27,6 @@ import {
   useCreatePurchase, usePurchaseDetail,
   useConfirmPurchase, useCancelPurchase,
 } from '@/hooks/usePurchase'
-import { useCreateInboundTask } from '@/hooks/useInboundTasks'
 import type { PurchaseOrderItem } from '@/types/purchase'
 import type { ProductFinderResult } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
@@ -290,11 +289,8 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 // ════════════════════════════════════════════════════════════════════════════
 
 function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: () => void }) {
-  const navigate = useNavigate()
-  const addTab = useWorkspaceStore(s => s.addTab)
   const { data: order, isLoading } = usePurchaseDetail(purchaseId)
   const confirmMutate = useConfirmPurchase()
-  const createInboundMut = useCreateInboundTask()
   const cancelMutate  = useCancelPurchase()
 
   const [confirmState, setConfirmState] = useState<{
@@ -315,9 +311,6 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
     setConfirmState({ open: true, title, description, variant, onConfirm, confirmText })
   }
 
-  const confirmLoading =
-    createInboundMut.isPending && confirmState.open && confirmState.title === '创建收货订单'
-
   if (isLoading) {
     return (
       <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
@@ -336,7 +329,6 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
   }
 
   const canConfirm = order.status === 1
-  const canCreateInbound = order.status === 2 && !order.openInboundTaskId
   const canCancel  = order.status === 1 || order.status === 2
   const isPending  = confirmMutate.isPending || cancelMutate.isPending
 
@@ -358,47 +350,11 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
             )}
             {canConfirm && (
               <Button variant="outline" disabled={isPending}
-                onClick={() => ask('确认采购单', '确认后采购单将进入待收货状态。', 'default', () => {
+                onClick={() => ask('提交采购单', '提交后采购单将进入待收货阶段，后续由收货入库单承接到货。', 'default', () => {
                   setConfirmState(s => ({ ...s, open: false }))
                   confirmMutate.mutate(order.id)
                 })}>
-                确认
-              </Button>
-            )}
-            {order.status === 2 && order.openInboundTaskId && order.openInboundTaskNo && (
-              <Button variant="outline" disabled={isPending}
-                onClick={() => {
-                  const path = `/inbound-tasks/${order.openInboundTaskId}`
-                  addTab({ key: path, title: order.openInboundTaskNo!, path })
-                  navigate(path)
-                }}>
-                收货订单 {order.openInboundTaskNo}
-              </Button>
-            )}
-            {canCreateInbound && (
-              <Button disabled={isPending || createInboundMut.isPending}
-                onClick={() => ask(
-                  '创建收货订单',
-                  '确认后将为该采购单生成收货订单（入库任务）；收货将产生待上架容器，上架后才计入库存。',
-                  'default',
-                  () => {
-                    createInboundMut.mutate(order.id, {
-                      onSuccess: (d) => {
-                        setConfirmState(s => ({ ...s, open: false }))
-                        toast.success(`收货订单 ${d.taskNo} 已创建`)
-                        const path = `/inbound-tasks/${d.taskId}`
-                        addTab({ key: path, title: d.taskNo, path })
-                        navigate(path)
-                      },
-                      onError: (e: unknown) => {
-                        const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'
-                        toast.error(msg)
-                      },
-                    })
-                  },
-                  '继续',
-                )}>
-                创建收货订单
+                提交
               </Button>
             )}
             <Button variant="outline" onClick={closeTab}>关闭</Button>
@@ -430,8 +386,10 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
         </dl>
       </Section>
 
-      {/* 商品明细 */}
       <Section title="商品明细">
+        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm text-muted-foreground">
+          当前采购单只负责计划与提交。收货、打印箱码、PDA 执行与上架，将迁移到独立的收货入库单流程。
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -460,7 +418,6 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
         </div>
       </Section>
 
-      {/* 金额统计 */}
       <Section title="金额统计">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
@@ -473,7 +430,6 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
         </div>
       </Section>
 
-      {/* 底部安全间距 */}
       <div className="h-4" />
 
       <ConfirmDialog
@@ -485,12 +441,9 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
           confirmState.confirmText
             ?? (confirmState.variant === 'destructive' ? '确认取消' : '确认')
         }
-        loading={isPending || confirmLoading}
+        loading={isPending}
         onConfirm={confirmState.onConfirm}
-        onCancel={() => {
-          if (confirmLoading) return
-          setConfirmState(s => ({ ...s, open: false }))
-        }}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
       />
     </div>
   )

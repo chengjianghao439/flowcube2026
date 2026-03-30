@@ -11,6 +11,5 @@ router.get('/',             ctrl.list)
 router.get('/:id',          ctrl.detail)
 router.post('/',            vBody(createSchema), ctrl.create)
 router.post('/:id/confirm', ctrl.confirm)
-router.post('/:id/receive', ctrl.receive)
 router.post('/:id/cancel',  ctrl.cancel)
 module.exports = router

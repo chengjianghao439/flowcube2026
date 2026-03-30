@@ -9,6 +9,7 @@
  *   3. PDA 内部页面之间的 navigate() 不受影响
  */
 import { useEffect } from 'react'
+import { App as CapacitorApp } from '@capacitor/app'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AppToast } from '@/components/shared/AppToast'
 import { usePdaUpdate } from '@/hooks/usePdaUpdate'
@@ -20,6 +21,7 @@ export default function PdaLayout() {
   const location = useLocation()
   const navigate  = useNavigate()
   const { newVersion, dismiss, checkUpdate } = usePdaUpdate()
+  const isPdaRoot = location.pathname === '/pda' || location.pathname === '/pda/'
 
   // ── viewport meta 动态修正（禁止缩放，防止扫码后页面跳动）────────────
   useEffect(() => {
@@ -61,6 +63,34 @@ export default function PdaLayout() {
     window.addEventListener('pda:check-update', onManualCheck as EventListener)
     return () => window.removeEventListener('pda:check-update', onManualCheck as EventListener)
   }, [checkUpdate])
+
+  useEffect(() => {
+    let disposed = false
+    let removeListener: (() => void) | undefined
+
+    void CapacitorApp.addListener('backButton', async ({ canGoBack }) => {
+      if (disposed) return
+      if (!location.pathname.startsWith('/pda')) {
+        navigate('/pda', { replace: true })
+        return
+      }
+      if (!isPdaRoot) {
+        if (canGoBack) navigate(-1)
+        else navigate('/pda', { replace: true })
+        return
+      }
+      await CapacitorApp.minimizeApp()
+    }).then(handle => {
+      removeListener = () => {
+        void handle.remove()
+      }
+    })
+
+    return () => {
+      disposed = true
+      removeListener?.()
+    }
+  }, [isPdaRoot, location.pathname, navigate])
 
   return (
     <>

@@ -20,8 +20,8 @@ const CONFIG: Record<OrderType, Record<number, StatusConfig>> = {
   },
   purchase: {
     1: { label: '草稿',   className: 'bg-secondary text-secondary-foreground border-secondary' },
-    2: { label: '已确认', className: 'bg-primary/10 text-primary border-primary/20' },
-    3: { label: '已收货', className: 'bg-success/10 text-success border-success/20' },
+    2: { label: '已提交', className: 'bg-primary/10 text-primary border-primary/20' },
+    3: { label: '已完成', className: 'bg-success/10 text-success border-success/20' },
     4: { label: '已取消', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   },
   transfer: {

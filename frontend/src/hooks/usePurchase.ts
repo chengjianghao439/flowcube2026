@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { getPurchaseListApi, getPurchaseDetailApi, createPurchaseApi, confirmPurchaseApi, receivePurchaseApi, cancelPurchaseApi } from '@/api/purchase'
+import { getPurchaseListApi, getPurchaseDetailApi, createPurchaseApi, confirmPurchaseApi, cancelPurchaseApi } from '@/api/purchase'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import type { CreatePurchaseParams } from '@/types/purchase'
 
@@ -19,14 +19,6 @@ export const useConfirmPurchase = () => {
   return useMutation({
     mutationFn: (id: number) => confirmPurchaseApi(id),
     onSuccess: () => invalidate('purchase_confirm'),
-  })
-}
-
-export const useReceivePurchase = () => {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: (id: number) => receivePurchaseApi(id),
-    onSuccess: () => invalidate('purchase_receive'),
   })
 }
 

@@ -13,15 +13,36 @@ function vBody(schema) {
   }
 }
 
-const createSchema = z.object({
-  poId: z.number().int().positive('请选择采购单'),
-})
+const createSchema = z.union([
+  z.object({
+    poId: z.number().int().positive('请选择采购单'),
+  }),
+  z.object({
+    supplierId: z.number().int().positive('请选择供应商'),
+    supplierName: z.string().min(1, '供应商名称不能为空'),
+    remark: z.string().optional(),
+    items: z.array(
+      z.object({
+        purchaseItemId: z.number().int().positive('采购明细无效'),
+        qty: z.number().positive('收货数量必须大于 0'),
+      }),
+    ).min(1, '请至少选择一条采购明细'),
+  }),
+])
 
-/** 逐包收货：单次仅一包。兼容旧客户端 { items: [{ productId, qty }] } 且仅允许 1 条 */
+/** 收货：兼容旧客户端单包；新版支持同商品多箱录入 { productId, packages:[{ qty }] } */
 const receiveSchema = z.union([
   z.object({
     productId: z.number().int().positive('商品无效'),
     qty:       z.number().positive('本包数量必须大于 0'),
+  }),
+  z.object({
+    productId: z.number().int().positive('商品无效'),
+    packages: z.array(
+      z.object({
+        qty: z.number().positive('箱数量必须大于 0'),
+      }),
+    ).min(1, '请至少填写一箱数量'),
   }),
   z
     .object({
@@ -32,9 +53,18 @@ const receiveSchema = z.union([
             qty:       z.number().positive('数量必须大于 0'),
           }),
         )
-        .length(1, '逐包收货：items 仅允许 1 条，请改用 { productId, qty }'),
+        .min(1, '请至少填写一条收货记录'),
     })
-    .transform(d => ({ productId: d.items[0].productId, qty: d.items[0].qty })),
+    .refine(d => new Set(d.items.map(item => item.productId)).size === 1, {
+      message: '同一次收货仅允许提交同一商品',
+      path: ['items'],
+    })
+    .transform(d => {
+      return {
+        productId: d.items[0].productId,
+        packages: d.items.map(item => ({ qty: item.qty })),
+      }
+    }),
 ])
 
 const putawaySchema = z.object({
@@ -54,6 +84,7 @@ function pdaOnly(req, res, next) {
 }
 
 router.get('/pending-containers', ctrl.pendingContainers)
+router.get('/purchase-items', ctrl.purchaseItems)
 router.get('/',              ctrl.list)
 router.post('/',             vBody(createSchema), ctrl.create)
 router.get('/:id/containers', ctrl.containers)

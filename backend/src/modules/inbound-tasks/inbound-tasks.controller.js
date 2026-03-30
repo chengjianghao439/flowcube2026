@@ -26,9 +26,21 @@ const list = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
+const purchaseItems = async (req, res, next) => {
+  try {
+    const data = await svc.findPurchasableItems({
+      supplierId: req.query.supplierId,
+      keyword: req.query.keyword || '',
+    })
+    return successResponse(res, data)
+  } catch (e) { next(e) }
+}
+
 const create = async (req, res, next) => {
   try {
-    const data = await svc.createFromPoId(req.body.poId)
+    const data = 'poId' in req.body
+      ? await svc.createFromPoId(req.body.poId)
+      : await svc.createManualTask(req.body)
     return successResponse(res, data, '入库任务已创建', 201)
   } catch (e) { next(e) }
 }
@@ -68,4 +80,4 @@ const cancel = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { pendingContainers, list, create, detail, containers, receive, putaway, cancel }
+module.exports = { pendingContainers, list, purchaseItems, create, detail, containers, receive, putaway, cancel }

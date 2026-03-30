@@ -5,11 +5,12 @@ import {
   getInboundTaskByIdApi,
   getInboundTaskContainersApi,
   createInboundTaskApi,
+  getInboundPurchaseCandidatesApi,
   receiveInboundApi,
   cancelInboundApi,
 } from '@/api/inbound-tasks'
 import type { QueryParams } from '@/types'
-import type { ReceiveParams, ReceivePackageResult } from '@/types/inbound-tasks'
+import type { CreateInboundTaskParams, ReceiveParams, ReceivePackageResult } from '@/types/inbound-tasks'
 
 const QUERY_KEY = 'inbound-tasks'
 
@@ -36,14 +37,18 @@ export function useInboundTaskContainers(id: number | null) {
   })
 }
 
+export function useInboundPurchaseCandidates(supplierId: number | null, keyword: string) {
+  return useQuery({
+    queryKey: [QUERY_KEY, 'purchase-items', supplierId, keyword],
+    queryFn: () => getInboundPurchaseCandidatesApi({ supplierId: supplierId!, keyword }).then(r => r.data.data ?? []),
+    enabled: !!supplierId,
+  })
+}
+
 export function useCreateInboundTask() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (poId: number) => createInboundTaskApi(poId).then(r => r.data.data!),
-    /**
-     * 成功 / 失败（含「已有未完结入库任务」）都要刷新采购单：
-     * 避免中途离开页面、仅收到错误响应等情况下 UI 仍显示「创建入库任务」。
-     */
+    mutationFn: (data: CreateInboundTaskParams) => createInboundTaskApi(data).then(r => r.data.data!),
     onSettled: () => invalidate('inbound_create'),
   })
 }

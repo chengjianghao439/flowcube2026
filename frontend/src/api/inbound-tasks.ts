@@ -7,13 +7,18 @@ import type {
   PutawayParams,
   InboundContainersResult,
   CreateInboundTaskResult,
+  CreateInboundTaskParams,
+  InboundPurchaseCandidate,
 } from '@/types/inbound-tasks'
 
 export const getInboundTasksApi = (params: QueryParams & { status?: number }) =>
   client.get<ApiResponse<PaginatedData<InboundTask>>>('/inbound-tasks', { params })
 
-export const createInboundTaskApi = (poId: number) =>
-  client.post<ApiResponse<CreateInboundTaskResult>>('/inbound-tasks', { poId })
+export const getInboundPurchaseCandidatesApi = (params: { supplierId: number; keyword?: string }) =>
+  client.get<ApiResponse<InboundPurchaseCandidate[]>>('/inbound-tasks/purchase-items', { params })
+
+export const createInboundTaskApi = (data: CreateInboundTaskParams) =>
+  client.post<ApiResponse<CreateInboundTaskResult>>('/inbound-tasks', data)
 
 export const getInboundTaskByIdApi = (id: number) =>
   client.get<ApiResponse<InboundTask>>(`/inbound-tasks/${id}`)
