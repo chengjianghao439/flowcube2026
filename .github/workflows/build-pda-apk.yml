@@ -41,6 +41,7 @@ jobs:
         working-directory: ./frontend
         env:
           VITE_CAPACITOR: 1
+          VITE_ERP_PRODUCTION_ORIGIN: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
         run: npm run pda:sync
 
       - name: Build debug APK

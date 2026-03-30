@@ -20,6 +20,7 @@ export default function PdaLoginPage() {
 
   const [apiOrigin, setApiOrigin] = useState('')
   const [labelPrinterId, setLabelPrinterId] = useState('')
+  const [showAdvancedConfig, setShowAdvancedConfig] = useState(false)
   const [scanServerMode, setScanServerMode] = useState(false)
   const [username, setUsername] = useState(() => loadSavedLoginForm().username)
   const [password, setPassword] = useState(() => loadSavedLoginForm().password)
@@ -29,8 +30,10 @@ export default function PdaLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
-    setApiOrigin(getResolvedPdaApiOrigin())
+    const resolvedOrigin = getResolvedPdaApiOrigin()
+    setApiOrigin(resolvedOrigin)
     setLabelPrinterId(localStorage.getItem(PDA_LABEL_PRINTER_ID_KEY) ?? '')
+    setShowAdvancedConfig(!resolvedOrigin)
   }, [])
 
   function applyScannedServerUrl(code: string) {
@@ -99,56 +102,77 @@ export default function PdaLoginPage() {
 
           {showApiConfig && (
             <div className="rounded-xl border border-amber-600/40 bg-amber-950/30 px-4 py-3 space-y-2">
-              <p className="text-xs font-medium text-amber-200/90">独立 App：请配置后端 API</p>
-              <p className="text-[11px] text-amber-200/60 leading-snug">
-                填写运行极序 Flow 后端的电脑地址与端口（默认 3000），不要带 <code className="text-amber-100/80">/api</code>
-                。若打包时已配置 <code className="text-amber-100/80">VITE_ERP_PRODUCTION_ORIGIN</code>，此处会预填；仍连不上请改为局域网
-                IP（勿用 localhost）。保存后会重新加载。
-              </p>
-              <input
-                type="url"
-                inputMode="url"
-                placeholder="http://192.168.1.10:3000"
-                value={apiOrigin}
-                onChange={(e) => setApiOrigin(e.target.value)}
-                className="w-full rounded-lg border border-amber-800/50 bg-slate-900/80 px-3 py-2.5 text-sm text-white placeholder:text-amber-200/30 outline-none focus:border-amber-500"
-              />
-              <label className="block text-[11px] font-medium text-amber-200/80" htmlFor="pda-label-printer">
-                标签打印机 ID（数字，用于 <code className="text-amber-100/90">window.printLabel</code>）
-              </label>
-              <input
-                id="pda-label-printer"
-                type="text"
-                inputMode="numeric"
-                placeholder="例如 1（见 ERP → 打印机管理）"
-                value={labelPrinterId}
-                onChange={(e) => setLabelPrinterId(e.target.value.replace(/\D/g, ''))}
-                className="w-full rounded-lg border border-amber-800/50 bg-slate-900/80 px-3 py-2.5 text-sm text-white placeholder:text-amber-200/30 outline-none focus:border-amber-500"
-              />
-              <button
-                type="button"
-                onClick={() => setScanServerMode((v) => !v)}
-                className="w-full rounded-lg border border-amber-600/50 py-2 text-sm font-medium text-amber-100 active:scale-[0.99]"
-              >
-                {scanServerMode ? '取消扫码配置' : '扫码配置服务器地址'}
-              </button>
-              {scanServerMode && (
-                <div className="rounded-lg border border-amber-800/40 bg-slate-950/50 p-2">
-                  <p className="text-[10px] text-amber-200/70 mb-2 px-1">请扫包含后端根地址的二维码（内容形如 http://IP:3000）</p>
-                  <PdaScanner
-                    onScan={applyScannedServerUrl}
-                    placeholder="等待扫描服务器二维码…"
-                    allowManualEntry={false}
+              <p className="text-xs font-medium text-amber-200/90">独立 App：默认已带服务器配置</p>
+              {apiOrigin && !showAdvancedConfig ? (
+                <>
+                  <p className="text-[11px] text-amber-200/70 leading-snug">
+                    当前默认后端：
+                    <span className="ml-1 font-mono text-amber-100/90">{apiOrigin}</span>
+                  </p>
+                  <p className="text-[11px] text-amber-200/60 leading-snug">
+                    标签打印机 ID 会在登录后优先自动读取后端的容器标签绑定；只有没有配置绑定时，才需要手动填写。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedConfig(true)}
+                    className="w-full rounded-lg border border-amber-600/50 py-2 text-sm font-medium text-amber-100 active:scale-[0.99]"
+                  >
+                    打开高级设置
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] text-amber-200/60 leading-snug">
+                    填写运行极序 Flow 后端的电脑地址与端口（默认 3000），不要带 <code className="text-amber-100/80">/api</code>
+                    。若打包时已配置 <code className="text-amber-100/80">VITE_ERP_PRODUCTION_ORIGIN</code>，此处会预填；仍连不上请改为局域网
+                    IP（勿用 localhost）。保存后会重新加载。
+                  </p>
+                  <input
+                    type="url"
+                    inputMode="url"
+                    placeholder="http://192.168.1.10:3000"
+                    value={apiOrigin}
+                    onChange={(e) => setApiOrigin(e.target.value)}
+                    className="w-full rounded-lg border border-amber-800/50 bg-slate-900/80 px-3 py-2.5 text-sm text-white placeholder:text-amber-200/30 outline-none focus:border-amber-500"
                   />
-                </div>
+                  <label className="block text-[11px] font-medium text-amber-200/80" htmlFor="pda-label-printer">
+                    标签打印机 ID（可留空；登录后优先自动读取）
+                  </label>
+                  <input
+                    id="pda-label-printer"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="例如 1（见 ERP → 打印机管理）"
+                    value={labelPrinterId}
+                    onChange={(e) => setLabelPrinterId(e.target.value.replace(/\D/g, ''))}
+                    className="w-full rounded-lg border border-amber-800/50 bg-slate-900/80 px-3 py-2.5 text-sm text-white placeholder:text-amber-200/30 outline-none focus:border-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setScanServerMode((v) => !v)}
+                    className="w-full rounded-lg border border-amber-600/50 py-2 text-sm font-medium text-amber-100 active:scale-[0.99]"
+                  >
+                    {scanServerMode ? '取消扫码配置' : '扫码配置服务器地址'}
+                  </button>
+                  {scanServerMode && (
+                    <div className="rounded-lg border border-amber-800/40 bg-slate-950/50 p-2">
+                      <p className="text-[10px] text-amber-200/70 mb-2 px-1">请扫包含后端根地址的二维码（内容形如 http://IP:3000）</p>
+                      <PdaScanner
+                        onScan={applyScannedServerUrl}
+                        placeholder="等待扫描服务器二维码…"
+                        allowManualEntry={false}
+                      />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={saveApiServer}
+                    className="w-full rounded-lg bg-amber-700/90 py-2 text-sm font-semibold text-white active:scale-[0.99]"
+                  >
+                    保存并重新加载
+                  </button>
+                </>
               )}
-              <button
-                type="button"
-                onClick={saveApiServer}
-                className="w-full rounded-lg bg-amber-700/90 py-2 text-sm font-semibold text-white active:scale-[0.99]"
-              >
-                保存并重新加载
-              </button>
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new Event('pda:check-update'))}

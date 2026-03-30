@@ -101,6 +101,40 @@ export function applyPdaApiBaseFromStorage(): void {
   }
 }
 
+type PrinterBindingLike = {
+  printer_id?: number
+  printerId?: number
+}
+
+function readStoredPdaPrinterId(): number | null {
+  const pid = Number(localStorage.getItem(PDA_LABEL_PRINTER_ID_KEY) || '')
+  return Number.isFinite(pid) && pid > 0 ? pid : null
+}
+
+/** 登录后自动读取容器标签打印机绑定，避免 PDA 手填 printerId */
+export async function syncPdaLabelPrinterBinding(): Promise<number | null> {
+  if (typeof window === 'undefined') return null
+  const stored = readStoredPdaPrinterId()
+  if (stored) return stored
+  if (!useAuthStore.getState().token) return null
+
+  try {
+    const res = await apiClient.get<{
+      success: boolean
+      data?: Record<string, PrinterBindingLike | undefined>
+    }>('/printer-bindings', { skipGlobalError: true })
+    const binding = res.data?.data?.container_label
+    const pid = Number(binding?.printer_id ?? binding?.printerId ?? '')
+    if (Number.isFinite(pid) && pid > 0) {
+      localStorage.setItem(PDA_LABEL_PRINTER_ID_KEY, String(pid))
+      return pid
+    }
+  } catch {
+    // keep silent; printing path will show explicit error if still unresolved
+  }
+  return null
+}
+
 /** 独立 App 已配置 API 根时检测后端是否可达（GET /api/health，无需登录） */
 export async function checkPdaApiHealth(): Promise<boolean> {
   if (!Capacitor.isNativePlatform() || isPdaViteLiveHost()) return true
@@ -159,8 +193,8 @@ export function installPdaGlobals(): void {
       toast.error('请先登录后再打印')
       return
     }
-    const pid = Number(localStorage.getItem(PDA_LABEL_PRINTER_ID_KEY) || '')
-    if (!Number.isFinite(pid) || pid <= 0) {
+    const pid = readStoredPdaPrinterId() ?? await syncPdaLabelPrinterBinding()
+    if (!pid) {
       toast.error('未配置标签打印机 ID，请在登录页填写')
       return
     }
