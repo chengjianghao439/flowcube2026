@@ -96,12 +96,12 @@ export default function PdaLayout() {
     <>
       {/*
         pda-root：
-        - h-[100dvh]  动态视口高度，键盘弹出时自动收缩（iOS Safari / Android Chrome 均支持）
-        - overflow-hidden 防止弹出键盘时出现双滚动条
+        - min-h-[100dvh]  保持至少一屏高，内容超出时允许整页下滑
+        - overflow-y-auto  避免工作台 / 列表页被外层容器裁掉
         - touch-action: manipulation 加快点击响应，消除 300ms 延迟
       */}
       <div
-        className="flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground antialiased"
+        className="flex min-h-[100dvh] flex-col overflow-x-hidden overflow-y-auto bg-background text-foreground antialiased"
         style={{
           WebkitTapHighlightColor: 'transparent',
           touchAction: 'manipulation',
