@@ -55,7 +55,7 @@ jobs:
       - name: Build release APK
         working-directory: ./frontend/android
         env:
-          FLOWCUBE_UPLOAD_STORE_FILE: app/flowcube-release.keystore
+          FLOWCUBE_UPLOAD_STORE_FILE: flowcube-release.keystore
           FLOWCUBE_UPLOAD_STORE_PASSWORD: ${{ secrets.PDA_SIGNING_STORE_PASSWORD }}
           FLOWCUBE_UPLOAD_KEY_ALIAS: ${{ secrets.PDA_SIGNING_KEY_ALIAS }}
           FLOWCUBE_UPLOAD_KEY_PASSWORD: ${{ secrets.PDA_SIGNING_KEY_PASSWORD }}
