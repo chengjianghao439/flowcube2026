@@ -1,0 +1,60 @@
+name: Build PDA APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "可选。构建指定分支 / tag / commit；留空则使用当前默认分支"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-pda:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref != '' && github.event.inputs.ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Sync Capacitor Android project
+        working-directory: ./frontend
+        env:
+          VITE_CAPACITOR: 1
+        run: npm run pda:sync
+
+      - name: Build debug APK
+        working-directory: ./frontend/android
+        run: ./gradlew assembleDebug
+
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk "out/FlowCubePDA-${GITHUB_SHA::7}.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowcube-pda-apk
+          path: out/*.apk
+          if-no-files-found: error
