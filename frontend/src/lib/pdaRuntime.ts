@@ -7,7 +7,7 @@ import { API_BASE_STORAGE_KEY } from '@/config/api'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/lib/toast'
 
-/** localStorage：后端 HTTP 根，如 http://192.168.1.10:3000（不要带 /api） */
+/** localStorage：后端 HTTP 根（不要带 /api） */
 export const PDA_API_ORIGIN_KEY = 'flowcube:pdaApiOrigin'
 
 /** 标签打印机 ID（数字），供 window.printLabel 提交 print-jobs */
@@ -52,21 +52,16 @@ export function getBuiltPdaDefaultApiOrigin(): string {
  */
 export function getResolvedPdaApiOrigin(): string {
   if (typeof window === 'undefined') return ''
-  const built = getBuiltPdaDefaultApiOrigin()
-  if (Capacitor.isNativePlatform() && !isPdaViteLiveHost() && built) {
-    return built
+  return getBuiltPdaDefaultApiOrigin()
+}
+
+export async function resolveHealthyPdaApiOrigin(): Promise<string> {
+  const origin = getBuiltPdaDefaultApiOrigin()
+  if (origin) {
+    localStorage.setItem(PDA_API_ORIGIN_KEY, origin)
+    localStorage.setItem(API_BASE_STORAGE_KEY, origin)
   }
-  const a = localStorage.getItem(PDA_API_ORIGIN_KEY)?.trim()
-  if (a) {
-    const o = normalizePdaApiOrigin(a)
-    if (o) return o
-  }
-  const b = localStorage.getItem(API_BASE_STORAGE_KEY)?.trim()
-  if (b) {
-    const o = normalizePdaApiOrigin(b)
-    if (o) return o
-  }
-  return built
+  return origin
 }
 
 /** 将服务端返回的相对地址补成 PDA 可访问的绝对地址 */
@@ -95,15 +90,17 @@ export function resolvePdaServerUrl(pathOrUrl: string): string {
 }
 
 /** 根据 localStorage 设置 axios 基址（独立 APK bundled；Live 开发不覆盖） */
-export function applyPdaApiBaseFromStorage(): void {
-  if (!Capacitor.isNativePlatform()) return
-  if (isPdaViteLiveHost()) return
+export async function applyPdaApiBaseFromStorage(): Promise<string> {
+  if (!Capacitor.isNativePlatform()) return ''
+  if (isPdaViteLiveHost()) return ''
 
-  const origin = getResolvedPdaApiOrigin()
+  const origin = await resolveHealthyPdaApiOrigin()
   if (origin) {
     apiClient.defaults.baseURL = `${origin}/api`
     localStorage.setItem(PDA_API_ORIGIN_KEY, origin)
+    localStorage.setItem(API_BASE_STORAGE_KEY, origin)
   }
+  return origin
 }
 
 type PrinterBindingLike = {
@@ -143,7 +140,7 @@ export async function syncPdaLabelPrinterBinding(): Promise<number | null> {
 /** 独立 App 已配置 API 根时检测后端是否可达（GET /api/health，无需登录） */
 export async function checkPdaApiHealth(): Promise<boolean> {
   if (!Capacitor.isNativePlatform() || isPdaViteLiveHost()) return true
-  const origin = getResolvedPdaApiOrigin()
+  const origin = await resolveHealthyPdaApiOrigin()
   if (!origin) return false
   try {
     const res = await fetch(`${origin}/api/health`, { method: 'GET', cache: 'no-store' })

@@ -2,8 +2,7 @@
 # build-pda-apk.sh
 # FlowCube PDA Android APK 打包脚本
 # 使用方式：
-#   ./build-pda-apk.sh                        # 本地离线包（内嵌静态资源）
-#   PDA_SERVER_URL=http://192.168.8.109:5173 ./build-pda-apk.sh  # 连接服务器 Live 模式
+#   ./build-pda-apk.sh
 
 set -e
 cd "$(dirname "$0")"

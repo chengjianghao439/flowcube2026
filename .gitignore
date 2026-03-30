@@ -13,7 +13,6 @@ desktop/release/
 desktop/.git-build-sha
 frontend/.vite/
 # PDA 套壳加载的前端地址（本机 IP，勿提交）
-frontend/.pda-server-url
 logs/
 TEMP_BRAND_SYNC/
 

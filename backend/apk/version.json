@@ -1,7 +1,7 @@
 {
-  "version": "1.1.2",
-  "versionCode": 4,
+  "version": "1.1.3",
+  "versionCode": 5,
   "filename": "app-release.apk",
-  "releaseNote": "修复独立 PDA 优先使用内置服务器地址，并移除手动修改 API 的入口与提示。",
+  "releaseNote": "移除 PDA 局域网配置与 Live 模式，仅保留安装包内置服务器地址。",
   "publishedAt": "2026-03-30T00:00:00.000Z"
 }

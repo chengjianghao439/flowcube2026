@@ -39,17 +39,6 @@ APK 输出路径：
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## 打包方式二：Live 模式（连接服务器）
-
-App 直接加载服务器上的页面，更新前端无需重新打包 APK。
-
-```bash
-cd frontend
-PDA_SERVER_URL=http://192.168.8.109:5173 ./build-pda-apk.sh
-```
-
-> 将 `192.168.8.109` 替换为实际后端服务器 IP。
-
 ## 手动打包步骤
 
 ```bash
@@ -76,7 +65,7 @@ adb install android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 **方式二：直接传输**
-将 APK 文件通过 USB 或局域网传输到设备，在设备上点击安装（需开启「允许未知来源」）。
+将 APK 文件通过 USB 或文件传输到设备，在设备上点击安装（需开启「允许未知来源」）。
 
 ## App 行为说明
 
@@ -87,7 +76,7 @@ adb install android/app/build/outputs/apk/debug/app-debug.apk
 | 屏幕常亮 | 防止扫码过程中设备自动锁屏 |
 | 返回键 | 在 WebView 内返回历史页面，不退出 App |
 | 屏幕方向 | 强制竖屏 |
-| 明文 HTTP | 支持局域网内 HTTP 连接（`android:usesCleartextTraffic`） |
+| 网络访问 | 使用安装包内置服务器地址访问后端 |
 
 ## 常见问题
 

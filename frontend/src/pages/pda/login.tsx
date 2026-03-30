@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { useLogin } from '@/hooks/useAuth'
 import {
-  getResolvedPdaApiOrigin,
   isPdaViteLiveHost,
+  resolveHealthyPdaApiOrigin,
 } from '@/lib/pdaRuntime'
 import { loadSavedLoginForm } from '@/lib/loginCredentials'
 
@@ -21,8 +21,13 @@ export default function PdaLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
-    const resolvedOrigin = getResolvedPdaApiOrigin()
-    setApiOrigin(resolvedOrigin)
+    let cancelled = false
+    void resolveHealthyPdaApiOrigin().then((resolvedOrigin) => {
+      if (!cancelled) setApiOrigin(resolvedOrigin)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -65,7 +70,7 @@ export default function PdaLoginPage() {
                 <span className="ml-1 font-mono text-amber-100/90">{apiOrigin || '未写入构建配置'}</span>
               </p>
               <p className="text-[11px] leading-snug text-amber-200/60">
-                PDA 不再提供手动修改 API 的入口。标签打印机会在登录后自动读取后端的容器标签绑定，无需在设备上手动填写。
+                PDA 仅使用安装包内置的服务器地址。标签打印机会在登录后自动读取后端的容器标签绑定，无需在设备上手动填写。
               </p>
             </div>
           )}
@@ -172,12 +177,7 @@ export default function PdaLoginPage() {
           独立 App 连不上服务器？
         </summary>
         <p className="mt-3 text-xs leading-relaxed text-slate-500">
-          <strong className="text-slate-400">独立 APK</strong>：前端和服务器地址都已打进安装包，若服务器域名或 IP 变更，需要重新打包并重新安装新 APK。
-          <br />
-          <strong className="text-slate-400">开发热更新</strong>：在电脑执行{' '}
-          <code className="rounded bg-slate-800 px-1 text-slate-300">npm run pda:sync:live</code>
-          ，壳会打开局域网 Vite；IP 变更可配合 <code className="text-slate-800 px-1">.pda-server-url</code> 或{' '}
-          <code className="text-slate-400">PDA_SERVER_URL=...</code>。
+          <strong className="text-slate-400">独立 APK</strong>：前端和服务器地址都已打进安装包。若服务器地址变化，需要重新打包并重新安装新 APK。
         </p>
       </details>
 

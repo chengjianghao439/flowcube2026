@@ -144,7 +144,7 @@ apiClient.interceptors.response.use(
       error.response?.data?.message
       ?? (status == null && (code === 'ERR_NETWORK' || rawMsg === 'Network Error')
         ? isNativePdaNoViteLive()
-          ? '无法连接服务器，请在 PDA 登录页填写后端地址（如 http://192.168.x.x:3000，不要带 /api）'
+          ? '无法连接服务器，请检查网络与内置服务器地址是否可达'
           : '无法连接服务器，请检查网络与后端地址（Ctrl+Shift+S 可配置 API）'
         : null)
       ?? (code === 'ECONNABORTED' ? '请求超时，请稍后重试' : null)
