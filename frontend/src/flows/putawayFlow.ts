@@ -1,5 +1,5 @@
 /**
- * PDA 上架流程（强制扫码）：扫库存条码 CNT → 扫货架条码 LOC → 调用入库任务上架接口
+ * PDA 上架流程（强制扫码）：扫库存条码 I → 扫货架条码 R → 调用入库任务上架接口
  * 禁止仅输入数字库存条码 ID；货架条码须为 LOC 格式并由后端校验启用/同仓
  */
 import type { FlowDef } from '@/hooks/usePdaFlow'
@@ -20,11 +20,11 @@ export interface PutawayFlowContext {
 }
 
 function isStrictContainerScan(raw: string): boolean {
-  return /^CNT\d+$/i.test(raw.trim())
+  return /^(?:I|CNT)\d+$/i.test(raw.trim())
 }
 
 function isStrictLocationScan(raw: string): boolean {
-  return /^LOC[-A-Z0-9]+$/i.test(raw.trim())
+  return /^(?:R\d+|LOC[-A-Z0-9]+)$/i.test(raw.trim())
 }
 
 export function makePutawayFlow(
@@ -37,19 +37,19 @@ export function makePutawayFlow(
     steps:       [
       {
         id:          'scan-container',
-        label:       '扫描待上架库存条码（CNT）',
-        placeholder: '请扫库存条码，如 CNT123456',
+        label:       '扫描待上架库存条码（I）',
+        placeholder: '请扫库存条码，如 I000123',
         barcodeType: 'container',
         handle:      async (raw, ctx) => {
           const trimmed = raw.trim()
           if (/^\d+$/.test(trimmed)) {
-            return { ok: false, message: '禁止仅输入数字 ID，请扫描完整库存条码（CNT+数字）' }
+            return { ok: false, message: '禁止仅输入数字 ID，请扫描完整库存条码（I+数字）' }
           }
           if (!isStrictContainerScan(trimmed)) {
-            return { ok: false, message: '请扫描库存条码：必须以 CNT 开头（例如 CNT123456）' }
+            return { ok: false, message: '请扫描库存条码：必须以 I 开头（例如 I000123），旧版 CNT 也兼容' }
           }
           const parsed = parseBarcode(trimmed)
-          if (parsed.type !== 'container') return { ok: false, message: '请扫描库存条码（CNT）' }
+          if (parsed.type !== 'container') return { ok: false, message: '请扫描库存条码（I）' }
           const res = await getContainerByBarcodeApi(trimmed)
           const d = res.data.data!
           if (d.containerStatus !== 'waiting_putaway') {
@@ -60,7 +60,7 @@ export function makePutawayFlow(
           }
           return {
             ok:         true,
-            message:    `✓ ${d.productName ?? '商品'} 库存条码已识别，请扫描货架条码（LOC）`,
+            message:    `✓ ${d.productName ?? '商品'} 库存条码已识别，请扫描货架条码（R）`,
             nextStep:   'scan-location',
             context:    { containerId: d.containerId },
           }
@@ -68,16 +68,16 @@ export function makePutawayFlow(
       },
       {
         id:          'scan-location',
-        label:       '扫描货架条码（LOC）',
-        placeholder: '请扫货架条码，如 LOC-A01-01-01',
+        label:       '扫描货架条码（R）',
+        placeholder: '请扫货架条码，如 R000123',
         barcodeType: 'location',
         handle:      async (raw, ctx) => {
           const trimmed = raw.trim()
           if (!isStrictLocationScan(trimmed)) {
-            return { ok: false, message: '请扫描货架条码：LOC 开头格式（如 LOC-A01-01-01）' }
+            return { ok: false, message: '请扫描货架条码：新码为 R+数字，旧版 LOC 也兼容' }
           }
           const parsed = parseBarcode(trimmed)
-          if (parsed.type !== 'location') return { ok: false, message: '请扫描货架条码（LOC）' }
+          if (parsed.type !== 'location') return { ok: false, message: '请扫描货架条码（R）' }
           if (!ctx.containerId) return { ok: false, message: '请先扫描库存条码' }
           const res = await apiClient.get<ApiResponse<LocationInfo>>(`/locations/code/${encodeURIComponent(trimmed)}`)
           const loc = res.data.data!

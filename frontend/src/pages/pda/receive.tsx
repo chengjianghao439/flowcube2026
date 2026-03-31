@@ -209,14 +209,13 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   function handleScan(raw: string) {
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'product' && parsed.type !== 'unknown') {
-      err('请扫描产品条码')
+      err('请扫描产品条码（P000123）')
       return
     }
 
     const normalized = raw.trim().toUpperCase()
     const match = selectableProducts.find(product =>
       normalized === String(product.productCode ?? '').toUpperCase()
-      || normalized === `PRD${String(product.productCode ?? '').toUpperCase()}`
       || parsed.id === product.productId,
     )
     if (!match) {

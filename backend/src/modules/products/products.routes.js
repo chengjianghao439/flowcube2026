@@ -30,7 +30,7 @@ const { successResponse } = require('../../utils/response')
 router.use(authMiddleware)
 router.get('/next-code', async (req, res, next) => {
   try {
-    const code = await generateCode('product_items', 'code', 'code_prefix_product', 'PRD-')
+    const code = await generateCode('product_items', 'code', 'code_prefix_product', 'P')
     return successResponse(res, { code }, '生成成功')
   } catch (e) { next(e) }
 })

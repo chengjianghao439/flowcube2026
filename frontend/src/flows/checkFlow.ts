@@ -18,7 +18,7 @@ export const CHECK_FLOW: FlowDef<CheckFlowContext> = {
     {
       id:          'scan-container',
       label:       '扫描库存条码',
-      placeholder: '扫描库存条码 CNTxxxxxx',
+      placeholder: '扫描库存条码 I000123',
       barcodeType: 'container',
       handle: async (barcode, ctx) => {
         const { task } = ctx

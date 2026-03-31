@@ -151,7 +151,7 @@ async function fetchFromGitHub() {
           // 使用 release body；净化后过短则仅占位（后续可与本地 manifest 合并）
           const rawBody = release.body || ''
           let notes = sanitizeReleaseNotes(rawBody)
-          if (!notes) notes = `FlowCube ERP v${version} 已发布`
+          if (!notes) notes = `极序 Flow ERP v${version} 已发布`
 
           resolve({
             version,

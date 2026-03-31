@@ -92,7 +92,7 @@ export default function RacksPage() {
         }
         if (local === 'skipped_no_desktop') {
           toast.warning(
-            '未连接本机打印桥接：若您是用 Chrome / Edge 直接打开网页，Windows 打印队列里不会出现任何作业，标签机也不会动——请改用「FlowCube ERP」桌面安装包登录同一地址再试。若已是桌面端，请重启应用，或在开发者工具控制台执行 typeof window.flowcubeDesktop?.printZpl 应为 function。任务已在服务器入队。',
+            '未连接本机打印桥接：若您是用 Chrome / Edge 直接打开网页，Windows 打印队列里不会出现任何作业，标签机也不会动——请改用「极序 Flow ERP」桌面安装包登录同一地址再试。若已是桌面端，请重启应用，或在开发者工具控制台执行 typeof window.flowcubeDesktop?.printZpl 应为 function。任务已在服务器入队。',
           )
           return
         }
@@ -199,7 +199,7 @@ export default function RacksPage() {
     <div className="space-y-5">
       <PageHeader
         title="货架管理"
-        description="货架唯一条码（RCK）与标签打印"
+        description="货架唯一条码（H）与标签打印"
         actions={<Button onClick={() => { setEditItem(null); setFormOpen(true) }}>+ 新建货架</Button>}
       />
 
@@ -216,13 +216,13 @@ export default function RacksPage() {
               <strong>当前页面无法本机出纸：</strong>
               检测到在普通浏览器中打开，不会调用 Windows
               打印队列，故「打印队列里什么也没有」是正常现象。请安装并打开
-              <strong> FlowCube ERP 桌面客户端</strong>
+              <strong> 极序 Flow ERP 桌面客户端</strong>
               ，在桌面程序里登录同一服务器后再点「打印」。
             </>
           ) : (
             <>
               <strong>桌面端未加载本机打印桥接：</strong>
-              无法向标签机送 RAW。请完全退出后重启 FlowCube；仍不行请检查安全软件是否拦截预加载脚本。在控制台执行{' '}
+              无法向标签机送 RAW。请完全退出后重启极序 Flow ERP；仍不行请检查安全软件是否拦截预加载脚本。在控制台执行{' '}
               <code className="rounded bg-muted px-1">typeof window.flowcubeDesktop?.printZpl</code> 应显示{' '}
               <code className="rounded bg-muted px-1">&quot;function&quot;</code>。
             </>

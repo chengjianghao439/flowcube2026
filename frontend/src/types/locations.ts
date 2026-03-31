@@ -3,6 +3,7 @@ export interface Location {
   warehouseId: number
   warehouseName: string | null
   code: string
+  barcode?: string | null
   zone: string | null
   aisle: string | null
   rack: string | null

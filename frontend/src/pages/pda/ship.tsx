@@ -39,7 +39,7 @@ export default function PdaShipPage() {
   // 扫码后自动查询并立即出库，无需额外确认按钮
   const handleScan = useCallback(async (raw: string) => {
     const parsed = parseBarcode(raw)
-    if (parsed.type !== 'box') { err('必须扫描物流条码（BOXxxxxxx）'); return }
+    if (parsed.type !== 'box') { err('必须扫描物流条码（L000123）'); return }
     setLoading(true)
     try {
       const res  = await getPackageByBarcodeApi(raw)
@@ -157,7 +157,7 @@ export default function PdaShipPage() {
         ) : (
           <p className="text-center text-sm text-muted-foreground py-2">扫描物流条码后自动完成出库</p>
         )}
-        <PdaScanner onScan={handleScan} placeholder="扫描物流条码 BOXxxxxxx" disabled={loading || shipMut.isPending} />
+        <PdaScanner onScan={handleScan} placeholder="扫描物流条码 L000123" disabled={loading || shipMut.isPending} />
         {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">出库中…</span></div>}
       </PdaBottomBar>
     </div>

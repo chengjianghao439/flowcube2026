@@ -76,7 +76,7 @@ export function makeReceiveFlow(opts?: {
           const item = ctx.items.find(i =>
             i.productCode === raw ||
             i.productCode === raw.toUpperCase() ||
-            `PRD${i.productCode}` === raw.toUpperCase(),
+            parsed.id === i.productId,
           )
           if (!item) return { ok: false, message: `商品不在本收货单：${raw}` }
           const remain = remainForProduct(ctx.items, item.productId)

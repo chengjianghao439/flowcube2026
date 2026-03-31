@@ -181,7 +181,7 @@ async function findById(id) {
 }
 
 async function create({ name, categoryId, unit, spec, barcode, costPrice, salePrice, remark }) {
-  const code = await generateMasterCode(pool, 'PRD', 'product_items')
+  const code = await generateMasterCode(pool, 'P', 'product_items')
   const [r] = await pool.query(
     `INSERT INTO product_items (code,name,category_id,unit,spec,barcode,cost_price,sale_price,remark)
      VALUES (?,?,?,?,?,?,?,?,?)`,

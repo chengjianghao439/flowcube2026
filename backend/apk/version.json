@@ -1,7 +1,7 @@
 {
-  "version": "1.1.14",
-  "versionCode": 16,
+  "version": "1.1.15",
+  "versionCode": 17,
   "filename": "app-release.apk",
-  "releaseNote": "统一全局条码术语：产品条码、货架条码、库存条码、物流条码，并同步桌面端打印模板与 PDA 文案。",
-  "publishedAt": "2026-03-31T06:55:00.000Z"
+  "releaseNote": "统一新旧条码制：新增 P/I/R/H/L/W 单字母条码，并兼容旧版条码继续扫码作业。",
+  "publishedAt": "2026-03-31T08:30:00.000Z"
 }

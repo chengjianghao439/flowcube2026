@@ -11,12 +11,17 @@ function generateCode({ zone, aisle, rack, level, position }) {
   return `${zone}${pad(aisle)}-${pad(rack)}-${pad(level)}${pad(position)}`
 }
 
+function makeLocationBarcode(id) {
+  return `R${String(id).padStart(6, '0')}`
+}
+
 function formatRow(row) {
   return {
     id: row.id,
     warehouseId: row.warehouse_id,
     warehouseName: row.warehouse_name ?? null,
     code: row.code,
+    barcode: row.barcode ?? null,
     zone: row.zone,
     aisle: row.aisle,
     rack: row.rack,
@@ -108,6 +113,11 @@ async function create(data) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [warehouseId, code, zone, pad(aisle), pad(rack), pad(level), pad(position), name || '', remark || ''],
   )
+  try {
+    await pool.query('UPDATE warehouse_locations SET barcode = ? WHERE id = ?', [makeLocationBarcode(result.insertId), result.insertId])
+  } catch (e) {
+    if (!(e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column ['`]?barcode/i.test(String(e.message)))) throw e
+  }
   return findById(result.insertId)
 }
 
@@ -179,14 +189,27 @@ async function findOrCreateByRackLevel(conn, { warehouseId, rackCode, level, pos
 }
 
 async function findByCode(code) {
-  const [rows] = await pool.query(
-    'SELECT id, code, name, zone, aisle, rack, level, position, warehouse_id, status FROM warehouse_locations WHERE code = ? AND deleted_at IS NULL LIMIT 1',
-    [code]
-  )
+  let rows
+  try {
+    ;[rows] = await pool.query(
+      `SELECT id, code, barcode, name, zone, aisle, rack, level, position, warehouse_id, status
+       FROM warehouse_locations
+       WHERE (code = ? OR UPPER(barcode) = UPPER(?)) AND deleted_at IS NULL
+       ORDER BY CASE WHEN UPPER(barcode) = UPPER(?) THEN 0 ELSE 1 END
+       LIMIT 1`,
+      [code, code, code],
+    )
+  } catch (e) {
+    if (!(e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column ['`]?barcode/i.test(String(e.message)))) throw e
+    ;[rows] = await pool.query(
+      'SELECT id, code, name, zone, aisle, rack, level, position, warehouse_id, status FROM warehouse_locations WHERE code = ? AND deleted_at IS NULL LIMIT 1',
+      [code],
+    )
+  }
   if (!rows.length) throw new AppError(`库位编码 ${code} 不存在`, 404)
   const r = rows[0]
   if (Number(r.status) !== 1) throw new AppError(`库位 ${code} 已停用`, 400)
-  return { id: r.id, code: r.code, name: r.name, zone: r.zone, aisle: r.aisle, rack: r.rack, level: r.level, position: r.position, warehouseId: r.warehouse_id, status: r.status }
+  return { id: r.id, code: r.code, barcode: r.barcode ?? null, name: r.name, zone: r.zone, aisle: r.aisle, rack: r.rack, level: r.level, position: r.position, warehouseId: r.warehouse_id, status: r.status }
 }
 
 module.exports = {

@@ -137,7 +137,7 @@ export default function RackFormDialog({ open, onClose, editItem }: Props) {
             <div className="space-y-2 rounded-lg border border-dashed border-border bg-muted/15 px-3 py-3">
               <Label className="text-xs text-muted-foreground">扫码校验（选填）</Label>
               <p className="text-xs text-muted-foreground">
-                填写仓库与货架编码后，可扫 RCK / PRD / CNT 或商品编码，检查条码冲突或在库绑定提示。
+                填写仓库与货架编码后，可扫 H / P / I 或商品编码，检查条码冲突或在库绑定提示。
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input

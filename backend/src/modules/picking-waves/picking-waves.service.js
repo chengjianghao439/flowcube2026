@@ -48,7 +48,7 @@ const fmt = r => ({
   updatedAt:     r.updated_at,
 })
 
-const genWaveNo = conn => generateDailyCode(conn, 'WV', 'picking_waves', 'wave_no')
+const genWaveNo = conn => generateDailyCode(conn, 'W', 'picking_waves', 'wave_no')
 
 // ── 列表查询 ──────────────────────────────────────────────────────────────────
 

@@ -18,6 +18,10 @@ function fmt(r) {
   }
 }
 
+function makeRackBarcode(id) {
+  return `H${String(id).padStart(6, '0')}`
+}
+
 async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null, zone = null }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
@@ -85,7 +89,7 @@ async function create(data) {
     [warehouseId, zone, code, name, maxLevels, maxPositions, remark || null],
   )
   const newId = result.insertId
-  const barcode = `RCK${String(newId).padStart(6, '0')}`
+  const barcode = makeRackBarcode(newId)
   try {
     await pool.query('UPDATE warehouse_racks SET barcode = ? WHERE id = ?', [barcode, newId])
   } catch (e) {
@@ -170,7 +174,7 @@ async function softDelete(id) {
 }
 
 /**
- * 新建货架前扫描提示：RCK 冲突、PRD/CNT/商品编码 与 rack 维度上在库关系
+ * 新建货架前扫描提示：H 冲突、P/I/商品编码 与 rack 维度上在库关系
  */
 async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }) {
   const wid = Number(warehouseId)
@@ -182,8 +186,8 @@ async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }
 
   const up = raw.toUpperCase()
 
-  const rck = /^RCK(\d+)$/i.exec(raw)
-  if (rck) {
+  const rackScan = /^(?:H|RCK)(\d+)$/i.exec(raw)
+  if (rackScan) {
     try {
       const [[existing]] = await pool.query(
         `SELECT id, code FROM warehouse_racks WHERE UPPER(barcode) = ? AND deleted_at IS NULL`,
@@ -197,14 +201,14 @@ async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }
       }
     } catch (e) {
       if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column ['`]?barcode/i.test(String(e.message))) {
-        return { kind: 'invalid', message: '数据库未迁移货架条码字段，无法校验 RCK' }
+        return { kind: 'invalid', message: '数据库未迁移货架条码字段，无法校验 H 条码' }
       }
       throw e
     }
-    return { kind: 'ok', message: '条码可用；保存后将自动生成 RCK 条码' }
+    return { kind: 'ok', message: '条码可用；保存后将自动生成 H 条码' }
   }
 
-  const prd = /^PRD(\d+)$/i.exec(raw)
+  const prd = /^(?:P|PRD)(\d+)$/i.exec(raw)
   if (prd) {
     const pid = Number(prd[1])
     const [[cnt]] = await pool.query(
@@ -217,13 +221,13 @@ async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }
     if (Number(cnt.c) > 0) {
       return {
         kind:    'binding',
-        message: `该商品（PRD）在货架编码「${code}」相关库位仍有在库容器，保存前请确认；若删除旧货架需先移库`,
+        message: `该产品在货架编码「${code}」相关库位仍有在库库存，保存前请确认；若删除旧货架需先移库`,
       }
     }
     return { kind: 'ok', message: '未发现该商品在此货架维度上的在库容器' }
   }
 
-  const cntM = /^CNT(\d+)$/i.exec(raw)
+  const cntM = /^(?:I|B|CNT)(\d+)$/i.exec(raw)
   if (cntM) {
     const [[c]] = await pool.query(
       `SELECT c.barcode, wl.rack FROM inventory_containers c
@@ -234,7 +238,7 @@ async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }
     if (c && c.rack != null && String(c.rack).trim() === code) {
       return {
         kind:    'binding',
-        message: `容器 ${c.barcode} 已位于「货架=${code}」的库位上，请注意与新建货架的关系`,
+        message: `库存条码 ${c.barcode} 已位于「货架=${code}」的库位上，请注意与新建货架的关系`,
       }
     }
     if (c && c.rack != null && String(c.rack).trim() !== code) {
@@ -266,7 +270,7 @@ async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }
     }
   }
 
-  return { kind: 'ok', message: '未识别为 RCK/PRD/CNT 或仓库内商品编码，无额外绑定提示' }
+  return { kind: 'ok', message: '未识别为 H/P/I 等条码或仓库内商品编码，无额外绑定提示' }
 }
 
 async function enqueuePrintLabel(id, { tenantId = 0, userId = null } = {}) {

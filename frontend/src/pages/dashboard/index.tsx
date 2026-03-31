@@ -74,7 +74,7 @@ export default function DashboardPage() {
     if (!lowStock?.length || notified.current) return
     notified.current = true
     if (!('Notification' in window)) return
-    const send = () => new Notification('FlowCube 低库存预警', {
+    const send = () => new Notification('极序 Flow 低库存预警', {
       body: `${lowStock.length} 种商品库存不足，请及时补货`,
       icon: '/favicon.ico',
     })
@@ -102,7 +102,7 @@ export default function DashboardPage() {
       {/* 页面标题 */}
       <div>
         <h1 className="text-page-title">仪表盘</h1>
-        <p className="text-muted-body mt-1">FlowCube ERP · 数据总览</p>
+        <p className="text-muted-body mt-1">极序 Flow ERP · 数据总览</p>
       </div>
 
       <DashboardVersionCard />

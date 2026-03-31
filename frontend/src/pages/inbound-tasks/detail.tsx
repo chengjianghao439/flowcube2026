@@ -211,7 +211,7 @@ export default function InboundTaskDetailPage() {
           <div className="rounded-lg border border-sky-500/35 bg-sky-500/[0.08] px-4 py-3 text-sm space-y-1.5">
             <p className="font-medium text-sky-950 dark:text-sky-100">请使用 PDA 扫码完成上架</p>
             <p className="text-muted-foreground">
-              在 PDA「扫码上架」进入本任务，依次扫描库存条码（CNT）与货架条码（LOC）。电脑端仅可查看待上架列表，无法在此提交上架。
+              在 PDA「扫码上架」进入本任务，依次扫描库存条码（I）与货架条码（R）。电脑端仅可查看待上架列表，无法在此提交上架。
             </p>
           </div>
 

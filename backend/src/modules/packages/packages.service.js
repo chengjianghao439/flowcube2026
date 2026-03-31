@@ -52,7 +52,7 @@ async function listByTask(taskId) {
   }))
 }
 
-// ─── 创建新箱子（BOX + 6位 ID）───────────────────────────────────────────────
+// ─── 创建新物流条码（L + 6位 ID）───────────────────────────────────────────────
 async function createPackage(taskId, remark = null) {
   const [[task]] = await pool.query(
     'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL',
@@ -68,7 +68,7 @@ async function createPackage(taskId, remark = null) {
     ['TMP', taskId, remark],
   )
   const newId  = result.insertId
-  const barcode = `BOX${String(newId).padStart(6, '0')}`
+  const barcode = `L${String(newId).padStart(6, '0')}`
   await pool.query('UPDATE packages SET barcode=? WHERE id=?', [barcode, newId])
 
   return { id: newId, barcode, warehouseTaskId: taskId, status: 1, items: [] }

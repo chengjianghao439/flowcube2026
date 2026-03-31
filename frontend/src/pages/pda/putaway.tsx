@@ -1,6 +1,6 @@
 /**
  * PDA 上架（收货订单）— 路由 /pda/putaway/:id
- * 扫库存条码 CNT → 扫货架条码 LOC → 调用 POST /inbound-tasks/:id/putaway
+ * 扫库存条码 I → 扫货架条码 R → 调用 POST /inbound-tasks/:id/putaway
  */
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -48,8 +48,8 @@ function PutawayRunner({ taskId }: { taskId: number }) {
 
       <div className="flex-1 px-4 py-6 text-sm text-muted-foreground space-y-2">
         <p className="text-amber-600/90 font-medium">上架流程：先扫描收货时打印出的库存条码，再扫描货架条码。</p>
-        <p>① 扫描待上架库存条码（CNTxxxxxx）</p>
-        <p>② 连续扫描货架条码（LOC-…）完成入库</p>
+        <p>① 扫描待上架库存条码（I000123，旧版 CNT 也兼容）</p>
+        <p>② 连续扫描货架条码（R000123，旧版 LOC 也兼容）完成入库</p>
       </div>
 
       <PdaBottomBar>

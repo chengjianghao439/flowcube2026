@@ -229,9 +229,9 @@ export default function PdaTaskPage() {
       {/* 步骤提示 */}
       <div className="max-w-md mx-auto px-4 pt-3">
         <PdaStepHint
-          step="扫描货架上的库存条码（CNTxxxxxx）"
+          step="扫描货架上的库存条码（I000123）"
           nextStep="扫码后系统自动记录拣货数量，继续扫下一个库存单元"
-          errorHint="请扫描货架上的库存条码（格式：CNTxxxxxx），不是产品条码"
+          errorHint="请扫描货架上的库存条码（格式：I000123，旧版 CNT 也兼容），不是产品条码"
           hasError={false}
         />
       </div>
@@ -240,7 +240,7 @@ export default function PdaTaskPage() {
         <Input ref={inputRef} value={inputVal}
           onChange={e => setInputVal(e.target.value)}
           onKeyDown={e => { if(e.key==='Enter') handleScan(inputVal) }}
-          placeholder={scanning?'处理中…':'扫描库存条码 CNT000001'}
+          placeholder={scanning?'处理中…':'扫描库存条码 I000123'}
           disabled={scanning||!!finished}
           className="flex-1 h-12 text-base"
           autoComplete="off" autoCorrect="off" spellCheck={false}
