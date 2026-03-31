@@ -1,7 +1,7 @@
 {
-  "version": "1.1.11",
-  "versionCode": 13,
+  "version": "1.1.12",
+  "versionCode": 14,
   "filename": "app-release.apk",
-  "releaseNote": "简化通用扫码框样式，减少多余提示，更贴近收货订单等页面的轻量操作感。",
-  "publishedAt": "2026-03-30T20:55:00.000Z"
+  "releaseNote": "重构 PDA 底部扫码栏为页面内粘底交互，避免遮挡收货等页面内容。",
+  "publishedAt": "2026-03-31T00:10:00.000Z"
 }

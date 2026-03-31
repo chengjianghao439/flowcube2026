@@ -226,7 +226,7 @@ export default function PdaCheckPage() {
 
       <PdaFlash flash={flash} />
 
-      <div className="flex-1 overflow-y-auto pb-48">
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
           {taskLoading && (
             <div className="flex h-40 items-center justify-center">

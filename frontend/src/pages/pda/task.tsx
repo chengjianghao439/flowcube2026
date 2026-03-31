@@ -213,7 +213,7 @@ export default function PdaTaskPage() {
       <PdaFlash flash={flash} />
 
       {/* Product list */}
-      <div className="flex-1 overflow-y-auto pb-32">
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
           {isLoading && <PdaLoading className="h-32" />}
           {items.map(item => (
@@ -236,7 +236,7 @@ export default function PdaTaskPage() {
         />
       </div>
 
-      <PdaBottomBar>
+      <PdaBottomBar contentClassName="flex-row items-center gap-3">
         <Input ref={inputRef} value={inputVal}
           onChange={e => setInputVal(e.target.value)}
           onKeyDown={e => { if(e.key==='Enter') handleScan(inputVal) }}
@@ -252,5 +252,4 @@ export default function PdaTaskPage() {
     </div>
   )
 }
-
 

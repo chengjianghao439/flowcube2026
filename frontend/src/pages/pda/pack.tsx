@@ -269,7 +269,7 @@ export default function PdaPackPage() {
       {/* Flash */}
       <PdaFlash flash={flash} />
 
-      <div className="flex-1 overflow-y-auto pb-64">
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
 
           {/* 统计行 */}

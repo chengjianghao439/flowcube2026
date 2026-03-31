@@ -9,15 +9,20 @@ import type { ReactNode } from 'react'
 interface PdaBottomBarProps {
   children: ReactNode
   className?: string
+  contentClassName?: string
 }
 
-export default function PdaBottomBar({ children, className = '' }: PdaBottomBarProps) {
+export default function PdaBottomBar({
+  children,
+  className = '',
+  contentClassName = '',
+}: PdaBottomBarProps) {
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-white ${className}`}
-      style={{ padding: 12, minHeight: 64 }}
+      className={`sticky bottom-0 z-20 mt-auto border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 ${className}`}
+      style={{ padding: 12 }}
     >
-      <div className="max-w-md mx-auto h-full flex items-center gap-3">
+      <div className={`mx-auto flex h-full max-w-md flex-col gap-2 ${contentClassName}`.trim()}>
         {children}
       </div>
     </div>

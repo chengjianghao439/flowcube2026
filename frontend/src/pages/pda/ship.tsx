@@ -86,7 +86,7 @@ export default function PdaShipPage() {
 
       <PdaFlash flash={flash} />
 
-      <div className="flex-1 overflow-y-auto pb-40">
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-5 space-y-4">
 
           {/* 扫码区移至底栏，此处保留加载状态 */}
