@@ -1,7 +1,7 @@
 {
-  "version": "1.1.15",
-  "versionCode": 17,
+  "version": "1.1.16",
+  "versionCode": 18,
   "filename": "app-release.apk",
-  "releaseNote": "统一新旧条码制：新增 P/I/R/H/L/W 单字母条码，并兼容旧版条码继续扫码作业。",
-  "publishedAt": "2026-03-31T08:30:00.000Z"
+  "releaseNote": "修复 PDA 独立 APK 未写入默认服务器地址导致无法连接，并继续兼容新旧条码制。",
+  "publishedAt": "2026-03-31T08:50:00.000Z"
 }
