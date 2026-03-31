@@ -101,7 +101,7 @@ router.get('/download', (req, res) => {
   const range    = req.headers.range
 
   res.setHeader('Content-Type', 'application/vnd.android.package-archive')
-  res.setHeader('Content-Disposition', `attachment; filename="FlowCubePDA-${meta.version}.apk"`)
+  res.setHeader('Content-Disposition', `attachment; filename="JiXu-Flow-PDA-${meta.version}.apk"`)
   res.setHeader('Accept-Ranges', 'bytes')
 
   if (range) {

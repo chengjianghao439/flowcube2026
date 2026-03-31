@@ -1,5 +1,5 @@
 /**
- * PDA 收货流程：扫采购单号 → 扫商品 → 输入本包数量 → 提交生成待上架容器并排队打印标签
+ * PDA 收货流程：扫采购单号 → 扫商品 → 输入本箱数量 → 提交生成待上架箱码并排队打印标签
  */
 import type { FlowDef } from '@/hooks/usePdaFlow'
 import { parseBarcode } from '@/utils/barcode'
@@ -22,7 +22,7 @@ function remainForProduct(items: InboundTaskItem[], productId: number): number {
     .reduce((s, i) => s + Math.max(0, i.orderedQty - i.receivedQty), 0)
 }
 
-/** 与后端 distributeQtyToLines 一致：按行 id 顺序分摊本包数量 */
+/** 与后端 distributeQtyToLines 一致：按行 id 顺序分摊本箱数量 */
 function applyReceiveToItems(items: InboundTaskItem[], productId: number, qty: number): InboundTaskItem[] {
   const next = items.map(i => ({ ...i }))
   let left = qty
@@ -81,11 +81,11 @@ export function makeReceiveFlow(opts?: {
           if (!item) return { ok: false, message: `商品不在本收货单：${raw}` }
           const remain = remainForProduct(ctx.items, item.productId)
           if (remain <= 0) {
-            return { ok: false, message: `${item.productName} 已收满` }
+            return { ok: false, message: `${item.productName} 已收货完成` }
           }
           return {
             ok:         true,
-            message:    `✓ ${item.productName}，剩余 ${remain}，请输入本包数量`,
+            message:    `✓ ${item.productName}，剩余 ${remain}，请输入本箱数量`,
             nextStep:   'input-qty',
             context:    {
               productId: item.productId, productName: item.productName, productCode: item.productCode,
@@ -95,12 +95,12 @@ export function makeReceiveFlow(opts?: {
       },
       {
         id:          'input-qty',
-        label:       '本包数量',
-        placeholder: '输入本包数量后回车（逐包收货）',
+        label:       '本箱数量',
+        placeholder: '输入本箱数量后回车（逐箱收货）',
         barcodeType: 'any',
         handle:      async (barcode, ctx) => {
           const qty = Number(String(barcode).trim().replace(/,/g, '.'))
-          if (!Number.isFinite(qty) || qty <= 0) return { ok: false, message: '请输入大于 0 的本包数量' }
+          if (!Number.isFinite(qty) || qty <= 0) return { ok: false, message: '请输入大于 0 的本箱数量' }
           if (!ctx.productId) return { ok: false, message: '请先扫描商品' }
           const remain = remainForProduct(ctx.items, ctx.productId)
           if (qty > remain) return { ok: false, message: `超出待收（本单该 SKU 剩余 ${remain}）` }
@@ -113,7 +113,7 @@ export function makeReceiveFlow(opts?: {
           const printHint = pkg?.printJobId ? '已加入打印队列' : '（未配置标签打印机则跳过打印）'
           return {
             ok:         true,
-            message:    `✓ 容器 ${code}，${printHint}${afterRemain > 0 ? ` · 该 SKU 还剩 ${afterRemain}` : ' · 该 SKU 已收满'}`,
+            message:    `✓ 箱码 ${code}，${printHint}${afterRemain > 0 ? ` · 该 SKU 还剩 ${afterRemain}` : ' · 该 SKU 已收货完成'}`,
             nextStep:   'scan-product',
             context:    {
               items:       nextItems,

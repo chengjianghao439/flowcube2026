@@ -1,7 +1,7 @@
 {
-  "version": "1.1.12",
-  "versionCode": 14,
+  "version": "1.1.13",
+  "versionCode": 15,
   "filename": "app-release.apk",
-  "releaseNote": "重构 PDA 底部扫码栏为页面内粘底交互，避免遮挡收货等页面内容。",
-  "publishedAt": "2026-03-31T00:10:00.000Z"
+  "releaseNote": "统一 PDA 收货完成与扫码上架文案，明确上架使用箱码与上架库位，并清理残留旧品牌名称。",
+  "publishedAt": "2026-03-31T02:20:00.000Z"
 }

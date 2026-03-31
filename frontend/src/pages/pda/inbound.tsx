@@ -45,7 +45,7 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
           </div>
         )}
         <Button size="lg" className="w-full" variant={isReady ? 'outline' : 'default'} onClick={onTap}>
-          {isReady ? '📤 开始上架' : '📥 开始收货'}
+          {isReady ? '📤 扫码上架' : '📥 开始收货'}
         </Button>
       </div>
     </PdaCard>

@@ -1,6 +1,6 @@
 /**
  * PDA 上架（收货订单）— 路由 /pda/putaway/:id
- * 扫容器 CNT → 扫库位 LOC → 调用 POST /inbound-tasks/:id/putaway
+ * 扫箱码 CNT → 扫上架库位 LOC → 调用 POST /inbound-tasks/:id/putaway
  */
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -34,11 +34,11 @@ function PutawayRunner({ taskId }: { taskId: number }) {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader
-        title="上架入库"
+        title="扫码上架"
         subtitle={`任务 #${taskId}`}
         backLabel="← 收货订单"
         onBack={() => navigate('/pda/inbound')}
-        right={<span className="text-xs text-muted-foreground">上架</span>}
+        right={<span className="text-xs text-muted-foreground">箱码上架</span>}
       />
 
       <div className="px-4 pt-3">
@@ -47,9 +47,9 @@ function PutawayRunner({ taskId }: { taskId: number }) {
       </div>
 
       <div className="flex-1 px-4 py-6 text-sm text-muted-foreground space-y-2">
-        <p className="text-amber-600/90 font-medium">须扫码上架：先 CNT 容器，再 LOC 库位；不可手填容器 ID。</p>
-        <p>① 扫描待上架容器（CNTxxxxxx）</p>
-        <p>② 扫描目标库位（LOC-…）</p>
+        <p className="text-amber-600/90 font-medium">上架流程：先扫描收货时打印出的箱码，再扫描上架库位。</p>
+        <p>① 扫描待上架箱码（CNTxxxxxx）</p>
+        <p>② 连续扫描上架库位（LOC-…）完成入库</p>
       </div>
 
       <PdaBottomBar>
@@ -89,7 +89,7 @@ export default function PdaPutawayPage() {
   if (!taskId) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="上架" onBack={() => navigate('/pda/inbound')} />
+        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon="📤"
           title="请选择上架任务"
@@ -104,7 +104,7 @@ export default function PdaPutawayPage() {
   if (isLoading || !task) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="上架" onBack={() => navigate('/pda/inbound')} />
+        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaLoading className="h-40 mt-8" />
       </div>
     )
@@ -113,7 +113,7 @@ export default function PdaPutawayPage() {
   if (task.status < 3) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="上架" onBack={() => navigate('/pda/inbound')} />
+        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon="⏳"
           title="任务尚未进入待上架"
@@ -128,7 +128,7 @@ export default function PdaPutawayPage() {
   if (task.status >= 4) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="上架" onBack={() => navigate('/pda/inbound')} />
+        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon="✅"
           title="任务已完成"

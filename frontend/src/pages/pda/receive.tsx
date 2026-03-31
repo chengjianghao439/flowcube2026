@@ -319,7 +319,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
                 active={product.productId === selectedProductId}
                 onClick={() => {
                   if (product.remainingQty <= 0) {
-                    warn(`${product.productName} 已收满`)
+                    warn(`${product.productName} 已收货完成`)
                     return
                   }
                   selectProduct(product.productId)
@@ -346,7 +346,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           />
         ) : (
           <PdaCard>
-            <p className="text-sm text-muted-foreground">请选择一个未收满商品，再录入每个箱码对应的数量。</p>
+            <p className="text-sm text-muted-foreground">请选择一个未收货完成的商品，再录入每个箱码对应的数量。</p>
           </PdaCard>
         )}
       </div>
@@ -395,7 +395,7 @@ export default function PdaReceivePage() {
     return (
       <div className="min-h-screen bg-background p-6 text-center space-y-3">
         <p className="text-muted-foreground">
-          {task.status === 3 ? '本单已收满，请前往「开始上架」扫描容器与库位。' : '任务已结束'}
+          {task.status === 3 ? '本单已收货完成，请前往「扫码上架」扫描箱码与上架库位。' : '任务已结束'}
         </p>
         <button type="button" className="text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回列表</button>
       </div>

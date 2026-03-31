@@ -81,7 +81,7 @@ public class PdaAppUpdatePlugin extends Plugin {
                 throw new Exception("无法创建更新目录");
             }
 
-            File apkFile = new File(parentDir, "FlowCubePDA-" + sanitizeVersion(version) + ".apk");
+            File apkFile = new File(parentDir, "JiXu-Flow-PDA-" + sanitizeVersion(version) + ".apk");
             if (apkFile.exists() && !apkFile.delete()) {
                 throw new Exception("旧更新包无法覆盖，请清理后重试");
             }

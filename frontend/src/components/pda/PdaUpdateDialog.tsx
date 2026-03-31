@@ -88,7 +88,7 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
       const url  = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `FlowCubePDA-${version.version}.apk`
+      a.download = `JiXu-Flow-PDA-${version.version}.apk`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)

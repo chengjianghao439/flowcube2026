@@ -190,13 +190,13 @@ export default function PdaPackPage() {
         }
         if (isDesktopLocalPrintError(local)) {
           err(
-            `${local.error} PDA 仅提交任务；请在已安装 FlowCube 桌面端、且连接标签机的电脑上登录 ERP 执行打印，或检查打印机名称与 RAW 驱动。`,
+            `${local.error} PDA 仅提交任务；请在已安装极序 Flow 桌面端、且连接标签机的电脑上登录 ERP 执行打印，或检查打印机名称与 RAW 驱动。`,
           )
           return
         }
         if (local === 'skipped_no_desktop') {
           err(
-            '当前浏览器未连接本机打印桥接（非桌面端或未注入 flowcubeDesktop），箱贴不会在本机出纸；任务已在服务器入队，请到装了 FlowCube 桌面端且挂了标签机的电脑登录后处理「打印任务」。',
+            '当前浏览器未连接本机打印桥接（非桌面端或未注入 flowcubeDesktop），箱贴不会在本机出纸；任务已在服务器入队，请到装了极序 Flow 桌面端且挂了标签机的电脑登录后处理「打印任务」。',
           )
           return
         }

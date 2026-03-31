@@ -13,7 +13,7 @@ import { usePdaOnboarding } from '@/hooks/usePdaOnboarding'
 // ── 作业入口（带权限过滤）────────────────────────────────────────────────────
 const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = [
   { icon: '📥', label: '收货订单', path: '/pda/inbound',  perm: 'pda:inbound'  },
-  { icon: '📤', label: '上架作业', path: '/pda/putaway',  perm: 'pda:putaway'  },
+  { icon: '📤', label: '扫码上架', path: '/pda/putaway',  perm: 'pda:putaway'  },
   { icon: '🗂️', label: '拣货任务', path: '/pda/picking',  perm: 'pda:picking'  },
   { icon: '🔀', label: '订单分拣', path: '/pda/sort',      perm: 'pda:sorting'  },
   { icon: '✅', label: '复核任务', path: '/pda/check',     perm: 'pda:checking' },
@@ -39,7 +39,7 @@ export default function PdaWorkbench() {
       <div className="border-b border-border bg-card px-4 pt-4 pb-4">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-mono text-muted-foreground tracking-wider uppercase">FlowCube WMS</p>
+            <p className="text-xs font-mono text-muted-foreground tracking-wider uppercase">极序 Flow</p>
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event('pda:check-update'))}
