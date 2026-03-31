@@ -362,7 +362,7 @@ async function getPickRoute(waveId) {
     if (remaining <= 0) continue
 
     const [containers] = await pool.query(
-      `SELECT c.id AS containerId, c.barcode, c.remaining_qty AS remainingQty,
+      `SELECT c.id AS containerId, c.barcode, c.container_type AS containerType, c.remaining_qty AS remainingQty,
               c.locked_by_task_id AS lockedByTaskId,
               loc.code AS locationCode,
               loc.zone, loc.aisle, loc.rack, loc.level, loc.position
@@ -392,6 +392,7 @@ async function getPickRoute(waveId) {
         unit:         item.unit,
         containerId:  c.containerId,
         barcode:      c.barcode,
+        containerKind: Number(c.containerType) === 2 || /^B/i.test(String(c.barcode || '')) ? 'plastic_box' : 'inventory',
         locationCode: c.locationCode || null,
         zone:         c.zone  || '',
         aisle:        c.aisle || '',

@@ -554,7 +554,7 @@ async function updatePriority(id, priority) {
 async function _fetchContainersForProducts(productIds, warehouseId, taskId) {
   if (!productIds.length) return {}
   const [containers] = await pool.query(
-    `SELECT c.id AS containerId, c.barcode, c.remaining_qty AS remainingQty,
+    `SELECT c.id AS containerId, c.barcode, c.container_type AS containerType, c.remaining_qty AS remainingQty,
             c.product_id AS productId,
             c.locked_by_task_id AS lockedByTaskId,
             loc.code AS locationCode,
@@ -601,6 +601,7 @@ async function getPickSuggestions(taskId) {
       suggestions: containers.map(c => ({
         containerId:  c.containerId,
         barcode:      c.barcode,
+        containerKind: Number(c.containerType) === 2 || /^B/i.test(String(c.barcode || '')) ? 'plastic_box' : 'inventory',
         locationCode: c.locationCode || null,
         remainingQty: Number(c.remainingQty),
         locked:       c.lockedByTaskId === taskId,

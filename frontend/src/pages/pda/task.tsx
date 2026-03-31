@@ -28,6 +28,7 @@ import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 function SuggestionRow({ c, onTap, disabled }: {
   c: PickSuggestionContainer; onTap: () => void; disabled: boolean
 }) {
+  const kindLabel = c.containerKind === 'plastic_box' ? '塑料盒' : '库存'
   return (
     <button onClick={onTap} disabled={disabled||c.locked}
       className={`mt-1.5 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-all active:scale-95
@@ -35,7 +36,10 @@ function SuggestionRow({ c, onTap, disabled }: {
     >
       <div>
         <p className="font-medium text-foreground"><span className="mr-1 text-muted-foreground">📍</span>{c.locationCode||'无库位'}</p>
-        <p className="font-mono text-xs text-muted-foreground">{c.barcode}</p>
+        <div className="mt-0.5 flex items-center gap-2">
+          <p className="font-mono text-xs text-muted-foreground">{c.barcode}</p>
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${c.containerKind === 'plastic_box' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'}`}>{kindLabel}</span>
+        </div>
       </div>
       <div className="text-right">
         <p className="text-sm font-bold text-primary">{c.remainingQty}</p>

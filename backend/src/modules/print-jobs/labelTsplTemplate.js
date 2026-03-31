@@ -67,11 +67,13 @@ function buildContainerLabelTspl({ container_code, product_name, qty }) {
   const name = sanitizeTsplValue(String(product_name ?? '').slice(0, 32))
   const q = Number(qty)
   const qtyStr = sanitizeTsplValue(Number.isFinite(q) ? String(q) : String(qty ?? ''))
+  const kind = sanitizeTsplValue(String(container_code ?? '').toUpperCase().startsWith('B') ? '塑料盒' : '库存')
   return [
     ...tsplHeaderLines('SIZE 60 mm,40 mm'),
     `BARCODE 40,24,"128",72,1,0,2,2,"${code}"`,
     `TEXT 40,108,"${TSPL_TEXT_FONT}",0,1,1,"${name}"`,
-    `TEXT 40,148,"${TSPL_TEXT_FONT}",0,1,1,"QTY ${qtyStr}"`,
+    `TEXT 40,148,"${TSPL_TEXT_FONT}",0,1,1,"${kind}"`,
+    `TEXT 40,188,"${TSPL_TEXT_FONT}",0,1,1,"QTY ${qtyStr}"`,
     'PRINT 1',
   ].join('\n')
 }

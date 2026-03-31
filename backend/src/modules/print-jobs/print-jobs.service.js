@@ -422,6 +422,12 @@ async function pushToClients(_printerCode, _job) {
 }
 
 /** ZPL 容器标签（Code128），供斑马等标签机 */
+function buildContainerLabelKind(containerCode) {
+  const code = String(containerCode ?? '').toUpperCase()
+  if (code.startsWith('B')) return '塑料盒'
+  return '库存'
+}
+
 function buildContainerLabelZpl({ container_code, product_name, qty }) {
   const code = String(container_code ?? '').replace(/[\r\n^~]/g, '')
   const name = String(product_name ?? '')
@@ -429,7 +435,8 @@ function buildContainerLabelZpl({ container_code, product_name, qty }) {
     .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
   const q = Number(qty)
   const qtyStr = Number.isFinite(q) ? String(q) : String(qty ?? '')
-  return `^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,24,24^FD${name}^FS^FO32,148^A0N,24,24^FDQTY ${qtyStr}^FS^XZ`
+  const kind = buildContainerLabelKind(container_code)
+  return `^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,24,24^FD${name}^FS^FO32,148^A0N,24,24^FD${kind}^FS^FO32,184^A0N,24,24^FDQTY ${qtyStr}^FS^XZ`
 }
 
 /** ZPL 货架标签 */

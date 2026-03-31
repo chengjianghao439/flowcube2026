@@ -13,6 +13,7 @@ import client from '@/api/client'
 interface ContainerInfo {
   containerId: number
   barcode: string
+  containerKind?: 'inventory' | 'plastic_box'
   productId: number
   productName: string
   warehouseId: number
@@ -41,7 +42,7 @@ async function createScanLog(params: {
 
 interface ScanRecord {
   id: number; barcode: string; productName: string; locationCode: string | null
-  qty: number; time: string; mode: string
+  qty: number; time: string; mode: string; containerKind?: 'inventory' | 'plastic_box'
 }
 
 function now(): string {
@@ -166,7 +167,7 @@ export default function PdaWavePage() {
 
       setRecords(prev => [{
         id: Date.now(), barcode: trimmed, productName: matchItem.productName,
-        locationCode: container.locationCode, qty: addQty, time: now(), mode: scanMode,
+        locationCode: container.locationCode, qty: addQty, time: now(), mode: scanMode, containerKind: container.containerKind,
       }, ...prev])
       triggerFlash('success')
 
@@ -373,6 +374,11 @@ export default function PdaWavePage() {
                                 <span className={`font-mono text-sm ${cDone ? 'text-gray-500' : 'text-white'}`}>
                                   {c.barcode}
                                 </span>
+                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                  String(c.barcode).startsWith('B') ? 'bg-orange-500/20 text-orange-300' : 'bg-slate-500/20 text-slate-300'
+                                }`}>
+                                  {String(c.barcode).startsWith('B') ? '塑料盒' : '库存'}
+                                </span>
                                 {!cDone && isCurrent && (
                                   <button
                                     onClick={e => { e.stopPropagation(); handleScan(c.barcode) }}
@@ -458,6 +464,9 @@ export default function PdaWavePage() {
                     <div className="flex items-center gap-2">
                       <span className="shrink-0 text-xs text-green-400">✓</span>
                       <span className="truncate font-mono text-sm text-gray-200">{rec.barcode}</span>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        rec.containerKind === 'plastic_box' ? 'bg-orange-500/20 text-orange-300' : 'bg-slate-500/20 text-slate-300'
+                      }`}>{rec.containerKind === 'plastic_box' ? '塑料盒' : '库存'}</span>
                       <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
                         rec.mode === '整件' ? 'bg-purple-500/20 text-purple-300' : 'bg-cyan-500/20 text-cyan-300'
                       }`}>{rec.mode} ×{rec.qty}</span>

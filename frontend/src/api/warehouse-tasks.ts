@@ -124,6 +124,7 @@ export const updateTaskPriorityApi = (id: number, priority: number) =>
 export interface PickSuggestionContainer {
   containerId: number
   barcode: string
+  containerKind?: 'inventory' | 'plastic_box'
   locationCode: string | null
   remainingQty: number
   locked: boolean
