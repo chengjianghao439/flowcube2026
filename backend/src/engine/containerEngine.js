@@ -69,10 +69,11 @@ function assertNonNegativeQty(qty, context = '') {
 
 /**
  * 生成容器条码
- * 格式：CNT + 6位全局递增序号，如 CNT000001
+ * - I + 6位数字：库存条码
+ * - B + 6位数字：塑料盒条码
  */
-async function genBarcode(conn) {
-  return generateContainerCode(conn)
+async function genBarcode(conn, prefix = 'I') {
+  return generateContainerCode(conn, prefix)
 }
 
 /**
@@ -93,6 +94,8 @@ async function genBarcode(conn) {
  * @param {string} [params.sourceRefNo]
  * @param {string} [params.remark]
  * @param {string} [params.barcode]          - 自定义条码（不传则自动生成）
+ * @param {'I'|'B'} [params.barcodePrefix]   - 自动生成条码前缀；默认 I
+ * @param {number} [params.containerType]    - 1=库存条码 2=塑料盒条码
  * @param {number} [params.locationId]       - 库位ID
  * @param {number} [params.inboundTaskId]     - 入库任务ID（收货生成待上架容器）
  * @param {number} [params.containerStatus]   - 默认 ACTIVE（仅调拨/退货允许）；其它来源须显式传 PENDING_PUTAWAY 或由引擎内部两段式入账
@@ -113,6 +116,8 @@ async function createContainer(conn, {
   sourceRefNo   = null,
   remark        = null,
   barcode       = null,
+  barcodePrefix = 'I',
+  containerType = 1,
   locationId    = null,
   inboundTaskId = null,
   containerStatus = CONTAINER_STATUS.ACTIVE,
@@ -144,7 +149,7 @@ async function createContainer(conn, {
     deadline = putawayDeadlineAt || defaultPutawayDeadline()
   }
 
-  const bc = barcode || await genBarcode(conn)
+  const bc = barcode || await genBarcode(conn, barcodePrefix)
   const detailRefType = sourceRefType || sourceType
   const [r] = await conn.query(
     `INSERT INTO inventory_containers
@@ -154,8 +159,8 @@ async function createContainer(conn, {
         source_ref_type, source_ref_id, source_ref_no, inbound_task_id, remark,
         source_type, source_audit_missing, putaway_flagged_overdue,
         is_legacy, putaway_deadline_at, is_overdue)
-     VALUES (?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?,0)`,
-    [bc, productId, warehouseId, locationId,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?,0)`,
+    [bc, containerType, productId, warehouseId, locationId,
      batchNo, mfgDate || null, expDate || null, unit,
      initialQty, initialQty, containerStatus,
      detailRefType, sid, sourceRefNo, inboundTaskId, remark,
@@ -644,11 +649,11 @@ function fmtSqlDate(d) {
 }
 
 /**
- * 同仓容器拆分：从单一 ACTIVE 容器扣减数量，生成新容器（继承库位与批次）
+ * 同仓容器拆分：从单一 ACTIVE 容器扣减数量，生成新塑料盒（B 条码，继承库位与批次）
  *
  * @param {object} conn
  * @param {{ containerId: number, qty: number, remark?: string|null }} params
- * @returns {Promise<{ sourceContainerId: number, sourceBarcode: string, sourceRemainingAfter: number, newContainerId: number, newBarcode: string, productId: number, warehouseId: number }>}
+ * @returns {Promise<{ sourceContainerId: number, sourceBarcode: string, sourceRemainingAfter: number, newContainerId: number, newBarcode: string, newContainerKind: 'plastic_box', productId: number, warehouseId: number }>}
  */
 async function splitContainer(conn, { containerId, qty, remark = null }) {
   const cid = Number(containerId)
@@ -693,6 +698,8 @@ async function splitContainer(conn, { containerId, qty, remark = null }) {
     sourceRefId:     cid,
     sourceRefType:   'container_split',
     remark:          remark || `自 ${row.barcode} 拆分`,
+    barcodePrefix:   'B',
+    containerType:   2,
     locationId:      row.location_id,
     containerStatus: CONTAINER_STATUS.ACTIVE,
   })
@@ -710,6 +717,7 @@ async function splitContainer(conn, { containerId, qty, remark = null }) {
     sourceRemainingAfter:  newRem,
     newContainerId:        newId,
     newBarcode:            newBc,
+    newContainerKind:      'plastic_box',
     productId:             row.product_id,
     warehouseId:           row.warehouse_id,
   }

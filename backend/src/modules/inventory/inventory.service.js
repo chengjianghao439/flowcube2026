@@ -601,7 +601,7 @@ async function checkStockConsistency({ productId = null, warehouseId = null, lim
 
 async function getContainerByBarcode(barcode) {
   const [[row]] = await pool.query(
-    `SELECT c.id, c.barcode, c.product_id, c.warehouse_id, c.location_id,
+    `SELECT c.id, c.barcode, c.container_type, c.product_id, c.warehouse_id, c.location_id,
             c.remaining_qty, c.unit, c.status, c.inbound_task_id,
             c.source_type, c.source_ref_id, c.is_legacy,
             p.code AS product_code, p.name AS product_name,
@@ -627,6 +627,7 @@ async function getContainerByBarcode(barcode) {
     locationCode:  row.location_code || null,
     remainingQty:  Number(row.remaining_qty),
     unit:          row.unit,
+    containerKind: Number(row.container_type) === 2 || /^B/i.test(String(row.barcode || '')) ? 'plastic_box' : 'inventory',
     containerStatus: Number(row.status) === 4 ? 'waiting_putaway' : 'stored',
     inboundTaskId: row.inbound_task_id || null,
     sourceType:    row.source_type || null,
@@ -675,7 +676,7 @@ async function assignContainerLocation(containerId, locationId) {
 }
 
 /**
- * 同仓容器拆分（散件）：单容器扣减并生成新 CNT，可选打印新容器标
+ * 同仓容器拆分（散件）：单容器扣减并生成新塑料盒条码（B），可选打印新标签
  */
 async function splitContainerOp(containerId, { qty, remark, printLabel, tenantId, userId }) {
   const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')

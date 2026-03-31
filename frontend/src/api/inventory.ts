@@ -22,6 +22,7 @@ export const getContainerByBarcodeApi = async (barcode: string) =>
     productName: string; warehouseId: number; warehouseName: string
     locationId: number | null; locationCode: string | null
     remainingQty: number; unit: string
+    containerKind?: 'inventory' | 'plastic_box'
     containerStatus?: 'waiting_putaway' | 'stored'
     inboundTaskId?: number | null
   }>>(`/inventory/containers/barcode/${encodeURIComponent(barcode)}`)
@@ -38,6 +39,7 @@ export interface SplitContainerResult {
   sourceRemainingAfter: number
   newContainerId: number
   newBarcode: string
+  newContainerKind?: 'inventory' | 'plastic_box'
   productId: number
   warehouseId: number
 }

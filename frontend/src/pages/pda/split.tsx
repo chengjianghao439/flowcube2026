@@ -1,5 +1,5 @@
 /**
- * PDA 同仓库存条码拆分 /pda/split
+ * PDA 同仓库存拆分 /pda/split
  */
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -21,6 +21,7 @@ export default function PdaSplitPage() {
   const [containerId, setContainerId] = useState<number | null>(null)
   const [barcode, setBarcode] = useState<string | null>(null)
   const [productHint, setProductHint] = useState<string>('')
+  const [sourceKind, setSourceKind] = useState<'inventory' | 'plastic_box'>('inventory')
   const [remaining, setRemaining] = useState<number>(0)
   const [qtyStr, setQtyStr] = useState('1')
   const [printLabel, setPrintLabel] = useState(true)
@@ -37,6 +38,7 @@ export default function PdaSplitPage() {
       }
       setContainerId(d.containerId)
       setBarcode(d.barcode)
+      setSourceKind(d.containerKind === 'plastic_box' ? 'plastic_box' : 'inventory')
       setProductHint(`${d.productName}（${d.productCode}）`)
       setRemaining(d.remainingQty)
       setQtyStr('1')
@@ -55,10 +57,11 @@ export default function PdaSplitPage() {
       return splitContainerApi(containerId, { qty: q, printLabel })
     },
     onSuccess: (res) => {
-      ok(`拆分成功：新容器 ${res.newBarcode}`)
+      ok(`拆分成功：新塑料盒条码 ${res.newBarcode}`)
       setStep('scan')
       setContainerId(null)
       setBarcode(null)
+      setSourceKind('inventory')
       setProductHint('')
       setRemaining(0)
       setQtyStr('1')
@@ -70,7 +73,7 @@ export default function PdaSplitPage() {
   const handleScan = useCallback((raw: string) => {
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'container' && parsed.type !== 'unknown') {
-      err('请扫描库存条码（I000123）')
+      err('请扫描库存条码或塑料盒条码（I000123 / B000123）')
       return
     }
     loadMut.mutate(raw.trim())
@@ -91,19 +94,20 @@ export default function PdaSplitPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <PdaHeader title="库存拆分" subtitle="同仓散件拆出" onBack={() => navigate('/pda')} />
+      <PdaHeader title="塑料盒拆分" subtitle="从库存中拆出散件塑料盒" onBack={() => navigate('/pda')} />
       <PdaFlash flash={flash} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
         {step === 'scan' && (
           <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
-            <p className="text-sm text-muted-foreground">扫描源库存条码（I），系统将扣减并生成新的库存条码。</p>
+            <p className="text-sm text-muted-foreground">扫描源库存条码或塑料盒条码，系统会扣减原容器并生成新的塑料盒条码（B）。</p>
           </div>
         )}
         {step === 'qty' && containerId && (
           <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3">
             <p className="font-mono text-lg font-bold text-foreground">{barcode}</p>
             <p className="text-sm text-foreground">{productHint}</p>
+            <p className="text-xs text-muted-foreground">来源类型：<span className="font-semibold text-foreground">{sourceKind === 'plastic_box' ? '塑料盒条码' : '库存条码'}</span></p>
             <p className="text-xs text-muted-foreground">剩余可拆：<span className="font-semibold text-foreground">{remaining}</span></p>
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">拆分数量</label>
@@ -124,7 +128,7 @@ export default function PdaSplitPage() {
                 onChange={e => setPrintLabel(e.target.checked)}
                 className="h-4 w-4 rounded border-border"
               />
-              打印新库存条码
+              打印新塑料盒条码
             </label>
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => { setStep('scan'); setContainerId(null) }}>
@@ -140,7 +144,7 @@ export default function PdaSplitPage() {
 
       <PdaBottomBar>
         {step === 'scan' && (
-          <PdaScanner onScan={handleScan} placeholder="扫描库存条码 I000123" disabled={loadMut.isPending} />
+          <PdaScanner onScan={handleScan} placeholder="扫描库存/塑料盒条码 I000123 / B000123" disabled={loadMut.isPending} />
         )}
       </PdaBottomBar>
     </div>

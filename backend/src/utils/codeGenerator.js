@@ -11,8 +11,8 @@
  *     示例：SO20260308001 / PO20260308001 / WT20260308001
  *     规则：每天独立计数，当天 001 起始
  *
- *  3. 库存条码（累计流水）：I + 6位数字
- *     示例：I000001 / I000002
+ *  3. 容器条码（累计流水）：I/B + 6位数字
+ *     示例：I000001 / B000001
  *     规则：全局最大值 +1，不重置
  *
  * 所有函数接受 conn（数据库连接或连接池），
@@ -60,12 +60,23 @@ async function generateDailyCode(conn, prefix, table, codeField) {
 }
 
 /**
- * 生成库存条码（累计）。
+ * 生成容器条码（累计）。
  *
  * @param {object} conn  - mysql2 连接或连接池
- * @returns {Promise<string>}  - 如 'I000001'
+ * @param {'I'|'B'} [prefix='I'] - I=库存条码，B=塑料盒条码
+ * @returns {Promise<string>}  - 如 'I000001' / 'B000001'
  */
-async function generateContainerCode(conn) {
+async function generateContainerCode(conn, prefix = 'I') {
+  const upper = String(prefix || 'I').toUpperCase()
+  if (upper === 'B') {
+    const [[{ maxNum }]] = await conn.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(barcode, 2) AS UNSIGNED)), 0) AS maxNum
+       FROM inventory_containers
+       WHERE barcode LIKE 'B%'`,
+    )
+    return `B${String(maxNum + 1).padStart(6, '0')}`
+  }
+
   const [[{ maxNum }]] = await conn.query(
     `SELECT COALESCE(MAX(CAST(
         CASE

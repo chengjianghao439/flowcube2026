@@ -118,8 +118,8 @@ export default function PdaWavePage() {
     const trimmed = barcode.trim()
     if (!trimmed || !wave?.items?.length) return
 
-    if (!/^(?:I|CNT)\d{6}$/.test(trimmed)) {
-      showError(`条码格式无效：${trimmed}`)
+    if (!/^(?:I|B|CNT)\d{6}$/.test(trimmed)) {
+      showError(`请扫描库存条码或塑料盒条码：${trimmed}`)
       setInputVal('')
       return
     }
@@ -437,7 +437,7 @@ export default function PdaWavePage() {
               onChange={e => setInputVal(e.target.value)}
               onKeyDown={handleKeyDown}
               onBlur={() => setTimeout(focusInput, 100)}
-              placeholder="等待扫码枪输入 I000001 ..."
+              placeholder="等待扫码枪输入 I000001 / B000001 ..."
               disabled={scanning}
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
               className="w-full bg-transparent text-lg font-mono text-white placeholder-gray-600 outline-none disabled:opacity-50" />

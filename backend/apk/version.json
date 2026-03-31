@@ -1,7 +1,7 @@
 {
-  "version": "1.1.16",
-  "versionCode": 18,
+  "version": "1.1.17",
+  "versionCode": 19,
   "filename": "app-release.apk",
-  "releaseNote": "修复 PDA 独立 APK 未写入默认服务器地址导致无法连接，并继续兼容新旧条码制。",
-  "publishedAt": "2026-03-31T08:50:00.000Z"
+  "releaseNote": "拆分作业正式生成塑料盒条码 B，拣货/复核/波次同步支持扫描库存条码与塑料盒条码。",
+  "publishedAt": "2026-03-31T09:25:00.000Z"
 }
