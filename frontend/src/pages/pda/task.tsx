@@ -78,7 +78,7 @@ function ProductCard({ item, onScan, scanning }: {
         {!done && <button onClick={()=>setOpen(o=>!o)} className="text-xs text-muted-foreground hover:text-foreground">{open?'▲ 收起推荐':'▼ 查看推荐库位'}</button>}
         {open && !done && (
           item.suggestions.length===0
-            ? <p className="text-xs text-muted-foreground">暂无推荐容器，请直接扫码</p>
+            ? <p className="text-xs text-muted-foreground">暂无推荐库存单元，请直接扫码</p>
             : item.suggestions.map(c => (
                 <SuggestionRow key={c.containerId} c={c} disabled={scanning} onTap={()=>onScan(c.barcode,c)} />
               ))
@@ -229,9 +229,9 @@ export default function PdaTaskPage() {
       {/* 步骤提示 */}
       <div className="max-w-md mx-auto px-4 pt-3">
         <PdaStepHint
-          step="扫描货架上的容器条码（CNTxxxxxx）"
-          nextStep="扫码后系统自动记录拣货数量，继续扫下一个容器"
-          errorHint="请扫描货架上的容器条码（格式：CNTxxxxxx），不是商品条码"
+          step="扫描货架上的库存条码（CNTxxxxxx）"
+          nextStep="扫码后系统自动记录拣货数量，继续扫下一个库存单元"
+          errorHint="请扫描货架上的库存条码（格式：CNTxxxxxx），不是产品条码"
           hasError={false}
         />
       </div>
@@ -240,7 +240,7 @@ export default function PdaTaskPage() {
         <Input ref={inputRef} value={inputVal}
           onChange={e => setInputVal(e.target.value)}
           onKeyDown={e => { if(e.key==='Enter') handleScan(inputVal) }}
-          placeholder={scanning?'处理中…':'扫描容器条码 CNT000001'}
+          placeholder={scanning?'处理中…':'扫描库存条码 CNT000001'}
           disabled={scanning||!!finished}
           className="flex-1 h-12 text-base"
           autoComplete="off" autoCorrect="off" spellCheck={false}
@@ -252,4 +252,3 @@ export default function PdaTaskPage() {
     </div>
   )
 }
-

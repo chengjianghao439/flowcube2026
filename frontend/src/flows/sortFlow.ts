@@ -26,8 +26,8 @@ export const SORT_FLOW: FlowDef<SortFlowContext> = {
   steps: [
     {
       id:          'scan-product',
-      label:       '扫描商品条码',
-      placeholder: '扫描商品条码',
+      label:       '扫描产品条码',
+      placeholder: '扫描产品条码',
       barcodeType: 'any',
       handle: async (barcode, _ctx) => {
         const res    = await scanProductForSortApi(barcode)

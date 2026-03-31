@@ -2,7 +2,7 @@
  * PDA 流程配置 — 出库确认流程
  *
  * 使用 usePdaFlow 驱动，替代 ship.tsx 中的手写逻辑
- * 演示：如何用流程引擎配置一个「扫箱号 → 自动出库」流程
+ * 演示：如何用流程引擎配置一个「扫物流条码 → 自动出库」流程
  */
 import type { FlowDef } from '@/hooks/usePdaFlow'
 import { getPackageByBarcodeApi } from '@/api/packages'
@@ -20,8 +20,8 @@ export const SHIP_FLOW: FlowDef<ShipFlowContext> = {
   steps: [
     {
       id:          'scan-box',
-      label:       '扫描箱号',
-      placeholder: '扫描箱号 BOXxxxxxx',
+      label:       '扫描物流条码',
+      placeholder: '扫描物流条码 BOXxxxxxx',
       barcodeType: 'box',
       handle: async (barcode, _ctx) => {
         const res  = await getPackageByBarcodeApi(barcode)

@@ -43,7 +43,7 @@ export default function BarcodeDialog({ open, onClose, product, copies = 1 }: Pr
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>商品标签 — {product.name}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>产品条码标签 — {product.name}</DialogTitle></DialogHeader>
         <div className="flex items-center justify-end gap-2 pb-1">
           <PrintPreviewZoomControls value={previewZoom} onChange={setPreviewZoom} />
         </div>

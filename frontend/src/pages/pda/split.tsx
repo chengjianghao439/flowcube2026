@@ -1,5 +1,5 @@
 /**
- * PDA 同仓容器拆分 /pda/split
+ * PDA 同仓库存条码拆分 /pda/split
  */
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -70,7 +70,7 @@ export default function PdaSplitPage() {
   const handleScan = useCallback((raw: string) => {
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'container' && parsed.type !== 'unknown') {
-      err('请扫描容器条码（CNTxxxxxx）')
+      err('请扫描库存条码（CNTxxxxxx）')
       return
     }
     loadMut.mutate(raw.trim())
@@ -91,13 +91,13 @@ export default function PdaSplitPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <PdaHeader title="容器拆分" subtitle="同仓散件拆出" onBack={() => navigate('/pda')} />
+      <PdaHeader title="库存拆分" subtitle="同仓散件拆出" onBack={() => navigate('/pda')} />
       <PdaFlash flash={flash} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
         {step === 'scan' && (
           <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
-            <p className="text-sm text-muted-foreground">扫描源容器条码（CNT），系统将扣减并生成新容器。</p>
+            <p className="text-sm text-muted-foreground">扫描源库存条码（CNT），系统将扣减并生成新的库存条码。</p>
           </div>
         )}
         {step === 'qty' && containerId && (
@@ -124,7 +124,7 @@ export default function PdaSplitPage() {
                 onChange={e => setPrintLabel(e.target.checked)}
                 className="h-4 w-4 rounded border-border"
               />
-              打印新容器标
+              打印新库存条码
             </label>
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => { setStep('scan'); setContainerId(null) }}>
@@ -140,7 +140,7 @@ export default function PdaSplitPage() {
 
       <PdaBottomBar>
         {step === 'scan' && (
-          <PdaScanner onScan={handleScan} placeholder="扫描容器条码 CNTxxxxxx" disabled={loadMut.isPending} />
+          <PdaScanner onScan={handleScan} placeholder="扫描库存条码 CNTxxxxxx" disabled={loadMut.isPending} />
         )}
       </PdaBottomBar>
     </div>

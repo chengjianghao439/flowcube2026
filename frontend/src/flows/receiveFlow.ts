@@ -1,5 +1,5 @@
 /**
- * PDA 收货流程：扫采购单号 → 扫商品 → 输入本箱数量 → 提交生成待上架箱码并排队打印标签
+ * PDA 收货流程：扫采购单号 → 扫产品 → 输入本箱数量 → 提交生成待上架库存条码并排队打印标签
  */
 import type { FlowDef } from '@/hooks/usePdaFlow'
 import { parseBarcode } from '@/utils/barcode'
@@ -65,13 +65,13 @@ export function makeReceiveFlow(opts?: {
       },
       {
         id:          'scan-product',
-        label:       '扫描商品',
-        placeholder: '扫描商品条码',
+        label:       '扫描产品',
+        placeholder: '扫描产品条码',
         barcodeType: 'product',
         handle:      async (raw, ctx) => {
           const parsed = parseBarcode(raw)
           if (parsed.type !== 'product' && parsed.type !== 'unknown') {
-            return { ok: false, message: '请扫描商品条码' }
+            return { ok: false, message: '请扫描产品条码' }
           }
           const item = ctx.items.find(i =>
             i.productCode === raw ||
@@ -113,7 +113,7 @@ export function makeReceiveFlow(opts?: {
           const printHint = pkg?.printJobId ? '已加入打印队列' : '（未配置标签打印机则跳过打印）'
           return {
             ok:         true,
-            message:    `✓ 箱码 ${code}，${printHint}${afterRemain > 0 ? ` · 该 SKU 还剩 ${afterRemain}` : ' · 该 SKU 已收货完成'}`,
+            message:    `✓ 库存条码 ${code}，${printHint}${afterRemain > 0 ? ` · 该 SKU 还剩 ${afterRemain}` : ' · 该 SKU 已收货完成'}`,
             nextStep:   'scan-product',
             context:    {
               items:       nextItems,

@@ -1,6 +1,6 @@
 /**
  * PDA 上架（收货订单）— 路由 /pda/putaway/:id
- * 扫箱码 CNT → 扫上架库位 LOC → 调用 POST /inbound-tasks/:id/putaway
+ * 扫库存条码 CNT → 扫货架条码 LOC → 调用 POST /inbound-tasks/:id/putaway
  */
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -38,7 +38,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
         subtitle={`任务 #${taskId}`}
         backLabel="← 收货订单"
         onBack={() => navigate('/pda/inbound')}
-        right={<span className="text-xs text-muted-foreground">箱码上架</span>}
+        right={<span className="text-xs text-muted-foreground">库存上架</span>}
       />
 
       <div className="px-4 pt-3">
@@ -47,9 +47,9 @@ function PutawayRunner({ taskId }: { taskId: number }) {
       </div>
 
       <div className="flex-1 px-4 py-6 text-sm text-muted-foreground space-y-2">
-        <p className="text-amber-600/90 font-medium">上架流程：先扫描收货时打印出的箱码，再扫描上架库位。</p>
-        <p>① 扫描待上架箱码（CNTxxxxxx）</p>
-        <p>② 连续扫描上架库位（LOC-…）完成入库</p>
+        <p className="text-amber-600/90 font-medium">上架流程：先扫描收货时打印出的库存条码，再扫描货架条码。</p>
+        <p>① 扫描待上架库存条码（CNTxxxxxx）</p>
+        <p>② 连续扫描货架条码（LOC-…）完成入库</p>
       </div>
 
       <PdaBottomBar>
@@ -117,7 +117,7 @@ export default function PdaPutawayPage() {
         <PdaEmptyState
           icon="⏳"
           title="任务尚未进入待上架"
-          description="请先完成收货并打印箱码，任务进入待上架后会显示在这里。"
+          description="请先完成收货并打印库存条码，任务进入待上架后会显示在这里。"
           actionText="返回收货订单"
           onAction={() => navigate('/pda/inbound')}
         />

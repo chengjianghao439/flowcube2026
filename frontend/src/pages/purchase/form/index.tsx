@@ -388,7 +388,7 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
 
       <Section title="商品明细">
         <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm text-muted-foreground">
-          当前采购单只负责计划与提交。收货、打印箱码、PDA 执行与上架，将迁移到独立的收货入库单流程。
+          当前采购单只负责计划与提交。收货、打印库存条码、PDA 执行与上架，将迁移到独立的收货入库单流程。
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

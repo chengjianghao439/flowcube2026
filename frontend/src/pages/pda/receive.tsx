@@ -1,5 +1,5 @@
 /**
- * PDA 收货 — 支持按商品逐箱录入并批量打印箱码
+ * PDA 收货 — 支持按产品逐箱录入并批量打印库存条码
  */
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -209,7 +209,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   function handleScan(raw: string) {
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'product' && parsed.type !== 'unknown') {
-      err('请扫描商品条码')
+      err('请扫描产品条码')
       return
     }
 
@@ -270,7 +270,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
         onSuccess: (data) => {
           const count = data.containers?.length ?? 0
           const printCount = data.printJobIds?.length ?? 0
-          ok(`已生成 ${count} 个箱码${printCount > 0 ? `，已提交 ${printCount} 条打印任务` : ''}`)
+          ok(`已生成 ${count} 个库存条码${printCount > 0 ? `，已提交 ${printCount} 条打印任务` : ''}`)
           if ((activeProduct.remainingQty - totalQty) > 0) {
             resetBoxes(1)
           } else {
@@ -302,7 +302,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           <div className="space-y-2 text-sm">
             <p className="text-muted-foreground">仓库：{task.warehouseName ?? '—'}</p>
             <p className="text-muted-foreground">关联采购：{task.purchaseOrderNo ?? '混合采购单'}</p>
-            <p className="text-muted-foreground">操作方式：扫描商品条码或点选商品，再逐箱录入数量并批量打印</p>
+            <p className="text-muted-foreground">操作方式：扫描产品条码或点选商品，再逐箱录入数量并批量打印</p>
           </div>
         </PdaCard>
 
@@ -346,7 +346,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           />
         ) : (
           <PdaCard>
-            <p className="text-sm text-muted-foreground">请选择一个未收货完成的商品，再录入每个箱码对应的数量。</p>
+            <p className="text-sm text-muted-foreground">请选择一个未收货完成的产品，再录入每个库存条码对应的数量。</p>
           </PdaCard>
         )}
       </div>
@@ -354,7 +354,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       <PdaBottomBar>
         <PdaScanner
           onScan={handleScan}
-          placeholder="扫描商品条码，快速定位到待收商品"
+          placeholder="扫描产品条码，快速定位到待收商品"
           disabled={receiveMut.isPending}
         />
       </PdaBottomBar>
@@ -395,7 +395,7 @@ export default function PdaReceivePage() {
     return (
       <div className="min-h-screen bg-background p-6 text-center space-y-3">
         <p className="text-muted-foreground">
-          {task.status === 3 ? '本单已收货完成，请前往「扫码上架」扫描箱码与上架库位。' : '任务已结束'}
+          {task.status === 3 ? '本单已收货完成，请前往「扫码上架」扫描库存条码与货架条码。' : '任务已结束'}
         </p>
         <button type="button" className="text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回列表</button>
       </div>

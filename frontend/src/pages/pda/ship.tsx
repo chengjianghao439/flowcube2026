@@ -1,6 +1,6 @@
 /**
  * PDA 出库确认  /pda/ship
- * 无感操作：扫箱号 → 自动查询 → 自动出库，无需额外确认按钮
+ * 无感操作：扫物流条码 → 自动查询 → 自动出库，无需额外确认按钮
  */
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -39,7 +39,7 @@ export default function PdaShipPage() {
   // 扫码后自动查询并立即出库，无需额外确认按钮
   const handleScan = useCallback(async (raw: string) => {
     const parsed = parseBarcode(raw)
-    if (parsed.type !== 'box') { err('必须扫描箱号条码（BOXxxxxxx）'); return }
+    if (parsed.type !== 'box') { err('必须扫描物流条码（BOXxxxxxx）'); return }
     setLoading(true)
     try {
       const res  = await getPackageByBarcodeApi(raw)
@@ -50,7 +50,7 @@ export default function PdaShipPage() {
       // 自动触发出库，无需用户再次确认
       shipMut.mutate(data.warehouseTaskId)
     } catch (e: unknown) {
-      err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '箱号不存在')
+      err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '物流条码不存在')
     } finally { setLoading(false) }
   }, [err, shipMut])
 
@@ -127,7 +127,7 @@ export default function PdaShipPage() {
 
               {/* 箱子列表 */}
               <div className="rounded-2xl bg-card border border-border p-4">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">箱子列表（{totalBoxes} 箱）</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">物流条码列表（{totalBoxes} 箱）</p>
                 <div className="space-y-1.5">
                   {info.packages.map(pkg => (
                     <div key={pkg.id} className={`flex items-center justify-between rounded-xl px-3 py-2 ${
@@ -155,9 +155,9 @@ export default function PdaShipPage() {
             <span className="text-sm font-bold text-foreground">{totalBoxes} 箱</span>
           </PdaCard>
         ) : (
-          <p className="text-center text-sm text-muted-foreground py-2">扫描箱号后自动完成出库</p>
+          <p className="text-center text-sm text-muted-foreground py-2">扫描物流条码后自动完成出库</p>
         )}
-        <PdaScanner onScan={handleScan} placeholder="扫描箱号 BOXxxxxxx" disabled={loading || shipMut.isPending} />
+        <PdaScanner onScan={handleScan} placeholder="扫描物流条码 BOXxxxxxx" disabled={loading || shipMut.isPending} />
         {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">出库中…</span></div>}
       </PdaBottomBar>
     </div>

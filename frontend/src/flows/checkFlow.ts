@@ -1,7 +1,7 @@
 /**
  * PDA 流程配置 — 复核流程
  *
- * 步骤：扫描拣货时使用的容器条码 → 后端按容器确认复核量；全部容器确认后任务进入待打包
+ * 步骤：扫描拣货时使用的库存条码 → 后端按库存单元确认复核量；全部库存单元确认后任务进入待打包
  */
 import type { FlowDef } from '@/hooks/usePdaFlow'
 import { submitCheckScanApi } from '@/api/warehouse-tasks'
@@ -17,8 +17,8 @@ export const CHECK_FLOW: FlowDef<CheckFlowContext> = {
   steps: [
     {
       id:          'scan-container',
-      label:       '扫描容器条码',
-      placeholder: '扫描容器条码 CNTxxxxxx',
+      label:       '扫描库存条码',
+      placeholder: '扫描库存条码 CNTxxxxxx',
       barcodeType: 'container',
       handle: async (barcode, ctx) => {
         const { task } = ctx

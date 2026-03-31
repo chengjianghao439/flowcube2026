@@ -231,7 +231,7 @@ export default function PdaPackPage() {
   const handleScan = useCallback((raw: string) => {
     if (!activePackageId) { err('请先创建或选择一个箱子'); return }
     const parsed = parseBarcode(raw)
-    if (parsed.type !== 'product' && parsed.type !== 'unknown') { err('请扫描商品条码（PRDxxxxxx 或 SKU 编码）'); return }
+    if (parsed.type !== 'product' && parsed.type !== 'unknown') { err('请扫描产品条码（PRDxxxxxx 或 SKU 编码）'); return }
     // 扫码即直接装箱（默认数量 1），无需额外确认
     addMut.mutate({ code: raw, qty: 1 })
   }, [activePackageId, err, addMut])
@@ -302,7 +302,7 @@ export default function PdaPackPage() {
       </div>
 
       <PdaBottomBar>
-          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描商品条码 PRDxxxxxx" disabled={addMut.isPending} />}
+          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描产品条码 PRDxxxxxx" disabled={addMut.isPending} />}
           <Button variant={activePackageId ? 'outline' : 'default'} className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending}>
             {createMut.isPending ? '创建中…' : '＋ 新建箱子'}
           </Button>

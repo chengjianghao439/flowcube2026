@@ -113,7 +113,7 @@ export default function PdaSortPage() {
           <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
             step==='scan-product' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
           }`}>1</div>
-          <p className={`text-sm ${step==='scan-product' ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>扫商品条码</p>
+          <p className={`text-sm ${step==='scan-product' ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>扫产品条码</p>
           <div className="flex-1 h-px bg-border" />
           <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
             step==='confirm-bin' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
@@ -128,7 +128,7 @@ export default function PdaSortPage() {
         }`}>
           <p className="text-sm font-semibold text-foreground">
             {scanning ? '⏳ 处理中…' :
-             step === 'scan-product' ? '📷 请扫描商品条码' : `📷 请扫描分拣格 ${hint?.binCode ?? ''}`}
+             step === 'scan-product' ? '📷 请扫描产品条码' : `📷 请扫描分拣格 ${hint?.binCode ?? ''}`}
           </p>
         </div>
 

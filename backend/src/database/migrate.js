@@ -253,7 +253,7 @@ async function seedDefaultPrintTemplates(conn) {
       },
     },
     {
-      name:      '默认货架标签模板',
+      name:      '默认货架条码标签模板',
       type:      5,
       paperSize: 'thermal80',
       layout: {
@@ -266,24 +266,24 @@ async function seedDefaultPrintTemplates(conn) {
       },
     },
     {
-      name:      '默认散件容器标签模板',
+      name:      '默认库存条码标签模板',
       type:      6,
       paperSize: 'thermal80',
       layout: {
         elements: [
-          { id: 'lb6_bc', type: 'barcode', fieldKey: 'container_code', label: '容器条码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb6_bc', type: 'barcode', fieldKey: 'container_code', label: '库存条码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
           { id: 'lb6_pn', type: 'text', fieldKey: 'product_name', label: '品名', x: 4, y: 22, width: 72, height: 10, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
           { id: 'lb6_q', type: 'text', fieldKey: 'qty', label: '数量', x: 4, y: 36, width: 72, height: 7, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
         ],
       },
     },
     {
-      name:      '默认物流箱贴标签模板',
+      name:      '默认物流条码标签模板',
       type:      7,
       paperSize: 'thermal80',
       layout: {
         elements: [
-          { id: 'lb7_bc', type: 'barcode', fieldKey: 'box_code', label: '箱码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb7_bc', type: 'barcode', fieldKey: 'box_code', label: '物流条码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
           { id: 'lb7_tn', type: 'text', fieldKey: 'task_no', label: '任务号', x: 4, y: 22, width: 72, height: 7, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
           { id: 'lb7_cn', type: 'text', fieldKey: 'customer_name', label: '客户', x: 4, y: 32, width: 72, height: 8, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
           { id: 'lb7_sm', type: 'text', fieldKey: 'summary', label: '摘要', x: 4, y: 43, width: 72, height: 14, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
@@ -291,13 +291,13 @@ async function seedDefaultPrintTemplates(conn) {
       },
     },
     {
-      name:      '默认商品标签模板',
+      name:      '默认产品条码标签模板',
       type:      8,
       paperSize: 'thermal80',
       layout: {
         elements: [
-          { id: 'lb8_bc', type: 'barcode', fieldKey: 'product_code', label: '商品条码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
-          { id: 'lb8_pn', type: 'text', fieldKey: 'product_name', label: '商品名称', x: 4, y: 22, width: 72, height: 10, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb8_bc', type: 'barcode', fieldKey: 'product_code', label: '产品条码', x: 4, y: 4, width: 72, height: 14, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+          { id: 'lb8_pn', type: 'text', fieldKey: 'product_name', label: '产品名称', x: 4, y: 22, width: 72, height: 10, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
           { id: 'lb8_sp', type: 'text', fieldKey: 'spec', label: '规格', x: 4, y: 36, width: 72, height: 7, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
         ],
       },

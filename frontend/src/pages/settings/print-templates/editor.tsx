@@ -55,10 +55,10 @@ const TEMPLATE_TYPES: { value: TemplateType; label: string }[] = [
   { value: 2, label: '采购订单' },
   { value: 3, label: '出库单' },
   { value: 4, label: '仓库任务单' },
-  { value: 5, label: '货架标签 (画布)' },
-  { value: 6, label: '散件容器标签 (画布)' },
-  { value: 7, label: '物流箱贴 (画布)' },
-  { value: 8, label: '商品标签 (画布)' },
+  { value: 5, label: '货架条码标签 (画布)' },
+  { value: 6, label: '库存条码标签 (画布)' },
+  { value: 7, label: '物流条码标签 (画布)' },
+  { value: 8, label: '产品条码标签 (画布)' },
   { value: 9, label: '库存标签 (画布)' },
 ]
 
@@ -84,19 +84,19 @@ const LABEL_FIELD_DEFS_BY_TYPE: Record<number, FieldDef[]> = {
     { key: 'name', label: '名称', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 8 },
   ],
   6: [
-    { key: 'container_code', label: '容器条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
+    { key: 'container_code', label: '库存条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
     { key: 'product_name', label: '品名', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 10 },
     { key: 'qty', label: '数量', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 7 },
   ],
   7: [
-    { key: 'box_code', label: '箱码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
+    { key: 'box_code', label: '物流条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
     { key: 'task_no', label: '任务号', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 7 },
     { key: 'customer_name', label: '客户', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 8 },
     { key: 'summary', label: '摘要', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 10 },
   ],
   8: [
-    { key: 'product_code', label: '商品条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
-    { key: 'product_name', label: '商品名称', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 10 },
+    { key: 'product_code', label: '产品条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
+    { key: 'product_name', label: '产品名称', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 10 },
     { key: 'spec', label: '规格', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 7 },
   ],
   9: [

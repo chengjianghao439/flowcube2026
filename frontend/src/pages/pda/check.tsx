@@ -2,7 +2,7 @@
  * PDA 复核作业
  * 路由：/pda/check  或  /pda/check?taskId=X
  *
- * 须扫描拣货阶段使用过的容器条码（CNT），由后端按容器累加 checked_qty；禁止手填。
+ * 须扫描拣货阶段使用过的库存条码（CNT），由后端按库存单元累加 checked_qty；禁止手填。
  */
 import { useState, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -164,7 +164,7 @@ export default function PdaCheckPage() {
     const b = raw.trim()
     if (!b) return
     if (parseBarcode(b).type !== 'container') {
-      err('请扫描容器条码（CNTxxxxxx）')
+      err('请扫描库存条码（CNTxxxxxx）')
       return
     }
     scanMut.mutate(b)
@@ -243,9 +243,9 @@ export default function PdaCheckPage() {
       </div>
 
       <PdaBottomBar>
-        <PdaScanner onScan={handleScan} placeholder="扫描容器条码 CNTxxxxxx" disabled={scanMut.isPending} />
+        <PdaScanner onScan={handleScan} placeholder="扫描库存条码 CNTxxxxxx" disabled={scanMut.isPending} />
         <p className="text-center text-xs text-muted-foreground px-2">
-          请依次扫描拣货时绑定的容器；禁止手改数量
+          请依次扫描拣货时绑定的库存单元；禁止手改数量
         </p>
       </PdaBottomBar>
 

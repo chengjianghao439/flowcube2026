@@ -71,7 +71,7 @@ export default function ProductsPage() {
           printerName: d.printerName,
         })
         if (local === 'ok') {
-          toast.success(d.printerName ? `已向 ${d.printerName} 提交商品标签` : '已提交商品标签')
+          toast.success(d.printerName ? `已向 ${d.printerName} 提交产品条码标签` : '已提交产品条码标签')
           return
         }
         if (isDesktopLocalPrintError(local)) {
@@ -79,7 +79,7 @@ export default function ProductsPage() {
           return
         }
         if (local === 'skipped_no_desktop') {
-          toast.warning('任务已入队，请在 FlowCube 桌面端登录同一服务器后执行打印。')
+          toast.warning('任务已入队，请在极序 Flow 桌面端登录同一服务器后执行打印。')
           return
         }
         if (local === 'skipped_no_payload') {
@@ -94,7 +94,7 @@ export default function ProductsPage() {
         toast.success(d.printerCode ? `已加入打印队列 → ${d.printerCode}` : '已加入打印队列')
         return
       }
-      toast.warning('未绑定「商品标签」打印机，未创建打印任务')
+      toast.warning('未绑定「产品条码」打印机，未创建打印任务')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : '打印失败')
     }

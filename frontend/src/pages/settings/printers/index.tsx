@@ -1,7 +1,7 @@
 /**
  * 打印机管理页面
  * 路由：/settings/printers
- * 添加打印机：仅在 FlowCube 桌面端从本机系统已安装列表中选择（与系统「打印机」设置一致）。
+ * 添加打印机：仅在极序 Flow 桌面端从本机系统已安装列表中选择（与系统「打印机」设置一致）。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -42,10 +42,10 @@ const TYPE_COLOR: Record<number, string> = {
 
 const BIND_TYPES = [
   { key: 'waybill', label: '电子面单', desc: '快递面单等' },
-  { key: 'product_label', label: '商品标签', desc: '商品条码、PDA 商品标等' },
+  { key: 'product_label', label: '产品条码', desc: '产品条码、PDA 产品标等' },
   { key: 'inventory_label', label: '库存标签', desc: '库存盘点、通用库存 ZPL' },
-  { key: 'rack_label', label: '货架标签', desc: '货架仓位条码；未单独绑定时使用「库存标签」绑定' },
-  { key: 'container_label', label: '散件容器标签', desc: '入库容器等；未单独绑定时使用「库存标签」绑定' },
+  { key: 'rack_label', label: '货架条码', desc: '货架位条码；未单独绑定时使用「库存标签」绑定' },
+  { key: 'container_label', label: '库存条码', desc: '当前收货入库与库存单元共用；未单独绑定时使用「库存标签」绑定' },
 ] as const
 
 type BindType = (typeof BIND_TYPES)[number]['key']
@@ -192,7 +192,7 @@ export default function PrintersPage() {
 
   const loadSystemPrinters = useCallback(async () => {
     if (!canUseSystemPrinters) {
-      setListError('请在 FlowCube 桌面客户端中打开本页，以读取本机已安装打印机。')
+      setListError('请在极序 Flow 桌面客户端中打开本页，以读取本机已安装打印机。')
       setSystemList([])
       return
     }
@@ -411,7 +411,7 @@ export default function PrintersPage() {
                     </SelectContent>
                   </Select>
                   <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                    此为硬件分类，与下方列表中的「绑定用途」无关。实际打印走哪台机请在添加后使用「绑定用途」指定（如商品标签、货架标签等）。
+                    此为硬件分类，与下方列表中的「绑定用途」无关。实际打印走哪台机请在添加后使用「绑定用途」指定（如产品条码、货架条码等）。
                   </p>
                 </div>
                 <p className="text-xs text-muted-foreground">

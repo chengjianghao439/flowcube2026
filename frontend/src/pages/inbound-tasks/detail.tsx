@@ -207,22 +207,22 @@ export default function InboundTaskDetailPage() {
       </Section>
 
       {canPutaway && (
-        <Section title="待上架容器">
+        <Section title="待上架库存">
           <div className="rounded-lg border border-sky-500/35 bg-sky-500/[0.08] px-4 py-3 text-sm space-y-1.5">
             <p className="font-medium text-sky-950 dark:text-sky-100">请使用 PDA 扫码完成上架</p>
             <p className="text-muted-foreground">
-              在 PDA「上架作业」进入本任务，依次扫描容器条码（CNT）与库位条码（LOC）。电脑端仅可查看待上架列表，无法在此提交上架。
+              在 PDA「扫码上架」进入本任务，依次扫描库存条码（CNT）与货架条码（LOC）。电脑端仅可查看待上架列表，无法在此提交上架。
             </p>
           </div>
 
           {!containers?.waiting?.length ? (
-            <p className="text-sm text-muted-foreground pt-1">暂无待上架容器</p>
+            <p className="text-sm text-muted-foreground pt-1">暂无待上架库存</p>
           ) : (
             <div className="overflow-x-auto pt-2">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-xs text-muted-foreground">
-                    <th className="text-left py-2 pr-2">容器条码</th>
+                    <th className="text-left py-2 pr-2">库存条码</th>
                     <th className="text-left py-2">商品</th>
                     <th className="text-right py-2 w-24">数量</th>
                   </tr>
