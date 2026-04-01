@@ -11,11 +11,21 @@
 
 - 触发：`push` 到 `v*` **tag**（推荐发版路径）、或 `push` 到 `main`（验证构建）、或 Actions 里 **手动运行**（仅产物/artifact，**不**创建 Release）。
 - Runner：`windows-latest`。
-- 步骤概要：`npm ci`（frontend → desktop）→ `npm run build`（frontend，桌面包）→ `dist:win`（electron-builder NSIS）→ 将 `desktop/release/*.exe` 上传 **GitHub Release**（**仅 tag 推送**）。
+- 步骤概要：`npm ci`（frontend → desktop）→ `npm run build`（frontend，桌面包）→ 固定下载 **NSIS 3.0.4.1** → `dist:win`（electron-builder NSIS）→ 校验产物内部为 **`Nullsoft Install System v3.04`** → 将 `desktop/release/*.exe` 上传 **GitHub Release**（**仅 tag 推送**）。
 - 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
 
 发版请严格使用下面「推荐发布流程」，执行 `npm run release:tag-desktop` 推送 tag 后即可在仓库 **Releases** 下载安装包（文件名含 `FlowCube ERP` / `Setup` 等，随 electron-builder 产物而定）。
+
+### 桌面安装器约束（本次问题后的固定规则）
+
+- **桌面正式安装包只允许用 GitHub Actions 的 Windows runner 构建**，不要再把本机 Mac 临时产物当正式发布包。
+- 工作流里必须固定使用 **官方 `NSIS 3.0.4.1`**，并在构建后校验安装包内部字符串含 **`Nullsoft Install System v3.04`**。
+- 根因说明：2026-04-01 已确认，本机打包环境曾被 **Homebrew `makensis 3.11`** 污染，生成的 EXE 在部分 Windows 上会出现“**双击无界面、无反应**”。
+- 因此：
+  - **允许** 本地做功能开发和调试。
+  - **不允许** 用本机随手打出来的桌面 EXE 作为最终上线包。
+  - 最终上线包以 **GitHub Release** 和服务器 `/downloads` 中的同版本文件为准。
 
 ### 桌面默认 API 地址（避免每次填写服务器）
 
