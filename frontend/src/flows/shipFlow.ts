@@ -21,7 +21,7 @@ export const SHIP_FLOW: FlowDef<ShipFlowContext> = {
     {
       id:          'scan-box',
       label:       '扫描物流条码',
-      placeholder: '扫描物流条码 L000123',
+      placeholder: '扫描物流条码',
       barcodeType: 'box',
       handle: async (barcode, _ctx) => {
         const res  = await getPackageByBarcodeApi(barcode)

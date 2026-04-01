@@ -164,7 +164,7 @@ export default function PdaCheckPage() {
     const b = raw.trim()
     if (!b) return
     if (parseBarcode(b).type !== 'container') {
-      err('请扫描库存条码或塑料盒条码（I000123 / B000123）')
+      err('扫描库存条码')
       return
     }
     scanMut.mutate(b)
@@ -243,10 +243,7 @@ export default function PdaCheckPage() {
       </div>
 
       <PdaBottomBar>
-        <PdaScanner onScan={handleScan} placeholder="扫描库存/塑料盒条码 I000123 / B000123" disabled={scanMut.isPending} />
-        <p className="text-center text-xs text-muted-foreground px-2">
-          请依次扫描拣货时绑定的库存单元或塑料盒；禁止手改数量
-        </p>
+        <PdaScanner onScan={handleScan} placeholder="扫描库存条码" disabled={scanMut.isPending} />
       </PdaBottomBar>
 
     </div>

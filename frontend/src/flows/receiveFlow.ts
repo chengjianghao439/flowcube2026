@@ -71,7 +71,7 @@ export function makeReceiveFlow(opts?: {
         handle:      async (raw, ctx) => {
           const parsed = parseBarcode(raw)
           if (parsed.type !== 'product' && parsed.type !== 'unknown') {
-            return { ok: false, message: '请扫描产品条码' }
+            return { ok: false, message: '扫描产品条码' }
           }
           const item = ctx.items.find(i =>
             i.productCode === raw ||

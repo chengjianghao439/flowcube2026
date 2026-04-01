@@ -73,7 +73,7 @@ export default function PdaSplitPage() {
   const handleScan = useCallback((raw: string) => {
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'container' && parsed.type !== 'unknown') {
-      err('请扫描库存条码或塑料盒条码（I000123 / B000123）')
+      err('扫描库存条码')
       return
     }
     loadMut.mutate(raw.trim())
@@ -100,7 +100,7 @@ export default function PdaSplitPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
         {step === 'scan' && (
           <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
-            <p className="text-sm text-muted-foreground">扫描源库存条码或塑料盒条码，系统会扣减原容器并生成新的塑料盒条码（B）。</p>
+            <p className="text-sm text-muted-foreground">扫描库存条码</p>
           </div>
         )}
         {step === 'qty' && containerId && (
@@ -144,7 +144,7 @@ export default function PdaSplitPage() {
 
       <PdaBottomBar>
         {step === 'scan' && (
-          <PdaScanner onScan={handleScan} placeholder="扫描库存/塑料盒条码 I000123 / B000123" disabled={loadMut.isPending} />
+          <PdaScanner onScan={handleScan} placeholder="扫描库存条码" disabled={loadMut.isPending} />
         )}
       </PdaBottomBar>
     </div>

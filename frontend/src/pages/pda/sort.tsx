@@ -128,7 +128,7 @@ export default function PdaSortPage() {
         }`}>
           <p className="text-sm font-semibold text-foreground">
             {scanning ? '⏳ 处理中…' :
-             step === 'scan-product' ? '📷 请扫描产品条码' : `📷 请扫描分拣格 ${hint?.binCode ?? ''}`}
+             step === 'scan-product' ? '扫描产品条码' : '扫描分拣格条码'}
           </p>
         </div>
 

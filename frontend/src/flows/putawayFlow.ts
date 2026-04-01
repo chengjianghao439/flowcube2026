@@ -37,19 +37,19 @@ export function makePutawayFlow(
     steps:       [
       {
         id:          'scan-container',
-        label:       '扫描待上架库存条码（I）',
-        placeholder: '请扫库存条码，如 I000123',
+        label:       '扫描库存条码',
+        placeholder: '扫描库存条码',
         barcodeType: 'container',
         handle:      async (raw, ctx) => {
           const trimmed = raw.trim()
           if (/^\d+$/.test(trimmed)) {
-            return { ok: false, message: '禁止仅输入数字 ID，请扫描完整库存条码（I+数字）' }
+            return { ok: false, message: '扫描库存条码' }
           }
           if (!isStrictContainerScan(trimmed)) {
-            return { ok: false, message: '请扫描库存条码：必须以 I 开头（例如 I000123），旧版 CNT 也兼容' }
+            return { ok: false, message: '扫描库存条码' }
           }
           const parsed = parseBarcode(trimmed)
-          if (parsed.type !== 'container') return { ok: false, message: '请扫描库存条码（I）' }
+          if (parsed.type !== 'container') return { ok: false, message: '扫描库存条码' }
           const res = await getContainerByBarcodeApi(trimmed)
           const d = res.data.data!
           if (d.containerStatus !== 'waiting_putaway') {
@@ -60,7 +60,7 @@ export function makePutawayFlow(
           }
           return {
             ok:         true,
-            message:    `✓ ${d.productName ?? '商品'} 库存条码已识别，请扫描货架条码（R）`,
+            message:    `✓ ${d.productName ?? '商品'}，扫描货架条码`,
             nextStep:   'scan-location',
             context:    { containerId: d.containerId },
           }
@@ -68,17 +68,17 @@ export function makePutawayFlow(
       },
       {
         id:          'scan-location',
-        label:       '扫描货架条码（R）',
-        placeholder: '请扫货架条码，如 R000123',
+        label:       '扫描货架条码',
+        placeholder: '扫描货架条码',
         barcodeType: 'location',
         handle:      async (raw, ctx) => {
           const trimmed = raw.trim()
           if (!isStrictLocationScan(trimmed)) {
-            return { ok: false, message: '请扫描货架条码：新码为 R+数字，旧版 LOC 也兼容' }
+            return { ok: false, message: '扫描货架条码' }
           }
           const parsed = parseBarcode(trimmed)
-          if (parsed.type !== 'location') return { ok: false, message: '请扫描货架条码（R）' }
-          if (!ctx.containerId) return { ok: false, message: '请先扫描库存条码' }
+          if (parsed.type !== 'location') return { ok: false, message: '扫描货架条码' }
+          if (!ctx.containerId) return { ok: false, message: '扫描库存条码' }
           const res = await apiClient.get<ApiResponse<LocationInfo>>(`/locations/code/${encodeURIComponent(trimmed)}`)
           const loc = res.data.data!
           await putawayInboundApi(ctx.taskId, { containerId: ctx.containerId, locationId: loc.id })

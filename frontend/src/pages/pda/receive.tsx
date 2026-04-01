@@ -209,7 +209,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   function handleScan(raw: string) {
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'product' && parsed.type !== 'unknown') {
-      err('请扫描产品条码（P000123）')
+      err('扫描产品条码')
       return
     }
 
@@ -301,7 +301,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           <div className="space-y-2 text-sm">
             <p className="text-muted-foreground">仓库：{task.warehouseName ?? '—'}</p>
             <p className="text-muted-foreground">关联采购：{task.purchaseOrderNo ?? '混合采购单'}</p>
-            <p className="text-muted-foreground">操作方式：扫描产品条码或点选商品，再逐箱录入数量并批量打印</p>
           </div>
         </PdaCard>
 
@@ -345,7 +344,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           />
         ) : (
           <PdaCard>
-            <p className="text-sm text-muted-foreground">请选择一个未收货完成的产品，再录入每个库存条码对应的数量。</p>
+            <p className="text-sm text-muted-foreground">扫描产品条码</p>
           </PdaCard>
         )}
       </div>
@@ -353,7 +352,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       <PdaBottomBar>
         <PdaScanner
           onScan={handleScan}
-          placeholder="扫描产品条码，快速定位到待收商品"
+          placeholder="扫描产品条码"
           disabled={receiveMut.isPending}
         />
       </PdaBottomBar>

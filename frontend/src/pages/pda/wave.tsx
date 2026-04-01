@@ -120,7 +120,7 @@ export default function PdaWavePage() {
     if (!trimmed || !wave?.items?.length) return
 
     if (!/^(?:I|B|CNT)\d{6}$/.test(trimmed)) {
-      showError(`请扫描库存条码或塑料盒条码：${trimmed}`)
+      showError('扫描库存条码')
       setInputVal('')
       return
     }

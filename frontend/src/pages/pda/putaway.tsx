@@ -46,11 +46,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
         <p className="text-xs text-muted-foreground mt-2">{engine.currentStep.label}</p>
       </div>
 
-      <div className="flex-1 px-4 py-6 text-sm text-muted-foreground space-y-2">
-        <p className="text-amber-600/90 font-medium">上架流程：先扫描收货时打印出的库存条码，再扫描货架条码。</p>
-        <p>① 扫描待上架库存条码（I000123，旧版 CNT 也兼容）</p>
-        <p>② 连续扫描货架条码（R000123，旧版 LOC 也兼容）完成入库</p>
-      </div>
+      <div className="flex-1" />
 
       <PdaBottomBar>
         <PdaScanner
@@ -63,13 +59,6 @@ function PutawayRunner({ taskId }: { taskId: number }) {
           disabled={engine.scanning}
           allowManualEntry={false}
         />
-        <button
-          type="button"
-          className="w-full rounded-2xl py-3 text-sm text-muted-foreground border border-border"
-          onClick={() => engine.reset()}
-        >
-          重置流程
-        </button>
       </PdaBottomBar>
     </div>
   )
