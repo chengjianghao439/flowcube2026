@@ -61,6 +61,27 @@ async function resolveCanonicalPrinterNameForRaw(event, requestedName) {
 /** 用户已在渲染层确认退出，允许真正关闭窗口（与 ipc flowcube:close-accept 共用） */
 const closeAllowed = new WeakSet()
 
+function quitForInstaller() {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win || win.isDestroyed()) continue
+    try {
+      win.webContents.executeJavaScript(
+        `window.dispatchEvent(new CustomEvent('flowcube-quit-confirmed'))`,
+        true,
+      ).catch(() => {})
+    } catch {
+      /* ignore */
+    }
+    closeAllowed.add(win)
+    try {
+      win.close()
+    } catch {
+      /* ignore */
+    }
+  }
+  setTimeout(() => app.exit(0), 150)
+}
+
 function readEmbeddedBuildCommit() {
   try {
     return fs.readFileSync(path.join(__dirname, '.git-build-sha'), 'utf8').trim()
@@ -136,7 +157,7 @@ function triggerPackagedUpdateCheck(win, originRaw) {
   if (!origin) return
   packagedUpdateCheckStarted = true
   setTimeout(() => {
-    checkAppUpdate(app, win, () => origin, { ui: 'ipc' }).catch((err) => {
+    checkAppUpdate(app, win, () => origin, { ui: 'ipc', quitForInstall: quitForInstaller }).catch((err) => {
       console.error('[FlowCube] 自动更新检查失败:', err)
     })
   }, PACKAGED_UPDATE_CHECK_DELAY_MS)
@@ -157,7 +178,7 @@ ipcMain.handle('flowcube:start-update-download', async (event, downloadUrl) => {
     throw new Error('无效的下载地址')
   }
   const win = BrowserWindow.fromWebContents(event.sender)
-  await startUpdateDownload(app, win, url)
+  await startUpdateDownload(app, win, url, { quitForInstall: quitForInstaller })
 })
 
 ipcMain.handle('flowcube:ignore-update-version', async (_event, version) => {

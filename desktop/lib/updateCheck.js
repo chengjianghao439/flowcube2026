@@ -265,7 +265,7 @@ async function probeDownloadUrl(url) {
  * @param {import('electron').BrowserWindow | null | undefined} parentWindow
  * @param {string} downloadUrl
  */
-async function startUpdateDownload(app, parentWindow, downloadUrl) {
+async function startUpdateDownload(app, parentWindow, downloadUrl, options = {}) {
   if (updateFlowLocked) {
     await showBox(parentWindow, {
       type: 'info',
@@ -280,7 +280,7 @@ async function startUpdateDownload(app, parentWindow, downloadUrl) {
 
   updateFlowLocked = true
   try {
-    await runUpdateDownloadAndInstall(app, parentWindow, downloadUrl)
+    await runUpdateDownloadAndInstall(app, parentWindow, downloadUrl, options)
   } finally {
     updateFlowLocked = false
   }
@@ -291,7 +291,7 @@ async function startUpdateDownload(app, parentWindow, downloadUrl) {
  * @param {import('electron').BrowserWindow | null | undefined} parentWindow
  * @param {string} downloadUrl
  */
-async function runUpdateDownloadAndInstall(app, parentWindow, downloadUrl) {
+async function runUpdateDownloadAndInstall(app, parentWindow, downloadUrl, options = {}) {
   const dir = await resolveSaveDir(app)
   const baseName = filenameFromUrl(downloadUrl)
   const destPath = path.join(dir, baseName)
@@ -415,6 +415,14 @@ async function runUpdateDownloadAndInstall(app, parentWindow, downloadUrl) {
   }
 
   setTimeout(() => {
+    if (typeof options.quitForInstall === 'function') {
+      try {
+        options.quitForInstall()
+        return
+      } catch (err) {
+        console.error('[FlowCube] 自定义退出安装流程失败，回退 app.quit():', err)
+      }
+    }
     app.quit()
   }, QUIT_AFTER_OPEN_MS)
 }
@@ -703,7 +711,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
         }
         const result = await showBox(parentWindow, boxOptions)
         if (result.response === 0) {
-          await startUpdateDownload(app, parentWindow, resolvedUrl)
+          await startUpdateDownload(app, parentWindow, resolvedUrl, options)
         } else if (result.response === 1 && !FORCE_UPDATE) {
           await ignoreVersion(app, latest)
         }
@@ -724,7 +732,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
       const result = await showBox(parentWindow, boxOptions)
 
       if (result.response === 0) {
-        await startUpdateDownload(app, parentWindow, resolvedUrl)
+        await startUpdateDownload(app, parentWindow, resolvedUrl, options)
       } else if (result.response === 1 && !FORCE_UPDATE) {
         await ignoreVersion(app, latest)
       }
