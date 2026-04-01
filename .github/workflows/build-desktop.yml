@@ -287,11 +287,29 @@ jobs:
           grep -q '当前 main.js 已加载' desktop/main.js || { echo 'ERROR: desktop/main.js 缺少打包验证日志，避免打入旧主进程'; exit 1; }
           echo 'OK: main.js 包含「当前 main.js 已加载」标记'
 
+      - name: Prepare fixed NSIS 3.0.4.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $archive = "$env:RUNNER_TEMP\nsis-3.0.4.1.7z"
+          $dir = "$env:RUNNER_TEMP\nsis-3.0.4.1"
+          Invoke-WebRequest -Uri "https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z" -OutFile $archive
+          if (Test-Path $dir) {
+            Remove-Item -Recurse -Force $dir
+          }
+          7z x -y $archive "-o$dir"
+          if (-not (Test-Path "$dir\Bin\makensis.exe")) {
+            throw "Fixed NSIS package missing Bin\\makensis.exe"
+          }
+          "ELECTRON_BUILDER_NSIS_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using fixed NSIS from $dir"
+
       - name: Build desktop installer
         working-directory: ./desktop
         shell: bash
         env:
           VITE_ELECTRON: 1
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           set -euo pipefail
           echo "=== STEP: Build desktop — START (npm run dist:win) ==="
@@ -313,6 +331,19 @@ jobs:
           }
           Write-Host "✅ exe 已生成 ($($exes.Count) 个)"
           $exes | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length) bytes)" }
+
+      - name: Verify installer runtime is NSIS 3.04
+        shell: powershell
+        run: |
+          $exe = Get-ChildItem -Path "desktop/release" -Filter "*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) {
+            throw "No installer exe found for runtime verification"
+          }
+          $content = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($exe.FullName))
+          if ($content -notmatch "Nullsoft Install System v3.04") {
+            throw "Installer runtime is not NSIS v3.04"
+          }
+          Write-Host "✅ Verified NSIS runtime v3.04 in $($exe.Name)"
 
       - name: DEBUG — after Build desktop (dist:win)
         shell: bash
