@@ -333,7 +333,14 @@ export default function PrintersPage() {
     const baseCode = systemNameToPrinterCode(name)
     const code = ensureUniquePrinterCode(baseCode, existingCodes)
     const description = `本机系统打印机`
-    addPrinter.mutate({ name, code, type: addType, description })
+    const clientInfo = await window.flowcubeDesktop?.getClientInfo?.().catch(() => null)
+    addPrinter.mutate({
+      name,
+      code,
+      type: addType,
+      description,
+      clientId: clientInfo?.clientId ?? null,
+    } as { name: string; code: string; type: number; description: string | null; clientId?: string | null })
   }
 
   function openAddDialog() {

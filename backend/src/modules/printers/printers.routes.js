@@ -5,6 +5,7 @@ const { authMiddleware } = require('../../middleware/auth')
 const router = Router()
 
 router.use(authMiddleware)
+router.post('/client-heartbeat', ctrl.heartbeatClient)
 router.get('/online-clients', ctrl.listOnlineClients)
 router.get('/all-clients', ctrl.listAllClients)
 router.put('/clients/:clientId/alias', ctrl.updateClientAlias)

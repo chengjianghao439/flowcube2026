@@ -34,6 +34,21 @@ async function create(req, res, next) {
   } catch(e) { next(e) }
 }
 
+async function claimClientJobs(req, res, next) {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {}
+    const clientId = String(body.clientId || '').trim()
+    res.json({
+      success: true,
+      data: await svc.claimClientJobs({
+        clientId,
+        limit: Number(body.limit) || 3,
+        tenantId: getTenantId(req),
+      }),
+    })
+  } catch (e) { next(e) }
+}
+
 async function stats(req, res, next) {
   try {
     res.json({ success: true, data: await svc.getStatsCounts(getTenantId(req)) })
@@ -96,6 +111,7 @@ module.exports = {
   list,
   detail,
   create,
+  claimClientJobs,
   stats,
   printerHealth,
   complete,

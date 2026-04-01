@@ -107,6 +107,21 @@ function fmt(row, { includeAckToken = false } = {}) {
   return o
 }
 
+async function listJobsByIds(ids, { tenantId = 0, includeAckToken = false } = {}) {
+  const uniq = [...new Set(ids.map(Number).filter((n) => Number.isFinite(n) && n > 0))]
+  if (!uniq.length) return []
+  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+  const [rows] = await pool.query(
+    `SELECT j.*, p.code AS printer_code, p.name AS printer_name
+     FROM print_jobs j
+     LEFT JOIN printers p ON p.id = j.printer_id
+     WHERE j.tenant_id = ? AND j.id IN (${uniq.map(() => '?').join(',')})
+     ORDER BY j.priority DESC, j.id ASC`,
+    [tid, ...uniq],
+  )
+  return rows.map((row) => fmt(row, { includeAckToken }))
+}
+
 // ── 查询 ──────────────────────────────────────────────────────────────────────
 
 async function findAll({ printerId, status, page = 1, pageSize = 50, tenantId = 0 } = {}) {
@@ -370,6 +385,73 @@ async function retry(id, { tenantId } = {}) {
   const [[printer]] = await pool.query('SELECT code FROM printers WHERE id=?', [job.printerId])
   if (printer) await pushToClients(printer.code, updated)
   return updated
+}
+
+async function claimClientJobs({ clientId, limit = 3, tenantId = 0 } = {}) {
+  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+  const cid = String(clientId || '').trim()
+  if (!cid) throw new AppError('clientId 必填', 400)
+  const n = Math.min(10, Math.max(1, Number(limit) || 3))
+
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await conn.query(
+      `UPDATE print_clients
+       SET last_seen = NOW(), status = 1
+       WHERE client_id = ?`,
+      [cid],
+    )
+
+    const [rows] = await conn.query(
+      `SELECT j.id
+       FROM print_jobs j
+       INNER JOIN printers p ON p.id = j.printer_id
+       WHERE j.tenant_id = ?
+         AND j.status = ?
+         AND p.status = 1
+         AND p.client_id = ?
+         AND (p.tenant_id = ? OR p.tenant_id = 0)
+       ORDER BY j.priority DESC, j.id ASC
+       LIMIT ?
+       FOR UPDATE`,
+      [tid, STATUS.PENDING, cid, tid, n],
+    )
+    const ids = rows.map((r) => Number(r.id)).filter(Boolean)
+    if (!ids.length) {
+      await conn.commit()
+      return []
+    }
+
+    const jobsWithToken = ids.map((id) => ({
+      id,
+      ackToken: crypto.randomBytes(16).toString('hex'),
+    }))
+
+    for (const job of jobsWithToken) {
+      await conn.query(
+        `UPDATE print_jobs
+         SET status = ?, ack_token = ?, dispatched_at = NOW(), error_message = NULL,
+             expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE)
+         WHERE id = ? AND tenant_id = ? AND status = ?`,
+        [STATUS.PRINTING, job.ackToken, ttlMinutes(), job.id, tid, STATUS.PENDING],
+      )
+    }
+
+    await conn.commit()
+
+    const jobs = await listJobsByIds(ids, { tenantId: tid, includeAckToken: true })
+    const tokenMap = new Map(jobsWithToken.map((job) => [job.id, job.ackToken]))
+    return jobs.map((job) => ({
+      ...job,
+      ackToken: tokenMap.get(Number(job.id)) || job.ackToken || null,
+    }))
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 /**
@@ -889,6 +971,7 @@ module.exports = {
   resolvePrinterForJob,
   fail,
   retry,
+  claimClientJobs,
   expireStaleJobs,
   getStatsCounts,
   listPrinterHealth,

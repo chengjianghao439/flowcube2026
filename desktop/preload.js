@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('flowcubeDesktop', {
     ipcRenderer.invoke('flowcube:show-message-box', payload),
   /** 主进程枚举当前系统已安装打印机（仅桌面端） */
   getSystemPrinters: () => ipcRenderer.invoke('flowcube:get-system-printers'),
+  /** 当前桌面工作站标识，用于远程打印任务领取 */
+  getClientInfo: () => ipcRenderer.invoke('flowcube:get-client-info'),
   /**
    * 本机 ZPL：printerName 与「打印机管理」中名称一致（从本机添加时的系统打印机名）
    * @param {{ content: string, printerName: string }} opts

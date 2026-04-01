@@ -1,6 +1,7 @@
 console.log('🔥 当前 main.js 已加载')
 
 const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron')
+const os = require('os')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
@@ -99,6 +100,15 @@ function normalizeApiOrigin(raw) {
   } catch {
     return ''
   }
+}
+
+function buildDesktopClientInfo() {
+  const hostnameRaw = String(os.hostname() || '').trim() || 'flowcube-desktop'
+  const hostname = hostnameRaw.slice(0, 200)
+  const clientId = `desktop:${hostnameRaw}`
+    .replace(/[^A-Za-z0-9_.:-]/g, '_')
+    .slice(0, 200)
+  return { clientId, hostname }
 }
 
 async function getRendererApiOrigin(win) {
@@ -202,6 +212,8 @@ ipcMain.handle('flowcube:get-system-printers', async (event) => {
     return []
   }
 })
+
+ipcMain.handle('flowcube:get-client-info', async () => buildDesktopClientInfo())
 
 /** 本机直连：按打印机名称 RAW 出 ZPL（Windows WinSpool / macOS·Linux lp） */
 ipcMain.handle('flowcube:print-zpl', async (event, opts) => {

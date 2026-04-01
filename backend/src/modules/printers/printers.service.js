@@ -95,6 +95,7 @@ async function create({
   description,
   warehouseId,
   source,
+  clientId,
   labelRawFormat,
 }, tenantId = 0) {
   const tid = normTid(tenantId)
@@ -108,11 +109,12 @@ async function create({
       : null
   const src =
     source === 'local_desktop' || source === 'client' || source === 'manual' ? source : null
+  const clientIdVal = clientId != null ? String(clientId).trim().slice(0, 200) || null : null
   const lr = String(labelRawFormat || '').toLowerCase() === 'tspl' ? 'tspl' : 'zpl'
   const finalCode = await allocateUniqueCodeGlobally(code)
   const [r] = await pool.query(
-    'INSERT INTO printers (name, code, type, label_raw_format, warehouse_id, tenant_id, description, source) VALUES (?,?,?,?,?,?,?,?)',
-    [nameNorm, finalCode, type, lr, wh, tid, description || null, src],
+    'INSERT INTO printers (name, code, type, label_raw_format, warehouse_id, tenant_id, description, source, client_id) VALUES (?,?,?,?,?,?,?,?,?)',
+    [nameNorm, finalCode, type, lr, wh, tid, description || null, src, clientIdVal],
   )
   return findById(r.insertId, tid)
 }
@@ -124,6 +126,7 @@ async function update(id, {
   description,
   status,
   warehouseId,
+  clientId,
   labelRawFormat,
 }, tenantId = 0) {
   const tid = normTid(tenantId)
@@ -134,23 +137,35 @@ async function update(id, {
     labelRawFormat !== undefined
       ? (String(labelRawFormat).toLowerCase() === 'tspl' ? 'tspl' : 'zpl')
       : (existing.labelRawFormat || 'zpl')
+  const clientIdVal =
+    clientId === undefined
+      ? (existing.clientId || null)
+      : (clientId != null ? String(clientId).trim().slice(0, 200) || null : null)
   const wh =
     warehouseId === undefined
       ? undefined
       : warehouseId != null && warehouseId !== '' && Number.isFinite(Number(warehouseId))
         ? Number(warehouseId)
         : null
+  const sets = [
+    'name=?',
+    'code=?',
+    'type=?',
+    'description=?',
+    'status=?',
+    'label_raw_format=?',
+    'client_id=?',
+  ]
+  const params = [nameVal, code, type, description || null, status ?? 1, lrVal, clientIdVal]
   if (wh !== undefined) {
-    await pool.query(
-      'UPDATE printers SET name=?, code=?, type=?, warehouse_id=?, description=?, status=?, label_raw_format=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
-      [nameVal, code, type, wh, description || null, status ?? 1, lrVal, id, tid],
-    )
-  } else {
-    await pool.query(
-      'UPDATE printers SET name=?, code=?, type=?, description=?, status=?, label_raw_format=? WHERE id=? AND (tenant_id=? OR tenant_id=0)',
-      [nameVal, code, type, description || null, status ?? 1, lrVal, id, tid],
-    )
+    sets.push('warehouse_id=?')
+    params.push(wh)
   }
+  params.push(id, tid)
+  await pool.query(
+    `UPDATE printers SET ${sets.join(', ')} WHERE id=? AND (tenant_id=? OR tenant_id=0)`,
+    params,
+  )
   return findById(id, tid)
 }
 

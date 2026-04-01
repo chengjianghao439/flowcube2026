@@ -7,6 +7,7 @@ import PdaConnectionGate from '@/components/pda/PdaConnectionGate'
 import ErpDesktopConnectionGate from '@/components/erp/ErpDesktopConnectionGate'
 import ErpApiBaseHotkeyDialog from '@/components/erp/ErpApiBaseHotkeyDialog'
 import { DesktopQuitUnloadBridge } from '@/components/desktop/DesktopQuitUnloadBridge'
+import DesktopPrintClientBridge from '@/components/desktop/DesktopPrintClientBridge'
 import GlobalDesktopUpdateDialog from '@/components/desktop/GlobalDesktopUpdateDialog'
 
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ export default function AppRouter() {
           桌面：beforeunload 闸门 / API 热键 必须挂在 ErpDesktopConnectionGate 之外。
         */}
         <DesktopQuitUnloadBridge />
+        <DesktopPrintClientBridge />
         <ErpApiBaseHotkeyDialog />
         <ErpDesktopConnectionGate>
         <Suspense fallback={<PageLoader />}>
