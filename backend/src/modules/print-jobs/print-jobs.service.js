@@ -974,8 +974,6 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
   const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
   const statusCond = status === undefined ? '' : 'AND status = ?'
-  const params = [tid, like, like, like, like]
-  if (status !== undefined) params.push(status)
   const offset = (page - 1) * pageSize
 
   const subParams = [tid]
@@ -1033,7 +1031,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
        )
      ORDER BY c.id DESC
      LIMIT ? OFFSET ?`,
-    [...subParams, ...params, pageSize, offset],
+    [...subParams, like, like, like, like, pageSize, offset],
   )
 
   const [[{ total }]] = await pool.query(
