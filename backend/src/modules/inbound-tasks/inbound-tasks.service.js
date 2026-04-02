@@ -490,6 +490,7 @@ async function receive(taskId, payload, { userId, tenantId = 0 } = {}) {
     for (const container of result.containers) {
       const job = await printJobs.enqueueContainerLabelJob({
         type: 'container_label',
+        containerId: container.containerId,
         tenantId: Number(tenantId) >= 0 ? Number(tenantId) : 0,
         warehouseId: result.warehouseId,
         data: {

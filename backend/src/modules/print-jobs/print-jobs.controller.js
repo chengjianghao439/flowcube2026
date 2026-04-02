@@ -57,6 +57,40 @@ async function stats(req, res, next) {
   }
 }
 
+async function barcodeRecords(req, res, next) {
+  try {
+    const { category, keyword, status, page, pageSize } = req.query
+    res.json({
+      success: true,
+      data: await svc.findBarcodeRecords({
+        category,
+        keyword: keyword || '',
+        status: svc.parseListStatus(status),
+        page: Number(page) || 1,
+        pageSize: Number(pageSize) || 20,
+        tenantId: getTenantId(req),
+      }),
+    })
+  } catch (e) {
+    next(e)
+  }
+}
+
+async function reprintBarcode(req, res, next) {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {}
+    const job = await svc.reprintBarcodeRecord({
+      category: body.category,
+      recordId: body.recordId,
+      tenantId: getTenantId(req),
+      createdBy: req.user?.userId ?? req.user?.id ?? null,
+    })
+    res.json({ success: true, data: job })
+  } catch (e) {
+    next(e)
+  }
+}
+
 async function printerHealth(req, res, next) {
   try {
     res.json({ success: true, data: await svc.listPrinterHealth(getTenantId(req)) })
@@ -114,6 +148,8 @@ module.exports = {
   claimClientJobs,
   stats,
   printerHealth,
+  barcodeRecords,
+  reprintBarcode,
   complete,
   completeLocal,
   fail,

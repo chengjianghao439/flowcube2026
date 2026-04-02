@@ -91,6 +91,7 @@ export const TOP_NAV_SECTIONS: TopNavSection[] = [
       { label: '用户管理', path: '/users', perm: 'page:users' },
       { label: '权限管理', path: '/permissions', perm: 'page:users' },
       { label: '系统设置', path: '/settings', perm: 'page:settings' },
+      { label: '条码打印查询', path: '/settings/barcode-print-query', perm: 'page:settings' },
       { label: '打印模板', path: '/settings/print-templates', perm: 'page:settings' },
       { label: '打印机管理', path: '/settings/printers', perm: 'page:settings' },
     ],

@@ -99,6 +99,9 @@ function fmt(row, { includeAckToken = false } = {}) {
     acknowledgedAt: row.acknowledged_at ?? null,
     jobUniqueKey: row.job_unique_key ?? null,
     dispatchReason: row.dispatch_reason ?? null,
+    refType: row.ref_type ?? null,
+    refId: row.ref_id != null ? Number(row.ref_id) : null,
+    refCode: row.ref_code ?? null,
     dispatchedAt: row.dispatched_at ?? null,
     createdBy:    num(row.created_by),
     createdAt:    row.created_at,
@@ -169,6 +172,9 @@ async function create({
   priority: priorityIn,
   jobUniqueKey: jobUniqueKeyRaw,
   dispatchReason: dispatchReasonIn,
+  refType: refTypeIn,
+  refId: refIdIn,
+  refCode: refCodeIn,
   templateId,
   title,
   contentType = 'html',
@@ -188,6 +194,9 @@ async function create({
 
   const priority = parsePriority(priorityIn)
   const jobTypeNorm = normalizeJobType(jobTypeIn, contentType)
+  const refType = refTypeIn != null ? String(refTypeIn).trim() || null : null
+  const refId = refIdIn != null && refIdIn !== '' && Number.isFinite(Number(refIdIn)) ? Number(refIdIn) : null
+  const refCode = refCodeIn != null ? String(refCodeIn).trim() || null : null
   const warehouseId =
     warehouseIdIn != null && warehouseIdIn !== '' && Number.isFinite(Number(warehouseIdIn))
       ? Number(warehouseIdIn)
@@ -237,8 +246,8 @@ async function create({
 
   const ttl = ttlMinutes()
   const [r] = await pool.query(
-    `INSERT INTO print_jobs (printer_id, template_id, title, content_type, content, copies, priority, job_type, warehouse_id, tenant_id, job_unique_key, dispatch_reason, created_by, expires_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
+    `INSERT INTO print_jobs (printer_id, template_id, title, content_type, content, copies, priority, job_type, warehouse_id, tenant_id, job_unique_key, dispatch_reason, ref_type, ref_id, ref_code, created_by, expires_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
     [
       resolvedId,
       templateId || null,
@@ -252,6 +261,9 @@ async function create({
       tid,
       jobUniqueKey,
       dispatchReason,
+      refType,
+      refId,
+      refCode,
       createdBy || null,
       ttl,
     ],
@@ -598,6 +610,8 @@ async function resolveLabelPrinterId(tenantId = 0) {
 async function enqueueContainerLabelJob(payload) {
   const data = payload?.data
   if (!data?.container_code) return null
+  const containerId =
+    payload?.containerId != null && Number.isFinite(Number(payload.containerId)) ? Number(payload.containerId) : null
   const tid = Number(payload.tenantId) >= 0 && Number.isFinite(Number(payload.tenantId)) ? Number(payload.tenantId) : 0
   const wh = payload.warehouseId != null ? Number(payload.warehouseId) : null
   const resolved = await resolvePrinterForJob({
@@ -645,6 +659,9 @@ async function enqueueContainerLabelJob(payload) {
     copies: 1,
     createdBy: payload.createdBy ?? null,
     jobUniqueKey: payload.jobUniqueKey,
+    refType: containerId ? 'inventory_container' : null,
+    refId: containerId,
+    refCode: data.container_code,
   })
 }
 
@@ -810,6 +827,9 @@ async function enqueuePackageLabelJob(payload) {
     copies: 1,
     createdBy: payload.createdBy ?? null,
     jobUniqueKey: payload.jobUniqueKey ?? null,
+    refType: 'package',
+    refId: Number(packageId),
+    refCode: row.barcode,
   })
 }
 
@@ -869,6 +889,9 @@ async function enqueueProductLabelJob(payload) {
     copies: 1,
     createdBy: payload.createdBy ?? null,
     jobUniqueKey: payload.jobUniqueKey ?? null,
+    refType: 'product',
+    refId: Number(productId),
+    refCode: row.code,
   })
   const dispatchHint = await getDispatchHintForJob(job.printerCode, job.id)
   return {
@@ -933,6 +956,379 @@ async function listPrinterHealth(tenantId = 0) {
   }))
 }
 
+function normalizeBarcodeQueryKeyword(raw) {
+  return String(raw || '').trim()
+}
+
+async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, tenantId = 0 } = {}) {
+  const type = String(category || '').trim().toLowerCase()
+  if (!['inbound', 'outbound', 'logistics'].includes(type)) {
+    throw new AppError('条码分类无效', 400)
+  }
+  if (type === 'inbound') return findInboundBarcodeRecords({ keyword, status, page, pageSize, tenantId })
+  if (type === 'outbound') return findOutboundBarcodeRecords({ keyword, status, page, pageSize, tenantId })
+  return findLogisticsBarcodeRecords({ keyword, status, page, pageSize, tenantId })
+}
+
+async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, tenantId = 0 } = {}) {
+  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+  const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
+  const statusCond = status === undefined ? '' : 'AND status = ?'
+  const params = [tid, like, like, like, like]
+  if (status !== undefined) params.push(status)
+  const offset = (page - 1) * pageSize
+
+  const subParams = [tid]
+  if (status !== undefined) subParams.push(status)
+  const [rows] = await pool.query(
+    `SELECT
+        c.id AS record_id,
+        c.barcode,
+        CASE WHEN c.container_type = 2 OR c.barcode LIKE 'B%' THEN 'plastic_box' ELSE 'inventory' END AS container_kind,
+        c.status AS container_status,
+        c.remaining_qty,
+        c.created_at AS barcode_created_at,
+        p.id AS product_id,
+        p.code AS product_code,
+        p.name AS product_name,
+        p.unit,
+        t.id AS inbound_task_id,
+        t.task_no AS inbound_task_no,
+        t.supplier_name,
+        w.id AS warehouse_id,
+        w.name AS warehouse_name,
+        loc.code AS location_code,
+        pj.id AS print_job_id,
+        pj.status AS print_status,
+        pj.error_message,
+        pj.printer_id,
+        pj.created_at AS print_created_at,
+        pj.updated_at AS print_updated_at,
+        pj.dispatch_reason,
+        pj.printer_code,
+        pj.printer_name
+     FROM inventory_containers c
+     LEFT JOIN product_items p ON p.id = c.product_id
+     LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
+     LEFT JOIN inventory_warehouses w ON w.id = c.warehouse_id
+     LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
+     LEFT JOIN (
+       SELECT j.*, pr.code AS printer_code, pr.name AS printer_name
+       FROM print_jobs j
+       LEFT JOIN printers pr ON pr.id = j.printer_id
+       INNER JOIN (
+         SELECT ref_id, MAX(id) AS max_id
+         FROM print_jobs
+         WHERE tenant_id = ? AND ref_type = 'inventory_container' ${statusCond}
+         GROUP BY ref_id
+       ) latest ON latest.max_id = j.id
+     ) pj ON pj.ref_id = c.id
+     WHERE c.deleted_at IS NULL
+       AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+       AND (
+         c.barcode LIKE ?
+         OR IFNULL(p.code, '') LIKE ?
+         OR IFNULL(p.name, '') LIKE ?
+         OR IFNULL(t.task_no, '') LIKE ?
+       )
+     ORDER BY c.id DESC
+     LIMIT ? OFFSET ?`,
+    [...subParams, ...params, pageSize, offset],
+  )
+
+  const [[{ total }]] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM inventory_containers c
+     LEFT JOIN product_items p ON p.id = c.product_id
+     LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
+     WHERE c.deleted_at IS NULL
+       AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+       AND (
+         c.barcode LIKE ?
+         OR IFNULL(p.code, '') LIKE ?
+         OR IFNULL(p.name, '') LIKE ?
+         OR IFNULL(t.task_no, '') LIKE ?
+       )`,
+    [like, like, like, like],
+  )
+
+  return {
+    list: rows.map((row) => ({
+      category: 'inbound',
+      recordId: Number(row.record_id),
+      barcode: row.barcode,
+      barcodeLabel: '入库条码',
+      barcodeKind: row.container_kind === 'plastic_box' ? '塑料盒条码' : '库存条码',
+      bizNo: row.inbound_task_no || null,
+      title: row.product_name || row.barcode,
+      subtitle: row.product_code ? `${row.product_code}${row.unit ? ` / ${row.unit}` : ''}` : (row.unit || null),
+      extraInfo: row.supplier_name || null,
+      warehouseName: row.warehouse_name || null,
+      locationCode: row.location_code || null,
+      qty: Number(row.remaining_qty),
+      createdAt: row.barcode_created_at,
+      latestJob: row.print_job_id
+        ? {
+            id: Number(row.print_job_id),
+            status: Number(row.print_status),
+            statusKey: statusKey(row.print_status),
+            printStateLabel: printStateLabel(row.print_status),
+            printerId: row.printer_id != null ? Number(row.printer_id) : null,
+            printerCode: row.printer_code ?? null,
+            printerName: row.printer_name ?? null,
+            errorMessage: row.error_message ?? null,
+            dispatchReason: row.dispatch_reason ?? null,
+            createdAt: row.print_created_at,
+            updatedAt: row.print_updated_at,
+          }
+        : null,
+      canReprint: true,
+    })),
+    pagination: { page, pageSize, total: Number(total) },
+  }
+}
+
+async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, tenantId = 0 } = {}) {
+  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+  const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
+  const statusCond = status === undefined ? '' : 'AND status = ?'
+  const subParams = [tid]
+  if (status !== undefined) subParams.push(status)
+  const offset = (page - 1) * pageSize
+
+  const [rows] = await pool.query(
+    `SELECT
+        p.id AS record_id,
+        p.barcode,
+        p.status AS package_status,
+        p.created_at AS barcode_created_at,
+        wt.id AS warehouse_task_id,
+        wt.task_no,
+        wt.customer_name,
+        wt.warehouse_name,
+        (
+          SELECT COUNT(*) FROM package_items pi WHERE pi.package_id = p.id
+        ) AS line_count,
+        (
+          SELECT COALESCE(SUM(pi.qty), 0) FROM package_items pi WHERE pi.package_id = p.id
+        ) AS total_qty,
+        pj.id AS print_job_id,
+        pj.status AS print_status,
+        pj.error_message,
+        pj.printer_id,
+        pj.created_at AS print_created_at,
+        pj.updated_at AS print_updated_at,
+        pj.dispatch_reason,
+        pj.printer_code,
+        pj.printer_name
+     FROM packages p
+     INNER JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
+     LEFT JOIN (
+       SELECT j.*, pr.code AS printer_code, pr.name AS printer_name
+       FROM print_jobs j
+       LEFT JOIN printers pr ON pr.id = j.printer_id
+       INNER JOIN (
+         SELECT ref_id, MAX(id) AS max_id
+         FROM print_jobs
+         WHERE tenant_id = ? AND ref_type = 'package' ${statusCond}
+         GROUP BY ref_id
+       ) latest ON latest.max_id = j.id
+     ) pj ON pj.ref_id = p.id
+     WHERE p.barcode LIKE ?
+        OR IFNULL(wt.task_no, '') LIKE ?
+        OR IFNULL(wt.customer_name, '') LIKE ?
+     ORDER BY p.id DESC
+     LIMIT ? OFFSET ?`,
+    [...subParams, like, like, like, pageSize, offset],
+  )
+
+  const [[{ total }]] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM packages p
+     INNER JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
+     WHERE p.barcode LIKE ?
+        OR IFNULL(wt.task_no, '') LIKE ?
+        OR IFNULL(wt.customer_name, '') LIKE ?`,
+    [like, like, like],
+  )
+
+  return {
+    list: rows.map((row) => ({
+      category: 'outbound',
+      recordId: Number(row.record_id),
+      barcode: row.barcode,
+      barcodeLabel: '出库条码',
+      barcodeKind: '箱贴条码',
+      bizNo: row.task_no || null,
+      title: row.customer_name || row.barcode,
+      subtitle: `${Number(row.line_count)} 行 / ${Number(row.total_qty)} 件`,
+      extraInfo: row.task_no || null,
+      warehouseName: row.warehouse_name || null,
+      locationCode: null,
+      qty: Number(row.total_qty),
+      createdAt: row.barcode_created_at,
+      latestJob: row.print_job_id
+        ? {
+            id: Number(row.print_job_id),
+            status: Number(row.print_status),
+            statusKey: statusKey(row.print_status),
+            printStateLabel: printStateLabel(row.print_status),
+            printerId: row.printer_id != null ? Number(row.printer_id) : null,
+            printerCode: row.printer_code ?? null,
+            printerName: row.printer_name ?? null,
+            errorMessage: row.error_message ?? null,
+            dispatchReason: row.dispatch_reason ?? null,
+            createdAt: row.print_created_at,
+            updatedAt: row.print_updated_at,
+          }
+        : null,
+      canReprint: true,
+    })),
+    pagination: { page, pageSize, total: Number(total) },
+  }
+}
+
+async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, tenantId = 0 } = {}) {
+  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+  const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
+  const params = [tid]
+  let statusSql = ''
+  if (status !== undefined) {
+    statusSql = 'AND j.status = ?'
+    params.push(status)
+  }
+  const offset = (page - 1) * pageSize
+  const [rows] = await pool.query(
+    `SELECT j.*, p.code AS printer_code, p.name AS printer_name
+     FROM print_jobs j
+     LEFT JOIN printers p ON p.id = j.printer_id
+     WHERE j.tenant_id = ?
+       AND (j.ref_type = 'waybill' OR j.job_type = 'waybill')
+       ${statusSql}
+       AND (
+         IFNULL(j.ref_code, '') LIKE ?
+         OR IFNULL(j.title, '') LIKE ?
+       )
+     ORDER BY j.id DESC
+     LIMIT ? OFFSET ?`,
+    [...params, like, like, pageSize, offset],
+  )
+  const [[{ total }]] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM print_jobs j
+     WHERE j.tenant_id = ?
+       AND (j.ref_type = 'waybill' OR j.job_type = 'waybill')
+       ${statusSql}
+       AND (
+         IFNULL(j.ref_code, '') LIKE ?
+         OR IFNULL(j.title, '') LIKE ?
+       )`,
+    [...params, like, like],
+  )
+
+  return {
+    list: rows.map((row) => ({
+      category: 'logistics',
+      recordId: Number(row.id),
+      barcode: row.ref_code || row.title,
+      barcodeLabel: '物流条码',
+      barcodeKind: '物流标签',
+      bizNo: row.ref_code || null,
+      title: row.title,
+      subtitle: row.ref_code || null,
+      extraInfo: null,
+      warehouseName: null,
+      locationCode: null,
+      qty: row.copies != null ? Number(row.copies) : 1,
+      createdAt: row.created_at,
+      latestJob: {
+        id: Number(row.id),
+        status: Number(row.status),
+        statusKey: statusKey(row.status),
+        printStateLabel: printStateLabel(row.status),
+        printerId: row.printer_id != null ? Number(row.printer_id) : null,
+        printerCode: row.printer_code ?? null,
+        printerName: row.printer_name ?? null,
+        errorMessage: row.error_message ?? null,
+        dispatchReason: row.dispatch_reason ?? null,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      },
+      canReprint: true,
+    })),
+    pagination: { page, pageSize, total: Number(total) },
+  }
+}
+
+async function reprintBarcodeRecord({ category, recordId, tenantId = 0, createdBy = null } = {}) {
+  const type = String(category || '').trim().toLowerCase()
+  if (type === 'inbound') return reprintInboundBarcode(recordId, { tenantId, createdBy })
+  if (type === 'outbound') return reprintOutboundBarcode(recordId, { tenantId, createdBy })
+  if (type === 'logistics') return reprintLogisticsBarcode(recordId, { tenantId, createdBy })
+  throw new AppError('条码分类无效', 400)
+}
+
+async function reprintInboundBarcode(recordId, { tenantId = 0, createdBy = null } = {}) {
+  const id = Number(recordId)
+  if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404)
+  const [[row]] = await pool.query(
+    `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, p.name AS product_name
+     FROM inventory_containers c
+     LEFT JOIN product_items p ON p.id = c.product_id
+     WHERE c.id = ? AND c.deleted_at IS NULL`,
+    [id],
+  )
+  if (!row) throw new AppError('入库条码不存在', 404)
+  return enqueueContainerLabelJob({
+    containerId: id,
+    tenantId,
+    warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
+    data: {
+      container_code: row.barcode,
+      product_name: row.product_name,
+      qty: row.remaining_qty,
+    },
+    createdBy,
+    jobUniqueKey: `reprint_container:${id}:${Date.now()}`,
+  })
+}
+
+async function reprintOutboundBarcode(recordId, { tenantId = 0, createdBy = null } = {}) {
+  const id = Number(recordId)
+  if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404)
+  return enqueuePackageLabelJob({
+    packageId: id,
+    tenantId,
+    createdBy,
+    jobUniqueKey: `reprint_package:${id}:${Date.now()}`,
+  })
+}
+
+async function reprintLogisticsBarcode(recordId, { tenantId = 0, createdBy = null } = {}) {
+  const id = Number(recordId)
+  if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404)
+  const job = await findById(id, { tenantId })
+  if (job.jobType !== 'waybill' && job.refType !== 'waybill') {
+    throw new AppError('该记录不是物流条码打印任务', 400)
+  }
+  return create({
+    printerId: job.printerId,
+    tenantId,
+    warehouseId: job.warehouseId,
+    jobType: 'waybill',
+    title: job.title,
+    contentType: job.contentType,
+    content: job.content,
+    copies: job.copies || 1,
+    createdBy,
+    dispatchReason: 'manual_reprint',
+    refType: 'waybill',
+    refId: job.refId,
+    refCode: job.refCode,
+    jobUniqueKey: `reprint_waybill:${id}:${Date.now()}`,
+  })
+}
+
 /** 列表查询 ?status= 支持数字或 pending|printing|success|failed|done */
 function parseListStatus(raw) {
   if (raw === undefined || raw === null || raw === '') return undefined
@@ -975,6 +1371,8 @@ module.exports = {
   expireStaleJobs,
   getStatsCounts,
   listPrinterHealth,
+  findBarcodeRecords,
+  reprintBarcodeRecord,
   STATUS,
   parseListStatus,
   enqueueContainerLabelJob,

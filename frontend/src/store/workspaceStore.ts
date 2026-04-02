@@ -37,6 +37,7 @@ export const PATH_TITLES: Record<string, string> = {
   '/users':           '用户管理',
   '/permissions':     '权限管理',
   '/settings':        '系统设置',
+  '/settings/barcode-print-query': '条码打印查询',
   '/oplogs':          '操作日志',
   '/reports':                 '报表中心',
   '/reports/wave-performance': '波次效率报表',

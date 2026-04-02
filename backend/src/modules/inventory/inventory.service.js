@@ -704,6 +704,7 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, tenantId
     if (row) {
       const tid = Number(tenantId) >= 0 && Number.isFinite(Number(tenantId)) ? Number(tenantId) : 0
       await enqueueContainerLabelJob({
+        containerId: result.newContainerId,
         tenantId: tid,
         warehouseId: result.warehouseId,
         data: {
