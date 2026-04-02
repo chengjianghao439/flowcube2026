@@ -60,6 +60,17 @@ async function resolveCanonicalPrinterNameForRaw(event, requestedName) {
 
 /** 用户已在渲染层确认退出，允许真正关闭窗口（与 ipc flowcube:close-accept 共用） */
 const closeAllowed = new WeakSet()
+let mainWindow = null
+
+function focusExistingWindow() {
+  const win = mainWindow && !mainWindow.isDestroyed()
+    ? mainWindow
+    : BrowserWindow.getAllWindows().find(item => item && !item.isDestroyed())
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+}
 
 function quitForInstaller() {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -296,6 +307,10 @@ function createWindow() {
     win.show()
   })
 
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null
+  })
+
   const indexHtml = path.join(rendererDist(), 'index.html')
   const url = pathToFileURL(indexHtml).href + '#/'
   win.loadURL(url).catch((err) => {
@@ -333,23 +348,36 @@ function createWindow() {
   return win
 }
 
-app.whenReady().then(() => {
-  // 去掉默认「文件 / 编辑 / 视图…」等系统菜单栏（Windows/Linux）；界面以 Web 为准
-  Menu.setApplicationMenu(null)
+const gotTheLock = app.requestSingleInstanceLock()
 
-  createWindow()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    focusExistingWindow()
+  })
+  app.whenReady().then(() => {
+    // 去掉默认「文件 / 编辑 / 视图…」等系统菜单栏（Windows/Linux）；界面以 Web 为准
+    Menu.setApplicationMenu(null)
 
-  console.log('🚀 应用已启动')
+    mainWindow = createWindow()
 
-  if (!app.isPackaged) {
-    console.log('ℹ️ 未打包：自动更新仅在安装包中启用')
-  }
-})
+    console.log('🚀 应用已启动')
+
+    if (!app.isPackaged) {
+      console.log('ℹ️ 未打包：自动更新仅在安装包中启用')
+    }
+  })
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  if (BrowserWindow.getAllWindows().length === 0) {
+    mainWindow = createWindow()
+    return
+  }
+  focusExistingWindow()
 })

@@ -10,8 +10,7 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getInboundTasksApi } from '@/api/inbound-tasks'
 import {
   INBOUND_STATUS_LABEL,
@@ -27,6 +26,15 @@ import { SupplierFinder, FinderTrigger } from '@/components/finder'
 import type { FinderResult } from '@/types/finder'
 import { useCreateInboundTask, useInboundPurchaseCandidates } from '@/hooks/useInboundTasks'
 import { toast } from '@/lib/toast'
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="card-base p-5">
+      <h3 className="text-section-title mb-4 pb-2 border-b border-border/50">{title}</h3>
+      {children}
+    </div>
+  )
+}
 
 function CreateInboundDialog({
   open,
@@ -132,102 +140,133 @@ function CreateInboundDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose() }}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+          <DialogHeader className="border-b px-6 py-5">
             <DialogTitle>新建收货订单</DialogTitle>
+            <DialogDescription>
+              先选择供应商，再从已提交采购单中挑选本次到货商品并填写实际到货数量。
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium">供应商</p>
-                <FinderTrigger
-                  value={supplier?.name ?? ''}
-                  placeholder="点击选择供应商..."
-                  onClick={() => setSupplierFinderOpen(true)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium">备注</p>
-                <Input value={remark} onChange={e => setRemark(e.target.value)} placeholder="选填" />
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border p-4 space-y-3">
-              <div className="flex items-center gap-3">
-                <Input
-                  placeholder="按采购单号 / SKU / 商品名称搜索"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') setKeyword(search.trim())
-                  }}
-                />
-                <Button variant="outline" onClick={() => setKeyword(search.trim())}>搜索</Button>
-              </div>
-
-              {!supplier && (
-                <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
-                  先选择供应商，再从该供应商已提交的采购单中挑选本次到货商品
+          <div className="space-y-4 px-6 py-5">
+            <Section title="基础信息">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium">供应商 *</p>
+                  <FinderTrigger
+                    value={supplier?.name ?? ''}
+                    placeholder="点击选择供应商..."
+                    onClick={() => setSupplierFinderOpen(true)}
+                  />
                 </div>
-              )}
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium">备注</p>
+                  <Input value={remark} onChange={e => setRemark(e.target.value)} placeholder="选填" />
+                </div>
+              </div>
+            </Section>
 
-              {supplier && (
-                <div className="max-h-[48vh] overflow-auto rounded-lg border">
-                  <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-background">
-                      <tr className="border-b text-xs text-muted-foreground">
-                        <th className="px-3 py-2 text-left">采购单</th>
-                        <th className="px-3 py-2 text-left">SKU</th>
-                        <th className="px-3 py-2 text-left">商品</th>
-                        <th className="px-3 py-2 text-left">仓库</th>
-                        <th className="px-3 py-2 text-right">已分配</th>
-                        <th className="px-3 py-2 text-right">可建单</th>
-                        <th className="px-3 py-2 text-right w-28">本次到货</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
+            <Section title="到货明细">
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <Input
+                    className="flex-1"
+                    placeholder="按采购单号 / SKU / 商品名称搜索"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') setKeyword(search.trim())
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setKeyword(search.trim())}>搜索</Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSearch('')
+                        setKeyword('')
+                        setQtyMap({})
+                      }}
+                    >
+                      清空
+                    </Button>
+                  </div>
+                </div>
+
+                {!supplier && (
+                  <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
+                    先选择供应商，再从该供应商已提交的采购单中挑选本次到货商品
+                  </div>
+                )}
+
+                {supplier && (
+                  <div className="overflow-hidden rounded-xl border border-border">
+                    <div className="grid grid-cols-[140px_110px_minmax(220px,1fr)_120px_90px_90px_120px] gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
+                      <span>采购单</span>
+                      <span>SKU</span>
+                      <span>商品</span>
+                      <span>仓库</span>
+                      <span className="text-right">已分配</span>
+                      <span className="text-right">可建单</span>
+                      <span className="text-right">本次到货</span>
+                    </div>
+
+                    <div className="max-h-[46vh] overflow-auto">
                       {!isLoading && candidates.length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-                            暂无可用采购明细
-                          </td>
-                        </tr>
+                        <div className="py-12 text-center text-sm text-muted-foreground">
+                          暂无可用采购明细
+                        </div>
                       )}
-                      {candidates.map(item => (
-                        <tr key={item.purchaseItemId}>
-                          <td className="px-3 py-2 font-mono text-xs">{item.purchaseOrderNo}</td>
-                          <td className="px-3 py-2 font-mono text-xs">{item.productCode}</td>
-                          <td className="px-3 py-2">
-                            <div className="font-medium">{item.productName}</div>
-                            <div className="text-xs text-muted-foreground">{item.unit ?? '—'}</div>
-                          </td>
-                          <td className="px-3 py-2">{item.warehouseName}</td>
-                          <td className="px-3 py-2 text-right">{item.assignedQty}</td>
-                          <td className="px-3 py-2 text-right">{item.remainingQty}</td>
-                          <td className="px-3 py-2">
-                            <Input
-                              className="text-right"
-                              placeholder="0"
-                              value={qtyMap[item.purchaseItemId] ?? ''}
-                              onChange={e => setLineQty(item, e.target.value)}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
 
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>已选 {selectedRows.length} 行</span>
-              <span>到货总数 {selectedRows.reduce((sum, entry) => sum + entry.qty, 0)}</span>
-            </div>
+                      <div className="divide-y">
+                        {candidates.map(item => (
+                          <div
+                            key={item.purchaseItemId}
+                            className="grid grid-cols-[140px_110px_minmax(220px,1fr)_120px_90px_90px_120px] gap-3 px-4 py-3 text-sm"
+                          >
+                            <div className="font-mono text-xs text-foreground">{item.purchaseOrderNo}</div>
+                            <div className="font-mono text-xs text-foreground">{item.productCode}</div>
+                            <div className="min-w-0">
+                              <div className="truncate font-medium text-foreground">{item.productName}</div>
+                              <div className="text-xs text-muted-foreground">{item.unit ?? '—'}</div>
+                            </div>
+                            <div className="text-muted-foreground">{item.warehouseName}</div>
+                            <div className="text-right text-muted-foreground">{item.assignedQty}</div>
+                            <div className="text-right font-medium text-foreground">{item.remainingQty}</div>
+                            <div>
+                              <Input
+                                className="text-right"
+                                placeholder="0"
+                                value={qtyMap[item.purchaseItemId] ?? ''}
+                                onChange={e => setLineQty(item, e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Section>
+
+            <Section title="建单汇总">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>已选明细：{selectedRows.length} 行</p>
+                  <p>供应商：{supplier?.name ?? '未选择'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground mb-1">本次到货总数</p>
+                  <p className="text-3xl font-bold text-foreground">
+                    {selectedRows.reduce((sum, entry) => sum + entry.qty, 0)}
+                  </p>
+                </div>
+              </div>
+            </Section>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="border-t px-6 py-4">
             <Button variant="outline" onClick={handleClose} disabled={createInbound.isPending}>取消</Button>
             <Button onClick={submit} disabled={createInbound.isPending}>
               {createInbound.isPending ? '创建中...' : '创建收货订单'}
