@@ -85,12 +85,16 @@ function fmtContainer(r) {
 
 // ── 查询 ────────────────────────────────────────────────────────────────────
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', status = null }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, productId = null }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
   const conds = ['t.deleted_at IS NULL', '(t.task_no LIKE ? OR t.supplier_name LIKE ? OR t.purchase_order_no LIKE ?)']
   const params = [like, like, like]
   if (status) { conds.push('t.status = ?'); params.push(status) }
+  if (productId) {
+    conds.push('EXISTS (SELECT 1 FROM inbound_task_items iti WHERE iti.task_id = t.id AND iti.product_id = ?)')
+    params.push(productId)
+  }
   const where = conds.join(' AND ')
 
   const [rows] = await pool.query(

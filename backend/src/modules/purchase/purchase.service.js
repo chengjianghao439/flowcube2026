@@ -30,23 +30,30 @@ const PO_COLUMNS = `po.id, po.order_no, po.supplier_id, po.supplier_name, po.war
 
 const genOrderNo = conn => generateDailyCode(conn, 'PO', 'purchase_orders', 'order_no')
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
-  const whereStatus = status ? 'AND po.status = ?' : ''
-  const extra = status ? [like, like, status, pageSize, offset] : [like, like, pageSize, offset]
-  const cntExtra = status ? [like, like, status] : [like, like]
+  const params = [like, like]
+  let whereExtra = ''
+  if (status) {
+    whereExtra += ' AND po.status = ?'
+    params.push(status)
+  }
+  if (productId) {
+    whereExtra += ' AND EXISTS (SELECT 1 FROM purchase_order_items poi WHERE poi.order_id = po.id AND poi.product_id = ?)'
+    params.push(productId)
+  }
   const [rows] = await pool.query(
     `SELECT ${PO_COLUMNS}
      FROM purchase_orders po
-     WHERE po.deleted_at IS NULL AND (po.order_no LIKE ? OR po.supplier_name LIKE ?) ${whereStatus}
+     WHERE po.deleted_at IS NULL AND (po.order_no LIKE ? OR po.supplier_name LIKE ?) ${whereExtra}
      ORDER BY po.created_at DESC LIMIT ? OFFSET ?`,
-    extra,
+    [...params, pageSize, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM purchase_orders po
-     WHERE po.deleted_at IS NULL AND (po.order_no LIKE ? OR po.supplier_name LIKE ?) ${whereStatus}`,
-    cntExtra,
+     WHERE po.deleted_at IS NULL AND (po.order_no LIKE ? OR po.supplier_name LIKE ?) ${whereExtra}`,
+    params,
   )
   return { list: rows.map(fmtOrder), pagination: { page, pageSize, total } }
 }

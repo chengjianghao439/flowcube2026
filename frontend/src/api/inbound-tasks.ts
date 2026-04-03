@@ -11,7 +11,7 @@ import type {
   InboundPurchaseCandidate,
 } from '@/types/inbound-tasks'
 
-export const getInboundTasksApi = (params: QueryParams & { status?: number }) =>
+export const getInboundTasksApi = (params: QueryParams & { status?: number; productId?: number }) =>
   client.get<ApiResponse<PaginatedData<InboundTask>>>('/inbound-tasks', { params })
 
 export const getInboundPurchaseCandidatesApi = (params: { supplierId: number; keyword?: string }) =>

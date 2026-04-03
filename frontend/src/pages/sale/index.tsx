@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -15,7 +14,9 @@ import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { ProductFinder } from '@/components/finder'
 import type { SaleOrder } from '@/types/sale'
+import type { ProductFinderResult } from '@/types/products'
 import type { TableColumn } from '@/types'
 
 // ─── 二次确认 state 类型 ─────────────────────────────────────────────────────
@@ -35,12 +36,12 @@ export default function SalePage() {
   const [keyword,      setKeyword]      = useState('')
   const [search,       setSearch]       = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [selectedIds,  setSelectedIds]  = useState<Set<number>>(new Set())
-  const [batchLoading, setBatchLoading] = useState(false)
+  const [product,      setProduct]      = useState<ProductFinderResult | null>(null)
+  const [productFinderOpen, setProductFinderOpen] = useState(false)
   const [confirmState, setConfirmState] = useState<ConfirmState>(EMPTY_CONFIRM)
   const [printOrder,   setPrintOrder]   = useState<SaleOrder | null>(null)
 
-  const { data, isLoading } = useSaleList({ page, pageSize: 20, keyword, status: statusFilter || undefined })
+  const { data, isLoading } = useSaleList({ page, pageSize: 20, keyword, status: statusFilter || undefined, productId: product?.id || undefined })
   const reserveMutate = useReserveSale()
   const releaseMutate = useReleaseSale()
   const ship          = useShipSale()
@@ -76,35 +77,8 @@ export default function SalePage() {
 
   // ── 筛选操作 ──
   function handleSearch() { setKeyword(search); setPage(1) }
-  function handleReset()  { setSearch(''); setKeyword(''); setStatusFilter(''); setPage(1) }
+  function handleReset()  { setSearch(''); setKeyword(''); setStatusFilter(''); setProduct(null); setPage(1) }
   function handleStatusChange(v: string) { setStatusFilter(v); setPage(1) }
-
-  // ── 批量操作 ──
-  const selectedList = data?.list.filter(r => selectedIds.has(r.id)) ?? []
-
-  async function batchReserve() {
-    const can = selectedList.filter(r => r.status === 1)
-    if (!can.length) { toast.warning('所选中没有草稿状态的销售单'); return }
-    openConfirm('批量占用库存', `确认为 ${can.length} 笔销售单占用库存？可用库存将相应减少。`, async () => {
-      closeConfirm()
-      setBatchLoading(true)
-      for (const r of can) await reserveMutate.mutateAsync(r.id).catch(() => {})
-      setBatchLoading(false)
-      setSelectedIds(new Set())
-    })
-  }
-
-  async function batchCancel() {
-    const can = selectedList.filter(r => r.status === 1 || r.status === 2 || r.status === 3)
-    if (!can.length) { toast.warning('所选中没有可取消的销售单'); return }
-    openConfirm('批量取消销售单', `确认批量取消 ${can.length} 笔销售单？已占库与拣货中的单据会同步释放或取消关联任务。`, async () => {
-      closeConfirm()
-      setBatchLoading(true)
-      for (const r of can) await cancel.mutateAsync(r.id).catch(() => {})
-      setBatchLoading(false)
-      setSelectedIds(new Set())
-    })
-  }
 
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
@@ -171,7 +145,10 @@ export default function SalePage() {
             <Button
               variant="outline"
               onClick={() =>
-                downloadExport('/export/sale', statusFilter ? { status: statusFilter } : {}).catch(e => toast.error((e as Error).message))
+                downloadExport('/export/sale', {
+                  ...(statusFilter ? { status: statusFilter } : {}),
+                  ...(product?.id ? { productId: String(product.id) } : {}),
+                }).catch(e => toast.error((e as Error).message))
               }
             >
               导出 Excel
@@ -189,29 +166,9 @@ export default function SalePage() {
         onReset={handleReset}
         statusFilter={statusFilter}
         onStatusFilterChange={handleStatusChange}
+        productName={product ? `${product.name} (${product.code})` : ''}
+        onPickProduct={() => setProductFinderOpen(true)}
       />
-
-      {/* 批量操作栏（有选中时显示） */}
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
-          <span className="text-sm font-medium text-foreground">
-            已选 <span className="text-primary">{selectedIds.size}</span> 条
-          </span>
-          <span className="h-4 w-px bg-border" />
-          <Button size="sm" variant="outline" disabled={batchLoading} onClick={batchReserve}>
-            {batchLoading ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />处理中...</> : '批量占库'}
-          </Button>
-          <Button size="sm" variant="destructive" disabled={batchLoading} onClick={batchCancel}>
-            {batchLoading ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />处理中...</> : '批量取消'}
-          </Button>
-          <button
-            className="ml-auto text-xs text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => setSelectedIds(new Set())}
-          >
-            清除选择
-          </button>
-        </div>
-      )}
 
       {/* 数据表格 */}
       <DataTable
@@ -220,9 +177,6 @@ export default function SalePage() {
         loading={isLoading}
         pagination={data?.pagination}
         onPageChange={setPage}
-        selectable
-        selectedIds={selectedIds}
-        onSelectChange={setSelectedIds}
         onRowDoubleClick={goToDetail}
       />
 
@@ -241,6 +195,15 @@ export default function SalePage() {
       {printOrder && (
         <PrintPreviewOverlay order={printOrder} onClose={() => setPrintOrder(null)} />
       )}
+
+      <ProductFinder
+        open={productFinderOpen}
+        onClose={() => setProductFinderOpen(false)}
+        onConfirm={(selected) => {
+          setProduct(selected)
+          setPage(1)
+        }}
+      />
     </div>
   )
 }

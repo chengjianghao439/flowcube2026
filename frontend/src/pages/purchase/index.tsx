@@ -14,7 +14,9 @@ import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
+import { ProductFinder } from '@/components/finder'
 import type { PurchaseOrder } from '@/types/purchase'
+import type { ProductFinderResult } from '@/types/products'
 import type { TableColumn } from '@/types'
 
 export default function PurchasePage() {
@@ -36,9 +38,9 @@ export default function PurchasePage() {
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [product, setProduct] = useState<ProductFinderResult | null>(null)
+  const [productFinderOpen, setProductFinderOpen] = useState(false)
   const [printId, setPrintId]   = useState<number | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [batchLoading, setBatchLoading] = useState(false)
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean
@@ -48,7 +50,7 @@ export default function PurchasePage() {
     onConfirm: () => void
   }>({ open: false, title: '', description: '', onConfirm: () => {} })
 
-  const { data, isLoading } = usePurchaseList({ page, pageSize: 20, keyword, status: statusFilter || undefined })
+  const { data, isLoading } = usePurchaseList({ page, pageSize: 20, keyword, status: statusFilter || undefined, productId: product?.id || undefined })
   const confirm = useConfirmPurchase()
   const cancel = useCancelPurchase()
   const { data: printDetail } = usePurchaseDetail(printId || 0)
@@ -63,42 +65,6 @@ export default function PurchasePage() {
   }
   function closeConfirm() {
     setConfirmState(s => ({ ...s, open: false }))
-  }
-
-  const selectedList = data?.list.filter(r => selectedIds.has(r.id)) || []
-
-  const batchConfirm = async () => {
-    if (!selectedList.length) return
-    const canConfirm = selectedList.filter(r => r.status === 1)
-    if (!canConfirm.length) { toast.warning('所选单据中没有可提交的草稿'); return }
-    openConfirm(
-      '批量提交采购单',
-      `确认批量提交 ${canConfirm.length} 笔采购单？`,
-      async () => {
-        closeConfirm()
-        setBatchLoading(true)
-        for (const r of canConfirm) await confirm.mutateAsync(r.id).catch(() => {})
-        setBatchLoading(false)
-        setSelectedIds(new Set())
-      }
-    )
-  }
-
-  const batchCancel = async () => {
-    if (!selectedList.length) return
-    const canCancel = selectedList.filter(r => r.status === 1 || r.status === 2)
-    if (!canCancel.length) { toast.warning('所选单据中没有可取消的'); return }
-    openConfirm(
-      '批量取消采购单',
-      `确认批量取消 ${canCancel.length} 笔采购单？此操作不可恢复。`,
-      async () => {
-        closeConfirm()
-        setBatchLoading(true)
-        for (const r of canCancel) await cancel.mutateAsync(r.id).catch(() => {})
-        setBatchLoading(false)
-        setSelectedIds(new Set())
-      }
-    )
   }
 
   const columns: TableColumn<PurchaseOrder>[] = [
@@ -149,7 +115,10 @@ export default function PurchasePage() {
         actions={
           <>
             <Button variant="outline"
-              onClick={() => downloadExport('/export/purchase', statusFilter ? { status: statusFilter } : {}).catch(e => toast.error((e as Error).message))}>
+              onClick={() => downloadExport('/export/purchase', {
+                ...(statusFilter ? { status: statusFilter } : {}),
+                ...(product?.id ? { productId: String(product.id) } : {}),
+              }).catch(e => toast.error((e as Error).message))}>
               导出 Excel
             </Button>
             <Button onClick={goToNew}>+ 新建采购单</Button>
@@ -159,47 +128,32 @@ export default function PurchasePage() {
 
       {/* 筛选区 */}
       <FilterCard>
-        <Input
-          placeholder="搜索单号/供应商..."
-          value={search}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          className="h-9 w-56"
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
-        />
-        <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-9 w-36">
-            <SelectValue placeholder="全部状态" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部状态</SelectItem>
-            <SelectItem value="1">草稿</SelectItem>
-            <SelectItem value="2">已提交</SelectItem>
-            <SelectItem value="4">已取消</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
-      </FilterCard>
-
-      {/* 批量操作区 */}
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
-          <span className="text-sm font-medium text-foreground">已选 {selectedIds.size} 条</span>
-          <div className="h-4 w-px bg-border" />
-          <Button size="sm" variant="outline" onClick={batchConfirm} disabled={batchLoading}>
-            {batchLoading ? '处理中...' : '批量提交'}
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder="搜索单号 / 供应商..."
+            value={search}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+            className="h-9 w-56"
+            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
+          />
+          <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
+            <SelectTrigger className="h-9 w-36">
+              <SelectValue placeholder="全部状态" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部状态</SelectItem>
+              <SelectItem value="1">草稿</SelectItem>
+              <SelectItem value="2">已提交</SelectItem>
+              <SelectItem value="4">已取消</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" className="h-9 min-w-[180px] justify-start font-normal" onClick={() => setProductFinderOpen(true)}>
+            {product ? `${product.name} (${product.code})` : '按产品筛选'}
           </Button>
-          <Button size="sm" variant="destructive" onClick={batchCancel} disabled={batchLoading}>
-            {batchLoading ? '处理中...' : '批量取消'}
-          </Button>
-          <button
-            className="ml-auto text-xs text-muted-foreground hover:text-foreground transition-colors"
-            onClick={() => setSelectedIds(new Set())}
-          >
-            清除选择
-          </button>
+          <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setProduct(null); setPage(1) }}>重置</Button>
         </div>
-      )}
+      </FilterCard>
 
       <DataTable
         columns={columns}
@@ -207,9 +161,6 @@ export default function PurchasePage() {
         loading={isLoading}
         pagination={data?.pagination}
         onPageChange={setPage}
-        selectable
-        selectedIds={selectedIds}
-        onSelectChange={setSelectedIds}
         onRowDoubleClick={goToDetail}
       />
 
@@ -252,6 +203,15 @@ export default function PurchasePage() {
         loading={false}
         onConfirm={confirmState.onConfirm}
         onCancel={closeConfirm}
+      />
+
+      <ProductFinder
+        open={productFinderOpen}
+        onClose={() => setProductFinderOpen(false)}
+        onConfirm={(selected) => {
+          setProduct(selected)
+          setPage(1)
+        }}
       />
     </div>
   )

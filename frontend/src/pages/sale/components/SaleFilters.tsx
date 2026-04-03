@@ -10,6 +10,8 @@ interface SaleFiltersProps {
   onReset: () => void
   statusFilter: string
   onStatusFilterChange: (v: string) => void
+  productName?: string
+  onPickProduct: () => void
 }
 
 const STATUS_OPTIONS = [
@@ -28,6 +30,8 @@ export function SaleFilters({
   onReset,
   statusFilter,
   onStatusFilterChange,
+  productName,
+  onPickProduct,
 }: SaleFiltersProps) {
   return (
     <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
@@ -57,6 +61,10 @@ export function SaleFilters({
             ))}
           </SelectContent>
         </Select>
+
+        <Button variant="outline" className="h-9 min-w-[180px] justify-start font-normal" onClick={onPickProduct}>
+          {productName || '按产品筛选'}
+        </Button>
 
         <Button size="sm" variant="outline" onClick={onSearch}>搜索</Button>
         <Button size="sm" variant="ghost"   onClick={onReset}>重置</Button>

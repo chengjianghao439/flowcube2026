@@ -12,12 +12,11 @@ function toDate(value: unknown): Date | null {
 export function formatDisplayDateTime(value: unknown, fallback = '—'): string {
   const date = toDate(value)
   if (!date) return fallback
-  return [
+  return `${[
     date.getFullYear(),
     pad(date.getMonth() + 1),
     pad(date.getDate()),
-    pad(date.getHours()),
-  ].join('-') + `：${pad(date.getMinutes())}`
+  ].join('-')} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 export function formatDisplayDate(value: unknown, fallback = '—'): string {

@@ -14,7 +14,7 @@ import type { CreateInboundTaskParams, ReceiveParams, ReceivePackageResult } fro
 
 const QUERY_KEY = 'inbound-tasks'
 
-export function useInboundTasks(params: QueryParams & { status?: number }) {
+export function useInboundTasks(params: QueryParams & { status?: number; productId?: number }) {
   return useQuery({
     queryKey: [QUERY_KEY, params],
     queryFn: () => getInboundTasksApi(params).then(r => r.data.data),

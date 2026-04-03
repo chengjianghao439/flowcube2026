@@ -23,13 +23,20 @@ const fmt = row => ({
 
 const genOrderNo = conn => generateDailyCode(conn, 'SO', 'sale_orders', 'order_no')
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
-  const cond=status?'AND status=?':''
-  const extra=status?[like,like,status,pageSize,offset]:[like,like,pageSize,offset]
-  const cntExtra=status?[like,like,status]:[like,like]
-  const [rows] = await pool.query(`SELECT * FROM sale_orders WHERE deleted_at IS NULL AND (order_no LIKE ? OR customer_name LIKE ?) ${cond} ORDER BY created_at DESC LIMIT ? OFFSET ?`,extra)
-  const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_orders WHERE deleted_at IS NULL AND (order_no LIKE ? OR customer_name LIKE ?) ${cond}`,cntExtra)
+  const params=[like,like]
+  let cond=''
+  if (status) {
+    cond += ' AND status=?'
+    params.push(status)
+  }
+  if (productId) {
+    cond += ' AND EXISTS (SELECT 1 FROM sale_order_items soi WHERE soi.order_id = sale_orders.id AND soi.product_id = ?)'
+    params.push(productId)
+  }
+  const [rows] = await pool.query(`SELECT * FROM sale_orders WHERE deleted_at IS NULL AND (order_no LIKE ? OR customer_name LIKE ?) ${cond} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,pageSize,offset])
+  const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_orders WHERE deleted_at IS NULL AND (order_no LIKE ? OR customer_name LIKE ?) ${cond}`,params)
   return { list:rows.map(fmt), pagination:{page,pageSize,total} }
 }
 

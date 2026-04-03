@@ -225,15 +225,15 @@ export default function DataTable<T extends object>({
                   style={getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined}
                 >
                   <div className="group flex items-center gap-2">
-                    <span className="truncate">{col.title}</span>
+                    <span className="min-w-0 flex-1 truncate">{col.title}</span>
                     <button
                       type="button"
                       aria-label={`调整${col.title}列宽`}
                       onMouseDown={(event) => startResize(event, col)}
                       onClick={event => event.preventDefault()}
-                      className="ml-auto hidden h-5 w-2 shrink-0 cursor-col-resize rounded bg-transparent text-transparent transition group-hover:block hover:bg-border/80"
+                      className="ml-auto flex h-5 w-3 shrink-0 cursor-col-resize items-center justify-center rounded-sm opacity-70 transition-opacity group-hover:opacity-100"
                     >
-                      |
+                      <span className="block h-4 w-px bg-border/80" />
                     </button>
                   </div>
                 </th>

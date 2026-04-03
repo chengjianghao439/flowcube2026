@@ -24,10 +24,13 @@ import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { SupplierFinder, FinderTrigger } from '@/components/finder'
+import { ProductFinder } from '@/components/finder'
 import type { FinderResult } from '@/types/finder'
 import { useCreateInboundTask, useInboundPurchaseCandidates } from '@/hooks/useInboundTasks'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { downloadExport } from '@/lib/exportDownload'
+import type { ProductFinderResult } from '@/types/products'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -292,12 +295,14 @@ export default function InboundTasksPage() {
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const [product, setProduct] = useState<ProductFinderResult | null>(null)
+  const [productFinderOpen, setProductFinderOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['inbound-tasks', keyword, statusFilter, page],
-    queryFn: () => getInboundTasksApi({ keyword, status: statusFilter ? +statusFilter : undefined, page, pageSize: 20 })
+    queryKey: ['inbound-tasks', keyword, statusFilter, product?.id ?? null, page],
+    queryFn: () => getInboundTasksApi({ keyword, status: statusFilter ? +statusFilter : undefined, productId: product?.id, page, pageSize: 20 })
       .then(r => r.data.data),
   })
 
@@ -362,13 +367,27 @@ export default function InboundTasksPage() {
       <PageHeader
         title="收货订单"
         description="按供应商一次到货建单；收货生成容器，PDA 打印条码并上架后计入库存"
-        actions={<Button onClick={() => setCreateOpen(true)}>+ 新建收货订单</Button>}
+        actions={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => downloadExport('/export/inbound-tasks', {
+                ...(statusFilter ? { status: statusFilter } : {}),
+                ...(product?.id ? { productId: String(product.id) } : {}),
+              }).catch(e => toast.error((e as Error).message))}
+            >
+              导出 Excel
+            </Button>
+            <Button onClick={() => setCreateOpen(true)}>+ 新建收货订单</Button>
+          </>
+        }
       />
 
       <FilterCard>
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[180px]">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-[180px] flex-1">
             <Input
+              className="h-9"
               placeholder="任务单号 / 采购单号 / 供应商"
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -376,7 +395,7 @@ export default function InboundTasksPage() {
             />
           </div>
           <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
-            <SelectTrigger className="w-32"><SelectValue placeholder="全部状态" /></SelectTrigger>
+            <SelectTrigger className="h-9 w-36"><SelectValue placeholder="全部状态" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部</SelectItem>
               {([1, 2, 3, 4, 5] as InboundTaskStatus[]).map(s => (
@@ -384,8 +403,11 @@ export default function InboundTasksPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-          <Button variant="outline" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setPage(1) }}>重置</Button>
+          <Button variant="outline" className="h-9 min-w-[180px] justify-start font-normal" onClick={() => setProductFinderOpen(true)}>
+            {product ? `${product.name} (${product.code})` : '按产品筛选'}
+          </Button>
+          <Button variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
+          <Button variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setProduct(null); setPage(1) }}>重置</Button>
         </div>
       </FilterCard>
 
@@ -404,6 +426,15 @@ export default function InboundTasksPage() {
           const path = `/inbound-tasks/${taskId}`
           addTab({ key: path, title: taskNo, path })
           navigate(path)
+        }}
+      />
+
+      <ProductFinder
+        open={productFinderOpen}
+        onClose={() => setProductFinderOpen(false)}
+        onConfirm={(selected) => {
+          setProduct(selected)
+          setPage(1)
         }}
       />
     </div>

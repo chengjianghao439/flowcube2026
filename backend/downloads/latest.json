@@ -1,5 +1,5 @@
 {
-  "version": "0.3.55",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.55/Jixu-Flow-Setup-0.3.55.exe",
-  "notes": "【v0.3.55 主要更新】\n\n• 共享表格新增列宽拖动，拖宽后会自动按页面记住设置，重开后仍保留。\n• 之前已上线的列顺序拖动、分页提示收口、统一时间格式继续保留。\n• ERP 桌面端列表交互进一步贴近工作区模式，不再需要重复调整表格布局。"
+  "version": "0.3.56",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.56/Jixu-Flow-Setup-0.3.56.exe",
+  "notes": "【v0.3.56 主要更新】\n\n• 采购订单、销售订单、收货订单去掉了不一致的批量操作，列表行为统一。\n• 收货订单补上导出 Excel，并支持按产品筛选，直接复用原有商品选择弹窗。\n• 筛选条高度、搜索/重置交互、时间显示、表头列宽拖动提示线一起收口，桌面观感更一致。"
 }
