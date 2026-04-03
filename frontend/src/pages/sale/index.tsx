@@ -94,9 +94,9 @@ export default function SalePage() {
   }
 
   async function batchCancel() {
-    const can = selectedList.filter(r => r.status === 1)
-    if (!can.length) { toast.warning('所选中没有草稿状态的销售单'); return }
-    openConfirm('批量取消销售单', `确认批量取消 ${can.length} 笔草稿销售单？`, async () => {
+    const can = selectedList.filter(r => r.status === 1 || r.status === 2 || r.status === 3)
+    if (!can.length) { toast.warning('所选中没有可取消的销售单'); return }
+    openConfirm('批量取消销售单', `确认批量取消 ${can.length} 笔销售单？已占库与拣货中的单据会同步释放或取消关联任务。`, async () => {
       closeConfirm()
       setBatchLoading(true)
       for (const r of can) await cancel.mutateAsync(r.id).catch(() => {})

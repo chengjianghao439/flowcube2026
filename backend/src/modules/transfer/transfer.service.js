@@ -9,6 +9,44 @@ const fmt = r => ({ id:r.id, orderNo:r.order_no, fromWarehouseId:r.from_warehous
 
 const genNo = conn => generateDailyCode(conn, 'TR', 'transfer_orders', 'order_no')
 
+async function assertTransferAvailability(conn, order) {
+  if (!order.items?.length) throw new AppError('调拨单无明细', 400)
+
+  const merged = new Map()
+  for (const item of order.items) {
+    const key = `${order.fromWarehouseId}:${item.productId}`
+    const prev = merged.get(key)
+    if (prev) {
+      prev.quantity += Number(item.quantity)
+    } else {
+      merged.set(key, {
+        productId: item.productId,
+        productName: item.productName,
+        quantity: Number(item.quantity),
+      })
+    }
+  }
+
+  for (const item of merged.values()) {
+    const [[stock]] = await conn.query(
+      `SELECT quantity, reserved
+       FROM inventory_stock
+       WHERE warehouse_id = ? AND product_id = ?
+       FOR UPDATE`,
+      [order.fromWarehouseId, item.productId],
+    )
+    const onHand = Number(stock?.quantity ?? 0)
+    const reserved = Number(stock?.reserved ?? 0)
+    const available = onHand - reserved
+    if (available < item.quantity) {
+      throw new AppError(
+        `调拨库存不足：${item.productName} 可用 ${available}，申请 ${item.quantity}`,
+        400,
+      )
+    }
+  }
+}
+
 async function findAll({ page=1, pageSize=20, keyword='', status=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
   const cond=status?'AND status=?':''
@@ -44,7 +82,18 @@ async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWar
 async function confirm(id) {
   const o=await findById(id)
   if(o.status!==1) throw new AppError('只有草稿可以确认',400)
-  await pool.query('UPDATE transfer_orders SET status=2 WHERE id=?',[id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await assertTransferAvailability(conn, o)
+    await conn.query('UPDATE transfer_orders SET status=2 WHERE id=?',[id])
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 async function execute(id, operator) {
@@ -54,6 +103,8 @@ async function execute(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+
+    await assertTransferAvailability(conn, o)
 
     for (const item of o.items) {
       // 容器路径：FIFO 扣减源仓库容器 → 目标仓库创建容器（保留批次）→ 双仓缓存同步

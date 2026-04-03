@@ -144,7 +144,7 @@ export default function PurchasePage() {
     <div className="space-y-4">
       <PageHeader
         title="采购订单"
-        description="采购单仅管理计划与提交流程；后续将按供应商到货创建独立收货入库单"
+        description="采购单仅管理计划与提交；实际到货请在收货订单中按供应商创建本次收货单"
         actions={
           <>
             <Button variant="outline"

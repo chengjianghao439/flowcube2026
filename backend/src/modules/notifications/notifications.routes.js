@@ -35,6 +35,18 @@ router.get('/', async (req, res, next) => {
     const [[{ overdueReceivable }]] = await pool.query(
       `SELECT COUNT(*) AS overdueReceivable FROM payment_records WHERE type=2 AND status IN (1,2) AND due_date IS NOT NULL AND due_date < CURDATE()`
     )
+    const [[{ pendingInbound }]] = await pool.query(
+      `SELECT COUNT(*) AS pendingInbound FROM inbound_tasks WHERE status IN (1,2,3) AND deleted_at IS NULL`
+    )
+    const [[{ failedPrintJobs }]] = await pool.query(
+      `SELECT COUNT(*) AS failedPrintJobs FROM print_jobs WHERE status = 3`
+    )
+    const [[{ healthAnomalies }]] = await pool.query(
+      `SELECT COUNT(*) AS healthAnomalies
+       FROM system_health_logs
+       WHERE created_at >= NOW() - INTERVAL 24 HOUR
+         AND severity IN ('danger', 'warning', 'fix_failed')`
+    )
 
     // 组装通知列表
     const items = []
@@ -46,10 +58,13 @@ router.get('/', async (req, res, next) => {
     if (unpaidPayable > 0) items.push({ type: 'danger', icon: '💳', text: `${unpaidPayable} 笔应付账款未清`, path: '/payments' })
     if (unpaidReceivable > 0) items.push({ type: 'danger', icon: '💰', text: `${unpaidReceivable} 笔应收账款未清`, path: '/payments' })
     if (pendingTransfer > 0) items.push({ type: 'info', icon: '🔄', text: `${pendingTransfer} 笔调拨单待处理`, path: '/transfer' })
+    if (pendingInbound > 0) items.push({ type: 'info', icon: '📥', text: `${pendingInbound} 笔收货订单待处理`, path: '/inbound-tasks' })
+    if (failedPrintJobs > 0) items.push({ type: 'warning', icon: '🖨️', text: `${failedPrintJobs} 条打印任务失败，建议补打`, path: '/settings/barcode-print-query' })
+    if (healthAnomalies > 0) items.push({ type: 'warning', icon: '🩺', text: `近 24 小时发现 ${healthAnomalies} 条系统异常记录`, path: '/reports/pda-anomaly' })
 
     const total = items.length
 
-    return successResponse(res, { total, items, counts: { lowStockCount, pendingPurchase, pendingSale, unpaidPayable, unpaidReceivable, pendingTransfer, overduePayable, overdueReceivable } }, '查询成功')
+    return successResponse(res, { total, items, counts: { lowStockCount, pendingPurchase, pendingSale, unpaidPayable, unpaidReceivable, pendingTransfer, overduePayable, overdueReceivable, pendingInbound, failedPrintJobs, healthAnomalies } }, '查询成功')
   } catch (e) { next(e) }
 })
 

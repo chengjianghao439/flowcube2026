@@ -450,6 +450,20 @@ async function ship(id, operator, saleData) {
     await assertTaskCheckScanClosure(conn, id)
     await assertTaskPackagingClosure(conn, id)
 
+    if (saleOrderId) {
+      const [[saleRow]] = await conn.query(
+        'SELECT id, status, order_no FROM sale_orders WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+        [saleOrderId],
+      )
+      if (!saleRow) throw new AppError('关联销售单不存在，无法出库', 404)
+      if (Number(saleRow.status) === 5) {
+        throw new AppError(`关联销售单 ${saleRow.order_no} 已取消，无法继续出库`, 400)
+      }
+      if (Number(saleRow.status) === 4) {
+        throw new AppError(`关联销售单 ${saleRow.order_no} 已完成出库，请勿重复操作`, 400)
+      }
+    }
+
     // 通过引擎扣减库存（仅本任务锁定容器）
     for (const item of items) {
       await moveStock(conn, {
@@ -504,19 +518,20 @@ async function ship(id, operator, saleData) {
 /**
  * 取消任务（→8）：同步销售单状态 → 5；释放分拣格
  */
-async function cancel(id) {
+async function cancel(id, options = {}) {
   const task = await findById(id)
   if (task.status === WT_STATUS.SHIPPED)   throw new AppError('已出库的任务不能取消', 400)
   if (task.status === WT_STATUS.CANCELLED) throw new AppError('任务已取消', 400)
   if (!isValidTransition(task.status, WT_STATUS.CANCELLED)) throw new AppError(`非法状态迁移：${task.status} → ${WT_STATUS.CANCELLED}`, 400)
 
-  const conn = await pool.getConnection()
+  const manageConn = !options.conn
+  const conn = options.conn || await pool.getConnection()
   try {
-    await conn.beginTransaction()
+    if (manageConn) await conn.beginTransaction()
     await conn.query('UPDATE warehouse_tasks SET status=?, sorting_bin_id=NULL, sorting_bin_code=NULL WHERE id=?', [WT_STATUS.CANCELLED, id])
     await unlockContainersByTask(conn, id)
     await sortingBinSvc.releaseByTask(conn, id)
-    if (task.saleOrderId) {
+    if (task.saleOrderId && options.syncSaleStatus !== false) {
       await conn.query('UPDATE sale_orders SET status=5 WHERE id=?', [task.saleOrderId])
     }
     try {
@@ -528,9 +543,13 @@ async function cancel(id) {
         detail:     { saleOrderId: task.saleOrderId },
       })
     } catch (_) {}
-    await conn.commit()
-  } catch (e) { await conn.rollback(); throw e }
-  finally { conn.release() }
+    if (manageConn) await conn.commit()
+  } catch (e) {
+    if (manageConn) await conn.rollback()
+    throw e
+  } finally {
+    if (manageConn) conn.release()
+  }
 }
 
 /**

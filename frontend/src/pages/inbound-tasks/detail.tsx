@@ -113,6 +113,10 @@ export default function InboundTaskDetailPage() {
   const canReceive = task.status === 1 || task.status === 2
   const canPutaway = task.status === 2 || task.status === 3
   const canCancel = task.status === 1
+  const waitingCount = containers?.waiting?.length ?? 0
+  const storedCount = containers?.stored?.length ?? 0
+  const totalWaitingQty = (containers?.waiting ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
+  const totalStoredQty = (containers?.stored ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
 
   return (
     <div className="space-y-5">
@@ -143,9 +147,10 @@ export default function InboundTaskDetailPage() {
 
       <Section title="任务明细（应到 / 已收 / 已上架）">
         {canReceive && (
-          <p className="text-xs text-muted-foreground">
-            逐包收货：每行填写「本包数量」后点「提交本包」，每次生成一个待上架容器并尝试打印条码；不可一次提交多行合并数量。
-          </p>
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-xs text-muted-foreground space-y-1.5">
+            <p className="font-medium text-foreground">电脑端适合补录单箱收货，批量多箱建议在 PDA 收货。</p>
+            <p>电脑端每次只补录 1 箱，提交后会生成 1 个库存条码并加入打印队列。</p>
+          </div>
         )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -208,10 +213,22 @@ export default function InboundTaskDetailPage() {
 
       {canPutaway && (
         <Section title="待上架库存">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-border bg-card px-4 py-3">
+              <p className="text-xs text-muted-foreground">待上架箱数</p>
+              <p className="mt-1 text-2xl font-bold">{waitingCount}</p>
+              <p className="text-xs text-muted-foreground mt-1">合计数量 {totalWaitingQty}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card px-4 py-3">
+              <p className="text-xs text-muted-foreground">已上架箱数</p>
+              <p className="mt-1 text-2xl font-bold">{storedCount}</p>
+              <p className="text-xs text-muted-foreground mt-1">合计数量 {totalStoredQty}</p>
+            </div>
+          </div>
           <div className="rounded-lg border border-sky-500/35 bg-sky-500/[0.08] px-4 py-3 text-sm space-y-1.5">
             <p className="font-medium text-sky-950 dark:text-sky-100">请使用 PDA 扫码完成上架</p>
             <p className="text-muted-foreground">
-              在 PDA「扫码上架」进入本任务，依次扫描库存条码（I）与货架条码（R）。电脑端仅可查看待上架列表，无法在此提交上架。
+              在 PDA「扫码上架」进入本任务，依次扫描库存条码（I）与货架条码（R）。如果库存条码丢失或打印残缺，可去「条码打印查询」补打。
             </p>
           </div>
 

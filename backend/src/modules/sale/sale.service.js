@@ -167,8 +167,33 @@ async function releaseStock(id) {
 // 取消订单：仅 DRAFT(1) → CANCELLED(5)
 async function cancel(id) {
   const order = await findById(id)
-  if (order.status !== 1) throw new AppError('只有草稿状态的订单可以取消', 400)
-  await pool.query('UPDATE sale_orders SET status=5 WHERE id=?', [id])
+  if (order.status === 4) throw new AppError('已出库的订单不能取消', 400)
+  if (order.status === 5) throw new AppError('订单已取消', 400)
+
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+
+    if (order.status === 2) {
+      await releaseByRef(conn, 'sale_order', id)
+    }
+
+    if (order.status === 3) {
+      if (!order.taskId) {
+        throw new AppError('销售单处于拣货中但未关联仓库任务，请先排查异常', 409)
+      }
+      const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
+      await taskSvc.cancel(order.taskId, { conn, syncSaleStatus: false })
+    }
+
+    await conn.query('UPDATE sale_orders SET status=5 WHERE id=?', [id])
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 // 删除订单：仅 CANCELLED(5) 可删

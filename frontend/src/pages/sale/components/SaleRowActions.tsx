@@ -96,6 +96,13 @@ export function SaleRowActions({
             >
               <Undo2 className="size-4" />取消占库
             </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              disabled={anyPending}
+              onClick={() => onAsk('取消订单', '将释放已占用库存并取消销售单，是否继续？', () => onCancelSale(row.id))}
+            >
+              <X className="size-4" />取消订单
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -115,6 +122,15 @@ export function SaleRowActions({
         </Button>
         <Button size="sm" variant="ghost" onClick={onDetail}>
           <Eye className="size-3.5" />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-destructive hover:text-destructive"
+          disabled={anyPending}
+          onClick={() => onAsk('取消订单', '将同步取消关联仓库任务并释放锁定资源，是否继续？', () => onCancelSale(row.id))}
+        >
+          <X className="size-3.5" />
         </Button>
       </div>
     )
