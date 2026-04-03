@@ -12,6 +12,7 @@ import { downloadExport } from '@/lib/exportDownload'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { toast } from '@/lib/toast'
 import client from '@/api/client'
 import { printProductLabelApi } from '@/api/products'
@@ -118,12 +119,15 @@ export default function ProductsPage() {
     { key:'costPrice', title:'成本价', width:90, render:v=>v!=null?`¥${v}`:'-' },
     { key:'salePrice', title:'售价', width:90, render:v=>v!=null?`¥${v}`:'-' },
     { key:'isActive', title:'状态', width:80, render:(_,r)=><Badge variant={r.isActive?'default':'destructive'}>{r.isActive?'启用':'停用'}</Badge> },
-    { key:'id', title:'操作', width:200, render:(_,r)=>(
-      <div className="flex gap-1 flex-wrap">
-        <Button size="sm" variant="outline" onClick={()=>openEdit(r)}>编辑</Button>
-        <Button size="sm" variant="outline" onClick={()=>void handlePrintProductLabel(r)}>标签</Button>
-        <Button size="sm" variant="destructive" onClick={()=>setConfirmProduct(r)}>删除</Button>
-      </div>
+    { key:'id', title:'操作', width:160, render:(_,r)=>(
+      <TableActionsMenu
+        primaryLabel="编辑"
+        onPrimaryClick={()=>openEdit(r)}
+        items={[
+          { label:'打印标签', onClick:()=>void handlePrintProductLabel(r) },
+          { label:'删除', onClick:()=>setConfirmProduct(r), destructive:true, separatorBefore:true },
+        ]}
+      />
     )},
   ]
 

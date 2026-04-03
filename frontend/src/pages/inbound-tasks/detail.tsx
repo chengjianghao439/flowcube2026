@@ -7,11 +7,11 @@ import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
   useInboundTaskDetail,
   useInboundTaskContainers,
@@ -20,7 +20,6 @@ import {
 } from '@/hooks/useInboundTasks'
 import {
   INBOUND_STATUS_LABEL,
-  INBOUND_STATUS_VARIANT,
   type InboundContainerRow,
   type InboundTaskItem,
 } from '@/types/inbound-tasks'
@@ -117,6 +116,7 @@ export default function InboundTaskDetailPage() {
   const storedCount = containers?.stored?.length ?? 0
   const totalWaitingQty = (containers?.waiting ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
   const totalStoredQty = (containers?.stored ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
+  const statusTone = task.status === 4 ? 'success' : task.status === 5 ? 'danger' : task.status === 1 ? 'draft' : 'active'
 
   return (
     <div className="space-y-5">
@@ -124,7 +124,7 @@ export default function InboundTaskDetailPage() {
         title={`收货订单 ${task.taskNo}`}
         description={
           <span className="flex flex-wrap items-center gap-2">
-            <Badge variant={INBOUND_STATUS_VARIANT[task.status]}>{INBOUND_STATUS_LABEL[task.status]}</Badge>
+            <SoftStatusLabel label={INBOUND_STATUS_LABEL[task.status]} tone={statusTone} />
             <span className="text-muted-foreground">采购单 <span className="text-doc-code">{task.purchaseOrderNo ?? '—'}</span></span>
           </span>
         }

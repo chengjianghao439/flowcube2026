@@ -1,5 +1,5 @@
 {
-  "version": "0.3.56",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.56/Jixu-Flow-Setup-0.3.56.exe",
-  "notes": "【v0.3.56 主要更新】\n\n• 采购订单、销售订单、收货订单去掉了不一致的批量操作，列表行为统一。\n• 收货订单补上导出 Excel，并支持按产品筛选，直接复用原有商品选择弹窗。\n• 筛选条高度、搜索/重置交互、时间显示、表头列宽拖动提示线一起收口，桌面观感更一致。"
+  "version": "0.3.57",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.57/Jixu-Flow-Setup-0.3.57.exe",
+  "notes": "【v0.3.57 主要更新】\n\n• 表格列宽拖动改成只影响当前列，交互更接近 Excel，不会再连带挤动其他列。\n• 主要业务页状态颜色统一成采购订单的浅色风格，视觉不再一页一个样式。\n• 操作列改成“主按钮 + 更多下拉”，并修复销售订单详情页异常。"
 }

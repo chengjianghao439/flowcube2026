@@ -9,13 +9,13 @@ import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getInboundTasksApi } from '@/api/inbound-tasks'
 import {
   INBOUND_STATUS_LABEL,
-  INBOUND_STATUS_VARIANT,
   type InboundTask,
   type InboundTaskStatus,
   type InboundPurchaseCandidate,
@@ -339,7 +339,11 @@ export default function InboundTasksPage() {
       key: 'status',
       title: '状态',
       width: 90,
-      render: v => <Badge variant={INBOUND_STATUS_VARIANT[v as InboundTaskStatus]}>{INBOUND_STATUS_LABEL[v as InboundTaskStatus]}</Badge>,
+      render: v => {
+        const status = v as InboundTaskStatus
+        const tone = status === 4 ? 'success' : status === 5 ? 'danger' : status === 1 ? 'draft' : 'active'
+        return <SoftStatusLabel label={INBOUND_STATUS_LABEL[status]} tone={tone} />
+      },
     },
     {
       key: 'operatorName',
@@ -355,9 +359,13 @@ export default function InboundTasksPage() {
     {
       key: 'id',
       title: '操作',
-      width: 100,
+      width: 140,
       render: (_, row) => (
-        <Button size="sm" variant="ghost" onClick={() => openDetail(row as InboundTask)}>详情</Button>
+        <TableActionsMenu
+          primaryLabel="详情"
+          onPrimaryClick={() => openDetail(row as InboundTask)}
+          items={[]}
+        />
       ),
     },
   ]

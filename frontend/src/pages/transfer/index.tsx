@@ -6,9 +6,10 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getTransferListApi, createTransferApi, confirmTransferApi, executeTransferApi, cancelTransferApi } from '@/api/transfer'
 import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -18,8 +19,6 @@ import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { useProducts } from '@/hooks/useProducts'
 import type { TransferOrder, TransferItem } from '@/api/transfer'
 import type { TableColumn } from '@/types'
-
-const SC: Record<number,'default'|'secondary'|'outline'|'destructive'> = {1:'secondary',2:'default',3:'outline',4:'destructive'}
 
 interface DraftItem extends Omit<TransferItem,'id'> { _key:number }
 
@@ -67,16 +66,35 @@ export default function TransferPage() {
     {key:'orderNo',title:'调拨单号',width:170,render:(v)=><span className="text-doc-code">{String(v)}</span>},
     {key:'fromWarehouseName',title:'源仓库',width:130},
     {key:'toWarehouseName',title:'目标仓库',width:130},
-    {key:'status',title:'状态',width:90,render:(v,row)=><Badge variant={SC[v as number]}>{(row as TransferOrder).statusName}</Badge>},
+    {key:'status',title:'状态',width:90,render:(v,row)=>{
+      const status = v as number
+      const tone = status === 3 ? 'success' : status === 4 ? 'danger' : status === 1 ? 'draft' : 'active'
+      return <SoftStatusLabel label={(row as TransferOrder).statusName} tone={tone} />
+    }},
     {key:'operatorName',title:'经办人',width:90},
     {key:'createdAt',title:'创建时间',width:160,render:(v)=>formatDisplayDateTime(v)},
-    {key:'id',title:'操作',width:200,render:(_,row)=>{const r=row as TransferOrder; return(
-      <div className="flex gap-1 flex-wrap">
-        {r.status===1&&<Button size="sm" variant="outline" disabled={pendingId===r.id} onClick={()=>mut(()=>confirmTransferApi(r.id),r.id)}>{pendingId===r.id?'处理中...':'确认'}</Button>}
-        {r.status===2&&<Button size="sm" variant="outline" disabled={pendingId===r.id} onClick={()=>openConfirm('执行调拨','确认执行调拨？将同步两个仓库库存，不可撤销。',()=>mut(()=>executeTransferApi(r.id),r.id))}>{pendingId===r.id?'处理中...':'执行调拨'}</Button>}
-        {(r.status===1||r.status===2)&&<Button size="sm" variant="destructive" disabled={pendingId===r.id} onClick={()=>openConfirm('取消调拨','确认取消此调拨单？',()=>mut(()=>cancelTransferApi(r.id),r.id))}>{pendingId===r.id?'处理中...':'取消'}</Button>}
-      </div>
-    )}}
+    {key:'id',title:'操作',width:180,render:(_,row)=>{const r=row as TransferOrder;
+      if (r.status !== 1 && r.status !== 2) return <span className="text-xs text-muted-foreground">—</span>
+      return(
+        <TableActionsMenu
+          primaryLabel={r.status===1 ? (pendingId===r.id?'处理中...':'确认') : (pendingId===r.id?'处理中...':'执行调拨')}
+          onPrimaryClick={()=> {
+            if (r.status===1) mut(()=>confirmTransferApi(r.id),r.id)
+            else openConfirm('执行调拨','确认执行调拨？将同步两个仓库库存，不可撤销。',()=>mut(()=>executeTransferApi(r.id),r.id))
+          }}
+          primaryDisabled={pendingId===r.id}
+          items={[
+            {
+              label: pendingId===r.id?'处理中...':'取消',
+              onClick:()=>openConfirm('取消调拨','确认取消此调拨单？',()=>mut(()=>cancelTransferApi(r.id),r.id)),
+              disabled: pendingId===r.id,
+              destructive: true,
+              separatorBefore: true,
+            },
+          ]}
+        />
+      )
+    }}
   ]
 
   return (

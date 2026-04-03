@@ -14,7 +14,7 @@ const CONFIG: Record<OrderType, Record<number, StatusConfig>> = {
   sale: {
     1: { label: '草稿',   className: 'bg-secondary text-secondary-foreground border-secondary' },
     2: { label: '已占库', className: 'bg-primary/10 text-primary border-primary/20' },
-    3: { label: '拣货中', className: 'bg-warning/10 text-warning border-warning/20' },
+    3: { label: '拣货中', className: 'bg-primary/10 text-primary border-primary/20' },
     4: { label: '已出库', className: 'bg-success/10 text-success border-success/20' },
     5: { label: '已取消', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   },
@@ -49,13 +49,21 @@ const CONFIG: Record<OrderType, Record<number, StatusConfig>> = {
   },
 }
 
+export const SOFT_STATUS_CLASS = {
+  draft: 'bg-secondary text-secondary-foreground border-secondary',
+  active: 'bg-primary/10 text-primary border-primary/20',
+  success: 'bg-success/10 text-success border-success/20',
+  danger: 'bg-destructive/10 text-destructive border-destructive/20',
+} as const
+
 interface StatusBadgeProps {
   type: OrderType
   status: number
   className?: string
+  ariaLabel?: string
 }
 
-export function StatusBadge({ type, status, className }: StatusBadgeProps) {
+export function StatusBadge({ type, status, className, ariaLabel }: StatusBadgeProps) {
   const cfg = CONFIG[type]?.[status]
   if (!cfg) {
     return (
@@ -68,8 +76,23 @@ export function StatusBadge({ type, status, className }: StatusBadgeProps) {
     <Badge
       variant="outline"
       className={cn('text-xs font-medium', cfg.className, className)}
+      aria-label={ariaLabel}
     >
       {cfg.label}
+    </Badge>
+  )
+}
+
+interface SoftStatusLabelProps {
+  label: string
+  tone: keyof typeof SOFT_STATUS_CLASS
+  className?: string
+}
+
+export function SoftStatusLabel({ label, tone, className }: SoftStatusLabelProps) {
+  return (
+    <Badge variant="outline" className={cn('text-xs font-medium', SOFT_STATUS_CLASS[tone], className)}>
+      {label}
     </Badge>
   )
 }

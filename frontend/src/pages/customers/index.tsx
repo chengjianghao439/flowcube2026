@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCustomers, useDeleteCustomer } from '@/hooks/useCustomers'
 import CustomerFormDialog from './components/CustomerFormDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { getPriceListsApi, bindCustomerApi } from '@/api/price-lists'
 import type { Customer } from '@/types/customers'
 import type { TableColumn } from '@/types'
@@ -49,12 +50,15 @@ export default function CustomersPage() {
     { key: 'email', title: '邮箱', width: 160 },
     { key: 'priceListName' as keyof Customer, title: '价格表', width: 120, render: (v) => v ? <Badge variant="outline" className="text-primary border-primary/30">{String(v)}</Badge> : <span className="text-muted-foreground text-xs">默认价</span> },
     { key: 'isActive', title: '状态', width: 70, render:(v)=> <Badge variant={v ? 'default' : 'secondary'}>{v ? '启用' : '停用'}</Badge> },
-    { key: 'id', title: '操作', width: 180, render:(_, row)=>(
-      <div className="flex gap-1 flex-wrap">
-        <Button size="sm" variant="outline" onClick={()=>{ setEditing(row as Customer); setDialogOpen(true) }}>编辑</Button>
-        <Button size="sm" variant="outline" onClick={()=>openBind(row as Customer)}>绑定价格</Button>
-        <Button size="sm" variant="destructive" onClick={()=> setConfirmTarget(row as Customer)}>删除</Button>
-      </div>
+    { key: 'id', title: '操作', width: 160, render:(_, row)=>(
+      <TableActionsMenu
+        primaryLabel="编辑"
+        onPrimaryClick={()=>{ setEditing(row as Customer); setDialogOpen(true) }}
+        items={[
+          { label: '绑定价格', onClick:()=>openBind(row as Customer) },
+          { label: '删除', onClick:()=> setConfirmTarget(row as Customer), destructive: true, separatorBefore: true },
+        ]}
+      />
     )}
   ]
 

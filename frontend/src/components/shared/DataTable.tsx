@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Inbox } from 'lucide-react'
 import type { Pagination, TableColumn } from '@/types'
 
@@ -31,6 +31,7 @@ export default function DataTable<T extends object>({
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
+  const columnWidthsRef = useRef<Record<string, number>>({})
 
   const resolvedStorageKey = useMemo(() => {
     if (columnStorageKey) return `flowcube:table-columns:${columnStorageKey}`
@@ -96,6 +97,10 @@ export default function DataTable<T extends object>({
     return merged
   }, [columnOrder, columns])
 
+  useEffect(() => {
+    columnWidthsRef.current = columnWidths
+  }, [columnWidths])
+
   const persistLayout = (nextOrder: string[], nextWidths: Record<string, number>) => {
     setColumnOrder(nextOrder)
     setColumnWidths(nextWidths)
@@ -127,8 +132,13 @@ export default function DataTable<T extends object>({
 
   const getColumnWidth = (col: TableColumn<T>) => {
     const key = String(col.key)
-    return columnWidths[key] ?? col.width
+    return columnWidths[key] ?? col.width ?? (isAction(key, col.title) ? 200 : 160)
   }
+
+  const tableWidth = useMemo(() => {
+    const base = orderedColumns.reduce((sum, col) => sum + getColumnWidth(col), 0)
+    return base + (selectable ? 56 : 0)
+  }, [orderedColumns, selectable, columnWidths])
 
   const startResize = (event: ReactMouseEvent, col: TableColumn<T>) => {
     event.preventDefault()
@@ -146,7 +156,7 @@ export default function DataTable<T extends object>({
 
     const handleMouseUp = (moveEvent: MouseEvent) => {
       const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
-      const nextWidths = { ...columnWidths, [key]: nextWidth }
+      const nextWidths = { ...columnWidthsRef.current, [key]: nextWidth }
       persistLayout(columnOrder.length ? columnOrder : columns.map(item => String(item.key)), nextWidths)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
@@ -190,7 +200,13 @@ export default function DataTable<T extends object>({
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="table-fixed text-sm" style={{ width: tableWidth }}>
+          <colgroup>
+            {selectable && <col style={{ width: 56 }} />}
+            {orderedColumns.map(col => (
+              <col key={String(col.key)} style={{ width: getColumnWidth(col) }} />
+            ))}
+          </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/30">
               {selectable && (

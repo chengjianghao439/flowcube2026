@@ -9,7 +9,8 @@ import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
@@ -21,10 +22,6 @@ import DataTable from '@/components/shared/DataTable'
 import { confirmAction } from '@/lib/confirm'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
-
-const STATUS_VARIANT: Record<WaveStatus, 'default'|'secondary'|'outline'|'destructive'> = {
-  1: 'outline', 2: 'secondary', 3: 'default', 4: 'default', 5: 'destructive',
-}
 
 export default function PickingWavesPage() {
   const qc = useQueryClient()
@@ -59,7 +56,11 @@ export default function PickingWavesPage() {
     { key: 'warehouseName',  title: '仓库',
       render: v => v ?? <span className="text-muted-foreground">—</span> },
     { key: 'status',         title: '状态', width: 90,
-      render: v => <Badge variant={STATUS_VARIANT[v as WaveStatus]}>{WAVE_STATUS_LABEL[v as WaveStatus]}</Badge> },
+      render: v => {
+        const status = v as WaveStatus
+        const tone = status === 4 ? 'success' : status === 5 ? 'danger' : status === 1 ? 'draft' : 'active'
+        return <SoftStatusLabel label={WAVE_STATUS_LABEL[status]} tone={tone} />
+      } },
     { key: 'priority',       title: '优先级', width: 80,
       render: v => WAVE_PRIORITY_LABEL[v as 1|2|3] },
     { key: 'taskCount',      title: '任务数', width: 80 },
@@ -67,9 +68,9 @@ export default function PickingWavesPage() {
       render: v => v ?? <span className="text-muted-foreground">—</span> },
     { key: 'createdAt',      title: '创建时间', width: 160,
       render: v => formatDisplayDateTime(v) },
-    { key: 'id', title: '操作', width: 80,
+    { key: 'id', title: '操作', width: 140,
       render: (_, row) => (
-        <Button size="sm" variant="ghost" onClick={() => setDetailWave(row)}>详情</Button>
+        <TableActionsMenu primaryLabel="详情" onPrimaryClick={() => setDetailWave(row)} items={[]} />
       ) },
   ]
 
@@ -115,7 +116,7 @@ export default function PickingWavesPage() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><span className="text-muted-foreground">仓库：</span>{detail?.warehouseName ?? '—'}</div>
               <div><span className="text-muted-foreground">状态：</span>
-                {detail && <Badge variant={STATUS_VARIANT[detail.status]}>{WAVE_STATUS_LABEL[detail.status]}</Badge>}
+                {detail && <SoftStatusLabel label={WAVE_STATUS_LABEL[detail.status]} tone={detail.status === 4 ? 'success' : detail.status === 5 ? 'danger' : detail.status === 1 ? 'draft' : 'active'} />}
               </div>
               <div><span className="text-muted-foreground">优先级：</span>{detail && WAVE_PRIORITY_LABEL[detail.priority]}</div>
               <div><span className="text-muted-foreground">拣货人：</span>{detail?.operatorName ?? '—'}</div>

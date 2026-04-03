@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { usePurchaseList, useConfirmPurchase, useCancelPurchase, usePurchaseDetail } from '@/hooks/usePurchase'
 import PrintOrderDialog from '@/components/shared/PrintOrderDialog'
 import { downloadExport } from '@/lib/exportDownload'
@@ -79,29 +80,35 @@ export default function PurchasePage() {
     { key: 'operatorName', title: '经办人', width: 90 },
     { key: 'createdAt', title: '创建时间', width: 160, render: (v) => formatDisplayDateTime(v) },
     {
-      key: 'id', title: '操作', width: 240, render: (_, row) => {
+      key: 'id', title: '操作', width: 160, render: (_, row) => {
         const r = row as PurchaseOrder
         return (
-          <div className="flex gap-1 flex-wrap">
-            <Button size="sm" variant="ghost" onClick={() => goToDetail(r)}>详情</Button>
-            {r.status === 1 && (
-              <Button size="sm" variant="outline" disabled={confirm.isPending}
-                onClick={() => confirm.mutate(r.id)}>
-                提交
-              </Button>
-            )}
-            {(r.status === 1 || r.status === 2) && (
-              <Button size="sm" variant="destructive" disabled={cancel.isPending}
-                onClick={() => openConfirm(
+          <TableActionsMenu
+            primaryLabel="详情"
+            onPrimaryClick={() => goToDetail(r)}
+            items={[
+              ...(r.status === 1 ? [{
+                label: '提交',
+                onClick: () => confirm.mutate(r.id),
+                disabled: confirm.isPending,
+              }] : []),
+              {
+                label: '打印',
+                onClick: () => setPrintId(r.id),
+              },
+              ...((r.status === 1 || r.status === 2) ? [{
+                label: '取消',
+                destructive: true,
+                separatorBefore: true,
+                onClick: () => openConfirm(
                   '取消采购单',
                   '取消后此采购单将无法恢复，请确认操作。',
-                  () => { closeConfirm(); cancel.mutate(r.id) }
-                )}>
-                取消
-              </Button>
-            )}
-            <Button size="sm" variant="ghost" onClick={() => setPrintId(r.id)}>打印</Button>
-          </div>
+                  () => { closeConfirm(); cancel.mutate(r.id) },
+                ),
+                disabled: cancel.isPending,
+              }] : []),
+            ]}
+          />
         )
       }
     },

@@ -7,6 +7,7 @@ import { useInvalidate } from '@/hooks/useInvalidate'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { StatusBadge } from '@/components/shared/StatusBadge'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -237,10 +238,20 @@ export default function WarehouseTasksPage() {
     { key: 'status', title: '状态', width: 110, render: v => <StatusBadge type="task" status={v as number} /> },
     { key: 'createdAt', title: '创建时间', width: 120, render: v => formatDisplayDateTime(v) },
     { key: 'id', title: '操作', width: 160, render: (_, r) => (
-      <div className="flex gap-1 flex-wrap">
-        <Button size="sm" variant="outline" onClick={() => openDetail(r.id)}>详情</Button>
-        {![4,5].includes(r.status) && <Button size="sm" variant="ghost" className="text-destructive" disabled={cancel.isPending} onClick={() => openConfirm('取消任务', `确认取消任务 ${r.taskNo}？`, () => { closeConfirm(); cancel.mutate(r.id) })}>取消</Button>}
-      </div>
+      <TableActionsMenu
+        primaryLabel="详情"
+        onPrimaryClick={() => openDetail(r.id)}
+        items={
+          ![4, 5].includes(r.status)
+            ? [{
+                label: '取消',
+                destructive: true,
+                onClick: () => openConfirm('取消任务', `确认取消任务 ${r.taskNo}？`, () => { closeConfirm(); cancel.mutate(r.id) }),
+                disabled: cancel.isPending,
+              }]
+            : []
+        }
+      />
     )},
   ]
 

@@ -58,7 +58,8 @@ export default function SaleFormPage() {
   const tabPath  = useContext(TabPathContext)
   const navigate = useNavigate()
   const isNew    = tabPath === '/sale/new' || tabPath === ''
-  const saleId   = isNew ? null : Number(tabPath.split('/').pop())
+  const rawSaleId = isNew ? null : tabPath.split('/').pop() ?? null
+  const saleId   = rawSaleId && /^\d+$/.test(rawSaleId) ? Number(rawSaleId) : null
 
   // ── 关闭当前 Tab 并返回 ──
   function closeTab() {
@@ -74,7 +75,16 @@ export default function SaleFormPage() {
 
   // ─── ② 查看模式 ─────────────────────────────────────────────────────────────
 
-  return <DetailView saleId={saleId!} tabPath={tabPath} closeTab={closeTab} />
+  if (!saleId) {
+    return (
+      <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
+        <p className="text-muted-body">销售单路由无效，请从列表重新打开</p>
+        <Button size="sm" variant="outline" onClick={closeTab}>关闭页面</Button>
+      </div>
+    )
+  }
+
+  return <DetailView saleId={saleId} tabPath={tabPath} closeTab={closeTab} />
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -772,8 +782,6 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
     setConfirmState({ open: true, title, description, variant, onConfirm })
   }
   const closeAsk = () => setConfirmState(s => ({ ...s, open: false }))
-
-  const { setActive } = useWorkspaceStore()
 
   if (isLoading) {
     return (

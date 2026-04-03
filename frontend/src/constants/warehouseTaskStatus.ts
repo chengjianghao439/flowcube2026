@@ -41,14 +41,14 @@ export const WT_STATUS_NAME: Record<WtStatus, string> = {
 
 /** 状态徽章样式映射 */
 export const WT_STATUS_CLASS: Record<WtStatus, string> = {
-  [WT_STATUS.PENDING]:   'bg-gray-100 text-gray-600 border-gray-200',
+  [WT_STATUS.PENDING]:   'bg-secondary text-secondary-foreground border-secondary',
   [WT_STATUS.PICKING]:   'bg-primary/10 text-primary border-primary/20',
-  [WT_STATUS.SORTING]:   'bg-yellow-100 text-yellow-700 border-yellow-200',
-  [WT_STATUS.CHECKING]:  'bg-purple-100 text-purple-700 border-purple-200',
-  [WT_STATUS.PACKING]:   'bg-orange-100 text-orange-700 border-orange-200',
-  [WT_STATUS.SHIPPING]:  'bg-cyan-100 text-cyan-700 border-cyan-200',
-  [WT_STATUS.SHIPPED]:   'bg-green-100 text-green-700 border-green-200',
-  [WT_STATUS.CANCELLED]: 'bg-red-100 text-red-600 border-red-200',
+  [WT_STATUS.SORTING]:   'bg-primary/10 text-primary border-primary/20',
+  [WT_STATUS.CHECKING]:  'bg-primary/10 text-primary border-primary/20',
+  [WT_STATUS.PACKING]:   'bg-primary/10 text-primary border-primary/20',
+  [WT_STATUS.SHIPPING]:  'bg-primary/10 text-primary border-primary/20',
+  [WT_STATUS.SHIPPED]:   'bg-success/10 text-success border-success/20',
+  [WT_STATUS.CANCELLED]: 'bg-destructive/10 text-destructive border-destructive/20',
 }
 
 /** 进行中的状态列表（未完成且未取消）*/

@@ -6,9 +6,10 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getPurchaseReturnsApi, createPurchaseReturnApi, confirmPurchaseReturnApi, executePurchaseReturnApi, cancelPurchaseReturnApi, getSaleReturnsApi, createSaleReturnApi, confirmSaleReturnApi, executeSaleReturnApi, cancelSaleReturnApi } from '@/api/returns'
 import { downloadExport } from '@/lib/exportDownload'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -21,7 +22,6 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { PurchaseReturn, SaleReturn } from '@/api/returns'
 import type { TableColumn } from '@/types'
 
-const SC:Record<number,'default'|'secondary'|'outline'|'destructive'>={1:'secondary',2:'default',3:'outline',4:'destructive'}
 interface DraftItem{_key:number;productId:number;productCode:string;productName:string;unit:string;quantity:number;unitPrice:number}
 
 function ReturnForm({ type, onClose, onSuccess }: { type:'purchase'|'sale'; onClose:()=>void; onSuccess:()=>void }) {
@@ -142,16 +142,35 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
     {key:partyKey,title:type==='purchase'?'供应商':'客户'},
     {key:'warehouseName',title:'仓库',width:120},
     {key:'totalAmount',title:'金额',width:100,render:(v)=>`¥${Number(v).toFixed(2)}`},
-    {key:'status',title:'状态',width:90,render:(v,row)=><Badge variant={SC[v as number]}>{(row as RowType).statusName}</Badge>},
+    {key:'status',title:'状态',width:90,render:(v,row)=>{
+      const status = v as number
+      const tone = status === 3 ? 'success' : status === 4 ? 'danger' : status === 1 ? 'draft' : 'active'
+      return <SoftStatusLabel label={(row as RowType).statusName} tone={tone} />
+    }},
     {key:'operatorName',title:'经办人',width:90},
     {key:'createdAt',title:'时间',width:160,render:(v)=>formatDisplayDateTime(v)},
-    {key:'id',title:'操作',width:200,render:(_,row)=>{const r=row as RowType; return(
-      <div className="flex gap-1 flex-wrap">
-        {r.status===1&&<Button size="sm" variant="outline" disabled={pendingId===r.id} onClick={()=>mut(()=>confirmFn(r.id),r.id)}>{pendingId===r.id?'处理中...':'确认'}</Button>}
-        {r.status===2&&<Button size="sm" variant="outline" disabled={pendingId===r.id} onClick={()=>openConfirm('执行退货',type==='purchase'?'确认执行退货？将扣减对应库存。':'确认执行退货入库？将增加对应库存。',()=>mut(()=>executeFn(r.id),r.id))}>{pendingId===r.id?'处理中...':'执行退货'}</Button>}
-        {(r.status===1||r.status===2)&&<Button size="sm" variant="destructive" disabled={pendingId===r.id} onClick={()=>openConfirm('取消退货单','确认取消此退货单？',()=>mut(()=>cancelFn(r.id),r.id))}>{pendingId===r.id?'处理中...':'取消'}</Button>}
-      </div>
-    )}}
+    {key:'id',title:'操作',width:180,render:(_,row)=>{const r=row as RowType;
+      if (r.status !== 1 && r.status !== 2) return <span className="text-xs text-muted-foreground">—</span>
+      return(
+        <TableActionsMenu
+          primaryLabel={r.status===1 ? (pendingId===r.id ? '处理中...' : '确认') : (pendingId===r.id ? '处理中...' : '执行退货')}
+          onPrimaryClick={()=>{
+            if (r.status===1) mut(()=>confirmFn(r.id),r.id)
+            else openConfirm('执行退货',type==='purchase'?'确认执行退货？将扣减对应库存。':'确认执行退货入库？将增加对应库存。',()=>mut(()=>executeFn(r.id),r.id))
+          }}
+          primaryDisabled={pendingId===r.id}
+          items={[
+            {
+              label: pendingId===r.id ? '处理中...' : '取消',
+              onClick:()=>openConfirm('取消退货单','确认取消此退货单？',()=>mut(()=>cancelFn(r.id),r.id)),
+              disabled: pendingId===r.id,
+              destructive:true,
+              separatorBefore:true,
+            },
+          ]}
+        />
+      )
+    }}
   ]
   return (
     <div className="space-y-4">
