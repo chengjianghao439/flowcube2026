@@ -1,5 +1,5 @@
 {
   "version": "0.3.53",
-  "filename": "Jixu-Flow-Setup-0.3.53.exe",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.53/Jixu-Flow-Setup-0.3.53.exe",
   "notes": "【v0.3.53 主要更新】\n\n• 深度统一 ERP 页面字体层级：页面标题、卡片标题、表格列标题、辅助说明与编号样式全部收口到统一语义类。\n• 采购单、销售单、收货订单、打印机管理与报表页进一步去掉浏览器式零散写法，观感更贴近桌面工作区。\n• 桌面端再次点击已运行程序时继续唤醒当前窗口，旧版本可直接自动更新到本版。"
 }
