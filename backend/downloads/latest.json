@@ -1,6 +1,6 @@
 {
-  "version": "0.3.63",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.63/Jixu-Flow-Setup-0.3.63.exe",
-  "filename": "Jixu-Flow-Setup-0.3.63.exe",
-  "notes": "【v0.3.63 主要更新】\n\n• 分类管理页改成真正可折叠展开的结构，点同一个分类可收起。\n• 分类选择器改成手风琴式展开，不再按层级跳转。\n• 商品选择弹窗左侧分类同步改成可展开、可收起。"
+  "version": "0.3.64",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.64/Jixu-Flow-Setup-0.3.64.exe",
+  "filename": "Jixu-Flow-Setup-0.3.64.exe",
+  "notes": "【v0.3.64 主要更新】\n\n• 分类页改成真正的手风琴展开结构，默认只显示一级。\n• 点击一级在下方展开二级，再点同一个分类可收起。\n• 新增二级/三级分类弹窗标题与层级同步修正。"
 }

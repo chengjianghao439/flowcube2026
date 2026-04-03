@@ -65,11 +65,12 @@ function CategoryAccordionLevel({
             <button
               type="button"
               className={cn(
-                'flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+                'flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors',
                 selected
                   ? 'border-primary/40 bg-primary/10 text-primary'
                   : 'border-border/70 bg-muted/20 text-foreground hover:border-primary/30 hover:bg-primary/5',
                 !selectable && 'text-muted-foreground',
+                expanded && hasChildren && 'border-primary/30 bg-primary/5',
               )}
               onClick={() => {
                 if (hasChildren) {
@@ -90,7 +91,7 @@ function CategoryAccordionLevel({
             </button>
 
             {hasChildren && expanded && (
-              <div className="ml-4 rounded-lg border border-border/60 bg-background/80 p-2">
+              <div className="rounded-xl border border-border/60 bg-background/80 p-2">
                 <CategoryAccordionLevel
                   nodes={cat.children!}
                   selectedId={selectedId}
@@ -175,6 +176,10 @@ export default function CategoryTreeSelect({
             当前路径：{breadcrumb.map(item => item.name).join(' / ')}
           </div>
         )}
+
+        <div className="mb-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+          默认显示一级分类，点击当前分类展开或收起下一级
+        </div>
 
         <div className="max-h-80 overflow-y-auto">
           {categoryTree.length === 0 ? (

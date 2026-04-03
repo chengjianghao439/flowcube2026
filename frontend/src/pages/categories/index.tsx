@@ -8,7 +8,7 @@
  *  - 有绑定商品时不能删除（只能停用）
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Power, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button }  from '@/components/ui/button'
@@ -69,10 +69,13 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
     }
   }
 
+  useEffect(() => {
+    if (open) reset()
+  }, [open, mode, parentCat?.id, editCat?.id])
+
   // 弹窗打开时初始化
   function handleOpenChange(v: boolean) {
-    if (v) reset()
-    else onClose()
+    if (!v) onClose()
   }
 
   function set(k: string, v: unknown) {
@@ -180,7 +183,6 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
 
 interface NodeProps {
   cat: Category
-  depth: number
   onAddChild:     (cat: Category) => void
   onEdit:         (cat: Category) => void
   onDelete:       (cat: Category) => void
@@ -201,23 +203,22 @@ function findPathToCategory(nodes: Category[], targetId: number, trail: Category
   return null
 }
 
-function CategoryNode({ cat, depth, onAddChild, onEdit, onDelete, onToggleStatus, expandedIds, onToggle }: NodeProps) {
+function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expandedIds, onToggle }: NodeProps) {
   const hasChildren = !!(cat.children && cat.children.length > 0)
   const expanded = expandedIds.has(cat.id)
 
   return (
-    <div>
+    <div className="space-y-2">
       <div
         className={cn(
-          'group flex items-center gap-2 rounded-md border border-border/70 bg-muted/20 px-3 py-2 transition-colors hover:border-primary/30 hover:bg-primary/5',
+          'group flex items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-3 transition-colors hover:border-primary/30 hover:bg-primary/5',
           cat.status === 0 && 'opacity-50',
+          expanded && 'border-primary/30 bg-primary/5',
         )}
       >
-        {depth > 0 && <span style={{ width: depth * 18 }} className="shrink-0" />}
-
         <button
           type="button"
-          className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-muted-foreground"
           onClick={() => hasChildren && onToggle(cat)}
           tabIndex={-1}
         >
@@ -237,16 +238,6 @@ function CategoryNode({ cat, depth, onAddChild, onEdit, onDelete, onToggleStatus
         )}
 
         <span className="flex-1 truncate text-sm font-medium">{cat.name}</span>
-
-        {hasChildren && (
-          <button
-            type="button"
-            className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => onToggle(cat)}
-          >
-            {cat.children!.length} 个子分类
-          </button>
-        )}
 
         <Badge variant={cat.status ? 'default' : 'secondary'} className="shrink-0 text-xs">
           {cat.status ? '启用' : '停用'}
@@ -296,12 +287,11 @@ function CategoryNode({ cat, depth, onAddChild, onEdit, onDelete, onToggleStatus
       </div>
 
       {hasChildren && expanded && (
-        <div className="mt-2 space-y-2">
+        <div className="space-y-2 rounded-xl border border-border/60 bg-muted/15 p-3">
           {cat.children!.map(child => (
             <CategoryNode
               key={child.id}
               cat={child}
-              depth={depth + 1}
               onAddChild={onAddChild}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -387,7 +377,7 @@ export default function CategoriesPage() {
     <div>
       <PageHeader
         title="商品分类管理"
-        description={`树形结构，最多 4 级 · 共 ${totalCount} 个分类`}
+        description={`手风琴展开结构，最多 4 级 · 共 ${totalCount} 个分类`}
         actions={
           <Button onClick={handleAddRoot}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -405,10 +395,10 @@ export default function CategoriesPage() {
             {l === 4 && <span className="text-purple-600">（可绑定商品）</span>}
           </span>
         ))}
-        <span className="ml-auto">默认显示一级分类，点击分类展开或收起下一级</span>
+        <span className="ml-auto">默认显示一级分类，点击当前分类展开或收起下一级</span>
       </div>
 
-      {/* 树形列表 */}
+      {/* 分类列表 */}
       <div className="card-base p-2">
         {isLoading ? (
           <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
@@ -425,7 +415,6 @@ export default function CategoriesPage() {
               <CategoryNode
                 key={cat.id}
                 cat={cat}
-                depth={0}
                 onAddChild={handleAddChild}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
