@@ -9,7 +9,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Power, FolderOpen } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Power, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
@@ -180,11 +180,13 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
 
 interface NodeProps {
   cat: Category
+  depth: number
   onAddChild:     (cat: Category) => void
   onEdit:         (cat: Category) => void
   onDelete:       (cat: Category) => void
   onToggleStatus: (cat: Category) => void
-  onEnter: (cat: Category) => void
+  expandedIds: Set<number>
+  onToggle: (cat: Category) => void
 }
 
 function findPathToCategory(nodes: Category[], targetId: number, trail: Category[] = []): Category[] | null {
@@ -199,99 +201,117 @@ function findPathToCategory(nodes: Category[], targetId: number, trail: Category
   return null
 }
 
-function getNodesAtPath(tree: Category[], pathIds: number[]) {
-  let nodes = tree
-  for (const id of pathIds) {
-    const current = nodes.find(item => item.id === id)
-    nodes = current?.children ?? []
-  }
-  return nodes
-}
-
-function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, onEnter }: NodeProps) {
+function CategoryNode({ cat, depth, onAddChild, onEdit, onDelete, onToggleStatus, expandedIds, onToggle }: NodeProps) {
   const hasChildren = !!(cat.children && cat.children.length > 0)
+  const expanded = expandedIds.has(cat.id)
 
   return (
-    <div
-      className={cn(
-        'group flex items-center gap-2 rounded-md border border-border/70 bg-muted/20 px-3 py-2 transition-colors hover:border-primary/30 hover:bg-primary/5',
-        cat.status === 0 && 'opacity-50',
-      )}
-    >
-      <button
-        type="button"
-        className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
-        onClick={() => hasChildren && onEnter(cat)}
-        tabIndex={-1}
+    <div>
+      <div
+        className={cn(
+          'group flex items-center gap-2 rounded-md border border-border/70 bg-muted/20 px-3 py-2 transition-colors hover:border-primary/30 hover:bg-primary/5',
+          cat.status === 0 && 'opacity-50',
+        )}
       >
-        {hasChildren ? <ChevronRight className="h-3.5 w-3.5" /> : <span className="h-3.5 w-3.5" />}
-      </button>
+        {depth > 0 && <span style={{ width: depth * 18 }} className="shrink-0" />}
 
-      <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold', LEVEL_BADGE[cat.level] ?? LEVEL_BADGE[4])}>
-        L{cat.level}
-      </span>
-
-      {cat.code && (
-        <span className="shrink-0 text-doc-code-muted">{cat.code}</span>
-      )}
-
-      <span className="flex-1 truncate text-sm font-medium">{cat.name}</span>
-
-      {hasChildren && (
         <button
           type="button"
-          className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => onEnter(cat)}
+          className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
+          onClick={() => hasChildren && onToggle(cat)}
+          tabIndex={-1}
         >
-          {cat.children!.length} 个子分类
+          {hasChildren
+            ? expanded
+              ? <ChevronDown className="h-3.5 w-3.5" />
+              : <ChevronRight className="h-3.5 w-3.5" />
+            : <span className="h-3.5 w-3.5" />}
         </button>
-      )}
 
-      <Badge variant={cat.status ? 'default' : 'secondary'} className="shrink-0 text-xs">
-        {cat.status ? '启用' : '停用'}
-      </Badge>
+        <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold', LEVEL_BADGE[cat.level] ?? LEVEL_BADGE[4])}>
+          L{cat.level}
+        </span>
 
-      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-        {cat.level < 4 && (
+        {cat.code && (
+          <span className="shrink-0 text-doc-code-muted">{cat.code}</span>
+        )}
+
+        <span className="flex-1 truncate text-sm font-medium">{cat.name}</span>
+
+        {hasChildren && (
+          <button
+            type="button"
+            className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => onToggle(cat)}
+          >
+            {cat.children!.length} 个子分类
+          </button>
+        )}
+
+        <Badge variant={cat.status ? 'default' : 'secondary'} className="shrink-0 text-xs">
+          {cat.status ? '启用' : '停用'}
+        </Badge>
+
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          {cat.level < 4 && (
+            <Button
+              size="sm" variant="ghost"
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+              title="新增子分类"
+              onClick={() => onAddChild(cat)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Button
             size="sm" variant="ghost"
             className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-            title="新增子分类"
-            onClick={() => onAddChild(cat)}
+            title="编辑"
+            onClick={() => onEdit(cat)}
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Pencil className="h-3.5 w-3.5" />
           </Button>
-        )}
-        <Button
-          size="sm" variant="ghost"
-          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-          title="编辑"
-          onClick={() => onEdit(cat)}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="sm" variant="ghost"
-          className={cn(
-            'h-7 w-7 p-0',
-            cat.status
-              ? 'text-muted-foreground hover:text-orange-500'
-              : 'text-muted-foreground hover:text-green-600',
-          )}
-          title={cat.status ? '停用' : '启用'}
-          onClick={() => onToggleStatus(cat)}
-        >
-          <Power className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="sm" variant="ghost"
-          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-          title="删除"
-          onClick={() => onDelete(cat)}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+          <Button
+            size="sm" variant="ghost"
+            className={cn(
+              'h-7 w-7 p-0',
+              cat.status
+                ? 'text-muted-foreground hover:text-orange-500'
+                : 'text-muted-foreground hover:text-green-600',
+            )}
+            title={cat.status ? '停用' : '启用'}
+            onClick={() => onToggleStatus(cat)}
+          >
+            <Power className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm" variant="ghost"
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+            title="删除"
+            onClick={() => onDelete(cat)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
+
+      {hasChildren && expanded && (
+        <div className="mt-2 space-y-2">
+          {cat.children!.map(child => (
+            <CategoryNode
+              key={child.id}
+              cat={child}
+              depth={depth + 1}
+              onAddChild={onAddChild}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onToggleStatus={onToggleStatus}
+              expandedIds={expandedIds}
+              onToggle={onToggle}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -314,7 +334,8 @@ export default function CategoriesPage() {
 
   // 停用/启用确认
   const [toggleTarget, setToggleTarget] = useState<Category | null>(null)
-  const [browsePath, setBrowsePath] = useState<number[]>([])
+  const [expandedPath, setExpandedPath] = useState<number[]>([])
+  const expandedIds = useMemo(() => new Set(expandedPath), [expandedPath])
 
   function handleAddRoot() {
     setFormMode('create')
@@ -362,22 +383,15 @@ export default function CategoriesPage() {
   const flatCount = (nodes: Category[]): number =>
     nodes.reduce((s, n) => s + 1 + flatCount(n.children ?? []), 0)
   const totalCount = flatCount(tree)
-  const browseNodes = useMemo(() => getNodesAtPath(tree, browsePath), [tree, browsePath])
-  const browseBreadcrumb = useMemo(
-    () => browsePath.map(id => findPathToCategory(tree, id)?.slice(-1)[0]).filter(Boolean) as Category[],
-    [browsePath, tree],
-  )
-  const currentParent = browseBreadcrumb[browseBreadcrumb.length - 1] ?? null
-
   return (
     <div>
       <PageHeader
         title="商品分类管理"
         description={`树形结构，最多 4 级 · 共 ${totalCount} 个分类`}
         actions={
-          <Button onClick={currentParent ? () => handleAddChild(currentParent) : handleAddRoot}>
+          <Button onClick={handleAddRoot}>
             <Plus className="mr-1.5 h-4 w-4" />
-            {currentParent ? '新增当前层子分类' : '新增一级分类'}
+            新增一级分类
           </Button>
         }
       />
@@ -391,18 +405,7 @@ export default function CategoriesPage() {
             {l === 4 && <span className="text-purple-600">（可绑定商品）</span>}
           </span>
         ))}
-        {browsePath.length > 0 ? (
-          <button
-            type="button"
-            className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => setBrowsePath(prev => prev.slice(0, -1))}
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            返回上一级
-          </button>
-        ) : (
-          <span className="ml-auto">默认显示一级分类，点击分类进入下一级</span>
-        )}
+        <span className="ml-auto">默认显示一级分类，点击分类展开或收起下一级</span>
       </div>
 
       {/* 树形列表 */}
@@ -418,20 +421,24 @@ export default function CategoriesPage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {browsePath.length > 0 && (
-              <div className="rounded-md border border-border/60 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
-                当前层级：{browseBreadcrumb.map(item => item.name).join(' / ')}
-              </div>
-            )}
-            {browseNodes.map(cat => (
+            {tree.map(cat => (
               <CategoryNode
                 key={cat.id}
                 cat={cat}
+                depth={0}
                 onAddChild={handleAddChild}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onToggleStatus={handleToggleStatus}
-                onEnter={(target) => setBrowsePath(prev => [...prev, target.id])}
+                expandedIds={expandedIds}
+                onToggle={(target) => {
+                  const path = findPathToCategory(tree, target.id)?.map(item => item.id) ?? [target.id]
+                  setExpandedPath(prev =>
+                    prev.length === path.length && prev.every((item, index) => item === path[index])
+                      ? prev.slice(0, -1)
+                      : path,
+                  )
+                }}
               />
             ))}
           </div>

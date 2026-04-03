@@ -13,7 +13,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Search, ChevronLeft, ChevronRight, PackageSearch, Inbox } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, PackageSearch, Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AppDialog } from '@/components/shared/AppDialog'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
@@ -48,13 +48,62 @@ function findPathToCategory(nodes: Category[], targetId: number, trail: Category
   return null
 }
 
-function getNodesAtPath(tree: Category[], pathIds: number[]) {
-  let nodes = tree
-  for (const id of pathIds) {
-    const current = nodes.find(item => item.id === id)
-    nodes = current?.children ?? []
-  }
-  return nodes
+function FinderCategoryAccordion({
+  nodes,
+  selectedId,
+  expandedIds,
+  onToggle,
+  onSelect,
+}: {
+  nodes: Category[]
+  selectedId: number | null
+  expandedIds: Set<number>
+  onToggle: (cat: Category) => void
+  onSelect: (id: number | null) => void
+}) {
+  return (
+    <div className="space-y-2">
+      {nodes.map(cat => {
+        const hasChildren = !!cat.children?.length
+        const selected = selectedId === cat.id
+        const expanded = expandedIds.has(cat.id)
+        return (
+          <div key={cat.id} className="space-y-2">
+            <button
+              type="button"
+              className={cn(
+                'flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+                selected
+                  ? 'border-primary/40 bg-primary/10 font-medium text-primary'
+                  : 'border-border/70 bg-muted/20 text-foreground hover:border-primary/30 hover:bg-primary/5',
+              )}
+              onClick={() => (hasChildren ? onToggle(cat) : onSelect(cat.id))}
+            >
+              {hasChildren
+                ? expanded
+                  ? <ChevronDown className="h-4 w-4 shrink-0" />
+                  : <ChevronRight className="h-4 w-4 shrink-0" />
+                : <span className="h-4 w-4 shrink-0" />}
+              <span className="truncate">{cat.name}</span>
+              {cat.status === 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">停用</span>}
+            </button>
+
+            {hasChildren && expanded && (
+              <div className="ml-4 rounded-lg border border-border/60 bg-background/80 p-2">
+                <FinderCategoryAccordion
+                  nodes={cat.children!}
+                  selectedId={selectedId}
+                  expandedIds={expandedIds}
+                  onToggle={onToggle}
+                  onSelect={onSelect}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
@@ -73,7 +122,7 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
   useEffect(() => {
     if (!open) {
       setKeyword('');  setSearchText('');  setCategoryId(null)
-      setPage(1);      setSelected(null); setBrowsePath([])
+      setPage(1);      setSelected(null); setExpandedPath([])
     }
   }, [open])
 
@@ -89,16 +138,12 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
 
   const products   = finderData?.list ?? []
   const pagination = finderData?.pagination
-  const [browsePath, setBrowsePath] = useState<number[]>([])
+  const [expandedPath, setExpandedPath] = useState<number[]>([])
+  const expandedIds = useMemo(() => new Set(expandedPath), [expandedPath])
   const breadcrumb = useMemo(() => {
     if (categoryId == null) return []
     return findPathToCategory(categoryTree, categoryId) ?? []
   }, [categoryId, categoryTree])
-  const browseNodes = useMemo(() => getNodesAtPath(categoryTree, browsePath), [categoryTree, browsePath])
-  const browseBreadcrumb = useMemo(
-    () => browsePath.map(id => findPathToCategory(categoryTree, id)?.slice(-1)[0]).filter(Boolean) as Category[],
-    [browsePath, categoryTree],
-  )
 
   // ── 搜索防抖（300ms） ──
   function handleKeywordChange(val: string) {
@@ -213,51 +258,22 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
                 </div>
               )}
 
-              {browsePath.length > 0 && (
-                <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/80 px-3 py-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => setBrowsePath(prev => prev.slice(0, -1))}
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                    返回上一级
-                  </button>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {browseBreadcrumb.map(item => item.name).join(' / ')}
-                  </span>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {browseNodes.map(cat => {
-                  const hasChildren = !!cat.children?.length
-                  const selectedCurrent = categoryId === cat.id
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors',
-                        selectedCurrent
-                          ? 'border-primary/40 bg-primary/10 font-medium text-primary'
-                          : 'border-border/70 bg-muted/20 text-foreground hover:border-primary/30 hover:bg-primary/5',
-                      )}
-                      onClick={() => {
-                        if (hasChildren) {
-                          setBrowsePath(prev => [...prev, cat.id])
-                          return
-                        }
-                        handleCategorySelect(cat.id)
-                      }}
-                    >
-                      {hasChildren ? <ChevronRight className="h-4 w-4 shrink-0" /> : <span className="h-4 w-4 shrink-0" />}
-                      <span className="truncate">{cat.name}</span>
-                      {cat.status === 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">停用</span>}
-                    </button>
+              <FinderCategoryAccordion
+                nodes={categoryTree}
+                selectedId={categoryId}
+                expandedIds={expandedIds}
+                onToggle={(cat) => {
+                  const path = findPathToCategory(categoryTree, cat.id)?.map(item => item.id) ?? [cat.id]
+                  setExpandedPath(prev =>
+                    prev.length === path.length && prev.every((item, index) => item === path[index])
+                      ? prev.slice(0, -1)
+                      : path,
                   )
-                })}
-              </div>
+                }}
+                onSelect={(id) => {
+                  handleCategorySelect(id)
+                }}
+              />
 
               {categoryTree.length === 0 && (
                 <p className="px-3 py-4 text-center text-xs text-muted-foreground">暂无分类</p>
