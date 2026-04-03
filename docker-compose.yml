@@ -63,6 +63,8 @@ services:
       - backend
     ports:
       - "80:80"
+    volumes:
+      - ./backend/downloads:/usr/share/nginx/downloads:ro
 
 volumes:
   mysql_data:
