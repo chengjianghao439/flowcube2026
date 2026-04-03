@@ -1,5 +1,5 @@
 {
-  "version": "0.3.54",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.54/Jixu-Flow-Setup-0.3.54.exe",
-  "notes": "【v0.3.54 主要更新】\n\n• 全站去掉零散的“共几条 / 上一页 / 下一页”浏览器式分页提示，桌面端列表观感统一。\n• 所有共享表格支持列拖动并自动记住顺序，关闭后重新打开仍保留上次布局。\n• 创建时间等展示统一为 YYYY-MM-DD-HH：mm 格式，采购、销售、收货、任务、库存、报表等页面一致。"
+  "version": "0.3.55",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.55/Jixu-Flow-Setup-0.3.55.exe",
+  "notes": "【v0.3.55 主要更新】\n\n• 共享表格新增列宽拖动，拖宽后会自动按页面记住设置，重开后仍保留。\n• 之前已上线的列顺序拖动、分页提示收口、统一时间格式继续保留。\n• ERP 桌面端列表交互进一步贴近工作区模式，不再需要重复调整表格布局。"
 }

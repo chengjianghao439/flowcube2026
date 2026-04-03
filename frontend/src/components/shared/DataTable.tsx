@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Inbox } from 'lucide-react'
 import type { Pagination, TableColumn } from '@/types'
 
@@ -29,6 +29,7 @@ export default function DataTable<T extends object>({
   columnStorageKey,
 }: DataTableProps<T>) {
   const [columnOrder, setColumnOrder] = useState<string[]>([])
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
 
   const resolvedStorageKey = useMemo(() => {
@@ -45,21 +46,43 @@ export default function DataTable<T extends object>({
       const raw = window.localStorage.getItem(resolvedStorageKey)
       if (!raw) {
         setColumnOrder(columns.map(col => String(col.key)))
+        setColumnWidths({})
         return
       }
       const saved = JSON.parse(raw)
-      if (!Array.isArray(saved)) {
+      if (Array.isArray(saved)) {
+        const currentKeys = columns.map(col => String(col.key))
+        const merged = [
+          ...saved.filter((key): key is string => typeof key === 'string' && currentKeys.includes(key)),
+          ...currentKeys.filter(key => !saved.includes(key)),
+        ]
+        setColumnOrder(merged)
+        setColumnWidths({})
+        return
+      }
+      if (!saved || typeof saved !== 'object') {
         setColumnOrder(columns.map(col => String(col.key)))
+        setColumnWidths({})
         return
       }
       const currentKeys = columns.map(col => String(col.key))
+      const savedOrder = Array.isArray(saved.order) ? saved.order : []
       const merged = [
-        ...saved.filter((key): key is string => typeof key === 'string' && currentKeys.includes(key)),
-        ...currentKeys.filter(key => !saved.includes(key)),
+        ...savedOrder.filter((key): key is string => typeof key === 'string' && currentKeys.includes(key)),
+        ...currentKeys.filter(key => !savedOrder.includes(key)),
       ]
       setColumnOrder(merged)
+      const widths = saved.widths && typeof saved.widths === 'object'
+        ? Object.fromEntries(
+            Object.entries(saved.widths).filter(
+              ([key, value]) => currentKeys.includes(key) && typeof value === 'number' && Number.isFinite(value),
+            ),
+          )
+        : {}
+      setColumnWidths(widths)
     } catch {
       setColumnOrder(columns.map(col => String(col.key)))
+      setColumnWidths({})
     }
   }, [columns, resolvedStorageKey])
 
@@ -73,10 +96,21 @@ export default function DataTable<T extends object>({
     return merged
   }, [columnOrder, columns])
 
-  const persistOrder = (next: string[]) => {
-    setColumnOrder(next)
+  const persistLayout = (nextOrder: string[], nextWidths: Record<string, number>) => {
+    setColumnOrder(nextOrder)
+    setColumnWidths(nextWidths)
     if (!resolvedStorageKey || typeof window === 'undefined') return
-    window.localStorage.setItem(resolvedStorageKey, JSON.stringify(next))
+    window.localStorage.setItem(
+      resolvedStorageKey,
+      JSON.stringify({
+        order: nextOrder,
+        widths: nextWidths,
+      }),
+    )
+  }
+
+  const persistOrder = (next: string[]) => {
+    persistLayout(next, columnWidths)
   }
 
   const moveColumn = (targetKey: string) => {
@@ -89,6 +123,41 @@ export default function DataTable<T extends object>({
     next.splice(toIndex, 0, draggingKey)
     persistOrder(next)
     setDraggingKey(null)
+  }
+
+  const getColumnWidth = (col: TableColumn<T>) => {
+    const key = String(col.key)
+    return columnWidths[key] ?? col.width
+  }
+
+  const startResize = (event: ReactMouseEvent, col: TableColumn<T>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (typeof window === 'undefined') return
+    const key = String(col.key)
+    const startX = event.clientX
+    const startWidth = columnWidths[key] ?? col.width ?? 160
+    const minWidth = isAction(key, col.title) ? 180 : 96
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
+      setColumnWidths(prev => ({ ...prev, [key]: nextWidth }))
+    }
+
+    const handleMouseUp = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
+      const nextWidths = { ...columnWidths, [key]: nextWidth }
+      persistLayout(columnOrder.length ? columnOrder : columns.map(item => String(item.key)), nextWidths)
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
   }
 
   const allIds = data.map(r => Number((r as Record<string, unknown>)[String(rowKey)]))
@@ -153,9 +222,20 @@ export default function DataTable<T extends object>({
                       ? 'sticky right-0 z-20 min-w-[200px] bg-muted/30 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
                       : 'cursor-move select-none'
                   }`}
-                  style={col.width ? { width: col.width } : undefined}
+                  style={getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined}
                 >
-                  {col.title}
+                  <div className="group flex items-center gap-2">
+                    <span className="truncate">{col.title}</span>
+                    <button
+                      type="button"
+                      aria-label={`调整${col.title}列宽`}
+                      onMouseDown={(event) => startResize(event, col)}
+                      onClick={event => event.preventDefault()}
+                      className="ml-auto hidden h-5 w-2 shrink-0 cursor-col-resize rounded bg-transparent text-transparent transition group-hover:block hover:bg-border/80"
+                    >
+                      |
+                    </button>
+                  </div>
                 </th>
               ))}
             </tr>
@@ -213,6 +293,7 @@ export default function DataTable<T extends object>({
                             ? 'sticky right-0 z-10 min-w-[200px] bg-card py-3 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.08)] group-hover:bg-muted/30'
                             : 'py-3'
                         }`}
+                        style={getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined}
                       >
                         {col.render
                           ? (col.render((row as Record<string, unknown>)[String(col.key)], row) as ReactNode)
