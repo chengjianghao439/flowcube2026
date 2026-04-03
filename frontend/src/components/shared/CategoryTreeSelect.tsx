@@ -44,9 +44,9 @@ function TreeNode({ cat, depth, selectedId, onSelect, leafOnly }: TreeNodeProps)
     <div>
       <div
         className={cn(
-          'flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors',
-          selectable ? 'cursor-pointer hover:bg-muted/70' : 'cursor-default',
-          selected && 'bg-primary/10 text-primary',
+          'flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-sm transition-colors',
+          selectable ? 'cursor-pointer border-border/70 bg-muted/20 hover:border-primary/30 hover:bg-primary/5' : 'cursor-default border-border/50 bg-muted/10',
+          selected && 'border-primary/40 bg-primary/10 text-primary',
           !selectable && 'text-muted-foreground',
         )}
         style={{ paddingLeft: depth * 14 + 8 }}
@@ -67,7 +67,7 @@ function TreeNode({ cat, depth, selectedId, onSelect, leafOnly }: TreeNodeProps)
               : <ChevronRight className="h-3.5 w-3.5" />
             : <span className="h-3.5 w-3.5" />}
         </button>
-        <span className="truncate">{cat.name}</span>
+        <span className={cn('truncate', selected && 'font-medium')}>{cat.name}</span>
         {cat.status === 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">停用</span>}
       </div>
 
@@ -108,10 +108,10 @@ export default function CategoryTreeSelect({
         <Button
           type="button"
           variant="outline"
-          className={cn('h-9 w-56 justify-between font-normal', className)}
+          className={cn('h-9 w-56 justify-between border-border/80 bg-background font-normal', className)}
           disabled={disabled}
         >
-          <span className={cn('truncate', !selected && 'text-muted-foreground')}>
+          <span className={cn('truncate text-left', !selected && 'text-muted-foreground')}>
             {selected?.name ?? (value == null ? emptyLabel : placeholder)}
           </span>
           <FolderTree className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -126,8 +126,8 @@ export default function CategoryTreeSelect({
           <button
             type="button"
             className={cn(
-              'mb-1 flex w-full items-center rounded-md px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted/70',
-              value == null && 'bg-primary/10 text-primary',
+              'mb-1 flex w-full items-center rounded-md border border-border/70 bg-muted/20 px-3 py-1.5 text-left text-sm transition-colors hover:border-primary/30 hover:bg-primary/5',
+              value == null && 'border-primary/40 bg-primary/10 text-primary',
             )}
             onClick={() => {
               onChange(null)

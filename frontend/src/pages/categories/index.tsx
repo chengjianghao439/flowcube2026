@@ -195,7 +195,7 @@ function CategoryNode({ cat, depth, onAddChild, onEdit, onDelete, onToggleStatus
     <div>
       <div
         className={cn(
-          'group flex items-center gap-2 rounded-md px-3 py-2 transition-colors hover:bg-muted/50',
+          'group flex items-center gap-2 rounded-md border border-border/70 bg-muted/20 px-3 py-2 transition-colors hover:border-primary/30 hover:bg-primary/5',
           cat.status === 0 && 'opacity-50',
         )}
       >
@@ -283,15 +283,16 @@ function CategoryNode({ cat, depth, onAddChild, onEdit, onDelete, onToggleStatus
 
       {/* 子节点递归渲染 */}
       {hasChildren && expanded && cat.children!.map(child => (
-        <CategoryNode
-          key={child.id}
-          cat={child}
-          depth={depth + 1}
-          onAddChild={onAddChild}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onToggleStatus={onToggleStatus}
-        />
+        <div key={child.id} className="mt-1">
+          <CategoryNode
+            cat={child}
+            depth={depth + 1}
+            onAddChild={onAddChild}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onToggleStatus={onToggleStatus}
+          />
+        </div>
       ))}
     </div>
   )

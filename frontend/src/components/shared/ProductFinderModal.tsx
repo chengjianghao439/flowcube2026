@@ -55,10 +55,10 @@ function TreeNode({ cat, depth, selectedId, onSelect }: TreeNodeProps) {
         role="button"
         tabIndex={0}
         className={cn(
-          'flex cursor-pointer items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors select-none',
+          'flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1.5 text-sm transition-colors select-none',
           isSelected
-            ? 'bg-primary/10 font-medium text-primary'
-            : 'text-foreground hover:bg-muted/60',
+            ? 'border-primary/40 bg-primary/10 font-medium text-primary'
+            : 'border-border/70 bg-muted/20 text-foreground hover:border-primary/30 hover:bg-primary/5',
         )}
         style={{ paddingLeft: depth * 14 + 8 }}
         onClick={() => onSelect(cat.id)}
@@ -220,10 +220,10 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
                 role="button"
                 tabIndex={0}
                 className={cn(
-                  'flex cursor-pointer items-center gap-1 rounded-md px-3 py-1.5 text-sm transition-colors select-none',
+                  'flex cursor-pointer items-center gap-1.5 rounded-md border border-border/70 bg-muted/20 px-3 py-1.5 text-sm transition-colors select-none',
                   categoryId === null
-                    ? 'bg-primary/10 font-medium text-primary'
-                    : 'text-foreground hover:bg-muted/60',
+                    ? 'border-primary/40 bg-primary/10 font-medium text-primary'
+                    : 'text-foreground hover:border-primary/30 hover:bg-primary/5',
                 )}
                 onClick={() => setCategoryId(null)}
                 onKeyDown={e => e.key === 'Enter' && setCategoryId(null)}

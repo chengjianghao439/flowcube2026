@@ -1,6 +1,6 @@
 {
-  "version": "0.3.59",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.59/Jixu-Flow-Setup-0.3.59.exe",
-  "filename": "Jixu-Flow-Setup-0.3.59.exe",
-  "notes": "【v0.3.59 主要更新】\n\n• 商品改为默认 4 个价格（A / B / C / D），按进价和系统设置的百分比自动生成。\n• 客户不再绑定旧价格表，改为直接绑定价格 A / B / C / D。\n• 销售单会按客户绑定的价格等级自动带入商品单价。\n• 价格管理页改为维护 A / B / C / D 的默认加价比例。\n• 分类显示统一为可折叠树形展示。"
+  "version": "0.3.60",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.60/Jixu-Flow-Setup-0.3.60.exe",
+  "filename": "Jixu-Flow-Setup-0.3.60.exe",
+  "notes": "【v0.3.60 主要更新】\n\n• 分类路径显示改为更明显的折叠样式。\n• 分类选择器与商品选择弹窗左侧分类树统一成同一视觉语言。\n• 分类管理页树节点样式同步统一，整套分类交互一致。"
 }
