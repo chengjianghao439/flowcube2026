@@ -2,36 +2,6 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 
-// ─── 分类 ────────────────────────────────────────────────────────────────────
-
-async function getCategoryList() {
-  const [rows] = await pool.query(
-    'SELECT id,name,sort FROM product_categories WHERE deleted_at IS NULL ORDER BY sort ASC, id ASC',
-  )
-  return rows
-}
-
-async function createCategory({ name, sort }) {
-  const [r] = await pool.query(
-    'INSERT INTO product_categories (name,sort) VALUES (?,?)', [name, sort||0],
-  )
-  return { id: r.insertId }
-}
-
-async function updateCategory(id, { name, sort }) {
-  const [rows] = await pool.query('SELECT id FROM product_categories WHERE id=? AND deleted_at IS NULL',[id])
-  if (!rows[0]) throw new AppError('分类不存在',404)
-  await pool.query('UPDATE product_categories SET name=?,sort=? WHERE id=?',[name,sort||0,id])
-}
-
-async function deleteCategory(id) {
-  const [[{cnt}]] = await pool.query(
-    'SELECT COUNT(*) AS cnt FROM product_items WHERE category_id=? AND deleted_at IS NULL',[id],
-  )
-  if (cnt > 0) throw new AppError('该分类下存在商品，无法删除',400)
-  await pool.query('UPDATE product_categories SET deleted_at=NOW() WHERE id=? AND deleted_at IS NULL',[id])
-}
-
 // ─── 商品选择中心（Finder）────────────────────────────────────────────────────
 
 /**

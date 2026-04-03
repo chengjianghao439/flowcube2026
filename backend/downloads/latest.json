@@ -1,5 +1,6 @@
 {
-  "version": "0.3.57",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.57/Jixu-Flow-Setup-0.3.57.exe",
-  "notes": "【v0.3.57 主要更新】\n\n• 表格列宽拖动改成只影响当前列，交互更接近 Excel，不会再连带挤动其他列。\n• 主要业务页状态颜色统一成采购订单的浅色风格，视觉不再一页一个样式。\n• 操作列改成“主按钮 + 更多下拉”，并修复销售订单详情页异常。"
+  "version": "0.3.58",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.58/Jixu-Flow-Setup-0.3.58.exe",
+  "filename": "Jixu-Flow-Setup-0.3.58.exe",
+  "notes": "【v0.3.58 主要更新】\n\n• 商品分类只保留树形分类管理，移除了商品页里的旧简单分类入口。\n• 商品页的分类筛选与商品绑定统一改为使用树形分类的末级分类。\n• 移除了旧的 /products/categories 前后端接口，避免两套分类逻辑并存。"
 }

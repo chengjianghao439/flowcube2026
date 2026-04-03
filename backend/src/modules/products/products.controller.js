@@ -2,12 +2,6 @@ const svc = require('./products.service')
 const { successResponse } = require('../../utils/response')
 const { getTenantId } = require('../../utils/tenantScope')
 
-// 分类
-const catList   = async (req,res,next) => { try { return successResponse(res, await svc.getCategoryList(), '查询成功') } catch(e){next(e)} }
-const catCreate = async (req,res,next) => { try { return successResponse(res, await svc.createCategory(req.body), '创建成功', 201) } catch(e){next(e)} }
-const catUpdate = async (req,res,next) => { try { await svc.updateCategory(+req.params.id, req.body); return successResponse(res,null,'更新成功') } catch(e){next(e)} }
-const catDelete = async (req,res,next) => { try { await svc.deleteCategory(+req.params.id); return successResponse(res,null,'删除成功') } catch(e){next(e)} }
-
 // 商品选择中心
 const finder = async (req,res,next) => { try { return successResponse(res, await svc.findForFinder({ page:+req.query.page||1, pageSize:+req.query.pageSize||15, keyword:req.query.keyword||'', categoryId:req.query.categoryId?+req.query.categoryId:null, warehouseId:req.query.warehouseId?+req.query.warehouseId:null }), '查询成功') } catch(e){next(e)} }
 
@@ -47,4 +41,4 @@ const printLabel = async (req,res,next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { catList, catCreate, catUpdate, catDelete, finder, list, listActive, detail, create, update, remove, printLabel }
+module.exports = { finder, list, listActive, detail, create, update, remove, printLabel }

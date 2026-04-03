@@ -12,7 +12,6 @@ function vBody(schema) {
   }
 }
 
-const catSchema = z.object({ name: z.string().min(1,'名称不能为空').max(60), sort: z.number().int().optional() })
 const productBase = z.object({
   code:       z.string().min(1,'编码不能为空').max(50),
   name:       z.string().min(1,'名称不能为空').max(150),
@@ -34,11 +33,6 @@ router.get('/next-code', async (req, res, next) => {
     return successResponse(res, { code }, '生成成功')
   } catch (e) { next(e) }
 })
-router.get('/categories',      ctrl.catList)
-router.post('/categories',     vBody(catSchema), ctrl.catCreate)
-router.put('/categories/:id',  vBody(catSchema), ctrl.catUpdate)
-router.delete('/categories/:id', ctrl.catDelete)
-
 router.get('/finder', ctrl.finder)
 router.get('/active', ctrl.listActive)
 router.get('/',       ctrl.list)

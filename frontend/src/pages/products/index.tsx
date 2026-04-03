@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
@@ -7,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { useProducts, useCategories, useCreateProduct, useUpdateProduct, useDeleteProduct, useCreateCategory, useDeleteCategory } from '@/hooks/useProducts'
+import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '@/hooks/useProducts'
+import { useCategoryLeaves } from '@/hooks/useCategories'
 import { downloadExport } from '@/lib/exportDownload'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { LimitedInput } from '@/components/shared/LimitedInput'
@@ -26,14 +28,13 @@ import type { TableColumn } from '@/types'
 const emptyProd = { name:'', categoryId:null as number|null, unit:'个', spec:'', barcode:'', costPrice:'' as string, salePrice:'' as string, remark:'', isActive:true }
 
 export default function ProductsPage() {
+  const navigate = useNavigate()
   const [page, setPage] = useState(1); const [keyword, setKeyword] = useState(''); const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState<number|null>(null)
   const [open, setOpen] = useState(false); const [edit, setEdit] = useState<Product|null>(null)
   const [form, setForm] = useState(emptyProd)
-  const [newCat, setNewCat] = useState(''); const [catOpen, setCatOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [confirmProduct, setConfirmProduct] = useState<Product | null>(null)
-  const [confirmCat, setConfirmCat] = useState<{id:number;name:string} | null>(null)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ success: number; skip: number; errors: string[] } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -51,12 +52,10 @@ export default function ProductsPage() {
   }
 
   const { data, isLoading } = useProducts({ page, pageSize:20, keyword, categoryId:catFilter })
-  const { data: categories } = useCategories()
+  const { data: categories } = useCategoryLeaves()
   const { mutate: create, isPending: creating } = useCreateProduct()
   const { mutate: update, isPending: updating } = useUpdateProduct()
   const { mutate: del } = useDeleteProduct()
-  const { mutate: addCat } = useCreateCategory()
-  const { mutate: delCat } = useDeleteCategory()
   const isPending = creating || updating
   const set = (k:string, v:unknown) => setForm(f=>({...f,[k]:v}))
 
@@ -137,7 +136,7 @@ export default function ProductsPage() {
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={()=>downloadExport('/export/stock').catch(e=>toast.error((e as Error).message))}>导出库存</Button>
           <Button variant="outline" onClick={()=>setImportOpen(true)}>批量导入</Button>
-          <Button variant="outline" onClick={()=>setCatOpen(true)}>分类管理</Button>
+          <Button variant="outline" onClick={()=>navigate('/categories')}>分类管理</Button>
           <Button onClick={openCreate}>新增商品</Button>
         </div>
       } />
@@ -209,28 +208,6 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 分类管理 */}
-      <Dialog open={catOpen} onOpenChange={v=>!v&&setCatOpen(false)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>分类管理</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="flex gap-2">
-              <Input placeholder="新分类名称" value={newCat} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setNewCat(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&newCat&&(addCat({name:newCat},{onSuccess:()=>setNewCat('')}))} />
-              <Button onClick={()=>newCat&&addCat({name:newCat},{onSuccess:()=>setNewCat('')})}>添加</Button>
-            </div>
-            <div className="max-h-60 overflow-y-auto space-y-1">
-              {categories?.map(c=>(
-                <div key={c.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                  <span className="text-sm">{c.name}</span>
-                  <Button size="sm" variant="ghost" onClick={()=>setConfirmCat({id:c.id,name:c.name})}>删除</Button>
-                </div>
-              ))}
-              {!categories?.length && <p className="text-sm text-muted-foreground text-center py-4">暂无分类</p>}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* 批量导入弹窗 */}
       <Dialog open={importOpen} onOpenChange={v=>{ setImportOpen(v); if(!v) setImportResult(null) }}>
         <DialogContent className="max-w-lg">
@@ -273,15 +250,6 @@ export default function ProductsPage() {
         confirmText="删除"
         onConfirm={() => { del(confirmProduct!.id); setConfirmProduct(null) }}
         onCancel={() => setConfirmProduct(null)}
-      />
-      <ConfirmDialog
-        open={!!confirmCat}
-        title="确认删除分类"
-        description={`删除分类「${confirmCat?.name}」？该操作不可撤销。`}
-        variant="destructive"
-        confirmText="删除"
-        onConfirm={() => { delCat(confirmCat!.id); setConfirmCat(null) }}
-        onCancel={() => setConfirmCat(null)}
       />
     </div>
   )

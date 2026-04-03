@@ -1,5 +1,3 @@
-export interface ProductCategory { id: number; name: string; sort: number }
-
 export interface Product {
   id: number; code: string; name: string
   categoryId: number | null; categoryName: string | null
