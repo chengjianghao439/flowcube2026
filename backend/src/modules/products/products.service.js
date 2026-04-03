@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
+const { loadPriceRates, computeTierPrices } = require('../../utils/priceLevels')
 
 // ─── 商品选择中心（Finder）────────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
 
   const offset = (page - 1) * pageSize
   const [rows] = await pool.query(
-    `SELECT p.id, p.code, p.name, p.category_id, p.unit, p.sale_price, p.cost_price, p.spec, p.barcode,
+    `SELECT p.id, p.code, p.name, p.category_id, p.unit, p.sale_price, p.sale_price_a, p.sale_price_b, p.sale_price_c, p.sale_price_d, p.cost_price, p.spec, p.barcode,
             c.name AS category_name, ${stockCol} AS stock
      FROM product_items p
      LEFT JOIN product_categories c ON p.category_id = c.id AND c.deleted_at IS NULL
@@ -87,8 +88,12 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
       categoryName: r.category_name || null,
       categoryPath: buildPath(r.category_id),
       unit: r.unit, spec: r.spec || null,
-      salePrice: r.sale_price  ? Number(r.sale_price)  : null,
-      costPrice: r.cost_price  ? Number(r.cost_price)  : null,
+      salePrice: r.sale_price_a != null ? Number(r.sale_price_a) : (r.sale_price != null ? Number(r.sale_price) : null),
+      salePriceA: r.sale_price_a != null ? Number(r.sale_price_a) : (r.sale_price != null ? Number(r.sale_price) : null),
+      salePriceB: r.sale_price_b != null ? Number(r.sale_price_b) : null,
+      salePriceC: r.sale_price_c != null ? Number(r.sale_price_c) : null,
+      salePriceD: r.sale_price_d != null ? Number(r.sale_price_d) : null,
+      costPrice: r.cost_price != null ? Number(r.cost_price) : null,
       stock: Number(r.stock),
     })),
     pagination: { page, pageSize, total },
@@ -102,8 +107,12 @@ function fmtProduct(row) {
     id: row.id, code: row.code, name: row.name,
     categoryId: row.category_id, categoryName: row.category_name||null,
     unit: row.unit, spec: row.spec, barcode: row.barcode,
-    costPrice: row.cost_price ? Number(row.cost_price) : null,
-    salePrice: row.sale_price ? Number(row.sale_price) : null,
+    costPrice: row.cost_price != null ? Number(row.cost_price) : null,
+    salePrice: row.sale_price_a != null ? Number(row.sale_price_a) : (row.sale_price != null ? Number(row.sale_price) : null),
+    salePriceA: row.sale_price_a != null ? Number(row.sale_price_a) : (row.sale_price != null ? Number(row.sale_price) : null),
+    salePriceB: row.sale_price_b != null ? Number(row.sale_price_b) : null,
+    salePriceC: row.sale_price_c != null ? Number(row.sale_price_c) : null,
+    salePriceD: row.sale_price_d != null ? Number(row.sale_price_d) : null,
     remark: row.remark, isActive: !!row.is_active, createdAt: row.created_at,
   }
 }
@@ -150,22 +159,26 @@ async function findById(id) {
   return fmtProduct(rows[0])
 }
 
-async function create({ name, categoryId, unit, spec, barcode, costPrice, salePrice, remark }) {
+async function create({ name, categoryId, unit, spec, barcode, costPrice, remark }) {
   const code = await generateMasterCode(pool, 'P', 'product_items')
+  const rates = await loadPriceRates(pool)
+  const prices = computeTierPrices(costPrice, rates)
   const [r] = await pool.query(
-    `INSERT INTO product_items (code,name,category_id,unit,spec,barcode,cost_price,sale_price,remark)
-     VALUES (?,?,?,?,?,?,?,?,?)`,
-    [code, name, categoryId||null, unit||'个', spec||null, barcode||null, costPrice||null, salePrice||null, remark||null],
+    `INSERT INTO product_items (code,name,category_id,unit,spec,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [code, name, categoryId||null, unit||'个', spec||null, barcode||null, prices.costPrice, prices.salePrice, prices.salePriceA, prices.salePriceB, prices.salePriceC, prices.salePriceD, remark||null],
   )
   return { id: r.insertId, code }
 }
 
-async function update(id, { name, categoryId, unit, spec, barcode, costPrice, salePrice, remark, isActive }) {
+async function update(id, { name, categoryId, unit, spec, barcode, costPrice, remark, isActive }) {
   await findById(id)
+  const rates = await loadPriceRates(pool)
+  const prices = computeTierPrices(costPrice, rates)
   await pool.query(
-    `UPDATE product_items SET name=?,category_id=?,unit=?,spec=?,barcode=?,cost_price=?,sale_price=?,remark=?,is_active=?
+    `UPDATE product_items SET name=?,category_id=?,unit=?,spec=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?
      WHERE id=? AND deleted_at IS NULL`,
-    [name, categoryId||null, unit||'个', spec||null, barcode||null, costPrice||null, salePrice||null, remark||null, isActive?1:0, id],
+    [name, categoryId||null, unit||'个', spec||null, barcode||null, prices.costPrice, prices.salePrice, prices.salePriceA, prices.salePriceB, prices.salePriceC, prices.salePriceD, remark||null, isActive?1:0, id],
   )
 }
 

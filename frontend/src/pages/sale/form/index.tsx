@@ -122,7 +122,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const isDirty = !!(customerId || warehouseId || remark || carrierId || receiverName || items.some(i => i.productId > 0))
   useDirtyGuard(tabPath, isDirty)
 
-  // 触发已有商品行的专属价格查询（只查价，不设 customerId）
+  // 触发已有商品行的客户价格等级查询（只查价，不设 customerId）
   const handleCustomerChange = useCallback(async (cid: string) => {
     if (!cid) return
     setItems(prev => prev.map(i => {
@@ -361,7 +361,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
                 <span className="absolute right-2 top-2 text-xs text-blue-500">查询中...</span>
               )}
               {item.priceSource === 'list' && !priceLoading[item._key] && (
-                <span className="absolute -top-1.5 -right-1.5 rounded-full bg-blue-500 px-1 text-[9px] text-white">专属</span>
+                <span className="absolute -top-1.5 -right-1.5 rounded-full bg-blue-500 px-1 text-[9px] text-white">等级</span>
               )}
             </div>
 
@@ -689,7 +689,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
                 className={`text-sm ${item.priceSource === 'list' ? 'border-blue-400 bg-blue-50' : ''}`} />
               {priceLoading[item._key] && <span className="absolute right-2 top-2 text-xs text-blue-500">查询中...</span>}
-              {item.priceSource === 'list' && !priceLoading[item._key] && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-blue-500 px-1 text-[9px] text-white">专属</span>}
+              {item.priceSource === 'list' && !priceLoading[item._key] && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-blue-500 px-1 text-[9px] text-white">等级</span>}
             </div>
             <div className="text-right text-sm font-medium">¥{(item.quantity * item.unitPrice).toFixed(2)}</div>
             <Button type="button" size="sm" variant="ghost" className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>

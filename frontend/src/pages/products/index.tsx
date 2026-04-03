@@ -1,22 +1,24 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
+import CategoryTreeSelect from '@/components/shared/CategoryTreeSelect'
+import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '@/hooks/useProducts'
-import { useCategoryLeaves } from '@/hooks/useCategories'
+import { useCategoryTree } from '@/hooks/useCategories'
 import { downloadExport } from '@/lib/exportDownload'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { LimitedInput } from '@/components/shared/LimitedInput'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { toast } from '@/lib/toast'
 import client from '@/api/client'
+import { getSettingsApi } from '@/api/settings'
 import { printProductLabelApi } from '@/api/products'
 import {
   isDesktopLocalPrintError,
@@ -24,8 +26,20 @@ import {
 } from '@/lib/desktopLocalPrint'
 import type { Product } from '@/types/products'
 import type { TableColumn } from '@/types'
+import type { Category } from '@/types/categories'
 
 const emptyProd = { name:'', categoryId:null as number|null, unit:'个', spec:'', barcode:'', costPrice:'' as string, salePrice:'' as string, remark:'', isActive:true }
+
+const DEFAULT_RATES = { A: 10, B: 20, C: 30, D: 40 }
+
+function buildCategoryPathMap(nodes: Category[], ancestors: string[] = [], map = new Map<number, string>()) {
+  for (const node of nodes) {
+    const chain = [...ancestors, node.name]
+    map.set(node.id, chain.join(' > '))
+    if (node.children?.length) buildCategoryPathMap(node.children, chain, map)
+  }
+  return map
+}
 
 export default function ProductsPage() {
   const navigate = useNavigate()
@@ -52,12 +66,25 @@ export default function ProductsPage() {
   }
 
   const { data, isLoading } = useProducts({ page, pageSize:20, keyword, categoryId:catFilter })
-  const { data: categories } = useCategoryLeaves()
+  const { data: categoryTree = [] } = useCategoryTree()
+  const [priceRates, setPriceRates] = useState(DEFAULT_RATES)
   const { mutate: create, isPending: creating } = useCreateProduct()
   const { mutate: update, isPending: updating } = useUpdateProduct()
   const { mutate: del } = useDeleteProduct()
   const isPending = creating || updating
   const set = (k:string, v:unknown) => setForm(f=>({...f,[k]:v}))
+
+  useEffect(() => {
+    void getSettingsApi().then(r => {
+      const map = r.data.data?.map ?? {}
+      setPriceRates({
+        A: Number(map.price_rate_a?.value ?? DEFAULT_RATES.A),
+        B: Number(map.price_rate_b?.value ?? DEFAULT_RATES.B),
+        C: Number(map.price_rate_c?.value ?? DEFAULT_RATES.C),
+        D: Number(map.price_rate_d?.value ?? DEFAULT_RATES.D),
+      })
+    }).catch(() => {})
+  }, [])
 
   async function handlePrintProductLabel(p: Product) {
     try {
@@ -104,19 +131,34 @@ export default function ProductsPage() {
   function openEdit(p:Product) { setEdit(p); setForm({ name:p.name, categoryId:p.categoryId, unit:p.unit, spec:p.spec??'', barcode:p.barcode??'', costPrice:p.costPrice!=null?String(p.costPrice):'', salePrice:p.salePrice!=null?String(p.salePrice):'', remark:p.remark??'', isActive:p.isActive }); setOpen(true) }
   function handleSubmit(e:React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const d = { name:form.name, categoryId:form.categoryId||undefined, unit:form.unit||'个', spec:form.spec||undefined, barcode:form.barcode||undefined, costPrice:form.costPrice!==''?Number(form.costPrice):null, salePrice:form.salePrice!==''?Number(form.salePrice):null, remark:form.remark||undefined }
+    const d = { name:form.name, categoryId:form.categoryId||undefined, unit:form.unit||'个', spec:form.spec||undefined, barcode:form.barcode||undefined, costPrice:form.costPrice!==''?Number(form.costPrice):null, remark:form.remark||undefined }
     if (edit) update({ id:edit.id, data:{...d,isActive:form.isActive} }, { onSuccess:()=>setOpen(false) })
     else create(d, { onSuccess:()=>setOpen(false) })
   }
 
+  const categoryPathMap = useMemo(() => buildCategoryPathMap(categoryTree), [categoryTree])
+  const previewPrices = useMemo(() => {
+    const cost = Number(form.costPrice || 0)
+    const mk = (rate: number) => Number.isFinite(cost) ? (cost * (1 + rate / 100)).toFixed(2) : '0.00'
+    return {
+      A: mk(priceRates.A),
+      B: mk(priceRates.B),
+      C: mk(priceRates.C),
+      D: mk(priceRates.D),
+    }
+  }, [form.costPrice, priceRates])
+
   const cols:TableColumn<Product>[] = [
     { key:'code', title:'编码', width:130 },
     { key:'name', title:'商品名称' },
-    { key:'categoryName', title:'分类', width:100, render:v=>(v as string)||'-' },
+    { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
     { key:'unit', title:'单位', width:70 },
     { key:'spec', title:'规格', render:v=>(v as string)||'-' },
     { key:'costPrice', title:'成本价', width:90, render:v=>v!=null?`¥${v}`:'-' },
-    { key:'salePrice', title:'售价', width:90, render:v=>v!=null?`¥${v}`:'-' },
+    { key:'salePriceA', title:'价格A', width:90, render:v=>v!=null?`¥${v}`:'-' },
+    { key:'salePriceB', title:'价格B', width:90, render:v=>v!=null?`¥${v}`:'-' },
+    { key:'salePriceC', title:'价格C', width:90, render:v=>v!=null?`¥${v}`:'-' },
+    { key:'salePriceD', title:'价格D', width:90, render:v=>v!=null?`¥${v}`:'-' },
     { key:'isActive', title:'状态', width:80, render:(_,r)=><Badge variant={r.isActive?'default':'destructive'}>{r.isActive?'启用':'停用'}</Badge> },
     { key:'id', title:'操作', width:160, render:(_,r)=>(
       <TableActionsMenu
@@ -143,23 +185,16 @@ export default function ProductsPage() {
 
       <FilterCard>
         <Input placeholder="搜索编码/名称/条码" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&(setPage(1),setKeyword(search))} className="h-9 w-60" />
-        <Select
-          value={catFilter == null ? '__all__' : String(catFilter)}
-          onValueChange={v => {
-            setCatFilter(v === '__all__' ? null : +v)
+        <CategoryTreeSelect
+          value={catFilter}
+          onChange={(v) => {
+            setCatFilter(v)
             setPage(1)
           }}
-        >
-          <SelectTrigger className="h-9 w-44">
-            <SelectValue placeholder="全部分类" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部分类</SelectItem>
-            {categories?.map(c => (
-              <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          emptyLabel="全部分类"
+          leafOnly
+          className="w-48"
+        />
         <Button size="sm" variant="outline" onClick={()=>{setPage(1);setKeyword(search)}}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('');setPage(1)}}>重置</Button>}
       </FilterCard>
@@ -179,27 +214,29 @@ export default function ProductsPage() {
               )}
               <div className="space-y-2"><Label>名称 *</Label><Input value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} disabled={isPending}/></div>
               <div className="space-y-2"><Label>分类</Label>
-                <Select
-                  value={form.categoryId == null ? '__none__' : String(form.categoryId)}
-                  onValueChange={v => set('categoryId', v === '__none__' ? null : +v)}
+                <CategoryTreeSelect
+                  value={form.categoryId}
+                  onChange={(v) => set('categoryId', v)}
+                  emptyLabel="无分类"
+                  leafOnly
+                  className="w-full justify-between"
                   disabled={isPending}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="无分类" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">无分类</SelectItem>
-                    {categories?.map(c => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
               <div className="space-y-2"><Label>单位</Label><Input value={form.unit} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('unit',e.target.value)} disabled={isPending} placeholder="个"/></div>
               <div className="space-y-2"><Label>规格型号</Label><LimitedInput maxLength={5} value={form.spec} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('spec',e.target.value)} disabled={isPending}/></div>
               <div className="space-y-2"><Label>条形码</Label><Input value={form.barcode} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('barcode',e.target.value)} disabled={isPending}/></div>
               <div className="space-y-2"><Label>成本价</Label><Input type="number" step="0.01" value={form.costPrice} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('costPrice',e.target.value)} disabled={isPending}/></div>
-              <div className="space-y-2"><Label>售价</Label><Input type="number" step="0.01" value={form.salePrice} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('salePrice',e.target.value)} disabled={isPending}/></div>
+              <div className="col-span-2 rounded-lg border border-border bg-muted/20 p-3">
+                <p className="text-sm font-medium">默认销售价格</p>
+                <p className="mt-1 text-xs text-muted-foreground">按系统设置的加价比例自动生成，保存后生效。</p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="rounded-md border bg-background px-3 py-2 text-sm">价格A：¥{previewPrices.A}</div>
+                  <div className="rounded-md border bg-background px-3 py-2 text-sm">价格B：¥{previewPrices.B}</div>
+                  <div className="rounded-md border bg-background px-3 py-2 text-sm">价格C：¥{previewPrices.C}</div>
+                  <div className="rounded-md border bg-background px-3 py-2 text-sm">价格D：¥{previewPrices.D}</div>
+                </div>
+              </div>
             </div>
             <div className="space-y-2"><Label>备注</Label><LimitedInput maxLength={30} value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)} disabled={isPending}/></div>
             {edit && <div className="flex items-center gap-2"><input type="checkbox" id="pd-active" checked={form.isActive} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('isActive',e.target.checked)} className="accent-primary"/><Label htmlFor="pd-active" className="cursor-pointer">启用</Label></div>}

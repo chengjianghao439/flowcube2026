@@ -2,7 +2,20 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 
-const fmt = r => ({ id:r.id, code:r.code, name:r.name, contact:r.contact, phone:r.phone, email:r.email, address:r.address, remark:r.remark, isActive:!!r.is_active, priceListId:r.price_list_id||null, priceListName:r.price_list_name||null, createdAt:r.created_at })
+const fmt = r => ({
+  id:r.id,
+  code:r.code,
+  name:r.name,
+  contact:r.contact,
+  phone:r.phone,
+  email:r.email,
+  address:r.address,
+  remark:r.remark,
+  isActive:!!r.is_active,
+  priceLevel:r.price_level || 'A',
+  priceLevelName:`价格${r.price_level || 'A'}`,
+  createdAt:r.created_at,
+})
 
 async function findAll({ page=1, pageSize=20, keyword='' }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
@@ -11,7 +24,7 @@ async function findAll({ page=1, pageSize=20, keyword='' }) {
   return { list:rows.map(fmt), pagination:{page,pageSize,total} }
 }
 async function findAllActive() {
-  const [rows] = await pool.query('SELECT id,code,name FROM sale_customers WHERE deleted_at IS NULL AND is_active=1 ORDER BY name ASC')
+  const [rows] = await pool.query('SELECT id,code,name,price_level FROM sale_customers WHERE deleted_at IS NULL AND is_active=1 ORDER BY name ASC')
   return rows
 }
 async function findById(id) {
@@ -21,7 +34,7 @@ async function findById(id) {
 }
 async function create({ name,contact,phone,email,address,remark }) {
   const code = await generateMasterCode(pool, 'CUS', 'sale_customers')
-  const [r] = await pool.query('INSERT INTO sale_customers (code,name,contact,phone,email,address,remark) VALUES (?,?,?,?,?,?,?)',[code,name,contact||null,phone||null,email||null,address||null,remark||null])
+  const [r] = await pool.query('INSERT INTO sale_customers (code,name,contact,phone,email,address,remark,price_level) VALUES (?,?,?,?,?,?,?,?)',[code,name,contact||null,phone||null,email||null,address||null,remark||null,'A'])
   return { id:r.insertId, code }
 }
 async function update(id,{name,contact,phone,email,address,remark,isActive}) {

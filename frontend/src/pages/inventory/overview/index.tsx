@@ -15,9 +15,10 @@ import { Button }         from '@/components/ui/button'
 import { Input }          from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useInventoryOverview } from '@/hooks/useInventory'
-import { useCategoryFlat }      from '@/hooks/useCategories'
 import { useWarehousesActive }  from '@/hooks/useWarehouses'
 import ContainerDrawer          from '@/components/shared/ContainerDrawer'
+import CategoryTreeSelect       from '@/components/shared/CategoryTreeSelect'
+import CategoryPathDisplay      from '@/components/shared/CategoryPathDisplay'
 import type { InventoryOverviewItem } from '@/types/inventory'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 
@@ -68,7 +69,6 @@ export default function InventoryOverviewPage() {
     categoryId,
   })
 
-  const { data: categories } = useCategoryFlat()
   const { data: warehouses  } = useWarehousesActive()
 
   function doSearch() {
@@ -140,25 +140,16 @@ export default function InventoryOverviewPage() {
 
           <div className="h-5 w-px bg-border" />
 
-          <Select
-            value={categoryId == null ? '__all__' : String(categoryId)}
-            onValueChange={v => {
-              setCategoryId(v === '__all__' ? null : +v)
+          <CategoryTreeSelect
+            value={categoryId}
+            onChange={(v) => {
+              setCategoryId(v)
               setPage(1)
             }}
-          >
-            <SelectTrigger className="h-10 w-48">
-              <SelectValue placeholder="全部分类" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">全部分类</SelectItem>
-              {(categories ?? []).map(c => (
-                <SelectItem key={c.id} value={String(c.id)}>
-                  {'　'.repeat(c.level - 1)}{c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            emptyLabel="全部分类"
+            leafOnly
+            className="h-10 w-48"
+          />
 
           <Select
             value={warehouseId == null ? '__all__' : String(warehouseId)}
@@ -241,7 +232,7 @@ export default function InventoryOverviewPage() {
                     </td>
                     <td className="px-4 py-3 font-medium">{row.productName}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {row.categoryPath || <span className="italic">未分类</span>}
+                      <CategoryPathDisplay path={row.categoryPath} />
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{row.warehouseName}</td>
                     <td className="px-4 py-3 text-right tabular-nums">

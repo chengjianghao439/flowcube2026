@@ -7,6 +7,7 @@ const { successResponse } = require('../../utils/response')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE } = require('../../engine/containerEngine')
+const { loadPriceRates, computeTierPrices } = require('../../utils/priceLevels')
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
@@ -16,10 +17,10 @@ router.use(authMiddleware)
 router.get('/products/template', (req, res) => {
   const XLSX2 = require('xlsx')
   const ws = XLSX2.utils.aoa_to_sheet([
-    ['商品编码*', '商品名称*', '单位*', '规格', '条码', '成本价', '销售价', '备注'],
-    ['P001', '示例商品', '个', '标准规格', '', '10.00', '15.00', '']
+    ['商品编码*', '商品名称*', '单位*', '规格', '条码', '成本价', '备注'],
+    ['P001', '示例商品', '个', '标准规格', '', '10.00', '']
   ])
-  ws['!cols'] = [12,22,6,14,14,10,10,20].map(w=>({wch:w}))
+  ws['!cols'] = [12,22,6,14,14,10,20].map(w=>({wch:w}))
   const wb = XLSX2.utils.book_new()
   XLSX2.utils.book_append_sheet(wb, ws, '商品导入')
   const buf = XLSX2.write(wb, { type: 'buffer', bookType: 'xlsx' })
@@ -39,16 +40,18 @@ router.post('/products', upload.single('file'), async (req, res, next) => {
 
     const dataRows = rows.slice(1).filter(r => r[0] || r[1]) // 跳过空行
     let success = 0, skip = 0, errors = []
+    const rates = await loadPriceRates(pool)
 
     for (let i = 0; i < dataRows.length; i++) {
-      const [code, name, unit, spec, barcode, costPrice, salePrice, remark] = dataRows[i]
+      const [code, name, unit, spec, barcode, costPrice, remark] = dataRows[i]
       if (!code || !name || !unit) { errors.push(`第${i+2}行：编码、名称、单位为必填`); continue }
       try {
         const [ex] = await pool.query('SELECT id FROM product_items WHERE code=? AND deleted_at IS NULL', [String(code).trim()])
         if (ex.length) { skip++; continue }
+        const prices = computeTierPrices(costPrice, rates)
         await pool.query(
-          `INSERT INTO product_items (code,name,unit,spec,barcode,cost_price,sale_price,remark) VALUES (?,?,?,?,?,?,?,?)`,
-          [String(code).trim(), String(name).trim(), String(unit).trim(), spec||null, barcode||null, costPrice||null, salePrice||null, remark||null]
+          `INSERT INTO product_items (code,name,unit,spec,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [String(code).trim(), String(name).trim(), String(unit).trim(), spec||null, barcode||null, prices.costPrice, prices.salePrice, prices.salePriceA, prices.salePriceB, prices.salePriceC, prices.salePriceD, remark||null]
         )
         success++
       } catch (e) { errors.push(`第${i+2}行：${e.message}`) }

@@ -4,6 +4,7 @@ const { pool } = require('../../config/db')
 const { successResponse } = require('../../utils/response')
 const { authMiddleware } = require('../../middleware/auth')
 const AppError = require('../../utils/AppError')
+const { priceLevelLabel } = require('../../utils/priceLevels')
 const router = Router()
 router.use(authMiddleware)
 
@@ -30,10 +31,21 @@ router.get('/customer-price', async (req, res, next) => {
   try {
     const { customerId, productId } = req.query
     if (!customerId || !productId) return successResponse(res, null, '缺少参数')
-    const [[cust]] = await pool.query('SELECT price_list_id FROM sale_customers WHERE id=?', [+customerId])
-    if (!cust?.price_list_id) return successResponse(res, null, '客户未设置价格表')
-    const [[item]] = await pool.query('SELECT sale_price FROM price_list_items WHERE list_id=? AND product_id=?', [cust.price_list_id, +productId])
-    return successResponse(res, item ? { salePrice: Number(item.sale_price) } : null, item ? '找到定价' : '未设置该商品价格')
+    const [[cust]] = await pool.query('SELECT price_level FROM sale_customers WHERE id=?', [+customerId])
+    const level = String(cust?.price_level || 'A').toUpperCase()
+    const fieldMap = {
+      A: 'sale_price_a',
+      B: 'sale_price_b',
+      C: 'sale_price_c',
+      D: 'sale_price_d',
+    }
+    const field = fieldMap[level] || fieldMap.A
+    const [[item]] = await pool.query(`SELECT ${field} AS sale_price FROM product_items WHERE id=? AND deleted_at IS NULL`, [+productId])
+    return successResponse(
+      res,
+      item ? { salePrice: Number(item.sale_price || 0), priceLevel: level, priceLevelName: priceLevelLabel(level) } : null,
+      item ? '找到定价' : '未设置该商品价格',
+    )
   } catch (e) { next(e) }
 })
 
@@ -91,15 +103,14 @@ router.delete('/:id', async (req, res, next) => {
 // 更新客户关联的价格表
 router.put('/bind-customer', async (req, res, next) => {
   try {
-    const { customerId, priceListId } = req.body
+    const { customerId, priceLevel } = req.body
     if (!customerId) return res.status(400).json({ success:false, message:'缺少 customerId', data:null })
-    if (priceListId) {
-      const [[list]] = await pool.query('SELECT name FROM price_lists WHERE id=? AND deleted_at IS NULL', [priceListId])
-      if (!list) throw new AppError('价格表不存在', 404)
-      await pool.query('UPDATE sale_customers SET price_list_id=?, price_list_name=? WHERE id=?', [priceListId, list.name, customerId])
-    } else {
-      await pool.query('UPDATE sale_customers SET price_list_id=NULL, price_list_name=NULL WHERE id=?', [customerId])
-    }
+    const normalized = String(priceLevel || 'A').toUpperCase()
+    if (!['A', 'B', 'C', 'D'].includes(normalized)) throw new AppError('价格等级无效', 400)
+    await pool.query(
+      'UPDATE sale_customers SET price_level=?, price_list_id=NULL, price_list_name=NULL WHERE id=?',
+      [normalized, customerId],
+    )
     return successResponse(res, null, '绑定成功')
   } catch (e) { next(e) }
 })

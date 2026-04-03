@@ -13,14 +13,13 @@ function vBody(schema) {
 }
 
 const productBase = z.object({
-  code:       z.string().min(1,'编码不能为空').max(50),
+  code:       z.string().min(1,'编码不能为空').max(50).optional(),
   name:       z.string().min(1,'名称不能为空').max(150),
   categoryId: z.number().int().positive().optional().nullable(),
   unit:       z.string().min(1).max(20).optional(),
   spec:       z.string().max(5,'商品规格最多 5 个字符').optional(),
   barcode:    z.string().max(60).optional(),
   costPrice:  z.number().nonnegative().optional().nullable(),
-  salePrice:  z.number().nonnegative().optional().nullable(),
   remark:     z.string().max(30,'备注最多 30 个字符').optional(),
 })
 

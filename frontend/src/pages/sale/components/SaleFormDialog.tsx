@@ -127,7 +127,7 @@ export default function SaleFormDialog({ open, onClose }: Props) {
                 <Label>客户 *</Label>
                 <Select value={customerId || '__none__'} onValueChange={v => void handleCustomerChange(v === '__none__' ? '' : v)}>
                   <SelectTrigger className="h-10 w-full">
-                    <SelectValue placeholder="请选择" />
+              <SelectValue placeholder="请选择" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">请选择</SelectItem>
@@ -164,7 +164,7 @@ export default function SaleFormDialog({ open, onClose }: Props) {
             {customerId && customers?.find(c => String(c.id) === customerId) && (
               <div className="flex items-center gap-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-3 py-2">
                 <span>💡</span>
-                <span>已选择客户价格表，商品价格将自动带入专属定价（如有）</span>
+                <span>已选择客户价格等级，商品价格将自动带入对应的 A / B / C / D 价格（如有）。</span>
               </div>
             )}
 
@@ -202,7 +202,7 @@ export default function SaleFormDialog({ open, onClose }: Props) {
                     />
                     {priceLoading[item._key] && <span className="absolute right-2 top-2 text-xs text-blue-500">查询中...</span>}
                     {item.priceSource === 'list' && !priceLoading[item._key] && (
-                      <span className="absolute -top-1 -right-1 text-[9px] bg-blue-500 text-white rounded-full px-1">专属</span>
+                      <span className="absolute -top-1 -right-1 text-[9px] bg-blue-500 text-white rounded-full px-1">等级</span>
                     )}
                   </div>
                   <div className="col-span-2 text-sm text-right pr-1">¥{(item.quantity * item.unitPrice).toFixed(2)}</div>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
@@ -12,9 +12,11 @@ import { useCustomers, useDeleteCustomer } from '@/hooks/useCustomers'
 import CustomerFormDialog from './components/CustomerFormDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import { getPriceListsApi, bindCustomerApi } from '@/api/price-lists'
+import { bindCustomerApi } from '@/api/price-lists'
 import type { Customer } from '@/types/customers'
 import type { TableColumn } from '@/types'
+
+const PRICE_LEVELS = ['A', 'B', 'C', 'D'] as const
 
 export default function CustomersPage() {
   const qc = useQueryClient()
@@ -25,20 +27,19 @@ export default function CustomersPage() {
   const [editing, setEditing] = useState<Customer | null>(null)
   const [bindOpen, setBindOpen] = useState(false)
   const [bindCustomer, setBindCustomer] = useState<Customer | null>(null)
-  const [selectedListId, setSelectedListId] = useState<string>('')
+  const [selectedPriceLevel, setSelectedPriceLevel] = useState<'A' | 'B' | 'C' | 'D'>('A')
 
   const { data, isLoading } = useCustomers({ page, pageSize: 20, keyword })
   const del = useDeleteCustomer()
   const [confirmTarget, setConfirmTarget] = useState<Customer | null>(null)
-  const { data: priceLists } = useQuery({ queryKey: ['price-lists'], queryFn: () => getPriceListsApi().then(r => r.data.data || []) })
   const bindMut = useMutation({
-    mutationFn: () => bindCustomerApi(bindCustomer!.id, selectedListId ? +selectedListId : null),
+    mutationFn: () => bindCustomerApi(bindCustomer!.id, selectedPriceLevel),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['customers'] }); setBindOpen(false); setBindCustomer(null) }
   })
 
   const openBind = (c: Customer) => {
     setBindCustomer(c)
-    setSelectedListId((c as Customer & { priceListId?: number }).priceListId ? String((c as Customer & { priceListId?: number }).priceListId) : '')
+    setSelectedPriceLevel((c.priceLevel ?? 'A') as 'A' | 'B' | 'C' | 'D')
     setBindOpen(true)
   }
 
@@ -48,7 +49,7 @@ export default function CustomersPage() {
     { key: 'contact', title: '联系人', width: 100 },
     { key: 'phone', title: '电话', width: 130 },
     { key: 'email', title: '邮箱', width: 160 },
-    { key: 'priceListName' as keyof Customer, title: '价格表', width: 120, render: (v) => v ? <Badge variant="outline" className="text-primary border-primary/30">{String(v)}</Badge> : <span className="text-muted-foreground text-xs">默认价</span> },
+    { key: 'priceLevelName' as keyof Customer, title: '价格等级', width: 120, render: (_, row) => <Badge variant="outline" className="text-primary border-primary/30">价格{row.priceLevel ?? 'A'}</Badge> },
     { key: 'isActive', title: '状态', width: 70, render:(v)=> <Badge variant={v ? 'default' : 'secondary'}>{v ? '启用' : '停用'}</Badge> },
     { key: 'id', title: '操作', width: 160, render:(_, row)=>(
       <TableActionsMenu
@@ -64,7 +65,7 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="客户管理" description="管理销售客户档案，可绑定专属价格表" actions={<Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>+ 新增客户</Button>} />
+      <PageHeader title="客户管理" description="管理销售客户档案，可绑定价格 A / B / C / D" actions={<Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>+ 新增客户</Button>} />
       <FilterCard>
         <Input placeholder="搜索编码/名称..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); setPage(1) }}>搜索</Button>
@@ -82,24 +83,22 @@ export default function CustomersPage() {
         onCancel={() => setConfirmTarget(null)}
       />
 
-      {/* 绑定价格表弹窗 */}
+      {/* 绑定价格等级弹窗 */}
       <Dialog open={bindOpen} onOpenChange={setBindOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>绑定价格表 — {bindCustomer?.name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>绑定价格等级 — {bindCustomer?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">选择一个价格表绑定到此客户，下销售单时将自动带入专属价格。</p>
-            <Select value={selectedListId || '__none__'} onValueChange={v => setSelectedListId(v === '__none__' ? '' : v)}>
+            <p className="text-sm text-muted-foreground">选择客户默认价格等级，下销售单时会自动带入对应的 A / B / C / D 价格。</p>
+            <Select value={selectedPriceLevel} onValueChange={v => setSelectedPriceLevel(v as 'A' | 'B' | 'C' | 'D')}>
               <SelectTrigger className="h-10 w-full">
-                <SelectValue placeholder="选择价格表" />
+                <SelectValue placeholder="选择价格等级" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">不使用价格表（默认售价）</SelectItem>
-                {priceLists?.filter(p => p.isActive).map(p => (
-                  <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                {PRICE_LEVELS.map(level => (
+                  <SelectItem key={level} value={level}>价格{level}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {!priceLists?.length && <p className="text-xs text-muted-foreground">暂无可用价格表，请先在「价格管理」中创建。</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBindOpen(false)}>取消</Button>

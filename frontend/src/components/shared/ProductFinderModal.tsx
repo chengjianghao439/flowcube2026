@@ -16,6 +16,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Search, ChevronRight, ChevronDown, PackageSearch, Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AppDialog } from '@/components/shared/AppDialog'
+import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
 import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
 import { Badge }  from '@/components/ui/badge'
@@ -295,9 +296,11 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
                     >
                       <span className="truncate font-mono text-xs leading-5">{product.code}</span>
                       <span className="truncate font-medium leading-5">{product.name}</span>
-                      <span className="truncate text-xs leading-5 text-muted-foreground">
-                        {product.categoryPath ?? product.categoryName ?? '—'}
-                      </span>
+                      <CategoryPathDisplay
+                        path={product.categoryPath}
+                        fallback={product.categoryName}
+                        className="text-xs leading-5 text-muted-foreground"
+                      />
                       <span className="text-center leading-5 text-muted-foreground">{product.unit}</span>
                       <span className={cn(
                         'text-right leading-5',
