@@ -9,7 +9,7 @@
  */
 import { useRef, useState, useCallback } from 'react'
 import { usePdaScanner } from '@/hooks/usePdaScanner'
-import { parseBarcode } from '@/utils/pda/barcode'
+import { parseBarcode } from '@/utils/barcode'
 
 interface PdaScannerProps {
   onScan: (barcode: string) => void

@@ -42,8 +42,14 @@ export default function ReportsPage() {
         <h1 className="text-2xl font-bold">报表中心</h1>
         <p className="text-sm text-muted-foreground mt-1">采购、销售、库存多维度统计分析</p>
         <button
+          onClick={() => { addTab({ key: '/reports/exception-workbench', title: '异常工作台', path: '/reports/exception-workbench' }); navigate('/reports/exception-workbench') }}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+        >
+          🩺 异常工作台
+        </button>
+        <button
           onClick={() => { addTab({ key: '/reports/pda-anomaly', title: 'PDA 异常分析', path: '/reports/pda-anomaly' }); navigate('/reports/pda-anomaly') }}
-          className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
+          className="mt-2 ml-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
         >
           ⚠️ PDA 异常分析
         </button>

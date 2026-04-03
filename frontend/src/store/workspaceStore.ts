@@ -40,6 +40,7 @@ export const PATH_TITLES: Record<string, string> = {
   '/settings/barcode-print-query': '条码打印查询',
   '/oplogs':          '操作日志',
   '/reports':                 '报表中心',
+  '/reports/exception-workbench': '异常工作台',
   '/reports/wave-performance': '波次效率报表',
   '/reports/pda-anomaly':      'PDA 异常分析',
   '/reports/warehouse-ops':    '仓库运营看板',
