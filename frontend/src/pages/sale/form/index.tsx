@@ -863,7 +863,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
             ['仓库',     order.warehouseName],
             ['销售日期', order.saleDate ?? '—'],
             ['经办人',   order.operatorName],
-            ['创建时间', order.createdAt?.slice(0, 16)],
+            ['创建时间', formatDisplayDateTime(order.createdAt)],
           ].map(([label, value]) => (
             <div key={label}>
               <dt className="mb-0.5 text-helper">{label}</dt>

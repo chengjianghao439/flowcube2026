@@ -19,6 +19,7 @@ import { useCategoryFlat }      from '@/hooks/useCategories'
 import { useWarehousesActive }  from '@/hooks/useWarehouses'
 import ContainerDrawer          from '@/components/shared/ContainerDrawer'
 import type { InventoryOverviewItem } from '@/types/inventory'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 // ─── 统计卡片 ─────────────────────────────────────────────────────────────────
 
@@ -258,7 +259,7 @@ export default function InventoryOverviewPage() {
                       <AvailableBadge available={row.available} onHand={row.onHand} />
                     </td>
                     <td className="px-4 py-3 text-right text-xs text-muted-foreground">
-                      {row.updatedAt ? row.updatedAt.slice(0, 16) : '—'}
+                      {formatDisplayDateTime(row.updatedAt)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Button
@@ -277,27 +278,6 @@ export default function InventoryOverviewPage() {
           </table>
         </div>
 
-        {/* 分页 */}
-        {pagination && pagination.total > 0 && (
-          <div className="flex items-center justify-between border-t px-4 py-3">
-            <span className="text-xs text-muted-foreground">
-              共 {pagination.total.toLocaleString()} 条
-              {pagination.total > PAGE_SIZE && `，第 ${page} / ${Math.ceil(pagination.total / PAGE_SIZE)} 页`}
-            </span>
-            <div className="flex items-center gap-1">
-              <Button
-                size="sm" variant="outline"
-                disabled={page <= 1}
-                onClick={() => setPage(p => p - 1)}
-              >上一页</Button>
-              <Button
-                size="sm" variant="outline"
-                disabled={page >= Math.ceil(pagination.total / PAGE_SIZE)}
-                onClick={() => setPage(p => p + 1)}
-              >下一页</Button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 容器侧滑面板 */}

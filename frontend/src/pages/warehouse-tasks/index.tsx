@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label'
 import { TaskStatCards } from './components/TaskStatCards'
 import { KanbanBoard } from './components/KanbanBoard'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import {
   getTasksApi, getTaskByIdApi, cancelTaskApi, updateTaskPriorityApi,
   PRIORITY_LABEL, PRIORITY_COLOR,
@@ -82,8 +83,8 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
               <div><span className="text-muted-foreground">关联销售单：</span><span className="text-doc-code">{task.saleOrderNo}</span></div>
               <div><span className="text-muted-foreground">客户：</span>{task.customerName}</div>
               <div><span className="text-muted-foreground">仓库：</span>{task.warehouseName}</div>
-              <div><span className="text-muted-foreground">创建时间：</span>{task.createdAt?.slice(0, 16)}</div>
-              {task.shippedAt && <div><span className="text-muted-foreground">出库时间：</span>{task.shippedAt?.slice(0, 16)}</div>}
+              <div><span className="text-muted-foreground">创建时间：</span>{formatDisplayDateTime(task.createdAt)}</div>
+              {task.shippedAt && <div><span className="text-muted-foreground">出库时间：</span>{formatDisplayDateTime(task.shippedAt)}</div>}
             </div>
 
             {task.status === 2 && (
@@ -234,7 +235,7 @@ export default function WarehouseTasksPage() {
     { key: 'customerName', title: '客户' },
     { key: 'warehouseName', title: '仓库', width: 100 },
     { key: 'status', title: '状态', width: 110, render: v => <StatusBadge type="task" status={v as number} /> },
-    { key: 'createdAt', title: '创建时间', width: 120, render: v => String(v).slice(0, 16) },
+    { key: 'createdAt', title: '创建时间', width: 120, render: v => formatDisplayDateTime(v) },
     { key: 'id', title: '操作', width: 160, render: (_, r) => (
       <div className="flex gap-1 flex-wrap">
         <Button size="sm" variant="outline" onClick={() => openDetail(r.id)}>详情</Button>

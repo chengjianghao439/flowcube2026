@@ -103,8 +103,8 @@ export default function GlobalSearch() {
                   </div>
                 )
               })}
-              <div className="px-4 py-2 border-t text-center text-xs text-muted-foreground">
-                共 {results.length} 条结果 · 点击跳转到对应页面
+              <div className="border-t px-4 py-2 text-center text-xs text-muted-foreground">
+                点击跳转到对应页面
               </div>
             </div>
           )}

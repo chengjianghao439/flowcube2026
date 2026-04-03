@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { usePurchaseList, useConfirmPurchase, useCancelPurchase, usePurchaseDetail } from '@/hooks/usePurchase'
 import PrintOrderDialog from '@/components/shared/PrintOrderDialog'
 import { downloadExport } from '@/lib/exportDownload'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import type { PurchaseOrder } from '@/types/purchase'
@@ -110,7 +111,7 @@ export default function PurchasePage() {
       render: (v, row) => <StatusBadge type="purchase" status={v as number} aria-label={(row as PurchaseOrder).statusName} />
     },
     { key: 'operatorName', title: '经办人', width: 90 },
-    { key: 'createdAt', title: '创建时间', width: 160, render: (v) => String(v).slice(0, 16) },
+    { key: 'createdAt', title: '创建时间', width: 160, render: (v) => formatDisplayDateTime(v) },
     {
       key: 'id', title: '操作', width: 240, render: (_, row) => {
         const r = row as PurchaseOrder

@@ -1,5 +1,5 @@
 {
-  "version": "0.3.53",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.53/Jixu-Flow-Setup-0.3.53.exe",
-  "notes": "【v0.3.53 主要更新】\n\n• 深度统一 ERP 页面字体层级：页面标题、卡片标题、表格列标题、辅助说明与编号样式全部收口到统一语义类。\n• 采购单、销售单、收货订单、打印机管理与报表页进一步去掉浏览器式零散写法，观感更贴近桌面工作区。\n• 桌面端再次点击已运行程序时继续唤醒当前窗口，旧版本可直接自动更新到本版。"
+  "version": "0.3.54",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.54/Jixu-Flow-Setup-0.3.54.exe",
+  "notes": "【v0.3.54 主要更新】\n\n• 全站去掉零散的“共几条 / 上一页 / 下一页”浏览器式分页提示，桌面端列表观感统一。\n• 所有共享表格支持列拖动并自动记住顺序，关闭后重新打开仍保留上次布局。\n• 创建时间等展示统一为 YYYY-MM-DD-HH：mm 格式，采购、销售、收货、任务、库存、报表等页面一致。"
 }

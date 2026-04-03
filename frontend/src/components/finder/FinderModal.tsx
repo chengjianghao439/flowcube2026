@@ -83,38 +83,9 @@ export function FinderModal<T extends Record<string, unknown>>({
 
         {/* ── Footer ──────────────────────────────────────────────── */}
         <div className="shrink-0 border-t bg-muted/20 px-6 py-4">
-          <div className="flex items-center justify-between">
-
-            {/* Left — total count + pagination */}
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <span>共 {total} 条</span>
-              {totalPages > 1 && (
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="sm" variant="outline" className="h-7 px-2 text-xs"
-                    disabled={page <= 1 || !!isLoading}
-                    onClick={() => onPageChange(page - 1)}
-                  >
-                    上一页
-                  </Button>
-                  <span className="px-2 text-xs tabular-nums">{page} / {totalPages}</span>
-                  <Button
-                    size="sm" variant="outline" className="h-7 px-2 text-xs"
-                    disabled={page >= totalPages || !!isLoading}
-                    onClick={() => onPageChange(page + 1)}
-                  >
-                    下一页
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* Right — action buttons */}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>取消</Button>
-              <Button disabled={!selected} onClick={onConfirm}>确认选择</Button>
-            </div>
-
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>取消</Button>
+            <Button disabled={!selected} onClick={onConfirm}>确认选择</Button>
           </div>
         </div>
 

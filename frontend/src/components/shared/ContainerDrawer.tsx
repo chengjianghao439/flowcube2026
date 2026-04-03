@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/sheet'
 import { useInventoryContainers } from '@/hooks/useInventory'
 import type { InventoryOverviewItem } from '@/types/inventory'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 interface ContainerDrawerProps {
   open:    boolean
@@ -138,7 +139,7 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
                           valueClass={isExpiringSoon(c.expDate) ? 'text-amber-600 font-medium' : undefined}
                         />
                       )}
-                      <Field label="入库时间" value={c.createdAt.slice(0, 16)} className="col-span-2" />
+                      <Field label="入库时间" value={formatDisplayDateTime(c.createdAt)} className="col-span-2" />
                       {c.remark && (
                         <Field label="备注" value={c.remark} className="col-span-2" />
                       )}

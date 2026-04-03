@@ -137,16 +137,6 @@ export default function LocationsPage() {
         rowKey="id"
       />
 
-      {data && (
-        <div className="flex items-center justify-between px-1 text-sm text-muted-foreground">
-          <span>共 {data.total} 条</span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
-            <Button size="sm" variant="outline" disabled={page * 20 >= data.total} onClick={() => setPage(p => p + 1)}>下一页</Button>
-          </div>
-        </div>
-      )}
-
       <Dialog open={dialogOpen} onOpenChange={v => !v && closeDialog()}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editTarget ? '编辑库位' : '新建库位'}</DialogTitle></DialogHeader>

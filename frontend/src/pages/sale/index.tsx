@@ -14,6 +14,7 @@ import { getSaleDetailApi } from '@/api/sale'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { SaleOrder } from '@/types/sale'
 import type { TableColumn } from '@/types'
 
@@ -134,7 +135,7 @@ export default function SalePage() {
       },
     },
     { key: 'operatorName', title: '经办人',   width: 90 },
-    { key: 'createdAt',    title: '创建时间', width: 152, render: v => String(v).slice(0, 16) },
+    { key: 'createdAt',    title: '创建时间', width: 152, render: v => formatDisplayDateTime(v) },
     {
       key: 'id', title: '操作', width: 248,
       render: (_, row) => {

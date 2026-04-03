@@ -370,7 +370,7 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
             ['仓库',       order.warehouseName],
             ['预计到货',   order.expectedDate ?? '—'],
             ['经办人',     order.operatorName],
-            ['创建时间',   order.createdAt?.slice(0, 16)],
+            ['创建时间',   formatDisplayDateTime(order.createdAt)],
           ].map(([label, value]) => (
             <div key={label}>
               <dt className="mb-0.5 text-helper">{label}</dt>

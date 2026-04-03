@@ -15,6 +15,7 @@ import {
 } from '@/api/system'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 function severityBadge(level: string) {
   if (level === 'high' || level === 'danger') return <Badge variant="destructive">高风险</Badge>
@@ -149,7 +150,7 @@ export default function ExceptionWorkbenchPage() {
         <StatCard label="低风险异常" value={lowCount} hint="可集中收口" />
         <StatCard
           label="最近巡检"
-          value={latestSummary ? new Date(latestSummary.checkedAt).toLocaleString('zh-CN', { hour12: false }) : '未执行'}
+          value={latestSummary ? formatDisplayDateTime(latestSummary.checkedAt, '未执行') : '未执行'}
           hint={latestSummary ? `耗时 ${latestSummary.elapsedMs}ms` : '点击立即巡检'}
         />
       </div>
@@ -237,7 +238,7 @@ export default function ExceptionWorkbenchPage() {
                   <Badge variant={run.hasHigh ? 'destructive' : run.totalIssues > 0 ? 'secondary' : 'outline'}>
                     {run.totalIssues === 0 ? '正常' : `${run.totalIssues} 项`}
                   </Badge>
-                  <span className="font-medium text-foreground">{new Date(run.checkedAt).toLocaleString('zh-CN', { hour12: false })}</span>
+                  <span className="font-medium text-foreground">{formatDisplayDateTime(run.checkedAt)}</span>
                   <span className="text-helper">来源：{run.triggeredBy}</span>
                 </div>
                 <p className="mt-1 text-muted-body">
@@ -267,7 +268,7 @@ export default function ExceptionWorkbenchPage() {
                     {severityBadge(log.severity)}
                     <span className="font-medium text-foreground">{log.check_type}</span>
                     <span className="text-helper">
-                      {new Date(log.created_at).toLocaleString('zh-CN', { hour12: false })}
+                      {formatDisplayDateTime(log.created_at)}
                     </span>
                   </div>
                   <p className="mt-2 text-sm leading-relaxed text-foreground">{log.message}</p>

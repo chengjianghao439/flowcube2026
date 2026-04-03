@@ -27,6 +27,7 @@ import { SupplierFinder, FinderTrigger } from '@/components/finder'
 import type { FinderResult } from '@/types/finder'
 import { useCreateInboundTask, useInboundPurchaseCandidates } from '@/hooks/useInboundTasks'
 import { toast } from '@/lib/toast'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -344,7 +345,7 @@ export default function InboundTasksPage() {
       key: 'createdAt',
       title: '创建时间',
       width: 160,
-      render: v => (v as string)?.slice(0, 16),
+      render: v => formatDisplayDateTime(v),
     },
     {
       key: 'id',
@@ -394,16 +395,6 @@ export default function InboundTasksPage() {
         loading={isLoading}
         rowKey="id"
       />
-
-      {data && (
-        <div className="flex items-center justify-between px-1 text-sm text-muted-foreground">
-          <span>共 {data.pagination.total} 条</span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
-            <Button size="sm" variant="outline" disabled={page * 20 >= data.pagination.total} onClick={() => setPage(p => p + 1)}>下一页</Button>
-          </div>
-        </div>
-      )}
 
       <CreateInboundDialog
         open={createOpen}

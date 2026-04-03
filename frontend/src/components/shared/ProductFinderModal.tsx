@@ -312,31 +312,6 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
               )}
             </div>
 
-            {/* 分页 */}
-            {pagination && pagination.total > 0 && (
-              <div className="flex shrink-0 items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
-                <span>共 {pagination.total} 个商品</span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="sm" variant="outline"
-                    className="h-7 px-2 text-xs"
-                    disabled={page <= 1 || isFetching}
-                    onClick={() => setPage(p => p - 1)}
-                  >
-                    上一页
-                  </Button>
-                  <span className="px-2">{page} / {totalPages}</span>
-                  <Button
-                    size="sm" variant="outline"
-                    className="h-7 px-2 text-xs"
-                    disabled={page >= totalPages || isFetching}
-                    onClick={() => setPage(p => p + 1)}
-                  >
-                    下一页
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>

@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useStock, useLogs, useOutbound } from '@/hooks/useInventory'
 import { WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { StockItem, InventoryLog } from '@/types/inventory'
 import type { TableColumn } from '@/types'
 import type { ProductFinderResult } from '@/types/products'
@@ -66,7 +67,7 @@ export default function InventoryPage() {
   ]
 
   const logCols: TableColumn<InventoryLog>[] = [
-    { key:'createdAt', title:'时间', width:160, render:v=>String(v).replace('T',' ').slice(0,16) },
+    { key:'createdAt', title:'时间', width:160, render:v=>formatDisplayDateTime(v) },
     { key:'typeName', title:'类型', width:80, render:(_,r)=><Badge variant={TYPE_VARIANT[r.type]??'outline'}>{TYPE_NAMES[r.type]}</Badge> },
     { key:'productName', title:'商品' },
     { key:'warehouseName', title:'仓库', width:120 },

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getTransferListApi, createTransferApi, confirmTransferApi, executeTransferApi, cancelTransferApi } from '@/api/transfer'
 import { downloadExport } from '@/lib/exportDownload'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
@@ -68,7 +69,7 @@ export default function TransferPage() {
     {key:'toWarehouseName',title:'目标仓库',width:130},
     {key:'status',title:'状态',width:90,render:(v,row)=><Badge variant={SC[v as number]}>{(row as TransferOrder).statusName}</Badge>},
     {key:'operatorName',title:'经办人',width:90},
-    {key:'createdAt',title:'创建时间',width:160,render:(v)=>String(v).slice(0,16)},
+    {key:'createdAt',title:'创建时间',width:160,render:(v)=>formatDisplayDateTime(v)},
     {key:'id',title:'操作',width:200,render:(_,row)=>{const r=row as TransferOrder; return(
       <div className="flex gap-1 flex-wrap">
         {r.status===1&&<Button size="sm" variant="outline" disabled={pendingId===r.id} onClick={()=>mut(()=>confirmTransferApi(r.id),r.id)}>{pendingId===r.id?'处理中...':'确认'}</Button>}

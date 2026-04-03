@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import DataTable from '@/components/shared/DataTable'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 import { getPrintTemplateListApi, deletePrintTemplateApi } from '@/api/print-templates'
 import type { PrintTemplate } from '@/types/print-template'
@@ -53,7 +54,7 @@ export default function PrintTemplatesPage() {
     { key: 'isDefault', title: '默认', width: 80,
       render: v => v ? <Badge variant="default">默认</Badge> : <span className="text-muted-foreground">—</span> },
     { key: 'createdAt', title: '创建时间', width: 160,
-      render: v => (v as string)?.slice(0, 16) },
+      render: v => formatDisplayDateTime(v) },
     {
       key: 'id', title: '操作', width: 140,
       render: (_, row) => (

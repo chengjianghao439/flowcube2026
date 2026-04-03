@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Inbox } from 'lucide-react'
 import type { Pagination, TableColumn } from '@/types'
 
@@ -14,6 +14,7 @@ interface DataTableProps<T extends object> {
   selectedIds?: Set<number>
   onSelectChange?: (ids: Set<number>) => void
   onRowDoubleClick?: (row: T) => void
+  columnStorageKey?: string
 }
 
 function isAction(key: string, title: string): boolean {
@@ -25,8 +26,70 @@ export default function DataTable<T extends object>({
   rowKey = 'id' as keyof T, emptyText = '暂无数据',
   selectable = false, selectedIds, onSelectChange,
   onRowDoubleClick,
+  columnStorageKey,
 }: DataTableProps<T>) {
-  const totalPages = pagination ? Math.ceil(pagination.total / pagination.pageSize) : 0
+  const [columnOrder, setColumnOrder] = useState<string[]>([])
+  const [draggingKey, setDraggingKey] = useState<string | null>(null)
+
+  const resolvedStorageKey = useMemo(() => {
+    if (columnStorageKey) return `flowcube:table-columns:${columnStorageKey}`
+    if (typeof window === 'undefined') return null
+    const pageKey = window.location.hash.split('?')[0].replace(/^#/, '') || 'root'
+    const columnKeys = columns.map(col => String(col.key)).join('|')
+    return `flowcube:table-columns:${pageKey}:${columnKeys}`
+  }, [columnStorageKey, columns])
+
+  useEffect(() => {
+    if (!resolvedStorageKey || typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem(resolvedStorageKey)
+      if (!raw) {
+        setColumnOrder(columns.map(col => String(col.key)))
+        return
+      }
+      const saved = JSON.parse(raw)
+      if (!Array.isArray(saved)) {
+        setColumnOrder(columns.map(col => String(col.key)))
+        return
+      }
+      const currentKeys = columns.map(col => String(col.key))
+      const merged = [
+        ...saved.filter((key): key is string => typeof key === 'string' && currentKeys.includes(key)),
+        ...currentKeys.filter(key => !saved.includes(key)),
+      ]
+      setColumnOrder(merged)
+    } catch {
+      setColumnOrder(columns.map(col => String(col.key)))
+    }
+  }, [columns, resolvedStorageKey])
+
+  const orderedColumns = useMemo(() => {
+    if (!columnOrder.length) return columns
+    const byKey = new Map(columns.map(col => [String(col.key), col]))
+    const merged = [
+      ...columnOrder.map(key => byKey.get(key)).filter((col): col is TableColumn<T> => !!col),
+      ...columns.filter(col => !columnOrder.includes(String(col.key))),
+    ]
+    return merged
+  }, [columnOrder, columns])
+
+  const persistOrder = (next: string[]) => {
+    setColumnOrder(next)
+    if (!resolvedStorageKey || typeof window === 'undefined') return
+    window.localStorage.setItem(resolvedStorageKey, JSON.stringify(next))
+  }
+
+  const moveColumn = (targetKey: string) => {
+    if (!draggingKey || draggingKey === targetKey) return
+    const next = [...(columnOrder.length ? columnOrder : columns.map(col => String(col.key)))]
+    const fromIndex = next.indexOf(draggingKey)
+    const toIndex = next.indexOf(targetKey)
+    if (fromIndex < 0 || toIndex < 0) return
+    next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, draggingKey)
+    persistOrder(next)
+    setDraggingKey(null)
+  }
 
   const allIds = data.map(r => Number((r as Record<string, unknown>)[String(rowKey)]))
   const allSelected = allIds.length > 0 && allIds.every(id => selectedIds?.has(id))
@@ -53,7 +116,7 @@ export default function DataTable<T extends object>({
     onSelectChange(next)
   }
 
-  const colCount = columns.length + (selectable ? 1 : 0)
+  const colCount = orderedColumns.length + (selectable ? 1 : 0)
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -72,13 +135,23 @@ export default function DataTable<T extends object>({
                   />
                 </th>
               )}
-              {columns.map((col) => (
+              {orderedColumns.map((col) => (
                 <th
                   key={String(col.key)}
+                  draggable={!isAction(String(col.key), col.title)}
+                  onDragStart={() => setDraggingKey(String(col.key))}
+                  onDragOver={(e) => {
+                    if (draggingKey && draggingKey !== String(col.key)) e.preventDefault()
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    moveColumn(String(col.key))
+                  }}
+                  onDragEnd={() => setDraggingKey(null)}
                   className={`px-4 py-3 text-left text-table-head ${
                     isAction(String(col.key), col.title)
                       ? 'sticky right-0 z-20 min-w-[200px] bg-muted/30 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
-                      : ''
+                      : 'cursor-move select-none'
                   }`}
                   style={col.width ? { width: col.width } : undefined}
                 >
@@ -93,7 +166,7 @@ export default function DataTable<T extends object>({
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b border-border last:border-0">
                   {selectable && <td className="px-4 min-h-12 py-3" />}
-                  {columns.map((col) => (
+                  {orderedColumns.map((col) => (
                     <td key={String(col.key)} className="px-4 min-h-12 py-3">
                       <div className="h-3.5 w-3/4 animate-pulse rounded bg-muted" />
                     </td>
@@ -131,7 +204,7 @@ export default function DataTable<T extends object>({
                         />
                       </td>
                     )}
-                    {columns.map((col) => (
+                    {orderedColumns.map((col) => (
                       <td
                         key={String(col.key)}
                         onDoubleClick={isAction(String(col.key), col.title) ? e => e.stopPropagation() : undefined}
@@ -154,29 +227,6 @@ export default function DataTable<T extends object>({
         </table>
       </div>
 
-      {pagination && totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-border bg-muted/20 px-4 py-3">
-          <p className="text-helper">
-            共 <span className="font-medium text-foreground">{pagination.total}</span> 条 · 第 {pagination.page} / {totalPages} 页
-          </p>
-          <div className="flex gap-1.5">
-            <button
-              disabled={pagination.page <= 1}
-              onClick={() => onPageChange?.(pagination.page - 1)}
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-            >
-              上一页
-            </button>
-            <button
-              disabled={pagination.page >= totalPages}
-              onClick={() => onPageChange?.(pagination.page + 1)}
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-            >
-              下一页
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

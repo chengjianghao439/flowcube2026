@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { getOpLogsApi, clearLogsApi } from '@/api/oplogs'
 import { usePermission } from '@/hooks/usePermission'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { OpLog } from '@/api/oplogs'
 import type { TableColumn } from '@/types'
 
@@ -28,7 +29,7 @@ export default function OpLogsPage() {
   const clear = useMutation({ mutationFn: clearLogsApi, onSuccess: () => qc.invalidateQueries({ queryKey: ['oplogs'] }) })
 
   const columns: TableColumn<OpLog>[] = [
-    { key: 'createdAt', title: '时间', width: 160, render: (v) => String(v).slice(0, 16) },
+    { key: 'createdAt', title: '时间', width: 160, render: (v) => formatDisplayDateTime(v) },
     { key: 'userName', title: '操作人', width: 90 },
     { key: 'method', title: '方法', width: 70, render: (v) => <Badge variant={METHOD_COLOR[String(v)] || 'secondary'}>{String(v)}</Badge> },
     { key: 'module', title: '模块', width: 80, render: (v) => MODULE_LABELS[String(v)] || String(v) },

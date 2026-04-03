@@ -19,6 +19,7 @@ import {
 } from '@/api/picking-waves'
 import DataTable from '@/components/shared/DataTable'
 import { confirmAction } from '@/lib/confirm'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 
 const STATUS_VARIANT: Record<WaveStatus, 'default'|'secondary'|'outline'|'destructive'> = {
@@ -65,7 +66,7 @@ export default function PickingWavesPage() {
     { key: 'operatorName',   title: '拣货人',
       render: v => v ?? <span className="text-muted-foreground">—</span> },
     { key: 'createdAt',      title: '创建时间', width: 160,
-      render: v => (v as string)?.slice(0, 16) },
+      render: v => formatDisplayDateTime(v) },
     { key: 'id', title: '操作', width: 80,
       render: (_, row) => (
         <Button size="sm" variant="ghost" onClick={() => setDetailWave(row)}>详情</Button>
@@ -104,16 +105,6 @@ export default function PickingWavesPage() {
         loading={isLoading}
         rowKey="id"
       />
-
-      {data && (
-        <div className="flex items-center justify-between px-1 text-sm text-muted-foreground">
-          <span>共 {data.total} 条</span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
-            <Button size="sm" variant="outline" disabled={page * 20 >= data.total} onClick={() => setPage(p => p + 1)}>下一页</Button>
-          </div>
-        </div>
-      )}
 
       <Dialog open={!!detailWave} onOpenChange={v => !v && setDetailWave(null)}>
         <DialogContent className="max-w-2xl">

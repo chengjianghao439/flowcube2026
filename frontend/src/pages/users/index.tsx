@@ -12,6 +12,7 @@ import ResetPasswordDialog from './components/ResetPasswordDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import type { SysUser } from '@/types/users'
 import type { TableColumn } from '@/types'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 export default function UsersPage() {
   const currentUser = useAuthStore((s) => s.user)
@@ -73,7 +74,7 @@ export default function UsersPage() {
         </Badge>
       ),
     },
-    { key: 'createdAt', title: '创建时间', render: (v) => String(v).slice(0, 10) },
+    { key: 'createdAt', title: '创建时间', render: (v) => formatDisplayDateTime(v) },
     {
       key: 'id',
       title: '操作',

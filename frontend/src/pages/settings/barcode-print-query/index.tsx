@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getBarcodePrintRecordsApi, reprintBarcodeRecordApi } from '@/api/print-jobs'
 import { toast } from '@/lib/toast'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 import type { BarcodePrintCategory, BarcodePrintRecord } from '@/types/print-jobs'
 
@@ -140,7 +141,7 @@ export default function BarcodePrintQueryPage() {
         key: 'createdAt',
         title: '最近变化',
         width: 150,
-        render: (_, row) => (row.latestJob?.updatedAt || row.createdAt || '').slice(0, 16) || '—',
+        render: (_, row) => formatDisplayDateTime(row.latestJob?.updatedAt || row.createdAt),
       },
       {
         key: 'action',
@@ -246,16 +247,7 @@ export default function BarcodePrintQueryPage() {
         rowKey="recordId"
       />
 
-      {pagination && (
-        <div className="flex items-center justify-between px-1 text-sm text-muted-foreground">
-          <span>共 {pagination.total} 条</span>
-          <div className="flex items-center gap-2">
-            <span className="text-xs">状态每 3 秒自动刷新</span>
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
-            <Button size="sm" variant="outline" disabled={page * pagination.pageSize >= pagination.total} onClick={() => setPage(p => p + 1)}>下一页</Button>
-          </div>
-        </div>
-      )}
+      {pagination && <div className="px-1 text-helper">状态每 3 秒自动刷新</div>}
     </div>
   )
 }

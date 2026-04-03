@@ -17,6 +17,7 @@ import { useSuppliers } from '@/hooks/useSuppliers'
 import { useCustomersActive } from '@/hooks/useCustomers'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { useProducts } from '@/hooks/useProducts'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { PurchaseReturn, SaleReturn } from '@/api/returns'
 import type { TableColumn } from '@/types'
 
@@ -143,7 +144,7 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
     {key:'totalAmount',title:'金额',width:100,render:(v)=>`¥${Number(v).toFixed(2)}`},
     {key:'status',title:'状态',width:90,render:(v,row)=><Badge variant={SC[v as number]}>{(row as RowType).statusName}</Badge>},
     {key:'operatorName',title:'经办人',width:90},
-    {key:'createdAt',title:'时间',width:160,render:(v)=>String(v).slice(0,16)},
+    {key:'createdAt',title:'时间',width:160,render:(v)=>formatDisplayDateTime(v)},
     {key:'id',title:'操作',width:200,render:(_,row)=>{const r=row as RowType; return(
       <div className="flex gap-1 flex-wrap">
         {r.status===1&&<Button size="sm" variant="outline" disabled={pendingId===r.id} onClick={()=>mut(()=>confirmFn(r.id),r.id)}>{pendingId===r.id?'处理中...':'确认'}</Button>}
