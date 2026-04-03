@@ -11,7 +11,7 @@ export type PermCode =
   | 'page:inbound'
   | 'page:sale' | 'page:stockcheck' | 'page:reports' | 'page:settings'
   | 'page:transfer' | 'page:returns' | 'page:payments' | 'page:warehouse-tasks'
-  | 'action:purchase:confirm' | 'action:purchase:receive' | 'action:purchase:cancel'
+  | 'action:purchase:confirm' | 'action:purchase:cancel'
   | 'action:sale:confirm' | 'action:sale:ship' | 'action:sale:cancel'
   | 'action:inventory:inbound' | 'action:inventory:outbound' | 'action:inventory:adjust'
   | 'action:stockcheck:create' | 'action:stockcheck:submit'
@@ -21,7 +21,7 @@ const ALL: PermCode[] = [
   'page:dashboard','page:users','page:warehouses','page:suppliers','page:products','page:categories',
   'page:inventory','page:customers','page:carriers','page:purchase','page:inbound','page:sale','page:stockcheck',
   'page:transfer','page:returns','page:payments','page:warehouse-tasks','page:reports','page:settings',
-  'action:purchase:confirm','action:purchase:receive','action:purchase:cancel',
+  'action:purchase:confirm','action:purchase:cancel',
   'action:sale:confirm','action:sale:ship','action:sale:cancel',
   'action:inventory:inbound','action:inventory:outbound','action:inventory:adjust',
   'action:stockcheck:create','action:stockcheck:submit',
@@ -37,7 +37,7 @@ const ROLE_PERMS: Record<number, PermCode[]> = {
   ],
   3: [ // 采购员
     'page:dashboard','page:suppliers','page:products','page:categories','page:inventory','page:purchase','page:inbound','page:reports','action:export','action:import',
-    'action:purchase:confirm','action:purchase:receive','action:purchase:cancel',
+    'action:purchase:confirm','action:purchase:cancel',
   ],
   4: [ // 销售员
     'page:dashboard','page:customers','page:products','page:inventory','page:sale','page:warehouse-tasks','page:reports','action:export',

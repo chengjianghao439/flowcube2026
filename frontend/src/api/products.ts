@@ -22,7 +22,12 @@ export const printProductLabelApi = async (id: number) =>
     jobId: number | null
     printerCode: string | null
     printerName: string | null
-    dispatchHint?: { code: string; message: string; sseClients: number } | null
+    dispatchHint?: {
+      code: string
+      message: string
+      onlineClients: number
+      sseClients?: number
+    } | null
     contentType?: string | null
     content?: string | null
   }>>(`/products/${id}/print-label`, {}, {

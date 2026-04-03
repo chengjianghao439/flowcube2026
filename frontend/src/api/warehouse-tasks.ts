@@ -91,10 +91,6 @@ export const assignTaskApi = (id: number, userId: number, userName: string) =>
 export const startPickingApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/start-picking`, {}, { headers: { 'X-Client': 'pda' } })
 
-/** @deprecated 已拣数量仅由拣货扫码累加，勿调用 */
-export const updatePickedQtyApi = (taskId: number, itemId: number, pickedQty: number) =>
-  client.put(`/warehouse-tasks/${taskId}/items/${itemId}/picked-qty`, { pickedQty })
-
 export const readyToShipApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/ready`, {}, { headers: { 'X-Client': 'pda' } })
 
@@ -178,13 +174,3 @@ export const submitCheckScanApi = (taskId: number, barcode: string) =>
     { taskId, barcode },
     { headers: { 'X-Client': 'pda' } },
   )
-
-/** @deprecated 已改为 submitCheckScanApi */
-export const checkTaskItemsApi = (
-  taskId: number,
-  items: { itemId: number; checkedQty: number }[],
-) => client.put<ApiResponse<{ allChecked: boolean }>>(
-  `/warehouse-tasks/${taskId}/check`,
-  { items },
-  { headers: { 'X-Client': 'pda' } },
-)

@@ -34,28 +34,6 @@ async function runMigrations() {
       .filter(f => f.endsWith('.sql'))
       .sort()
 
-    // ── 货架主数据表（供 051 迁移与业务查询依赖）──────────────────────────────
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS warehouse_racks (
-        id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-        warehouse_id BIGINT UNSIGNED NOT NULL              COMMENT '所属仓库',
-        zone         VARCHAR(20)     NOT NULL DEFAULT ''   COMMENT '库区，如 A / B',
-        code         VARCHAR(50)     NOT NULL              COMMENT '货架编码，如 A01',
-        name         VARCHAR(100)    NOT NULL DEFAULT ''   COMMENT '货架名称',
-        max_levels   TINYINT UNSIGNED NOT NULL DEFAULT 5   COMMENT '最大层数',
-        max_positions TINYINT UNSIGNED NOT NULL DEFAULT 10 COMMENT '每层最大位数',
-        status       TINYINT(1)      NOT NULL DEFAULT 1    COMMENT '1=启用 2=停用',
-        remark       VARCHAR(200)    DEFAULT NULL,
-        deleted_at   DATETIME        DEFAULT NULL,
-        created_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        UNIQUE KEY uk_rack_code (warehouse_id, code),
-        INDEX idx_rack_warehouse (warehouse_id),
-        INDEX idx_rack_zone (warehouse_id, zone)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='货架主数据'
-    `)
-
     // 先执行按编号排序的 SQL 建表迁移，保证基础表存在后再做增量 ALTER
     let ran = 0
     for (const file of files) {

@@ -26,7 +26,6 @@ const ALL_PERMS: { code: string; label: string; group: string }[] = [
   { group:'页面', code:'page:settings',   label:'系统设置' },
   { group:'页面', code:'page:users',      label:'用户管理' },
   { group:'操作', code:'action:purchase:confirm', label:'采购确认' },
-  { group:'操作', code:'action:purchase:receive', label:'采购收货' },
   { group:'操作', code:'action:sale:confirm',     label:'销售确认' },
   { group:'操作', code:'action:sale:ship',        label:'销售出库' },
   { group:'操作', code:'action:inventory:inbound',  label:'库存入库' },

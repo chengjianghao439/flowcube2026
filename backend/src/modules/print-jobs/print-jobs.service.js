@@ -468,46 +468,46 @@ async function claimClientJobs({ clientId, limit = 3, tenantId = 0 } = {}) {
 
 /**
  * 入队后给前端的提示（独立 print-client 已移除；桌面端走本机直连 + complete-local）
- * @returns {{ code: string, message: string, sseClients: number }}
+ * 为兼容旧前端，仍保留 sseClients；新代码统一使用 onlineClients。
+ * @returns {{ code: string, message: string, onlineClients: number, sseClients: number }}
  */
 async function getDispatchHintForJob(printerCode, jobId) {
+  const withClients = (code, message, onlineClients = 0) => ({
+    code,
+    message,
+    onlineClients,
+    sseClients: onlineClients,
+  })
   const jid = Number(jobId)
   if (!Number.isFinite(jid) || jid <= 0) {
-    return { code: 'unknown', message: '', sseClients: 0 }
+    return withClients('unknown', '', 0)
   }
   let code = String(printerCode || '').trim()
   const job = await findById(jid)
-  if (!job) return { code: 'unknown', message: '任务不存在', sseClients: 0 }
+  if (!job) return withClients('unknown', '任务不存在', 0)
   if (!code) code = String(job.printerCode || '').trim()
 
   const st = Number(job.status)
   if (st === STATUS.PRINTING) {
-    return {
-      code: 'dispatched',
-      message: '任务处于打印中（例如已下发至外部集成），请等待核销',
-      sseClients: 0,
-    }
+    return withClients('dispatched', '任务处于打印中（例如已下发至外部集成），请等待核销', 0)
   }
   if (st === STATUS.DONE) {
-    return { code: 'done', message: '已完成', sseClients: 0 }
+    return withClients('done', '已完成', 0)
   }
   if (st === STATUS.FAILED) {
-    return {
-      code: 'failed',
-      message: job.errorMessage ? String(job.errorMessage).slice(0, 200) : '打印失败',
-      sseClients: 0,
-    }
+    return withClients(
+      'failed',
+      job.errorMessage ? String(job.errorMessage).slice(0, 200) : '打印失败',
+      0,
+    )
   }
-  if (st !== STATUS.PENDING) {
-    return { code: 'unknown', message: '', sseClients: 0 }
-  }
+  if (st !== STATUS.PENDING) return withClients('unknown', '', 0)
 
-  return {
-    code: 'no_print_client',
-    message:
-      '任务已入队。请使用 FlowCube 桌面端，在「打印机管理」通过「从本机添加」绑定标签机并绑定用途后，再执行打印；桌面端将按打印机名称本机出纸并核销队列。',
-    sseClients: 0,
-  }
+  return withClients(
+    'no_print_client',
+    '任务已入队。请使用 FlowCube 桌面端，在「打印机管理」通过「从本机添加」绑定标签机并绑定用途后，再执行打印；桌面端将按打印机名称本机出纸并核销队列。',
+    0,
+  )
 }
 
 /** 原 SSE 推送入口；独立打印客户端已移除，此处不再下发 */

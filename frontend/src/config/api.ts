@@ -8,6 +8,20 @@ export const API_BASE_STORAGE_KEY = 'API_BASE_URL'
 /** 旧版键名，读取时兼容；写入统一用 API_BASE_URL */
 const LEGACY_ERP_ORIGIN_KEY = 'flowcube:apiOrigin'
 
+function readStorageValue(key: string): string {
+  if (typeof localStorage === 'undefined') return ''
+  return localStorage.getItem(key)?.trim() || ''
+}
+
+function getStoredApiBaseCandidates(): Array<{ key: string; raw: string; normalized: string }> {
+  return [API_BASE_STORAGE_KEY, LEGACY_ERP_ORIGIN_KEY]
+    .map((key) => {
+      const raw = readStorageValue(key)
+      return { key, raw, normalized: raw ? normalizeApiBase(raw) : '' }
+    })
+    .filter((item) => Boolean(item.raw))
+}
+
 /** 公网/生产默认（可通过 VITE_ERP_PRODUCTION_ORIGIN 覆盖） */
 export const PRODUCTION_ERP_FALLBACK = 'https://erp.xxx.com'
 
@@ -50,7 +64,7 @@ export function clearElectronStaleViteOrigins(): void {
   if (!IS_ELECTRON_DESKTOP) return
   if (typeof localStorage === 'undefined') return
   for (const key of [API_BASE_STORAGE_KEY, LEGACY_ERP_ORIGIN_KEY]) {
-    const raw = localStorage.getItem(key)?.trim()
+    const raw = readStorageValue(key)
     if (raw && isStaleLocalViteProxyOrigin(raw)) {
       localStorage.removeItem(key)
     }
@@ -137,8 +151,7 @@ export function collectErpApiFallbackCandidates(): string[] {
     }
   }
 
-  add(typeof localStorage !== 'undefined' ? localStorage.getItem(API_BASE_STORAGE_KEY) : null)
-  add(typeof localStorage !== 'undefined' ? localStorage.getItem(LEGACY_ERP_ORIGIN_KEY) : null)
+  for (const item of getStoredApiBaseCandidates()) add(item.raw)
 
   if (typeof window !== 'undefined') {
     add(getDynamicDefaultApi())
@@ -155,21 +168,11 @@ export function collectErpApiFallbackCandidates(): string[] {
 
 /** 已保存地址或动态默认（含旧键迁移） */
 export function getApiBase(): string {
-  const v = localStorage.getItem(API_BASE_STORAGE_KEY)?.trim()
-  if (v) {
-    const n = normalizeApiBase(v)
-    if (n && IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(v)) {
+  for (const item of getStoredApiBaseCandidates()) {
+    if (item.normalized && IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(item.raw)) {
       return getDynamicDefaultApi()
     }
-    return n || getDynamicDefaultApi()
-  }
-  const leg = localStorage.getItem(LEGACY_ERP_ORIGIN_KEY)?.trim()
-  if (leg) {
-    const n = normalizeApiBase(leg)
-    if (n && IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(leg)) {
-      return getDynamicDefaultApi()
-    }
-    if (n) return n
+    if (item.normalized) return item.normalized
   }
   return getDynamicDefaultApi()
 }
@@ -179,26 +182,33 @@ export function getApiBase(): string {
  * 用于桌面端：避免启动探测或 axios 网络重试时「本机 localhost 先连通」覆盖用户真实服务器，导致空库与乱码感知的错配数据。
  */
 export function hasUserConfiguredApiOrigin(): boolean {
-  if (typeof localStorage === 'undefined') return false
-  const a = localStorage.getItem(API_BASE_STORAGE_KEY)?.trim()
-  const b = localStorage.getItem(LEGACY_ERP_ORIGIN_KEY)?.trim()
-  return Boolean((a && normalizeApiBase(a)) || (b && normalizeApiBase(b)))
+  return getStoredApiBaseCandidates().some((item) => Boolean(item.normalized))
 }
 
 /** 仅已写入 localStorage 的地址（去重、归一化），主键优先于旧键 */
 export function getUserConfiguredApiOriginsInOrder(): string[] {
-  if (typeof localStorage === 'undefined') return []
   const out: string[] = []
   const seen = new Set<string>()
-  const push = (raw: string | null | undefined) => {
-    const n = raw ? normalizeApiBase(raw) : ''
-    if (!n || seen.has(n)) return
-    seen.add(n)
-    out.push(n)
+  const push = (normalized: string) => {
+    if (!normalized || seen.has(normalized)) return
+    seen.add(normalized)
+    out.push(normalized)
   }
-  push(localStorage.getItem(API_BASE_STORAGE_KEY))
-  push(localStorage.getItem(LEGACY_ERP_ORIGIN_KEY))
+  for (const item of getStoredApiBaseCandidates()) {
+    push(item.normalized)
+  }
   return out
+}
+
+function getStoredEffectiveApiOrigin(): string | null {
+  for (const item of getStoredApiBaseCandidates()) {
+    if (IS_ELECTRON_DESKTOP && item.normalized && isStaleLocalViteProxyOrigin(item.raw)) {
+      const dynamic = normalizeApiBase(getDynamicDefaultApi())
+      return dynamic || null
+    }
+    if (item.normalized) return item.normalized
+  }
+  return null
 }
 
 export function setApiBase(url: string): void {
@@ -221,24 +231,8 @@ export function setApiBase(url: string): void {
  * file:// 或未配置时用动态默认（保证 Electron 等可连）。
  */
 export function getEffectiveApiOrigin(): string | null {
-  const v = localStorage.getItem(API_BASE_STORAGE_KEY)?.trim()
-  if (v) {
-    const n = normalizeApiBase(v)
-    if (IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(v)) {
-      const d = normalizeApiBase(getDynamicDefaultApi())
-      return d || null
-    }
-    return n || null
-  }
-  const leg = localStorage.getItem(LEGACY_ERP_ORIGIN_KEY)?.trim()
-  if (leg) {
-    const n = normalizeApiBase(leg)
-    if (IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(leg)) {
-      const d = normalizeApiBase(getDynamicDefaultApi())
-      return d || null
-    }
-    if (n) return n
-  }
+  const stored = getStoredEffectiveApiOrigin()
+  if (stored) return stored
   if (!isFileProtocol()) return null
   const d = normalizeApiBase(getDynamicDefaultApi())
   return d || null

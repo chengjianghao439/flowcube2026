@@ -1,18 +1,18 @@
-// Polyfills for Android 5.x WebView compatibility
-import 'core-js/stable'
-import 'regenerator-runtime/runtime'
-
 import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary'
 import './index.css'
-import AppRouter from './router'
-import AuthTenantSync from '@/components/auth/AuthTenantSync'
 import { Capacitor } from '@capacitor/core'
 import { applyPdaApiBaseFromStorage, installPdaGlobals } from '@/lib/pdaRuntime'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
 import { bootstrapErpApiConnection } from '@/lib/erpApiBootstrap'
+import { IS_CAPACITOR_PDA } from '@/lib/platform'
+
+async function loadPlatformPolyfills(): Promise<void> {
+  if (!IS_CAPACITOR_PDA) return
+  await Promise.all([
+    import('core-js/stable'),
+    import('regenerator-runtime/runtime'),
+  ])
+}
 
 // ── Capacitor PDA：API 基址（bundled）、ZPL 打印桥、路由入口 ─────────────────
 async function boot(): Promise<void> {
@@ -30,24 +30,6 @@ async function boot(): Promise<void> {
   await bootstrapErpApiConnection()
 }
 
-// ── React Query 默认配置 ──────────────────────────────────────────────────────
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      // 5 分钟内不重新请求，减少多标签场景下的重复网络请求
-      staleTime: 1000 * 60 * 5,
-      // 窗口重新获得焦点时不自动刷新（在多标签工作区中会造成大量重复请求）
-      refetchOnWindowFocus: false,
-      // 网络恢复时自动重新请求（合理）
-      refetchOnReconnect: true,
-    },
-    mutations: {
-      retry: 0,  // mutation 默认不重试，避免重复写操作
-    },
-  },
-})
-
 // ── 全局未捕获 Promise 错误监听 ──────────────────────────────────────────────
 window.addEventListener('unhandledrejection', (event) => {
   const reason = event.reason
@@ -60,9 +42,45 @@ window.addEventListener('unhandledrejection', (event) => {
   event.preventDefault()
 })
 
-// ── 渲染入口（ERP 先静默探测 API，再挂载）────────────────────────────────────
+// ── 渲染入口（PDA 先加载 polyfill；ERP 先静默探测 API，再挂载）──────────────
 const rootEl = document.getElementById('root')!
-void boot().then(() => {
+void (async () => {
+  await loadPlatformPolyfills()
+  const [
+    reactDom,
+    reactQuery,
+    routerModule,
+    authTenantSyncModule,
+    errorBoundaryModule,
+  ] = await Promise.all([
+    import('react-dom/client'),
+    import('@tanstack/react-query'),
+    import('./router'),
+    import('@/components/auth/AuthTenantSync'),
+    import('@/components/GlobalErrorBoundary'),
+  ])
+
+  const { createRoot } = reactDom
+  const { QueryClient, QueryClientProvider } = reactQuery
+  const AppRouter = routerModule.default
+  const AuthTenantSync = authTenantSyncModule.default
+  const { GlobalErrorBoundary } = errorBoundaryModule
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: 1,
+        staleTime: 1000 * 60 * 5,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: true,
+      },
+      mutations: {
+        retry: 0,
+      },
+    },
+  })
+
+  await boot()
+
   createRoot(rootEl).render(
     <StrictMode>
       <GlobalErrorBoundary>
@@ -73,4 +91,4 @@ void boot().then(() => {
       </GlobalErrorBoundary>
     </StrictMode>,
   )
-})
+})()

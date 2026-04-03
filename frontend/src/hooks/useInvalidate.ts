@@ -109,11 +109,6 @@ const INVALIDATION_MAP = {
     ['purchase'],
   ],
 
-  /** 采购一键收货已停用，保留 key 避免旧代码引用报错 */
-  purchase_receive: [
-    ['purchase'],
-  ],
-
   /** 取消采购单 */
   purchase_cancel: [
     ['purchase'],

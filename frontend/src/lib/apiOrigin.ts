@@ -9,8 +9,6 @@ import {
   setApiBase,
 } from '@/config/api'
 
-export const FLOWCUBE_API_ORIGIN_KEY = 'flowcube:apiOrigin'
-
 export function normalizeApiOrigin(raw: string): string {
   return normalizeApiBase(raw)
 }

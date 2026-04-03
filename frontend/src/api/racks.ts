@@ -39,7 +39,8 @@ export async function deleteRackApi(id: number): Promise<void> {
 export type PrintDispatchHint = {
   code: string
   message: string
-  sseClients: number
+  onlineClients: number
+  sseClients?: number
 }
 
 export interface PrintRackLabelResult {

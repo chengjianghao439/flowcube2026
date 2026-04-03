@@ -77,6 +77,53 @@ export default defineConfig(({ command }) => {
     ].filter(Boolean),
     build: {
       target: isPDA ? 'es2015' : 'modules',
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return
+
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('/scheduler/')
+            ) {
+              return 'vendor-react'
+            }
+
+            if (id.includes('/react-router') || id.includes('/@remix-run/')) {
+              return 'vendor-router'
+            }
+
+            if (id.includes('/@tanstack/')) {
+              return 'vendor-query'
+            }
+
+            if (id.includes('/@radix-ui/') || id.includes('/cmdk/')) {
+              return 'vendor-ui'
+            }
+
+            if (id.includes('/recharts/') || id.includes('/d3-')) {
+              return 'vendor-charts'
+            }
+
+            if (
+              id.includes('/qrcode.react/') ||
+              id.includes('/react-barcode/') ||
+              id.includes('/jsbarcode/')
+            ) {
+              return 'vendor-barcode'
+            }
+
+            if (
+              id.includes('/axios/') ||
+              id.includes('/zustand/') ||
+              id.includes('/lucide-react/')
+            ) {
+              return 'vendor-core'
+            }
+          },
+        },
+      },
     },
     resolve: {
       alias: {
