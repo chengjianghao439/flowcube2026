@@ -12,7 +12,7 @@
  *   open, warehouseId, onConfirm, onClose
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Search, ChevronRight, ChevronDown, PackageSearch, Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -36,57 +36,72 @@ export interface ProductFinderModalProps {
 
 // ─── 左侧分类树节点 ────────────────────────────────────────────────────────────
 
-interface TreeNodeProps {
-  cat: Category
-  depth: number
-  selectedId: number | null
-  onSelect: (id: number | null) => void
+function findPathToCategory(nodes: Category[], targetId: number, trail: Category[] = []): Category[] | null {
+  for (const node of nodes) {
+    const next = [...trail, node]
+    if (node.id === targetId) return next
+    if (node.children?.length) {
+      const found = findPathToCategory(node.children, targetId, next)
+      if (found) return found
+    }
+  }
+  return null
 }
 
-function TreeNode({ cat, depth, selectedId, onSelect }: TreeNodeProps) {
-  const hasChildren = !!(cat.children && cat.children.length > 0)
-  // 前两层默认展开
-  const [expanded, setExpanded] = useState(depth < 2)
-  const isSelected = selectedId === cat.id
-
+function FinderCategoryAccordion({
+  nodes,
+  selectedId,
+  expandedIds,
+  onExpand,
+  onSelect,
+}: {
+  nodes: Category[]
+  selectedId: number | null
+  expandedIds: Set<number>
+  onExpand: (cat: Category) => void
+  onSelect: (id: number | null) => void
+}) {
   return (
-    <div>
-      <div
-        role="button"
-        tabIndex={0}
-        className={cn(
-          'flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1.5 text-sm transition-colors select-none',
-          isSelected
-            ? 'border-primary/40 bg-primary/10 font-medium text-primary'
-            : 'border-border/70 bg-muted/20 text-foreground hover:border-primary/30 hover:bg-primary/5',
-        )}
-        style={{ paddingLeft: depth * 14 + 8 }}
-        onClick={() => onSelect(cat.id)}
-        onKeyDown={e => e.key === 'Enter' && onSelect(cat.id)}
-      >
-        <button
-          type="button"
-          className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
-          tabIndex={-1}
-          onClick={e => { e.stopPropagation(); hasChildren && setExpanded(v => !v) }}
-        >
-          {hasChildren
-            ? (expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />)
-            : <span className="h-3 w-3" />}
-        </button>
-        <span className="truncate">{cat.name}</span>
-        {cat.status === 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">停用</span>}
-      </div>
+    <div className="space-y-2">
+      {nodes.map(cat => {
+        const hasChildren = !!cat.children?.length
+        const selected = selectedId === cat.id
+        const expanded = expandedIds.has(cat.id)
+        return (
+          <div key={cat.id} className="space-y-2">
+            <button
+              type="button"
+              className={cn(
+                'flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+                selected
+                  ? 'border-primary/40 bg-primary/10 font-medium text-primary'
+                  : 'border-border/70 bg-muted/20 text-foreground hover:border-primary/30 hover:bg-primary/5',
+              )}
+              onClick={() => (hasChildren ? onExpand(cat) : onSelect(cat.id))}
+            >
+              {hasChildren
+                ? expanded
+                  ? <ChevronDown className="h-4 w-4 shrink-0" />
+                  : <ChevronRight className="h-4 w-4 shrink-0" />
+                : <span className="h-4 w-4 shrink-0" />}
+              <span className="truncate">{cat.name}</span>
+              {cat.status === 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">停用</span>}
+            </button>
 
-      {hasChildren && expanded && cat.children!.map(child => (
-        <TreeNode
-          key={child.id}
-          cat={child}
-          depth={depth + 1}
-          selectedId={selectedId}
-          onSelect={onSelect}
-        />
-      ))}
+            {hasChildren && expanded && (
+              <div className="ml-4 rounded-lg border border-border/60 bg-background/80 p-2">
+                <FinderCategoryAccordion
+                  nodes={cat.children!}
+                  selectedId={selectedId}
+                  expandedIds={expandedIds}
+                  onExpand={onExpand}
+                  onSelect={onSelect}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -123,6 +138,12 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
 
   const products   = finderData?.list ?? []
   const pagination = finderData?.pagination
+  const [expandedPath, setExpandedPath] = useState<number[]>([])
+  const expandedIds = useMemo(() => new Set(expandedPath), [expandedPath])
+  const breadcrumb = useMemo(() => {
+    if (categoryId == null) return []
+    return findPathToCategory(categoryTree, categoryId) ?? []
+  }, [categoryId, categoryTree])
 
   // ── 搜索防抖（300ms） ──
   function handleKeywordChange(val: string) {
@@ -231,15 +252,28 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
                 全部分类
               </div>
 
-              {categoryTree.map(cat => (
-                <TreeNode
-                  key={cat.id}
-                  cat={cat}
-                  depth={0}
-                  selectedId={categoryId}
-                  onSelect={handleCategorySelect}
-                />
-              ))}
+              {breadcrumb.length > 0 && (
+                <div className="mb-2 rounded-md border border-border/60 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+                  当前路径：{breadcrumb.map(item => item.name).join(' / ')}
+                </div>
+              )}
+
+              <FinderCategoryAccordion
+                nodes={categoryTree}
+                selectedId={categoryId}
+                expandedIds={expandedIds}
+                onExpand={(cat) => {
+                  const path = findPathToCategory(categoryTree, cat.id)?.map(item => item.id) ?? [cat.id]
+                  setExpandedPath(path)
+                }}
+                onSelect={(id) => {
+                  handleCategorySelect(id)
+                  if (id != null) {
+                    const path = findPathToCategory(categoryTree, id)?.map(item => item.id) ?? [id]
+                    setExpandedPath(path)
+                  }
+                }}
+              />
 
               {categoryTree.length === 0 && (
                 <p className="px-3 py-4 text-center text-xs text-muted-foreground">暂无分类</p>

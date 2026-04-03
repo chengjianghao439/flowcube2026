@@ -8,7 +8,7 @@
  *  - 有绑定商品时不能删除（只能停用）
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronRight, ChevronDown, Plus, Pencil, Trash2, Power, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button }  from '@/components/ui/button'
@@ -180,16 +180,29 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
 
 interface NodeProps {
   cat: Category
-  depth: number
   onAddChild:     (cat: Category) => void
   onEdit:         (cat: Category) => void
   onDelete:       (cat: Category) => void
   onToggleStatus: (cat: Category) => void
+  expandedIds: Set<number>
+  onExpand: (cat: Category) => void
 }
 
-function CategoryNode({ cat, depth, onAddChild, onEdit, onDelete, onToggleStatus }: NodeProps) {
-  const [expanded, setExpanded] = useState(true)
+function findPathToCategory(nodes: Category[], targetId: number, trail: Category[] = []): Category[] | null {
+  for (const node of nodes) {
+    const next = [...trail, node]
+    if (node.id === targetId) return next
+    if (node.children?.length) {
+      const found = findPathToCategory(node.children, targetId, next)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expandedIds, onExpand }: NodeProps) {
   const hasChildren = !!(cat.children && cat.children.length > 0)
+  const expanded = expandedIds.has(cat.id)
 
   return (
     <div>
@@ -199,14 +212,11 @@ function CategoryNode({ cat, depth, onAddChild, onEdit, onDelete, onToggleStatus
           cat.status === 0 && 'opacity-50',
         )}
       >
-        {/* 缩进占位 */}
-        {depth > 0 && <span style={{ width: depth * 20 }} className="shrink-0" />}
-
         {/* 展开/折叠按钮 */}
         <button
           type="button"
           className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
-          onClick={() => hasChildren && setExpanded(v => !v)}
+          onClick={() => hasChildren && onExpand(cat)}
           tabIndex={-1}
         >
           {hasChildren
@@ -283,14 +293,15 @@ function CategoryNode({ cat, depth, onAddChild, onEdit, onDelete, onToggleStatus
 
       {/* 子节点递归渲染 */}
       {hasChildren && expanded && cat.children!.map(child => (
-        <div key={child.id} className="mt-1">
+        <div key={child.id} className="mt-2 ml-4 rounded-lg border border-border/60 bg-background/80 p-2">
           <CategoryNode
             cat={child}
-            depth={depth + 1}
             onAddChild={onAddChild}
             onEdit={onEdit}
             onDelete={onDelete}
             onToggleStatus={onToggleStatus}
+            expandedIds={expandedIds}
+            onExpand={onExpand}
           />
         </div>
       ))}
@@ -316,6 +327,8 @@ export default function CategoriesPage() {
 
   // 停用/启用确认
   const [toggleTarget, setToggleTarget] = useState<Category | null>(null)
+  const [expandedPath, setExpandedPath] = useState<number[]>([])
+  const expandedIds = useMemo(() => new Set(expandedPath), [expandedPath])
 
   function handleAddRoot() {
     setFormMode('create')
@@ -406,11 +419,15 @@ export default function CategoriesPage() {
               <CategoryNode
                 key={cat.id}
                 cat={cat}
-                depth={0}
                 onAddChild={handleAddChild}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onToggleStatus={handleToggleStatus}
+                expandedIds={expandedIds}
+                onExpand={(target) => {
+                  const path = findPathToCategory(tree, target.id)?.map(item => item.id) ?? [target.id]
+                  setExpandedPath(path)
+                }}
               />
             ))}
           </div>

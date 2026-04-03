@@ -18,14 +18,6 @@ interface CategoryTreeSelectProps {
   disabled?: boolean
 }
 
-interface TreeNodeProps {
-  cat: Category
-  depth: number
-  selectedId: number | null
-  onSelect: (id: number) => void
-  leafOnly: boolean
-}
-
 function flattenTree(nodes: Category[], map = new Map<number, Category>()) {
   for (const node of nodes) {
     map.set(node.id, node)
@@ -34,53 +26,77 @@ function flattenTree(nodes: Category[], map = new Map<number, Category>()) {
   return map
 }
 
-function TreeNode({ cat, depth, selectedId, onSelect, leafOnly }: TreeNodeProps) {
-  const hasChildren = !!cat.children?.length
-  const [expanded, setExpanded] = useState(depth < 1)
-  const selectable = !leafOnly || !hasChildren
-  const selected = selectedId === cat.id
+function findPathToCategory(nodes: Category[], targetId: number, trail: Category[] = []): Category[] | null {
+  for (const node of nodes) {
+    const next = [...trail, node]
+    if (node.id === targetId) return next
+    if (node.children?.length) {
+      const found = findPathToCategory(node.children, targetId, next)
+      if (found) return found
+    }
+  }
+  return null
+}
 
+function CategoryAccordionLevel({
+  nodes,
+  selectedId,
+  expandedIds,
+  onExpand,
+  onSelect,
+  leafOnly,
+}: {
+  nodes: Category[]
+  selectedId: number | null
+  expandedIds: Set<number>
+  onExpand: (cat: Category) => void
+  onSelect: (cat: Category) => void
+  leafOnly: boolean
+}) {
   return (
-    <div>
-      <div
-        className={cn(
-          'flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-sm transition-colors',
-          selectable ? 'cursor-pointer border-border/70 bg-muted/20 hover:border-primary/30 hover:bg-primary/5' : 'cursor-default border-border/50 bg-muted/10',
-          selected && 'border-primary/40 bg-primary/10 text-primary',
-          !selectable && 'text-muted-foreground',
-        )}
-        style={{ paddingLeft: depth * 14 + 8 }}
-        onClick={() => selectable && onSelect(cat.id)}
-      >
-        <button
-          type="button"
-          tabIndex={-1}
-          className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
-          onClick={e => {
-            e.stopPropagation()
-            if (hasChildren) setExpanded(v => !v)
-          }}
-        >
-          {hasChildren
-            ? expanded
-              ? <ChevronDown className="h-3.5 w-3.5" />
-              : <ChevronRight className="h-3.5 w-3.5" />
-            : <span className="h-3.5 w-3.5" />}
-        </button>
-        <span className={cn('truncate', selected && 'font-medium')}>{cat.name}</span>
-        {cat.status === 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">停用</span>}
-      </div>
+    <div className="space-y-2">
+      {nodes.map(cat => {
+        const hasChildren = !!cat.children?.length
+        const selectable = !leafOnly || !hasChildren
+        const selected = selectedId === cat.id
+        const expanded = expandedIds.has(cat.id)
+        return (
+          <div key={cat.id} className="space-y-2">
+            <button
+              type="button"
+              className={cn(
+                'flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+                selected
+                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  : 'border-border/70 bg-muted/20 text-foreground hover:border-primary/30 hover:bg-primary/5',
+                !selectable && 'text-muted-foreground',
+              )}
+              onClick={() => (hasChildren ? onExpand(cat) : selectable && onSelect(cat))}
+            >
+              {hasChildren
+                ? expanded
+                  ? <ChevronDown className="h-4 w-4 shrink-0" />
+                  : <ChevronRight className="h-4 w-4 shrink-0" />
+                : <span className="h-4 w-4 shrink-0" />}
+              <span className={cn('truncate', selected && 'font-medium')}>{cat.name}</span>
+              {cat.status === 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">停用</span>}
+            </button>
 
-      {hasChildren && expanded && cat.children!.map(child => (
-        <TreeNode
-          key={child.id}
-          cat={child}
-          depth={depth + 1}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          leafOnly={leafOnly}
-        />
-      ))}
+            {hasChildren && expanded && (
+              <div className="ml-4 rounded-lg border border-border/60 bg-background/80 p-2">
+                <CategoryAccordionLevel
+                  nodes={cat.children!}
+                  selectedId={selectedId}
+                  expandedIds={expandedIds}
+                  onExpand={onExpand}
+                  onSelect={onSelect}
+                  leafOnly={leafOnly}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -101,6 +117,14 @@ export default function CategoryTreeSelect({
 
   const categoryMap = useMemo(() => flattenTree(categoryTree), [categoryTree])
   const selected = value == null ? null : categoryMap.get(value) ?? null
+  const [expandedPath, setExpandedPath] = useState<number[]>([])
+
+  const expandedIds = useMemo(() => new Set(expandedPath), [expandedPath])
+
+  const breadcrumb = useMemo(() => {
+    if (value == null) return []
+    return findPathToCategory(categoryTree, value) ?? []
+  }, [categoryTree, value])
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -139,23 +163,32 @@ export default function CategoryTreeSelect({
           </button>
         )}
 
+        {breadcrumb.length > 0 && (
+          <div className="mb-2 rounded-md border border-border/60 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+            当前路径：{breadcrumb.map(item => item.name).join(' / ')}
+          </div>
+        )}
+
         <div className="max-h-80 overflow-y-auto">
           {categoryTree.length === 0 ? (
             <p className="px-3 py-4 text-center text-xs text-muted-foreground">暂无分类</p>
           ) : (
-            categoryTree.map(cat => (
-              <TreeNode
-                key={cat.id}
-                cat={cat}
-                depth={0}
-                selectedId={value}
-                leafOnly={leafOnly}
-                onSelect={(id) => {
-                  onChange(id)
-                  setOpen(false)
-                }}
-              />
-            ))
+            <CategoryAccordionLevel
+              nodes={categoryTree}
+              selectedId={value}
+              leafOnly={leafOnly}
+              expandedIds={expandedIds}
+              onExpand={(cat) => {
+                const path = findPathToCategory(categoryTree, cat.id)?.map(item => item.id) ?? [cat.id]
+                setExpandedPath(path)
+              }}
+              onSelect={(cat) => {
+                onChange(cat.id)
+                const path = findPathToCategory(categoryTree, cat.id)?.map(item => item.id) ?? [cat.id]
+                setExpandedPath(path)
+                setOpen(false)
+              }}
+            />
           )}
         </div>
       </DropdownMenuContent>
