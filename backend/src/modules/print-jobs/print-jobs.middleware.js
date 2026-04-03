@@ -5,7 +5,7 @@ const { getTenantId } = require('../../utils/tenantScope')
 const SAFE_PRINTER_CODE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,49}$/
 
 /** 工作站 ID：与 printers.client_id 一致（complete/fail 头校验） */
-const SAFE_STATION_CLIENT_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/
+const SAFE_STATION_CLIENT_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/
 
 /** complete / fail：X-Client-Id（工作站）或 X-Printer-Code 与任务目标打印机一致 */
 async function validateJobPrinterHeader(req, res, next) {
