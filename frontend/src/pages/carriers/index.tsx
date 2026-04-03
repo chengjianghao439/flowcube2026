@@ -69,7 +69,7 @@ export default function CarriersPage() {
 
   const columns: TableColumn<Carrier>[] = [
     { key: 'code',     title: '编号', width: 120,
-      render: v => <span className="font-mono text-xs">{v as string}</span> },
+      render: v => <span className="text-doc-code">{v as string}</span> },
     { key: 'name',     title: '名称' },
     { key: 'type',     title: '类型', width: 80,
       render: v => CARRIER_TYPE_LABELS[v as CarrierType] },

@@ -107,7 +107,7 @@ export default function SalePage() {
 
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
-    { key: 'orderNo',      title: '销售单号', width: 160 },
+    { key: 'orderNo',      title: '销售单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'customerName', title: '客户' },
     { key: 'warehouseName',title: '仓库',     width: 120 },
     {
@@ -124,7 +124,7 @@ export default function SalePage() {
             {r.taskNo && (
               <button
                 onClick={() => navigate('/warehouse-tasks')}
-                className="rounded-full border border-primary/20 bg-primary/5 px-1.5 py-0.5 font-mono text-[10px] text-primary transition-colors hover:bg-primary/10"
+                className="rounded-full border border-primary/20 bg-primary/5 px-1.5 py-0.5 text-doc-code text-primary transition-colors hover:bg-primary/10"
               >
                 {r.taskNo}
               </button>

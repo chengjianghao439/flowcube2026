@@ -103,11 +103,11 @@ export default function InboundTaskDetailPage() {
   }
 
   if (!validId) {
-    return <p className="text-sm text-muted-foreground p-6">无效的任务路径</p>
+    return <p className="p-6 text-muted-body">无效的任务路径</p>
   }
 
   if (isLoading || !task) {
-    return <p className="text-sm text-muted-foreground p-6">加载中…</p>
+    return <p className="p-6 text-muted-body">加载中…</p>
   }
 
   const canReceive = task.status === 1 || task.status === 2
@@ -125,7 +125,7 @@ export default function InboundTaskDetailPage() {
         description={
           <span className="flex flex-wrap items-center gap-2">
             <Badge variant={INBOUND_STATUS_VARIANT[task.status]}>{INBOUND_STATUS_LABEL[task.status]}</Badge>
-            <span className="text-muted-foreground">采购单 {task.purchaseOrderNo ?? '—'}</span>
+            <span className="text-muted-foreground">采购单 <span className="text-doc-code">{task.purchaseOrderNo ?? '—'}</span></span>
           </span>
         }
         actions={
@@ -147,7 +147,7 @@ export default function InboundTaskDetailPage() {
 
       <Section title="任务明细（应到 / 已收 / 已上架）">
         {canReceive && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-xs text-muted-foreground space-y-1.5">
+          <div className="space-y-1.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-helper">
             <p className="font-medium text-foreground">电脑端适合补录单箱收货，批量多箱建议在 PDA 收货。</p>
             <p>电脑端每次只补录 1 箱，提交后会生成 1 个库存条码并加入打印队列。</p>
           </div>
@@ -155,7 +155,7 @@ export default function InboundTaskDetailPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-xs text-muted-foreground">
+              <tr className="border-b text-table-head">
                 <th className="text-left py-2">商品</th>
                 <th className="text-right py-2 w-24">应到</th>
                 <th className="text-right py-2 w-24">已收</th>
@@ -172,7 +172,7 @@ export default function InboundTaskDetailPage() {
                   <tr key={it.id}>
                     <td className="py-2">
                       <div className="font-medium">{it.productName}</div>
-                      <div className="text-xs font-mono text-muted-foreground">{it.productCode}</div>
+                      <div className="text-doc-code-muted">{it.productCode}</div>
                     </td>
                     <td className="text-right">{it.orderedQty}</td>
                     <td className="text-right">{it.receivedQty}</td>
@@ -215,30 +215,30 @@ export default function InboundTaskDetailPage() {
         <Section title="待上架库存">
           <div className="grid gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-border bg-card px-4 py-3">
-              <p className="text-xs text-muted-foreground">待上架箱数</p>
+              <p className="text-helper">待上架箱数</p>
               <p className="mt-1 text-2xl font-bold">{waitingCount}</p>
-              <p className="text-xs text-muted-foreground mt-1">合计数量 {totalWaitingQty}</p>
+              <p className="mt-1 text-helper">合计数量 {totalWaitingQty}</p>
             </div>
             <div className="rounded-xl border border-border bg-card px-4 py-3">
-              <p className="text-xs text-muted-foreground">已上架箱数</p>
+              <p className="text-helper">已上架箱数</p>
               <p className="mt-1 text-2xl font-bold">{storedCount}</p>
-              <p className="text-xs text-muted-foreground mt-1">合计数量 {totalStoredQty}</p>
+              <p className="mt-1 text-helper">合计数量 {totalStoredQty}</p>
             </div>
           </div>
           <div className="rounded-lg border border-sky-500/35 bg-sky-500/[0.08] px-4 py-3 text-sm space-y-1.5">
             <p className="font-medium text-sky-950 dark:text-sky-100">请使用 PDA 扫码完成上架</p>
-            <p className="text-muted-foreground">
+            <p className="text-muted-body">
               在 PDA「扫码上架」进入本任务，依次扫描库存条码（I）与货架条码（R）。如果库存条码丢失或打印残缺，可去「条码打印查询」补打。
             </p>
           </div>
 
           {!containers?.waiting?.length ? (
-            <p className="text-sm text-muted-foreground pt-1">暂无待上架库存</p>
+            <p className="pt-1 text-muted-body">暂无待上架库存</p>
           ) : (
             <div className="overflow-x-auto pt-2">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
+                  <tr className="border-b text-table-head">
                     <th className="text-left py-2 pr-2">库存条码</th>
                     <th className="text-left py-2">商品</th>
                     <th className="text-right py-2 w-24">数量</th>
@@ -247,11 +247,11 @@ export default function InboundTaskDetailPage() {
                 <tbody className="divide-y">
                   {containers.waiting.map((c: InboundContainerRow) => (
                     <tr key={c.id}>
-                      <td className="py-2.5 font-mono text-xs whitespace-nowrap">{c.barcode}</td>
+                      <td className="py-2.5 whitespace-nowrap"><span className="text-doc-code">{c.barcode}</span></td>
                       <td className="py-2.5">
                         <span className="font-medium">{c.productName ?? '—'}</span>
                         {c.productCode && (
-                          <span className="block text-xs text-muted-foreground font-mono">{c.productCode}</span>
+                          <span className="block text-doc-code-muted">{c.productCode}</span>
                         )}
                       </td>
                       <td className="py-2.5 text-right tabular-nums">
@@ -268,12 +268,12 @@ export default function InboundTaskDetailPage() {
 
       <Section title="容器：已上架">
         {!containers?.stored?.length ? (
-          <p className="text-sm text-muted-foreground">暂无</p>
+          <p className="text-muted-body">暂无</p>
         ) : (
           <ul className="text-sm space-y-2">
             {containers.stored.map(c => (
               <li key={c.id} className="flex flex-wrap justify-between gap-2 border rounded-lg px-3 py-2">
-                <span className="font-mono">{c.barcode}</span>
+                <span className="text-doc-code">{c.barcode}</span>
                 <span>{c.productName} × {c.qty}</span>
                 <span className="text-muted-foreground">{c.locationCode ?? '—'}</span>
               </li>

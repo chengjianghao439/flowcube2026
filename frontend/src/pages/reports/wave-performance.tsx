@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getWavePerformanceApi } from '@/api/reports'
+import PageHeader from '@/components/shared/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,11 +30,11 @@ function SummaryCard({ label, value, sub, accent = false }: {
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-table-head">{label}</p>
       <p className={`mt-2 text-3xl font-bold tabular-nums ${
         accent ? 'text-primary' : 'text-foreground'
       }`}>{value}</p>
-      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+      {sub && <p className="mt-1 text-helper">{sub}</p>}
     </div>
   )
 }
@@ -101,16 +102,16 @@ export default function WavePerformancePage() {
   return (
     <div className="space-y-6">
       {/* 页面标题 */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">波次效率报表</h1>
-        <p className="text-sm text-muted-foreground mt-1">波次拣货时长、SKU 分布、拣货效率分析（近 30 天）</p>
-      </div>
+      <PageHeader
+        title="波次效率报表"
+        description="波次拣货时长、SKU 分布与拣货效率分析，统一桌面端页头与字号。"
+      />
 
       {/* 过滤器 */}
       <div className="flex gap-2 items-center flex-wrap">
-        <span className="text-sm text-muted-foreground">创建日期：</span>
+        <span className="text-muted-body">创建日期：</span>
         <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40" />
-        <span className="text-sm text-muted-foreground">至</span>
+        <span className="text-muted-body">至</span>
         <Input type="date" value={endDate}   onChange={e => setEndDate(e.target.value)}   className="w-40" />
         <Button onClick={apply}>查询</Button>
         <Button variant="outline" onClick={reset}>重置</Button>
@@ -150,7 +151,7 @@ export default function WavePerformancePage() {
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h2 className="font-semibold text-foreground">波次明细</h2>
-          <span className="text-xs text-muted-foreground">点击列标题排序</span>
+          <span className="text-helper">点击列标题排序</span>
         </div>
 
         {isLoading && (
@@ -160,30 +161,30 @@ export default function WavePerformancePage() {
         )}
 
         {!isLoading && waves.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground py-12">暂无波次数据</p>
+          <p className="text-center text-muted-body py-12">暂无波次数据</p>
         )}
 
         {waves.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-xs">
-                  <th className="pb-3 px-5 text-left text-muted-foreground">波次号</th>
-                  <th className="pb-3 text-left text-muted-foreground">状态</th>
-                  <th className="pb-3 text-left text-muted-foreground">操作员</th>
+                <tr className="border-b border-border text-table-head">
+                  <th className="pb-3 px-5 text-left">波次号</th>
+                  <th className="pb-3 text-left">状态</th>
+                  <th className="pb-3 text-left">操作员</th>
                   <SortTh field="taskCount">任务数</SortTh>
                   <SortTh field="skuCount">SKU</SortTh>
                   <SortTh field="totalPickedQty">拣货量</SortTh>
                   <SortTh field="durationMinutes">时长</SortTh>
-                  <th className="pb-3 pr-5 text-right text-muted-foreground">拣货效率</th>
+                  <th className="pb-3 pr-5 text-right">拣货效率</th>
                 </tr>
               </thead>
               <tbody>
                 {waves.map(w => (
                   <tr key={w.id} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="py-3 px-5">
-                      <p className="font-mono font-semibold text-foreground">{w.waveNo}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(w.createdAt).toLocaleDateString('zh-CN')}</p>
+                      <p className="text-doc-code-strong">{w.waveNo}</p>
+                      <p className="text-helper">{new Date(w.createdAt).toLocaleDateString('zh-CN')}</p>
                     </td>
                     <td className="py-3">
                       <Badge className={`${STATUS_COLOR[w.status]} text-xs border-0`}>{w.statusName}</Badge>

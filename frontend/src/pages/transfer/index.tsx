@@ -63,7 +63,7 @@ export default function TransferPage() {
   }
 
   const columns:TableColumn<TransferOrder>[]=[
-    {key:'orderNo',title:'调拨单号',width:170},
+    {key:'orderNo',title:'调拨单号',width:170,render:(v)=><span className="text-doc-code">{String(v)}</span>},
     {key:'fromWarehouseName',title:'源仓库',width:130},
     {key:'toWarehouseName',title:'目标仓库',width:130},
     {key:'status',title:'状态',width:90,render:(v,row)=><Badge variant={SC[v as number]}>{(row as TransferOrder).statusName}</Badge>},

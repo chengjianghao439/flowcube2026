@@ -75,7 +75,7 @@ export default function DataTable<T extends object>({
               {columns.map((col) => (
                 <th
                   key={String(col.key)}
-                  className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground ${
+                  className={`px-4 py-3 text-left text-table-head ${
                     isAction(String(col.key), col.title)
                       ? 'sticky right-0 z-20 min-w-[200px] bg-muted/30 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
                       : ''
@@ -156,7 +156,7 @@ export default function DataTable<T extends object>({
 
       {pagination && totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-border bg-muted/20 px-4 py-3">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-helper">
             共 <span className="font-medium text-foreground">{pagination.total}</span> 条 · 第 {pagination.page} / {totalPages} 页
           </p>
           <div className="flex gap-1.5">

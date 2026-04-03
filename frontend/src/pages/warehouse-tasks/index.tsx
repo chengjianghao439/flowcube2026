@@ -78,8 +78,8 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
         {task && !loading && (
           <div className="space-y-5 py-2">
             <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/40 p-4 text-sm">
-              <div><span className="text-muted-foreground">任务编号：</span><span className="font-mono font-semibold">{task.taskNo}</span></div>
-              <div><span className="text-muted-foreground">关联销售单：</span><span className="font-mono">{task.saleOrderNo}</span></div>
+              <div><span className="text-muted-foreground">任务编号：</span><span className="text-doc-code-strong">{task.taskNo}</span></div>
+              <div><span className="text-muted-foreground">关联销售单：</span><span className="text-doc-code">{task.saleOrderNo}</span></div>
               <div><span className="text-muted-foreground">客户：</span>{task.customerName}</div>
               <div><span className="text-muted-foreground">仓库：</span>{task.warehouseName}</div>
               <div><span className="text-muted-foreground">创建时间：</span>{task.createdAt?.slice(0, 16)}</div>
@@ -229,8 +229,8 @@ export default function WarehouseTasksPage() {
         </Select>
       )
     }},
-    { key: 'taskNo', title: '任务编号', width: 160 },
-    { key: 'saleOrderNo', title: '销售单', width: 160, render: v => <span className="font-mono text-xs">{String(v)}</span> },
+    { key: 'taskNo', title: '任务编号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'saleOrderNo', title: '销售单', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'customerName', title: '客户' },
     { key: 'warehouseName', title: '仓库', width: 100 },
     { key: 'status', title: '状态', width: 110, render: v => <StatusBadge type="task" status={v as number} /> },

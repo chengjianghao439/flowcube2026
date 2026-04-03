@@ -48,9 +48,9 @@ function detectActionTarget(issue: Pick<SystemHealthIssue, 'checkType' | 'relate
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <div className="rounded-2xl border border-border bg-card px-4 py-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-helper">{label}</p>
       <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p className="mt-1 text-helper">{hint}</p>}
     </div>
   )
 }
@@ -158,8 +158,8 @@ export default function ExceptionWorkbenchPage() {
         <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">最新巡检结果</h2>
-              <p className="text-sm text-muted-foreground">这里优先展示本次巡检发现的问题，并给出处理入口。</p>
+              <h2 className="text-card-title">最新巡检结果</h2>
+              <p className="text-muted-body">这里优先展示本次巡检发现的问题，并给出处理入口。</p>
             </div>
             {latestRun && (
               <Badge variant={latestRun.healthy ? 'outline' : latestRun.hasHigh ? 'destructive' : 'secondary'}>
@@ -169,7 +169,7 @@ export default function ExceptionWorkbenchPage() {
           </div>
 
           {latestIssues.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border py-12 text-center text-muted-body">
               {runHealthMut.isPending ? '正在执行巡检…' : '暂无最新巡检结果，或最近一次巡检未发现异常'}
             </div>
           ) : (
@@ -182,7 +182,7 @@ export default function ExceptionWorkbenchPage() {
                       {severityBadge(issue.severity)}
                       <span className="font-medium text-foreground">{issue.checkType}</span>
                       {issue.relatedTable && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-helper">
                           {issue.relatedTable}{issue.relatedId ? ` #${issue.relatedId}` : ''}
                         </span>
                       )}
@@ -205,8 +205,8 @@ export default function ExceptionWorkbenchPage() {
 
         <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
           <div>
-            <h2 className="text-lg font-semibold">自动修复范围</h2>
-            <p className="text-sm text-muted-foreground">当前系统只会自动修复孤立资源类问题，不会直接改业务结果。</p>
+            <h2 className="text-card-title">自动修复范围</h2>
+            <p className="text-muted-body">当前系统只会自动修复孤立资源类问题，不会直接改业务结果。</p>
           </div>
           <div className="space-y-3">
             {(autoFixTypesQ.data ?? []).map(item => (
@@ -217,7 +217,7 @@ export default function ExceptionWorkbenchPage() {
                     风险 {item.risk}
                   </Badge>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+                <p className="mt-1 text-muted-body">{item.description}</p>
               </div>
             ))}
           </div>
@@ -227,8 +227,8 @@ export default function ExceptionWorkbenchPage() {
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
           <div>
-            <h2 className="text-lg font-semibold">最近巡检批次</h2>
-            <p className="text-sm text-muted-foreground">方便判断异常是新出现还是长期遗留。</p>
+            <h2 className="text-card-title">最近巡检批次</h2>
+            <p className="text-muted-body">方便判断异常是新出现还是长期遗留。</p>
           </div>
           <div className="space-y-3">
             {(runsQ.data ?? []).map(run => (
@@ -238,9 +238,9 @@ export default function ExceptionWorkbenchPage() {
                     {run.totalIssues === 0 ? '正常' : `${run.totalIssues} 项`}
                   </Badge>
                   <span className="font-medium text-foreground">{new Date(run.checkedAt).toLocaleString('zh-CN', { hour12: false })}</span>
-                  <span className="text-xs text-muted-foreground">来源：{run.triggeredBy}</span>
+                  <span className="text-helper">来源：{run.triggeredBy}</span>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-muted-body">
                   高 {run.severity.high} / 中 {run.severity.medium} / 低 {run.severity.low}，耗时 {run.elapsedMs}ms
                 </p>
               </div>
@@ -251,8 +251,8 @@ export default function ExceptionWorkbenchPage() {
         <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">最近异常日志</h2>
-              <p className="text-sm text-muted-foreground">包含巡检发现与自动修复记录，可直接跳到处理页。</p>
+              <h2 className="text-card-title">最近异常日志</h2>
+              <p className="text-muted-body">包含巡检发现与自动修复记录，可直接跳到处理页。</p>
             </div>
             <Button size="sm" variant="outline" onClick={() => openPath('/settings/barcode-print-query', '条码打印查询')}>
               打开补打查询
@@ -266,7 +266,7 @@ export default function ExceptionWorkbenchPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     {severityBadge(log.severity)}
                     <span className="font-medium text-foreground">{log.check_type}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-helper">
                       {new Date(log.created_at).toLocaleString('zh-CN', { hour12: false })}
                     </span>
                   </div>

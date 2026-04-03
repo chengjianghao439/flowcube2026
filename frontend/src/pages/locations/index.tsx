@@ -78,7 +78,7 @@ export default function LocationsPage() {
 
   const columns: TableColumn<Location>[] = [
     { key: 'code',          title: '库位编号', width: 120,
-      render: v => <span className="font-mono font-bold">{v as string}</span> },
+      render: v => <span className="text-doc-code-strong">{v as string}</span> },
     { key: 'warehouseName', title: '仓库',
       render: v => v ?? <span className="text-muted-foreground">—</span> },
     { key: 'zone',    title: '区域', render: v => v ?? <span className="text-muted-foreground">—</span> },

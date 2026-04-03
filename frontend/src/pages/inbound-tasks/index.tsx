@@ -225,8 +225,8 @@ function CreateInboundDialog({
                             key={item.purchaseItemId}
                             className="grid grid-cols-[140px_110px_minmax(220px,1fr)_120px_90px_90px_120px] gap-3 px-4 py-3 text-sm"
                           >
-                            <div className="font-mono text-xs text-foreground">{item.purchaseOrderNo}</div>
-                            <div className="font-mono text-xs text-foreground">{item.productCode}</div>
+                            <div className="text-doc-code">{item.purchaseOrderNo}</div>
+                            <div className="text-doc-code">{item.productCode}</div>
                             <div className="min-w-0">
                               <div className="truncate font-medium text-foreground">{item.productName}</div>
                               <div className="text-xs text-muted-foreground">{item.unit ?? '—'}</div>
@@ -311,13 +311,13 @@ export default function InboundTasksPage() {
       key: 'taskNo',
       title: '任务单号',
       width: 160,
-      render: v => <span className="font-mono text-xs">{v as string}</span>,
+      render: v => <span className="text-doc-code">{v as string}</span>,
     },
     {
       key: 'purchaseOrderNo',
       title: '关联采购',
       width: 160,
-      render: v => v ? <span className="text-xs">{v as string}</span> : <span className="text-muted-foreground">混合采购</span>,
+      render: v => v ? <span className="text-doc-code">{v as string}</span> : <span className="text-muted-foreground">混合采购</span>,
     },
     {
       key: 'supplierName',

@@ -235,8 +235,8 @@ export default function InventoryOverviewPage() {
                       drawerItem?.id === row.id && drawerOpen ? 'bg-primary/5' : ''
                     }`}
                   >
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                      {row.productCode}
+                    <td className="px-4 py-3">
+                      <span className="text-doc-code-muted">{row.productCode}</span>
                     </td>
                     <td className="px-4 py-3 font-medium">{row.productName}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">

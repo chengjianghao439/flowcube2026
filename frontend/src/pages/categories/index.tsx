@@ -221,7 +221,7 @@ function CategoryNode({ cat, depth, onAddChild, onEdit, onDelete, onToggleStatus
 
         {/* 分类编码 */}
         {cat.code && (
-          <span className="shrink-0 font-mono text-xs text-muted-foreground">{cat.code}</span>
+          <span className="shrink-0 text-doc-code-muted">{cat.code}</span>
         )}
 
         {/* 分类名称 */}

@@ -77,7 +77,7 @@ export function KanbanBoard({ tasks, onDetail }: KanbanBoardProps) {
                     <div className="flex flex-1 flex-col gap-2 p-3">
                       {/* 头部：任务号 + 优先级标签 */}
                       <div className="flex items-start justify-between gap-1">
-                        <span className="font-mono text-xs font-semibold text-foreground leading-tight">
+                        <span className="text-doc-code-strong leading-tight">
                           {task.taskNo}
                         </span>
                         <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
@@ -94,7 +94,7 @@ export function KanbanBoard({ tasks, onDetail }: KanbanBoardProps) {
                       {/* 客户 & 销售单 */}
                       <div className="space-y-0.5">
                         <p className="text-xs font-medium text-foreground truncate">{task.customerName}</p>
-                        <p className="font-mono text-[10px] text-muted-foreground">{task.saleOrderNo}</p>
+                        <p className="text-doc-code-muted">{task.saleOrderNo}</p>
                       </div>
 
                       {/* 状态 badge */}

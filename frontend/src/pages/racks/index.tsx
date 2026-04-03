@@ -132,7 +132,7 @@ export default function RacksPage() {
       title: '货架条码',
       width: 120,
       render: (v) =>
-        v ? <span className="font-mono font-semibold">{v as string}</span> : <span className="text-muted-foreground">—</span>,
+        v ? <span className="text-doc-code-strong">{v as string}</span> : <span className="text-muted-foreground">—</span>,
     },
     { key: 'code', title: '编码', width: 100 },
     { key: 'zone', title: '库区', width: 72, render: v => (v as string) || '—' },

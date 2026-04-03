@@ -4,6 +4,8 @@
  */
 import { useContext } from 'react'
 import { TabPathContext } from '@/components/layout/TabPathContext'
+import PageHeader from '@/components/shared/PageHeader'
+import { Button } from '@/components/ui/button'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 
 export default function PrintTemplateEditorPage() {
@@ -18,18 +20,11 @@ export default function PrintTemplateEditorPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">{isNew ? '新建打印模板' : `编辑打印模板 #${id}`}</h1>
-          <p className="text-sm text-muted-foreground mt-1">配置打印模板内容与格式</p>
-        </div>
-        <button
-          onClick={closeTab}
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
-          关闭
-        </button>
-      </div>
+      <PageHeader
+        title={isNew ? '新建打印模板' : `编辑打印模板 #${id}`}
+        description="打印模板编辑器入口页，保持与桌面端其他设置页一致的标题和操作区。"
+        actions={<Button size="sm" variant="outline" onClick={closeTab}>关闭页面</Button>}
+      />
       <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
         打印模板编辑器功能开发中...
       </div>

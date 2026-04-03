@@ -161,12 +161,12 @@ export default function SortingBinsPage() {
 
   const columns: TableColumn<SortingBin>[] = [
     { key: 'code',          title: '分拣格编号', width: 120,
-      render: (v) => <span className="font-mono font-bold">{v as string}</span> },
+      render: (v) => <span className="text-doc-code-strong">{v as string}</span> },
     { key: 'warehouseName', title: '仓库' },
     { key: 'status',        title: '状态', width: 80,
       render: (v) => <Badge variant={STATUS_VARIANT[v as number]}>{STATUS_LABEL[v as number]}</Badge> },
     { key: 'currentTaskNo', title: '当前任务',
-      render: (v) => v ? <span className="font-mono text-xs">{v as string}</span> : <span className="text-muted-foreground">—</span> },
+      render: (v) => v ? <span className="text-doc-code">{v as string}</span> : <span className="text-muted-foreground">—</span> },
     { key: 'customerName',  title: '客户',
       render: (v) => v ?? <span className="text-muted-foreground">—</span> },
     { key: 'remark',        title: '备注',

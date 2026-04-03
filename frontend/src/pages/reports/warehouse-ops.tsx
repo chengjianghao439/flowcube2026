@@ -6,6 +6,8 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { getWarehouseOpsApi } from '@/api/reports'
+import PageHeader from '@/components/shared/PageHeader'
+import { Button } from '@/components/ui/button'
 import type { OpsOperator, FlowBottleneck } from '@/api/reports'
 
 // ── 数字卡片 ────────────────────────────────────────────────────────────────
@@ -16,10 +18,10 @@ function KpiCard({ icon, label, value, sub, danger }: {
     <div className={`rounded-xl border p-4 ${danger ? 'border-red-200 bg-red-50' : 'border-border bg-card'}`}>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-xl">{icon}</span>
-        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-helper">{label}</p>
       </div>
       <p className={`text-3xl font-bold tabular-nums ${danger ? 'text-red-600' : 'text-foreground'}`}>{value}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+      {sub && <p className="text-helper mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -33,7 +35,7 @@ function MiniBar({ data, color = 'bg-primary' }: {
     <div className="space-y-1.5">
       {data.map(d => (
         <div key={d.label} className="flex items-center gap-2">
-          <p className="w-20 shrink-0 text-xs text-muted-foreground truncate">{d.label}</p>
+          <p className="w-20 shrink-0 text-helper truncate">{d.label}</p>
           <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
             <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.max(2, (d.value / max) * 100)}%` }} />
           </div>
@@ -77,7 +79,7 @@ function FlowBar({ items }: { items: FlowBottleneck[] }) {
     <div className="space-y-2">
       {items.map(item => (
         <div key={item.status} className="flex items-center gap-3">
-          <p className="w-16 shrink-0 text-xs text-muted-foreground">{item.label}</p>
+          <p className="w-16 shrink-0 text-helper">{item.label}</p>
           <div className="flex-1 h-3 rounded-full bg-muted overflow-hidden">
             <div
               className={`h-full rounded-full transition-all ${FLOW_COLOR[item.status]}`}
@@ -107,16 +109,15 @@ export default function WarehouseOpsPage() {
   return (
     <div className="space-y-6">
       {/* 标题栏 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">仓库运营看板</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">实时数据 · 每分钟自动刷新 · 更新于 {updatedTime}</p>
-        </div>
-        <button onClick={() => refetch()}
-          className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors">
-          ↻ 立即刷新
-        </button>
-      </div>
+      <PageHeader
+        title="仓库运营看板"
+        description={`实时数据 · 每分钟自动刷新 · 更新于 ${updatedTime}`}
+        actions={(
+          <Button size="sm" variant="outline" onClick={() => refetch()}>
+            立即刷新
+          </Button>
+        )}
+      />
 
       {isLoading && <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}
 
@@ -137,8 +138,8 @@ export default function WarehouseOpsPage() {
           {/* 流程瓶颈 */}
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold">流程瓶颈分析</p>
-              <p className="text-xs text-muted-foreground">各步骤任务堆积量</p>
+              <p className="text-card-title">流程瓶颈分析</p>
+              <p className="text-helper">各步骤任务堆积量</p>
             </div>
             <FlowBar items={data.flowBottleneck} />
           </div>
@@ -146,8 +147,8 @@ export default function WarehouseOpsPage() {
           {/* 每小时趋势 */}
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold">今日作业趋势</p>
-              <p className="text-xs text-muted-foreground">每小时扫码量</p>
+              <p className="text-card-title">今日作业趋势</p>
+              <p className="text-helper">每小时扫码量</p>
             </div>
             <HourlyChart data={data.hourlyTrend} />
             <div className="flex justify-between mt-1">
@@ -159,9 +160,9 @@ export default function WarehouseOpsPage() {
 
           {/* 人员效率 */}
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-3">今日人员效率</p>
+            <p className="text-card-title mb-3">今日人员效率</p>
             {data.operators.length === 0
-              ? <p className="text-sm text-muted-foreground text-center py-4">暂无今日数据</p>
+              ? <p className="text-muted-body text-center py-4">暂无今日数据</p>
               : (
                 <div className="space-y-3">
                   {data.operators.map((op: OpsOperator) => (
@@ -172,7 +173,7 @@ export default function WarehouseOpsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-medium text-foreground truncate">{op.operatorName}</p>
-                          <p className="text-xs text-muted-foreground shrink-0">{op.pickQty} 件</p>
+                          <p className="text-helper shrink-0">{op.pickQty} 件</p>
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[10px] text-muted-foreground">扫码 {op.scanCount}</span>
@@ -193,9 +194,9 @@ export default function WarehouseOpsPage() {
 
           {/* 最新错误 */}
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-3">最新异常记录</p>
+            <p className="text-card-title mb-3">最新异常记录</p>
             {data.recentErrors.length === 0
-              ? <p className="text-sm text-muted-foreground text-center py-4">暂无异常记录 ✓</p>
+              ? <p className="text-muted-body text-center py-4">暂无异常记录 ✓</p>
               : (
                 <div className="space-y-2">
                   {data.recentErrors.slice(0, 6).map(e => (

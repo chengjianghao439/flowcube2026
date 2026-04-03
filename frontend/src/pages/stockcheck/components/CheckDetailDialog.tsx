@@ -60,7 +60,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
         {check && (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4 text-sm">
-              <div><span className="text-muted-foreground">盘点单号：</span>{check.checkNo}</div>
+              <div><span className="text-muted-foreground">盘点单号：</span><span className="text-doc-code-strong">{check.checkNo}</span></div>
               <div><span className="text-muted-foreground">仓库：</span>{check.warehouseName}</div>
               <div><span className="text-muted-foreground">经办人：</span>{check.operatorName}</div>
               {check.remark && <div className="col-span-3"><span className="text-muted-foreground">备注：</span>{check.remark}</div>}

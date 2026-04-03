@@ -97,9 +97,15 @@
   /* 排版工具类 */
   .text-page-title    { @apply text-2xl font-semibold tracking-tight text-foreground; }
   .text-section-title { @apply text-base font-medium text-foreground; }
+  .text-card-title    { @apply text-base font-semibold text-foreground; }
+  .text-table-head    { @apply text-xs font-medium uppercase tracking-wide text-muted-foreground; }
   .text-label         { @apply text-sm font-medium text-foreground; }
   .text-body          { @apply text-sm text-foreground; }
   .text-muted-body    { @apply text-sm text-muted-foreground; }
+  .text-helper        { @apply text-xs text-muted-foreground; }
+  .text-doc-code      { @apply font-mono text-xs text-foreground; }
+  .text-doc-code-strong { @apply font-mono text-sm font-semibold text-foreground; }
+  .text-doc-code-muted  { @apply font-mono text-xs text-muted-foreground; }
 
   /* 语义色工具类 */
   .text-success  { color: hsl(var(--success)); }
@@ -201,4 +207,3 @@ html {
     transform: scaleX(0);
   }
 }
-

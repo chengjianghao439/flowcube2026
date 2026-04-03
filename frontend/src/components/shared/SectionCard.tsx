@@ -59,7 +59,7 @@ export function SectionCard({
       {hasHeader && (
         <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
           {title && (
-            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            <h3 className="text-card-title">{title}</h3>
           )}
           {actions && (
             <div className="flex items-center gap-2">{actions}</div>

@@ -5,15 +5,16 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getPdaAnomalyApi } from '@/api/reports'
+import PageHeader from '@/components/shared/PageHeader'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
   return (
     <div className={`rounded-xl border p-4 ${accent ? 'border-red-200 bg-red-50' : 'border-border bg-card'}`}>
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-helper">{label}</p>
       <p className={`text-2xl font-bold mt-1 ${accent ? 'text-red-600' : 'text-foreground'}`}>{value}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+      {sub && <p className="text-helper mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -69,10 +70,10 @@ export default function PdaAnomalyPage() {
   return (
     <div className="space-y-6">
       {/* 标题 */}
-      <div>
-        <h1 className="text-2xl font-bold">PDA 异常分析</h1>
-        <p className="text-sm text-muted-foreground mt-1">扫码错误、撤销操作、异常趋势多维度分析</p>
-      </div>
+      <PageHeader
+        title="PDA 异常分析"
+        description="扫码错误、撤销操作、异常趋势统一用桌面端页头规格展示。"
+      />
 
       {/* 日期筛选 */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -98,11 +99,11 @@ export default function PdaAnomalyPage() {
         {/* 每日趋势 */}
         {data.dailyTrend.length > 0 && (
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-3">每日错误趋势</p>
+            <p className="text-card-title mb-3">每日错误趋势</p>
             <MiniChart data={data.dailyTrend} />
             <div className="flex justify-between mt-1">
-              <span className="text-xs text-muted-foreground">{data.dailyTrend[0]?.date}</span>
-              <span className="text-xs text-muted-foreground">{data.dailyTrend[data.dailyTrend.length-1]?.date}</span>
+              <span className="text-helper">{data.dailyTrend[0]?.date}</span>
+              <span className="text-helper">{data.dailyTrend[data.dailyTrend.length-1]?.date}</span>
             </div>
           </div>
         )}
@@ -111,9 +112,9 @@ export default function PdaAnomalyPage() {
 
           {/* 按操作员错误 */}
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-3">按操作员 — 错误次数</p>
+            <p className="text-card-title mb-3">按操作员 — 错误次数</p>
             {data.byOperator.length === 0
-              ? <p className="text-sm text-muted-foreground text-center py-4">暂无数据</p>
+              ? <p className="text-muted-body text-center py-4">暂无数据</p>
               : <div className="space-y-2">
                   {data.byOperator.map(r => (
                     <BarRow key={r.operatorId} label={r.operatorName} value={r.errorCount} max={maxErr} />
@@ -124,9 +125,9 @@ export default function PdaAnomalyPage() {
 
           {/* 按操作员撤销 */}
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-3">按操作员 — 撤销次数</p>
+            <p className="text-card-title mb-3">按操作员 — 撤销次数</p>
             {data.undoByOperator.length === 0
-              ? <p className="text-sm text-muted-foreground text-center py-4">暂无数据</p>
+              ? <p className="text-muted-body text-center py-4">暂无数据</p>
               : <div className="space-y-2">
                   {data.undoByOperator.map(r => (
                     <BarRow key={r.operatorId} label={r.operatorName} value={r.undoCount} max={maxUndo} color="bg-orange-400" />
@@ -137,9 +138,9 @@ export default function PdaAnomalyPage() {
 
           {/* 按错误原因 */}
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-3">错误原因分布</p>
+            <p className="text-card-title mb-3">错误原因分布</p>
             {data.byReason.length === 0
-              ? <p className="text-sm text-muted-foreground text-center py-4">暂无数据</p>
+              ? <p className="text-muted-body text-center py-4">暂无数据</p>
               : <div className="space-y-2">
                   {data.byReason.map(r => (
                     <BarRow key={r.reason} label={r.reason} value={r.count} max={maxRsn} color="bg-yellow-400" />
@@ -150,9 +151,9 @@ export default function PdaAnomalyPage() {
 
           {/* 按条码 */}
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-sm font-semibold mb-3">问题最多的条码 Top 10</p>
+            <p className="text-card-title mb-3">问题最多的条码 Top 10</p>
             {data.byBarcode.length === 0
-              ? <p className="text-sm text-muted-foreground text-center py-4">暂无数据</p>
+              ? <p className="text-muted-body text-center py-4">暂无数据</p>
               : <div className="space-y-2">
                   {data.byBarcode.map(r => (
                     <BarRow key={r.barcode} label={r.barcode} value={r.count} max={maxBc} color="bg-purple-400" />

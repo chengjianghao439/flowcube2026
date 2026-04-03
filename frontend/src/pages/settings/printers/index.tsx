@@ -87,11 +87,11 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
         className="w-[22rem] max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl"
         onClick={e => e.stopPropagation()}
       >
-        <p className="mb-1 font-semibold text-foreground">绑定业务用途</p>
-        <p className="mb-1 text-sm text-muted-foreground">
-          {printer.name} <span className="font-mono text-xs">({printer.code})</span>
+        <p className="mb-1 text-card-title">绑定业务用途</p>
+        <p className="mb-1 text-muted-body">
+          {printer.name} <span className="text-doc-code">({printer.code})</span>
         </p>
-        <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+        <p className="mb-4 text-helper leading-relaxed">
           与添加打印机时的「设备类型」不同：此处指定各业务场景使用哪台机。已绑定本项时再次点击可解除绑定。
         </p>
         <div className="space-y-2">
@@ -110,7 +110,7 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
                 ].join(' ')}
               >
                 <div className="font-medium">{t.label}</div>
-                <div className="mt-0.5 text-xs text-muted-foreground leading-snug">{t.desc}</div>
+                <div className="mt-0.5 text-helper leading-snug">{t.desc}</div>
                 {currentCode && !isBound && (
                   <div className="mt-1 text-xs text-amber-700">当前已绑：{currentCode}</div>
                 )}
@@ -123,7 +123,7 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
           type="button"
           onClick={onClose}
           disabled={busy}
-          className="mt-4 w-full text-sm text-muted-foreground hover:text-foreground disabled:opacity-60"
+          className="mt-4 w-full text-muted-body hover:text-foreground disabled:opacity-60"
         >
           关闭
         </button>
@@ -367,8 +367,8 @@ export default function PrintersPage() {
 
       {IS_ELECTRON_DESKTOP && (
         <div className="rounded-xl border border-border bg-card p-4">
-          <h3 className="font-semibold text-foreground">本机打印标签（RAW）</h3>
-          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+          <h3 className="text-card-title">本机打印标签（RAW）</h3>
+          <p className="mt-2 text-muted-body leading-relaxed">
             无需填写任何网络地址。请使用下方「从本机添加」，在系统已安装的打印机里选中您的标签机，并在用途中绑定「库存标签」等；打印时软件会按该打印机在系统中的名称自动出纸。请勿随意修改 ERP
             里该打印机的「名称」，以免与系统不一致导致打不出来。
           </p>
@@ -384,7 +384,7 @@ export default function PrintersPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {listLoading && <p className="text-sm text-muted-foreground">正在读取本机打印机…</p>}
+            {listLoading && <p className="text-muted-body">正在读取本机打印机…</p>}
             {listError && <p className="text-sm text-destructive">{listError}</p>}
             {!listLoading && !listError && systemList.length > 0 && (
               <>
@@ -417,17 +417,17 @@ export default function PrintersPage() {
                       <SelectItem value="3">A4 / 文档打印机</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  <p className="mt-1.5 text-helper leading-relaxed">
                     此为硬件分类，与下方列表中的「绑定用途」无关。实际打印走哪台机请在添加后使用「绑定用途」指定（如产品条码、货架条码等）。
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-helper">
                   保存时将自动生成符合规则的编码，并与列表中已有编码去重。
                 </p>
               </>
             )}
             {!listLoading && canUseSystemPrinters && systemList.length === 0 && !listError && (
-              <p className="text-sm text-muted-foreground">暂无数据，请点击刷新重试。</p>
+              <p className="text-muted-body">暂无数据，请点击刷新重试。</p>
             )}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -454,20 +454,20 @@ export default function PrintersPage() {
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-muted/40">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">名称</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">编码</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">类型</th>
+              <th className="px-4 py-3 text-left text-table-head">名称</th>
+              <th className="px-4 py-3 text-left text-table-head">编码</th>
+              <th className="px-4 py-3 text-left text-table-head">类型</th>
               <th
-                className="px-4 py-3 text-left font-medium text-muted-foreground"
+                className="px-4 py-3 text-left text-table-head"
                 title="本机 RAW：ZPL 适用于斑马等；TSPL 适用于通用 TSPL 标签机"
               >
                 RAW
               </th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">状态</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">来源</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">所属设备</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">绑定</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">操作</th>
+              <th className="px-4 py-3 text-left text-table-head">状态</th>
+              <th className="px-4 py-3 text-left text-table-head">来源</th>
+              <th className="px-4 py-3 text-left text-table-head">所属设备</th>
+              <th className="px-4 py-3 text-left text-table-head">绑定</th>
+              <th className="px-4 py-3 text-left text-table-head">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -481,9 +481,9 @@ export default function PrintersPage() {
               <tr key={p.id} className="hover:bg-muted/20">
                 <td className="px-4 py-3 font-medium text-foreground">
                   {p.name}
-                  {p.description && <span className="ml-2 text-xs text-muted-foreground">{p.description}</span>}
+                  {p.description && <span className="ml-2 text-helper">{p.description}</span>}
                 </td>
-                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code}</td>
+                <td className="px-4 py-3"><span className="text-doc-code-muted">{p.code}</span></td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[p.type]}`}>{TYPE_LABEL[p.type]}</span>
                 </td>
@@ -515,7 +515,7 @@ export default function PrintersPage() {
                     {sourceBadgeLabel(p.source)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-xs text-muted-foreground">
+                <td className="px-4 py-3 text-helper">
                   {p.clientId ? (
                     <div className="space-y-1">
                       <div className="font-medium text-foreground">🖥️ {getDeviceName(p)}</div>

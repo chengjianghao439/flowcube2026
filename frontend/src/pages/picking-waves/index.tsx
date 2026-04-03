@@ -54,7 +54,7 @@ export default function PickingWavesPage() {
 
   const columns: TableColumn<PickingWave>[] = [
     { key: 'waveNo',         title: '波次单号', width: 160,
-      render: v => <span className="font-mono text-xs">{v as string}</span> },
+      render: v => <span className="text-doc-code">{v as string}</span> },
     { key: 'warehouseName',  title: '仓库',
       render: v => v ?? <span className="text-muted-foreground">—</span> },
     { key: 'status',         title: '状态', width: 90,
@@ -118,7 +118,7 @@ export default function PickingWavesPage() {
       <Dialog open={!!detailWave} onOpenChange={v => !v && setDetailWave(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>波次详情 — {detail?.waveNo ?? detailWave?.waveNo}</DialogTitle>
+            <DialogTitle>波次详情 — <span className="text-doc-code-strong">{detail?.waveNo ?? detailWave?.waveNo}</span></DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3 text-sm">

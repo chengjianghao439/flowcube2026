@@ -22,11 +22,8 @@ export default function ForbiddenPage() {
         </p>
 
         <div className="flex justify-center gap-3">
-          <Button variant="outline" onClick={() => navigate(-1)}>
-            返回上一页
-          </Button>
           <Button onClick={() => navigate('/dashboard')}>
-            返回仪表盘
+            回到仪表盘
           </Button>
         </div>
       </div>

@@ -41,7 +41,7 @@ export default function PaymentsPage() {
   const summary = (data as { summary?: { totalAmount:number; paidAmount:number; balance:number } })?.summary
 
   const columns: TableColumn<PaymentRecord>[] = [
-    { key: 'orderNo', title: '关联单号', width: 160 },
+    { key: 'orderNo', title: '关联单号', width: 160, render: (v) => <span className="text-doc-code">{String(v)}</span> },
     { key: 'partyName', title: tab === 1 ? '供应商' : '客户' },
     { key: 'totalAmount', title: '总金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
     { key: 'paidAmount', title: '已付金额', width: 100, render: (v) => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
@@ -109,7 +109,7 @@ export default function PaymentsPage() {
           <DialogHeader><DialogTitle>登记{tab === 1 ? '付款' : '收款'}</DialogTitle></DialogHeader>
           {selectedRecord && (
             <div className="text-sm text-muted-foreground mb-2 space-y-1">
-              <p>关联单号：{selectedRecord.orderNo} &nbsp;·&nbsp; {tab === 1 ? '供应商' : '客户'}：{selectedRecord.partyName}</p>
+              <p>关联单号：<span className="text-doc-code-strong">{selectedRecord.orderNo}</span> &nbsp;·&nbsp; {tab === 1 ? '供应商' : '客户'}：{selectedRecord.partyName}</p>
               <p>余额：<span className="font-medium text-destructive">¥{selectedRecord.balance.toFixed(2)}</span></p>
             </div>
           )}
@@ -141,7 +141,7 @@ export default function PaymentsPage() {
       {/* 付款流水弹窗 */}
       <Dialog open={entriesOpen} onOpenChange={setEntriesOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>付款流水 — {selectedRecord?.orderNo}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>付款流水 — <span className="text-doc-code-strong">{selectedRecord?.orderNo}</span></DialogTitle></DialogHeader>
           {!entries?.length && <p className="text-sm text-muted-foreground text-center py-6">暂无流水记录</p>}
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {entries?.map((e: PaymentEntry) => (

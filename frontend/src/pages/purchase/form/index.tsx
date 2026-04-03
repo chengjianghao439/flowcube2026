@@ -181,12 +181,12 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         </div>
 
         {items.length === 0 ? (
-          <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
+          <div className="rounded-lg border border-dashed py-12 text-center text-muted-body">
             点击「添加行」开始录入商品明细
           </div>
         ) : (
           <>
-            <div className="mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3 text-xs font-medium text-muted-foreground">
+            <div className="text-table-head mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3">
               <span>商品</span>
               <span className="text-center">单位</span>
               <span>数量</span>
@@ -206,12 +206,12 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
                   {item.productName
                     ? <span className="flex items-center gap-1.5">
                         <span className="font-medium truncate">{item.productName}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">({item.productCode})</span>
+                        <span className="shrink-0 text-doc-code-muted">({item.productCode})</span>
                       </span>
                     : <span className="text-muted-foreground">点击选择商品...</span>}
                 </button>
 
-                <div className="text-center text-sm text-muted-foreground">{item.unit || '—'}</div>
+                <div className="text-center text-muted-body">{item.unit || '—'}</div>
 
                 <Input
                   type="number" min="0.01" step="0.01" placeholder="数量"
@@ -246,12 +246,12 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       {items.length > 0 && (
         <Section title="金额统计">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground space-y-0.5">
+            <div className="space-y-0.5 text-muted-body">
               <p>商品种数：{items.length} 种</p>
               <p>合计数量：{items.reduce((s, i) => s + i.quantity, 0)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-muted-foreground mb-1">合计金额</p>
+              <p className="mb-1 text-helper">合计金额</p>
               <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
             </div>
           </div>
@@ -313,7 +313,7 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
 
   if (isLoading) {
     return (
-      <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-40 items-center justify-center text-muted-body">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中...
       </div>
     )
@@ -323,7 +323,7 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
         <p className="text-sm">采购单不存在或已删除</p>
-        <Button size="sm" variant="outline" onClick={closeTab}>返回列表</Button>
+        <Button size="sm" variant="outline" onClick={closeTab}>关闭页面</Button>
       </div>
     )
   }
@@ -373,13 +373,13 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
             ['创建时间',   order.createdAt?.slice(0, 16)],
           ].map(([label, value]) => (
             <div key={label}>
-              <dt className="text-xs text-muted-foreground mb-0.5">{label}</dt>
+              <dt className="mb-0.5 text-helper">{label}</dt>
               <dd className="font-medium">{value}</dd>
             </div>
           ))}
           {order.remark && (
             <div className="col-span-3">
-              <dt className="text-xs text-muted-foreground mb-0.5">备注</dt>
+              <dt className="mb-0.5 text-helper">备注</dt>
               <dd>{order.remark}</dd>
             </div>
           )}
@@ -387,26 +387,26 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
       </Section>
 
       <Section title="商品明细">
-        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm text-muted-foreground">
+        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-muted-body">
           当前采购单只负责计划与提交。收货、打印库存条码、PDA 执行与上架，将迁移到独立的收货入库单流程。
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-xs text-muted-foreground">
-                <th className="pb-2 text-left font-medium">商品</th>
-                <th className="pb-2 text-left font-medium">编码</th>
-                <th className="pb-2 text-center font-medium w-16">单位</th>
-                <th className="pb-2 text-right font-medium w-20">数量</th>
-                <th className="pb-2 text-right font-medium w-24">单价</th>
-                <th className="pb-2 text-right font-medium w-24">金额</th>
+              <tr className="border-b text-table-head">
+                <th className="pb-2 text-left">商品</th>
+                <th className="pb-2 text-left">编码</th>
+                <th className="w-16 pb-2 text-center">单位</th>
+                <th className="w-20 pb-2 text-right">数量</th>
+                <th className="w-24 pb-2 text-right">单价</th>
+                <th className="w-24 pb-2 text-right">金额</th>
               </tr>
             </thead>
             <tbody>
               {(order.items ?? []).map(item => (
                 <tr key={item.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
                   <td className="py-2.5 font-medium">{item.productName}</td>
-                  <td className="py-2.5 font-mono text-xs text-muted-foreground">{item.productCode}</td>
+                  <td className="py-2.5"><span className="text-doc-code-muted">{item.productCode}</span></td>
                   <td className="py-2.5 text-center text-muted-foreground">{item.unit}</td>
                   <td className="py-2.5 text-right">{item.quantity}</td>
                   <td className="py-2.5 text-right">¥{Number(item.unitPrice).toFixed(2)}</td>
@@ -420,11 +420,11 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
 
       <Section title="金额统计">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-body">
             共 {order.items?.length ?? 0} 种商品
           </p>
           <div className="text-right">
-            <p className="text-xs text-muted-foreground mb-1">合计金额</p>
+            <p className="mb-1 text-helper">合计金额</p>
             <p className="text-3xl font-bold">¥{Number(order.totalAmount).toFixed(2)}</p>
           </div>
         </div>

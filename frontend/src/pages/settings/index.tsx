@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getSettingsApi, updateSettingsApi, getRolesApi } from '@/api/settings'
 import { toast } from '@/lib/toast'
+import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,13 +31,13 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold">系统设置</h1>
-        <p className="text-sm text-muted-foreground mt-1">全局参数配置，仅管理员可修改</p>
-      </div>
+      <PageHeader
+        title="系统设置"
+        description="全局参数配置与角色说明，采用桌面端统一页头和卡片样式。"
+      />
 
       {/* 基础参数 */}
-      <div className="bg-white rounded-xl border p-6 space-y-5">
+      <div className="rounded-xl border border-border bg-card p-6 space-y-5">
         <h2 className="font-semibold text-base border-b pb-3">基础参数</h2>
         {data?.list.map(s => (
           <div key={s.key_name} className="grid grid-cols-3 gap-4 items-start">
@@ -63,7 +64,7 @@ export default function SettingsPage() {
       </div>
 
       {/* 角色说明 */}
-      <div className="bg-white rounded-xl border p-6">
+      <div className="rounded-xl border border-border bg-card p-6">
         <h2 className="font-semibold text-base border-b pb-3 mb-4">角色权限说明</h2>
         <div className="space-y-3">
           {roles?.map(r => (

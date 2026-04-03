@@ -85,7 +85,7 @@ export default function BarcodePrintQueryPage() {
         width: 150,
         render: (_, row) => (
           <div className="space-y-1">
-            <div className="font-mono text-xs font-semibold">{row.barcode}</div>
+            <div className="text-doc-code-strong">{row.barcode}</div>
             <div className="text-[11px] text-muted-foreground">{row.barcodeKind}</div>
           </div>
         ),
@@ -104,7 +104,7 @@ export default function BarcodePrintQueryPage() {
         key: 'bizNo',
         title: bizTitle,
         width: 140,
-        render: (_, row) => row.bizNo ? <span className="font-mono text-xs">{row.bizNo}</span> : <span className="text-muted-foreground">—</span>,
+        render: (_, row) => row.bizNo ? <span className="text-doc-code">{row.bizNo}</span> : <span className="text-muted-foreground">—</span>,
       },
       {
         key: 'warehouseName',
