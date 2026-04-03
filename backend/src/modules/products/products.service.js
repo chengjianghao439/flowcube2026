@@ -186,7 +186,6 @@ async function enqueueLabel(id, { tenantId = 0, createdBy = null } = {}) {
 }
 
 module.exports = {
-  getCategoryList, createCategory, updateCategory, deleteCategory,
   findAll, findAllActive, findById, create, update, softDelete,
   enqueueLabel,
   findForFinder,
