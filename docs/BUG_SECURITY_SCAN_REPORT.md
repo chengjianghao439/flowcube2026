@@ -1,5 +1,8 @@
 # FlowCube Bug 与安全风险扫描报告
 
+> 历史快照说明：本文是 **2025-03-05** 的扫描结果，用于保留历史问题背景。  
+> 其中部分问题可能已在后续版本中修复或重构，**不能直接作为当前未修复问题清单使用**；如需判断现状，应重新扫描当前代码或对照最新规范。
+
 **扫描日期**：2025-03-05  
 **重点模块**：sale.service、warehouse-tasks.service、inbound-tasks.service、containerEngine、reservationEngine、picking-waves.service
 

@@ -1,4 +1,4 @@
-# FlowCube 发布与桌面打包规范
+# 极序 Flow 发布与桌面打包规范
 
 ## 原则
 
@@ -15,7 +15,7 @@
 - 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
 
-发版请严格使用下面「推荐发布流程」，执行 `npm run release:tag-desktop` 推送 tag 后即可在仓库 **Releases** 下载安装包（文件名含 `FlowCube ERP` / `Setup` 等，随 electron-builder 产物而定）。
+发版请严格使用下面「推荐发布流程」，执行 `npm run release:tag-desktop` 推送 tag 后即可在仓库 **Releases** 下载安装包（当前正式安装包名为 `Jixu-Flow-Setup-<version>.exe`）。
 
 ### 桌面安装器约束（本次问题后的固定规则）
 
@@ -62,7 +62,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 
 ## 获取 EXE
 
-打开本仓库的 GitHub **Releases** 页面（URL 形如 `https://github.com/<你的用户或组织>/<仓库名>/releases`），进入对应版本（例如 `v0.3.2`），在 **Assets** 中下载 NSIS 安装包（名称通常包含 `FlowCube ERP` 与版本号）。
+打开本仓库的 GitHub **Releases** 页面（URL 形如 `https://github.com/<你的用户或组织>/<仓库名>/releases`），进入对应版本（例如 `v0.3.64`），在 **Assets** 中下载 NSIS 安装包（当前正式命名通常为 `Jixu-Flow-Setup-<version>.exe`）。
 
 ## 验证（必做）
 
@@ -103,6 +103,6 @@ SKIP_GIT_SYNC_CHECK=1 npm run dist:win --prefix desktop
 - 环境变量 **`FLOWCUBE_TSPL_BYTES=utf8`** 或 **`gb18030`** 可强制字节编码。
 - 仍含 `CODEPAGE` 且不出纸时，可试 **`FLOWCUBE_TSPL_OMIT_CODEPAGE=1`** 去掉所有 `CODEPAGE` 行。
 
-**说明**：队列中「FlowCube **RAW**」仅表示本软件提交的假脱机作业，**不是** ZPL 协议名。
+**说明**：队列中「FlowCube **RAW**」仅表示本软件提交的假脱机作业，**不是** ZPL 协议名；该显示名属于历史保留，不影响当前极序 Flow 打印链路。
 
-**测试页能打、FlowCube 不打**：多属 **RAW 指令/编码** 问题；可重启 **Print Spooler**、清空队列后更新后端与本机桌面端再试。
+**测试页能打、极序 Flow 不打**：多属 **RAW 指令/编码** 问题；可重启 **Print Spooler**、清空队列后更新后端与本机桌面端再试。

@@ -1,4 +1,4 @@
-# 使用 Gitee 同步代码与标签
+# 使用 Gitee 同步极序 Flow 代码与标签
 
 主开发远程可为 GitHub（`origin`）；若团队或 CI 使用 **Gitee**，请将同一套提交与 **tag** 推到 Gitee，避免两端不一致。
 
