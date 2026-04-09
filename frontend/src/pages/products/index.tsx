@@ -131,6 +131,9 @@ export default function ProductsPage() {
   function openEdit(p:Product) { setEdit(p); setForm({ name:p.name, categoryId:p.categoryId, unit:p.unit, spec:p.spec??'', barcode:p.barcode??'', costPrice:p.costPrice!=null?String(p.costPrice):'', salePrice:p.salePrice!=null?String(p.salePrice):'', remark:p.remark??'', isActive:p.isActive }); setOpen(true) }
   function handleSubmit(e:React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!form.categoryId) { toast.warning('请选择商品分类'); return }
+    if (!form.barcode.trim()) { toast.warning('请输入产品条码'); return }
+    if (form.costPrice === '' || Number(form.costPrice) <= 0) { toast.warning('请输入大于 0 的进价'); return }
     const d = { name:form.name, categoryId:form.categoryId||undefined, unit:form.unit||'个', spec:form.spec||undefined, barcode:form.barcode||undefined, costPrice:form.costPrice!==''?Number(form.costPrice):null, remark:form.remark||undefined }
     if (edit) update({ id:edit.id, data:{...d,isActive:form.isActive} }, { onSuccess:()=>setOpen(false) })
     else create(d, { onSuccess:()=>setOpen(false) })
@@ -213,11 +216,11 @@ export default function ProductsPage() {
                 </div>
               )}
               <div className="space-y-2"><Label>名称 *</Label><Input value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} disabled={isPending}/></div>
-              <div className="space-y-2"><Label>分类</Label>
+              <div className="space-y-2"><Label>分类 *</Label>
                 <CategoryTreeSelect
                   value={form.categoryId}
                   onChange={(v) => set('categoryId', v)}
-                  emptyLabel="无分类"
+                  emptyLabel="请选择分类"
                   leafOnly
                   className="w-full justify-between"
                   disabled={isPending}
@@ -225,8 +228,8 @@ export default function ProductsPage() {
               </div>
               <div className="space-y-2"><Label>单位</Label><Input value={form.unit} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('unit',e.target.value)} disabled={isPending} placeholder="个"/></div>
               <div className="space-y-2"><Label>规格型号</Label><LimitedInput maxLength={5} value={form.spec} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('spec',e.target.value)} disabled={isPending}/></div>
-              <div className="space-y-2"><Label>条形码</Label><Input value={form.barcode} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('barcode',e.target.value)} disabled={isPending}/></div>
-              <div className="space-y-2"><Label>成本价</Label><Input type="number" step="0.01" value={form.costPrice} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('costPrice',e.target.value)} disabled={isPending}/></div>
+              <div className="space-y-2"><Label>产品条码 *</Label><Input value={form.barcode} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('barcode',e.target.value)} disabled={isPending} placeholder="唯一产品条码"/></div>
+              <div className="space-y-2"><Label>进价 *</Label><Input type="number" step="0.01" min="0.01" value={form.costPrice} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('costPrice',e.target.value)} disabled={isPending}/></div>
               <div className="col-span-2 rounded-lg border border-border bg-muted/20 p-3">
                 <p className="text-sm font-medium">默认销售价格</p>
                 <p className="mt-1 text-xs text-muted-foreground">按系统设置的加价比例自动生成，保存后生效。</p>

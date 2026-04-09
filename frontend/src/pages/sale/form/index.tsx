@@ -11,14 +11,16 @@
 
 import { useState, useCallback, useContext, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Printer, Save, Trash2, Truck, Warehouse, X } from 'lucide-react'
+import { AlertTriangle, Loader2, Printer, Save, Trash2, Truck, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
 import { Label }   from '@/components/ui/label'
+import { Badge }   from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar }      from '@/components/shared/ActionBar'
@@ -39,6 +41,38 @@ import type { FinderResult } from '@/types/finder'
 interface DraftItem extends Omit<SaleOrderItem, 'id' | 'amount'> {
   _key: number
   priceSource?: 'list' | 'default' | 'manual'
+}
+
+function PriceMetaHint({ item, loading = false }: { item: DraftItem; loading?: boolean }) {
+  const belowCost = item.costPrice != null && item.costPrice > 0 && item.unitPrice < item.costPrice
+  const label =
+    item.priceSource === 'list'
+      ? (item.resolvedPriceLevel ? `等级价 ${item.resolvedPriceLevel}` : '等级价')
+      : item.priceSource === 'manual'
+        ? '手工价'
+        : '默认价'
+  const badgeClass =
+    item.priceSource === 'list'
+      ? 'border-blue-200 bg-blue-50 text-blue-700'
+      : item.priceSource === 'manual'
+        ? 'border-amber-200 bg-amber-50 text-amber-700'
+        : 'border-slate-200 bg-slate-50 text-slate-600'
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2">
+      <Badge variant="outline" className={badgeClass}>{label}</Badge>
+      {loading && <span className="text-[11px] text-blue-600">查询等级价中...</span>}
+      {!loading && item.priceSource === 'manual' && item.resolvedPrice != null && (
+        <span className="text-[11px] text-muted-foreground">参考等级价 ¥{Number(item.resolvedPrice).toFixed(2)}</span>
+      )}
+      {belowCost && (
+        <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
+          <AlertTriangle className="h-3 w-3" />
+          低于进价 ¥{Number(item.costPrice).toFixed(2)}
+        </span>
+      )}
+    </div>
+  )
 }
 
 // ─── 信息区块 ─────────────────────────────────────────────────────────────────
@@ -107,7 +141,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const [receiverAddress, setReceiverAddress] = useState('')
   const counterRef    = useRef(0)
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
-  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default' })
+  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
   const { data: carrierOptions = [] } = useCarriersActive()
 
@@ -131,7 +165,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         try {
           const r = await getCustomerPriceApi(+cid, i.productId)
           if (r.data.data?.salePrice !== undefined) {
-            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r.data.data!.salePrice, priceSource: 'list' } : x))
+            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r.data.data!.salePrice, priceSource: 'list', resolvedPrice: r.data.data!.salePrice, resolvedPriceLevel: r.data.data!.priceLevel } : x))
           }
         } catch (_) {}
       })()
@@ -192,7 +226,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     if (finderItemKey === null) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default' }
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
       : i
     ))
     // 商品选择后自动聚焦到该行数量框
@@ -202,7 +236,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       try {
         const r = await getCustomerPriceApi(+customerId, product.id)
         if (r.data.data?.salePrice !== undefined)
-          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r.data.data!.salePrice, priceSource: 'list' } : i))
+          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r.data.data!.salePrice, priceSource: 'list', resolvedPrice: r.data.data!.salePrice, resolvedPriceLevel: r.data.data!.priceLevel } : i))
       } catch (_) {}
       setPriceLoading(prev => ({ ...prev, [k]: false }))
     }
@@ -226,7 +260,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         receiverName: receiverName || undefined,
         receiverPhone: receiverPhone || undefined,
         receiverAddress: receiverAddress || undefined,
-        items: filledItems.map(({ _key, priceSource, ...r }) => r),
+        items: filledItems.map(({ _key, ...r }) => r),
       })
       closeTab()
     } catch (_) {}
@@ -350,19 +384,14 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
               className="text-sm"
             />
 
-            <div className="relative">
+            <div>
               <Input
                 type="number" min="0" step="0.01" placeholder="单价"
                 value={item.unitPrice}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                className={`text-sm ${item.priceSource === 'list' ? 'border-blue-400 bg-blue-50' : ''}`}
+                className={`text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`}
               />
-              {priceLoading[item._key] && (
-                <span className="absolute right-2 top-2 text-xs text-blue-500">查询中...</span>
-              )}
-              {item.priceSource === 'list' && !priceLoading[item._key] && (
-                <span className="absolute -top-1.5 -right-1.5 rounded-full bg-blue-500 px-1 text-[9px] text-white">等级</span>
-              )}
+              <PriceMetaHint item={item} loading={!!priceLoading[item._key]} />
             </div>
 
             <div className="text-right text-sm font-medium">
@@ -385,6 +414,12 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             <div className="space-y-0.5 text-muted-body">
               <p>商品种数：{items.filter(i => i.productId > 0).length} 种</p>
               <p>合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
+              {items.some(i => i.productId > 0 && i.costPrice != null && i.unitPrice < Number(i.costPrice)) && (
+                <p className="inline-flex items-center gap-1 text-destructive">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  存在低于进价的销售行，提交后会记录到时间线
+                </p>
+              )}
             </div>
             <div className="text-right">
               <p className="mb-1 text-helper">合计金额</p>
@@ -444,7 +479,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
   const [receiverAddress, setReceiverAddress] = useState(order.receiverAddress ?? '')
   const counterRef    = useRef((order.items ?? []).length)
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
-  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default' })
+  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
   const { data: carrierOptions = [] } = useCarriersActive()
 
@@ -452,7 +487,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
     const loaded = (order.items ?? []).map((item, i) => ({
       _key: i, productId: item.productId, productCode: item.productCode,
       productName: item.productName, unit: item.unit, quantity: item.quantity,
-      unitPrice: item.unitPrice, remark: item.remark ?? '', priceSource: 'default' as const,
+      unitPrice: item.unitPrice, remark: item.remark ?? '', priceSource: 'default' as const, costPrice: item.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null,
     }))
     // 已有明细末尾追加一行空行，保持 Excel 式输入体验
     return [...loaded, mkEmpty()]
@@ -471,7 +506,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
         try {
           const r = await getCustomerPriceApi(+cid, i.productId)
           if (r.data.data?.salePrice !== undefined)
-            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r.data.data!.salePrice, priceSource: 'list' } : x))
+            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r.data.data!.salePrice, priceSource: 'list', resolvedPrice: r.data.data!.salePrice, resolvedPriceLevel: r.data.data!.priceLevel } : x))
         } catch (_) {}
       })()
       return i
@@ -531,7 +566,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
     if (finderItemKey === null) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default' }
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
       : i
     ))
     // 商品选择后自动聚焦到该行数量框
@@ -541,7 +576,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
       try {
         const r = await getCustomerPriceApi(+customerId, product.id)
         if (r.data.data?.salePrice !== undefined)
-          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r.data.data!.salePrice, priceSource: 'list' } : i))
+          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r.data.data!.salePrice, priceSource: 'list', resolvedPrice: r.data.data!.salePrice, resolvedPriceLevel: r.data.data!.priceLevel } : i))
       } catch (_) {}
       setPriceLoading(prev => ({ ...prev, [k]: false }))
     }
@@ -566,7 +601,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
         receiverName: receiverName || undefined,
         receiverPhone: receiverPhone || undefined,
         receiverAddress: receiverAddress || undefined,
-        items: filledItems.map(({ _key, priceSource, ...r }) => r),
+        items: filledItems.map(({ _key, ...r }) => r),
       })
     } catch (_) {}
   }
@@ -684,12 +719,11 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
               onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
               className="text-sm" />
-            <div className="relative">
+            <div>
               <Input type="number" min="0" step="0.01" placeholder="单价" value={item.unitPrice}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                className={`text-sm ${item.priceSource === 'list' ? 'border-blue-400 bg-blue-50' : ''}`} />
-              {priceLoading[item._key] && <span className="absolute right-2 top-2 text-xs text-blue-500">查询中...</span>}
-              {item.priceSource === 'list' && !priceLoading[item._key] && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-blue-500 px-1 text-[9px] text-white">等级</span>}
+                className={`text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`} />
+              <PriceMetaHint item={item} loading={!!priceLoading[item._key]} />
             </div>
             <div className="text-right text-sm font-medium">¥{(item.quantity * item.unitPrice).toFixed(2)}</div>
             <Button type="button" size="sm" variant="ghost" className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
@@ -704,6 +738,12 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
             <div className="space-y-0.5 text-muted-body">
               <p>商品种数：{items.filter(i => i.productId > 0).length} 种</p>
               <p>合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
+              {items.some(i => i.productId > 0 && i.costPrice != null && i.unitPrice < Number(i.costPrice)) && (
+                <p className="inline-flex items-center gap-1 text-destructive">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  存在低于进价的销售行，保存后会记录到时间线
+                </p>
+              )}
             </div>
             <div className="text-right">
               <p className="mb-1 text-helper">合计金额</p>
@@ -946,7 +986,17 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                   <td className="py-2.5"><span className="text-doc-code-muted">{item.productCode}</span></td>
                   <td className="py-2.5 text-center text-muted-foreground">{item.unit}</td>
                   <td className="py-2.5 text-right">{item.quantity}</td>
-                  <td className="py-2.5 text-right">¥{Number(item.unitPrice).toFixed(2)}</td>
+                  <td className="py-2.5 text-right">
+                    <div className="space-y-1">
+                      <div>¥{Number(item.unitPrice).toFixed(2)}</div>
+                      {item.belowCost && item.costPrice != null && (
+                        <div className="inline-flex items-center gap-1 text-[11px] text-destructive">
+                          <AlertTriangle className="h-3 w-3" />
+                          低于进价 ¥{Number(item.costPrice).toFixed(2)}
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-2.5 text-right font-semibold">¥{Number(item.amount).toFixed(2)}</td>
                 </tr>
               ))}
@@ -954,6 +1004,30 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
           </table>
         </div>
       </Section>
+
+      {!!order.timeline?.length && (
+        <Section title="操作时间线">
+          <div className="space-y-3">
+            {order.timeline.map(event => (
+              <div key={event.id} className="rounded-lg border border-border/70 bg-card px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{event.title}</p>
+                      <Badge variant="outline" className="text-[11px]">{event.eventType}</Badge>
+                    </div>
+                    {event.description && <p className="text-sm text-muted-foreground">{event.description}</p>}
+                  </div>
+                  <div className="shrink-0 text-right text-xs text-muted-foreground">
+                    <p>{event.createdByName || '系统'}</p>
+                    <p>{formatDisplayDateTime(event.createdAt)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* 金额统计 */}
       <Section title="金额统计">

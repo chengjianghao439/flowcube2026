@@ -2,6 +2,16 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 
+async function ensureSupplierNameUnique(name, currentId = null) {
+  const normalized = String(name || '').trim()
+  if (!normalized) throw new AppError('供应商名称不能为空', 400)
+  const [rows] = currentId
+    ? await pool.query('SELECT id FROM supply_suppliers WHERE name=? AND deleted_at IS NULL AND id<>? LIMIT 1', [normalized, currentId])
+    : await pool.query('SELECT id FROM supply_suppliers WHERE name=? AND deleted_at IS NULL LIMIT 1', [normalized])
+  if (rows[0]) throw new AppError('供应商名称已存在，请勿重复', 400)
+  return normalized
+}
+
 function fmt(row) {
   return {
     id: row.id, code: row.code, name: row.name,
@@ -42,19 +52,21 @@ async function findById(id) {
 }
 
 async function create({ name, contact, phone, email, address, remark }) {
+  const normalizedName = await ensureSupplierNameUnique(name)
   const code = await generateMasterCode(pool, 'SUP', 'supply_suppliers')
   const [r] = await pool.query(
     `INSERT INTO supply_suppliers (code,name,contact,phone,email,address,remark) VALUES (?,?,?,?,?,?,?)`,
-    [code, name, contact||null, phone||null, email||null, address||null, remark||null],
+    [code, normalizedName, contact||null, phone||null, email||null, address||null, remark||null],
   )
   return { id: r.insertId, code }
 }
 
 async function update(id, { name, contact, phone, email, address, remark, isActive }) {
   await findById(id)
+  const normalizedName = await ensureSupplierNameUnique(name, id)
   await pool.query(
     `UPDATE supply_suppliers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=? WHERE id=? AND deleted_at IS NULL`,
-    [name, contact||null, phone||null, email||null, address||null, remark||null, isActive?1:0, id],
+    [normalizedName, contact||null, phone||null, email||null, address||null, remark||null, isActive?1:0, id],
   )
 }
 

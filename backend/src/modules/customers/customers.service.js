@@ -2,6 +2,16 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 
+async function ensureCustomerNameUnique(name, currentId = null) {
+  const normalized = String(name || '').trim()
+  if (!normalized) throw new AppError('客户名称不能为空', 400)
+  const [rows] = currentId
+    ? await pool.query('SELECT id FROM sale_customers WHERE name=? AND deleted_at IS NULL AND id<>? LIMIT 1', [normalized, currentId])
+    : await pool.query('SELECT id FROM sale_customers WHERE name=? AND deleted_at IS NULL LIMIT 1', [normalized])
+  if (rows[0]) throw new AppError('客户名称已存在，请勿重复', 400)
+  return normalized
+}
+
 const fmt = r => ({
   id:r.id,
   code:r.code,
@@ -33,13 +43,15 @@ async function findById(id) {
   return fmt(rows[0])
 }
 async function create({ name,contact,phone,email,address,remark }) {
+  const normalizedName = await ensureCustomerNameUnique(name)
   const code = await generateMasterCode(pool, 'CUS', 'sale_customers')
-  const [r] = await pool.query('INSERT INTO sale_customers (code,name,contact,phone,email,address,remark,price_level) VALUES (?,?,?,?,?,?,?,?)',[code,name,contact||null,phone||null,email||null,address||null,remark||null,'A'])
+  const [r] = await pool.query('INSERT INTO sale_customers (code,name,contact,phone,email,address,remark,price_level) VALUES (?,?,?,?,?,?,?,?)',[code,normalizedName,contact||null,phone||null,email||null,address||null,remark||null,'A'])
   return { id:r.insertId, code }
 }
 async function update(id,{name,contact,phone,email,address,remark,isActive}) {
   await findById(id)
-  await pool.query('UPDATE sale_customers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=? WHERE id=? AND deleted_at IS NULL',[name,contact||null,phone||null,email||null,address||null,remark||null,isActive?1:0,id])
+  const normalizedName = await ensureCustomerNameUnique(name, id)
+  await pool.query('UPDATE sale_customers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=? WHERE id=? AND deleted_at IS NULL',[normalizedName,contact||null,phone||null,email||null,address||null,remark||null,isActive?1:0,id])
 }
 async function softDelete(id) {
   await findById(id)

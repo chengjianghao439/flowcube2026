@@ -3,6 +3,31 @@ const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { loadPriceRates, computeTierPrices } = require('../../utils/priceLevels')
 
+async function ensureCategoryExists(categoryId) {
+  if (!categoryId) throw new AppError('请选择商品分类', 400)
+  const [[row]] = await pool.query('SELECT id FROM product_categories WHERE id=? AND deleted_at IS NULL AND status=1', [categoryId])
+  if (!row) throw new AppError('商品分类不存在或已停用', 400)
+}
+
+async function ensureBarcodeUnique(barcode, currentId = null) {
+  if (!barcode || !String(barcode).trim()) throw new AppError('产品条码不能为空', 400)
+  const normalized = String(barcode).trim()
+  const [rows] = currentId
+    ? await pool.query('SELECT id FROM product_items WHERE barcode=? AND deleted_at IS NULL AND id<>? LIMIT 1', [normalized, currentId])
+    : await pool.query('SELECT id FROM product_items WHERE barcode=? AND deleted_at IS NULL LIMIT 1', [normalized])
+  if (rows[0]) throw new AppError('产品条码已存在，请勿重复', 400)
+  return normalized
+}
+
+async function validateProductPayload({ name, categoryId, barcode, costPrice, currentId = null }) {
+  if (!String(name || '').trim()) throw new AppError('商品名称不能为空', 400)
+  await ensureCategoryExists(categoryId)
+  const normalizedBarcode = await ensureBarcodeUnique(barcode, currentId)
+  const normalizedCost = Number(costPrice)
+  if (!Number.isFinite(normalizedCost) || normalizedCost <= 0) throw new AppError('进价必须大于 0', 400)
+  return { normalizedBarcode, normalizedCost }
+}
+
 // ─── 商品选择中心（Finder）────────────────────────────────────────────────────
 
 /**
@@ -160,25 +185,27 @@ async function findById(id) {
 }
 
 async function create({ name, categoryId, unit, spec, barcode, costPrice, remark }) {
+  const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
   const code = await generateMasterCode(pool, 'P', 'product_items')
   const rates = await loadPriceRates(pool)
-  const prices = computeTierPrices(costPrice, rates)
+  const prices = computeTierPrices(normalizedCost, rates)
   const [r] = await pool.query(
     `INSERT INTO product_items (code,name,category_id,unit,spec,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [code, name, categoryId||null, unit||'个', spec||null, barcode||null, prices.costPrice, prices.salePrice, prices.salePriceA, prices.salePriceB, prices.salePriceC, prices.salePriceD, remark||null],
+    [code, String(name).trim(), categoryId||null, unit||'个', spec||null, normalizedBarcode, prices.costPrice, prices.salePrice, prices.salePriceA, prices.salePriceB, prices.salePriceC, prices.salePriceD, remark||null],
   )
   return { id: r.insertId, code }
 }
 
 async function update(id, { name, categoryId, unit, spec, barcode, costPrice, remark, isActive }) {
   await findById(id)
+  const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const rates = await loadPriceRates(pool)
-  const prices = computeTierPrices(costPrice, rates)
+  const prices = computeTierPrices(normalizedCost, rates)
   await pool.query(
     `UPDATE product_items SET name=?,category_id=?,unit=?,spec=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?
      WHERE id=? AND deleted_at IS NULL`,
-    [name, categoryId||null, unit||'个', spec||null, barcode||null, prices.costPrice, prices.salePrice, prices.salePriceA, prices.salePriceB, prices.salePriceC, prices.salePriceD, remark||null, isActive?1:0, id],
+    [String(name).trim(), categoryId||null, unit||'个', spec||null, normalizedBarcode, prices.costPrice, prices.salePrice, prices.salePriceA, prices.salePriceB, prices.salePriceC, prices.salePriceD, remark||null, isActive?1:0, id],
   )
 }
 

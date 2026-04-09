@@ -8,6 +8,21 @@ export interface SaleOrderItem {
   unitPrice: number
   amount: number
   remark?: string
+  priceSource?: 'list' | 'default' | 'manual'
+  resolvedPrice?: number | null
+  resolvedPriceLevel?: string | null
+  costPrice?: number | null
+  belowCost?: boolean
+}
+export interface SaleOrderTimelineEvent {
+  id: number | string
+  eventType: string
+  title: string
+  description?: string | null
+  createdBy?: number | null
+  createdByName?: string | null
+  createdAt: string
+  payload?: Record<string, unknown> | null
 }
 export interface SaleOrder {
   id: number
@@ -34,6 +49,7 @@ export interface SaleOrder {
   operatorName: string
   createdAt: string
   items?: SaleOrderItem[]
+  timeline?: SaleOrderTimelineEvent[]
 }
 export interface CreateSaleParams {
   customerId: number
@@ -47,7 +63,7 @@ export interface CreateSaleParams {
   receiverName?: string
   receiverPhone?: string
   receiverAddress?: string
-  items: Omit<SaleOrderItem, 'id' | 'amount'>[]
+  items: Omit<SaleOrderItem, 'id' | 'amount' | 'belowCost'>[]
 }
 export interface UpdateSaleParams extends CreateSaleParams {
   id: number
