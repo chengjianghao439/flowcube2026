@@ -41,6 +41,27 @@ router.get('/', async (req, res, next) => {
     const [[{ failedPrintJobs }]] = await pool.query(
       `SELECT COUNT(*) AS failedPrintJobs FROM print_jobs WHERE status = 3`
     )
+    const [[{ inboundPrintFailures }]] = await pool.query(
+      `SELECT COUNT(*) AS inboundPrintFailures
+       FROM print_jobs j
+       WHERE j.ref_type = 'inventory_container' AND j.status = 3`
+    )
+    const [[{ overdueInboundPutaway }]] = await pool.query(
+      `SELECT COUNT(*) AS overdueInboundPutaway
+       FROM inventory_containers
+       WHERE deleted_at IS NULL
+         AND is_overdue = 1
+         AND status = 0
+         AND inbound_task_id IS NOT NULL`
+    )
+    const [[{ pendingInboundAudit }]] = await pool.query(
+      `SELECT COUNT(*) AS pendingInboundAudit
+       FROM inbound_tasks
+       WHERE deleted_at IS NULL
+         AND status = 4
+         AND audit_status = 0
+         AND updated_at < NOW() - INTERVAL 24 HOUR`
+    )
     const [[{ healthAnomalies }]] = await pool.query(
       `SELECT COUNT(*) AS healthAnomalies
        FROM system_health_logs
@@ -60,11 +81,14 @@ router.get('/', async (req, res, next) => {
     if (pendingTransfer > 0) items.push({ type: 'info', icon: '🔄', text: `${pendingTransfer} 笔调拨单待处理`, path: '/transfer' })
     if (pendingInbound > 0) items.push({ type: 'info', icon: '📥', text: `${pendingInbound} 笔收货订单待处理`, path: '/inbound-tasks' })
     if (failedPrintJobs > 0) items.push({ type: 'warning', icon: '🖨️', text: `${failedPrintJobs} 条打印任务失败，建议补打`, path: '/settings/barcode-print-query' })
+    if (inboundPrintFailures > 0) items.push({ type: 'warning', icon: '🏷️', text: `${inboundPrintFailures} 条收货条码打印失败待补打`, path: '/settings/barcode-print-query?category=inbound&status=failed' })
+    if (overdueInboundPutaway > 0) items.push({ type: 'warning', icon: '📦', text: `${overdueInboundPutaway} 箱已打印未上架超时`, path: '/inbound-tasks' })
+    if (pendingInboundAudit > 0) items.push({ type: 'warning', icon: '🧾', text: `${pendingInboundAudit} 笔收货订单待审核超时`, path: '/inbound-tasks' })
     if (healthAnomalies > 0) items.push({ type: 'warning', icon: '🩺', text: `近 24 小时发现 ${healthAnomalies} 条系统异常记录`, path: '/reports/pda-anomaly' })
 
     const total = items.length
 
-    return successResponse(res, { total, items, counts: { lowStockCount, pendingPurchase, pendingSale, unpaidPayable, unpaidReceivable, pendingTransfer, overduePayable, overdueReceivable, pendingInbound, failedPrintJobs, healthAnomalies } }, '查询成功')
+    return successResponse(res, { total, items, counts: { lowStockCount, pendingPurchase, pendingSale, unpaidPayable, unpaidReceivable, pendingTransfer, overduePayable, overdueReceivable, pendingInbound, failedPrintJobs, inboundPrintFailures, overdueInboundPutaway, pendingInboundAudit, healthAnomalies } }, '查询成功')
   } catch (e) { next(e) }
 })
 

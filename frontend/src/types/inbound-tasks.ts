@@ -23,10 +23,71 @@ export interface InboundTaskItem {
   putawayQty: number
 }
 
+export interface InboundStatusView {
+  key: string
+  label: string
+}
+
+export interface InboundPrintSummary {
+  total: number
+  queued: number
+  printing: number
+  success: number
+  failed: number
+  timeout: number
+}
+
+export interface InboundPutawaySummary {
+  waitingContainers: number
+  storedContainers: number
+  waitingQty: number
+  storedQty: number
+  overdueContainers: number
+}
+
+export interface InboundTimelineEvent {
+  id: number
+  eventType: string
+  title: string
+  description: string | null
+  payload: Record<string, unknown> | null
+  createdBy: number | null
+  createdByName: string | null
+  createdAt: string
+}
+
+export interface InboundRecentPrintJob {
+  id: number
+  status: number
+  statusKey: 'queued' | 'printing' | 'success' | 'failed'
+  statusLabel: string
+  printerCode: string | null
+  printerName: string | null
+  errorMessage: string | null
+  dispatchReason: string | null
+  containerId: number | null
+  barcode: string | null
+  productId: number | null
+  productCode: string | null
+  productName: string | null
+  qty: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface InboundExceptionFlags {
+  failedPrintJobs: number
+  timeoutPrintJobs: number
+  overduePutawayContainers: number
+  pendingAuditOverdue: boolean
+  auditRejected: boolean
+  hasException: boolean
+}
+
 export interface InboundTask {
   id: number
   taskNo: string
-  purchaseOrderId: number
+  purchaseOrderId: number | null
   purchaseOrderNo: string | null
   supplierName: string | null
   warehouseId: number
@@ -37,6 +98,27 @@ export interface InboundTask {
   operatorId: number | null
   operatorName: string | null
   remark: string | null
+  submittedAt?: string | null
+  submittedBy?: number | null
+  submittedByName?: string | null
+  auditStatus?: number
+  auditRemark?: string | null
+  auditedAt?: string | null
+  auditedBy?: number | null
+  auditedByName?: string | null
+  orderedQty?: number
+  receivedQty?: number
+  putawayQty?: number
+  lineCount?: number
+  receiptStatus?: InboundStatusView
+  printStatus?: InboundStatusView
+  putawayStatus?: InboundStatusView
+  auditFlowStatus?: InboundStatusView
+  printSummary?: InboundPrintSummary
+  putawaySummary?: InboundPutawaySummary
+  timeline?: InboundTimelineEvent[]
+  recentPrintJobs?: InboundRecentPrintJob[]
+  exceptionFlags?: InboundExceptionFlags
   createdAt: string
   updatedAt: string
   items?: InboundTaskItem[]
@@ -105,6 +187,11 @@ export interface CreateInboundTaskParams {
     purchaseItemId: number
     qty: number
   }>
+}
+
+export interface AuditInboundTaskParams {
+  action: 'approve' | 'reject'
+  remark?: string
 }
 
 export interface InboundPurchaseCandidate {

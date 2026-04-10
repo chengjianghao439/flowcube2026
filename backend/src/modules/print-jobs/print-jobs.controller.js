@@ -59,7 +59,7 @@ async function stats(req, res, next) {
 
 async function barcodeRecords(req, res, next) {
   try {
-    const { category, keyword, status, page, pageSize } = req.query
+    const { category, keyword, status, page, pageSize, inboundTaskId, inboundTaskItemId } = req.query
     res.json({
       success: true,
       data: await svc.findBarcodeRecords({
@@ -69,6 +69,8 @@ async function barcodeRecords(req, res, next) {
         page: Number(page) || 1,
         pageSize: Number(pageSize) || 20,
         tenantId: getTenantId(req),
+        inboundTaskId: inboundTaskId ? Number(inboundTaskId) : null,
+        inboundTaskItemId: inboundTaskItemId ? Number(inboundTaskItemId) : null,
       }),
     })
   } catch (e) {

@@ -72,6 +72,11 @@ const putawaySchema = z.object({
   locationId:  z.number().int().positive('请选择库位'),
 })
 
+const auditSchema = z.object({
+  action: z.enum(['approve', 'reject']).default('approve'),
+  remark: z.string().trim().max(200, '审核备注不能超过 200 个字').optional(),
+})
+
 router.use(authMiddleware)
 
 /** 入库上架仅允许 PDA（请求头 X-Client: pda），与出库 PDA 校验一致 */
@@ -89,6 +94,8 @@ router.get('/',              ctrl.list)
 router.post('/',             vBody(createSchema), ctrl.create)
 router.get('/:id/containers', ctrl.containers)
 router.get('/:id',           ctrl.detail)
+router.post('/:id/submit',   ctrl.submit)
+router.post('/:id/audit',    vBody(auditSchema), ctrl.audit)
 router.post('/:id/receive',  vBody(receiveSchema), ctrl.receive)
 router.post('/:id/putaway', pdaOnly, vBody(putawaySchema), ctrl.putaway)
 router.post('/:id/cancel',  ctrl.cancel)

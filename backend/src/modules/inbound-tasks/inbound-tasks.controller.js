@@ -50,6 +50,22 @@ const detail = async (req, res, next) => {
   try { return successResponse(res, await svc.findById(+req.params.id)) } catch (e) { next(e) }
 }
 
+const submit = async (req, res, next) => {
+  try {
+    const operator = await getOp(req.user.userId)
+    const data = await svc.submit(+req.params.id, operator)
+    return successResponse(res, data, '已提交到 PDA')
+  } catch (e) { next(e) }
+}
+
+const audit = async (req, res, next) => {
+  try {
+    const operator = await getOp(req.user.userId)
+    const data = await svc.audit(+req.params.id, req.body || {}, operator)
+    return successResponse(res, data, req.body?.action === 'reject' ? '已退回收货订单' : '已审核通过')
+  } catch (e) { next(e) }
+}
+
 const containers = async (req, res, next) => {
   try {
     return successResponse(res, await svc.listContainers(+req.params.id))
@@ -81,4 +97,4 @@ const cancel = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { pendingContainers, list, purchaseItems, create, detail, containers, receive, putaway, cancel }
+module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, audit, containers, receive, putaway, cancel }

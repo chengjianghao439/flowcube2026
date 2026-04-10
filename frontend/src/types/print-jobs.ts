@@ -19,6 +19,8 @@ export interface BarcodePrintJobInfo {
 export interface BarcodePrintRecord {
   category: BarcodePrintCategory
   recordId: number
+  inboundTaskId?: number | null
+  inboundTaskItemId?: number | null
   barcode: string
   barcodeLabel: string
   barcodeKind: string

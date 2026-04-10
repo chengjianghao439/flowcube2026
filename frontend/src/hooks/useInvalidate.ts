@@ -122,11 +122,20 @@ const INVALIDATION_MAP = {
     ['purchase'],
   ],
 
+  /** 提交到 PDA / 审核通过 / 审核退回 */
+  inbound_submit: [
+    ['inbound-tasks'],
+    ['pda-inbound-tasks'],
+    ['pda-inbound-task'],
+    ['barcode-print-records'],
+  ],
+
   /** 入库任务收货（仅任务与容器，不计库存） */
   inbound_receive: [
     ['inbound-tasks'],
     ['pda-inbound-tasks'],
     ['pda-inbound-task'],
+    ['barcode-print-records'],
   ],
 
   /** 入库任务上架：创建容器 + 库存变化 + 可能完成采购单 */

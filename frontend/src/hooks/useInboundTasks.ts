@@ -6,11 +6,13 @@ import {
   getInboundTaskContainersApi,
   createInboundTaskApi,
   getInboundPurchaseCandidatesApi,
+  submitInboundTaskApi,
+  auditInboundTaskApi,
   receiveInboundApi,
   cancelInboundApi,
 } from '@/api/inbound-tasks'
 import type { QueryParams } from '@/types'
-import type { CreateInboundTaskParams, ReceiveParams, ReceivePackageResult } from '@/types/inbound-tasks'
+import type { AuditInboundTaskParams, CreateInboundTaskParams, ReceiveParams, ReceivePackageResult } from '@/types/inbound-tasks'
 
 const QUERY_KEY = 'inbound-tasks'
 
@@ -61,6 +63,22 @@ export function useReceiveInbound() {
       return res.data.data as ReceivePackageResult
     },
     onSuccess: () => invalidate('inbound_receive'),
+  })
+}
+
+export function useSubmitInboundTask() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: number) => submitInboundTaskApi(id).then(r => r.data.data!),
+    onSuccess: () => invalidate('inbound_submit'),
+  })
+}
+
+export function useAuditInboundTask() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: AuditInboundTaskParams }) => auditInboundTaskApi(id, data).then(r => r.data.data!),
+    onSuccess: () => invalidate('inbound_submit'),
   })
 }
 

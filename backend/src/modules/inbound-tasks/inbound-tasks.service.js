@@ -6,8 +6,134 @@ const { createContainer, syncStockFromContainers, CONTAINER_STATUS, SOURCE_TYPE 
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 
 const TASK_STATUS = { 1: '待收货', 2: '收货中', 3: '待上架', 4: '已完成', 5: '已取消' }
+const RECEIPT_STATUS_LABEL = {
+  draft: '草稿',
+  submitted: '已提交到PDA',
+  receiving: '收货中',
+  printed_waiting_putaway: '已打印待上架',
+  putaway_in_progress: '上架中',
+  pending_audit: '已上架待审核',
+  audited: '已审核',
+  exception: '异常中',
+  cancelled: '已取消',
+}
+const PRINT_STATUS_LABEL = {
+  not_started: '未打印',
+  queued: '待派发',
+  printing: '打印中',
+  success: '已打印',
+  failed: '打印失败',
+  timeout: '超时待确认',
+  cancelled: '已取消',
+}
+const PUTAWAY_STATUS_LABEL = {
+  not_started: '未开始',
+  waiting: '待上架',
+  putting_away: '上架中',
+  completed: '已上架',
+  cancelled: '已取消',
+}
+const AUDIT_STATUS_LABEL = {
+  not_ready: '未到审核',
+  pending: '待审核',
+  approved: '已审核',
+  rejected: '已退回',
+  cancelled: '已取消',
+}
 
 const genTaskNo = conn => generateDailyCode(conn, 'IT', 'inbound_tasks', 'task_no')
+
+function parseJson(value) {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try {
+    return JSON.parse(String(value))
+  } catch {
+    return null
+  }
+}
+
+async function appendInboundEvent(conn, taskId, eventType, title, description = null, operator = null, payload = null) {
+  await conn.query(
+    `INSERT INTO inbound_task_events (task_id,event_type,title,description,payload_json,created_by,created_by_name)
+     VALUES (?,?,?,?,?,?,?)`,
+    [
+      taskId,
+      eventType,
+      title,
+      description || null,
+      payload ? JSON.stringify(payload) : null,
+      operator?.userId ?? null,
+      operator?.realName ?? operator?.username ?? null,
+    ],
+  )
+}
+
+function buildPrintStatus(summary, cancelled = false) {
+  if (cancelled) return { key: 'cancelled', label: PRINT_STATUS_LABEL.cancelled }
+  if (!summary || !summary.total) return { key: 'not_started', label: PRINT_STATUS_LABEL.not_started }
+  if (summary.timeout > 0) return { key: 'timeout', label: PRINT_STATUS_LABEL.timeout }
+  if (summary.failed > 0) return { key: 'failed', label: PRINT_STATUS_LABEL.failed }
+  if (summary.printing > 0) return { key: 'printing', label: PRINT_STATUS_LABEL.printing }
+  if (summary.queued > 0) return { key: 'queued', label: PRINT_STATUS_LABEL.queued }
+  if (summary.success > 0) return { key: 'success', label: PRINT_STATUS_LABEL.success }
+  return { key: 'not_started', label: PRINT_STATUS_LABEL.not_started }
+}
+
+function buildPutawayStatus(summary, cancelled = false) {
+  if (cancelled) return { key: 'cancelled', label: PUTAWAY_STATUS_LABEL.cancelled }
+  if (!summary || (!summary.waitingContainers && !summary.storedContainers)) {
+    return { key: 'not_started', label: PUTAWAY_STATUS_LABEL.not_started }
+  }
+  if (summary.waitingContainers > 0 && summary.storedContainers > 0) {
+    return { key: 'putting_away', label: PUTAWAY_STATUS_LABEL.putting_away }
+  }
+  if (summary.waitingContainers > 0) return { key: 'waiting', label: PUTAWAY_STATUS_LABEL.waiting }
+  return { key: 'completed', label: PUTAWAY_STATUS_LABEL.completed }
+}
+
+function buildAuditStatus(task) {
+  if (Number(task.status) === 5) return { key: 'cancelled', label: AUDIT_STATUS_LABEL.cancelled }
+  if (Number(task.status) < 4) return { key: 'not_ready', label: AUDIT_STATUS_LABEL.not_ready }
+  if (Number(task.auditStatus) === 1) return { key: 'approved', label: AUDIT_STATUS_LABEL.approved }
+  if (Number(task.auditStatus) === 2) return { key: 'rejected', label: AUDIT_STATUS_LABEL.rejected }
+  return { key: 'pending', label: AUDIT_STATUS_LABEL.pending }
+}
+
+function buildExceptionFlags(task) {
+  const printSummary = task.printSummary || { failed: 0, timeout: 0 }
+  const putawaySummary = task.putawaySummary || { overdueContainers: 0 }
+  const isPendingAuditOverdue = Number(task.status) === 4 && Number(task.auditStatus) === 0
+    && !!task.updatedAt
+    && (Date.now() - new Date(task.updatedAt).getTime()) > 24 * 60 * 60 * 1000
+  const flags = {
+    failedPrintJobs: Number(printSummary.failed || 0),
+    timeoutPrintJobs: Number(printSummary.timeout || 0),
+    overduePutawayContainers: Number(putawaySummary.overdueContainers || 0),
+    pendingAuditOverdue: isPendingAuditOverdue,
+    auditRejected: Number(task.auditStatus) === 2,
+  }
+  return {
+    ...flags,
+    hasException: flags.failedPrintJobs > 0
+      || flags.timeoutPrintJobs > 0
+      || flags.overduePutawayContainers > 0
+      || flags.pendingAuditOverdue
+      || flags.auditRejected,
+  }
+}
+
+function buildReceiptStatus(task) {
+  if (Number(task.status) === 5) return { key: 'cancelled', label: RECEIPT_STATUS_LABEL.cancelled }
+  if (task.exceptionFlags?.hasException) return { key: 'exception', label: RECEIPT_STATUS_LABEL.exception }
+  if (Number(task.auditStatus) === 1) return { key: 'audited', label: RECEIPT_STATUS_LABEL.audited }
+  if (Number(task.status) === 4) return { key: 'pending_audit', label: RECEIPT_STATUS_LABEL.pending_audit }
+  if (task.putawayStatus?.key === 'putting_away') return { key: 'putaway_in_progress', label: RECEIPT_STATUS_LABEL.putaway_in_progress }
+  if (Number(task.status) === 3) return { key: 'printed_waiting_putaway', label: RECEIPT_STATUS_LABEL.printed_waiting_putaway }
+  if (Number(task.status) === 2) return { key: 'receiving', label: RECEIPT_STATUS_LABEL.receiving }
+  if (task.submittedAt) return { key: 'submitted', label: RECEIPT_STATUS_LABEL.submitted }
+  return { key: 'draft', label: RECEIPT_STATUS_LABEL.draft }
+}
 
 const fmt = r => ({
   id:              r.id,
@@ -29,6 +155,14 @@ const fmt = r => ({
   operatorId:      r.operator_id       || null,
   operatorName:    r.operator_name     || null,
   remark:          r.remark            || null,
+  submittedAt:     r.submitted_at || null,
+  submittedBy:     r.submitted_by != null ? Number(r.submitted_by) : null,
+  submittedByName: r.submitted_by_name || null,
+  auditStatus:     Number(r.audit_status || 0),
+  auditRemark:     r.audit_remark || null,
+  auditedAt:       r.audited_at || null,
+  auditedBy:       r.audited_by != null ? Number(r.audited_by) : null,
+  auditedByName:   r.audited_by_name || null,
   lockVersion:     Number(r.lock_version) || 0,
   createdAt:       r.created_at,
   updatedAt:       r.updated_at,
@@ -83,6 +217,229 @@ function fmtContainer(r) {
   }
 }
 
+function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], recentPrintJobs = []) {
+  const orderedQty = items.reduce((sum, item) => sum + Number(item.orderedQty || 0), 0)
+  const receivedQty = items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0)
+  const putawayQty = items.reduce((sum, item) => sum + Number(item.putawayQty || 0), 0)
+  const printSummary = {
+    total: Number(summary.totalContainers || 0),
+    queued: Number(summary.queuedPrintJobs || 0),
+    printing: Number(summary.printingPrintJobs || 0),
+    success: Number(summary.successPrintJobs || 0),
+    failed: Number(summary.failedPrintJobs || 0),
+    timeout: Number(summary.timeoutPrintJobs || 0),
+  }
+  const putawaySummary = {
+    waitingContainers: Number(summary.waitingContainers || 0),
+    storedContainers: Number(summary.storedContainers || 0),
+    waitingQty: Number(summary.waitingQty || 0),
+    storedQty: Number(summary.storedQty || 0),
+    overdueContainers: Number(summary.overdueContainers || 0),
+  }
+  const base = {
+    ...task,
+    items,
+    orderedQty,
+    receivedQty,
+    putawayQty,
+    lineCount: items.length,
+    printSummary,
+    putawaySummary,
+    timeline,
+    recentPrintJobs,
+  }
+  base.printStatus = buildPrintStatus(printSummary, Number(task.status) === 5)
+  base.putawayStatus = buildPutawayStatus(putawaySummary, Number(task.status) === 5)
+  base.auditFlowStatus = buildAuditStatus(base)
+  base.exceptionFlags = buildExceptionFlags(base)
+  base.receiptStatus = buildReceiptStatus(base)
+  return base
+}
+
+async function loadInboundTaskClosureSummary(taskIds) {
+  const ids = [...new Set((taskIds || []).map(Number).filter(id => Number.isFinite(id) && id > 0))]
+  if (!ids.length) return new Map()
+  const placeholders = ids.map(() => '?').join(',')
+  const [itemRows] = await pool.query(
+    `SELECT
+        task_id,
+        COUNT(*) AS line_count,
+        COALESCE(SUM(ordered_qty), 0) AS ordered_qty,
+        COALESCE(SUM(received_qty), 0) AS received_qty,
+        COALESCE(SUM(putaway_qty), 0) AS putaway_qty
+     FROM inbound_task_items
+     WHERE task_id IN (${placeholders})
+     GROUP BY task_id`,
+    ids,
+  )
+
+  const [containerRows] = await pool.query(
+    `SELECT
+        c.inbound_task_id AS task_id,
+        COALESCE(SUM(CASE WHEN c.status = ? THEN 1 ELSE 0 END), 0) AS waiting_containers,
+        COALESCE(SUM(CASE WHEN c.status = ? THEN 1 ELSE 0 END), 0) AS stored_containers,
+        COALESCE(SUM(CASE WHEN c.status = ? THEN c.remaining_qty ELSE 0 END), 0) AS waiting_qty,
+        COALESCE(SUM(CASE WHEN c.status = ? THEN c.remaining_qty ELSE 0 END), 0) AS stored_qty,
+        COALESCE(SUM(CASE WHEN c.status = ? AND c.is_overdue = 1 THEN 1 ELSE 0 END), 0) AS overdue_containers,
+        COALESCE(COUNT(DISTINCT c.id), 0) AS total_containers
+     FROM inventory_containers c
+     WHERE c.inbound_task_id IN (${placeholders})
+       AND c.deleted_at IS NULL
+       AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+     GROUP BY c.inbound_task_id`,
+    [
+      CONTAINER_STATUS.PENDING_PUTAWAY,
+      CONTAINER_STATUS.ACTIVE,
+      CONTAINER_STATUS.PENDING_PUTAWAY,
+      CONTAINER_STATUS.ACTIVE,
+      CONTAINER_STATUS.PENDING_PUTAWAY,
+      ...ids,
+    ],
+  )
+
+  const [printRows] = await pool.query(
+    `SELECT
+        c.inbound_task_id AS task_id,
+        COUNT(*) AS total_jobs,
+        SUM(CASE WHEN latest.status = 0 THEN 1 ELSE 0 END) AS queued_jobs,
+        SUM(CASE WHEN latest.status = 1 THEN 1 ELSE 0 END) AS printing_jobs,
+        SUM(CASE WHEN latest.status = 2 THEN 1 ELSE 0 END) AS success_jobs,
+        SUM(CASE WHEN latest.status = 3 THEN 1 ELSE 0 END) AS failed_jobs,
+        SUM(
+          CASE
+            WHEN latest.status IN (0,1) AND latest.updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+            THEN 1 ELSE 0
+          END
+        ) AS timeout_jobs
+     FROM inventory_containers c
+     INNER JOIN (
+       SELECT ref_id, MAX(id) AS max_id
+       FROM print_jobs
+       WHERE ref_type = 'inventory_container'
+       GROUP BY ref_id
+     ) latest_ref ON latest_ref.ref_id = c.id
+     INNER JOIN print_jobs latest ON latest.id = latest_ref.max_id
+     WHERE c.inbound_task_id IN (${placeholders})
+     GROUP BY c.inbound_task_id`,
+    ids,
+  )
+
+  const map = new Map(ids.map(id => [id, {
+    lineCount: 0,
+    orderedQty: 0,
+    receivedQty: 0,
+    putawayQty: 0,
+    waitingContainers: 0,
+    storedContainers: 0,
+    waitingQty: 0,
+    storedQty: 0,
+    overdueContainers: 0,
+    totalContainers: 0,
+    queuedPrintJobs: 0,
+    printingPrintJobs: 0,
+    successPrintJobs: 0,
+    failedPrintJobs: 0,
+    timeoutPrintJobs: 0,
+  }]))
+
+  for (const row of itemRows) {
+    map.set(Number(row.task_id), {
+      ...(map.get(Number(row.task_id)) || {}),
+      lineCount: Number(row.line_count || 0),
+      orderedQty: Number(row.ordered_qty || 0),
+      receivedQty: Number(row.received_qty || 0),
+      putawayQty: Number(row.putaway_qty || 0),
+    })
+  }
+  for (const row of containerRows) {
+    map.set(Number(row.task_id), {
+      ...(map.get(Number(row.task_id)) || {}),
+      waitingContainers: Number(row.waiting_containers || 0),
+      storedContainers: Number(row.stored_containers || 0),
+      waitingQty: Number(row.waiting_qty || 0),
+      storedQty: Number(row.stored_qty || 0),
+      overdueContainers: Number(row.overdue_containers || 0),
+      totalContainers: Number(row.total_containers || 0),
+    })
+  }
+  for (const row of printRows) {
+    map.set(Number(row.task_id), {
+      ...(map.get(Number(row.task_id)) || {}),
+      queuedPrintJobs: Number(row.queued_jobs || 0),
+      printingPrintJobs: Number(row.printing_jobs || 0),
+      successPrintJobs: Number(row.success_jobs || 0),
+      failedPrintJobs: Number(row.failed_jobs || 0),
+      timeoutPrintJobs: Number(row.timeout_jobs || 0),
+    })
+  }
+  return map
+}
+
+async function loadInboundTimeline(taskId) {
+  const [rows] = await pool.query(
+    `SELECT * FROM inbound_task_events WHERE task_id = ? ORDER BY created_at DESC, id DESC`,
+    [taskId],
+  )
+  return rows.map(row => ({
+    id: Number(row.id),
+    eventType: row.event_type,
+    title: row.title,
+    description: row.description || null,
+    payload: parseJson(row.payload_json),
+    createdBy: row.created_by != null ? Number(row.created_by) : null,
+    createdByName: row.created_by_name || null,
+    createdAt: row.created_at,
+  }))
+}
+
+async function loadInboundRecentPrintJobs(taskId) {
+  const [rows] = await pool.query(
+    `SELECT
+        j.id,
+        j.status,
+        j.error_message,
+        j.ref_id,
+        j.ref_code,
+        j.created_at,
+        j.updated_at,
+        j.dispatch_reason,
+        pr.code AS printer_code,
+        pr.name AS printer_name,
+        c.product_id,
+        p.code AS product_code,
+        p.name AS product_name,
+        c.remaining_qty
+     FROM print_jobs j
+     INNER JOIN inventory_containers c
+       ON j.ref_type = 'inventory_container'
+      AND j.ref_id = c.id
+     LEFT JOIN product_items p ON p.id = c.product_id
+     LEFT JOIN printers pr ON pr.id = j.printer_id
+     WHERE c.inbound_task_id = ?
+     ORDER BY j.id DESC
+     LIMIT 20`,
+    [taskId],
+  )
+  return rows.map(row => ({
+    id: Number(row.id),
+    status: Number(row.status),
+    statusKey: row.status === 2 ? 'success' : row.status === 3 ? 'failed' : row.status === 1 ? 'printing' : 'queued',
+    statusLabel: row.status === 2 ? '已打印' : row.status === 3 ? '打印失败' : row.status === 1 ? '打印中' : '待派发',
+    printerCode: row.printer_code || null,
+    printerName: row.printer_name || null,
+    errorMessage: row.error_message || null,
+    dispatchReason: row.dispatch_reason || null,
+    containerId: row.ref_id != null ? Number(row.ref_id) : null,
+    barcode: row.ref_code || null,
+    productId: row.product_id != null ? Number(row.product_id) : null,
+    productCode: row.product_code || null,
+    productName: row.product_name || null,
+    qty: Number(row.remaining_qty || 0),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }))
+}
+
 // ── 查询 ────────────────────────────────────────────────────────────────────
 
 async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, productId = null }) {
@@ -105,7 +462,12 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
     `SELECT COUNT(*) AS total FROM inbound_tasks t WHERE ${where}`,
     params,
   )
-  return { list: rows.map(fmt), pagination: { page, pageSize, total } }
+  const list = rows.map(fmt)
+  const summaryMap = await loadInboundTaskClosureSummary(list.map(item => item.id))
+  return {
+    list: list.map(task => buildTaskWithClosure(task, [], summaryMap.get(task.id))),
+    pagination: { page, pageSize, total },
+  }
 }
 
 async function findById(id) {
@@ -113,8 +475,11 @@ async function findById(id) {
   if (!row) throw new AppError('入库任务不存在', 404)
   const task = fmt(row)
   const [items] = await pool.query('SELECT * FROM inbound_task_items WHERE task_id = ?', [id])
-  task.items = items.map(fmtItem)
-  return task
+  const formattedItems = items.map(fmtItem)
+  const summaryMap = await loadInboundTaskClosureSummary([id])
+  const timeline = await loadInboundTimeline(id)
+  const recentPrintJobs = await loadInboundRecentPrintJobs(id)
+  return buildTaskWithClosure(task, formattedItems, summaryMap.get(id), timeline, recentPrintJobs)
 }
 
 async function findPurchasableItems({ supplierId, keyword = '' }) {
@@ -208,6 +573,10 @@ async function createFromPoId(purchaseOrderId) {
         [taskId, order.id, order.orderNo, item.id, item.productId, item.productCode, item.productName, item.unit, item.quantity],
       )
     }
+    await appendInboundEvent(conn, taskId, 'created', '创建收货订单', `收货订单 ${taskNo} 已创建，等待提交到 PDA`, null, {
+      purchaseOrderNo: order.orderNo,
+      warehouseName: order.warehouseName,
+    })
     await conn.commit()
     return { taskId, taskNo }
   } catch (e) {
@@ -336,8 +705,100 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
       )
     }
 
+    await appendInboundEvent(conn, taskId, 'created', '创建收货订单', `收货订单 ${taskNo} 已创建，等待提交到 PDA`, null, {
+      supplierName: supplierName.trim(),
+      mixedPurchaseOrders: purchaseOrders.length,
+      warehouseName,
+    })
+
     await conn.commit()
     return { taskId, taskNo }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
+async function submit(taskId, operator) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[taskRow]] = await conn.query(
+      'SELECT * FROM inbound_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      [taskId],
+    )
+    if (!taskRow) throw new AppError('收货订单不存在', 404)
+    if (Number(taskRow.status) === 5) throw new AppError('已取消的收货订单不能提交到 PDA', 400)
+    if (taskRow.submitted_at) throw new AppError('该收货订单已提交到 PDA', 400)
+    await conn.query(
+      `UPDATE inbound_tasks
+       SET submitted_at = NOW(), submitted_by = ?, submitted_by_name = ?, operator_id = ?, operator_name = ?
+       WHERE id = ?`,
+      [
+        operator?.userId ?? null,
+        operator?.realName ?? operator?.username ?? null,
+        operator?.userId ?? null,
+        operator?.realName ?? operator?.username ?? null,
+        taskId,
+      ],
+    )
+    await appendInboundEvent(
+      conn,
+      taskId,
+      'submitted_to_pda',
+      '提交到PDA',
+      `收货订单 ${taskRow.task_no} 已提交到 PDA，等待现场收货`,
+      operator,
+      null,
+    )
+    await conn.commit()
+    return findById(taskId)
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
+async function audit(taskId, { action = 'approve', remark = '' } = {}, operator) {
+  const normalizedAction = String(action || 'approve').toLowerCase()
+  if (!['approve', 'reject'].includes(normalizedAction)) throw new AppError('审核动作无效', 400)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[taskRow]] = await conn.query(
+      'SELECT * FROM inbound_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      [taskId],
+    )
+    if (!taskRow) throw new AppError('收货订单不存在', 404)
+    if (Number(taskRow.status) !== 4) throw new AppError('只有已上架完成的收货订单才能审核', 400)
+    const auditStatus = normalizedAction === 'approve' ? 1 : 2
+    await conn.query(
+      `UPDATE inbound_tasks
+       SET audit_status = ?, audit_remark = ?, audited_at = NOW(), audited_by = ?, audited_by_name = ?
+       WHERE id = ?`,
+      [
+        auditStatus,
+        String(remark || '').trim() || null,
+        operator?.userId ?? null,
+        operator?.realName ?? operator?.username ?? null,
+        taskId,
+      ],
+    )
+    await appendInboundEvent(
+      conn,
+      taskId,
+      normalizedAction === 'approve' ? 'audit_approved' : 'audit_rejected',
+      normalizedAction === 'approve' ? '审核通过' : '审核退回',
+      String(remark || '').trim() || (normalizedAction === 'approve' ? '收货订单已审核通过' : '收货订单已退回，请处理异常后重新审核'),
+      operator,
+      { auditStatus },
+    )
+    await conn.commit()
+    return findById(taskId)
   } catch (e) {
     await conn.rollback()
     throw e
@@ -408,10 +869,20 @@ async function receive(taskId, payload, { userId, tenantId = 0 } = {}) {
     )
     if (!taskRow) throw new AppError('入库任务不存在', 404)
     if (Number(taskRow.status) >= 4) throw new AppError('任务已完成或已取消', 400)
+    if (!taskRow.submitted_at) throw new AppError('请先在 ERP 提交到 PDA，再开始收货', 400)
     if (Number(taskRow.status) === 3) throw new AppError('任务已全部收货，请执行上架', 400)
 
     if (Number(taskRow.status) === 1) {
       await conn.query('UPDATE inbound_tasks SET status = 2 WHERE id = ?', [taskId])
+      await appendInboundEvent(
+        conn,
+        taskId,
+        'receive_started',
+        'PDA 开始收货',
+        `现场开始收货 ${taskRow.task_no}`,
+        { userId, realName: null },
+        null,
+      )
     }
 
     const [itemRowsFresh] = await conn.query(
@@ -437,6 +908,7 @@ async function receive(taskId, payload, { userId, tenantId = 0 } = {}) {
     const line = taskItems.find(i => i.productId === productIdN)
     const unit = line?.unit || null
     const productName = line?.productName || ''
+    const itemCount = normalizedPackages.length
 
     const containers = []
     for (const pkg of normalizedPackages) {
@@ -460,6 +932,21 @@ async function receive(taskId, payload, { userId, tenantId = 0 } = {}) {
         qty: pkg.qty,
       })
     }
+
+    await appendInboundEvent(
+      conn,
+      taskId,
+      'receive_recorded',
+      '收货登记',
+      `${productName} 已登记 ${itemCount} 箱，共 ${totalQty}${unit ? ` ${unit}` : ''}`,
+      { userId, realName: null },
+      {
+        productId: productIdN,
+        productName,
+        totalQty,
+        packages: normalizedPackages.length,
+      },
+    )
 
     const [updatedItems] = await conn.query('SELECT * FROM inbound_task_items WHERE task_id = ?', [taskId])
     const allReceived = updatedItems.every(i => Number(i.received_qty) >= Number(i.ordered_qty))
@@ -507,6 +994,20 @@ async function receive(taskId, payload, { userId, tenantId = 0 } = {}) {
       if (job?.id) result.printJobIds.push(job.id)
     }
     result.printJobId = result.printJobIds[0] ?? null
+    if (result.printJobIds.length > 0) {
+      await appendInboundEvent(
+        pool,
+        taskId,
+        'print_queued',
+        '打印提交',
+        `${result.productName} 已提交 ${result.printJobIds.length} 条库存条码打印任务`,
+        { userId, realName: null },
+        {
+          printJobIds: result.printJobIds,
+          containerCodes: result.containers.map(item => item.containerCode),
+        },
+      )
+    }
   } catch (e) {
     logger.warn(`[inbound receive] 打印队列失败（收货已成功）: ${e.message}`)
   }
@@ -582,6 +1083,24 @@ async function putaway(taskId, { containerId, locationId }, operator) {
       throw new AppError('容器须为待上架状态（status=4）', 400)
     }
 
+    const [[storedBefore]] = await conn.query(
+      `SELECT COUNT(*) AS n
+       FROM inventory_containers
+       WHERE inbound_task_id = ? AND deleted_at IS NULL AND status = ?`,
+      [taskId, CONTAINER_STATUS.ACTIVE],
+    )
+    if (Number(storedBefore?.n || 0) === 0) {
+      await appendInboundEvent(
+        conn,
+        taskId,
+        'putaway_started',
+        '开始上架',
+        `开始执行收货订单 ${c.task_no} 的扫码上架`,
+        operator,
+        null,
+      )
+    }
+
     const [[loc]] = await conn.query(
       `SELECT l.id, l.code, l.warehouse_id, l.status
        FROM warehouse_locations l
@@ -642,6 +1161,21 @@ async function putaway(taskId, { containerId, locationId }, operator) {
 
     await conn.query('UPDATE inbound_tasks SET lock_version = lock_version + 1 WHERE id = ?', [taskId])
 
+    await appendInboundEvent(
+      conn,
+      taskId,
+      'putaway_recorded',
+      '完成上架',
+      `库存条码 ${c.barcode} 已上架到货架 ${loc.code}`,
+      operator,
+      {
+        containerId,
+        barcode: c.barcode,
+        locationId,
+        locationCode: loc.code,
+      },
+    )
+
     await conn.commit()
     return { barcode: c.barcode, locationCode: loc.code }
   } catch (e) {
@@ -666,7 +1200,18 @@ async function tryFinishTask(conn, taskId) {
   const allPutaway = itemRows.every(r => Number(r.putaway_qty) >= Number(r.received_qty))
   if (!allReceived || !allPutaway) return
 
-  await conn.query('UPDATE inbound_tasks SET status = 4 WHERE id = ? AND status = 3', [taskId])
+  const [res] = await conn.query('UPDATE inbound_tasks SET status = 4 WHERE id = ? AND status = 3', [taskId])
+  if (res.affectedRows > 0) {
+    await appendInboundEvent(
+      conn,
+      taskId,
+      'putaway_completed',
+      '上架完成',
+      '收货订单已全部上架，等待审核',
+      null,
+      null,
+    )
+  }
 
   const [poRows] = await conn.query(
     `SELECT DISTINCT purchase_order_id
@@ -778,6 +1323,15 @@ async function cancel(taskId) {
   )
   if (Number(n) > 0) throw new AppError('任务已产生容器，无法取消', 400)
   await pool.query('UPDATE inbound_tasks SET status = 5 WHERE id = ?', [taskId])
+  await appendInboundEvent(
+    pool,
+    taskId,
+    'cancelled',
+    '取消收货订单',
+    `收货订单 ${task.taskNo} 已取消`,
+    null,
+    null,
+  )
 }
 
 module.exports = {
@@ -786,6 +1340,8 @@ module.exports = {
   findPurchasableItems,
   createFromPoId,
   createManualTask,
+  submit,
+  audit,
   receive,
   putaway,
   listContainers,

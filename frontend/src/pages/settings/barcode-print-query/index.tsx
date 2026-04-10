@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
@@ -37,20 +38,27 @@ function statusBadge(job: BarcodePrintRecord['latestJob']) {
 
 export default function BarcodePrintQueryPage() {
   const qc = useQueryClient()
-  const [category, setCategory] = useState<BarcodePrintCategory>('inbound')
-  const [search, setSearch] = useState('')
-  const [keyword, setKeyword] = useState('')
+  const [searchParams] = useSearchParams()
+  const initialCategory = (searchParams.get('category') as BarcodePrintCategory | null) || 'inbound'
+  const initialInboundTaskId = Number(searchParams.get('inboundTaskId') || 0) || undefined
+  const initialInboundTaskItemId = Number(searchParams.get('inboundTaskItemId') || 0) || undefined
+  const initialKeyword = searchParams.get('keyword') || ''
+  const [category, setCategory] = useState<BarcodePrintCategory>(initialCategory)
+  const [search, setSearch] = useState(initialKeyword)
+  const [keyword, setKeyword] = useState(initialKeyword)
   const [status, setStatus] = useState('__all__')
   const [page, setPage] = useState(1)
 
   const query = useQuery({
-    queryKey: ['barcode-print-records', category, keyword, status, page],
+    queryKey: ['barcode-print-records', category, keyword, status, page, initialInboundTaskId, initialInboundTaskItemId],
     queryFn: () => getBarcodePrintRecordsApi({
       category,
       keyword,
       status: status === '__all__' ? undefined : status,
       page,
       pageSize: 20,
+      inboundTaskId: category === 'inbound' ? initialInboundTaskId : undefined,
+      inboundTaskItemId: category === 'inbound' ? initialInboundTaskItemId : undefined,
     }).then(r => r.data.data),
     refetchInterval: 3000,
   })
@@ -238,6 +246,13 @@ export default function BarcodePrintQueryPage() {
             重置
           </Button>
         </div>
+        {(initialInboundTaskId || initialInboundTaskItemId) && category === 'inbound' && (
+          <div className="mt-3 text-helper">
+            当前按收货订单筛选
+            {initialInboundTaskId ? ` #${initialInboundTaskId}` : ''}
+            {initialInboundTaskItemId ? ` / 明细 #${initialInboundTaskItemId}` : ''}
+          </div>
+        )}
       </FilterCard>
 
       <DataTable

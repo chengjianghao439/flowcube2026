@@ -301,6 +301,25 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           <div className="space-y-2 text-sm">
             <p className="text-muted-foreground">仓库：{task.warehouseName ?? '—'}</p>
             <p className="text-muted-foreground">关联采购：{task.purchaseOrderNo ?? '混合采购单'}</p>
+            <p className="text-muted-foreground">收货状态：{task.receiptStatus?.label ?? task.statusName}</p>
+            <p className="text-muted-foreground">打印 {task.printStatus?.label ?? '—'} · 上架 {task.putawayStatus?.label ?? '—'}</p>
+          </div>
+        </PdaCard>
+
+        <PdaCard>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div>
+              <p className="text-xs text-muted-foreground">已打印</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{task.printSummary?.success ?? 0}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">待上架</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{task.putawaySummary?.waitingContainers ?? 0}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">已上架</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{task.putawaySummary?.storedContainers ?? 0}</p>
+            </div>
           </div>
         </PdaCard>
 
@@ -389,11 +408,22 @@ export default function PdaReceivePage() {
     )
   }
 
-  if (task.status >= 3) {
+  if (!task.submittedAt) {
+    return (
+      <div className="min-h-screen bg-background p-6 text-center space-y-3">
+        <p className="text-muted-foreground">该收货订单尚未提交到 PDA，请先在 ERP 提交。</p>
+        <button type="button" className="text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回列表</button>
+      </div>
+    )
+  }
+
+  if (task.putawayStatus?.key === 'waiting' || task.putawayStatus?.key === 'putting_away' || task.status >= 3) {
     return (
       <div className="min-h-screen bg-background p-6 text-center space-y-3">
         <p className="text-muted-foreground">
-          {task.status === 3 ? '本单已收货完成，请前往「扫码上架」扫描库存条码与货架条码。' : '任务已结束'}
+          {task.putawayStatus?.key === 'waiting' || task.putawayStatus?.key === 'putting_away'
+            ? '本单已完成收货，请前往「扫码上架」扫描库存条码与货架条码。'
+            : '任务已结束'}
         </p>
         <button type="button" className="text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回列表</button>
       </div>

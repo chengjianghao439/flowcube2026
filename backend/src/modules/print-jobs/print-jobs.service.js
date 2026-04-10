@@ -110,6 +110,30 @@ function fmt(row, { includeAckToken = false } = {}) {
   return o
 }
 
+async function appendInboundPrintEventByJob(job, eventType, title, description = null, payload = null) {
+  if (!job || job.refType !== 'inventory_container' || !job.refId) return
+  const [[container]] = await pool.query(
+    `SELECT inbound_task_id, barcode
+     FROM inventory_containers
+     WHERE id = ? AND deleted_at IS NULL`,
+    [job.refId],
+  )
+  if (!container?.inbound_task_id) return
+  await pool.query(
+    `INSERT INTO inbound_task_events (task_id, event_type, title, description, payload_json, created_by, created_by_name)
+     VALUES (?,?,?,?,?,?,?)`,
+    [
+      Number(container.inbound_task_id),
+      eventType,
+      title,
+      description,
+      payload ? JSON.stringify(payload) : null,
+      null,
+      '打印中心',
+    ],
+  )
+}
+
 async function listJobsByIds(ids, { tenantId = 0, includeAckToken = false } = {}) {
   const uniq = [...new Set(ids.map(Number).filter((n) => Number.isFinite(n) && n > 0))]
   if (!uniq.length) return []
@@ -318,6 +342,13 @@ async function complete(id, { ackToken } = {}, { tenantId } = {}) {
     'UPDATE print_jobs SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW() WHERE id=? AND tenant_id=?',
     [STATUS.DONE, id, job.tenantId],
   )
+  await appendInboundPrintEventByJob(
+    job,
+    'print_completed',
+    '库存条码打印成功',
+    job.refCode ? `库存条码 ${job.refCode} 已打印` : '库存条码已打印',
+    { printJobId: job.id, barcode: job.refCode || null },
+  ).catch(() => {})
   if (latRow?.printer_id && latencyMs != null) {
     await recordPrintSuccess(latRow.printer_id, latencyMs, job.tenantId).catch(() => {})
   }
@@ -350,6 +381,13 @@ async function completeLocalDesktop(id, { tenantId } = {}) {
   if (!ur.affectedRows) {
     throw new AppError('任务状态已变更，请刷新后重试', 409)
   }
+  await appendInboundPrintEventByJob(
+    job,
+    'print_completed',
+    '库存条码打印成功',
+    job.refCode ? `库存条码 ${job.refCode} 已打印` : '库存条码已打印',
+    { printJobId: job.id, barcode: job.refCode || null },
+  ).catch(() => {})
   return findById(id, { tenantId })
 }
 
@@ -382,6 +420,13 @@ async function fail(id, errorMessage, { tenantId } = {}) {
     const [[printer]] = await pool.query('SELECT code FROM printers WHERE id=?', [job.printerId])
     if (printer) await pushToClients(printer.code, updated)
   }
+  await appendInboundPrintEventByJob(
+    job,
+    newStatus === STATUS.FAILED ? 'print_failed' : 'print_retrying',
+    newStatus === STATUS.FAILED ? '库存条码打印失败' : '库存条码打印重试',
+    msg,
+    { printJobId: job.id, barcode: job.refCode || null, retryCount: newRetry },
+  ).catch(() => {})
   return findById(id, { tenantId })
 }
 
@@ -960,21 +1005,33 @@ function normalizeBarcodeQueryKeyword(raw) {
   return String(raw || '').trim()
 }
 
-async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, tenantId = 0 } = {}) {
+async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, tenantId = 0, inboundTaskId = null, inboundTaskItemId = null } = {}) {
   const type = String(category || '').trim().toLowerCase()
   if (!['inbound', 'outbound', 'logistics'].includes(type)) {
     throw new AppError('条码分类无效', 400)
   }
-  if (type === 'inbound') return findInboundBarcodeRecords({ keyword, status, page, pageSize, tenantId })
+  if (type === 'inbound') return findInboundBarcodeRecords({ keyword, status, page, pageSize, tenantId, inboundTaskId, inboundTaskItemId })
   if (type === 'outbound') return findOutboundBarcodeRecords({ keyword, status, page, pageSize, tenantId })
   return findLogisticsBarcodeRecords({ keyword, status, page, pageSize, tenantId })
 }
 
-async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, tenantId = 0 } = {}) {
+async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, tenantId = 0, inboundTaskId = null, inboundTaskItemId = null } = {}) {
   const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
   const statusCond = status === undefined ? '' : 'AND status = ?'
   const offset = (page - 1) * pageSize
+  const inboundTaskIdNum = Number(inboundTaskId)
+  const inboundTaskItemIdNum = Number(inboundTaskItemId)
+  const inboundFilterSql = []
+  const inboundFilterParams = []
+  if (Number.isFinite(inboundTaskIdNum) && inboundTaskIdNum > 0) {
+    inboundFilterSql.push('AND c.inbound_task_id = ?')
+    inboundFilterParams.push(inboundTaskIdNum)
+  }
+  if (Number.isFinite(inboundTaskItemIdNum) && inboundTaskItemIdNum > 0) {
+    inboundFilterSql.push('AND EXISTS (SELECT 1 FROM inbound_task_items iti WHERE iti.task_id = c.inbound_task_id AND iti.id = ? AND iti.product_id = c.product_id)')
+    inboundFilterParams.push(inboundTaskItemIdNum)
+  }
 
   const subParams = [tid]
   if (status !== undefined) subParams.push(status)
@@ -1023,6 +1080,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
      ) pj ON pj.ref_id = c.id
      WHERE c.deleted_at IS NULL
        AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+       ${inboundFilterSql.join(' ')}
        AND (
          c.barcode LIKE ?
          OR IFNULL(p.code, '') LIKE ?
@@ -1031,7 +1089,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
        )
      ORDER BY c.id DESC
      LIMIT ? OFFSET ?`,
-    [...subParams, like, like, like, like, pageSize, offset],
+    [...subParams, ...inboundFilterParams, like, like, like, like, pageSize, offset],
   )
 
   const [[{ total }]] = await pool.query(
@@ -1041,19 +1099,22 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
      LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
      WHERE c.deleted_at IS NULL
        AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+       ${inboundFilterSql.join(' ')}
        AND (
          c.barcode LIKE ?
          OR IFNULL(p.code, '') LIKE ?
          OR IFNULL(p.name, '') LIKE ?
          OR IFNULL(t.task_no, '') LIKE ?
        )`,
-    [like, like, like, like],
+    [...inboundFilterParams, like, like, like, like],
   )
 
   return {
     list: rows.map((row) => ({
       category: 'inbound',
       recordId: Number(row.record_id),
+      inboundTaskId: row.inbound_task_id != null ? Number(row.inbound_task_id) : null,
+      inboundTaskItemId: null,
       barcode: row.barcode,
       barcodeLabel: '入库条码',
       barcodeKind: row.container_kind === 'plastic_box' ? '塑料盒条码' : '库存条码',

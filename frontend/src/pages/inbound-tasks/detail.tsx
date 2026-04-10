@@ -2,7 +2,7 @@
  * 收货订单详情 — 收货 / 上架 / 容器列表
  * 路由：/inbound-tasks/:id（多标签）
  */
-import { useContext, useState } from 'react'
+import { useContext, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -16,13 +16,15 @@ import {
   useInboundTaskDetail,
   useInboundTaskContainers,
   useReceiveInbound,
+  useSubmitInboundTask,
+  useAuditInboundTask,
   useCancelInbound,
 } from '@/hooks/useInboundTasks'
 import {
-  INBOUND_STATUS_LABEL,
   type InboundContainerRow,
   type InboundTaskItem,
 } from '@/types/inbound-tasks'
+import type { InboundRecentPrintJob } from '@/types/inbound-tasks'
 
 function skuRemainToReceive(items: InboundTaskItem[] | undefined, productId: number): number {
   if (!items?.length) return 0
@@ -43,6 +45,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function InboundTaskDetailPage() {
   const tabPath = useContext(TabPathContext)
   const navigate = useNavigate()
+  const addTab = useWorkspaceStore(s => s.addTab)
   const taskId = Number((tabPath || '').split('/').pop())
   const validId = Number.isFinite(taskId) && taskId > 0 ? taskId : null
 
@@ -50,10 +53,14 @@ export default function InboundTaskDetailPage() {
   const { data: containers, refetch: refetchContainers } = useInboundTaskContainers(validId)
 
   const receiveMut = useReceiveInbound()
+  const submitMut = useSubmitInboundTask()
+  const auditMut = useAuditInboundTask()
   const cancelMut = useCancelInbound()
 
   const [lineQty, setLineQty] = useState<Record<number, string>>({})
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
 
   function closeTab() {
     const { removeTab, tabs } = useWorkspaceStore.getState()
@@ -109,14 +116,40 @@ export default function InboundTaskDetailPage() {
     return <p className="p-6 text-muted-body">加载中…</p>
   }
 
-  const canReceive = task.status === 1 || task.status === 2
-  const canPutaway = task.status === 2 || task.status === 3
+  const canSubmit = task.receiptStatus?.key === 'draft'
+  const canReceive = task.receiptStatus?.key === 'submitted' || task.receiptStatus?.key === 'receiving'
+  const canPutaway = task.putawayStatus?.key === 'waiting' || task.putawayStatus?.key === 'putting_away'
+  const canAudit = task.auditFlowStatus?.key === 'pending'
   const canCancel = task.status === 1
   const waitingCount = containers?.waiting?.length ?? 0
   const storedCount = containers?.stored?.length ?? 0
   const totalWaitingQty = (containers?.waiting ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
   const totalStoredQty = (containers?.stored ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
-  const statusTone = task.status === 4 ? 'success' : task.status === 5 ? 'danger' : task.status === 1 ? 'draft' : 'active'
+  const statusTone = task.receiptStatus?.key === 'audited'
+    ? 'success'
+    : task.receiptStatus?.key === 'exception'
+      ? 'danger'
+      : task.receiptStatus?.key === 'draft'
+        ? 'draft'
+        : 'active'
+  const exceptionLines = useMemo(() => {
+    const flags = task.exceptionFlags
+    if (!flags?.hasException) return []
+    const lines: string[] = []
+    if (flags.failedPrintJobs > 0) lines.push(`${flags.failedPrintJobs} 条库存条码打印失败待补打`)
+    if (flags.timeoutPrintJobs > 0) lines.push(`${flags.timeoutPrintJobs} 条库存条码打印超时待确认`)
+    if (flags.overduePutawayContainers > 0) lines.push(`${flags.overduePutawayContainers} 箱已打印未上架超时`)
+    if (flags.pendingAuditOverdue) lines.push('该收货订单已上架但审核超时')
+    if (flags.auditRejected) lines.push('该收货订单已被审核退回')
+    return lines
+  }, [task.exceptionFlags])
+
+  function openPrintQuery(extra: Record<string, string> = {}) {
+    const searchParams = new URLSearchParams({ category: 'inbound', inboundTaskId: String(task.id), ...extra })
+    const path = `/settings/barcode-print-query?${searchParams.toString()}`
+    addTab({ key: path, title: `补打 ${task.taskNo}`, path })
+    navigate(path)
+  }
 
   return (
     <div className="space-y-5">
@@ -124,12 +157,47 @@ export default function InboundTaskDetailPage() {
         title={`收货订单 ${task.taskNo}`}
         description={
           <span className="flex flex-wrap items-center gap-2">
-            <SoftStatusLabel label={INBOUND_STATUS_LABEL[task.status]} tone={statusTone} />
-            <span className="text-muted-foreground">采购单 <span className="text-doc-code">{task.purchaseOrderNo ?? '—'}</span></span>
+            <SoftStatusLabel label={task.receiptStatus?.label ?? task.statusName} tone={statusTone} />
+            <span className="text-muted-foreground">采购单 <span className="text-doc-code">{task.purchaseOrderNo ?? '混合采购'}</span></span>
+            <span className="text-muted-foreground">供应商 <span className="text-doc-code">{task.supplierName ?? '—'}</span></span>
           </span>
         }
         actions={
           <div className="flex gap-2 flex-wrap">
+            {canSubmit && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!validId) return
+                  submitMut.mutate(validId, {
+                    onSuccess: async () => {
+                      toast.success('已提交到 PDA')
+                      await afterMutation()
+                    },
+                    onError: (err: unknown) => {
+                      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '提交失败'
+                      toast.error(msg)
+                    },
+                  })
+                }}
+                disabled={submitMut.isPending}
+              >
+                {submitMut.isPending ? '提交中...' : '提交到 PDA'}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => openPrintQuery()}>
+              查看打印 / 补打
+            </Button>
+            {canAudit && (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => setApproveConfirmOpen(true)} disabled={auditMut.isPending}>
+                  审核通过
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setRejectConfirmOpen(true)} disabled={auditMut.isPending}>
+                  审核退回
+                </Button>
+              </>
+            )}
             {canCancel && (
               <Button
                 variant="destructive"
@@ -145,10 +213,53 @@ export default function InboundTaskDetailPage() {
         }
       />
 
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-xl border border-border bg-card px-4 py-3">
+          <p className="text-helper">收货状态</p>
+          <p className="mt-1 text-lg font-semibold">{task.receiptStatus?.label ?? '—'}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card px-4 py-3">
+          <p className="text-helper">打印状态</p>
+          <p className="mt-1 text-lg font-semibold">{task.printStatus?.label ?? '—'}</p>
+          <p className="mt-1 text-helper">已打印 {task.printSummary?.success ?? 0} / 失败 {task.printSummary?.failed ?? 0}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card px-4 py-3">
+          <p className="text-helper">上架状态</p>
+          <p className="mt-1 text-lg font-semibold">{task.putawayStatus?.label ?? '—'}</p>
+          <p className="mt-1 text-helper">待上架 {task.putawaySummary?.waitingContainers ?? 0} / 已上架 {task.putawaySummary?.storedContainers ?? 0}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card px-4 py-3">
+          <p className="text-helper">审核状态</p>
+          <p className="mt-1 text-lg font-semibold">{task.auditFlowStatus?.label ?? '—'}</p>
+          <p className="mt-1 text-helper">{task.auditedAt ? `审核于 ${task.auditedAt}` : '收货完成后进入审核'}</p>
+        </div>
+      </div>
+
+      {!!exceptionLines.length && (
+        <Section title="异常提醒">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 space-y-2">
+            {exceptionLines.map(line => (
+              <p key={line} className="text-sm text-foreground">{line}</p>
+            ))}
+            <div className="pt-1">
+              <Button size="sm" variant="outline" onClick={() => openPrintQuery({ status: 'failed' })}>
+                去补打 / 排查
+              </Button>
+            </div>
+          </div>
+        </Section>
+      )}
+
       <Section title="任务明细（应到 / 已收 / 已上架）">
+        {!task.submittedAt && (
+          <div className="space-y-1.5 rounded-lg border border-slate-500/30 bg-slate-500/[0.06] px-4 py-3 text-helper">
+            <p className="font-medium text-foreground">当前仍是草稿收货订单。</p>
+            <p>请先点击“提交到 PDA”，再由 PDA 执行收货、打印库存条码和上架。</p>
+          </div>
+        )}
         {canReceive && (
           <div className="space-y-1.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-helper">
-            <p className="font-medium text-foreground">电脑端适合补录单箱收货，批量多箱建议在 PDA 收货。</p>
+            <p className="font-medium text-foreground">电脑端只保留补录单箱收货，现场主流程请走 PDA。</p>
             <p>电脑端每次只补录 1 箱，提交后会生成 1 个库存条码并加入打印队列。</p>
           </div>
         )}
@@ -228,8 +339,9 @@ export default function InboundTaskDetailPage() {
           <div className="rounded-lg border border-sky-500/35 bg-sky-500/[0.08] px-4 py-3 text-sm space-y-1.5">
             <p className="font-medium text-sky-950 dark:text-sky-100">请使用 PDA 扫码完成上架</p>
             <p className="text-muted-body">
-              在 PDA「扫码上架」进入本任务，依次扫描库存条码（I）与货架条码（R）。如果库存条码丢失或打印残缺，可去「条码打印查询」补打。
+              在 PDA「扫码上架」进入本任务，依次扫描库存条码（I）与货架条码（R）。如果库存条码丢失或打印残缺，可直接去本单的打印查询补打。
             </p>
+            <Button size="sm" variant="outline" onClick={() => openPrintQuery()} className="mt-1">打开本单补打</Button>
           </div>
 
           {!containers?.waiting?.length ? (
@@ -282,6 +394,49 @@ export default function InboundTaskDetailPage() {
         )}
       </Section>
 
+      <Section title="最近打印记录">
+        {!task.recentPrintJobs?.length ? (
+          <p className="text-muted-body">本单暂无打印记录</p>
+        ) : (
+          <div className="space-y-2">
+            {task.recentPrintJobs.map((job: InboundRecentPrintJob) => (
+              <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <div className="font-medium text-foreground">{job.productName ?? job.barcode ?? '库存条码'}</div>
+                  <div className="text-doc-code-muted">{job.barcode ?? '—'} · {job.statusLabel}</div>
+                  <div className="text-helper">{job.printerCode ?? job.printerName ?? '未绑定打印机'}{job.errorMessage ? ` · ${job.errorMessage}` : ''}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-helper">{job.updatedAt}</span>
+                  <Button size="sm" variant="outline" onClick={() => openPrintQuery(job.barcode ? { keyword: job.barcode } : {})}>
+                    补打
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section title="操作时间线">
+        {!task.timeline?.length ? (
+          <p className="text-muted-body">暂无时间线记录</p>
+        ) : (
+          <div className="space-y-3">
+            {task.timeline.map(event => (
+              <div key={event.id} className="rounded-lg border border-border px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-foreground">{event.title}</span>
+                  <span className="text-helper">{event.createdAt}</span>
+                  {event.createdByName && <span className="text-helper">· {event.createdByName}</span>}
+                </div>
+                {event.description && <p className="mt-1 text-sm text-muted-foreground">{event.description}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
       <ConfirmDialog
         open={cancelConfirmOpen}
         title="取消收货订单"
@@ -301,6 +456,50 @@ export default function InboundTaskDetailPage() {
           })
         }}
         onCancel={() => setCancelConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={approveConfirmOpen}
+        title="审核通过"
+        description="确认该收货订单已完成收货、打印与上架，并正式通过审核？"
+        confirmText="审核通过"
+        loading={auditMut.isPending}
+        onConfirm={() => {
+          if (!validId) return
+          auditMut.mutate({ id: validId, data: { action: 'approve' } }, {
+            onSuccess: async () => {
+              setApproveConfirmOpen(false)
+              toast.success('审核通过')
+              await afterMutation()
+            },
+            onError: (err: unknown) => {
+              toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '审核失败')
+            },
+          })
+        }}
+        onCancel={() => setApproveConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={rejectConfirmOpen}
+        title="审核退回"
+        description="确认将该收货订单退回异常处理？退回后会进入异常状态，需补打或补录后再处理。"
+        confirmText="确认退回"
+        loading={auditMut.isPending}
+        onConfirm={() => {
+          if (!validId) return
+          auditMut.mutate({ id: validId, data: { action: 'reject' } }, {
+            onSuccess: async () => {
+              setRejectConfirmOpen(false)
+              toast.success('已退回')
+              await afterMutation()
+            },
+            onError: (err: unknown) => {
+              toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '退回失败')
+            },
+          })
+        }}
+        onCancel={() => setRejectConfirmOpen(false)}
       />
     </div>
   )

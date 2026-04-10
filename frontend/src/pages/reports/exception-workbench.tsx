@@ -43,6 +43,14 @@ function detectActionTarget(issue: Pick<SystemHealthIssue, 'checkType' | 'relate
   if (checkType === 'LONG_PENDING_RESERVATION' || checkType === 'RESERVED_EXCEEDS_ON_HAND' || checkType === 'NEGATIVE_ON_HAND') {
     return { path: '/inventory/overview', title: '库存总览', actionLabel: '查看库存总览' }
   }
+  if (
+    checkType === 'INBOUND_PRINT_FAILED'
+    || checkType === 'INBOUND_PUTAWAY_TIMEOUT'
+    || checkType === 'INBOUND_AUDIT_TIMEOUT'
+    || table === 'inbound_tasks'
+  ) {
+    return { path: '/inbound-tasks', title: '收货订单', actionLabel: '查看收货订单' }
+  }
   return { path: '/reports/pda-anomaly', title: 'PDA 异常分析', actionLabel: '查看异常分析' }
 }
 
@@ -127,6 +135,12 @@ export default function ExceptionWorkbenchPage() {
               onClick={() => openPath('/settings/barcode-print-query', '条码打印查询')}
             >
               打开补打中心
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => openPath('/inbound-tasks', '收货订单')}
+            >
+              打开收货订单
             </Button>
             <Button
               variant="outline"

@@ -9,6 +9,7 @@ import type {
   CreateInboundTaskResult,
   CreateInboundTaskParams,
   InboundPurchaseCandidate,
+  AuditInboundTaskParams,
 } from '@/types/inbound-tasks'
 
 export const getInboundTasksApi = (params: QueryParams & { status?: number; productId?: number }) =>
@@ -22,6 +23,12 @@ export const createInboundTaskApi = (data: CreateInboundTaskParams) =>
 
 export const getInboundTaskByIdApi = (id: number) =>
   client.get<ApiResponse<InboundTask>>(`/inbound-tasks/${id}`)
+
+export const submitInboundTaskApi = (id: number) =>
+  client.post<ApiResponse<InboundTask>>(`/inbound-tasks/${id}/submit`)
+
+export const auditInboundTaskApi = (id: number, data: AuditInboundTaskParams) =>
+  client.post<ApiResponse<InboundTask>>(`/inbound-tasks/${id}/audit`, data)
 
 export const getInboundTaskContainersApi = (id: number) =>
   client.get<ApiResponse<InboundContainersResult>>(`/inbound-tasks/${id}/containers`)

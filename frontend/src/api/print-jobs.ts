@@ -8,6 +8,8 @@ export const getBarcodePrintRecordsApi = (params: {
   status?: string
   page?: number
   pageSize?: number
+  inboundTaskId?: number
+  inboundTaskItemId?: number
 }) =>
   client.get<ApiResponse<BarcodePrintRecordPage>>('/print-jobs/barcodes', { params })
 

@@ -26,7 +26,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { SupplierFinder, FinderTrigger } from '@/components/finder'
 import { ProductFinder } from '@/components/finder'
 import type { FinderResult } from '@/types/finder'
-import { useCreateInboundTask, useInboundPurchaseCandidates } from '@/hooks/useInboundTasks'
+import { useAuditInboundTask, useCreateInboundTask, useInboundPurchaseCandidates, useSubmitInboundTask } from '@/hooks/useInboundTasks'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
@@ -299,6 +299,8 @@ export default function InboundTasksPage() {
   const [productFinderOpen, setProductFinderOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
+  const submitMut = useSubmitInboundTask()
+  const auditMut = useAuditInboundTask()
 
   const { data, isLoading } = useQuery({
     queryKey: ['inbound-tasks', keyword, statusFilter, product?.id ?? null, page],
@@ -338,11 +340,17 @@ export default function InboundTasksPage() {
     {
       key: 'status',
       title: '状态',
-      width: 90,
-      render: v => {
-        const status = v as InboundTaskStatus
-        const tone = status === 4 ? 'success' : status === 5 ? 'danger' : status === 1 ? 'draft' : 'active'
-        return <SoftStatusLabel label={INBOUND_STATUS_LABEL[status]} tone={tone} />
+      width: 120,
+      render: (_, row) => {
+        const task = row as InboundTask
+        const tone = task.receiptStatus?.key === 'audited'
+          ? 'success'
+          : task.receiptStatus?.key === 'exception'
+            ? 'danger'
+            : task.receiptStatus?.key === 'draft'
+              ? 'draft'
+              : 'active'
+        return <SoftStatusLabel label={task.receiptStatus?.label ?? INBOUND_STATUS_LABEL[task.status]} tone={tone} />
       },
     },
     {
@@ -360,13 +368,58 @@ export default function InboundTasksPage() {
       key: 'id',
       title: '操作',
       width: 140,
-      render: (_, row) => (
-        <TableActionsMenu
-          primaryLabel="详情"
-          onPrimaryClick={() => openDetail(row as InboundTask)}
-          items={[]}
-        />
-      ),
+      render: (_, row) => {
+        const task = row as InboundTask
+        const items = []
+        if (task.receiptStatus?.key === 'draft') {
+          items.push({
+            label: '提交到 PDA',
+            onClick: () => {
+              submitMut.mutate(task.id, {
+                onSuccess: () => toast.success('已提交到 PDA'),
+                onError: (error: unknown) => toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '提交失败'),
+              })
+            },
+          })
+        }
+        if (task.auditFlowStatus?.key === 'pending') {
+          items.push(
+            {
+              label: '审核通过',
+              onClick: () => {
+                auditMut.mutate({ id: task.id, data: { action: 'approve' } }, {
+                  onSuccess: () => toast.success('审核通过'),
+                  onError: (error: unknown) => toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '审核失败'),
+                })
+              },
+            },
+            {
+              label: '审核退回',
+              onClick: () => {
+                auditMut.mutate({ id: task.id, data: { action: 'reject' } }, {
+                  onSuccess: () => toast.success('已退回'),
+                  onError: (error: unknown) => toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '退回失败'),
+                })
+              },
+            },
+          )
+        }
+        items.push({
+          label: '查看打印 / 补打',
+          onClick: () => {
+            const path = `/settings/barcode-print-query?category=inbound&inboundTaskId=${task.id}`
+            addTab({ key: path, title: `补打 ${task.taskNo}`, path })
+            navigate(path)
+          },
+        })
+        return (
+          <TableActionsMenu
+            primaryLabel="详情"
+            onPrimaryClick={() => openDetail(task)}
+            items={items}
+          />
+        )
+      },
     },
   ]
 
