@@ -4,6 +4,8 @@ const logger = require('../../utils/logger')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { createContainer, syncStockFromContainers, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
+const { getInboundClosureThresholds, DEFAULT_INBOUND_THRESHOLDS } = require('../../utils/inboundThresholds')
 
 const TASK_STATUS = { 1: '待收货', 2: '收货中', 3: '待上架', 4: '已完成', 5: '已取消' }
 const RECEIPT_STATUS_LABEL = {
@@ -105,7 +107,7 @@ function buildExceptionFlags(task) {
   const putawaySummary = task.putawaySummary || { overdueContainers: 0 }
   const isPendingAuditOverdue = Number(task.status) === 4 && Number(task.auditStatus) === 0
     && !!task.updatedAt
-    && (Date.now() - new Date(task.updatedAt).getTime()) > 24 * 60 * 60 * 1000
+    && (Date.now() - new Date(task.updatedAt).getTime()) > Number(task.auditTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.auditTimeoutHours) * 60 * 60 * 1000
   const flags = {
     failedPrintJobs: Number(printSummary.failed || 0),
     timeoutPrintJobs: Number(printSummary.timeout || 0),
@@ -121,6 +123,17 @@ function buildExceptionFlags(task) {
       || flags.pendingAuditOverdue
       || flags.auditRejected,
   }
+}
+
+async function ensureInboundTaskExists(conn, taskId) {
+  const [[taskRow]] = await conn.query(
+    `SELECT id, task_no, status, audit_status, updated_at
+     FROM inbound_tasks
+     WHERE id = ? AND deleted_at IS NULL`,
+    [taskId],
+  )
+  if (!taskRow) throw new AppError('收货订单不存在', 404)
+  return taskRow
 }
 
 function buildReceiptStatus(task) {
@@ -217,7 +230,7 @@ function fmtContainer(r) {
   }
 }
 
-function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], recentPrintJobs = []) {
+function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], recentPrintJobs = [], thresholds = DEFAULT_INBOUND_THRESHOLDS) {
   const orderedQty = items.reduce((sum, item) => sum + Number(item.orderedQty || 0), 0)
   const receivedQty = items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0)
   const putawayQty = items.reduce((sum, item) => sum + Number(item.putawayQty || 0), 0)
@@ -247,6 +260,9 @@ function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], rec
     putawaySummary,
     timeline,
     recentPrintJobs,
+    printTimeoutMinutes: Number(thresholds.printTimeoutMinutes || DEFAULT_INBOUND_THRESHOLDS.printTimeoutMinutes),
+    putawayTimeoutHours: Number(thresholds.putawayTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.putawayTimeoutHours),
+    auditTimeoutHours: Number(thresholds.auditTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.auditTimeoutHours),
   }
   base.printStatus = buildPrintStatus(printSummary, Number(task.status) === 5)
   base.putawayStatus = buildPutawayStatus(putawaySummary, Number(task.status) === 5)
@@ -256,10 +272,12 @@ function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], rec
   return base
 }
 
-async function loadInboundTaskClosureSummary(taskIds) {
+async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOUND_THRESHOLDS) {
   const ids = [...new Set((taskIds || []).map(Number).filter(id => Number.isFinite(id) && id > 0))]
   if (!ids.length) return new Map()
   const placeholders = ids.map(() => '?').join(',')
+  const printTimeoutMinutes = Number(thresholds.printTimeoutMinutes || DEFAULT_INBOUND_THRESHOLDS.printTimeoutMinutes)
+  const putawayTimeoutHours = Number(thresholds.putawayTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.putawayTimeoutHours)
   const [itemRows] = await pool.query(
     `SELECT
         task_id,
@@ -280,7 +298,16 @@ async function loadInboundTaskClosureSummary(taskIds) {
         COALESCE(SUM(CASE WHEN c.status = ? THEN 1 ELSE 0 END), 0) AS stored_containers,
         COALESCE(SUM(CASE WHEN c.status = ? THEN c.remaining_qty ELSE 0 END), 0) AS waiting_qty,
         COALESCE(SUM(CASE WHEN c.status = ? THEN c.remaining_qty ELSE 0 END), 0) AS stored_qty,
-        COALESCE(SUM(CASE WHEN c.status = ? AND c.is_overdue = 1 THEN 1 ELSE 0 END), 0) AS overdue_containers,
+        COALESCE(SUM(
+          CASE
+            WHEN c.status = ?
+             AND (
+               (c.putaway_deadline_at IS NOT NULL AND c.putaway_deadline_at < NOW())
+               OR (c.putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, c.created_at, NOW()) >= ?)
+             )
+            THEN 1 ELSE 0
+          END
+        ), 0) AS overdue_containers,
         COALESCE(COUNT(DISTINCT c.id), 0) AS total_containers
      FROM inventory_containers c
      WHERE c.inbound_task_id IN (${placeholders})
@@ -293,6 +320,7 @@ async function loadInboundTaskClosureSummary(taskIds) {
       CONTAINER_STATUS.PENDING_PUTAWAY,
       CONTAINER_STATUS.ACTIVE,
       CONTAINER_STATUS.PENDING_PUTAWAY,
+      putawayTimeoutHours,
       ...ids,
     ],
   )
@@ -304,10 +332,13 @@ async function loadInboundTaskClosureSummary(taskIds) {
         SUM(CASE WHEN latest.status = 0 THEN 1 ELSE 0 END) AS queued_jobs,
         SUM(CASE WHEN latest.status = 1 THEN 1 ELSE 0 END) AS printing_jobs,
         SUM(CASE WHEN latest.status = 2 THEN 1 ELSE 0 END) AS success_jobs,
-        SUM(CASE WHEN latest.status = 3 THEN 1 ELSE 0 END) AS failed_jobs,
+        SUM(CASE WHEN latest.status = 3 AND IFNULL(latest.error_message, '') <> ? THEN 1 ELSE 0 END) AS failed_jobs,
         SUM(
           CASE
-            WHEN latest.status IN (0,1) AND latest.updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+            WHEN (
+              (latest.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, latest.updated_at, NOW()) >= ?)
+              OR (latest.status = 3 AND IFNULL(latest.error_message, '') = ?)
+            )
             THEN 1 ELSE 0
           END
         ) AS timeout_jobs
@@ -321,7 +352,7 @@ async function loadInboundTaskClosureSummary(taskIds) {
      INNER JOIN print_jobs latest ON latest.id = latest_ref.max_id
      WHERE c.inbound_task_id IN (${placeholders})
      GROUP BY c.inbound_task_id`,
-    ids,
+    [EXPIRE_MESSAGE, printTimeoutMinutes, EXPIRE_MESSAGE, ...ids],
   )
 
   const map = new Map(ids.map(id => [id, {
@@ -392,7 +423,24 @@ async function loadInboundTimeline(taskId) {
   }))
 }
 
-async function loadInboundRecentPrintJobs(taskId) {
+function deriveInboundPrintJobState(row, thresholds = DEFAULT_INBOUND_THRESHOLDS) {
+  const rawStatus = Number(row.status)
+  const timedOut = (
+    (rawStatus === 0 || rawStatus === 1)
+      && !!row.updated_at
+      && (Date.now() - new Date(row.updated_at).getTime()) >= Number(thresholds.printTimeoutMinutes || DEFAULT_INBOUND_THRESHOLDS.printTimeoutMinutes) * 60 * 1000
+  ) || (rawStatus === 3 && String(row.error_message || '') === EXPIRE_MESSAGE)
+
+  if (Number(row.task_status) === 5) return { key: 'cancelled', label: PRINT_STATUS_LABEL.cancelled }
+  if (timedOut) return { key: 'timeout', label: PRINT_STATUS_LABEL.timeout }
+  if (rawStatus === 2) return { key: 'success', label: PRINT_STATUS_LABEL.success }
+  if (rawStatus === 3) return { key: 'failed', label: PRINT_STATUS_LABEL.failed }
+  if (rawStatus === 1) return { key: 'printing', label: PRINT_STATUS_LABEL.printing }
+  if (rawStatus === 0) return { key: 'queued', label: PRINT_STATUS_LABEL.queued }
+  return { key: 'queued', label: PRINT_STATUS_LABEL.queued }
+}
+
+async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_THRESHOLDS) {
   const [rows] = await pool.query(
     `SELECT
         j.id,
@@ -405,6 +453,7 @@ async function loadInboundRecentPrintJobs(taskId) {
         j.dispatch_reason,
         pr.code AS printer_code,
         pr.name AS printer_name,
+        t.status AS task_status,
         c.product_id,
         p.code AS product_code,
         p.name AS product_name,
@@ -413,6 +462,7 @@ async function loadInboundRecentPrintJobs(taskId) {
      INNER JOIN inventory_containers c
        ON j.ref_type = 'inventory_container'
       AND j.ref_id = c.id
+     LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
      LEFT JOIN product_items p ON p.id = c.product_id
      LEFT JOIN printers pr ON pr.id = j.printer_id
      WHERE c.inbound_task_id = ?
@@ -421,10 +471,9 @@ async function loadInboundRecentPrintJobs(taskId) {
     [taskId],
   )
   return rows.map(row => ({
+    ...deriveInboundPrintJobState(row, thresholds),
     id: Number(row.id),
     status: Number(row.status),
-    statusKey: row.status === 2 ? 'success' : row.status === 3 ? 'failed' : row.status === 1 ? 'printing' : 'queued',
-    statusLabel: row.status === 2 ? '已打印' : row.status === 3 ? '打印失败' : row.status === 1 ? '打印中' : '待派发',
     printerCode: row.printer_code || null,
     printerName: row.printer_name || null,
     errorMessage: row.error_message || null,
@@ -463,9 +512,10 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
     params,
   )
   const list = rows.map(fmt)
-  const summaryMap = await loadInboundTaskClosureSummary(list.map(item => item.id))
+  const thresholds = await getInboundClosureThresholds()
+  const summaryMap = await loadInboundTaskClosureSummary(list.map(item => item.id), thresholds)
   return {
-    list: list.map(task => buildTaskWithClosure(task, [], summaryMap.get(task.id))),
+    list: list.map(task => buildTaskWithClosure(task, [], summaryMap.get(task.id), [], [], thresholds)),
     pagination: { page, pageSize, total },
   }
 }
@@ -476,10 +526,11 @@ async function findById(id) {
   const task = fmt(row)
   const [items] = await pool.query('SELECT * FROM inbound_task_items WHERE task_id = ?', [id])
   const formattedItems = items.map(fmtItem)
-  const summaryMap = await loadInboundTaskClosureSummary([id])
+  const thresholds = await getInboundClosureThresholds()
+  const summaryMap = await loadInboundTaskClosureSummary([id], thresholds)
   const timeline = await loadInboundTimeline(id)
-  const recentPrintJobs = await loadInboundRecentPrintJobs(id)
-  return buildTaskWithClosure(task, formattedItems, summaryMap.get(id), timeline, recentPrintJobs)
+  const recentPrintJobs = await loadInboundRecentPrintJobs(id, thresholds)
+  return buildTaskWithClosure(task, formattedItems, summaryMap.get(id), timeline, recentPrintJobs, thresholds)
 }
 
 async function findPurchasableItems({ supplierId, keyword = '' }) {
@@ -1262,19 +1313,20 @@ async function syncPurchaseOrderStatus(conn, purchaseOrderId) {
   )
 }
 
-/** 刷新待上架超时标记（按 putaway_deadline_at 或创建超过 24h） */
+/** 刷新待上架超时标记（按 putaway_deadline_at 或系统设置阈值） */
 async function refreshPutawayOverdueMarks() {
   try {
+    const thresholds = await getInboundClosureThresholds()
     const [u] = await pool.query(
       `UPDATE inventory_containers
        SET putaway_flagged_overdue = 1, is_overdue = 1
        WHERE status = ? AND deleted_at IS NULL AND (is_legacy = 0 OR is_legacy IS NULL)
          AND (
            (putaway_deadline_at IS NOT NULL AND putaway_deadline_at < NOW())
-           OR (putaway_deadline_at IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR))
+           OR (putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, created_at, NOW()) >= ?)
          )
          AND (is_overdue = 0 OR is_overdue IS NULL)`,
-      [CONTAINER_STATUS.PENDING_PUTAWAY],
+      [CONTAINER_STATUS.PENDING_PUTAWAY, Number(thresholds.putawayTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.putawayTimeoutHours)],
     )
     if (u.affectedRows > 0) {
       logger.warn(`[PutawayOverdue] 新标记 ${u.affectedRows} 个待上架超时容器`)
@@ -1314,6 +1366,108 @@ async function listAllPendingPutawayContainers() {
   }))
 }
 
+async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } = {}, operator = null, tenantId = 0) {
+  const normalizedMode = String(mode || 'task').trim().toLowerCase()
+  if (!['task', 'item', 'barcode'].includes(normalizedMode)) throw new AppError('补打模式无效', 400)
+
+  const conn = await pool.getConnection()
+  try {
+    const taskRow = await ensureInboundTaskExists(conn, taskId)
+
+    let containers = []
+    let title = '发起补打'
+    let description = ''
+    let payload = null
+
+    if (normalizedMode === 'task') {
+      const [rows] = await conn.query(
+        `SELECT id, barcode, remaining_qty, warehouse_id, product_name
+         FROM inventory_containers
+         WHERE inbound_task_id = ? AND deleted_at IS NULL AND (is_legacy = 0 OR is_legacy IS NULL)
+         ORDER BY id ASC`,
+        [taskId],
+      )
+      containers = rows
+      title = '整单补打'
+      description = `收货订单 ${taskRow.task_no} 发起整单补打`
+      payload = { mode: 'task' }
+    } else if (normalizedMode === 'item') {
+      const [[item]] = await conn.query(
+        `SELECT id, product_id, product_name
+         FROM inbound_task_items
+         WHERE id = ? AND task_id = ?`,
+        [itemId, taskId],
+      )
+      if (!item) throw new AppError('收货明细不存在', 404)
+      const [rows] = await conn.query(
+        `SELECT id, barcode, remaining_qty, warehouse_id, product_name
+         FROM inventory_containers
+         WHERE inbound_task_id = ? AND product_id = ? AND deleted_at IS NULL AND (is_legacy = 0 OR is_legacy IS NULL)
+         ORDER BY id ASC`,
+        [taskId, item.product_id],
+      )
+      containers = rows
+      title = '明细补打'
+      description = `收货订单 ${taskRow.task_no} 对商品 ${item.product_name} 发起补打`
+      payload = { mode: 'item', itemId: Number(item.id), productId: Number(item.product_id) }
+    } else {
+      const code = String(barcode || '').trim()
+      if (!code) throw new AppError('库存条码不能为空', 400)
+      const [rows] = await conn.query(
+        `SELECT id, barcode, remaining_qty, warehouse_id, product_name
+         FROM inventory_containers
+         WHERE inbound_task_id = ? AND barcode = ? AND deleted_at IS NULL AND (is_legacy = 0 OR is_legacy IS NULL)
+         LIMIT 1`,
+        [taskId, code],
+      )
+      containers = rows
+      title = '条码补打'
+      description = `收货订单 ${taskRow.task_no} 对库存条码 ${code} 发起补打`
+      payload = { mode: 'barcode', barcode: code }
+    }
+
+    if (!containers.length) throw new AppError('没有可补打的库存条码', 400)
+
+    const jobs = []
+    for (const container of containers) {
+      const job = await enqueueContainerLabelJob({
+        containerId: Number(container.id),
+        tenantId,
+        warehouseId: container.warehouse_id != null ? Number(container.warehouse_id) : null,
+        data: {
+          container_code: container.barcode,
+          product_name: container.product_name,
+          qty: container.remaining_qty,
+        },
+        createdBy: operator?.userId ?? null,
+        jobUniqueKey: `reprint_inbound:${taskId}:${normalizedMode}:${container.id}:${Date.now()}`,
+      })
+      if (job) jobs.push(job)
+    }
+
+    await appendInboundEvent(
+      pool,
+      taskId,
+      'print_requeued',
+      title,
+      `${description}，共 ${jobs.length} 条`,
+      operator,
+      { ...payload, jobIds: jobs.map(job => Number(job.id)) },
+    )
+    return {
+      taskId: Number(taskId),
+      mode: normalizedMode,
+      count: jobs.length,
+      jobIds: jobs.map(job => Number(job.id)),
+      barcodes: containers.map(item => item.barcode),
+    }
+  } catch (error) {
+    throw error
+  } finally {
+    conn.release()
+  }
+}
+
 async function cancel(taskId) {
   const task = await findById(taskId)
   if (task.status !== 1) throw new AppError('仅待收货状态的任务可取消', 400)
@@ -1349,5 +1503,6 @@ module.exports = {
   listStoredContainers,
   refreshPutawayOverdueMarks,
   listAllPendingPutawayContainers,
+  reprint,
   cancel,
 }

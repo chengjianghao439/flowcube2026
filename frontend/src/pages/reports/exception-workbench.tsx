@@ -24,9 +24,14 @@ function severityBadge(level: string) {
   return <Badge variant="outline">低风险</Badge>
 }
 
-function detectActionTarget(issue: Pick<SystemHealthIssue, 'checkType' | 'relatedTable'> | Pick<SystemHealthLog, 'check_type' | 'related_table'>) {
+function detectActionTarget(
+  issue:
+    | Pick<SystemHealthIssue, 'checkType' | 'relatedTable' | 'relatedId'>
+    | Pick<SystemHealthLog, 'check_type' | 'related_table' | 'related_id'>,
+) {
   const checkType = 'checkType' in issue ? issue.checkType : issue.check_type
   const table = 'relatedTable' in issue ? issue.relatedTable : issue.related_table
+  const relatedId = 'relatedId' in issue ? issue.relatedId : issue.related_id
 
   if (checkType === 'ORPHANED_RESERVATION' || checkType === 'CONFIRMED_SALE_NO_RESERVATION') {
     return { path: '/sale', title: '销售管理', actionLabel: '查看销售单' }
@@ -49,6 +54,9 @@ function detectActionTarget(issue: Pick<SystemHealthIssue, 'checkType' | 'relate
     || checkType === 'INBOUND_AUDIT_TIMEOUT'
     || table === 'inbound_tasks'
   ) {
+    if (relatedId) {
+      return { path: `/inbound-tasks/${relatedId}`, title: `收货订单 #${relatedId}`, actionLabel: '打开收货详情' }
+    }
     return { path: '/inbound-tasks', title: '收货订单', actionLabel: '查看收货订单' }
   }
   return { path: '/reports/pda-anomaly', title: 'PDA 异常分析', actionLabel: '查看异常分析' }

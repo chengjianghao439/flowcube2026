@@ -2,12 +2,14 @@ const { Router } = require('express')
 const { pool } = require('../../config/db')
 const { successResponse } = require('../../utils/response')
 const { authMiddleware } = require('../../middleware/auth')
+const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const router = Router()
 router.use(authMiddleware)
 
 router.get('/', async (req, res, next) => {
   try {
     const threshold = 10 // 低库存阈值
+    const inboundThresholds = await getInboundClosureThresholds()
 
     const [[{ pendingPurchase }]] = await pool.query(
       `SELECT COUNT(*) AS pendingPurchase FROM purchase_orders WHERE status IN (1,2) AND deleted_at IS NULL`
@@ -44,15 +46,53 @@ router.get('/', async (req, res, next) => {
     const [[{ inboundPrintFailures }]] = await pool.query(
       `SELECT COUNT(*) AS inboundPrintFailures
        FROM print_jobs j
-       WHERE j.ref_type = 'inventory_container' AND j.status = 3`
+       WHERE j.ref_type = 'inventory_container'
+         AND (
+           (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
+           OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
+           OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
+         )`,
+      [Number(inboundThresholds.printTimeoutMinutes)],
+    )
+    const [[failedInboundTarget]] = await pool.query(
+      `SELECT c.inbound_task_id AS taskId
+       FROM print_jobs j
+       INNER JOIN inventory_containers c ON c.id = j.ref_id AND j.ref_type = 'inventory_container'
+       WHERE c.inbound_task_id IS NOT NULL
+         AND (
+           (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
+           OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
+           OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
+         )
+       ORDER BY j.updated_at DESC
+       LIMIT 1`,
+      [Number(inboundThresholds.printTimeoutMinutes)],
     )
     const [[{ overdueInboundPutaway }]] = await pool.query(
       `SELECT COUNT(*) AS overdueInboundPutaway
        FROM inventory_containers
        WHERE deleted_at IS NULL
-         AND is_overdue = 1
          AND status = 0
-         AND inbound_task_id IS NOT NULL`
+         AND inbound_task_id IS NOT NULL
+         AND (
+           (putaway_deadline_at IS NOT NULL AND putaway_deadline_at < NOW())
+           OR (putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, created_at, NOW()) >= ?)
+         )`,
+      [Number(inboundThresholds.putawayTimeoutHours)],
+    )
+    const [[putawayTimeoutTarget]] = await pool.query(
+      `SELECT inbound_task_id AS taskId
+       FROM inventory_containers
+       WHERE deleted_at IS NULL
+         AND status = 0
+         AND inbound_task_id IS NOT NULL
+         AND (
+           (putaway_deadline_at IS NOT NULL AND putaway_deadline_at < NOW())
+           OR (putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, created_at, NOW()) >= ?)
+         )
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [Number(inboundThresholds.putawayTimeoutHours)],
     )
     const [[{ pendingInboundAudit }]] = await pool.query(
       `SELECT COUNT(*) AS pendingInboundAudit
@@ -60,7 +100,19 @@ router.get('/', async (req, res, next) => {
        WHERE deleted_at IS NULL
          AND status = 4
          AND audit_status = 0
-         AND updated_at < NOW() - INTERVAL 24 HOUR`
+         AND TIMESTAMPDIFF(HOUR, updated_at, NOW()) >= ?`,
+      [Number(inboundThresholds.auditTimeoutHours)],
+    )
+    const [[pendingAuditTarget]] = await pool.query(
+      `SELECT id AS taskId
+       FROM inbound_tasks
+       WHERE deleted_at IS NULL
+         AND status = 4
+         AND audit_status = 0
+         AND TIMESTAMPDIFF(HOUR, updated_at, NOW()) >= ?
+       ORDER BY updated_at ASC
+       LIMIT 1`,
+      [Number(inboundThresholds.auditTimeoutHours)],
     )
     const [[{ healthAnomalies }]] = await pool.query(
       `SELECT COUNT(*) AS healthAnomalies
@@ -81,9 +133,9 @@ router.get('/', async (req, res, next) => {
     if (pendingTransfer > 0) items.push({ type: 'info', icon: '🔄', text: `${pendingTransfer} 笔调拨单待处理`, path: '/transfer' })
     if (pendingInbound > 0) items.push({ type: 'info', icon: '📥', text: `${pendingInbound} 笔收货订单待处理`, path: '/inbound-tasks' })
     if (failedPrintJobs > 0) items.push({ type: 'warning', icon: '🖨️', text: `${failedPrintJobs} 条打印任务失败，建议补打`, path: '/settings/barcode-print-query' })
-    if (inboundPrintFailures > 0) items.push({ type: 'warning', icon: '🏷️', text: `${inboundPrintFailures} 条收货条码打印失败待补打`, path: '/settings/barcode-print-query?category=inbound&status=failed' })
-    if (overdueInboundPutaway > 0) items.push({ type: 'warning', icon: '📦', text: `${overdueInboundPutaway} 箱已打印未上架超时`, path: '/inbound-tasks' })
-    if (pendingInboundAudit > 0) items.push({ type: 'warning', icon: '🧾', text: `${pendingInboundAudit} 笔收货订单待审核超时`, path: '/inbound-tasks' })
+    if (inboundPrintFailures > 0) items.push({ type: 'warning', icon: '🏷️', text: `${inboundPrintFailures} 条收货条码打印失败待补打`, path: failedInboundTarget?.taskId ? `/inbound-tasks/${failedInboundTarget.taskId}` : '/settings/barcode-print-query?category=inbound&status=failed' })
+    if (overdueInboundPutaway > 0) items.push({ type: 'warning', icon: '📦', text: `${overdueInboundPutaway} 箱已打印未上架超时`, path: putawayTimeoutTarget?.taskId ? `/inbound-tasks/${putawayTimeoutTarget.taskId}` : '/inbound-tasks' })
+    if (pendingInboundAudit > 0) items.push({ type: 'warning', icon: '🧾', text: `${pendingInboundAudit} 笔收货订单待审核超时`, path: pendingAuditTarget?.taskId ? `/inbound-tasks/${pendingAuditTarget.taskId}` : '/inbound-tasks' })
     if (healthAnomalies > 0) items.push({ type: 'warning', icon: '🩺', text: `近 24 小时发现 ${healthAnomalies} 条系统异常记录`, path: '/reports/pda-anomaly' })
 
     const total = items.length

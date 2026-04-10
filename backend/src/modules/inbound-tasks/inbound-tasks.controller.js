@@ -66,6 +66,14 @@ const audit = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
+const reprint = async (req, res, next) => {
+  try {
+    const operator = await getOp(req.user.userId)
+    const data = await svc.reprint(+req.params.id, req.body || {}, operator, getTenantId(req))
+    return successResponse(res, data, '补打任务已加入打印队列')
+  } catch (e) { next(e) }
+}
+
 const containers = async (req, res, next) => {
   try {
     return successResponse(res, await svc.listContainers(+req.params.id))
@@ -97,4 +105,4 @@ const cancel = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, audit, containers, receive, putaway, cancel }
+module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, audit, reprint, containers, receive, putaway, cancel }

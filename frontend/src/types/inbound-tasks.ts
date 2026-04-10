@@ -59,7 +59,7 @@ export interface InboundTimelineEvent {
 export interface InboundRecentPrintJob {
   id: number
   status: number
-  statusKey: 'queued' | 'printing' | 'success' | 'failed'
+  statusKey: 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'cancelled'
   statusLabel: string
   printerCode: string | null
   printerName: string | null
@@ -192,6 +192,20 @@ export interface CreateInboundTaskParams {
 export interface AuditInboundTaskParams {
   action: 'approve' | 'reject'
   remark?: string
+}
+
+export interface ReprintInboundTaskParams {
+  mode?: 'task' | 'item' | 'barcode'
+  itemId?: number
+  barcode?: string
+}
+
+export interface ReprintInboundTaskResult {
+  taskId: number
+  mode: 'task' | 'item' | 'barcode'
+  count: number
+  jobIds: number[]
+  barcodes: string[]
 }
 
 export interface InboundPurchaseCandidate {

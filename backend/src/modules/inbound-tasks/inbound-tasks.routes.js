@@ -77,6 +77,19 @@ const auditSchema = z.object({
   remark: z.string().trim().max(200, '审核备注不能超过 200 个字').optional(),
 })
 
+const reprintSchema = z.object({
+  mode: z.enum(['task', 'item', 'barcode']).default('task'),
+  itemId: z.number().int().positive('收货明细无效').optional(),
+  barcode: z.string().trim().min(1, '库存条码不能为空').optional(),
+}).superRefine((data, ctx) => {
+  if (data.mode === 'item' && !data.itemId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: '请选择收货明细', path: ['itemId'] })
+  }
+  if (data.mode === 'barcode' && !data.barcode) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: '库存条码不能为空', path: ['barcode'] })
+  }
+})
+
 router.use(authMiddleware)
 
 /** 入库上架仅允许 PDA（请求头 X-Client: pda），与出库 PDA 校验一致 */
@@ -96,6 +109,7 @@ router.get('/:id/containers', ctrl.containers)
 router.get('/:id',           ctrl.detail)
 router.post('/:id/submit',   ctrl.submit)
 router.post('/:id/audit',    vBody(auditSchema), ctrl.audit)
+router.post('/:id/reprint',  vBody(reprintSchema), ctrl.reprint)
 router.post('/:id/receive',  vBody(receiveSchema), ctrl.receive)
 router.post('/:id/putaway', pdaOnly, vBody(putawaySchema), ctrl.putaway)
 router.post('/:id/cancel',  ctrl.cancel)

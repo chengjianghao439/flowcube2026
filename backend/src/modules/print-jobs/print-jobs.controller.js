@@ -65,7 +65,7 @@ async function barcodeRecords(req, res, next) {
       data: await svc.findBarcodeRecords({
         category,
         keyword: keyword || '',
-        status: svc.parseListStatus(status),
+        status: status || undefined,
         page: Number(page) || 1,
         pageSize: Number(pageSize) || 20,
         tenantId: getTenantId(req),

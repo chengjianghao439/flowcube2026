@@ -5,7 +5,7 @@ export type BarcodePrintCategory = 'inbound' | 'outbound' | 'logistics'
 export interface BarcodePrintJobInfo {
   id: number
   status: number
-  statusKey: 'pending' | 'printing' | 'success' | 'failed' | 'unknown'
+  statusKey: 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'cancelled' | 'unknown'
   printStateLabel: string
   printerId: number | null
   printerCode: string | null

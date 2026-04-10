@@ -22,18 +22,22 @@ const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint
 
 const STATUS_OPTIONS = [
   { value: '__all__', label: '全部状态' },
-  { value: 'pending', label: '排队中' },
+  { value: 'queued', label: '待派发' },
   { value: 'printing', label: '打印中' },
   { value: 'success', label: '已打印' },
   { value: 'failed', label: '打印失败' },
+  { value: 'timeout', label: '超时待确认' },
+  { value: 'cancelled', label: '已取消' },
 ] as const
 
 function statusBadge(job: BarcodePrintRecord['latestJob']) {
   if (!job) return <Badge variant="secondary">未打印</Badge>
   if (job.statusKey === 'success') return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50">已打印</Badge>
+  if (job.statusKey === 'timeout') return <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50">超时待确认</Badge>
   if (job.statusKey === 'failed') return <Badge variant="destructive">打印失败</Badge>
+  if (job.statusKey === 'cancelled') return <Badge variant="outline">已取消</Badge>
   if (job.statusKey === 'printing') return <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50">打印中</Badge>
-  return <Badge variant="outline">排队中</Badge>
+  return <Badge variant="outline">待派发</Badge>
 }
 
 export default function BarcodePrintQueryPage() {
@@ -54,7 +58,7 @@ export default function BarcodePrintQueryPage() {
     queryFn: () => getBarcodePrintRecordsApi({
       category,
       keyword,
-      status: status === '__all__' ? undefined : status,
+        status: status === '__all__' ? undefined : status,
       page,
       pageSize: 20,
       inboundTaskId: category === 'inbound' ? initialInboundTaskId : undefined,

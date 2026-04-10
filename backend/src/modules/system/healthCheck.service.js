@@ -15,6 +15,7 @@
 
 const { pool } = require('../../config/db')
 const { v4: uuidv4 } = require('uuid')
+const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 
 // ─── 检查项定义 ───────────────────────────────────────────────────────────────
 
@@ -480,6 +481,87 @@ async function checkOrphanedContainerLock(conn, issues) {
   }
 }
 
+async function checkInboundPrintFailures(conn, issues, thresholds) {
+  const [rows] = await conn.query(
+    `SELECT DISTINCT
+        t.id,
+        t.task_no,
+        t.supplier_name,
+        MAX(j.updated_at) AS latest_print_at
+     FROM inbound_tasks t
+     INNER JOIN inventory_containers c ON c.inbound_task_id = t.id AND c.deleted_at IS NULL
+     INNER JOIN print_jobs j ON j.ref_type = 'inventory_container' AND j.ref_id = c.id
+     WHERE t.deleted_at IS NULL
+       AND (
+         (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
+         OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
+         OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
+       )
+     GROUP BY t.id, t.task_no, t.supplier_name`,
+    [Number(thresholds.printTimeoutMinutes)],
+  )
+  for (const r of rows) {
+    issues.push({
+      checkType: 'INBOUND_PRINT_FAILED',
+      severity: 'warning',
+      relatedId: r.id,
+      relatedTable: 'inbound_tasks',
+      message: `收货订单「${r.task_no}」（供应商：${r.supplier_name || '—'}）存在打印失败或超时待确认的库存条码，请尽快补打或确认状态。`,
+    })
+  }
+}
+
+async function checkInboundPutawayTimeout(conn, issues, thresholds) {
+  const [rows] = await conn.query(
+    `SELECT
+        t.id,
+        t.task_no,
+        t.supplier_name,
+        COUNT(*) AS overdue_count
+     FROM inbound_tasks t
+     INNER JOIN inventory_containers c ON c.inbound_task_id = t.id
+     WHERE t.deleted_at IS NULL
+       AND c.deleted_at IS NULL
+       AND c.status = 0
+       AND (
+         (c.putaway_deadline_at IS NOT NULL AND c.putaway_deadline_at < NOW())
+         OR (c.putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, c.created_at, NOW()) >= ?)
+       )
+     GROUP BY t.id, t.task_no, t.supplier_name`,
+    [Number(thresholds.putawayTimeoutHours)],
+  )
+  for (const r of rows) {
+    issues.push({
+      checkType: 'INBOUND_PUTAWAY_TIMEOUT',
+      severity: 'warning',
+      relatedId: r.id,
+      relatedTable: 'inbound_tasks',
+      message: `收货订单「${r.task_no}」（供应商：${r.supplier_name || '—'}）有 ${r.overdue_count} 箱已打印未上架超时，请尽快处理。`,
+    })
+  }
+}
+
+async function checkInboundAuditTimeout(conn, issues, thresholds) {
+  const [rows] = await conn.query(
+    `SELECT id, task_no, supplier_name
+     FROM inbound_tasks
+     WHERE deleted_at IS NULL
+       AND status = 4
+       AND audit_status = 0
+       AND TIMESTAMPDIFF(HOUR, updated_at, NOW()) >= ?`,
+    [Number(thresholds.auditTimeoutHours)],
+  )
+  for (const r of rows) {
+    issues.push({
+      checkType: 'INBOUND_AUDIT_TIMEOUT',
+      severity: 'warning',
+      relatedId: r.id,
+      relatedTable: 'inbound_tasks',
+      message: `收货订单「${r.task_no}」（供应商：${r.supplier_name || '—'}）已上架完成但审核超时，请尽快审核。`,
+    })
+  }
+}
+
 
 
 async function saveIssues(conn, runId, issues) {
@@ -535,6 +617,7 @@ async function runAllChecks(triggeredBy = 'manual') {
   const startAt = Date.now()
   const issues  = []
   const errors  = []
+  const inboundThresholds = await getInboundClosureThresholds()
 
   const conn = await pool.getConnection()
   try {
@@ -554,6 +637,9 @@ async function runAllChecks(triggeredBy = 'manual') {
       { name: 'SORTED_QTY_OVERFLOW',             fn: checkSortedQtyOverflow },
       { name: 'ORPHANED_SORTING_BIN',            fn: checkOrphanedSortingBin },
       { name: 'ORPHANED_CONTAINER_LOCK',         fn: checkOrphanedContainerLock },
+      { name: 'INBOUND_PRINT_FAILED',            fn: (db, list) => checkInboundPrintFailures(db, list, inboundThresholds) },
+      { name: 'INBOUND_PUTAWAY_TIMEOUT',         fn: (db, list) => checkInboundPutawayTimeout(db, list, inboundThresholds) },
+      { name: 'INBOUND_AUDIT_TIMEOUT',           fn: (db, list) => checkInboundAuditTimeout(db, list, inboundThresholds) },
     ]
 
     for (const { name, fn } of checks) {

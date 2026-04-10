@@ -18,6 +18,7 @@ import {
   useReceiveInbound,
   useSubmitInboundTask,
   useAuditInboundTask,
+  useReprintInboundTask,
   useCancelInbound,
 } from '@/hooks/useInboundTasks'
 import {
@@ -55,6 +56,7 @@ export default function InboundTaskDetailPage() {
   const receiveMut = useReceiveInbound()
   const submitMut = useSubmitInboundTask()
   const auditMut = useAuditInboundTask()
+  const reprintMut = useReprintInboundTask()
   const cancelMut = useCancelInbound()
 
   const [lineQty, setLineQty] = useState<Record<number, string>>({})
@@ -119,7 +121,7 @@ export default function InboundTaskDetailPage() {
   const canSubmit = task.receiptStatus?.key === 'draft'
   const canReceive = task.receiptStatus?.key === 'submitted' || task.receiptStatus?.key === 'receiving'
   const canPutaway = task.putawayStatus?.key === 'waiting' || task.putawayStatus?.key === 'putting_away'
-  const canAudit = task.auditFlowStatus?.key === 'pending'
+  const canAudit = task.auditFlowStatus?.key === 'pending' || task.auditFlowStatus?.key === 'rejected'
   const canCancel = task.status === 1
   const waitingCount = containers?.waiting?.length ?? 0
   const storedCount = containers?.stored?.length ?? 0
@@ -149,6 +151,23 @@ export default function InboundTaskDetailPage() {
     const path = `/settings/barcode-print-query?${searchParams.toString()}`
     addTab({ key: path, title: `补打 ${task.taskNo}`, path })
     navigate(path)
+  }
+
+  function triggerReprint(data: { mode: 'task' | 'item' | 'barcode'; itemId?: number; barcode?: string }, successText: string) {
+    if (!validId) return
+    reprintMut.mutate(
+      { id: validId, data },
+      {
+        onSuccess: async (result) => {
+          toast.success(`${successText}，已加入 ${result.count} 条打印任务`)
+          await afterMutation()
+        },
+        onError: (err: unknown) => {
+          const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '补打失败'
+          toast.error(msg)
+        },
+      },
+    )
   }
 
   return (
@@ -187,6 +206,14 @@ export default function InboundTaskDetailPage() {
             )}
             <Button variant="outline" size="sm" onClick={() => openPrintQuery()}>
               查看打印 / 补打
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={reprintMut.isPending}
+              onClick={() => triggerReprint({ mode: 'task' }, '整单补打已提交')}
+            >
+              整单补打
             </Button>
             {canAudit && (
               <>
@@ -241,6 +268,9 @@ export default function InboundTaskDetailPage() {
             {exceptionLines.map(line => (
               <p key={line} className="text-sm text-foreground">{line}</p>
             ))}
+            {task.auditRemark && task.auditFlowStatus?.key === 'rejected' && (
+              <p className="text-sm text-foreground">退回原因：{task.auditRemark}</p>
+            )}
             <div className="pt-1">
               <Button size="sm" variant="outline" onClick={() => openPrintQuery({ status: 'failed' })}>
                 去补打 / 排查
@@ -273,6 +303,7 @@ export default function InboundTaskDetailPage() {
                 <th className="text-right py-2 w-20">本行剩余</th>
                 <th className="text-right py-2 w-24">已上架</th>
                 {canReceive && <th className="text-right py-2 min-w-[200px]">本包收货</th>}
+                <th className="text-right py-2 w-28">补打</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -314,6 +345,17 @@ export default function InboundTaskDetailPage() {
                         </div>
                       </td>
                     )}
+                    <td className="py-2 text-right">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={reprintMut.isPending || it.receivedQty <= 0}
+                        onClick={() => triggerReprint({ mode: 'item', itemId: it.id }, `${it.productName} 补打已提交`)}
+                      >
+                        补打本商品
+                      </Button>
+                    </td>
                   </tr>
                 )
               })}
@@ -354,6 +396,7 @@ export default function InboundTaskDetailPage() {
                     <th className="text-left py-2 pr-2">库存条码</th>
                     <th className="text-left py-2">商品</th>
                     <th className="text-right py-2 w-24">数量</th>
+                    <th className="text-right py-2 w-28">补打</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -368,6 +411,16 @@ export default function InboundTaskDetailPage() {
                       </td>
                       <td className="py-2.5 text-right tabular-nums">
                         {c.qty}{c.unit ? ` ${c.unit}` : ''}
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={reprintMut.isPending}
+                          onClick={() => triggerReprint({ mode: 'barcode', barcode: c.barcode }, `${c.barcode} 补打已提交`)}
+                        >
+                          补打条码
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -385,9 +438,21 @@ export default function InboundTaskDetailPage() {
           <ul className="text-sm space-y-2">
             {containers.stored.map(c => (
               <li key={c.id} className="flex flex-wrap justify-between gap-2 border rounded-lg px-3 py-2">
-                <span className="text-doc-code">{c.barcode}</span>
-                <span>{c.productName} × {c.qty}</span>
-                <span className="text-muted-foreground">{c.locationCode ?? '—'}</span>
+                <div className="min-w-0">
+                  <span className="text-doc-code">{c.barcode}</span>
+                  <span className="ml-3">{c.productName} × {c.qty}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">{c.locationCode ?? '—'}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={reprintMut.isPending}
+                    onClick={() => triggerReprint({ mode: 'barcode', barcode: c.barcode }, `${c.barcode} 补打已提交`)}
+                  >
+                    补打
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
@@ -408,9 +473,22 @@ export default function InboundTaskDetailPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-helper">{job.updatedAt}</span>
-                  <Button size="sm" variant="outline" onClick={() => openPrintQuery(job.barcode ? { keyword: job.barcode } : {})}>
-                    补打
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={reprintMut.isPending}
+                      onClick={() => job.barcode
+                        ? triggerReprint({ mode: 'barcode', barcode: job.barcode }, `${job.barcode} 补打已提交`)
+                        : openPrintQuery()
+                      }
+                    >
+                      补打
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => openPrintQuery(job.barcode ? { keyword: job.barcode } : {})}>
+                      查看记录
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
