@@ -431,13 +431,20 @@ function deriveInboundPrintJobState(row, thresholds = DEFAULT_INBOUND_THRESHOLDS
       && (Date.now() - new Date(row.updated_at).getTime()) >= Number(thresholds.printTimeoutMinutes || DEFAULT_INBOUND_THRESHOLDS.printTimeoutMinutes) * 60 * 1000
   ) || (rawStatus === 3 && String(row.error_message || '') === EXPIRE_MESSAGE)
 
-  if (Number(row.task_status) === 5) return { key: 'cancelled', label: PRINT_STATUS_LABEL.cancelled }
-  if (timedOut) return { key: 'timeout', label: PRINT_STATUS_LABEL.timeout }
-  if (rawStatus === 2) return { key: 'success', label: PRINT_STATUS_LABEL.success }
-  if (rawStatus === 3) return { key: 'failed', label: PRINT_STATUS_LABEL.failed }
-  if (rawStatus === 1) return { key: 'printing', label: PRINT_STATUS_LABEL.printing }
-  if (rawStatus === 0) return { key: 'queued', label: PRINT_STATUS_LABEL.queued }
-  return { key: 'queued', label: PRINT_STATUS_LABEL.queued }
+  const base = (statusKey, statusLabel) => ({
+    key: statusKey,
+    label: statusLabel,
+    statusKey,
+    statusLabel,
+  })
+
+  if (Number(row.task_status) === 5) return base('cancelled', PRINT_STATUS_LABEL.cancelled)
+  if (timedOut) return base('timeout', PRINT_STATUS_LABEL.timeout)
+  if (rawStatus === 2) return base('success', PRINT_STATUS_LABEL.success)
+  if (rawStatus === 3) return base('failed', PRINT_STATUS_LABEL.failed)
+  if (rawStatus === 1) return base('printing', PRINT_STATUS_LABEL.printing)
+  if (rawStatus === 0) return base('queued', PRINT_STATUS_LABEL.queued)
+  return base('queued', PRINT_STATUS_LABEL.queued)
 }
 
 async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_THRESHOLDS) {

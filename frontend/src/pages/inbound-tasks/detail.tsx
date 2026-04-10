@@ -3,7 +3,7 @@
  * 路由：/inbound-tasks/:id（多标签）
  */
 import { useContext, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,9 +45,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function InboundTaskDetailPage() {
   const tabPath = useContext(TabPathContext)
+  const params = useParams<{ id?: string }>()
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
-  const taskId = Number((tabPath || '').split('/').pop())
+  const rawId = (tabPath || params.id || '').split('/').filter(Boolean).pop() ?? ''
+  const taskId = Number(rawId)
   const validId = Number.isFinite(taskId) && taskId > 0 ? taskId : null
 
   const { data: task, isLoading, refetch: refetchTask } = useInboundTaskDetail(validId)
@@ -111,7 +113,14 @@ export default function InboundTaskDetailPage() {
   }
 
   if (!validId) {
-    return <p className="p-6 text-muted-body">无效的任务路径</p>
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-border bg-card p-5 text-muted-foreground">
+          <p className="font-medium text-foreground">收货订单路径无效</p>
+          <p className="mt-1">请从收货订单列表重新打开该详情页。</p>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading || !task) {
@@ -468,7 +477,7 @@ export default function InboundTaskDetailPage() {
               <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
                 <div className="min-w-0">
                   <div className="font-medium text-foreground">{job.productName ?? job.barcode ?? '库存条码'}</div>
-                  <div className="text-doc-code-muted">{job.barcode ?? '—'} · {job.statusLabel}</div>
+                  <div className="text-doc-code-muted">{job.barcode ?? '—'} · {job.statusLabel ?? '未知'}</div>
                   <div className="text-helper">{job.printerCode ?? job.printerName ?? '未绑定打印机'}{job.errorMessage ? ` · ${job.errorMessage}` : ''}</div>
                 </div>
                 <div className="flex items-center gap-2">
