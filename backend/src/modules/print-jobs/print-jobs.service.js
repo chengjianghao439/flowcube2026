@@ -1499,4 +1499,5 @@ module.exports = {
   buildRackLabelZpl,
   buildProductLabelZpl,
   buildPackageLabelZpl,
+  EXPIRE_MESSAGE,
 }

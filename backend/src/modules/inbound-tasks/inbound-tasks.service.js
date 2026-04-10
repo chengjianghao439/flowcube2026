@@ -4,7 +4,7 @@ const logger = require('../../utils/logger')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { createContainer, syncStockFromContainers, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
+const { enqueueContainerLabelJob, EXPIRE_MESSAGE } = require('../print-jobs/print-jobs.service')
 const { getInboundClosureThresholds, DEFAULT_INBOUND_THRESHOLDS } = require('../../utils/inboundThresholds')
 
 const TASK_STATUS = { 1: '待收货', 2: '收货中', 3: '待上架', 4: '已完成', 5: '已取消' }
