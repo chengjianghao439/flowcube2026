@@ -26,6 +26,14 @@ import { usePermission } from '@/hooks/usePermission'
 import type { PermCode } from '@/lib/permissions'
 import { TabPathContext } from './TabPathContext'
 
+function normalizePath(path: string): string {
+  return path.split(/[?#]/)[0] || '/'
+}
+
+function getFullPath(pathname: string, search: string): string {
+  return `${pathname}${search || ''}` || '/'
+}
+
 // ── 路径 → 所需权限（固定路径） ──────────────────────────────────────────────
 const PATH_PERMS: Record<string, PermCode> = {
   '/dashboard':       'page:dashboard',
@@ -161,20 +169,23 @@ const PATH_PATTERNS: PathPattern[] = [
 
 /** 根据路径解析对应的页面组件（固定路径优先，其次匹配模式） */
 function resolveComponent(path: string): React.LazyExoticComponent<React.ComponentType> | undefined {
-  if (PAGE_MAP[path]) return PAGE_MAP[path]
-  return PATH_PATTERNS.find(p => p.pattern.test(path))?.component
+  const normalized = normalizePath(path)
+  if (PAGE_MAP[normalized]) return PAGE_MAP[normalized]
+  return PATH_PATTERNS.find(p => p.pattern.test(normalized))?.component
 }
 
 /** 根据路径解析权限 code */
 function resolvePermission(path: string): PermCode | undefined {
-  if (PATH_PERMS[path]) return PATH_PERMS[path]
-  return PATH_PATTERNS.find(p => p.pattern.test(path))?.perm
+  const normalized = normalizePath(path)
+  if (PATH_PERMS[normalized]) return PATH_PERMS[normalized]
+  return PATH_PATTERNS.find(p => p.pattern.test(normalized))?.perm
 }
 
 /** 路径是否已注册（固定 + 动态） */
 function isKnownPath(path: string): boolean {
-  if (PATH_TITLES[path]) return true
-  return PATH_PATTERNS.some(p => p.pattern.test(path))
+  const normalized = normalizePath(path)
+  if (PATH_TITLES[normalized]) return true
+  return PATH_PATTERNS.some(p => p.pattern.test(normalized))
 }
 
 // ── 加载占位 ──────────────────────────────────────────────────────────────────
@@ -247,15 +258,15 @@ export function KeepAliveOutlet() {
    * 3. dirty → 弹确认框 → 确认后 navigate(targetPath)
    * 4. 非 dirty → 直接放行（replaceState 到 targetPath）
    */
-  const pathnameRef = useRef(location.pathname)
+  const locationPathRef = useRef(getFullPath(location.pathname, location.search))
   useEffect(() => {
-    pathnameRef.current = location.pathname
-  }, [location.pathname])
+    locationPathRef.current = getFullPath(location.pathname, location.search)
+  }, [location.pathname, location.search])
 
   useEffect(() => {
     const handlePopState = () => {
-      const targetPathname  = window.location.pathname
-      const currentPathname = pathnameRef.current
+      const targetPathname = getFullPath(window.location.pathname, window.location.search)
+      const currentPathname = locationPathRef.current
 
       if (targetPathname === currentPathname) return
 
@@ -284,17 +295,18 @@ export function KeepAliveOutlet() {
    * 触发场景：浏览器前进/后退、侧边栏 href 导航、外部 navigate() 调用
    */
   useEffect(() => {
-    const path = location.pathname
+    const path = getFullPath(location.pathname, location.search)
+    const normalizedPath = normalizePath(path)
 
-    if (path === '/' || path === '/dashboard') {
+    if (normalizedPath === '/' || normalizedPath === '/dashboard') {
       useWorkspaceStore.getState().setActive(HOME_TAB.key)
       return
     }
 
-    if (!isKnownPath(path)) return  // 未注册路径，忽略
+    if (!isKnownPath(normalizedPath)) return  // 未注册路径，忽略
 
     // 权限拦截
-    const requiredPerm = resolvePermission(path)
+    const requiredPerm = resolvePermission(normalizedPath)
     if (requiredPerm && !can(requiredPerm)) {
       navigate('/403', { replace: true })
       return
@@ -302,16 +314,16 @@ export function KeepAliveOutlet() {
 
     // 如果 tab 已存在（由导航发起方提前 addTab），则只激活；
     // 否则用 PATH_TITLES 或动态默认标题注册新 tab。
-    const existingTab = useWorkspaceStore.getState().tabs.find(t => t.key === path)
+    const existingTab = useWorkspaceStore.getState().tabs.find(t => t.key === path || normalizePath(t.path) === normalizedPath)
     if (!existingTab) {
-      const patternCfg = PATH_PATTERNS.find(p => p.pattern.test(path))
-      const title = PATH_TITLES[path] ?? patternCfg?.defaultTitle(path) ?? path
+      const patternCfg = PATH_PATTERNS.find(p => p.pattern.test(normalizedPath))
+      const title = PATH_TITLES[normalizedPath] ?? patternCfg?.defaultTitle(normalizedPath) ?? normalizedPath
       addTab({ key: path, title, path })
     } else {
-      useWorkspaceStore.getState().setActive(path)
+      useWorkspaceStore.getState().setActive(existingTab.key)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname])
+  }, [location.pathname, location.search])
 
   return (
     <div className="relative h-full w-full">
