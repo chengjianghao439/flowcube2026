@@ -1,6 +1,6 @@
 {
-  "version": "0.3.64",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.64/Jixu-Flow-Setup-0.3.64.exe",
-  "filename": "Jixu-Flow-Setup-0.3.64.exe",
-  "notes": "【v0.3.64 主要更新】\n\n• 分类页改成真正的手风琴展开结构，默认只显示一级。\n• 点击一级在下方展开二级，再点同一个分类可收起。\n• 新增二级/三级分类弹窗标题与层级同步修正。"
+  "version": "0.3.65",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.65/Jixu-Flow-Setup-0.3.65.exe",
+  "filename": "Jixu-Flow-Setup-0.3.65.exe",
+  "notes": "【v0.3.65 主要更新】\n\n• 新增岗位工作台基础版，按仓库、销售/客服、管理聚合待办。\n• 每个待办卡片都可直达具体单据、任务或异常工作台。\n• 桌面端更新源已对齐到同版本安装包，便于触发自动更新。"
 }
