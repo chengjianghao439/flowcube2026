@@ -1,6 +1,6 @@
 {
-  "version": "0.3.65",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.65/Jixu-Flow-Setup-0.3.65.exe",
-  "filename": "Jixu-Flow-Setup-0.3.65.exe",
-  "notes": "【v0.3.65 主要更新】\n\n• 新增岗位工作台基础版，按仓库、销售/客服、管理聚合待办。\n• 每个待办卡片都可直达具体单据、任务或异常工作台。\n• 桌面端更新源已对齐到同版本安装包，便于触发自动更新。"
+  "version": "0.3.66",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.66/Jixu-Flow-Setup-0.3.66.exe",
+  "filename": "Jixu-Flow-Setup-0.3.66.exe",
+  "notes": "【v0.3.66 主要更新】\n\n• 修复带查询参数页面误判未注册的问题，KeepAlive 路径识别改为 pathname 与 search 分离处理。\n• 收货订单详情、打印查询等带参数页面现在可稳定恢复，不再容易进入渲染错误态。\n• 桌面端发布版本已同步抬升，确保自动更新源与安装包版本一致。"
 }
