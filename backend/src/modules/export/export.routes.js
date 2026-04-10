@@ -2,6 +2,7 @@ const { Router } = require('express')
 const { pool } = require('../../config/db')
 const { authMiddleware } = require('../../middleware/auth')
 const { exportXlsx } = require('../../utils/excelExport')
+const reportsSvc = require('../reports/reports.service')
 
 const router = Router()
 router.use(authMiddleware)
@@ -61,6 +62,50 @@ router.get('/sale', async (req, res, next) => {
       { header: '创建时间', key: 'created_at', width: 20 },
       { header: '备注', key: 'remark', width: 24 },
     ], rows)
+  } catch (e) { next(e) }
+})
+
+// ─── 对账单导出 ────────────────────────────────────────────────
+router.get('/reconciliation', async (req, res, next) => {
+  try {
+    const data = await reportsSvc.reconciliationReport({
+      type: req.query.type || '1',
+      startDate: req.query.startDate || null,
+      endDate: req.query.endDate || null,
+      keyword: req.query.keyword || '',
+      status: req.query.status || null,
+      page: 1,
+      pageSize: 10000,
+    })
+    const sheetName = data.type === 1 ? '供应商对账单' : '客户对账单'
+    const filename = `${sheetName}_${new Date().toLocaleDateString('zh-CN').replace(/\//g,'')}`
+    await exportXlsx(res, filename, sheetName, [
+      { header: '单据类型', key: 'statementName', width: 14 },
+      { header: '关联单号', key: 'orderNo', width: 22 },
+      { header: '往来方', key: 'partyName', width: 20 },
+      { header: '源单号', key: 'sourceOrderNo', width: 22 },
+      { header: '收货单号', key: 'receiptTaskNo', width: 22 },
+      { header: '总金额', key: 'totalAmount', width: 14 },
+      { header: '已付/已收', key: 'paidAmount', width: 14 },
+      { header: '余额', key: 'balance', width: 14 },
+      { header: '状态', key: 'statusName', width: 10 },
+      { header: '到期日', key: 'dueDate', width: 14 },
+      { header: '创建时间', key: 'createdAt', width: 20 },
+      { header: '备注', key: 'remark', width: 24 },
+    ], data.list.map(row => ({
+      statementName: row.statementName,
+      orderNo: row.orderNo,
+      partyName: row.partyName,
+      sourceOrderNo: row.sourceOrderNo,
+      receiptTaskNo: row.receiptTaskNo || '',
+      totalAmount: row.totalAmount,
+      paidAmount: row.paidAmount,
+      balance: row.balance,
+      statusName: row.statusName,
+      dueDate: row.dueDate || '',
+      createdAt: row.createdAt,
+      remark: row.remark || '',
+    })))
   } catch (e) { next(e) }
 })
 

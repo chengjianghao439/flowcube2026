@@ -19,6 +19,36 @@ function mapWorkbenchItem(row) {
   }
 }
 
+function buildDateFilter(column, startDate, endDate) {
+  const conds = []
+  const params = []
+  if (startDate) {
+    conds.push(`DATE(${column}) >= ?`)
+    params.push(startDate)
+  }
+  if (endDate) {
+    conds.push(`DATE(${column}) <= ?`)
+    params.push(endDate)
+  }
+  return {
+    sql: conds.length ? ` AND ${conds.join(' AND ')}` : '',
+    params,
+  }
+}
+
+function paymentStatusName(status) {
+  return { 1: '未付', 2: '部分付', 3: '已付清' }[Number(status)] || '未知'
+}
+
+function paymentTypeName(type) {
+  return Number(type) === 1 ? '应付' : '应收'
+}
+
+function safeNum(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
 async function fetchOne(sql, params = []) {
   const [[row]] = await pool.query(sql, params)
   return row || {}
@@ -929,4 +959,318 @@ async function roleWorkbench() {
   }
 }
 
-module.exports = { purchaseStats, saleStats, inventoryStats, pdaPerformance, wavePerformance, warehouseOps, roleWorkbench }
+async function reconciliationReport({ type = 1, startDate = null, endDate = null, keyword = '', status = null, page = 1, pageSize = 20 } = {}) {
+  const typeNum = Number(type) === 2 ? 2 : 1
+  const dateFilter = buildDateFilter('pr.created_at', startDate, endDate)
+  const conds = ['pr.type = ?']
+  const params = [typeNum]
+
+  if (status) {
+    conds.push('pr.status = ?')
+    params.push(Number(status))
+  }
+  if (keyword && String(keyword).trim()) {
+    conds.push('(pr.order_no LIKE ? OR pr.party_name LIKE ?)')
+    const like = `%${String(keyword).trim()}%`
+    params.push(like, like)
+  }
+  if (dateFilter.sql) {
+    conds.push(dateFilter.sql.replace(/^ AND /, '').trim())
+    params.push(...dateFilter.params)
+  }
+  const where = `WHERE ${conds.join(' AND ')}`
+  const pageNum = Math.max(1, Number(page) || 1)
+  const pageSizeNum = Math.max(1, Math.min(200, Number(pageSize) || 20))
+  const offset = (pageNum - 1) * pageSizeNum
+
+  const [[summaryRow]] = await pool.query(
+    `SELECT
+       COUNT(*) AS totalRecords,
+       COALESCE(SUM(pr.total_amount), 0) AS totalAmount,
+       COALESCE(SUM(pr.paid_amount), 0) AS paidAmount,
+       COALESCE(SUM(pr.balance), 0) AS balance,
+       COALESCE(SUM(CASE WHEN pr.status IN (1,2) AND pr.due_date IS NOT NULL AND pr.due_date < CURDATE() THEN 1 ELSE 0 END), 0) AS overdueCount,
+       COALESCE(SUM(CASE WHEN pr.status IN (1,2) THEN 1 ELSE 0 END), 0) AS pendingCount
+     FROM payment_records pr
+     ${where}`,
+    params,
+  )
+
+  const [[countRow]] = await pool.query(
+    `SELECT COUNT(*) AS total FROM payment_records pr ${where}`,
+    params,
+  )
+
+  const [rows] = await pool.query(
+    `SELECT
+       pr.id,
+       pr.type,
+       pr.order_id,
+       pr.order_no,
+       pr.party_name,
+       pr.total_amount,
+       pr.paid_amount,
+       pr.balance,
+       pr.status,
+       pr.due_date,
+       pr.remark,
+       pr.created_at,
+       CASE pr.type WHEN 1 THEN '供应商对账单' ELSE '客户对账单' END AS statement_name,
+       CASE pr.status WHEN 1 THEN '未付' WHEN 2 THEN '部分付' WHEN 3 THEN '已付清' ELSE '未知' END AS status_name,
+       CASE
+         WHEN pr.type = 1 AND po.id IS NOT NULL THEN po.id
+         WHEN pr.type = 2 AND so.id IS NOT NULL THEN so.id
+         ELSE NULL
+       END AS source_order_id,
+       CASE
+         WHEN pr.type = 1 AND po.id IS NOT NULL THEN po.order_no
+         WHEN pr.type = 2 AND so.id IS NOT NULL THEN so.order_no
+         ELSE pr.order_no
+       END AS source_order_no,
+       CASE
+         WHEN pr.type = 1 AND po.id IS NOT NULL THEN CONCAT('/purchase/', po.id)
+         WHEN pr.type = 2 AND so.id IS NOT NULL THEN CONCAT('/sale/', so.id)
+         ELSE NULL
+       END AS source_path,
+       lt.task_id AS receipt_task_id,
+       lt.task_no AS receipt_task_no,
+       CASE WHEN pr.type = 1 AND lt.task_id IS NOT NULL THEN CONCAT('/inbound-tasks/', lt.task_id) ELSE NULL END AS receipt_path
+     FROM payment_records pr
+     LEFT JOIN purchase_orders po
+       ON pr.type = 1
+      AND po.id = pr.order_id
+      AND po.deleted_at IS NULL
+     LEFT JOIN sale_orders so
+       ON pr.type = 2
+      AND so.id = pr.order_id
+      AND so.deleted_at IS NULL
+     LEFT JOIN (
+       SELECT purchase_order_id, MAX(id) AS task_id
+       FROM inbound_tasks
+       WHERE deleted_at IS NULL AND purchase_order_id IS NOT NULL
+       GROUP BY purchase_order_id
+     ) task_map ON pr.type = 1 AND task_map.purchase_order_id = pr.order_id
+     LEFT JOIN inbound_tasks lt ON lt.id = task_map.task_id
+     ${where}
+     ORDER BY pr.created_at DESC, pr.id DESC
+     LIMIT ? OFFSET ?`,
+    [...params, pageSizeNum, offset],
+  )
+
+  const list = rows.map(row => ({
+    id: Number(row.id),
+    type: Number(row.type),
+    typeName: paymentTypeName(row.type),
+    orderId: row.order_id != null ? Number(row.order_id) : null,
+    orderNo: row.order_no,
+    partyName: row.party_name,
+    totalAmount: safeNum(row.total_amount),
+    paidAmount: safeNum(row.paid_amount),
+    balance: safeNum(row.balance),
+    status: Number(row.status),
+    statusName: row.status_name || paymentStatusName(row.status),
+    dueDate: row.due_date || null,
+    remark: row.remark || null,
+    statementName: row.statement_name,
+    sourceOrderId: row.source_order_id != null ? Number(row.source_order_id) : null,
+    sourceOrderNo: row.source_order_no || row.order_no,
+    sourcePath: row.source_path || null,
+    receiptTaskId: row.receipt_task_id != null ? Number(row.receipt_task_id) : null,
+    receiptTaskNo: row.receipt_task_no || null,
+    receiptPath: row.receipt_path || null,
+    createdAt: row.created_at,
+  }))
+
+  return {
+    summary: {
+      totalRecords: Number(summaryRow.totalRecords || 0),
+      totalAmount: safeNum(summaryRow.totalAmount),
+      paidAmount: safeNum(summaryRow.paidAmount),
+      balance: safeNum(summaryRow.balance),
+      overdueCount: Number(summaryRow.overdueCount || 0),
+      pendingCount: Number(summaryRow.pendingCount || 0),
+    },
+    list,
+    type: typeNum,
+    pagination: {
+      page: pageNum,
+      pageSize: pageSizeNum,
+      total: Number(countRow.total || 0),
+    },
+  }
+}
+
+async function profitAnalysis({ startDate = null, endDate = null } = {}) {
+  const saleDate = buildDateFilter('so.created_at', startDate, endDate)
+  const saleWhere = `WHERE so.deleted_at IS NULL AND so.status = 4${saleDate.sql}`
+
+  const [[summaryRow]] = await pool.query(
+    `SELECT
+       COALESCE(SUM(so.total_amount), 0) AS saleAmount,
+       COALESCE(SUM(soi.quantity * IFNULL(p.cost_price, 0)), 0) AS costAmount
+     FROM sale_orders so
+     INNER JOIN sale_order_items soi ON soi.order_id = so.id
+     INNER JOIN product_items p ON p.id = soi.product_id
+     ${saleWhere}`,
+    saleDate.params,
+  )
+
+  const [saleRows] = await pool.query(
+    `SELECT
+       so.id,
+       so.order_no,
+       so.customer_name,
+       so.warehouse_name,
+       so.total_amount,
+       COALESCE(SUM(soi.quantity * IFNULL(p.cost_price, 0)), 0) AS cost_amount,
+       COALESCE(SUM(soi.amount), 0) - COALESCE(SUM(soi.quantity * IFNULL(p.cost_price, 0)), 0) AS gross_profit
+     FROM sale_orders so
+     INNER JOIN sale_order_items soi ON soi.order_id = so.id
+     INNER JOIN product_items p ON p.id = soi.product_id
+     ${saleWhere}
+     GROUP BY so.id, so.order_no, so.customer_name, so.warehouse_name, so.total_amount
+     ORDER BY gross_profit DESC, so.created_at DESC
+     LIMIT 20`,
+    saleDate.params,
+  )
+
+  const [productRows] = await pool.query(
+    `SELECT
+       p.id,
+       p.code,
+       p.name,
+       p.unit,
+       COALESCE(SUM(soi.quantity), 0) AS total_qty,
+       COALESCE(SUM(soi.amount), 0) AS revenue_amount,
+       COALESCE(SUM(soi.quantity * IFNULL(p.cost_price, 0)), 0) AS cost_amount,
+       COALESCE(SUM(soi.amount), 0) - COALESCE(SUM(soi.quantity * IFNULL(p.cost_price, 0)), 0) AS gross_profit
+     FROM sale_orders so
+     INNER JOIN sale_order_items soi ON soi.order_id = so.id
+     INNER JOIN product_items p ON p.id = soi.product_id
+     ${saleWhere}
+     GROUP BY p.id, p.code, p.name, p.unit
+     ORDER BY gross_profit DESC, revenue_amount DESC
+     LIMIT 20`,
+    saleDate.params,
+  )
+
+  const [stockRows] = await pool.query(
+    `SELECT
+       p.id,
+       p.code,
+       p.name,
+       p.unit,
+       w.name AS warehouse_name,
+       SUM(s.quantity) AS total_qty,
+       SUM(s.quantity * IFNULL(p.cost_price, 0)) AS total_value
+     FROM inventory_stock s
+     INNER JOIN product_items p ON p.id = s.product_id
+     INNER JOIN inventory_warehouses w ON w.id = s.warehouse_id
+     WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL
+     GROUP BY p.id, p.code, p.name, p.unit, w.name
+     ORDER BY total_value DESC
+     LIMIT 30`,
+  )
+
+  const [slowRows] = await pool.query(
+    `SELECT
+       p.id,
+       p.code,
+       p.name,
+       p.unit,
+       COALESCE(st.qty, 0) AS current_qty,
+       COALESCE(st.value, 0) AS stock_value,
+       lo.last_outbound_at,
+       COALESCE(lo.outbound_90d, 0) AS outbound_90d
+     FROM product_items p
+     LEFT JOIN (
+       SELECT product_id, SUM(quantity) AS qty, SUM(quantity * IFNULL(cost_price, 0)) AS value
+       FROM inventory_stock
+       GROUP BY product_id
+     ) st ON st.product_id = p.id
+     LEFT JOIN (
+       SELECT
+         product_id,
+         MAX(created_at) AS last_outbound_at,
+         SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN quantity ELSE 0 END) AS outbound_90d
+       FROM inventory_logs
+       WHERE type = 2
+       GROUP BY product_id
+     ) lo ON lo.product_id = p.id
+     WHERE p.deleted_at IS NULL
+       AND COALESCE(st.qty, 0) > 0
+       AND (lo.last_outbound_at IS NULL OR lo.last_outbound_at < DATE_SUB(CURDATE(), INTERVAL 90 DAY))
+     ORDER BY stock_value DESC, current_qty DESC
+     LIMIT 30`,
+  )
+
+  const saleAmount = safeNum(summaryRow.saleAmount)
+  const costAmount = safeNum(summaryRow.costAmount)
+
+  return {
+    summary: {
+      saleAmount,
+      costAmount,
+      grossProfit: saleAmount - costAmount,
+      stockValue: stockRows.reduce((sum, row) => sum + safeNum(row.total_value), 0),
+      slowMovingValue: slowRows.reduce((sum, row) => sum + safeNum(row.stock_value), 0),
+      slowMovingCount: slowRows.length,
+    },
+    saleOrders: saleRows.map(row => ({
+      id: Number(row.id),
+      orderNo: row.order_no,
+      customerName: row.customer_name,
+      warehouseName: row.warehouse_name,
+      totalAmount: safeNum(row.total_amount),
+      costAmount: safeNum(row.cost_amount),
+      grossProfit: safeNum(row.gross_profit),
+      marginRate: safeNum(row.total_amount) > 0 ? ((safeNum(row.gross_profit) / safeNum(row.total_amount)) * 100) : 0,
+      path: `/sale/${row.id}`,
+    })),
+    products: productRows.map(row => ({
+      id: Number(row.id),
+      code: row.code,
+      name: row.name,
+      unit: row.unit,
+      totalQty: safeNum(row.total_qty),
+      revenueAmount: safeNum(row.revenue_amount),
+      costAmount: safeNum(row.cost_amount),
+      grossProfit: safeNum(row.gross_profit),
+      marginRate: safeNum(row.revenue_amount) > 0 ? ((safeNum(row.gross_profit) / safeNum(row.revenue_amount)) * 100) : 0,
+      path: '/products',
+    })),
+    stockValue: stockRows.map(row => ({
+      id: Number(row.id),
+      code: row.code,
+      name: row.name,
+      unit: row.unit,
+      warehouseName: row.warehouse_name,
+      totalQty: safeNum(row.total_qty),
+      totalValue: safeNum(row.total_value),
+      path: '/inventory/overview',
+    })),
+    slowMoving: slowRows.map(row => ({
+      id: Number(row.id),
+      code: row.code,
+      name: row.name,
+      unit: row.unit,
+      currentQty: safeNum(row.current_qty),
+      stockValue: safeNum(row.stock_value),
+      lastOutboundAt: row.last_outbound_at || null,
+      outbound90d: safeNum(row.outbound_90d),
+      path: '/inventory/overview',
+    })),
+  }
+}
+
+module.exports = {
+  purchaseStats,
+  saleStats,
+  inventoryStats,
+  pdaPerformance,
+  wavePerformance,
+  warehouseOps,
+  roleWorkbench,
+  reconciliationReport,
+  profitAnalysis,
+}

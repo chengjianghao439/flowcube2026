@@ -63,6 +63,30 @@ export default function ReportsPage() {
             <Button
               size="sm"
               variant="outline"
+              className="border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 hover:text-cyan-800"
+              onClick={() => { addTab({ key: '/reports/reconciliation', title: '对账基础版', path: '/reports/reconciliation' }); navigate('/reports/reconciliation') }}
+            >
+              对账基础版
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 hover:text-violet-800"
+              onClick={() => { addTab({ key: '/reports/profit-analysis', title: '利润 / 库存分析', path: '/reports/profit-analysis' }); navigate('/reports/profit-analysis') }}
+            >
+              利润 / 库存分析
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-800"
+              onClick={() => { addTab({ key: '/reports/approvals', title: '审批与提醒', path: '/reports/approvals' }); navigate('/reports/approvals') }}
+            >
+              审批与提醒
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800"
               onClick={() => { addTab({ key: '/reports/pda-anomaly', title: 'PDA 异常分析', path: '/reports/pda-anomaly' }); navigate('/reports/pda-anomaly') }}
             >

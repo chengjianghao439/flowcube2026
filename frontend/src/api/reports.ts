@@ -133,6 +133,117 @@ export interface RoleWorkbenchData {
 export const getRoleWorkbenchApi = () =>
   client.get<ApiResponse<RoleWorkbenchData>>('/reports/role-workbench')
 
+export interface ReconciliationRecord {
+  id: number
+  type: 1 | 2
+  typeName: string
+  orderId: number | null
+  orderNo: string
+  partyName: string
+  totalAmount: number
+  paidAmount: number
+  balance: number
+  status: 1 | 2 | 3
+  statusName: string
+  dueDate: string | null
+  remark: string | null
+  statementName: string
+  sourceOrderId: number | null
+  sourceOrderNo: string
+  sourcePath: string | null
+  receiptTaskId: number | null
+  receiptTaskNo: string | null
+  receiptPath: string | null
+  createdAt: string
+}
+
+export interface ReconciliationSummary {
+  totalRecords: number
+  totalAmount: number
+  paidAmount: number
+  balance: number
+  overdueCount: number
+  pendingCount: number
+}
+
+export interface ReconciliationReport {
+  summary: ReconciliationSummary
+  list: ReconciliationRecord[]
+  type: 1 | 2
+  pagination: { page: number; pageSize: number; total: number }
+}
+
+export const getReconciliationApi = (params: { type?: number; startDate?: string; endDate?: string; keyword?: string; status?: number | string } = {}) =>
+  client.get<ApiResponse<ReconciliationReport>>('/reports/reconciliation', { params })
+
+export interface ProfitSaleOrderRow {
+  id: number
+  orderNo: string
+  customerName: string
+  warehouseName: string
+  totalAmount: number
+  costAmount: number
+  grossProfit: number
+  marginRate: number
+  path: string
+}
+
+export interface ProfitProductRow {
+  id: number
+  code: string
+  name: string
+  unit: string
+  totalQty: number
+  revenueAmount: number
+  costAmount: number
+  grossProfit: number
+  marginRate: number
+  path: string
+}
+
+export interface ProfitStockValueRow {
+  id: number
+  code: string
+  name: string
+  unit: string
+  warehouseName: string
+  totalQty: number
+  totalValue: number
+  path: string
+}
+
+export interface ProfitSlowMovingRow {
+  id: number
+  code: string
+  name: string
+  unit: string
+  currentQty: number
+  stockValue: number
+  lastOutboundAt: string | null
+  outbound90d: number
+  path: string
+}
+
+export interface ProfitAnalysisSummary {
+  saleAmount: number
+  costAmount: number
+  grossProfit: number
+  stockValue: number
+  slowMovingValue: number
+  slowMovingCount: number
+}
+
+export interface ProfitAnalysisReport {
+  summary: ProfitAnalysisSummary
+  saleOrders: ProfitSaleOrderRow[]
+  products: ProfitProductRow[]
+  stockValue: ProfitStockValueRow[]
+  slowMoving: ProfitSlowMovingRow[]
+}
+
+export const getProfitAnalysisApi = (params: { startDate?: string; endDate?: string } = {}) =>
+  client.get<ApiResponse<ProfitAnalysisReport>>(`/reports/profit-analysis?${q(params)}`)
+
 export interface WaveStats {
   id: number
   waveNo: string
