@@ -47,6 +47,14 @@ export default function ReportsPage() {
             <Button
               size="sm"
               variant="outline"
+              className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+              onClick={() => { addTab({ key: '/reports/role-workbench', title: '岗位工作台', path: '/reports/role-workbench' }); navigate('/reports/role-workbench') }}
+            >
+              岗位工作台
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
               onClick={() => { addTab({ key: '/reports/exception-workbench', title: '异常工作台', path: '/reports/exception-workbench' }); navigate('/reports/exception-workbench') }}
             >

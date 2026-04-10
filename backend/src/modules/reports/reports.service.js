@@ -1,4 +1,33 @@
 const { pool } = require('../../config/db')
+const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+
+function firstValue(row, key, fallback = 0) {
+  if (!row || row[key] == null) return fallback
+  const n = Number(row[key])
+  return Number.isFinite(n) ? n : fallback
+}
+
+function mapWorkbenchItem(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    subtitle: row.subtitle,
+    path: row.path,
+    badge: row.badge || null,
+    hint: row.hint || null,
+    createdAt: row.createdAt || null,
+  }
+}
+
+async function fetchOne(sql, params = []) {
+  const [[row]] = await pool.query(sql, params)
+  return row || {}
+}
+
+async function fetchMany(sql, params = []) {
+  const [rows] = await pool.query(sql, params)
+  return rows || []
+}
 
 // 采购统计：按月汇总金额、单数，可按供应商细分
 async function purchaseStats({ startDate, endDate, groupBy = 'month' }) {
@@ -469,4 +498,435 @@ async function warehouseOps() {
   }
 }
 
-module.exports = { purchaseStats, saleStats, inventoryStats, pdaPerformance, wavePerformance, warehouseOps }
+async function roleWorkbench() {
+  const thresholds = await getInboundClosureThresholds()
+  const highRiskWindowHours = 24
+
+  // ── 仓库角色 ─────────────────────────────────────────────────────────────
+  const pendingReceiveCount = await fetchOne(
+    `SELECT COUNT(*) AS count
+     FROM inbound_tasks
+     WHERE deleted_at IS NULL AND status IN (1, 2)`,
+  )
+  const pendingReceiveRows = await fetchMany(
+    `SELECT t.id,
+            t.task_no AS title,
+            CONCAT(COALESCE(t.supplier_name, '未知供应商'), ' · ', COALESCE(t.purchase_order_no, '混合采购')) AS subtitle,
+            CONCAT('/inbound-tasks/', t.id) AS path,
+            CASE WHEN t.status = 1 THEN '待收货' ELSE '收货中' END AS badge,
+            CONCAT('创建于 ', DATE_FORMAT(t.created_at, '%m-%d %H:%i')) AS hint,
+            t.created_at AS createdAt
+     FROM inbound_tasks t
+     WHERE t.deleted_at IS NULL AND t.status IN (1, 2)
+     ORDER BY t.created_at ASC
+     LIMIT 5`,
+  )
+
+  const waitingPutawayCount = await fetchOne(
+    `SELECT COUNT(*) AS count
+     FROM inventory_containers
+     WHERE deleted_at IS NULL
+       AND status = 0
+       AND inbound_task_id IS NOT NULL`,
+  )
+  const waitingPutawayRows = await fetchMany(
+    `SELECT c.id,
+            c.container_code AS title,
+            CONCAT(COALESCE(t.task_no, '收货任务'), ' · ', COALESCE(c.source_ref_no, '待上架')) AS subtitle,
+            CONCAT('/inbound-tasks/', c.inbound_task_id) AS path,
+            CASE
+              WHEN c.putaway_deadline_at IS NOT NULL AND c.putaway_deadline_at < NOW() THEN '超时'
+              ELSE '待上架'
+            END AS badge,
+            CONCAT('库存条码 · ', DATE_FORMAT(c.created_at, '%m-%d %H:%i')) AS hint,
+            c.created_at AS createdAt
+     FROM inventory_containers c
+     LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
+     WHERE c.deleted_at IS NULL
+       AND c.status = 0
+       AND c.inbound_task_id IS NOT NULL
+     ORDER BY COALESCE(c.putaway_deadline_at, c.created_at) ASC
+     LIMIT 5`,
+  )
+
+  const pendingAuditCount = await fetchOne(
+    `SELECT COUNT(*) AS count
+     FROM inbound_tasks
+     WHERE deleted_at IS NULL
+       AND status = 4
+       AND audit_status = 0`,
+  )
+  const pendingAuditRows = await fetchMany(
+    `SELECT t.id,
+            t.task_no AS title,
+            CONCAT(COALESCE(t.supplier_name, '未知供应商'), ' · ', COALESCE(t.warehouse_name, '未知仓库')) AS subtitle,
+            CONCAT('/inbound-tasks/', t.id) AS path,
+            '待审核' AS badge,
+            CONCAT('上架后 ', DATE_FORMAT(t.updated_at, '%m-%d %H:%i')) AS hint,
+            t.updated_at AS createdAt
+     FROM inbound_tasks t
+     WHERE t.deleted_at IS NULL
+       AND t.status = 4
+       AND t.audit_status = 0
+     ORDER BY t.updated_at ASC
+     LIMIT 5`,
+  )
+
+  const printFailureCount = await fetchOne(
+    `SELECT COUNT(*) AS count
+     FROM print_jobs j
+     INNER JOIN inventory_containers c ON c.id = j.ref_id AND j.ref_type = 'inventory_container'
+     WHERE c.inbound_task_id IS NOT NULL
+       AND (
+         (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
+         OR (j.status IN (0, 1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
+         OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
+       )`,
+    [Number(thresholds.printTimeoutMinutes)],
+  )
+  const printFailureRows = await fetchMany(
+    `SELECT c.inbound_task_id AS id,
+            COALESCE(t.task_no, '收货任务') AS title,
+            CONCAT(COALESCE(c.container_code, '库存条码'), ' · ', COALESCE(j.status, 'queued')) AS subtitle,
+            CONCAT('/inbound-tasks/', c.inbound_task_id) AS path,
+            CASE
+              WHEN j.status = 3 THEN '失败'
+              WHEN j.status IN (0, 1) THEN '超时待确认'
+              ELSE '打印中'
+            END AS badge,
+            CONCAT('补打入口 · ', DATE_FORMAT(j.updated_at, '%m-%d %H:%i')) AS hint,
+            j.updated_at AS createdAt
+     FROM print_jobs j
+     INNER JOIN inventory_containers c ON c.id = j.ref_id AND j.ref_type = 'inventory_container'
+     LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
+     WHERE c.inbound_task_id IS NOT NULL
+       AND (
+         (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
+         OR (j.status IN (0, 1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
+         OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
+       )
+     ORDER BY j.updated_at DESC
+     LIMIT 5`,
+    [Number(thresholds.printTimeoutMinutes)],
+  )
+
+  // ── 销售/客服角色 ───────────────────────────────────────────────────────
+  const pendingShipCount = await fetchOne(
+    `SELECT COUNT(*) AS count
+     FROM sale_orders
+     WHERE deleted_at IS NULL AND status IN (2, 3)`,
+  )
+  const pendingShipRows = await fetchMany(
+    `SELECT o.id,
+            o.order_no AS title,
+            CONCAT(COALESCE(o.customer_name, '未知客户'), ' · ', COALESCE(o.warehouse_name, '未知仓库')) AS subtitle,
+            CONCAT('/sale/', o.id) AS path,
+            CASE WHEN o.status = 2 THEN '待出库' ELSE '出库中' END AS badge,
+            CONCAT('创建于 ', DATE_FORMAT(o.created_at, '%m-%d %H:%i')) AS hint,
+            o.created_at AS createdAt
+     FROM sale_orders o
+     WHERE o.deleted_at IS NULL AND o.status IN (2, 3)
+     ORDER BY o.created_at ASC
+     LIMIT 5`,
+  )
+
+  const saleAnomalyCount = await fetchOne(
+    `SELECT COUNT(DISTINCT related_id) AS count
+     FROM system_health_logs
+     WHERE created_at >= NOW() - INTERVAL ? HOUR
+       AND severity IN ('high', 'danger')
+       AND related_table = 'sale_orders'`,
+    [highRiskWindowHours],
+  )
+  const saleAnomalyRows = await fetchMany(
+    `SELECT id,
+            related_id AS saleId,
+            CONCAT(check_type, IF(related_id IS NULL, '', CONCAT(' #', related_id))) AS title,
+            message AS subtitle,
+            CASE
+              WHEN related_id IS NOT NULL THEN CONCAT('/sale/', related_id)
+              ELSE '/reports/exception-workbench'
+            END AS path,
+            severity AS badge,
+            DATE_FORMAT(created_at, '%m-%d %H:%i') AS hint,
+            created_at AS createdAt
+     FROM system_health_logs
+     WHERE created_at >= NOW() - INTERVAL ? HOUR
+       AND severity IN ('high', 'danger')
+       AND related_table = 'sale_orders'
+     ORDER BY created_at DESC
+     LIMIT 5`,
+    [highRiskWindowHours],
+  )
+
+  const belowCostCount = await fetchOne(
+    `SELECT COUNT(DISTINCT o.id) AS count
+     FROM sale_orders o
+     INNER JOIN sale_order_items soi ON soi.order_id = o.id
+     INNER JOIN product_items p ON p.id = soi.product_id
+     WHERE o.deleted_at IS NULL
+       AND o.status != 5
+       AND p.cost_price IS NOT NULL
+       AND p.cost_price > 0
+       AND soi.unit_price < p.cost_price`,
+  )
+  const belowCostRows = await fetchMany(
+    `SELECT o.id,
+            o.order_no AS title,
+            CONCAT(COALESCE(o.customer_name, '未知客户'), ' · 低于进价 ', COUNT(*) , ' 行') AS subtitle,
+            CONCAT('/sale/', o.id) AS path,
+            '低于进价' AS badge,
+            CONCAT('潜在损失 ¥', FORMAT(SUM((p.cost_price - soi.unit_price) * soi.quantity), 2)) AS hint,
+            o.created_at AS createdAt
+     FROM sale_orders o
+     INNER JOIN sale_order_items soi ON soi.order_id = o.id
+     INNER JOIN product_items p ON p.id = soi.product_id
+     WHERE o.deleted_at IS NULL
+       AND o.status != 5
+       AND p.cost_price IS NOT NULL
+       AND p.cost_price > 0
+       AND soi.unit_price < p.cost_price
+     GROUP BY o.id, o.order_no, o.customer_name, o.created_at
+     ORDER BY SUM((p.cost_price - soi.unit_price) * soi.quantity) DESC
+     LIMIT 5`,
+  )
+
+  // ── 管理角色 ─────────────────────────────────────────────────────────────
+  const auditCount = pendingAuditCount
+
+  const inventoryAnomalyCount = await fetchOne(
+    `SELECT COUNT(*) AS count
+     FROM (
+       SELECT CONCAT('neg_on_hand-', s.id) AS issue_key
+       FROM inventory_stock s
+       WHERE s.quantity < 0
+       UNION ALL
+       SELECT CONCAT('neg_reserved-', s.id)
+       FROM inventory_stock s
+       WHERE s.reserved < 0
+       UNION ALL
+       SELECT CONCAT('reserved_exceeds-', s.id)
+       FROM inventory_stock s
+       WHERE s.quantity < s.reserved
+     ) x`,
+  )
+  const inventoryAnomalyRows = await fetchMany(
+    `SELECT * FROM (
+       SELECT s.id,
+              p.name AS title,
+              CONCAT('实际库存 ', s.quantity, '，预占 ', s.reserved) AS subtitle,
+              '/inventory/overview' AS path,
+              '库存异常' AS badge,
+              '实际库存为负' AS hint,
+              s.updated_at AS createdAt,
+              1 AS sort_rank
+       FROM inventory_stock s
+       INNER JOIN product_items p ON p.id = s.product_id
+       WHERE s.quantity < 0
+       UNION ALL
+       SELECT s.id,
+              p.name AS title,
+              CONCAT('实际库存 ', s.quantity, '，预占 ', s.reserved) AS subtitle,
+              '/inventory/overview' AS path,
+              '库存异常' AS badge,
+              '预占数量为负' AS hint,
+              s.updated_at AS createdAt,
+              2 AS sort_rank
+       FROM inventory_stock s
+       INNER JOIN product_items p ON p.id = s.product_id
+       WHERE s.reserved < 0
+       UNION ALL
+       SELECT s.id,
+              p.name AS title,
+              CONCAT('实际库存 ', s.quantity, '，预占 ', s.reserved) AS subtitle,
+              '/inventory/overview' AS path,
+              '库存异常' AS badge,
+              '可用库存为负' AS hint,
+              s.updated_at AS createdAt,
+              3 AS sort_rank
+       FROM inventory_stock s
+       INNER JOIN product_items p ON p.id = s.product_id
+       WHERE s.quantity < s.reserved
+     ) t
+     ORDER BY sort_rank ASC, createdAt DESC
+     LIMIT 5`,
+  )
+
+  const highRiskCount = await fetchOne(
+    `SELECT COUNT(*) AS count
+     FROM system_health_logs
+     WHERE created_at >= NOW() - INTERVAL ? HOUR
+       AND severity IN ('high', 'danger', 'fix_failed')`,
+    [highRiskWindowHours],
+  )
+  const highRiskRows = await fetchMany(
+    `SELECT id,
+            CONCAT(check_type, IF(related_id IS NULL, '', CONCAT(' #', related_id))) AS title,
+            message AS subtitle,
+            CASE
+              WHEN related_table = 'sale_orders' AND related_id IS NOT NULL THEN CONCAT('/sale/', related_id)
+              WHEN related_table = 'inbound_tasks' AND related_id IS NOT NULL THEN CONCAT('/inbound-tasks/', related_id)
+              WHEN related_table = 'warehouse_tasks' AND related_id IS NOT NULL THEN '/reports/exception-workbench'
+              WHEN related_table = 'inventory_stock' THEN '/inventory/overview'
+              ELSE '/reports/exception-workbench'
+            END AS path,
+            severity AS badge,
+            DATE_FORMAT(created_at, '%m-%d %H:%i') AS hint,
+            created_at AS createdAt
+     FROM system_health_logs
+     WHERE created_at >= NOW() - INTERVAL ? HOUR
+       AND severity IN ('high', 'danger', 'fix_failed')
+     ORDER BY created_at DESC
+     LIMIT 5`,
+    [highRiskWindowHours],
+  )
+
+  const sections = [
+    {
+      key: 'warehouse',
+      title: '仓库角色',
+      description: '收货、上架、审核和补打，聚焦一线仓库收口。',
+      cards: [
+        {
+          key: 'warehouse-pending-receive',
+          title: '待收货',
+          description: '已建但尚未进入收货闭环的收货订单。',
+          count: firstValue(pendingReceiveCount, 'count'),
+          path: pendingReceiveRows[0] ? `/inbound-tasks/${pendingReceiveRows[0].id}` : '/inbound-tasks',
+          actionLabel: pendingReceiveRows[0] ? '打开首单' : '查看收货订单',
+          accent: 'blue',
+          items: pendingReceiveRows.map(mapWorkbenchItem),
+        },
+        {
+          key: 'warehouse-putaway',
+          title: '待上架',
+          description: '已打印库存条码但尚未完成上架的容器。',
+          count: firstValue(waitingPutawayCount, 'count'),
+          path: waitingPutawayRows[0]?.path ?? '/inbound-tasks',
+          actionLabel: waitingPutawayRows[0] ? '打开首条' : '查看收货订单',
+          accent: 'amber',
+          items: waitingPutawayRows.map(mapWorkbenchItem),
+        },
+        {
+          key: 'warehouse-audit',
+          title: '待复核',
+          description: '已上架但还未完成审核的收货订单。',
+          count: firstValue(pendingAuditCount, 'count'),
+          path: pendingAuditRows[0]?.path ?? '/inbound-tasks',
+          actionLabel: pendingAuditRows[0] ? '打开首单' : '查看收货订单',
+          accent: 'emerald',
+          items: pendingAuditRows.map(mapWorkbenchItem),
+        },
+        {
+          key: 'warehouse-print',
+          title: '打印失败待补打',
+          description: '收货库存条码打印异常或超时待确认。',
+          count: firstValue(printFailureCount, 'count'),
+          path: printFailureRows[0]?.path ?? '/settings/barcode-print-query?category=inbound&status=failed',
+          actionLabel: printFailureRows[0] ? '打开首单' : '打开补打中心',
+          accent: 'rose',
+          items: printFailureRows.map(mapWorkbenchItem),
+        },
+      ],
+    },
+    {
+      key: 'sale',
+      title: '销售/客服',
+      description: '出库推进、价格风险和销售异常，优先看影响业务结果的单据。',
+      cards: [
+        {
+          key: 'sale-pending-ship',
+          title: '待出库',
+          description: '已确认或已进入出库流程的销售单。',
+          count: firstValue(pendingShipCount, 'count'),
+          path: pendingShipRows[0]?.path ?? '/sale',
+          actionLabel: pendingShipRows[0] ? '打开首单' : '查看销售单',
+          accent: 'blue',
+          items: pendingShipRows.map(mapWorkbenchItem),
+        },
+        {
+          key: 'sale-anomaly',
+          title: '异常销售单',
+          description: '近期命中的销售相关高风险巡检问题。',
+          count: firstValue(saleAnomalyCount, 'count'),
+          path: saleAnomalyRows[0]?.path ?? '/reports/exception-workbench',
+          actionLabel: saleAnomalyRows[0] ? '查看首条' : '打开异常工作台',
+          accent: 'rose',
+          items: saleAnomalyRows.map(mapWorkbenchItem),
+        },
+        {
+          key: 'sale-below-cost',
+          title: '低于进价单据',
+          description: '存在低于成本价销售行的销售单。',
+          count: firstValue(belowCostCount, 'count'),
+          path: belowCostRows[0]?.path ?? '/sale',
+          actionLabel: belowCostRows[0] ? '打开首单' : '查看销售单',
+          accent: 'amber',
+          items: belowCostRows.map(mapWorkbenchItem),
+        },
+      ],
+    },
+    {
+      key: 'management',
+      title: '管理角色',
+      description: '看收口进度、异常任务和高风险问题，优先盯住会拖慢闭环的点。',
+      cards: [
+        {
+          key: 'management-audit',
+          title: '待审核收货单',
+          description: '完成上架后等待管理审核的收货订单。',
+          count: firstValue(auditCount, 'count'),
+          path: pendingAuditRows[0]?.path ?? '/inbound-tasks',
+          actionLabel: pendingAuditRows[0] ? '打开首单' : '查看收货订单',
+          accent: 'emerald',
+          items: pendingAuditRows.map(mapWorkbenchItem),
+        },
+        {
+          key: 'management-anomaly-task',
+          title: '异常任务',
+          description: '销售/仓库流程中的巡检异常与任务延迟。',
+          count: Math.max(firstValue(saleAnomalyCount, 'count'), firstValue(highRiskCount, 'count')),
+          path: '/reports/exception-workbench',
+          actionLabel: '打开异常工作台',
+          accent: 'rose',
+          items: highRiskRows.map(mapWorkbenchItem),
+        },
+        {
+          key: 'management-stock',
+          title: '库存异常',
+          description: '负库存、负预占和可用库存为负的风险项。',
+          count: firstValue(inventoryAnomalyCount, 'count'),
+          path: '/inventory/overview',
+          actionLabel: '查看库存总览',
+          accent: 'amber',
+          items: inventoryAnomalyRows.map(mapWorkbenchItem),
+        },
+        {
+          key: 'management-high-risk',
+          title: '近期高风险问题',
+          description: '最近 24 小时内的高风险巡检结果。',
+          count: firstValue(highRiskCount, 'count'),
+          path: '/reports/exception-workbench',
+          actionLabel: '打开异常工作台',
+          accent: 'slate',
+          items: highRiskRows.map(mapWorkbenchItem),
+        },
+      ],
+    },
+  ]
+
+  const summary = {
+    totalAlerts:
+      sections.reduce((sum, section) => sum + section.cards.reduce((cardSum, card) => cardSum + card.count, 0), 0),
+    warehouseCount: sections[0].cards.reduce((sum, card) => sum + card.count, 0),
+    saleCount: sections[1].cards.reduce((sum, card) => sum + card.count, 0),
+    managementCount: sections[2].cards.reduce((sum, card) => sum + card.count, 0),
+  }
+
+  return {
+    summary,
+    sections,
+  }
+}
+
+module.exports = { purchaseStats, saleStats, inventoryStats, pdaPerformance, wavePerformance, warehouseOps, roleWorkbench }

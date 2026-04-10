@@ -78,6 +78,7 @@ export const TOP_NAV_SECTIONS: TopNavSection[] = [
     label: '数据',
     children: [
       { label: '报表中心', path: '/reports', perm: 'page:reports' },
+      { label: '岗位工作台', path: '/reports/role-workbench', perm: 'page:reports' },
       { label: '异常工作台', path: '/reports/exception-workbench', perm: 'page:reports' },
       { label: '波次效率', path: '/reports/wave-performance', perm: 'page:reports' },
       { label: 'PDA 异常分析', path: '/reports/pda-anomaly', perm: 'page:reports' },

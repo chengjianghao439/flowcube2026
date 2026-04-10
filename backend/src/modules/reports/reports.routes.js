@@ -13,5 +13,6 @@ router.get('/inventory',       async (req, res, next) => { try { return successR
 router.get('/pda-performance',  async (req, res, next) => { try { return successResponse(res, await svc.pdaPerformance(),                            '查询成功') } catch (e) { next(e) } })
 router.get('/wave-performance', async (req, res, next) => { try { return successResponse(res, await svc.wavePerformance(parseQuery(req.query)),  '查询成功') } catch (e) { next(e) } })
 router.get('/warehouse-ops',    async (req, res, next) => { try { return successResponse(res, await svc.warehouseOps(),                             '查询成功') } catch (e) { next(e) } })
+router.get('/role-workbench',   async (req, res, next) => { try { return successResponse(res, await svc.roleWorkbench(),                            '查询成功') } catch (e) { next(e) } })
 
 module.exports = router

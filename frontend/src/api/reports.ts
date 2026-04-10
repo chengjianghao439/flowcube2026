@@ -95,6 +95,44 @@ export interface WarehouseOpsData {
 export const getWarehouseOpsApi = () =>
   client.get<ApiResponse<WarehouseOpsData>>('/reports/warehouse-ops')
 
+export interface WorkbenchItem {
+  id: number | string
+  title: string
+  subtitle?: string | null
+  path: string
+  badge?: string | null
+  hint?: string | null
+  createdAt?: string | null
+}
+export interface WorkbenchCard {
+  key: string
+  title: string
+  description: string
+  count: number
+  path: string
+  actionLabel: string
+  accent: 'blue' | 'amber' | 'emerald' | 'rose' | 'slate'
+  items: WorkbenchItem[]
+}
+export interface WorkbenchSection {
+  key: string
+  title: string
+  description: string
+  cards: WorkbenchCard[]
+}
+export interface RoleWorkbenchData {
+  summary: {
+    totalAlerts: number
+    warehouseCount: number
+    saleCount: number
+    managementCount: number
+  }
+  sections: WorkbenchSection[]
+}
+
+export const getRoleWorkbenchApi = () =>
+  client.get<ApiResponse<RoleWorkbenchData>>('/reports/role-workbench')
+
 export interface WaveStats {
   id: number
   waveNo: string

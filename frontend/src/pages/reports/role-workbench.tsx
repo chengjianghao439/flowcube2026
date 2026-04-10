@@ -1,0 +1,169 @@
+import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import PageHeader from '@/components/shared/PageHeader'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { useWorkspaceStore } from '@/store/workspaceStore'
+import { formatDisplayDateTime } from '@/lib/dateTime'
+import { getRoleWorkbenchApi, type WorkbenchCard, type WorkbenchItem, type WorkbenchSection } from '@/api/reports'
+
+const ACCENT_CLASSES: Record<WorkbenchCard['accent'], { card: string; badge: string; pill: string; button: string }> = {
+  blue:   { card: 'border-blue-200 bg-gradient-to-br from-blue-50 to-white', badge: 'border-blue-200 bg-blue-50 text-blue-700', pill: 'bg-blue-500', button: 'border-blue-200 text-blue-700 hover:bg-blue-50' },
+  amber:  { card: 'border-amber-200 bg-gradient-to-br from-amber-50 to-white', badge: 'border-amber-200 bg-amber-50 text-amber-700', pill: 'bg-amber-500', button: 'border-amber-200 text-amber-700 hover:bg-amber-50' },
+  emerald:{ card: 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-white', badge: 'border-emerald-200 bg-emerald-50 text-emerald-700', pill: 'bg-emerald-500', button: 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' },
+  rose:   { card: 'border-rose-200 bg-gradient-to-br from-rose-50 to-white', badge: 'border-rose-200 bg-rose-50 text-rose-700', pill: 'bg-rose-500', button: 'border-rose-200 text-rose-700 hover:bg-rose-50' },
+  slate:  { card: 'border-slate-200 bg-gradient-to-br from-slate-50 to-white', badge: 'border-slate-200 bg-slate-50 text-slate-700', pill: 'bg-slate-500', button: 'border-slate-200 text-slate-700 hover:bg-slate-50' },
+}
+
+function StatCard({ label, value, hint }: { label: string; value: number | string; hint: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+    </div>
+  )
+}
+
+function ItemRow({ item, onOpen }: { item: WorkbenchItem; onOpen: (path: string, title: string) => void }) {
+  const hint = item.hint || (item.createdAt ? formatDisplayDateTime(item.createdAt) : '待处理')
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(item.path, item.title)}
+      className="w-full rounded-xl border border-border/70 bg-white/80 px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+            {item.badge && (
+              <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px] leading-4">
+                {item.badge}
+              </Badge>
+            )}
+          </div>
+          {item.subtitle && <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.subtitle}</p>}
+        </div>
+        <span className="shrink-0 text-xs text-muted-foreground">{hint}</span>
+      </div>
+    </button>
+  )
+}
+
+function CardView({ card, onOpen }: { card: WorkbenchCard; onOpen: (path: string, title: string) => void }) {
+  const accent = ACCENT_CLASSES[card.accent]
+  return (
+    <div className={`rounded-2xl border p-4 shadow-sm ${accent.card}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-card-title">{card.title}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{card.description}</p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <Badge variant="outline" className={`gap-1 rounded-full ${accent.badge}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${accent.pill}`} />
+            {card.count}
+          </Badge>
+          <Button size="sm" variant="outline" className={accent.button} onClick={() => onOpen(card.path, card.title)}>
+            {card.actionLabel}
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {card.items.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+            暂无待处理项
+          </div>
+        ) : (
+          card.items.map(item => (
+            <ItemRow key={`${card.key}-${item.id}`} item={item} onOpen={onOpen} />
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function RoleWorkbenchPage() {
+  const navigate = useNavigate()
+  const addTab = useWorkspaceStore(s => s.addTab)
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['role-workbench'],
+    queryFn: () => getRoleWorkbenchApi().then(r => r.data.data!),
+    refetchInterval: 60_000,
+  })
+
+  function openPath(path: string, title: string) {
+    addTab({ key: path, title, path })
+    navigate(path)
+  }
+
+  const summary = data?.summary
+  const sections: WorkbenchSection[] = data?.sections ?? []
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="岗位工作台"
+        description="按岗位聚合待办，优先收口收货、出库、库存和管理异常。"
+        actions={(
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
+              打开异常工作台
+            </Button>
+            <Button variant="outline" onClick={() => openPath('/reports/warehouse-ops', '仓库运营看板')}>
+              打开仓库运营看板
+            </Button>
+            <Button onClick={() => refetch()}>立即刷新</Button>
+          </div>
+        )}
+      />
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="总待办" value={summary?.totalAlerts ?? 0} hint="岗位工作台全部卡片合计" />
+        <StatCard label="仓库角色" value={summary?.warehouseCount ?? 0} hint="收货、上架、审核、补打" />
+        <StatCard label="销售/客服" value={summary?.saleCount ?? 0} hint="出库、异常销售、低于进价" />
+        <StatCard label="管理角色" value={summary?.managementCount ?? 0} hint="审核、异常任务、库存风险" />
+      </div>
+
+      {isLoading && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="h-72 animate-pulse rounded-2xl border border-border bg-muted/40" />
+          <div className="h-72 animate-pulse rounded-2xl border border-border bg-muted/40" />
+        </div>
+      )}
+
+      {!isLoading && sections.length > 0 && (
+        <div className="space-y-6">
+          {sections.map(section => (
+            <section key={section.key} className="space-y-4">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-section-title">{section.title}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{section.description}</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
+                  查看异常工作台
+                </Button>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {section.cards.map(card => (
+                  <CardView key={card.key} card={card} onOpen={openPath} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+
+      {!isLoading && !sections.length && (
+        <div className="rounded-2xl border border-dashed border-border py-16 text-center text-muted-foreground">
+          暂无岗位工作台数据
+        </div>
+      )}
+    </div>
+  )
+}
