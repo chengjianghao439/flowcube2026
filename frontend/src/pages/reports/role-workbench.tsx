@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getRoleWorkbenchApi, type WorkbenchCard, type WorkbenchItem, type WorkbenchSection } from '@/api/reports'
 
 const ACCENT_CLASSES: Record<WorkbenchCard['accent'], { card: string; badge: string; pill: string; button: string }> = {
@@ -90,11 +91,13 @@ export default function RoleWorkbenchPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
 
-  const { data, isLoading, refetch } = useQuery({
+  const workbenchQ = useQuery({
     queryKey: ['role-workbench'],
     queryFn: () => getRoleWorkbenchApi().then(r => r.data.data!),
     refetchInterval: 60_000,
   })
+
+  const { data, isLoading, isError, error, refetch } = workbenchQ
 
   function openPath(path: string, title: string) {
     addTab({ key: path, title, path })
@@ -136,7 +139,17 @@ export default function RoleWorkbenchPage() {
         </div>
       )}
 
-      {!isLoading && sections.length > 0 && (
+      {isError && !data && (
+        <QueryErrorState
+          error={error}
+          onRetry={() => void refetch()}
+          title="岗位工作台加载失败"
+          description="当前岗位待办暂时无法加载，请点击重试或稍后再试"
+          compact
+        />
+      )}
+
+      {!isLoading && !isError && sections.length > 0 && (
         <div className="space-y-6">
           {sections.map(section => (
             <section key={section.key} className="space-y-4">
@@ -159,7 +172,7 @@ export default function RoleWorkbenchPage() {
         </div>
       )}
 
-      {!isLoading && !sections.length && (
+      {!isLoading && !isError && !sections.length && (
         <div className="rounded-2xl border border-dashed border-border py-16 text-center text-muted-foreground">
           暂无岗位工作台数据
         </div>

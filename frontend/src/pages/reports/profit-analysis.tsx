@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getProfitAnalysisApi, type ProfitSaleOrderRow, type ProfitProductRow, type ProfitStockValueRow, type ProfitSlowMovingRow } from '@/api/reports'
 import type { TableColumn } from '@/types'
 
@@ -39,7 +40,7 @@ export default function ProfitAnalysisPage() {
   const [endDate, setEndDate] = useState('')
   const [applied, setApplied] = useState({ startDate: '', endDate: '' })
 
-  const { data, isLoading, refetch } = useQuery({
+  const profitQ = useQuery({
     queryKey: ['profit-analysis', applied],
     queryFn: () => getProfitAnalysisApi({
       startDate: applied.startDate || undefined,
@@ -47,6 +48,7 @@ export default function ProfitAnalysisPage() {
     }).then(r => r.data.data!),
   })
 
+  const { data, isLoading, isError, error, refetch } = profitQ
   const summary = data?.summary
 
   function openPath(path: string, title: string) {
@@ -131,6 +133,16 @@ export default function ProfitAnalysisPage() {
         <Button size="sm" variant="ghost" onClick={() => { setStartDate(''); setEndDate(''); setApplied({ startDate: '', endDate: '' }) }}>重置</Button>
       </FilterCard>
 
+      {isError && !data && (
+        <QueryErrorState
+          error={error}
+          onRetry={() => void refetch()}
+          title="利润 / 库存分析加载失败"
+          description="当前利润分析数据暂时无法加载，请点击重试或稍后再试"
+          compact
+        />
+      )}
+
       <div className="flex gap-1 border-b border-border">
         {([
           { key: 'sale' as const, label: '销售毛利' },
@@ -149,7 +161,7 @@ export default function ProfitAnalysisPage() {
         ))}
       </div>
 
-      {tab === 'sale' && (
+      {tab === 'sale' && !isError && (
         <DataTable
           columns={saleColumns}
           data={data?.saleOrders ?? []}
@@ -159,7 +171,7 @@ export default function ProfitAnalysisPage() {
         />
       )}
 
-      {tab === 'product' && (
+      {tab === 'product' && !isError && (
         <DataTable
           columns={productColumns}
           data={data?.products ?? []}
@@ -169,7 +181,7 @@ export default function ProfitAnalysisPage() {
         />
       )}
 
-      {tab === 'stock' && (
+      {tab === 'stock' && !isError && (
         <DataTable
           columns={stockColumns}
           data={data?.stockValue ?? []}
@@ -179,7 +191,7 @@ export default function ProfitAnalysisPage() {
         />
       )}
 
-      {tab === 'slow' && (
+      {tab === 'slow' && !isError && (
         <DataTable
           columns={slowColumns}
           data={data?.slowMoving ?? []}

@@ -12,6 +12,7 @@ import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getReconciliationApi, type ReconciliationRecord } from '@/api/reports'
 import type { TableColumn, Pagination } from '@/types'
 
@@ -45,7 +46,7 @@ export default function ReconciliationPage() {
   const [endDate, setEndDate] = useState('')
   const [applied, setApplied] = useState({ keyword: '', startDate: '', endDate: '', status: '' })
 
-  const { data, isLoading } = useQuery({
+  const reconciliationQ = useQuery({
     queryKey: ['reconciliation', type, page, applied],
     queryFn: () => getReconciliationApi({
       type,
@@ -58,6 +59,7 @@ export default function ReconciliationPage() {
     }).then(r => r.data.data!),
   })
 
+  const { data, isLoading, isError, error, refetch } = reconciliationQ
   const summary = data?.summary
   const rows = data?.list ?? []
 
@@ -191,15 +193,27 @@ export default function ReconciliationPage() {
         <Button size="sm" variant="ghost" onClick={resetFilters}>重置</Button>
       </FilterCard>
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        loading={isLoading}
-        pagination={data?.pagination as Pagination | undefined}
-        onPageChange={setPage}
-        onRowDoubleClick={(row) => openPath(row.sourcePath || row.receiptPath, row.orderNo)}
-        emptyText="暂无对账数据"
-      />
+      {isError && !data && (
+        <QueryErrorState
+          error={error}
+          onRetry={() => void refetch()}
+          title="对账数据加载失败"
+          description="当前对账单数据无法加载，请点击右上角刷新页面或稍后重试"
+          compact
+        />
+      )}
+
+      {!isError && (
+        <DataTable
+          columns={columns}
+          data={rows}
+          loading={isLoading}
+          pagination={data?.pagination as Pagination | undefined}
+          onPageChange={setPage}
+          onRowDoubleClick={(row) => openPath(row.sourcePath || row.receiptPath, row.orderNo)}
+          emptyText="暂无对账数据"
+        />
+      )}
     </div>
   )
 }

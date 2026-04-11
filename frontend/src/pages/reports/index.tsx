@@ -6,6 +6,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 
 type Tab = 'purchase' | 'sale' | 'inventory'
 
@@ -32,6 +33,8 @@ export default function ReportsPage() {
   const purchaseQ = useQuery({ queryKey: ['report-purchase', applied], queryFn: () => getPurchaseStatsApi(applied).then(r => r.data.data!), enabled: tab === 'purchase' })
   const saleQ     = useQuery({ queryKey: ['report-sale', applied],     queryFn: () => getSaleStatsApi(applied).then(r => r.data.data!),     enabled: tab === 'sale' })
   const invQ      = useQuery({ queryKey: ['report-inv', applied],      queryFn: () => getInventoryStatsApi(applied).then(r => r.data.data!), enabled: tab === 'inventory' })
+
+  const activeQ = tab === 'purchase' ? purchaseQ : tab === 'sale' ? saleQ : invQ
 
   const apply = () => setApplied({ startDate, endDate })
 
@@ -124,8 +127,17 @@ export default function ReportsPage() {
         ))}
       </div>
 
+      {activeQ.isError && !activeQ.data && (
+        <QueryErrorState
+          error={activeQ.error}
+          onRetry={() => activeQ.refetch()}
+          title="报表加载失败"
+          description="当前报表数据暂时无法加载，请重试或稍后再试"
+        />
+      )}
+
       {/* 采购统计 */}
-      {tab === 'purchase' && (
+      {tab === 'purchase' && !activeQ.isError && (
         <div className="space-y-6">
           {purchaseQ.isLoading && <p className="text-center py-12 text-muted-foreground">加载中...</p>}
           {purchaseQ.data && (<>
@@ -160,7 +172,7 @@ export default function ReportsPage() {
       )}
 
       {/* 销售统计 */}
-      {tab === 'sale' && (
+      {tab === 'sale' && !activeQ.isError && (
         <div className="space-y-6">
           {saleQ.isLoading && <p className="text-center py-12 text-muted-foreground">加载中...</p>}
           {saleQ.data && (<>
@@ -194,7 +206,7 @@ export default function ReportsPage() {
       )}
 
       {/* 库存周转 */}
-      {tab === 'inventory' && (
+      {tab === 'inventory' && !activeQ.isError && (
         <div className="space-y-6">
           {invQ.isLoading && <p className="text-center py-12 text-muted-foreground">加载中...</p>}
           {invQ.data && (<>

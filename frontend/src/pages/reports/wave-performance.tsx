@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getWavePerformanceApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -60,10 +61,12 @@ export default function WavePerformancePage() {
   const [sortField, setSortField] = useState<string>('createdAt')
   const [sortAsc, setSortAsc]     = useState(false)
 
-  const { data, isLoading } = useQuery({
+  const wavePerformanceQ = useQuery({
     queryKey: ['wave-performance', applied],
     queryFn:  () => getWavePerformanceApi(applied).then(r => r.data.data!),
   })
+
+  const { data, isLoading, isError, error, refetch } = wavePerformanceQ
 
   const apply = () => setApplied({ startDate, endDate })
   const reset = () => { setStartDate(''); setEndDate(''); setApplied({ startDate: '', endDate: '' }) }
@@ -106,6 +109,16 @@ export default function WavePerformancePage() {
         title="波次效率报表"
         description="波次拣货时长、SKU 分布与拣货效率分析，统一桌面端页头与字号。"
       />
+
+      {isError && !data && (
+        <QueryErrorState
+          error={error}
+          onRetry={() => void refetch()}
+          title="波次效率报表加载失败"
+          description="当前波次效率数据暂时无法加载，请点击重试或稍后再试"
+          compact
+        />
+      )}
 
       {/* 过滤器 */}
       <div className="flex gap-2 items-center flex-wrap">
@@ -160,11 +173,11 @@ export default function WavePerformancePage() {
           </div>
         )}
 
-        {!isLoading && waves.length === 0 && (
+        {!isLoading && !isError && waves.length === 0 && (
           <p className="text-center text-muted-body py-12">暂无波次数据</p>
         )}
 
-        {waves.length > 0 && (
+        {!isError && waves.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

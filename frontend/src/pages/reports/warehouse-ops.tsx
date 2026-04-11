@@ -7,6 +7,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { getWarehouseOpsApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import type { OpsOperator, FlowBottleneck } from '@/api/reports'
 
@@ -95,11 +96,13 @@ function FlowBar({ items }: { items: FlowBottleneck[] }) {
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 export default function WarehouseOpsPage() {
-  const { data, isLoading, dataUpdatedAt, refetch } = useQuery({
+  const warehouseOpsQ = useQuery({
     queryKey: ['warehouse-ops'],
     queryFn:  () => getWarehouseOpsApi().then(r => r.data.data!),
     refetchInterval: 60_000,   // 每分钟自动刷新
   })
+
+  const { data, isLoading, isError, error, dataUpdatedAt, refetch } = warehouseOpsQ
 
   const s  = data?.summary
   const updatedTime = dataUpdatedAt
@@ -119,9 +122,19 @@ export default function WarehouseOpsPage() {
         )}
       />
 
+      {isError && !data && (
+        <QueryErrorState
+          error={error}
+          onRetry={() => void refetch()}
+          title="仓库运营看板加载失败"
+          description="当前仓库运营数据暂时无法加载，请点击重试或稍后再试"
+          compact
+        />
+      )}
+
       {isLoading && <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}
 
-      {!isLoading && data && (<>
+      {!isLoading && data && !isError && (<>
 
         {/* 今日核心指标 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

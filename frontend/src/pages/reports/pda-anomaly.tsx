@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getPdaAnomalyApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
@@ -54,10 +55,12 @@ export default function PdaAnomalyPage() {
   const [endDate,   setEndDate]   = useState('')
   const [applied, setApplied]     = useState<{ startDate?: string; endDate?: string }>({})
 
-  const { data, isLoading } = useQuery({
+  const pdaAnomalyQ = useQuery({
     queryKey: ['pda-anomaly', applied],
     queryFn: () => getPdaAnomalyApi(applied).then(r => r.data.data!),
   })
+
+  const { data, isLoading, isError, error, refetch } = pdaAnomalyQ
 
   const apply = () => setApplied({ startDate: startDate || undefined, endDate: endDate || undefined })
 
@@ -75,6 +78,16 @@ export default function PdaAnomalyPage() {
         description="扫码错误、撤销操作、异常趋势统一用桌面端页头规格展示。"
       />
 
+      {isError && !data && (
+        <QueryErrorState
+          error={error}
+          onRetry={() => void refetch()}
+          title="PDA 异常分析加载失败"
+          description="当前异常分析数据暂时无法加载，请点击重试或稍后再试"
+          compact
+        />
+      )}
+
       {/* 日期筛选 */}
       <div className="flex items-center gap-3 flex-wrap">
         <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40" placeholder="开始日期" />
@@ -86,7 +99,7 @@ export default function PdaAnomalyPage() {
 
       {isLoading && <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}
 
-      {!isLoading && data && (<>
+      {!isLoading && data && !isError && (<>
 
         {/* 汇总 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

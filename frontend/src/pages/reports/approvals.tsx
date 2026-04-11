@@ -5,6 +5,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getRoleWorkbenchApi } from '@/api/reports'
 import { getNotificationsApi } from '@/api/notifications'
 
@@ -41,6 +42,8 @@ export default function ApprovalsPage() {
     refetchInterval: 60_000,
   })
 
+  const notificationsError = notificationsQ.isError && !notificationsQ.data
+  const workbenchError = workbenchQ.isError && !workbenchQ.data
   const notificationItems = notificationsQ.data?.items ?? []
   const managementCards = useMemo(() => {
     const section = workbenchQ.data?.sections.find(item => item.key === 'management')
@@ -72,6 +75,19 @@ export default function ApprovalsPage() {
         <SummaryCard label="异常任务" value={managementCards.find(card => card.key === 'management-anomaly-task')?.count ?? 0} hint="销售/仓库高风险巡检项" tone="amber" />
         <SummaryCard label="库存异常" value={managementCards.find(card => card.key === 'management-stock')?.count ?? 0} hint="负库存与可用库存风险" tone="rose" />
       </div>
+
+      {(notificationsError || workbenchError) && (
+        <QueryErrorState
+          error={notificationsQ.error || workbenchQ.error}
+          onRetry={() => {
+            void notificationsQ.refetch()
+            void workbenchQ.refetch()
+          }}
+          title="审批与提醒加载失败"
+          description="部分待办或提醒暂时无法加载，请点击重试或稍后再试"
+          compact
+        />
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
