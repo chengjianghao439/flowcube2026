@@ -5,6 +5,7 @@
   "scripts": {
     "pretag": "bash scripts/git-tag-check.sh",
     "release:tag-desktop": "bash scripts/release-desktop-tag.sh",
-    "smoke:reports": "npm --prefix backend run smoke:reports"
+    "smoke:reports": "npm --prefix backend run smoke:reports",
+    "smoke:pages": "bash scripts/smoke-pages.sh"
   }
 }
