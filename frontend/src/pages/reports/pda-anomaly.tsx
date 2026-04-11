@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getPdaAnomalyApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { Input } from '@/components/ui/input'
+import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { Button } from '@/components/ui/button'
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
@@ -58,9 +58,10 @@ export default function PdaAnomalyPage() {
   const pdaAnomalyQ = useQuery({
     queryKey: ['pda-anomaly', applied],
     queryFn: () => getPdaAnomalyApi(applied).then(r => r.data.data!),
+    refetchInterval: 60_000,
   })
 
-  const { data, isLoading, isError, error, refetch } = pdaAnomalyQ
+  const { data, isLoading, isError, error, dataUpdatedAt, refetch } = pdaAnomalyQ
 
   const apply = () => setApplied({ startDate: startDate || undefined, endDate: endDate || undefined })
 
@@ -72,10 +73,12 @@ export default function PdaAnomalyPage() {
 
   return (
     <div className="space-y-6">
-      {/* 标题 */}
       <PageHeader
         title="PDA 异常分析"
         description="扫码错误、撤销操作、异常趋势统一用桌面端页头规格展示。"
+        actions={(
+          <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
+        )}
       />
 
       {isError && !data && (
@@ -88,14 +91,17 @@ export default function PdaAnomalyPage() {
         />
       )}
 
-      {/* 日期筛选 */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40" placeholder="开始日期" />
-        <span className="text-muted-foreground">至</span>
-        <Input type="date" value={endDate}   onChange={e => setEndDate(e.target.value)}   className="w-40" placeholder="结束日期" />
-        <Button onClick={apply}>查询</Button>
-        <Button variant="outline" onClick={() => { setStartDate(''); setEndDate(''); setApplied({}) }}>重置</Button>
-      </div>
+      <DateRangeQueryBar
+        label="异常日期"
+        startDate={startDate}
+        endDate={endDate}
+        onStartDateChange={setStartDate}
+        onEndDateChange={setEndDate}
+        onApply={apply}
+        onReset={() => { setStartDate(''); setEndDate(''); setApplied({}) }}
+        onRefresh={() => refetch()}
+        updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : undefined}
+      />
 
       {isLoading && <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}
 

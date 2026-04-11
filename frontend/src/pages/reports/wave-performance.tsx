@@ -7,9 +7,9 @@ import { useQuery } from '@tanstack/react-query'
 import { getWavePerformanceApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import type { WaveStats } from '@/api/reports'
 
 const STATUS_COLOR: Record<number, string> = {
@@ -64,9 +64,10 @@ export default function WavePerformancePage() {
   const wavePerformanceQ = useQuery({
     queryKey: ['wave-performance', applied],
     queryFn:  () => getWavePerformanceApi(applied).then(r => r.data.data!),
+    refetchInterval: 60_000,
   })
 
-  const { data, isLoading, isError, error, refetch } = wavePerformanceQ
+  const { data, isLoading, isError, error, dataUpdatedAt, refetch } = wavePerformanceQ
 
   const apply = () => setApplied({ startDate, endDate })
   const reset = () => { setStartDate(''); setEndDate(''); setApplied({ startDate: '', endDate: '' }) }
@@ -104,10 +105,12 @@ export default function WavePerformancePage() {
 
   return (
     <div className="space-y-6">
-      {/* 页面标题 */}
       <PageHeader
         title="波次效率报表"
         description="波次拣货时长、SKU 分布与拣货效率分析，统一桌面端页头与字号。"
+        actions={(
+          <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
+        )}
       />
 
       {isError && !data && (
@@ -120,15 +123,17 @@ export default function WavePerformancePage() {
         />
       )}
 
-      {/* 过滤器 */}
-      <div className="flex gap-2 items-center flex-wrap">
-        <span className="text-muted-body">创建日期：</span>
-        <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40" />
-        <span className="text-muted-body">至</span>
-        <Input type="date" value={endDate}   onChange={e => setEndDate(e.target.value)}   className="w-40" />
-        <Button onClick={apply}>查询</Button>
-        <Button variant="outline" onClick={reset}>重置</Button>
-      </div>
+      <DateRangeQueryBar
+        label="创建日期"
+        startDate={startDate}
+        endDate={endDate}
+        onStartDateChange={setStartDate}
+        onEndDateChange={setEndDate}
+        onApply={apply}
+        onReset={reset}
+        onRefresh={() => refetch()}
+        updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : undefined}
+      />
 
       {/* 汇总卡片 */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
