@@ -1,6 +1,6 @@
 {
-  "version": "0.3.66",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.66/Jixu-Flow-Setup-0.3.66.exe",
-  "filename": "Jixu-Flow-Setup-0.3.66.exe",
-  "notes": "【v0.3.66 主要更新】\n\n• 修复带查询参数页面误判未注册的问题，KeepAlive 路径识别改为 pathname 与 search 分离处理。\n• 收货订单详情、打印查询等带参数页面现在可稳定恢复，不再容易进入渲染错误态。\n• 桌面端发布版本已同步抬升，确保自动更新源与安装包版本一致。"
+  "version": "0.3.67",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.67/Jixu-Flow-Setup-0.3.67.exe",
+  "filename": "Jixu-Flow-Setup-0.3.67.exe",
+  "notes": "【v0.3.67 主要更新】\n\n• 把报表中心、岗位工作台、对账、利润分析、审批与提醒、作业绩效的上线前烟雾检查固定到发布流程。\n• 岗位工作台、审批与提醒、通知中心完成分流，操作待办、财务提醒和系统提醒各归其位。\n• 对账页、作业绩效三页组统一了筛选、卡片、空态和回跳入口，核对与下钻更顺手。\n• 收货详情、打印查询与相关渲染错误继续加固，页面能打开但接口报错的问题被提前拦截。\n• 桌面端发布版本已同步抬升，更新弹窗将显示本次更新内容。"
 }
