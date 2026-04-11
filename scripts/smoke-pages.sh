@@ -4,15 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-PWCLI="$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh"
 SESSION="${PLAYWRIGHT_CLI_SESSION:-fps-$$-$RANDOM}"
 BASE_URL="${PAGE_SMOKE_BASE_URL:-http://127.0.0.1}"
-
-if [ ! -f "$PWCLI" ]; then
-  echo "!! 缺少 Playwright CLI wrapper：$PWCLI" >&2
-  exit 1
-fi
 
 if ! command -v npx >/dev/null 2>&1; then
   echo "!! 缺少 npx，无法运行页面烟雾检查" >&2
@@ -20,7 +13,7 @@ if ! command -v npx >/dev/null 2>&1; then
 fi
 
 pw() {
-  bash "$PWCLI" --session "$SESSION" "$@"
+  npx --yes --package @playwright/cli playwright-cli --session "$SESSION" "$@"
 }
 
 js_quote() {
