@@ -129,32 +129,38 @@ async function runMigrations() {
     await safeAlter(conn, `ALTER TABLE inventory_containers ADD INDEX idx_container_locked (locked_by_task_id)`)
 
     // ── 字段长度规范化（三端统一：DB / 后端 / 前端）──────────────────────────
-    // 客户表
-    await safeModify(conn, `ALTER TABLE sale_customers MODIFY COLUMN name    VARCHAR(20) NOT NULL COMMENT '客户名称'`)
-    await safeModify(conn, `ALTER TABLE sale_customers MODIFY COLUMN contact VARCHAR(5)  DEFAULT NULL COMMENT '联系人'`)
-    await safeModify(conn, `ALTER TABLE sale_customers MODIFY COLUMN phone   VARCHAR(11) DEFAULT NULL COMMENT '联系电话'`)
-    await safeModify(conn, `ALTER TABLE sale_customers MODIFY COLUMN address VARCHAR(30) DEFAULT NULL COMMENT '地址'`)
-    await safeModify(conn, `ALTER TABLE sale_customers MODIFY COLUMN remark  VARCHAR(30) DEFAULT NULL COMMENT '备注'`)
-    // 供应商表
-    await safeModify(conn, `ALTER TABLE supply_suppliers MODIFY COLUMN name    VARCHAR(20) NOT NULL COMMENT '供应商名称'`)
-    await safeModify(conn, `ALTER TABLE supply_suppliers MODIFY COLUMN contact VARCHAR(5)  DEFAULT NULL COMMENT '联系人'`)
-    await safeModify(conn, `ALTER TABLE supply_suppliers MODIFY COLUMN phone   VARCHAR(11) DEFAULT NULL COMMENT '联系电话'`)
-    await safeModify(conn, `ALTER TABLE supply_suppliers MODIFY COLUMN address VARCHAR(30) DEFAULT NULL COMMENT '地址'`)
-    await safeModify(conn, `ALTER TABLE supply_suppliers MODIFY COLUMN remark  VARCHAR(30) DEFAULT NULL COMMENT '备注'`)
-    // 承运商表
-    await safeModify(conn, `ALTER TABLE carriers MODIFY COLUMN name    VARCHAR(10) NOT NULL COMMENT '承运商名称'`)
-    await safeModify(conn, `ALTER TABLE carriers MODIFY COLUMN contact VARCHAR(5)  DEFAULT NULL COMMENT '联系人'`)
-    await safeModify(conn, `ALTER TABLE carriers MODIFY COLUMN phone   VARCHAR(11) DEFAULT NULL COMMENT '联系电话'`)
-    await safeModify(conn, `ALTER TABLE carriers MODIFY COLUMN remark  VARCHAR(30) DEFAULT NULL COMMENT '备注'`)
-    // 商品表
-    await safeAlter(conn, `ALTER TABLE product_items ADD COLUMN cost_price DECIMAL(12,4) NOT NULL DEFAULT 0 COMMENT '成本价' AFTER barcode`)
-    await safeModify(conn, `ALTER TABLE product_items MODIFY COLUMN spec   VARCHAR(5)  DEFAULT NULL COMMENT '规格型号'`)
-    await safeModify(conn, `ALTER TABLE product_items MODIFY COLUMN remark VARCHAR(30) DEFAULT NULL COMMENT '备注'`)
-    // 销售订单表
-    await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN receiver_name    VARCHAR(5)   DEFAULT NULL COMMENT '收货人'`)
-    await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN receiver_phone   VARCHAR(11)  DEFAULT NULL COMMENT '收货电话'`)
-    await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN receiver_address VARCHAR(30)  DEFAULT NULL COMMENT '收货地址'`)
-    await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN remark           VARCHAR(30)  DEFAULT NULL COMMENT '备注'`)
+    // 这批 MODIFY 语句会触发表重建，启动期容易卡住；默认不在每次启动都执行。
+    // 如需离线做一次性字段收口，可临时设置 RUN_SCHEMA_NORMALIZATION=1。
+    if (String(process.env.RUN_SCHEMA_NORMALIZATION || '').trim() === '1') {
+      // 客户表
+      await safeModify(conn, `ALTER TABLE sale_customers MODIFY COLUMN name    VARCHAR(20) NOT NULL COMMENT '客户名称'`)
+      await safeModify(conn, `ALTER TABLE sale_customers MODIFY COLUMN contact VARCHAR(5)  DEFAULT NULL COMMENT '联系人'`)
+      await safeModify(conn, `ALTER TABLE sale_customers MODIFY COLUMN phone   VARCHAR(11) DEFAULT NULL COMMENT '联系电话'`)
+      await safeModify(conn, `ALTER TABLE sale_customers MODIFY COLUMN address VARCHAR(30) DEFAULT NULL COMMENT '地址'`)
+      await safeModify(conn, `ALTER TABLE sale_customers MODIFY COLUMN remark  VARCHAR(30) DEFAULT NULL COMMENT '备注'`)
+      // 供应商表
+      await safeModify(conn, `ALTER TABLE supply_suppliers MODIFY COLUMN name    VARCHAR(20) NOT NULL COMMENT '供应商名称'`)
+      await safeModify(conn, `ALTER TABLE supply_suppliers MODIFY COLUMN contact VARCHAR(5)  DEFAULT NULL COMMENT '联系人'`)
+      await safeModify(conn, `ALTER TABLE supply_suppliers MODIFY COLUMN phone   VARCHAR(11) DEFAULT NULL COMMENT '联系电话'`)
+      await safeModify(conn, `ALTER TABLE supply_suppliers MODIFY COLUMN address VARCHAR(30) DEFAULT NULL COMMENT '地址'`)
+      await safeModify(conn, `ALTER TABLE supply_suppliers MODIFY COLUMN remark  VARCHAR(30) DEFAULT NULL COMMENT '备注'`)
+      // 承运商表
+      await safeModify(conn, `ALTER TABLE carriers MODIFY COLUMN name    VARCHAR(10) NOT NULL COMMENT '承运商名称'`)
+      await safeModify(conn, `ALTER TABLE carriers MODIFY COLUMN contact VARCHAR(5)  DEFAULT NULL COMMENT '联系人'`)
+      await safeModify(conn, `ALTER TABLE carriers MODIFY COLUMN phone   VARCHAR(11) DEFAULT NULL COMMENT '联系电话'`)
+      await safeModify(conn, `ALTER TABLE carriers MODIFY COLUMN remark  VARCHAR(30) DEFAULT NULL COMMENT '备注'`)
+      // 商品表
+      await safeAlter(conn, `ALTER TABLE product_items ADD COLUMN cost_price DECIMAL(12,4) NOT NULL DEFAULT 0 COMMENT '成本价' AFTER barcode`)
+      await safeModify(conn, `ALTER TABLE product_items MODIFY COLUMN spec   VARCHAR(5)  DEFAULT NULL COMMENT '规格型号'`)
+      await safeModify(conn, `ALTER TABLE product_items MODIFY COLUMN remark VARCHAR(30) DEFAULT NULL COMMENT '备注'`)
+      // 销售订单表
+      await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN receiver_name    VARCHAR(5)   DEFAULT NULL COMMENT '收货人'`)
+      await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN receiver_phone   VARCHAR(11)  DEFAULT NULL COMMENT '收货电话'`)
+      await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN receiver_address VARCHAR(30)  DEFAULT NULL COMMENT '收货地址'`)
+      await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN remark           VARCHAR(30)  DEFAULT NULL COMMENT '备注'`)
+    } else {
+      await safeAlter(conn, `ALTER TABLE product_items ADD COLUMN cost_price DECIMAL(12,4) NOT NULL DEFAULT 0 COMMENT '成本价' AFTER barcode`)
+    }
 
     // 为 picking_waves 添加优先级字段（表由 025 创建，需在 SQL 执行后）
     await safeAlter(conn, `ALTER TABLE picking_waves ADD COLUMN priority TINYINT UNSIGNED NOT NULL DEFAULT 2 COMMENT '1紧急 2普通 3低' AFTER status`)
