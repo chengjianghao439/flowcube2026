@@ -6,10 +6,22 @@ const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const router = Router()
 router.use(authMiddleware)
 
+function pushNotification(items, seen, item) {
+  const dedupeKey = item.dedupeKey || `${item.category || 'general'}:${item.text}:${item.path}`
+  if (seen.has(dedupeKey)) return
+  seen.add(dedupeKey)
+  items.push({
+    ...item,
+    dedupeKey,
+  })
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const threshold = 10 // 低库存阈值
     const inboundThresholds = await getInboundClosureThresholds()
+    const items = []
+    const seen = new Set()
 
     const [[{ pendingPurchase }]] = await pool.query(
       `SELECT COUNT(*) AS pendingPurchase FROM purchase_orders WHERE status IN (1,2) AND deleted_at IS NULL`
@@ -122,21 +134,22 @@ router.get('/', async (req, res, next) => {
     )
 
     // 组装通知列表
-    const items = []
-    if (overduePayable > 0) items.push({ type: 'danger', icon: '🚨', text: `${overduePayable} 笔应付账款已逾期！`, path: '/payments' })
-    if (overdueReceivable > 0) items.push({ type: 'danger', icon: '🚨', text: `${overdueReceivable} 笔应收账款已逾期！`, path: '/payments' })
-    if (lowStockCount > 0) items.push({ type: 'warning', icon: '⚠️', text: `${lowStockCount} 种商品库存不足`, path: '/inventory' })
-    if (pendingPurchase > 0) items.push({ type: 'info', icon: '📦', text: `${pendingPurchase} 笔采购单待处理`, path: '/purchase' })
-    if (pendingSale > 0) items.push({ type: 'info', icon: '🚚', text: `${pendingSale} 笔销售单待处理`, path: '/sale' })
-    if (unpaidPayable > 0) items.push({ type: 'danger', icon: '💳', text: `${unpaidPayable} 笔应付账款未清`, path: '/payments' })
-    if (unpaidReceivable > 0) items.push({ type: 'danger', icon: '💰', text: `${unpaidReceivable} 笔应收账款未清`, path: '/payments' })
-    if (pendingTransfer > 0) items.push({ type: 'info', icon: '🔄', text: `${pendingTransfer} 笔调拨单待处理`, path: '/transfer' })
-    if (pendingInbound > 0) items.push({ type: 'info', icon: '📥', text: `${pendingInbound} 笔收货订单待处理`, path: '/inbound-tasks' })
-    if (failedPrintJobs > 0) items.push({ type: 'warning', icon: '🖨️', text: `${failedPrintJobs} 条打印任务失败，建议补打`, path: '/settings/barcode-print-query' })
-    if (inboundPrintFailures > 0) items.push({ type: 'warning', icon: '🏷️', text: `${inboundPrintFailures} 条收货条码打印失败待补打`, path: failedInboundTarget?.taskId ? `/inbound-tasks/${failedInboundTarget.taskId}` : '/settings/barcode-print-query?category=inbound&status=failed' })
-    if (overdueInboundPutaway > 0) items.push({ type: 'warning', icon: '📦', text: `${overdueInboundPutaway} 箱已打印未上架超时`, path: putawayTimeoutTarget?.taskId ? `/inbound-tasks/${putawayTimeoutTarget.taskId}` : '/inbound-tasks' })
-    if (pendingInboundAudit > 0) items.push({ type: 'warning', icon: '🧾', text: `${pendingInboundAudit} 笔收货订单待审核超时`, path: pendingAuditTarget?.taskId ? `/inbound-tasks/${pendingAuditTarget.taskId}` : '/inbound-tasks' })
-    if (healthAnomalies > 0) items.push({ type: 'warning', icon: '🩺', text: `近 24 小时发现 ${healthAnomalies} 条系统异常记录`, path: '/reports/pda-anomaly' })
+    if (overduePayable > 0) pushNotification(items, seen, { category: 'finance', priority: 10, type: 'danger', icon: '🚨', text: `${overduePayable} 笔应付账款已逾期！`, path: '/payments' })
+    if (overdueReceivable > 0) pushNotification(items, seen, { category: 'finance', priority: 10, type: 'danger', icon: '🚨', text: `${overdueReceivable} 笔应收账款已逾期！`, path: '/payments' })
+    if (lowStockCount > 0) pushNotification(items, seen, { category: 'inventory', priority: 20, type: 'warning', icon: '⚠️', text: `${lowStockCount} 种商品库存不足`, path: '/inventory' })
+    if (pendingPurchase > 0) pushNotification(items, seen, { category: 'operations', priority: 30, type: 'info', icon: '📦', text: `${pendingPurchase} 笔采购单待处理`, path: '/purchase' })
+    if (pendingSale > 0) pushNotification(items, seen, { category: 'operations', priority: 30, type: 'info', icon: '🚚', text: `${pendingSale} 笔销售单待处理`, path: '/sale' })
+    if (unpaidPayable > 0) pushNotification(items, seen, { category: 'finance', priority: 12, type: 'danger', icon: '💳', text: `${unpaidPayable} 笔应付账款未清`, path: '/payments' })
+    if (unpaidReceivable > 0) pushNotification(items, seen, { category: 'finance', priority: 12, type: 'danger', icon: '💰', text: `${unpaidReceivable} 笔应收账款未清`, path: '/payments' })
+    if (pendingTransfer > 0) pushNotification(items, seen, { category: 'operations', priority: 30, type: 'info', icon: '🔄', text: `${pendingTransfer} 笔调拨单待处理`, path: '/transfer' })
+    if (pendingInbound > 0) pushNotification(items, seen, { category: 'operations', priority: 25, type: 'info', icon: '📥', text: `${pendingInbound} 笔收货订单待处理`, path: '/inbound-tasks' })
+    if (failedPrintJobs > 0) pushNotification(items, seen, { category: 'operations', priority: 25, type: 'warning', icon: '🖨️', text: `${failedPrintJobs} 条打印任务失败，建议补打`, path: '/settings/barcode-print-query' })
+    if (inboundPrintFailures > 0) pushNotification(items, seen, { category: 'operations', priority: 20, type: 'warning', icon: '🏷️', text: `${inboundPrintFailures} 条收货条码打印失败待补打`, path: failedInboundTarget?.taskId ? `/inbound-tasks/${failedInboundTarget.taskId}` : '/settings/barcode-print-query?category=inbound&status=failed' })
+    if (overdueInboundPutaway > 0) pushNotification(items, seen, { category: 'operations', priority: 15, type: 'warning', icon: '📦', text: `${overdueInboundPutaway} 箱已打印未上架超时`, path: putawayTimeoutTarget?.taskId ? `/inbound-tasks/${putawayTimeoutTarget.taskId}` : '/inbound-tasks' })
+    if (pendingInboundAudit > 0) pushNotification(items, seen, { category: 'operations', priority: 15, type: 'warning', icon: '🧾', text: `${pendingInboundAudit} 笔收货订单待审核超时`, path: pendingAuditTarget?.taskId ? `/inbound-tasks/${pendingAuditTarget.taskId}` : '/inbound-tasks' })
+    if (healthAnomalies > 0) pushNotification(items, seen, { category: 'system', priority: 5, type: 'warning', icon: '🩺', text: `近 24 小时发现 ${healthAnomalies} 条系统异常记录`, path: '/reports/pda-anomaly' })
+
+    items.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100))
 
     const total = items.length
 

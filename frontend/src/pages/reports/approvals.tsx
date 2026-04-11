@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getRoleWorkbenchApi } from '@/api/reports'
-import { getNotificationsApi } from '@/api/notifications'
+import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
 
 function SummaryCard({ label, value, hint, tone }: { label: string; value: number | string; hint: string; tone: 'blue' | 'amber' | 'emerald' | 'rose' }) {
   const toneClass = tone === 'amber'
@@ -87,6 +87,12 @@ export default function ApprovalsPage() {
   const workbenchError = workbenchQ.isError && !workbenchQ.data
   const topAlert = workbenchQ.data?.topAlert ?? null
   const notificationItems = notificationsQ.data?.items ?? []
+  const reminderItems = useMemo(
+    () => notificationItems
+      .filter(item => item.category === 'finance' || item.category === 'system')
+      .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)),
+    [notificationItems],
+  )
   const managementCards = useMemo(() => {
     const section = workbenchQ.data?.sections.find(item => item.key === 'management')
     return section?.cards ?? []
@@ -112,7 +118,7 @@ export default function ApprovalsPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-4">
-        <SummaryCard label="待提醒总数" value={notificationsQ.data?.total ?? 0} hint="来自通知中心的待处理项" tone="blue" />
+        <SummaryCard label="待提醒总数" value={reminderItems.length ?? 0} hint="仅保留财务与系统提醒" tone="blue" />
         <SummaryCard label="待审核收货单" value={managementCards.find(card => card.key === 'management-audit')?.count ?? 0} hint="需要管理审核的收货单" tone="emerald" />
         <SummaryCard label="异常任务" value={managementCards.find(card => card.key === 'management-anomaly-task')?.count ?? 0} hint="销售/仓库高风险巡检项" tone="amber" />
         <SummaryCard label="库存异常" value={managementCards.find(card => card.key === 'management-stock')?.count ?? 0} hint="负库存与可用库存风险" tone="rose" />
@@ -178,17 +184,17 @@ export default function ApprovalsPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-card-title">提醒事项</h2>
-              <p className="text-muted-body">来自系统通知中心的高频提醒，点击可直接跳转处理。</p>
+              <p className="text-muted-body">仅展示财务和系统级提醒，避免与岗位工作台重复。</p>
             </div>
-            <Badge variant="outline">{notificationItems.length} 项</Badge>
+            <Badge variant="outline">{reminderItems.length} 项</Badge>
           </div>
           <div className="space-y-2">
-            {notificationItems.length === 0 ? (
+            {reminderItems.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border py-12 text-center text-muted-foreground">
                 暂无待提醒事项
               </div>
             ) : (
-              notificationItems.map((item, index) => (
+              reminderItems.map((item: NotificationItem, index) => (
                 <button
                   key={`${item.path}-${index}`}
                   type="button"
