@@ -32,6 +32,7 @@ function PriorityBanner({
   count,
   sectionTitle,
   badge,
+  priorityLabel,
   onOpen,
 }: {
   title: string
@@ -39,6 +40,7 @@ function PriorityBanner({
   count: number
   sectionTitle: string
   badge: string
+  priorityLabel: string
   onOpen: () => void
 }) {
   return (
@@ -48,6 +50,9 @@ function PriorityBanner({
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="rounded-full border-rose-200 bg-rose-100 text-rose-700">
               {badge}
+            </Badge>
+            <Badge variant="outline" className="rounded-full border-border/60 bg-white/80 text-[10px] text-muted-foreground">
+              {priorityLabel}
             </Badge>
             <span className="text-xs uppercase tracking-wide text-muted-foreground">最优先待办</span>
           </div>
@@ -99,7 +104,12 @@ function CardView({ card, onOpen }: { card: WorkbenchCard; onOpen: (path: string
     <div className={`rounded-2xl border p-4 shadow-sm ${accent.card}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-card-title">{card.title}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-card-title">{card.title}</p>
+            <Badge variant="outline" className="rounded-full border-border/60 bg-white/90 px-2 text-[10px] text-muted-foreground">
+              {card.priorityLabel}
+            </Badge>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">{card.description}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
@@ -147,7 +157,7 @@ export default function RoleWorkbenchPage() {
 
   const summary = data?.summary
   const topAlert = data?.topAlert
-  const sections: WorkbenchSection[] = data?.sections ?? []
+  const sections: WorkbenchSection[] = [...(data?.sections ?? [])].sort((a, b) => a.priorityRank - b.priorityRank)
 
   return (
     <div className="space-y-6">
@@ -181,6 +191,7 @@ export default function RoleWorkbenchPage() {
           count={topAlert.count}
           sectionTitle={topAlert.sectionTitle}
           badge={topAlert.badge}
+          priorityLabel={topAlert.priorityLabel}
           onOpen={() => openPath(topAlert.path, topAlert.title)}
         />
       )}
@@ -208,7 +219,12 @@ export default function RoleWorkbenchPage() {
             <section key={section.key} className="space-y-4">
               <div className="flex items-end justify-between gap-3">
                 <div>
-                  <h2 className="text-section-title">{section.title}</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-section-title">{section.title}</h2>
+                    <Badge variant="outline" className="rounded-full border-border/60 bg-white/90 px-2 text-[10px] text-muted-foreground">
+                      区块 P{section.priorityRank / 10}
+                    </Badge>
+                  </div>
                   <p className="mt-1 text-sm text-muted-foreground">{section.description}</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
@@ -216,9 +232,12 @@ export default function RoleWorkbenchPage() {
                 </Button>
               </div>
               <div className="grid gap-4 xl:grid-cols-2">
-                {section.cards.map(card => (
+                {section.cards
+                  .slice()
+                  .sort((a, b) => a.priorityRank - b.priorityRank)
+                  .map(card => (
                   <CardView key={card.key} card={card} onOpen={openPath} />
-                ))}
+                  ))}
               </div>
             </section>
           ))}

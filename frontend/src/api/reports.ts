@@ -112,12 +112,15 @@ export interface WorkbenchCard {
   path: string
   actionLabel: string
   accent: 'blue' | 'amber' | 'emerald' | 'rose' | 'slate'
+  priorityRank: number
+  priorityLabel: string
   items: WorkbenchItem[]
 }
 export interface WorkbenchSection {
   key: string
   title: string
   description: string
+  priorityRank: number
   cards: WorkbenchCard[]
 }
 export interface RoleWorkbenchData {
@@ -136,6 +139,7 @@ export interface RoleWorkbenchData {
     path: string
     actionLabel: string
     accent: 'blue' | 'amber' | 'emerald' | 'rose' | 'slate'
+    priorityLabel: string
     badge: string
   } | null
   sections: WorkbenchSection[]
