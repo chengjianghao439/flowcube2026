@@ -1032,9 +1032,9 @@ async function reconciliationReport({ type = 1, startDate = null, endDate = null
          WHEN pr.type = 2 AND so.id IS NOT NULL THEN CONCAT('/sale/', so.id)
          ELSE NULL
        END AS source_path,
-       lt.task_id AS receipt_task_id,
+       lt.id AS receipt_task_id,
        lt.task_no AS receipt_task_no,
-       CASE WHEN pr.type = 1 AND lt.task_id IS NOT NULL THEN CONCAT('/inbound-tasks/', lt.task_id) ELSE NULL END AS receipt_path
+       CASE WHEN pr.type = 1 AND lt.id IS NOT NULL THEN CONCAT('/inbound-tasks/', lt.id) ELSE NULL END AS receipt_path
      FROM payment_records pr
      LEFT JOIN purchase_orders po
        ON pr.type = 1
