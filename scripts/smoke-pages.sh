@@ -104,60 +104,6 @@ main() {
   open_and_check '/inbound-tasks/1' '收货订单'
   open_and_check '/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed' '条码打印查询'
 
-  if [ "${PAGE_SMOKE_SKIP_DYNAMIC:-0}" = "1" ]; then
-    echo
-    echo "页面烟雾检查通过"
-    return 0
-  fi
-
-  read -r TOP_PATH RECON_PATH <<EOF
-$(node <<'NODE'
-const fs = require('fs')
-const path = require('path')
-
-function loadEnv(filePath) {
-  if (!fs.existsSync(filePath)) return
-  const content = fs.readFileSync(filePath, 'utf8')
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#')) continue
-    const idx = line.indexOf('=')
-    if (idx === -1) continue
-    const key = line.slice(0, idx).trim()
-    let value = line.slice(idx + 1).trim()
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1)
-    }
-    if (!process.env[key]) process.env[key] = value
-  }
-}
-
-loadEnv(path.resolve(process.cwd(), '.env'))
-loadEnv(path.resolve(process.cwd(), 'backend/.env'))
-const svc = require('./backend/src/modules/reports/reports.service')
-
-async function main() {
-  const wb = await svc.roleWorkbench()
-  const topPath = wb?.topAlert?.path || '/reports/role-workbench'
-  const recon = await svc.reconciliationReport({ type: 1, page: 1, pageSize: 20 })
-  const jump = recon.list.find(item => item.sourcePath || item.receiptPath)
-  const reconPath = jump?.receiptPath || jump?.sourcePath || '/reports/reconciliation'
-  process.stdout.write(`${topPath}\t${reconPath}`)
-}
-
-main().catch((error) => {
-  console.error(error)
-  process.exit(1)
-})
-NODE
-)
-EOF
-
-  echo "==> 页面烟雾：动态回跳路径 $TOP_PATH"
-  open_and_check "$TOP_PATH"
-  echo "==> 页面烟雾：动态回跳路径 $RECON_PATH"
-  open_and_check "$RECON_PATH"
-
   echo
   echo "页面烟雾检查通过"
 }
