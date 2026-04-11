@@ -32,8 +32,8 @@ echo "==> 拉取代码..."
 git pull origin main
 
 if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
-  echo "==> Docker：重建并启动 backend..."
-  docker compose up -d --build backend
+  echo "==> Docker：重建并启动 backend / frontend..."
+  docker compose up -d --build backend frontend
   wait_for_health
   echo "==> 运行报表烟雾检查..."
   docker compose exec -T backend npm run smoke:reports
