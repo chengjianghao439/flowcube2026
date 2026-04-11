@@ -1115,7 +1115,13 @@ async function reconciliationReport({ type = 1, startDate = null, endDate = null
      ) task_map ON pr.type = 1 AND task_map.purchase_order_id = pr.order_id
      LEFT JOIN inbound_tasks lt ON lt.id = task_map.task_id
      ${where}
-     ORDER BY pr.created_at DESC, pr.id DESC
+     ORDER BY
+       CASE WHEN pr.status IN (1, 2) THEN 0 ELSE 1 END ASC,
+       CASE WHEN pr.status IN (1, 2) AND pr.due_date IS NOT NULL AND pr.due_date < CURDATE() THEN 0 ELSE 1 END ASC,
+       CASE WHEN pr.due_date IS NULL THEN 1 ELSE 0 END ASC,
+       pr.due_date ASC,
+       pr.created_at DESC,
+       pr.id DESC
      LIMIT ? OFFSET ?`,
     [...params, pageSizeNum, offset],
   )

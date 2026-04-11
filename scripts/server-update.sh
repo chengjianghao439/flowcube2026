@@ -5,12 +5,38 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+wait_for_health() {
+  local attempts=30
+  local delay=2
+  local url="http://127.0.0.1:3000/api/health"
+  echo "==> 等待后端健康检查通过..."
+  for ((i=1; i<=attempts; i++)); do
+    if command -v curl >/dev/null 2>&1; then
+      if curl -fsS "$url" >/dev/null 2>&1; then
+        echo "==> 后端健康检查通过"
+        return 0
+      fi
+    else
+      if node -e "const http=require('http');http.get('$url',res=>{process.exit(res.statusCode===200?0:1)}).on('error',()=>process.exit(1))" >/dev/null 2>&1; then
+        echo "==> 后端健康检查通过"
+        return 0
+      fi
+    fi
+    sleep "$delay"
+  done
+  echo "!! 后端健康检查超时：$url"
+  return 1
+}
+
 echo "==> 拉取代码..."
 git pull origin main
 
 if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   echo "==> Docker：重建并启动 backend..."
   docker compose up -d --build backend
+  wait_for_health
+  echo "==> 运行报表烟雾检查..."
+  docker compose exec -T backend npm run smoke:reports
   echo "==> 完成。请确认仓库根 .env 已设置 APP_PUBLIC_URL=https://你的API域名"
   exit 0
 fi

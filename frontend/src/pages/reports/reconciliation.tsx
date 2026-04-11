@@ -35,6 +35,12 @@ function SummaryCard({ label, value, hint, tone }: { label: string; value: numbe
   )
 }
 
+function isOverdue(record: ReconciliationRecord) {
+  if (!record.dueDate) return false
+  if (record.status === 3) return false
+  return record.dueDate < new Date().toISOString().slice(0, 10)
+}
+
 export default function ReconciliationPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
@@ -100,7 +106,16 @@ export default function ReconciliationPage() {
     { key: 'totalAmount', title: '总金额', width: 110, render: v => <span className="tabular-nums font-medium">¥{Number(v).toFixed(2)}</span> },
     { key: 'paidAmount', title: type === 1 ? '已付' : '已收', width: 110, render: v => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
     { key: 'balance', title: '余额', width: 110, render: v => <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
-    { key: 'status', title: '状态', width: 100, render: (v, row) => <Badge variant={Number(v) === 3 ? 'outline' : Number(v) === 2 ? 'secondary' : 'default'}>{(row as ReconciliationRecord).statusName}</Badge> },
+    { key: 'status', title: '状态', width: 120, render: (v, row) => {
+      const record = row as ReconciliationRecord
+      const overdue = isOverdue(record)
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant={Number(v) === 3 ? 'outline' : Number(v) === 2 ? 'secondary' : 'default'}>{record.statusName}</Badge>
+          {overdue && <Badge variant="destructive" className="rounded-full px-2">逾期</Badge>}
+        </div>
+      )
+    } },
     { key: 'dueDate', title: '到期日', width: 120, render: v => v ? String(v) : <span className="text-muted-foreground">-</span> },
     { key: 'createdAt', title: '创建时间', width: 160, render: v => formatDisplayDateTime(String(v)) },
     { key: 'id', title: '操作', width: 220, render: (_, row) => {
