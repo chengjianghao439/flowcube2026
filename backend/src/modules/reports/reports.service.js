@@ -561,7 +561,7 @@ async function roleWorkbench() {
   )
   const waitingPutawayRows = await fetchMany(
     `SELECT c.id,
-            c.container_code AS title,
+            c.barcode AS title,
             CONCAT(COALESCE(t.task_no, '收货任务'), ' · ', COALESCE(c.source_ref_no, '待上架')) AS subtitle,
             CONCAT('/inbound-tasks/', c.inbound_task_id) AS path,
             CASE
@@ -617,7 +617,7 @@ async function roleWorkbench() {
   const printFailureRows = await fetchMany(
     `SELECT c.inbound_task_id AS id,
             COALESCE(t.task_no, '收货任务') AS title,
-            CONCAT(COALESCE(c.container_code, '库存条码'), ' · ', COALESCE(j.status, 'queued')) AS subtitle,
+            CONCAT(COALESCE(c.barcode, '库存条码'), ' · ', COALESCE(j.status, 'queued')) AS subtitle,
             CONCAT('/inbound-tasks/', c.inbound_task_id) AS path,
             CASE
               WHEN j.status = 3 THEN '失败'
