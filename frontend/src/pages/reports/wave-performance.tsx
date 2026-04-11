@@ -8,6 +8,7 @@ import { getWavePerformanceApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
+import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { WaveStats } from '@/api/reports'
@@ -166,23 +167,19 @@ export default function WavePerformancePage() {
       </div>
 
       {/* 波次明细表 */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h2 className="font-semibold text-foreground">波次明细</h2>
-          <span className="text-helper">点击列标题排序</span>
-        </div>
-
-        {isLoading && (
+      <ReportPanel
+        title="波次明细"
+        description="点击列标题排序，查看每个波次的任务数、SKU 与效率。"
+        helper="当前列表支持按任务数、SKU、拣货量和时长排序"
+        empty={!isLoading && !isError && waves.length === 0}
+        emptyTitle="暂无波次数据"
+        emptyDescription="当前筛选条件下没有波次记录"
+      >
+        {isLoading ? (
           <div className="flex h-40 items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
-        )}
-
-        {!isLoading && !isError && waves.length === 0 && (
-          <p className="text-center text-muted-body py-12">暂无波次数据</p>
-        )}
-
-        {!isError && waves.length > 0 && (
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -230,7 +227,7 @@ export default function WavePerformancePage() {
             </table>
           </div>
         )}
-      </div>
+      </ReportPanel>
     </div>
   )
 }

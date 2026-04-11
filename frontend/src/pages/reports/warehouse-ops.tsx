@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getWarehouseOpsApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Button } from '@/components/ui/button'
 import type { OpsOperator, FlowBottleneck } from '@/api/reports'
 
@@ -23,26 +24,6 @@ function KpiCard({ icon, label, value, sub, danger }: {
       </div>
       <p className={`text-3xl font-bold tabular-nums ${danger ? 'text-red-600' : 'text-foreground'}`}>{value}</p>
       {sub && <p className="text-helper mt-0.5">{sub}</p>}
-    </div>
-  )
-}
-
-// ── 简单柱状图 ─────────────────────────────────────────────────────────────
-function MiniBar({ data, color = 'bg-primary' }: {
-  data: { label: string; value: number }[]; color?: string
-}) {
-  const max = Math.max(...data.map(d => d.value), 1)
-  return (
-    <div className="space-y-1.5">
-      {data.map(d => (
-        <div key={d.label} className="flex items-center gap-2">
-          <p className="w-20 shrink-0 text-helper truncate">{d.label}</p>
-          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-            <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.max(2, (d.value / max) * 100)}%` }} />
-          </div>
-          <p className="w-8 text-right text-xs font-semibold text-foreground">{d.value}</p>
-        </div>
-      ))}
     </div>
   )
 }
@@ -147,85 +128,89 @@ export default function WarehouseOpsPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-          {/* 流程瓶颈 */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-card-title">流程瓶颈分析</p>
-              <p className="text-helper">各步骤任务堆积量</p>
-            </div>
+          <ReportPanel
+            title="流程瓶颈分析"
+            description="各步骤任务堆积量"
+            helper="用于查看拣货、复核、打包、完成的积压情况"
+            empty={data.flowBottleneck.length === 0}
+            emptyTitle="暂无流程瓶颈数据"
+            emptyDescription="当前时段没有可展示的流程堆积"
+          >
             <FlowBar items={data.flowBottleneck} />
-          </div>
+          </ReportPanel>
 
-          {/* 每小时趋势 */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-card-title">今日作业趋势</p>
-              <p className="text-helper">每小时扫码量</p>
-            </div>
-            <HourlyChart data={data.hourlyTrend} />
-            <div className="flex justify-between mt-1">
-              <span className="text-[10px] text-muted-foreground">06:00</span>
-              <span className="text-[10px] text-muted-foreground">14:00</span>
-              <span className="text-[10px] text-muted-foreground">22:00</span>
-            </div>
-          </div>
+          <ReportPanel
+            title="今日作业趋势"
+            description="每小时扫码量"
+            helper="一眼看出今天哪个时段最忙"
+            empty={data.hourlyTrend.length === 0}
+            emptyTitle="暂无作业趋势"
+            emptyDescription="当前时段没有可展示的扫码趋势"
+          >
+            <>
+              <HourlyChart data={data.hourlyTrend} />
+              <div className="flex justify-between mt-1">
+                <span className="text-[10px] text-muted-foreground">06:00</span>
+                <span className="text-[10px] text-muted-foreground">14:00</span>
+                <span className="text-[10px] text-muted-foreground">22:00</span>
+              </div>
+            </>
+          </ReportPanel>
 
-          {/* 人员效率 */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-card-title mb-3">今日人员效率</p>
-            {data.operators.length === 0
-              ? <p className="text-muted-body text-center py-4">暂无今日数据</p>
-              : (
-                <div className="space-y-3">
-                  {data.operators.map((op: OpsOperator) => (
-                    <div key={op.operatorId} className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-                        {op.operatorName.slice(0, 1)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-foreground truncate">{op.operatorName}</p>
-                          <p className="text-helper shrink-0">{op.pickQty} 件</p>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-muted-foreground">扫码 {op.scanCount}</span>
-                          {op.errorCount > 0 && (
-                            <span className="text-[10px] text-red-500">错误 {op.errorCount}（{op.errorRate}）</span>
-                          )}
-                          {op.efficiency && (
-                            <span className="text-[10px] text-green-600">{op.efficiency} 件/分</span>
-                          )}
-                        </div>
-                      </div>
+          <ReportPanel
+            title="今日人员效率"
+            description="按人员展示扫码、错误和效率"
+            helper="查看每个操作员的拣货表现"
+            empty={data.operators.length === 0}
+            emptyTitle="暂无今日人员数据"
+            emptyDescription="当前没有可展示的人员效率数据"
+          >
+            <div className="space-y-3">
+              {data.operators.map((op: OpsOperator) => (
+                <div key={op.operatorId} className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+                    {op.operatorName.slice(0, 1)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-foreground truncate">{op.operatorName}</p>
+                      <p className="text-helper shrink-0">{op.pickQty} 件</p>
                     </div>
-                  ))}
-                </div>
-              )
-            }
-          </div>
-
-          {/* 最新错误 */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-card-title mb-3">最新异常记录</p>
-            {data.recentErrors.length === 0
-              ? <p className="text-muted-body text-center py-4">暂无异常记录 ✓</p>
-              : (
-                <div className="space-y-2">
-                  {data.recentErrors.slice(0, 6).map(e => (
-                    <div key={e.id} className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2">
-                      <span className="text-red-400 shrink-0 mt-0.5">⚠</span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-red-700 truncate">{e.reason}</p>
-                        <p className="text-[10px] text-red-500">{e.operatorName} · {e.barcode} · {new Date(e.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</p>
-                      </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-muted-foreground">扫码 {op.scanCount}</span>
+                      {op.errorCount > 0 && (
+                        <span className="text-[10px] text-red-500">错误 {op.errorCount}（{op.errorRate}）</span>
+                      )}
+                      {op.efficiency && (
+                        <span className="text-[10px] text-green-600">{op.efficiency} 件/分</span>
+                      )}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              )
-            }
-          </div>
+              ))}
+            </div>
+          </ReportPanel>
 
+          <ReportPanel
+            title="最新异常记录"
+            description="最近 10 条异常日志"
+            helper="关注扫码错误、撤销和条码问题"
+            empty={data.recentErrors.length === 0}
+            emptyTitle="暂无异常记录"
+            emptyDescription="当前没有可展示的异常日志"
+          >
+            <div className="space-y-2">
+              {data.recentErrors.slice(0, 6).map(e => (
+                <div key={e.id} className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2">
+                  <span className="text-red-400 shrink-0 mt-0.5">⚠</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-red-700 truncate">{e.reason}</p>
+                    <p className="text-[10px] text-red-500">{e.operatorName} · {e.barcode} · {new Date(e.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ReportPanel>
         </div>
       </>)}
     </div>

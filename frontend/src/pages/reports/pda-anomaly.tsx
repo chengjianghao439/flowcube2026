@@ -8,6 +8,7 @@ import { getPdaAnomalyApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
+import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Button } from '@/components/ui/button'
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
@@ -115,72 +116,83 @@ export default function PdaAnomalyPage() {
           <StatCard label="错误率"     value={s?.errorRate ?? '0%'} accent={parseFloat(s?.errorRate ?? '0') > 5} sub="错误次数 / 总扫码" />
         </div>
 
-        {/* 每日趋势 */}
-        {data.dailyTrend.length > 0 && (
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-card-title mb-3">每日错误趋势</p>
-            <MiniChart data={data.dailyTrend} />
-            <div className="flex justify-between mt-1">
-              <span className="text-helper">{data.dailyTrend[0]?.date}</span>
-              <span className="text-helper">{data.dailyTrend[data.dailyTrend.length-1]?.date}</span>
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ReportPanel
+            title="每日错误趋势"
+            description="最近时间范围内的错误变化"
+            helper="用于快速判断异常是否在增多"
+            empty={data.dailyTrend.length === 0}
+            emptyTitle="暂无每日趋势"
+            emptyDescription="当前筛选条件下没有错误趋势数据"
+          >
+            <>
+              <MiniChart data={data.dailyTrend} />
+              <div className="flex justify-between mt-1">
+                <span className="text-helper">{data.dailyTrend[0]?.date}</span>
+                <span className="text-helper">{data.dailyTrend[data.dailyTrend.length-1]?.date}</span>
+              </div>
+            </>
+          </ReportPanel>
 
-          {/* 按操作员错误 */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-card-title mb-3">按操作员 — 错误次数</p>
-            {data.byOperator.length === 0
-              ? <p className="text-muted-body text-center py-4">暂无数据</p>
-              : <div className="space-y-2">
-                  {data.byOperator.map(r => (
-                    <BarRow key={r.operatorId} label={r.operatorName} value={r.errorCount} max={maxErr} />
-                  ))}
-                </div>
-            }
-          </div>
+          <ReportPanel
+            title="按操作员 — 错误次数"
+            description="找出最容易出错的操作员"
+            helper="聚焦培训和流程修正"
+            empty={data.byOperator.length === 0}
+            emptyTitle="暂无操作员错误数据"
+            emptyDescription="当前没有可展示的操作员错误记录"
+          >
+            <div className="space-y-2">
+              {data.byOperator.map(r => (
+                <BarRow key={r.operatorId} label={r.operatorName} value={r.errorCount} max={maxErr} />
+              ))}
+            </div>
+          </ReportPanel>
 
-          {/* 按操作员撤销 */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-card-title mb-3">按操作员 — 撤销次数</p>
-            {data.undoByOperator.length === 0
-              ? <p className="text-muted-body text-center py-4">暂无数据</p>
-              : <div className="space-y-2">
-                  {data.undoByOperator.map(r => (
-                    <BarRow key={r.operatorId} label={r.operatorName} value={r.undoCount} max={maxUndo} color="bg-orange-400" />
-                  ))}
-                </div>
-            }
-          </div>
+          <ReportPanel
+            title="按操作员 — 撤销次数"
+            description="查看谁最常撤销操作"
+            helper="用于排查误扫或流程不熟"
+            empty={data.undoByOperator.length === 0}
+            emptyTitle="暂无撤销数据"
+            emptyDescription="当前没有可展示的撤销统计"
+          >
+            <div className="space-y-2">
+              {data.undoByOperator.map(r => (
+                <BarRow key={r.operatorId} label={r.operatorName} value={r.undoCount} max={maxUndo} color="bg-orange-400" />
+              ))}
+            </div>
+          </ReportPanel>
 
-          {/* 按错误原因 */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-card-title mb-3">错误原因分布</p>
-            {data.byReason.length === 0
-              ? <p className="text-muted-body text-center py-4">暂无数据</p>
-              : <div className="space-y-2">
-                  {data.byReason.map(r => (
-                    <BarRow key={r.reason} label={r.reason} value={r.count} max={maxRsn} color="bg-yellow-400" />
-                  ))}
-                </div>
-            }
-          </div>
+          <ReportPanel
+            title="错误原因分布"
+            description="错误主要集中在哪些原因"
+            helper="查看流程或设备问题"
+            empty={data.byReason.length === 0}
+            emptyTitle="暂无错误原因数据"
+            emptyDescription="当前没有可展示的错误原因分布"
+          >
+            <div className="space-y-2">
+              {data.byReason.map(r => (
+                <BarRow key={r.reason} label={r.reason} value={r.count} max={maxRsn} color="bg-yellow-400" />
+              ))}
+            </div>
+          </ReportPanel>
 
-          {/* 按条码 */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-card-title mb-3">问题最多的条码 Top 10</p>
-            {data.byBarcode.length === 0
-              ? <p className="text-muted-body text-center py-4">暂无数据</p>
-              : <div className="space-y-2">
-                  {data.byBarcode.map(r => (
-                    <BarRow key={r.barcode} label={r.barcode} value={r.count} max={maxBc} color="bg-purple-400" />
-                  ))}
-                </div>
-            }
-          </div>
-
+          <ReportPanel
+            title="问题最多的条码 Top 10"
+            description="最容易出错的条码集中在哪些"
+            helper="便于针对性修正"
+            empty={data.byBarcode.length === 0}
+            emptyTitle="暂无条码异常数据"
+            emptyDescription="当前没有可展示的条码问题记录"
+          >
+            <div className="space-y-2">
+              {data.byBarcode.map(r => (
+                <BarRow key={r.barcode} label={r.barcode} value={r.count} max={maxBc} color="bg-purple-400" />
+              ))}
+            </div>
+          </ReportPanel>
         </div>
       </>)}
     </div>
