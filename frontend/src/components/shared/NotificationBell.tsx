@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import client from '@/api/client'
 import type { ApiResponse } from '@/types'
+import { getNotificationCategoryLabel, normalizeNotifications, type NotificationEntry } from '@/lib/notifications'
 
-interface NotifItem { type: string; icon: string; text: string; path: string }
-interface NotifData { total: number; items: NotifItem[] }
+interface NotifData { total: number; items: NotificationEntry[] }
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
@@ -17,8 +17,8 @@ export default function NotificationBell() {
     refetchInterval: 60000, // 每分钟刷新
   })
 
-  const total = data?.total ?? 0
-  const items = data?.items ?? []
+  const items = normalizeNotifications(data?.items ?? [])
+  const total = items.length
 
   const colorMap: Record<string, string> = {
     warning: 'text-amber-600 bg-amber-50 border-amber-200',
@@ -68,7 +68,16 @@ export default function NotificationBell() {
                     className={`w-full text-left px-4 py-3 hover:opacity-80 transition-opacity flex items-start gap-3 ${colorMap[item.type] || 'text-foreground bg-background'}`}
                   >
                     <span className="text-base shrink-0 mt-0.5">{item.icon}</span>
-                    <span className="text-sm font-medium">{item.text}</span>
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{item.text}</span>
+                        {item.category && (
+                          <span className="rounded-full border border-current/20 px-2 py-0.5 text-[10px] leading-none opacity-80">
+                            {getNotificationCategoryLabel(item.category)}
+                          </span>
+                        )}
+                      </span>
+                    </span>
                   </button>
                 ))}
               </div>

@@ -8,6 +8,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getRoleWorkbenchApi } from '@/api/reports'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
+import { getReminderNotifications } from '@/lib/notifications'
 
 function SummaryCard({ label, value, hint, tone }: { label: string; value: number | string; hint: string; tone: 'blue' | 'amber' | 'emerald' | 'rose' }) {
   const toneClass = tone === 'amber'
@@ -87,12 +88,7 @@ export default function ApprovalsPage() {
   const workbenchError = workbenchQ.isError && !workbenchQ.data
   const topAlert = workbenchQ.data?.topAlert ?? null
   const notificationItems = notificationsQ.data?.items ?? []
-  const reminderItems = useMemo(
-    () => notificationItems
-      .filter(item => item.category === 'finance' || item.category === 'system')
-      .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)),
-    [notificationItems],
-  )
+  const reminderItems = useMemo(() => getReminderNotifications(notificationItems), [notificationItems])
   const managementCards = useMemo(() => {
     const section = workbenchQ.data?.sections.find(item => item.key === 'management')
     return section?.cards ?? []
