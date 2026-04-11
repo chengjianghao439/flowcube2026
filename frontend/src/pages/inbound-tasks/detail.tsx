@@ -78,6 +78,60 @@ export default function InboundTaskDetailPage() {
     await refetchContainers()
   }
 
+  const items = Array.isArray(task?.items) ? task.items : []
+  const recentPrintJobs = Array.isArray(task?.recentPrintJobs) ? task.recentPrintJobs : []
+  const timeline = Array.isArray(task?.timeline) ? task.timeline : []
+  const exceptionFlags = task?.exceptionFlags ?? null
+  const printSummary = task?.printSummary ?? null
+  const putawaySummary = task?.putawaySummary ?? null
+  const receiptStatus = task?.receiptStatus ?? null
+  const printStatus = task?.printStatus ?? null
+  const putawayStatus = task?.putawayStatus ?? null
+  const auditFlowStatus = task?.auditFlowStatus ?? null
+
+  const canSubmit = receiptStatus?.key === 'draft'
+  const canReceive = receiptStatus?.key === 'submitted' || receiptStatus?.key === 'receiving'
+  const canPutaway = putawayStatus?.key === 'waiting' || putawayStatus?.key === 'putting_away'
+  const canAudit = auditFlowStatus?.key === 'pending' || auditFlowStatus?.key === 'rejected'
+  const canCancel = task?.status === 1
+  const waitingCount = containers?.waiting?.length ?? 0
+  const storedCount = containers?.stored?.length ?? 0
+  const totalWaitingQty = (containers?.waiting ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
+  const totalStoredQty = (containers?.stored ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
+  const statusTone = receiptStatus?.key === 'audited'
+    ? 'success'
+    : receiptStatus?.key === 'exception'
+      ? 'danger'
+      : receiptStatus?.key === 'draft'
+        ? 'draft'
+        : 'active'
+  const exceptionLines = useMemo(() => {
+    const flags = exceptionFlags
+    if (!flags?.hasException) return []
+    const lines: string[] = []
+    if (flags.failedPrintJobs > 0) lines.push(`${flags.failedPrintJobs} 条库存条码打印失败待补打`)
+    if (flags.timeoutPrintJobs > 0) lines.push(`${flags.timeoutPrintJobs} 条库存条码打印超时待确认`)
+    if (flags.overduePutawayContainers > 0) lines.push(`${flags.overduePutawayContainers} 箱已打印未上架超时`)
+    if (flags.pendingAuditOverdue) lines.push('该收货订单已上架但审核超时')
+    if (flags.auditRejected) lines.push('该收货订单已被审核退回')
+    return lines
+  }, [exceptionFlags])
+
+  if (!validId) {
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-border bg-card p-5 text-muted-foreground">
+          <p className="font-medium text-foreground">收货订单路径无效</p>
+          <p className="mt-1">请从收货订单列表重新打开该详情页。</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading || !task) {
+    return <p className="p-6 text-muted-body">加载中…</p>
+  }
+
   function submitOnePackage(it: InboundTaskItem) {
     if (!validId || !task) return
     const raw = lineQty[it.id]?.trim()
@@ -111,60 +165,6 @@ export default function InboundTaskDetailPage() {
       },
     )
   }
-
-  if (!validId) {
-    return (
-      <div className="p-6">
-        <div className="rounded-xl border border-border bg-card p-5 text-muted-foreground">
-          <p className="font-medium text-foreground">收货订单路径无效</p>
-          <p className="mt-1">请从收货订单列表重新打开该详情页。</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (isLoading || !task) {
-    return <p className="p-6 text-muted-body">加载中…</p>
-  }
-
-  const items = Array.isArray(task.items) ? task.items : []
-  const recentPrintJobs = Array.isArray(task.recentPrintJobs) ? task.recentPrintJobs : []
-  const timeline = Array.isArray(task.timeline) ? task.timeline : []
-  const exceptionFlags = task.exceptionFlags ?? null
-  const printSummary = task.printSummary ?? null
-  const putawaySummary = task.putawaySummary ?? null
-  const receiptStatus = task.receiptStatus ?? null
-  const printStatus = task.printStatus ?? null
-  const putawayStatus = task.putawayStatus ?? null
-  const auditFlowStatus = task.auditFlowStatus ?? null
-
-  const canSubmit = receiptStatus?.key === 'draft'
-  const canReceive = receiptStatus?.key === 'submitted' || receiptStatus?.key === 'receiving'
-  const canPutaway = putawayStatus?.key === 'waiting' || putawayStatus?.key === 'putting_away'
-  const canAudit = auditFlowStatus?.key === 'pending' || auditFlowStatus?.key === 'rejected'
-  const canCancel = task.status === 1
-  const waitingCount = containers?.waiting?.length ?? 0
-  const storedCount = containers?.stored?.length ?? 0
-  const totalWaitingQty = (containers?.waiting ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
-  const totalStoredQty = (containers?.stored ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
-  const statusTone = receiptStatus?.key === 'audited'
-    ? 'success'
-    : receiptStatus?.key === 'exception'
-      ? 'danger'
-      : receiptStatus?.key === 'draft'
-        ? 'draft'
-        : 'active'
-  const exceptionLines = useMemo(() => {
-    const flags = exceptionFlags
-    if (!flags?.hasException) return []
-    const lines: string[] = []
-    if (flags.failedPrintJobs > 0) lines.push(`${flags.failedPrintJobs} 条库存条码打印失败待补打`)
-    if (flags.timeoutPrintJobs > 0) lines.push(`${flags.timeoutPrintJobs} 条库存条码打印超时待确认`)
-    if (flags.overduePutawayContainers > 0) lines.push(`${flags.overduePutawayContainers} 箱已打印未上架超时`)
-    if (flags.pendingAuditOverdue) lines.push('该收货订单已上架但审核超时')
-    if (flags.auditRejected) lines.push('该收货订单已被审核退回')
-    return lines
-  }, [exceptionFlags])
 
   function openPrintQuery(extra: Record<string, string> = {}) {
     const searchParams = new URLSearchParams({ category: 'inbound', inboundTaskId: String(task.id), ...extra })
