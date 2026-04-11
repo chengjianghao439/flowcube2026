@@ -127,6 +127,17 @@ export interface RoleWorkbenchData {
     saleCount: number
     managementCount: number
   }
+  topAlert: {
+    sectionKey: string
+    sectionTitle: string
+    title: string
+    description: string
+    count: number
+    path: string
+    actionLabel: string
+    accent: 'blue' | 'amber' | 'emerald' | 'rose' | 'slate'
+    badge: string
+  } | null
   sections: WorkbenchSection[]
 }
 

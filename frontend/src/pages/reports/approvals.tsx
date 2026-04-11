@@ -26,6 +26,47 @@ function SummaryCard({ label, value, hint, tone }: { label: string; value: numbe
   )
 }
 
+function PriorityBanner({
+  title,
+  description,
+  count,
+  sectionTitle,
+  badge,
+  onOpen,
+}: {
+  title: string
+  description: string
+  count: number
+  sectionTitle: string
+  badge: string
+  onOpen: () => void
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-100 text-slate-700">
+              {badge}
+            </Badge>
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">当前最优先处理</span>
+          </div>
+          <h2 className="mt-2 text-xl font-semibold text-foreground">{title}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          <p className="mt-2 text-xs text-muted-foreground">来源：{sectionTitle}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">待处理数</p>
+            <p className="text-3xl font-bold tabular-nums text-slate-700">{count}</p>
+          </div>
+          <Button variant="outline" onClick={onOpen}>打开待办</Button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function ApprovalsPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
@@ -44,6 +85,7 @@ export default function ApprovalsPage() {
 
   const notificationsError = notificationsQ.isError && !notificationsQ.data
   const workbenchError = workbenchQ.isError && !workbenchQ.data
+  const topAlert = workbenchQ.data?.topAlert ?? null
   const notificationItems = notificationsQ.data?.items ?? []
   const managementCards = useMemo(() => {
     const section = workbenchQ.data?.sections.find(item => item.key === 'management')
@@ -75,6 +117,17 @@ export default function ApprovalsPage() {
         <SummaryCard label="异常任务" value={managementCards.find(card => card.key === 'management-anomaly-task')?.count ?? 0} hint="销售/仓库高风险巡检项" tone="amber" />
         <SummaryCard label="库存异常" value={managementCards.find(card => card.key === 'management-stock')?.count ?? 0} hint="负库存与可用库存风险" tone="rose" />
       </div>
+
+      {topAlert && (
+        <PriorityBanner
+          title={topAlert.title}
+          description={topAlert.description}
+          count={topAlert.count}
+          sectionTitle={topAlert.sectionTitle}
+          badge={topAlert.badge}
+          onOpen={() => openPath(topAlert.path, topAlert.title)}
+        />
+      )}
 
       {(notificationsError || workbenchError) && (
         <QueryErrorState

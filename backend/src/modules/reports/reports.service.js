@@ -19,6 +19,68 @@ function mapWorkbenchItem(row) {
   }
 }
 
+const WORKBENCH_CARD_PRIORITY = {
+  'warehouse-pending-receive': 10,
+  'warehouse-putaway': 20,
+  'warehouse-audit': 30,
+  'warehouse-print': 40,
+  'sale-pending-ship': 10,
+  'sale-anomaly': 20,
+  'sale-below-cost': 30,
+  'management-audit': 10,
+  'management-anomaly-task': 20,
+  'management-stock': 30,
+  'management-high-risk': 40,
+}
+
+function getWorkbenchCardPriority(cardKey) {
+  return WORKBENCH_CARD_PRIORITY[cardKey] ?? 1000
+}
+
+function pickTopWorkbenchCard(sections) {
+  const cards = []
+  for (const section of sections) {
+    for (const card of section.cards) {
+      if (Number(card.count) > 0) {
+        cards.push({
+          ...card,
+          sectionKey: section.key,
+          sectionTitle: section.title,
+          sectionDescription: section.description,
+        })
+      }
+    }
+  }
+
+  if (!cards.length) return null
+
+  cards.sort((a, b) => {
+    const scoreA = Number(a.count) * 1000 - getWorkbenchCardPriority(a.key)
+    const scoreB = Number(b.count) * 1000 - getWorkbenchCardPriority(b.key)
+    if (scoreA !== scoreB) return scoreB - scoreA
+    return String(a.title).localeCompare(String(b.title), 'zh-Hans-CN')
+  })
+
+  const top = cards[0]
+  return {
+    sectionKey: top.sectionKey,
+    sectionTitle: top.sectionTitle,
+    title: top.title,
+    description: top.description,
+    count: top.count,
+    path: top.path,
+    actionLabel: top.actionLabel,
+    accent: top.accent,
+    badge: top.accent === 'rose'
+      ? '高优先'
+      : top.accent === 'amber'
+        ? '提醒'
+        : top.accent === 'emerald'
+          ? '待办'
+          : '待处理',
+  }
+}
+
 function buildDateFilter(column, startDate, endDate) {
   const conds = []
   const params = []
@@ -955,6 +1017,7 @@ async function roleWorkbench() {
 
   return {
     summary,
+    topAlert: pickTopWorkbenchCard(sections),
     sections,
   }
 }
