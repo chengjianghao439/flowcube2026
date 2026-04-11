@@ -153,7 +153,7 @@ export default function InboundTaskDetailPage() {
     if (flags.pendingAuditOverdue) lines.push('该收货订单已上架但审核超时')
     if (flags.auditRejected) lines.push('该收货订单已被审核退回')
     return lines
-  }, [task.exceptionFlags])
+  }, [task?.exceptionFlags])
 
   function openPrintQuery(extra: Record<string, string> = {}) {
     const searchParams = new URLSearchParams({ category: 'inbound', inboundTaskId: String(task.id), ...extra })
