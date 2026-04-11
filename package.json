@@ -4,6 +4,7 @@
   "description": "仓库根脚本（tag / 工具），业务包见 frontend、desktop、backend",
   "scripts": {
     "pretag": "bash scripts/git-tag-check.sh",
-    "release:tag-desktop": "bash scripts/release-desktop-tag.sh"
+    "release:tag-desktop": "bash scripts/release-desktop-tag.sh",
+    "smoke:reports": "npm --prefix backend run smoke:reports"
   }
 }
