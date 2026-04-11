@@ -73,6 +73,7 @@ async function main() {
   }
 
   console.log('\\n报表烟雾检查通过')
+  process.exit(0)
 }
 
 main().catch((error) => {
