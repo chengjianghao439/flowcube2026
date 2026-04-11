@@ -3,7 +3,7 @@ const { pool } = require('../../config/db')
 async function getSummary() {
   const [[{ totalSkus }]] = await pool.query('SELECT COUNT(*) AS totalSkus FROM inventory_stock WHERE quantity > 0')
   const [[{ totalQty }]] = await pool.query('SELECT COALESCE(SUM(s.quantity),0) AS totalQty FROM inventory_stock s')
-  const [[{ totalValue }]] = await pool.query('SELECT COALESCE(SUM(s.quantity*p.cost_price),0) AS totalValue FROM inventory_stock s JOIN product_items p ON s.product_id=p.id WHERE p.deleted_at IS NULL')
+  const [[{ totalValue }]] = await pool.query('SELECT COALESCE(SUM(s.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)),0) AS totalValue FROM inventory_stock s JOIN product_items p ON s.product_id=p.id WHERE p.deleted_at IS NULL')
   const [[{ purchaseOrders }]] = await pool.query("SELECT COUNT(*) AS purchaseOrders FROM purchase_orders WHERE deleted_at IS NULL AND status IN (1,2)")
   const [[{ saleOrders }]] = await pool.query("SELECT COUNT(*) AS saleOrders FROM sale_orders WHERE deleted_at IS NULL AND status IN (1,2,3)")
   return {
@@ -44,7 +44,7 @@ async function getRecentTrend(days = 7) {
 
 async function getTopStockByValue(limit = 10) {
   const [rows] = await pool.query(
-    `SELECT p.code, p.name, p.unit, SUM(s.quantity) AS qty, SUM(s.quantity*p.cost_price) AS value
+    `SELECT p.code, p.name, p.unit, SUM(s.quantity) AS qty, SUM(s.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS value
      FROM inventory_stock s
      JOIN product_items p ON s.product_id=p.id
      WHERE p.deleted_at IS NULL

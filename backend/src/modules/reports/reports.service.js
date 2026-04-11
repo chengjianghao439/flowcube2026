@@ -174,7 +174,7 @@ async function inventoryStats({ startDate, endDate }) {
   const byWarehouse = await pool.query(
     `SELECT w.name AS warehouse_name,
             SUM(s.quantity) AS total_qty,
-            SUM(s.quantity * p.cost_price) AS total_value
+            SUM(s.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS total_value
      FROM inventory_stock s
      JOIN inventory_warehouses w ON s.warehouse_id = w.id
      JOIN product_items p ON s.product_id = p.id
@@ -1107,7 +1107,7 @@ async function profitAnalysis({ startDate = null, endDate = null } = {}) {
   const [[summaryRow]] = await pool.query(
     `SELECT
        COALESCE(SUM(so.total_amount), 0) AS saleAmount,
-       COALESCE(SUM(soi.quantity * IFNULL(p.cost_price, 0)), 0) AS costAmount
+       COALESCE(SUM(soi.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS costAmount
      FROM sale_orders so
      INNER JOIN sale_order_items soi ON soi.order_id = so.id
      INNER JOIN product_items p ON p.id = soi.product_id
@@ -1122,8 +1122,8 @@ async function profitAnalysis({ startDate = null, endDate = null } = {}) {
        so.customer_name,
        so.warehouse_name,
        so.total_amount,
-       COALESCE(SUM(soi.quantity * IFNULL(p.cost_price, 0)), 0) AS cost_amount,
-       COALESCE(SUM(soi.amount), 0) - COALESCE(SUM(soi.quantity * IFNULL(p.cost_price, 0)), 0) AS gross_profit
+       COALESCE(SUM(soi.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost_amount,
+       COALESCE(SUM(soi.amount), 0) - COALESCE(SUM(soi.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS gross_profit
      FROM sale_orders so
      INNER JOIN sale_order_items soi ON soi.order_id = so.id
      INNER JOIN product_items p ON p.id = soi.product_id
@@ -1142,8 +1142,8 @@ async function profitAnalysis({ startDate = null, endDate = null } = {}) {
        p.unit,
        COALESCE(SUM(soi.quantity), 0) AS total_qty,
        COALESCE(SUM(soi.amount), 0) AS revenue_amount,
-       COALESCE(SUM(soi.quantity * IFNULL(p.cost_price, 0)), 0) AS cost_amount,
-       COALESCE(SUM(soi.amount), 0) - COALESCE(SUM(soi.quantity * IFNULL(p.cost_price, 0)), 0) AS gross_profit
+       COALESCE(SUM(soi.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost_amount,
+       COALESCE(SUM(soi.amount), 0) - COALESCE(SUM(soi.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS gross_profit
      FROM sale_orders so
      INNER JOIN sale_order_items soi ON soi.order_id = so.id
      INNER JOIN product_items p ON p.id = soi.product_id
@@ -1162,7 +1162,7 @@ async function profitAnalysis({ startDate = null, endDate = null } = {}) {
        p.unit,
        w.name AS warehouse_name,
        SUM(s.quantity) AS total_qty,
-       SUM(s.quantity * IFNULL(p.cost_price, 0)) AS total_value
+       SUM(s.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS total_value
      FROM inventory_stock s
      INNER JOIN product_items p ON p.id = s.product_id
      INNER JOIN inventory_warehouses w ON w.id = s.warehouse_id
@@ -1184,9 +1184,12 @@ async function profitAnalysis({ startDate = null, endDate = null } = {}) {
        COALESCE(lo.outbound_90d, 0) AS outbound_90d
      FROM product_items p
      LEFT JOIN (
-       SELECT product_id, SUM(quantity) AS qty, SUM(quantity * IFNULL(cost_price, 0)) AS value
-       FROM inventory_stock
-       GROUP BY product_id
+       SELECT s.product_id,
+              SUM(s.quantity) AS qty,
+              SUM(s.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS value
+       FROM inventory_stock s
+       INNER JOIN product_items p ON p.id = s.product_id
+       GROUP BY s.product_id
      ) st ON st.product_id = p.id
      LEFT JOIN (
        SELECT

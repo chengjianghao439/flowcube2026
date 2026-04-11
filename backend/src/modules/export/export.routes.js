@@ -147,7 +147,7 @@ router.get('/stock', async (req, res, next) => {
   try {
     const [rows] = await pool.query(
       `SELECT p.code,p.name,c.name AS category_name,p.unit,w.name AS warehouse_name,
-        s.quantity,p.cost_price,ROUND(s.quantity*p.cost_price,4) AS value
+        s.quantity,COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0) AS cost_price,ROUND(s.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0),4) AS value
        FROM inventory_stock s
        JOIN product_items p ON s.product_id=p.id
        JOIN inventory_warehouses w ON s.warehouse_id=w.id

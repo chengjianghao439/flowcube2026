@@ -147,6 +147,7 @@ async function runMigrations() {
     await safeModify(conn, `ALTER TABLE carriers MODIFY COLUMN phone   VARCHAR(11) DEFAULT NULL COMMENT '联系电话'`)
     await safeModify(conn, `ALTER TABLE carriers MODIFY COLUMN remark  VARCHAR(30) DEFAULT NULL COMMENT '备注'`)
     // 商品表
+    await safeAlter(conn, `ALTER TABLE product_items ADD COLUMN cost_price DECIMAL(12,4) NOT NULL DEFAULT 0 COMMENT '成本价' AFTER barcode`)
     await safeModify(conn, `ALTER TABLE product_items MODIFY COLUMN spec   VARCHAR(5)  DEFAULT NULL COMMENT '规格型号'`)
     await safeModify(conn, `ALTER TABLE product_items MODIFY COLUMN remark VARCHAR(30) DEFAULT NULL COMMENT '备注'`)
     // 销售订单表
