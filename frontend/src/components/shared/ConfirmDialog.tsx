@@ -83,6 +83,10 @@ export function ConfirmDialog({
     return null
   }
 
+  if (!open) {
+    return null
+  }
+
   return (
     <AppDialog
       open={open}

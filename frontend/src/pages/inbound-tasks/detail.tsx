@@ -90,7 +90,7 @@ export default function InboundTaskDetailPage() {
       toast.error(`数量无效：${it.productName}`)
       return
     }
-    const remainSku = skuRemainToReceive(task.items, it.productId)
+    const remainSku = skuRemainToReceive(items, it.productId)
     if (q > remainSku) {
       toast.error(`${it.productName} 超出待收（该 SKU 最多还可收 ${remainSku}）`)
       return
@@ -127,24 +127,35 @@ export default function InboundTaskDetailPage() {
     return <p className="p-6 text-muted-body">加载中…</p>
   }
 
-  const canSubmit = task.receiptStatus?.key === 'draft'
-  const canReceive = task.receiptStatus?.key === 'submitted' || task.receiptStatus?.key === 'receiving'
-  const canPutaway = task.putawayStatus?.key === 'waiting' || task.putawayStatus?.key === 'putting_away'
-  const canAudit = task.auditFlowStatus?.key === 'pending' || task.auditFlowStatus?.key === 'rejected'
+  const items = Array.isArray(task.items) ? task.items : []
+  const recentPrintJobs = Array.isArray(task.recentPrintJobs) ? task.recentPrintJobs : []
+  const timeline = Array.isArray(task.timeline) ? task.timeline : []
+  const exceptionFlags = task.exceptionFlags ?? null
+  const printSummary = task.printSummary ?? null
+  const putawaySummary = task.putawaySummary ?? null
+  const receiptStatus = task.receiptStatus ?? null
+  const printStatus = task.printStatus ?? null
+  const putawayStatus = task.putawayStatus ?? null
+  const auditFlowStatus = task.auditFlowStatus ?? null
+
+  const canSubmit = receiptStatus?.key === 'draft'
+  const canReceive = receiptStatus?.key === 'submitted' || receiptStatus?.key === 'receiving'
+  const canPutaway = putawayStatus?.key === 'waiting' || putawayStatus?.key === 'putting_away'
+  const canAudit = auditFlowStatus?.key === 'pending' || auditFlowStatus?.key === 'rejected'
   const canCancel = task.status === 1
   const waitingCount = containers?.waiting?.length ?? 0
   const storedCount = containers?.stored?.length ?? 0
   const totalWaitingQty = (containers?.waiting ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
   const totalStoredQty = (containers?.stored ?? []).reduce((sum, row) => sum + Number(row.qty || 0), 0)
-  const statusTone = task.receiptStatus?.key === 'audited'
+  const statusTone = receiptStatus?.key === 'audited'
     ? 'success'
-    : task.receiptStatus?.key === 'exception'
+    : receiptStatus?.key === 'exception'
       ? 'danger'
-      : task.receiptStatus?.key === 'draft'
+      : receiptStatus?.key === 'draft'
         ? 'draft'
         : 'active'
   const exceptionLines = useMemo(() => {
-    const flags = task.exceptionFlags
+    const flags = exceptionFlags
     if (!flags?.hasException) return []
     const lines: string[] = []
     if (flags.failedPrintJobs > 0) lines.push(`${flags.failedPrintJobs} 条库存条码打印失败待补打`)
@@ -153,7 +164,7 @@ export default function InboundTaskDetailPage() {
     if (flags.pendingAuditOverdue) lines.push('该收货订单已上架但审核超时')
     if (flags.auditRejected) lines.push('该收货订单已被审核退回')
     return lines
-  }, [task?.exceptionFlags])
+  }, [exceptionFlags])
 
   function openPrintQuery(extra: Record<string, string> = {}) {
     const searchParams = new URLSearchParams({ category: 'inbound', inboundTaskId: String(task.id), ...extra })
@@ -185,7 +196,7 @@ export default function InboundTaskDetailPage() {
         title={`收货订单 ${task.taskNo}`}
         description={
           <span className="flex flex-wrap items-center gap-2">
-            <SoftStatusLabel label={task.receiptStatus?.label ?? task.statusName} tone={statusTone} />
+            <SoftStatusLabel label={receiptStatus?.label ?? task.statusName} tone={statusTone} />
             <span className="text-muted-foreground">采购单 <span className="text-doc-code">{task.purchaseOrderNo ?? '混合采购'}</span></span>
             <span className="text-muted-foreground">供应商 <span className="text-doc-code">{task.supplierName ?? '—'}</span></span>
           </span>
@@ -252,21 +263,21 @@ export default function InboundTaskDetailPage() {
       <div className="grid gap-3 md:grid-cols-4">
         <div className="rounded-xl border border-border bg-card px-4 py-3">
           <p className="text-helper">收货状态</p>
-          <p className="mt-1 text-lg font-semibold">{task.receiptStatus?.label ?? '—'}</p>
+          <p className="mt-1 text-lg font-semibold">{receiptStatus?.label ?? '—'}</p>
         </div>
         <div className="rounded-xl border border-border bg-card px-4 py-3">
           <p className="text-helper">打印状态</p>
-          <p className="mt-1 text-lg font-semibold">{task.printStatus?.label ?? '—'}</p>
-          <p className="mt-1 text-helper">已打印 {task.printSummary?.success ?? 0} / 失败 {task.printSummary?.failed ?? 0}</p>
+          <p className="mt-1 text-lg font-semibold">{printStatus?.label ?? '—'}</p>
+          <p className="mt-1 text-helper">已打印 {printSummary?.success ?? 0} / 失败 {printSummary?.failed ?? 0}</p>
         </div>
         <div className="rounded-xl border border-border bg-card px-4 py-3">
           <p className="text-helper">上架状态</p>
-          <p className="mt-1 text-lg font-semibold">{task.putawayStatus?.label ?? '—'}</p>
-          <p className="mt-1 text-helper">待上架 {task.putawaySummary?.waitingContainers ?? 0} / 已上架 {task.putawaySummary?.storedContainers ?? 0}</p>
+          <p className="mt-1 text-lg font-semibold">{putawayStatus?.label ?? '—'}</p>
+          <p className="mt-1 text-helper">待上架 {putawaySummary?.waitingContainers ?? 0} / 已上架 {putawaySummary?.storedContainers ?? 0}</p>
         </div>
         <div className="rounded-xl border border-border bg-card px-4 py-3">
           <p className="text-helper">审核状态</p>
-          <p className="mt-1 text-lg font-semibold">{task.auditFlowStatus?.label ?? '—'}</p>
+          <p className="mt-1 text-lg font-semibold">{auditFlowStatus?.label ?? '—'}</p>
           <p className="mt-1 text-helper">{task.auditedAt ? `审核于 ${task.auditedAt}` : '收货完成后进入审核'}</p>
         </div>
       </div>
@@ -277,7 +288,7 @@ export default function InboundTaskDetailPage() {
             {exceptionLines.map(line => (
               <p key={line} className="text-sm text-foreground">{line}</p>
             ))}
-            {task.auditRemark && task.auditFlowStatus?.key === 'rejected' && (
+            {task.auditRemark && auditFlowStatus?.key === 'rejected' && (
               <p className="text-sm text-foreground">退回原因：{task.auditRemark}</p>
             )}
             <div className="pt-1">
@@ -316,9 +327,9 @@ export default function InboundTaskDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {(task.items ?? []).map((it: InboundTaskItem) => {
+              {items.map((it: InboundTaskItem) => {
                 const lineRemain = Math.max(0, it.orderedQty - it.receivedQty)
-                const skuRemain = skuRemainToReceive(task.items, it.productId)
+                const skuRemain = skuRemainToReceive(items, it.productId)
                 return (
                   <tr key={it.id}>
                     <td className="py-2">
@@ -469,11 +480,11 @@ export default function InboundTaskDetailPage() {
       </Section>
 
       <Section title="最近打印记录">
-        {!task.recentPrintJobs?.length ? (
+        {!recentPrintJobs.length ? (
           <p className="text-muted-body">本单暂无打印记录</p>
         ) : (
           <div className="space-y-2">
-            {task.recentPrintJobs.map((job: InboundRecentPrintJob) => (
+            {recentPrintJobs.map((job: InboundRecentPrintJob) => (
               <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
                 <div className="min-w-0">
                   <div className="font-medium text-foreground">{job.productName ?? job.barcode ?? '库存条码'}</div>
@@ -506,11 +517,11 @@ export default function InboundTaskDetailPage() {
       </Section>
 
       <Section title="操作时间线">
-        {!task.timeline?.length ? (
+        {!timeline.length ? (
           <p className="text-muted-body">暂无时间线记录</p>
         ) : (
           <div className="space-y-3">
-            {task.timeline.map(event => (
+            {timeline.map(event => (
               <div key={event.id} className="rounded-lg border border-border px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-foreground">{event.title}</span>
