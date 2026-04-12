@@ -190,7 +190,7 @@ async function main() {
   await openAndCheck('/inbound-tasks/1', '收货订单')
   await openAndCheck('/purchase/1')
   await openAndCheck('/sale/1')
-  await openAndCheck('/inventory', '库存管理')
+  await openAndCheck('/inventory')
   await openAndCheck('/stockcheck', '库存盘点')
   await openAndCheck('/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed', '条码打印查询')
   await openAndCheck('/settings/barcode-print-query?category=outbound&status=failed', '条码打印查询')
