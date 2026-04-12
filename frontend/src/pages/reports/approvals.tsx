@@ -147,6 +147,7 @@ export default function ApprovalsPage() {
         actions={[
           { label: '打开岗位工作台', onClick: () => openPath('/reports/role-workbench', '岗位工作台') },
           { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
+          { label: '打开仓库运营看板', variant: 'outline', onClick: () => openPath('/reports/warehouse-ops', '仓库运营看板') },
           { label: '打开账款中心', onClick: () => openPath('/payments', '应付/应收账款') },
         ]}
       />

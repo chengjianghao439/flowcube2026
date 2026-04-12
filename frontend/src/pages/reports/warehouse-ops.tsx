@@ -138,7 +138,9 @@ export default function WarehouseOpsPage() {
             '最后下钻人员效率和最新异常',
           ]}
           actions={[
+            { label: '打开岗位工作台', onClick: () => openPath('/reports/role-workbench', '岗位工作台') },
             { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
+            { label: '打开审批与提醒', variant: 'outline', onClick: () => openPath('/reports/approvals', '审批与提醒') },
             { label: '查看波次效率', variant: 'outline', onClick: () => openPath('/reports/wave-performance', '波次效率报表') },
           ]}
         />
