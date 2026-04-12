@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import { getInboundClosureCopy } from '@/lib/inboundClosure'
 
 const STATUS_VARIANT: Record<number,'default'|'secondary'|'outline'|'destructive'> = {
   1:'outline', 2:'default', 3:'secondary', 4:'secondary', 5:'destructive'
@@ -21,6 +22,7 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
   const totalReceived = task.receivedQty ?? task.items?.reduce((s,i)=>s+i.receivedQty,0) ?? 0
   const pct = totalOrdered > 0 ? Math.min(100, Math.round(totalReceived/totalOrdered*100)) : 0
   const isReady = task.putawayStatus?.key === 'waiting' || task.putawayStatus?.key === 'putting_away'
+  const closureCopy = getInboundClosureCopy(task)
 
   return (
     <PdaCard>
@@ -37,6 +39,7 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
         <div>
           <p className="text-xs text-muted-foreground">应到 {totalOrdered}，已收 {totalReceived}</p>
           <p className="text-xs text-muted-foreground mt-1">打印 {task.printStatus?.label ?? '—'} · 上架 {task.putawayStatus?.label ?? '—'}</p>
+          <p className="text-xs text-muted-foreground mt-1">{closureCopy.stageLabel} · {closureCopy.nextAction}</p>
         </div>
         {task.status !== 1 && (
           <div>

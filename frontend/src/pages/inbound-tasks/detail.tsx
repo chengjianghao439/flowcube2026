@@ -14,6 +14,7 @@ import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { getInboundClosureCopy } from '@/lib/inboundClosure'
 import {
   useInboundTaskDetail,
   useInboundTaskContainers,
@@ -253,6 +254,7 @@ export default function InboundTaskDetailPage() {
         }
       })
   }, [timeline])
+  const closureCopy = useMemo(() => getInboundClosureCopy(task), [task])
   const focusSection = useMemo(() => {
     const search = new URLSearchParams(location.search)
     return search.get('focus')
@@ -435,6 +437,17 @@ export default function InboundTaskDetailPage() {
           )}
         </div>
       </div>
+
+      <Section title="主链提示" sectionId="closure-guidance">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <SoftStatusLabel label={closureCopy.stageLabel} tone={closureCopy.actionMode === 'done' ? 'success' : closureCopy.actionMode === 'exception' ? 'danger' : closureCopy.actionMode === 'submit' ? 'draft' : 'active'} />
+            <span className="text-sm text-muted-foreground">当前主负责：{closureCopy.ownerLabel}</span>
+          </div>
+          <p className="text-sm text-foreground">{closureCopy.description}</p>
+          <p className="text-sm text-muted-foreground">{closureCopy.nextAction}</p>
+        </div>
+      </Section>
 
       {!!exceptionLines.length && (
         <Section title="异常提醒" sectionId="exception-alerts">

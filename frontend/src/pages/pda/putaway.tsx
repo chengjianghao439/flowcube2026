@@ -13,6 +13,7 @@ import PdaEmptyState, { PdaLoading } from '@/components/pda/PdaEmptyState'
 import { usePdaFlow } from '@/hooks/usePdaFlow'
 import PdaFlowSteps from '@/components/pda/PdaFlowSteps'
 import { makePutawayFlow, type PutawayFlowContext } from '@/flows/putawayFlow'
+import { getInboundClosureCopy } from '@/lib/inboundClosure'
 
 function PutawayRunner({ taskId }: { taskId: number }) {
   const navigate = useNavigate()
@@ -100,13 +101,14 @@ export default function PdaPutawayPage() {
   }
 
   if (task.status < 3) {
+    const copy = getInboundClosureCopy(task)
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon="⏳"
-          title="任务尚未进入待上架"
-          description="请先完成收货并打印库存条码，任务进入待上架后会显示在这里。"
+          title={copy.stageLabel}
+          description={copy.nextAction}
           actionText="返回收货订单"
           onAction={() => navigate('/pda/inbound')}
         />
@@ -115,13 +117,14 @@ export default function PdaPutawayPage() {
   }
 
   if (!task.submittedAt) {
+    const copy = getInboundClosureCopy(task)
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon="📤"
-          title="任务尚未提交到 PDA"
-          description="请先在 ERP 提交收货订单，再进入现场上架作业。"
+          title={copy.stageLabel}
+          description={copy.nextAction}
           actionText="返回收货订单"
           onAction={() => navigate('/pda/inbound')}
         />
@@ -130,13 +133,14 @@ export default function PdaPutawayPage() {
   }
 
   if (task.putawayStatus?.key === 'completed' || task.status >= 4) {
+    const copy = getInboundClosureCopy(task)
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon="✅"
-          title="任务已完成"
-          description={task.auditFlowStatus?.key === 'approved' ? '这张收货任务已经上架并审核完成。' : '这张收货任务已经上架完成，无需重复操作。'}
+          title={copy.stageLabel}
+          description={copy.nextAction}
           actionText="返回收货订单"
           onAction={() => navigate('/pda/inbound')}
         />

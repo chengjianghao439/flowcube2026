@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { parseBarcode } from '@/utils/barcode'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useReceiveInbound } from '@/hooks/useInboundTasks'
+import { getInboundClosureCopy } from '@/lib/inboundClosure'
 
 interface ProductSummary {
   productId: number
@@ -196,6 +197,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   const [boxes, setBoxes] = useState<string[]>([''])
 
   const activeProduct = selectableProducts.find(product => product.productId === selectedProductId) ?? null
+  const closureCopy = getInboundClosureCopy(task)
 
   function resetBoxes(defaultCount = 1) {
     setBoxes(Array.from({ length: defaultCount }, () => ''))
@@ -303,6 +305,8 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
             <p className="text-muted-foreground">关联采购：{task.purchaseOrderNo ?? '混合采购单'}</p>
             <p className="text-muted-foreground">收货状态：{task.receiptStatus?.label ?? task.statusName}</p>
             <p className="text-muted-foreground">打印 {task.printStatus?.label ?? '—'} · 上架 {task.putawayStatus?.label ?? '—'}</p>
+            <p className="text-muted-foreground">当前阶段：{closureCopy.stageLabel}</p>
+            <p className="text-muted-foreground">{closureCopy.nextAction}</p>
           </div>
         </PdaCard>
 
@@ -409,22 +413,22 @@ export default function PdaReceivePage() {
   }
 
   if (!task.submittedAt) {
+    const copy = getInboundClosureCopy(task)
     return (
       <div className="min-h-screen bg-background p-6 text-center space-y-3">
-        <p className="text-muted-foreground">该收货订单尚未提交到 PDA，请先在 ERP 提交。</p>
+        <p className="text-muted-foreground">{copy.description}</p>
+        <p className="text-muted-foreground">{copy.nextAction}</p>
         <button type="button" className="text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回列表</button>
       </div>
     )
   }
 
   if (task.putawayStatus?.key === 'waiting' || task.putawayStatus?.key === 'putting_away' || task.status >= 3) {
+    const copy = getInboundClosureCopy(task)
     return (
       <div className="min-h-screen bg-background p-6 text-center space-y-3">
-        <p className="text-muted-foreground">
-          {task.putawayStatus?.key === 'waiting' || task.putawayStatus?.key === 'putting_away'
-            ? '本单已完成收货，请前往「扫码上架」扫描库存条码与货架条码。'
-            : '任务已结束'}
-        </p>
+        <p className="text-muted-foreground">{copy.description}</p>
+        <p className="text-muted-foreground">{copy.nextAction}</p>
         <button type="button" className="text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回列表</button>
       </div>
     )

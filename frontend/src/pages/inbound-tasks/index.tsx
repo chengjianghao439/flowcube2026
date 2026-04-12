@@ -26,11 +26,12 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { SupplierFinder, FinderTrigger } from '@/components/finder'
 import { ProductFinder } from '@/components/finder'
 import type { FinderResult } from '@/types/finder'
-import { useAuditInboundTask, useCreateInboundTask, useInboundPurchaseCandidates, useSubmitInboundTask } from '@/hooks/useInboundTasks'
+import { useCreateInboundTask, useInboundPurchaseCandidates, useSubmitInboundTask } from '@/hooks/useInboundTasks'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import type { ProductFinderResult } from '@/types/products'
+import { getInboundClosureCopy } from '@/lib/inboundClosure'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -300,7 +301,6 @@ export default function InboundTasksPage() {
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
   const submitMut = useSubmitInboundTask()
-  const auditMut = useAuditInboundTask()
 
   const { data, isLoading } = useQuery({
     queryKey: ['inbound-tasks', keyword, statusFilter, product?.id ?? null, page],
@@ -340,9 +340,10 @@ export default function InboundTasksPage() {
     {
       key: 'status',
       title: '状态',
-      width: 120,
+      width: 220,
       render: (_, row) => {
         const task = row as InboundTask
+        const closureCopy = getInboundClosureCopy(task)
         const tone = task.receiptStatus?.key === 'audited'
           ? 'success'
           : task.receiptStatus?.key === 'exception'
@@ -350,7 +351,12 @@ export default function InboundTasksPage() {
             : task.receiptStatus?.key === 'draft'
               ? 'draft'
               : 'active'
-        return <SoftStatusLabel label={task.receiptStatus?.label ?? INBOUND_STATUS_LABEL[task.status]} tone={tone} />
+        return (
+          <div className="space-y-1">
+            <SoftStatusLabel label={task.receiptStatus?.label ?? INBOUND_STATUS_LABEL[task.status]} tone={tone} />
+            <p className="text-xs text-muted-foreground">{closureCopy.nextAction}</p>
+          </div>
+        )
       },
     },
     {
@@ -382,24 +388,14 @@ export default function InboundTasksPage() {
             },
           })
         }
-        if (task.auditFlowStatus?.key === 'pending') {
+        if (task.auditFlowStatus?.key === 'pending' || task.auditFlowStatus?.key === 'rejected') {
           items.push(
             {
-              label: '审核通过',
+              label: task.auditFlowStatus?.key === 'rejected' ? '打开详情处理退回' : '打开详情处理审核',
               onClick: () => {
-                auditMut.mutate({ id: task.id, data: { action: 'approve' } }, {
-                  onSuccess: () => toast.success('审核通过'),
-                  onError: (error: unknown) => toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '审核失败'),
-                })
-              },
-            },
-            {
-              label: '审核退回',
-              onClick: () => {
-                auditMut.mutate({ id: task.id, data: { action: 'reject' } }, {
-                  onSuccess: () => toast.success('已退回'),
-                  onError: (error: unknown) => toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '退回失败'),
-                })
+                const path = `/inbound-tasks/${task.id}`
+                addTab({ key: path, title: task.taskNo, path })
+                navigate(`${path}?focus=audit-follow-up`)
               },
             },
           )
