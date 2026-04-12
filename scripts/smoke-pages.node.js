@@ -24,6 +24,7 @@ function cmdExists(cmd) {
 }
 
 const [runnerBin, runnerArgs] = pickRunner()
+const BROWSER_NAME = 'chrome'
 
 function runPw(args) {
   const res = spawnSync(runnerBin, [...runnerArgs, '--session', SESSION, ...args], {
@@ -36,6 +37,16 @@ function runPw(args) {
     throw new Error(detail || `playwright-cli ${args[0]} failed`)
   }
   return (res.stdout || '').trim()
+}
+
+function ensureBrowser() {
+  const res = spawnSync(runnerBin, [...runnerArgs, 'install-browser', BROWSER_NAME], {
+    cwd: ROOT,
+    stdio: 'inherit',
+  })
+  if (res.status !== 0) {
+    throw new Error(`安装浏览器 ${BROWSER_NAME} 失败`)
+  }
 }
 
 function jsQuote(value) {
@@ -109,6 +120,7 @@ function openAndCheck(path, expected = '', forbidden = '') {
 }
 
 async function main() {
+  ensureBrowser()
   await login()
   await openAndCheck('/reports/role-workbench', '岗位工作台')
   await openAndCheck('/reports/reconciliation', '对账基础版')
