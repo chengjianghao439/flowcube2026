@@ -230,6 +230,18 @@ export default function BarcodePrintQueryPage() {
     const printingCount = rows.filter(row => row.waveId === waveId && (row.latestJob?.statusKey === 'printing' || row.latestJob?.statusKey === 'queued')).length
     return { waveId, waveNo, failedCount, timeoutCount, printingCount }
   }, [category, rows])
+  const logisticsContext = useMemo(() => {
+    if (category !== 'logistics') return null
+    const failedCount = rows.filter(row => row.latestJob?.statusKey === 'failed').length
+    const timeoutCount = rows.filter(row => row.latestJob?.statusKey === 'timeout').length
+    const printingCount = rows.filter(row => row.latestJob?.statusKey === 'printing' || row.latestJob?.statusKey === 'queued').length
+    return {
+      failedCount,
+      timeoutCount,
+      printingCount,
+      latestBizNo: rows[0]?.bizNo ?? null,
+    }
+  }, [category, rows])
 
   return (
     <div className="space-y-5">
@@ -321,6 +333,44 @@ export default function BarcodePrintQueryPage() {
               <p className="mt-1 text-2xl font-bold text-foreground">{outboundContext.printingCount}</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {logisticsContext && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">当前正在处理物流标签链路</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                物流标签打印异常会直接影响现场出库确认。建议先处理失败 / 超时，再回 PDA 扫描物流条码继续出库。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => openPath('/pda/ship', 'PDA 出库确认')}>
+                打开 PDA 出库
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
+                打开异常工作台
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-rose-200 bg-white px-4 py-3">
+              <p className="text-helper">打印失败</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{logisticsContext.failedCount}</p>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-white px-4 py-3">
+              <p className="text-helper">超时待确认</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{logisticsContext.timeoutCount}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p className="text-helper">仍在排队 / 打印中</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{logisticsContext.printingCount}</p>
+            </div>
+          </div>
+          {logisticsContext.latestBizNo ? (
+            <p className="text-xs text-muted-foreground">最近物流编码：<span className="text-doc-code">{logisticsContext.latestBizNo}</span></p>
+          ) : null}
         </div>
       )}
 

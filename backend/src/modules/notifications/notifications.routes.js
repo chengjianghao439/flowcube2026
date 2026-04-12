@@ -194,8 +194,19 @@ router.get('/', async (req, res, next) => {
        FROM picking_waves
        WHERE status = 3
          AND updated_at < DATE_SUB(NOW(), INTERVAL 4 HOUR)
-       ORDER BY updated_at ASC
-       LIMIT 1`,
+      ORDER BY updated_at ASC
+      LIMIT 1`,
+    )
+    const [[{ logisticsPrintFailures }]] = await pool.query(
+      `SELECT COUNT(*) AS logisticsPrintFailures
+       FROM print_jobs j
+       WHERE (j.ref_type = 'waybill' OR j.job_type = 'waybill')
+         AND (
+           (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
+           OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
+           OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
+         )`,
+      [Number(inboundThresholds.printTimeoutMinutes)],
     )
     const [[{ healthAnomalies }]] = await pool.query(
       `SELECT COUNT(*) AS healthAnomalies
@@ -220,6 +231,7 @@ router.get('/', async (req, res, next) => {
     if (pendingInboundAudit > 0) pushNotification(items, seen, { code: 'INBOUND_AUDIT_TIMEOUT', category: 'operations', priority: 15, type: 'warning', icon: '🧾', text: `${pendingInboundAudit} 笔收货订单待审核超时`, path: pendingAuditTarget?.taskId ? `/inbound-tasks/${pendingAuditTarget.taskId}?focus=audit-follow-up` : '/inbound-tasks' })
     if (rejectedInboundAudit > 0) pushNotification(items, seen, { code: 'INBOUND_AUDIT_REJECTED', category: 'operations', priority: 14, type: 'warning', icon: '↩️', text: `${rejectedInboundAudit} 笔收货订单已退回待处理`, path: rejectedAuditTarget?.taskId ? `/inbound-tasks/${rejectedAuditTarget.taskId}?focus=audit-follow-up` : '/inbound-tasks' })
     if (outboundPrintFailures > 0) pushNotification(items, seen, { code: 'OUTBOUND_PRINT_FAILED', category: 'operations', priority: 21, type: 'warning', icon: '📮', text: `${outboundPrintFailures} 条出库条码打印失败待补打`, path: failedOutboundTarget?.waveId ? `/picking-waves?waveId=${failedOutboundTarget.waveId}&focus=print-closure` : '/settings/barcode-print-query?category=outbound&status=failed' })
+    if (logisticsPrintFailures > 0) pushNotification(items, seen, { code: 'LOGISTICS_PRINT_FAILED', category: 'operations', priority: 22, type: 'warning', icon: '🚛', text: `${logisticsPrintFailures} 条物流标签打印失败待补打`, path: '/settings/barcode-print-query?category=logistics&status=failed' })
     if (staleWavePicking > 0) pushNotification(items, seen, { code: 'WAVE_STALE_PICKING', category: 'operations', priority: 18, type: 'warning', icon: '🛒', text: `${staleWavePicking} 个波次拣货推进缓慢`, path: staleWavePickingTarget?.waveId ? `/picking-waves?waveId=${staleWavePickingTarget.waveId}&focus=wave-progress` : '/picking-waves' })
     if (staleWaveSorting > 0) pushNotification(items, seen, { code: 'WAVE_STALE_SORTING', category: 'operations', priority: 19, type: 'warning', icon: '📚', text: `${staleWaveSorting} 个波次待分拣超时`, path: staleWaveSortingTarget?.waveId ? `/picking-waves?waveId=${staleWaveSortingTarget.waveId}&focus=wave-progress` : '/picking-waves' })
     if (healthAnomalies > 0) pushNotification(items, seen, { code: 'SYSTEM_HEALTH_ANOMALY', category: 'system', priority: 5, type: 'warning', icon: '🩺', text: `近 24 小时发现 ${healthAnomalies} 条系统异常记录`, path: '/reports/pda-anomaly' })
@@ -228,7 +240,7 @@ router.get('/', async (req, res, next) => {
 
     const total = items.length
 
-    return successResponse(res, { total, items, counts: { lowStockCount, pendingPurchase, pendingSale, unpaidPayable, unpaidReceivable, pendingTransfer, overduePayable, overdueReceivable, pendingInbound, failedPrintJobs, inboundPrintFailures, overdueInboundPutaway, pendingInboundAudit, rejectedInboundAudit, outboundPrintFailures, staleWavePicking, staleWaveSorting, healthAnomalies } }, '查询成功')
+    return successResponse(res, { total, items, counts: { lowStockCount, pendingPurchase, pendingSale, unpaidPayable, unpaidReceivable, pendingTransfer, overduePayable, overdueReceivable, pendingInbound, failedPrintJobs, inboundPrintFailures, overdueInboundPutaway, pendingInboundAudit, rejectedInboundAudit, outboundPrintFailures, staleWavePicking, staleWaveSorting, logisticsPrintFailures, healthAnomalies } }, '查询成功')
   } catch (e) { next(e) }
 })
 

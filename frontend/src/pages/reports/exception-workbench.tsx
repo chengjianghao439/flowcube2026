@@ -17,7 +17,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
-import { getInboundExceptionNotifications, getOutboundExceptionNotifications } from '@/lib/notifications'
+import { getInboundExceptionNotifications, getOutboundExceptionNotifications, getLogisticsExceptionNotifications } from '@/lib/notifications'
 
 function severityBadge(level: string) {
   if (level === 'high' || level === 'danger') return <Badge variant="destructive">高风险</Badge>
@@ -148,6 +148,10 @@ export default function ExceptionWorkbenchPage() {
     () => getOutboundExceptionNotifications(notificationsQ.data?.items ?? []),
     [notificationsQ.data],
   )
+  const logisticsReminders = useMemo(
+    () => getLogisticsExceptionNotifications(notificationsQ.data?.items ?? []),
+    [notificationsQ.data],
+  )
   const highCount = latestRun?.severity.high ?? latestSummary?.severity.high ?? 0
   const mediumCount = latestRun?.severity.medium ?? latestSummary?.severity.medium ?? 0
   const lowCount = latestRun?.severity.low ?? latestSummary?.severity.low ?? 0
@@ -237,6 +241,48 @@ export default function ExceptionWorkbenchPage() {
                   {item.code === 'INBOUND_AUDIT_REJECTED' && '直接进入退回处理区，按退回原因补打、补录并重新审核。'}
                 </p>
                 <p className="mt-3 text-xs text-muted-foreground">点击后将打开对应收货详情焦点区域</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-card-title">物流标签闭环</h2>
+            <p className="text-muted-body">统一收口物流标签补打、面单打印失败与出库现场扫描衔接问题，优先回到打印查询继续处理。</p>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => openPath('/settings/barcode-print-query?category=logistics', '条码打印查询')}>
+              打开物流补打
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => openPath('/pda/ship', 'PDA 出库确认')}>
+              打开 PDA 出库
+            </Button>
+          </div>
+        </div>
+        {logisticsReminders.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border py-10 text-center text-muted-body">
+            当前没有待处理的物流标签异常
+          </div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {logisticsReminders.map((item: NotificationItem, index) => (
+              <button
+                key={`${item.code ?? item.path}-logistics-${index}`}
+                type="button"
+                onClick={() => openPath(item.path, item.text)}
+                className="w-full rounded-xl border border-border px-4 py-4 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{item.icon}</span>
+                  <span className="font-medium text-foreground">{item.text}</span>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  直接进入物流标签打印查询，先处理失败或超时记录，再继续 PDA 出库确认。
+                </p>
+                <p className="mt-3 text-xs text-muted-foreground">点击后将打开物流标签补打入口</p>
               </button>
             ))}
           </div>

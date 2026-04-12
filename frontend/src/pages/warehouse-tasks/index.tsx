@@ -142,6 +142,9 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                     <Button size="sm" variant="outline" onClick={() => nav(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(task.taskNo)}`)}>
                       打开出库补打
                     </Button>
+                    <Button size="sm" variant="outline" onClick={() => nav(`/settings/barcode-print-query?category=logistics&keyword=${encodeURIComponent(task.taskNo)}`)}>
+                      打开物流补打
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => nav('/pda/ship')}>
                       打开 PDA 出库
                     </Button>

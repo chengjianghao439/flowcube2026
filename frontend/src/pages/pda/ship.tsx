@@ -118,6 +118,14 @@ export default function PdaShipPage() {
                 </div>
               </div>
             ) : null}
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" variant="outline" className="flex-1" onClick={() => navigate('/settings/barcode-print-query?category=logistics&status=failed')}>
+                物流补打
+              </Button>
+              <Button size="sm" variant="ghost" className="flex-1" onClick={() => navigate('/reports/exception-workbench')}>
+                异常工作台
+              </Button>
+            </div>
           </PdaCard>
 
           {/* 扫码区移至底栏，此处保留加载状态 */}
