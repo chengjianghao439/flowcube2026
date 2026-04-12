@@ -7,13 +7,17 @@ cd "$ROOT"
 SESSION="${PLAYWRIGHT_CLI_SESSION:-fps-$$-$RANDOM}"
 BASE_URL="${PAGE_SMOKE_BASE_URL:-http://127.0.0.1}"
 
-if ! command -v npx >/dev/null 2>&1; then
-  echo "!! 缺少 npx，无法运行页面烟雾检查" >&2
+if command -v npm >/dev/null 2>&1; then
+  PLAYWRIGHT_RUNNER=(npm exec --yes --package @playwright/cli -- playwright-cli)
+elif command -v npx >/dev/null 2>&1; then
+  PLAYWRIGHT_RUNNER=(npx --yes --package @playwright/cli playwright-cli)
+else
+  echo "!! 缺少 npm / npx，无法运行页面烟雾检查" >&2
   exit 1
 fi
 
 pw() {
-  npx --yes --package @playwright/cli playwright-cli --session "$SESSION" "$@"
+  "${PLAYWRIGHT_RUNNER[@]}" --session "$SESSION" "$@"
 }
 
 js_quote() {

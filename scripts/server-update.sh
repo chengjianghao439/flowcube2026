@@ -37,13 +37,13 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   wait_for_health
   echo "==> 运行报表烟雾检查..."
   docker compose exec -T backend npm run smoke:reports
-  if command -v npx >/dev/null 2>&1; then
+  if command -v npm >/dev/null 2>&1; then
     echo "==> 运行页面烟雾检查..."
     bash scripts/smoke-pages.sh
     echo "==> 运行对账回跳烟雾检查..."
     bash scripts/smoke-reconciliation-jumps.sh
   else
-    echo "==> 跳过页面/对账回跳烟雾检查：当前环境未安装 npx"
+    echo "==> 跳过页面/对账回跳烟雾检查：当前环境未安装 npm"
   fi
   echo "==> 完成。请确认仓库根 .env 已设置 APP_PUBLIC_URL=https://你的API域名"
   exit 0
