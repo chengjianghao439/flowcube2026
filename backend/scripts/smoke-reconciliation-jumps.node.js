@@ -42,6 +42,7 @@ function createCliConfigArgs() {
           browserName: 'chromium',
           launchOptions: {
             executablePath,
+            chromiumSandbox: false,
           },
         },
       },
