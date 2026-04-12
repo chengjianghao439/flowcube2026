@@ -25,6 +25,7 @@ import {
 } from '@/hooks/useInboundTasks'
 import {
   type InboundContainerRow,
+  type InboundPrintBatch,
   type InboundTaskItem,
 } from '@/types/inbound-tasks'
 import type { InboundRecentPrintJob } from '@/types/inbound-tasks'
@@ -68,6 +69,97 @@ function ManualReceiveCard({
   )
 }
 
+function printStatusTone(statusKey: string): 'draft' | 'active' | 'success' | 'danger' {
+  if (statusKey === 'failed' || statusKey === 'timeout' || statusKey === 'cancelled') return 'danger'
+  if (statusKey === 'success') return 'success'
+  if (statusKey === 'queued' || statusKey === 'printing') return 'active'
+  return 'draft'
+}
+
+function PrintBatchCard({
+  batch,
+  onOpenQuery,
+  onOpenFailedQuery,
+}: {
+  batch: InboundPrintBatch
+  onOpenQuery: () => void
+  onOpenFailedQuery: () => void
+}) {
+  const needsFollowUp = batch.failed > 0 || batch.timeout > 0
+
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-4 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-medium text-foreground">{batch.title}</h4>
+            <SoftStatusLabel label={batch.statusLabel} tone={printStatusTone(batch.statusKey)} />
+          </div>
+          <p className="text-helper">{batch.dispatchReasonLabel} · {batch.firstCreatedAt}</p>
+          <p className="text-helper">最近回写 {batch.lastUpdatedAt}</p>
+        </div>
+        <div className="grid min-w-[220px] grid-cols-3 gap-2 text-right">
+          <div className="rounded-lg border border-border px-3 py-2">
+            <p className="text-helper">总任务</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{batch.total}</p>
+          </div>
+          <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.06] px-3 py-2">
+            <p className="text-helper">成功</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{batch.success}</p>
+          </div>
+          <div className="rounded-lg border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2">
+            <p className="text-helper">失败 / 超时</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{batch.failed + batch.timeout}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-4">
+        <div className="rounded-lg border border-border px-3 py-2">
+          <p className="text-helper">待派发</p>
+          <p className="mt-1 font-medium text-foreground">{batch.queued}</p>
+        </div>
+        <div className="rounded-lg border border-border px-3 py-2">
+          <p className="text-helper">打印中</p>
+          <p className="mt-1 font-medium text-foreground">{batch.printing}</p>
+        </div>
+        <div className="rounded-lg border border-border px-3 py-2">
+          <p className="text-helper">打印机</p>
+          <p className="mt-1 font-medium text-foreground">{batch.printerNames.join(' / ') || '未绑定打印机'}</p>
+        </div>
+        <div className="rounded-lg border border-border px-3 py-2">
+          <p className="text-helper">条码样本</p>
+          <p className="mt-1 font-medium text-foreground">{batch.barcodes.slice(0, 2).join(' / ') || '—'}</p>
+        </div>
+      </div>
+
+      {batch.latestErrorMessage && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm text-foreground">
+          最近异常：{batch.latestErrorMessage}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {needsFollowUp
+            ? '当前批次仍有失败或超时任务，建议先补打并确认打印回执，再继续后续审核。'
+            : '当前批次打印结果已回写，可继续核对上架与审核状态。'}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {needsFollowUp && (
+            <Button size="sm" variant="outline" onClick={onOpenFailedQuery}>
+              去失败补打
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={onOpenQuery}>
+            查看本单打印记录
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function InboundTaskDetailPage() {
   const tabPath = useContext(TabPathContext)
   const params = useParams<{ id?: string }>()
@@ -106,6 +198,7 @@ export default function InboundTaskDetailPage() {
 
   const items = Array.isArray(task?.items) ? task.items : []
   const recentPrintJobs = Array.isArray(task?.recentPrintJobs) ? task.recentPrintJobs : []
+  const printBatches = Array.isArray(task?.printBatches) ? task.printBatches : []
   const timeline = Array.isArray(task?.timeline) ? task.timeline : []
   const exceptionFlags = task?.exceptionFlags ?? null
   const printSummary = task?.printSummary ?? null
@@ -578,41 +671,67 @@ export default function InboundTaskDetailPage() {
         )}
       </Section>
 
-      <Section title="最近打印记录">
-        {!recentPrintJobs.length ? (
-          <p className="text-muted-body">本单暂无打印记录</p>
+      <Section title="打印批次与补打结果">
+        {!printBatches.length ? (
+          <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+            本单暂无打印批次，后续收货生成库存条码后会在这里回写批次结果。
+          </div>
         ) : (
-          <div className="space-y-2">
-            {recentPrintJobs.map((job: InboundRecentPrintJob) => (
-              <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <div className="font-medium text-foreground">{job.productName ?? job.barcode ?? '库存条码'}</div>
-                  <div className="text-doc-code-muted">{job.barcode ?? '—'} · {job.statusLabel ?? '未知'}</div>
-                  <div className="text-helper">{job.printerCode ?? job.printerName ?? '未绑定打印机'}{job.errorMessage ? ` · ${job.errorMessage}` : ''}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-helper">{job.updatedAt}</span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={reprintMut.isPending}
-                      onClick={() => job.barcode
-                        ? triggerReprint({ mode: 'barcode', barcode: job.barcode }, `${job.barcode} 补打已提交`)
-                        : openPrintQuery()
-                      }
-                    >
-                      补打
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => openPrintQuery(job.barcode ? { keyword: job.barcode } : {})}>
-                      查看记录
-                    </Button>
-                  </div>
-                </div>
-              </div>
+          <div className="space-y-3">
+            {printBatches.map((batch: InboundPrintBatch) => (
+              <PrintBatchCard
+                key={batch.batchKey}
+                batch={batch}
+                onOpenQuery={() => openPrintQuery()}
+                onOpenFailedQuery={() => openPrintQuery({ status: 'failed' })}
+              />
             ))}
           </div>
         )}
+
+        <div className="space-y-2 pt-3 border-t border-border/60">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h4 className="font-medium text-foreground">打印明细记录</h4>
+            <span className="text-helper">保留最近 {recentPrintJobs.length} 条</span>
+          </div>
+          {!recentPrintJobs.length ? (
+            <p className="text-muted-body">本单暂无打印记录</p>
+          ) : (
+            <div className="space-y-2">
+              {recentPrintJobs.map((job: InboundRecentPrintJob) => (
+                <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="font-medium text-foreground">{job.productName ?? job.barcode ?? '库存条码'}</div>
+                      <SoftStatusLabel label={job.statusLabel ?? '未知'} tone={printStatusTone(job.statusKey)} />
+                    </div>
+                    <div className="text-doc-code-muted">{job.barcode ?? '—'} · {job.dispatchReason ?? 'default'}</div>
+                    <div className="text-helper">{job.printerCode ?? job.printerName ?? '未绑定打印机'}{job.errorMessage ? ` · ${job.errorMessage}` : ''}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-helper">{job.updatedAt}</span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={reprintMut.isPending}
+                        onClick={() => job.barcode
+                          ? triggerReprint({ mode: 'barcode', barcode: job.barcode }, `${job.barcode} 补打已提交`)
+                          : openPrintQuery()
+                        }
+                      >
+                        补打
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => openPrintQuery(job.barcode ? { keyword: job.barcode } : {})}>
+                        查看记录
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </Section>
 
       <Section title="操作时间线">

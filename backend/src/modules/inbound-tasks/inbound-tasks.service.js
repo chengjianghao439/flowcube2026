@@ -249,6 +249,7 @@ function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], rec
     storedQty: Number(summary.storedQty || 0),
     overdueContainers: Number(summary.overdueContainers || 0),
   }
+  const printBatches = buildInboundPrintBatches(recentPrintJobs)
   const base = {
     ...task,
     items,
@@ -260,6 +261,7 @@ function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], rec
     putawaySummary,
     timeline,
     recentPrintJobs,
+    printBatches,
     printTimeoutMinutes: Number(thresholds.printTimeoutMinutes || DEFAULT_INBOUND_THRESHOLDS.printTimeoutMinutes),
     putawayTimeoutHours: Number(thresholds.putawayTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.putawayTimeoutHours),
     auditTimeoutHours: Number(thresholds.auditTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.auditTimeoutHours),
@@ -445,6 +447,106 @@ function deriveInboundPrintJobState(row, thresholds = DEFAULT_INBOUND_THRESHOLDS
   if (rawStatus === 1) return base('printing', PRINT_STATUS_LABEL.printing)
   if (rawStatus === 0) return base('queued', PRINT_STATUS_LABEL.queued)
   return base('queued', PRINT_STATUS_LABEL.queued)
+}
+
+function getInboundPrintDispatchReasonLabel(reason) {
+  switch (String(reason || '').toLowerCase()) {
+    case 'manual_reprint':
+      return '补打批次'
+    case 'explicit':
+      return '手动指定打印机'
+    case 'fallback':
+      return '自动回退打印'
+    default:
+      return reason ? `打印批次 · ${reason}` : '打印批次'
+  }
+}
+
+function buildInboundBatchStatus(summary) {
+  if (summary.cancelled > 0) return { key: 'cancelled', label: PRINT_STATUS_LABEL.cancelled }
+  if (summary.timeout > 0) return { key: 'timeout', label: PRINT_STATUS_LABEL.timeout }
+  if (summary.failed > 0) return { key: 'failed', label: PRINT_STATUS_LABEL.failed }
+  if (summary.printing > 0) return { key: 'printing', label: PRINT_STATUS_LABEL.printing }
+  if (summary.queued > 0) return { key: 'queued', label: PRINT_STATUS_LABEL.queued }
+  return { key: 'success', label: PRINT_STATUS_LABEL.success }
+}
+
+function buildInboundPrintBatches(recentPrintJobs = []) {
+  if (!Array.isArray(recentPrintJobs) || !recentPrintJobs.length) return []
+  const orderedJobs = [...recentPrintJobs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  const batches = []
+  const batchWindowMs = 45 * 1000
+
+  for (const job of orderedJobs) {
+    const createdAtMs = new Date(job.createdAt).getTime()
+    const prev = batches[batches.length - 1]
+    const canMerge = prev
+      && prev.dispatchReason === (job.dispatchReason || null)
+      && Math.abs(prev.anchorCreatedAtMs - createdAtMs) <= batchWindowMs
+    if (canMerge) {
+      prev.jobs.push(job)
+      prev.anchorCreatedAtMs = Math.max(prev.anchorCreatedAtMs, createdAtMs)
+      continue
+    }
+    batches.push({
+      batchKey: `batch:${job.dispatchReason || 'default'}:${job.id}`,
+      dispatchReason: job.dispatchReason || null,
+      anchorCreatedAtMs: createdAtMs,
+      jobs: [job],
+    })
+  }
+
+  return batches.map(batch => {
+    const summary = {
+      total: batch.jobs.length,
+      queued: 0,
+      printing: 0,
+      success: 0,
+      failed: 0,
+      timeout: 0,
+      cancelled: 0,
+    }
+    const printerNames = new Set()
+    const barcodes = []
+    let latestErrorMessage = null
+    let firstCreatedAt = batch.jobs[0]?.createdAt || null
+    let lastUpdatedAt = batch.jobs[0]?.updatedAt || null
+
+    for (const job of batch.jobs) {
+      if (summary[job.statusKey] != null) summary[job.statusKey] += 1
+      if (job.printerName || job.printerCode) printerNames.add(job.printerName || job.printerCode)
+      if (job.barcode) barcodes.push(job.barcode)
+      if (!latestErrorMessage && job.errorMessage) latestErrorMessage = job.errorMessage
+      if (job.createdAt && (!firstCreatedAt || new Date(job.createdAt).getTime() < new Date(firstCreatedAt).getTime())) {
+        firstCreatedAt = job.createdAt
+      }
+      if (job.updatedAt && (!lastUpdatedAt || new Date(job.updatedAt).getTime() > new Date(lastUpdatedAt).getTime())) {
+        lastUpdatedAt = job.updatedAt
+      }
+    }
+
+    const statusView = buildInboundBatchStatus(summary)
+    return {
+      batchKey: batch.batchKey,
+      title: batch.dispatchReason === 'manual_reprint' ? '补打结果回写' : getInboundPrintDispatchReasonLabel(batch.dispatchReason),
+      dispatchReason: batch.dispatchReason,
+      dispatchReasonLabel: getInboundPrintDispatchReasonLabel(batch.dispatchReason),
+      statusKey: statusView.key,
+      statusLabel: statusView.label,
+      total: summary.total,
+      queued: summary.queued,
+      printing: summary.printing,
+      success: summary.success,
+      failed: summary.failed,
+      timeout: summary.timeout,
+      cancelled: summary.cancelled,
+      firstCreatedAt,
+      lastUpdatedAt,
+      printerNames: [...printerNames],
+      barcodes: [...new Set(barcodes)].slice(0, 6),
+      latestErrorMessage,
+    }
+  })
 }
 
 async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_THRESHOLDS) {

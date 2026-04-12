@@ -75,6 +75,27 @@ export interface InboundRecentPrintJob {
   updatedAt: string
 }
 
+export interface InboundPrintBatch {
+  batchKey: string
+  title: string
+  dispatchReason: string | null
+  dispatchReasonLabel: string
+  statusKey: 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'cancelled'
+  statusLabel: string
+  total: number
+  queued: number
+  printing: number
+  success: number
+  failed: number
+  timeout: number
+  cancelled: number
+  firstCreatedAt: string
+  lastUpdatedAt: string
+  printerNames: string[]
+  barcodes: string[]
+  latestErrorMessage: string | null
+}
+
 export interface InboundExceptionFlags {
   failedPrintJobs: number
   timeoutPrintJobs: number
@@ -118,6 +139,7 @@ export interface InboundTask {
   putawaySummary?: InboundPutawaySummary
   timeline?: InboundTimelineEvent[]
   recentPrintJobs?: InboundRecentPrintJob[]
+  printBatches?: InboundPrintBatch[]
   exceptionFlags?: InboundExceptionFlags
   createdAt: string
   updatedAt: string
