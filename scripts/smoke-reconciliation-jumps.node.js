@@ -20,7 +20,7 @@ function pickRunner() {
 }
 
 const [runnerBin, runnerArgs] = pickRunner()
-const BROWSER_NAME = 'chrome'
+const BROWSER_NAME = process.env.PLAYWRIGHT_BROWSER_NAME || 'chrome'
 
 function runPw(args) {
   const res = spawnSync(runnerBin, [...runnerArgs, '--session', SESSION, ...args], {
