@@ -25,6 +25,7 @@ function cmdExists(cmd) {
 
 const [runnerBin, runnerArgs] = pickRunner()
 const BROWSER_NAME = process.env.PLAYWRIGHT_BROWSER_NAME || 'chrome'
+const SKIP_BROWSER_INSTALL = process.env.PLAYWRIGHT_SKIP_BROWSER_INSTALL === '1'
 
 function runPw(args) {
   const res = spawnSync(runnerBin, [...runnerArgs, '--session', SESSION, ...args], {
@@ -40,6 +41,9 @@ function runPw(args) {
 }
 
 function ensureBrowser() {
+  if (SKIP_BROWSER_INSTALL) {
+    return
+  }
   const res = spawnSync(runnerBin, [...runnerArgs, 'install-browser', BROWSER_NAME], {
     cwd: ROOT,
     stdio: 'inherit',

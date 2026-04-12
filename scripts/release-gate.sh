@@ -45,6 +45,7 @@ echo "==> 运行页面烟雾检查（Playwright 容器）..."
 docker run --rm --network host \
   -e PAGE_SMOKE_BASE_URL="$SMOKE_BASE_URL" \
   -e PLAYWRIGHT_BROWSER_NAME=chromium \
+  -e PLAYWRIGHT_SKIP_BROWSER_INSTALL=1 \
   -v "$ROOT":"$ROOT" \
   -w "$ROOT" \
   "$PLAYWRIGHT_IMAGE" \
@@ -54,6 +55,7 @@ echo "==> 运行对账回跳烟雾检查（Playwright 容器）..."
 docker run --rm --network host \
   -e PAGE_SMOKE_BASE_URL="$SMOKE_BASE_URL" \
   -e PLAYWRIGHT_BROWSER_NAME=chromium \
+  -e PLAYWRIGHT_SKIP_BROWSER_INSTALL=1 \
   -v "$ROOT":"$ROOT" \
   -w "$ROOT" \
   "$PLAYWRIGHT_IMAGE" \
