@@ -35,26 +35,8 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   echo "==> Docker：重建并启动 backend / frontend..."
   docker compose up -d --build backend frontend
   wait_for_health
-  echo "==> 运行报表烟雾检查..."
-  docker compose exec -T backend npm run smoke:reports
-  if docker image inspect mcr.microsoft.com/playwright:v1.55.0-noble >/dev/null 2>&1 || docker pull mcr.microsoft.com/playwright:v1.55.0-noble >/dev/null 2>&1; then
-    echo "==> 运行页面烟雾检查（Playwright 容器）..."
-    docker run --rm --network host \
-      -e PAGE_SMOKE_BASE_URL=http://127.0.0.1 \
-      -v "$ROOT":"$ROOT" \
-      -w "$ROOT" \
-      mcr.microsoft.com/playwright:v1.55.0-noble \
-      node scripts/smoke-pages.node.js
-    echo "==> 运行对账回跳烟雾检查（Playwright 容器）..."
-    docker run --rm --network host \
-      -e PAGE_SMOKE_BASE_URL=http://127.0.0.1 \
-      -v "$ROOT":"$ROOT" \
-      -w "$ROOT" \
-      mcr.microsoft.com/playwright:v1.55.0-noble \
-      node scripts/smoke-reconciliation-jumps.node.js
-  else
-    echo "!! 无法获取 Playwright 容器镜像，跳过页面/对账回跳烟雾检查"
-  fi
+  echo "==> 运行发布门禁..."
+  bash scripts/release-gate.sh
   echo "==> 完成。请确认仓库根 .env 已设置 APP_PUBLIC_URL=https://你的API域名"
   exit 0
 fi
