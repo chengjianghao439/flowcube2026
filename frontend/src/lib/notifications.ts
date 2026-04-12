@@ -1,6 +1,7 @@
 export type NotificationCategory = 'finance' | 'inventory' | 'operations' | 'system'
 
 export interface NotificationEntry {
+  code?: string
   type: string
   icon: string
   text: string
@@ -30,6 +31,17 @@ export function normalizeNotifications(items: NotificationEntry[]) {
 
 export function getReminderNotifications(items: NotificationEntry[]) {
   return normalizeNotifications(items).filter(item => item.category === 'finance' || item.category === 'system')
+}
+
+const INBOUND_EXCEPTION_CODES = new Set([
+  'INBOUND_PRINT_FAILED',
+  'INBOUND_PUTAWAY_TIMEOUT',
+  'INBOUND_AUDIT_TIMEOUT',
+  'INBOUND_AUDIT_REJECTED',
+])
+
+export function getInboundExceptionNotifications(items: NotificationEntry[]) {
+  return normalizeNotifications(items).filter(item => item.code && INBOUND_EXCEPTION_CODES.has(item.code))
 }
 
 export function getNotificationCategoryLabel(category?: NotificationCategory) {

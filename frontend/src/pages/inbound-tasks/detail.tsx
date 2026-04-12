@@ -2,8 +2,8 @@
  * 收货订单详情 — 收货 / 上架 / 容器列表
  * 路由：/inbound-tasks/:id（多标签）
  */
-import { useContext, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useContext, useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,9 +37,9 @@ function skuRemainToReceive(items: InboundTaskItem[] | undefined, productId: num
     .reduce((s, i) => s + Math.max(0, i.orderedQty - i.receivedQty), 0)
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, sectionId }: { title: string; children: React.ReactNode; sectionId?: string }) {
   return (
-    <div className="card-base p-5 space-y-4">
+    <div id={sectionId} className="card-base p-5 space-y-4 scroll-mt-24">
       <h3 className="text-section-title pb-2 border-b border-border/50">{title}</h3>
       {children}
     </div>
@@ -164,6 +164,7 @@ export default function InboundTaskDetailPage() {
   const tabPath = useContext(TabPathContext)
   const params = useParams<{ id?: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const addTab = useWorkspaceStore(s => s.addTab)
   const rawId = (tabPath || params.id || '').split('/').filter(Boolean).pop() ?? ''
   const taskId = Number(rawId)
@@ -252,6 +253,20 @@ export default function InboundTaskDetailPage() {
         }
       })
   }, [timeline])
+  const focusSection = useMemo(() => {
+    const search = new URLSearchParams(location.search)
+    return search.get('focus')
+  }, [location.search])
+
+  useEffect(() => {
+    if (!focusSection || isLoading || !task) return
+    const node = document.getElementById(focusSection)
+    if (!node) return
+    const timer = window.setTimeout(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [focusSection, isLoading, task])
 
   if (!validId) {
     return (
@@ -422,7 +437,7 @@ export default function InboundTaskDetailPage() {
       </div>
 
       {!!exceptionLines.length && (
-        <Section title="异常提醒">
+        <Section title="异常提醒" sectionId="exception-alerts">
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 space-y-2">
             {exceptionLines.map(line => (
               <p key={line} className="text-sm text-foreground">{line}</p>
@@ -440,7 +455,7 @@ export default function InboundTaskDetailPage() {
       )}
 
       {(auditFlowStatus?.key === 'rejected' || manualReceiveEvents.length > 0) && (
-        <Section title="审核处理与补录">
+        <Section title="审核处理与补录" sectionId="audit-follow-up">
           <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-3">
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm space-y-1.5">
@@ -492,7 +507,7 @@ export default function InboundTaskDetailPage() {
         </Section>
       )}
 
-      <Section title="任务明细（应到 / 已收 / 已上架）">
+      <Section title="任务明细（应到 / 已收 / 已上架）" sectionId="task-items">
         {!task.submittedAt && (
           <div className="space-y-1.5 rounded-lg border border-slate-500/30 bg-slate-500/[0.06] px-4 py-3 text-helper">
             <p className="font-medium text-foreground">当前仍是草稿收货订单。</p>
@@ -577,7 +592,7 @@ export default function InboundTaskDetailPage() {
       </Section>
 
       {canPutaway && (
-        <Section title="待上架库存">
+        <Section title="待上架库存" sectionId="waiting-putaway">
           <div className="grid gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-border bg-card px-4 py-3">
               <p className="text-helper">待上架箱数</p>
@@ -643,7 +658,7 @@ export default function InboundTaskDetailPage() {
         </Section>
       )}
 
-      <Section title="容器：已上架">
+      <Section title="容器：已上架" sectionId="stored-containers">
         {!containers?.stored?.length ? (
           <p className="text-muted-body">暂无</p>
         ) : (
@@ -671,7 +686,7 @@ export default function InboundTaskDetailPage() {
         )}
       </Section>
 
-      <Section title="打印批次与补打结果">
+      <Section title="打印批次与补打结果" sectionId="print-batches">
         {!printBatches.length ? (
           <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
             本单暂无打印批次，后续收货生成库存条码后会在这里回写批次结果。
@@ -734,7 +749,7 @@ export default function InboundTaskDetailPage() {
         </div>
       </Section>
 
-      <Section title="操作时间线">
+      <Section title="操作时间线" sectionId="timeline">
         {!timeline.length ? (
           <p className="text-muted-body">暂无时间线记录</p>
         ) : (
