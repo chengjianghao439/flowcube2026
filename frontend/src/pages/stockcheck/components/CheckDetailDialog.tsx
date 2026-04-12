@@ -5,12 +5,15 @@ import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { useCheckDetail, useUpdateCheckItems, useSubmitCheck, useCancelCheck } from '@/hooks/useStockCheck'
+import { useNavigate } from 'react-router-dom'
 import type { CheckItem } from '@/types/stockcheck'
 
 interface Props { open: boolean; onClose: () => void; checkId: number | null }
 
 export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
+  const navigate = useNavigate()
   const { data: check, isLoading } = useCheckDetail(checkId||0)
   const updateItems = useUpdateCheckItems()
   const submit = useSubmitCheck()
@@ -59,6 +62,22 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中...</p>}
         {check && (
           <div className="space-y-4">
+            <FocusModePanel
+              badge="下一步推荐入口"
+              title="盘点详情负责确认差异、提交调整，并把后续排查交回库存与异常入口"
+              description="这里适合先填实盘数，再判断差异是否需要直接提交调整；如果差异来源涉及现场收货、出库或异常库存，先回库存管理和异常工作台确认原因。"
+              summary={`当前状态：${check.statusName}`}
+              steps={[
+                '先逐项填写实盘数量，优先确认差异明显的商品。',
+                '提交前确认差异原因，避免把现场异常直接写进正式库存。',
+                '如果差异来源不清晰，回库存管理或异常工作台继续核查。',
+              ]}
+              actions={[
+                { label: '打开库存管理', variant: 'default', onClick: () => navigate('/inventory') },
+                { label: '打开岗位工作台', onClick: () => navigate('/reports/role-workbench') },
+                { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+              ]}
+            />
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div><span className="text-muted-foreground">盘点单号：</span><span className="text-doc-code-strong">{check.checkNo}</span></div>
               <div><span className="text-muted-foreground">仓库：</span>{check.warehouseName}</div>

@@ -22,6 +22,7 @@ import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar }      from '@/components/shared/ActionBar'
 import { StatusBadge }    from '@/components/shared/StatusBadge'
 import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
+import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { SupplierFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import {
   useCreatePurchase, usePurchaseDetail,
@@ -289,6 +290,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 // ════════════════════════════════════════════════════════════════════════════
 
 function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: () => void }) {
+  const navigate = useNavigate()
   const { data: order, isLoading } = usePurchaseDetail(purchaseId)
   const confirmMutate = useConfirmPurchase()
   const cancelMutate  = useCancelPurchase()
@@ -360,6 +362,23 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
             <Button variant="outline" onClick={closeTab}>关闭</Button>
           </>
         }
+      />
+
+      <FocusModePanel
+        badge="下一步推荐入口"
+        title="采购详情负责确认计划、提交收货，并把后续处理交给收货主链"
+        description="这页最适合先确认供应商、仓库和到货计划，再决定是否提交到收货订单；进入收货阶段后，异常和现场执行继续走收货详情、岗位工作台与异常工作台。"
+        summary={`当前状态：${order.statusName}`}
+        steps={[
+          '先确认基础信息、预计到货与商品数量是否正确。',
+          '草稿单优先提交到待收货，后续由收货订单承接打印、上架与审核。',
+          '如果已经进入收货阶段，回到岗位工作台或异常工作台继续推进。',
+        ]}
+        actions={[
+          { label: '打开岗位工作台', variant: 'default', onClick: () => navigate('/reports/role-workbench') },
+          { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+          { label: '查看收货订单', onClick: () => navigate('/inbound-tasks') },
+        ]}
       />
 
       {/* 基础信息 */}

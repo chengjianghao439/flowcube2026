@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
+import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -18,6 +20,7 @@ import type { TableColumn } from '@/types'
 const STATUS_COLOR: Record<number, 'default' | 'secondary' | 'destructive' | 'outline'> = { 1:'default', 2:'outline', 3:'destructive' }
 
 export default function StockCheckPage() {
+  const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
@@ -52,6 +55,22 @@ export default function StockCheckPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="库存盘点" description="创建盘点单并填写实盘数量，提交后自动调整库存" actions={<Button onClick={()=>setCreateOpen(true)}>+ 新建盘点</Button>} />
+      <FocusModePanel
+        badge="下一步推荐入口"
+        title="库存盘点负责把账面库存和现场实盘收口到同一条调整链"
+        description="这页最适合先判断是否需要新建盘点，再进入盘点单详情填写实盘数；提交前如果发现风险或来源不明的波动，先回库存页、岗位工作台或异常工作台确认。"
+        summary={detailId ? `当前打开盘点单 #${detailId}` : '当前焦点：盘点列表'}
+        steps={[
+          '先按仓库查看盘点单，确定是新建盘点还是继续填写已有盘点。',
+          '进入盘点单详情录入实盘数，提交前再次确认差异原因。',
+          '如果差异关联现场异常，回库存管理、岗位工作台或异常工作台继续排查。',
+        ]}
+        actions={[
+          { label: '打开库存管理', variant: 'default', onClick: () => navigate('/inventory') },
+          { label: '打开岗位工作台', onClick: () => navigate('/reports/role-workbench') },
+          { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+        ]}
+      />
       <FilterCard>
         <Input placeholder="搜索单号/仓库..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); setPage(1) }}>搜索</Button>
