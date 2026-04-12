@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 import type { BarcodePrintCategory, BarcodePrintRecord } from '@/types/print-jobs'
+import { useWorkspaceStore } from '@/store/workspaceStore'
 
 const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint: string }> = [
   { value: 'inbound', label: '入库条码', hint: '库存条码、塑料盒条码的打印状态与补打' },
@@ -41,6 +42,8 @@ function statusBadge(job: BarcodePrintRecord['latestJob']) {
 }
 
 export default function BarcodePrintQueryPage() {
+  const navigate = useNavigate()
+  const addTab = useWorkspaceStore(s => s.addTab)
   const qc = useQueryClient()
   const [searchParams] = useSearchParams()
   const initialCategory = (searchParams.get('category') as BarcodePrintCategory | null) || 'inbound'
@@ -85,6 +88,11 @@ export default function BarcodePrintQueryPage() {
       toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '重新打印失败')
     },
   })
+
+  function openPath(path: string, title: string) {
+    addTab({ key: path, title, path })
+    navigate(path)
+  }
 
   const columns = useMemo<TableColumn<BarcodePrintRecord>[]>(() => {
     const bizTitle =
@@ -158,16 +166,27 @@ export default function BarcodePrintQueryPage() {
       {
         key: 'action',
         title: '操作',
-        width: 110,
+        width: 210,
         render: (_, row) => (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!row.canReprint || (reprintMut.isPending && reprintMut.variables?.recordId === row.recordId)}
-            onClick={() => reprintMut.mutate(row)}
-          >
-            {reprintMut.isPending && reprintMut.variables?.recordId === row.recordId ? '处理中…' : '重新打印'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!row.canReprint || (reprintMut.isPending && reprintMut.variables?.recordId === row.recordId)}
+              onClick={() => reprintMut.mutate(row)}
+            >
+              {reprintMut.isPending && reprintMut.variables?.recordId === row.recordId ? '处理中…' : '重新打印'}
+            </Button>
+            {row.category === 'inbound' && row.inboundTaskId ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openPath(`/inbound-tasks/${row.inboundTaskId}?focus=print-batches`, row.bizNo || `收货订单 #${row.inboundTaskId}`)}
+              >
+                打开收货详情
+              </Button>
+            ) : null}
+          </div>
         ),
       },
     ]
@@ -176,6 +195,22 @@ export default function BarcodePrintQueryPage() {
   const activeCategory = CATEGORY_OPTIONS.find(item => item.value === category)!
   const rows = query.data?.list ?? []
   const pagination = query.data?.pagination
+  const inboundContext = useMemo(() => {
+    if (category !== 'inbound') return null
+    const taskId = initialInboundTaskId || rows.find(row => row.inboundTaskId)?.inboundTaskId
+    if (!taskId) return null
+    const failedCount = rows.filter(row => row.latestJob?.statusKey === 'failed').length
+    const timeoutCount = rows.filter(row => row.latestJob?.statusKey === 'timeout').length
+    const printingCount = rows.filter(row => row.latestJob?.statusKey === 'printing' || row.latestJob?.statusKey === 'queued').length
+    const taskNo = rows.find(row => row.inboundTaskId === taskId)?.bizNo ?? `#${taskId}`
+    return {
+      taskId,
+      taskNo,
+      failedCount,
+      timeoutCount,
+      printingCount,
+    }
+  }, [category, initialInboundTaskId, rows])
 
   return (
     <div className="space-y-5">
@@ -183,6 +218,49 @@ export default function BarcodePrintQueryPage() {
         title="条码打印查询"
         description="查询入库条码、出库条码、物流条码的打印状态，支持失败追踪与丢失补打。"
       />
+
+      {inboundContext && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">当前正在处理收货打印链路</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                收货订单 <span className="text-doc-code">{inboundContext.taskNo}</span> 的库存条码都在这里追踪。先收口失败 / 超时，再回收货详情继续上架与审核。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openPath(`/inbound-tasks/${inboundContext.taskId}?focus=print-batches`, `收货订单 ${inboundContext.taskNo}`)}
+              >
+                返回收货详情
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openPath('/reports/exception-workbench', '异常工作台')}
+              >
+                打开异常工作台
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-rose-200 bg-white px-4 py-3">
+              <p className="text-helper">打印失败</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{inboundContext.failedCount}</p>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-white px-4 py-3">
+              <p className="text-helper">超时待确认</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{inboundContext.timeoutCount}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p className="text-helper">仍在排队 / 打印中</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{inboundContext.printingCount}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-3 md:grid-cols-3">
         {CATEGORY_OPTIONS.map(item => (
