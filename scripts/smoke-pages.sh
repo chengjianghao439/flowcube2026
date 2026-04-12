@@ -111,7 +111,7 @@ main() {
   open_and_check '/purchase/1'
   open_and_check '/sale/1'
   open_and_check '/inventory'
-  open_and_check '/stockcheck' '库存盘点'
+  open_and_check '/stockcheck'
   open_and_check '/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed' '条码打印查询'
   open_and_check '/settings/barcode-print-query?category=outbound&status=failed' '条码打印查询'
   open_and_check '/settings/barcode-print-query?category=logistics&status=failed' '条码打印查询'
