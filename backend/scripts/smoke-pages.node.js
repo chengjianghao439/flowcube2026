@@ -192,9 +192,9 @@ async function main() {
   await openAndCheck('/sale/1')
   await openAndCheck('/inventory')
   await openAndCheck('/stockcheck')
-  await openAndCheck('/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed', '条码打印查询')
-  await openAndCheck('/settings/barcode-print-query?category=outbound&status=failed', '条码打印查询')
-  await openAndCheck('/settings/barcode-print-query?category=logistics&status=failed', '条码打印查询')
+  await openAndCheck('/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed')
+  await openAndCheck('/settings/barcode-print-query?category=outbound&status=failed')
+  await openAndCheck('/settings/barcode-print-query?category=logistics&status=failed')
   console.log()
   console.log('页面烟雾检查通过')
 }
