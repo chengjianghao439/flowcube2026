@@ -8,6 +8,7 @@ import { getPdaAnomalyApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
+import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
@@ -124,6 +125,18 @@ export default function PdaAnomalyPage() {
         }}
         onRefresh={() => refetch()}
         updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : undefined}
+      />
+
+      <FocusModePanel
+        badge="作业绩效默认视角"
+        title="PDA 异常建议先看趋势，再看人和原因"
+        description="先确认错误和撤销是否在升高，再看哪些操作员、原因和条码最集中，最后回到异常工作台或现场流程处理。"
+        summary={`当前错误 ${s?.totalErrors ?? 0} 次，撤销 ${s?.totalUndos ?? 0} 次`}
+        steps={[
+          '先看错误率和每日趋势',
+          '再看操作员错误与撤销次数',
+          '最后看错误原因和问题条码',
+        ]}
       />
 
       {isLoading && <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}
