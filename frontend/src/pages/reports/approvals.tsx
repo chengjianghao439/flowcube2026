@@ -8,7 +8,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getRoleWorkbenchApi } from '@/api/reports'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
-import { getReminderNotifications } from '@/lib/notifications'
+import { getNotificationCategoryLabel, getReminderNotifications } from '@/lib/notifications'
 
 function SummaryCard({ label, value, hint, tone }: { label: string; value: number | string; hint: string; tone: 'blue' | 'amber' | 'emerald' | 'rose' }) {
   const toneClass = tone === 'amber'
@@ -33,6 +33,7 @@ function PriorityBanner({
   count,
   sectionTitle,
   badge,
+  actionLabel,
   onOpen,
 }: {
   title: string
@@ -40,6 +41,7 @@ function PriorityBanner({
   count: number
   sectionTitle: string
   badge: string
+  actionLabel: string
   onOpen: () => void
 }) {
   return (
@@ -61,11 +63,21 @@ function PriorityBanner({
             <p className="text-xs uppercase tracking-wide text-muted-foreground">待处理数</p>
             <p className="text-3xl font-bold tabular-nums text-slate-700">{count}</p>
           </div>
-          <Button variant="outline" onClick={onOpen}>打开待办</Button>
+          <Button variant="outline" onClick={onOpen}>{actionLabel}</Button>
         </div>
       </div>
     </section>
   )
+}
+
+function getReminderTone(item: NotificationItem) {
+  if (item.type === 'danger') {
+    return 'border-rose-200 bg-rose-50 text-rose-700'
+  }
+  if (item.type === 'warning') {
+    return 'border-amber-200 bg-amber-50 text-amber-700'
+  }
+  return 'border-blue-200 bg-blue-50 text-blue-700'
 }
 
 export default function ApprovalsPage() {
@@ -86,13 +98,14 @@ export default function ApprovalsPage() {
 
   const notificationsError = notificationsQ.isError && !notificationsQ.data
   const workbenchError = workbenchQ.isError && !workbenchQ.data
-  const topAlert = workbenchQ.data?.topAlert ?? null
   const notificationItems = notificationsQ.data?.items ?? []
   const reminderItems = useMemo(() => getReminderNotifications(notificationItems), [notificationItems])
   const managementCards = useMemo(() => {
     const section = workbenchQ.data?.sections.find(item => item.key === 'management')
     return section?.cards ?? []
   }, [workbenchQ.data])
+  const topReminder = reminderItems[0] ?? null
+  const topApprovalCard = managementCards[0] ?? null
 
   function openPath(path: string, title: string) {
     addTab({ key: path, title, path })
@@ -120,16 +133,27 @@ export default function ApprovalsPage() {
         <SummaryCard label="库存异常" value={managementCards.find(card => card.key === 'management-stock')?.count ?? 0} hint="负库存与可用库存风险" tone="rose" />
       </div>
 
-      {topAlert && (
+      {topReminder ? (
         <PriorityBanner
-          title={topAlert.title}
-          description={topAlert.description}
-          count={topAlert.count}
-          sectionTitle={topAlert.sectionTitle}
-          badge={topAlert.badge}
-          onOpen={() => openPath(topAlert.path, topAlert.title)}
+          title={topReminder.text}
+          description="审批与提醒页顶部优先展示财务与系统级事项，避免与岗位工作台的操作型待办重复。"
+          count={reminderItems.length}
+          sectionTitle={`${getNotificationCategoryLabel(topReminder.category)}提醒`}
+          badge={topReminder.icon}
+          actionLabel="打开提醒"
+          onOpen={() => openPath(topReminder.path, topReminder.text)}
         />
-      )}
+      ) : topApprovalCard ? (
+        <PriorityBanner
+          title={topApprovalCard.title}
+          description={topApprovalCard.description}
+          count={topApprovalCard.count}
+          sectionTitle="管理审批待办"
+          badge={topApprovalCard.priorityLabel}
+          actionLabel={topApprovalCard.actionLabel}
+          onOpen={() => openPath(topApprovalCard.path, topApprovalCard.title)}
+        />
+      ) : null}
 
       {(notificationsError || workbenchError) && (
         <QueryErrorState
@@ -166,6 +190,7 @@ export default function ApprovalsPage() {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-foreground">{card.title}</p>
                       <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px] leading-4">{card.count}</Badge>
+                      <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px] leading-4">{card.priorityLabel}</Badge>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">{card.description}</p>
                   </div>
@@ -195,17 +220,19 @@ export default function ApprovalsPage() {
                   key={`${item.path}-${index}`}
                   type="button"
                   onClick={() => openPath(item.path, item.text)}
-                  className={`w-full rounded-xl border px-4 py-3 text-left transition-colors hover:opacity-90 ${
-                    item.type === 'danger'
-                      ? 'border-red-200 bg-red-50 text-red-700'
-                      : item.type === 'warning'
-                        ? 'border-amber-200 bg-amber-50 text-amber-700'
-                        : 'border-blue-200 bg-blue-50 text-blue-700'
-                  }`}
+                  className={`w-full rounded-xl border px-4 py-3 text-left transition-colors hover:opacity-90 ${getReminderTone(item)}`}
                 >
-                  <div className="flex items-start gap-3">
-                    <span className="text-base shrink-0 mt-0.5">{item.icon}</span>
-                    <span className="text-sm font-medium">{item.text}</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="mt-0.5 shrink-0 text-base">{item.icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{item.text}</p>
+                        <p className="mt-1 text-xs opacity-80">{getNotificationCategoryLabel(item.category)}提醒</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="shrink-0 border-current/20 bg-white/70">
+                      P{item.priority ?? 9}
+                    </Badge>
                   </div>
                 </button>
               ))

@@ -138,6 +138,48 @@ function CardView({ card, onOpen }: { card: WorkbenchCard; onOpen: (path: string
   )
 }
 
+function FocusQueue({
+  items,
+  onOpen,
+}: {
+  items: Array<{ key: string; title: string; path: string; priorityLabel: string; sectionTitle: string; count: number }>
+  onOpen: (path: string, title: string) => void
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-white p-5 shadow-sm">
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-card-title">今日处理顺序</h2>
+          <p className="text-sm text-muted-foreground">按固定优先级给出今日建议处理顺序，先做高频且最容易形成堵点的待办。</p>
+        </div>
+        <Badge variant="outline" className="w-fit rounded-full border-slate-200 bg-white text-slate-700">
+          {items.length} 项建议优先处理
+        </Badge>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-4">
+        {items.map(item => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => onOpen(item.path, item.title)}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/5"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-100 text-slate-700">
+                {item.priorityLabel}
+              </Badge>
+              <span className="text-xs text-muted-foreground">{item.sectionTitle}</span>
+            </div>
+            <p className="mt-3 text-sm font-semibold text-foreground">{item.title}</p>
+            <p className="mt-1 text-xs text-muted-foreground">当前待处理 {item.count} 项</p>
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export default function RoleWorkbenchPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
@@ -158,6 +200,20 @@ export default function RoleWorkbenchPage() {
   const summary = data?.summary
   const topAlert = data?.topAlert
   const sections: WorkbenchSection[] = [...(data?.sections ?? [])].sort((a, b) => a.priorityRank - b.priorityRank)
+  const focusQueue = sections
+    .flatMap(section =>
+      section.cards.map(card => ({
+        key: card.key,
+        title: card.title,
+        path: card.path,
+        priorityLabel: card.priorityLabel,
+        sectionTitle: section.title,
+        count: card.count,
+        priorityRank: card.priorityRank,
+      })),
+    )
+    .sort((a, b) => a.priorityRank - b.priorityRank)
+    .slice(0, 4)
 
   return (
     <div className="space-y-6">
@@ -194,6 +250,10 @@ export default function RoleWorkbenchPage() {
           priorityLabel={topAlert.priorityLabel}
           onOpen={() => openPath(topAlert.path, topAlert.title)}
         />
+      )}
+
+      {!isLoading && !isError && focusQueue.length > 0 && (
+        <FocusQueue items={focusQueue} onOpen={openPath} />
       )}
 
       {isLoading && (

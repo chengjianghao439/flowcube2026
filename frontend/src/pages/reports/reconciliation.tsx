@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
@@ -18,6 +18,7 @@ import { getReconciliationApi, type ReconciliationRecord } from '@/api/reports'
 import type { TableColumn, Pagination } from '@/types'
 
 type StatementType = 1 | 2
+type ViewMode = 'focus' | 'all'
 
 function SummaryCard({ label, value, hint, tone }: { label: string; value: number | string; hint: string; tone?: 'blue' | 'amber' | 'emerald' | 'rose' }) {
   const toneClass = tone === 'amber'
@@ -49,6 +50,7 @@ export default function ReconciliationPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [viewMode, setViewMode] = useState<ViewMode>('focus')
   const recent30d = getRelativeDateRange(30)
   const recent90d = getRelativeDateRange(90)
   const monthRange = getMonthDateRange()
@@ -72,6 +74,30 @@ export default function ReconciliationPage() {
   const { data, isLoading, isError, error, refetch } = reconciliationQ
   const summary = data?.summary
   const rows = data?.list ?? []
+  const displayRows = useMemo(() => {
+    const sortedRows = [...rows].sort((a, b) => {
+      const overdueDelta = Number(isOverdue(b)) - Number(isOverdue(a))
+      if (overdueDelta !== 0) return overdueDelta
+
+      const unsettledDelta = Number(a.status === 3) - Number(b.status === 3)
+      if (unsettledDelta !== 0) return unsettledDelta
+
+      const dueA = a.dueDate || '9999-12-31'
+      const dueB = b.dueDate || '9999-12-31'
+      if (dueA !== dueB) return dueA.localeCompare(dueB)
+
+      return String(b.createdAt).localeCompare(String(a.createdAt))
+    })
+
+    if (viewMode === 'all') {
+      return sortedRows
+    }
+    return sortedRows.filter(record => record.status !== 3 || isOverdue(record))
+  }, [rows, viewMode])
+  const focusCount = useMemo(
+    () => rows.filter(record => record.status !== 3 || isOverdue(record)).length,
+    [rows],
+  )
 
   function openPath(path: string | null | undefined, title: string) {
     if (!path) return
@@ -203,6 +229,17 @@ export default function ReconciliationPage() {
 
       <FilterCard>
         <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant={viewMode === 'focus' ? 'default' : 'outline'} onClick={() => setViewMode('focus')}>
+            待核对优先
+          </Button>
+          <Button size="sm" variant={viewMode === 'all' ? 'default' : 'outline'} onClick={() => setViewMode('all')}>
+            查看全部
+          </Button>
+          <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 text-amber-700">
+            当前需重点核对 {focusCount} 条
+          </Badge>
+        </div>
+        <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => applyPreset(recent30d.startDate, recent30d.endDate)}>
             近 30 天
           </Button>
@@ -251,12 +288,12 @@ export default function ReconciliationPage() {
       {!isError && (
         <DataTable
           columns={columns}
-          data={rows}
+          data={displayRows}
           loading={isLoading}
           pagination={data?.pagination as Pagination | undefined}
           onPageChange={setPage}
           onRowDoubleClick={(row) => openPath(row.sourcePath || row.receiptPath, row.orderNo)}
-          emptyText="暂无对账数据"
+          emptyText={viewMode === 'focus' ? '当前范围内暂无待核对对账数据' : '暂无对账数据'}
         />
       )}
     </div>
