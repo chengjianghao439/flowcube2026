@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -48,9 +49,12 @@ export default function ReconciliationPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [applied, setApplied] = useState({ keyword: '', startDate: '', endDate: '', status: '' })
+  const recent30d = getRelativeDateRange(30)
+  const recent90d = getRelativeDateRange(90)
+  const monthRange = getMonthDateRange()
+  const [startDate, setStartDate] = useState(recent30d.startDate)
+  const [endDate, setEndDate] = useState(recent30d.endDate)
+  const [applied, setApplied] = useState({ keyword: '', startDate: recent30d.startDate, endDate: recent30d.endDate, status: '' })
 
   const reconciliationQ = useQuery({
     queryKey: ['reconciliation', type, page, applied],
@@ -87,10 +91,17 @@ export default function ReconciliationPage() {
 
   function resetFilters() {
     setSearch('')
-    setStartDate('')
-    setEndDate('')
+    setStartDate(recent30d.startDate)
+    setEndDate(recent30d.endDate)
     setStatusFilter('')
-    setApplied({ keyword: '', startDate: '', endDate: '', status: '' })
+    setApplied({ keyword: '', startDate: recent30d.startDate, endDate: recent30d.endDate, status: '' })
+    setPage(1)
+  }
+
+  function applyPreset(start: string, end: string) {
+    setStartDate(start)
+    setEndDate(end)
+    setApplied(prev => ({ ...prev, startDate: start, endDate: end }))
     setPage(1)
   }
 
@@ -174,7 +185,15 @@ export default function ReconciliationPage() {
           <button
             key={item.key}
             type="button"
-            onClick={() => { setType(item.key); setPage(1); setApplied({ keyword: '', startDate: '', endDate: '', status: '' }); setSearch(''); setStartDate(''); setEndDate(''); setStatusFilter('') }}
+            onClick={() => {
+              setType(item.key)
+              setPage(1)
+              setApplied({ keyword: '', startDate: recent30d.startDate, endDate: recent30d.endDate, status: '' })
+              setSearch('')
+              setStartDate(recent30d.startDate)
+              setEndDate(recent30d.endDate)
+              setStatusFilter('')
+            }}
             className={`px-4 py-2 text-sm font-medium transition-colors ${type === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
           >
             {item.label}
@@ -183,6 +202,17 @@ export default function ReconciliationPage() {
       </div>
 
       <FilterCard>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => applyPreset(recent30d.startDate, recent30d.endDate)}>
+            近 30 天
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => applyPreset(recent90d.startDate, recent90d.endDate)}>
+            近 90 天
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => applyPreset(monthRange.startDate, monthRange.endDate)}>
+            本月
+          </Button>
+        </div>
         <Input
           placeholder="搜索单号 / 往来方"
           value={search}

@@ -3,10 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -36,9 +36,12 @@ export default function ProfitAnalysisPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   const [tab, setTab] = useState<ProfitTab>('sale')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [applied, setApplied] = useState({ startDate: '', endDate: '' })
+  const recent30d = getRelativeDateRange(30)
+  const recent90d = getRelativeDateRange(90)
+  const monthRange = getMonthDateRange()
+  const [startDate, setStartDate] = useState(recent30d.startDate)
+  const [endDate, setEndDate] = useState(recent30d.endDate)
+  const [applied, setApplied] = useState({ startDate: recent30d.startDate, endDate: recent30d.endDate })
 
   const profitQ = useQuery({
     queryKey: ['profit-analysis', applied],
@@ -59,6 +62,12 @@ export default function ProfitAnalysisPage() {
   function applyFilters() {
     setApplied({ startDate, endDate })
   }
+
+  const presetItems = [
+    { label: '近 30 天', ...recent30d },
+    { label: '近 90 天', ...recent90d },
+    { label: '本月', ...monthRange },
+  ]
 
   const saleColumns: TableColumn<ProfitSaleOrderRow>[] = [
     { key: 'orderNo', title: '销售单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
@@ -125,13 +134,25 @@ export default function ProfitAnalysisPage() {
         <SummaryCard label="滞销库存" value={summary?.slowMovingCount ?? 0} hint={`金额 ¥${(summary?.slowMovingValue ?? 0).toFixed(2)}`} tone="rose" />
       </div>
 
-      <FilterCard>
-        <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 w-40" />
-        <span className="text-muted-foreground">至</span>
-        <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9 w-40" />
-        <Button size="sm" onClick={applyFilters}>查询</Button>
-        <Button size="sm" variant="ghost" onClick={() => { setStartDate(''); setEndDate(''); setApplied({ startDate: '', endDate: '' }) }}>重置</Button>
-      </FilterCard>
+      <DateRangeQueryBar
+        label="统计日期"
+        startDate={startDate}
+        endDate={endDate}
+        onStartDateChange={setStartDate}
+        onEndDateChange={setEndDate}
+        onApply={applyFilters}
+        onReset={() => {
+          setStartDate(recent30d.startDate)
+          setEndDate(recent30d.endDate)
+          setApplied({ startDate: recent30d.startDate, endDate: recent30d.endDate })
+        }}
+        presets={presetItems}
+        onPresetSelect={(preset) => {
+          setStartDate(preset.startDate)
+          setEndDate(preset.endDate)
+          setApplied({ startDate: preset.startDate, endDate: preset.endDate })
+        }}
+      />
 
       {isError && !data && (
         <QueryErrorState

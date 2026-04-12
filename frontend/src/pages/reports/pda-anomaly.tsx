@@ -10,6 +10,7 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Button } from '@/components/ui/button'
+import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
   return (
@@ -52,9 +53,15 @@ function MiniChart({ data }: { data: { date: string; errorCount: number }[] }) {
 }
 
 export default function PdaAnomalyPage() {
-  const [startDate, setStartDate] = useState('')
-  const [endDate,   setEndDate]   = useState('')
-  const [applied, setApplied]     = useState<{ startDate?: string; endDate?: string }>({})
+  const recent7d = getRelativeDateRange(7)
+  const recent30d = getRelativeDateRange(30)
+  const monthRange = getMonthDateRange()
+  const [startDate, setStartDate] = useState(recent7d.startDate)
+  const [endDate,   setEndDate]   = useState(recent7d.endDate)
+  const [applied, setApplied]     = useState<{ startDate?: string; endDate?: string }>({
+    startDate: recent7d.startDate,
+    endDate: recent7d.endDate,
+  })
 
   const pdaAnomalyQ = useQuery({
     queryKey: ['pda-anomaly', applied],
@@ -65,6 +72,11 @@ export default function PdaAnomalyPage() {
   const { data, isLoading, isError, error, dataUpdatedAt, refetch } = pdaAnomalyQ
 
   const apply = () => setApplied({ startDate: startDate || undefined, endDate: endDate || undefined })
+  const presetItems = [
+    { label: '近 7 天', ...recent7d },
+    { label: '近 30 天', ...recent30d },
+    { label: '本月', ...monthRange },
+  ]
 
   const s = data?.summary
   const maxErr   = Math.max(...(data?.byOperator     ?? []).map(r => r.errorCount), 1)
@@ -99,7 +111,17 @@ export default function PdaAnomalyPage() {
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
         onApply={apply}
-        onReset={() => { setStartDate(''); setEndDate(''); setApplied({}) }}
+        onReset={() => {
+          setStartDate(recent7d.startDate)
+          setEndDate(recent7d.endDate)
+          setApplied({ startDate: recent7d.startDate, endDate: recent7d.endDate })
+        }}
+        presets={presetItems}
+        onPresetSelect={(preset) => {
+          setStartDate(preset.startDate)
+          setEndDate(preset.endDate)
+          setApplied({ startDate: preset.startDate, endDate: preset.endDate })
+        }}
         onRefresh={() => refetch()}
         updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : undefined}
       />

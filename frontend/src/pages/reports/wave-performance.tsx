@@ -11,6 +11,7 @@ import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import type { WaveStats } from '@/api/reports'
 
 const STATUS_COLOR: Record<number, string> = {
@@ -56,9 +57,12 @@ function EfficiencyBar({ value, max }: { value: number; max: number }) {
 }
 
 export default function WavePerformancePage() {
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate]     = useState('')
-  const [applied, setApplied]     = useState<{ startDate: string; endDate: string }>({ startDate: '', endDate: '' })
+  const recent7d = getRelativeDateRange(7)
+  const recent30d = getRelativeDateRange(30)
+  const monthRange = getMonthDateRange()
+  const [startDate, setStartDate] = useState(recent7d.startDate)
+  const [endDate, setEndDate]     = useState(recent7d.endDate)
+  const [applied, setApplied]     = useState<{ startDate: string; endDate: string }>(recent7d)
   const [sortField, setSortField] = useState<string>('createdAt')
   const [sortAsc, setSortAsc]     = useState(false)
 
@@ -71,7 +75,16 @@ export default function WavePerformancePage() {
   const { data, isLoading, isError, error, dataUpdatedAt, refetch } = wavePerformanceQ
 
   const apply = () => setApplied({ startDate, endDate })
-  const reset = () => { setStartDate(''); setEndDate(''); setApplied({ startDate: '', endDate: '' }) }
+  const reset = () => {
+    setStartDate(recent7d.startDate)
+    setEndDate(recent7d.endDate)
+    setApplied(recent7d)
+  }
+  const presetItems = [
+    { label: '近 7 天', ...recent7d },
+    { label: '近 30 天', ...recent30d },
+    { label: '本月', ...monthRange },
+  ]
 
   function toggleSort(field: string) {
     if (sortField === field) setSortAsc(a => !a)
@@ -132,6 +145,12 @@ export default function WavePerformancePage() {
         onEndDateChange={setEndDate}
         onApply={apply}
         onReset={reset}
+        presets={presetItems}
+        onPresetSelect={(preset) => {
+          setStartDate(preset.startDate)
+          setEndDate(preset.endDate)
+          setApplied({ startDate: preset.startDate, endDate: preset.endDate })
+        }}
         onRefresh={() => refetch()}
         updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : undefined}
       />

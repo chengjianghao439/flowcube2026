@@ -1,6 +1,12 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
+export interface DateRangePreset {
+  label: string
+  startDate: string
+  endDate: string
+}
+
 interface DateRangeQueryBarProps {
   label?: string
   startDate: string
@@ -9,6 +15,8 @@ interface DateRangeQueryBarProps {
   onEndDateChange: (value: string) => void
   onApply: () => void
   onReset: () => void
+  presets?: DateRangePreset[]
+  onPresetSelect?: (preset: DateRangePreset) => void
   onRefresh?: () => void
   updatedAt?: string
 }
@@ -21,12 +29,28 @@ export function DateRangeQueryBar({
   onEndDateChange,
   onApply,
   onReset,
+  presets,
+  onPresetSelect,
   onRefresh,
   updatedAt,
 }: DateRangeQueryBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
       <span className="text-sm font-medium text-muted-foreground">{label}：</span>
+      {presets?.length ? (
+        <div className="flex flex-wrap gap-2">
+          {presets.map(preset => (
+            <Button
+              key={preset.label}
+              size="sm"
+              variant="outline"
+              onClick={() => onPresetSelect?.(preset)}
+            >
+              {preset.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
       <Input
         type="date"
         value={startDate}
