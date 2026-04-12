@@ -29,7 +29,7 @@ wait_for_health() {
 }
 
 echo "==> 拉取代码..."
-git pull origin main
+git pull --rebase --autostash origin main
 
 if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   echo "==> Docker：重建并启动 backend / frontend..."
