@@ -824,6 +824,8 @@ async function submit(taskId, operator) {
 async function audit(taskId, { action = 'approve', remark = '' } = {}, operator) {
   const normalizedAction = String(action || 'approve').toLowerCase()
   if (!['approve', 'reject'].includes(normalizedAction)) throw new AppError('审核动作无效', 400)
+  const normalizedRemark = String(remark || '').trim()
+  if (normalizedAction === 'reject' && !normalizedRemark) throw new AppError('审核退回必须填写原因', 400)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -840,7 +842,7 @@ async function audit(taskId, { action = 'approve', remark = '' } = {}, operator)
        WHERE id = ?`,
       [
         auditStatus,
-        String(remark || '').trim() || null,
+        normalizedRemark || null,
         operator?.userId ?? null,
         operator?.realName ?? operator?.username ?? null,
         taskId,
@@ -851,9 +853,9 @@ async function audit(taskId, { action = 'approve', remark = '' } = {}, operator)
       taskId,
       normalizedAction === 'approve' ? 'audit_approved' : 'audit_rejected',
       normalizedAction === 'approve' ? '审核通过' : '审核退回',
-      String(remark || '').trim() || (normalizedAction === 'approve' ? '收货订单已审核通过' : '收货订单已退回，请处理异常后重新审核'),
+      normalizedRemark || (normalizedAction === 'approve' ? '收货订单已审核通过' : '收货订单已退回，请处理异常后重新审核'),
       operator,
-      { auditStatus },
+      { auditStatus, remark: normalizedRemark || null },
     )
     await conn.commit()
     return findById(taskId)

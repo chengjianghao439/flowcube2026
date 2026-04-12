@@ -75,6 +75,10 @@ const putawaySchema = z.object({
 const auditSchema = z.object({
   action: z.enum(['approve', 'reject']).default('approve'),
   remark: z.string().trim().max(200, '审核备注不能超过 200 个字').optional(),
+}).superRefine((data, ctx) => {
+  if (data.action === 'reject' && !String(data.remark || '').trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: '审核退回必须填写原因', path: ['remark'] })
+  }
 })
 
 const reprintSchema = z.object({

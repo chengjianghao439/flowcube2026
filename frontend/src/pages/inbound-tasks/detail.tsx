@@ -8,9 +8,11 @@ import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { TabPathContext } from '@/components/layout/TabPathContext'
+import { AppDialog } from '@/components/shared/AppDialog'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
   useInboundTaskDetail,
@@ -43,6 +45,29 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
+function ManualReceiveCard({
+  title,
+  subtitle,
+  createdAt,
+  createdByName,
+}: {
+  title: string
+  subtitle: string
+  createdAt: string
+  createdByName: string | null
+}) {
+  return (
+    <div className="rounded-lg border border-border px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium text-foreground">{title}</span>
+        <span className="text-helper">{createdAt}</span>
+        {createdByName && <span className="text-helper">· {createdByName}</span>}
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+    </div>
+  )
+}
+
 export default function InboundTaskDetailPage() {
   const tabPath = useContext(TabPathContext)
   const params = useParams<{ id?: string }>()
@@ -65,6 +90,7 @@ export default function InboundTaskDetailPage() {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
   const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
 
   function closeTab() {
     const { removeTab, tabs } = useWorkspaceStore.getState()
@@ -116,6 +142,23 @@ export default function InboundTaskDetailPage() {
     if (flags.auditRejected) lines.push('该收货订单已被审核退回')
     return lines
   }, [exceptionFlags])
+  const manualReceiveEvents = useMemo(() => {
+    return timeline
+      .filter(event => event.eventType === 'receive_recorded')
+      .map(event => {
+        const payload = event.payload ?? {}
+        const productName = typeof payload.productName === 'string' ? payload.productName : event.title
+        const totalQty = typeof payload.totalQty === 'number' ? payload.totalQty : null
+        const packages = typeof payload.packages === 'number' ? payload.packages : null
+        return {
+          id: event.id,
+          title: productName || '补录收货',
+          subtitle: `${packages ?? 0} 箱${totalQty != null ? `，共 ${totalQty}` : ''}，已生成库存条码并进入打印队列`,
+          createdAt: event.createdAt,
+          createdByName: event.createdByName,
+        }
+      })
+  }, [timeline])
 
   if (!validId) {
     return (
@@ -238,7 +281,7 @@ export default function InboundTaskDetailPage() {
             {canAudit && (
               <>
                 <Button variant="secondary" size="sm" onClick={() => setApproveConfirmOpen(true)} disabled={auditMut.isPending}>
-                  审核通过
+                  {auditFlowStatus?.key === 'rejected' ? '重新审核通过' : '审核通过'}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setRejectConfirmOpen(true)} disabled={auditMut.isPending}>
                   审核退回
@@ -279,6 +322,9 @@ export default function InboundTaskDetailPage() {
           <p className="text-helper">审核状态</p>
           <p className="mt-1 text-lg font-semibold">{auditFlowStatus?.label ?? '—'}</p>
           <p className="mt-1 text-helper">{task.auditedAt ? `审核于 ${task.auditedAt}` : '收货完成后进入审核'}</p>
+          {task.auditedByName && (
+            <p className="mt-1 text-helper">审核人 {task.auditedByName}</p>
+          )}
         </div>
       </div>
 
@@ -295,6 +341,59 @@ export default function InboundTaskDetailPage() {
               <Button size="sm" variant="outline" onClick={() => openPrintQuery({ status: 'failed' })}>
                 去补打 / 排查
               </Button>
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {(auditFlowStatus?.key === 'rejected' || manualReceiveEvents.length > 0) && (
+        <Section title="审核处理与补录">
+          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-3">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm space-y-1.5">
+                <p className="font-medium text-foreground">退回后的处理顺序</p>
+                <p className="text-muted-foreground">先补打失败条码或补录缺失箱数，再确认上架与打印状态无异常，最后从本页重新审核通过。</p>
+                {task.auditRemark && auditFlowStatus?.key === 'rejected' && (
+                  <p className="text-foreground">最新退回原因：{task.auditRemark}</p>
+                )}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button size="sm" variant="outline" onClick={() => openPrintQuery({ status: 'failed' })}>
+                    查看失败补打
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => openPrintQuery()}>
+                    打开本单打印记录
+                  </Button>
+                  {canAudit && auditFlowStatus?.key === 'rejected' && (
+                    <Button size="sm" onClick={() => setApproveConfirmOpen(true)} disabled={auditMut.isPending}>
+                      重新审核通过
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="font-medium text-foreground">最近补录动作</h4>
+                <span className="text-helper">{manualReceiveEvents.length} 条</span>
+              </div>
+              {manualReceiveEvents.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                  当前没有补录记录
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {manualReceiveEvents.slice(0, 5).map(event => (
+                    <ManualReceiveCard
+                      key={event.id}
+                      title={event.title}
+                      subtitle={event.subtitle}
+                      createdAt={event.createdAt}
+                      createdByName={event.createdByName}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </Section>
@@ -558,9 +657,11 @@ export default function InboundTaskDetailPage() {
 
       <ConfirmDialog
         open={approveConfirmOpen}
-        title="审核通过"
-        description="确认该收货订单已完成收货、打印与上架，并正式通过审核？"
-        confirmText="审核通过"
+        title={auditFlowStatus?.key === 'rejected' ? '重新审核通过' : '审核通过'}
+        description={auditFlowStatus?.key === 'rejected'
+          ? '确认退回问题已经处理完成，并将该收货订单重新审核通过？'
+          : '确认该收货订单已完成收货、打印与上架，并正式通过审核？'}
+        confirmText={auditFlowStatus?.key === 'rejected' ? '重新审核通过' : '审核通过'}
         loading={auditMut.isPending}
         onConfirm={() => {
           if (!validId) return
@@ -578,27 +679,75 @@ export default function InboundTaskDetailPage() {
         onCancel={() => setApproveConfirmOpen(false)}
       />
 
-      <ConfirmDialog
+      <AppDialog
         open={rejectConfirmOpen}
-        title="审核退回"
-        description="确认将该收货订单退回异常处理？退回后会进入异常状态，需补打或补录后再处理。"
-        confirmText="确认退回"
-        loading={auditMut.isPending}
-        onConfirm={() => {
-          if (!validId) return
-          auditMut.mutate({ id: validId, data: { action: 'reject' } }, {
-            onSuccess: async () => {
-              setRejectConfirmOpen(false)
-              toast.success('已退回')
-              await afterMutation()
-            },
-            onError: (err: unknown) => {
-              toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '退回失败')
-            },
-          })
+        onOpenChange={(open) => {
+          if (!open && !auditMut.isPending) {
+            setRejectConfirmOpen(false)
+          }
         }}
-        onCancel={() => setRejectConfirmOpen(false)}
-      />
+        dialogId="inbound-audit-reject"
+        title="审核退回"
+        resizable={false}
+        defaultWidth={520}
+        defaultHeight={330}
+        minWidth={420}
+        minHeight={280}
+        footer={(
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={auditMut.isPending}
+              onClick={() => {
+                setRejectConfirmOpen(false)
+                setRejectReason('')
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={auditMut.isPending}
+              onClick={() => {
+                if (!validId) return
+                const remark = rejectReason.trim()
+                if (!remark) {
+                  toast.error('请填写审核退回原因')
+                  return
+                }
+                auditMut.mutate({ id: validId, data: { action: 'reject', remark } }, {
+                  onSuccess: async () => {
+                    setRejectConfirmOpen(false)
+                    setRejectReason('')
+                    toast.success('已退回')
+                    await afterMutation()
+                  },
+                  onError: (err: unknown) => {
+                    toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '退回失败')
+                  },
+                })
+              }}
+            >
+              {auditMut.isPending ? '处理中...' : '确认退回'}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-4 px-5 py-4">
+          <div className="space-y-1.5 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">请明确填写退回原因</p>
+            <p>退回后该收货订单会进入异常处理，后续补打、补录和重新审核都会围绕这个原因继续处理。</p>
+          </div>
+          <LimitedTextarea
+            autoFocus
+            maxLength={200}
+            value={rejectReason}
+            onChange={e => setRejectReason(e.target.value)}
+            placeholder="例如：有 2 箱库存条码打印失败，需补打后重新审核"
+            rows={5}
+          />
+        </div>
+      </AppDialog>
     </div>
   )
 }
