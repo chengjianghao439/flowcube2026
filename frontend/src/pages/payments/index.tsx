@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
+import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -16,6 +18,7 @@ import type { TableColumn } from '@/types'
 const ST_COLOR: Record<number,'default'|'secondary'|'outline'> = { 1:'secondary', 2:'default', 3:'outline' }
 
 export default function PaymentsPage() {
+  const navigate = useNavigate()
   const qc = useQueryClient()
   const [tab, setTab] = useState<1|2>(1)
   const [page, setPage] = useState(1)
@@ -67,6 +70,22 @@ export default function PaymentsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="应付/应收账款" description="跟踪采购应付款与销售应收款" />
+      <FocusModePanel
+        badge="核对优先"
+        title="账款页负责看余额、登记收付款，并把追溯动作交给对账和原始单据"
+        description="这页最适合先看余额和到期日，再决定是登记收付款、打开流水，还是回到对账基础版和采购/销售原单继续核对。"
+        summary={`当前视角：${tab === 1 ? '应付账款（采购）' : '应收账款（销售）'}`}
+        steps={[
+          '先看待付/待收余额和到期日，优先处理逾期和未结清项。',
+          '需要登记资金流时直接在这里完成收付款并查看流水。',
+          '需要追溯来源单据或继续核对时，回到对账基础版和采购/销售单详情。',
+        ]}
+        actions={[
+          { label: '打开对账基础版', variant: 'default', onClick: () => navigate(`/reports/reconciliation?type=${tab}`) },
+          { label: tab === 1 ? '打开采购单' : '打开销售单', onClick: () => navigate(tab === 1 ? '/purchase' : '/sale') },
+          { label: '打开审批与提醒', onClick: () => navigate('/reports/approvals') },
+        ]}
+      />
 
       {/* 汇总卡片 */}
       {summary && (
