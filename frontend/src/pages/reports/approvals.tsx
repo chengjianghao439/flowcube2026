@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { getRoleWorkbenchApi } from '@/api/reports'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
 import { getNotificationCategoryLabel, getReminderNotifications } from '@/lib/notifications'
@@ -132,6 +133,23 @@ export default function ApprovalsPage() {
         <SummaryCard label="异常任务" value={managementCards.find(card => card.key === 'management-anomaly-task')?.count ?? 0} hint="销售/仓库高风险巡检项" tone="amber" />
         <SummaryCard label="库存异常" value={managementCards.find(card => card.key === 'management-stock')?.count ?? 0} hint="负库存与可用库存风险" tone="rose" />
       </div>
+
+      <FocusModePanel
+        badge="入口分工"
+        title="审批与提醒只保留财务与系统级事项"
+        description="操作型待办留给岗位工作台，审批与提醒页专注管理角色需要快速扫一轮的风险、账款和系统提醒。"
+        summary={`当前提醒 ${reminderItems.length} 条，审批待办 ${managementCards.reduce((sum, card) => sum + card.count, 0)} 项`}
+        steps={[
+          '先处理财务与系统提醒',
+          '再看管理审批待办',
+          '操作型事项回到岗位工作台',
+        ]}
+        actions={[
+          { label: '打开岗位工作台', onClick: () => openPath('/reports/role-workbench', '岗位工作台') },
+          { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
+          { label: '打开账款中心', onClick: () => openPath('/payments', '应付/应收账款') },
+        ]}
+      />
 
       {topReminder ? (
         <PriorityBanner

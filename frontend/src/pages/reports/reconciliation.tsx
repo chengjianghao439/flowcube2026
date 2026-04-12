@@ -14,6 +14,7 @@ import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { getReconciliationApi, type ReconciliationRecord } from '@/api/reports'
 import type { TableColumn, Pagination } from '@/types'
 
@@ -203,6 +204,34 @@ export default function ReconciliationPage() {
         <SummaryCard label="待回收余额" value={`¥${(summary?.balance ?? 0).toFixed(2)}`} hint={`逾期 ${summary?.overdueCount ?? 0} 单`} tone="rose" />
       </div>
 
+      <FocusModePanel
+        badge={viewMode === 'focus' ? '待核对优先' : '查看全部'}
+        title={type === 1 ? '供应商对账建议先看未付与逾期单据' : '客户对账建议先看未收与逾期单据'}
+        description="对账页不再只是查询页，建议先处理未结清与逾期记录，再回跳原始单据和收货单确认原因。"
+        summary={`当前重点核对 ${focusCount} 条`}
+        steps={[
+          '先看未结清和逾期状态',
+          '再检查余额与到期日',
+          '最后回跳原单或收货单核对',
+        ]}
+        actions={[
+          { label: '待核对优先', variant: viewMode === 'focus' ? 'default' : 'outline', onClick: () => setViewMode('focus') },
+          { label: '查看全部', variant: viewMode === 'all' ? 'default' : 'outline', onClick: () => setViewMode('all') },
+          {
+            label: '导出当前结果',
+            onClick: () => {
+              void downloadExport('/export/reconciliation', {
+                type: String(type),
+                ...(applied.keyword ? { keyword: applied.keyword } : {}),
+                ...(applied.startDate ? { startDate: applied.startDate } : {}),
+                ...(applied.endDate ? { endDate: applied.endDate } : {}),
+                ...(applied.status ? { status: applied.status } : {}),
+              }).catch(e => toast.error((e as Error).message))
+            },
+          },
+        ]}
+      />
+
       <div className="flex gap-1 border-b border-border">
         {([
           { key: 1 as const, label: '供应商对账单' },
@@ -229,12 +258,6 @@ export default function ReconciliationPage() {
 
       <FilterCard>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant={viewMode === 'focus' ? 'default' : 'outline'} onClick={() => setViewMode('focus')}>
-            待核对优先
-          </Button>
-          <Button size="sm" variant={viewMode === 'all' ? 'default' : 'outline'} onClick={() => setViewMode('all')}>
-            查看全部
-          </Button>
           <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 text-amber-700">
             当前需重点核对 {focusCount} 条
           </Badge>

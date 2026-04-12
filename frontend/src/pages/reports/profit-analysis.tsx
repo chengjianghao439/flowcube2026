@@ -10,6 +10,7 @@ import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { getProfitAnalysisApi, type ProfitSaleOrderRow, type ProfitProductRow, type ProfitStockValueRow, type ProfitSlowMovingRow } from '@/api/reports'
 import type { TableColumn } from '@/types'
 
@@ -68,6 +69,20 @@ export default function ProfitAnalysisPage() {
     { label: '近 90 天', ...recent90d },
     { label: '本月', ...monthRange },
   ]
+  const currentFocusTitle = tab === 'sale'
+    ? '销售毛利优先看最近成交单据'
+    : tab === 'product'
+      ? '商品毛利优先看高毛利与低毛利商品'
+      : tab === 'stock'
+        ? '库存金额优先看高金额库存占用'
+        : '滞销库存优先看高金额且长期未出库商品'
+  const currentFocusSummary = tab === 'sale'
+    ? `当前销售单 ${data?.saleOrders.length ?? 0} 条`
+    : tab === 'product'
+      ? `当前商品 ${data?.products.length ?? 0} 条`
+      : tab === 'stock'
+        ? `当前库存 ${data?.stockValue.length ?? 0} 条`
+        : `当前滞销 ${data?.slowMoving.length ?? 0} 条`
 
   const saleColumns: TableColumn<ProfitSaleOrderRow>[] = [
     { key: 'orderNo', title: '销售单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
@@ -133,6 +148,24 @@ export default function ProfitAnalysisPage() {
         <SummaryCard label="库存金额" value={`¥${(summary?.stockValue ?? 0).toFixed(2)}`} hint="当前库存成本价值" tone="blue" />
         <SummaryCard label="滞销库存" value={summary?.slowMovingCount ?? 0} hint={`金额 ¥${(summary?.slowMovingValue ?? 0).toFixed(2)}`} tone="rose" />
       </div>
+
+      <FocusModePanel
+        badge="轻 BI 默认视角"
+        title={currentFocusTitle}
+        description="利润 / 库存分析保持轻量，不做复杂 BI；建议先看最近区间，再从高金额、高影响项下钻回原始业务。"
+        summary={currentFocusSummary}
+        steps={[
+          '先保留最近时间范围',
+          '优先查看高金额或高风险项',
+          '再回跳原单、商品或库存总览',
+        ]}
+        actions={[
+          { label: '销售毛利', variant: tab === 'sale' ? 'default' : 'outline', onClick: () => setTab('sale') },
+          { label: '商品毛利', variant: tab === 'product' ? 'default' : 'outline', onClick: () => setTab('product') },
+          { label: '库存金额', variant: tab === 'stock' ? 'default' : 'outline', onClick: () => setTab('stock') },
+          { label: '滞销库存', variant: tab === 'slow' ? 'default' : 'outline', onClick: () => setTab('slow') },
+        ]}
+      />
 
       <DateRangeQueryBar
         label="统计日期"
