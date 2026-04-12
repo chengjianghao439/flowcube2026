@@ -18,8 +18,28 @@ if [ ! -f docker-compose.yml ]; then
   exit 1
 fi
 
+cleanup_docker_space() {
+  echo "==> 预检 Docker 磁盘空间..."
+  local avail_mb
+  avail_mb="$(df -Pm / | awk 'NR==2 {print $4}')"
+  echo "==> 当前可用空间：${avail_mb}MB"
+  if [ "${avail_mb:-0}" -lt 2500 ]; then
+    echo "==> 可用空间偏低，清理 Docker builder cache / 未使用镜像..."
+    docker builder prune -af >/dev/null
+    docker image prune -af >/dev/null
+    avail_mb="$(df -Pm / | awk 'NR==2 {print $4}')"
+    echo "==> 清理后可用空间：${avail_mb}MB"
+    if [ "${avail_mb:-0}" -lt 2500 ]; then
+      echo "!! 清理后空间仍不足 2500MB，无法安全拉取 Playwright 容器" >&2
+      exit 1
+    fi
+  fi
+}
+
 echo "==> 运行报表烟雾检查..."
 docker compose exec -T backend npm run smoke:reports
+
+cleanup_docker_space
 
 echo "==> 运行页面烟雾检查（Playwright 容器）..."
 docker run --rm --network host \

@@ -28,10 +28,24 @@ wait_for_health() {
   return 1
 }
 
+ensure_docker_space() {
+  if ! command -v docker >/dev/null 2>&1; then
+    return 0
+  fi
+  local avail_mb
+  avail_mb="$(df -Pm / | awk 'NR==2 {print $4}')"
+  if [ "${avail_mb:-0}" -lt 2500 ]; then
+    echo "==> Docker 磁盘空间偏低，预先清理 builder cache / 未使用镜像..."
+    docker builder prune -af >/dev/null
+    docker image prune -af >/dev/null
+  fi
+}
+
 echo "==> 拉取代码..."
 git pull --rebase --autostash origin main
 
 if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
+  ensure_docker_space
   echo "==> Docker：重建并启动 backend / frontend..."
   docker compose up -d --build backend frontend
   wait_for_health
