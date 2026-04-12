@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { TaskStatCards } from './components/TaskStatCards'
 import { KanbanBoard } from './components/KanbanBoard'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { getOutboundClosureCopy } from '@/lib/outboundClosure'
 import {
   getTasksApi, getTaskByIdApi, cancelTaskApi, updateTaskPriorityApi,
   PRIORITY_LABEL, PRIORITY_COLOR,
@@ -49,6 +50,7 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
   const totalRequired = task?.items?.reduce((s, i) => s + i.requiredQty, 0) ?? 0
   const totalPicked   = task?.items?.reduce((s, i) => s + i.pickedQty, 0) ?? 0
   const pickProgress  = totalRequired > 0 ? Math.round((totalPicked / totalRequired) * 100) : 0
+  const closureCopy = getOutboundClosureCopy(task)
 
   return (
     <>
@@ -79,6 +81,19 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
 
         {task && !loading && (
           <div className="space-y-5 py-2">
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">当前闭环阶段：{closureCopy.stageLabel}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{closureCopy.description}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-white px-4 py-3 text-right">
+                  <p className="text-helper">下一步动作</p>
+                  <p className="mt-1 font-semibold text-foreground">{closureCopy.nextAction}</p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/40 p-4 text-sm">
               <div><span className="text-muted-foreground">任务编号：</span><span className="text-doc-code-strong">{task.taskNo}</span></div>
               <div><span className="text-muted-foreground">关联销售单：</span><span className="text-doc-code">{task.saleOrderNo}</span></div>
@@ -87,6 +102,53 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
               <div><span className="text-muted-foreground">创建时间：</span>{formatDisplayDateTime(task.createdAt)}</div>
               {task.shippedAt && <div><span className="text-muted-foreground">出库时间：</span>{formatDisplayDateTime(task.shippedAt)}</div>}
             </div>
+
+            {(task.packageSummary || task.printSummary) && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-border p-4 space-y-3">
+                  <div>
+                    <p className="font-medium text-foreground">装箱进度</p>
+                    <p className="text-xs text-muted-foreground">统一查看当前任务的打包完成度。</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div><span className="text-muted-foreground">箱子总数：</span>{task.packageSummary?.totalPackages ?? 0}</div>
+                    <div><span className="text-muted-foreground">已完成：</span>{task.packageSummary?.donePackages ?? 0}</div>
+                    <div><span className="text-muted-foreground">未完成：</span>{task.packageSummary?.openPackages ?? 0}</div>
+                    <div><span className="text-muted-foreground">装箱总件：</span>{task.packageSummary?.totalItems ?? 0}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => nav('/pda/pack')}>
+                      打开 PDA 打包
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border p-4 space-y-3">
+                  <div>
+                    <p className="font-medium text-foreground">打印闭环</p>
+                    <p className="text-xs text-muted-foreground">优先收口箱贴失败、超时和待确认任务，再继续现场出库。</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div><span className="text-muted-foreground">已打印：</span>{task.printSummary?.successCount ?? 0}</div>
+                    <div><span className="text-muted-foreground">打印失败：</span>{task.printSummary?.failedCount ?? 0}</div>
+                    <div><span className="text-muted-foreground">超时待确认：</span>{task.printSummary?.timeoutCount ?? 0}</div>
+                    <div><span className="text-muted-foreground">打印中：</span>{task.printSummary?.processingCount ?? 0}</div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {task.printSummary?.recentPrinter ? `最近打印机：${task.printSummary.recentPrinter}。` : ''}
+                    {task.printSummary?.recentError ? ` 最近异常：${task.printSummary.recentError}。` : ''}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => nav(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(task.taskNo)}`)}>
+                      打开出库补打
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => nav('/pda/ship')}>
+                      打开 PDA 出库
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {task.status === 2 && (
               <div className="space-y-1.5">

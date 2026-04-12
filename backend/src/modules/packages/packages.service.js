@@ -7,6 +7,7 @@ const {
   assertTaskCheckScanClosure,
   assertTaskPackagingClosure,
 } = require('../warehouse-tasks/warehouse-tasks.service')
+const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 
 // ─── 查询任务下所有箱子（含明细）────────────────────────────────────────────
 async function listByTask(taskId) {
@@ -211,6 +212,7 @@ async function finishPackage(packageId) {
 
 // ─── 按条码查询箱子（含任务信息 + 所有箱的明细）────────────────────────────────
 async function getByBarcode(barcode) {
+  const inboundThresholds = await getInboundClosureThresholds()
   const [[pkg]] = await pool.query(
     `SELECT p.id, p.barcode, p.status, p.warehouse_task_id,
             wt.task_no, wt.customer_name, wt.warehouse_name,
@@ -224,6 +226,46 @@ async function getByBarcode(barcode) {
 
   // 返回该任务下所有箱子的明细（方便一次展示全订单）
   const allPkgs = await listByTask(pkg.warehouse_task_id)
+  const [printRows] = await pool.query(
+    `SELECT
+        j.status,
+        j.updated_at,
+        j.error_message,
+        pr.code AS printer_code,
+        pr.name AS printer_name
+     FROM packages p
+     LEFT JOIN (
+       SELECT j1.*
+       FROM print_jobs j1
+       INNER JOIN (
+         SELECT ref_id, MAX(id) AS max_id
+         FROM print_jobs
+         WHERE ref_type = 'package'
+         GROUP BY ref_id
+       ) latest ON latest.max_id = j1.id
+     ) j ON j.ref_id = p.id AND j.ref_type = 'package'
+     LEFT JOIN printers pr ON pr.id = j.printer_id
+     WHERE p.warehouse_task_id = ?`,
+    [pkg.warehouse_task_id],
+  )
+  const printSummary = {
+    totalPackages: allPkgs.length,
+    successCount: 0,
+    failedCount: 0,
+    timeoutCount: 0,
+    processingCount: 0,
+    recentError: null,
+    recentPrinter: null,
+  }
+  for (const row of printRows) {
+    const status = Number(row.status)
+    if (status === 2) printSummary.successCount += 1
+    else if (status === 3) printSummary.failedCount += 1
+    else if ((status === 0 || status === 1) && row.updated_at && (Date.now() - new Date(row.updated_at).getTime()) >= Number(inboundThresholds.printTimeoutMinutes) * 60 * 1000) printSummary.timeoutCount += 1
+    else if (status === 0 || status === 1) printSummary.processingCount += 1
+    if (!printSummary.recentError && row.error_message) printSummary.recentError = row.error_message
+    if (!printSummary.recentPrinter && (row.printer_code || row.printer_name)) printSummary.recentPrinter = row.printer_code || row.printer_name
+  }
 
   return {
     packageId:        pkg.id,
@@ -235,6 +277,8 @@ async function getByBarcode(barcode) {
     customerName:     pkg.customer_name,
     warehouseName:    pkg.warehouse_name,
     taskStatus:       pkg.task_status,
+    taskStatusName:   pkg.task_status === 6 ? '待出库' : pkg.task_status === 7 ? '已出库' : pkg.task_status === 5 ? '待打包' : null,
+    printSummary,
     packages:         allPkgs,
   }
 }

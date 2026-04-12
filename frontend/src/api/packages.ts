@@ -66,6 +66,16 @@ export interface PackageShipInfo {
   customerName: string
   warehouseName: string
   taskStatus: number
+  taskStatusName?: string
+  printSummary?: {
+    totalPackages: number
+    successCount: number
+    failedCount: number
+    timeoutCount: number
+    processingCount: number
+    recentError: string | null
+    recentPrinter: string | null
+  }
   packages: Package[]
 }
 

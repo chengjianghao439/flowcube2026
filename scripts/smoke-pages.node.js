@@ -185,6 +185,7 @@ async function main() {
   await openAndCheck('/reports/warehouse-ops', '仓库运营看板')
   await openAndCheck('/reports/pda-anomaly', 'PDA 异常分析')
   await openAndCheck('/reports/exception-workbench', '异常工作台')
+  await openAndCheck('/warehouse-tasks', '仓库任务')
   await openAndCheck('/picking-waves?waveId=1&focus=print-closure', '出库打印闭环')
   await openAndCheck('/inbound-tasks/1', '收货订单')
   await openAndCheck('/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed', '条码打印查询')

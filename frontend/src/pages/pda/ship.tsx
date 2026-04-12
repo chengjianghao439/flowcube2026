@@ -21,6 +21,7 @@ import { shipTaskApi } from '@/api/warehouse-tasks'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import type { PackageShipInfo } from '@/api/packages'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
+import { getPackageShipClosureCopy } from '@/lib/outboundClosure'
 
 export default function PdaShipPage() {
   const navigate = useNavigate()
@@ -79,6 +80,7 @@ export default function PdaShipPage() {
 
   const totalQty   = mergedItems.reduce((s, i) => s + i.qty, 0)
   const totalBoxes = info?.packages.length ?? 0
+  const closureCopy = getPackageShipClosureCopy(info)
   // BODY_SPLIT
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -88,6 +90,35 @@ export default function PdaShipPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-5 space-y-4">
+          <PdaCard className="space-y-2 border-primary/20 bg-primary/5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">当前阶段：{closureCopy.stageLabel}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{closureCopy.description}</p>
+              </div>
+              <Badge className="text-xs">{closureCopy.nextAction}</Badge>
+            </div>
+            {closureCopy.printSummary ? (
+              <div className="grid grid-cols-4 gap-2 pt-1 text-center text-xs">
+                <div className="rounded-lg bg-white/80 px-2 py-2">
+                  <p className="text-muted-foreground">已打印</p>
+                  <p className="mt-1 font-semibold text-foreground">{closureCopy.printSummary.successCount}</p>
+                </div>
+                <div className="rounded-lg bg-white/80 px-2 py-2">
+                  <p className="text-muted-foreground">失败</p>
+                  <p className="mt-1 font-semibold text-foreground">{closureCopy.printSummary.failedCount}</p>
+                </div>
+                <div className="rounded-lg bg-white/80 px-2 py-2">
+                  <p className="text-muted-foreground">超时</p>
+                  <p className="mt-1 font-semibold text-foreground">{closureCopy.printSummary.timeoutCount}</p>
+                </div>
+                <div className="rounded-lg bg-white/80 px-2 py-2">
+                  <p className="text-muted-foreground">处理中</p>
+                  <p className="mt-1 font-semibold text-foreground">{closureCopy.printSummary.processingCount}</p>
+                </div>
+              </div>
+            ) : null}
+          </PdaCard>
 
           {/* 扫码区移至底栏，此处保留加载状态 */}
           {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">查询中…</span></div>}

@@ -3,6 +3,7 @@ const AppError = require('../../utils/AppError')
 const { moveStock, MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { unlockContainersByTask } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
+const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const { WT_STATUS, WT_STATUS_NAME, WT_STATUS_PICK_POOL, isValidTransition } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
@@ -145,6 +146,7 @@ async function findById(id) {
   const [rows] = await pool.query('SELECT * FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL', [id])
   if (!rows[0]) throw new AppError('仓库任务不存在', 404)
   const task = fmt(rows[0])
+  const inboundThresholds = await getInboundClosureThresholds()
   const [items] = await pool.query('SELECT * FROM warehouse_task_items WHERE task_id=?', [id])
   task.items = items.map(r => ({
     id: r.id,
@@ -156,6 +158,68 @@ async function findById(id) {
     pickedQty: Number(r.picked_qty),
     checkedQty: Number(r.checked_qty ?? 0),
   }))
+
+  const [packageRows] = await pool.query(
+    `SELECT id, status
+     FROM packages
+     WHERE warehouse_task_id = ?
+     ORDER BY created_at ASC`,
+    [id],
+  )
+  const [packageItemAgg] = await pool.query(
+    `SELECT COALESCE(SUM(pi.qty), 0) AS total_items
+     FROM package_items pi
+     INNER JOIN packages p ON p.id = pi.package_id
+     WHERE p.warehouse_task_id = ?`,
+    [id],
+  )
+  task.packageSummary = {
+    totalPackages: packageRows.length,
+    openPackages: packageRows.filter(row => Number(row.status) !== 2).length,
+    donePackages: packageRows.filter(row => Number(row.status) === 2).length,
+    totalItems: Number(packageItemAgg?.[0]?.total_items || 0),
+  }
+
+  const [printRows] = await pool.query(
+    `SELECT
+        j.status,
+        j.updated_at,
+        j.error_message,
+        pr.code AS printer_code,
+        pr.name AS printer_name
+     FROM packages p
+     LEFT JOIN (
+       SELECT j1.*
+       FROM print_jobs j1
+       INNER JOIN (
+         SELECT ref_id, MAX(id) AS max_id
+         FROM print_jobs
+         WHERE ref_type = 'package'
+         GROUP BY ref_id
+       ) latest ON latest.max_id = j1.id
+     ) j ON j.ref_id = p.id AND j.ref_type = 'package'
+     LEFT JOIN printers pr ON pr.id = j.printer_id
+     WHERE p.warehouse_task_id = ?`,
+    [id],
+  )
+  task.printSummary = {
+    totalPackages: packageRows.length,
+    successCount: 0,
+    failedCount: 0,
+    timeoutCount: 0,
+    processingCount: 0,
+    recentError: null,
+    recentPrinter: null,
+  }
+  for (const row of printRows) {
+    const status = Number(row.status)
+    if (status === 2) task.printSummary.successCount += 1
+    else if (status === 3) task.printSummary.failedCount += 1
+    else if ((status === 0 || status === 1) && row.updated_at && (Date.now() - new Date(row.updated_at).getTime()) >= Number(inboundThresholds.printTimeoutMinutes) * 60 * 1000) task.printSummary.timeoutCount += 1
+    else if (status === 0 || status === 1) task.printSummary.processingCount += 1
+    if (!task.printSummary.recentError && row.error_message) task.printSummary.recentError = row.error_message
+    if (!task.printSummary.recentPrinter && (row.printer_code || row.printer_name)) task.printSummary.recentPrinter = row.printer_code || row.printer_name
+  }
   return task
 }
 

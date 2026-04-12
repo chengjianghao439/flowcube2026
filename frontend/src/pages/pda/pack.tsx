@@ -21,6 +21,7 @@ import { getPackagesApi, createPackageApi, addPackageItemApi, finishPackageApi, 
 import type { Package } from '@/api/packages'
 import type { WarehouseTask } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
+import { getOutboundClosureCopy } from '@/lib/outboundClosure'
 import {
   isDesktopLocalPrintError,
   tryDesktopLocalZplThenComplete,
@@ -239,6 +240,27 @@ export default function PdaPackPage() {
   const totalBoxes = packages.length
   const doneBoxes  = packages.filter(p => p.status === 2).length
   const totalItems = packages.reduce((s, p) => s + p.items.reduce((ss, i) => ss + i.qty, 0), 0)
+  const closureCopy = getOutboundClosureCopy({
+    status: task.status,
+    statusName: task.statusName,
+    taskNo: task.taskNo,
+    customerName: task.customerName,
+    packageSummary: {
+      totalPackages: totalBoxes,
+      openPackages: packages.filter(p => p.status !== 2).length,
+      donePackages: doneBoxes,
+      totalItems,
+    },
+    printSummary: {
+      totalPackages: totalBoxes,
+      successCount: 0,
+      failedCount: 0,
+      timeoutCount: 0,
+      processingCount: 0,
+      recentError: null,
+      recentPrinter: null,
+    },
+  })
   // ── 任务未选 ────────────────────────────────────────────────────────────
   if (!task) return <TaskSelectStep onSelect={t => { setTask(t); setActivePackageId(null) }} />
 
@@ -271,6 +293,15 @@ export default function PdaPackPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          <PdaCard className="space-y-2 border-primary/20 bg-primary/5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">当前阶段：{closureCopy.stageLabel}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{closureCopy.description}</p>
+              </div>
+              <Badge className="text-xs">{closureCopy.nextAction}</Badge>
+            </div>
+          </PdaCard>
 
           {/* 统计行 */}
           <PdaStatGrid cols={3}>

@@ -52,6 +52,21 @@ export interface WarehouseTask {
   shippedAt: string | null
   createdAt: string
   updatedAt: string
+  packageSummary?: {
+    totalPackages: number
+    openPackages: number
+    donePackages: number
+    totalItems: number
+  }
+  printSummary?: {
+    totalPackages: number
+    successCount: number
+    failedCount: number
+    timeoutCount: number
+    processingCount: number
+    recentError: string | null
+    recentPrinter: string | null
+  }
   items?: WarehouseTaskItem[]
 }
 
