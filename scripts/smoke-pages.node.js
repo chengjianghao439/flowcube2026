@@ -197,6 +197,7 @@ async function main() {
   await openAndCheck('/carriers')
   await openAndCheck('/locations')
   await openAndCheck('/racks')
+  await openAndCheck('/sorting-bins')
   await openAndCheck('/inventory')
   await openAndCheck('/stockcheck')
   await openAndCheck('/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed')
