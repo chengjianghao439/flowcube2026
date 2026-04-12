@@ -38,9 +38,9 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   echo "==> 运行报表烟雾检查..."
   docker compose exec -T backend npm run smoke:reports
   echo "==> 运行页面烟雾检查（backend 容器内）..."
-  docker compose exec -T backend env PAGE_SMOKE_BASE_URL=http://frontend bash scripts/smoke-pages.sh
+  docker compose exec -T backend sh -lc 'command -v bash >/dev/null 2>&1 || apk add --no-cache bash >/dev/null; env PAGE_SMOKE_BASE_URL=http://frontend bash scripts/smoke-pages.sh'
   echo "==> 运行对账回跳烟雾检查（backend 容器内）..."
-  docker compose exec -T backend env PAGE_SMOKE_BASE_URL=http://frontend bash scripts/smoke-reconciliation-jumps.sh
+  docker compose exec -T backend sh -lc 'command -v bash >/dev/null 2>&1 || apk add --no-cache bash >/dev/null; env PAGE_SMOKE_BASE_URL=http://frontend bash scripts/smoke-reconciliation-jumps.sh'
   echo "==> 完成。请确认仓库根 .env 已设置 APP_PUBLIC_URL=https://你的API域名"
   exit 0
 fi
