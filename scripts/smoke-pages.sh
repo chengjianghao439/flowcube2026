@@ -113,6 +113,8 @@ main() {
   open_and_check '/customers'
   open_and_check '/suppliers'
   open_and_check '/payments'
+  open_and_check '/price-lists'
+  open_and_check '/carriers'
   open_and_check '/inventory'
   open_and_check '/stockcheck'
   open_and_check '/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed'
