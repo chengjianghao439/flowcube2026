@@ -37,23 +37,14 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   wait_for_health
   echo "==> 运行报表烟雾检查..."
   docker compose exec -T backend npm run smoke:reports
-  echo "==> 运行页面烟雾检查（backend 容器内）..."
-  docker compose exec -T backend sh -lc '
-    set -e
-    if [ ! -x /opt/google/chrome/chrome ]; then
-      apk add --no-cache chromium >/dev/null
-      mkdir -p /opt/google/chrome
-      browser_bin="$(command -v chromium-browser || command -v chromium || command -v chrome || true)"
-      if [ -z "$browser_bin" ]; then
-        echo "!! chromium 安装后仍未找到浏览器可执行文件" >&2
-        exit 1
-      fi
-      ln -sf "$browser_bin" /opt/google/chrome/chrome
-    fi
-    env PAGE_SMOKE_BASE_URL=http://frontend node scripts/smoke-pages.node.js
-    echo "==> 运行对账回跳烟雾检查（backend 容器内）..."
-    env PAGE_SMOKE_BASE_URL=http://frontend node scripts/smoke-reconciliation-jumps.node.js
-  '
+  if command -v node >/dev/null 2>&1; then
+    echo "==> 运行页面烟雾检查（宿主机）..."
+    env PAGE_SMOKE_BASE_URL=http://127.0.0.1 node scripts/smoke-pages.node.js
+    echo "==> 运行对账回跳烟雾检查（宿主机）..."
+    env PAGE_SMOKE_BASE_URL=http://127.0.0.1 node scripts/smoke-reconciliation-jumps.node.js
+  else
+    echo "!! 宿主机缺少 node，跳过页面/对账回跳烟雾检查"
+  fi
   echo "==> 完成。请确认仓库根 .env 已设置 APP_PUBLIC_URL=https://你的API域名"
   exit 0
 fi
