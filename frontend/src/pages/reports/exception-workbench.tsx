@@ -17,7 +17,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
-import { getInboundExceptionNotifications } from '@/lib/notifications'
+import { getInboundExceptionNotifications, getOutboundExceptionNotifications } from '@/lib/notifications'
 
 function severityBadge(level: string) {
   if (level === 'high' || level === 'danger') return <Badge variant="destructive">高风险</Badge>
@@ -60,6 +60,17 @@ function detectActionTarget(
       return { path: `/inbound-tasks/${relatedId}`, title: `收货订单 #${relatedId}`, actionLabel: '打开收货详情' }
     }
     return { path: '/inbound-tasks', title: '收货订单', actionLabel: '查看收货订单' }
+  }
+  if (
+    checkType === 'OUTBOUND_PRINT_FAILED'
+    || checkType === 'WAVE_STALE_PICKING'
+    || checkType === 'WAVE_STALE_SORTING'
+    || table === 'picking_waves'
+  ) {
+    if (relatedId) {
+      return { path: `/picking-waves?waveId=${relatedId}&focus=print-closure`, title: `波次 #${relatedId}`, actionLabel: '打开波次详情' }
+    }
+    return { path: '/picking-waves', title: '波次拣货', actionLabel: '查看波次' }
   }
   return { path: '/reports/pda-anomaly', title: 'PDA 异常分析', actionLabel: '查看异常分析' }
 }
@@ -131,6 +142,10 @@ export default function ExceptionWorkbenchPage() {
   const latestIssues = latestRun?.issues ?? []
   const inboundReminders = useMemo(
     () => getInboundExceptionNotifications(notificationsQ.data?.items ?? []),
+    [notificationsQ.data],
+  )
+  const outboundReminders = useMemo(
+    () => getOutboundExceptionNotifications(notificationsQ.data?.items ?? []),
     [notificationsQ.data],
   )
   const highCount = latestRun?.severity.high ?? latestSummary?.severity.high ?? 0
@@ -222,6 +237,50 @@ export default function ExceptionWorkbenchPage() {
                   {item.code === 'INBOUND_AUDIT_REJECTED' && '直接进入退回处理区，按退回原因补打、补录并重新审核。'}
                 </p>
                 <p className="mt-3 text-xs text-muted-foreground">点击后将打开对应收货详情焦点区域</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-card-title">出库异常闭环</h2>
+            <p className="text-muted-body">统一收口出库条码补打与波次推进异常，所有入口都能落到波次详情或打印查询继续处理。</p>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => openPath('/picking-waves', '波次拣货')}>
+              打开波次拣货
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => openPath('/settings/barcode-print-query?category=outbound', '条码打印查询')}>
+              打开出库补打
+            </Button>
+          </div>
+        </div>
+        {outboundReminders.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border py-10 text-center text-muted-body">
+            当前没有待处理的出库异常
+          </div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {outboundReminders.map((item: NotificationItem, index) => (
+              <button
+                key={`${item.code ?? item.path}-outbound-${index}`}
+                type="button"
+                onClick={() => openPath(item.path, item.text)}
+                className="w-full rounded-xl border border-border px-4 py-4 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{item.icon}</span>
+                  <span className="font-medium text-foreground">{item.text}</span>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {item.code === 'OUTBOUND_PRINT_FAILED' && '直接进入波次详情的出库打印区，先处理失败或超时的箱贴条码，再继续出库。'}
+                  {item.code === 'WAVE_STALE_PICKING' && '直接进入波次详情，优先查看拣货进度、路线完成度与打印补打状态。'}
+                  {item.code === 'WAVE_STALE_SORTING' && '直接进入波次详情，优先确认待分拣波次是否因补打、拣货残留或现场操作卡住。'}
+                </p>
+                <p className="mt-3 text-xs text-muted-foreground">点击后将打开对应波次或打印查询处理入口</p>
               </button>
             ))}
           </div>

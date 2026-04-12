@@ -40,8 +40,18 @@ const INBOUND_EXCEPTION_CODES = new Set([
   'INBOUND_AUDIT_REJECTED',
 ])
 
+const OUTBOUND_EXCEPTION_CODES = new Set([
+  'OUTBOUND_PRINT_FAILED',
+  'WAVE_STALE_PICKING',
+  'WAVE_STALE_SORTING',
+])
+
 export function getInboundExceptionNotifications(items: NotificationEntry[]) {
   return normalizeNotifications(items).filter(item => item.code && INBOUND_EXCEPTION_CODES.has(item.code))
+}
+
+export function getOutboundExceptionNotifications(items: NotificationEntry[]) {
+  return normalizeNotifications(items).filter(item => item.code && OUTBOUND_EXCEPTION_CODES.has(item.code))
 }
 
 export function getNotificationCategoryLabel(category?: NotificationCategory) {

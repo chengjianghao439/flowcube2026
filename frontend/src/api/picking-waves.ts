@@ -76,6 +76,15 @@ export interface PickingWave {
   items?: WaveItem[]
   /** 后端按任务顺序展开，用于将扫码归属到正确的 warehouse_task_items */
   pickLines?: WavePickLine[]
+  printSummary?: {
+    totalPackages: number
+    successCount: number
+    failedCount: number
+    timeoutCount: number
+    processingCount: number
+    recentError: string | null
+    recentPrinter: string | null
+  }
 }
 
 export interface WaveRouteContainer {

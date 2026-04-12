@@ -4,6 +4,7 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { unlockContainersByTask } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 const { assertTaskPickScanClosure } = require('../warehouse-tasks/warehouse-tasks.service')
+const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 
 /**
  * 按各任务明细汇总刷新波次行的 picked_qty（只读任务表，禁止反向写任务）
@@ -107,6 +108,7 @@ async function findById(id) {
   }
 
   const wave = fmt(row)
+  const inboundThresholds = await getInboundClosureThresholds()
 
   const [tasks] = await pool.query(
     `SELECT wt.wave_id, wt.task_id, wt.sale_order_id, wt.sale_order_no, wt.customer_name,
@@ -153,6 +155,51 @@ async function findById(id) {
     requiredQty: Number(r.required_qty),
     pickedQty:   Number(r.picked_qty),
   }))
+
+  const [packagePrintRows] = await pool.query(
+    `SELECT
+        p.id,
+        p.barcode,
+        j.status,
+        j.updated_at,
+        j.error_message,
+        pr.code AS printer_code,
+        pr.name AS printer_name
+     FROM picking_wave_tasks pwt
+     INNER JOIN packages p ON p.warehouse_task_id = pwt.task_id
+     LEFT JOIN (
+       SELECT j1.*
+       FROM print_jobs j1
+       INNER JOIN (
+         SELECT ref_id, MAX(id) AS max_id
+         FROM print_jobs
+         WHERE ref_type = 'package'
+         GROUP BY ref_id
+       ) latest ON latest.max_id = j1.id
+     ) j ON j.ref_id = p.id AND j.ref_type = 'package'
+     LEFT JOIN printers pr ON pr.id = j.printer_id
+     WHERE pwt.wave_id = ?`,
+    [id],
+  )
+  const printSummary = {
+    totalPackages: packagePrintRows.length,
+    successCount: 0,
+    failedCount: 0,
+    timeoutCount: 0,
+    processingCount: 0,
+    recentError: null,
+    recentPrinter: null,
+  }
+  for (const row of packagePrintRows) {
+    const status = Number(row.status)
+    if (status === 2) printSummary.successCount += 1
+    else if (status === 3) printSummary.failedCount += 1
+    else if ((status === 0 || status === 1) && row.updated_at && (Date.now() - new Date(row.updated_at).getTime()) >= Number(inboundThresholds.printTimeoutMinutes) * 60 * 1000) printSummary.timeoutCount += 1
+    else if (status === 0 || status === 1) printSummary.processingCount += 1
+    if (!printSummary.recentError && row.error_message) printSummary.recentError = row.error_message
+    if (!printSummary.recentPrinter && (row.printer_code || row.printer_name)) printSummary.recentPrinter = row.printer_code || row.printer_name
+  }
+  wave.printSummary = printSummary
 
   return wave
 }

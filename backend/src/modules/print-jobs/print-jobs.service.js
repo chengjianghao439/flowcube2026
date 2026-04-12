@@ -1217,6 +1217,8 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
         wt.task_no,
         wt.customer_name,
         wt.warehouse_name,
+        pw.id AS wave_id,
+        pw.wave_no,
         (
           SELECT COUNT(*) FROM package_items pi WHERE pi.package_id = p.id
         ) AS line_count,
@@ -1234,6 +1236,8 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
         pj.printer_name
      FROM packages p
      INNER JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
+     LEFT JOIN picking_wave_tasks pwt ON pwt.task_id = wt.id
+     LEFT JOIN picking_waves pw ON pw.id = pwt.wave_id
      LEFT JOIN (
        SELECT j.*, pr.code AS printer_code, pr.name AS printer_name
        FROM print_jobs j
@@ -1257,6 +1261,9 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
       return {
       category: 'outbound',
       recordId: Number(row.record_id),
+      warehouseTaskId: row.warehouse_task_id != null ? Number(row.warehouse_task_id) : null,
+      waveId: row.wave_id != null ? Number(row.wave_id) : null,
+      waveNo: row.wave_no ?? null,
       barcode: row.barcode,
       barcodeLabel: '出库条码',
       barcodeKind: '箱贴条码',

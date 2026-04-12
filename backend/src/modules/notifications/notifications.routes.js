@@ -142,6 +142,61 @@ router.get('/', async (req, res, next) => {
        ORDER BY updated_at DESC
        LIMIT 1`,
     )
+    const [[{ outboundPrintFailures }]] = await pool.query(
+      `SELECT COUNT(*) AS outboundPrintFailures
+       FROM print_jobs j
+       INNER JOIN packages p ON p.id = j.ref_id AND j.ref_type = 'package'
+       WHERE (
+         (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
+         OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
+         OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
+       )`,
+      [Number(inboundThresholds.printTimeoutMinutes)],
+    )
+    const [[failedOutboundTarget]] = await pool.query(
+      `SELECT pw.id AS waveId, pw.wave_no AS waveNo, wt.task_no AS taskNo
+       FROM print_jobs j
+       INNER JOIN packages p ON p.id = j.ref_id AND j.ref_type = 'package'
+       INNER JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
+       LEFT JOIN picking_wave_tasks pwt ON pwt.task_id = wt.id
+       LEFT JOIN picking_waves pw ON pw.id = pwt.wave_id
+       WHERE (
+         (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
+         OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
+         OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
+       )
+       ORDER BY j.updated_at DESC
+       LIMIT 1`,
+      [Number(inboundThresholds.printTimeoutMinutes)],
+    )
+    const [[{ staleWavePicking }]] = await pool.query(
+      `SELECT COUNT(*) AS staleWavePicking
+       FROM picking_waves
+       WHERE status = 2
+         AND created_at < DATE_SUB(NOW(), INTERVAL 8 HOUR)`,
+    )
+    const [[staleWavePickingTarget]] = await pool.query(
+      `SELECT id AS waveId, wave_no AS waveNo
+       FROM picking_waves
+       WHERE status = 2
+         AND created_at < DATE_SUB(NOW(), INTERVAL 8 HOUR)
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    )
+    const [[{ staleWaveSorting }]] = await pool.query(
+      `SELECT COUNT(*) AS staleWaveSorting
+       FROM picking_waves
+       WHERE status = 3
+         AND updated_at < DATE_SUB(NOW(), INTERVAL 4 HOUR)`,
+    )
+    const [[staleWaveSortingTarget]] = await pool.query(
+      `SELECT id AS waveId, wave_no AS waveNo
+       FROM picking_waves
+       WHERE status = 3
+         AND updated_at < DATE_SUB(NOW(), INTERVAL 4 HOUR)
+       ORDER BY updated_at ASC
+       LIMIT 1`,
+    )
     const [[{ healthAnomalies }]] = await pool.query(
       `SELECT COUNT(*) AS healthAnomalies
        FROM system_health_logs
@@ -164,13 +219,16 @@ router.get('/', async (req, res, next) => {
     if (overdueInboundPutaway > 0) pushNotification(items, seen, { code: 'INBOUND_PUTAWAY_TIMEOUT', category: 'operations', priority: 15, type: 'warning', icon: '📦', text: `${overdueInboundPutaway} 箱已打印未上架超时`, path: putawayTimeoutTarget?.taskId ? `/inbound-tasks/${putawayTimeoutTarget.taskId}?focus=waiting-putaway` : '/inbound-tasks' })
     if (pendingInboundAudit > 0) pushNotification(items, seen, { code: 'INBOUND_AUDIT_TIMEOUT', category: 'operations', priority: 15, type: 'warning', icon: '🧾', text: `${pendingInboundAudit} 笔收货订单待审核超时`, path: pendingAuditTarget?.taskId ? `/inbound-tasks/${pendingAuditTarget.taskId}?focus=audit-follow-up` : '/inbound-tasks' })
     if (rejectedInboundAudit > 0) pushNotification(items, seen, { code: 'INBOUND_AUDIT_REJECTED', category: 'operations', priority: 14, type: 'warning', icon: '↩️', text: `${rejectedInboundAudit} 笔收货订单已退回待处理`, path: rejectedAuditTarget?.taskId ? `/inbound-tasks/${rejectedAuditTarget.taskId}?focus=audit-follow-up` : '/inbound-tasks' })
+    if (outboundPrintFailures > 0) pushNotification(items, seen, { code: 'OUTBOUND_PRINT_FAILED', category: 'operations', priority: 21, type: 'warning', icon: '📮', text: `${outboundPrintFailures} 条出库条码打印失败待补打`, path: failedOutboundTarget?.waveId ? `/picking-waves?waveId=${failedOutboundTarget.waveId}&focus=print-closure` : '/settings/barcode-print-query?category=outbound&status=failed' })
+    if (staleWavePicking > 0) pushNotification(items, seen, { code: 'WAVE_STALE_PICKING', category: 'operations', priority: 18, type: 'warning', icon: '🛒', text: `${staleWavePicking} 个波次拣货推进缓慢`, path: staleWavePickingTarget?.waveId ? `/picking-waves?waveId=${staleWavePickingTarget.waveId}&focus=wave-progress` : '/picking-waves' })
+    if (staleWaveSorting > 0) pushNotification(items, seen, { code: 'WAVE_STALE_SORTING', category: 'operations', priority: 19, type: 'warning', icon: '📚', text: `${staleWaveSorting} 个波次待分拣超时`, path: staleWaveSortingTarget?.waveId ? `/picking-waves?waveId=${staleWaveSortingTarget.waveId}&focus=wave-progress` : '/picking-waves' })
     if (healthAnomalies > 0) pushNotification(items, seen, { code: 'SYSTEM_HEALTH_ANOMALY', category: 'system', priority: 5, type: 'warning', icon: '🩺', text: `近 24 小时发现 ${healthAnomalies} 条系统异常记录`, path: '/reports/pda-anomaly' })
 
     items.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100))
 
     const total = items.length
 
-    return successResponse(res, { total, items, counts: { lowStockCount, pendingPurchase, pendingSale, unpaidPayable, unpaidReceivable, pendingTransfer, overduePayable, overdueReceivable, pendingInbound, failedPrintJobs, inboundPrintFailures, overdueInboundPutaway, pendingInboundAudit, rejectedInboundAudit, healthAnomalies } }, '查询成功')
+    return successResponse(res, { total, items, counts: { lowStockCount, pendingPurchase, pendingSale, unpaidPayable, unpaidReceivable, pendingTransfer, overduePayable, overdueReceivable, pendingInbound, failedPrintJobs, inboundPrintFailures, overdueInboundPutaway, pendingInboundAudit, rejectedInboundAudit, outboundPrintFailures, staleWavePicking, staleWaveSorting, healthAnomalies } }, '查询成功')
   } catch (e) { next(e) }
 })
 

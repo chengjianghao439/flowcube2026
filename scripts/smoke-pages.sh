@@ -105,8 +105,10 @@ main() {
   open_and_check '/reports/warehouse-ops' '仓库运营看板'
   open_and_check '/reports/pda-anomaly' 'PDA 异常分析'
   open_and_check '/reports/exception-workbench' '异常工作台'
+  open_and_check '/picking-waves?waveId=1&focus=print-closure' '出库打印闭环'
   open_and_check '/inbound-tasks/1' '收货订单'
   open_and_check '/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed' '条码打印查询'
+  open_and_check '/settings/barcode-print-query?category=outbound&status=failed' '条码打印查询'
 
   echo
   echo "页面烟雾检查通过"

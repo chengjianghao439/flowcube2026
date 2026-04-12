@@ -511,6 +511,39 @@ async function checkInboundPrintFailures(conn, issues, thresholds) {
   }
 }
 
+async function checkOutboundPrintFailures(conn, issues, thresholds) {
+  const [rows] = await conn.query(
+    `SELECT DISTINCT
+        COALESCE(pw.id, wt.id) AS related_id,
+        pw.id AS wave_id,
+        pw.wave_no,
+        wt.id AS task_id,
+        wt.task_no,
+        wt.customer_name
+     FROM packages p
+     INNER JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
+     LEFT JOIN picking_wave_tasks pwt ON pwt.task_id = wt.id
+     LEFT JOIN picking_waves pw ON pw.id = pwt.wave_id
+     INNER JOIN print_jobs j ON j.ref_type = 'package' AND j.ref_id = p.id
+     WHERE (
+       (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
+       OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
+       OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
+     )`,
+    [Number(thresholds.printTimeoutMinutes)],
+  )
+  for (const r of rows) {
+    const targetLabel = r.wave_no ? `波次「${r.wave_no}」` : `出库任务「${r.task_no}」`
+    issues.push({
+      checkType: 'OUTBOUND_PRINT_FAILED',
+      severity: 'warning',
+      relatedId: r.wave_id || r.task_id,
+      relatedTable: r.wave_id ? 'picking_waves' : 'warehouse_tasks',
+      message: `${targetLabel}${r.customer_name ? `（客户：${r.customer_name}）` : ''}存在出库条码打印失败或超时待确认，请尽快补打并继续出库闭环。`,
+    })
+  }
+}
+
 async function checkInboundPutawayTimeout(conn, issues, thresholds) {
   const [rows] = await conn.query(
     `SELECT
@@ -638,6 +671,7 @@ async function runAllChecks(triggeredBy = 'manual') {
       { name: 'ORPHANED_SORTING_BIN',            fn: checkOrphanedSortingBin },
       { name: 'ORPHANED_CONTAINER_LOCK',         fn: checkOrphanedContainerLock },
       { name: 'INBOUND_PRINT_FAILED',            fn: (db, list) => checkInboundPrintFailures(db, list, inboundThresholds) },
+      { name: 'OUTBOUND_PRINT_FAILED',           fn: (db, list) => checkOutboundPrintFailures(db, list, inboundThresholds) },
       { name: 'INBOUND_PUTAWAY_TIMEOUT',         fn: (db, list) => checkInboundPutawayTimeout(db, list, inboundThresholds) },
       { name: 'INBOUND_AUDIT_TIMEOUT',           fn: (db, list) => checkInboundAuditTimeout(db, list, inboundThresholds) },
     ]

@@ -21,6 +21,9 @@ export interface BarcodePrintRecord {
   recordId: number
   inboundTaskId?: number | null
   inboundTaskItemId?: number | null
+  warehouseTaskId?: number | null
+  waveId?: number | null
+  waveNo?: string | null
   barcode: string
   barcodeLabel: string
   barcodeKind: string

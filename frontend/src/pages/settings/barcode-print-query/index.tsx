@@ -186,6 +186,15 @@ export default function BarcodePrintQueryPage() {
                 打开收货详情
               </Button>
             ) : null}
+            {row.category === 'outbound' && row.waveId ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openPath(`/picking-waves?waveId=${row.waveId}&focus=print-closure`, row.waveNo || `波次 #${row.waveId}`)}
+              >
+                打开波次详情
+              </Button>
+            ) : null}
           </div>
         ),
       },
@@ -211,6 +220,16 @@ export default function BarcodePrintQueryPage() {
       printingCount,
     }
   }, [category, initialInboundTaskId, rows])
+  const outboundContext = useMemo(() => {
+    if (category !== 'outbound') return null
+    const waveId = rows.find(row => row.waveId)?.waveId
+    if (!waveId) return null
+    const waveNo = rows.find(row => row.waveId === waveId)?.waveNo ?? `#${waveId}`
+    const failedCount = rows.filter(row => row.waveId === waveId && row.latestJob?.statusKey === 'failed').length
+    const timeoutCount = rows.filter(row => row.waveId === waveId && row.latestJob?.statusKey === 'timeout').length
+    const printingCount = rows.filter(row => row.waveId === waveId && (row.latestJob?.statusKey === 'printing' || row.latestJob?.statusKey === 'queued')).length
+    return { waveId, waveNo, failedCount, timeoutCount, printingCount }
+  }, [category, rows])
 
   return (
     <div className="space-y-5">
@@ -257,6 +276,49 @@ export default function BarcodePrintQueryPage() {
             <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
               <p className="text-helper">仍在排队 / 打印中</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{inboundContext.printingCount}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {outboundContext && (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">当前正在处理出库打印链路</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                波次 <span className="text-doc-code">{outboundContext.waveNo}</span> 的出库箱贴都在这里追踪。先收口失败 / 超时，再回波次详情继续拣货与分拣。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openPath(`/picking-waves?waveId=${outboundContext.waveId}&focus=print-closure`, `波次 ${outboundContext.waveNo}`)}
+              >
+                返回波次详情
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openPath('/reports/exception-workbench', '异常工作台')}
+              >
+                打开异常工作台
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-rose-200 bg-white px-4 py-3">
+              <p className="text-helper">打印失败</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{outboundContext.failedCount}</p>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-white px-4 py-3">
+              <p className="text-helper">超时待确认</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{outboundContext.timeoutCount}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p className="text-helper">仍在排队 / 打印中</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{outboundContext.printingCount}</p>
             </div>
           </div>
         </div>
