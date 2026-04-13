@@ -158,38 +158,41 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0)
 
   return (
-    <div className="flex flex-col gap-5">
-      <ActionBar
-        title="新建采购单"
-        rightActions={
-          <>
-            <Button variant="outline" onClick={closeTab} disabled={createMutate.isPending}>
-              取消
-            </Button>
-            <Button onClick={handleSubmit} disabled={createMutate.isPending} className="gap-1.5">
-              {createMutate.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  提交中...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  提交保存
-                </>
-              )}
-            </Button>
-          </>
-        }
-      />
+    <div className="flex flex-col gap-8 bg-[#f7f4fb] px-6 py-6 md:px-10">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <h1 className="text-4xl font-semibold tracking-tight text-slate-950">新建采购订单</h1>
+          <span className="rounded-lg bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700">草稿</span>
+        </div>
 
-      <section className="rounded-3xl bg-white px-6 py-5 shadow-[0_12px_36px_-28px_rgba(15,23,42,0.25)]">
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_1.1fr_180px_1fr]">
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">供应商</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="ghost" onClick={closeTab} disabled={createMutate.isPending} className="text-base text-slate-900 hover:bg-transparent hover:text-slate-700">
+            取消
+          </Button>
+          <Button variant="outline" onClick={handleSubmit} disabled={createMutate.isPending} className="border-slate-200 bg-white text-base text-slate-900 hover:bg-slate-50">
+            保存草稿
+          </Button>
+          <Button onClick={handleSubmit} disabled={createMutate.isPending} className="min-w-[124px] bg-[#1540b8] text-base text-white hover:bg-[#11379f]">
+            {createMutate.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                提交中
+              </>
+            ) : (
+              '提交订单'
+            )}
+          </Button>
+        </div>
+      </div>
+
+      <section className="rounded-[26px] bg-white px-8 py-8 shadow-[0_18px_50px_-40px_rgba(15,23,42,0.28)]">
+        <div className="mb-8 text-base font-semibold text-[#1540b8]">基本信息</div>
+        <div className="grid gap-6 md:grid-cols-4">
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-slate-500">供应商</p>
             <FinderTrigger
               value={supplierName}
-              placeholder="点击选择供应商..."
+              placeholder="选择供应商..."
               onClick={() => setSupplierFinderOpen(true)}
               onDoubleClick={() => {
                 setSupplierFinderOpen(false)
@@ -198,11 +201,21 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             />
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">入库仓库</p>
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-slate-500">预计到货日期</p>
+            <Input
+              type="date"
+              value={expectedDate}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setExpectedDate(e.target.value)}
+              className="h-12 border-0 bg-[#f7f4fb] text-base text-slate-900 shadow-none"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-slate-500">入库仓库</p>
             <FinderTrigger
               value={warehouseName}
-              placeholder="点击选择仓库..."
+              placeholder="选择仓库..."
               onClick={() => setWarehouseFinderOpen(true)}
               onDoubleClick={() => {
                 setWarehouseFinderOpen(false)
@@ -211,142 +224,172 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             />
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">预计到货</p>
-            <Input
-              type="date"
-              value={expectedDate}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setExpectedDate(e.target.value)}
-              className="border-slate-200 bg-slate-50"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">备注</p>
-            <Input
-              value={remark}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)}
-              placeholder="选填"
-              className="border-slate-200 bg-slate-50"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-[24px] bg-white p-5 shadow-[0_14px_42px_-34px_rgba(15,23,42,0.3)]">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">商品明细</p>
-            <h3 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">把数量和采购成本一次录清楚</h3>
-          </div>
-          <Button type="button" variant="outline" onClick={addItem} className="gap-2 rounded-full">
-            <Plus className="h-4 w-4" />
-            添加商品
-          </Button>
-        </div>
-
-        {items.length === 0 ? (
-          <div className="rounded-[20px] bg-slate-50 px-6 py-16 text-center">
-            <h4 className="text-lg font-semibold text-slate-900">还没有商品明细</h4>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">点击添加商品，开始录入本次采购的数量和单价。</p>
-            <Button type="button" onClick={addItem} className="mt-6 gap-2">
-              <Plus className="h-4 w-4" />
-              添加第一条商品
-            </Button>
-          </div>
-        ) : (
           <div className="space-y-3">
-            <div className="grid grid-cols-[minmax(0,1.4fr)_72px_110px_120px_96px_40px] gap-3 px-2 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-              <span>商品</span>
-              <span className="text-center">单位</span>
-              <span>数量</span>
-              <span>单价</span>
-              <span className="text-right">金额</span>
-              <span />
-            </div>
-
-            {items.map(item => (
-              <div key={item._key} className="grid grid-cols-[minmax(0,1.4fr)_72px_110px_120px_96px_40px] items-center gap-3 rounded-[20px] bg-slate-50/80 p-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFinderItemKey(item._key)
-                    setFinderOpen(true)
-                  }}
-                  onDoubleClick={() => {
-                    setFinderOpen(false)
-                    setFinderItemKey(null)
-                    navigate('/products')
-                  }}
-                  className="min-w-0 rounded-2xl bg-white px-3 py-3 text-left text-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {item.productName ? (
-                    <span className="flex flex-col gap-1">
-                      <span className="truncate font-medium text-slate-900">{item.productName}</span>
-                      <span className="truncate text-xs text-slate-500">{item.productCode}</span>
-                    </span>
-                  ) : (
-                    <span className="text-slate-500">点击选择商品...</span>
-                  )}
-                </button>
-
-                <div className="text-center text-sm text-slate-600">{item.unit || '—'}</div>
-
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  placeholder="数量"
-                  value={item.quantity}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
-                  className="border-transparent bg-white"
-                />
-
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="单价"
-                  value={item.unitPrice}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                  className="border-transparent bg-white"
-                />
-
-                <div className="text-right text-sm font-semibold text-slate-900">¥{(item.quantity * item.unitPrice).toFixed(2)}</div>
-
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-9 w-9 rounded-full p-0 text-slate-500 hover:text-destructive"
-                  onClick={() => removeItem(item._key)}
-                >
-                  ✕
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-[24px] bg-white p-5 shadow-[0_14px_42px_-34px_rgba(15,23,42,0.3)]">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">合计</p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">¥{total.toFixed(2)}</p>
-          </div>
-          <div className="grid min-w-[260px] gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl bg-slate-50 px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.14em] text-slate-500">商品种数</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">{items.length}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.14em] text-slate-500">总数量</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">{totalQuantity}</p>
+            <p className="text-sm font-medium text-slate-500">采购员</p>
+            <div className="flex h-12 items-center rounded-xl bg-[#f7f4fb] px-4 text-base text-slate-900">
+              系统管理员
             </div>
           </div>
         </div>
       </section>
+
+      <section className="rounded-[26px] bg-white px-0 py-0 shadow-[0_18px_50px_-40px_rgba(15,23,42,0.28)]">
+        <div className="flex items-center justify-between border-b border-slate-100 px-8 py-7">
+          <div className="text-base font-semibold text-[#1540b8]">商品清单</div>
+          <div className="text-sm text-slate-500">已选 {items.length} 项商品</div>
+        </div>
+
+        <div className="px-8 py-4">
+          <div className="grid grid-cols-[72px_minmax(0,1.6fr)_120px_160px_160px] gap-4 border-b border-slate-100 py-4 text-sm font-medium text-slate-500">
+            <span>序号</span>
+            <span>商品信息</span>
+            <span className="text-center">数量</span>
+            <span className="text-center">单价（¥）</span>
+            <span className="text-right">小计（¥）</span>
+          </div>
+
+          {items.length === 0 ? (
+            <div className="py-16 text-center text-slate-500">
+              还没有商品，先从下方新增商品开始。
+            </div>
+          ) : (
+            items.map((item, index) => (
+              <div key={item._key} className="grid grid-cols-[72px_minmax(0,1.6fr)_120px_160px_160px] items-center gap-4 border-b border-slate-100 py-6 last:border-b-0">
+                <div className="text-2xl font-medium tabular-nums text-[#c3c5d9]">
+                  {String(index + 1).padStart(2, '0')}
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFinderItemKey(item._key)
+                      setFinderOpen(true)
+                    }}
+                    onDoubleClick={() => {
+                      setFinderOpen(false)
+                      setFinderItemKey(null)
+                      navigate('/products')
+                    }}
+                    className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white"
+                  >
+                    {(item.productName || '商').slice(0, 1)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFinderItemKey(item._key)
+                      setFinderOpen(true)
+                    }}
+                    onDoubleClick={() => {
+                      setFinderOpen(false)
+                      setFinderItemKey(null)
+                      navigate('/products')
+                    }}
+                    className="min-w-0 text-left"
+                  >
+                    {item.productName ? (
+                      <span className="flex flex-col gap-1">
+                        <span className="truncate text-[30px] leading-none font-medium text-slate-900 sm:text-[18px]">{item.productName}</span>
+                        <span className="truncate text-sm text-[#b7b4ca]">SKU: {item.productCode}</span>
+                      </span>
+                    ) : (
+                      <span className="text-base text-slate-400">点击选择商品...</span>
+                    )}
+                  </button>
+                </div>
+
+                <div className="px-3">
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="数量"
+                    value={item.quantity}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
+                    className="h-11 border-0 bg-transparent text-center text-2xl font-medium text-slate-900 shadow-none"
+                  />
+                </div>
+
+                <div className="px-3">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="单价"
+                    value={item.unitPrice}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
+                    className="h-11 border-0 bg-transparent text-center text-2xl font-medium text-slate-900 shadow-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3">
+                  <span className="text-2xl font-semibold tabular-nums text-slate-900">
+                    {(item.quantity * item.unitPrice).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-9 w-9 rounded-full p-0 text-slate-400 hover:text-destructive"
+                    onClick={() => removeItem(item._key)}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+
+          <button
+            type="button"
+            onClick={addItem}
+            className="mt-5 flex h-16 w-full items-center justify-center gap-3 rounded-2xl border border-dashed border-[#ddd9ec] text-lg font-medium text-[#c3c5d9] transition-colors hover:border-[#c8c3de] hover:text-[#8f8aa8]"
+          >
+            <Plus className="h-5 w-5" />
+            新增商品
+          </button>
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_540px]">
+        <section className="rounded-[26px] bg-white px-8 py-8 shadow-[0_18px_50px_-40px_rgba(15,23,42,0.28)]">
+          <div className="mb-6 text-base font-semibold text-[#1540b8]">订单备注</div>
+          <textarea
+            value={remark}
+            onChange={e => setRemark(e.target.value)}
+            placeholder="在此输入订单补充说明或特殊要求..."
+            className="min-h-[180px] w-full resize-none rounded-2xl border-0 bg-[#f7f4fb] px-5 py-4 text-base text-slate-900 outline-none placeholder:text-slate-400"
+          />
+        </section>
+
+        <section className="rounded-[26px] bg-white px-8 py-8 shadow-[0_18px_50px_-40px_rgba(15,23,42,0.28)]">
+          <div className="space-y-5">
+            <div className="flex items-center justify-between text-[28px] sm:text-base">
+              <span className="text-slate-500">商品总额</span>
+              <span className="font-medium text-slate-900">¥ {total.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div className="flex items-center justify-between text-[28px] sm:text-base">
+              <span className="text-slate-500">商品种数</span>
+              <span className="font-medium text-slate-900">{items.length}</span>
+            </div>
+            <div className="flex items-center justify-between text-[28px] sm:text-base">
+              <span className="text-slate-500">总数量</span>
+              <span className="font-medium text-slate-900">{totalQuantity}</span>
+            </div>
+          </div>
+
+          <div className="mt-8 border-t border-slate-100 pt-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#c3c5d9]">Grand Total</p>
+            <div className="mt-4 flex items-end justify-between gap-4">
+              <span className="text-2xl font-semibold text-slate-900">订单总额</span>
+              <span className="text-5xl font-semibold tracking-tight text-slate-900">
+                ¥{total.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        </section>
+      </div>
 
       <ProductFinder
         open={finderOpen}
