@@ -155,7 +155,7 @@ function CreateInboundDialog({
           </DialogHeader>
 
           <div className="space-y-4 px-6 py-5">
-            <Section title="基础信息">
+            <Section title="订单信息">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <p className="text-sm font-medium">供应商 *</p>
@@ -172,7 +172,7 @@ function CreateInboundDialog({
               </div>
             </Section>
 
-            <Section title="到货明细">
+            <Section title="商品明细">
               <div className="space-y-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
                   <Input
@@ -256,10 +256,10 @@ function CreateInboundDialog({
               </div>
             </Section>
 
-            <Section title="建单汇总">
+            <Section title="数量汇总">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div className="space-y-1 text-sm text-muted-foreground">
-                  <p>已选明细：{selectedRows.length} 行</p>
+                  <p>已选商品：{selectedRows.length} 行</p>
                   <p>供应商：{supplier?.name ?? '未选择'}</p>
                 </div>
                 <div className="text-right">
