@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
+import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -79,6 +80,29 @@ export default function PaymentsPage() {
           '先看待付/待收余额和到期日，优先处理逾期和未结清项。',
           '需要登记资金流时直接在这里完成收付款并查看流水。',
           '需要追溯来源单据或继续核对时，回到对账基础版和采购/销售单详情。',
+        ]}
+        actions={[
+          { label: '打开对账基础版', variant: 'default', onClick: () => navigate(`/reports/reconciliation?type=${tab}`) },
+          { label: tab === 1 ? '打开采购单' : '打开销售单', onClick: () => navigate(tab === 1 ? '/purchase' : '/sale') },
+          { label: '打开审批与提醒', onClick: () => navigate('/reports/approvals') },
+        ]}
+      />
+
+      <ExecutionBridgePanel
+        badge="ERP / 处理执行桥接"
+        title="账款页统一承接资金判断与实际处理动作"
+        description="ERP 在这里负责判断余额、逾期、结清状态以及是否允许登记收付款；实际处理则通过流水登记、对账追溯、采购/销售原单和审批提醒完成，避免账款页只看数不知下一步怎么处理。"
+        erpTitle="先在 ERP 判断余额风险、逾期优先级和结清状态"
+        erpItems={[
+          '先看未结清、部分结清和逾期项，再决定当前优先处理哪笔账款。',
+          '登记前先确认金额来源、到期日和当前状态，避免误把核对问题当成付款动作。',
+          '如果涉及审批或高风险提醒，先回审批与提醒收口，不要直接在资金页跳过判断。',
+        ]}
+        pdaTitle="再通过登记、核对和原单追溯完成实际处理"
+        pdaItems={[
+          '实际处理动作先在这里登记收付款，再通过流水确认资金是否已落账。',
+          '来源不清时回对账基础版、采购单或销售单继续追溯真实业务背景。',
+          '账款处理完成后，再回当前页确认余额、状态和逾期标签是否真正更新。',
         ]}
         actions={[
           { label: '打开对账基础版', variant: 'default', onClick: () => navigate(`/reports/reconciliation?type=${tab}`) },
