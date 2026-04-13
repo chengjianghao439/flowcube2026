@@ -4,6 +4,7 @@ import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
+import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -104,6 +105,29 @@ export default function InventoryPage() {
         actions={[
           { label: '打开库存盘点', variant: 'default', onClick: () => navigate('/stockcheck') },
           { label: '打开岗位工作台', onClick: () => navigate('/reports/role-workbench') },
+          { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+        ]}
+      />
+
+      <ExecutionBridgePanel
+        badge="ERP / 现场执行桥接"
+        title="库存管理统一承接库存判断与现场校正动作"
+        description="ERP 在这里负责识别负库存、异常波动和日志线索；现场执行则通过盘点、收货、仓库任务和 PDA 链路完成真实库存校正，避免只在后台看到问题却不知道去哪处理。"
+        erpTitle="先在 ERP 判断库存风险、日志线索和优先处理顺序"
+        erpItems={[
+          '优先查看负库存、零库存和重点仓库数量异常，再决定是否需要立刻校正。',
+          '结合出入库日志判断异常来自收货、出库、盘点还是人工调整。',
+          '如果已经形成跨任务风险，回岗位工作台或异常工作台统一排优先级。',
+        ]}
+        pdaTitle="再把真实校正动作交给现场链路执行"
+        pdaItems={[
+          '需要校正账实差异时，先进入盘点详情填写实盘，再提交正式调整。',
+          '如果异常来自收货、上架、拣货或出库，回对应 PDA 执行页继续现场处理。',
+          '现场校正完成后，再回库存页确认数量和日志是否真正回到正常状态。',
+        ]}
+        actions={[
+          { label: '打开库存盘点', variant: 'default', onClick: () => navigate('/stockcheck') },
+          { label: '打开 PDA 工作台', onClick: () => navigate('/pda') },
           { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
         ]}
       />

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
+import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import { useCheckDetail, useUpdateCheckItems, useSubmitCheck, useCancelCheck } from '@/hooks/useStockCheck'
 import { useNavigate } from 'react-router-dom'
 import type { CheckItem } from '@/types/stockcheck'
@@ -75,6 +76,28 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
               actions={[
                 { label: '打开库存管理', variant: 'default', onClick: () => navigate('/inventory') },
                 { label: '打开岗位工作台', onClick: () => navigate('/reports/role-workbench') },
+                { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+              ]}
+            />
+            <ExecutionBridgePanel
+              badge="ERP / 现场执行桥接"
+              title="盘点详情统一承接后台判断与现场复核校正"
+              description="ERP 在这里负责判断账实差异是否可以正式提交，现场则负责重新清点、回看收货或出库动作、确认实盘数量，避免把来源不清的异常直接写成库存结果。"
+              erpTitle="先在 ERP 判断差异是否成立、是否适合正式调整"
+              erpItems={[
+                '先比较账面数、实盘数和差异幅度，确认这次盘点是否具备提交条件。',
+                '如果差异来源仍不明确，先不要直接提交，应回库存日志或异常页继续核查。',
+                '盘点提交后，结果会成为正式库存调整，后台判断要比现场操作更谨慎。',
+              ]}
+              pdaTitle="现场再通过复点、收货和出库链路确认真实数量"
+              pdaItems={[
+                '现场优先重新核对异常商品，必要时回看收货、上架、拣货和出库执行记录。',
+                '如果账实不符来自现场操作遗漏，先回对应 PDA 执行页或仓库任务继续处理。',
+                '确认实盘结果后，再回盘点详情保存并提交，让 ERP 完成最终调整。',
+              ]}
+              actions={[
+                { label: '打开库存管理', variant: 'default', onClick: () => navigate('/inventory') },
+                { label: '打开 PDA 工作台', onClick: () => navigate('/pda') },
                 { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
               ]}
             />
