@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
+import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -71,6 +72,29 @@ export default function PriceListsPage() {
           '先维护四档价比例，保证商品按进价生成的默认等级价口径一致。',
           '再到客户管理绑定默认价格等级，确保销售建单能自动带入正确价格。',
           '最后回销售单和利润分析，确认实际成交价和毛利结果符合预期。',
+        ]}
+        actions={[
+          { label: '打开客户管理', variant: 'default', onClick: () => navigate('/customers') },
+          { label: '打开销售单', onClick: () => navigate('/sale') },
+          { label: '打开利润分析', onClick: () => navigate('/reports/profit-analysis') },
+        ]}
+      />
+
+      <ExecutionBridgePanel
+        badge="ERP / 处理执行桥接"
+        title="价格页统一承接价格策略判断与经营落地动作"
+        description="ERP 在这里负责判断四档价比例、默认策略和毛利目标是否合理；实际落地则通过客户绑定、销售建单和利润分析验证完成，避免价格页只停在配置层。"
+        erpTitle="先在 ERP 判断价格规则、等级策略和毛利目标"
+        erpItems={[
+          '先确认 A / B / C / D 四档价比例是否符合当前经营策略和毛利目标。',
+          '变更比例前，优先评估对客户等级绑定和销售成交价的影响。',
+          '保存后再决定回客户管理、销售单还是利润分析验证实际效果。',
+        ]}
+        pdaTitle="再通过经营处理入口验证价格是否真正落地"
+        pdaItems={[
+          '先到客户管理绑定默认价格等级，让客户进入正确价格体系。',
+          '再回销售单验证价格自动带入是否正确，避免现场临时改价。',
+          '最后通过利润分析确认成交价格和毛利结果是否与策略一致。',
         ]}
         actions={[
           { label: '打开客户管理', variant: 'default', onClick: () => navigate('/customers') },

@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
+import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -215,6 +216,29 @@ export default function RacksPage() {
           '先维护货架编码、层位容量和状态，保证现场扫码和摆放规则一致。',
           '需要现场执行时，回收货订单和仓库任务确认具体上架或出库链路。',
           '遇到货架标签或物流标签打印问题时，回打印查询和异常工作台继续处理。',
+        ]}
+        actions={[
+          { label: '打开收货订单', variant: 'default', onClick: () => navigate('/inbound-tasks') },
+          { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
+          { label: '打开打印查询', onClick: () => navigate('/settings/barcode-print-query?category=inbound&status=failed') },
+        ]}
+      />
+
+      <ExecutionBridgePanel
+        badge="ERP / 现场执行桥接"
+        title="货架页统一承接货架规则判断与现场扫码执行"
+        description="ERP 在这里负责判断货架编码、层位、状态和标签是否适合继续使用；现场则通过收货、仓库任务、扫码上架和补打链路完成真实执行，避免货架页只停在资料维护和单次打印。"
+        erpTitle="先在 ERP 判断货架结构、条码规则和可用状态"
+        erpItems={[
+          '先确认货架编码、状态和所属仓库是否与当前现场规则一致。',
+          '打印或重新打印货架标签前，优先判断是否会影响现场扫码和上架流程。',
+          '货架规则确认后，再回收货订单、仓库任务或打印查询继续处理。',
+        ]}
+        pdaTitle="再由现场通过扫码、上架和补打动作完成真实使用"
+        pdaItems={[
+          'PDA 收货和上架现场负责真正扫描货架条码完成落位。',
+          '仓库任务负责把货架规则带入拣货、补货和出库执行。',
+          '如果现场条码损坏或打印异常，再回打印查询和异常工作台收口问题。',
         ]}
         actions={[
           { label: '打开收货订单', variant: 'default', onClick: () => navigate('/inbound-tasks') },
