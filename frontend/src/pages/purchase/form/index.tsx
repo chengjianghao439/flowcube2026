@@ -9,12 +9,11 @@
  * 确保 keep-alive 多标签场景下路径隔离正确。
  */
 
-import { useState, useContext } from 'react'
+import { useMemo, useState, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Save, Loader2 } from 'lucide-react'
+import { Save, Loader2, Building2, Package2, CalendarDays, ReceiptText, Plus } from 'lucide-react'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
-import { Label }   from '@/components/ui/label'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -41,6 +40,51 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div className="card-base p-5">
       <h3 className="text-section-title mb-4 pb-2 border-b border-border/50">{title}</h3>
+      {children}
+    </div>
+  )
+}
+
+function HeroMetric({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: string
+  hint: string
+}) {
+  return (
+    <div className="rounded-2xl border border-white/50 bg-white/80 px-4 py-3 shadow-sm backdrop-blur">
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{hint}</p>
+    </div>
+  )
+}
+
+function PurchaseField({
+  icon,
+  label,
+  required,
+  children,
+}: {
+  icon: React.ReactNode
+  label: string
+  required?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-sm transition-shadow hover:shadow-md">
+      <div className="mb-3 flex items-center gap-2 text-slate-600">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+          {icon}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-medium text-slate-900">{label}</span>
+          {required && <span className="text-xs font-medium text-rose-500">*</span>}
+        </div>
+      </div>
       {children}
     </div>
   )
@@ -135,9 +179,19 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   }
 
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const totalQuantity = items.reduce((s, i) => s + i.quantity, 0)
+  const completionText = useMemo(() => {
+    if (!supplierId && !warehouseId && items.length === 0) return '从供应商、仓库和商品开始，先搭好这张采购单。'
+    if (!supplierId || !warehouseId) return '先补齐供应商和仓库，后面的商品录入会顺很多。'
+    if (!items.length) return '基础信息已经准备好了，接下来录入本次采购商品。'
+    return '采购计划已经成型，确认数量和价格后就可以提交。'
+  }, [supplierId, warehouseId, items.length])
+  const expectedDateLabel = expectedDate || '待安排'
+  const supplierDisplay = supplierName || '未选择供应商'
+  const warehouseDisplay = warehouseName || '未选择仓库'
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <ActionBar
         title="新建采购单"
         rightActions={
@@ -152,111 +206,260 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         }
       />
 
-      {/* 基础信息 */}
-      <Section title="基础信息">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label>供应商 *</Label>
-            <FinderTrigger value={supplierName} placeholder="点击选择供应商..." onClick={() => setSupplierFinderOpen(true)} onDoubleClick={() => { setSupplierFinderOpen(false); navigate('/suppliers') }} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>入库仓库 *</Label>
-            <FinderTrigger value={warehouseName} placeholder="点击选择仓库..." onClick={() => setWarehouseFinderOpen(true)} onDoubleClick={() => { setWarehouseFinderOpen(false); navigate('/warehouses') }} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>预计到货日期</Label>
-            <Input type="date" value={expectedDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setExpectedDate(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>备注</Label>
-            <Input value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" />
-          </div>
-        </div>
-      </Section>
-
-      {/* 商品明细 */}
-      <Section title="商品明细">
-        <div className="mb-3 flex items-center justify-end">
-          <Button type="button" size="sm" variant="outline" onClick={addItem}>+ 添加行</Button>
-        </div>
-
-        {items.length === 0 ? (
-          <div className="rounded-lg border border-dashed py-12 text-center text-muted-body">
-            点击「添加行」开始录入商品明细
-          </div>
-        ) : (
-          <>
-            <div className="text-table-head mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3">
-              <span>商品</span>
-              <span className="text-center">单位</span>
-              <span>数量</span>
-              <span>单价 (¥)</span>
-              <span className="text-right">金额</span>
-              <span />
+      <section className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#f8fafc_0%,#eef2ff_45%,#fff7ed_100%)] p-6 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.4)]">
+        <div className="absolute inset-y-0 right-0 hidden w-1/2 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.92),transparent_58%)] lg:block" />
+        <div className="relative grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
+          <div className="space-y-4">
+            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium tracking-[0.14em] text-slate-600 shadow-sm backdrop-blur">
+              极序 Flow · 采购计划录入
+            </div>
+            <div className="max-w-2xl space-y-3">
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
+                把采购计划先搭稳，再把到货节奏和金额控制清楚。
+              </h1>
+              <p className="max-w-xl text-sm leading-6 text-slate-600 md:text-base">
+                这一页只负责采购计划与提交。供应商、仓库、预计到货和商品明细在同一视角里完成，减少来回切换。
+              </p>
             </div>
 
-            {items.map(item => (
-              <div key={item._key} className="mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3 items-center">
-                <button
-                  type="button"
-                  onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
-                  onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-                  className="truncate rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {item.productName
-                    ? <span className="flex items-center gap-1.5">
-                        <span className="font-medium truncate">{item.productName}</span>
-                        <span className="shrink-0 text-doc-code-muted">({item.productCode})</span>
-                      </span>
-                    : <span className="text-muted-foreground">点击选择商品...</span>}
-                </button>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <HeroMetric label="供应商" value={supplierName ? '已锁定' : '待选择'} hint={supplierDisplay} />
+              <HeroMetric label="到货日期" value={expectedDate ? '已安排' : '待安排'} hint={expectedDateLabel} />
+              <HeroMetric label="采购金额" value={`¥${total.toFixed(2)}`} hint={`${items.length} 种商品 / ${totalQuantity} 件`} />
+            </div>
+          </div>
 
-                <div className="text-center text-muted-body">{item.unit || '—'}</div>
+          <aside className="flex h-full flex-col justify-between rounded-[24px] border border-slate-200/80 bg-white/85 p-5 shadow-lg shadow-slate-200/40 backdrop-blur">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">当前节奏</p>
+              <p className="mt-3 text-lg font-semibold text-slate-950">{completionText}</p>
+              <div className="mt-4 space-y-3 text-sm text-slate-600">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 h-2 w-2 rounded-full bg-emerald-500" />
+                  <p>先确定供应商和仓库，保证后续到货与收货链路一致。</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 h-2 w-2 rounded-full bg-amber-500" />
+                  <p>商品明细录入后，页面会实时汇总金额与数量，不需要跳到别处复核。</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 h-2 w-2 rounded-full bg-sky-500" />
+                  <p>提交后由收货订单承接到货、打印库存条码、PDA 收货与上架流程。</p>
+                </div>
+              </div>
+            </div>
 
-                <Input
-                  type="number" min="0.01" step="0.01" placeholder="数量"
-                  value={item.quantity}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
-                  className="text-sm"
+            <div className="mt-6 rounded-2xl bg-slate-950 px-4 py-4 text-white">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/60">提交前检查</p>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-white/60">供应商</p>
+                  <p className="mt-1 font-medium">{supplierName || '未选择'}</p>
+                </div>
+                <div>
+                  <p className="text-white/60">仓库</p>
+                  <p className="mt-1 font-medium">{warehouseName || '未选择'}</p>
+                </div>
+                <div>
+                  <p className="text-white/60">商品数</p>
+                  <p className="mt-1 font-medium">{items.length} 种</p>
+                </div>
+                <div>
+                  <p className="text-white/60">总件数</p>
+                  <p className="mt-1 font-medium">{totalQuantity}</p>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-6">
+          <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">基础信息</p>
+                <h3 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">本次采购的关键参数</h3>
+              </div>
+              <div className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 md:block">
+                先定主体，再录明细
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <PurchaseField icon={<Building2 className="h-4 w-4" />} label="供应商" required>
+                <FinderTrigger
+                  value={supplierName}
+                  placeholder="点击选择供应商..."
+                  onClick={() => setSupplierFinderOpen(true)}
+                  onDoubleClick={() => { setSupplierFinderOpen(false); navigate('/suppliers') }}
                 />
+              </PurchaseField>
 
-                <Input
-                  type="number" min="0" step="0.01" placeholder="单价"
-                  value={item.unitPrice}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                  className="text-sm"
+              <PurchaseField icon={<Package2 className="h-4 w-4" />} label="入库仓库" required>
+                <FinderTrigger
+                  value={warehouseName}
+                  placeholder="点击选择仓库..."
+                  onClick={() => setWarehouseFinderOpen(true)}
+                  onDoubleClick={() => { setWarehouseFinderOpen(false); navigate('/warehouses') }}
                 />
+              </PurchaseField>
 
-                <div className="text-right text-sm font-medium">
-                  ¥{(item.quantity * item.unitPrice).toFixed(2)}
+              <PurchaseField icon={<CalendarDays className="h-4 w-4" />} label="预计到货日期">
+                <Input
+                  type="date"
+                  value={expectedDate}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setExpectedDate(e.target.value)}
+                />
+              </PurchaseField>
+
+              <PurchaseField icon={<ReceiptText className="h-4 w-4" />} label="备注">
+                <Input
+                  value={remark}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)}
+                  placeholder="补充本次采购的特殊要求或说明"
+                />
+              </PurchaseField>
+            </div>
+          </section>
+
+          <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">商品明细</p>
+                <h3 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">把数量和采购成本一次录清楚</h3>
+              </div>
+              <Button type="button" variant="outline" onClick={addItem} className="gap-2 rounded-full">
+                <Plus className="h-4 w-4" />
+                添加商品
+              </Button>
+            </div>
+
+            {items.length === 0 ? (
+              <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50/80 px-6 py-16 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
+                  <Package2 className="h-6 w-6" />
+                </div>
+                <h4 className="mt-4 text-lg font-semibold text-slate-900">还没有商品明细</h4>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+                  从这里开始录入本次采购的商品、数量和单价。录完后页面会实时汇总金额，提交前就能先看清计划体量。
+                </p>
+                <Button type="button" onClick={addItem} className="mt-6 gap-2">
+                  <Plus className="h-4 w-4" />
+                  添加第一条商品
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-[minmax(0,1.4fr)_72px_110px_120px_96px_40px] gap-3 px-2 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+                  <span>商品</span>
+                  <span className="text-center">单位</span>
+                  <span>数量</span>
+                  <span>单价</span>
+                  <span className="text-right">金额</span>
+                  <span />
                 </div>
 
-                <Button
-                  type="button" size="sm" variant="ghost"
-                  className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => removeItem(item._key)}
-                >✕</Button>
-              </div>
-            ))}
-          </>
-        )}
-      </Section>
+                {items.map(item => (
+                  <div key={item._key} className="grid grid-cols-[minmax(0,1.4fr)_72px_110px_120px_96px_40px] items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50/70 p-3 transition-colors hover:border-slate-300 hover:bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+                      onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
+                      className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left text-sm shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {item.productName ? (
+                        <span className="flex flex-col gap-1">
+                          <span className="truncate font-medium text-slate-900">{item.productName}</span>
+                          <span className="truncate text-xs text-slate-500">{item.productCode}</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-500">点击选择商品...</span>
+                      )}
+                    </button>
 
-      {/* 金额统计 */}
-      {items.length > 0 && (
-        <Section title="金额统计">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5 text-muted-body">
-              <p>商品种数：{items.length} 种</p>
-              <p>合计数量：{items.reduce((s, i) => s + i.quantity, 0)}</p>
+                    <div className="text-center text-sm text-slate-600">{item.unit || '—'}</div>
+
+                    <Input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      placeholder="数量"
+                      value={item.quantity}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
+                      className="border-slate-200 bg-white"
+                    />
+
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="单价"
+                      value={item.unitPrice}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
+                      className="border-slate-200 bg-white"
+                    />
+
+                    <div className="text-right text-sm font-semibold text-slate-900">
+                      ¥{(item.quantity * item.unitPrice).toFixed(2)}
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-9 w-9 rounded-full p-0 text-slate-500 hover:text-destructive"
+                      onClick={() => removeItem(item._key)}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <aside className="space-y-4">
+          <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">采购摘要</p>
+            <div className="mt-4 space-y-4">
+              <div className="rounded-2xl bg-slate-950 px-4 py-4 text-white">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/60">合计金额</p>
+                <p className="mt-3 text-3xl font-semibold tracking-tight">¥{total.toFixed(2)}</p>
+                <p className="mt-2 text-sm text-white/65">提交后，这个金额会进入采购计划与后续收货链路。</p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-500">商品种数</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">{items.length}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-500">总数量</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">{totalQuantity}</p>
+                </div>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="mb-1 text-helper">合计金额</p>
-              <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
+          </section>
+
+          <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/60">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">流程提醒</p>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                采购单负责计划与提交，不直接进入 PDA。
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                后续正式主链是：采购单 → 收货订单 → PDA 收货任务 → 打印库存条码 → 上架 → 审核。
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                建议先把供应商、仓库和预计到货日定下来，再录商品，会更接近真实收货安排。
+              </div>
             </div>
-          </div>
-        </Section>
-      )}
+          </section>
+        </aside>
+      </div>
 
       {/* 商品选择中心 */}
       <ProductFinder
