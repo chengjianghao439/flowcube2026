@@ -59,6 +59,45 @@ export default function PdaWorkbench() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-4">
+        <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">现场闭环入口</p>
+              <p className="mt-1 text-base font-semibold text-foreground">PDA 工作台负责把收货、拣货、分拣、复核、打包、出库按主链顺序串起来</p>
+              <p className="mt-1 text-sm text-muted-foreground">进入具体作业前先判断当前卡在哪个阶段。遇到优先级冲突回岗位工作台，遇到打印或流程异常回异常工作台。</p>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-2">
+            <div className="rounded-xl border border-border bg-background px-3 py-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">推荐顺序</p>
+              <p className="mt-1 text-sm text-foreground">收货与上架完成后，再推进拣货、分拣、复核、打包和出库；不要跳过中间状态直接做后续动作。</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => navigate('/reports/role-workbench')}
+                className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground active:scale-95"
+              >
+                岗位工作台
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/reports/exception-workbench')}
+                className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground active:scale-95"
+              >
+                异常工作台
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/settings/barcode-print-query?category=logistics&status=failed')}
+                className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground active:scale-95"
+              >
+                物流补打
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div>
           <p className="text-xs text-muted-foreground mb-3">{roleIcon} {roleLabel} 可用作业（{allowedOps.length} 项）</p>
           <div className="grid grid-cols-2 gap-3">

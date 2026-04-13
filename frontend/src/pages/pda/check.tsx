@@ -45,6 +45,31 @@ function TaskSelectStep({
       <PdaHeader title="选择复核任务" onBack={() => navigate('/pda')} right={<span className="text-xs text-muted-foreground">{tasks.length} 个待复核</span>} />
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          <PdaCard>
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">复核闭环提示</p>
+                  <p className="mt-1 text-base font-semibold text-foreground">复核页负责确认“已拣数量”和“已核数量”一致，再把任务推进到待打包</p>
+                  <p className="mt-1 text-sm text-muted-foreground">先选任务，再连续扫库存条码完成复核。若发现任务卡住、分拣未完成或数量不一致，回仓库任务、PDA 分拣或异常工作台继续处理。</p>
+                </div>
+                <div className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-right">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">下一步</p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">选择待复核任务</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-background px-3 py-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">推荐顺序</p>
+                <p className="mt-1 text-sm text-foreground">先确认任务已经完成分拣，再做复核扫码；复核完成后继续打包，不要绕过待打包阶段直接出库。</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => navigate('/warehouse-tasks')}>打开仓库任务</Button>
+                <Button size="sm" variant="outline" onClick={() => navigate('/pda/sort')}>打开 PDA 分拣</Button>
+                <Button size="sm" variant="outline" onClick={() => navigate('/reports/exception-workbench')}>打开异常工作台</Button>
+              </div>
+            </div>
+          </PdaCard>
+
           {isLoading && <PdaLoading className="h-40" />}
           {!isLoading && tasks.length === 0 && (
             <PdaEmptyCard icon="✅" title="暂无待复核任务" description="任务完成分拣后进入此列表" />
@@ -174,6 +199,17 @@ export default function PdaCheckPage() {
   const totalChecked = items.reduce((s, i) => s + (i.checkedQty ?? 0), 0)
   const pct         = totalPick > 0 ? Math.min(100, Math.round(totalChecked / totalPick * 100)) : 0
   const linesDone   = items.length > 0 && items.every(i => (i.checkedQty ?? 0) === i.pickedQty)
+  const phaseCopy = linesDone
+    ? {
+        stage: '复核收口',
+        description: '当前各明细已核数量已与拣货一致，可以结束复核并推进到待打包。',
+        nextAction: '确认复核完成并进入待打包',
+      }
+    : {
+        stage: '复核进行中',
+        description: '当前优先连续扫描库存条码，让已核数量追平已拣数量。发现缺少分拣或数量不一致时，回分拣或异常入口继续处理。',
+        nextAction: '继续扫描库存条码',
+      }
 
   if (step === 'select-task') {
     return (
@@ -199,14 +235,21 @@ export default function PdaCheckPage() {
         <p className="text-muted-foreground mb-8">
           {allChecked ? '任务已进入待打包' : `进度约 ${pct}%`}
         </p>
+        <div className="w-full max-w-md rounded-2xl border border-primary/20 bg-primary/5 p-4 text-left mb-6">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">下一步推荐入口</p>
+          <p className="mt-1 text-sm text-foreground">复核结束后优先进入打包；如果需要回看整体任务状态，去仓库任务；如果发现流程异常，去异常工作台继续处理。</p>
+        </div>
         <div className="flex gap-3 w-full max-w-xs">
           {!allChecked && (
             <Button variant="outline" className="flex-1" onClick={() => setStep('checking')}>
               继续复核
             </Button>
           )}
-          <Button className="flex-1" onClick={() => navigate('/pda/picking')}>
-            返回任务列表
+          <Button variant="outline" className="flex-1" onClick={() => navigate('/warehouse-tasks')}>
+            仓库任务
+          </Button>
+          <Button className="flex-1" onClick={() => navigate(allChecked ? '/pda/pack' : '/pda')}>
+            {allChecked ? '去打包' : '返回工作台'}
           </Button>
         </div>
       </div>
@@ -228,6 +271,31 @@ export default function PdaCheckPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          <PdaCard>
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">复核闭环提示</p>
+                  <p className="mt-1 text-base font-semibold text-foreground">{phaseCopy.stage}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{phaseCopy.description}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-right">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">下一步</p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{phaseCopy.nextAction}</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-background px-3 py-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">推荐顺序</p>
+                <p className="mt-1 text-sm text-foreground">先追平复核数量，再结束当前任务；复核完成后优先去 PDA 打包，异常时回仓库任务和异常工作台。</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => navigate('/warehouse-tasks')}>打开仓库任务</Button>
+                <Button size="sm" variant="outline" onClick={() => navigate('/pda/pack')}>打开 PDA 打包</Button>
+                <Button size="sm" variant="outline" onClick={() => navigate('/reports/exception-workbench')}>打开异常工作台</Button>
+              </div>
+            </div>
+          </PdaCard>
+
           {taskLoading && (
             <div className="flex h-40 items-center justify-center">
               <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" />
