@@ -20,6 +20,7 @@ import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
 import PdaStepHint from '@/components/pda/PdaStepHint'
+import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import client from '@/api/client'
 import { useOfflineScan } from '@/hooks/useOfflineScan'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
@@ -219,6 +220,18 @@ export default function PdaTaskPage() {
       {/* Product list */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          <PdaFlowPanel
+            badge="拣货执行中"
+            title={task ? `当前任务：${task.taskNo}` : '当前任务拣货执行'}
+            description="这里优先把每个商品的已拣数量追平需求数量。推荐库位扫完后，再确认是否全部完成并推进到待分拣。"
+            nextAction={finished ? '返回拣货列表' : '继续扫描库存条码'}
+            stepText="先扫推荐库存条码完成拣货；若推荐库位不足或条码不匹配，先核对库存与异常，再继续执行。"
+            actions={[
+              { label: '打开拣货列表', onClick: () => navigate('/pda/picking') },
+              { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
+              { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+            ]}
+          />
           {isLoading && <PdaLoading className="h-32" />}
           {items.map(item => (
             <ProductCard key={item.id} item={item} scanning={scanning}

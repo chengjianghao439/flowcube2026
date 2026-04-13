@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { getInboundClosureCopy } from '@/lib/inboundClosure'
 
 const STATUS_VARIANT: Record<number,'default'|'secondary'|'outline'|'destructive'> = {
@@ -68,6 +69,18 @@ export default function PdaInboundPage() {
     <div className="min-h-screen bg-background">
       <PdaHeader title="收货订单" onBack={() => navigate('/pda')} right={<PdaRefreshButton onRefresh={() => refetch()} />} />
       <div className="max-w-md mx-auto px-4 py-5 space-y-4">
+        <PdaFlowPanel
+          badge="收货闭环提示"
+          title="收货列表负责把待收货、打印库存条码和待上架任务串成同一条现场主链"
+          description="先进入收货登记，再确认库存条码打印结果，最后推进到扫码上架。遇到补打或退回时，回打印查询、异常工作台或 ERP 收货详情继续处理。"
+          nextAction="选择待处理收货任务"
+          stepText="先做收货登记，再收口库存条码打印，再做上架；不要跳过打印和上架直接进入审核。"
+          actions={[
+            { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+            { label: '打开入库补打', onClick: () => navigate('/settings/barcode-print-query?category=inbound&status=failed') },
+            { label: '打开岗位工作台', onClick: () => navigate('/reports/role-workbench') },
+          ]}
+        />
         <p className="text-xs text-muted-foreground">{tasks.length} 个待处理任务</p>
         {isLoading && <PdaLoading className="h-32" />}
         {!isLoading && tasks.length===0 && (

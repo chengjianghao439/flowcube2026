@@ -199,6 +199,8 @@ async function main() {
   await openAndCheck('/racks')
   await openAndCheck('/sorting-bins')
   await openAndCheck('/pda')
+  await openAndCheck('/pda/inbound')
+  await openAndCheck('/pda/picking')
   await openAndCheck('/pda/check')
   await openAndCheck('/pda/pack')
   await openAndCheck('/pda/split')

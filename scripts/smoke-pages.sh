@@ -119,6 +119,8 @@ main() {
   open_and_check '/racks'
   open_and_check '/sorting-bins'
   open_and_check '/pda'
+  open_and_check '/pda/inbound'
+  open_and_check '/pda/picking'
   open_and_check '/pda/check'
   open_and_check '/pda/pack'
   open_and_check '/pda/split'

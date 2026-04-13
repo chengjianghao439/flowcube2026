@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 
 // ─── 常量 ─────────────────────────────────────────────────────────────────────
 
@@ -220,6 +221,18 @@ export default function PdaPickingPage() {
       </div>
 
       <div className="max-w-md mx-auto px-4 pb-8 space-y-3">
+        <PdaFlowPanel
+          badge="拣货闭环提示"
+          title="拣货列表负责把待拣任务推进到待分拣，并为后续复核和打包准备正确数量"
+          description="先按商品或订单挑选任务，再连续扫描库存条码完成拣货。发现库位异常、数量不对或任务卡住时，回异常工作台、仓库任务或岗位工作台继续处理。"
+          nextAction="选择当前待拣任务"
+          stepText="优先处理高优先级任务；拣货完成后继续去分拣，再推进复核和打包，不要跳过中间阶段。"
+          actions={[
+            { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
+            { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+            { label: '打开岗位工作台', onClick: () => navigate('/reports/role-workbench') },
+          ]}
+        />
         <p className="text-xs text-muted-foreground">
           {viewMode === 'sku' ? `${skuList.length} 个 SKU` : `${tasks.length} 个任务`}
         </p>
