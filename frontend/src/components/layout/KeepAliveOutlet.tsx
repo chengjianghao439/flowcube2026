@@ -49,6 +49,7 @@ const PATH_PERMS: Record<string, PermCode> = {
   '/transfer':        'page:transfer',
   '/warehouse-tasks': 'page:warehouse-tasks',
   '/inbound-tasks':   'page:inbound',
+  '/inbound-tasks/new': 'page:inbound',
   '/picking-waves':   'page:warehouse-tasks',
   '/sorting-bins':    'page:warehouse-tasks',
   '/locations':       'page:warehouses',
@@ -122,6 +123,7 @@ const PAGE_MAP: Record<string, React.LazyExoticComponent<React.ComponentType>> =
 // ── 动态路由：模块级惰性加载（注意：必须在组件外声明，防止每次渲染重新 lazy） ──
 const SaleFormPage           = lazy(() => import('@/pages/sale/form'))
 const PurchaseFormPage       = lazy(() => import('@/pages/purchase/form'))
+const InboundTaskCreatePage  = lazy(() => import('@/pages/inbound-tasks/create'))
 const InboundTaskDetailPage  = lazy(() => import('@/pages/inbound-tasks/detail'))
 const PrintTemplateEditorPage = lazy(() => import('@/pages/settings/print-templates/editor'))
 const PdaWavePage            = lazy(() => import('@/pages/pda/wave'))
@@ -146,6 +148,12 @@ const PATH_PATTERNS: PathPattern[] = [
     perm: 'page:purchase',
     component: PurchaseFormPage,
     defaultTitle: (path) => path === '/purchase/new' ? '新建采购单' : `采购订单 #${path.split('/').pop()}`,
+  },
+  {
+    pattern: /^\/inbound-tasks\/new$/,
+    perm: 'page:inbound',
+    component: InboundTaskCreatePage,
+    defaultTitle: () => '新建收货订单',
   },
   {
     pattern: /^\/inbound-tasks\/\d+$/,

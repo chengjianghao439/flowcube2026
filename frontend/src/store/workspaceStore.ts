@@ -24,6 +24,7 @@ export const PATH_TITLES: Record<string, string> = {
   '/transfer':        '库存调拨',
   '/warehouse-tasks': '仓库任务',
   '/inbound-tasks':   '收货订单',
+  '/inbound-tasks/new': '新建收货订单',
   '/picking-waves':   '波次拣货',
   '/sorting-bins':    '分拣格管理',
   '/wave-scan':       '波次扫码',
