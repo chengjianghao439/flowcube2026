@@ -12,6 +12,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import PdaStat, { PdaStatGrid } from '@/components/pda/PdaStat'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +40,18 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
       <PdaHeader title="选择打包任务" onBack={() => navigate('/pda')} right={<span className="text-xs text-muted-foreground">{tasks.length} 个待打包</span>} />
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          <PdaFlowPanel
+            badge="打包闭环提示"
+            title="打包页负责把复核后的任务装成箱，并把箱贴打印收口后再推进到待出库"
+            description="先选待打包任务，再创建箱子、扫码装箱并打印箱贴。发现箱贴失败、超时或任务卡住时，回仓库任务、出库补打或异常工作台继续处理。"
+            nextAction="选择待打包任务"
+            stepText="先确认复核已经完成，再开始装箱；箱贴打印状态正常后，再推进到待出库，不要跳过打包阶段直接出库。"
+            actions={[
+              { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
+              { label: '打开出库补打', onClick: () => navigate('/settings/barcode-print-query?category=outbound&status=failed') },
+              { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+            ]}
+          />
           {isLoading && <PdaLoading className="h-40" />}
           {!isLoading && tasks.length === 0 && (
             <PdaEmptyCard icon="📦" title="暂无待打包任务" />
@@ -270,7 +283,21 @@ export default function PdaPackPage() {
       <div className="text-6xl mb-6">🎉</div>
       <h2 className="text-2xl font-bold text-foreground">打包完成！</h2>
       <p className="text-muted-foreground mt-2 mb-1">任务：<span className="font-mono font-semibold text-foreground">{task.taskNo}</span></p>
-      <p className="text-muted-foreground mb-8">共 {totalBoxes} 箱，{totalItems.toFixed(0)} 件商品</p>
+      <p className="text-muted-foreground mb-4">共 {totalBoxes} 箱，{totalItems.toFixed(0)} 件商品</p>
+      <div className="mb-6 w-full max-w-md">
+        <PdaFlowPanel
+          badge="打包收口"
+          title="当前任务已完成打包，可以继续推进到待出库"
+          description="优先确认箱贴和物流标签没有异常，再去 PDA 出库或仓库任务继续现场执行。"
+          nextAction="进入出库确认"
+          stepText="先确认打印异常清零，再继续出库；如果需要重新排优先级或查看异常，分别回岗位工作台和异常工作台。"
+          actions={[
+            { label: '打开 PDA 出库', onClick: () => navigate('/pda/ship') },
+            { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
+            { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+          ]}
+        />
+      </div>
       <div className="flex gap-3 w-full max-w-xs">
         <Button variant="outline" className="flex-1" onClick={() => { setTask(null); setAllDone(false) }}>继续打包</Button>
         <Button className="flex-1" onClick={() => navigate('/pda')}>返回工作台</Button>
@@ -293,15 +320,18 @@ export default function PdaPackPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
-          <PdaCard className="space-y-2 border-primary/20 bg-primary/5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-foreground">当前阶段：{closureCopy.stageLabel}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{closureCopy.description}</p>
-              </div>
-              <Badge className="text-xs">{closureCopy.nextAction}</Badge>
-            </div>
-          </PdaCard>
+          <PdaFlowPanel
+            badge="打包执行中"
+            title={`当前阶段：${closureCopy.stageLabel}`}
+            description={closureCopy.description}
+            nextAction={closureCopy.nextAction}
+            stepText="先把当前箱装满并完成箱贴打印，再处理下一箱；若箱贴失败或超时，先收口打印异常，再继续装箱或推进到出库。"
+            actions={[
+              { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
+              { label: '打开出库补打', onClick: () => navigate(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(task.taskNo)}`) },
+              { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+            ]}
+          />
 
           {/* 统计行 */}
           <PdaStatGrid cols={3}>

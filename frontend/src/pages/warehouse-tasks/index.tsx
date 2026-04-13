@@ -106,9 +106,11 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                 '最后回 PDA 继续现场出库',
               ]}
               actions={[
+                { label: '打开 PDA 打包', onClick: () => nav('/pda/pack') },
+                { label: '打开 PDA 出库', onClick: () => nav('/pda/ship') },
                 { label: '打开异常工作台', onClick: () => nav('/reports/exception-workbench') },
                 { label: '打开岗位工作台', variant: 'outline', onClick: () => nav('/reports/role-workbench') },
-                { label: '打开 PDA 出库', variant: 'outline', onClick: () => nav('/pda/ship') },
+                { label: '打开容器拆分', variant: 'outline', onClick: () => nav('/pda/split') },
               ]}
             />
 

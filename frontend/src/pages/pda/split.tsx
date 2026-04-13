@@ -9,6 +9,7 @@ import PdaScanner from '@/components/pda/PdaScanner'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaFlash from '@/components/pda/PdaFlash'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
+import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getContainerByBarcodeApi, splitContainerApi } from '@/api/inventory'
@@ -98,6 +99,18 @@ export default function PdaSplitPage() {
       <PdaFlash flash={flash} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
+        <PdaFlowPanel
+          badge="容器拆分闭环"
+          title="拆分页负责把库存条码拆成新的塑料盒条码，并确保新标签立即可追踪"
+          description="先扫描库存条码或塑料盒条码，再填写拆分数量并决定是否立即打印新条码。遇到标签异常时，回打印查询或异常工作台继续处理。"
+          nextAction={step === 'scan' ? '扫描库存条码' : '确认拆分并打印新标签'}
+          stepText="先识别来源容器，再确认拆分数量；新塑料盒条码打印成功后，再回上架、分拣或仓库任务继续现场执行。"
+          actions={[
+            { label: '打开库存管理', onClick: () => navigate('/inventory') },
+            { label: '打开打印查询', onClick: () => navigate('/settings/barcode-print-query?category=inbound&status=failed') },
+            { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+          ]}
+        />
         {step === 'scan' && (
           <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
             <p className="text-sm text-muted-foreground">扫描库存条码</p>
