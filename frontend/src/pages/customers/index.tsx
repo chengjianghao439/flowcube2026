@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
+import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -83,6 +84,28 @@ export default function CustomersPage() {
           { label: '打开对账基础版', variant: 'default', onClick: () => navigate('/reports/reconciliation?type=2') },
           { label: '打开应收账款', onClick: () => navigate('/payments') },
           { label: '打开审批与提醒', onClick: () => navigate('/reports/approvals') },
+        ]}
+      />
+      <ExecutionBridgePanel
+        badge="ERP / 处理执行桥接"
+        title="客户页统一承接经营判断与后续业务处理动作"
+        description="ERP 在这里负责判断客户资料、价格等级、启停状态是否适合继续承接销售业务；实际处理动作则通过销售单、对账、应收账款和提醒入口继续推进，避免客户页只停在资料维护。"
+        erpTitle="先在 ERP 判断客户资料、价格策略和风险状态"
+        erpItems={[
+          '先确认客户联系人、启停状态和默认价格等级，保证销售建单不会带错对象或价格。',
+          '如果客户存在高风险订单、低毛利或未收回款项，优先在 ERP 层判断是否需要先收口风险。',
+          '客户资料变更完成后，再决定回销售单、对账页还是审批页继续处理。',
+        ]}
+        pdaTitle="再通过经营处理入口完成真实业务推进"
+        pdaItems={[
+          '需要继续成交时，回销售单和仓库任务主链推进实际业务。',
+          '需要核对回款时，回对账基础版和应收账款页继续登记与追溯。',
+          '如果客户问题最终落到仓库或异常执行，再由岗位工作台和异常工作台承接后续动作。',
+        ]}
+        actions={[
+          { label: '打开销售单', variant: 'default', onClick: () => navigate('/sale') },
+          { label: '打开对账基础版', onClick: () => navigate('/reports/reconciliation?type=2') },
+          { label: '打开应收账款', onClick: () => navigate('/payments') },
         ]}
       />
       <FilterCard>
