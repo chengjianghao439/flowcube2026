@@ -9,6 +9,7 @@ import { parseBarcode } from '@/utils/barcode'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
+import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import PdaSection from '@/components/pda/PdaSection'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
@@ -90,14 +91,18 @@ export default function PdaShipPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-5 space-y-4">
-          <PdaCard className="space-y-2 border-primary/20 bg-primary/5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-foreground">当前阶段：{closureCopy.stageLabel}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{closureCopy.description}</p>
-              </div>
-              <Badge className="text-xs">{closureCopy.nextAction}</Badge>
-            </div>
+          <div className="space-y-2">
+            <PdaFlowPanel
+              badge="出库闭环提示"
+              title={`当前阶段：${closureCopy.stageLabel}`}
+              description={closureCopy.description}
+              nextAction={closureCopy.nextAction}
+              stepText="先收口物流和箱贴打印异常，再扫描物流条码完成出库；如果发现流程卡点，回异常工作台或仓库任务继续处理。"
+              actions={[
+                { label: '物流补打', onClick: () => navigate('/settings/barcode-print-query?category=logistics&status=failed') },
+                { label: '异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+              ]}
+            />
             {closureCopy.printSummary ? (
               <div className="grid grid-cols-4 gap-2 pt-1 text-center text-xs">
                 <div className="rounded-lg bg-white/80 px-2 py-2">
@@ -118,15 +123,7 @@ export default function PdaShipPage() {
                 </div>
               </div>
             ) : null}
-            <div className="flex gap-2 pt-1">
-              <Button size="sm" variant="outline" className="flex-1" onClick={() => navigate('/settings/barcode-print-query?category=logistics&status=failed')}>
-                物流补打
-              </Button>
-              <Button size="sm" variant="ghost" className="flex-1" onClick={() => navigate('/reports/exception-workbench')}>
-                异常工作台
-              </Button>
-            </div>
-          </PdaCard>
+          </div>
 
           {/* 扫码区移至底栏，此处保留加载状态 */}
           {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">查询中…</span></div>}

@@ -18,6 +18,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 
@@ -119,30 +120,18 @@ export default function PdaSortPage() {
       <div className="max-w-md mx-auto px-4 pb-32 space-y-4 py-4">
         <PdaFlash flash={flash} />
 
-        <PdaCard>
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">分拣闭环提示</p>
-                <p className="mt-1 text-base font-semibold text-foreground">{phaseCopy.stage}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{phaseCopy.description}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-right">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">下一步</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{phaseCopy.nextAction}</p>
-              </div>
-            </div>
-            <div className="rounded-xl border border-border bg-background px-3 py-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">推荐顺序</p>
-              <p className="mt-1 text-sm text-foreground">先扫商品找格口，再扫分拣格确认，最后回波次详情或异常工作台看整体推进。</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => nav('/sorting-bins')}>打开分拣格管理</Button>
-              <Button size="sm" variant="outline" onClick={() => nav('/picking-waves?waveId=1&focus=print-closure')}>打开波次详情</Button>
-              <Button size="sm" variant="outline" onClick={() => nav('/reports/exception-workbench')}>打开异常工作台</Button>
-            </div>
-          </div>
-        </PdaCard>
+        <PdaFlowPanel
+          badge="分拣闭环提示"
+          title={phaseCopy.stage}
+          description={phaseCopy.description}
+          nextAction={phaseCopy.nextAction}
+          stepText="先扫商品找格口，再扫分拣格确认，最后回波次详情或异常工作台看整体推进。"
+          actions={[
+            { label: '打开分拣格管理', onClick: () => nav('/sorting-bins') },
+            { label: '打开波次详情', onClick: () => nav('/picking-waves?waveId=1&focus=print-closure') },
+            { label: '打开异常工作台', onClick: () => nav('/reports/exception-workbench') },
+          ]}
+        />
 
         {/* 步骤进度 */}
         <div className="flex items-center gap-3">
