@@ -8,7 +8,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getWarehouseOpsApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Button } from '@/components/ui/button'
@@ -126,24 +125,6 @@ export default function WarehouseOpsPage() {
       {isLoading && <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}
 
       {!isLoading && data && !isError && (<>
-
-        <FocusModePanel
-          badge="作业绩效默认视角"
-          title="仓库运营看板建议先看今日风险，再下钻流程和人员"
-          description="这页最适合先快速扫一轮今日出入库、扫码和错误，再从流程瓶颈、人员效率和异常记录定位具体问题。"
-          summary={`更新于 ${updatedTime}`}
-          steps={[
-            '先看今日核心指标和错误数',
-            '再看流程瓶颈与每小时趋势',
-            '最后下钻人员效率和最新异常',
-          ]}
-          actions={[
-            { label: '打开岗位工作台', onClick: () => openPath('/reports/role-workbench', '岗位工作台') },
-            { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
-            { label: '打开审批与提醒', variant: 'outline', onClick: () => openPath('/reports/approvals', '审批与提醒') },
-            { label: '查看波次效率', variant: 'outline', onClick: () => openPath('/reports/wave-performance', '波次效率报表') },
-          ]}
-        />
 
         {/* 今日核心指标 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

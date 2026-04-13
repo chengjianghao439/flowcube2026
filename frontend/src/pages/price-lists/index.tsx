@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -60,23 +59,6 @@ export default function PriceListsPage() {
         title="价格管理"
         description="商品默认生成 4 个价格，客户绑定价格 A / B / C / D，销售单自动带入对应价格。"
         actions={<Button onClick={() => save.mutate(payload)} disabled={save.isPending}>{save.isPending ? '保存中...' : '保存比例'}</Button>}
-      />
-
-      <FocusModePanel
-        badge="主数据闭环"
-        title="价格页负责维护四档价规则，并把应用动作交给客户、销售和利润分析"
-        description="这页最适合先确认 A / B / C / D 的默认比例，再去客户管理绑定价格等级，最后回销售单和利润分析验证价格策略是否落地。"
-        summary="当前焦点：四档价默认比例"
-        steps={[
-          '先维护四档价比例，保证商品按进价生成的默认等级价口径一致。',
-          '再到客户管理绑定默认价格等级，确保销售建单能自动带入正确价格。',
-          '最后回销售单和利润分析，确认实际成交价和毛利结果符合预期。',
-        ]}
-        actions={[
-          { label: '打开客户管理', variant: 'default', onClick: () => navigate('/customers') },
-          { label: '打开销售单', onClick: () => navigate('/sale') },
-          { label: '打开利润分析', onClick: () => navigate('/reports/profit-analysis') },
-        ]}
       />
 
       <div className="grid gap-4 lg:grid-cols-[360px_1fr]">

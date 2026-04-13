@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -62,22 +61,6 @@ export default function SuppliersPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="供应商管理" description="管理采购供应商档案" actions={<Button onClick={openCreate}>新增供应商</Button>} />
-      <FocusModePanel
-        badge="经营侧闭环"
-        title="供应商页负责维护采购前置资料，并把后续处理交给采购、收货和对账入口"
-        description="这页最适合先确认供应商档案、联系人和启停状态，再进入采购单、收货订单或对账基础版继续处理。供应商页承担的是主数据准确性，而不是现场执行。"
-        summary={edit ? `当前操作：编辑供应商 - ${edit.name}` : '当前焦点：供应商资料维护'}
-        steps={[
-          '先维护供应商基础资料，确保采购建单和到货跟踪不会带错对象。',
-          '需要继续推进采购或收货时，切到采购单和收货订单主链。',
-          '需要核对应付款或到货异常时，切到对账基础版、应付账款和异常工作台继续处理。',
-        ]}
-        actions={[
-          { label: '打开采购单', variant: 'default', onClick: () => navigate('/purchase') },
-          { label: '打开收货订单', onClick: () => navigate('/inbound-tasks') },
-          { label: '打开对账基础版', onClick: () => navigate('/reports/reconciliation?type=1') },
-        ]}
-      />
       <FilterCard>
         <Input placeholder="搜索编码或名称" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&(setPage(1),setKeyword(search))} className="h-9 w-60" />
         <Button size="sm" variant="outline" onClick={()=>{setPage(1);setKeyword(search)}}>搜索</Button>

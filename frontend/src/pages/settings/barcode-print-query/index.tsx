@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -249,23 +248,6 @@ export default function BarcodePrintQueryPage() {
       <PageHeader
         title="条码打印查询"
         description="查询入库条码、出库条码、物流条码的打印状态，支持失败追踪与丢失补打。"
-      />
-
-      <FocusModePanel
-        badge="下一步推荐入口"
-        title="打印查询负责收口失败、超时和补打结果"
-        description="这里不是终点页。先处理打印异常，再回收货详情、波次详情或 PDA 出库继续推进现场主链。"
-        summary={`当前分类 ${activeCategory.label}`}
-        steps={[
-          '先筛失败和超时任务',
-          '再执行重新打印并确认回写',
-          '最后回对应业务详情继续处理',
-        ]}
-        actions={[
-          { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
-          { label: '打开岗位工作台', variant: 'outline', onClick: () => openPath('/reports/role-workbench', '岗位工作台') },
-          { label: '打开审批与提醒', variant: 'outline', onClick: () => openPath('/reports/approvals', '审批与提醒') },
-        ]}
       />
 
       {inboundContext && (

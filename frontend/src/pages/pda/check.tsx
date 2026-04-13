@@ -224,19 +224,6 @@ export default function PdaCheckPage() {
         <p className="text-muted-foreground mb-8">
           {allChecked ? '任务已进入待打包' : `进度约 ${pct}%`}
         </p>
-        <div className="w-full max-w-md">
-          <PdaFlowPanel
-            badge="下一步推荐入口"
-            title="复核结束后优先进入打包，再决定是否回仓库任务或异常页复盘"
-            description="这一页完成的是“已拣数量”和“已核数量”对齐。后续应先推进打包，不要直接跳出到出库。"
-            nextAction={allChecked ? '进入 PDA 打包' : '继续当前复核'}
-            stepText="复核结束后优先进入打包；如果需要回看整体任务状态，去仓库任务；如果发现流程异常，去异常工作台继续处理。"
-            actions={[
-              { label: '仓库任务', onClick: () => navigate('/warehouse-tasks') },
-              { label: allChecked ? '去打包' : '返回工作台', variant: 'default', onClick: () => navigate(allChecked ? '/pda/pack' : '/pda') },
-            ]}
-          />
-        </div>
         <div className="flex gap-3 w-full max-w-xs">
           {!allChecked && (
             <Button variant="outline" className="flex-1" onClick={() => setStep('checking')}>

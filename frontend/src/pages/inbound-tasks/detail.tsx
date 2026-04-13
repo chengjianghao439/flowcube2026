@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { AppDialog } from '@/components/shared/AppDialog'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -448,22 +447,6 @@ export default function InboundTaskDetailPage() {
           <p className="text-sm text-foreground">{closureCopy.description}</p>
           <p className="text-sm text-muted-foreground">{closureCopy.nextAction}</p>
         </div>
-        <FocusModePanel
-          badge="下一步推荐入口"
-          title="收货详情负责把收货、打印、上架、审核收口"
-          description="如果当前问题已经定位到具体收货单，就优先在本页处理；如果要统一排查异常或回到当天优先级，再切到异常工作台或岗位工作台。"
-          summary={`当前焦点 ${focusSection || '主链详情'}`}
-          steps={[
-            '先确认打印、上架、审核当前状态',
-            '异常优先在本页完成补打和补录',
-            '需要更大范围排查再切到异常或工作台',
-          ]}
-          actions={[
-            { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
-            { label: '打开岗位工作台', variant: 'outline', onClick: () => openPath('/reports/role-workbench', '岗位工作台') },
-            { label: '打开打印查询', variant: 'outline', onClick: () => openPrintQuery() },
-          ]}
-        />
       </Section>
 
       {!!exceptionLines.length && (

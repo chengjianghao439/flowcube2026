@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LayoutGrid, List, ScanBarcode } from 'lucide-react'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import PageHeader from '@/components/shared/PageHeader'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import DataTable from '@/components/shared/DataTable'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
@@ -95,24 +94,6 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
               </div>
             </div>
 
-            <FocusModePanel
-              badge="下一步推荐入口"
-              title="仓库任务详情负责把打包、打印和出库确认衔接起来"
-              description="这里优先确认装箱进度和打印闭环；如果要看整体异常去异常工作台，如果要重新安排当天优先级回岗位工作台。"
-              summary={`当前任务 ${task.taskNo}`}
-              steps={[
-                '先确认装箱完成度',
-                '再收口出库和物流打印异常',
-                '最后回 PDA 继续现场出库',
-              ]}
-              actions={[
-                { label: '打开 PDA 打包', onClick: () => nav('/pda/pack') },
-                { label: '打开 PDA 出库', onClick: () => nav('/pda/ship') },
-                { label: '打开异常工作台', onClick: () => nav('/reports/exception-workbench') },
-                { label: '打开岗位工作台', variant: 'outline', onClick: () => nav('/reports/role-workbench') },
-                { label: '打开容器拆分', variant: 'outline', onClick: () => nav('/pda/split') },
-              ]}
-            />
             <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/40 p-4 text-sm">
               <div><span className="text-muted-foreground">任务编号：</span><span className="text-doc-code-strong">{task.taskNo}</span></div>
               <div><span className="text-muted-foreground">关联销售单：</span><span className="text-doc-code">{task.saleOrderNo}</span></div>

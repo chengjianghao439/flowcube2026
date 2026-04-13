@@ -26,7 +26,6 @@ import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar }      from '@/components/shared/ActionBar'
 import { StatusBadge }    from '@/components/shared/StatusBadge'
 import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { CustomerFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import { useCreateSale, useUpdateSale, useSaleDetail, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { useCarriersActive } from '@/hooks/useCarriers'
@@ -902,23 +901,6 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
             <Button variant="outline" onClick={closeTab}>关闭</Button>
           </>
         }
-      />
-
-      <FocusModePanel
-        badge="下一步推荐入口"
-        title="销售详情负责确认订单状态，并把占库、仓库任务和出库衔接起来"
-        description="这页最适合先确认客户、收货信息和商品价格，再根据当前状态决定是继续占库、查看仓库任务，还是回到岗位工作台与异常工作台处理卡点。"
-        summary={`当前状态：${order.statusName}`}
-        steps={[
-          '先确认客户、物流信息和商品明细，避免带错单进入仓库执行。',
-          '已占库或发货中时，优先回仓库任务或岗位工作台看现场推进。',
-          '遇到打印、波次或物流异常时，切到异常工作台和打印查询继续处理。',
-        ]}
-        actions={[
-          { label: '打开岗位工作台', variant: 'default', onClick: () => navigate('/reports/role-workbench') },
-          { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-          { label: '查看仓库任务', onClick: () => navigate('/warehouse-tasks') },
-        ]}
       />
 
       {/* 基础信息 */}

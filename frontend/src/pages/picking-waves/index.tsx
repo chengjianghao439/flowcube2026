@@ -8,7 +8,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -274,23 +273,6 @@ export default function PickingWavesPage() {
                 </div>
               </div>
             </section>
-
-            <FocusModePanel
-              badge="下一步推荐入口"
-              title="波次详情负责推进拣货、分拣和出库打印闭环"
-              description="这里先看波次推进和打印异常；如果要统一看出库异常，去异常工作台；如果要重新安排当天优先级，回岗位工作台。"
-              summary={`当前焦点 ${focus || '波次详情'}`}
-              steps={[
-                '先确认波次推进状态',
-                '再收口出库打印失败和超时',
-                '需要跨任务排查时切到异常或工作台',
-              ]}
-              actions={[
-                { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
-                { label: '打开岗位工作台', variant: 'outline', onClick: () => openPath('/reports/role-workbench', '岗位工作台') },
-                { label: '打开出库补打', variant: 'outline', onClick: () => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询') },
-              ]}
-            />
 
             <section ref={progressRef} className="space-y-4 rounded-2xl border border-border bg-card p-4">
               <div className="flex items-center justify-between gap-3">

@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -109,23 +108,6 @@ export default function LocationsPage() {
         title="库位管理"
         description="管理仓库内的存储库位"
         actions={<Button onClick={openCreate}>+ 新建库位</Button>}
-      />
-
-      <FocusModePanel
-        badge="仓储主数据"
-        title="库位页负责维护上架落点，并把后续动作交给收货、仓库任务和库存处理链"
-        description="这页最适合先确认仓库、库区、巷道和库位编码是否规范，再回收货订单、仓库任务和库存管理继续执行上架与库存追踪。"
-        summary={editTarget ? `当前操作：编辑库位 - ${editTarget.code}` : '当前焦点：库位资料维护'}
-        steps={[
-          '先维护库位编码、区域结构和容量，保证上架与盘点现场有清晰落点。',
-          '再到收货订单和仓库任务确认实际上架、补录和现场任务是否能落到正确库位。',
-          '发现库存差异或现场异常时，回库存管理和异常工作台继续排查。',
-        ]}
-        actions={[
-          { label: '打开收货订单', variant: 'default', onClick: () => navigate('/inbound-tasks') },
-          { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-          { label: '打开库存管理', onClick: () => navigate('/inventory') },
-        ]}
       />
 
       <FilterCard>

@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -198,24 +197,6 @@ export default function SortingBinsPage() {
             <Button onClick={() => setCreateOpen(true)}>+ 新建分拣格</Button>
           </>
         }
-      />
-
-      <FocusModePanel
-        badge="仓储执行主数据"
-        title="分拣格页负责维护 Put Wall 落点，并把后续动作交给波次、仓库任务和 PDA 分拣执行"
-        description="这页最适合先确认分拣格编码、仓库归属和占用状态，再回波次、仓库任务和 PDA 分拣现场继续执行。遇到格口占用异常、任务卡点或标签问题时，直接切异常工作台和打印查询继续收口。"
-        summary={releaseTarget ? `当前操作：释放分拣格 - ${releaseTarget.code}` : '当前焦点：分拣格结构与占用状态'}
-        steps={[
-          '先维护分拣格编码和仓库归属，保证波次和客户订单有明确落格位置。',
-          '再回波次详情、仓库任务和 PDA 分拣现场，确认商品已被正确分到对应格口。',
-          '发现占用异常、格口冲突或标签问题时，回异常工作台和打印查询继续处理。',
-        ]}
-        actions={[
-          { label: '打开波次详情', variant: 'default', onClick: () => navigate('/picking-waves?waveId=1&focus=print-closure') },
-          { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-          { label: '打开 PDA 分拣', onClick: () => navigate('/pda/sort') },
-          { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-        ]}
       />
 
       <FilterCard>

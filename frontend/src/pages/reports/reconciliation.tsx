@@ -14,13 +14,10 @@ import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { getReconciliationApi, type ReconciliationRecord } from '@/api/reports'
 import type { TableColumn, Pagination } from '@/types'
 
 type StatementType = 1 | 2
-type ViewMode = 'focus' | 'all'
-
 function SummaryCard({ label, value, hint, tone }: { label: string; value: number | string; hint: string; tone?: 'blue' | 'amber' | 'emerald' | 'rose' }) {
   const toneClass = tone === 'amber'
     ? 'border-amber-200 bg-amber-50'
@@ -51,7 +48,6 @@ export default function ReconciliationPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [viewMode, setViewMode] = useState<ViewMode>('focus')
   const recent30d = getRelativeDateRange(30)
   const recent90d = getRelativeDateRange(90)
   const monthRange = getMonthDateRange()
@@ -90,15 +86,8 @@ export default function ReconciliationPage() {
       return String(b.createdAt).localeCompare(String(a.createdAt))
     })
 
-    if (viewMode === 'all') {
-      return sortedRows
-    }
-    return sortedRows.filter(record => record.status !== 3 || isOverdue(record))
-  }, [rows, viewMode])
-  const focusCount = useMemo(
-    () => rows.filter(record => record.status !== 3 || isOverdue(record)).length,
-    [rows],
-  )
+    return sortedRows
+  }, [rows])
 
   function openPath(path: string | null | undefined, title: string) {
     if (!path) return
@@ -203,34 +192,6 @@ export default function ReconciliationPage() {
         <SummaryCard label="已付/已收" value={`¥${(summary?.paidAmount ?? 0).toFixed(2)}`} hint="已结清金额" tone="emerald" />
         <SummaryCard label="待回收余额" value={`¥${(summary?.balance ?? 0).toFixed(2)}`} hint={`逾期 ${summary?.overdueCount ?? 0} 单`} tone="rose" />
       </div>
-
-      <FocusModePanel
-        badge={viewMode === 'focus' ? '待核对优先' : '查看全部'}
-        title={type === 1 ? '供应商对账建议先看未付与逾期单据' : '客户对账建议先看未收与逾期单据'}
-        description="对账页不再只是查询页，建议先处理未结清与逾期记录，再回跳原始单据和收货单确认原因。"
-        summary={`当前重点核对 ${focusCount} 条`}
-        steps={[
-          '先看未结清和逾期状态',
-          '再检查余额与到期日',
-          '最后回跳原单或收货单核对',
-        ]}
-        actions={[
-          { label: '待核对优先', variant: viewMode === 'focus' ? 'default' : 'outline', onClick: () => setViewMode('focus') },
-          { label: '查看全部', variant: viewMode === 'all' ? 'default' : 'outline', onClick: () => setViewMode('all') },
-          {
-            label: '导出当前结果',
-            onClick: () => {
-              void downloadExport('/export/reconciliation', {
-                type: String(type),
-                ...(applied.keyword ? { keyword: applied.keyword } : {}),
-                ...(applied.startDate ? { startDate: applied.startDate } : {}),
-                ...(applied.endDate ? { endDate: applied.endDate } : {}),
-                ...(applied.status ? { status: applied.status } : {}),
-              }).catch(e => toast.error((e as Error).message))
-            },
-          },
-        ]}
-      />
 
       <div className="flex gap-1 border-b border-border">
         {([

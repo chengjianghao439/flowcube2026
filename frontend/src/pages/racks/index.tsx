@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -204,23 +203,6 @@ export default function RacksPage() {
         title="货架管理"
         description="货架唯一条码（H）与标签打印"
         actions={<Button onClick={() => { setEditItem(null); setFormOpen(true) }}>+ 新建货架</Button>}
-      />
-
-      <FocusModePanel
-        badge="仓储主数据"
-        title="货架页负责维护货架条码和打印入口，并把后续执行交给现场仓库链路"
-        description="这页最适合先确认货架编码、层位规则和条码打印，再回收货、仓库任务和打印查询继续处理现场执行与补打。"
-        summary={editItem ? `当前操作：编辑货架 - ${editItem.code}` : '当前焦点：货架资料维护'}
-        steps={[
-          '先维护货架编码、层位容量和状态，保证现场扫码和摆放规则一致。',
-          '需要现场执行时，回收货订单和仓库任务确认具体上架或出库链路。',
-          '遇到货架标签或物流标签打印问题时，回打印查询和异常工作台继续处理。',
-        ]}
-        actions={[
-          { label: '打开收货订单', variant: 'default', onClick: () => navigate('/inbound-tasks') },
-          { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-          { label: '打开打印查询', onClick: () => navigate('/settings/barcode-print-query?category=inbound&status=failed') },
-        ]}
       />
 
       {localPrintEnv !== 'ok' && (

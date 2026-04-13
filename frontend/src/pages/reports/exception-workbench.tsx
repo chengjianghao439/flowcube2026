@@ -18,7 +18,6 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
 import { getInboundExceptionNotifications, getOutboundExceptionNotifications, getLogisticsExceptionNotifications } from '@/lib/notifications'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 
 function severityBadge(level: string) {
   if (level === 'high' || level === 'danger') return <Badge variant="destructive">高风险</Badge>
@@ -207,23 +206,6 @@ export default function ExceptionWorkbenchPage() {
           hint={latestSummary ? `耗时 ${latestSummary.elapsedMs}ms` : '点击立即巡检'}
         />
       </div>
-
-      <FocusModePanel
-        badge="跨页协同"
-        title="异常工作台负责定位问题并把处理链收口"
-        description="这里优先处理打印失败、超时和系统巡检问题；如果要安排今天先做什么，回岗位工作台；如果是财务 / 系统提醒，回审批与提醒；如果想看整体趋势，去作业绩效页。"
-        summary={`当前高风险 ${highCount} 项`}
-        steps={[
-          '先处理高风险和可直接收口的异常',
-          '需要排班与优先级时回岗位工作台',
-          '需要看趋势和范围时切到作业绩效页',
-        ]}
-        actions={[
-          { label: '打开岗位工作台', onClick: () => openPath('/reports/role-workbench', '岗位工作台') },
-          { label: '打开审批与提醒', variant: 'outline', onClick: () => openPath('/reports/approvals', '审批与提醒') },
-          { label: '打开仓库运营看板', variant: 'outline', onClick: () => openPath('/reports/warehouse-ops', '仓库运营看板') },
-        ]}
-      />
 
       <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
         <div className="flex items-center justify-between gap-3">

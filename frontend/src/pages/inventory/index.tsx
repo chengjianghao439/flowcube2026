@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -90,23 +89,6 @@ export default function InventoryPage() {
           <Button variant="outline" asChild><Link to="/stockcheck">盘点调整</Link></Button>
         </div>
       } />
-
-      <FocusModePanel
-        badge="默认视角"
-        title="库存页负责看库存现状、识别风险，并决定是否进入盘点或异常处理"
-        description="这里适合先判断库存数量、库存日志和出库动作是否正常；如果发现负库存、异常波动或需要校正库存，直接切去盘点、岗位工作台或异常工作台。"
-        summary={`当前视角：${tab === 'stock' ? '当前库存' : '出入库记录'}`}
-        steps={[
-          '先看当前库存，优先识别负库存、零库存和重点仓库库存不足。',
-          '再看出入库记录，确认最近的出库、调整和现场操作是否合理。',
-          '需要调整时直接进入盘点；发现异常时回岗位工作台或异常工作台继续推进。',
-        ]}
-        actions={[
-          { label: '打开库存盘点', variant: 'default', onClick: () => navigate('/stockcheck') },
-          { label: '打开岗位工作台', onClick: () => navigate('/reports/role-workbench') },
-          { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-        ]}
-      />
 
       {/* 标签切换 */}
       <div className="mb-4 flex gap-1 border-b border-border">

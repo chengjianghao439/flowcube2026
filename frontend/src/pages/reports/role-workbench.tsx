@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { getRoleWorkbenchApi, type WorkbenchCard, type WorkbenchItem, type WorkbenchSection } from '@/api/reports'
 
 const ACCENT_CLASSES: Record<WorkbenchCard['accent'], { card: string; badge: string; pill: string; button: string }> = {
@@ -240,23 +239,6 @@ export default function RoleWorkbenchPage() {
         <StatCard label="销售/客服" value={summary?.saleCount ?? 0} hint="出库、异常销售、低于进价" />
         <StatCard label="管理角色" value={summary?.managementCount ?? 0} hint="审核、异常任务、库存风险" />
       </div>
-
-      <FocusModePanel
-        badge="跨页协同"
-        title="岗位工作台负责决定今天先处理什么"
-        description="这里先确定优先级和处理顺序；遇到异常就去异常工作台，涉及财务 / 系统提醒就去审批与提醒，想看整体风险再去作业绩效页。"
-        summary={`当前总待办 ${summary?.totalAlerts ?? 0} 项`}
-        steps={[
-          '先按今日处理顺序执行待办',
-          '异常堵点切到异常工作台',
-          '经营风险和趋势切到审批或绩效页',
-        ]}
-        actions={[
-          { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
-          { label: '打开审批与提醒', variant: 'outline', onClick: () => openPath('/reports/approvals', '审批与提醒') },
-          { label: '打开仓库运营看板', variant: 'outline', onClick: () => openPath('/reports/warehouse-ops', '仓库运营看板') },
-        ]}
-      />
 
       {topAlert && (
         <PriorityBanner

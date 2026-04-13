@@ -8,7 +8,6 @@ import { getWavePerformanceApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -154,18 +153,6 @@ export default function WavePerformancePage() {
         }}
         onRefresh={() => refetch()}
         updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : undefined}
-      />
-
-      <FocusModePanel
-        badge="作业绩效默认视角"
-        title="波次效率建议先看完成率，再看时长和拣货效率"
-        description="这页最适合先判断波次推进是否顺畅，再根据任务数、SKU、拣货量和时长回跳到波次详情或仓库任务排查卡点。"
-        summary={`当前波次 ${waves.length} 条`}
-        steps={[
-          '先看总波次和完成率',
-          '再看平均拣货时长与效率',
-          '最后按明细排序定位卡点波次',
-        ]}
       />
 
       {/* 汇总卡片 */}

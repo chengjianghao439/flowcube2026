@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -69,22 +68,6 @@ export default function CustomersPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="客户管理" description="管理销售客户档案，可绑定价格 A / B / C / D" actions={<Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>+ 新增客户</Button>} />
-      <FocusModePanel
-        badge="经营侧闭环"
-        title="客户页负责维护销售前置资料，并把后续处理交给销售、对账和提醒入口"
-        description="这页最适合先确认客户档案和价格等级，再继续去销售单、对账基础版或审批与提醒处理后续业务。客户页不直接承担执行闭环，但要把经营侧入口串起来。"
-        summary={bindCustomer ? `当前操作：绑定价格等级 - ${bindCustomer.name}` : '当前焦点：客户资料维护'}
-        steps={[
-          '先维护客户档案、联系人和默认价格等级，保证下销售单时价格和对象都准确。',
-          '需要核对销售回款时，优先切到对账基础版和应收账款页。',
-          '遇到高风险订单、低毛利或系统提醒时，再回审批与提醒和岗位工作台继续处理。',
-        ]}
-        actions={[
-          { label: '打开对账基础版', variant: 'default', onClick: () => navigate('/reports/reconciliation?type=2') },
-          { label: '打开应收账款', onClick: () => navigate('/payments') },
-          { label: '打开审批与提醒', onClick: () => navigate('/reports/approvals') },
-        ]}
-      />
       <FilterCard>
         <Input placeholder="搜索编码/名称..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); setPage(1) }}>搜索</Button>

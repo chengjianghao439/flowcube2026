@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
-import { FocusModePanel } from '@/components/shared/FocusModePanel'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -99,23 +98,6 @@ export default function CarriersPage() {
         title="承运商管理"
         description="管理物流、快递等承运商信息"
         actions={<Button onClick={openCreate}>+ 新建承运商</Button>}
-      />
-
-      <FocusModePanel
-        badge="主数据闭环"
-        title="承运商页负责维护物流基础资料，并把执行动作交给销售、仓库任务和物流标签处理链"
-        description="这页最适合先确认承运商档案、类型和启停状态，再去销售单、仓库任务和打印查询处理物流标签、出库和现场执行。"
-        summary={editTarget ? `当前操作：编辑承运商 - ${editTarget.name}` : '当前焦点：承运商资料维护'}
-        steps={[
-          '先维护承运商资料，保证销售单和仓库执行不会选择失效或错误的物流渠道。',
-          '再到销售单和仓库任务确认现场使用的承运商与物流动作是否一致。',
-          '遇到物流标签打印异常时，回打印查询和异常工作台继续处理。',
-        ]}
-        actions={[
-          { label: '打开销售单', variant: 'default', onClick: () => navigate('/sale') },
-          { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-          { label: '打开打印查询', onClick: () => navigate('/settings/barcode-print-query?category=logistics&status=failed') },
-        ]}
       />
 
       <FilterCard>
