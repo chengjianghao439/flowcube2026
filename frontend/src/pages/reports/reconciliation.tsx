@@ -219,11 +219,6 @@ export default function ReconciliationPage() {
 
       <FilterCard>
         <div className="flex flex-wrap gap-2">
-          <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 text-amber-700">
-            当前需重点核对 {focusCount} 条
-          </Badge>
-        </div>
-        <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => applyPreset(recent30d.startDate, recent30d.endDate)}>
             近 30 天
           </Button>
@@ -277,7 +272,7 @@ export default function ReconciliationPage() {
           pagination={data?.pagination as Pagination | undefined}
           onPageChange={setPage}
           onRowDoubleClick={(row) => openPath(row.sourcePath || row.receiptPath, row.orderNo)}
-          emptyText={viewMode === 'focus' ? '当前范围内暂无待核对对账数据' : '暂无对账数据'}
+          emptyText="暂无对账数据"
         />
       )}
     </div>
