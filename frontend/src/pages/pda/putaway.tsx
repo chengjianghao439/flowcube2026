@@ -10,6 +10,7 @@ import PdaHeader from '@/components/pda/PdaHeader'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaEmptyState, { PdaLoading } from '@/components/pda/PdaEmptyState'
+import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { usePdaFlow } from '@/hooks/usePdaFlow'
 import PdaFlowSteps from '@/components/pda/PdaFlowSteps'
 import { makePutawayFlow, type PutawayFlowContext } from '@/flows/putawayFlow'
@@ -18,6 +19,11 @@ import { getInboundClosureCopy } from '@/lib/inboundClosure'
 function PutawayRunner({ taskId }: { taskId: number }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { data: task } = useQuery({
+    queryKey: ['pda-inbound-task', taskId],
+    queryFn: () => getInboundTaskByIdApi(taskId).then(r => r.data.data!),
+    enabled: taskId > 0,
+  })
   const flowDef = useMemo(
     () =>
       makePutawayFlow(taskId, {
@@ -31,6 +37,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
 
   const initialContext: PutawayFlowContext = { taskId, containerId: null }
   const engine = usePdaFlow(flowDef, initialContext, `inbound-putaway-${taskId}`)
+  const closureCopy = task ? getInboundClosureCopy(task) : null
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -43,6 +50,22 @@ function PutawayRunner({ taskId }: { taskId: number }) {
       />
 
       <div className="px-4 pt-3">
+        {closureCopy ? (
+          <div className="mb-3">
+            <PdaFlowPanel
+              badge="上架执行中"
+              title={`当前阶段：${closureCopy.stageLabel}`}
+              description={closureCopy.description}
+              nextAction={closureCopy.nextAction}
+              stepText="先扫描库存条码，再扫描货架条码完成上架；如果发现库位不匹配或待上架数据不对，先回收货列表、异常工作台或 ERP 收货详情处理。"
+              actions={[
+                { label: '返回收货列表', onClick: () => navigate('/pda/inbound') },
+                { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
+                { label: '打开收货详情', onClick: () => navigate(`/inbound-tasks/${taskId}`) },
+              ]}
+            />
+          </div>
+        ) : null}
         <PdaFlowSteps steps={flowDef.steps} currentId={engine.stepId} />
         <p className="text-xs text-muted-foreground mt-2">{engine.currentStep.label}</p>
       </div>

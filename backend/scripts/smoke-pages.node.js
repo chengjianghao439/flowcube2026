@@ -200,6 +200,8 @@ async function main() {
   await openAndCheck('/sorting-bins')
   await openAndCheck('/pda')
   await openAndCheck('/pda/inbound')
+  await openAndCheck('/pda/receive/1')
+  await openAndCheck('/pda/putaway/1')
   await openAndCheck('/pda/picking')
   await openAndCheck('/pda/check')
   await openAndCheck('/pda/pack')

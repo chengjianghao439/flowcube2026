@@ -120,6 +120,8 @@ main() {
   open_and_check '/sorting-bins'
   open_and_check '/pda'
   open_and_check '/pda/inbound'
+  open_and_check '/pda/receive/1'
+  open_and_check '/pda/putaway/1'
   open_and_check '/pda/picking'
   open_and_check '/pda/check'
   open_and_check '/pda/pack'
