@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom'
 import { Loader2, Plus, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -21,6 +22,7 @@ import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { SupplierFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import {
   useCreatePurchase,
@@ -183,10 +185,10 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         }
       />
 
-      <Section title="表头">
+      <Section title="订单信息">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">供应商</p>
+          <div className="space-y-1.5">
+            <Label>供应商 *</Label>
             <FinderTrigger
               value={supplierName}
               placeholder="点击选择供应商..."
@@ -198,8 +200,8 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             />
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">入库仓库</p>
+          <div className="space-y-1.5">
+            <Label>入库仓库 *</Label>
             <FinderTrigger
               value={warehouseName}
               placeholder="点击选择仓库..."
@@ -211,8 +213,8 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             />
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">预计到货</p>
+          <div className="space-y-1.5">
+            <Label>预计到货日期</Label>
             <Input
               type="date"
               value={expectedDate}
@@ -221,19 +223,20 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             />
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">备注</p>
-            <Input
+          <div className="space-y-1.5 md:col-span-2 xl:col-span-1">
+            <Label>备注</Label>
+            <LimitedTextarea
+              maxLength={50}
               value={remark}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRemark(e.target.value)}
               placeholder="选填"
-              className="border-slate-200 bg-slate-50"
+              rows={1}
             />
           </div>
         </div>
       </Section>
 
-      <Section title="明细">
+      <Section title="商品明细">
         <div className="mb-4 flex items-center justify-between gap-3">
           <p className="text-sm text-slate-500">录入采购商品、数量和进价。</p>
           <Button type="button" variant="outline" onClick={addItem} className="gap-2 rounded-full">
@@ -248,11 +251,11 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="grid grid-cols-[minmax(0,1.5fr)_72px_120px_120px_120px_40px] gap-3 px-2 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+            <div className="text-table-head grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3">
               <span>商品</span>
               <span className="text-center">单位</span>
               <span>数量</span>
-              <span>单价</span>
+              <span>单价 (¥)</span>
               <span className="text-right">金额</span>
               <span />
             </div>
@@ -260,7 +263,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             {items.map(item => (
               <div
                 key={item._key}
-                className="grid grid-cols-[minmax(0,1.5fr)_72px_120px_120px_120px_40px] items-center gap-3 rounded-2xl bg-slate-50/90 p-3"
+                className="grid grid-cols-[1fr_70px_110px_110px_90px_36px] items-center gap-3"
               >
                 <button
                   type="button"
@@ -273,19 +276,19 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
                     setFinderItemKey(null)
                     navigate('/products')
                   }}
-                  className="min-w-0 rounded-2xl bg-white px-3 py-3 text-left text-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="truncate rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {item.productName ? (
-                    <span className="flex flex-col gap-1">
-                      <span className="truncate font-medium text-slate-900">{item.productName}</span>
-                      <span className="truncate text-xs text-slate-500">{item.productCode}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate font-medium">{item.productName}</span>
+                      <span className="shrink-0 text-doc-code-muted">({item.productCode})</span>
                     </span>
                   ) : (
                     <span className="text-slate-500">点击选择商品...</span>
                   )}
                 </button>
 
-                <div className="text-center text-sm text-slate-600">{item.unit || '—'}</div>
+                <div className="text-center text-muted-body">{item.unit || '—'}</div>
 
                 <Input
                   type="number"
@@ -294,7 +297,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
                   placeholder="数量"
                   value={item.quantity}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
-                  className="border-transparent bg-white"
+                  className="text-sm"
                 />
 
                 <Input
@@ -304,10 +307,10 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
                   placeholder="单价"
                   value={item.unitPrice}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                  className="border-transparent bg-white"
+                  className="text-sm"
                 />
 
-                <div className="text-right text-sm font-semibold text-slate-900">
+                <div className="text-right text-sm font-medium">
                   ¥{(item.quantity * item.unitPrice).toFixed(2)}
                 </div>
 
@@ -326,22 +329,22 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         )}
       </Section>
 
-      <Section title="表尾">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">商品种数</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">{items.length}</p>
+      {items.length > 0 && (
+        <Section title="金额统计">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5 text-muted-body">
+              <p>商品种数：{items.length} 种</p>
+              <p>合计数量：{totalQuantity}</p>
+              <p>预计到货：{expectedDate || '未填写'}</p>
+            </div>
+
+            <div className="text-right">
+              <p className="mb-1 text-helper">合计金额</p>
+              <p className="text-[28px] font-semibold text-foreground">¥ {total.toFixed(2)}</p>
+            </div>
           </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">总数量</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">{totalQuantity}</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">合计金额</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">¥{total.toFixed(2)}</p>
-          </div>
-        </div>
-      </Section>
+        </Section>
+      )}
 
       <ProductFinder
         open={finderOpen}
