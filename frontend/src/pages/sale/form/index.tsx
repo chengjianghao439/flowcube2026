@@ -27,6 +27,7 @@ import { ActionBar }      from '@/components/shared/ActionBar'
 import { StatusBadge }    from '@/components/shared/StatusBadge'
 import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
+import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import { CustomerFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import { useCreateSale, useUpdateSale, useSaleDetail, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { useCarriersActive } from '@/hooks/useCarriers'
@@ -918,6 +919,29 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
           { label: '打开岗位工作台', variant: 'default', onClick: () => navigate('/reports/role-workbench') },
           { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
           { label: '查看仓库任务', onClick: () => navigate('/warehouse-tasks') },
+        ]}
+      />
+
+      <ExecutionBridgePanel
+        badge="ERP / PDA 执行桥接"
+        title="销售详情统一承接订单判断与仓库现场执行"
+        description="ERP 在这里负责客户、价格、占库、物流和出库判断；PDA 负责拣货、复核、打包和出库的现场动作，避免订单页和现场页之间来回猜下一步。"
+        erpTitle="先在 ERP 确认销售判断、占库状态和物流安排"
+        erpItems={[
+          '确认客户、价格、承运商和收货信息后，再决定是否占库或发起出库。',
+          '订单进入发货中后，优先通过仓库任务、岗位工作台和异常工作台看推进情况。',
+          '如果出现打印、波次或物流卡点，先在 ERP 收口异常，再让现场继续推进。',
+        ]}
+        pdaTitle="仓库现场再由 PDA 连续推进拣货、复核、打包和出库"
+        pdaItems={[
+          '现场从 PDA 拣货开始，继续推进到复核、打包和出库确认。',
+          '物流标签、箱贴或容器异常时，回 ERP 打印查询和异常工作台处理后再继续。',
+          '执行完成后，再回销售详情确认状态、打印记录和最终出库结果。',
+        ]}
+        actions={[
+          { label: '打开仓库任务', variant: 'default', onClick: () => navigate('/warehouse-tasks') },
+          { label: '打开 PDA 工作台', onClick: () => navigate('/pda') },
+          { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
         ]}
       />
 
