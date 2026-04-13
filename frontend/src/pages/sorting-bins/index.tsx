@@ -8,7 +8,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
-import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -214,29 +213,6 @@ export default function SortingBinsPage() {
         actions={[
           { label: '打开波次详情', variant: 'default', onClick: () => navigate('/picking-waves?waveId=1&focus=print-closure') },
           { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-          { label: '打开 PDA 分拣', onClick: () => navigate('/pda/sort') },
-          { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-        ]}
-      />
-
-      <ExecutionBridgePanel
-        badge="ERP / 现场执行桥接"
-        title="分拣格页统一承接分拣结构判断与现场落格执行"
-        description="ERP 在这里负责判断分拣格编号、占用状态和释放动作是否合理；现场则通过波次、仓库任务和 PDA 分拣把商品真正落到对应格口，避免分拣格页只停在结构维护。"
-        erpTitle="先在 ERP 判断格口状态、占用风险和释放时机"
-        erpItems={[
-          '先确认分拣格编号、仓库归属和当前占用状态，避免误用或冲突释放。',
-          '如果格口占用异常或任务卡在分拣阶段，优先在 ERP 判断是否需要释放或调整。',
-          '结构判断完成后，再决定回波次详情、仓库任务还是异常工作台继续处理。',
-        ]}
-        pdaTitle="再由现场通过分拣执行把商品真正落到格口"
-        pdaItems={[
-          'PDA 分拣负责把波次商品按客户和任务真正分配到对应格口。',
-          '仓库任务和波次详情负责复核当前格口是否还适合继续使用。',
-          '如果现场发现格口冲突、标签异常或扫码失败，再回异常工作台和打印查询收口。',
-        ]}
-        actions={[
-          { label: '打开波次详情', variant: 'default', onClick: () => navigate('/picking-waves?waveId=1&focus=print-closure') },
           { label: '打开 PDA 分拣', onClick: () => navigate('/pda/sort') },
           { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
         ]}

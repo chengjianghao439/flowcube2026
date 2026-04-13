@@ -8,7 +8,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
-import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -116,29 +115,6 @@ export default function CarriersPage() {
           { label: '打开销售单', variant: 'default', onClick: () => navigate('/sale') },
           { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
           { label: '打开打印查询', onClick: () => navigate('/settings/barcode-print-query?category=logistics&status=failed') },
-        ]}
-      />
-
-      <ExecutionBridgePanel
-        badge="ERP / 处理执行桥接"
-        title="承运商页统一承接物流判断与现场处理动作"
-        description="ERP 在这里负责判断承运商资料、启停状态和物流渠道是否适合继续使用；实际处理则通过销售单、仓库任务、物流标签打印和异常入口继续推进，避免承运商页只停在资料维护。"
-        erpTitle="先在 ERP 判断承运商可用性、渠道选择和风险状态"
-        erpItems={[
-          '先确认承运商类型、联系人和启停状态，避免销售和仓库继续使用失效渠道。',
-          '如果出现物流标签异常、承运商切换或出库卡点，优先在 ERP 侧先判断应走哪条处理链。',
-          '资料确认后，再决定回销售单、仓库任务或打印查询继续处理。',
-        ]}
-        pdaTitle="再通过业务和打印入口完成真实物流处理"
-        pdaItems={[
-          '销售单继续承接承运商选择和物流信息绑定。',
-          '仓库任务和 PDA 出库负责现场执行，真正把承运商应用到发运链路。',
-          '物流标签失败或超时时，再回打印查询和异常工作台收口现场问题。',
-        ]}
-        actions={[
-          { label: '打开销售单', variant: 'default', onClick: () => navigate('/sale') },
-          { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-          { label: '打开物流打印查询', onClick: () => navigate('/settings/barcode-print-query?category=logistics&status=failed') },
         ]}
       />
 

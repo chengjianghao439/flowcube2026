@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
-import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -69,28 +68,6 @@ export default function StockCheckPage() {
         actions={[
           { label: '打开库存管理', variant: 'default', onClick: () => navigate('/inventory') },
           { label: '打开岗位工作台', onClick: () => navigate('/reports/role-workbench') },
-          { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-        ]}
-      />
-      <ExecutionBridgePanel
-        badge="ERP / 现场执行桥接"
-        title="盘点列表统一承接盘点组织与现场校正协同"
-        description="ERP 在这里负责决定什么时候新建盘点、继续已有盘点、是否允许正式调整；现场则负责复点、核查差异来源，并通过盘点详情、收货、仓库任务等链路完成实际校正。"
-        erpTitle="先在 ERP 决定盘点批次、优先级和正式调整时机"
-        erpItems={[
-          '先按仓库和盘点状态判断是否新建盘点，还是继续推进已有盘点单。',
-          '差异来源不明时，优先回库存日志、岗位工作台和异常工作台继续核查。',
-          '只有确认差异原因和实盘可信后，才把盘点提交成正式库存调整。',
-        ]}
-        pdaTitle="再由现场复点和业务链路完成真实数量校正"
-        pdaItems={[
-          '现场先重新核对异常商品和库位，必要时回收货、上架、拣货或出库链路复盘。',
-          '盘点单详情负责录入实盘数，但真实差异仍要回现场动作确认。',
-          '校正完成后，再回盘点列表确认盘点状态、差异结果和后续是否需要继续追查。',
-        ]}
-        actions={[
-          { label: '打开库存管理', variant: 'default', onClick: () => navigate('/inventory') },
-          { label: '打开 PDA 工作台', onClick: () => navigate('/pda') },
           { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
         ]}
       />

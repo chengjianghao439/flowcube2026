@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
-import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -77,28 +76,6 @@ export default function SuppliersPage() {
           { label: '打开采购单', variant: 'default', onClick: () => navigate('/purchase') },
           { label: '打开收货订单', onClick: () => navigate('/inbound-tasks') },
           { label: '打开对账基础版', onClick: () => navigate('/reports/reconciliation?type=1') },
-        ]}
-      />
-      <ExecutionBridgePanel
-        badge="ERP / 处理执行桥接"
-        title="供应商页统一承接采购判断与后续到货处理动作"
-        description="ERP 在这里负责判断供应商资料、启停状态和采购前置条件是否完整；实际处理动作则通过采购单、收货订单、对账和应付账款继续推进，避免供应商页只停在资料维护。"
-        erpTitle="先在 ERP 判断供应商资料、可用状态和采购风险"
-        erpItems={[
-          '先确认供应商名称、联系人、启停状态和基础资料是否适合继续承接采购。',
-          '如果供应商存在到货异常、账款风险或资料缺失，优先在 ERP 层先收口判断再继续下游动作。',
-          '资料确认后，再决定回采购单、收货订单或对账页继续推进。',
-        ]}
-        pdaTitle="再通过采购、收货和对账入口完成真实业务推进"
-        pdaItems={[
-          '需要继续采购时，回采购单建立计划并提交到收货主链。',
-          '已经到货时，继续通过收货订单、PDA 收货和上架链路完成现场执行。',
-          '需要核对应付款和到货异常时，回对账基础版、应付账款和异常工作台继续收口。',
-        ]}
-        actions={[
-          { label: '打开采购单', variant: 'default', onClick: () => navigate('/purchase') },
-          { label: '打开收货订单', onClick: () => navigate('/inbound-tasks') },
-          { label: '打开应付/应收账款', onClick: () => navigate('/payments') },
         ]}
       />
       <FilterCard>

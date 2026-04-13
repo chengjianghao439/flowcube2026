@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
-import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -463,28 +462,6 @@ export default function InboundTaskDetailPage() {
             { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
             { label: '打开岗位工作台', variant: 'outline', onClick: () => openPath('/reports/role-workbench', '岗位工作台') },
             { label: '打开打印查询', variant: 'outline', onClick: () => openPrintQuery() },
-          ]}
-        />
-        <ExecutionBridgePanel
-          badge="ERP / PDA 协同"
-          title="收货详情负责指挥，PDA 负责现场执行"
-          description="ERP 端在这里判断补打、上架、审核和异常处理；PDA 端负责收货登记与扫码上架。两边入口保持一致，避免现场和后台各走各的。"
-          erpTitle="先在 ERP 确认主链状态"
-          erpItems={[
-            '先确认打印、待上架和审核当前状态',
-            '打印失败或超时时，优先在 ERP 发起补打和排查',
-            '审核退回或异常超时时，在 ERP 收口后再回现场执行',
-          ]}
-          pdaTitle="再回 PDA 继续现场动作"
-          pdaItems={[
-            '收货登记后继续在 PDA 扫码上架',
-            '待上架容器优先在 PDA 完成货架落位',
-            '需要现场复核条码或重扫时，统一回 PDA 收货链路处理',
-          ]}
-          actions={[
-            { label: '打开 PDA 收货', onClick: () => openPath('/pda/inbound', 'PDA 收货') },
-            { label: '打开 PDA 上架', variant: 'outline', onClick: () => openPath(task?.id ? `/pda/putaway/${task.id}` : '/pda/inbound', 'PDA 上架') },
-            { label: '打开异常工作台', variant: 'outline', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
           ]}
         />
       </Section>

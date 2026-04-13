@@ -8,7 +8,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
-import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -121,29 +120,6 @@ export default function LocationsPage() {
           '先维护库位编码、区域结构和容量，保证上架与盘点现场有清晰落点。',
           '再到收货订单和仓库任务确认实际上架、补录和现场任务是否能落到正确库位。',
           '发现库存差异或现场异常时，回库存管理和异常工作台继续排查。',
-        ]}
-        actions={[
-          { label: '打开收货订单', variant: 'default', onClick: () => navigate('/inbound-tasks') },
-          { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-          { label: '打开库存管理', onClick: () => navigate('/inventory') },
-        ]}
-      />
-
-      <ExecutionBridgePanel
-        badge="ERP / 现场执行桥接"
-        title="库位页统一承接仓储结构判断与现场落位动作"
-        description="ERP 在这里负责判断库位结构、容量和规则是否适合继续使用；现场则通过收货、上架、仓库任务和盘点链路把实际库存落到正确位置，避免库位页只停在结构维护。"
-        erpTitle="先在 ERP 判断库位结构、容量和使用规则"
-        erpItems={[
-          '先确认仓库、区域、通道、货架和库位编码是否符合当前仓储规划。',
-          '库位容量和状态变更前，优先判断会不会影响现有上架和库存追踪。',
-          '结构确认后，再决定回收货订单、仓库任务还是库存页继续处理。',
-        ]}
-        pdaTitle="再由现场通过上架、执行和盘点链路完成真实落位"
-        pdaItems={[
-          '收货和 PDA 上架负责把新到货库存落到实际库位。',
-          '仓库任务和盘点负责复核库存是否真的在正确位置，避免账实分离。',
-          '如果现场发现库位异常或容量冲突，再回异常工作台和库存页继续排查。',
         ]}
         actions={[
           { label: '打开收货订单', variant: 'default', onClick: () => navigate('/inbound-tasks') },

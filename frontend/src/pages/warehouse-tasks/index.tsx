@@ -6,7 +6,6 @@ import { LayoutGrid, List, ScanBarcode } from 'lucide-react'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import PageHeader from '@/components/shared/PageHeader'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
-import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import DataTable from '@/components/shared/DataTable'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
@@ -114,29 +113,6 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                 { label: '打开容器拆分', variant: 'outline', onClick: () => nav('/pda/split') },
               ]}
             />
-            <ExecutionBridgePanel
-              badge="ERP / PDA 协同"
-              title="仓库任务详情负责指挥，PDA 负责现场执行"
-              description="ERP 端在这里判断装箱、补打和出库风险；PDA 端负责拣货、打包、出库和必要的容器拆分。两边入口统一后，现场切换会更直接。"
-              erpTitle="先在 ERP 确认任务和打印闭环"
-              erpItems={[
-                '先看装箱完成度和打印异常是否已收口',
-                '物流标签或箱贴异常优先在 ERP 打印查询中处理',
-                '需要重新安排优先级或异常排查时回岗位工作台和异常工作台',
-              ]}
-              pdaTitle="再回 PDA 继续现场执行"
-              pdaItems={[
-                '待复核后继续打包，打包完成再推进出库',
-                '现场需要重扫、拆分或继续出库时统一回 PDA',
-                'PDA 只负责执行，不在现场侧做优先级判断',
-              ]}
-              actions={[
-                { label: '打开 PDA 拣货', onClick: () => nav('/pda/picking') },
-                { label: '打开 PDA 打包', variant: 'outline', onClick: () => nav('/pda/pack') },
-                { label: '打开 PDA 出库', variant: 'outline', onClick: () => nav('/pda/ship') },
-              ]}
-            />
-
             <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/40 p-4 text-sm">
               <div><span className="text-muted-foreground">任务编号：</span><span className="text-doc-code-strong">{task.taskNo}</span></div>
               <div><span className="text-muted-foreground">关联销售单：</span><span className="text-doc-code">{task.saleOrderNo}</span></div>

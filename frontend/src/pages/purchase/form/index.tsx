@@ -23,7 +23,6 @@ import { ActionBar }      from '@/components/shared/ActionBar'
 import { StatusBadge }    from '@/components/shared/StatusBadge'
 import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
-import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import { SupplierFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import {
   useCreatePurchase, usePurchaseDetail,
@@ -379,29 +378,6 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
           { label: '打开岗位工作台', variant: 'default', onClick: () => navigate('/reports/role-workbench') },
           { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
           { label: '查看收货订单', onClick: () => navigate('/inbound-tasks') },
-        ]}
-      />
-
-      <ExecutionBridgePanel
-        badge="ERP / PDA 执行桥接"
-        title="采购详情统一承接计划确认与现场收货执行"
-        description="ERP 在这里确认供应商、仓库、预计到货和提交动作；真正到货后，PDA 继续承接收货登记、库存条码打印和上架执行，形成采购到收货的闭环。"
-        erpTitle="先在 ERP 确认计划、提交采购，并切到收货主链"
-        erpItems={[
-          '确认供应商、仓库、预计到货和商品数量后，再提交采购单。',
-          '采购提交后，后续处理以收货订单、岗位工作台和异常工作台为主入口。',
-          '如果计划变更或到货异常，优先在 ERP 收口，而不是让 PDA 现场自行判断。',
-        ]}
-        pdaTitle="到货后由 PDA 承接收货登记、扫码和上架"
-        pdaItems={[
-          '现场先在 PDA 收货列表找到任务，再进入收货执行页登记到货。',
-          '收货完成后继续打印库存条码、扫码上架，并把结果回写到 ERP 详情。',
-          '现场发现条码、库位或补打异常时，再回 ERP 异常工作台或打印查询处理。',
-        ]}
-        actions={[
-          { label: '打开收货订单', variant: 'default', onClick: () => navigate('/inbound-tasks') },
-          { label: '打开 PDA 收货', onClick: () => navigate('/pda/inbound') },
-          { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
         ]}
       />
 

@@ -9,7 +9,6 @@ import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { FocusModePanel } from '@/components/shared/FocusModePanel'
-import { ExecutionBridgePanel } from '@/components/shared/ExecutionBridgePanel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -290,29 +289,6 @@ export default function PickingWavesPage() {
                 { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
                 { label: '打开岗位工作台', variant: 'outline', onClick: () => openPath('/reports/role-workbench', '岗位工作台') },
                 { label: '打开出库补打', variant: 'outline', onClick: () => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询') },
-              ]}
-            />
-
-            <ExecutionBridgePanel
-              badge="ERP / PDA 执行桥接"
-              title="波次详情统一承接后台判断与现场执行"
-              description="ERP 在这里判断波次推进、打印闭环和异常优先级；PDA 负责拣货、分拣、复核、打包与出库的现场动作，避免现场页与后台页各说各话。"
-              erpTitle="先在 ERP 收口波次推进、打印异常和跨任务优先级"
-              erpItems={[
-                '确认波次是否进入待拣货、拣货中、待分拣或已完成阶段。',
-                '先收口出库标签失败、超时和推进卡点，再决定是否继续现场执行。',
-                '需要跨任务统一排优先级时，回岗位工作台或异常工作台继续调度。',
-              ]}
-              pdaTitle="再把现场动作交给 PDA 连续推进"
-              pdaItems={[
-                '从 PDA 拣货开始，继续推进到分拣、复核、打包和出库。',
-                '现场扫码过程中如果发现打印、容器或条码异常，再回 ERP 页面处理闭环。',
-                '波次执行完成后，回到详情页复盘进度、异常和打印结果。',
-              ]}
-              actions={[
-                { label: '打开 PDA 拣货', variant: 'default', onClick: () => openPath('/pda/picking', 'PDA 拣货') },
-                { label: '打开 PDA 分拣', onClick: () => openPath('/pda/sort', 'PDA 分拣') },
-                { label: '打开异常工作台', onClick: () => openPath('/reports/exception-workbench', '异常工作台') },
               ]}
             />
 
