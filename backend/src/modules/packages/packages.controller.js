@@ -35,7 +35,6 @@ async function finish(req, res, next) {
     try {
       await printJobs.enqueuePackageLabelJob({
         packageId: id,
-        tenantId: req.user.tenantId ?? 0,
         createdBy: req.user.userId,
       })
     } catch (_) { /* 打印队列失败不阻断完成装箱 */ }
@@ -47,7 +46,6 @@ async function printLabel(req, res, next) {
   try {
     const job = await printJobs.enqueuePackageLabelJob({
       packageId: +req.params.id,
-      tenantId: req.user.tenantId ?? 0,
       createdBy: req.user.userId,
     })
     return successResponse(res, { queued: !!job, job: job ?? null }, job ? '已加入打印队列' : '未配置标签机，未创建打印任务')

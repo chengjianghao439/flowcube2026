@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { usePermission } from '@/hooks/usePermission'
 import { useWorkspaceStore, PATH_TITLES } from '@/store/workspaceStore'
 import type { PermCode } from '@/lib/permissions'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 export type NavChildItem = { label: string; path: string; perm: PermCode }
 
@@ -20,85 +21,85 @@ export type TopNavSection =
 
 /** 与原 Sidebar 分组一致，并补全 KeepAlive 中已有路由（报表子页、波次扫码） */
 export const TOP_NAV_SECTIONS: TopNavSection[] = [
-  { kind: 'link', label: '仪表盘', path: '/dashboard', perm: 'page:dashboard' },
+  { kind: 'link', label: '仪表盘', path: '/dashboard', perm: PERMISSIONS.DASHBOARD_VIEW },
   {
     kind: 'menu',
     label: '采购',
     children: [
-      { label: '供应商管理', path: '/suppliers', perm: 'page:suppliers' },
-      { label: '采购订单', path: '/purchase', perm: 'page:purchase' },
-      { label: '收货订单', path: '/inbound-tasks', perm: 'page:inbound' },
+      { label: '供应商管理', path: '/suppliers', perm: PERMISSIONS.SUPPLIER_VIEW },
+      { label: '采购订单', path: '/purchase', perm: PERMISSIONS.PURCHASE_ORDER_VIEW },
+      { label: '收货订单', path: '/inbound-tasks', perm: PERMISSIONS.INBOUND_ORDER_VIEW },
     ],
   },
   {
     kind: 'menu',
     label: '销售',
     children: [
-      { label: '客户管理', path: '/customers', perm: 'page:customers' },
-      { label: '承运商管理', path: '/carriers', perm: 'page:carriers' },
-      { label: '销售管理', path: '/sale', perm: 'page:sale' },
-      { label: '价格管理', path: '/price-lists', perm: 'page:sale' },
+      { label: '客户管理', path: '/customers', perm: PERMISSIONS.CUSTOMER_VIEW },
+      { label: '承运商管理', path: '/carriers', perm: PERMISSIONS.CARRIER_VIEW },
+      { label: '销售管理', path: '/sale', perm: PERMISSIONS.SALE_ORDER_VIEW },
+      { label: '价格管理', path: '/price-lists', perm: PERMISSIONS.PRICE_LIST_VIEW },
     ],
   },
   {
     kind: 'menu',
     label: '往来',
     children: [
-      { label: '退货管理', path: '/returns', perm: 'page:returns' },
-      { label: '应付/应收', path: '/payments', perm: 'page:payments' },
+      { label: '退货管理', path: '/returns', perm: PERMISSIONS.RETURN_ORDER_VIEW },
+      { label: '应付/应收', path: '/payments', perm: PERMISSIONS.PAYMENT_VIEW },
     ],
   },
   {
     kind: 'menu',
     label: '库存',
     children: [
-      { label: '商品管理', path: '/products', perm: 'page:products' },
-      { label: '商品分类', path: '/categories', perm: 'page:categories' },
-      { label: '仓库管理', path: '/warehouses', perm: 'page:warehouses' },
-      { label: '库位管理', path: '/locations', perm: 'page:warehouses' },
-      { label: '货架管理', path: '/racks', perm: 'page:warehouses' },
-      { label: '库存总览', path: '/inventory/overview', perm: 'page:inventory' },
-      { label: '库存管理', path: '/inventory', perm: 'page:inventory' },
-      { label: '库存盘点', path: '/stockcheck', perm: 'page:stockcheck' },
-      { label: '库存调拨', path: '/transfer', perm: 'page:transfer' },
+      { label: '商品管理', path: '/products', perm: PERMISSIONS.PRODUCT_VIEW },
+      { label: '商品分类', path: '/categories', perm: PERMISSIONS.CATEGORY_VIEW },
+      { label: '仓库管理', path: '/warehouses', perm: PERMISSIONS.WAREHOUSE_VIEW },
+      { label: '库位管理', path: '/locations', perm: PERMISSIONS.LOCATION_VIEW },
+      { label: '货架管理', path: '/racks', perm: PERMISSIONS.RACK_VIEW },
+      { label: '库存总览', path: '/inventory/overview', perm: PERMISSIONS.INVENTORY_VIEW },
+      { label: '库存管理', path: '/inventory', perm: PERMISSIONS.INVENTORY_VIEW },
+      { label: '库存盘点', path: '/stockcheck', perm: PERMISSIONS.STOCKCHECK_VIEW },
+      { label: '库存调拨', path: '/transfer', perm: PERMISSIONS.TRANSFER_ORDER_VIEW },
     ],
   },
   {
     kind: 'menu',
     label: '仓库任务',
     children: [
-      { label: '出库看板', path: '/warehouse-tasks', perm: 'page:warehouse-tasks' },
-      { label: '波次拣货', path: '/picking-waves', perm: 'page:warehouse-tasks' },
-      { label: '分拣格管理', path: '/sorting-bins', perm: 'page:warehouse-tasks' },
-      { label: '波次扫码', path: '/wave-scan', perm: 'page:warehouse-tasks' },
+      { label: '出库看板', path: '/warehouse-tasks', perm: PERMISSIONS.WAREHOUSE_TASK_VIEW },
+      { label: '波次拣货', path: '/picking-waves', perm: PERMISSIONS.PICKING_WAVE_VIEW },
+      { label: '分拣格管理', path: '/sorting-bins', perm: PERMISSIONS.SORTING_BIN_VIEW },
+      { label: '波次扫码', path: '/wave-scan', perm: PERMISSIONS.PICKING_WAVE_VIEW },
     ],
   },
   {
     kind: 'menu',
     label: '数据',
     children: [
-      { label: '报表中心', path: '/reports', perm: 'page:reports' },
-      { label: '岗位工作台', path: '/reports/role-workbench', perm: 'page:reports' },
-      { label: '异常工作台', path: '/reports/exception-workbench', perm: 'page:reports' },
-      { label: '对账基础版', path: '/reports/reconciliation', perm: 'page:reports' },
-      { label: '利润 / 库存分析', path: '/reports/profit-analysis', perm: 'page:reports' },
-      { label: '审批与提醒', path: '/reports/approvals', perm: 'page:reports' },
-      { label: '波次效率', path: '/reports/wave-performance', perm: 'page:reports' },
-      { label: 'PDA 异常分析', path: '/reports/pda-anomaly', perm: 'page:reports' },
-      { label: '仓库运营看板', path: '/reports/warehouse-ops', perm: 'page:reports' },
-      { label: '操作日志', path: '/oplogs', perm: 'page:users' },
+      { label: '报表中心', path: '/reports', perm: PERMISSIONS.REPORT_VIEW },
+      { label: '岗位工作台', path: '/reports/role-workbench', perm: PERMISSIONS.REPORT_VIEW },
+      { label: '异常工作台', path: '/reports/exception-workbench', perm: PERMISSIONS.REPORT_VIEW },
+      { label: '对账基础版', path: '/reports/reconciliation', perm: PERMISSIONS.REPORT_VIEW },
+      { label: '利润 / 库存分析', path: '/reports/profit-analysis', perm: PERMISSIONS.REPORT_VIEW },
+      { label: '审批与提醒', path: '/reports/approvals', perm: PERMISSIONS.REPORT_VIEW },
+      { label: '波次效率', path: '/reports/wave-performance', perm: PERMISSIONS.REPORT_VIEW },
+      { label: 'PDA 异常分析', path: '/reports/pda-anomaly', perm: PERMISSIONS.REPORT_VIEW },
+      { label: '仓库运营看板', path: '/reports/warehouse-ops', perm: PERMISSIONS.REPORT_VIEW },
+      { label: '操作日志', path: '/oplogs', perm: PERMISSIONS.AUDIT_LOG_VIEW },
     ],
   },
   {
     kind: 'menu',
     label: '系统',
     children: [
-      { label: '用户管理', path: '/users', perm: 'page:users' },
-      { label: '权限管理', path: '/permissions', perm: 'page:users' },
-      { label: '系统设置', path: '/settings', perm: 'page:settings' },
-      { label: '条码打印查询', path: '/settings/barcode-print-query', perm: 'page:settings' },
-      { label: '打印模板', path: '/settings/print-templates', perm: 'page:settings' },
-      { label: '打印机管理', path: '/settings/printers', perm: 'page:settings' },
+      { label: '用户管理', path: '/users', perm: PERMISSIONS.USER_VIEW },
+      { label: '权限管理', path: '/permissions', perm: PERMISSIONS.ROLE_VIEW },
+      { label: '系统设置', path: '/settings', perm: PERMISSIONS.SETTINGS_VIEW },
+      { label: '条码打印查询', path: '/settings/barcode-print-query', perm: PERMISSIONS.PRINT_JOB_VIEW },
+      { label: '打印模板', path: '/settings/print-templates', perm: PERMISSIONS.PRINT_TEMPLATE_VIEW },
+      { label: '打印机管理', path: '/settings/printers', perm: PERMISSIONS.PRINT_PRINTER_VIEW },
     ],
   },
 ]

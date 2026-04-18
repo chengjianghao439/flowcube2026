@@ -2,8 +2,9 @@ const { Router } = require('express')
 const { z } = require('zod')
 const { pool } = require('../../config/db')
 const { successResponse } = require('../../utils/response')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const AppError = require('../../utils/AppError')
+const { PERMISSIONS } = require('../../constants/permissions')
 const router = Router()
 router.use(authMiddleware)
 
@@ -17,7 +18,7 @@ const vParams = s => (req,res,next) => {
 const idParam = z.object({ id: z.coerce.number().int().positive('id 必须为正整数') })
 
 // 列表（含合计）
-router.get('/', async (req, res, next) => {
+router.get('/', requirePermission(PERMISSIONS.PAYMENT_VIEW), async (req, res, next) => {
   try {
     const { page=1, pageSize=20, type='', status='' } = req.query
     const offset = (+page-1)*+pageSize
@@ -34,7 +35,7 @@ router.get('/', async (req, res, next) => {
 })
 
 // 手动创建账款（也可从采购/销售单自动创建）
-router.post('/', vBody(z.object({ type:z.number().int().min(1).max(2), orderNo:z.string(), partyName:z.string(), totalAmount:z.number().positive(), dueDate:z.string().optional(), remark:z.string().optional() })), async (req,res,next) => {
+router.post('/', requirePermission(PERMISSIONS.PAYMENT_CREATE), vBody(z.object({ type:z.number().int().min(1).max(2), orderNo:z.string(), partyName:z.string(), totalAmount:z.number().positive(), dueDate:z.string().optional(), remark:z.string().optional() })), async (req,res,next) => {
   try {
     const { type, orderNo, partyName, totalAmount, dueDate, remark } = req.body
     const [r] = await pool.query(`INSERT INTO payment_records (type,order_no,party_name,total_amount,balance,due_date,remark) VALUES (?,?,?,?,?,?,?)`,[type,orderNo,partyName,totalAmount,totalAmount,dueDate||null,remark||null])
@@ -43,7 +44,7 @@ router.post('/', vBody(z.object({ type:z.number().int().min(1).max(2), orderNo:z
 })
 
 // 登记付款/收款
-router.post('/:id/pay', vParams(idParam), vBody(z.object({ amount:z.number().positive('金额必须大于0'), paymentDate:z.string(), method:z.string().optional(), remark:z.string().optional() })), async (req,res,next) => {
+router.post('/:id/pay', requirePermission(PERMISSIONS.PAYMENT_EXECUTE), vParams(idParam), vBody(z.object({ amount:z.number().positive('金额必须大于0'), paymentDate:z.string(), method:z.string().optional(), remark:z.string().optional() })), async (req,res,next) => {
   try {
     const id = +req.params.id
     const [[record]] = await pool.query('SELECT * FROM payment_records WHERE id=?',[id])
@@ -61,7 +62,7 @@ router.post('/:id/pay', vParams(idParam), vBody(z.object({ amount:z.number().pos
 })
 
 // 账款明细（付款记录）
-router.get('/:id/entries', vParams(idParam), async (req,res,next) => {
+router.get('/:id/entries', requirePermission(PERMISSIONS.PAYMENT_VIEW), vParams(idParam), async (req,res,next) => {
   try {
     const [rows] = await pool.query('SELECT * FROM payment_entries WHERE record_id=? ORDER BY created_at ASC',[+req.params.id])
     return successResponse(res, rows.map(r=>({ id:r.id, amount:Number(r.amount), paymentDate:r.payment_date, method:r.method, remark:r.remark, operatorName:r.operator_name, createdAt:r.created_at })), '查询成功')

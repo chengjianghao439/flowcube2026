@@ -995,7 +995,7 @@ function distributeQtyToLines(taskItems, productId, qty) {
 /**
  * 收货：支持旧版单包 { productId, qty }，也支持同商品多箱 { productId, packages:[{ qty }] }
  */
-async function receive(taskId, payload, { userId, tenantId = 0 } = {}) {
+async function receive(taskId, payload, { userId } = {}) {
   const { productId, qty, packages: rawPackages } = payload
   const productIdN = Number(productId)
   const packages = Array.isArray(rawPackages) && rawPackages.length
@@ -1144,7 +1144,6 @@ async function receive(taskId, payload, { userId, tenantId = 0 } = {}) {
       const job = await printJobs.enqueueContainerLabelJob({
         type: 'container_label',
         containerId: container.containerId,
-        tenantId: Number(tenantId) >= 0 ? Number(tenantId) : 0,
         warehouseId: result.warehouseId,
         data: {
           container_code: container.containerCode,
@@ -1477,7 +1476,7 @@ async function listAllPendingPutawayContainers() {
   }))
 }
 
-async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } = {}, operator = null, tenantId = 0) {
+async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } = {}, operator = null) {
   const normalizedMode = String(mode || 'task').trim().toLowerCase()
   if (!['task', 'item', 'barcode'].includes(normalizedMode)) throw new AppError('补打模式无效', 400)
 
@@ -1543,7 +1542,6 @@ async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } 
     for (const container of containers) {
       const job = await enqueueContainerLabelJob({
         containerId: Number(container.id),
-        tenantId,
         warehouseId: container.warehouse_id != null ? Number(container.warehouse_id) : null,
         data: {
           container_code: container.barcode,

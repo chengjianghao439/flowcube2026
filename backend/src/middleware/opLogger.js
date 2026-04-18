@@ -1,4 +1,5 @@
 const { pool } = require('../config/db')
+const logger = require('../utils/logger')
 
 const MODULE_MAP = {
   '/api/auth': 'auth', '/api/users': 'users', '/api/warehouses': 'warehouses',
@@ -24,16 +25,18 @@ function opLogger(req, res, next) {
     setImmediate(async () => {
       try {
         const userId = req.user?.userId || null
-        const userName = req.user?.username || null
+        const userName = req.user?.username || req.user?.realName || null
         const bodyStr = req.body && Object.keys(req.body).length
           ? JSON.stringify(req.body).substring(0, 500)
           : null
         const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null
         await pool.query(
-          `INSERT INTO operation_logs (user_id,user_name,method,path,module,request_body,status_code,ip) VALUES (?,?,?,?,?,?,?,?)`,
-          [userId, userName, req.method, req.path, getModule(req.path), bodyStr, res.statusCode, ip]
+          `INSERT INTO operation_logs (user_id,user_name,action,method,path,module,request_body,status_code,ip) VALUES (?,?,?,?,?,?,?,?,?)`,
+          [userId, userName, `${req.method} ${req.path}`, req.method, req.path, getModule(req.path), bodyStr, res.statusCode, ip]
         )
-      } catch (_) {}
+      } catch (error) {
+        logger.error('写入操作日志失败', error, { path: req.path, method: req.method }, 'OPLOG')
+      }
     })
     return originalJson(body)
   }

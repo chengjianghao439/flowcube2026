@@ -2,8 +2,9 @@ const { Router } = require('express')
 const { z } = require('zod')
 const svc = require('./warehouse-tasks.service')
 const { successResponse } = require('../../utils/response')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { pool } = require('../../config/db')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 
@@ -24,7 +25,7 @@ function vBody(schema) {
 }
 
 // GET /api/warehouse-tasks — 列表（支持 status / warehouseId / keyword / page / pageSize）
-router.get('/', async (req, res, next) => {
+router.get('/', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), async (req, res, next) => {
   try {
     const { page=1, pageSize=20, keyword='', status, warehouseId } = req.query
     const data = await svc.findAll({ page:+page, pageSize:+pageSize, keyword, status:status?+status:null, warehouseId:warehouseId?+warehouseId:null })
@@ -33,27 +34,27 @@ router.get('/', async (req, res, next) => {
 })
 
 // GET /api/warehouse-tasks/my — PDA 任务池（status IN 1,2）
-router.get('/my', async (req, res, next) => {
+router.get('/my', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), async (req, res, next) => {
   try { return successResponse(res, await svc.findMyTasks(), '查询成功') } catch (e) { next(e) }
 })
 
 // GET /api/warehouse-tasks/:id/pick-suggestions — 推荐拣货容器
-router.get('/:id/pick-suggestions', async (req, res, next) => {
+router.get('/:id/pick-suggestions', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), async (req, res, next) => {
   try { return successResponse(res, await svc.getPickSuggestions(+req.params.id)) } catch (e) { next(e) }
 })
 
 // GET /api/warehouse-tasks/:id/pick-route — 最优拣货路线
-router.get('/:id/pick-route', async (req, res, next) => {
+router.get('/:id/pick-route', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), async (req, res, next) => {
   try { return successResponse(res, await svc.getPickRoute(+req.params.id)) } catch (e) { next(e) }
 })
 
 // GET /api/warehouse-tasks/:id — 详情（含明细）
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), async (req, res, next) => {
   try { return successResponse(res, await svc.findById(+req.params.id), '查询成功') } catch (e) { next(e) }
 })
 
 // PUT /api/warehouse-tasks/:id/assign — 分配操作员
-router.put('/:id/assign', vBody(z.object({ userId: z.number().int().positive(), userName: z.string().min(1) })), async (req, res, next) => {
+router.put('/:id/assign', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), vBody(z.object({ userId: z.number().int().positive(), userName: z.string().min(1) })), async (req, res, next) => {
   try {
     await svc.assign(+req.params.id, req.body)
     return successResponse(res, null, '已分配')
@@ -70,7 +71,7 @@ function pdaOnly(req, res, next) {
 }
 
 // PUT /api/warehouse-tasks/:id/start-picking — 开始备货（1→2）
-router.put('/:id/start-picking', pdaOnly, async (req, res, next) => {
+router.put('/:id/start-picking', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), pdaOnly, async (req, res, next) => {
   try { await svc.startPicking(+req.params.id); return successResponse(res, null, '备货已开始') } catch (e) { next(e) }
 })
 
@@ -88,12 +89,12 @@ router.put('/:id/items/:itemId/picked-qty', (req, res) => {
 })
 
 // PUT /api/warehouse-tasks/:id/ready — 拣货完成，待分拣（2→3）
-router.put('/:id/ready', pdaOnly, async (req, res, next) => {
+router.put('/:id/ready', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK), pdaOnly, async (req, res, next) => {
   try { await svc.readyToShip(+req.params.id); return successResponse(res, null, '已标记为待分拣') } catch (e) { next(e) }
 })
 
 // GET /api/warehouse-tasks/:id/events — 查询任务事件历史
-router.get('/:id/events', async (req, res, next) => {
+router.get('/:id/events', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), async (req, res, next) => {
   try {
     const [events] = await pool.query(
       `SELECT id, event_type, from_status, to_status, operator_name, detail, created_at
@@ -108,7 +109,7 @@ router.get('/:id/events', async (req, res, next) => {
 
 // GET /api/warehouse-tasks/:id/debug — 任务完整数据快照（调试用）
 // 一次返回任务在所有关联表的完整状态，用于快速定位流程问题
-router.get('/:id/debug', async (req, res, next) => {
+router.get('/:id/debug', requirePermission(PERMISSIONS.WAREHOUSE_TASK_DEBUG), async (req, res, next) => {
   try {
     const taskId = +req.params.id
 

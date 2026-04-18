@@ -8,8 +8,7 @@ import { persistLoginSuccess } from '@/lib/loginCredentials'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { syncPdaLabelPrinterBinding } from '@/lib/pdaRuntime'
 
-/** rememberPassword：是否在本机保存密码（与 JWT 会话无关） */
-export type LoginMutationVars = LoginParams & { rememberPassword?: boolean }
+export type LoginMutationVars = LoginParams
 
 export function useLogin(redirectTo = '/dashboard') {
   const { login } = useAuthStore()
@@ -24,11 +23,7 @@ export function useLogin(redirectTo = '/dashboard') {
       useWorkspaceStore.getState().closeAll()
       login(data.token, data.user)
       await syncPdaLabelPrinterBinding().catch(() => null)
-      persistLoginSuccess(
-        variables.username,
-        variables.password,
-        !!variables.rememberPassword,
-      )
+      persistLoginSuccess(variables.username)
       navigate(redirectTo, { replace: true })
     },
   })

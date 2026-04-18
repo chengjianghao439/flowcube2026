@@ -1,6 +1,5 @@
 const svc = require('./products.service')
 const { successResponse } = require('../../utils/response')
-const { getTenantId } = require('../../utils/tenantScope')
 
 // 商品选择中心
 const finder = async (req,res,next) => { try { return successResponse(res, await svc.findForFinder({ page:+req.query.page||1, pageSize:+req.query.pageSize||15, keyword:req.query.keyword||'', categoryId:req.query.categoryId?+req.query.categoryId:null, warehouseId:req.query.warehouseId?+req.query.warehouseId:null }), '查询成功') } catch(e){next(e)} }
@@ -15,7 +14,6 @@ const remove     = async (req,res,next) => { try { await svc.softDelete(+req.par
 const printLabel = async (req,res,next) => {
   try {
     const job = await svc.enqueueLabel(+req.params.id, {
-      tenantId: getTenantId(req),
       createdBy: req.user?.userId ?? req.user?.id ?? null,
     })
     return successResponse(

@@ -1,11 +1,12 @@
 const { Router } = require('express')
 const { pool } = require('../../config/db')
 const { successResponse } = require('../../utils/response')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 const router = Router()
 router.use(authMiddleware)
 
-router.get('/', async (req, res, next) => {
+router.get('/', requirePermission(PERMISSIONS.AUDIT_LOG_VIEW), async (req, res, next) => {
   try {
     const { page=1, pageSize=30, keyword='', module: mod='' } = req.query
     const offset = (+page-1)*+pageSize
@@ -30,9 +31,8 @@ router.get('/', async (req, res, next) => {
 })
 
 // 清空日志（仅管理员）
-router.delete('/clear', async (req, res, next) => {
+router.delete('/clear', requirePermission(PERMISSIONS.AUDIT_LOG_CLEAR), async (req, res, next) => {
   try {
-    if (req.user.roleId !== 1) return res.status(403).json({ success:false, message:'无权操作', data:null })
     await pool.query('DELETE FROM operation_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)')
     return successResponse(res, null, '已清理 30 天前的日志')
   } catch (e) { next(e) }

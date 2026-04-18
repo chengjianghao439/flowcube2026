@@ -10,17 +10,18 @@ import { usePdaRole } from '@/hooks/usePdaRole'
 import type { PdaPerm } from '@/hooks/usePdaRole'
 import { usePdaOnboarding } from '@/hooks/usePdaOnboarding'
 import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 // ── 作业入口（带权限过滤）────────────────────────────────────────────────────
 const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = [
-  { icon: '📥', label: '收货订单', path: '/pda/inbound',  perm: 'pda:inbound'  },
-  { icon: '📤', label: '扫码上架', path: '/pda/putaway',  perm: 'pda:putaway'  },
-  { icon: '🗂️', label: '拣货任务', path: '/pda/picking',  perm: 'pda:picking'  },
-  { icon: '🔀', label: '订单分拣', path: '/pda/sort',      perm: 'pda:sorting'  },
-  { icon: '✅', label: '复核任务', path: '/pda/check',     perm: 'pda:checking' },
-  { icon: '📦', label: '打包作业', path: '/pda/pack',      perm: 'pda:packing'  },
-  { icon: '✂️', label: '容器拆分', path: '/pda/split',     perm: 'pda:split'    },
-  { icon: '🚚', label: '出库确认', path: '/pda/ship',      perm: 'pda:shipping' },
+  { icon: '📥', label: '收货订单', path: '/pda/inbound',  perm: PERMISSIONS.INBOUND_ORDER_VIEW },
+  { icon: '📤', label: '扫码上架', path: '/pda/putaway',  perm: PERMISSIONS.INBOUND_PUTAWAY_EXECUTE },
+  { icon: '🗂️', label: '拣货任务', path: '/pda/picking',  perm: PERMISSIONS.WAREHOUSE_TASK_PICK },
+  { icon: '🔀', label: '订单分拣', path: '/pda/sort',      perm: PERMISSIONS.SORTING_BIN_MANAGE },
+  { icon: '✅', label: '复核任务', path: '/pda/check',     perm: PERMISSIONS.WAREHOUSE_TASK_CHECK },
+  { icon: '📦', label: '打包作业', path: '/pda/pack',      perm: PERMISSIONS.WAREHOUSE_TASK_PACK },
+  { icon: '✂️', label: '容器拆分', path: '/pda/split',     perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT },
+  { icon: '🚚', label: '出库确认', path: '/pda/ship',      perm: PERMISSIONS.WAREHOUSE_TASK_SHIP },
 ]
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────

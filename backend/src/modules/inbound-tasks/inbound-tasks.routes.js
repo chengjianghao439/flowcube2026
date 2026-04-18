@@ -1,7 +1,8 @@
 const { Router } = require('express')
 const { z } = require('zod')
 const ctrl = require('./inbound-tasks.controller')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const router = Router()
 
@@ -105,17 +106,17 @@ function pdaOnly(req, res, next) {
   next()
 }
 
-router.get('/pending-containers', ctrl.pendingContainers)
-router.get('/purchase-items', ctrl.purchaseItems)
-router.get('/',              ctrl.list)
-router.post('/',             vBody(createSchema), ctrl.create)
-router.get('/:id/containers', ctrl.containers)
-router.get('/:id',           ctrl.detail)
-router.post('/:id/submit',   ctrl.submit)
-router.post('/:id/audit',    vBody(auditSchema), ctrl.audit)
-router.post('/:id/reprint',  vBody(reprintSchema), ctrl.reprint)
-router.post('/:id/receive',  vBody(receiveSchema), ctrl.receive)
-router.post('/:id/putaway', pdaOnly, vBody(putawaySchema), ctrl.putaway)
-router.post('/:id/cancel',  ctrl.cancel)
+router.get('/pending-containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.pendingContainers)
+router.get('/purchase-items', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.purchaseItems)
+router.get('/',              requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.list)
+router.post('/',             requirePermission(PERMISSIONS.INBOUND_ORDER_CREATE), vBody(createSchema), ctrl.create)
+router.get('/:id/containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.containers)
+router.get('/:id',           requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.detail)
+router.post('/:id/submit',   requirePermission(PERMISSIONS.INBOUND_ORDER_SUBMIT), ctrl.submit)
+router.post('/:id/audit',    requirePermission(PERMISSIONS.INBOUND_ORDER_AUDIT), vBody(auditSchema), ctrl.audit)
+router.post('/:id/reprint',  requirePermission(PERMISSIONS.INBOUND_PRINT_REPRINT), vBody(reprintSchema), ctrl.reprint)
+router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), vBody(receiveSchema), ctrl.receive)
+router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaOnly, vBody(putawaySchema), ctrl.putaway)
+router.post('/:id/cancel',  requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.cancel)
 
 module.exports = router

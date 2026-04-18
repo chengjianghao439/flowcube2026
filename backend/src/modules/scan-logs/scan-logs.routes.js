@@ -1,7 +1,8 @@
 const { Router } = require('express')
 const { z } = require('zod')
 const ctrl = require('./scan-logs.controller')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const router = Router()
 
@@ -54,20 +55,20 @@ const checkScanSchema = z.object({
 })
 
 // 扫码记录（仅 PDA）
-router.post('/',             pdaOnly, vBody(createSchema), ctrl.create)
-router.post('/check',        pdaOnly, vBody(checkScanSchema), ctrl.createCheckScan)
-router.get('/task/:taskId',  ctrl.listByTask)
+router.post('/',             requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, vBody(createSchema), ctrl.create)
+router.post('/check',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, vBody(checkScanSchema), ctrl.createCheckScan)
+router.get('/task/:taskId',  requirePermission(PERMISSIONS.SCAN_LOG_VIEW), ctrl.listByTask)
 
 // 错误日志
-router.post('/error',        vBody(errorSchema),  ctrl.logError)
+router.post('/error',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), vBody(errorSchema),  ctrl.logError)
 
 // 撤销日志
-router.post('/undo',         vBody(undoSchema),   ctrl.logUndo)
+router.post('/undo',         requirePermission(PERMISSIONS.SCAN_LOG_CREATE), vBody(undoSchema),   ctrl.logUndo)
 
 // 统计（仓库管理员 / 主管）
-router.get('/stats',         ctrl.getStats)
+router.get('/stats',         requirePermission(PERMISSIONS.SCAN_LOG_VIEW), ctrl.getStats)
 
 // 异常分析报表
-router.get('/anomaly',       ctrl.getAnomalyReport)
+router.get('/anomaly',       requirePermission(PERMISSIONS.SCAN_LOG_VIEW), ctrl.getAnomalyReport)
 
 module.exports = router

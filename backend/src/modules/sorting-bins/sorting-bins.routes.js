@@ -6,7 +6,8 @@ const { Router } = require('express')
 const { z } = require('zod')
 const svc = require('./sorting-bins.service')
 const { successResponse } = require('../../utils/response')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const router = Router()
 router.use(authMiddleware)
@@ -21,7 +22,7 @@ function vBody(schema) {
 
 // GET /api/sorting-bins/scan?code=xxx
 // PDA 扫商品条码 → 查找对应任务的分拣格
-router.get('/scan', async (req, res, next) => {
+router.get('/scan', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), async (req, res, next) => {
   try {
     const { code } = req.query
     if (!code) return res.status(400).json({ success: false, message: '条码不能为空', data: null })
@@ -32,7 +33,7 @@ router.get('/scan', async (req, res, next) => {
 
 // GET /api/sorting-bins?warehouseId=&keyword=&status=
 // 管理页：所有仓库的分拣格
-router.get('/', async (req, res, next) => {
+router.get('/', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), async (req, res, next) => {
   try {
     const { keyword = '', status } = req.query
     const data = await svc.findAllWarehouses({ keyword, status: status ? +status : null })
@@ -42,7 +43,7 @@ router.get('/', async (req, res, next) => {
 
 // GET /api/sorting-bins/warehouse/:warehouseId
 // PDA 或特定仓库查询
-router.get('/warehouse/:warehouseId', async (req, res, next) => {
+router.get('/warehouse/:warehouseId', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), async (req, res, next) => {
   try {
     const data = await svc.findAll(+req.params.warehouseId)
     return successResponse(res, data, '查询成功')
@@ -51,6 +52,7 @@ router.get('/warehouse/:warehouseId', async (req, res, next) => {
 
 // POST /api/sorting-bins — 新建单个
 router.post('/',
+  requirePermission(PERMISSIONS.SORTING_BIN_MANAGE),
   vBody(z.object({
     code:        z.string().min(1).max(20),
     warehouseId: z.number().int().positive(),
@@ -66,6 +68,7 @@ router.post('/',
 
 // POST /api/sorting-bins/batch — 批量创建（如 A01-A10）
 router.post('/batch',
+  requirePermission(PERMISSIONS.SORTING_BIN_MANAGE),
   vBody(z.object({
     warehouseId: z.number().int().positive(),
     prefix:      z.string().min(1).max(5),
@@ -82,6 +85,7 @@ router.post('/batch',
 
 // PATCH /api/sorting-bins/:id — 修改备注
 router.patch('/:id',
+  requirePermission(PERMISSIONS.SORTING_BIN_MANAGE),
   vBody(z.object({ remark: z.string().max(200).optional() })),
   async (req, res, next) => {
     try {
@@ -92,7 +96,7 @@ router.patch('/:id',
 )
 
 // POST /api/sorting-bins/:id/release — 管理员强制释放
-router.post('/:id/release', async (req, res, next) => {
+router.post('/:id/release', requirePermission(PERMISSIONS.SORTING_BIN_MANAGE), async (req, res, next) => {
   try {
     await svc.forceRelease(+req.params.id)
     return successResponse(res, null, '分拣格已释放')
@@ -100,7 +104,7 @@ router.post('/:id/release', async (req, res, next) => {
 })
 
 // DELETE /api/sorting-bins/:id
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requirePermission(PERMISSIONS.SORTING_BIN_MANAGE), async (req, res, next) => {
   try {
     await svc.remove(+req.params.id)
     return successResponse(res, null, '已删除')

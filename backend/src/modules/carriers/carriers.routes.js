@@ -1,7 +1,8 @@
 const { Router } = require('express')
 const { z }      = require('zod')
 const ctrl       = require('./carriers.controller')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const router = Router()
 
@@ -27,11 +28,11 @@ const updateSchema = createSchema.extend({
 
 router.use(authMiddleware)
 
-router.get('/active', ctrl.listActive)
-router.get('/',        ctrl.list)
-router.get('/:id',     ctrl.detail)
-router.post('/',       vBody(createSchema), ctrl.create)
-router.put('/:id',     vBody(updateSchema), ctrl.update)
-router.delete('/:id',  ctrl.remove)
+router.get('/active', requirePermission(PERMISSIONS.CARRIER_VIEW), ctrl.listActive)
+router.get('/',        requirePermission(PERMISSIONS.CARRIER_VIEW), ctrl.list)
+router.get('/:id',     requirePermission(PERMISSIONS.CARRIER_VIEW), ctrl.detail)
+router.post('/',       requirePermission(PERMISSIONS.CARRIER_CREATE), vBody(createSchema), ctrl.create)
+router.put('/:id',     requirePermission(PERMISSIONS.CARRIER_UPDATE), vBody(updateSchema), ctrl.update)
+router.delete('/:id',  requirePermission(PERMISSIONS.CARRIER_DELETE), ctrl.remove)
 
 module.exports = router

@@ -7,38 +7,11 @@ import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { usePermission } from '@/hooks/usePermission'
 import type { ApiResponse } from '@/types'
-
-const ALL_PERMS: { code: string; label: string; group: string }[] = [
-  { group:'页面', code:'page:dashboard',  label:'仪表盘' },
-  { group:'页面', code:'page:warehouses', label:'仓库管理' },
-  { group:'页面', code:'page:suppliers',  label:'供应商管理' },
-  { group:'页面', code:'page:products',   label:'商品管理' },
-  { group:'页面', code:'page:inventory',  label:'库存管理' },
-  { group:'页面', code:'page:stockcheck', label:'库存盘点' },
-  { group:'页面', code:'page:transfer',   label:'库存调拨' },
-  { group:'页面', code:'page:purchase',   label:'采购订单' },
-  { group:'页面', code:'page:inbound',    label:'收货订单' },
-  { group:'页面', code:'page:returns',    label:'退货管理' },
-  { group:'页面', code:'page:customers',  label:'客户管理' },
-  { group:'页面', code:'page:sale',       label:'销售管理' },
-  { group:'页面', code:'page:payments',   label:'账款管理' },
-  { group:'页面', code:'page:reports',    label:'报表中心' },
-  { group:'页面', code:'page:settings',   label:'系统设置' },
-  { group:'页面', code:'page:users',      label:'用户管理' },
-  { group:'操作', code:'action:purchase:confirm', label:'采购确认' },
-  { group:'操作', code:'action:sale:confirm',     label:'销售确认' },
-  { group:'操作', code:'action:sale:ship',        label:'销售出库' },
-  { group:'操作', code:'action:inventory:inbound',  label:'库存入库' },
-  { group:'操作', code:'action:inventory:outbound', label:'库存出库' },
-  { group:'操作', code:'action:inventory:adjust',   label:'库存调整' },
-  { group:'操作', code:'action:stockcheck:submit',  label:'提交盘点' },
-  { group:'操作', code:'action:import',  label:'批量导入' },
-  { group:'操作', code:'action:export',  label:'导出Excel' },
-]
+import { PERMISSIONS, PERMISSION_GROUPS } from '@/lib/permission-codes'
 
 export default function PermissionsPage() {
-  const { roleId } = usePermission()
-  const isAdmin = roleId === 1
+  const { can } = usePermission()
+  const isAdmin = can(PERMISSIONS.ROLE_ASSIGN)
   const qc = useQueryClient()
   const [selectedRole, setSelectedRole] = useState<number>(2)
   const [perms, setPerms] = useState<Set<string>>(new Set())
@@ -58,8 +31,6 @@ export default function PermissionsPage() {
     setPerms(p => { const n = new Set(p); if (n.has(code)) n.delete(code); else n.add(code); return n })
   }
 
-  const groups = [...new Set(ALL_PERMS.map(p => p.group))]
-
   return (
     <div className="space-y-6 max-w-4xl">
       <PageHeader title="权限管理" description="动态配置各角色可访问的功能" />
@@ -75,11 +46,11 @@ export default function PermissionsPage() {
 
       {isLoading ? <p className="text-muted-foreground text-sm">加载中...</p> : (
         <div className="bg-white rounded-xl border p-5 space-y-6">
-          {groups.map(group => (
-            <div key={group}>
-              <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase">{group}</h3>
+          {PERMISSION_GROUPS.map(group => (
+            <div key={group.group}>
+              <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase">{group.group}</h3>
               <div className="flex flex-wrap gap-2">
-                {ALL_PERMS.filter(p => p.group === group).map(p => {
+                {group.items.map(p => {
                   const active = perms.has(p.code)
                   return (
                     <button key={p.code} onClick={() => toggle(p.code)} disabled={!isAdmin}

@@ -8,10 +8,7 @@ export default function LoginPage() {
   const { mutate: login, isPending, error } = useLogin()
 
   const [username, setUsername] = useState(() => loadSavedLoginForm().username)
-  const [password, setPassword] = useState(() => loadSavedLoginForm().password)
-  const [rememberPassword, setRememberPassword] = useState(
-    () => loadSavedLoginForm().rememberPassword,
-  )
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -20,7 +17,7 @@ export default function LoginPage() {
 
     // API 根地址由构建期 VITE_ERP_PRODUCTION_ORIGIN、启动时 bootstrap、本机已存配置决定，无需在登录页填写
     applyErpApiBaseFromStorage()
-    login({ username, password, rememberPassword })
+    login({ username, password })
   }
 
   return (
@@ -197,21 +194,8 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* 记住密码：仅填充表单；登录态仅存当前会话，退出或关闭应用后须重新登录 */}
-            <div className="flex items-center gap-2">
-              <input
-                id="rememberPassword"
-                type="checkbox"
-                checked={rememberPassword}
-                onChange={(e) => setRememberPassword(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-              />
-              <label className="text-sm text-slate-600 dark:text-slate-400" htmlFor="rememberPassword">
-                在本机记住密码
-              </label>
-            </div>
             <p className="text-xs text-slate-500 dark:text-slate-500">
-              登录成功后会记住账号；勾选则同时保存密码（本机）。退出或关闭应用后需重新登录。
+              登录成功后仅记住账号，不在本机保存密码。退出或关闭应用后需重新登录。
             </p>
 
             {/* 提交按钮 */}

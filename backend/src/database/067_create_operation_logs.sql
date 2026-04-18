@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `operation_logs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT UNSIGNED DEFAULT NULL,
+  `user_name` VARCHAR(100) DEFAULT NULL,
+  `action` VARCHAR(100) DEFAULT NULL,
+  `method` VARCHAR(10) DEFAULT NULL,
+  `path` VARCHAR(255) DEFAULT NULL,
+  `module` VARCHAR(50) DEFAULT NULL,
+  `biz_type` VARCHAR(50) DEFAULT NULL,
+  `biz_id` BIGINT UNSIGNED DEFAULT NULL,
+  `biz_no` VARCHAR(100) DEFAULT NULL,
+  `request_body` TEXT,
+  `status_code` INT DEFAULT NULL,
+  `ip` VARCHAR(100) DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_operation_logs_created_at` (`created_at`),
+  KEY `idx_operation_logs_module` (`module`),
+  KEY `idx_operation_logs_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作审计日志';

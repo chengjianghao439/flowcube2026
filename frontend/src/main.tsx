@@ -50,20 +50,17 @@ void (async () => {
     reactDom,
     reactQuery,
     routerModule,
-    authTenantSyncModule,
     errorBoundaryModule,
   ] = await Promise.all([
     import('react-dom/client'),
     import('@tanstack/react-query'),
     import('./router'),
-    import('@/components/auth/AuthTenantSync'),
     import('@/components/GlobalErrorBoundary'),
   ])
 
   const { createRoot } = reactDom
   const { QueryClient, QueryClientProvider } = reactQuery
   const AppRouter = routerModule.default
-  const AuthTenantSync = authTenantSyncModule.default
   const { GlobalErrorBoundary } = errorBoundaryModule
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -85,7 +82,6 @@ void (async () => {
     <StrictMode>
       <GlobalErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <AuthTenantSync />
           <AppRouter />
         </QueryClientProvider>
       </GlobalErrorBoundary>

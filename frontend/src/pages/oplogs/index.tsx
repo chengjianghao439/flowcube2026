@@ -12,12 +12,13 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { OpLog } from '@/api/oplogs'
 import type { TableColumn } from '@/types'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 const METHOD_COLOR: Record<string,'default'|'secondary'|'destructive'|'outline'> = { GET:'secondary', POST:'default', PUT:'outline', DELETE:'destructive', PATCH:'outline' }
 const MODULE_LABELS: Record<string, string> = { auth:'认证', users:'用户', warehouses:'仓库', suppliers:'供应商', products:'商品', inventory:'库存', customers:'客户', purchase:'采购', sale:'销售', stockcheck:'盘点', transfer:'调拨', returns:'退货', payments:'账款', settings:'设置' }
 
 export default function OpLogsPage() {
-  const { roleId } = usePermission()
+  const { can } = usePermission()
   const qc = useQueryClient()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -41,7 +42,7 @@ export default function OpLogsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="操作日志" description="记录所有写操作，追踪变更历史" actions={
-        roleId === 1 ? <Button variant="destructive" size="sm" onClick={() => setClearConfirm(true)}>清理旧日志</Button> : undefined
+        can(PERMISSIONS.AUDIT_LOG_CLEAR) ? <Button variant="destructive" size="sm" onClick={() => setClearConfirm(true)}>清理旧日志</Button> : undefined
       } />
       <div className="flex gap-2 flex-wrap">
         <Input placeholder="搜索用户/路径..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} className="w-56"

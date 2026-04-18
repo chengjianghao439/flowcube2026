@@ -58,7 +58,6 @@ async function printLabel(req, res, next) {
       return res.status(400).json({ success: false, message: '无效的货架 ID', data: null })
     }
     const slim = await racksService.enqueuePrintLabel(id, {
-      tenantId: req.user?.tenantId ?? 0,
       userId: req.user?.userId ?? null,
     })
     if (!slim) {

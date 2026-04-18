@@ -273,12 +273,11 @@ async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }
   return { kind: 'ok', message: '未识别为 H/P/I 等条码或仓库内商品编码，无额外绑定提示' }
 }
 
-async function enqueuePrintLabel(id, { tenantId = 0, userId = null } = {}) {
+async function enqueuePrintLabel(id, { userId = null } = {}) {
   await findById(id)
   const { enqueueRackLabelJob } = require('../print-jobs/print-jobs.service')
   const job = await enqueueRackLabelJob({
     rackId: id,
-    tenantId,
     createdBy: userId,
   })
   if (!job) return null

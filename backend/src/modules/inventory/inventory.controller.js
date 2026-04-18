@@ -139,7 +139,6 @@ async function splitContainer(req, res, next) {
       qty,
       remark,
       printLabel: !!printLabel,
-      tenantId:   req.user.tenantId ?? 0,
       userId:     req.user.userId,
     })
     return successResponse(res, result, '拆分成功')

@@ -1,7 +1,6 @@
 const svc = require('./inbound-tasks.service')
 const { successResponse } = require('../../utils/response')
 const { pool } = require('../../config/db')
-const { getTenantId } = require('../../utils/tenantScope')
 
 async function getOp(userId) {
   const [[u]] = await pool.query('SELECT id, username, real_name FROM sys_users WHERE id=?', [userId])
@@ -69,7 +68,7 @@ const audit = async (req, res, next) => {
 const reprint = async (req, res, next) => {
   try {
     const operator = await getOp(req.user.userId)
-    const data = await svc.reprint(+req.params.id, req.body || {}, operator, getTenantId(req))
+    const data = await svc.reprint(+req.params.id, req.body || {}, operator)
     return successResponse(res, data, '补打任务已加入打印队列')
   } catch (e) { next(e) }
 }
@@ -84,7 +83,6 @@ const receive = async (req, res, next) => {
   try {
     const data = await svc.receive(+req.params.id, req.body, {
       userId: req.user?.userId ?? null,
-      tenantId: getTenantId(req),
     })
     return successResponse(res, data, '收货成功')
   } catch (e) { next(e) }

@@ -28,22 +28,22 @@ function isCold(h) {
   return (h.sample_count ?? 0) < COLD_START_MAX_SAMPLES
 }
 
-function normTenant(tenantId) {
-  const n = Number(tenantId)
-  return Number.isFinite(n) && n >= 0 ? n : 0
-}
-
-async function recordPrintSuccess(printerId, latencyMs, tenantId = 0) {
+async function recordPrintSuccess(printerId, latencyMs) {
   const pid = Number(printerId)
   if (!Number.isFinite(pid) || pid <= 0) return
-  const tid = normTenant(tenantId)
   const lat = Number(latencyMs)
   const useLat = Number.isFinite(lat) && lat > 0 && lat < 3_600_000
 
-  const [[row]] = await pool.query(
-    'SELECT error_rate, avg_latency_ms, sample_count FROM printer_health_stats WHERE tenant_id=? AND printer_id=?',
-    [tid, pid],
-  )
+  let row
+  try {
+    ;[[row]] = await pool.query(
+      'SELECT error_rate, avg_latency_ms, sample_count FROM printer_health_stats WHERE printer_id=?',
+      [pid],
+    )
+  } catch (e) {
+    if (e.code === 'ER_BAD_FIELD_ERROR' || e.code === 'ER_NO_SUCH_TABLE') return
+    throw e
+  }
   let er = row ? Number(row.error_rate) : 0
   let al = row ? Number(row.avg_latency_ms) : 0
   const sc = row ? Number(row.sample_count) : 0
@@ -52,49 +52,53 @@ async function recordPrintSuccess(printerId, latencyMs, tenantId = 0) {
     al = Math.round(LAT_ALPHA * lat + (1 - LAT_ALPHA) * al)
   }
   await pool.query(
-    `INSERT INTO printer_health_stats (tenant_id, printer_id, error_rate, avg_latency_ms, sample_count)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO printer_health_stats (printer_id, error_rate, avg_latency_ms, sample_count)
+     VALUES (?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        error_rate = VALUES(error_rate),
        avg_latency_ms = VALUES(avg_latency_ms),
        sample_count = VALUES(sample_count)`,
-    [tid, pid, er, al, sc + 1],
+    [pid, er, al, sc + 1],
   )
 }
 
-async function recordPrintFailure(printerId, tenantId = 0) {
+async function recordPrintFailure(printerId) {
   const pid = Number(printerId)
   if (!Number.isFinite(pid) || pid <= 0) return
-  const tid = normTenant(tenantId)
-  const [[row]] = await pool.query(
-    'SELECT error_rate, avg_latency_ms, sample_count FROM printer_health_stats WHERE tenant_id=? AND printer_id=?',
-    [tid, pid],
-  )
+  let row
+  try {
+    ;[[row]] = await pool.query(
+      'SELECT error_rate, avg_latency_ms, sample_count FROM printer_health_stats WHERE printer_id=?',
+      [pid],
+    )
+  } catch (e) {
+    if (e.code === 'ER_BAD_FIELD_ERROR' || e.code === 'ER_NO_SUCH_TABLE') return
+    throw e
+  }
   let er = row ? Number(row.error_rate) : 0
   const al = row ? Number(row.avg_latency_ms) : 0
   const sc = row ? Number(row.sample_count) : 0
   er = Math.min(1, ERR_FAIL_WEIGHT + ERR_DECAY * er)
   await pool.query(
-    `INSERT INTO printer_health_stats (tenant_id, printer_id, error_rate, avg_latency_ms, sample_count)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO printer_health_stats (printer_id, error_rate, avg_latency_ms, sample_count)
+     VALUES (?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        error_rate = VALUES(error_rate),
        avg_latency_ms = VALUES(avg_latency_ms),
        sample_count = VALUES(sample_count)`,
-    [tid, pid, er, al, sc + 1],
+    [pid, er, al, sc + 1],
   )
 }
 
-async function getHealthMap(tenantId, printerIds) {
-  const tid = normTenant(tenantId)
+async function getHealthMap(printerIds) {
   const ids = [...new Set(printerIds.map(Number).filter((n) => n > 0))]
   if (!ids.length) return new Map()
   let rows = []
   try {
     ;[rows] = await pool.query(
       `SELECT printer_id, error_rate, avg_latency_ms, sample_count FROM printer_health_stats
-       WHERE tenant_id=? AND printer_id IN (${ids.map(() => '?').join(',')})`,
-      [tid, ...ids],
+       WHERE printer_id IN (${ids.map(() => '?').join(',')})`,
+      ids,
     )
   } catch (e) {
     // 未执行 045/047 等迁移时表结构不一致，退化为无历史健康度

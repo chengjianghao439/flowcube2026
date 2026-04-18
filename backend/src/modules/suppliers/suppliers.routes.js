@@ -1,7 +1,8 @@
 const { Router } = require('express')
 const { z } = require('zod')
 const ctrl = require('./suppliers.controller')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const router = Router()
 function vBody(schema) {
@@ -32,11 +33,11 @@ router.get('/next-code', async (req, res, next) => {
     return successResponse(res, { code }, '生成成功')
   } catch (e) { next(e) }
 })
-router.get('/active', ctrl.listActive)
-router.get('/',       ctrl.list)
-router.get('/:id',    ctrl.detail)
-router.post('/',      vBody(base), ctrl.create)
-router.put('/:id',    vBody(base.extend({ isActive: z.boolean() })), ctrl.update)
-router.delete('/:id', ctrl.remove)
+router.get('/active', requirePermission(PERMISSIONS.SUPPLIER_VIEW), ctrl.listActive)
+router.get('/',       requirePermission(PERMISSIONS.SUPPLIER_VIEW), ctrl.list)
+router.get('/:id',    requirePermission(PERMISSIONS.SUPPLIER_VIEW), ctrl.detail)
+router.post('/',      requirePermission(PERMISSIONS.SUPPLIER_CREATE), vBody(base), ctrl.create)
+router.put('/:id',    requirePermission(PERMISSIONS.SUPPLIER_UPDATE), vBody(base.extend({ isActive: z.boolean() })), ctrl.update)
+router.delete('/:id', requirePermission(PERMISSIONS.SUPPLIER_DELETE), ctrl.remove)
 
 module.exports = router

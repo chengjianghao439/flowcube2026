@@ -2,6 +2,11 @@
 /**
  * FlowCube 高强度并发压力测试
  *
+ * 已过期说明：
+ * - 本脚本仍基于销售单 `confirm/cancel` 旧状态流。
+ * - 当前真实主链路已转为 `reserve/release`，并与 warehouse_tasks、inbound_tasks 新口径联动。
+ * - 默认不再作为有效压力测试基线执行，需按新状态机重写后再恢复。
+ *
  * 场景1  双销售抢库存         — 50轮
  * 场景2  销售确认 vs 盘点扣减  — 50轮
  * 场景3  取消销售 vs 任务出库  — 50轮
@@ -15,6 +20,18 @@
  */
 
 'use strict'
+
+if (process.env.FLOWCUBE_RUN_LEGACY_STRESS !== '1') {
+  process.stderr.write(
+    [
+      '⚠️ tests/concurrency.stress.test.js 已过期，默认不执行。',
+      '请基于当前真实链路重写为 reserve/release/warehouse_tasks 版本后再恢复。',
+      '如需临时运行旧脚本，请显式设置 FLOWCUBE_RUN_LEGACY_STRESS=1。',
+      '',
+    ].join('\n'),
+  )
+  process.exit(2)
+}
 
 const path = require('path')
 

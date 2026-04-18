@@ -1,6 +1,6 @@
 /**
  * 数据库迁移运行器
- * 启动时自动检查并执行未运行的 .sql 文件，使部署无需手动建表
+ * 当前已改为显式执行：由 scripts/migrate.js 或 npm run migrate 触发。
  */
 const fs = require('fs')
 const path = require('path')

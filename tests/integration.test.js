@@ -2,6 +2,11 @@
 /**
  * FlowCube 业务集成测试脚本
  *
+ * 已过期说明：
+ * - 本脚本仍基于旧主链路：采购单直接 receive、销售单直接 confirm。
+ * - 当前真实主链路已调整为：采购 -> inbound_tasks 收货/上架；销售 -> reserve 预占。
+ * - 默认不再作为有效回归门禁执行，需完成 v2 重写后再恢复。
+ *
  * 测试流程：
  *   Step 1  登录，获取 Token
  *   Step 2  采购单：创建 → 确认 → 收货（入库）
@@ -29,6 +34,18 @@
  */
 
 'use strict'
+
+if (process.env.FLOWCUBE_RUN_LEGACY_INTEGRATION !== '1') {
+  process.stderr.write(
+    [
+      '⚠️ tests/integration.test.js 已过期，默认不执行。',
+      '当前系统应改测真实链路：purchase -> inbound_tasks -> receive -> putaway -> audit，以及 sale -> reserve -> warehouse_tasks。',
+      '如需临时运行旧脚本，请显式设置 FLOWCUBE_RUN_LEGACY_INTEGRATION=1。',
+      '',
+    ].join('\n'),
+  )
+  process.exit(2)
+}
 
 const path = require('path')
 const http = require('http')

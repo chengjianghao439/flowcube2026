@@ -1,12 +1,11 @@
 const svc = require('./printers.service')
 const { pool } = require('../../config/db')
-const { getTenantId } = require('../../utils/tenantScope')
 
-const list   = async (req, res, next) => { try { res.json({ success:true, data: await svc.findAll({ type: req.query.type ? +req.query.type : undefined, tenantId: getTenantId(req) }) }) } catch(e) { next(e) } }
-const detail = async (req, res, next) => { try { res.json({ success:true, data: await svc.findById(+req.params.id, getTenantId(req)) }) } catch(e) { next(e) } }
-const create = async (req, res, next) => { try { res.status(201).json({ success:true, data: await svc.create(req.body, getTenantId(req)) }) } catch(e) { next(e) } }
-const update = async (req, res, next) => { try { res.json({ success:true, data: await svc.update(+req.params.id, req.body, getTenantId(req)) }) } catch(e) { next(e) } }
-const remove = async (req, res, next) => { try { await svc.remove(+req.params.id, getTenantId(req)); res.json({ success:true, data:null }) } catch(e) { next(e) } }
+const list   = async (req, res, next) => { try { res.json({ success:true, data: await svc.findAll({ type: req.query.type ? +req.query.type : undefined }) }) } catch(e) { next(e) } }
+const detail = async (req, res, next) => { try { res.json({ success:true, data: await svc.findById(+req.params.id) }) } catch(e) { next(e) } }
+const create = async (req, res, next) => { try { res.status(201).json({ success:true, data: await svc.create(req.body) }) } catch(e) { next(e) } }
+const update = async (req, res, next) => { try { res.json({ success:true, data: await svc.update(+req.params.id, req.body) }) } catch(e) { next(e) } }
+const remove = async (req, res, next) => { try { await svc.remove(+req.params.id); res.json({ success:true, data:null }) } catch(e) { next(e) } }
 
 const updateClientAlias = async (req, res, next) => {
   try {
@@ -24,7 +23,6 @@ const updateClientAlias = async (req, res, next) => {
 
 const heartbeatClient = async (req, res, next) => {
   try {
-    const tid = getTenantId(req)
     const body = req.body && typeof req.body === 'object' ? req.body : {}
     const clientId = String(body.clientId || '').trim().slice(0, 200)
     const hostname = String(body.hostname || '').trim().slice(0, 200)
@@ -55,18 +53,17 @@ const heartbeatClient = async (req, res, next) => {
         `UPDATE printers
          SET client_id = ?, source = CASE WHEN source IS NULL OR source = '' THEN 'local_desktop' ELSE source END
          WHERE name IN (${placeholders})
-           AND (tenant_id = ? OR tenant_id = 0)
            AND (client_id IS NULL OR client_id = ?)`,
-        [clientId, ...printerNames, tid, clientId],
+        [clientId, ...printerNames, clientId],
       )
     }
 
     const [ownedPrinters] = await pool.query(
       `SELECT id, name, code
        FROM printers
-       WHERE client_id = ? AND status = 1 AND (tenant_id = ? OR tenant_id = 0)
+       WHERE client_id = ? AND status = 1
        ORDER BY id ASC`,
-      [clientId, tid],
+      [clientId],
     )
 
     res.json({
@@ -91,7 +88,6 @@ async function markOfflineClients() {
 // 获取在线客户端列表（数据库，status=online 或 30秒内有心跳）
 const listOnlineClients = async (req, res, next) => {
   try {
-    const tid = getTenantId(req)
     await markOfflineClients()
     const [clients] = await pool.query(
       `SELECT client_id, hostname, alias_name, ip_address, last_seen
@@ -103,8 +99,8 @@ const listOnlineClients = async (req, res, next) => {
     const data = []
     for (const c of clients) {
       const [printers] = await pool.query(
-        'SELECT name, code FROM printers WHERE client_id=? AND status=1 AND (tenant_id=? OR tenant_id=0) ORDER BY id ASC',
-        [c.client_id, tid],
+        'SELECT name, code FROM printers WHERE client_id=? AND status=1 ORDER BY id ASC',
+        [c.client_id],
       )
       data.push({
         clientId: c.client_id,

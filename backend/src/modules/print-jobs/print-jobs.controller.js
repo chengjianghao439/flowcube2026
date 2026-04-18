@@ -1,5 +1,4 @@
 const svc = require('./print-jobs.service')
-const { getTenantId } = require('../../utils/tenantScope')
 
 async function list(req, res, next) {
   try {
@@ -9,7 +8,6 @@ async function list(req, res, next) {
       status:    svc.parseListStatus(status),
       page:      +page || 1,
       pageSize:  +pageSize || 50,
-      tenantId:  getTenantId(req),
     })
     res.json({ success: true, data: result })
   } catch(e) { next(e) }
@@ -17,7 +15,7 @@ async function list(req, res, next) {
 
 async function detail(req, res, next) {
   try {
-    res.json({ success: true, data: await svc.findById(+req.params.id, { tenantId: getTenantId(req) }) })
+    res.json({ success: true, data: await svc.findById(+req.params.id) })
   } catch (e) {
     next(e)
   }
@@ -27,7 +25,6 @@ async function create(req, res, next) {
   try {
     const job = await svc.create({
       ...req.body,
-      tenantId: getTenantId(req),
       createdBy: req.user?.userId ?? req.user?.id,
     })
     res.status(201).json({ success: true, data: job })
@@ -43,7 +40,6 @@ async function claimClientJobs(req, res, next) {
       data: await svc.claimClientJobs({
         clientId,
         limit: Number(body.limit) || 3,
-        tenantId: getTenantId(req),
       }),
     })
   } catch (e) { next(e) }
@@ -51,7 +47,7 @@ async function claimClientJobs(req, res, next) {
 
 async function stats(req, res, next) {
   try {
-    res.json({ success: true, data: await svc.getStatsCounts(getTenantId(req)) })
+    res.json({ success: true, data: await svc.getStatsCounts() })
   } catch (e) {
     next(e)
   }
@@ -68,7 +64,6 @@ async function barcodeRecords(req, res, next) {
         status: status || undefined,
         page: Number(page) || 1,
         pageSize: Number(pageSize) || 20,
-        tenantId: getTenantId(req),
         inboundTaskId: inboundTaskId ? Number(inboundTaskId) : null,
         inboundTaskItemId: inboundTaskItemId ? Number(inboundTaskItemId) : null,
       }),
@@ -84,7 +79,6 @@ async function reprintBarcode(req, res, next) {
     const job = await svc.reprintBarcodeRecord({
       category: body.category,
       recordId: body.recordId,
-      tenantId: getTenantId(req),
       createdBy: req.user?.userId ?? req.user?.id ?? null,
     })
     res.json({ success: true, data: job })
@@ -95,7 +89,7 @@ async function reprintBarcode(req, res, next) {
 
 async function printerHealth(req, res, next) {
   try {
-    res.json({ success: true, data: await svc.listPrinterHealth(getTenantId(req)) })
+    res.json({ success: true, data: await svc.listPrinterHealth() })
   } catch (e) {
     next(e)
   }
@@ -105,7 +99,7 @@ async function complete(req, res, next) {
   try {
     res.json({
       success: true,
-      data: await svc.complete(+req.params.id, req.body || {}, { tenantId: getTenantId(req) }),
+      data: await svc.complete(+req.params.id, req.body || {}),
     })
   } catch (e) {
     next(e)
@@ -117,7 +111,7 @@ async function completeLocal(req, res, next) {
   try {
     res.json({
       success: true,
-      data: await svc.completeLocalDesktop(+req.params.id, { tenantId: getTenantId(req) }),
+      data: await svc.completeLocalDesktop(+req.params.id),
     })
   } catch (e) {
     next(e)
@@ -128,7 +122,7 @@ async function fail(req, res, next) {
   try {
     res.json({
       success: true,
-      data: await svc.fail(+req.params.id, req.body.errorMessage, { tenantId: getTenantId(req) }),
+      data: await svc.fail(+req.params.id, req.body.errorMessage),
     })
   } catch (e) {
     next(e)
@@ -137,7 +131,7 @@ async function fail(req, res, next) {
 
 async function retry(req, res, next) {
   try {
-    res.json({ success: true, data: await svc.retry(+req.params.id, { tenantId: getTenantId(req) }) })
+    res.json({ success: true, data: await svc.retry(+req.params.id) })
   } catch (e) {
     next(e)
   }

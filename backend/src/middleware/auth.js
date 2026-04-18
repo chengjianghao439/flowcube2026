@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken')
 const AppError = require('../utils/AppError')
+const { loadRolePermissions } = require('./loadRolePermissions')
 
 /**
  * JWT 认证中间件。
@@ -27,8 +28,7 @@ function authMiddleware(req, res, next) {
 
 /**
  * 权限校验中间件工厂。
- * 用法：router.delete('/:id', authMiddleware, permissionMiddleware('inventory:delete'), controller.delete)
- * @param {string} permissionCode 格式：[模块]:[动作]，如 inventory:delete
+ * @param {string} permissionCode 格式：module.resource.action，如 inventory.container.move
  * @param {{ superAdminRoleIds?: number[] }} [options] superAdminRoleIds 默认 [1]，拥有任一角色则跳过权限表校验
  */
 function permissionMiddleware(permissionCode, options = {}) {
@@ -43,4 +43,14 @@ function permissionMiddleware(permissionCode, options = {}) {
   }
 }
 
-module.exports = { authMiddleware, permissionMiddleware }
+function requirePermission(permissionCode, options = {}) {
+  const checker = permissionMiddleware(permissionCode, options)
+  return (req, res, next) => {
+    loadRolePermissions(req, res, (error) => {
+      if (error) return next(error)
+      return checker(req, res, next)
+    })
+  }
+}
+
+module.exports = { authMiddleware, permissionMiddleware, requirePermission }

@@ -1,5 +1,5 @@
 /**
- * PDA 角色与权限系统
+ * PDA 角色显示与权限映射
  *
  * 映射规则（基于现有 roleId）：
  *  roleId=1  → 主管 supervisor  ：全部 PDA 功能 + 管理操作
@@ -9,49 +9,51 @@
  *  roleId=5  → 打包员 packer    ：复核 + 打包 + 出库
  *  其他      → 拣货员（默认）
  *
- * PDA 功能权限码：
- *  pda:inbound   收货入库
- *  pda:putaway   上架作业
- *  pda:picking   拣货任务
- *  pda:sorting   订单分拣
- *  pda:checking  复核任务
- *  pda:packing   打包作业
- *  pda:shipping  出库确认
- *  pda:split     同仓容器拆分
- *  pda:cancel    取消任务（主管专属）
- *  pda:override  强制完成（主管专属）
  */
 import { useAuthStore } from '@/store/authStore'
+import { hasPermission } from '@/lib/permissions'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import type { PermissionCode } from '@/lib/permission-codes'
 
 export type PdaRole = 'supervisor' | 'picker' | 'packer' | 'receiver'
 
-export type PdaPerm =
-  | 'pda:inbound'
-  | 'pda:putaway'
-  | 'pda:picking'
-  | 'pda:sorting'
-  | 'pda:checking'
-  | 'pda:packing'
-  | 'pda:shipping'
-  | 'pda:split'
-  | 'pda:cancel'
-  | 'pda:override'
+export type PdaPerm = PermissionCode
 
 // ── 角色 → 权限映射 ────────────────────────────────────────────────────────
 const ROLE_PERMS: Record<PdaRole, PdaPerm[]> = {
   supervisor: [
-    'pda:inbound', 'pda:putaway', 'pda:picking', 'pda:sorting',
-    'pda:checking', 'pda:packing', 'pda:shipping', 'pda:split',
-    'pda:cancel', 'pda:override',
+    PERMISSIONS.INBOUND_ORDER_VIEW,
+    PERMISSIONS.INBOUND_RECEIVE_EXECUTE,
+    PERMISSIONS.INBOUND_PUTAWAY_EXECUTE,
+    PERMISSIONS.WAREHOUSE_TASK_VIEW,
+    PERMISSIONS.WAREHOUSE_TASK_PICK,
+    PERMISSIONS.SORTING_BIN_VIEW,
+    PERMISSIONS.SORTING_BIN_MANAGE,
+    PERMISSIONS.WAREHOUSE_TASK_CHECK,
+    PERMISSIONS.WAREHOUSE_TASK_PACK,
+    PERMISSIONS.WAREHOUSE_TASK_SHIP,
+    PERMISSIONS.INVENTORY_CONTAINER_SPLIT,
   ],
   receiver: [
-    'pda:inbound',
+    PERMISSIONS.INBOUND_ORDER_VIEW,
+    PERMISSIONS.INBOUND_RECEIVE_EXECUTE,
+    PERMISSIONS.INBOUND_PUTAWAY_EXECUTE,
   ],
   picker: [
-    'pda:picking', 'pda:sorting', 'pda:checking', 'pda:shipping', 'pda:split',
+    PERMISSIONS.WAREHOUSE_TASK_VIEW,
+    PERMISSIONS.WAREHOUSE_TASK_PICK,
+    PERMISSIONS.SORTING_BIN_VIEW,
+    PERMISSIONS.SORTING_BIN_MANAGE,
+    PERMISSIONS.WAREHOUSE_TASK_CHECK,
+    PERMISSIONS.WAREHOUSE_TASK_SHIP,
+    PERMISSIONS.INVENTORY_CONTAINER_SPLIT,
   ],
   packer: [
-    'pda:checking', 'pda:packing', 'pda:shipping', 'pda:split',
+    PERMISSIONS.WAREHOUSE_TASK_VIEW,
+    PERMISSIONS.WAREHOUSE_TASK_CHECK,
+    PERMISSIONS.WAREHOUSE_TASK_PACK,
+    PERMISSIONS.WAREHOUSE_TASK_SHIP,
+    PERMISSIONS.INVENTORY_CONTAINER_SPLIT,
   ],
 }
 
@@ -91,14 +93,15 @@ export function usePdaRole() {
   const user   = useAuthStore(s => s.user)
   const roleId = user?.roleId ?? 4
   const role   = toPdaRole(roleId)
-  const perms  = new Set<PdaPerm>(ROLE_PERMS[role])
+  const fallbackPerms = ROLE_PERMS[role]
+  const grantedPerms = user?.permissions && user.permissions.length > 0 ? user.permissions : fallbackPerms
 
   return {
     role,
     roleLabel: PDA_ROLE_LABEL[role],
     roleIcon:  PDA_ROLE_ICON[role],
     roleColor: PDA_ROLE_COLOR[role],
-    can: (p: PdaPerm) => perms.has(p),
+    can: (p: PdaPerm) => hasPermission(grantedPerms, p, roleId),
     isSupervisor: role === 'supervisor',
   }
 }

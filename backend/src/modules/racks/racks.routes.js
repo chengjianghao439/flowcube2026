@@ -1,7 +1,8 @@
 const { Router } = require('express')
 const { z } = require('zod')
 const ctrl = require('./racks.controller')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const router = Router()
 router.use(authMiddleware)
@@ -21,9 +22,10 @@ function vBody(schema) {
   }
 }
 
-router.get('/active', ctrl.listActive)
-router.get('/',       ctrl.list)
+router.get('/active', requirePermission(PERMISSIONS.RACK_VIEW), ctrl.listActive)
+router.get('/',       requirePermission(PERMISSIONS.RACK_VIEW), ctrl.list)
 router.post('/scan-hint',
+  requirePermission(PERMISSIONS.RACK_VIEW),
   vBody(z.object({
     warehouseId:   z.number().int().positive('请选择仓库'),
     rackCode:      z.string().min(1, '请填写货架编码'),
@@ -32,10 +34,10 @@ router.post('/scan-hint',
   })),
   ctrl.scanHint,
 )
-router.get('/:id',    ctrl.detail)
-router.post('/',      ctrl.create)
-router.put('/:id',    ctrl.update)
-router.delete('/:id', ctrl.remove)
-router.post('/:id/print-label', ctrl.printLabel)
+router.get('/:id',    requirePermission(PERMISSIONS.RACK_VIEW), ctrl.detail)
+router.post('/',      requirePermission(PERMISSIONS.RACK_CREATE), ctrl.create)
+router.put('/:id',    requirePermission(PERMISSIONS.RACK_UPDATE), ctrl.update)
+router.delete('/:id', requirePermission(PERMISSIONS.RACK_DELETE), ctrl.remove)
+router.post('/:id/print-label', requirePermission(PERMISSIONS.RACK_PRINT_LABEL), ctrl.printLabel)
 
 module.exports = router

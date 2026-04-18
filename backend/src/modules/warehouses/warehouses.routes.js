@@ -1,7 +1,8 @@
 const { Router } = require('express')
 const { z } = require('zod')
 const warehousesController = require('./warehouses.controller')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const router = Router()
 
@@ -32,11 +33,11 @@ const updateSchema = createSchema.extend({
 
 router.use(authMiddleware)
 
-router.get('/active',  warehousesController.listActive)
-router.get('/',        warehousesController.list)
-router.get('/:id',     warehousesController.detail)
-router.post('/',       validateBody(createSchema), warehousesController.create)
-router.put('/:id',     validateBody(updateSchema), warehousesController.update)
-router.delete('/:id',  warehousesController.remove)
+router.get('/active',  requirePermission(PERMISSIONS.WAREHOUSE_VIEW), warehousesController.listActive)
+router.get('/',        requirePermission(PERMISSIONS.WAREHOUSE_VIEW), warehousesController.list)
+router.get('/:id',     requirePermission(PERMISSIONS.WAREHOUSE_VIEW), warehousesController.detail)
+router.post('/',       requirePermission(PERMISSIONS.WAREHOUSE_CREATE), validateBody(createSchema), warehousesController.create)
+router.put('/:id',     requirePermission(PERMISSIONS.WAREHOUSE_UPDATE), validateBody(updateSchema), warehousesController.update)
+router.delete('/:id',  requirePermission(PERMISSIONS.WAREHOUSE_DELETE), warehousesController.remove)
 
 module.exports = router

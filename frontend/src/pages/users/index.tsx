@@ -53,7 +53,6 @@ export default function UsersPage() {
   const columns: TableColumn<SysUser>[] = [
     { key: 'username', title: '账号', width: 140 },
     { key: 'realName', title: '姓名', width: 120 },
-    { key: 'tenantId', title: '租户', width: 72 },
     {
       key: 'roleName',
       title: '角色',

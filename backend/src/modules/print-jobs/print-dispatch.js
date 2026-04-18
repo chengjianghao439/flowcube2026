@@ -1,5 +1,5 @@
 /**
- * 打印调度：绑定/兜底 → 本租户负载 → 设备分（错误率/延迟/心跳）→ 自适应探索选次优（策略见 print-policy 环境变量）
+ * 打印调度：绑定/兜底 → 当前系统负载 → 设备分（错误率/延迟/心跳）→ 自适应探索选次优（策略见 print-policy 环境变量）
  */
 const { pool } = require('../../config/db')
 const { getHealthMap } = require('./printer-health')
@@ -10,11 +10,6 @@ const {
   pickWithExploration,
   defaultDispatchPolicy,
 } = require('./print-policy')
-
-function tenantSqlParam(tenantId) {
-  const t = Number(tenantId) >= 0 ? Number(tenantId) : 0
-  return t
-}
 
 /** contentType / 业务 type → printer_bindings.print_type（可与绑定表 rack_label/container_label 等对应） */
 function normalizeJobType(jobType, contentType) {
@@ -32,7 +27,7 @@ function normalizeJobType(jobType, contentType) {
   return j || 'product_label'
 }
 
-/** 专用绑定无配置时回退到 inventory_label，兼容旧租户仅绑「库存标签机」 */
+/** 专用绑定无配置时回退到 inventory_label，兼容旧配置仅绑「库存标签机」 */
 function bindingFallbackChain(primary) {
   const map = {
     rack_label: ['rack_label', 'inventory_label'],
@@ -44,11 +39,10 @@ function bindingFallbackChain(primary) {
   return map[primary] || [primary]
 }
 
-async function fetchBindingCandidates(printType, tenantId, whNum) {
-  const tid = tenantSqlParam(tenantId)
-  const params = [printType, tid, tid]
+async function fetchBindingCandidates(printType, whNum) {
+  const params = [printType]
   let sql = `SELECT b.printer_id FROM printer_bindings b
-     WHERE b.print_type = ? AND (b.tenant_id = ? OR b.tenant_id = 0)`
+     WHERE b.print_type = ?`
   if (whNum) {
     sql += ` AND (b.warehouse_id = 0 OR b.warehouse_id = ?)`
     params.push(whNum)
@@ -56,11 +50,10 @@ async function fetchBindingCandidates(printType, tenantId, whNum) {
     sql += ` AND b.warehouse_id = 0`
   }
   if (whNum) {
-    sql += ` ORDER BY CASE WHEN b.warehouse_id = ? THEN 0 ELSE 1 END, CASE WHEN b.tenant_id = ? THEN 0 ELSE 1 END, b.printer_id ASC`
-    params.push(whNum, tid)
+    sql += ` ORDER BY CASE WHEN b.warehouse_id = ? THEN 0 ELSE 1 END, b.printer_id ASC`
+    params.push(whNum)
   } else {
-    sql += ` ORDER BY CASE WHEN b.tenant_id = ? THEN 0 ELSE 1 END, b.printer_id ASC`
-    params.push(tid)
+    sql += ` ORDER BY b.printer_id ASC`
   }
   const [bindRows] = await pool.query(sql, params)
   return bindRows.map((r) => Number(r.printer_id)).filter(Boolean)
@@ -88,15 +81,13 @@ async function fetchHeartbeatMap(printerIds) {
 
 /**
  * @param {{
- *   tenantId?: number,
  *   warehouseId?: number|null,
  *   jobType?: string|null,
  *   contentType?: string
  * }} opts
  * @returns {Promise<{ printerId: number|null, dispatchReason: string|null, explorationRate?: number }>}
  */
-async function resolvePrinterForJob({ tenantId = 0, warehouseId, jobType, contentType }) {
-  const tid = tenantSqlParam(tenantId)
+async function resolvePrinterForJob({ warehouseId, jobType, contentType }) {
   const wh = warehouseId != null && warehouseId !== '' ? Number(warehouseId) : null
   const ptype = normalizeJobType(jobType, contentType)
   const whNum = Number.isFinite(wh) && wh > 0 ? wh : null
@@ -107,7 +98,7 @@ async function resolvePrinterForJob({ tenantId = 0, warehouseId, jobType, conten
   if (ptype) {
     const chain = bindingFallbackChain(ptype)
     for (const pt of chain) {
-      const ids = await fetchBindingCandidates(pt, tid, whNum)
+      const ids = await fetchBindingCandidates(pt, whNum)
       if (ids.length) {
         candidates = ids
         fromBinding = true
@@ -118,9 +109,9 @@ async function resolvePrinterForJob({ tenantId = 0, warehouseId, jobType, conten
 
   if (!candidates.length) {
     const type = printerTypeForContentType(contentType)
-    const params = [type, tid, tid]
+    const params = [type]
     let sql = `SELECT p.id FROM printers p
-     WHERE p.status = 1 AND p.type = ? AND (p.tenant_id = ? OR p.tenant_id = 0)`
+     WHERE p.status = 1 AND p.type = ?`
     if (whNum) {
       sql += ' AND (p.warehouse_id IS NULL OR p.warehouse_id = ?)'
       params.push(whNum)
@@ -134,16 +125,16 @@ async function resolvePrinterForJob({ tenantId = 0, warehouseId, jobType, conten
 
   const uniq = [...new Set(candidates)]
   const dispatchPolicy = defaultDispatchPolicy()
-  const healthMap = await getHealthMap(tid, uniq)
+  const healthMap = await getHealthMap(uniq)
   const explorationRate = computeExplorationRate(healthMap, uniq, dispatchPolicy)
   const hbMap = await fetchHeartbeatMap(uniq)
 
   const [loads] = await pool.query(
     `SELECT printer_id, COUNT(*) AS load_cnt
      FROM print_jobs
-     WHERE tenant_id = ? AND status IN (0, 1) AND printer_id IN (${uniq.map(() => '?').join(',')})
+     WHERE status IN (0, 1) AND printer_id IN (${uniq.map(() => '?').join(',')})
      GROUP BY printer_id`,
-    [tid, ...uniq],
+    uniq,
   )
   const loadMap = new Map(loads.map((r) => [Number(r.printer_id), Number(r.load_cnt)]))
 
@@ -162,8 +153,8 @@ async function resolvePrinterForJob({ tenantId = 0, warehouseId, jobType, conten
   const onlineOrdered = []
   for (const id of uniq) {
     const [[o]] = await pool.query(
-      `SELECT id FROM printers WHERE id = ? AND status = 1 AND (tenant_id = ? OR tenant_id = 0) LIMIT 1`,
-      [id, tid],
+      `SELECT id FROM printers WHERE id = ? AND status = 1 LIMIT 1`,
+      [id],
     )
     if (o) onlineOrdered.push(id)
   }

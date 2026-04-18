@@ -1,7 +1,8 @@
 const { Router } = require('express')
 const { z } = require('zod')
 const ctrl = require('./products.controller')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const router = Router()
 function vBody(schema) {
@@ -32,13 +33,13 @@ router.get('/next-code', async (req, res, next) => {
     return successResponse(res, { code }, '生成成功')
   } catch (e) { next(e) }
 })
-router.get('/finder', ctrl.finder)
-router.get('/active', ctrl.listActive)
-router.get('/',       ctrl.list)
-router.post('/:id/print-label', ctrl.printLabel)
-router.get('/:id',    ctrl.detail)
-router.post('/',      vBody(productBase), ctrl.create)
-router.put('/:id',    vBody(productBase.extend({ isActive: z.boolean() })), ctrl.update)
-router.delete('/:id', ctrl.remove)
+router.get('/finder', requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.finder)
+router.get('/active', requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.listActive)
+router.get('/',       requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.list)
+router.post('/:id/print-label', requirePermission(PERMISSIONS.PRODUCT_PRINT_LABEL), ctrl.printLabel)
+router.get('/:id',    requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.detail)
+router.post('/',      requirePermission(PERMISSIONS.PRODUCT_CREATE), vBody(productBase), ctrl.create)
+router.put('/:id',    requirePermission(PERMISSIONS.PRODUCT_UPDATE), vBody(productBase.extend({ isActive: z.boolean() })), ctrl.update)
+router.delete('/:id', requirePermission(PERMISSIONS.PRODUCT_DELETE), ctrl.remove)
 
 module.exports = router

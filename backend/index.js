@@ -2,7 +2,6 @@ require('dotenv').config()
 const app    = require('./src/app')
 const logger = require('./src/utils/logger')
 const { testConnection } = require('./src/config/db')
-const { runMigrations }  = require('./src/database/migrate')
 const { startScheduler } = require('./src/scheduler')
 
 const PORT   = process.env.PORT    || 3000
@@ -32,10 +31,10 @@ process.on('uncaughtException', (err) => {
 
 async function bootstrap() {
   await testConnection()
-  await runMigrations()
   app.listen(PORT, () => {
     logger.info(`FlowCube API 已启动 http://localhost:${PORT}  env=${process.env.NODE_ENV || 'development'}`, {}, 'Server')
   })
+  logger.info('数据库迁移已改为显式执行：请在部署前运行 `npm run migrate`', {}, 'Server')
   startScheduler()
 }
 

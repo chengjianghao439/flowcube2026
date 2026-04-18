@@ -11,7 +11,6 @@ function fmt(row) {
     code:        row.code,
     type:        row.type,
     labelRawFormat: lr === 'tspl' ? 'tspl' : 'zpl',
-    tenantId:    row.tenant_id != null ? Number(row.tenant_id) : 0,
     warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
     typeName:    TYPE_NAME[row.type] || '其他',
     description: row.description,
@@ -26,15 +25,9 @@ function fmt(row) {
   }
 }
 
-function normTid(tenantId) {
-  const n = Number(tenantId)
-  return Number.isFinite(n) && n >= 0 ? n : 0
-}
-
-async function findAll({ type, tenantId = 0 } = {}) {
-  const tid = normTid(tenantId)
-  const conds = ['(p.tenant_id = ? OR p.tenant_id = 0)']
-  const params = [tid]
+async function findAll({ type } = {}) {
+  const conds = ['1=1']
+  const params = []
   if (type) {
     conds.push('p.type=?')
     params.push(type)
@@ -50,14 +43,13 @@ async function findAll({ type, tenantId = 0 } = {}) {
   return rows.map(fmt)
 }
 
-async function findById(id, tenantId = 0) {
-  const tid = normTid(tenantId)
+async function findById(id) {
   const [[row]] = await pool.query(
     `SELECT p.*, pc.alias_name AS client_alias_name, pc.hostname AS client_hostname
      FROM printers p
      LEFT JOIN print_clients pc ON pc.client_id = p.client_id
-     WHERE p.id=? AND (p.tenant_id=? OR p.tenant_id=0)`,
-    [id, tid],
+     WHERE p.id=?`,
+    [id],
   )
   if (!row) throw new AppError('打印机不存在', 404)
   return fmt(row)
@@ -71,7 +63,7 @@ function normalizePrinterName(raw) {
     .replace(/\u200b/g, '')
 }
 
-/** printers.code 表级全局唯一；前端仅按当前租户列表去重，跨租户需在此再分配 */
+/** printers.code 表级全局唯一。 */
 async function allocateUniqueCodeGlobally(baseCode) {
   const b = String(baseCode || '').trim().slice(0, 50)
   if (!b) throw new AppError('编码不能为空', 400)
@@ -97,8 +89,7 @@ async function create({
   source,
   clientId,
   labelRawFormat,
-}, tenantId = 0) {
-  const tid = normTid(tenantId)
+}) {
   const nameNorm = normalizePrinterName(name)
   if (!nameNorm) throw new AppError('名称不能为空', 400)
   if (!code) throw new AppError('编码不能为空', 400)
@@ -113,10 +104,10 @@ async function create({
   const lr = String(labelRawFormat || '').toLowerCase() === 'tspl' ? 'tspl' : 'zpl'
   const finalCode = await allocateUniqueCodeGlobally(code)
   const [r] = await pool.query(
-    'INSERT INTO printers (name, code, type, label_raw_format, warehouse_id, tenant_id, description, source, client_id) VALUES (?,?,?,?,?,?,?,?,?)',
-    [nameNorm, finalCode, type, lr, wh, tid, description || null, src, clientIdVal],
+    'INSERT INTO printers (name, code, type, label_raw_format, warehouse_id, description, source, client_id) VALUES (?,?,?,?,?,?,?,?)',
+    [nameNorm, finalCode, type, lr, wh, description || null, src, clientIdVal],
   )
-  return findById(r.insertId, tid)
+  return findById(r.insertId)
 }
 
 async function update(id, {
@@ -128,9 +119,8 @@ async function update(id, {
   warehouseId,
   clientId,
   labelRawFormat,
-}, tenantId = 0) {
-  const tid = normTid(tenantId)
-  const existing = await findById(id, tid)
+}) {
+  const existing = await findById(id)
   const nameVal = name !== undefined ? normalizePrinterName(name) : existing.name
   if (name !== undefined && !nameVal) throw new AppError('名称不能为空', 400)
   const lrVal =
@@ -161,18 +151,17 @@ async function update(id, {
     sets.push('warehouse_id=?')
     params.push(wh)
   }
-  params.push(id, tid)
+  params.push(id)
   await pool.query(
-    `UPDATE printers SET ${sets.join(', ')} WHERE id=? AND (tenant_id=? OR tenant_id=0)`,
+    `UPDATE printers SET ${sets.join(', ')} WHERE id=?`,
     params,
   )
-  return findById(id, tid)
+  return findById(id)
 }
 
-async function remove(id, tenantId = 0) {
-  const tid = normTid(tenantId)
-  await findById(id, tid)
-  await pool.query('DELETE FROM printers WHERE id=? AND (tenant_id=? OR tenant_id=0)', [id, tid])
+async function remove(id) {
+  await findById(id)
+  await pool.query('DELETE FROM printers WHERE id=?', [id])
 }
 
 async function setStatus(id, status) {

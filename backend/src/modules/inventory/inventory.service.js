@@ -678,7 +678,7 @@ async function assignContainerLocation(containerId, locationId) {
 /**
  * 同仓容器拆分（散件）：单容器扣减并生成新塑料盒条码（B），可选打印新标签
  */
-async function splitContainerOp(containerId, { qty, remark, printLabel, tenantId, userId }) {
+async function splitContainerOp(containerId, { qty, remark, printLabel, userId }) {
   const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
   const conn = await pool.getConnection()
   let result
@@ -702,10 +702,8 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, tenantId
       [result.newContainerId],
     )
     if (row) {
-      const tid = Number(tenantId) >= 0 && Number.isFinite(Number(tenantId)) ? Number(tenantId) : 0
       await enqueueContainerLabelJob({
         containerId: result.newContainerId,
-        tenantId: tid,
         warehouseId: result.warehouseId,
         data: {
           container_code: row.barcode,

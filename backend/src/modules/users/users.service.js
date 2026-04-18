@@ -7,7 +7,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
   const like = `%${keyword}%`
 
   const [rows] = await pool.query(
-    `SELECT id, username, real_name, role_id, role_name, is_active, tenant_id, created_at
+    `SELECT id, username, real_name, role_id, role_name, is_active, created_at
      FROM sys_users
      WHERE deleted_at IS NULL
        AND (username LIKE ? OR real_name LIKE ?)
@@ -30,7 +30,6 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
       roleId: u.role_id,
       roleName: u.role_name,
       isActive: !!u.is_active,
-      tenantId: u.tenant_id != null ? Number(u.tenant_id) : 0,
       createdAt: u.created_at,
     })),
     pagination: { page, pageSize, total },
@@ -39,7 +38,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
 
 async function findById(id) {
   const [rows] = await pool.query(
-    `SELECT id, username, real_name, role_id, role_name, is_active, tenant_id
+    `SELECT id, username, real_name, role_id, role_name, is_active
      FROM sys_users WHERE id = ? AND deleted_at IS NULL`,
     [id],
   )
@@ -52,45 +51,56 @@ async function findById(id) {
     roleId: user.role_id,
     roleName: user.role_name,
     isActive: !!user.is_active,
-    tenantId: user.tenant_id != null ? Number(user.tenant_id) : 0,
   }
 }
 
-function normTenantId(v) {
-  const n = Number(v)
-  return Number.isFinite(n) && n >= 0 ? n : 0
+async function resolveRoleName(roleId) {
+  try {
+    const [[role]] = await pool.query(
+      'SELECT name FROM sys_roles WHERE id=? LIMIT 1',
+      [roleId],
+    )
+    if (role?.name) return role.name
+  } catch (error) {
+    if (!error || error.code !== 'ER_NO_SUCH_TABLE') throw error
+  }
+
+  const ROLE_NAMES = {
+    1: '管理员',
+    2: '仓库管理员',
+    3: '采购员',
+    4: '销售员',
+    5: '只读用户',
+  }
+  return ROLE_NAMES[roleId] ?? '普通用户'
 }
 
-async function create({ username, password, realName, roleId, tenantId: tenantIdIn }) {
-  const tenantId = normTenantId(tenantIdIn)
+async function create({ username, password, realName, roleId }) {
   const [exists] = await pool.query(
     'SELECT id FROM sys_users WHERE username = ? AND deleted_at IS NULL',
     [username],
   )
   if (exists.length > 0) throw new AppError('账号已存在', 400)
 
-  const ROLE_NAMES = { 1: '管理员', 2: '普通用户' }
-  const roleName = ROLE_NAMES[roleId] ?? '普通用户'
+  const roleName = await resolveRoleName(roleId)
   const hashed = await bcrypt.hash(password, 10)
 
   const [result] = await pool.query(
-    `INSERT INTO sys_users (username, password, real_name, role_id, role_name, tenant_id)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [username, hashed, realName, roleId, roleName, tenantId],
+    `INSERT INTO sys_users (username, password, real_name, role_id, role_name)
+     VALUES (?, ?, ?, ?, ?)`,
+    [username, hashed, realName, roleId, roleName],
   )
   return { id: result.insertId }
 }
 
-async function update(id, { realName, roleId, isActive, tenantId: tenantIdIn }) {
+async function update(id, { realName, roleId, isActive }) {
   const user = await findById(id)
-  const ROLE_NAMES = { 1: '管理员', 2: '普通用户' }
-  const roleName = ROLE_NAMES[roleId] ?? user.roleName
-  const tenantId = tenantIdIn !== undefined ? normTenantId(tenantIdIn) : user.tenantId
+  const roleName = roleId !== undefined ? await resolveRoleName(roleId) : user.roleName
 
   await pool.query(
-    `UPDATE sys_users SET real_name = ?, role_id = ?, role_name = ?, is_active = ?, tenant_id = ?
+    `UPDATE sys_users SET real_name = ?, role_id = ?, role_name = ?, is_active = ?
      WHERE id = ? AND deleted_at IS NULL`,
-    [realName, roleId, roleName, isActive ? 1 : 0, tenantId, id],
+    [realName, roleId, roleName, isActive ? 1 : 0, id],
   )
 }
 

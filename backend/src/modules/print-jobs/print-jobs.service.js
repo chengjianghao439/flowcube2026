@@ -90,7 +90,6 @@ function fmt(row, { includeAckToken = false } = {}) {
     priorityKey:  pr === 1 ? 'high' : 'normal',
     jobType:      row.job_type ?? null,
     warehouseId:  row.warehouse_id != null ? Number(row.warehouse_id) : null,
-    tenantId:     row.tenant_id != null ? Number(row.tenant_id) : 0,
     status:       st,
     statusKey:    statusKey(st),
     printStateLabel: printStateLabel(st),
@@ -135,28 +134,26 @@ async function appendInboundPrintEventByJob(job, eventType, title, description =
   )
 }
 
-async function listJobsByIds(ids, { tenantId = 0, includeAckToken = false } = {}) {
+async function listJobsByIds(ids, { includeAckToken = false } = {}) {
   const uniq = [...new Set(ids.map(Number).filter((n) => Number.isFinite(n) && n > 0))]
   if (!uniq.length) return []
-  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
   const [rows] = await pool.query(
     `SELECT j.*, p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j
      LEFT JOIN printers p ON p.id = j.printer_id
-     WHERE j.tenant_id = ? AND j.id IN (${uniq.map(() => '?').join(',')})
+     WHERE j.id IN (${uniq.map(() => '?').join(',')})
      ORDER BY j.priority DESC, j.id ASC`,
-    [tid, ...uniq],
+    uniq,
   )
   return rows.map((row) => fmt(row, { includeAckToken }))
 }
 
 // ── 查询 ──────────────────────────────────────────────────────────────────────
 
-async function findAll({ printerId, status, page = 1, pageSize = 50, tenantId = 0 } = {}) {
+async function findAll({ printerId, status, page = 1, pageSize = 50 } = {}) {
   await expireStaleJobs()
-  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
-  const conds = ['j.tenant_id=?']
-  const params = [tid]
+  const conds = ['1=1']
+  const params = []
   if (printerId) { conds.push('j.printer_id=?'); params.push(printerId) }
   if (status !== undefined && status !== null) { conds.push('j.status=?'); params.push(status) }
   const where = 'WHERE ' + conds.join(' AND ')
@@ -174,15 +171,11 @@ async function findAll({ printerId, status, page = 1, pageSize = 50, tenantId = 
   return { list: rows.map(fmt), pagination: { page, pageSize, total } }
 }
 
-async function findById(id, { tenantId } = {}) {
+async function findById(id) {
   let sql = `SELECT j.*, p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j LEFT JOIN printers p ON p.id = j.printer_id
      WHERE j.id=?`
   const params = [id]
-  if (tenantId !== undefined) {
-    sql += ' AND j.tenant_id=?'
-    params.push(Number(tenantId))
-  }
   const [[row]] = await pool.query(sql, params)
   if (!row) throw new AppError('打印任务不存在', 404)
   return fmt(row)
@@ -206,9 +199,7 @@ async function create({
   content,
   copies = 1,
   createdBy,
-  tenantId: tenantIdIn,
 }) {
-  const tid = Number(tenantIdIn) >= 0 && Number.isFinite(Number(tenantIdIn)) ? Number(tenantIdIn) : 0
   if (!content) throw new AppError('打印内容不能为空', 400)
   if (!title) throw new AppError('任务标题不能为空', 400)
 
@@ -231,9 +222,9 @@ async function create({
     const [[dup]] = await pool.query(
       `SELECT id FROM print_jobs
        WHERE job_unique_key=? AND status IN (?,?,?)
-         AND (warehouse_id <=> ?) AND (job_type <=> ?) AND (tenant_id <=> ?)
+         AND (warehouse_id <=> ?) AND (job_type <=> ?)
        ORDER BY id DESC LIMIT 1`,
-      [jobUniqueKey, STATUS.PENDING, STATUS.PRINTING, STATUS.DONE, warehouseId, jobTypeNorm, tid],
+      [jobUniqueKey, STATUS.PENDING, STATUS.PRINTING, STATUS.DONE, warehouseId, jobTypeNorm],
     )
     if (dup && dup.id != null) return findById(Number(dup.id))
   }
@@ -249,7 +240,6 @@ async function create({
 
   if (!explicitPrinter) {
     const r = await resolvePrinterForJob({
-      tenantId: tid,
       warehouseId: warehouseId ?? undefined,
       jobType: jobTypeNorm,
       contentType,
@@ -264,15 +254,15 @@ async function create({
   }
 
   const [[printer]] = await pool.query(
-    'SELECT id, code, status FROM printers WHERE id=? AND (tenant_id=? OR tenant_id=0)',
-    [resolvedId, tid],
+    'SELECT id, code, status FROM printers WHERE id=?',
+    [resolvedId],
   )
   if (!printer) throw new AppError('打印机不存在', 400)
 
   const ttl = ttlMinutes()
   const [r] = await pool.query(
-    `INSERT INTO print_jobs (printer_id, template_id, title, content_type, content, copies, priority, job_type, warehouse_id, tenant_id, job_unique_key, dispatch_reason, ref_type, ref_id, ref_code, created_by, expires_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
+    `INSERT INTO print_jobs (printer_id, template_id, title, content_type, content, copies, priority, job_type, warehouse_id, job_unique_key, dispatch_reason, ref_type, ref_id, ref_code, created_by, expires_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
     [
       resolvedId,
       templateId || null,
@@ -283,7 +273,6 @@ async function create({
       priority,
       jobTypeNorm,
       warehouseId,
-      tid,
       jobUniqueKey,
       dispatchReason,
       refType,
@@ -315,8 +304,8 @@ async function create({
 
 // ── 打印客户端回调：完成 ──────────────────────────────────────────────────────
 
-async function complete(id, { ackToken } = {}, { tenantId } = {}) {
-  const job = await findById(id, { tenantId })
+async function complete(id, { ackToken } = {}) {
+  const job = await findById(id)
   if (job.status === STATUS.DONE) return job
   if (job.status === STATUS.FAILED) {
     throw new AppError('任务已失败，无法标记为完成', 400)
@@ -340,8 +329,8 @@ async function complete(id, { ackToken } = {}, { tenantId } = {}) {
       : null
 
   await pool.query(
-    'UPDATE print_jobs SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW() WHERE id=? AND tenant_id=?',
-    [STATUS.DONE, id, job.tenantId],
+    'UPDATE print_jobs SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW() WHERE id=?',
+    [STATUS.DONE, id],
   )
   await appendInboundPrintEventByJob(
     job,
@@ -351,16 +340,16 @@ async function complete(id, { ackToken } = {}, { tenantId } = {}) {
     { printJobId: job.id, barcode: job.refCode || null },
   ).catch(() => {})
   if (latRow?.printer_id && latencyMs != null) {
-    await recordPrintSuccess(latRow.printer_id, latencyMs, job.tenantId).catch(() => {})
+    await recordPrintSuccess(latRow.printer_id, latencyMs).catch(() => {})
   }
-  return findById(id, { tenantId })
+  return findById(id)
 }
 
 /**
  * ERP 桌面端本机出纸后核销：仅允许仍为「待打印」且未生成 ack_token 的任务（未被打印工作站领取）
  */
-async function completeLocalDesktop(id, { tenantId } = {}) {
-  const job = await findById(id, { tenantId })
+async function completeLocalDesktop(id) {
+  const job = await findById(id)
   if (job.status === STATUS.DONE) return job
   if (job.status === STATUS.FAILED) {
     throw new AppError('任务已失败，无法核销', 400)
@@ -376,8 +365,8 @@ async function completeLocalDesktop(id, { tenantId } = {}) {
     throw new AppError('任务已下发至工作站，请使用打印客户端确认完成', 409)
   }
   const [ur] = await pool.query(
-    'UPDATE print_jobs SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW() WHERE id=? AND tenant_id=? AND status=?',
-    [STATUS.DONE, id, job.tenantId, STATUS.PENDING],
+    'UPDATE print_jobs SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW() WHERE id=? AND status=?',
+    [STATUS.DONE, id, STATUS.PENDING],
   )
   if (!ur.affectedRows) {
     throw new AppError('任务状态已变更，请刷新后重试', 409)
@@ -389,35 +378,35 @@ async function completeLocalDesktop(id, { tenantId } = {}) {
     job.refCode ? `库存条码 ${job.refCode} 已打印` : '库存条码已打印',
     { printJobId: job.id, barcode: job.refCode || null },
   ).catch(() => {})
-  return findById(id, { tenantId })
+  return findById(id)
 }
 
 // ── 打印客户端回调：失败 ──────────────────────────────────────────────────────
 
-async function fail(id, errorMessage, { tenantId } = {}) {
-  const job = await findById(id, { tenantId })
+async function fail(id, errorMessage) {
+  const job = await findById(id)
   if (job.status === STATUS.DONE) return job
   if (job.status === STATUS.FAILED && job.retryCount >= MAX_RETRY) return job
 
-  await recordPrintFailure(job.printerId, job.tenantId).catch(() => {})
+  await recordPrintFailure(job.printerId).catch(() => {})
 
   const newRetry = job.retryCount + 1
   const newStatus = newRetry >= MAX_RETRY ? STATUS.FAILED : STATUS.PENDING
   const msg = errorMessage || '未知错误'
   if (newStatus === STATUS.PENDING) {
     await pool.query(
-      'UPDATE print_jobs SET status=?, retry_count=?, error_message=?, ack_token=NULL, dispatched_at=NULL, expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id=? AND tenant_id=?',
-      [newStatus, newRetry, msg, ttlMinutes(), id, job.tenantId],
+      'UPDATE print_jobs SET status=?, retry_count=?, error_message=?, ack_token=NULL, dispatched_at=NULL, expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id=?',
+      [newStatus, newRetry, msg, ttlMinutes(), id],
     )
   } else {
     await pool.query(
-      'UPDATE print_jobs SET status=?, retry_count=?, error_message=?, ack_token=NULL, dispatched_at=NULL WHERE id=? AND tenant_id=?',
-      [newStatus, newRetry, msg, id, job.tenantId],
+      'UPDATE print_jobs SET status=?, retry_count=?, error_message=?, ack_token=NULL, dispatched_at=NULL WHERE id=?',
+      [newStatus, newRetry, msg, id],
     )
   }
   // 如果还有重试机会，重新推送
   if (newStatus === STATUS.PENDING) {
-    const updated = await findById(id, { tenantId })
+    const updated = await findById(id)
     const [[printer]] = await pool.query('SELECT code FROM printers WHERE id=?', [job.printerId])
     if (printer) await pushToClients(printer.code, updated)
   }
@@ -428,25 +417,24 @@ async function fail(id, errorMessage, { tenantId } = {}) {
     msg,
     { printJobId: job.id, barcode: job.refCode || null, retryCount: newRetry },
   ).catch(() => {})
-  return findById(id, { tenantId })
+  return findById(id)
 }
 
 // ── 手动重试 ──────────────────────────────────────────────────────────────────
 
-async function retry(id, { tenantId } = {}) {
-  const job = await findById(id, { tenantId })
+async function retry(id) {
+  const job = await findById(id)
   await pool.query(
-    'UPDATE print_jobs SET status=0, retry_count=0, error_message=NULL, ack_token=NULL, dispatched_at=NULL, expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id=? AND tenant_id=?',
-    [ttlMinutes(), id, job.tenantId],
+    'UPDATE print_jobs SET status=0, retry_count=0, error_message=NULL, ack_token=NULL, dispatched_at=NULL, expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id=?',
+    [ttlMinutes(), id],
   )
-  const updated = await findById(id, { tenantId })
+  const updated = await findById(id)
   const [[printer]] = await pool.query('SELECT code FROM printers WHERE id=?', [job.printerId])
   if (printer) await pushToClients(printer.code, updated)
   return updated
 }
 
-async function claimClientJobs({ clientId, limit = 3, tenantId = 0 } = {}) {
-  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+async function claimClientJobs({ clientId, limit = 3 } = {}) {
   const cid = String(clientId || '').trim()
   if (!cid) throw new AppError('clientId 必填', 400)
   const n = Math.min(10, Math.max(1, Number(limit) || 3))
@@ -465,15 +453,13 @@ async function claimClientJobs({ clientId, limit = 3, tenantId = 0 } = {}) {
       `SELECT j.id
        FROM print_jobs j
        INNER JOIN printers p ON p.id = j.printer_id
-       WHERE j.tenant_id = ?
-         AND j.status = ?
+       WHERE j.status = ?
          AND p.status = 1
          AND p.client_id = ?
-         AND (p.tenant_id = ? OR p.tenant_id = 0)
        ORDER BY j.priority DESC, j.id ASC
        LIMIT ?
        FOR UPDATE`,
-      [tid, STATUS.PENDING, cid, tid, n],
+      [STATUS.PENDING, cid, n],
     )
     const ids = rows.map((r) => Number(r.id)).filter(Boolean)
     if (!ids.length) {
@@ -491,14 +477,14 @@ async function claimClientJobs({ clientId, limit = 3, tenantId = 0 } = {}) {
         `UPDATE print_jobs
          SET status = ?, ack_token = ?, dispatched_at = NOW(), error_message = NULL,
              expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE)
-         WHERE id = ? AND tenant_id = ? AND status = ?`,
-        [STATUS.PRINTING, job.ackToken, ttlMinutes(), job.id, tid, STATUS.PENDING],
+         WHERE id = ? AND status = ?`,
+        [STATUS.PRINTING, job.ackToken, ttlMinutes(), job.id, STATUS.PENDING],
       )
     }
 
     await conn.commit()
 
-    const jobs = await listJobsByIds(ids, { tenantId: tid, includeAckToken: true })
+    const jobs = await listJobsByIds(ids, { includeAckToken: true })
     const tokenMap = new Map(jobsWithToken.map((job) => [job.id, job.ackToken]))
     return jobs.map((job) => ({
       ...job,
@@ -630,21 +616,19 @@ async function getPrinterLabelRawFormat(printerId) {
 /**
  * 解析用于容器标签的打印机：优先环境变量 code，否则第一台「在线 + 标签机 type=1」
  */
-async function resolveLabelPrinterId(tenantId = 0) {
-  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+async function resolveLabelPrinterId() {
   const code = (process.env.INBOUND_LABEL_PRINTER_CODE || process.env.PDA_LABEL_PRINTER_CODE || '').trim()
   if (code) {
     const [[byCode]] = await pool.query(
-      'SELECT id, code FROM printers WHERE code = ? AND status = 1 AND (tenant_id = ? OR tenant_id = 0)',
-      [code, tid],
+      'SELECT id, code FROM printers WHERE code = ? AND status = 1',
+      [code],
     )
     if (byCode) return byCode.id
     logger.warn(`[print] 环境变量指定的标签机 code=${code} 不存在或未在线，将尝试使用默认标签机`, {}, 'PrintJobs')
   }
   const [[first]] = await pool.query(
-    `SELECT id, code FROM printers WHERE status = 1 AND type = 1 AND (tenant_id = ? OR tenant_id = 0)
-     ORDER BY CASE WHEN tenant_id = ? THEN 0 ELSE 1 END, id ASC LIMIT 1`,
-    [tid, tid],
+    `SELECT id, code FROM printers WHERE status = 1 AND type = 1
+     ORDER BY id ASC LIMIT 1`,
   )
   return first?.id ?? null
 }
@@ -658,10 +642,8 @@ async function enqueueContainerLabelJob(payload) {
   if (!data?.container_code) return null
   const containerId =
     payload?.containerId != null && Number.isFinite(Number(payload.containerId)) ? Number(payload.containerId) : null
-  const tid = Number(payload.tenantId) >= 0 && Number.isFinite(Number(payload.tenantId)) ? Number(payload.tenantId) : 0
   const wh = payload.warehouseId != null ? Number(payload.warehouseId) : null
   const resolved = await resolvePrinterForJob({
-    tenantId: tid,
     warehouseId: wh ?? undefined,
     jobType: 'container_label',
     contentType: 'zpl',
@@ -669,7 +651,7 @@ async function enqueueContainerLabelJob(payload) {
   let printerId = resolved.printerId
   let dispatchReason = resolved.dispatchReason || 'fallback'
   if (!printerId) {
-    printerId = await resolveLabelPrinterId(tid)
+    printerId = await resolveLabelPrinterId()
     dispatchReason = 'fallback'
   }
   if (!printerId) return null
@@ -696,7 +678,6 @@ async function enqueueContainerLabelJob(payload) {
   return create({
     printerId,
     dispatchReason,
-    tenantId: tid,
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
     jobType: 'container_label',
     title: `容器标 ${data.container_code}`,
@@ -713,12 +694,11 @@ async function enqueueContainerLabelJob(payload) {
 
 /**
  * 货架条码标签入队
- * payload: { rackId, tenantId?, createdBy?, jobUniqueKey? }
+ * payload: { rackId, createdBy?, jobUniqueKey? }
  */
 async function enqueueRackLabelJob(payload) {
   const rackId = payload?.rackId
   if (!rackId) return null
-  const tid = Number(payload.tenantId) >= 0 && Number.isFinite(Number(payload.tenantId)) ? Number(payload.tenantId) : 0
   let row
   try {
     const [rows] = await pool.query(
@@ -738,7 +718,6 @@ async function enqueueRackLabelJob(payload) {
   const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
   // 优先使用「货架标签」绑定，未配置时调度回退到「库存标签」绑定（见 print-dispatch bindingFallbackChain）
   const resolved = await resolvePrinterForJob({
-    tenantId: tid,
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : undefined,
     jobType: 'rack_label',
     contentType: 'zpl',
@@ -746,7 +725,7 @@ async function enqueueRackLabelJob(payload) {
   let printerId = resolved.printerId
   let dispatchReason = resolved.dispatchReason || 'fallback'
   if (!printerId) {
-    printerId = await resolveLabelPrinterId(tid)
+    printerId = await resolveLabelPrinterId()
     dispatchReason = 'fallback'
   }
   if (!printerId) return null
@@ -777,7 +756,6 @@ async function enqueueRackLabelJob(payload) {
     const job = await create({
       printerId,
       dispatchReason,
-      tenantId: tid,
       warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
       jobType: 'rack_label',
       title: `货架标 ${row.barcode}`,
@@ -807,12 +785,11 @@ async function enqueueRackLabelJob(payload) {
 
 /**
  * 物流箱贴入队（完成装箱或补打）
- * payload: { packageId, tenantId?, createdBy?, jobUniqueKey? }
+ * payload: { packageId, createdBy?, jobUniqueKey? }
  */
 async function enqueuePackageLabelJob(payload) {
   const packageId = payload?.packageId
   if (!packageId) return null
-  const tid = Number(payload.tenantId) >= 0 && Number.isFinite(Number(payload.tenantId)) ? Number(payload.tenantId) : 0
   const [[row]] = await pool.query(
     `SELECT p.id, p.barcode, wt.task_no, wt.customer_name, wt.warehouse_id,
             (SELECT COUNT(*) FROM package_items pi WHERE pi.package_id = p.id) AS line_count,
@@ -826,7 +803,6 @@ async function enqueuePackageLabelJob(payload) {
   const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
   const summary = `${Number(row.line_count)} 行 / ${Number(row.total_qty)} 件`
   const resolved = await resolvePrinterForJob({
-    tenantId: tid,
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : undefined,
     jobType: 'package_label',
     contentType: 'zpl',
@@ -834,7 +810,7 @@ async function enqueuePackageLabelJob(payload) {
   let printerId = resolved.printerId
   let dispatchReason = resolved.dispatchReason || 'fallback'
   if (!printerId) {
-    printerId = await resolveLabelPrinterId(tid)
+    printerId = await resolveLabelPrinterId()
     dispatchReason = 'fallback'
   }
   if (!printerId) return null
@@ -864,7 +840,6 @@ async function enqueuePackageLabelJob(payload) {
   return create({
     printerId,
     dispatchReason,
-    tenantId: tid,
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
     jobType: 'package_label',
     title: `箱贴 ${row.barcode}`,
@@ -881,12 +856,11 @@ async function enqueuePackageLabelJob(payload) {
 
 /**
  * 商品标签入队
- * payload: { productId, tenantId?, createdBy?, jobUniqueKey? }
+ * payload: { productId, createdBy?, jobUniqueKey? }
  */
 async function enqueueProductLabelJob(payload) {
   const productId = payload?.productId
   if (!productId) return null
-  const tid = Number(payload.tenantId) >= 0 && Number.isFinite(Number(payload.tenantId)) ? Number(payload.tenantId) : 0
   const [[row]] = await pool.query(
     `SELECT p.id, p.code, p.name, p.spec, p.unit, p.sale_price
      FROM product_items p
@@ -896,14 +870,13 @@ async function enqueueProductLabelJob(payload) {
   if (!row) return null
 
   const resolved = await resolvePrinterForJob({
-    tenantId: tid,
     jobType: 'product_label',
     contentType: 'zpl',
   })
   let printerId = resolved.printerId
   let dispatchReason = resolved.dispatchReason || 'fallback'
   if (!printerId) {
-    printerId = await resolveLabelPrinterId(tid)
+    printerId = await resolveLabelPrinterId()
     dispatchReason = 'fallback'
   }
   if (!printerId) return null
@@ -926,7 +899,6 @@ async function enqueueProductLabelJob(payload) {
   const job = await create({
     printerId,
     dispatchReason,
-    tenantId: tid,
     warehouseId: null,
     jobType: 'product_label',
     title: `商品标签 ${row.code}`,
@@ -964,34 +936,29 @@ async function expireStaleJobs() {
 }
 
 /** 监控：待打印数、失败数（会先执行过期清扫） */
-async function getStatsCounts(tenantId = 0) {
-  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+async function getStatsCounts() {
   await expireStaleJobs()
   const [[p]] = await pool.query(
-    'SELECT COUNT(*) AS c FROM print_jobs WHERE tenant_id=? AND status=?',
-    [tid, STATUS.PENDING],
+    'SELECT COUNT(*) AS c FROM print_jobs WHERE status=?',
+    [STATUS.PENDING],
   )
   const [[f]] = await pool.query(
-    'SELECT COUNT(*) AS c FROM print_jobs WHERE tenant_id=? AND status=?',
-    [tid, STATUS.FAILED],
+    'SELECT COUNT(*) AS c FROM print_jobs WHERE status=?',
+    [STATUS.FAILED],
   )
   return { pending: Number(p.c), failed: Number(f.c) }
 }
 
 /** 打印机健康度快照（error_rate / avg_latency_ms） */
-async function listPrinterHealth(tenantId = 0) {
-  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+async function listPrinterHealth() {
   const [rows] = await pool.query(
     `SELECT h.printer_id, h.error_rate, h.avg_latency_ms, h.sample_count, h.updated_at,
             p.code AS printer_code, p.name AS printer_name
      FROM printer_health_stats h
      LEFT JOIN printers p ON p.id = h.printer_id
-     WHERE h.tenant_id = ?
      ORDER BY h.printer_id ASC`,
-    [tid],
   )
   return rows.map((r) => ({
-    tenantId: tid,
     printerId: Number(r.printer_id),
     printerCode: r.printer_code,
     printerName: r.printer_name,
@@ -1045,19 +1012,18 @@ function deriveGenericBarcodeStatus(row) {
   return { statusKey: 'queued', printStateLabel: '待派发' }
 }
 
-async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, tenantId = 0, inboundTaskId = null, inboundTaskItemId = null } = {}) {
+async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null } = {}) {
   const type = String(category || '').trim().toLowerCase()
   if (!['inbound', 'outbound', 'logistics'].includes(type)) {
     throw new AppError('条码分类无效', 400)
   }
   const normalizedStatus = normalizeBarcodeRecordStatus(status)
-  if (type === 'inbound') return findInboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, tenantId, inboundTaskId, inboundTaskItemId })
-  if (type === 'outbound') return findOutboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, tenantId })
-  return findLogisticsBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, tenantId })
+  if (type === 'inbound') return findInboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, inboundTaskId, inboundTaskItemId })
+  if (type === 'outbound') return findOutboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize })
+  return findLogisticsBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize })
 }
 
-async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, tenantId = 0, inboundTaskId = null, inboundTaskItemId = null } = {}) {
-  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null } = {}) {
   const thresholds = await getInboundClosureThresholds()
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
   const inboundTaskIdNum = Number(inboundTaskId)
@@ -1121,7 +1087,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
        INNER JOIN (
          SELECT ref_id, MAX(id) AS max_id
          FROM print_jobs
-         WHERE tenant_id = ? AND ref_type = 'inventory_container'
+         WHERE ref_type = 'inventory_container'
          GROUP BY ref_id
        ) latest ON latest.max_id = j.id
      ) pj ON pj.ref_id = c.id
@@ -1136,7 +1102,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
        )
      ORDER BY c.id DESC
      ${paginateSql}`,
-    [tid, ...inboundFilterParams, like, like, like, like, ...paginateParams],
+    [...inboundFilterParams, like, like, like, like, ...paginateParams],
   )
 
   const mapped = rows.map((row) => {
@@ -1200,8 +1166,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
   }
 }
 
-async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, tenantId = 0 } = {}) {
-  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20 } = {}) {
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
   const offset = (page - 1) * pageSize
   const paginateSql = status ? '' : 'LIMIT ? OFFSET ?'
@@ -1245,7 +1210,7 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
        INNER JOIN (
          SELECT ref_id, MAX(id) AS max_id
          FROM print_jobs
-         WHERE tenant_id = ? AND ref_type = 'package'
+         WHERE ref_type = 'package'
          GROUP BY ref_id
        ) latest ON latest.max_id = j.id
      ) pj ON pj.ref_id = p.id
@@ -1254,7 +1219,7 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
         OR IFNULL(wt.customer_name, '') LIKE ?
      ORDER BY p.id DESC
      ${paginateSql}`,
-    [tid, like, like, like, ...paginateParams],
+    [like, like, like, ...paginateParams],
   )
   const mapped = rows.map((row) => {
       const derived = deriveGenericBarcodeStatus(row)
@@ -1311,25 +1276,23 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
   }
 }
 
-async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, tenantId = 0 } = {}) {
-  const tid = Number(tenantId) >= 0 ? Number(tenantId) : 0
+async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20 } = {}) {
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
   const offset = (page - 1) * pageSize
   const paginateSql = status ? '' : 'LIMIT ? OFFSET ?'
   const paginateParams = status ? [] : [pageSize, offset]
   const [rows] = await pool.query(
-    `SELECT j.*, p.code AS printer_code, p.name AS printer_name
+     `SELECT j.*, p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j
      LEFT JOIN printers p ON p.id = j.printer_id
-     WHERE j.tenant_id = ?
-       AND (j.ref_type = 'waybill' OR j.job_type = 'waybill')
+     WHERE (j.ref_type = 'waybill' OR j.job_type = 'waybill')
        AND (
          IFNULL(j.ref_code, '') LIKE ?
          OR IFNULL(j.title, '') LIKE ?
        )
      ORDER BY j.id DESC
      ${paginateSql}`,
-    [tid, like, like, ...paginateParams],
+    [like, like, ...paginateParams],
   )
   const mapped = rows.map((row) => {
       const derived = deriveGenericBarcodeStatus(row)
@@ -1367,13 +1330,12 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
   const [[{ total: totalRaw }]] = await pool.query(
     `SELECT COUNT(*) AS total
      FROM print_jobs j
-     WHERE j.tenant_id = ?
-       AND (j.ref_type = 'waybill' OR j.job_type = 'waybill')
+     WHERE (j.ref_type = 'waybill' OR j.job_type = 'waybill')
        AND (
          IFNULL(j.ref_code, '') LIKE ?
          OR IFNULL(j.title, '') LIKE ?
        )`,
-    [tid, like, like],
+    [like, like],
   )
 
   return {
@@ -1382,15 +1344,15 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
   }
 }
 
-async function reprintBarcodeRecord({ category, recordId, tenantId = 0, createdBy = null } = {}) {
+async function reprintBarcodeRecord({ category, recordId, createdBy = null } = {}) {
   const type = String(category || '').trim().toLowerCase()
-  if (type === 'inbound') return reprintInboundBarcode(recordId, { tenantId, createdBy })
-  if (type === 'outbound') return reprintOutboundBarcode(recordId, { tenantId, createdBy })
-  if (type === 'logistics') return reprintLogisticsBarcode(recordId, { tenantId, createdBy })
+  if (type === 'inbound') return reprintInboundBarcode(recordId, { createdBy })
+  if (type === 'outbound') return reprintOutboundBarcode(recordId, { createdBy })
+  if (type === 'logistics') return reprintLogisticsBarcode(recordId, { createdBy })
   throw new AppError('条码分类无效', 400)
 }
 
-async function reprintInboundBarcode(recordId, { tenantId = 0, createdBy = null } = {}) {
+async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404)
   const [[row]] = await pool.query(
@@ -1403,7 +1365,6 @@ async function reprintInboundBarcode(recordId, { tenantId = 0, createdBy = null 
   if (!row) throw new AppError('入库条码不存在', 404)
   return enqueueContainerLabelJob({
     containerId: id,
-    tenantId,
     warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
     data: {
       container_code: row.barcode,
@@ -1415,27 +1376,25 @@ async function reprintInboundBarcode(recordId, { tenantId = 0, createdBy = null 
   })
 }
 
-async function reprintOutboundBarcode(recordId, { tenantId = 0, createdBy = null } = {}) {
+async function reprintOutboundBarcode(recordId, { createdBy = null } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404)
   return enqueuePackageLabelJob({
     packageId: id,
-    tenantId,
     createdBy,
     jobUniqueKey: `reprint_package:${id}:${Date.now()}`,
   })
 }
 
-async function reprintLogisticsBarcode(recordId, { tenantId = 0, createdBy = null } = {}) {
+async function reprintLogisticsBarcode(recordId, { createdBy = null } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404)
-  const job = await findById(id, { tenantId })
+  const job = await findById(id)
   if (job.jobType !== 'waybill' && job.refType !== 'waybill') {
     throw new AppError('该记录不是物流条码打印任务', 400)
   }
   return create({
     printerId: job.printerId,
-    tenantId,
     warehouseId: job.warehouseId,
     jobType: 'waybill',
     title: job.title,

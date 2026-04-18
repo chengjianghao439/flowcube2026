@@ -3,6 +3,19 @@ const jwt = require('jsonwebtoken')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 
+async function listRolePermissions(roleId) {
+  try {
+    const [rows] = await pool.query(
+      'SELECT permission FROM sys_role_permissions WHERE role_id=? ORDER BY permission ASC',
+      [roleId],
+    )
+    return rows.map((row) => row.permission)
+  } catch (error) {
+    if (error && error.code === 'ER_NO_SUCH_TABLE') return []
+    throw error
+  }
+}
+
 async function login(username, password) {
   const [rows] = await pool.query(
     'SELECT * FROM sys_users WHERE username = ? AND deleted_at IS NULL',
@@ -23,16 +36,16 @@ async function login(username, password) {
     throw new AppError('账号或密码错误', 401)
   }
 
-  const tenantId = Number(user.tenant_id) >= 0 ? Number(user.tenant_id) : 0
   const payload = {
     userId: user.id,
     roleId: user.role_id,
-    tenantId,
   }
 
   const token = jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   })
+
+  const permissions = await listRolePermissions(user.role_id)
 
   return {
     token,
@@ -43,14 +56,14 @@ async function login(username, password) {
       roleId: user.role_id,
       roleName: user.role_name,
       avatar: user.avatar,
-      tenantId,
+      permissions,
     },
   }
 }
 
 async function getMe(userId) {
   const [rows] = await pool.query(
-    'SELECT id, username, real_name, role_id, role_name, avatar, tenant_id FROM sys_users WHERE id = ? AND deleted_at IS NULL',
+    'SELECT id, username, real_name, role_id, role_name, avatar FROM sys_users WHERE id = ? AND deleted_at IS NULL',
     [userId],
   )
 
@@ -59,7 +72,7 @@ async function getMe(userId) {
     throw new AppError('用户不存在', 404)
   }
 
-  const tenantId = Number(user.tenant_id) >= 0 ? Number(user.tenant_id) : 0
+  const permissions = await listRolePermissions(user.role_id)
   return {
     id: user.id,
     username: user.username,
@@ -67,7 +80,7 @@ async function getMe(userId) {
     roleId: user.role_id,
     roleName: user.role_name,
     avatar: user.avatar,
-    tenantId,
+    permissions,
   }
 }
 
@@ -76,7 +89,7 @@ async function getMe(userId) {
  */
 async function refreshAccessToken(userId) {
   const [rows] = await pool.query(
-    'SELECT id, role_id, is_active, tenant_id FROM sys_users WHERE id = ? AND deleted_at IS NULL',
+    'SELECT id, role_id, is_active FROM sys_users WHERE id = ? AND deleted_at IS NULL',
     [userId],
   )
   const user = rows[0]
@@ -87,11 +100,9 @@ async function refreshAccessToken(userId) {
     throw new AppError('账号已被禁用，请联系管理员', 403)
   }
 
-  const tenantId = Number(user.tenant_id) >= 0 ? Number(user.tenant_id) : 0
   const payload = {
     userId: user.id,
     roleId: user.role_id,
-    tenantId,
   }
 
   const token = jwt.sign(payload, process.env.JWT_SECRET, {

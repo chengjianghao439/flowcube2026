@@ -8,7 +8,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "lint": "eslint src/",
-    "smoke:reports": "node scripts/smoke-reports.js"
+    "smoke:reports": "node scripts/smoke-reports.js",
+    "migrate": "node scripts/migrate.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

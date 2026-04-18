@@ -2,16 +2,17 @@ const { Router } = require('express')
 const { z } = require('zod')
 const { pool } = require('../../config/db')
 const { successResponse } = require('../../utils/response')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const AppError = require('../../utils/AppError')
 const { priceLevelLabel } = require('../../utils/priceLevels')
+const { PERMISSIONS } = require('../../constants/permissions')
 const router = Router()
 router.use(authMiddleware)
 
 const vBody = s => (req,res,next) => { const r=s.safeParse(req.body); if(!r.success) return res.status(400).json({success:false,message:r.error.errors.map(e=>e.message).join('；'),data:null}); req.body=r.data; next() }
 
 // 价格表列表
-router.get('/', async (req, res, next) => {
+router.get('/', requirePermission(PERMISSIONS.PRICE_LIST_VIEW), async (req, res, next) => {
   try {
     const [rows] = await pool.query(`SELECT id,name,remark,is_active,created_at FROM price_lists WHERE deleted_at IS NULL ORDER BY created_at DESC`)
     return successResponse(res, rows.map(r => ({ id:r.id, name:r.name, remark:r.remark, isActive:r.is_active, createdAt:r.created_at })), '查询成功')
@@ -19,7 +20,7 @@ router.get('/', async (req, res, next) => {
 })
 
 // 价格表明细（含商品价格）
-router.get('/:id/items', async (req, res, next) => {
+router.get('/:id/items', requirePermission(PERMISSIONS.PRICE_LIST_VIEW), async (req, res, next) => {
   try {
     const [rows] = await pool.query(`SELECT id,list_id,product_id,product_code,product_name,unit,sale_price FROM price_list_items WHERE list_id=? ORDER BY product_code`, [+req.params.id])
     return successResponse(res, rows.map(r => ({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, salePrice:Number(r.sale_price) })), '查询成功')
@@ -27,7 +28,7 @@ router.get('/:id/items', async (req, res, next) => {
 })
 
 // 查询某客户对某商品的定价（下销售单时调用）
-router.get('/customer-price', async (req, res, next) => {
+router.get('/customer-price', requirePermission(PERMISSIONS.PRICE_LIST_VIEW), async (req, res, next) => {
   try {
     const { customerId, productId } = req.query
     if (!customerId || !productId) return successResponse(res, null, '缺少参数')
@@ -50,7 +51,7 @@ router.get('/customer-price', async (req, res, next) => {
 })
 
 // 创建价格表
-router.post('/', vBody(z.object({ name:z.string().min(1), remark:z.string().optional() })), async (req, res, next) => {
+router.post('/', requirePermission(PERMISSIONS.PRICE_LIST_CREATE), vBody(z.object({ name:z.string().min(1), remark:z.string().optional() })), async (req, res, next) => {
   try {
     const [r] = await pool.query('INSERT INTO price_lists (name,remark) VALUES (?,?)', [req.body.name, req.body.remark||null])
     return successResponse(res, { id:r.insertId }, '创建成功', 201)
@@ -58,7 +59,7 @@ router.post('/', vBody(z.object({ name:z.string().min(1), remark:z.string().opti
 })
 
 // 批量更新价格表明细（覆盖写入）
-router.put('/:id/items', async (req, res, next) => {
+router.put('/:id/items', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), async (req, res, next) => {
   try {
     const listId = +req.params.id
     const [[list]] = await pool.query('SELECT id FROM price_lists WHERE id=? AND deleted_at IS NULL', [listId])
@@ -81,7 +82,7 @@ router.put('/:id/items', async (req, res, next) => {
 })
 
 // 更新价格表基本信息
-router.put('/:id', vBody(z.object({ name:z.string().min(1).optional(), remark:z.string().optional(), isActive:z.boolean().optional() })), async (req, res, next) => {
+router.put('/:id', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), vBody(z.object({ name:z.string().min(1).optional(), remark:z.string().optional(), isActive:z.boolean().optional() })), async (req, res, next) => {
   try {
     const sets = []; const params = []
     if (req.body.name !== undefined) { sets.push('name=?'); params.push(req.body.name) }
@@ -93,7 +94,7 @@ router.put('/:id', vBody(z.object({ name:z.string().min(1).optional(), remark:z.
 })
 
 // 删除价格表
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PRICE_LIST_DELETE), async (req, res, next) => {
   try {
     await pool.query('UPDATE price_lists SET deleted_at=NOW() WHERE id=?', [+req.params.id])
     return successResponse(res, null, '已删除')
@@ -101,7 +102,7 @@ router.delete('/:id', async (req, res, next) => {
 })
 
 // 更新客户关联的价格表
-router.put('/bind-customer', async (req, res, next) => {
+router.put('/bind-customer', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), async (req, res, next) => {
   try {
     const { customerId, priceLevel } = req.body
     if (!customerId) return res.status(400).json({ success:false, message:'缺少 customerId', data:null })

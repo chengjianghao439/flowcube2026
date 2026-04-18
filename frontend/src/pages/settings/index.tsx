@@ -8,10 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 export default function SettingsPage() {
-  const { roleId } = usePermission()
-  const isAdmin = roleId === 1
+  const { can } = usePermission()
+  const canUpdate = can(PERMISSIONS.SETTINGS_UPDATE)
   const qc = useQueryClient()
 
   const { data } = useQuery({ queryKey: ['settings'], queryFn: () => getSettingsApi().then(r => r.data.data!) })
@@ -50,17 +51,17 @@ export default function SettingsPage() {
                 value={form[s.key_name] ?? ''}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [s.key_name]: e.target.value }))}
                 type={s.type === 'number' ? 'number' : 'text'}
-                disabled={!isAdmin}
+                disabled={!canUpdate}
               />
             </div>
           </div>
         ))}
-        {isAdmin && (
+        {canUpdate && (
           <div className="pt-2">
             <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中...' : '保存设置'}</Button>
           </div>
         )}
-        {!isAdmin && <p className="text-sm text-muted-foreground">当前账号无修改权限</p>}
+        {!canUpdate && <p className="text-sm text-muted-foreground">当前账号无修改权限</p>}
       </div>
 
       {/* 角色说明 */}

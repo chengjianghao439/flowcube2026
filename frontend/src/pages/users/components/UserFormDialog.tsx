@@ -14,7 +14,10 @@ import type { SysUser } from '@/types/users'
 
 const ROLES = [
   { value: 1, label: '管理员' },
-  { value: 2, label: '普通用户' },
+  { value: 2, label: '仓库管理员' },
+  { value: 3, label: '采购员' },
+  { value: 4, label: '销售员' },
+  { value: 5, label: '只读用户' },
 ]
 
 interface UserFormDialogProps {
@@ -31,7 +34,6 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
   const [realName, setRealName] = useState('')
   const [roleId, setRoleId] = useState(2)
   const [isActive, setIsActive] = useState(true)
-  const [tenantId, setTenantId] = useState(0)
 
   const { mutate: createUser, isPending: creating, error: createError } = useCreateUser()
   const { mutate: updateUser, isPending: updating, error: updateError } = useUpdateUser()
@@ -44,14 +46,12 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
       setRealName(editUser.realName)
       setRoleId(editUser.roleId)
       setIsActive(editUser.isActive)
-      setTenantId(editUser.tenantId ?? 0)
     } else {
       setUsername('')
       setPassword('')
       setRealName('')
       setRoleId(2)
       setIsActive(true)
-      setTenantId(0)
     }
   }, [editUser, open])
 
@@ -59,11 +59,11 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
     e.preventDefault()
     if (isEdit && editUser) {
       updateUser(
-        { id: editUser.id, data: { realName, roleId, isActive, tenantId } },
+        { id: editUser.id, data: { realName, roleId, isActive } },
         { onSuccess: onClose },
       )
     } else {
-      createUser({ username, password, realName, roleId, tenantId }, { onSuccess: onClose })
+      createUser({ username, password, realName, roleId }, { onSuccess: onClose })
     }
   }
 
@@ -110,23 +110,6 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
               placeholder="真实姓名"
               disabled={isPending}
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="form-tenantId">租户 ID（tenant_id）</Label>
-            <Input
-              id="form-tenantId"
-              type="number"
-              min={0}
-              step={1}
-              value={tenantId}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setTenantId(Number(e.target.value) >= 0 ? Number(e.target.value) : 0)
-              }
-              placeholder="0 = 共享 / 默认单租户"
-              disabled={isPending}
-            />
-            <p className="text-xs text-muted-foreground">与业务 company_id 对齐时填入相同数字即可。</p>
           </div>
 
           <div className="space-y-2">

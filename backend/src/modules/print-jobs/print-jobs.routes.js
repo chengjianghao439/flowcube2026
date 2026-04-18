@@ -1,38 +1,35 @@
 const { Router } = require('express')
 const ctrl = require('./print-jobs.controller')
-const { authMiddleware, permissionMiddleware } = require('../../middleware/auth')
-const { loadRolePermissions } = require('../../middleware/loadRolePermissions')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { validateJobPrinterHeader } = require('./print-jobs.middleware')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const router = Router()
-const printClientPerm = permissionMiddleware('print:client', { superAdminRoleIds: [1] })
 
 router.use(authMiddleware)
-router.get('/', ctrl.list)
-router.get('/stats', ctrl.stats)
-router.get('/printer-health', ctrl.printerHealth)
-router.get('/barcodes', ctrl.barcodeRecords)
-router.post('/barcodes/reprint', ctrl.reprintBarcode)
-router.post('/claim-client', ctrl.claimClientJobs)
-router.get('/:id', ctrl.detail)
-router.post('/', ctrl.create)
-router.post('/:id/complete-local', ctrl.completeLocal)
+router.get('/', requirePermission(PERMISSIONS.PRINT_JOB_VIEW), ctrl.list)
+router.get('/stats', requirePermission(PERMISSIONS.PRINT_JOB_VIEW), ctrl.stats)
+router.get('/printer-health', requirePermission(PERMISSIONS.PRINT_JOB_VIEW), ctrl.printerHealth)
+router.get('/barcodes', requirePermission(PERMISSIONS.PRINT_JOB_VIEW), ctrl.barcodeRecords)
+router.post('/barcodes/reprint', requirePermission(PERMISSIONS.PRINT_JOB_REPRINT), ctrl.reprintBarcode)
+router.post('/claim-client', requirePermission(PERMISSIONS.PRINT_CLIENT_CONSUME), ctrl.claimClientJobs)
+router.get('/:id', requirePermission(PERMISSIONS.PRINT_JOB_VIEW), ctrl.detail)
+router.post('/', requirePermission(PERMISSIONS.PRINT_JOB_CREATE), ctrl.create)
+router.post('/:id/complete-local', requirePermission(PERMISSIONS.PRINT_JOB_CREATE), ctrl.completeLocal)
 router.post('/:id/complete-client', validateJobPrinterHeader, ctrl.complete)
 router.post(
   '/:id/complete',
-  loadRolePermissions,
-  printClientPerm,
+  requirePermission(PERMISSIONS.PRINT_CLIENT_CONSUME),
   validateJobPrinterHeader,
   ctrl.complete,
 )
 router.post('/:id/fail-client', validateJobPrinterHeader, ctrl.fail)
 router.post(
   '/:id/fail',
-  loadRolePermissions,
-  printClientPerm,
+  requirePermission(PERMISSIONS.PRINT_CLIENT_CONSUME),
   validateJobPrinterHeader,
   ctrl.fail,
 )
-router.post('/:id/retry', ctrl.retry)
+router.post('/:id/retry', requirePermission(PERMISSIONS.PRINT_JOB_RETRY), ctrl.retry)
 
 module.exports = router

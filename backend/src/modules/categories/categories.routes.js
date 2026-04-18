@@ -1,7 +1,8 @@
 const { Router } = require('express')
 const { z }      = require('zod')
 const ctrl       = require('./categories.controller')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const router = Router()
 router.use(authMiddleware)
@@ -36,15 +37,15 @@ const updateSchema = z.object({
 })
 
 // GET 接口
-router.get('/tree',   ctrl.tree)
-router.get('/flat',   ctrl.flat)
-router.get('/leaves', ctrl.leaves)
-router.get('/:id',    ctrl.detail)
+router.get('/tree',   requirePermission(PERMISSIONS.CATEGORY_VIEW), ctrl.tree)
+router.get('/flat',   requirePermission(PERMISSIONS.CATEGORY_VIEW), ctrl.flat)
+router.get('/leaves', requirePermission(PERMISSIONS.CATEGORY_VIEW), ctrl.leaves)
+router.get('/:id',    requirePermission(PERMISSIONS.CATEGORY_VIEW), ctrl.detail)
 
 // 写入接口
-router.post('/',                   vBody(createSchema), ctrl.create)
-router.put('/:id',                 vBody(updateSchema), ctrl.update)
-router.delete('/:id',              ctrl.remove)
-router.patch('/:id/status',        vBody(z.object({ status: z.boolean() })), ctrl.toggle)
+router.post('/',                   requirePermission(PERMISSIONS.CATEGORY_CREATE), vBody(createSchema), ctrl.create)
+router.put('/:id',                 requirePermission(PERMISSIONS.CATEGORY_UPDATE), vBody(updateSchema), ctrl.update)
+router.delete('/:id',              requirePermission(PERMISSIONS.CATEGORY_DELETE), ctrl.remove)
+router.patch('/:id/status',        requirePermission(PERMISSIONS.CATEGORY_UPDATE), vBody(z.object({ status: z.boolean() })), ctrl.toggle)
 
 module.exports = router
