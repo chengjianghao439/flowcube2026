@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 const { spawnSync } = require('child_process')
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
 const ROOT = process.cwd()
 const SESSION = process.env.PLAYWRIGHT_CLI_SESSION || `rj-${process.pid}-${Math.floor(Math.random() * 1e6)}`
 const BASE_URL = process.env.PAGE_SMOKE_BASE_URL || 'http://127.0.0.1'
@@ -21,9 +24,70 @@ function pickRunner() {
 const [runnerBin, runnerArgs] = pickRunner()
 const BROWSER_NAME = process.env.PLAYWRIGHT_BROWSER_NAME || 'chrome'
 const SKIP_BROWSER_INSTALL = process.env.PLAYWRIGHT_SKIP_BROWSER_INSTALL === '1'
+const CLI_CONFIG_ARGS = createCliConfigArgs()
+
+function createCliConfigArgs() {
+  const executablePath = resolveChromiumExecutablePath()
+  if (!executablePath) {
+    return []
+  }
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-playwright-'))
+  const configPath = path.join(tempDir, 'cli.config.json')
+  fs.writeFileSync(
+    configPath,
+    JSON.stringify(
+      {
+        browser: {
+          browserName: 'chromium',
+          launchOptions: {
+            executablePath,
+            chromiumSandbox: false,
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  )
+  return ['--config', configPath]
+}
+
+function resolveChromiumExecutablePath() {
+  if (process.env.PLAYWRIGHT_BROWSER_EXECUTABLE_PATH) {
+    return process.env.PLAYWRIGHT_BROWSER_EXECUTABLE_PATH
+  }
+  const root = '/ms-playwright'
+  if (!fs.existsSync(root)) {
+    return ''
+  }
+  const candidates = fs
+    .readdirSync(root)
+    .filter((name) => /^chromium-\d+$/.test(name))
+    .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]))
+  for (const candidate of candidates) {
+    const executablePath = path.join(root, candidate, 'chrome-linux', 'chrome')
+    if (fs.existsSync(executablePath)) {
+      return executablePath
+    }
+  }
+  return ''
+}
 
 function runPw(args) {
   const res = spawnSync(runnerBin, [...runnerArgs, '--session', SESSION, ...args], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  if (res.status !== 0) {
+    const detail = (res.stderr || res.stdout || '').trim()
+    throw new Error(detail || `playwright-cli ${args[0]} failed`)
+  }
+  return (res.stdout || '').trim()
+}
+
+function runPwOpen(args) {
+  const res = spawnSync(runnerBin, [...runnerArgs, ...CLI_CONFIG_ARGS, '--session', SESSION, ...args], {
     cwd: ROOT,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -82,7 +146,7 @@ async function login() {
     state: { token, user, isAuthenticated: true },
     version: 0,
   })
-  runPw(['open', `${BASE_URL}/#/login`])
+  runPwOpen(['open', `${BASE_URL}/#/login`])
   runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(authStorage)}), true)`])
   runPw(['eval', '(location.reload(), true)'])
   await new Promise((resolve) => setTimeout(resolve, 3000))
