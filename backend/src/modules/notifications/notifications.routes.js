@@ -1,7 +1,8 @@
 const { Router } = require('express')
 const { pool } = require('../../config/db')
 const { successResponse } = require('../../utils/response')
-const { authMiddleware } = require('../../middleware/auth')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const router = Router()
 router.use(authMiddleware)
@@ -16,7 +17,7 @@ function pushNotification(items, seen, item) {
   })
 }
 
-router.get('/', async (req, res, next) => {
+router.get('/', requirePermission(PERMISSIONS.DASHBOARD_VIEW), async (req, res, next) => {
   try {
     const threshold = 10 // 低库存阈值
     const inboundThresholds = await getInboundClosureThresholds()

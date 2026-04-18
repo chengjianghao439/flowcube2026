@@ -1,3 +1,4 @@
 # 复制为 .pda-server-url（与 capacitor.config.ts 同目录），只保留一行地址，不要末尾斜杠。
 # 改 IP 后执行：npm run pda:sync，再在 Android Studio 重新运行/安装。
+# 该文件仅用于本机 PDA 开发调试，勿提交真实部署地址。
 http://192.168.1.100:5173

@@ -4,6 +4,7 @@
 import { Capacitor } from '@capacitor/core'
 import apiClient from '@/api/client'
 import { API_BASE_STORAGE_KEY } from '@/config/api'
+import { ERP_PRODUCTION_ORIGIN, PDA_FALLBACK_API_ORIGIN } from '@/config/env'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/lib/toast'
 
@@ -17,10 +18,9 @@ export const PDA_LABEL_PRINTER_ID_KEY = 'flowcube:pdaLabelPrinterId'
  * 独立 PDA 的内置后端兜底地址。
  * 说明：
  * - 正常优先使用构建期注入的 VITE_ERP_PRODUCTION_ORIGIN
- * - 若手动打包时漏传 env，仍应回退到当前线上服务器，避免 APK 启动即“无法连接服务器”
+ * - 如需额外兜底，显式配置 VITE_PDA_FALLBACK_API_ORIGIN
+ * - 不再内置固定公网地址，避免打包产物把测试/生产地址写死
  */
-export const PDA_FALLBACK_API_ORIGIN = 'http://47.93.228.251'
-
 export function normalizePdaApiOrigin(raw: string): string {
   const t = raw.trim().replace(/\/$/, '')
   if (!t) return ''
@@ -49,9 +49,7 @@ export function isPdaViteLiveHost(): boolean {
 
 /** APK 构建时注入的默认后端根（与桌面共用 VITE_ERP_PRODUCTION_ORIGIN） */
 export function getBuiltPdaDefaultApiOrigin(): string {
-  const raw = import.meta.env.VITE_ERP_PRODUCTION_ORIGIN?.trim()
-  const envOrigin = raw ? normalizePdaApiOrigin(raw) : ''
-  if (envOrigin) return envOrigin
+  if (ERP_PRODUCTION_ORIGIN) return ERP_PRODUCTION_ORIGIN
   return normalizePdaApiOrigin(PDA_FALLBACK_API_ORIGIN)
 }
 

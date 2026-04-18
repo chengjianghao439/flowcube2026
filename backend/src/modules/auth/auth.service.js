@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { env } = require('../../config/env')
 
 async function listRolePermissions(roleId) {
   try {
@@ -41,8 +42,8 @@ async function login(username, password) {
     roleId: user.role_id,
   }
 
-  const token = jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  const token = jwt.sign(payload, env.JWT_SECRET, {
+    expiresIn: env.JWT_EXPIRES_IN,
   })
 
   const permissions = await listRolePermissions(user.role_id)
@@ -105,8 +106,8 @@ async function refreshAccessToken(userId) {
     roleId: user.role_id,
   }
 
-  const token = jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  const token = jwt.sign(payload, env.JWT_SECRET, {
+    expiresIn: env.JWT_EXPIRES_IN,
   })
 
   return { token }

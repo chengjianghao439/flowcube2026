@@ -1,5 +1,8 @@
 const PERMISSIONS = {
   DASHBOARD_VIEW: 'dashboard.view',
+  ADMIN_PUTAWAY_EXECUTE: 'admin.putaway.execute',
+  IMPORT_PRODUCT_EXECUTE: 'import.product.execute',
+  IMPORT_STOCK_EXECUTE: 'import.stock.execute',
 
   PRODUCT_VIEW: 'product.view',
   PRODUCT_CREATE: 'product.create',

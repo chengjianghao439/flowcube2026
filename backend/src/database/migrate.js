@@ -5,14 +5,15 @@
 const fs = require('fs')
 const path = require('path')
 const mysql2 = require('mysql2/promise')
+const { env } = require('../config/env')
 
 async function runMigrations() {
   const cfg = {
-    host:     process.env.DB_HOST     || '127.0.0.1',
-    port:     Number(process.env.DB_PORT) || 3306,
-    user:     process.env.DB_USER     || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME     || 'flowcube',
+    host: env.DB_HOST,
+    port: env.DB_PORT,
+    user: env.DB_USER,
+    password: env.DB_PASSWORD,
+    database: env.DB_NAME,
     multipleStatements: true,
   }
 
@@ -27,6 +28,8 @@ async function runMigrations() {
         PRIMARY KEY (id), UNIQUE KEY uk_file (filename)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `)
+
+    await ensureLegacyTableCompatibility(conn, env.DB_NAME)
 
     // 扫描 SQL 文件（排除 migrate.js 自身）
     const dir = path.join(__dirname)
@@ -320,6 +323,27 @@ async function seedDefaultPrintTemplates(conn) {
 // 忽略"列已存在"(1060) 和"重复索引名"(1061) 错误
 async function safeAlter(conn, sql) {
   try { await conn.query(sql) } catch (e) { if (e.errno !== 1060 && e.errno !== 1061) throw e }
+}
+
+async function ensureLegacyTableCompatibility(conn, databaseName) {
+  if (!databaseName) return
+  const [tables] = await conn.query(
+    `
+      SELECT TABLE_NAME
+      FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = ?
+        AND TABLE_NAME IN ('sys_roles')
+    `,
+    [databaseName]
+  )
+
+  const existingTables = new Set(tables.map((row) => row.TABLE_NAME))
+  if (existingTables.has('sys_roles')) {
+    await safeAlter(conn, 'ALTER TABLE `sys_roles` ADD COLUMN `remark` VARCHAR(255) DEFAULT NULL AFTER `name`')
+    await safeAlter(conn, 'ALTER TABLE `sys_roles` ADD COLUMN `is_system` TINYINT(1) NOT NULL DEFAULT 1 AFTER `remark`')
+    await safeAlter(conn, 'ALTER TABLE `sys_roles` ADD COLUMN `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER `is_system`')
+    await safeAlter(conn, 'ALTER TABLE `sys_roles` ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`')
+  }
 }
 
 // MODIFY COLUMN 长度缩短时如有超长数据会报 1406，直接忽略（开发阶段无历史数据）

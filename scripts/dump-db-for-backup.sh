@@ -21,7 +21,7 @@ fi
 
 H="${DB_HOST:-127.0.0.1}"
 PT="${DB_PORT:-3306}"
-U="${DB_USER:-root}"
+U="${DB_USER:-flowcube}"
 DB="${DB_NAME:-flowcube}"
 
 echo "在终端输入数据库密码（用户: $U, 库: $DB）…" >&2

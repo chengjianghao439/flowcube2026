@@ -9,6 +9,10 @@ interface ImportMetaEnv {
    * 例：https://api.example.com 或 http://192.168.1.10:3000
    */
   readonly VITE_ERP_PRODUCTION_ORIGIN?: string
+  /**
+   * 仅 PDA APK 可选兜底地址。为空时不做额外回退，避免把生产地址写死到包里。
+   */
+  readonly VITE_PDA_FALLBACK_API_ORIGIN?: string
 }
 
 interface Window {

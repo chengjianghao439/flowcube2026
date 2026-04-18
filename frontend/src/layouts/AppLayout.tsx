@@ -7,8 +7,13 @@ import { GlobalConfirmDialog } from '@/components/shared/GlobalConfirmDialog'
 import NotificationBell from '@/components/shared/NotificationBell'
 import GlobalSearch from '@/components/shared/GlobalSearch'
 import UserMenu from '@/components/shared/UserMenu'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 export default function AppLayout() {
+  const { can } = usePermission()
+  const canUseGlobalTools = can(PERMISSIONS.DASHBOARD_VIEW)
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       {/*
@@ -27,8 +32,8 @@ export default function AppLayout() {
           </div>
 
           <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3">
-            <GlobalSearch />
-            <NotificationBell />
+            {canUseGlobalTools ? <GlobalSearch /> : null}
+            {canUseGlobalTools ? <NotificationBell /> : null}
             <UserMenu />
           </div>
         </div>

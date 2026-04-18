@@ -2,7 +2,7 @@
 # 将桌面安装包与 latest.json 上传到生产服务器的 downloads 目录（与 nginx/docker 中 /downloads 一致）。
 #
 # 用法（在已配置 SSH 免密的终端执行）：
-#   export DEPLOY_HOST=47.93.228.251
+#   export DEPLOY_HOST=your-server.example.com
 #   export DEPLOY_USER=root
 #   export DEPLOY_PATH=/opt/flowcube/backend/downloads   # 服务器上实际路径，须与容器/静态挂载一致
 #   # 可选：export DEPLOY_PORT=22

@@ -2,6 +2,7 @@ const express = require('express')
 const fs = require('fs').promises
 const path = require('path')
 const { successResponse } = require('../../utils/response')
+const { env } = require('../../config/env')
 
 const router = express.Router()
 
@@ -9,7 +10,7 @@ const router = express.Router()
  * GitHub Release 直链 / CDN：境内用户直连常失败，应由同域 /downloads/ 提供安装包。
  * 设为 1 时仍向客户端返回 GitHub 绝对地址（适合境外或已可直连 GitHub 的环境）。
  */
-const USE_GITHUB_DIRECT_URL = String(process.env.APP_UPDATE_USE_GITHUB_DIRECT_URL || '').trim() === '1'
+const USE_GITHUB_DIRECT_URL = env.APP_UPDATE_USE_GITHUB_DIRECT_URL
 
 function isGitHubReleaseOrCdnUrl(urlString) {
   try {
@@ -49,7 +50,7 @@ function absolutizeUpdateAssetUrl(req, url, filename) {
   }
   if (!pathPart) return null
 
-  const envBase = (process.env.APP_PUBLIC_URL || '').trim().replace(/\/$/, '')
+  const envBase = env.APP_PUBLIC_URL
   if (envBase) {
     return `${envBase}${pathPart}`
   }
@@ -65,13 +66,12 @@ function absolutizeUpdateAssetUrl(req, url, filename) {
 }
 
 const defaultDownloadsDir = path.join(__dirname, '../../../downloads')
-const DOWNLOADS_DIR = process.env.APP_UPDATE_DOWNLOADS_DIR || defaultDownloadsDir
-const MANIFEST_PATH =
-  process.env.APP_UPDATE_MANIFEST_PATH || path.join(DOWNLOADS_DIR, 'latest.json')
+const DOWNLOADS_DIR = env.APP_UPDATE_DOWNLOADS_DIR || defaultDownloadsDir
+const MANIFEST_PATH = env.APP_UPDATE_MANIFEST_PATH || path.join(DOWNLOADS_DIR, 'latest.json')
 
 // GitHub 配置
-const GITHUB_OWNER = process.env.GITHUB_OWNER || 'chengjianghao439'
-const GITHUB_REPO = process.env.GITHUB_REPO || 'flowcube2026'
+const GITHUB_OWNER = env.GITHUB_OWNER
+const GITHUB_REPO = env.GITHUB_REPO
 const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
 
 function normalizeVersion(v) {

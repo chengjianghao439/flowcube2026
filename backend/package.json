@@ -9,7 +9,8 @@
     "dev": "nodemon index.js",
     "lint": "eslint src/",
     "smoke:reports": "node scripts/smoke-reports.js",
-    "migrate": "node scripts/migrate.js"
+    "migrate": "node scripts/migrate.js",
+    "bootstrap:admin": "node scripts/bootstrap-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

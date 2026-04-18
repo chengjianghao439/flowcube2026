@@ -17,13 +17,13 @@ CREATE TABLE IF NOT EXISTS `sys_users` (
   UNIQUE KEY `uk_username` (`username`, `deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统用户表';
 
--- 初始管理员账号（密码：admin123）
+-- 初始管理员账号默认禁用，需通过 `backend/scripts/bootstrap-admin.js` 显式设置密码后再启用
 INSERT INTO `sys_users` (`username`, `password`, `real_name`, `role_id`, `role_name`, `is_active`)
 VALUES (
   'admin',
-  '$2a$10$/4UdVLa3jjGRqIkofCc3xuUaFl94HYNOWJpuqn2lRyRAGZi8vldXu',
+  '$2a$10$xxWx1WU1/mY7E.xrzJQMheHwhI58DQWvu4oj0v71V0k4VRJUWtjTi',
   '系统管理员',
   1,
   '管理员',
-  1
+  0
 );

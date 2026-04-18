@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 !.env.example
+.env.docker
 .DS_Store
 *.log
 *.exe
@@ -12,6 +13,7 @@ desktop/node_modules/
 desktop/release/
 desktop/.git-build-sha
 frontend/.vite/
+frontend/.pda-server-url
 # PDA 套壳加载的前端地址（本机 IP，勿提交）
 logs/
 TEMP_BRAND_SYNC/

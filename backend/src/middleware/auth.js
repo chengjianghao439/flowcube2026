@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken')
 const AppError = require('../utils/AppError')
 const { loadRolePermissions } = require('./loadRolePermissions')
+const { env } = require('../config/env')
 
 /**
  * JWT 认证中间件。
@@ -15,7 +16,7 @@ function authMiddleware(req, res, next) {
 
   const token = authHeader.slice(7)
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET)
+    const payload = jwt.verify(token, env.JWT_SECRET)
     req.user = payload
     next()
   } catch (err) {

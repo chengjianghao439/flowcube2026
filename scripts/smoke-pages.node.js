@@ -6,6 +6,14 @@ const path = require('path')
 const ROOT = process.cwd()
 const SESSION = process.env.PLAYWRIGHT_CLI_SESSION || `fps-${process.pid}-${Math.floor(Math.random() * 1e6)}`
 const BASE_URL = process.env.PAGE_SMOKE_BASE_URL || 'http://127.0.0.1'
+const SMOKE_USERNAME = String(process.env.SMOKE_USERNAME || '').trim()
+const SMOKE_PASSWORD = String(process.env.SMOKE_PASSWORD || '').trim()
+
+function requireSmokeCredentials() {
+  if (!SMOKE_USERNAME || !SMOKE_PASSWORD) {
+    throw new Error('缺少 SMOKE_USERNAME / SMOKE_PASSWORD，请通过环境变量显式注入测试账号凭据')
+  }
+}
 
 function pickRunner() {
   if (cmdExists('npm')) {
@@ -150,7 +158,7 @@ async function login() {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: SMOKE_USERNAME, password: SMOKE_PASSWORD }),
   })
   if (!res.ok) throw new Error(`登录失败：${res.status}`)
   const authJson = await res.json()
@@ -187,6 +195,7 @@ function openAndCheck(path, expected = '', forbidden = '') {
 }
 
 async function main() {
+  requireSmokeCredentials()
   ensureBrowser()
   await login()
   await openAndCheck('/reports/role-workbench', '岗位工作台')

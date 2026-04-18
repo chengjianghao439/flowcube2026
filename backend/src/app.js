@@ -6,11 +6,9 @@ const helmet = require('helmet')
 const errorHandler    = require('./middleware/errorHandler')
 const opLogger        = require('./middleware/opLogger')
 const requestLogger   = require('./middleware/requestLogger')
+const { env } = require('./config/env')
 
 // ─── 启动安全校验 ─────────────────────────────────────────────────────────────
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-  throw new Error('安全配置错误：JWT_SECRET 未设置或长度不足 32 位，请检查 .env 文件')
-}
 
 const app = express()
 
@@ -19,11 +17,11 @@ app.set('json charset', 'utf-8')
 
 // 位于 Nginx / 负载均衡后时开启，否则 req.protocol 多为 http，拼出的安装包下载地址会变成 http://，
 // 公网若仅开放 443，Windows 客户端更新下载会失败（0.3.x 等旧版依赖接口返回的可访问 URL）。
-if (['1', 'true', 'yes'].includes(String(process.env.TRUST_PROXY || '').toLowerCase())) {
+if (env.TRUST_PROXY) {
   app.set('trust proxy', 1)
 }
 
-const isProd = process.env.NODE_ENV === 'production'
+const isProd = env.IS_PROD
 
 // ─── 安全与解析中间件 ─────────────────────────────────────────────────────────
 // 本地 http://127.0.0.1 开发时，Helmet 默认 CSP 含 upgrade-insecure-requests，浏览器会把
@@ -43,14 +41,13 @@ app.use(
   ),
 )
 // Electron 桌面请求常见 Origin: null；仅配 CORS_ORIGIN=http://localhost:5173 会拒绝桌面端
-const corsOriginEnv = (process.env.CORS_ORIGIN || '').trim()
-const corsReflect = process.env.CORS_REFLECT === '1' || corsOriginEnv === '*'
+const corsOriginEnv = env.CORS_ORIGIN
+const corsReflect = env.CORS_REFLECT || corsOriginEnv === '*'
 const allowNullOrigin =
   corsReflect ||
   corsOriginEnv === '*' ||
-  process.env.CORS_ALLOW_NULL_ORIGIN === '1' ||
-  (!isProd && process.env.CORS_ALLOW_NULL_ORIGIN !== '0')
-const staticAllowed = corsOriginEnv || 'http://localhost:5173'
+  env.CORS_ALLOW_NULL_ORIGIN
+const staticAllowed = corsOriginEnv || (!isProd ? 'http://localhost:5173' : '')
 app.use(cors({
   origin: corsReflect
     ? true
@@ -58,7 +55,7 @@ app.use(cors({
         if (!origin) {
           return callback(null, allowNullOrigin)
         }
-        if (origin === staticAllowed) {
+        if (staticAllowed && origin === staticAllowed) {
           return callback(null, true)
         }
         return callback(null, false)

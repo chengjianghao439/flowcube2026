@@ -2,6 +2,7 @@
  * ERP API 根地址（不含 /api）。支持按 hostname 动态默认、多地址探测与 fallback。
  */
 import { IS_CAPACITOR_PDA, IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { ERP_PRODUCTION_ORIGIN } from '@/config/env'
 
 export const API_BASE_STORAGE_KEY = 'API_BASE_URL'
 
@@ -21,9 +22,6 @@ function getStoredApiBaseCandidates(): Array<{ key: string; raw: string; normali
     })
     .filter((item) => Boolean(item.raw))
 }
-
-/** 公网/生产默认（可通过 VITE_ERP_PRODUCTION_ORIGIN 覆盖） */
-export const PRODUCTION_ERP_FALLBACK = 'https://erp.xxx.com'
 
 function isFileProtocol(): boolean {
   if (typeof window === 'undefined') return false
@@ -77,14 +75,11 @@ export function clearElectronStaleViteOrigins(): void {
  * - Vite dev(5173) / preview(4173)：统一用当前页面 origin，API 走 /api 代理（局域网用 Mac IP 打开时勿直连 :3000，否则连到访问者本机或未监听端口）
  * - 浏览器 localhost / 127.0.0.1 → http://localhost:3000（直连后端，本机开发）
  * - 浏览器 192.168.* 且非上述端口 → http://{同主机}:3000
- * - 其它 → 生产域名（env 或 https://erp.xxx.com）
+ * - 其它 → 构建期注入的生产地址；未注入时退回当前站点 origin
  */
 export function getDynamicDefaultApi(): string {
   if (typeof window === 'undefined') return 'http://localhost:3000'
-  const envProdRaw = import.meta.env.VITE_ERP_PRODUCTION_ORIGIN?.trim()
-  const envProd = envProdRaw ? normalizeApiBase(envProdRaw) : ''
-  const prodFallback =
-    normalizeApiBase(envProdRaw || PRODUCTION_ERP_FALLBACK) || PRODUCTION_ERP_FALLBACK
+  const envProd = ERP_PRODUCTION_ORIGIN
 
   if (isFileProtocol() || IS_ELECTRON_DESKTOP) {
     if (envProd) return envProd
@@ -99,7 +94,8 @@ export function getDynamicDefaultApi(): string {
   const h = window.location.hostname.toLowerCase()
   if (!h || h === 'localhost' || h === '127.0.0.1') return 'http://localhost:3000'
   if (/^192\.168\./.test(h)) return `http://${h}:3000`
-  return prodFallback
+  if (envProd) return envProd
+  return window.location.origin.replace(/\/$/, '')
 }
 
 export function probeErpApiOrigin(origin: string): Promise<boolean> {
@@ -138,7 +134,7 @@ export function probeRelativeErpApi(): Promise<boolean> {
 
 /**
  * fallback 尝试顺序（去重）：
- * localStorage → 动态默认 → localhost:3000 → 生产域名
+ * localStorage → 动态默认 → localhost:3000 → 构建期生产地址
  */
 export function collectErpApiFallbackCandidates(): string[] {
   const out: string[] = []
@@ -156,11 +152,10 @@ export function collectErpApiFallbackCandidates(): string[] {
   if (typeof window !== 'undefined') {
     add(getDynamicDefaultApi())
     add('http://localhost:3000')
-    const envProd = import.meta.env.VITE_ERP_PRODUCTION_ORIGIN?.trim()
-    add(normalizeApiBase(envProd || PRODUCTION_ERP_FALLBACK))
+    add(ERP_PRODUCTION_ORIGIN)
   } else {
     add('http://localhost:3000')
-    add(PRODUCTION_ERP_FALLBACK)
+    add(ERP_PRODUCTION_ORIGIN)
   }
 
   return out

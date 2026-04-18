@@ -3,9 +3,10 @@ const app    = require('./src/app')
 const logger = require('./src/utils/logger')
 const { testConnection } = require('./src/config/db')
 const { startScheduler } = require('./src/scheduler')
+const { env } = require('./src/config/env')
 
-const PORT   = process.env.PORT    || 3000
-const IS_DEV = process.env.NODE_ENV !== 'production'
+const PORT = env.PORT
+const IS_DEV = !env.IS_PROD
 
 // ── 全局异常兜底（防止进程崩溃）─────────────────────────────────────────────
 
@@ -32,7 +33,7 @@ process.on('uncaughtException', (err) => {
 async function bootstrap() {
   await testConnection()
   app.listen(PORT, () => {
-    logger.info(`FlowCube API 已启动 http://localhost:${PORT}  env=${process.env.NODE_ENV || 'development'}`, {}, 'Server')
+    logger.info(`FlowCube API 已启动 http://localhost:${PORT}  env=${env.NODE_ENV}`, {}, 'Server')
   })
   logger.info('数据库迁移已改为显式执行：请在部署前运行 `npm run migrate`', {}, 'Server')
   startScheduler()

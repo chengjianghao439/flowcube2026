@@ -15,7 +15,7 @@
 # Environment variables (all have defaults; can be overridden in backend/.env):
 #   DB_HOST            MySQL host          (default: 127.0.0.1)
 #   DB_PORT            MySQL port          (default: 3306)
-#   DB_USER            MySQL user          (default: root)
+#   DB_USER            MySQL user          (default: flowcube)
 #   DB_PASSWORD        MySQL password      (default: empty)
 #   DB_NAME            database name       (default: flowcube)
 #   DOCKER_CONTAINER   container name      (default: flowcube-mysql)
@@ -42,7 +42,7 @@ fi
 
 DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-3306}"
-DB_USER="${DB_USER:-root}"
+DB_USER="${DB_USER:-flowcube}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 DB_NAME="${DB_NAME:-flowcube}"
 DOCKER_CONTAINER="${DOCKER_CONTAINER:-flowcube-mysql}"

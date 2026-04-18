@@ -1,5 +1,8 @@
 export const PERMISSIONS = {
   DASHBOARD_VIEW: 'dashboard.view',
+  ADMIN_PUTAWAY_EXECUTE: 'admin.putaway.execute',
+  IMPORT_PRODUCT_EXECUTE: 'import.product.execute',
+  IMPORT_STOCK_EXECUTE: 'import.stock.execute',
 
   PRODUCT_VIEW: 'product.view',
   PRODUCT_CREATE: 'product.create',
@@ -152,6 +155,14 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
   {
     group: '首页',
     items: [{ code: PERMISSIONS.DASHBOARD_VIEW, label: '仪表盘' }],
+  },
+  {
+    group: '平台工具',
+    items: [
+      { code: PERMISSIONS.ADMIN_PUTAWAY_EXECUTE, label: '管理员补录上架' },
+      { code: PERMISSIONS.IMPORT_PRODUCT_EXECUTE, label: '导入商品' },
+      { code: PERMISSIONS.IMPORT_STOCK_EXECUTE, label: '导入库存初始化' },
+    ],
   },
   {
     group: '主数据',

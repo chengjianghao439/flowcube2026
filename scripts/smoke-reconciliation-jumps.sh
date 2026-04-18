@@ -6,6 +6,15 @@ cd "$ROOT"
 
 SESSION="${PLAYWRIGHT_CLI_SESSION:-rj-$$-$RANDOM}"
 BASE_URL="${PAGE_SMOKE_BASE_URL:-http://127.0.0.1}"
+SMOKE_USERNAME="${SMOKE_USERNAME:-}"
+SMOKE_PASSWORD="${SMOKE_PASSWORD:-}"
+
+require_smoke_credentials() {
+  if [ -z "$SMOKE_USERNAME" ] || [ -z "$SMOKE_PASSWORD" ]; then
+    echo "!! 缺少 SMOKE_USERNAME / SMOKE_PASSWORD。请通过环境变量显式注入测试账号凭据。" >&2
+    exit 1
+  fi
+}
 
 if command -v npm >/dev/null 2>&1; then
   PLAYWRIGHT_RUNNER=(npm exec --yes --package @playwright/cli -- playwright-cli)
@@ -37,7 +46,7 @@ assert_no_error_text() {
 login() {
   echo "==> 对账回跳：登录测试账号..."
   local auth_json token user_json auth_storage auth_storage_js
-  auth_json="$(curl -fsS -X POST "$BASE_URL/api/auth/login" -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin123"}')"
+  auth_json="$(curl -fsS -X POST "$BASE_URL/api/auth/login" -H 'Content-Type: application/json' -d "{\"username\":\"$SMOKE_USERNAME\",\"password\":\"$SMOKE_PASSWORD\"}")"
   token="$(node -e 'const res = JSON.parse(process.argv[1]); process.stdout.write(res.data.token)' "$auth_json")"
   user_json="$(node -e 'const res = JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify(res.data.user))' "$auth_json")"
   auth_storage="$(node -e 'const token = process.argv[1]; const user = JSON.parse(process.argv[2]); process.stdout.write(JSON.stringify({ state: { token, user, isAuthenticated: true }, version: 0 }))' "$token" "$user_json")"
@@ -72,7 +81,7 @@ async function login() {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: process.env.SMOKE_USERNAME, password: process.env.SMOKE_PASSWORD }),
   })
   if (!res.ok) throw new Error(`login failed: ${res.status}`)
   return res.json()
@@ -112,6 +121,7 @@ NODE
 }
 
 main() {
+  require_smoke_credentials
   login
 
   open_path '/reports/reconciliation' '对账基础版'
