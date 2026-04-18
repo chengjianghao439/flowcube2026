@@ -27,8 +27,13 @@ import type { PermCode } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { TabPathContext } from './TabPathContext'
 
+const PATH_ALIASES: Record<string, string> = {
+  '/sales': '/sale',
+}
+
 function normalizePath(path: string): string {
-  return path.split(/[?#]/)[0] || '/'
+  const pathname = path.split(/[?#]/)[0] || '/'
+  return PATH_ALIASES[pathname] ?? pathname
 }
 
 function getFullPath(pathname: string, search: string): string {
@@ -305,7 +310,13 @@ export function KeepAliveOutlet() {
    */
   useEffect(() => {
     const path = getFullPath(location.pathname, location.search)
+    const rawPathname = path.split(/[?#]/)[0] || '/'
     const normalizedPath = normalizePath(path)
+
+    if (rawPathname !== normalizedPath) {
+      navigate(`${normalizedPath}${location.search || ''}`, { replace: true })
+      return
+    }
 
     if (normalizedPath === '/' || normalizedPath === '/dashboard') {
       useWorkspaceStore.getState().setActive(HOME_TAB.key)

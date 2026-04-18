@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -19,7 +18,6 @@ import type { TableColumn } from '@/types'
 const STATUS_COLOR: Record<number, 'default' | 'secondary' | 'destructive' | 'outline'> = { 1:'default', 2:'outline', 3:'destructive' }
 
 export default function StockCheckPage() {
-  const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
@@ -27,6 +25,7 @@ export default function StockCheckPage() {
   const [detailId, setDetailId] = useState<number|null>(null)
   const [whId, setWhId] = useState('')
   const [remark, setRemark] = useState('')
+  const [createLocked, setCreateLocked] = useState(false)
 
   const { data, isLoading } = useCheckList({ page, pageSize:20, keyword })
   const { data: warehouses } = useWarehousesActive()
@@ -45,10 +44,16 @@ export default function StockCheckPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (createLocked || create.isPending) return
     const wh = warehouses?.find(w=>String(w.id)===whId)
     if(!wh) { toast.warning('请选择仓库'); return }
-    await create.mutateAsync({ warehouseId:wh.id, warehouseName:wh.name, remark:remark||undefined })
-    setCreateOpen(false); setWhId(''); setRemark('')
+    try {
+      setCreateLocked(true)
+      await create.mutateAsync({ warehouseId:wh.id, warehouseName:wh.name, remark:remark||undefined })
+      setCreateOpen(false); setWhId(''); setRemark('')
+    } finally {
+      setCreateLocked(false)
+    }
   }
 
   return (
@@ -85,8 +90,8 @@ export default function StockCheckPage() {
               <Input value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRemark(e.target.value)} />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={()=>setCreateOpen(false)}>取消</Button>
-              <Button type="submit" disabled={create.isPending}>{create.isPending?'创建中...':'创建盘点'}</Button>
+              <Button type="button" variant="outline" onClick={()=>setCreateOpen(false)} disabled={create.isPending || createLocked}>取消</Button>
+              <Button type="submit" disabled={create.isPending || createLocked}>{create.isPending || createLocked?'创建中...':'创建盘点'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

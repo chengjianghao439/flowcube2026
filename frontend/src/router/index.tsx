@@ -118,6 +118,7 @@ export default function AppRouter() {
 
           {/* ── ERP 已登录路由 ── */}
           <Route element={<ErpProtectedRoute />}>
+            <Route path="/sales" element={<Navigate to="/sale" replace />} />
             <Route path="/*" element={<AppLayout />} />
           </Route>
 

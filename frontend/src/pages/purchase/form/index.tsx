@@ -54,11 +54,10 @@ export default function PurchaseFormPage() {
   const isNew = tabPath === '/purchase/new' || tabPath === ''
   const purchaseId = isNew ? null : Number(tabPath.split('/').pop())
 
-  function closeTab() {
-    const { removeTab, tabs } = useWorkspaceStore.getState()
-    const nextKey = removeTab(tabPath || '/purchase/new')
-    const nextTab = tabs.find(t => t.key === nextKey)
-    navigate(nextTab?.path ?? '/purchase')
+  function closeTab(targetPath = '/purchase') {
+    const { removeTab } = useWorkspaceStore.getState()
+    removeTab(tabPath || '/purchase/new')
+    navigate(targetPath)
   }
 
   if (isNew) return <CreateView closeTab={closeTab} tabPath={tabPath} />
@@ -81,6 +80,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [supplierFinderOpen, setSupplierFinderOpen] = useState(false)
   const [warehouseFinderOpen, setWarehouseFinderOpen] = useState(false)
+  const [submitLocked, setSubmitLocked] = useState(false)
 
   const isDirty = !!(supplierId || warehouseId || expectedDate || remark || items.length)
   useDirtyGuard(tabPath, isDirty)
@@ -96,6 +96,12 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const removeItem = (k: number) => setItems(p => p.filter(i => i._key !== k))
   const updateItem = (k: number, field: string, val: string | number) =>
     setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val } : i)))
+
+  const parsePositiveInteger = (value: string) => {
+    if (!value.trim()) return 0
+    const num = Number.parseInt(value, 10)
+    return Number.isFinite(num) ? num : 0
+  }
 
   function handleFinderConfirm(product: ProductFinderResult) {
     if (finderItemKey === null) return
@@ -127,6 +133,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   }
 
   async function handleSubmit() {
+    if (submitLocked || createMutate.isPending) return
     if (!supplierId || !supplierName) {
       toast.warning('请选择供应商')
       return
@@ -139,12 +146,17 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       toast.warning('请添加至少一条明细')
       return
     }
-    if (items.find(i => !i.productId || i.quantity <= 0)) {
+    if (items.find(i => !i.productId)) {
       toast.warning('请完整填写所有明细')
       return
     }
+    if (items.find(i => !Number.isInteger(i.quantity) || i.quantity <= 0)) {
+      toast.warning('采购数量必须为大于 0 的整数')
+      return
+    }
     try {
-      await createMutate.mutateAsync({
+      setSubmitLocked(true)
+      const res = await createMutate.mutateAsync({
         supplierId: +supplierId,
         supplierName,
         warehouseId: +warehouseId,
@@ -153,8 +165,12 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         remark: remark || undefined,
         items: items.map(({ _key, ...rest }) => rest),
       })
-      closeTab()
-    } catch (_) {}
+      const id = res.data.data?.id
+      closeTab(id ? `/purchase/${id}` : '/purchase')
+    } catch (_) {
+    } finally {
+      setSubmitLocked(false)
+    }
   }
 
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
@@ -166,11 +182,11 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         title="新建采购单"
         rightActions={
           <>
-            <Button variant="outline" onClick={closeTab} disabled={createMutate.isPending}>
+            <Button variant="outline" onClick={() => closeTab('/purchase')} disabled={createMutate.isPending || submitLocked}>
               取消
             </Button>
-            <Button onClick={handleSubmit} disabled={createMutate.isPending} className="gap-1.5">
-              {createMutate.isPending ? (
+            <Button onClick={handleSubmit} disabled={createMutate.isPending || submitLocked} className="gap-1.5">
+              {createMutate.isPending || submitLocked ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   提交中...
@@ -293,11 +309,11 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 
                 <Input
                   type="number"
-                  min="0.01"
-                  step="0.01"
+                  min="1"
+                  step="1"
                   placeholder="数量"
                   value={item.quantity}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
                   className="text-sm"
                 />
 
@@ -373,8 +389,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   )
 }
 
-function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: () => void }) {
-  const navigate = useNavigate()
+function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: (targetPath?: string) => void }) {
   const { data: order, isLoading } = usePurchaseDetail(purchaseId)
   const confirmMutate = useConfirmPurchase()
   const cancelMutate  = useCancelPurchase()
@@ -443,7 +458,7 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: ()
                 提交
               </Button>
             )}
-            <Button variant="outline" onClick={closeTab}>关闭</Button>
+            <Button variant="outline" onClick={() => closeTab('/purchase')}>关闭</Button>
           </>
         }
       />

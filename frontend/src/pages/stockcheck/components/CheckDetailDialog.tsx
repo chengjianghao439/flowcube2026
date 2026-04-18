@@ -6,13 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useCheckDetail, useUpdateCheckItems, useSubmitCheck, useCancelCheck } from '@/hooks/useStockCheck'
-import { useNavigate } from 'react-router-dom'
 import type { CheckItem } from '@/types/stockcheck'
 
 interface Props { open: boolean; onClose: () => void; checkId: number | null }
 
 export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
-  const navigate = useNavigate()
   const { data: check, isLoading } = useCheckDetail(checkId||0)
   const updateItems = useUpdateCheckItems()
   const submit = useSubmitCheck()
@@ -20,6 +18,9 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   const [actuals, setActuals] = useState<Record<number, string>>({})
   const [submitConfirm, setSubmitConfirm] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
+  const [saveLocked, setSaveLocked] = useState(false)
+  const [submitLocked, setSubmitLocked] = useState(false)
+  const [cancelLocked, setCancelLocked] = useState(false)
 
   useEffect(() => {
     if(check?.items) {
@@ -29,23 +30,63 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     }
   }, [check])
 
+  function parseActualQty(raw: string) {
+    if (raw.trim() === '') return 0
+    const parsed = Number.parseFloat(raw)
+    return Number.isFinite(parsed) ? parsed : Number.NaN
+  }
+
+  function validateActuals() {
+    if (!check?.items?.length) return { ok: true as const, items: [] as { id: number; actualQty: number }[] }
+    const items = check.items.map(i => ({ id: i.id, actualQty: parseActualQty(actuals[i.id] ?? '') }))
+    const invalid = items.find(i => Number.isNaN(i.actualQty) || i.actualQty < 0)
+    if (invalid) {
+      return { ok: false as const, items }
+    }
+    return { ok: true as const, items }
+  }
+
   const handleSave = async () => {
-    if(!check) return
-    const items = check.items!.map(i=>({ id:i.id, actualQty:parseFloat(actuals[i.id]||'0') }))
-    await updateItems.mutateAsync({ id:check.id, items })
-    toast.success('保存成功')
+    if(!check || saveLocked || updateItems.isPending) return
+    const validation = validateActuals()
+    if (!validation.ok) {
+      toast.warning('实盘数量必须大于或等于 0')
+      return
+    }
+    try {
+      setSaveLocked(true)
+      await updateItems.mutateAsync({ id:check.id, items: validation.items })
+      toast.success('保存成功')
+    } finally {
+      setSaveLocked(false)
+    }
   }
 
   const handleSubmit = async () => {
-    if(!check) return
-    await submit.mutateAsync(check.id)
-    onClose()
+    if(!check || submitLocked || submit.isPending) return
+    const validation = validateActuals()
+    if (!validation.ok) {
+      toast.warning('实盘数量必须大于或等于 0，修正后才能提交')
+      return
+    }
+    try {
+      setSubmitLocked(true)
+      await submit.mutateAsync(check.id)
+      onClose()
+    } finally {
+      setSubmitLocked(false)
+    }
   }
 
   const handleCancel = async () => {
-    if(!check) return
-    await cancel.mutateAsync(check.id)
-    onClose()
+    if(!check || cancelLocked || cancel.isPending) return
+    try {
+      setCancelLocked(true)
+      await cancel.mutateAsync(check.id)
+      onClose()
+    } finally {
+      setCancelLocked(false)
+    }
   }
 
   return (
@@ -103,9 +144,16 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
         )}
         <DialogFooter className="gap-2">
           {check?.status===1 && <>
-            <Button variant="outline" onClick={handleSave} disabled={updateItems.isPending}>保存实盘数</Button>
-            <Button onClick={() => setSubmitConfirm(true)} disabled={submit.isPending}>{submit.isPending?'提交中...':'提交盘点'}</Button>
-            <Button variant="destructive" onClick={() => setCancelConfirm(true)}>取消盘点</Button>
+            <Button variant="outline" onClick={handleSave} disabled={updateItems.isPending || saveLocked}>保存实盘数</Button>
+            <Button onClick={() => {
+              const validation = validateActuals()
+              if (!validation.ok) {
+                toast.warning('实盘数量必须大于或等于 0，修正后才能提交')
+                return
+              }
+              setSubmitConfirm(true)
+            }} disabled={submit.isPending || submitLocked}>{submit.isPending || submitLocked?'提交中...':'提交盘点'}</Button>
+            <Button variant="destructive" onClick={() => setCancelConfirm(true)} disabled={cancel.isPending || cancelLocked}>取消盘点</Button>
           </>}
           <Button variant="outline" onClick={onClose}>关闭</Button>
         </DialogFooter>
@@ -116,6 +164,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       title="确认提交盘点"
       description="将批量调整库存至实盘数量，此操作不可撤销。"
       confirmText="确认提交"
+      loading={submit.isPending || submitLocked}
       onConfirm={() => { setSubmitConfirm(false); handleSubmit() }}
       onCancel={() => setSubmitConfirm(false)}
     />
@@ -125,6 +174,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       description="确认取消本次盘点？"
       variant="destructive"
       confirmText="确认取消"
+      loading={cancel.isPending || cancelLocked}
       onConfirm={() => { setCancelConfirm(false); handleCancel() }}
       onCancel={() => setCancelConfirm(false)}
     />
