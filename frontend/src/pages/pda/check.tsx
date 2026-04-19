@@ -21,6 +21,8 @@ import { getTasksApi, getTaskByIdApi, submitCheckScanApi } from '@/api/warehouse
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import type { WarehouseTask, WarehouseTaskItem } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
+import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 
 interface CheckItem extends WarehouseTaskItem {
   checkedQty: number
@@ -143,6 +145,23 @@ export default function PdaCheckPage() {
   const [allChecked, setAllChecked]     = useState(false)
 
   const { flash, ok, err } = usePdaFeedback()
+  const checkAction = useCriticalPdaAction<{
+    allChecked: boolean
+  }>({
+    action: `warehouse.check-scan.${taskId}`,
+    label: `复核任务 ${taskId}`,
+    onConfirmed: async (payload) => {
+      await qc.invalidateQueries({ queryKey: ['pda-check-task', taskId] })
+      await qc.invalidateQueries({ queryKey: ['pda-check-tasks'] })
+      if (payload.allChecked) {
+        setAllChecked(true)
+        setStep('done')
+        ok('✓ 复核完成')
+      } else {
+        ok('✓ 已记录复核扫码')
+      }
+    },
+  })
 
   const taskId = selectedTask?.id ?? (params.get('taskId') ? Number(params.get('taskId')) : 0)
 
@@ -155,22 +174,19 @@ export default function PdaCheckPage() {
   const items: CheckItem[] = (taskDetail?.items ?? []) as CheckItem[]
 
   const scanMut = useMutation({
-    mutationFn: (barcode: string) => submitCheckScanApi(taskId, barcode),
-    onSuccess: async (res) => {
-      const payload = res.data.data
-      const done = payload?.allChecked ?? false
-      await qc.invalidateQueries({ queryKey: ['pda-check-task', taskId] })
-      await qc.invalidateQueries({ queryKey: ['pda-check-tasks'] })
-      if (done) {
-        setAllChecked(true)
-        setStep('done')
-        ok('✓ 复核完成')
-      } else {
-        ok('✓ 已记录复核扫码')
+    mutationFn: async (barcode: string) => {
+      const result = await checkAction.run((requestKey) =>
+        submitCheckScanApi(taskId, barcode, requestKey).then((res) => res.data.data!),
+      )
+      return result
+    },
+    onSuccess: (result) => {
+      if (result.kind === 'pending') {
+        err('网络中断，复核结果待确认。请先确认结果，避免重复扫码。')
       }
     },
     onError: (e: unknown) => {
-      err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '复核扫码失败')
+      err((e as { message?: string })?.message ?? '复核扫码失败')
     },
   })
 
@@ -256,6 +272,20 @@ export default function PdaCheckPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          <PdaCriticalActionNotice
+            blockedReason={checkAction.blockedReason}
+            pendingRecord={checkAction.pendingRecord}
+            confirming={checkAction.confirming}
+            onConfirm={() => {
+              void checkAction.confirmPending().then((status) => {
+                if (!status) return
+                if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
+                if (status.status === 'not_found') err('未找到上次复核记录，请刷新任务后再决定是否重扫')
+                if (status.status === 'failed') err(status.message || '上次复核未成功，请检查后重试')
+              })
+            }}
+            onClear={() => checkAction.clearPending()}
+          />
           <PdaFlowPanel
             badge="复核闭环提示"
             title={phaseCopy.stage}
@@ -284,7 +314,7 @@ export default function PdaCheckPage() {
       </div>
 
       <PdaBottomBar>
-        <PdaScanner onScan={handleScan} placeholder="扫描库存条码" disabled={scanMut.isPending} />
+        <PdaScanner onScan={handleScan} placeholder="扫描库存条码" disabled={scanMut.isPending || checkAction.submitBlocked} />
       </PdaBottomBar>
 
     </div>

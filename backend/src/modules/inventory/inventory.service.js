@@ -2,35 +2,72 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, splitContainer } = require('../../engine/containerEngine')
+const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 
 // ─── 库存查询 ─────────────────────────────────────────────────────────────────
 
-async function getStock({ page=1, pageSize=20, keyword='', warehouseId=null }) {
+/**
+ * 展示型库存列表：
+ * - quantity 基于容器事实层汇总
+ * - reserved 读取 inventory_stock 的 projection 字段
+ * - 不应用于关键业务判定
+ */
+async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', warehouseId=null }) {
   const offset = (page-1)*pageSize
   const like = `%${keyword}%`
-  const whFilter = warehouseId ? 'AND s.warehouse_id=?' : ''
+  const whFilter = warehouseId ? 'AND dims.warehouse_id=?' : ''
   const params = warehouseId
     ? [like, like, warehouseId, pageSize, offset]
     : [like, like, pageSize, offset]
 
   const [rows] = await pool.query(
-    `SELECT s.id, s.quantity, COALESCE(s.reserved, 0) AS reserved,
+    `SELECT COALESCE(s.id, -((dims.product_id * 1000000) + dims.warehouse_id)) AS id,
+            COALESCE(c.quantity, 0) AS quantity, COALESCE(s.reserved, 0) AS reserved,
             p.id AS product_id, p.code AS product_code, p.name AS product_name, p.unit,
             w.id AS warehouse_id, w.name AS warehouse_name
-     FROM inventory_stock s
-     JOIN product_items p ON s.product_id=p.id AND p.deleted_at IS NULL
-     JOIN inventory_warehouses w ON s.warehouse_id=w.id AND w.deleted_at IS NULL
+     FROM (
+       SELECT product_id, warehouse_id FROM inventory_stock
+       UNION
+       SELECT product_id, warehouse_id
+       FROM inventory_containers
+       WHERE status = 1 AND deleted_at IS NULL
+     ) dims
+     LEFT JOIN (
+       SELECT product_id, warehouse_id, SUM(remaining_qty) AS quantity
+       FROM inventory_containers
+       WHERE status = 1 AND deleted_at IS NULL
+       GROUP BY product_id, warehouse_id
+     ) c ON c.product_id = dims.product_id AND c.warehouse_id = dims.warehouse_id
+     LEFT JOIN inventory_stock s ON s.product_id = dims.product_id AND s.warehouse_id = dims.warehouse_id
+     JOIN product_items p ON dims.product_id=p.id AND p.deleted_at IS NULL
+     JOIN inventory_warehouses w ON dims.warehouse_id=w.id AND w.deleted_at IS NULL
      WHERE (p.code LIKE ? OR p.name LIKE ?) ${whFilter}
+       AND (COALESCE(c.quantity, 0) > 0 OR COALESCE(s.reserved, 0) > 0)
      ORDER BY p.name ASC LIMIT ? OFFSET ?`,
     params,
   )
 
   const cntParams = warehouseId ? [like, like, warehouseId] : [like, like]
   const [[{total}]] = await pool.query(
-    `SELECT COUNT(*) AS total FROM inventory_stock s
-     JOIN product_items p ON s.product_id=p.id AND p.deleted_at IS NULL
-     JOIN inventory_warehouses w ON s.warehouse_id=w.id AND w.deleted_at IS NULL
-     WHERE (p.code LIKE ? OR p.name LIKE ?) ${whFilter}`,
+    `SELECT COUNT(*) AS total
+     FROM (
+       SELECT product_id, warehouse_id FROM inventory_stock
+       UNION
+       SELECT product_id, warehouse_id
+       FROM inventory_containers
+       WHERE status = 1 AND deleted_at IS NULL
+     ) dims
+     JOIN product_items p ON dims.product_id=p.id AND p.deleted_at IS NULL
+     JOIN inventory_warehouses w ON dims.warehouse_id=w.id AND w.deleted_at IS NULL
+     LEFT JOIN (
+       SELECT product_id, warehouse_id, SUM(remaining_qty) AS quantity
+       FROM inventory_containers
+       WHERE status = 1 AND deleted_at IS NULL
+       GROUP BY product_id, warehouse_id
+     ) c ON c.product_id = dims.product_id AND c.warehouse_id = dims.warehouse_id
+     LEFT JOIN inventory_stock s ON s.product_id = dims.product_id AND s.warehouse_id = dims.warehouse_id
+     WHERE (p.code LIKE ? OR p.name LIKE ?) ${whFilter}
+       AND (COALESCE(c.quantity, 0) > 0 OR COALESCE(s.reserved, 0) > 0)`,
     cntParams,
   )
 
@@ -49,6 +86,10 @@ async function getStock({ page=1, pageSize=20, keyword='', warehouseId=null }) {
     }),
     pagination: { page, pageSize, total },
   }
+}
+
+async function getStock(params) {
+  return getStockSnapshotForDisplay(params)
 }
 
 // ─── 流水记录 ─────────────────────────────────────────────────────────────────
@@ -175,6 +216,7 @@ async function changeStock({ type, productId, warehouseId, supplierId, quantity,
 // ─── 库存总览（含分类路径、汇总统计、分页） ───────────────────────────────────
 
 async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, categoryId=null }) {
+  const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   // 1. 加载所有分类，用于路径重建和后代展开
   const [catRows] = await pool.query(
     'SELECT id, name, parent_id, path FROM product_categories',
@@ -213,7 +255,7 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
     baseParams.push(`%${keyword}%`, `%${keyword}%`)
   }
   if (warehouseId) {
-    conditions.push('s.warehouse_id = ?')
+    conditions.push('ip.warehouse_id = ?')
     baseParams.push(warehouseId)
   }
   if (catIds) {
@@ -225,12 +267,12 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
   // 4. 汇总统计（基于当前筛选条件，含仓库过滤）
   const [[statsRow]] = await pool.query(
     `SELECT
-       COUNT(*)                          AS total_skus,
-       COALESCE(SUM(s.quantity), 0)      AS total_on_hand,
-       COALESCE(SUM(s.reserved), 0)      AS total_reserved
-     FROM inventory_stock s
-     JOIN product_items p ON s.product_id = p.id
-     JOIN inventory_warehouses w ON s.warehouse_id = w.id AND w.deleted_at IS NULL
+       COUNT(DISTINCT ip.product_id)     AS total_skus,
+       COALESCE(SUM(ip.quantity), 0)     AS total_on_hand,
+       COALESCE(SUM(ip.reserved), 0)     AS total_reserved
+     FROM ${inventoryDisplayProjectionSql} ip
+     JOIN product_items p ON ip.product_id = p.id
+     JOIN inventory_warehouses w ON ip.warehouse_id = w.id AND w.deleted_at IS NULL
      WHERE ${where}`,
     baseParams,
   )
@@ -239,14 +281,15 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
   const offset = (page - 1) * pageSize
   const [rows] = await pool.query(
     `SELECT
-       s.id, s.quantity, COALESCE(s.reserved, 0) AS reserved,
+       -((ip.product_id * 1000000) + ip.warehouse_id) AS id,
+       ip.quantity, ip.reserved,
        NULL AS updated_at,
        p.id AS product_id, p.code AS product_code, p.name AS product_name,
        p.unit, p.category_id,
        w.id AS warehouse_id, w.name AS warehouse_name
-     FROM inventory_stock s
-     JOIN product_items p ON s.product_id = p.id
-     JOIN inventory_warehouses w ON s.warehouse_id = w.id AND w.deleted_at IS NULL
+     FROM ${inventoryDisplayProjectionSql} ip
+     JOIN product_items p ON ip.product_id = p.id
+     JOIN inventory_warehouses w ON ip.warehouse_id = w.id AND w.deleted_at IS NULL
      WHERE ${where}
      ORDER BY p.name ASC, w.name ASC
      LIMIT ? OFFSET ?`,
@@ -255,9 +298,9 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
 
   // 6. 总条数
   const [[{ total }]] = await pool.query(
-    `SELECT COUNT(*) AS total FROM inventory_stock s
-     JOIN product_items p ON s.product_id = p.id
-     JOIN inventory_warehouses w ON s.warehouse_id = w.id AND w.deleted_at IS NULL
+    `SELECT COUNT(*) AS total FROM ${inventoryDisplayProjectionSql} ip
+     JOIN product_items p ON ip.product_id = p.id
+     JOIN inventory_warehouses w ON ip.warehouse_id = w.id AND w.deleted_at IS NULL
      WHERE ${where}`,
     baseParams,
   )
@@ -721,6 +764,7 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, userId }
 
 module.exports = {
   getStock,
+  getStockSnapshotForDisplay,
   getLogs,
   changeStock,
   getOverview,

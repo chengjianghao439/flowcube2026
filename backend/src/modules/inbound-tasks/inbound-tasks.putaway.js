@@ -4,9 +4,13 @@ const { syncStockFromContainers, CONTAINER_STATUS, SOURCE_TYPE } = require('../.
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { appendInboundEvent } = require('./inbound-tasks.helpers')
 const { assertTaskCanPutaway } = require('./inbound-tasks.status')
+const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { assertStatusAction } = require('../../constants/documentStatusRules')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 async function syncPurchaseOrderStatus(conn, purchaseOrderId) {
   if (!Number.isFinite(purchaseOrderId) || purchaseOrderId <= 0) return
+  const completeRule = assertStatusAction('purchase', 'complete', 2)
 
   const [rows] = await conn.query(
     `SELECT
@@ -31,7 +35,13 @@ async function syncPurchaseOrderStatus(conn, purchaseOrderId) {
   const completed = rows.length > 0 && rows.every(row => Number(row.putaway_qty) >= Number(row.quantity))
   if (!completed) return
 
-  await conn.query('UPDATE purchase_orders SET status = 3 WHERE id = ? AND status = 2', [purchaseOrderId])
+  await compareAndSetStatus(conn, {
+    table: 'purchase_orders',
+    id: purchaseOrderId,
+    fromStatus: completeRule.from,
+    toStatus: completeRule.to,
+    entityName: '采购单',
+  })
   const [[po]] = await conn.query('SELECT * FROM purchase_orders WHERE id = ?', [purchaseOrderId])
   if (!po) return
 
@@ -43,6 +53,7 @@ async function syncPurchaseOrderStatus(conn, purchaseOrderId) {
 }
 
 async function tryFinishTask(conn, taskId) {
+  const finishRule = assertStatusAction('inboundTask', 'finish', 3)
   const [[{ n }]] = await conn.query(
     `SELECT COUNT(*) AS n FROM inventory_containers
      WHERE inbound_task_id = ? AND deleted_at IS NULL AND status = ?`,
@@ -56,8 +67,14 @@ async function tryFinishTask(conn, taskId) {
   const allPutaway = itemRows.every(r => Number(r.putaway_qty) >= Number(r.received_qty))
   if (!allReceived || !allPutaway) return
 
-  const [res] = await conn.query('UPDATE inbound_tasks SET status = 4 WHERE id = ? AND status = 3', [taskId])
-  if (res.affectedRows > 0) {
+  try {
+    await compareAndSetStatus(conn, {
+      table: 'inbound_tasks',
+      id: taskId,
+      fromStatus: finishRule.from,
+      toStatus: finishRule.to,
+      entityName: '收货订单',
+    })
     await appendInboundEvent(
       conn,
       taskId,
@@ -67,6 +84,8 @@ async function tryFinishTask(conn, taskId) {
       null,
       null,
     )
+  } catch (error) {
+    if (error?.statusCode !== 409) throw error
   }
 
   const [poRows] = await conn.query(
@@ -81,17 +100,35 @@ async function tryFinishTask(conn, taskId) {
   }
 }
 
-async function putaway(taskId, { containerId, locationId }, operator) {
+async function putaway(taskId, { containerId, locationId }, operator, { requestKey } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'inbound.putaway',
+      userId: operator?.userId ?? null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
 
-    const [[taskRow]] = await conn.query(
-      'SELECT id, status, lock_version FROM inbound_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-      [taskId],
-    )
-    if (!taskRow) throw new AppError('入库任务不存在', 404)
+    const taskRow = await lockStatusRow(conn, {
+      table: 'inbound_tasks',
+      id: taskId,
+      columns: 'id, status, lock_version, purchase_order_id',
+      entityName: '入库任务',
+    })
     assertTaskCanPutaway(taskRow)
+
+    const [[purchaseRow]] = await conn.query(
+      'SELECT id, order_no, status FROM purchase_orders WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      [Number(taskRow.purchase_order_id)],
+    )
+    if (purchaseRow && Number(purchaseRow.status) === 4) {
+      throw new AppError(`采购单 ${purchaseRow.order_no} 已取消，不能继续上架`, 409)
+    }
 
     const [[c]] = await conn.query(
       `SELECT c.*, t.task_no, t.purchase_order_id
@@ -151,7 +188,7 @@ async function putaway(taskId, { containerId, locationId }, operator) {
           quantity, before_qty, after_qty, unit_price,
           ref_type, ref_id, ref_no, container_id, log_source_type, log_source_ref_id,
           remark, operator_id, operator_name)
-       VALUES (?,1,?,?,NULL,?,?,?,NULL,?,?,?,?,?,?,?,?)`,
+       VALUES (?,1,?,?,NULL,?,?,?,NULL,?,?,?,?,?,?,?,?,?)`,
       [
         MOVE_TYPE.PURCHASE_IN,
         c.product_id, c.warehouse_id,
@@ -199,8 +236,15 @@ async function putaway(taskId, { containerId, locationId }, operator) {
       },
     )
 
+    const payload = { barcode: c.barcode, locationCode: loc.code }
+    await completeOperationRequest(conn, requestState, {
+      data: payload,
+      message: '上架成功',
+      resourceType: 'inbound_task',
+      resourceId: taskId,
+    })
     await conn.commit()
-    return { barcode: c.barcode, locationCode: loc.code }
+    return payload
   } catch (e) {
     await conn.rollback()
     throw e

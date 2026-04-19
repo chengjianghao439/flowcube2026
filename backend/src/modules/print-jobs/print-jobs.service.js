@@ -20,6 +20,7 @@ module.exports = {
   findAll,
   findById: query.findById,
   create: command.create,
+  assertQueueReady: command.assertQueueReady,
   complete: command.complete,
   completeLocalDesktop: command.completeLocalDesktop,
   fail: command.fail,

@@ -2,6 +2,7 @@ const router = require('express').Router()
 const { authMiddleware: auth } = require('../../middleware/auth')
 const { runAllChecks, getRecentLogs, getRunSummaries } = require('./healthCheck.service')
 const { runAutoFix, AUTO_FIXABLE_CHECK_TYPES } = require('./healthCheck.autoFix')
+const { getOperationRequestStatus } = require('../../utils/operationRequest')
 
 /**
  * GET /api/system/health
@@ -69,6 +70,23 @@ router.post('/health/autofix', auth, async (req, res, next) => {
  */
 router.get('/health/autofix/types', auth, async (req, res) => {
   res.json({ success: true, message: 'ok', data: AUTO_FIXABLE_CHECK_TYPES })
+})
+
+router.get('/request-status/:requestKey', auth, async (req, res, next) => {
+  try {
+    const action = String(req.query.action || '').trim()
+    if (!action) {
+      return res.status(400).json({ success: false, message: '缺少 action', data: null })
+    }
+    const result = await getOperationRequestStatus({
+      requestKey: req.params.requestKey,
+      action,
+      userId: req.user?.userId ?? null,
+    })
+    return res.json({ success: true, message: result.message, data: result })
+  } catch (err) {
+    next(err)
+  }
 })
 
 module.exports = router

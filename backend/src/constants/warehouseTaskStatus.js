@@ -1,3 +1,5 @@
+const AppError = require('../utils/AppError')
+
 /**
  * 仓库任务状态常量 — 统一定义，所有模块引用此文件
  *
@@ -181,6 +183,60 @@ const WT_TRANSITIONS = Object.freeze({
   [WT_STATUS.CANCELLED]: [],
 })
 
+const WT_ACTION_RULES = Object.freeze({
+  assign: {
+    allowed: WT_STATUS_ACTIVE,
+    blocked: {
+      [WT_STATUS.SHIPPED]: '已出库的任务不能修改',
+      [WT_STATUS.CANCELLED]: '已取消的任务不能修改',
+    },
+  },
+  startPicking: {
+    allowed: [WT_STATUS.PENDING, WT_STATUS.PICKING],
+    message: '只有"待拣货"或"拣货中"状态可以开始拣货',
+  },
+  readyToShip: {
+    allowed: [WT_STATUS.PICKING],
+    toStatus: WT_STATUS.SORTING,
+    message: '只有"拣货中"状态可以标记拣货完成',
+  },
+  sortTask: {
+    allowed: [WT_STATUS.SORTING],
+    toStatus: WT_STATUS.CHECKING,
+    message: '只有"待分拣"状态可以完成分拣',
+  },
+  checkDone: {
+    allowed: [WT_STATUS.CHECKING],
+    toStatus: WT_STATUS.PACKING,
+    message: '只有"待复核"状态可以完成复核',
+  },
+  packDone: {
+    allowed: [WT_STATUS.PACKING],
+    toStatus: WT_STATUS.SHIPPING,
+    message: '只有"待打包"状态可以完成打包',
+  },
+  ship: {
+    allowed: [WT_STATUS.SHIPPING],
+    toStatus: WT_STATUS.SHIPPED,
+    message: '只有"待出库"状态可以执行出库',
+  },
+  cancel: {
+    allowed: WT_STATUS_ACTIVE,
+    toStatus: WT_STATUS.CANCELLED,
+    blocked: {
+      [WT_STATUS.SHIPPED]: '已出库的任务不能取消',
+      [WT_STATUS.CANCELLED]: '任务已取消',
+    },
+  },
+  viewPickWork: {
+    allowed: WT_STATUS_ACTIVE,
+    blocked: {
+      [WT_STATUS.SHIPPED]: '任务已完成或已取消',
+      [WT_STATUS.CANCELLED]: '任务已完成或已取消',
+    },
+  },
+})
+
 /**
  * 校验状态迁移是否合法
  * @param {number} from - 当前状态
@@ -193,6 +249,15 @@ function isValidTransition(from, to) {
   return allowed.includes(to)
 }
 
+function assertWarehouseTaskAction(action, status) {
+  const rule = WT_ACTION_RULES[action]
+  if (!rule) throw new Error(`Unknown warehouse task action: ${action}`)
+  const normalized = Number(status)
+  if (rule.allowed.includes(normalized)) return rule
+  if (rule.blocked?.[normalized]) throw new AppError(rule.blocked[normalized], 400)
+  throw new AppError(rule.message || '当前状态不允许执行该操作', 400)
+}
+
 module.exports = {
   WT_STATUS,
   WT_STATUS_NAME,
@@ -200,7 +265,9 @@ module.exports = {
   WT_STATUS_PICK_POOL,
   WT_STATUS_TERMINAL,
   WT_TRANSITIONS,
+  WT_ACTION_RULES,
   WT_ON_ENTER_ACTIONS,
   WT_ON_EXIT_ACTIONS,
   isValidTransition,
+  assertWarehouseTaskAction,
 }

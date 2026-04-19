@@ -369,6 +369,46 @@ async function syncStockFromContainers(conn, productId, warehouseId) {
   return qty
 }
 
+async function getStockProjection(conn, {
+  productId,
+  warehouseId,
+  lock = false,
+}) {
+  const containerLockSql = lock ? ' FOR UPDATE' : ''
+  const [containerRows] = await conn.query(
+    `SELECT remaining_qty
+     FROM inventory_containers
+     WHERE product_id = ? AND warehouse_id = ? AND status = ? AND deleted_at IS NULL${containerLockSql}`,
+    [productId, warehouseId, CONTAINER_STATUS.ACTIVE],
+  )
+  const quantity = containerRows.reduce((sum, row) => sum + Number(row.remaining_qty), 0)
+
+  const stockLockSql = lock ? ' FOR UPDATE' : ''
+  const [[stockRow]] = await conn.query(
+    `SELECT COALESCE(quantity, 0) AS quantity, COALESCE(reserved, 0) AS reserved
+     FROM inventory_stock
+     WHERE product_id = ? AND warehouse_id = ?${stockLockSql}`,
+    [productId, warehouseId],
+  )
+  const reserved = Number(stockRow?.reserved ?? 0)
+
+  return {
+    quantity,
+    reserved,
+    available: Math.max(0, quantity - reserved),
+  }
+}
+
+/**
+ * 业务判定型库存读取：
+ * - quantity 基于 ACTIVE 容器事实层汇总
+ * - reserved 基于 inventory_stock 的受控 projection
+ * - 用于 reserve / transfer available check 等关键判断
+ */
+async function getAvailableStockForDecision(conn, params) {
+  return getStockProjection(conn, params)
+}
+
 /**
  * 调拨容器操作：源仓库 FIFO 扣减 → 目标仓库创建（保留批次）→ 双仓同步
  *
@@ -400,23 +440,25 @@ async function transferContainers(conn, {
   sourceRefNo    = null,
   remark         = null,
 }) {
-  // 1. 读源仓库 before 值（用于日志）+ 锁 inventory_stock
-  const [[fromStock]] = await conn.query(
-    'SELECT COALESCE(quantity,0) AS qty, COALESCE(reserved,0) AS reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
-    [productId, fromWarehouseId]
-  )
-  const fromBefore = fromStock ? Number(fromStock.qty)      : 0
-  const reserved   = fromStock ? Number(fromStock.reserved) : 0
+  // 1. 基于事实层容器读取源仓库当前库存，并锁定相关容器/预占行。
+  const sourceProjection = await getStockProjection(conn, {
+    productId,
+    warehouseId: fromWarehouseId,
+    lock: true,
+  })
+  const fromBefore = sourceProjection.quantity
+  const reserved = sourceProjection.reserved
 
-  // 2. 读目标仓库 before 值（用于日志）
-  const [[toStock]] = await conn.query(
-    'SELECT COALESCE(quantity,0) AS qty FROM inventory_stock WHERE product_id=? AND warehouse_id=?',
-    [productId, toWarehouseId]
-  )
-  const toBefore = toStock ? Number(toStock.qty) : 0
+  // 2. 读目标仓库当前事实库存（用于日志 before_qty）
+  const targetProjection = await getStockProjection(conn, {
+    productId,
+    warehouseId: toWarehouseId,
+    lock: false,
+  })
+  const toBefore = targetProjection.quantity
 
   // 3. 可用库存校验（不允许调拨预占库存）
-  const available = fromBefore - reserved
+  const available = sourceProjection.available
   if (available < qty) {
     throw new AppError(
       `调拨失败：商品「${productName}」可用库存不足，` +
@@ -729,6 +771,8 @@ module.exports = {
   deductFromContainers,
   deductFromTaskLockedContainers,
   syncStockFromContainers,
+  getStockProjection,
+  getAvailableStockForDecision,
   transferContainers,
   adjustContainersForStockcheck,
   adjustContainerStock,

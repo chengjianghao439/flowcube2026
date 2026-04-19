@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { getTasksApi } from '@/api/warehouse-tasks'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 
 interface StatItem {
   label: string
@@ -9,11 +10,13 @@ interface StatItem {
 }
 
 export function TaskStatCards() {
+  const isActiveTab = useActiveWorkspaceTab()
   const { data } = useQuery({
     queryKey: ['warehouse-tasks-stats'],
     queryFn: () => getTasksApi({ pageSize: 999 }).then(r => r.data.data!.list),
+    enabled: isActiveTab,
     staleTime: 10_000,
-    refetchInterval: 15_000,
+    refetchInterval: isActiveTab ? 15_000 : false,
   })
 
   const counts = { picking: 0, sorting: 0, checking: 0, packing: 0, shipping: 0, done: 0, urgent: 0 }

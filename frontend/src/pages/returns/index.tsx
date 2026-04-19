@@ -132,7 +132,9 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
   const cancelFn =type==='purchase'?cancelPurchaseReturnApi:cancelSaleReturnApi
   const mut=(fn:()=>Promise<unknown>,id?:number)=>{
     if(id) setPendingId(id)
-    fn().then(inv).catch(()=>{}).finally(()=>{ if(id) setPendingId(null) })
+    fn()
+      .then(inv)
+      .finally(() => { if(id) setPendingId(null) })
   }
   type RowType = PurchaseReturn | SaleReturn
   const partyKey = type==='purchase' ? 'supplierName' : 'customerName'

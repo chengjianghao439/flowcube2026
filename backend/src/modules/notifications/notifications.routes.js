@@ -4,6 +4,7 @@ const { successResponse } = require('../../utils/response')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+const { getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
 const router = Router()
 router.use(authMiddleware)
 
@@ -21,6 +22,7 @@ router.get('/', requirePermission(PERMISSIONS.DASHBOARD_VIEW), async (req, res, 
   try {
     const threshold = 10 // 低库存阈值
     const inboundThresholds = await getInboundClosureThresholds()
+    const productInventoryProjectionSql = getProductInventoryProjectionSql()
     const items = []
     const seen = new Set()
 
@@ -31,9 +33,10 @@ router.get('/', requirePermission(PERMISSIONS.DASHBOARD_VIEW), async (req, res, 
       `SELECT COUNT(*) AS pendingSale FROM sale_orders WHERE status IN (1,2,3) AND deleted_at IS NULL`
     )
     const [[{ lowStockCount }]] = await pool.query(
-      `SELECT COUNT(*) AS lowStockCount FROM (
-         SELECT product_id, SUM(quantity) AS total FROM inventory_stock GROUP BY product_id HAVING total < ?
-       ) t`, [threshold]
+      `SELECT COUNT(*) AS lowStockCount
+       FROM ${productInventoryProjectionSql} ip
+       WHERE ip.quantity < ?`,
+      [threshold]
     )
     const [[{ unpaidPayable }]] = await pool.query(
       `SELECT COUNT(*) AS unpaidPayable FROM payment_records WHERE type=1 AND status IN (1,2)`

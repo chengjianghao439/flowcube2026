@@ -1,6 +1,7 @@
 const svc = require('./inbound-tasks.service')
 const { successResponse } = require('../../utils/response')
 const { pool } = require('../../config/db')
+const { extractRequestKey } = require('../../utils/requestKey')
 
 async function getOp(userId) {
   const [[u]] = await pool.query('SELECT id, username, real_name FROM sys_users WHERE id=?', [userId])
@@ -83,6 +84,7 @@ const receive = async (req, res, next) => {
   try {
     const data = await svc.receive(+req.params.id, req.body, {
       userId: req.user?.userId ?? null,
+      requestKey: extractRequestKey(req),
     })
     return successResponse(res, data, '收货成功')
   } catch (e) { next(e) }
@@ -91,8 +93,10 @@ const receive = async (req, res, next) => {
 const putaway = async (req, res, next) => {
   try {
     const operator = await getOp(req.user.userId)
-    await svc.putaway(+req.params.id, req.body, operator)
-    return successResponse(res, null, '上架成功')
+    const data = await svc.putaway(+req.params.id, req.body, operator, {
+      requestKey: extractRequestKey(req),
+    })
+    return successResponse(res, data, '上架成功')
   } catch (e) { next(e) }
 }
 

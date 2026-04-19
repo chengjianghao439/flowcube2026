@@ -14,6 +14,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 import type { BarcodePrintCategory, BarcodePrintRecord } from '@/types/print-jobs'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 
 const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint: string }> = [
   { value: 'inbound', label: '入库条码', hint: '库存条码、塑料盒条码的打印状态与补打' },
@@ -55,6 +56,7 @@ export default function BarcodePrintQueryPage() {
   const [keyword, setKeyword] = useState(initialKeyword)
   const [status, setStatus] = useState('__all__')
   const [page, setPage] = useState(1)
+  const isActiveTab = useActiveWorkspaceTab()
 
   const query = useQuery({
     queryKey: ['barcode-print-records', category, keyword, status, page, initialInboundTaskId, initialInboundTaskItemId],
@@ -67,7 +69,8 @@ export default function BarcodePrintQueryPage() {
       inboundTaskId: category === 'inbound' ? initialInboundTaskId : undefined,
       inboundTaskItemId: category === 'inbound' ? initialInboundTaskItemId : undefined,
     }).then(r => r.data.data),
-    refetchInterval: 3000,
+    enabled: isActiveTab,
+    refetchInterval: isActiveTab ? 3000 : false,
   })
 
   const reprintMut = useMutation({

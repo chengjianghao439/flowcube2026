@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getRoleWorkbenchApi, type WorkbenchCard, type WorkbenchItem, type WorkbenchSection } from '@/api/reports'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 
 const ACCENT_CLASSES: Record<WorkbenchCard['accent'], { card: string; badge: string; pill: string; button: string }> = {
   blue:   { card: 'border-blue-200 bg-gradient-to-br from-blue-50 to-white', badge: 'border-blue-200 bg-blue-50 text-blue-700', pill: 'bg-blue-500', button: 'border-blue-200 text-blue-700 hover:bg-blue-50' },
@@ -183,11 +184,13 @@ function FocusQueue({
 export default function RoleWorkbenchPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
+  const isActiveTab = useActiveWorkspaceTab()
 
   const workbenchQ = useQuery({
     queryKey: ['role-workbench'],
     queryFn: () => getRoleWorkbenchApi().then(r => r.data.data!),
-    refetchInterval: 60_000,
+    enabled: isActiveTab,
+    refetchInterval: isActiveTab ? 60_000 : false,
   })
 
   const { data, isLoading, isError, error, refetch } = workbenchQ

@@ -12,6 +12,7 @@ import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import type { WaveStats } from '@/api/reports'
 
 const STATUS_COLOR: Record<number, string> = {
@@ -57,6 +58,7 @@ function EfficiencyBar({ value, max }: { value: number; max: number }) {
 }
 
 export default function WavePerformancePage() {
+  const isActiveTab = useActiveWorkspaceTab()
   const recent7d = getRelativeDateRange(7)
   const recent30d = getRelativeDateRange(30)
   const monthRange = getMonthDateRange()
@@ -69,7 +71,8 @@ export default function WavePerformancePage() {
   const wavePerformanceQ = useQuery({
     queryKey: ['wave-performance', applied],
     queryFn:  () => getWavePerformanceApi(applied).then(r => r.data.data!),
-    refetchInterval: 60_000,
+    enabled: isActiveTab,
+    refetchInterval: isActiveTab ? 60_000 : false,
   })
 
   const { data, isLoading, isError, error, dataUpdatedAt, refetch } = wavePerformanceQ

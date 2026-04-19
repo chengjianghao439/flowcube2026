@@ -5,7 +5,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { parseBarcode } from '@/utils/barcode'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getTaskByIdApi, getPickSuggestionsApi,
   readyToShipApi, cancelTaskApi,
@@ -24,6 +24,8 @@ import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import client from '@/api/client'
 import { useOfflineScan } from '@/hooks/useOfflineScan'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
+import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 
 // ─── 子组件：商品拣货卡片 ──────────────────────────────────────────────────────
 function SuggestionRow({ c, onTap, disabled }: {
@@ -106,6 +108,22 @@ export default function PdaTaskPage() {
   const { flash, ok, err }        = usePdaFeedback()
   const [scanning, setScanning]   = useState(false)
   const [finished, setFinished] = useState<'completed'|null>(null)
+  const pickAction = useCriticalPdaAction<void>({
+    action: `warehouse.pick-scan.${taskId}`,
+    label: `拣货任务 ${taskId}`,
+    onConfirmed: async () => {
+      await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
+    },
+  })
+  const readyAction = useCriticalPdaAction<{ taskId: number }>({
+    action: `warehouse.ready.${taskId}`,
+    label: `拣货任务 ${taskId} 收口`,
+    onConfirmed: async () => {
+      setFinished('completed')
+      await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
+      await qc.invalidateQueries({ queryKey: ['pda-suggestions', taskId] })
+    },
+  })
 
   // ── Queries ───────────────────────────────────────────────────────────
   const { data: task, isLoading } = useQuery({
@@ -122,8 +140,6 @@ export default function PdaTaskPage() {
   })
 
   // ── Mutations ─────────────────────────────────────────────────────────
-  const readyMut  = useMutation({ mutationFn: () => readyToShipApi(taskId),  onSuccess: () => setFinished('completed') })
-
   // ── Focus ─────────────────────────────────────────────────────────────
   const focusInput = useCallback(() => {
     if (!finished) inputRef.current?.focus()
@@ -168,12 +184,24 @@ export default function PdaTaskPage() {
         if (!item) { err('该商品不属于当前任务'); return }
         if (item.pickedQty >= item.requiredQty) { err('该商品已全部拣完'); return }
         const addQty = Math.min(c.remainingQty || 1, item.requiredQty - item.pickedQty)
-        await submitScan({ taskId, itemId: item.id, containerId: c.containerId, barcode: b, productId: c.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: c.locationCode ?? undefined })
+        const scanResult = await pickAction.run((requestKey) =>
+          submitScan({ taskId, itemId: item.id, containerId: c.containerId, barcode: b, productId: c.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: c.locationCode ?? undefined }, requestKey),
+        )
+        if (scanResult.kind === 'pending') {
+          warn('网络中断，拣货扫码结果待确认。请先确认结果，避免重复扫描。')
+          return
+        }
         await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       } else {
         if (match.remaining <= 0) { err('该商品已全部拣完'); return }
         const addQty = Math.min(container.remainingQty || 1, match.remaining)
-        await submitScan({ taskId, itemId: match.id, containerId: container.containerId, barcode: b, productId: match.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: container.locationCode ?? undefined })
+        const scanResult = await pickAction.run((requestKey) =>
+          submitScan({ taskId, itemId: match.id, containerId: container.containerId, barcode: b, productId: match.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: container.locationCode ?? undefined }, requestKey),
+        )
+        if (scanResult.kind === 'pending') {
+          warn('网络中断，拣货扫码结果待确认。请先确认结果，避免重复扫描。')
+          return
+        }
         await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       }
       ok('✓ 扫描成功')
@@ -181,7 +209,15 @@ export default function PdaTaskPage() {
       const refetchResult = await refetchSug()
       if (refetchResult.status === 'success') {
         const fresh = refetchResult.data?.items ?? []
-        if (fresh.length > 0 && fresh.every(i => i.remaining <= 0)) readyMut.mutate()
+        if (fresh.length > 0 && fresh.every(i => i.remaining <= 0)) {
+          const readyResult = await readyAction.run((requestKey) =>
+            readyToShipApi(taskId, requestKey).then(() => ({ taskId })),
+          )
+          if (readyResult.kind === 'pending') {
+            warn('网络中断，任务收口结果待确认。请先确认是否已进入待分拣。')
+            return
+          }
+        }
       }
     } catch (e: unknown) {
       const msg = (e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '扫码失败，请重试'
@@ -220,6 +256,24 @@ export default function PdaTaskPage() {
       {/* Product list */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          <PdaCriticalActionNotice
+            blockedReason={pickAction.blockedReason || readyAction.blockedReason}
+            pendingRecord={pickAction.pendingRecord ?? readyAction.pendingRecord}
+            confirming={pickAction.confirming || readyAction.confirming}
+            onConfirm={() => {
+              const handler = pickAction.pendingRecord ? pickAction : readyAction
+              void handler.confirmPending().then((status) => {
+                if (!status) return
+                if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
+                if (status.status === 'not_found') warn('未找到上次提交记录，请先刷新任务后再重试')
+                if (status.status === 'failed') err(status.message || '上次操作未成功，请检查后重试')
+              })
+            }}
+            onClear={() => {
+              if (pickAction.pendingRecord) pickAction.clearPending()
+              if (readyAction.pendingRecord) readyAction.clearPending()
+            }}
+          />
           <PdaFlowPanel
             badge="拣货执行中"
             title={task ? `当前任务：${task.taskNo}` : '当前任务拣货执行'}
@@ -258,11 +312,11 @@ export default function PdaTaskPage() {
           onChange={e => setInputVal(e.target.value)}
           onKeyDown={e => { if(e.key==='Enter') handleScan(inputVal) }}
           placeholder={scanning?'处理中…':'扫描库存条码'}
-          disabled={scanning||!!finished}
+          disabled={scanning||!!finished || pickAction.submitBlocked || readyAction.submitBlocked}
           className="flex-1 h-12 text-base"
           autoComplete="off" autoCorrect="off" spellCheck={false}
         />
-        <Button size="lg" onClick={() => handleScan(inputVal)} disabled={!inputVal||scanning||!!finished}>确认</Button>
+        <Button size="lg" onClick={() => handleScan(inputVal)} disabled={!inputVal||scanning||!!finished || pickAction.submitBlocked || readyAction.submitBlocked}>确认</Button>
       </PdaBottomBar>
 
 

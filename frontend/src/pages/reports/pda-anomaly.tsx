@@ -11,6 +11,7 @@ import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
   return (
@@ -53,6 +54,7 @@ function MiniChart({ data }: { data: { date: string; errorCount: number }[] }) {
 }
 
 export default function PdaAnomalyPage() {
+  const isActiveTab = useActiveWorkspaceTab()
   const recent7d = getRelativeDateRange(7)
   const recent30d = getRelativeDateRange(30)
   const monthRange = getMonthDateRange()
@@ -66,7 +68,8 @@ export default function PdaAnomalyPage() {
   const pdaAnomalyQ = useQuery({
     queryKey: ['pda-anomaly', applied],
     queryFn: () => getPdaAnomalyApi(applied).then(r => r.data.data!),
-    refetchInterval: 60_000,
+    enabled: isActiveTab,
+    refetchInterval: isActiveTab ? 60_000 : false,
   })
 
   const { data, isLoading, isError, error, dataUpdatedAt, refetch } = pdaAnomalyQ

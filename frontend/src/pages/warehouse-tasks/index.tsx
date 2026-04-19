@@ -4,6 +4,7 @@ import { toast } from '@/lib/toast'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LayoutGrid, List, ScanBarcode } from 'lucide-react'
 import { useInvalidate } from '@/hooks/useInvalidate'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -241,6 +242,7 @@ export default function WarehouseTasksPage() {
   const nav = useNavigate()
   const qc = useQueryClient()
   const invalidate = useInvalidate()
+  const isActiveTab = useActiveWorkspaceTab()
   const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
@@ -253,7 +255,8 @@ export default function WarehouseTasksPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['warehouse-tasks', page, keyword, statusFilter],
     queryFn: () => getTasksApi({ page, pageSize: view === 'kanban' ? 200 : 20, keyword, status: statusFilter ? +statusFilter : undefined }).then(r => r.data.data!),
-    refetchInterval: 15_000,
+    enabled: isActiveTab,
+    refetchInterval: isActiveTab ? 15_000 : false,
   })
 
   const { data: detail, isLoading: detailLoading } = useQuery({

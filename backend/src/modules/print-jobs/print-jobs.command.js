@@ -132,6 +132,55 @@ async function create({
   return findById(insertId)
 }
 
+async function assertQueueReady({
+  warehouseId,
+  jobType,
+  contentType = 'zpl',
+}) {
+  const resolved = await resolvePrinterForJob({ warehouseId, jobType, contentType })
+  if (!resolved?.printerId) {
+    throw new AppError('未找到可用打印机，请先在打印机管理中绑定对应用途', 409)
+  }
+
+  const [[printer]] = await pool.query(
+    `SELECT
+        p.id,
+        p.name,
+        p.code,
+        p.status,
+        p.client_id,
+        pc.status AS client_status,
+        pc.last_seen
+     FROM printers p
+     LEFT JOIN print_clients pc ON pc.client_id = p.client_id
+     WHERE p.id = ?`,
+    [resolved.printerId],
+  )
+  if (!printer || Number(printer.status) !== 1) {
+    throw new AppError('打印机未启用，请先检查打印机状态', 409)
+  }
+  if (!printer.client_id) {
+    throw new AppError('打印机未绑定桌面客户端，请先在打印机管理中从本机添加并绑定用途', 409)
+  }
+
+  const lastSeenMs = printer.last_seen ? new Date(printer.last_seen).getTime() : 0
+  const clientOnline =
+    Number(printer.client_status) === 1
+    && Number.isFinite(lastSeenMs)
+    && (Date.now() - lastSeenMs) <= 30_000
+
+  if (!clientOnline) {
+    throw new AppError('打印客户端离线，请在连接打印机的 FlowCube 桌面端重新上线后再继续', 409)
+  }
+
+  return {
+    printerId: Number(printer.id),
+    printerCode: printer.code,
+    printerName: printer.name,
+    clientId: printer.client_id,
+  }
+}
+
 async function complete(id, { ackToken } = {}) {
   const job = await findById(id)
   assertCanComplete(job)
@@ -241,6 +290,7 @@ async function retry(id) {
 
 module.exports = {
   create,
+  assertQueueReady,
   complete,
   completeLocalDesktop,
   fail,

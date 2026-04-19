@@ -113,7 +113,7 @@ export default function InboundTaskCreatePage() {
           navigate(path)
         },
         onError: (error: unknown) => {
-          const msg = (error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'
+          const msg = error instanceof Error ? error.message : '创建失败'
           toast.error(msg)
         },
       },

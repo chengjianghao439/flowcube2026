@@ -1,5 +1,6 @@
 const svc = require('./scan-logs.service')
 const { successResponse } = require('../../utils/response')
+const { extractRequestKey } = require('../../utils/requestKey')
 
 const create = async (req, res, next) => {
   try {
@@ -8,6 +9,7 @@ const create = async (req, res, next) => {
       ...req.body,
       operatorId:   operator.userId,
       operatorName: operator.realName || operator.username,
+      requestKey: extractRequestKey(req),
     })
     return successResponse(res, data, '扫描记录已保存', 201)
   } catch (e) { next(e) }
@@ -21,6 +23,7 @@ const createCheckScan = async (req, res, next) => {
       barcode: req.body.barcode.trim(),
       operatorId:   operator.userId,
       operatorName: operator.realName || operator.username,
+      requestKey: extractRequestKey(req),
     })
     return successResponse(res, data, data.allChecked ? '复核完成，已进入待打包' : '复核扫码已记录', 201)
   } catch (e) { next(e) }

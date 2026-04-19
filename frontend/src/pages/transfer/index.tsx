@@ -39,7 +39,9 @@ export default function TransferPage() {
   const {data:products}=useProducts({page:1,pageSize:200,keyword:''})
   const mut=(fn:()=>Promise<unknown>,id?:number)=>{
     if(id) setPendingId(id)
-    fn().then(()=>qc.invalidateQueries({queryKey:['transfer']})).catch(()=>{}).finally(()=>{if(id)setPendingId(null)})
+    fn()
+      .then(() => qc.invalidateQueries({queryKey:['transfer']}))
+      .finally(() => { if(id) setPendingId(null) })
   }
 
   const addItem=()=>{setCounter(c=>c+1);setItems(p=>[...p,{_key:counter,productId:0,productCode:'',productName:'',unit:'',quantity:1,remark:''}])}

@@ -18,6 +18,7 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
 import { getInboundExceptionNotifications, getOutboundExceptionNotifications, getLogisticsExceptionNotifications } from '@/lib/notifications'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 
 function severityBadge(level: string) {
   if (level === 'high' || level === 'danger') return <Badge variant="destructive">高风险</Badge>
@@ -89,6 +90,7 @@ export default function ExceptionWorkbenchPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   const qc = useQueryClient()
+  const isActiveTab = useActiveWorkspaceTab()
 
   const runsQ = useQuery({
     queryKey: ['system-health-runs'],
@@ -105,7 +107,8 @@ export default function ExceptionWorkbenchPage() {
   const notificationsQ = useQuery({
     queryKey: ['exception-workbench-notifications'],
     queryFn: () => getNotificationsApi().then(r => r.data.data!),
-    refetchInterval: 60_000,
+    enabled: isActiveTab,
+    refetchInterval: isActiveTab ? 60_000 : false,
   })
 
   const runHealthMut = useMutation({

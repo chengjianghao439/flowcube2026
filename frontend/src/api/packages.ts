@@ -1,6 +1,7 @@
 import client from './client'
 import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
 import type { ApiResponse } from '@/types'
+import { withRequestKeyHeaders } from '@/lib/requestKey'
 
 export interface PackageItem {
   id: number
@@ -38,12 +39,14 @@ export const addPackageItemApi = (
     qty,
   })
 
-export const finishPackageApi = (packageId: number) =>
-  client.put<ApiResponse<{ id: number; status: number; statusName: string; autoPacked?: boolean }>>(
+export const finishPackageApi = (packageId: number, requestKey?: string) =>
+  client.put<ApiResponse<{ id: number; status: number; statusName: string; allPackagesDone?: boolean; printQueued?: boolean; printJobId?: number | null }>>(
     `/packages/${packageId}/finish`,
+    undefined,
+    requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined,
   )
 
-export const printPackageLabelApi = (packageId: number) =>
+export const printPackageLabelApi = (packageId: number, requestKey?: string) =>
   client.post<ApiResponse<{
     queued: boolean
     job: {
@@ -53,7 +56,9 @@ export const printPackageLabelApi = (packageId: number) =>
       printerName?: string | null
     } | unknown
   }>>(`/packages/${packageId}/print-label`, undefined, {
-    headers: desktopLocalPrintRequestHeaders(),
+    headers: requestKey
+      ? withRequestKeyHeaders(requestKey, desktopLocalPrintRequestHeaders())
+      : desktopLocalPrintRequestHeaders(),
   })
 
 export interface PackageShipInfo {

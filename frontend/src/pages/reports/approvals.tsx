@@ -9,6 +9,7 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getRoleWorkbenchApi } from '@/api/reports'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
 import { getNotificationCategoryLabel, getReminderNotifications } from '@/lib/notifications'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 
 function SummaryCard({ label, value, hint, tone }: { label: string; value: number | string; hint: string; tone: 'blue' | 'amber' | 'emerald' | 'rose' }) {
   const toneClass = tone === 'amber'
@@ -83,17 +84,20 @@ function getReminderTone(item: NotificationItem) {
 export default function ApprovalsPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
+  const isActiveTab = useActiveWorkspaceTab()
 
   const notificationsQ = useQuery({
     queryKey: ['notifications-page'],
     queryFn: () => getNotificationsApi().then(r => r.data.data!),
-    refetchInterval: 60_000,
+    enabled: isActiveTab,
+    refetchInterval: isActiveTab ? 60_000 : false,
   })
 
   const workbenchQ = useQuery({
     queryKey: ['approvals-workbench'],
     queryFn: () => getRoleWorkbenchApi().then(r => r.data.data!),
-    refetchInterval: 60_000,
+    enabled: isActiveTab,
+    refetchInterval: isActiveTab ? 60_000 : false,
   })
 
   const notificationsError = notificationsQ.isError && !notificationsQ.data

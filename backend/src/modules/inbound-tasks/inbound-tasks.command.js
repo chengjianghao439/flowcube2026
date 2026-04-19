@@ -18,11 +18,26 @@ const {
   assertTaskCanCancel,
 } = require('./inbound-tasks.status')
 const { findById } = require('./inbound-tasks.query')
+const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { assertStatusAction } = require('../../constants/documentStatusRules')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+
+async function assertPurchaseOrderOpen(conn, purchaseOrderId) {
+  if (!Number.isFinite(Number(purchaseOrderId)) || Number(purchaseOrderId) <= 0) return
+  const [[purchaseRow]] = await conn.query(
+    'SELECT id, order_no, status FROM purchase_orders WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+    [purchaseOrderId],
+  )
+  if (!purchaseRow) throw new AppError('关联采购单不存在', 404)
+  if (Number(purchaseRow.status) === 4) {
+    throw new AppError(`采购单 ${purchaseRow.order_no} 已取消，不能继续收货`, 409)
+  }
+}
 
 async function createFromPoId(purchaseOrderId) {
   const purchaseSvc = require('../purchase/purchase.service')
   const order = await purchaseSvc.findById(purchaseOrderId)
-  if (order.status !== 2) throw new AppError('只有已确认的采购单可创建入库任务', 400)
+  assertStatusAction('purchase', 'createInboundTask', order.status)
   if (!order.items.length) throw new AppError('采购单无明细', 400)
 
   const [[dup]] = await pool.query(
@@ -201,24 +216,22 @@ async function submit(taskId, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [[taskRow]] = await conn.query(
-      'SELECT * FROM inbound_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-      [taskId],
-    )
-    if (!taskRow) throw new AppError('收货订单不存在', 404)
+    const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '收货订单' })
     assertTaskCanSubmit(taskRow)
-    await conn.query(
-      `UPDATE inbound_tasks
-       SET submitted_at = NOW(), submitted_by = ?, submitted_by_name = ?, operator_id = ?, operator_name = ?
-       WHERE id = ?`,
-      [
-        operator?.userId ?? null,
-        operator?.realName ?? operator?.username ?? null,
-        operator?.userId ?? null,
-        operator?.realName ?? operator?.username ?? null,
-        taskId,
-      ],
-    )
+    await compareAndSetStatus(conn, {
+      table: 'inbound_tasks',
+      id: taskId,
+      fromStatus: Number(taskRow.status),
+      toStatus: Number(taskRow.status),
+      entityName: '收货订单',
+      extraSet: {
+        submitted_at: new Date(),
+        submitted_by: operator?.userId ?? null,
+        submitted_by_name: operator?.realName ?? operator?.username ?? null,
+        operator_id: operator?.userId ?? null,
+        operator_name: operator?.realName ?? operator?.username ?? null,
+      },
+    })
     await appendInboundEvent(
       conn,
       taskId,
@@ -246,13 +259,10 @@ async function audit(taskId, { action = 'approve', remark = '' } = {}, operator)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [[taskRow]] = await conn.query(
-      'SELECT * FROM inbound_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-      [taskId],
-    )
-    if (!taskRow) throw new AppError('收货订单不存在', 404)
-    assertTaskCanAudit(taskRow)
-    const auditStatus = normalizedAction === 'approve' ? 1 : 2
+    const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '收货订单' })
+    assertTaskCanAudit(taskRow, normalizedAction)
+    const auditRule = assertStatusAction('inboundTaskAudit', normalizedAction, Number(taskRow.audit_status || 0))
+    const auditStatus = auditRule.to
     await conn.query(
       `UPDATE inbound_tasks
        SET audit_status = ?, audit_remark = ?, audited_at = NOW(), audited_by = ?, audited_by_name = ?
@@ -284,7 +294,7 @@ async function audit(taskId, { action = 'approve', remark = '' } = {}, operator)
   }
 }
 
-async function receive(taskId, payload, { userId } = {}) {
+async function receive(taskId, payload, { userId, requestKey } = {}) {
   const { productId, qty, packages: rawPackages } = payload
   const productIdN = Number(productId)
   const packages = Array.isArray(rawPackages) && rawPackages.length
@@ -313,16 +323,29 @@ async function receive(taskId, payload, { userId } = {}) {
   }
   try {
     await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'inbound.receive',
+      userId: userId || null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
 
-    const [[taskRow]] = await conn.query(
-      'SELECT * FROM inbound_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-      [taskId],
-    )
-    if (!taskRow) throw new AppError('入库任务不存在', 404)
+    const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '入库任务' })
     assertTaskCanReceive(taskRow)
+    await assertPurchaseOrderOpen(conn, Number(taskRow.purchase_order_id))
 
     if (Number(taskRow.status) === 1) {
-      await conn.query('UPDATE inbound_tasks SET status = 2 WHERE id = ?', [taskId])
+      const receiveStartRule = assertStatusAction('inboundTask', 'receiveStart', taskRow.status)
+      await compareAndSetStatus(conn, {
+        table: 'inbound_tasks',
+        id: taskId,
+        fromStatus: receiveStartRule.from,
+        toStatus: receiveStartRule.to,
+        entityName: '入库任务',
+      })
       await appendInboundEvent(
         conn,
         taskId,
@@ -400,13 +423,17 @@ async function receive(taskId, payload, { userId } = {}) {
     const [updatedItems] = await conn.query('SELECT * FROM inbound_task_items WHERE task_id = ?', [taskId])
     const allReceived = updatedItems.every(i => Number(i.received_qty) >= Number(i.ordered_qty))
     if (allReceived) {
-      await conn.query('UPDATE inbound_tasks SET status = 3 WHERE id = ?', [taskId])
+      const receiveCompleteRule = assertStatusAction('inboundTask', 'receiveComplete', Number(taskRow.status) === 1 ? 2 : taskRow.status)
+      await compareAndSetStatus(conn, {
+        table: 'inbound_tasks',
+        id: taskId,
+        fromStatus: receiveCompleteRule.from,
+        toStatus: receiveCompleteRule.to,
+        entityName: '入库任务',
+      })
     }
 
     await conn.query('UPDATE inbound_tasks SET lock_version = lock_version + 1 WHERE id = ?', [taskId])
-
-    await conn.commit()
-
     result = {
       containerCode: containers[0]?.containerCode ?? null,
       containerId: containers[0]?.containerId ?? null,
@@ -418,6 +445,13 @@ async function receive(taskId, payload, { userId } = {}) {
       printJobIds: [],
       containers,
     }
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: '收货成功',
+      resourceType: 'inbound_task',
+      resourceId: taskId,
+    })
+    await conn.commit()
   } catch (e) {
     await conn.rollback()
     throw e
@@ -562,23 +596,40 @@ async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } 
 }
 
 async function cancel(taskId) {
-  const task = await findById(taskId)
-  assertTaskCanCancel(task)
-  const [[{ n }]] = await pool.query(
-    'SELECT COUNT(*) AS n FROM inventory_containers WHERE inbound_task_id = ? AND deleted_at IS NULL',
-    [taskId],
-  )
-  if (Number(n) > 0) throw new AppError('任务已产生容器，无法取消', 400)
-  await pool.query('UPDATE inbound_tasks SET status = 5 WHERE id = ?', [taskId])
-  await appendInboundEvent(
-    pool,
-    taskId,
-    'cancelled',
-    '取消收货订单',
-    `收货订单 ${task.taskNo} 已取消`,
-    null,
-    null,
-  )
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '收货订单' })
+    assertTaskCanCancel(taskRow)
+    const [[{ n }]] = await conn.query(
+      'SELECT COUNT(*) AS n FROM inventory_containers WHERE inbound_task_id = ? AND deleted_at IS NULL',
+      [taskId],
+    )
+    if (Number(n) > 0) throw new AppError('任务已产生容器，无法取消', 400)
+    const cancelRule = assertStatusAction('inboundTask', 'cancel', taskRow.status)
+    await compareAndSetStatus(conn, {
+      table: 'inbound_tasks',
+      id: taskId,
+      fromStatus: cancelRule.from,
+      toStatus: cancelRule.to,
+      entityName: '收货订单',
+    })
+    await appendInboundEvent(
+      conn,
+      taskId,
+      'cancelled',
+      '取消收货订单',
+      `收货订单 ${taskRow.task_no} 已取消`,
+      null,
+      null,
+    )
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 module.exports = {

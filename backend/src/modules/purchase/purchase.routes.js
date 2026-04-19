@@ -5,7 +5,15 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const router = Router()
 const vBody = schema => (req,res,next) => { const r=schema.safeParse(req.body); if(!r.success) return res.status(400).json({success:false,message:r.error.errors.map(e=>e.message).join('；'),data:null}); req.body=r.data; next() }
-const itemSchema = z.object({ productId:z.number().int().positive(), productCode:z.string(), productName:z.string(), unit:z.string(), quantity:z.number().positive('数量必须大于0'), unitPrice:z.number().nonnegative(), remark:z.string().optional() })
+const itemSchema = z.object({
+  productId:z.number().int().positive(),
+  productCode:z.string(),
+  productName:z.string(),
+  unit:z.string(),
+  quantity:z.number().int('采购数量必须为整数').positive('数量必须大于0'),
+  unitPrice:z.number().nonnegative(),
+  remark:z.string().optional(),
+})
 const createSchema = z.object({ supplierId:z.number().int().positive('请选择供应商'), supplierName:z.string(), warehouseId:z.number().int().positive('请选择仓库'), warehouseName:z.string(), expectedDate:z.string().optional(), remark:z.string().optional(), items:z.array(itemSchema).min(1,'至少添加一条明细') })
 router.use(authMiddleware)
 router.get('/',             requirePermission(PERMISSIONS.PURCHASE_ORDER_VIEW), ctrl.list)

@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const printJobs = require('../print-jobs/print-jobs.service')
 
 const { WT_STATUS, isValidTransition } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
@@ -167,31 +168,7 @@ async function finishPackage(packageId) {
       'SELECT COUNT(*) AS remaining FROM packages WHERE warehouse_task_id=? AND status=1',
       [pkg.warehouse_task_id],
     )
-    let autoPacked = false
-    if (remaining === 0) {
-      // 所有箱子打包完毕 → 自动推进到「待出库」(5→6)
-      if (taskRow && isValidTransition(Number(taskRow.status), WT_STATUS.SHIPPING)) {
-        await assertTaskCheckScanClosure(conn, pkg.warehouse_task_id)
-        await assertTaskPackagingClosure(conn, pkg.warehouse_task_id)
-        const [r] = await conn.query(
-          'UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?',
-          [WT_STATUS.SHIPPING, pkg.warehouse_task_id, WT_STATUS.PACKING],
-        )
-        autoPacked = r.affectedRows > 0
-        if (autoPacked) {
-          try {
-            await recordEvent(conn, {
-              taskId:    pkg.warehouse_task_id,
-              taskNo:    taskRow.task_no,
-              eventType:  WT_EVENT.PACK_DONE,
-              fromStatus: WT_STATUS.PACKING,
-              toStatus:   WT_STATUS.SHIPPING,
-              detail:     { packageId },
-            })
-          } catch (_) {}
-        }
-      }
-    } else {
+    if (remaining > 0) {
       // 仍有未完成箱子，记录进度
       try {
         const [[taskRow]] = await conn.query('SELECT task_no FROM warehouse_tasks WHERE id=?', [pkg.warehouse_task_id])
@@ -205,9 +182,58 @@ async function finishPackage(packageId) {
     }
 
     await conn.commit()
-    return { id: packageId, status: 2, statusName: '已完成', autoPacked }
+    return {
+      id: packageId,
+      warehouseTaskId: Number(pkg.warehouse_task_id),
+      status: 2,
+      statusName: '已完成',
+      allPackagesDone: Number(remaining) === 0,
+    }
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
+}
+
+async function finishPackageWithPrint(packageId, { createdBy, requestKey } = {}) {
+  const [[pkg]] = await pool.query(
+    `SELECT p.id, p.barcode, p.status, p.warehouse_task_id, wt.warehouse_id
+     FROM packages p
+     INNER JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
+     WHERE p.id = ?`,
+    [packageId],
+  )
+  if (!pkg) throw new AppError('箱子不存在', 404)
+
+  await printJobs.assertQueueReady({
+    warehouseId: Number(pkg.warehouse_id),
+    jobType: 'package_label',
+    contentType: 'zpl',
+  })
+
+  const result = Number(pkg.status) === 2
+    ? {
+        id: Number(pkg.id),
+        warehouseTaskId: Number(pkg.warehouse_task_id),
+        status: 2,
+        statusName: '已完成',
+        allPackagesDone: false,
+      }
+    : await finishPackage(packageId)
+
+  const job = await printJobs.enqueuePackageLabelJob({
+    packageId,
+    createdBy: createdBy ?? null,
+    jobUniqueKey: requestKey ? `package_label:${requestKey}` : null,
+  })
+  if (!job) {
+    throw new AppError('箱贴未进入打印链，请先检查打印机绑定、用途配置和桌面客户端在线状态', 409)
+  }
+
+  return {
+    ...result,
+    printQueued: true,
+    printJobId: Number(job.id),
+    printJobStatus: Number(job.status),
+  }
 }
 
 // ─── 按条码查询箱子（含任务信息 + 所有箱的明细）────────────────────────────────
@@ -283,4 +309,4 @@ async function getByBarcode(barcode) {
   }
 }
 
-module.exports = { listByTask, createPackage, addItem, finishPackage, getByBarcode }
+module.exports = { listByTask, createPackage, addItem, finishPackage, finishPackageWithPrint, getByBarcode }

@@ -27,6 +27,8 @@ import {
   isDesktopLocalPrintError,
   tryDesktopLocalZplThenComplete,
 } from '@/lib/desktopLocalPrint'
+import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 
 function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) {
   const navigate = useNavigate()
@@ -137,11 +139,42 @@ export default function PdaPackPage() {
 
   const [task, setTask]                       = useState<WarehouseTask | null>(null)
   const [activePackageId, setActivePackageId] = useState<number | null>(null)
-  const [pendingCode, setPendingCode]         = useState<string | null>(null)
-  const [pendingQty, setPendingQty]           = useState<number>(1)
   const [allDone, setAllDone]                 = useState(false)
 
   const taskId = task?.id ?? 0
+  const finishAction = useCriticalPdaAction<{
+    id: number
+    allPackagesDone?: boolean
+  }>({
+    action: `package.finish.${taskId || 'none'}`,
+    label: '完成箱子',
+    onConfirmed: async (data) => {
+      await refetch()
+      ok('当前箱已完成，箱贴已进入打印链')
+      if (data.allPackagesDone) {
+        ok('所有箱子已完成。请确认箱贴打印完成后，再结束打包进入待出库。')
+      }
+    },
+  })
+  const printAction = useCriticalPdaAction<{
+    queued: boolean
+    job?: {
+      id?: number
+      content?: string
+      contentType?: string
+      printerName?: string | null
+    } | unknown
+  }>({
+    action: `package.print.${taskId || 'none'}`,
+    label: '箱贴打印',
+  })
+  const finalizeAction = useCriticalPdaAction<{ taskId: number }>({
+    action: `warehouse.pack-done.${taskId || 'none'}`,
+    label: '打包收口',
+    onConfirmed: async () => {
+      setAllDone(true)
+    },
+  })
 
   const { data: packages = [], isLoading: pkgLoading } = useQuery({
     queryKey: ['pda-packages', taskId],
@@ -156,6 +189,7 @@ export default function PdaPackPage() {
   })
 
   const refetch = () => qc.invalidateQueries({ queryKey: ['pda-packages', taskId] })
+  const onlineBlocked = finishAction.networkStatus !== 'online'
 
   const createMut = useMutation({
     mutationFn: () => createPackageApi(taskId),
@@ -173,18 +207,26 @@ export default function PdaPackPage() {
     onSuccess: (res) => {
       const item = res.data.data!
       ok(`✓ ${item.productName} × ${item.qty} ${item.unit} 已装箱`)
-      setPendingCode(null)
-      setPendingQty(1)
       refetch()
     },
     onError: (e: unknown) => err((e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '添加失败'),
   })
 
   const printLabelMut = useMutation({
-    mutationFn: (pkgId: number) => printPackageLabelApi(pkgId).then(r => r.data.data!),
+    mutationFn: async (pkgId: number) => {
+      const result = await printAction.run((requestKey) =>
+        printPackageLabelApi(pkgId, requestKey).then(r => r.data.data!),
+      )
+      return result
+    },
     onSuccess: async (d) => {
-      if (d.queued && d.job && typeof d.job === 'object') {
-        const job = d.job as {
+      if (d.kind === 'pending') {
+        err('网络中断，箱贴打印结果待确认。请先确认是否已入队或已出纸，再决定是否重试。')
+        return
+      }
+      const payload = d.data
+      if (payload.queued && payload.job && typeof payload.job === 'object') {
+        const job = payload.job as {
           id?: number
           content?: string
           contentType?: string
@@ -221,34 +263,51 @@ export default function PdaPackPage() {
           return
         }
       }
-      if (d.queued) ok('箱贴已加入打印队列')
-      else ok('未配置标签机，未创建打印任务')
+      if (payload.queued) ok('箱贴已加入打印队列')
     },
-    onError: (e: unknown) => err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '打印失败'),
+    onError: (e: unknown) => err((e as { message?: string })?.message ?? '打印失败'),
   })
 
   const finishMut = useMutation({
-    mutationFn: (pkgId: number) => finishPackageApi(pkgId),
+    mutationFn: async (pkgId: number) => {
+      const result = await finishAction.run((requestKey) =>
+        finishPackageApi(pkgId, requestKey).then((res) => res.data.data!),
+      )
+      return result
+    },
     onSuccess: (res) => {
-      ok('此箱已完成！')
+      if (res.kind === 'pending') {
+        err('网络中断，装箱结果待确认。请先确认刚才那次是否成功，再决定是否重试。')
+        return
+      }
       setActivePackageId(null)
-      setPendingCode(null)
       refetch()
-      // 后端自动判断是否全部打包完成（autoPacked=true 表示已推进到待出库）
-      if (res.data.data?.autoPacked) {
-        setAllDone(true)
+    },
+    onError: (e: unknown) => err((e as { message?: string })?.message ?? '操作失败'),
+  })
+  const finalizeMut = useMutation({
+    mutationFn: async () => {
+      const result = await finalizeAction.run((requestKey) =>
+        packDoneApi(taskId, requestKey).then((res) => res.data.data as { taskId: number }),
+      )
+      return result
+    },
+    onSuccess: (result) => {
+      if (result.kind === 'pending') {
+        err('网络中断，打包收口结果待确认。请先确认是否已进入待出库。')
       }
     },
-    onError: (e: unknown) => err((e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '操作失败'),
+    onError: (e: unknown) => err((e as { message?: string })?.message ?? '打包收口失败'),
   })
 
   const handleScan = useCallback((raw: string) => {
+    if (onlineBlocked) { err('网络已断开，打包装箱已阻断，请恢复网络后再继续'); return }
     if (!activePackageId) { err('请先创建或选择一个箱子'); return }
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'product' && parsed.type !== 'unknown') { err('扫描产品条码'); return }
     // 扫码即直接装箱（默认数量 1），无需额外确认
     addMut.mutate({ code: raw, qty: 1 })
-  }, [activePackageId, err, addMut])
+  }, [activePackageId, err, addMut, onlineBlocked])
 
   const totalBoxes = packages.length
   const doneBoxes  = packages.filter(p => p.status === 2).length
@@ -320,6 +379,34 @@ export default function PdaPackPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          <PdaCriticalActionNotice
+            blockedReason={
+              finishAction.blockedReason
+              || printAction.blockedReason
+              || finalizeAction.blockedReason
+              || (onlineBlocked ? '网络已断开，打包、打印和待出库收口都已阻断。' : null)
+            }
+            pendingRecord={finishAction.pendingRecord ?? printAction.pendingRecord ?? finalizeAction.pendingRecord}
+            confirming={finishAction.confirming || printAction.confirming || finalizeAction.confirming}
+            onConfirm={() => {
+              const handler = finishAction.pendingRecord
+                ? finishAction
+                : printAction.pendingRecord
+                  ? printAction
+                  : finalizeAction
+              void handler.confirmPending().then((status) => {
+                if (!status) return
+                if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
+                if (status.status === 'not_found') err('未找到上次提交记录，请先刷新箱子和任务状态后再重试')
+                if (status.status === 'failed') err(status.message || '上次操作未成功，请检查后重试')
+              })
+            }}
+            onClear={() => {
+              if (finishAction.pendingRecord) finishAction.clearPending()
+              if (printAction.pendingRecord) printAction.clearPending()
+              if (finalizeAction.pendingRecord) finalizeAction.clearPending()
+            }}
+          />
           <PdaFlowPanel
             badge="打包执行中"
             title={`当前阶段：${closureCopy.stageLabel}`}
@@ -349,9 +436,9 @@ export default function PdaPackPage() {
               active={activePackageId === pkg.id}
               onActivate={() => setActivePackageId(pkg.id)}
               onFinish={() => finishMut.mutate(pkg.id)}
-              finishing={finishMut.isPending}
+              finishing={finishMut.isPending || finishAction.submitBlocked || onlineBlocked}
               onPrintLabel={() => printLabelMut.mutate(pkg.id)}
-              printingLabel={printLabelMut.isPending && printLabelMut.variables === pkg.id}
+              printingLabel={(printLabelMut.isPending && printLabelMut.variables === pkg.id) || printAction.submitBlocked || onlineBlocked}
             />
           ))}
           {packages.length === 0 && !pkgLoading && (
@@ -359,12 +446,22 @@ export default function PdaPackPage() {
               <p className="text-muted-foreground text-sm">点击下方「新建箱子」开始打包</p>
             </div>
           )}
+          {packages.length > 0 && packages.every((pkg) => pkg.status === 2) ? (
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => finalizeMut.mutate()}
+              disabled={finalizeMut.isPending || finalizeAction.submitBlocked}
+            >
+              {finalizeMut.isPending ? '收口中…' : '完成打包并进入待出库'}
+            </Button>
+          ) : null}
         </div>
       </div>
 
       <PdaBottomBar>
-          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描产品条码" disabled={addMut.isPending} />}
-          <Button variant={activePackageId ? 'outline' : 'default'} className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending}>
+          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描产品条码" disabled={addMut.isPending || onlineBlocked} />}
+          <Button variant={activePackageId ? 'outline' : 'default'} className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending || onlineBlocked}>
             {createMut.isPending ? '创建中…' : '＋ 新建箱子'}
           </Button>
       </PdaBottomBar>

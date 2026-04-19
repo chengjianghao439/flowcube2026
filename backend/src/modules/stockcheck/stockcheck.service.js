@@ -3,6 +3,8 @@ const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { adjustContainersForStockcheck, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
+const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { assertStatusAction } = require('../../constants/documentStatusRules')
 
 const STATUS = { 1:'进行中', 2:'已完成', 3:'已取消' }
 const fmt = r => ({ id:r.id, checkNo:r.check_no, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, status:r.status, statusName:STATUS[r.status], remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
@@ -39,8 +41,23 @@ async function create({ warehouseId, warehouseName, remark, operator }) {
       [checkNo,warehouseId,warehouseName,remark||null,operator.userId,operator.realName]
     )
     const checkId = r.insertId
-    // 拉取该仓库所有有库存商品
-    const [stocks] = await conn.query(`SELECT s.product_id,s.quantity,p.code AS product_code,p.name AS product_name,p.unit FROM inventory_stock s JOIN product_items p ON s.product_id=p.id WHERE s.warehouse_id=? AND p.deleted_at IS NULL`,[warehouseId])
+    // 盘点账面数以容器汇总为准，避免直接信任缓存表 inventory_stock。
+    const [stocks] = await conn.query(
+      `SELECT
+          c.product_id,
+          COALESCE(SUM(c.remaining_qty), 0) AS quantity,
+          p.code AS product_code,
+          p.name AS product_name,
+          p.unit
+       FROM inventory_containers c
+       JOIN product_items p ON c.product_id = p.id
+       WHERE c.warehouse_id = ?
+         AND c.deleted_at IS NULL
+         AND p.deleted_at IS NULL
+       GROUP BY c.product_id, p.code, p.name, p.unit
+       HAVING COALESCE(SUM(c.remaining_qty), 0) > 0`,
+      [warehouseId],
+    )
     for(const s of stocks) {
       await conn.query(`INSERT INTO inventory_check_items (check_id,product_id,product_code,product_name,unit,book_qty) VALUES (?,?,?,?,?,?)`,[checkId,s.product_id,s.product_code,s.product_name,s.unit,s.quantity])
     }
@@ -52,24 +69,49 @@ async function create({ warehouseId, warehouseName, remark, operator }) {
 
 // 填写实盘数量
 async function updateItems(id, items) {
-  const check = await findById(id)
-  if(check.status!==1) throw new AppError('只有进行中的盘点单才能修改明细',400)
-  for(const item of items) {
-    const diff = item.actualQty - (check.items.find(i=>i.id===item.id)?.bookQty||0)
-    await pool.query('UPDATE inventory_check_items SET actual_qty=?,diff_qty=? WHERE id=? AND check_id=?',[item.actualQty,diff,item.id,id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, columns: 'id, status', entityName: '盘点单' })
+    assertStatusAction('stockcheck', 'edit', checkRow.status)
+    const [itemRows] = await conn.query('SELECT * FROM inventory_check_items WHERE check_id=? ORDER BY id ASC', [id])
+    for(const item of items) {
+      const bookQty = Number(itemRows.find(i => Number(i.id) === Number(item.id))?.book_qty || 0)
+      const diff = item.actualQty - bookQty
+      await conn.query('UPDATE inventory_check_items SET actual_qty=?,diff_qty=? WHERE id=? AND check_id=?',[item.actualQty,diff,item.id,id])
+    }
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
   }
 }
 
 // 提交盘点，批量调整库存
 async function submit(id, operator) {
-  const check = await findById(id)
-  if(check.status!==1) throw new AppError('只有进行中的盘点单才能提交',400)
-  const unfilled = check.items.filter(i=>i.actualQty===null)
-  if(unfilled.length) throw new AppError(`还有 ${unfilled.length} 条明细未填写实盘数量`,400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, entityName: '盘点单' })
+    const rule = assertStatusAction('stockcheck', 'submit', checkRow.status)
+    const [itemRows] = await conn.query('SELECT * FROM inventory_check_items WHERE check_id=? ORDER BY id ASC', [id])
+    const check = {
+      id: Number(checkRow.id),
+      checkNo: checkRow.check_no,
+      warehouseId: Number(checkRow.warehouse_id),
+      items: itemRows.map(r => ({
+        id:r.id,
+        productId:r.product_id,
+        productName:r.product_name,
+        unit:r.unit,
+        actualQty:r.actual_qty!=null?Number(r.actual_qty):null,
+        diffQty:r.diff_qty!=null?Number(r.diff_qty):null,
+      })),
+    }
+    const unfilled = check.items.filter(i=>i.actualQty===null)
+    if(unfilled.length) throw new AppError(`还有 ${unfilled.length} 条明细未填写实盘数量`,400)
     for (const item of check.items) {
       if (item.diffQty === 0) continue
 
@@ -109,17 +151,38 @@ async function submit(id, operator) {
         ]
       )
     }
-    await conn.query('UPDATE inventory_checks SET status=2 WHERE id=?', [id])
+    await compareAndSetStatus(conn, {
+      table: 'inventory_checks',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '盘点单',
+    })
     await conn.commit()
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
 }
 
 async function cancel(id) {
-  const check = await findById(id)
-  if(check.status===2) throw new AppError('已完成的盘点单不能取消',400)
-  if(check.status===3) throw new AppError('盘点单已取消',400)
-  await pool.query('UPDATE inventory_checks SET status=3 WHERE id=? AND deleted_at IS NULL',[id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, columns: 'id, status', entityName: '盘点单' })
+    const rule = assertStatusAction('stockcheck', 'cancel', checkRow.status)
+    await compareAndSetStatus(conn, {
+      table: 'inventory_checks',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '盘点单',
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 module.exports = { findAll, findById, create, updateItems, submit, cancel }

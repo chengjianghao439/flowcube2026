@@ -3,6 +3,8 @@ const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
+const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { assertStatusAction } = require('../../constants/documentStatusRules')
 
 // ─── 采购退货 ────────────────────────────────────────────────
 const PR_STATUS = { 1:'草稿', 2:'已确认', 3:'已退货', 4:'已取消' }
@@ -40,12 +42,52 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
     await conn.commit(); return { id:r.insertId, returnNo }
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
 }
-async function executePR(id, operator) {
-  const ret = await findByIdPR(id)
-  if (ret.status !== 2) throw new AppError('只有已确认的退货单可以执行', 400)
+async function confirmPR(id) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const retRow = await lockStatusRow(conn, {
+      table: 'purchase_returns',
+      id,
+      columns: 'id, status',
+      entityName: '采购退货单',
+    })
+    const rule = assertStatusAction('purchaseReturn', 'confirm', retRow.status)
+    await compareAndSetStatus(conn, {
+      table: 'purchase_returns',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '采购退货单',
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+async function executePR(id, operator) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const retRow = await lockStatusRow(conn, { table: 'purchase_returns', id, entityName: '采购退货单' })
+    const rule = assertStatusAction('purchaseReturn', 'execute', retRow.status)
+    const [itemRows] = await conn.query('SELECT * FROM purchase_return_items WHERE return_id=? ORDER BY id', [id])
+    const ret = {
+      id: Number(retRow.id),
+      returnNo: retRow.return_no,
+      supplierId: Number(retRow.supplier_id),
+      warehouseId: Number(retRow.warehouse_id),
+      items: itemRows.map(r => ({
+        productId: r.product_id,
+        productName: r.product_name,
+        unit: r.unit,
+        quantity: Number(r.quantity),
+        unitPrice: Number(r.unit_price),
+      })),
+    }
     for (const item of ret.items) {
       // 采购退货出库：从仓库扣减容器（FIFO）→ 同步缓存
       const { before, after, primaryDeductContainerId } = await adjustContainerStock(conn, {
@@ -74,16 +116,42 @@ async function executePR(id, operator) {
          `采购退货出库 ${ret.returnNo}`, operator.userId, operator.realName]
       )
     }
-    await conn.query('UPDATE purchase_returns SET status=3 WHERE id=?', [id])
+    await compareAndSetStatus(conn, {
+      table: 'purchase_returns',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '采购退货单',
+    })
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
 }
 async function cancelPR(id) {
-  const ret=await findByIdPR(id)
-  if(ret.status===3) throw new AppError('已退货的单据不能取消',400)
-  if(ret.status===4) throw new AppError('已取消',400)
-  await pool.query('UPDATE purchase_returns SET status=4 WHERE id=?',[id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const retRow = await lockStatusRow(conn, {
+      table: 'purchase_returns',
+      id,
+      columns: 'id, status',
+      entityName: '采购退货单',
+    })
+    const rule = assertStatusAction('purchaseReturn', 'cancel', retRow.status)
+    await compareAndSetStatus(conn, {
+      table: 'purchase_returns',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '采购退货单',
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 // 销售退货
@@ -113,12 +181,51 @@ async function createSR({ customerId, customerName, warehouseId, warehouseName, 
     await conn.commit(); return { id:r.insertId, returnNo }
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
 }
-async function executeSR(id, operator) {
-  const ret = await findByIdSR(id)
-  if (ret.status !== 2) throw new AppError('只有已确认的退货单可以执行', 400)
+async function confirmSR(id) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const retRow = await lockStatusRow(conn, {
+      table: 'sale_returns',
+      id,
+      columns: 'id, status',
+      entityName: '销售退货单',
+    })
+    const rule = assertStatusAction('saleReturn', 'confirm', retRow.status)
+    await compareAndSetStatus(conn, {
+      table: 'sale_returns',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '销售退货单',
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+async function executeSR(id, operator) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const retRow = await lockStatusRow(conn, { table: 'sale_returns', id, entityName: '销售退货单' })
+    const rule = assertStatusAction('saleReturn', 'execute', retRow.status)
+    const [itemRows] = await conn.query('SELECT * FROM sale_return_items WHERE return_id=? ORDER BY id', [id])
+    const ret = {
+      id: Number(retRow.id),
+      returnNo: retRow.return_no,
+      warehouseId: Number(retRow.warehouse_id),
+      items: itemRows.map(r => ({
+        productId: r.product_id,
+        productName: r.product_name,
+        unit: r.unit,
+        quantity: Number(r.quantity),
+        unitPrice: Number(r.unit_price),
+      })),
+    }
     for (const item of ret.items) {
       // 销售退货入库：客户退回商品，创建新容器→ 同步缓存
       const { before, after, createdContainerId } = await adjustContainerStock(conn, {
@@ -147,15 +254,42 @@ async function executeSR(id, operator) {
          `销售退货入库 ${ret.returnNo}`, operator.userId, operator.realName]
       )
     }
-    await conn.query('UPDATE sale_returns SET status=3 WHERE id=?', [id])
+    await compareAndSetStatus(conn, {
+      table: 'sale_returns',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '销售退货单',
+    })
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
 }
 async function cancelSR(id) {
-  const ret=await findByIdSR(id)
-  if(ret.status===3||ret.status===4) throw new AppError('该状态不能取消',400)
-  await pool.query('UPDATE sale_returns SET status=4 WHERE id=?',[id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const retRow = await lockStatusRow(conn, {
+      table: 'sale_returns',
+      id,
+      columns: 'id, status',
+      entityName: '销售退货单',
+    })
+    const rule = assertStatusAction('saleReturn', 'cancel', retRow.status)
+    await compareAndSetStatus(conn, {
+      table: 'sale_returns',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '销售退货单',
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
-module.exports = { findAllPR, findByIdPR, createPR, executePR, cancelPR, findAllSR, findByIdSR, createSR, executeSR, cancelSR }
+module.exports = { findAllPR, findByIdPR, createPR, confirmPR, executePR, cancelPR, findAllSR, findByIdSR, createSR, confirmSR, executeSR, cancelSR }

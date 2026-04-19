@@ -23,6 +23,8 @@ import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import type { PackageShipInfo } from '@/api/packages'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { getPackageShipClosureCopy } from '@/lib/outboundClosure'
+import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 
 export default function PdaShipPage() {
   const navigate = useNavigate()
@@ -30,12 +32,29 @@ export default function PdaShipPage() {
   const [info, setInfo]       = useState<PackageShipInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [done, setDone]       = useState(false)
+  const shipAction = useCriticalPdaAction<{ taskId: number }>({
+    action: `warehouse.ship.confirm`,
+    label: '出库确认',
+    onConfirmed: async () => {
+      ok('出库成功！')
+      setDone(true)
+    },
+  })
 
   const shipMut = useMutation({
-    mutationFn: (taskId: number) => shipTaskApi(taskId),
-    onSuccess: () => { ok('出库成功！'); setDone(true) },
+    mutationFn: async (taskId: number) => {
+      const result = await shipAction.run((requestKey) =>
+        shipTaskApi(taskId, requestKey).then((res) => res.data.data as { taskId: number }),
+      )
+      return result
+    },
+    onSuccess: (result) => {
+      if (result.kind === 'pending') {
+        err('网络中断，出库结果待确认。请先确认结果，避免重复扫码出库。')
+      }
+    },
     onError: (e: unknown) =>
-      err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '出库失败'),
+      err((e as { message?: string })?.message ?? '出库失败'),
   })
 
   // 扫码后自动查询并立即出库，无需额外确认按钮
@@ -91,6 +110,20 @@ export default function PdaShipPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-5 space-y-4">
+          <PdaCriticalActionNotice
+            blockedReason={shipAction.blockedReason}
+            pendingRecord={shipAction.pendingRecord}
+            confirming={shipAction.confirming}
+            onConfirm={() => {
+              void shipAction.confirmPending().then((status) => {
+                if (!status) return
+                if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
+                if (status.status === 'not_found') err('未找到上次出库记录，请先刷新任务状态再决定是否重扫')
+                if (status.status === 'failed') err(status.message || '上次出库未成功，请检查后重试')
+              })
+            }}
+            onClear={() => shipAction.clearPending()}
+          />
           <div className="space-y-2">
             <PdaFlowPanel
               badge="出库闭环提示"
@@ -191,7 +224,7 @@ export default function PdaShipPage() {
             <span className="text-sm font-bold text-foreground">{totalBoxes} 箱</span>
           </PdaCard>
         ) : null}
-        <PdaScanner onScan={handleScan} placeholder="扫描物流条码" disabled={loading || shipMut.isPending} />
+        <PdaScanner onScan={handleScan} placeholder="扫描物流条码" disabled={loading || shipMut.isPending || shipAction.submitBlocked} />
         {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">出库中…</span></div>}
       </PdaBottomBar>
     </div>

@@ -1,5 +1,6 @@
 import client from './client'
 import type { ApiResponse, PaginatedData } from '@/types'
+import { withRequestKeyHeaders } from '@/lib/requestKey'
 
 export type TaskStatus = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 export type TaskPriority = 1 | 2 | 3
@@ -106,11 +107,19 @@ export const assignTaskApi = (id: number, userId: number, userName: string) =>
 export const startPickingApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/start-picking`, {}, { headers: { 'X-Client': 'pda' } })
 
-export const readyToShipApi = (id: number) =>
-  client.put(`/warehouse-tasks/${id}/ready`, {}, { headers: { 'X-Client': 'pda' } })
+export const readyToShipApi = (id: number, requestKey?: string) =>
+  client.put(`/warehouse-tasks/${id}/ready`, {}, {
+    headers: requestKey
+      ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+      : { 'X-Client': 'pda' },
+  })
 
-export const sortDoneApi = (id: number, items?: { itemId: number; sortedQty: number }[]) =>
-  client.put(`/warehouse-tasks/${id}/sort-done`, { items: items ?? null }, { headers: { 'X-Client': 'pda' } })
+export const sortDoneApi = (id: number, items?: { itemId: number; sortedQty: number }[], requestKey?: string) =>
+  client.put(`/warehouse-tasks/${id}/sort-done`, { items: items ?? null }, {
+    headers: requestKey
+      ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+      : { 'X-Client': 'pda' },
+  })
 
 export const checkDoneApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/check-done`, {}, {
@@ -118,11 +127,19 @@ export const checkDoneApi = (id: number) =>
     skipGlobalError: true,
   })
 
-export const packDoneApi = (id: number) =>
-  client.put(`/warehouse-tasks/${id}/pack-done`, {}, { headers: { 'X-Client': 'pda' } })
+export const packDoneApi = (id: number, requestKey?: string) =>
+  client.put(`/warehouse-tasks/${id}/pack-done`, {}, {
+    headers: requestKey
+      ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+      : { 'X-Client': 'pda' },
+  })
 
-export const shipTaskApi = (id: number) =>
-  client.put(`/warehouse-tasks/${id}/ship`, {}, { headers: { 'X-Client': 'pda' } })
+export const shipTaskApi = (id: number, requestKey?: string) =>
+  client.put(`/warehouse-tasks/${id}/ship`, {}, {
+    headers: requestKey
+      ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+      : { 'X-Client': 'pda' },
+  })
 
 export const cancelTaskApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/cancel`)
@@ -183,9 +200,13 @@ export const getPickRouteApi = (taskId: number) =>
 // ── 复核（须扫描容器，禁止手填明细）──────────────────────────────────────────
 
 /** 复核扫码：确认本任务拣货时扫过的容器 */
-export const submitCheckScanApi = (taskId: number, barcode: string) =>
+export const submitCheckScanApi = (taskId: number, barcode: string, requestKey?: string) =>
   client.post<ApiResponse<{ id: number; allChecked: boolean; itemId: number; qty: number }>>(
     '/scan-logs/check',
     { taskId, barcode },
-    { headers: { 'X-Client': 'pda' } },
+    {
+      headers: requestKey
+        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+        : { 'X-Client': 'pda' },
+    },
   )

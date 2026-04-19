@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { lockContainer } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 const fmt = r => ({
   id:           r.id,
@@ -28,10 +29,20 @@ const SCAN_PURPOSE = { PICK: 1, CHECK: 2 }
 async function createScanLog({
   taskId, itemId, containerId, barcode, productId,
   qty, scanMode, operatorId, operatorName, locationCode,
+  requestKey,
 }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'scan-log.pick',
+      userId: operatorId || null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
 
     const [[taskRow]] = await conn.query(
       'SELECT id, status FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
@@ -94,8 +105,15 @@ async function createScanLog({
       throw new AppError('更新已拣数量失败（可能超出需求或并发冲突）', 409)
     }
 
+    const payload = { id: r.insertId }
+    await completeOperationRequest(conn, requestState, {
+      data: payload,
+      message: '扫描记录已保存',
+      resourceType: 'scan_log',
+      resourceId: r.insertId,
+    })
     await conn.commit()
-    return { id: r.insertId }
+    return payload
   } catch (e) {
     await conn.rollback()
     throw e
@@ -109,10 +127,20 @@ async function createScanLog({
  */
 async function createCheckScanLog({
   taskId, barcode, operatorId, operatorName,
+  requestKey,
 }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'scan-log.check',
+      userId: operatorId || null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
 
     const [[taskRow]] = await conn.query(
       'SELECT id, status, warehouse_id FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
@@ -222,8 +250,15 @@ async function createCheckScanLog({
       }
     }
 
+    const payload = { id: ins.insertId, allChecked, itemId: targetItemId, qty: addQty }
+    await completeOperationRequest(conn, requestState, {
+      data: payload,
+      message: allChecked ? '复核完成，已进入待打包' : '复核扫码已记录',
+      resourceType: 'scan_log',
+      resourceId: ins.insertId,
+    })
     await conn.commit()
-    return { id: ins.insertId, allChecked, itemId: targetItemId, qty: addQty }
+    return payload
   } catch (e) {
     await conn.rollback()
     throw e

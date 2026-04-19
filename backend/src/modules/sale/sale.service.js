@@ -2,6 +2,8 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { reserve, releaseByRef } = require('../../engine/reservationEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
+const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { assertStatusAction } = require('../../constants/documentStatusRules')
 
 const STATUS = { 1:'草稿', 2:'已占库', 3:'拣货中', 4:'已出库', 5:'已取消' }
 const FREIGHT_TYPE = { 1:'寄付', 2:'到付', 3:'第三方付' }
@@ -179,13 +181,12 @@ async function create({ customerId, customerName, warehouseId, warehouseName, re
 // 编辑草稿：仅在 status=1（草稿）时允许，整体替换明细行
 async function update(id, { customerId, customerName, warehouseId, warehouseName, remark,
   carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator }) {
-  const order = await findById(id)
-  if (order.status !== 1) throw new AppError('只有草稿状态的销售单可以编辑', 400)
-  if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, columns: 'id, status', entityName: '销售单' })
+    assertStatusAction('sale', 'edit', orderRow.status)
+    if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
     const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
     await conn.query(
       `UPDATE sale_orders SET customer_id=?,customer_name=?,warehouse_id=?,warehouse_name=?,total_amount=?,remark=?,carrier_id=?,carrier=?,freight_type=?,receiver_name=?,receiver_phone=?,receiver_address=? WHERE id=?`,
@@ -207,26 +208,32 @@ async function update(id, { customerId, customerName, warehouseId, warehouseName
 
 // ① 占用库存：仅调用 reservationEngine.reserve()，不创建仓库任务
 async function reserveStock(id, operator) {
-  const order = await findById(id)
-  if (order.status !== 1) throw new AppError('只有草稿状态可以占用库存', 400)
-  if (!order.items.length) throw new AppError('销售单无明细，无法占用库存', 400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    for (const item of order.items) {
+    const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
+    const rule = assertStatusAction('sale', 'reserve', orderRow.status)
+    const [itemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
+    if (!itemRows.length) throw new AppError('销售单无明细，无法占用库存', 400)
+    for (const item of itemRows) {
       await reserve(conn, {
-        productId:   item.productId,
-        productName: item.productName,
-        warehouseId: order.warehouseId,
-        qty:         item.quantity,
+        productId:   item.product_id,
+        productName: item.product_name,
+        warehouseId: Number(orderRow.warehouse_id),
+        qty:         Number(item.quantity),
         refType:     'sale_order',
-        refId:       order.id,
-        refNo:       order.orderNo,
+        refId:       Number(orderRow.id),
+        refNo:       orderRow.order_no,
       })
     }
-    await conn.query('UPDATE sale_orders SET status=2 WHERE id=?', [id])
-    await appendSaleEvent(conn, id, 'reserved', '占用库存', `销售单 ${order.orderNo} 已占用库存`, operator)
+    await compareAndSetStatus(conn, {
+      table: 'sale_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '销售单',
+    })
+    await appendSaleEvent(conn, id, 'reserved', '占用库存', `销售单 ${orderRow.order_no} 已占用库存`, operator)
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -234,26 +241,46 @@ async function reserveStock(id, operator) {
 
 // ② 发起出库：仅创建仓库任务，不扣减库存，订单进入拣货中（status=3）
 async function ship(id, operator) {
-  const order = await findById(id)
-  if (order.status !== 2) throw new AppError('只有已占库的销售单可以发起出库', 400)
-  if (!order.items.length) throw new AppError('销售单无明细', 400)
-  if (order.taskId) throw new AppError(`已存在仓库任务（${order.taskNo}），请勿重复操作`, 400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
+    const rule = assertStatusAction('sale', 'ship', orderRow.status)
+    if (orderRow.task_id) throw new AppError(`已存在仓库任务（${orderRow.task_no}），请勿重复操作`, 409)
+
+    const [itemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
+    if (!itemRows.length) throw new AppError('销售单无明细', 400)
+    const items = itemRows.map(r => ({
+      id: r.id,
+      productId: r.product_id,
+      productCode: r.product_code,
+      productName: r.product_name,
+      unit: r.unit,
+      quantity: Number(r.quantity),
+    }))
+
     const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
     const { taskId, taskNo } = await taskSvc.createForSaleOrder({
-      saleOrderId:   order.id,
-      saleOrderNo:   order.orderNo,
-      customerId:    order.customerId,
-      customerName:  order.customerName,
-      warehouseId:   order.warehouseId,
-      warehouseName: order.warehouseName,
-      items:         order.items,
+      saleOrderId:   Number(orderRow.id),
+      saleOrderNo:   orderRow.order_no,
+      customerId:    Number(orderRow.customer_id),
+      customerName:  orderRow.customer_name,
+      warehouseId:   Number(orderRow.warehouse_id),
+      warehouseName: orderRow.warehouse_name,
+      items,
       conn,
     })
-    await conn.query('UPDATE sale_orders SET status=3, task_id=?, task_no=? WHERE id=?', [taskId, taskNo, id])
+    await compareAndSetStatus(conn, {
+      table: 'sale_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '销售单',
+      extraSet: {
+        task_id: taskId,
+        task_no: taskNo,
+      },
+    })
     await appendSaleEvent(conn, id, 'ship_requested', '创建出库任务', `已创建仓库任务 ${taskNo}，等待仓库执行`, operator, { taskId, taskNo })
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
@@ -262,15 +289,20 @@ async function ship(id, operator) {
 
 // 取消占库：RESERVED(2) → DRAFT(1)，释放预占
 async function releaseStock(id, operator) {
-  const order = await findById(id)
-  if (order.status !== 2) throw new AppError('只有已占库的订单可以取消占库', 400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
+    const rule = assertStatusAction('sale', 'release', orderRow.status)
     await releaseByRef(conn, 'sale_order', id)
-    await conn.query('UPDATE sale_orders SET status=1 WHERE id=?', [id])
-    await appendSaleEvent(conn, id, 'released', '取消占库', `销售单 ${order.orderNo} 已取消占库并恢复草稿`, operator)
+    await compareAndSetStatus(conn, {
+      table: 'sale_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '销售单',
+    })
+    await appendSaleEvent(conn, id, 'released', '取消占库', `销售单 ${orderRow.order_no} 已取消占库并恢复草稿`, operator)
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -278,28 +310,32 @@ async function releaseStock(id, operator) {
 
 // 取消订单：仅 DRAFT(1) → CANCELLED(5)
 async function cancel(id, operator) {
-  const order = await findById(id)
-  if (order.status === 4) throw new AppError('已出库的订单不能取消', 400)
-  if (order.status === 5) throw new AppError('订单已取消', 400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
+    const rule = assertStatusAction('sale', 'cancel', orderRow.status)
 
-    if (order.status === 2) {
+    if (Number(orderRow.status) === 2) {
       await releaseByRef(conn, 'sale_order', id)
     }
 
-    if (order.status === 3) {
-      if (!order.taskId) {
+    if (Number(orderRow.status) === 3) {
+      if (!orderRow.task_id) {
         throw new AppError('销售单处于拣货中但未关联仓库任务，请先排查异常', 409)
       }
       const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
-      await taskSvc.cancel(order.taskId, { conn, syncSaleStatus: false })
+      await taskSvc.cancel(orderRow.task_id, { conn, syncSaleStatus: false })
     }
 
-    await conn.query('UPDATE sale_orders SET status=5 WHERE id=?', [id])
-    await appendSaleEvent(conn, id, 'cancelled', '取消销售单', `销售单 ${order.orderNo} 已取消`, operator)
+    await compareAndSetStatus(conn, {
+      table: 'sale_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '销售单',
+    })
+    await appendSaleEvent(conn, id, 'cancelled', '取消销售单', `销售单 ${orderRow.order_no} 已取消`, operator)
     await conn.commit()
   } catch (e) {
     await conn.rollback()
@@ -312,7 +348,7 @@ async function cancel(id, operator) {
 // 删除订单：仅 CANCELLED(5) 可删
 async function deleteOrder(id) {
   const order = await findById(id)
-  if (order.status !== 5) throw new AppError('只有已取消的订单可以删除', 400)
+  assertStatusAction('sale', 'delete', order.status)
   await pool.query('UPDATE sale_orders SET deleted_at=NOW() WHERE id=?', [id])
 }
 

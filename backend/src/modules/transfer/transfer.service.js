@@ -1,8 +1,10 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { transferContainers, SOURCE_TYPE } = require('../../engine/containerEngine')
+const { transferContainers, SOURCE_TYPE, getAvailableStockForDecision } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
+const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { assertStatusAction } = require('../../constants/documentStatusRules')
 const STATUS = { 1:'草稿', 2:'已确认', 3:'已执行', 4:'已取消' }
 
 const fmt = r => ({ id:r.id, orderNo:r.order_no, fromWarehouseId:r.from_warehouse_id, fromWarehouseName:r.from_warehouse_name, toWarehouseId:r.to_warehouse_id, toWarehouseName:r.to_warehouse_name, status:r.status, statusName:STATUS[r.status], remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
@@ -28,16 +30,11 @@ async function assertTransferAvailability(conn, order) {
   }
 
   for (const item of merged.values()) {
-    const [[stock]] = await conn.query(
-      `SELECT quantity, reserved
-       FROM inventory_stock
-       WHERE warehouse_id = ? AND product_id = ?
-       FOR UPDATE`,
-      [order.fromWarehouseId, item.productId],
-    )
-    const onHand = Number(stock?.quantity ?? 0)
-    const reserved = Number(stock?.reserved ?? 0)
-    const available = onHand - reserved
+    const { quantity: onHand, reserved, available } = await getAvailableStockForDecision(conn, {
+      productId: item.productId,
+      warehouseId: order.fromWarehouseId,
+      lock: true,
+    })
     if (available < item.quantity) {
       throw new AppError(
         `调拨库存不足：${item.productName} 可用 ${available}，申请 ${item.quantity}`,
@@ -80,13 +77,28 @@ async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWar
 }
 
 async function confirm(id) {
-  const o=await findById(id)
-  if(o.status!==1) throw new AppError('只有草稿可以确认',400)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
+    const rule = assertStatusAction('transfer', 'confirm', orderRow.status)
+    const [itemRows] = await conn.query('SELECT * FROM transfer_order_items WHERE order_id=? ORDER BY id', [id])
+    const o = {
+      fromWarehouseId: Number(orderRow.from_warehouse_id),
+      items: itemRows.map(r => ({
+        productId: r.product_id,
+        productName: r.product_name,
+        quantity: Number(r.quantity),
+      })),
+    }
     await assertTransferAvailability(conn, o)
-    await conn.query('UPDATE transfer_orders SET status=2 WHERE id=?',[id])
+    await compareAndSetStatus(conn, {
+      table: 'transfer_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '调拨单',
+    })
     await conn.commit()
   } catch (e) {
     await conn.rollback()
@@ -97,12 +109,24 @@ async function confirm(id) {
 }
 
 async function execute(id, operator) {
-  const o = await findById(id)
-  if (o.status !== 2) throw new AppError('只有已确认的调拨单可以执行', 400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
+    const rule = assertStatusAction('transfer', 'execute', orderRow.status)
+
+    const [itemRows] = await conn.query('SELECT * FROM transfer_order_items WHERE order_id=? ORDER BY id', [id])
+    const o = {
+      id: Number(orderRow.id),
+      orderNo: orderRow.order_no,
+      fromWarehouseId: Number(orderRow.from_warehouse_id),
+      toWarehouseId: Number(orderRow.to_warehouse_id),
+      items: itemRows.map(r => ({
+        productId: r.product_id,
+        productName: r.product_name,
+        quantity: Number(r.quantity),
+      })),
+    }
 
     await assertTransferAvailability(conn, o)
 
@@ -160,17 +184,38 @@ async function execute(id, operator) {
       )
     }
 
-    await conn.query('UPDATE transfer_orders SET status=3 WHERE id=?', [id])
+    await compareAndSetStatus(conn, {
+      table: 'transfer_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '调拨单',
+    })
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
 }
 
 async function cancel(id) {
-  const o=await findById(id)
-  if(o.status===3) throw new AppError('已执行的调拨单不能取消',400)
-  if(o.status===4) throw new AppError('调拨单已取消',400)
-  await pool.query('UPDATE transfer_orders SET status=4 WHERE id=?',[id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, columns: 'id, status', entityName: '调拨单' })
+    const rule = assertStatusAction('transfer', 'cancel', orderRow.status)
+    await compareAndSetStatus(conn, {
+      table: 'transfer_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '调拨单',
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 module.exports = { findAll, findById, create, confirm, execute, cancel }

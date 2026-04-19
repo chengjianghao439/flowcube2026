@@ -21,6 +21,8 @@ import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
 import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
+import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 
 type Step = 'scan-product' | 'confirm-bin'
 
@@ -41,6 +43,10 @@ export default function PdaSortPage() {
   const [hint, setHint]     = useState<BinHint | null>(null)
   const [scanning, setScanning] = useState(false)
   const { flash, ok, err }  = usePdaFeedback()
+  const sortAction = useCriticalPdaAction<{ allSorted: boolean; progress?: string }>({
+    action: `warehouse.sort.${hint?.taskId ?? 'none'}`,
+    label: '分拣确认',
+  })
 
   const { data: bins, isLoading, refetch } = useQuery({
     queryKey: ['sorting-bins-occupied'],
@@ -49,6 +55,7 @@ export default function PdaSortPage() {
   })
 
   async function handleProductScan(raw: string) {
+    if (sortAction.networkStatus !== 'online') { err('网络已断开，分拣作业已阻断，请恢复网络后再继续'); return }
     const code = raw.trim()
     if (!code) return
     setScanning(true)
@@ -68,6 +75,7 @@ export default function PdaSortPage() {
   }
 
   async function handleBinScan(raw: string) {
+    if (sortAction.submitBlocked) { err(sortAction.blockedReason || '当前不可提交'); return }
     const code = raw.trim()
     if (!code || !hint) return
     if (code.toUpperCase() !== hint.binCode.toUpperCase()) {
@@ -76,11 +84,17 @@ export default function PdaSortPage() {
     }
     setScanning(true)
     try {
-      const res = await sortDoneApi(hint.taskId, [{ itemId: hint.itemId, sortedQty: hint.qty }])
-      const result = res.data.data
+      const submitted = await sortAction.run((requestKey) =>
+        sortDoneApi(hint.taskId, [{ itemId: hint.itemId, sortedQty: hint.qty }], requestKey).then((res) => res.data.data!),
+      )
+      if (submitted.kind === 'pending') {
+        err('网络中断，分拣结果待确认。请先确认结果，再决定是否重扫。')
+        return
+      }
+      const result = submitted.data
       if (result?.allSorted) ok(`✓ 任务 ${hint.taskNo} 分拣全部完成！`)
       else ok(`✓ 已放入 ${hint.binCode}（${result?.progress ?? '?'}）`)
-    } catch { err('上报分拣失败，请重试') }
+    } catch (error: unknown) { err((error as { message?: string })?.message ?? '上报分拣失败，请重试') }
     finally { setScanning(false) }
     setStep('scan-product')
     setHint(null)
@@ -93,7 +107,7 @@ export default function PdaSortPage() {
       if (step === 'scan-product') handleProductScan(code)
       else handleBinScan(code)
     },
-    enabled: !scanning,
+    enabled: !scanning && !sortAction.submitBlocked,
   })
 
   const occupiedBins = (bins ?? []).filter(b => b.status === 2)
@@ -119,6 +133,20 @@ export default function PdaSortPage() {
 
       <div className="max-w-md mx-auto px-4 pb-32 space-y-4 py-4">
         <PdaFlash flash={flash} />
+        <PdaCriticalActionNotice
+          blockedReason={sortAction.blockedReason}
+          pendingRecord={sortAction.pendingRecord}
+          confirming={sortAction.confirming}
+          onConfirm={() => {
+            void sortAction.confirmPending().then((status) => {
+              if (!status) return
+              if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
+              if (status.status === 'not_found') err('未找到上次分拣确认记录，请先刷新任务状态后再决定是否重扫')
+              if (status.status === 'failed') err(status.message || '上次分拣确认未成功，请检查后重试')
+            })
+          }}
+          onClear={() => sortAction.clearPending()}
+        />
 
         <PdaFlowPanel
           badge="分拣闭环提示"

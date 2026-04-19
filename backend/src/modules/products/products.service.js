@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { loadPriceRates, computeTierPrices } = require('../../utils/priceLevels')
+const { getInventoryDisplayProjectionSql } = require('../inventory/inventoryProjection')
 
 async function ensureCategoryExists(categoryId) {
   if (!categoryId) throw new AppError('请选择商品分类', 400)
@@ -34,10 +35,11 @@ async function validateProductPayload({ name, categoryId, barcode, costPrice, cu
  * 商品选择中心专用分页查询
  * - 支持关键字（编码 / 名称 / 条码）
  * - 支持分类过滤（自动包含所有子孙分类）
- * - 可选传入 warehouseId 以联查该仓库当前可用库存
+ * - 可选传入 warehouseId 以联查该仓库当前展示用可用库存（容器汇总 + reserved projection）
  * - 自动构建完整分类路径（一级 > 二级 > 三级 > 四级）
  */
 async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId = null, warehouseId = null }) {
+  const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   // 1. 先取所有分类，用于路径拼接 + 子孙 ID 展开
   const [catRows] = await pool.query(
     'SELECT id, name, parent_id, path FROM product_categories WHERE deleted_at IS NULL'
@@ -79,7 +81,7 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
 
   // 4. 库存联查（可选）
   const stockJoin = warehouseId
-    ? 'LEFT JOIN inventory_stock s ON p.id = s.product_id AND s.warehouse_id = ?'
+    ? `LEFT JOIN ${inventoryDisplayProjectionSql} s ON p.id = s.product_id AND s.warehouse_id = ?`
     : ''
   const stockCol = warehouseId
     ? 'GREATEST(0, COALESCE(s.quantity, 0) - COALESCE(s.reserved, 0))'

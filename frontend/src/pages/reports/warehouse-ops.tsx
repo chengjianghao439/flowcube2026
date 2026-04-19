@@ -12,6 +12,7 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Button } from '@/components/ui/button'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import type { OpsOperator, FlowBottleneck } from '@/api/reports'
 
 // ── 数字卡片 ────────────────────────────────────────────────────────────────
@@ -81,10 +82,12 @@ function FlowBar({ items }: { items: FlowBottleneck[] }) {
 export default function WarehouseOpsPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
+  const isActiveTab = useActiveWorkspaceTab()
   const warehouseOpsQ = useQuery({
     queryKey: ['warehouse-ops'],
     queryFn:  () => getWarehouseOpsApi().then(r => r.data.data!),
-    refetchInterval: 60_000,   // 每分钟自动刷新
+    enabled: isActiveTab,
+    refetchInterval: isActiveTab ? 60_000 : false,   // 每分钟自动刷新
   })
 
   const { data, isLoading, isError, error, dataUpdatedAt, refetch } = warehouseOpsQ

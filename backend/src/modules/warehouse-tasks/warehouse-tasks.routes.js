@@ -2,11 +2,10 @@ const { Router } = require('express')
 const { z } = require('zod')
 const svc = require('./warehouse-tasks.service')
 const { successResponse } = require('../../utils/response')
+const { extractRequestKey } = require('../../utils/requestKey')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { pool } = require('../../config/db')
 const { PERMISSIONS } = require('../../constants/permissions')
-
-const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 
 async function getOp(userId) {
   const [[u]] = await pool.query('SELECT id, username, real_name FROM sys_users WHERE id=?', [userId])
@@ -90,7 +89,13 @@ router.put('/:id/items/:itemId/picked-qty', (req, res) => {
 
 // PUT /api/warehouse-tasks/:id/ready — 拣货完成，待分拣（2→3）
 router.put('/:id/ready', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK), pdaOnly, async (req, res, next) => {
-  try { await svc.readyToShip(+req.params.id); return successResponse(res, null, '已标记为待分拣') } catch (e) { next(e) }
+  try {
+    const data = await svc.readyToShip(+req.params.id, {
+      requestKey: extractRequestKey(req),
+      userId: req.user?.userId ?? null,
+    })
+    return successResponse(res, data, '已标记为待分拣')
+  } catch (e) { next(e) }
 })
 
 // GET /api/warehouse-tasks/:id/events — 查询任务事件历史
@@ -273,7 +278,10 @@ router.get('/:id/debug', requirePermission(PERMISSIONS.WAREHOUSE_TASK_DEBUG), as
 router.put('/:id/sort-done', pdaOnly, async (req, res, next) => {
   try {
     const sortedItems = req.body?.items ?? null
-    const result = await svc.sortTask(+req.params.id, sortedItems)
+    const result = await svc.sortTask(+req.params.id, sortedItems, {
+      requestKey: extractRequestKey(req),
+      userId: req.user?.userId ?? null,
+    })
     const msg = result.allSorted ? '分拣完成，已进入待复核' : `分拣进度 ${result.progress}，继续操作`
     return successResponse(res, result, msg)
   } catch (e) { next(e) }
@@ -286,7 +294,13 @@ router.put('/:id/check-done', pdaOnly, async (req, res, next) => {
 
 // PUT /api/warehouse-tasks/:id/pack-done — 打包完成，待出库（5→6）
 router.put('/:id/pack-done', pdaOnly, async (req, res, next) => {
-  try { await svc.packDone(+req.params.id); return successResponse(res, null, '已标记为待出库') } catch (e) { next(e) }
+  try {
+    const data = await svc.packDone(+req.params.id, {
+      requestKey: extractRequestKey(req),
+      userId: req.user?.userId ?? null,
+    })
+    return successResponse(res, data, '已标记为待出库')
+  } catch (e) { next(e) }
 })
 
 // PUT /api/warehouse-tasks/:id/ship — 执行出库（6→7）
@@ -298,7 +312,6 @@ router.put('/:id/ship', pdaOnly, async (req, res, next) => {
 
     // 读取任务以获取关联销售单ID
     const task = await svc.findById(taskId)
-    if (task.status !== WT_STATUS.SHIPPING) return res.status(400).json({ success: false, message: '只有"待出库"状态可以执行出库', data: null })
 
     // 在 route 层直接查询销售单（避免 WMS service 依赖 ERP service）
     const [[saleOrder]] = await pool.query(
@@ -306,8 +319,6 @@ router.put('/:id/ship', pdaOnly, async (req, res, next) => {
       [task.saleOrderId]
     )
     if (!saleOrder)          return res.status(404).json({ success: false, message: '关联销售单不存在', data: null })
-    if (saleOrder.status === 4) return res.status(400).json({ success: false, message: '对应销售单已出库', data: null })
-    if (saleOrder.status === 5) return res.status(400).json({ success: false, message: '对应销售单已取消', data: null })
 
     const [wmsItems] = await pool.query(
       `SELECT wti.product_id, wti.product_name, wti.picked_qty, soi.unit_price
@@ -320,7 +331,7 @@ router.put('/:id/ship', pdaOnly, async (req, res, next) => {
       return res.status(400).json({ success: false, message: '任务无出库明细', data: null })
     }
 
-    await svc.ship(taskId, op, {
+    const data = await svc.ship(taskId, op, {
       saleOrderId:  saleOrder.id,
       warehouseId:  saleOrder.warehouse_id,
       totalAmount:  Number(saleOrder.total_amount),
@@ -331,8 +342,10 @@ router.put('/:id/ship', pdaOnly, async (req, res, next) => {
         quantity:    Number(i.picked_qty),
         unitPrice:   i.unit_price != null ? Number(i.unit_price) : null,
       })),
+    }, {
+      requestKey: extractRequestKey(req),
     })
-    return successResponse(res, null, '出库成功')
+    return successResponse(res, data, '出库成功')
   } catch (e) { next(e) }
 })
 

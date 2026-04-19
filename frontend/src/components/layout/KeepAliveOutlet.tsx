@@ -25,20 +25,13 @@ import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import { usePermission } from '@/hooks/usePermission'
 import type { PermCode } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import {
+  normalizeWorkspacePath as normalizePath,
+  getWorkspaceFullPath as getFullPath,
+  buildWorkspaceTabRegistration,
+  buildWorkspaceTabRegistrationFromPath,
+} from '@/router/workspaceRouteMeta'
 import { TabPathContext } from './TabPathContext'
-
-const PATH_ALIASES: Record<string, string> = {
-  '/sales': '/sale',
-}
-
-function normalizePath(path: string): string {
-  const pathname = path.split(/[?#]/)[0] || '/'
-  return PATH_ALIASES[pathname] ?? pathname
-}
-
-function getFullPath(pathname: string, search: string): string {
-  return `${pathname}${search || ''}` || '/'
-}
 
 // ── 路径 → 所需权限（固定路径） ──────────────────────────────────────────────
 const PATH_PERMS: Record<string, PermCode> = {
@@ -258,8 +251,10 @@ function TabPanel({ tabKey, path, isActive }: TabPanelProps) {
 export function KeepAliveOutlet() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { tabs, activeKey, addTab } = useWorkspaceStore()
+  const { tabs, syncFromLocation } = useWorkspaceStore()
   const { can } = usePermission()
+  const locationRegistration = buildWorkspaceTabRegistration(location.pathname, location.search)
+  const activeKey = locationRegistration.key
 
   /**
    * Dirty Guard — Layer 2：兜底拦截浏览器前进/后退
@@ -285,7 +280,7 @@ export function KeepAliveOutlet() {
       if (targetPathname === currentPathname) return
 
       const store     = useDirtyGuardStore.getState()
-      const activeKey = useWorkspaceStore.getState().activeKey
+      const activeKey = buildWorkspaceTabRegistrationFromPath(currentPathname).key
 
       if (!store.isTabDirty(activeKey)) return
 
@@ -312,18 +307,19 @@ export function KeepAliveOutlet() {
     const path = getFullPath(location.pathname, location.search)
     const rawPathname = path.split(/[?#]/)[0] || '/'
     const normalizedPath = normalizePath(path)
+    const tabRegistration = buildWorkspaceTabRegistration(location.pathname, location.search)
 
-    if (rawPathname !== normalizedPath) {
-      navigate(`${normalizedPath}${location.search || ''}`, { replace: true })
+    if (path !== tabRegistration.path) {
+      navigate(tabRegistration.path, { replace: true })
       return
     }
 
     if (normalizedPath === '/' || normalizedPath === '/dashboard') {
-      useWorkspaceStore.getState().setActive(HOME_TAB.key)
+      syncFromLocation(HOME_TAB.path, HOME_TAB.title)
       return
     }
 
-    if (!isKnownPath(normalizedPath)) return  // 未注册路径，忽略
+    if (!isKnownPath(normalizedPath)) return
 
     // 权限拦截
     const requiredPerm = resolvePermission(normalizedPath)
@@ -334,20 +330,42 @@ export function KeepAliveOutlet() {
 
     // 如果 tab 已存在（由导航发起方提前 addTab），则只激活；
     // 否则用 PATH_TITLES 或动态默认标题注册新 tab。
-    const existingTab = useWorkspaceStore.getState().tabs.find(t => t.key === path || normalizePath(t.path) === normalizedPath)
-    if (!existingTab) {
-      const patternCfg = PATH_PATTERNS.find(p => p.pattern.test(normalizedPath))
-      const title = PATH_TITLES[normalizedPath] ?? patternCfg?.defaultTitle(normalizedPath) ?? normalizedPath
-      addTab({ key: path, title, path })
-    } else {
-      useWorkspaceStore.getState().setActive(existingTab.key)
-    }
+    const patternCfg = PATH_PATTERNS.find(p => p.pattern.test(normalizedPath))
+    const title = PATH_TITLES[normalizedPath] ?? patternCfg?.defaultTitle(normalizedPath) ?? normalizedPath
+    syncFromLocation(tabRegistration.path, title)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.search])
 
+  const currentPath = getFullPath(location.pathname, location.search)
+  const normalizedCurrentPath = normalizePath(currentPath)
+  if (normalizedCurrentPath !== '/' && normalizedCurrentPath !== '/dashboard' && !isKnownPath(normalizedCurrentPath)) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <div className="card-base w-full max-w-xl p-6 text-center">
+          <h2 className="text-lg font-semibold text-foreground">页面不存在</h2>
+          <p className="mt-2 text-sm text-muted-foreground">当前地址未注册为 ERP 页面：{currentPath}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const renderTabs = tabs.some((tab) => tab.key === activeKey) || normalizedCurrentPath === '/' || normalizedCurrentPath === '/dashboard'
+    ? tabs
+    : [
+        ...tabs,
+        {
+          key: locationRegistration.key,
+          path: locationRegistration.path,
+          title: PATH_TITLES[normalizedCurrentPath]
+            ?? PATH_PATTERNS.find((p) => p.pattern.test(normalizedCurrentPath))?.defaultTitle(normalizedCurrentPath)
+            ?? normalizedCurrentPath,
+          closable: locationRegistration.key !== HOME_TAB.key,
+        },
+      ]
+
   return (
     <div className="relative h-full w-full">
-      {tabs.map(tab => (
+      {renderTabs.map(tab => (
         <TabPanel
           key={tab.key}
           tabKey={tab.key}

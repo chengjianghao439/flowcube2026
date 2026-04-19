@@ -12,16 +12,19 @@
  */
 
 import { useRef, useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { X, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
+import { buildWorkspaceTabRegistration } from '@/router/workspaceRouteMeta'
 
 export function WorkspaceTabs() {
-  const { tabs, activeKey, removeTab, setActive, closeOthers, closeAll } = useWorkspaceStore()
+  const { tabs, removeTab, closeOthers, closeAll } = useWorkspaceStore()
   const dirtyTabs = useDirtyGuardStore(s => s.dirtyTabs)
   const navigate = useNavigate()
+  const location = useLocation()
+  const activeKey = buildWorkspaceTabRegistration(location.pathname, location.search).key
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef    = useRef<HTMLDivElement>(null)
   const scrollRef  = useRef<HTMLDivElement>(null)
@@ -72,7 +75,6 @@ export function WorkspaceTabs() {
   // 切换到另一个标签：不弹确认；非激活页仅隐藏，实例保留，切回可继续编辑
   const handleTabClick = (key: string, path: string) => {
     if (key === activeKey) return
-    setActive(key)
     navigate(path)
   }
 
@@ -83,7 +85,7 @@ export function WorkspaceTabs() {
     guardedAction(
       [key],
       () => {
-        const newKey = removeTab(key)
+        const newKey = removeTab(key, activeKey)
         if (closingActive) {
           const newTab = useWorkspaceStore.getState().tabs.find(t => t.key === newKey)
           if (newTab) navigate(newTab.path)

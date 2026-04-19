@@ -2,7 +2,7 @@ const XLSX = require('xlsx')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { adjustContainerStock, SOURCE_TYPE } = require('../../engine/containerEngine')
+const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../../engine/containerEngine')
 const { loadPriceRates, computeTierPrices } = require('../../utils/priceLevels')
 
 function createWorkbookBuffer(sheets) {
@@ -184,11 +184,11 @@ async function importSingleStockRow({
       return { ok: false, error: `第${rowIndex + 2}行：库存数量无效` }
     }
 
-    const [[stockRow]] = await connection.query(
-      'SELECT COALESCE(quantity,0) AS qty FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
-      [product.id, +warehouseId],
-    )
-    const current = stockRow ? Number(stockRow.qty) : 0
+    const { quantity: current } = await getStockProjection(connection, {
+      productId: product.id,
+      warehouseId: +warehouseId,
+      lock: true,
+    })
     const diff = target - current
     if (diff === 0) {
       await connection.commit()

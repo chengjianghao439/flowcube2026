@@ -29,7 +29,10 @@ function isStrictLocationScan(raw: string): boolean {
 
 export function makePutawayFlow(
   taskId: number,
-  opts?: { onAfterPutaway?: () => void | Promise<void> },
+  opts?: {
+    onAfterPutaway?: () => void | Promise<void>
+    submitPutaway?: (payload: { taskId: number; containerId: number; locationId: number }) => Promise<void>
+  },
 ): FlowDef<PutawayFlowContext> {
   return {
     id:          'inbound-putaway',
@@ -81,7 +84,11 @@ export function makePutawayFlow(
           if (!ctx.containerId) return { ok: false, message: '扫描库存条码' }
           const res = await apiClient.get<ApiResponse<LocationInfo>>(`/locations/code/${encodeURIComponent(trimmed)}`)
           const loc = res.data.data!
-          await putawayInboundApi(ctx.taskId, { containerId: ctx.containerId, locationId: loc.id })
+          if (opts?.submitPutaway) {
+            await opts.submitPutaway({ taskId: ctx.taskId, containerId: ctx.containerId, locationId: loc.id })
+          } else {
+            await putawayInboundApi(ctx.taskId, { containerId: ctx.containerId, locationId: loc.id })
+          }
           await opts?.onAfterPutaway?.()
           return {
             ok:         true,

@@ -1,6 +1,9 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
+const { appendInboundEvent } = require('../inbound-tasks/inbound-tasks.helpers')
+const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { assertStatusAction } = require('../../constants/documentStatusRules')
 
 const STATUS = { 1:'草稿', 2:'已提交', 3:'已完成', 4:'已取消' }
 
@@ -94,16 +97,88 @@ async function create({ supplierId, supplierName, warehouseId, warehouseName, ex
 }
 
 async function confirm(id, operator) {
-  const order = await findById(id)
-  if(order.status !== 1) throw new AppError('只有草稿状态的采购单可以提交',400)
-  await pool.query('UPDATE purchase_orders SET status=2 WHERE id=?', [id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status', entityName: '采购单' })
+    const rule = assertStatusAction('purchase', 'confirm', orderRow.status)
+    await compareAndSetStatus(conn, {
+      table: 'purchase_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '采购单',
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
-async function cancel(id) {
-  const order = await findById(id)
-  if(order.status === 3) throw new AppError('已完成的采购单不能取消',400)
-  if(order.status === 4) throw new AppError('采购单已取消',400)
-  await pool.query('UPDATE purchase_orders SET status=4 WHERE id=?',[id])
+async function cancel(id, operator) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, entityName: '采购单' })
+    const cancelRule = assertStatusAction('purchase', 'cancel', orderRow.status)
+
+    const [taskRows] = await conn.query(
+      `SELECT id, task_no, status
+       FROM inbound_tasks
+       WHERE purchase_order_id = ? AND deleted_at IS NULL AND status <> 5
+       FOR UPDATE`,
+      [id],
+    )
+
+    for (const taskRow of taskRows) {
+      assertStatusAction('inboundTask', 'cancel', taskRow.status)
+      const [[{ n }]] = await conn.query(
+        `SELECT COUNT(*) AS n
+         FROM inventory_containers
+         WHERE inbound_task_id = ? AND deleted_at IS NULL`,
+        [taskRow.id],
+      )
+      if (Number(n) > 0) {
+        throw new AppError(`采购单存在进行中的收货订单 ${taskRow.task_no}，请先处理收货流程`, 409)
+      }
+    }
+
+    for (const taskRow of taskRows) {
+      await compareAndSetStatus(conn, {
+        table: 'inbound_tasks',
+        id: Number(taskRow.id),
+        fromStatus: 1,
+        toStatus: 5,
+        entityName: '收货订单',
+      })
+      await appendInboundEvent(
+        conn,
+        Number(taskRow.id),
+        'cancelled_by_purchase',
+        '采购单取消同步取消收货订单',
+        `因采购单 ${orderRow.order_no} 已取消，收货订单 ${taskRow.task_no} 自动取消`,
+        operator,
+        { purchaseOrderId: id, purchaseOrderNo: orderRow.order_no },
+      )
+    }
+
+    await compareAndSetStatus(conn, {
+      table: 'purchase_orders',
+      id,
+      fromStatus: cancelRule.from,
+      toStatus: cancelRule.to,
+      entityName: '采购单',
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 module.exports = { findAll, findById, create, confirm, cancel }

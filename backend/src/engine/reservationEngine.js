@@ -11,6 +11,7 @@
  */
 
 const AppError = require('../utils/AppError')
+const { getAvailableStockForDecision } = require('./containerEngine')
 
 /**
  * 预占库存
@@ -27,14 +28,11 @@ const AppError = require('../utils/AppError')
  * @param {string} params.refNo         - 销售单编号
  */
 async function reserve(conn, { productId, productName = '该商品', warehouseId, qty, refType, refId, refNo }) {
-  // 加行锁，读取 on_hand 和 reserved
-  const [[row]] = await conn.query(
-    'SELECT quantity, reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
-    [productId, warehouseId]
-  )
-  const onHand   = row ? Number(row.quantity) : 0
-  const reserved = row ? Number(row.reserved)  : 0
-  const available = onHand - reserved
+  const { quantity: onHand, reserved, available } = await getAvailableStockForDecision(conn, {
+    productId,
+    warehouseId,
+    lock: true,
+  })
 
   if (available < qty) {
     throw new AppError(
@@ -46,9 +44,9 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
 
   // 增加 reserved（行不存在时先 insert，这种情况 onHand=0 available=0 会在上面被拦截）
   await conn.query(
-    `INSERT INTO inventory_stock (product_id, warehouse_id, quantity, reserved) VALUES (?,?,0,?)
-     ON DUPLICATE KEY UPDATE reserved = reserved + ?`,
-    [productId, warehouseId, qty, qty]
+    `INSERT INTO inventory_stock (product_id, warehouse_id, quantity, reserved) VALUES (?,?,?,?)
+     ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reserved = reserved + VALUES(reserved)`,
+    [productId, warehouseId, onHand, qty]
   )
 
   // 写入预占记录，供取消时释放使用

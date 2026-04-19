@@ -1,5 +1,5 @@
 /**
- * useOfflineScan — 离线容错扫码提交
+ * useOfflineScan — 强在线扫码提交
  *
  * 用法：替换页面中直接调用 client.post('/scan-logs', ...) 的地方
  *
@@ -7,9 +7,8 @@
  */
 import { useCallback } from 'react'
 import client from '@/api/client'
-import { useNetworkStatus } from './useNetworkStatus'
-import { useOfflineQueue } from './useOfflineQueue'
 import { useAuthStore } from '@/store/authStore'
+import { withRequestKeyHeaders } from '@/lib/requestKey'
 
 interface ScanPayload {
   taskId:       number
@@ -38,21 +37,13 @@ interface UndoPayload {
 }
 
 export function useOfflineScan() {
-  const networkStatus = useNetworkStatus()
-  const { enqueue }   = useOfflineQueue()
   const user          = useAuthStore(s => s.user)
 
-  const submitScan = useCallback(async (payload: ScanPayload): Promise<void> => {
-    if (networkStatus === 'online') {
-      try {
-        await client.post('/scan-logs', payload, { headers: { 'X-Client': 'pda' } })
-      } catch {
-        enqueue({ method: 'POST', url: '/scan-logs', body: payload, label: `扫码记录 ${payload.barcode}` })
-      }
-    } else {
-      enqueue({ method: 'POST', url: '/scan-logs', body: payload, label: `扫码记录 ${payload.barcode}` })
-    }
-  }, [networkStatus, enqueue])
+  const submitScan = useCallback(async (payload: ScanPayload, requestKey: string): Promise<void> => {
+    await client.post('/scan-logs', payload, {
+      headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }),
+    })
+  }, [])
 
   // 记录错误扫码（静默，不影响流程）
   const logError = useCallback((payload: ErrorPayload): void => {

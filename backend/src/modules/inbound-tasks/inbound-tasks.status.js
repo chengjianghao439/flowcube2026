@@ -1,6 +1,7 @@
 const AppError = require('../../utils/AppError')
 const { EXPIRE_MESSAGE } = require('../print-jobs/print-jobs.service')
 const { DEFAULT_INBOUND_THRESHOLDS } = require('../../utils/inboundThresholds')
+const { assertStatusAction } = require('../../constants/documentStatusRules')
 
 const RECEIPT_STATUS_LABEL = {
   draft: '草稿',
@@ -259,28 +260,26 @@ async function ensureInboundTaskExists(conn, taskId) {
 }
 
 function assertTaskCanSubmit(taskRow) {
-  if (Number(taskRow.status) === 5) throw new AppError('已取消的收货订单不能提交到 PDA', 400)
+  assertStatusAction('inboundTask', 'submit', Number(taskRow.status))
   if (taskRow.submitted_at) throw new AppError('该收货订单已提交到 PDA', 400)
 }
 
-function assertTaskCanAudit(taskRow) {
-  if (Number(taskRow.status) !== 4) throw new AppError('只有已上架完成的收货订单才能审核', 400)
+function assertTaskCanAudit(taskRow, action = 'approve') {
+  assertStatusAction('inboundTask', 'audit', Number(taskRow.status))
+  assertStatusAction('inboundTaskAudit', action, Number(taskRow.audit_status || taskRow.auditStatus || 0))
 }
 
 function assertTaskCanReceive(taskRow) {
-  if (Number(taskRow.status) >= 4) throw new AppError('任务已完成或已取消', 400)
+  assertStatusAction('inboundTask', 'receive', Number(taskRow.status))
   if (!taskRow.submitted_at) throw new AppError('请先在 ERP 提交到 PDA，再开始收货', 400)
-  if (Number(taskRow.status) === 3) throw new AppError('任务已全部收货，请执行上架', 400)
 }
 
 function assertTaskCanPutaway(taskRow) {
-  const ts = Number(taskRow.status)
-  if (ts >= 4) throw new AppError('任务已完成或已取消', 400)
-  if (ts === 1) throw new AppError('任务尚未开始收货，无法上架', 400)
+  assertStatusAction('inboundTask', 'putaway', Number(taskRow.status))
 }
 
 function assertTaskCanCancel(task) {
-  if (task.status !== 1) throw new AppError('仅待收货状态的任务可取消', 400)
+  assertStatusAction('inboundTask', 'cancel', Number(task.status))
 }
 
 module.exports = {

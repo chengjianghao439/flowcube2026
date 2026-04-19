@@ -11,10 +11,10 @@ const itemSchema = z.object({
   productName:z.string(),
   unit:z.string(),
   quantity:z.number().positive('数量必须大于0'),
-  unitPrice:z.number().nonnegative(),
+  unitPrice:z.number().positive('单价必须大于0'),
   remark:z.string().optional(),
   priceSource:z.enum(['list','default','manual']).optional(),
-  resolvedPrice:z.number().nonnegative().optional().nullable(),
+  resolvedPrice:z.number().positive('成交价必须大于0').optional().nullable(),
   resolvedPriceLevel:z.string().max(10).optional().nullable(),
   costPrice:z.number().nonnegative().optional().nullable(),
 })

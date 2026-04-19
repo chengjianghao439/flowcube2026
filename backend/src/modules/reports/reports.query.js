@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const { buildDateFilter } = require('./reports.helpers')
+const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
 
 async function fetchOne(sql, params = []) {
   const [[row]] = await pool.query(sql, params)
@@ -91,6 +92,8 @@ async function fetchSaleStatsRows({ startDate, endDate }) {
 }
 
 async function fetchInventoryStatsRows({ startDate, endDate }) {
+  const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
+  const productInventoryProjectionSql = getProductInventoryProjectionSql()
   const dateCond = startDate && endDate
     ? 'AND DATE(l.created_at) BETWEEN ? AND ?'
     : startDate ? 'AND DATE(l.created_at) >= ?' : endDate ? 'AND DATE(l.created_at) <= ?' : ''
@@ -104,7 +107,7 @@ async function fetchInventoryStatsRows({ startDate, endDate }) {
      FROM inventory_logs l
      JOIN product_items p ON l.product_id = p.id
      LEFT JOIN (
-       SELECT product_id, SUM(quantity) AS total_qty FROM inventory_stock GROUP BY product_id
+       SELECT product_id, quantity AS total_qty FROM ${productInventoryProjectionSql}
      ) s ON s.product_id = l.product_id
      WHERE p.deleted_at IS NULL ${dateCond}
      GROUP BY l.product_id, p.code, p.name, p.unit, s.total_qty
@@ -114,13 +117,13 @@ async function fetchInventoryStatsRows({ startDate, endDate }) {
 
   const byWarehouse = await fetchMany(
     `SELECT w.name AS warehouse_name,
-            SUM(s.quantity) AS total_qty,
-            SUM(s.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS total_value
-     FROM inventory_stock s
-     JOIN inventory_warehouses w ON s.warehouse_id = w.id
-     JOIN product_items p ON s.product_id = p.id
+            SUM(ip.quantity) AS total_qty,
+            SUM(ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS total_value
+     FROM ${inventoryDisplayProjectionSql} ip
+     JOIN inventory_warehouses w ON ip.warehouse_id = w.id
+     JOIN product_items p ON ip.product_id = p.id
      WHERE w.deleted_at IS NULL AND p.deleted_at IS NULL
-     GROUP BY s.warehouse_id, w.name ORDER BY total_value DESC`,
+     GROUP BY ip.warehouse_id, w.name ORDER BY total_value DESC`,
   )
 
   return { turnover, byWarehouse }
@@ -309,6 +312,7 @@ async function fetchWarehouseOpsRows() {
 }
 
 async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
+  const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   return {
     pendingReceiveCount: await fetchOne(
       `SELECT COUNT(*) AS count
@@ -493,56 +497,56 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
     inventoryAnomalyCount: await fetchOne(
       `SELECT COUNT(*) AS count
        FROM (
-         SELECT CONCAT('neg_on_hand-', s.id) AS issue_key
-         FROM inventory_stock s
-         WHERE s.quantity < 0
+         SELECT CONCAT('neg_on_hand-', ((ip.product_id * 1000000) + ip.warehouse_id)) AS issue_key
+         FROM ${inventoryDisplayProjectionSql} ip
+         WHERE ip.quantity < 0
          UNION ALL
          SELECT CONCAT('neg_reserved-', s.id)
          FROM inventory_stock s
          WHERE s.reserved < 0
          UNION ALL
-         SELECT CONCAT('reserved_exceeds-', s.id)
-         FROM inventory_stock s
-         WHERE s.quantity < s.reserved
+         SELECT CONCAT('reserved_exceeds-', ((ip.product_id * 1000000) + ip.warehouse_id))
+         FROM ${inventoryDisplayProjectionSql} ip
+         WHERE ip.quantity < ip.reserved
        ) x`,
     ),
     inventoryAnomalyRows: await fetchMany(
       `SELECT * FROM (
-         SELECT s.id,
+         SELECT ((ip.product_id * 1000000) + ip.warehouse_id) AS id,
                 p.name AS title,
-                CONCAT('实际库存 ', s.quantity, '，预占 ', s.reserved) AS subtitle,
+                CONCAT('展示库存 ', ip.quantity, '，预占 ', ip.reserved) AS subtitle,
                 '/inventory/overview' AS path,
                 '库存异常' AS badge,
-                '实际库存为负' AS hint,
-                s.updated_at AS createdAt,
+                '展示投影库存为负' AS hint,
+                NOW() AS createdAt,
                 1 AS sort_rank
-         FROM inventory_stock s
-         INNER JOIN product_items p ON p.id = s.product_id
-         WHERE s.quantity < 0
+         FROM ${inventoryDisplayProjectionSql} ip
+         INNER JOIN product_items p ON p.id = ip.product_id
+         WHERE ip.quantity < 0
          UNION ALL
          SELECT s.id,
                 p.name AS title,
-                CONCAT('实际库存 ', s.quantity, '，预占 ', s.reserved) AS subtitle,
+                CONCAT('展示库存 ', s.quantity, '，预占 ', s.reserved) AS subtitle,
                 '/inventory/overview' AS path,
                 '库存异常' AS badge,
-                '预占数量为负' AS hint,
+                '预占 projection 为负' AS hint,
                 s.updated_at AS createdAt,
                 2 AS sort_rank
          FROM inventory_stock s
          INNER JOIN product_items p ON p.id = s.product_id
          WHERE s.reserved < 0
          UNION ALL
-         SELECT s.id,
+         SELECT ((ip.product_id * 1000000) + ip.warehouse_id) AS id,
                 p.name AS title,
-                CONCAT('实际库存 ', s.quantity, '，预占 ', s.reserved) AS subtitle,
+                CONCAT('展示库存 ', ip.quantity, '，预占 ', ip.reserved) AS subtitle,
                 '/inventory/overview' AS path,
                 '库存异常' AS badge,
-                '可用库存为负' AS hint,
-                s.updated_at AS createdAt,
+                '展示可用库存为负' AS hint,
+                NOW() AS createdAt,
                 3 AS sort_rank
-         FROM inventory_stock s
-         INNER JOIN product_items p ON p.id = s.product_id
-         WHERE s.quantity < s.reserved
+         FROM ${inventoryDisplayProjectionSql} ip
+         INNER JOIN product_items p ON p.id = ip.product_id
+         WHERE ip.quantity < ip.reserved
        ) t
        ORDER BY sort_rank ASC, createdAt DESC
        LIMIT 5`,
@@ -682,6 +686,8 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
 }
 
 async function fetchProfitAnalysisRows({ startDate = null, endDate = null } = {}) {
+  const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
+  const productInventoryProjectionSql = getProductInventoryProjectionSql()
   const saleDate = buildDateFilter('so.created_at', startDate, endDate)
   const saleWhere = `WHERE so.deleted_at IS NULL AND so.status = 4${saleDate.sql}`
 
@@ -742,11 +748,11 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null } = {}
        p.name,
        p.unit,
        w.name AS warehouse_name,
-       SUM(s.quantity) AS total_qty,
-       SUM(s.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS total_value
-     FROM inventory_stock s
-     INNER JOIN product_items p ON p.id = s.product_id
-     INNER JOIN inventory_warehouses w ON w.id = s.warehouse_id
+       SUM(ip.quantity) AS total_qty,
+       SUM(ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS total_value
+     FROM ${inventoryDisplayProjectionSql} ip
+     INNER JOIN product_items p ON p.id = ip.product_id
+     INNER JOIN inventory_warehouses w ON w.id = ip.warehouse_id
      WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL
      GROUP BY p.id, p.code, p.name, p.unit, w.name
      ORDER BY total_value DESC
@@ -765,12 +771,11 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null } = {}
        COALESCE(lo.outbound_90d, 0) AS outbound_90d
      FROM product_items p
      LEFT JOIN (
-       SELECT s.product_id,
-              SUM(s.quantity) AS qty,
-              SUM(s.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS value
-       FROM inventory_stock s
-       INNER JOIN product_items p ON p.id = s.product_id
-       GROUP BY s.product_id
+       SELECT ip.product_id,
+              ip.quantity AS qty,
+              ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0) AS value
+       FROM ${productInventoryProjectionSql} ip
+       INNER JOIN product_items p ON p.id = ip.product_id
      ) st ON st.product_id = p.id
      LEFT JOIN (
        SELECT

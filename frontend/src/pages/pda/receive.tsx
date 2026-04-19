@@ -3,8 +3,8 @@
  */
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { getInboundTaskByIdApi } from '@/api/inbound-tasks'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getInboundTaskByIdApi, receiveInboundApi } from '@/api/inbound-tasks'
 import type { InboundTask } from '@/types/inbound-tasks'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
@@ -17,8 +17,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { parseBarcode } from '@/utils/barcode'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
-import { useReceiveInbound } from '@/hooks/useInboundTasks'
+import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { getInboundClosureCopy } from '@/lib/inboundClosure'
+import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 
 interface ProductSummary {
   productId: number
@@ -190,12 +191,27 @@ function ReceiveEditor({
 
 function ReceiveRunner({ task }: { task: InboundTask }) {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const { flash, ok, err, warn } = usePdaFeedback()
-  const receiveMut = useReceiveInbound()
   const products = useMemo(() => groupProducts(task), [task])
   const selectableProducts = useMemo(() => products.filter(product => product.remainingQty > 0), [products])
   const [selectedProductId, setSelectedProductId] = useState<number | null>(selectableProducts[0]?.productId ?? null)
   const [boxes, setBoxes] = useState<string[]>([''])
+  const [submitting, setSubmitting] = useState(false)
+  const receiveAction = useCriticalPdaAction<{
+    containers?: Array<{ containerId: number }>
+    printJobIds?: number[]
+  }>({
+    action: `inbound.receive.${task.id}`,
+    label: `收货单 ${task.taskNo}`,
+    onConfirmed: async (data) => {
+      await qc.invalidateQueries({ queryKey: ['pda-inbound-task', task.id] })
+      await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
+      const count = data.containers?.length ?? 0
+      const printCount = data.printJobIds?.length ?? 0
+      ok(`已生成 ${count} 个库存条码${printCount > 0 ? `，已提交 ${printCount} 条打印任务` : ''}`)
+    },
+  })
 
   const activeProduct = selectableProducts.find(product => product.productId === selectedProductId) ?? null
   const closureCopy = getInboundClosureCopy(task)
@@ -260,32 +276,29 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       warn(`当前只登记 ${totalQty}，提交后该商品还剩 ${activeProduct.remainingQty - totalQty}`)
     }
 
-    receiveMut.mutate(
-      {
-        id: task.id,
-        data: {
-          productId: activeProduct.productId,
-          packages: normalizedBoxes.map(box => ({ qty: box.qty })),
-        },
-      },
-      {
-        onSuccess: (data) => {
-          const count = data.containers?.length ?? 0
-          const printCount = data.printJobIds?.length ?? 0
-          ok(`已生成 ${count} 个库存条码${printCount > 0 ? `，已提交 ${printCount} 条打印任务` : ''}`)
-          if ((activeProduct.remainingQty - totalQty) > 0) {
-            resetBoxes(1)
-          } else {
-            setSelectedProductId(null)
-            resetBoxes(1)
-          }
-        },
-        onError: (error: unknown) => {
-          const message = (error as { message?: string })?.message ?? '收货失败'
-          err(message)
-        },
-      },
-    )
+    setSubmitting(true)
+    void receiveAction.run((requestKey) =>
+      receiveInboundApi(task.id, {
+        productId: activeProduct.productId,
+        packages: normalizedBoxes.map(box => ({ qty: box.qty })),
+      }, requestKey).then((res) => res.data.data!),
+    ).then((result) => {
+      if (result.kind === 'success') {
+        if ((activeProduct.remainingQty - totalQty) > 0) {
+          resetBoxes(1)
+        } else {
+          setSelectedProductId(null)
+          resetBoxes(1)
+        }
+      } else {
+        warn('网络中断，收货结果待确认。请先确认刚才那次是否成功，再决定是否重试。')
+      }
+    }).catch((error: unknown) => {
+      const message = (error as { message?: string })?.message ?? '收货失败'
+      err(message)
+    }).finally(() => {
+      setSubmitting(false)
+    })
   }
 
   return (
@@ -311,6 +324,20 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
             { label: '打开入库补打', onClick: () => navigate(`/settings/barcode-print-query?category=inbound&inboundTaskId=${task.id}&status=failed`) },
             { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
           ]}
+        />
+        <PdaCriticalActionNotice
+          blockedReason={receiveAction.blockedReason}
+          pendingRecord={receiveAction.pendingRecord}
+          confirming={receiveAction.confirming}
+          onConfirm={() => {
+            void receiveAction.confirmPending().then((status) => {
+              if (!status) return
+              if (status.status === 'pending') warn('服务端仍未确认结果，请稍后再查或刷新页面校验')
+              if (status.status === 'not_found') warn('服务端未找到该次收货记录，请检查明细后再手动重试')
+              if (status.status === 'failed') err(status.message || '上次收货未成功，请检查后重试')
+            })
+          }}
+          onClear={() => receiveAction.clearPending()}
         />
         <PdaCard>
           <div className="space-y-2 text-sm">
@@ -367,7 +394,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           <ReceiveEditor
             product={activeProduct}
             boxes={boxes}
-            submitting={receiveMut.isPending}
+            submitting={submitting || receiveAction.submitBlocked}
             onChangeBox={(index, value) => {
               setBoxes(prev => prev.map((item, idx) => idx === index ? value : item))
             }}
@@ -389,7 +416,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
         <PdaScanner
           onScan={handleScan}
           placeholder="扫描产品条码"
-          disabled={receiveMut.isPending}
+          disabled={submitting || receiveAction.submitBlocked}
         />
       </PdaBottomBar>
     </div>
