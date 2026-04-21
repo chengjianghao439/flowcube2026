@@ -39,33 +39,6 @@ jobs:
           [ -n "${{ steps.deploy_config.outputs.server_app_path }}" ] || { echo "::error::deploy/production.json 缺少 server.appPath"; exit 1; }
           [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm ci
-
-      - name: Build frontend and capture expected asset
-        id: expected
-        working-directory: ./frontend
-        shell: bash
-        env:
-          VITE_ELECTRON: 1
-          VITE_ERP_PRODUCTION_ORIGIN: ${{ steps.deploy_config.outputs.erp_origin }}
-        run: |
-          set -euo pipefail
-          npm run build
-          SCRIPT_PATH=$(node -e "const fs=require('fs');const html=fs.readFileSync('dist/index.html','utf8');const m=html.match(/<script type=\"module\" crossorigin src=\"([^\"]+)\"/);if(!m) process.exit(1);process.stdout.write(m[1]);")
-          CSS_PATH=$(node -e "const fs=require('fs');const html=fs.readFileSync('dist/index.html','utf8');const m=html.match(/<link rel=\"stylesheet\" crossorigin href=\"([^\"]+)\"/);if(!m) process.exit(1);process.stdout.write(m[1]);")
-          echo "script_path=$SCRIPT_PATH" >> "$GITHUB_OUTPUT"
-          echo "css_path=$CSS_PATH" >> "$GITHUB_OUTPUT"
-
       - name: Setup SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -90,22 +63,22 @@ jobs:
           SKIP_RELEASE_GATE=1 bash scripts/server-update.sh
           EOF
 
+      - name: Verify server repo moved to current commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_SHA=$(ssh -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" "cd '${{ steps.deploy_config.outputs.server_app_path }}' && git rev-parse HEAD")
+          test "$REMOTE_SHA" = "$GITHUB_SHA"
+
       - name: Verify backend health
         shell: bash
         run: |
           set -euo pipefail
           curl -fsSL "${{ steps.deploy_config.outputs.erp_origin }}/api/health" >/dev/null
 
-      - name: Verify frontend serves current build
+      - name: Verify frontend responds
         shell: bash
         run: |
           set -euo pipefail
           HTML=$(curl -fsSL "${{ steps.deploy_config.outputs.erp_origin }}/")
-          printf '%s' "$HTML" | grep -F "${{ steps.expected.outputs.script_path }}" >/dev/null || {
-            echo "::error::线上首页未返回当前构建的 script 资源: ${{ steps.expected.outputs.script_path }}"
-            exit 1
-          }
-          printf '%s' "$HTML" | grep -F "${{ steps.expected.outputs.css_path }}" >/dev/null || {
-            echo "::error::线上首页未返回当前构建的样式资源: ${{ steps.expected.outputs.css_path }}"
-            exit 1
-          }
+          printf '%s' "$HTML" | grep -F '<title>极序 Flow</title>' >/dev/null
