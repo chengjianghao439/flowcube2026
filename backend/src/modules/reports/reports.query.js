@@ -107,7 +107,8 @@ async function fetchInventoryStatsRows({ startDate, endDate }) {
      FROM inventory_logs l
      JOIN product_items p ON l.product_id = p.id
      LEFT JOIN (
-       SELECT product_id, quantity AS total_qty FROM ${productInventoryProjectionSql}
+       SELECT ip.product_id, ip.quantity AS total_qty
+       FROM ${productInventoryProjectionSql} ip
      ) s ON s.product_id = l.product_id
      WHERE p.deleted_at IS NULL ${dateCond}
      GROUP BY l.product_id, p.code, p.name, p.unit, s.total_qty

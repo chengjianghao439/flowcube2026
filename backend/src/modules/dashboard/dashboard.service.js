@@ -4,7 +4,11 @@ const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = r
 async function getSummary() {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   const productInventoryProjectionSql = getProductInventoryProjectionSql()
-  const [[{ totalSkus }]] = await pool.query(`SELECT COUNT(*) AS totalSkus FROM ${productInventoryProjectionSql} WHERE quantity > 0`)
+  const [[{ totalSkus }]] = await pool.query(
+    `SELECT COUNT(*) AS totalSkus
+     FROM ${productInventoryProjectionSql} ip
+     WHERE ip.quantity > 0`
+  )
   const [[{ totalQty }]] = await pool.query(`SELECT COALESCE(SUM(ip.quantity),0) AS totalQty FROM ${inventoryDisplayProjectionSql} ip`)
   const [[{ totalValue }]] = await pool.query(
     `SELECT COALESCE(SUM(ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)),0) AS totalValue
