@@ -494,7 +494,7 @@ jobs:
           ls -la desktop/release
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: FlowCube-Desktop-Setup
           path: desktop/release/*.exe
@@ -503,7 +503,7 @@ jobs:
 
       # 当前 win 目标多为 NSIS 仅 .exe；无 zip 时用 warn 记录日志且 job 仍成功（与「忽略 || true」不同，仍会输出警告）
       - name: Upload portable ZIP artifact (optional)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: FlowCube-Desktop-Portable
           path: desktop/release/*.zip

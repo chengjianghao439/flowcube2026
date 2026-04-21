@@ -110,7 +110,7 @@ jobs:
           cp frontend/android/app/build/outputs/apk/release/app-release.apk "out/FlowCubePDA-${GITHUB_SHA::7}.apk"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: flowcube-pda-apk
           path: out/*.apk
