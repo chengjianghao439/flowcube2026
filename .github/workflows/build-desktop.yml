@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.checkout_ref != '' && github.event.inputs.checkout_ref || github.ref }}
@@ -148,7 +148,7 @@ jobs:
 
       # 勿使用 cache: npm：setup-node 默认在仓库根目录找 package-lock.json，本仓库锁文件在 frontend/、desktop/
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -415,9 +415,18 @@ jobs:
       # ── 推 tag / 手动触发且已配置 SSH_PRIVATE_KEY 时：上传到服务器 backend/downloads ──
       - name: Setup SSH agent
         if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' }}
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          KEY_FILE=~/.ssh/flowcube_ci_key
+          printf '%s\n' '${{ secrets.SSH_PRIVATE_KEY }}' > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          ssh-add "$KEY_FILE"
 
       - name: Add SSH known_hosts
         if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' }}
@@ -482,7 +491,7 @@ jobs:
           ls -la desktop/release
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: FlowCube-Desktop-Setup
           path: desktop/release/*.exe
@@ -491,7 +500,7 @@ jobs:
 
       # 当前 win 目标多为 NSIS 仅 .exe；无 zip 时用 warn 记录日志且 job 仍成功（与「忽略 || true」不同，仍会输出警告）
       - name: Upload portable ZIP artifact (optional)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: FlowCube-Desktop-Portable
           path: desktop/release/*.zip

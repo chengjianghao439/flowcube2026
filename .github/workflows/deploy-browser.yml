@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Load tracked deploy config
         id: deploy_config
@@ -40,9 +40,18 @@ jobs:
           [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          KEY_FILE=~/.ssh/flowcube_ci_key
+          printf '%s\n' '${{ secrets.SSH_PRIVATE_KEY }}' > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          ssh-add "$KEY_FILE"
 
       - name: Add SSH known_hosts
         shell: bash

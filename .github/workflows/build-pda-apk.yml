@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -32,12 +32,12 @@ jobs:
           echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: "21"
@@ -107,7 +107,7 @@ jobs:
           cp frontend/android/app/build/outputs/apk/release/app-release.apk "out/FlowCubePDA-${GITHUB_SHA::7}.apk"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: flowcube-pda-apk
           path: out/*.apk
