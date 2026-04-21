@@ -31,8 +31,8 @@
 
 Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默认连 `http://localhost:3000`，正式用户必须在登录前改地址。
 
-- 在 GitHub 仓库 **Settings → Secrets and variables → Actions → Variables** 新增 **`VITE_ERP_PRODUCTION_ORIGIN`**，值为后端根地址，例如 `https://api.example.com`（**不要**带 `/api`）。
-- **Build Desktop Installer** 工作流在 `npm run build`（frontend）时已传入该变量；重新打 tag 构建的安装包将登录页**预填**该地址。
+- 生产默认地址已固定在 [deploy/production.json](/Users/chengjianghao/flowcube/deploy/production.json) 的 `erpOrigin`。
+- **Build Desktop Installer** 工作流在 `npm run build`（frontend）时会自动读取该配置；重新打 tag 构建的安装包会把这个地址作为登录页默认值。
 - 仍可在登录页「服务器地址」或 **Ctrl+Shift+S** 修改为其它环境。
 
 本地桌面打包示例：`VITE_ERP_PRODUCTION_ORIGIN=https://api.example.com npm run build`（在 `frontend` 目录）。
@@ -47,19 +47,14 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 
 ### 需要的 Actions 配置
 
-- Variables
-  - `VITE_ERP_PRODUCTION_ORIGIN`
 - Secrets
   - `SSH_PRIVATE_KEY`
-  - `SERVER_HOST`
-  - `SERVER_USER`
-  - `SERVER_DOWNLOADS_PATH`
-  - 可选：`SERVER_SSH_PORT`
 
 说明：
 
-- `SERVER_DOWNLOADS_PATH` 形如 `/opt/flowcube/backend/downloads`；workflow 会从这里自动反推服务器项目根目录 `/opt/flowcube`
-- 如果这些 Secrets/Variables 不完整，浏览器自动部署不会生效；此时即使 `main` 已更新，线上页面也仍会停在旧版本
+- 服务器 host / user / path、浏览器 origin 已固定在 [deploy/production.json](/Users/chengjianghao/flowcube/deploy/production.json)
+- 如果缺少 `SSH_PRIVATE_KEY`，浏览器自动部署不会生效；此时即使 `main` 已更新，线上页面也仍会停在旧版本
+- 建议同时阅读 [docs/DEPLOY.md](/Users/chengjianghao/flowcube/docs/DEPLOY.md)，后续统一从 `npm run release:prod` 发版
 
 ## 推荐发布流程（须按顺序）
 

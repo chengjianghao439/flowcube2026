@@ -1,0 +1,14 @@
+{
+  "name": "aliyun-production",
+  "erpOrigin": "http://47.93.228.251",
+  "server": {
+    "host": "47.93.228.251",
+    "user": "root",
+    "sshPort": 22,
+    "appPath": "/opt/flowcube",
+    "downloadsPath": "/opt/flowcube/backend/downloads"
+  },
+  "desktop": {
+    "releaseRepo": "chengjianghao439/flowcube2026"
+  }
+}

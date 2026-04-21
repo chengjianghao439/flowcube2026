@@ -23,6 +23,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Load tracked deploy config
+        id: deploy_config
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f deploy/production.json ] || { echo "::error::缺少 deploy/production.json"; exit 1; }
+          echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -42,7 +50,7 @@ jobs:
         working-directory: ./frontend
         env:
           VITE_CAPACITOR: 1
-          VITE_ERP_PRODUCTION_ORIGIN: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
+          VITE_ERP_PRODUCTION_ORIGIN: ${{ steps.deploy_config.outputs.erp_origin }}
         run: npm run pda:sync
 
       - name: Prepare Android signing keystore

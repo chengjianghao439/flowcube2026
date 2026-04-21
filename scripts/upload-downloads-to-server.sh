@@ -17,6 +17,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+DEPLOY_HOST="${DEPLOY_HOST:-$(node scripts/read-deploy-config.js server.host)}"
+DEPLOY_USER="${DEPLOY_USER:-$(node scripts/read-deploy-config.js server.user)}"
+DEPLOY_PATH="${DEPLOY_PATH:-$(node scripts/read-deploy-config.js server.downloadsPath)}"
+
 : "${DEPLOY_HOST:?请先 export DEPLOY_HOST}"
 : "${DEPLOY_USER:?请先 export DEPLOY_USER}"
 : "${DEPLOY_PATH:?请先 export DEPLOY_PATH（服务器上 downloads 目录绝对路径）}"
