@@ -12,6 +12,16 @@ const router = express.Router()
  */
 const USE_GITHUB_DIRECT_URL = env.APP_UPDATE_USE_GITHUB_DIRECT_URL
 
+async function fileExists(filePath) {
+  if (!filePath) return false
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function isGitHubReleaseOrCdnUrl(urlString) {
   try {
     const u = new URL(urlString)
@@ -256,21 +266,35 @@ router.get('/latest', async (req, res, next) => {
     }
 
     // GitHub 资产名与服务器 static 文件名可能不一致（如 CI 产出「-Flow-Setup-x.exe」）；
-    // 若本地 manifest 版本与 GitHub 一致且提供了 filename，优先用本地拼 /downloads/，避免 404。
+    // 若本地 manifest 版本与 GitHub 一致且提供了 filename，仅在服务器已存在该文件时才优先走 /downloads。
     let serveFilename = data.filename || null
     let urlForResolve = data.url
     const localFn = local && local.filename ? String(local.filename).trim() : ''
+    const localManifestAssetPath = localFn ? path.join(DOWNLOADS_DIR, localFn) : ''
     if (
       local &&
       local.version &&
       String(local.version) === String(data.version) &&
-      localFn
+      localFn &&
+      await fileExists(localManifestAssetPath)
     ) {
       serveFilename = localFn
       urlForResolve = ''
     }
+    const resolvedAssetPath = serveFilename ? path.join(DOWNLOADS_DIR, serveFilename) : ''
+    const hasLocalAsset = await fileExists(resolvedAssetPath)
+    let absoluteUrl = absolutizeUpdateAssetUrl(req, urlForResolve, serveFilename)
 
-    const absoluteUrl = absolutizeUpdateAssetUrl(req, urlForResolve, serveFilename)
+    // 默认优先返回同域 /downloads，但如果服务端并没有该文件，客户端会一直拿到 404。
+    // 这种情况下回退到 GitHub Release 直链，保证桌面端至少能拿到真实安装包。
+    if (
+      serveFilename &&
+      !hasLocalAsset &&
+      typeof data.url === 'string' &&
+      isGitHubReleaseOrCdnUrl(data.url)
+    ) {
+      absoluteUrl = data.url
+    }
 
     return successResponse(res, {
       version: data.version,

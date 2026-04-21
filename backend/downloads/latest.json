@@ -1,6 +1,6 @@
 {
-  "version": "0.3.70",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.70/Jixu-Flow-Setup-0.3.70.exe",
-  "filename": "Jixu-Flow-Setup-0.3.70.exe",
-  "notes": "【v0.3.70 主要更新】\n\n• 入库任务领域已完成第一轮骨架拆分：查询、命令、状态校验、上架与库存处理已从单一超大 service 中抽离，收货/上架主链保持兼容。\n• 打印任务模块已完成领域拆分：任务查询、状态规则、模板载荷、分发与命令处理边界更清晰，桌面桥接、RAW/ZPL、任务重试语义继续保留。\n• 报表与统计模块已完成第一轮结构重构：查询、汇总指标、趋势数据和辅助逻辑已拆分，报表口径与前端返回结构保持不变。\n• import / export / search / admin 四个工具模块已完成 route-controller-service 分层，route 层不再堆积 SQL 与事务逻辑。\n• 配置与发布边界继续收口：危险默认值、固定公网回退和脚本内置口令已清理，浏览器端与桌面端发布链路更稳定。"
+  "version": "0.3.71",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.71/Jixu-Flow-Setup-0.3.71.exe",
+  "filename": "Jixu-Flow-Setup-0.3.71.exe",
+  "notes": "【v0.3.71 主要更新】\n\n• 修复桌面端更新链：当服务器 /downloads 下不存在新安装包时，更新接口会自动回退到 GitHub Release 直链，不再返回 404 假链接。\n• 将 backend/downloads/latest.json 对齐到 0.3.71，避免 GitHub API 暂时不可用时回退到旧版本。\n• 保持桌面端自动更新逻辑兼容：如果服务器已同步安装包，仍优先走同域下载；只有服务器缺包时才改走 Release 直链。"
 }
