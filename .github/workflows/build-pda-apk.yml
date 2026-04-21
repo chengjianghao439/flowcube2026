@@ -79,14 +79,14 @@ jobs:
           EXPECTED_NAME="$(python3 - <<'PY'
           import re, pathlib
           text = pathlib.Path('frontend/android/app/build.gradle').read_text()
-          m = re.search(r'versionName\\s+\"([^\"]+)\"', text)
+          m = re.search(r'versionName\s+"([^"]+)"', text)
           print(m.group(1) if m else '')
           PY
           )"
           EXPECTED_CODE="$(python3 - <<'PY'
           import re, pathlib
           text = pathlib.Path('frontend/android/app/build.gradle').read_text()
-          m = re.search(r'versionCode\\s+(\\d+)', text)
+          m = re.search(r'versionCode\s+(\d+)', text)
           print(m.group(1) if m else '')
           PY
           )"
