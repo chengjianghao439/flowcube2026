@@ -37,6 +37,30 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 
 本地桌面打包示例：`VITE_ERP_PRODUCTION_ORIGIN=https://api.example.com npm run build`（在 `frontend` 目录）。
 
+## Browser 自动部署（main 推送后浏览器直接看到新版本）
+
+工作流：`.github/workflows/deploy-browser.yml`（**Deploy Browser App**）。
+
+- 触发：`push` 到 `main`，或手动 `workflow_dispatch`
+- 目标：在服务器仓库根目录执行 `SKIP_RELEASE_GATE=1 bash scripts/server-update.sh`
+- 结果：自动 `git pull origin main`，并重建 `backend` / `frontend` 容器，浏览器直接拿到本次提交的前端静态资源
+
+### 需要的 Actions 配置
+
+- Variables
+  - `VITE_ERP_PRODUCTION_ORIGIN`
+- Secrets
+  - `SSH_PRIVATE_KEY`
+  - `SERVER_HOST`
+  - `SERVER_USER`
+  - `SERVER_DOWNLOADS_PATH`
+  - 可选：`SERVER_SSH_PORT`
+
+说明：
+
+- `SERVER_DOWNLOADS_PATH` 形如 `/opt/flowcube/backend/downloads`；workflow 会从这里自动反推服务器项目根目录 `/opt/flowcube`
+- 如果这些 Secrets/Variables 不完整，浏览器自动部署不会生效；此时即使 `main` 已更新，线上页面也仍会停在旧版本
+
 ## 推荐发布流程（须按顺序）
 
 以下以仓库克隆在 `~/flowcube` 为例，将 `origin` 换成你的远端即可。

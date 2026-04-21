@@ -44,13 +44,19 @@ ensure_docker_space() {
 echo "==> 拉取代码..."
 git pull --rebase --autostash origin main
 
+SKIP_RELEASE_GATE="${SKIP_RELEASE_GATE:-0}"
+
 if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   ensure_docker_space
   echo "==> Docker：重建并启动 backend / frontend..."
   docker compose up -d --build backend frontend
   wait_for_health
-  echo "==> 运行发布门禁..."
-  bash scripts/release-gate.sh
+  if [ "$SKIP_RELEASE_GATE" = "1" ]; then
+    echo "==> 已跳过发布门禁（SKIP_RELEASE_GATE=1）"
+  else
+    echo "==> 运行发布门禁..."
+    bash scripts/release-gate.sh
+  fi
   echo "==> 完成。请确认仓库根 .env 已设置 APP_PUBLIC_URL=https://你的API域名"
   exit 0
 fi

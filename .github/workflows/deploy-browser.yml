@@ -1,0 +1,122 @@
+name: Deploy Browser App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      ERP_ORIGIN: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_DOWNLOADS_PATH: ${{ secrets.SERVER_DOWNLOADS_PATH }}
+      SERVER_SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate deploy inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${ERP_ORIGIN:-}" ] || { echo "::error::缺少 Actions Variable: VITE_ERP_PRODUCTION_ORIGIN"; exit 1; }
+          [ -n "${SERVER_HOST:-}" ] || { echo "::error::缺少 Actions Secret: SERVER_HOST"; exit 1; }
+          [ -n "${SERVER_USER:-}" ] || { echo "::error::缺少 Actions Secret: SERVER_USER"; exit 1; }
+          [ -n "${SERVER_DOWNLOADS_PATH:-}" ] || { echo "::error::缺少 Actions Secret: SERVER_DOWNLOADS_PATH"; exit 1; }
+          [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: Build frontend and capture expected asset
+        id: expected
+        working-directory: ./frontend
+        shell: bash
+        env:
+          VITE_ELECTRON: 1
+        run: |
+          set -euo pipefail
+          npm run build
+          SCRIPT_PATH=$(node -e "const fs=require('fs');const html=fs.readFileSync('dist/index.html','utf8');const m=html.match(/<script type=\"module\" crossorigin src=\"([^\"]+)\"/);if(!m) process.exit(1);process.stdout.write(m[1]);")
+          CSS_PATH=$(node -e "const fs=require('fs');const html=fs.readFileSync('dist/index.html','utf8');const m=html.match(/<link rel=\"stylesheet\" crossorigin href=\"([^\"]+)\"/);if(!m) process.exit(1);process.stdout.write(m[1]);")
+          echo "script_path=$SCRIPT_PATH" >> "$GITHUB_OUTPUT"
+          echo "css_path=$CSS_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Derive server path and ports
+        id: server
+        shell: bash
+        run: |
+          set -euo pipefail
+          HOST="${SERVER_HOST}"
+          PORT=$(node -e "const u=new URL(process.env.ERP_ORIGIN);process.stdout.write(u.port || (u.protocol === 'https:' ? '443' : '80'))")
+          SSH_PORT="${SERVER_SSH_PORT:-22}"
+          APP_PATH="${SERVER_DOWNLOADS_PATH%/backend/downloads}"
+          if [ -z "$APP_PATH" ] || [ "$APP_PATH" = "$SERVER_DOWNLOADS_PATH" ]; then
+            echo "::error::无法从 SERVER_DOWNLOADS_PATH 推导项目根目录，请确保其形如 /path/to/flowcube/backend/downloads"
+            exit 1
+          fi
+          echo "host=$HOST" >> "$GITHUB_OUTPUT"
+          echo "http_port=$PORT" >> "$GITHUB_OUTPUT"
+          echo "ssh_port=$SSH_PORT" >> "$GITHUB_OUTPUT"
+          echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add SSH known_hosts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H -p "${{ steps.server.outputs.ssh_port }}" "${{ steps.server.outputs.host }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy backend and frontend on server
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "${{ steps.server.outputs.ssh_port }}" "${SERVER_USER}@${{ steps.server.outputs.host }}" <<EOF
+          set -euo pipefail
+          cd "${{ steps.server.outputs.app_path }}"
+          SKIP_RELEASE_GATE=1 bash scripts/server-update.sh
+          EOF
+
+      - name: Verify backend health
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "${ERP_ORIGIN%/}/api/health" >/dev/null
+
+      - name: Verify frontend serves current build
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML=$(curl -fsSL "${ERP_ORIGIN%/}/")
+          printf '%s' "$HTML" | grep -F "${{ steps.expected.outputs.script_path }}" >/dev/null || {
+            echo "::error::线上首页未返回当前构建的 script 资源: ${{ steps.expected.outputs.script_path }}"
+            exit 1
+          }
+          printf '%s' "$HTML" | grep -F "${{ steps.expected.outputs.css_path }}" >/dev/null || {
+            echo "::error::线上首页未返回当前构建的样式资源: ${{ steps.expected.outputs.css_path }}"
+            exit 1
+          }
