@@ -11,6 +11,14 @@ const fmt = r => ({ id:r.id, checkNo:r.check_no, warehouseId:r.warehouse_id, war
 
 const genNo = conn => generateDailyCode(conn, 'SC', 'inventory_checks', 'check_no')
 
+function assertValidActualQty(actualQty) {
+  const normalized = Number(actualQty)
+  if (!Number.isFinite(normalized) || normalized < 0) {
+    throw new AppError('实盘数量必须为大于或等于 0 的数字', 400)
+  }
+  return normalized
+}
+
 async function findAll({ page=1, pageSize=20, keyword='', status=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
   const cond=status?'AND status=?':''
@@ -76,9 +84,10 @@ async function updateItems(id, items) {
     assertStatusAction('stockcheck', 'edit', checkRow.status)
     const [itemRows] = await conn.query('SELECT * FROM inventory_check_items WHERE check_id=? ORDER BY id ASC', [id])
     for(const item of items) {
+      const actualQty = assertValidActualQty(item.actualQty)
       const bookQty = Number(itemRows.find(i => Number(i.id) === Number(item.id))?.book_qty || 0)
-      const diff = item.actualQty - bookQty
-      await conn.query('UPDATE inventory_check_items SET actual_qty=?,diff_qty=? WHERE id=? AND check_id=?',[item.actualQty,diff,item.id,id])
+      const diff = actualQty - bookQty
+      await conn.query('UPDATE inventory_check_items SET actual_qty=?,diff_qty=? WHERE id=? AND check_id=?',[actualQty,diff,item.id,id])
     }
     await conn.commit()
   } catch (e) {
@@ -112,6 +121,7 @@ async function submit(id, operator) {
     }
     const unfilled = check.items.filter(i=>i.actualQty===null)
     if(unfilled.length) throw new AppError(`还有 ${unfilled.length} 条明细未填写实盘数量`,400)
+    check.items.forEach(item => { item.actualQty = assertValidActualQty(item.actualQty) })
     for (const item of check.items) {
       if (item.diffQty === 0) continue
 

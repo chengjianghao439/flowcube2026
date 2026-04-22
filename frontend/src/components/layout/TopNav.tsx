@@ -10,6 +10,8 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePermission } from '@/hooks/usePermission'
 import { useWorkspaceStore, PATH_TITLES } from '@/store/workspaceStore'
+import { buildWorkspaceTabRegistration } from '@/router/workspaceRouteMeta'
+import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import type { PermCode } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
@@ -254,14 +256,20 @@ export function TopNav() {
   const { addTab } = useWorkspaceStore()
   const pathname = location.pathname
 
-  /** 打开/激活目标页：不因未保存草稿拦截；与 WorkspaceTabs 一致，由 KeepAlive 保留表单状态 */
+  /** 打开/激活目标页：若当前页有未保存内容，先确认再跳转 */
   const navigateWithGuard = useCallback(
     (path: string) => {
       const title = PATH_TITLES[path] ?? path
-      addTab({ key: path, title, path })
-      navigate(path)
+      const currentKey = buildWorkspaceTabRegistration(location.pathname, location.search).key
+      confirmDirtyLeave({
+        dirtyKeys: [currentKey],
+        proceed: () => {
+          addTab({ key: path, title, path })
+          navigate(path)
+        },
+      })
     },
-    [addTab, navigate]
+    [addTab, location.pathname, location.search, navigate]
   )
 
   const nodes: ReactNode[] = []

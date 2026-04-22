@@ -11,6 +11,12 @@ const fmt = r => ({ id:r.id, orderNo:r.order_no, fromWarehouseId:r.from_warehous
 
 const genNo = conn => generateDailyCode(conn, 'TR', 'transfer_orders', 'order_no')
 
+function assertDifferentWarehouses(fromWarehouseId, toWarehouseId) {
+  if (Number(fromWarehouseId) === Number(toWarehouseId)) {
+    throw new AppError('源仓库和目标仓库不能相同', 400)
+  }
+}
+
 async function assertTransferAvailability(conn, order) {
   if (!order.items?.length) throw new AppError('调拨单无明细', 400)
 
@@ -64,7 +70,7 @@ async function findById(id) {
 }
 
 async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWarehouseName, remark, items, operator }) {
-  if(fromWarehouseId===toWarehouseId) throw new AppError('源仓库和目标仓库不能相同',400)
+  assertDifferentWarehouses(fromWarehouseId, toWarehouseId)
   const conn=await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -82,6 +88,7 @@ async function confirm(id) {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
     const rule = assertStatusAction('transfer', 'confirm', orderRow.status)
+    assertDifferentWarehouses(orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     const [itemRows] = await conn.query('SELECT * FROM transfer_order_items WHERE order_id=? ORDER BY id', [id])
     const o = {
       fromWarehouseId: Number(orderRow.from_warehouse_id),
@@ -114,6 +121,7 @@ async function execute(id, operator) {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
     const rule = assertStatusAction('transfer', 'execute', orderRow.status)
+    assertDifferentWarehouses(orderRow.from_warehouse_id, orderRow.to_warehouse_id)
 
     const [itemRows] = await conn.query('SELECT * FROM transfer_order_items WHERE order_id=? ORDER BY id', [id])
     const o = {

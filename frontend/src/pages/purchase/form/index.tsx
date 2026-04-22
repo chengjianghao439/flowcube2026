@@ -19,6 +19,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
+import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -84,6 +85,13 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 
   const isDirty = !!(supplierId || warehouseId || expectedDate || remark || items.length)
   useDirtyGuard(tabPath, isDirty)
+
+  function requestLeave(proceed: () => void) {
+    confirmDirtyLeave({
+      dirtyKeys: [tabPath],
+      proceed,
+    })
+  }
 
   const addItem = () => {
     setCounter(c => c + 1)
@@ -182,7 +190,11 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         title="新建采购单"
         rightActions={
           <>
-            <Button variant="outline" onClick={() => closeTab('/purchase')} disabled={createMutate.isPending || submitLocked}>
+            <Button
+              variant="outline"
+              onClick={() => requestLeave(() => closeTab('/purchase'))}
+              disabled={createMutate.isPending || submitLocked}
+            >
               取消
             </Button>
             <Button onClick={handleSubmit} disabled={createMutate.isPending || submitLocked} className="gap-1.5">
@@ -212,7 +224,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
               onClick={() => setSupplierFinderOpen(true)}
               onDoubleClick={() => {
                 setSupplierFinderOpen(false)
-                navigate('/suppliers')
+                requestLeave(() => navigate('/suppliers'))
               }}
             />
           </div>
@@ -225,7 +237,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
               onClick={() => setWarehouseFinderOpen(true)}
               onDoubleClick={() => {
                 setWarehouseFinderOpen(false)
-                navigate('/warehouses')
+                requestLeave(() => navigate('/warehouses'))
               }}
             />
           </div>
@@ -291,7 +303,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
                   onDoubleClick={() => {
                     setFinderOpen(false)
                     setFinderItemKey(null)
-                    navigate('/products')
+                    requestLeave(() => navigate('/products'))
                   }}
                   className="truncate rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >

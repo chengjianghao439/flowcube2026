@@ -37,6 +37,7 @@ export default function TransferPage() {
   const {data,isLoading}=useQuery({queryKey:['transfer',{page,keyword}],queryFn:()=>getTransferListApi({page,pageSize:20,keyword}).then(r=>r.data.data!)})
   const {data:warehouses}=useWarehousesActive()
   const {data:products}=useProducts({page:1,pageSize:200,keyword:''})
+  const sameWarehouseSelected = !!fromWh && fromWh === toWh
   const mut=(fn:()=>Promise<unknown>,id?:number)=>{
     if(id) setPendingId(id)
     fn()
@@ -129,25 +130,44 @@ export default function TransferPage() {
           <form onSubmit={handleSubmit} className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1"><Label>源仓库 *</Label>
-                <Select value={fromWh || '__none__'} onValueChange={v => setFromWh(v === '__none__' ? '' : v)}>
+                <Select value={fromWh || '__none__'} onValueChange={v => {
+                  const next = v === '__none__' ? '' : v
+                  if (next && next === toWh) {
+                    toast.warning('源仓库和目标仓库不能相同')
+                    return
+                  }
+                  setFromWh(next)
+                }}>
                   <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">请选择</SelectItem>
                     {warehouses?.map(w => (
-                      <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                      <SelectItem key={w.id} value={String(w.id)} disabled={String(w.id) === toWh}>{w.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select></div>
               <div className="space-y-1"><Label>目标仓库 *</Label>
-                <Select value={toWh || '__none__'} onValueChange={v => setToWh(v === '__none__' ? '' : v)}>
+                <Select value={toWh || '__none__'} onValueChange={v => {
+                  const next = v === '__none__' ? '' : v
+                  if (next && next === fromWh) {
+                    toast.warning('源仓库和目标仓库不能相同')
+                    return
+                  }
+                  setToWh(next)
+                }}>
                   <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">请选择</SelectItem>
                     {warehouses?.map(w => (
-                      <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                      <SelectItem key={w.id} value={String(w.id)} disabled={String(w.id) === fromWh}>{w.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select></div>
+              {sameWarehouseSelected ? (
+                <div className="col-span-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  源仓库与目标仓库不能相同，请重新选择。
+                </div>
+              ) : null}
               <div className="col-span-2 space-y-1"><Label>备注</Label><Input value={remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setRemark(e.target.value)} /></div>
             </div>
             <div>

@@ -7,7 +7,7 @@
  * - 标签溢出时横向滚动（scrollbar-none）
  * - 激活标签变化时自动 scrollIntoView
  * - 右侧折叠菜单（关闭其他 / 关闭全部）
- * - 未保存变更保护：仅「关闭标签 / 关闭其他 / 关闭全部」前确认；切换标签不拦截（KeepAlive 保留草稿，可切回继续编辑）
+ * - 未保存变更保护：关闭标签、关闭其他、关闭全部、切换标签前均确认
  * - 脏状态标签右上角显示橙色小圆点
  */
 
@@ -17,6 +17,7 @@ import { X, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
+import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import { buildWorkspaceTabRegistration } from '@/router/workspaceRouteMeta'
 
 export function WorkspaceTabs() {
@@ -61,21 +62,17 @@ export function WorkspaceTabs() {
     proceed: () => void,
     willNavigate = true,
   ) {
-    const store = useDirtyGuardStore.getState()
-    if (!store.hasAnyDirtyIn(dirtyPaths)) {
-      proceed()
-      return
-    }
-    store.showConfirm('当前内容尚未保存，确定离开吗？', () => {
-      if (willNavigate) store.setBypassNextBlock(true)
-      proceed()
+    confirmDirtyLeave({
+      dirtyKeys: dirtyPaths,
+      willNavigate,
+      proceed,
     })
   }
 
-  // 切换到另一个标签：不弹确认；非激活页仅隐藏，实例保留，切回可继续编辑
+  // 切换到另一个标签：若当前激活页 dirty，先确认再切换
   const handleTabClick = (key: string, path: string) => {
     if (key === activeKey) return
-    navigate(path)
+    guardedAction([activeKey], () => navigate(path))
   }
 
   // 关闭某个标签：检查该 tab 自身是否有未保存内容

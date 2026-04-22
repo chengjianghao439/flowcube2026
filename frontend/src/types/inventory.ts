@@ -1,5 +1,5 @@
 export interface StockItem {
-  id: number; quantity: number
+  id: number; quantity: number; reserved?: number; available?: number
   productId: number; productCode: string; productName: string; unit: string
   warehouseId: number; warehouseName: string
 }

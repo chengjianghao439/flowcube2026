@@ -905,6 +905,16 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
 
       {/* 基础信息 */}
       <Section title="基础信息">
+        {order.status === 2 && (
+          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm text-muted-foreground">
+            当前“已占库”仅表示这张销售单已经预占库存：会增加已占用、减少可用库存，但不会直接扣减当前库存，也不会自动生成仓库任务。点击“发货”后才会创建仓库任务进入仓库执行。
+          </div>
+        )}
+        {order.status === 3 && (
+          <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/[0.08] px-4 py-3 text-sm text-muted-foreground">
+            当前订单已进入仓库执行阶段。仓库任务创建后，库存仍以在库数量展示；只有仓库实际完成出库，当前库存才会减少。
+          </div>
+        )}
         <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
             ['客户',     order.customerName],

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useCheckDetail, useUpdateCheckItems, useSubmitCheck, useCancelCheck } from '@/hooks/useStockCheck'
+import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import type { CheckItem } from '@/types/stockcheck'
 
 interface Props { open: boolean; onClose: () => void; checkId: number | null }
@@ -21,12 +22,14 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   const [saveLocked, setSaveLocked] = useState(false)
   const [submitLocked, setSubmitLocked] = useState(false)
   const [cancelLocked, setCancelLocked] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({})
 
   useEffect(() => {
     if(check?.items) {
       const m: Record<number,string> = {}
       check.items.forEach(i=>{ m[i.id] = i.actualQty!=null ? String(i.actualQty) : '' })
       setActuals(m)
+      setFieldErrors({})
     }
   }, [check])
 
@@ -36,21 +39,62 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     return Number.isFinite(parsed) ? parsed : Number.NaN
   }
 
+  const hasUnsavedChanges = useMemo(() => {
+    if (!check?.items?.length || check.status !== 1) return false
+    return check.items.some(item => {
+      const current = actuals[item.id] ?? ''
+      const original = item.actualQty != null ? String(item.actualQty) : ''
+      return current !== original
+    })
+  }, [actuals, check])
+
   function validateActuals() {
     if (!check?.items?.length) return { ok: true as const, items: [] as { id: number; actualQty: number }[] }
+    const firstFieldError = Object.values(fieldErrors).find(Boolean)
+    if (firstFieldError) return { ok: false as const, items: [] as { id: number; actualQty: number }[], message: firstFieldError }
     const items = check.items.map(i => ({ id: i.id, actualQty: parseActualQty(actuals[i.id] ?? '') }))
     const invalid = items.find(i => Number.isNaN(i.actualQty) || i.actualQty < 0)
     if (invalid) {
-      return { ok: false as const, items }
+      return { ok: false as const, items, message: '实盘数量必须为大于或等于 0 的数字' }
     }
     return { ok: true as const, items }
+  }
+
+  function handleActualChange(itemId: number, raw: string) {
+    if (raw === '') {
+      setActuals(prev => ({ ...prev, [itemId]: '' }))
+      setFieldErrors(prev => ({ ...prev, [itemId]: '' }))
+      return
+    }
+
+    const parsed = Number(raw)
+    if (!Number.isFinite(parsed)) {
+      setFieldErrors(prev => ({ ...prev, [itemId]: '请输入合法数字' }))
+      return
+    }
+    if (parsed < 0) {
+      setFieldErrors(prev => ({ ...prev, [itemId]: '实盘数量不能为负数' }))
+      return
+    }
+
+    setActuals(prev => ({ ...prev, [itemId]: raw }))
+    setFieldErrors(prev => ({ ...prev, [itemId]: '' }))
+  }
+
+  function requestClose() {
+    if (saveLocked || submitLocked || cancelLocked || updateItems.isPending || submit.isPending || cancel.isPending) return
+    confirmDirtyLeave({
+      isDirty: hasUnsavedChanges,
+      willNavigate: false,
+      proceed: onClose,
+    })
   }
 
   const handleSave = async () => {
     if(!check || saveLocked || updateItems.isPending) return
     const validation = validateActuals()
     if (!validation.ok) {
-      toast.warning('实盘数量必须大于或等于 0')
+      toast.warning(validation.message || '实盘数量必须大于或等于 0')
       return
     }
     try {
@@ -66,7 +110,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     if(!check || submitLocked || submit.isPending) return
     const validation = validateActuals()
     if (!validation.ok) {
-      toast.warning('实盘数量必须大于或等于 0，修正后才能提交')
+      toast.warning(validation.message || '实盘数量必须大于或等于 0，修正后才能提交')
       return
     }
     try {
@@ -91,7 +135,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose() }}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
@@ -118,8 +162,10 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                 <div className="col-span-2 text-right">差异</div>
               </div>
               {check.items?.map((item: CheckItem)=>{
-                const actual = actuals[item.id]!==''&&actuals[item.id]!==undefined ? parseFloat(actuals[item.id]) : null
-                const diff = actual!=null ? actual - item.bookQty : null
+                const actualRaw = actuals[item.id]
+                const actual = actualRaw!==''&&actualRaw!==undefined ? parseFloat(actualRaw) : null
+                const hasError = !!fieldErrors[item.id]
+                const diff = actual!=null && !hasError ? actual - item.bookQty : null
                 return (
                   <div key={item.id} className="grid grid-cols-12 gap-2 items-center py-1 border-b last:border-0">
                     <div className="col-span-2 text-sm">{item.productCode}</div>
@@ -128,7 +174,18 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                     <div className="col-span-2 text-right text-sm">{item.bookQty}</div>
                     <div className="col-span-2">
                       {check.status===1 ? (
-                        <Input type="number" min="0" step="0.01" className="text-sm text-right h-8" value={actuals[item.id]??''} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setActuals(p=>({...p,[item.id]:e.target.value}))} />
+                        <div className="space-y-1">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="h-8 text-right text-sm"
+                            value={actuals[item.id]??''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>)=>handleActualChange(item.id, e.target.value)}
+                            aria-invalid={hasError}
+                          />
+                          {hasError ? <p className="text-right text-xs text-destructive">{fieldErrors[item.id]}</p> : null}
+                        </div>
                       ) : (
                         <span className="text-sm text-right block">{item.actualQty??'-'}</span>
                       )}
@@ -148,14 +205,14 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
             <Button onClick={() => {
               const validation = validateActuals()
               if (!validation.ok) {
-                toast.warning('实盘数量必须大于或等于 0，修正后才能提交')
+                toast.warning(validation.message || '实盘数量必须大于或等于 0，修正后才能提交')
                 return
               }
               setSubmitConfirm(true)
             }} disabled={submit.isPending || submitLocked}>{submit.isPending || submitLocked?'提交中...':'提交盘点'}</Button>
             <Button variant="destructive" onClick={() => setCancelConfirm(true)} disabled={cancel.isPending || cancelLocked}>取消盘点</Button>
           </>}
-          <Button variant="outline" onClick={onClose}>关闭</Button>
+          <Button variant="outline" onClick={requestClose}>关闭</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

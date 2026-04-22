@@ -64,7 +64,9 @@ export default function InventoryPage() {
     { key:'productName', title:'商品名称' },
     { key:'unit', title:'单位', width:70 },
     { key:'warehouseName', title:'仓库', width:130 },
-    { key:'quantity', title:'库存数量', width:110, render:(_,r)=><span className={`font-mono font-medium ${r.quantity<=0?'text-destructive':''}`}>{r.quantity}</span> },
+    { key:'quantity', title:'当前库存', width:110, render:(_,r)=><span className={`font-mono font-medium ${r.quantity<=0?'text-destructive':''}`}>{r.quantity}</span> },
+    { key:'reserved', title:'已占用', width:100, render:(_,r)=><span className="font-mono text-amber-600">{r.reserved ? r.reserved : '—'}</span> },
+    { key:'available', title:'可用库存', width:110, render:(_,r)=><span className="font-mono text-emerald-600">{r.available ?? r.quantity}</span> },
   ]
 
   const logCols: TableColumn<InventoryLog>[] = [
@@ -102,6 +104,9 @@ export default function InventoryPage() {
 
       {tab==='stock' && (
         <>
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm text-muted-foreground">
+            当前库存显示的是在库数量（on-hand）。销售单“已占库”会增加预占、减少可用，但不会直接减少在库；只有仓库任务实际出库后，在库才会下降。
+          </div>
           <FilterCard>
             <Input placeholder="搜索商品编码或名称" value={stockSearch} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setStockSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&(setStockPage(1),setStockKw(stockSearch))} className="h-9 w-60" />
             <Button size="sm" variant="outline" onClick={()=>{setStockPage(1);setStockKw(stockSearch)}}>搜索</Button>
