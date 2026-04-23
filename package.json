@@ -8,6 +8,7 @@
     "release:prod": "bash scripts/release-prod.sh",
     "release:gate": "bash scripts/release-gate.sh",
     "deploy:keygen": "bash scripts/setup-deploy-key.sh",
+    "smoke:concurrency-guards": "node tests/concurrency-guards.smoke.test.js",
     "smoke:mainline": "node tests/mainline.smoke.test.js",
     "smoke:reports": "npm --prefix backend run smoke:reports",
     "smoke:pages": "bash scripts/smoke-pages.sh",

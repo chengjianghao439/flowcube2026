@@ -15,6 +15,7 @@ function isTransientFailure(message: string) {
 }
 
 type ConfirmContext = { recovered: boolean; requestKey: string }
+export type CriticalPdaActionPhase = 'idle' | 'submitting' | 'pending' | 'confirming' | 'failed'
 
 export function useCriticalPdaAction<T>({
   action,
@@ -32,16 +33,24 @@ export function useCriticalPdaAction<T>({
     [records, action],
   )
   const [confirming, setConfirming] = useState(false)
+  const [phase, setPhase] = useState<CriticalPdaActionPhase>('idle')
+  const [phaseMessage, setPhaseMessage] = useState<string | null>(null)
+  const [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null)
   const autoConfirmRef = useRef<string | null>(null)
 
   const confirmPending = useCallback(async (): Promise<OperationRequestStatus | null> => {
     if (!pendingRecord || networkStatus !== 'online' || confirming) return null
     setConfirming(true)
+    setPhase('confirming')
+    setPhaseMessage(`正在确认${pendingRecord.label}的结果，请勿重复提交。`)
+    setLastErrorMessage(null)
     try {
       const res = await getOperationRequestStatusApi(pendingRecord.requestKey, pendingRecord.action)
       const status = res.data.data!
       if (status.status === 'success') {
         removePending(action)
+        setPhase('idle')
+        setPhaseMessage(null)
         if (onConfirmed) {
           await onConfirmed(status.data as T, {
             recovered: true,
@@ -49,10 +58,34 @@ export function useCriticalPdaAction<T>({
           })
         }
       }
-      if (status.status === 'failed' || status.status === 'not_found') {
+      if (status.status === 'failed') {
         removePending(action)
+        setPhase('failed')
+        setPhaseMessage(null)
+        setLastErrorMessage(status.message || `${pendingRecord.label}未成功，请检查后重试。`)
+      }
+      if (status.status === 'not_found') {
+        removePending(action)
+        setPhase('failed')
+        setPhaseMessage(null)
+        setLastErrorMessage(`系统未找到 ${pendingRecord.label} 的提交记录。请先刷新任务状态，再决定是否重试。`)
+      }
+      if (status.status === 'pending') {
+        setPhase('pending')
+        setPhaseMessage(`服务端仍未确认${pendingRecord.label}结果，请稍后重试确认，暂勿重复提交。`)
       }
       return status
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? '')
+      if (isTransientFailure(message)) {
+        setPhase('pending')
+        setPhaseMessage(`网络波动，暂时无法确认${pendingRecord.label}结果。请恢复网络后再次确认。`)
+        return null
+      }
+      setPhase('failed')
+      setPhaseMessage(null)
+      setLastErrorMessage(message || `确认 ${pendingRecord.label} 结果失败，请稍后重试。`)
+      return null
     } finally {
       setConfirming(false)
     }
@@ -86,6 +119,9 @@ export function useCriticalPdaAction<T>({
     }
 
     const requestKey = createRequestKey(action.replace(/[^a-z0-9]+/gi, '-'))
+    setPhase('submitting')
+    setPhaseMessage(`${label}提交中，请保持当前页面并等待结果。`)
+    setLastErrorMessage(null)
     const record: PendingRequestRecord = {
       requestKey,
       action,
@@ -97,6 +133,8 @@ export function useCriticalPdaAction<T>({
     try {
       const data = await executor(requestKey)
       removePending(action)
+      setPhase('idle')
+      setPhaseMessage(null)
       if (onConfirmed) {
         await onConfirmed(data, { recovered: false, requestKey })
       }
@@ -104,9 +142,14 @@ export function useCriticalPdaAction<T>({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error ?? '')
       if (isTransientFailure(message)) {
+        setPhase('pending')
+        setPhaseMessage(`网络波动，${label}结果待确认。请先确认结果，避免重复提交。`)
         return { kind: 'pending', requestKey }
       }
       removePending(action)
+      setPhase('failed')
+      setPhaseMessage(null)
+      setLastErrorMessage(message || `${label}提交失败，请检查后重试。`)
       throw error
     }
   }, [action, addPending, label, networkStatus, onConfirmed, pendingRecord, removePending])
@@ -115,10 +158,17 @@ export function useCriticalPdaAction<T>({
     networkStatus,
     pendingRecord,
     confirming,
+    phase,
+    phaseMessage,
+    lastErrorMessage,
     blockedReason,
     submitBlocked: Boolean(blockedReason),
     run,
     confirmPending,
     clearPending: () => removePending(action),
+    clearError: () => {
+      setLastErrorMessage(null)
+      if (phase === 'failed') setPhase('idle')
+    },
   }
 }

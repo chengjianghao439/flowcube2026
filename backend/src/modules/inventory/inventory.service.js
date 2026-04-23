@@ -728,35 +728,44 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, userId }
   try {
     await conn.beginTransaction()
     result = await splitContainer(conn, { containerId, qty, remark })
+    result.printJobId = null
+    result.printJobIds = []
+
+    if (printLabel) {
+      const [[row]] = await conn.query(
+        `SELECT c.barcode, c.remaining_qty, p.name AS product_name
+         FROM inventory_containers c
+         JOIN product_items p ON p.id = c.product_id
+         WHERE c.id = ?`,
+        [result.newContainerId],
+      )
+      if (!row) {
+        throw new AppError('拆分后新容器不存在，无法创建标签打印任务', 500)
+      }
+      const job = await enqueueContainerLabelJob({
+        conn,
+        containerId: result.newContainerId,
+        warehouseId: result.warehouseId,
+        data: {
+          container_code: row.barcode,
+          product_name: row.product_name,
+          qty: row.remaining_qty,
+        },
+        createdBy: userId ?? null,
+        jobUniqueKey: `split_cnt_${result.newContainerId}`,
+      })
+      if (!job?.id) {
+        throw new AppError(`容器 ${row.barcode} 的打印任务创建失败`, 500)
+      }
+      result.printJobId = Number(job.id)
+      result.printJobIds.push(Number(job.id))
+    }
     await conn.commit()
   } catch (e) {
     await conn.rollback()
     throw e
   } finally {
     conn.release()
-  }
-
-  if (printLabel) {
-    const [[row]] = await pool.query(
-      `SELECT c.barcode, c.remaining_qty, p.name AS product_name
-       FROM inventory_containers c
-       JOIN product_items p ON p.id = c.product_id
-       WHERE c.id = ?`,
-      [result.newContainerId],
-    )
-    if (row) {
-      await enqueueContainerLabelJob({
-        containerId: result.newContainerId,
-        warehouseId: result.warehouseId,
-        data: {
-          container_code: row.barcode,
-          product_name:   row.product_name,
-          qty:            row.remaining_qty,
-        },
-        createdBy: userId ?? null,
-        jobUniqueKey: `split_cnt_${result.newContainerId}`,
-      })
-    }
   }
 
   return result

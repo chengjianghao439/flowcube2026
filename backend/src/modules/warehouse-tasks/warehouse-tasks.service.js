@@ -4,6 +4,7 @@ const { moveStock, MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { unlockContainersByTask } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const { WT_STATUS, WT_STATUS_NAME, WT_STATUS_PICK_POOL, isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
@@ -329,12 +330,25 @@ async function assign(id, { userId, userName }) {
  * 同时清除孤立容器锁
  */
 async function startPicking(id) {
-  const task = await findById(id)
-  assertWarehouseTaskAction('startPicking', task.status)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    await conn.query('UPDATE warehouse_tasks SET status=? WHERE id=?', [WT_STATUS.PICKING, id])
+    const taskRow = await lockStatusRow(conn, {
+      table: 'warehouse_tasks',
+      id,
+      columns: 'id, status',
+      entityName: '仓库任务',
+    })
+    assertWarehouseTaskAction('startPicking', taskRow.status)
+    if (Number(taskRow.status) !== WT_STATUS.PICKING) {
+      await compareAndSetStatus(conn, {
+        table: 'warehouse_tasks',
+        id,
+        fromStatus: taskRow.status,
+        toStatus: WT_STATUS.PICKING,
+        entityName: '仓库任务',
+      })
+    }
     // 清除孤立容器锁（防止历史数据清空或任务已终结后残留锁阻断拣货）
     await conn.query(
       `UPDATE inventory_containers
@@ -362,180 +376,73 @@ async function updatePickedQty() {
  * 拣货完成，自动推进到「待分拣」（2→3）
  * 同步销售单状态 → 3；释放分拣格
  */
-async function readyToShip(id, { requestKey, userId } = {}) {
-  const task = await findById(id)
-  const rule = assertWarehouseTaskAction('readyToShip', task.status)
-  if (!isValidTransition(task.status, rule.toStatus)) throw new AppError(`非法状态迁移：${task.status} → ${rule.toStatus}`, 400)
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {}) {
+  const taskRow = await lockStatusRow(conn, {
+    table: 'warehouse_tasks',
+    id,
+    columns: 'id, task_no, status, sale_order_id',
+    entityName: '仓库任务',
+  })
+  const rule = assertWarehouseTaskAction('readyToShip', taskRow.status)
+  if (!isValidTransition(taskRow.status, rule.toStatus)) {
+    throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+  }
+
+  let requestState = { enabled: false }
+  if (requestKey) {
+    requestState = await beginOperationRequest(conn, {
       requestKey,
       action: 'warehouse.ready-to-ship',
       userId: userId || null,
     })
     if (requestState.replay) {
-      await conn.rollback()
       return requestState.responseData
     }
-    await assertTaskPickScanClosure(conn, id)
-    // 乐观锁：带状态条件防止并发重复推进
-    const [r] = await conn.query('UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?', [rule.toStatus, id, task.status])
-    if (r.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
-    if (task.saleOrderId) {
-      await conn.query('UPDATE sale_orders SET status=3 WHERE id=?', [task.saleOrderId])
-    }
-    try {
-      await recordEvent(conn, {
-        taskId: id, taskNo: task.taskNo,
-        eventType:  WT_EVENT.PICKING_DONE,
-        fromStatus: task.status,
-        toStatus:   rule.toStatus,
-      })
-    } catch (_) {}
-    const payload = { taskId: id, status: rule.toStatus }
+  }
+
+  await assertTaskPickScanClosure(conn, id)
+  await compareAndSetStatus(conn, {
+    table: 'warehouse_tasks',
+    id,
+    fromStatus: taskRow.status,
+    toStatus: rule.toStatus,
+    entityName: '仓库任务',
+  })
+  if (taskRow.sale_order_id) {
+    const saleSvc = require('../sale/sale.service')
+    await saleSvc.syncPickingByWarehouseTaskWithinTransaction(conn, Number(taskRow.sale_order_id), {
+      taskId: Number(taskRow.id),
+      taskNo: taskRow.task_no,
+    })
+  }
+  try {
+    await recordEvent(conn, {
+      taskId: id,
+      taskNo: taskRow.task_no,
+      eventType: WT_EVENT.PICKING_DONE,
+      fromStatus: taskRow.status,
+      toStatus: rule.toStatus,
+    })
+  } catch (_) {}
+  const payload = { taskId: id, status: rule.toStatus }
+  if (requestState.enabled) {
     await completeOperationRequest(conn, requestState, {
       data: payload,
       message: '已标记为待分拣',
       resourceType: 'warehouse_task',
       resourceId: id,
     })
-    await conn.commit()
-    return payload
-  } catch (e) { await conn.rollback(); throw e }
-  finally { conn.release() }
-}
-
-/**
- * 分拣完成，自动推进到「待复核」（3→4）
- * 接收已分拣的 item 列表，后端校验全部完成后自动推进
- * @param {number} id - 任务ID
- * @param {Array<{itemId: number, sortedQty: number}>} [sortedItems] - 可选，逐件上报时传入；不传则视为整任务完成
- */
-async function sortTask(id, sortedItems = null, { requestKey, userId } = {}) {
-  const task = await findById(id)
-  const rule = assertWarehouseTaskAction('sortTask', task.status)
-  if (!isValidTransition(task.status, rule.toStatus)) throw new AppError(`非法状态迁移：${task.status} → ${rule.toStatus}`, 400)
-  const conn = await pool.getConnection()
-  let released = false
-  try {
-    await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
-      requestKey,
-      action: 'warehouse.sort',
-      userId: userId || null,
-    })
-    if (requestState.replay) {
-      await conn.rollback()
-      return requestState.responseData
-    }
-
-    await assertTaskPickScanClosure(conn, id)
-
-    // 若传入明细，逐件更新 sorted_qty
-    if (sortedItems && sortedItems.length > 0) {
-      for (const { itemId, sortedQty } of sortedItems) {
-        await conn.query(
-          'UPDATE warehouse_task_items SET sorted_qty=? WHERE id=? AND task_id=?',
-          [sortedQty, itemId, id],
-        )
-      }
-    } else {
-      // 不传明细时：将所有 item 的 sorted_qty 设为 picked_qty（整任务一次性完成）
-      await conn.query(
-        'UPDATE warehouse_task_items SET sorted_qty=picked_qty WHERE task_id=?',
-        [id],
-      )
-    }
-
-    // 后端校验：所有 item 的 sorted_qty >= picked_qty
-    const [updatedItems] = await conn.query(
-      'SELECT picked_qty, sorted_qty FROM warehouse_task_items WHERE task_id=?',
-      [id],
-    )
-    const allSorted = updatedItems.every(
-      i => Number(i.sorted_qty) >= Number(i.picked_qty),
-    )
-    if (!allSorted) {
-      const done = updatedItems.filter(i => Number(i.sorted_qty) >= Number(i.picked_qty)).length
-      // 记录分拣进度事件（非阻断）
-      try {
-        await recordEvent(conn, {
-          taskId: id, taskNo: task.taskNo,
-          eventType: WT_EVENT.SORT_PROGRESS,
-          detail:    { done, total: updatedItems.length, progress: `${done}/${updatedItems.length}` },
-        })
-      } catch (_) {}
-      const payload = { allSorted: false, progress: `${done}/${updatedItems.length}` }
-      await completeOperationRequest(conn, requestState, {
-        data: payload,
-        message: `分拣进度 ${payload.progress}，继续操作`,
-        resourceType: 'warehouse_task',
-        resourceId: id,
-      })
-      await conn.commit()
-      return payload
-    }
-
-    // 乐观锁推进状态
-    const [r] = await conn.query('UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?', [rule.toStatus, id, task.status])
-    if (r.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
-
-    // 分拣完成 → 释放分拣格供下一订单使用
-    await sortingBinSvc.releaseByTask(conn, id)
-    await conn.query('UPDATE warehouse_tasks SET sorting_bin_id=NULL, sorting_bin_code=NULL WHERE id=?', [id])
-
-    try {
-      await recordEvent(conn, {
-        taskId: id, taskNo: task.taskNo,
-        eventType:  WT_EVENT.SORT_DONE,
-        fromStatus: task.status,
-        toStatus:   rule.toStatus,
-        detail:     { itemCount: updatedItems.length },
-      })
-      await recordEvent(conn, {
-        taskId: id, taskNo: task.taskNo,
-        eventType: WT_EVENT.SORTING_BIN_RELEASED,
-        detail:    { binCode: task.sortingBinCode },
-      })
-    } catch (_) {}
-
-    const payload = { allSorted: true }
-    await completeOperationRequest(conn, requestState, {
-      data: payload,
-      message: '分拣完成，已进入待复核',
-      resourceType: 'warehouse_task',
-      resourceId: id,
-    })
-    await conn.commit()
-    return payload
-  } catch (e) { await conn.rollback(); throw e }
-  finally { if (!released) conn.release() }
-}
-async function checkDone(id) {
-  const task = await findById(id)
-  const rule = assertWarehouseTaskAction('checkDone', task.status)
-  if (!isValidTransition(task.status, rule.toStatus)) throw new AppError(`非法状态迁移：${task.status} → ${rule.toStatus}`, 400)
-  for (const i of task.items) {
-    if (Number(i.checkedQty) !== Number(i.pickedQty)) {
-      throw new AppError('复核未完成：每条明细已核数量须等于拣货数量', 400)
-    }
   }
+  return payload
+}
+
+async function readyToShip(id, { requestKey, userId } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    await assertTaskCheckScanClosure(conn, id)
-    const [r] = await conn.query('UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?', [rule.toStatus, id, task.status])
-    if (r.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
-    try {
-      await recordEvent(conn, {
-        taskId: id, taskNo: task.taskNo,
-        eventType:  WT_EVENT.CHECK_DONE,
-        fromStatus: task.status,
-        toStatus:   rule.toStatus,
-      })
-    } catch (_) {}
+    const payload = await readyToShipWithinTransaction(conn, id, { requestKey, userId })
     await conn.commit()
+    return payload
   } catch (e) {
     await conn.rollback()
     throw e
@@ -545,44 +452,213 @@ async function checkDone(id) {
 }
 
 /**
- * 打包完成，自动推进到「待出库」（5→6）
+ * 分拣完成，自动推进到「待复核」（3→4）
+ * 接收已分拣的 item 列表，后端校验全部完成后自动推进
+ * @param {number} id - 任务ID
+ * @param {Array<{itemId: number, sortedQty: number}>} [sortedItems] - 可选，逐件上报时传入；不传则视为整任务完成
  */
-async function packDone(id, { requestKey, userId } = {}) {
-  const task = await findById(id)
-  const rule = assertWarehouseTaskAction('packDone', task.status)
-  if (!isValidTransition(task.status, rule.toStatus)) throw new AppError(`非法状态迁移：${task.status} → ${rule.toStatus}`, 400)
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
-      requestKey,
-      action: 'warehouse.pack-done',
-      userId: userId || null,
-    })
-    if (requestState.replay) {
-      await conn.rollback()
-      return requestState.responseData
+async function sortTaskWithinTransaction(conn, id, sortedItems = null, { requestKey, userId } = {}) {
+  const taskRow = await lockStatusRow(conn, {
+    table: 'warehouse_tasks',
+    id,
+    columns: 'id, task_no, status, sorting_bin_code',
+    entityName: '仓库任务',
+  })
+  const rule = assertWarehouseTaskAction('sortTask', taskRow.status)
+  if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+  const requestState = await beginOperationRequest(conn, {
+    requestKey,
+    action: 'warehouse.sort',
+    userId: userId || null,
+  })
+  if (requestState.replay) {
+    return requestState.responseData
+  }
+
+  await assertTaskPickScanClosure(conn, id)
+
+  if (sortedItems && sortedItems.length > 0) {
+    for (const { itemId, sortedQty } of sortedItems) {
+      await conn.query(
+        'UPDATE warehouse_task_items SET sorted_qty=? WHERE id=? AND task_id=?',
+        [sortedQty, itemId, id],
+      )
     }
-    await assertTaskCheckScanClosure(conn, id)
-    await assertTaskPackagingClosure(conn, id)
-    await assertTaskPackagePrintClosure(conn, id)
-    const [r] = await conn.query('UPDATE warehouse_tasks SET status=? WHERE id=? AND status=?', [rule.toStatus, id, task.status])
-    if (r.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
+  } else {
+    await conn.query(
+      'UPDATE warehouse_task_items SET sorted_qty=picked_qty WHERE task_id=?',
+      [id],
+    )
+  }
+
+  const [updatedItems] = await conn.query(
+    'SELECT picked_qty, sorted_qty FROM warehouse_task_items WHERE task_id=?',
+    [id],
+  )
+  const allSorted = updatedItems.every(i => Number(i.sorted_qty) >= Number(i.picked_qty))
+  if (!allSorted) {
+    const done = updatedItems.filter(i => Number(i.sorted_qty) >= Number(i.picked_qty)).length
     try {
       await recordEvent(conn, {
-        taskId: id, taskNo: task.taskNo,
-        eventType:  WT_EVENT.PACK_DONE,
-        fromStatus: task.status,
-        toStatus:   rule.toStatus,
+        taskId: id, taskNo: taskRow.task_no,
+        eventType: WT_EVENT.SORT_PROGRESS,
+        detail: { done, total: updatedItems.length, progress: `${done}/${updatedItems.length}` },
       })
     } catch (_) {}
-    const payload = { taskId: id, status: rule.toStatus }
+    const payload = { allSorted: false, progress: `${done}/${updatedItems.length}` }
     await completeOperationRequest(conn, requestState, {
       data: payload,
-      message: '已标记为待出库',
+      message: `分拣进度 ${payload.progress}，继续操作`,
       resourceType: 'warehouse_task',
       resourceId: id,
     })
+    return payload
+  }
+
+  await compareAndSetStatus(conn, {
+    table: 'warehouse_tasks',
+    id,
+    fromStatus: taskRow.status,
+    toStatus: rule.toStatus,
+    entityName: '仓库任务',
+  })
+
+  await sortingBinSvc.releaseByTask(conn, id)
+  await conn.query('UPDATE warehouse_tasks SET sorting_bin_id=NULL, sorting_bin_code=NULL WHERE id=?', [id])
+
+  try {
+    await recordEvent(conn, {
+      taskId: id, taskNo: taskRow.task_no,
+      eventType: WT_EVENT.SORT_DONE,
+      fromStatus: taskRow.status,
+      toStatus: rule.toStatus,
+      detail: { itemCount: updatedItems.length },
+    })
+    await recordEvent(conn, {
+      taskId: id, taskNo: taskRow.task_no,
+      eventType: WT_EVENT.SORTING_BIN_RELEASED,
+      detail: { binCode: taskRow.sorting_bin_code },
+    })
+  } catch (_) {}
+
+  const payload = { allSorted: true }
+  await completeOperationRequest(conn, requestState, {
+    data: payload,
+    message: '分拣完成，已进入待复核',
+    resourceType: 'warehouse_task',
+    resourceId: id,
+  })
+  return payload
+}
+
+async function sortTask(id, sortedItems = null, { requestKey, userId } = {}) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const payload = await sortTaskWithinTransaction(conn, id, sortedItems, { requestKey, userId })
+    await conn.commit()
+    return payload
+  } catch (e) { await conn.rollback(); throw e }
+  finally { conn.release() }
+}
+async function checkDone(id) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await checkDoneWithinTransaction(conn, id)
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
+async function checkDoneWithinTransaction(conn, id) {
+  const taskRow = await lockStatusRow(conn, {
+    table: 'warehouse_tasks',
+    id,
+    columns: 'id, task_no, status',
+    entityName: '仓库任务',
+  })
+  const rule = assertWarehouseTaskAction('checkDone', taskRow.status)
+  if (!isValidTransition(taskRow.status, rule.toStatus)) {
+    throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+  }
+  await assertTaskCheckScanClosure(conn, id)
+  await compareAndSetStatus(conn, {
+    table: 'warehouse_tasks',
+    id,
+    fromStatus: taskRow.status,
+    toStatus: rule.toStatus,
+    entityName: '仓库任务',
+  })
+  try {
+    await recordEvent(conn, {
+      taskId: id,
+      taskNo: taskRow.task_no,
+      eventType: WT_EVENT.CHECK_DONE,
+      fromStatus: taskRow.status,
+      toStatus: rule.toStatus,
+    })
+  } catch (_) {}
+  return { taskId: id, status: rule.toStatus }
+}
+
+/**
+ * 打包完成，自动推进到「待出库」（5→6）
+ */
+async function packDoneWithinTransaction(conn, id, { requestKey, userId } = {}) {
+  const taskRow = await lockStatusRow(conn, {
+    table: 'warehouse_tasks',
+    id,
+    columns: 'id, task_no, status',
+    entityName: '仓库任务',
+  })
+  const rule = assertWarehouseTaskAction('packDone', taskRow.status)
+  if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+  const requestState = await beginOperationRequest(conn, {
+    requestKey,
+    action: 'warehouse.pack-done',
+    userId: userId || null,
+  })
+  if (requestState.replay) {
+    return requestState.responseData
+  }
+  await assertTaskCheckScanClosure(conn, id)
+  await assertTaskPackagingClosure(conn, id)
+  await assertTaskPackagePrintClosure(conn, id)
+  await compareAndSetStatus(conn, {
+    table: 'warehouse_tasks',
+    id,
+    fromStatus: taskRow.status,
+    toStatus: rule.toStatus,
+    entityName: '仓库任务',
+  })
+  try {
+    await recordEvent(conn, {
+      taskId: id, taskNo: taskRow.task_no,
+      eventType: WT_EVENT.PACK_DONE,
+      fromStatus: taskRow.status,
+      toStatus: rule.toStatus,
+    })
+  } catch (_) {}
+  const payload = { taskId: id, status: rule.toStatus }
+  await completeOperationRequest(conn, requestState, {
+    data: payload,
+    message: '已标记为待出库',
+    resourceType: 'warehouse_task',
+    resourceId: id,
+  })
+  return payload
+}
+
+async function packDone(id, { requestKey, userId } = {}) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const payload = await packDoneWithinTransaction(conn, id, { requestKey, userId })
     await conn.commit()
     return payload
   } catch (e) {
@@ -596,98 +672,117 @@ async function packDone(id, { requestKey, userId } = {}) {
 /**
  * 执行出库（6→7）：扣减库存 + 更新销售单状态 + 生成应收账款
  */
-async function ship(id, operator, saleData, { requestKey } = {}) {
-  const task = await findById(id)
-  const rule = assertWarehouseTaskAction('ship', task.status)
-  if (!isValidTransition(task.status, rule.toStatus)) throw new AppError(`非法状态迁移：${task.status} → ${rule.toStatus}`, 400)
-
+async function shipWithinTransaction(conn, id, operator, saleData, { requestKey } = {}) {
   const { saleOrderId, warehouseId, totalAmount, customerName, items } = saleData
+  const taskRow = await lockStatusRow(conn, {
+    table: 'warehouse_tasks',
+    id,
+    columns: 'id, task_no, status',
+    entityName: '仓库任务',
+  })
+  const rule = assertWarehouseTaskAction('ship', taskRow.status)
+  if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+  const requestState = await beginOperationRequest(conn, {
+    requestKey,
+    action: 'warehouse.ship',
+    userId: operator?.userId ?? null,
+  })
+  if (requestState.replay) {
+    return requestState.responseData
+  }
 
+  await assertTaskPickScanClosure(conn, id)
+  await assertTaskCheckScanClosure(conn, id)
+  await assertTaskPackagingClosure(conn, id)
+  await assertTaskPackagePrintClosure(conn, id)
+
+  if (saleOrderId) {
+    const saleRow = await lockStatusRow(conn, {
+      table: 'sale_orders',
+      id: saleOrderId,
+      columns: 'id, status, order_no',
+      entityName: '销售单',
+    })
+    if (Number(saleRow.status) === 5) {
+      throw new AppError(`关联销售单 ${saleRow.order_no} 已取消，无法继续出库`, 400)
+    }
+    if (Number(saleRow.status) === 4) {
+      throw new AppError(`关联销售单 ${saleRow.order_no} 已完成出库，请勿重复操作`, 400)
+    }
+  }
+
+  for (const item of items) {
+    await moveStock(conn, {
+      moveType: MOVE_TYPE.TASK_OUT,
+      productId: item.productId,
+      productName: item.productName,
+      warehouseId,
+      qty: item.quantity,
+      unitPrice: item.unitPrice,
+      refType: 'warehouse_task',
+      refId: taskRow.id,
+      refNo: taskRow.task_no,
+      reservationRefType: 'sale_order',
+      reservationRefId: saleOrderId,
+      operatorId: operator.userId,
+      operatorName: operator.realName,
+      lockedByTaskId: id,
+    })
+  }
+
+  if (saleOrderId) {
+    const saleSvc = require('../sale/sale.service')
+    await saleSvc.syncShippedByWarehouseTaskWithinTransaction(conn, saleOrderId, {
+      taskId: Number(id),
+      taskNo: taskRow.task_no,
+    })
+  }
+  const shippedAt = new Date()
+  await compareAndSetStatus(conn, {
+    table: 'warehouse_tasks',
+    id,
+    fromStatus: taskRow.status,
+    toStatus: rule.toStatus,
+    entityName: '仓库任务',
+    extraSet: {
+      shipped_at: shippedAt,
+    },
+  })
+
+  await unlockContainersByTask(conn, id)
+
+  await conn.query(
+    `INSERT IGNORE INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,due_date) VALUES (2,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL 30 DAY))`,
+    [saleOrderId, taskRow.task_no, customerName, totalAmount, totalAmount],
+  )
+
+  try {
+    await recordEvent(conn, {
+      taskId: id, taskNo: taskRow.task_no,
+      eventType: WT_EVENT.SHIP_DONE,
+      fromStatus: taskRow.status,
+      toStatus: rule.toStatus,
+      operatorId: operator.userId,
+      operatorName: operator.realName,
+      detail: { saleOrderId, totalAmount, itemCount: items.length },
+    })
+  } catch (_) {}
+
+  const payload = { taskId: id, status: rule.toStatus, shippedAt: shippedAt.toISOString() }
+  await completeOperationRequest(conn, requestState, {
+    data: payload,
+    message: '出库成功',
+    resourceType: 'warehouse_task',
+    resourceId: id,
+  })
+  return payload
+}
+
+async function ship(id, operator, saleData, { requestKey } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
-      requestKey,
-      action: 'warehouse.ship',
-      userId: operator?.userId ?? null,
-    })
-    if (requestState.replay) {
-      await conn.rollback()
-      return requestState.responseData
-    }
-
-    await assertTaskPickScanClosure(conn, id)
-    await assertTaskCheckScanClosure(conn, id)
-    await assertTaskPackagingClosure(conn, id)
-    await assertTaskPackagePrintClosure(conn, id)
-
-    if (saleOrderId) {
-      const [[saleRow]] = await conn.query(
-        'SELECT id, status, order_no FROM sale_orders WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-        [saleOrderId],
-      )
-      if (!saleRow) throw new AppError('关联销售单不存在，无法出库', 404)
-      if (Number(saleRow.status) === 5) {
-        throw new AppError(`关联销售单 ${saleRow.order_no} 已取消，无法继续出库`, 400)
-      }
-      if (Number(saleRow.status) === 4) {
-        throw new AppError(`关联销售单 ${saleRow.order_no} 已完成出库，请勿重复操作`, 400)
-      }
-    }
-
-    // 通过引擎扣减库存（仅本任务锁定容器）
-    for (const item of items) {
-      await moveStock(conn, {
-        moveType:    MOVE_TYPE.TASK_OUT,
-        productId:   item.productId,
-        productName: item.productName,
-        warehouseId,
-        qty:         item.quantity,
-        unitPrice:   item.unitPrice,
-        refType:     'warehouse_task',
-        refId:       task.id,
-        refNo:       task.taskNo,
-        reservationRefType: 'sale_order',
-        reservationRefId:   saleOrderId,
-        operatorId:  operator.userId,
-        operatorName: operator.realName,
-        lockedByTaskId: id,
-      })
-    }
-
-    // 更新销售单 + 仓库任务状态（乐观锁）
-    await conn.query('UPDATE sale_orders SET status=4 WHERE id=?', [saleOrderId])
-    const [rShip] = await conn.query('UPDATE warehouse_tasks SET status=?, shipped_at=NOW() WHERE id=? AND status=?', [rule.toStatus, id, task.status])
-    if (rShip.affectedRows === 0) throw new AppError('任务状态已变更，请刷新后重试', 409)
-
-    // 释放该任务锁定的所有容器
-    await unlockContainersByTask(conn, id)
-
-    // 自动生成应收账款（如已存在则忽略）
-    await conn.query(
-      `INSERT IGNORE INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,due_date) VALUES (2,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL 30 DAY))`,
-      [saleOrderId, task.taskNo, customerName, totalAmount, totalAmount]
-    )
-
-    try {
-      await recordEvent(conn, {
-        taskId: id, taskNo: task.taskNo,
-        eventType:    WT_EVENT.SHIP_DONE,
-        fromStatus:   task.status,
-        toStatus:     rule.toStatus,
-        operatorId:   operator.userId,
-        operatorName: operator.realName,
-        detail:       { saleOrderId, totalAmount, itemCount: items.length },
-      })
-    } catch (_) {}
-
-    const payload = { taskId: id, status: rule.toStatus, shippedAt: new Date().toISOString() }
-    await completeOperationRequest(conn, requestState, {
-      data: payload,
-      message: '出库成功',
-      resourceType: 'warehouse_task',
-      resourceId: id,
-    })
+    const payload = await shipWithinTransaction(conn, id, operator, saleData, { requestKey })
     await conn.commit()
     return payload
   } catch (e) { await conn.rollback(); throw e }
@@ -698,27 +793,52 @@ async function ship(id, operator, saleData, { requestKey } = {}) {
  * 取消任务（→8）：同步销售单状态 → 5；释放分拣格
  */
 async function cancel(id, options = {}) {
-  const task = await findById(id)
-  const rule = assertWarehouseTaskAction('cancel', task.status)
-  if (!isValidTransition(task.status, rule.toStatus)) throw new AppError(`非法状态迁移：${task.status} → ${rule.toStatus}`, 400)
-
   const manageConn = !options.conn
   const conn = options.conn || await pool.getConnection()
   try {
     if (manageConn) await conn.beginTransaction()
-    await conn.query('UPDATE warehouse_tasks SET status=?, sorting_bin_id=NULL, sorting_bin_code=NULL WHERE id=?', [rule.toStatus, id])
+
+    const taskRow = await lockStatusRow(conn, {
+      table: 'warehouse_tasks',
+      id,
+      columns: 'id, task_no, status, sale_order_id, sorting_bin_id, sorting_bin_code',
+      entityName: '仓库任务',
+    })
+    const rule = assertWarehouseTaskAction('cancel', taskRow.status)
+    if (!isValidTransition(taskRow.status, rule.toStatus)) {
+      throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+    }
+
+    await compareAndSetStatus(conn, {
+      table: 'warehouse_tasks',
+      id,
+      fromStatus: taskRow.status,
+      toStatus: rule.toStatus,
+      entityName: '仓库任务',
+      extraSet: {
+        sorting_bin_id: null,
+        sorting_bin_code: null,
+      },
+    })
+
+    // 只有任务真实切换到 CANCELLED 后，才执行资源释放与单据同步副作用。
     await unlockContainersByTask(conn, id)
     await sortingBinSvc.releaseByTask(conn, id)
-    if (task.saleOrderId && options.syncSaleStatus !== false) {
-      await conn.query('UPDATE sale_orders SET status=5 WHERE id=?', [task.saleOrderId])
+
+    if (taskRow.sale_order_id && options.syncSaleStatus !== false) {
+      const saleSvc = require('../sale/sale.service')
+      await saleSvc.syncCancelledByWarehouseTaskWithinTransaction(conn, Number(taskRow.sale_order_id), {
+        taskId: Number(taskRow.id),
+        taskNo: taskRow.task_no,
+      })
     }
     try {
       await recordEvent(conn, {
-        taskId: id, taskNo: task.taskNo,
+        taskId: id, taskNo: taskRow.task_no,
         eventType:  WT_EVENT.TASK_CANCELLED,
-        fromStatus: task.status,
+        fromStatus: taskRow.status,
         toStatus:   rule.toStatus,
-        detail:     { saleOrderId: task.saleOrderId },
+        detail:     { saleOrderId: taskRow.sale_order_id != null ? Number(taskRow.sale_order_id) : null },
       })
     } catch (_) {}
     if (manageConn) await conn.commit()
@@ -921,10 +1041,15 @@ module.exports = {
   startPicking,
   updatePickedQty,
   readyToShip,
+  readyToShipWithinTransaction,
   sortTask,
+  sortTaskWithinTransaction,
+  checkDoneWithinTransaction,
   checkDone,
   packDone,
+  packDoneWithinTransaction,
   ship,
+  shipWithinTransaction,
   cancel,
   updatePriority,
   getPickSuggestions,

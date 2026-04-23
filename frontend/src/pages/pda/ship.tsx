@@ -114,6 +114,9 @@ export default function PdaShipPage() {
             blockedReason={shipAction.blockedReason}
             pendingRecord={shipAction.pendingRecord}
             confirming={shipAction.confirming}
+            phase={shipAction.phase}
+            phaseMessage={shipAction.phaseMessage}
+            lastErrorMessage={shipAction.lastErrorMessage}
             onConfirm={() => {
               void shipAction.confirmPending().then((status) => {
                 if (!status) return
@@ -123,6 +126,7 @@ export default function PdaShipPage() {
               })
             }}
             onClear={() => shipAction.clearPending()}
+            onDismissError={() => shipAction.clearError()}
           />
           <div className="space-y-2">
             <PdaFlowPanel

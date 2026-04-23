@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { lockContainer } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
+const { checkDoneWithinTransaction } = require('../warehouse-tasks/warehouse-tasks.service')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 const fmt = r => ({
@@ -241,13 +242,7 @@ async function createCheckScanLog({
       row => Number(row.checked_qty) === Number(row.picked_qty),
     )
     if (allChecked) {
-      const [rSt] = await conn.query(
-        'UPDATE warehouse_tasks SET status = ? WHERE id = ? AND status = ?',
-        [WT_STATUS.PACKING, taskId, WT_STATUS.CHECKING],
-      )
-      if (rSt.affectedRows === 0) {
-        throw new AppError('任务状态已变更，请刷新后重试', 409)
-      }
+      await checkDoneWithinTransaction(conn, taskId)
     }
 
     const payload = { id: ins.insertId, allChecked, itemId: targetItemId, qty: addQty }

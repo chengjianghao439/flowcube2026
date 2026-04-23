@@ -71,6 +71,107 @@ async function buildPricingEvents(conn, saleOrderId, items, operator) {
   }
 }
 
+async function syncPickingByWarehouseTaskWithinTransaction(conn, id, { taskId = null, taskNo = null } = {}) {
+  const orderRow = await lockStatusRow(conn, {
+    table: 'sale_orders',
+    id,
+    columns: 'id, order_no, status, task_id, task_no',
+    entityName: '销售单',
+  })
+  if (Number(orderRow.status) === 3) return fmt(orderRow)
+  const rule = assertStatusAction('sale', 'ship', orderRow.status)
+  await compareAndSetStatus(conn, {
+    table: 'sale_orders',
+    id,
+    fromStatus: rule.from,
+    toStatus: rule.to,
+    entityName: '销售单',
+    extraSet: {
+      ...(taskId ? { task_id: Number(taskId) } : {}),
+      ...(taskNo ? { task_no: String(taskNo) } : {}),
+    },
+  })
+  await appendSaleEvent(
+    conn,
+    id,
+    'warehouse_ready_to_sort',
+    '仓库任务推进到待分拣',
+    `销售单 ${orderRow.order_no} 已随仓库任务进入拣货完成阶段`,
+    null,
+    { taskId: taskId != null ? Number(taskId) : null, taskNo: taskNo || null },
+  )
+  return {
+    ...fmt(orderRow),
+    status: rule.to,
+    statusName: STATUS[rule.to],
+    taskId: taskId != null ? Number(taskId) : (orderRow.task_id || null),
+    taskNo: taskNo || orderRow.task_no || null,
+  }
+}
+
+async function syncShippedByWarehouseTaskWithinTransaction(conn, id, { taskId = null, taskNo = null } = {}) {
+  const orderRow = await lockStatusRow(conn, {
+    table: 'sale_orders',
+    id,
+    columns: 'id, order_no, status, task_id, task_no',
+    entityName: '销售单',
+  })
+  const rule = assertStatusAction('sale', 'completeShip', orderRow.status)
+  await compareAndSetStatus(conn, {
+    table: 'sale_orders',
+    id,
+    fromStatus: rule.from,
+    toStatus: rule.to,
+    entityName: '销售单',
+  })
+  await appendSaleEvent(
+    conn,
+    id,
+    'warehouse_shipped',
+    '仓库完成出库',
+    `销售单 ${orderRow.order_no} 已由仓库任务完成出库`,
+    null,
+    { taskId: taskId != null ? Number(taskId) : null, taskNo: taskNo || null },
+  )
+  return {
+    ...fmt(orderRow),
+    status: rule.to,
+    statusName: STATUS[rule.to],
+  }
+}
+
+async function syncCancelledByWarehouseTaskWithinTransaction(conn, id, { taskId = null, taskNo = null } = {}) {
+  const orderRow = await lockStatusRow(conn, {
+    table: 'sale_orders',
+    id,
+    columns: 'id, order_no, status',
+    entityName: '销售单',
+  })
+  if (Number(orderRow.status) === 5) return fmt(orderRow)
+  const rule = assertStatusAction('sale', 'cancel', orderRow.status)
+  await compareAndSetStatus(conn, {
+    table: 'sale_orders',
+    id,
+    fromStatus: rule.from,
+    toStatus: rule.to,
+    entityName: '销售单',
+  })
+  await appendSaleEvent(
+    conn,
+    id,
+    'warehouse_task_cancelled',
+    '仓库任务取消联动',
+    `销售单 ${orderRow.order_no} 已随仓库任务取消`,
+    null,
+    { taskId: taskId != null ? Number(taskId) : null, taskNo: taskNo || null },
+  )
+  return {
+    ...fmt(orderRow),
+    status: rule.to,
+    statusName: STATUS[rule.to],
+  }
+}
+
 function mapTimeline(rows, order) {
   const base = rows.some(r => r.event_type === 'created') ? [] : [{
     id: `created-${order.id}`,
@@ -352,4 +453,17 @@ async function deleteOrder(id) {
   await pool.query('UPDATE sale_orders SET deleted_at=NOW() WHERE id=?', [id])
 }
 
-module.exports = { findAll, findById, create, update, reserveStock, releaseStock, ship, cancel, deleteOrder }
+module.exports = {
+  findAll,
+  findById,
+  create,
+  update,
+  reserveStock,
+  releaseStock,
+  ship,
+  cancel,
+  deleteOrder,
+  syncPickingByWarehouseTaskWithinTransaction,
+  syncShippedByWarehouseTaskWithinTransaction,
+  syncCancelledByWarehouseTaskWithinTransaction,
+}

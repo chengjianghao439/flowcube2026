@@ -25,6 +25,7 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       reserve: { from: [1], to: 2, message: '只有草稿状态可以占用库存' },
       release: { from: [2], to: 1, message: '只有已占库的订单可以取消占库' },
       ship: { from: [2], to: 3, message: '只有已占库的销售单可以发起出库' },
+      completeShip: { from: [3], to: 4, message: '只有拣货中的销售单可以完成出库' },
       cancel: {
         from: [1, 2, 3],
         to: 5,

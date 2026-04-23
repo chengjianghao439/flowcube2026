@@ -124,6 +124,12 @@ export default function PdaTaskPage() {
       await qc.invalidateQueries({ queryKey: ['pda-suggestions', taskId] })
     },
   })
+  const taskNoticeAction =
+    pickAction.pendingRecord ? pickAction
+      : readyAction.pendingRecord ? readyAction
+        : pickAction.phase !== 'idle' || pickAction.lastErrorMessage ? pickAction
+          : readyAction.phase !== 'idle' || readyAction.lastErrorMessage ? readyAction
+            : null
 
   // ── Queries ───────────────────────────────────────────────────────────
   const { data: task, isLoading } = useQuery({
@@ -257,11 +263,15 @@ export default function PdaTaskPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
           <PdaCriticalActionNotice
-            blockedReason={pickAction.blockedReason || readyAction.blockedReason}
-            pendingRecord={pickAction.pendingRecord ?? readyAction.pendingRecord}
-            confirming={pickAction.confirming || readyAction.confirming}
+            blockedReason={taskNoticeAction?.blockedReason ?? null}
+            pendingRecord={taskNoticeAction?.pendingRecord}
+            confirming={taskNoticeAction?.confirming}
+            phase={taskNoticeAction?.phase}
+            phaseMessage={taskNoticeAction?.phaseMessage}
+            lastErrorMessage={taskNoticeAction?.lastErrorMessage}
             onConfirm={() => {
-              const handler = pickAction.pendingRecord ? pickAction : readyAction
+              const handler = pickAction.pendingRecord ? pickAction : readyAction.pendingRecord ? readyAction : taskNoticeAction
+              if (!handler) return
               void handler.confirmPending().then((status) => {
                 if (!status) return
                 if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
@@ -272,6 +282,10 @@ export default function PdaTaskPage() {
             onClear={() => {
               if (pickAction.pendingRecord) pickAction.clearPending()
               if (readyAction.pendingRecord) readyAction.clearPending()
+            }}
+            onDismissError={() => {
+              pickAction.clearError()
+              readyAction.clearError()
             }}
           />
           <PdaFlowPanel

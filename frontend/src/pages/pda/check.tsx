@@ -276,6 +276,9 @@ export default function PdaCheckPage() {
             blockedReason={checkAction.blockedReason}
             pendingRecord={checkAction.pendingRecord}
             confirming={checkAction.confirming}
+            phase={checkAction.phase}
+            phaseMessage={checkAction.phaseMessage}
+            lastErrorMessage={checkAction.lastErrorMessage}
             onConfirm={() => {
               void checkAction.confirmPending().then((status) => {
                 if (!status) return
@@ -285,6 +288,7 @@ export default function PdaCheckPage() {
               })
             }}
             onClear={() => checkAction.clearPending()}
+            onDismissError={() => checkAction.clearError()}
           />
           <PdaFlowPanel
             badge="复核闭环提示"

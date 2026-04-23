@@ -4,7 +4,7 @@ const logger = require('../../utils/logger')
 const { resolvePrinterForJob, normalizeJobType } = require('./print-dispatch')
 const { recordPrintSuccess, recordPrintFailure } = require('./printer-health')
 const { appendInboundPrintEventByJob } = require('./print-jobs.helpers')
-const { findById } = require('./print-jobs.query')
+const { findById, findByIdWithExecutor } = require('./print-jobs.query')
 const {
   STATUS,
   MAX_RETRY,
@@ -16,7 +16,7 @@ const {
 } = require('./print-jobs.status')
 const { pushToClients } = require('./print-jobs.dispatch')
 
-async function create({
+async function createRecord(exec, {
   printerId,
   warehouseId: warehouseIdIn,
   jobType: jobTypeIn,
@@ -32,6 +32,7 @@ async function create({
   content,
   copies = 1,
   createdBy,
+  pushAfterCreate = false,
 }) {
   if (!content) throw new AppError('打印内容不能为空', 400)
   if (!title) throw new AppError('任务标题不能为空', 400)
@@ -52,14 +53,14 @@ async function create({
       : null
 
   if (jobUniqueKey) {
-    const [[dup]] = await pool.query(
+    const [[dup]] = await exec.query(
       `SELECT id FROM print_jobs
        WHERE job_unique_key=? AND status IN (?,?,?)
          AND (warehouse_id <=> ?) AND (job_type <=> ?)
        ORDER BY id DESC LIMIT 1`,
       [jobUniqueKey, STATUS.PENDING, STATUS.PRINTING, STATUS.DONE, warehouseId, jobTypeNorm],
     )
-    if (dup && dup.id != null) return findById(Number(dup.id))
+    if (dup && dup.id != null) return findByIdWithExecutor(exec, Number(dup.id))
   }
 
   const explicitPrinter =
@@ -86,11 +87,11 @@ async function create({
     throw new AppError('无法分配打印机：请指定 printerId，或传入 warehouseId 并配置打印机用途绑定', 400)
   }
 
-  const [[printer]] = await pool.query('SELECT id, code, status FROM printers WHERE id=?', [resolvedId])
+  const [[printer]] = await exec.query('SELECT id, code, status FROM printers WHERE id=?', [resolvedId])
   if (!printer) throw new AppError('打印机不存在', 400)
 
   const ttl = ttlMinutes()
-  const [r] = await pool.query(
+  const [r] = await exec.query(
     `INSERT INTO print_jobs (printer_id, template_id, title, content_type, content, copies, priority, job_type, warehouse_id, job_unique_key, dispatch_reason, ref_type, ref_id, ref_code, created_by, expires_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
     [
@@ -116,20 +117,36 @@ async function create({
   if (!Number.isFinite(insertId) || insertId <= 0) {
     throw new AppError('创建打印任务失败（无法解析任务 ID）', 500)
   }
-  const job = await findById(insertId)
+  const job = await findByIdWithExecutor(exec, insertId)
 
-  try {
-    await pushToClients(printer.code, job)
-  } catch (e) {
-    logger.error(
-      `[print-jobs] pushToClients 失败（任务已入库 id=${insertId}）`,
-      e instanceof Error ? e : new Error(String(e)),
-      { printerCode: printer.code },
-      'PrintJobs',
-    )
+  if (pushAfterCreate) {
+    try {
+      await pushToClients(printer.code, job)
+    } catch (e) {
+      logger.error(
+        `[print-jobs] pushToClients 失败（任务已入库 id=${insertId}）`,
+        e instanceof Error ? e : new Error(String(e)),
+        { printerCode: printer.code },
+        'PrintJobs',
+      )
+    }
   }
 
-  return findById(insertId)
+  return pushAfterCreate ? findById(insertId) : job
+}
+
+async function create(args) {
+  return createRecord(pool, {
+    ...args,
+    pushAfterCreate: true,
+  })
+}
+
+async function createWithinTransaction(conn, args) {
+  return createRecord(conn, {
+    ...args,
+    pushAfterCreate: false,
+  })
 }
 
 async function assertQueueReady({
@@ -295,6 +312,7 @@ module.exports = {
   completeLocalDesktop,
   fail,
   retry,
+  createWithinTransaction,
   normalizeJobType,
   resolvePrinterForJob,
   STATUS,

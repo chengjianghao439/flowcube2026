@@ -3,7 +3,7 @@ const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { unlockContainersByTask } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
-const { assertTaskPickScanClosure } = require('../warehouse-tasks/warehouse-tasks.service')
+const { readyToShipWithinTransaction } = require('../warehouse-tasks/warehouse-tasks.service')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 
 /**
@@ -346,16 +346,7 @@ async function finish(id) {
       [id],
     )
     for (const t of waveTasks) {
-      await assertTaskPickScanClosure(conn, t.task_id)
-    }
-    for (const t of waveTasks) {
-      const [r] = await conn.query(
-        'UPDATE warehouse_tasks SET status = ? WHERE id = ? AND status = ?',
-        [WT_STATUS.SORTING, t.task_id, WT_STATUS.PICKING],
-      )
-      if (r.affectedRows === 0) {
-        throw new AppError(`任务状态已变更，无法完成波次分拣（task_id=${t.task_id}）`, 409)
-      }
+      await readyToShipWithinTransaction(conn, Number(t.task_id))
     }
 
     await conn.query('UPDATE picking_waves SET status = 4 WHERE id = ?', [id])

@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { adjustContainersForStockcheck, SOURCE_TYPE } = require('../../engine/containerEngine')
+const { adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -17,6 +17,32 @@ function assertValidActualQty(actualQty) {
     throw new AppError('实盘数量必须为大于或等于 0 的数字', 400)
   }
   return normalized
+}
+
+/**
+ * 盘点账面口径统一入口：
+ * - 只统计 ACTIVE 容器（与主库存事实层一致）
+ * - 明确排除待上架/空容器/作废容器，避免生成第二套库存口径
+ */
+async function listBookStocksFromActiveContainers(conn, warehouseId) {
+  const [rows] = await conn.query(
+    `SELECT
+        c.product_id,
+        COALESCE(SUM(c.remaining_qty), 0) AS quantity,
+        p.code AS product_code,
+        p.name AS product_name,
+        p.unit
+     FROM inventory_containers c
+     JOIN product_items p ON c.product_id = p.id
+     WHERE c.warehouse_id = ?
+       AND c.status = ?
+       AND c.deleted_at IS NULL
+       AND p.deleted_at IS NULL
+     GROUP BY c.product_id, p.code, p.name, p.unit
+     HAVING COALESCE(SUM(c.remaining_qty), 0) > 0`,
+    [warehouseId, CONTAINER_STATUS.ACTIVE],
+  )
+  return rows
 }
 
 async function findAll({ page=1, pageSize=20, keyword='', status=null }) {
@@ -49,23 +75,8 @@ async function create({ warehouseId, warehouseName, remark, operator }) {
       [checkNo,warehouseId,warehouseName,remark||null,operator.userId,operator.realName]
     )
     const checkId = r.insertId
-    // 盘点账面数以容器汇总为准，避免直接信任缓存表 inventory_stock。
-    const [stocks] = await conn.query(
-      `SELECT
-          c.product_id,
-          COALESCE(SUM(c.remaining_qty), 0) AS quantity,
-          p.code AS product_code,
-          p.name AS product_name,
-          p.unit
-       FROM inventory_containers c
-       JOIN product_items p ON c.product_id = p.id
-       WHERE c.warehouse_id = ?
-         AND c.deleted_at IS NULL
-         AND p.deleted_at IS NULL
-       GROUP BY c.product_id, p.code, p.name, p.unit
-       HAVING COALESCE(SUM(c.remaining_qty), 0) > 0`,
-      [warehouseId],
-    )
+    // 盘点账面数必须与主库存事实层一致：只统计 ACTIVE 容器，不信任全容器汇总。
+    const stocks = await listBookStocksFromActiveContainers(conn, warehouseId)
     for(const s of stocks) {
       await conn.query(`INSERT INTO inventory_check_items (check_id,product_id,product_code,product_name,unit,book_qty) VALUES (?,?,?,?,?,?)`,[checkId,s.product_id,s.product_code,s.product_name,s.unit,s.quantity])
     }

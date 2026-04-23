@@ -137,6 +137,9 @@ export default function PdaSortPage() {
           blockedReason={sortAction.blockedReason}
           pendingRecord={sortAction.pendingRecord}
           confirming={sortAction.confirming}
+          phase={sortAction.phase}
+          phaseMessage={sortAction.phaseMessage}
+          lastErrorMessage={sortAction.lastErrorMessage}
           onConfirm={() => {
             void sortAction.confirmPending().then((status) => {
               if (!status) return
@@ -146,6 +149,7 @@ export default function PdaSortPage() {
             })
           }}
           onClear={() => sortAction.clearPending()}
+          onDismissError={() => sortAction.clearError()}
         />
 
         <PdaFlowPanel

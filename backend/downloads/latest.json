@@ -1,6 +1,6 @@
 {
-  "version": "0.3.71",
-  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.71/Jixu-Flow-Setup-0.3.71.exe",
-  "filename": "Jixu-Flow-Setup-0.3.71.exe",
-  "notes": "【v0.3.71 主要更新】\n\n• 修复桌面端更新链：当服务器 /downloads 下不存在新安装包时，更新接口会自动回退到 GitHub Release 直链，不再返回 404 假链接。\n• 将 backend/downloads/latest.json 对齐到 0.3.71，避免 GitHub API 暂时不可用时回退到旧版本。\n• 保持桌面端自动更新逻辑兼容：如果服务器已同步安装包，仍优先走同域下载；只有服务器缺包时才改走 Release 直链。"
+  "version": "0.3.72",
+  "url": "https://github.com/chengjianghao439/flowcube2026/releases/download/v0.3.72/Jixu-Flow-Setup-0.3.72.exe",
+  "filename": "Jixu-Flow-Setup-0.3.72.exe",
+  "notes": "【v0.3.72 主要更新】\n\n• 修复库存、仓库任务、销售单、打印链等 ERP/WMS 核心主链的一致性问题，收口状态推进到统一 lock / assert / CAS 语义。\n• 收货、拆分、装箱等关键打印链改为“业务成功 = 打印任务已可靠入链”，避免事务后 warn 补做导致的黑洞。\n• 强化 PDA 弱网止血提示：关键提交统一显示提交中、待确认、确认中、失败可重试，降低重复提交和误操作风险。"
 }

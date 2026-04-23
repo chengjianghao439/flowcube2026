@@ -10,7 +10,7 @@ const {
   buildProductLabelTspl,
   getLabelTsplFromDefaultTemplate,
 } = require('./labelTsplTemplate')
-const { create } = require('./print-jobs.command')
+const { create, createWithinTransaction } = require('./print-jobs.command')
 const { findById } = require('./print-jobs.query')
 const { getDispatchHintForJob } = require('./print-jobs.dispatch')
 
@@ -94,6 +94,7 @@ async function resolveLabelPrinterId() {
 async function enqueueContainerLabelJob(payload) {
   const data = payload?.data
   if (!data?.container_code) return null
+  const conn = payload?.conn || null
   const containerId =
     payload?.containerId != null && Number.isFinite(Number(payload.containerId)) ? Number(payload.containerId) : null
   const wh = payload.warehouseId != null ? Number(payload.warehouseId) : null
@@ -121,7 +122,8 @@ async function enqueueContainerLabelJob(payload) {
       ?? buildContainerLabelTspl(vars)
     : (await getLabelZplFromDefaultTemplate(6, vars))
       ?? buildContainerLabelZpl(vars)
-  return create({
+  const createJob = conn ? createWithinTransaction.bind(null, conn) : create
+  return createJob({
     printerId,
     dispatchReason,
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
@@ -216,7 +218,9 @@ async function enqueueRackLabelJob(payload) {
 async function enqueuePackageLabelJob(payload) {
   const packageId = payload?.packageId
   if (!packageId) return null
-  const [[row]] = await pool.query(
+  const conn = payload?.conn || null
+  const exec = conn || pool
+  const [[row]] = await exec.query(
     `SELECT p.id, p.barcode, wt.task_no, wt.customer_name, wt.warehouse_id,
             (SELECT COUNT(*) FROM package_items pi WHERE pi.package_id = p.id) AS line_count,
             (SELECT COALESCE(SUM(pi.qty), 0) FROM package_items pi WHERE pi.package_id = p.id) AS total_qty
@@ -253,7 +257,8 @@ async function enqueuePackageLabelJob(payload) {
       ?? buildPackageLabelTspl(vars)
     : (await getLabelZplFromDefaultTemplate(7, vars))
       ?? buildPackageLabelZpl(vars)
-  return create({
+  const createJob = conn ? createWithinTransaction.bind(null, conn) : create
+  return createJob({
     printerId,
     dispatchReason,
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,

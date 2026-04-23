@@ -329,6 +329,9 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           blockedReason={receiveAction.blockedReason}
           pendingRecord={receiveAction.pendingRecord}
           confirming={receiveAction.confirming}
+          phase={receiveAction.phase}
+          phaseMessage={receiveAction.phaseMessage}
+          lastErrorMessage={receiveAction.lastErrorMessage}
           onConfirm={() => {
             void receiveAction.confirmPending().then((status) => {
               if (!status) return
@@ -338,6 +341,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
             })
           }}
           onClear={() => receiveAction.clearPending()}
+          onDismissError={() => receiveAction.clearError()}
         />
         <PdaCard>
           <div className="space-y-2 text-sm">

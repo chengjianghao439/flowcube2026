@@ -55,7 +55,11 @@ async function findAll({ printerId, status, page = 1, pageSize = 50 } = {}) {
 }
 
 async function findById(id) {
-  const [[row]] = await pool.query(
+  return findByIdWithExecutor(pool, id)
+}
+
+async function findByIdWithExecutor(exec, id) {
+  const [[row]] = await exec.query(
     `SELECT j.*, p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j LEFT JOIN printers p ON p.id = j.printer_id
      WHERE j.id=?`,
@@ -432,4 +436,5 @@ module.exports = {
   getStatsCounts,
   listPrinterHealth,
   findBarcodeRecords,
+  findByIdWithExecutor,
 }

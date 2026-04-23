@@ -135,60 +135,61 @@ async function addItem(packageId, { productCode, qty }) {
 }
 
 // ─── 完成箱子 ─────────────────────────────────────────────────────────────────
-async function finishPackage(packageId) {
-  const [[pkg]] = await pool.query(
-    'SELECT id, status, warehouse_task_id FROM packages WHERE id=?',
+async function finishPackageWithinTransaction(conn, packageId) {
+  const [[pkg]] = await conn.query(
+    'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
     [packageId],
   )
   if (!pkg) throw new AppError('箱子不存在', 404)
   if (pkg.status === 2) throw new AppError('该箱已标记为完成', 400)
 
-  const [[{ cnt }]] = await pool.query(
+  const [[{ cnt }]] = await conn.query(
     'SELECT COUNT(*) AS cnt FROM package_items WHERE package_id=?',
     [packageId],
   )
   if (cnt === 0) throw new AppError('箱子内没有商品，无法完成打包', 400)
 
+  const [[taskRow]] = await conn.query(
+    'SELECT id, status, task_no FROM warehouse_tasks WHERE id=? FOR UPDATE',
+    [pkg.warehouse_task_id],
+  )
+  if (!taskRow || Number(taskRow.status) !== WT_STATUS.PACKING) {
+    throw new AppError('任务不在待打包状态，禁止完成装箱', 400)
+  }
+
+  await conn.query('UPDATE packages SET status=2 WHERE id=?', [packageId])
+
+  const [[{ remaining }]] = await conn.query(
+    'SELECT COUNT(*) AS remaining FROM packages WHERE warehouse_task_id=? AND status=1',
+    [pkg.warehouse_task_id],
+  )
+  if (remaining > 0) {
+    try {
+      await recordEvent(conn, {
+        taskId: pkg.warehouse_task_id,
+        taskNo: taskRow.task_no ?? '',
+        eventType: WT_EVENT.PACK_PROGRESS,
+        detail: { packageId, remaining },
+      })
+    } catch (_) {}
+  }
+
+  return {
+    id: packageId,
+    warehouseTaskId: Number(pkg.warehouse_task_id),
+    status: 2,
+    statusName: '已完成',
+    allPackagesDone: Number(remaining) === 0,
+  }
+}
+
+async function finishPackage(packageId) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-
-    const [[taskRow]] = await conn.query(
-      'SELECT id, status, task_no FROM warehouse_tasks WHERE id=? FOR UPDATE',
-      [pkg.warehouse_task_id],
-    )
-    if (!taskRow || Number(taskRow.status) !== WT_STATUS.PACKING) {
-      throw new AppError('任务不在待打包状态，禁止完成装箱', 400)
-    }
-
-    await conn.query('UPDATE packages SET status=2 WHERE id=?', [packageId])
-
-    // 检查该任务是否还有未完成的箱子
-    const [[{ remaining }]] = await conn.query(
-      'SELECT COUNT(*) AS remaining FROM packages WHERE warehouse_task_id=? AND status=1',
-      [pkg.warehouse_task_id],
-    )
-    if (remaining > 0) {
-      // 仍有未完成箱子，记录进度
-      try {
-        const [[taskRow]] = await conn.query('SELECT task_no FROM warehouse_tasks WHERE id=?', [pkg.warehouse_task_id])
-        await recordEvent(conn, {
-          taskId:    pkg.warehouse_task_id,
-          taskNo:    taskRow?.task_no ?? '',
-          eventType: WT_EVENT.PACK_PROGRESS,
-          detail:    { packageId, remaining },
-        })
-      } catch (_) {}
-    }
-
+    const result = await finishPackageWithinTransaction(conn, packageId)
     await conn.commit()
-    return {
-      id: packageId,
-      warehouseTaskId: Number(pkg.warehouse_task_id),
-      status: 2,
-      statusName: '已完成',
-      allPackagesDone: Number(remaining) === 0,
-    }
+    return result
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
 }
@@ -209,30 +210,41 @@ async function finishPackageWithPrint(packageId, { createdBy, requestKey } = {})
     contentType: 'zpl',
   })
 
-  const result = Number(pkg.status) === 2
-    ? {
-        id: Number(pkg.id),
-        warehouseTaskId: Number(pkg.warehouse_task_id),
-        status: 2,
-        statusName: '已完成',
-        allPackagesDone: false,
-      }
-    : await finishPackage(packageId)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const result = Number(pkg.status) === 2
+      ? {
+          id: Number(pkg.id),
+          warehouseTaskId: Number(pkg.warehouse_task_id),
+          status: 2,
+          statusName: '已完成',
+          allPackagesDone: false,
+        }
+      : await finishPackageWithinTransaction(conn, packageId)
 
-  const job = await printJobs.enqueuePackageLabelJob({
-    packageId,
-    createdBy: createdBy ?? null,
-    jobUniqueKey: requestKey ? `package_label:${requestKey}` : null,
-  })
-  if (!job) {
-    throw new AppError('箱贴未进入打印链，请先检查打印机绑定、用途配置和桌面客户端在线状态', 409)
-  }
+    const job = await printJobs.enqueuePackageLabelJob({
+      conn,
+      packageId,
+      createdBy: createdBy ?? null,
+      jobUniqueKey: requestKey ? `package_label:${requestKey}` : null,
+    })
+    if (!job) {
+      throw new AppError('箱贴未进入打印链，请先检查打印机绑定、用途配置和桌面客户端在线状态', 409)
+    }
 
-  return {
-    ...result,
-    printQueued: true,
-    printJobId: Number(job.id),
-    printJobStatus: Number(job.status),
+    await conn.commit()
+    return {
+      ...result,
+      printQueued: true,
+      printJobId: Number(job.id),
+      printJobStatus: Number(job.status),
+    }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
   }
 }
 
@@ -309,4 +321,4 @@ async function getByBarcode(barcode) {
   }
 }
 
-module.exports = { listByTask, createPackage, addItem, finishPackage, finishPackageWithPrint, getByBarcode }
+module.exports = { listByTask, createPackage, addItem, finishPackage, finishPackageWithinTransaction, finishPackageWithPrint, getByBarcode }

@@ -1,6 +1,5 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const logger = require('../../utils/logger')
 const { createContainer, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
 const {
@@ -445,6 +444,40 @@ async function receive(taskId, payload, { userId, requestKey } = {}) {
       printJobIds: [],
       containers,
     }
+    for (const container of containers) {
+      const job = await enqueueContainerLabelJob({
+        conn,
+        type: 'container_label',
+        containerId: container.containerId,
+        warehouseId,
+        data: {
+          container_code: container.containerCode,
+          product_name: productName,
+          qty: container.qty,
+        },
+        createdBy: userId ?? null,
+        jobUniqueKey: `inbound_receive:${taskId}:container:${container.containerId}`,
+      })
+      if (!job?.id) {
+        throw new AppError(`容器 ${container.containerCode} 的打印任务创建失败`, 500)
+      }
+      result.printJobIds.push(Number(job.id))
+    }
+    result.printJobId = result.printJobIds[0] ?? null
+    if (result.printJobIds.length > 0) {
+      await appendInboundEvent(
+        conn,
+        taskId,
+        'print_queued',
+        '打印提交',
+        `${productName} 已提交 ${result.printJobIds.length} 条库存条码打印任务`,
+        { userId, realName: null },
+        {
+          printJobIds: result.printJobIds,
+          containerCodes: containers.map(item => item.containerCode),
+        },
+      )
+    }
     await completeOperationRequest(conn, requestState, {
       data: result,
       message: '收货成功',
@@ -457,40 +490,6 @@ async function receive(taskId, payload, { userId, requestKey } = {}) {
     throw e
   } finally {
     conn.release()
-  }
-
-  try {
-    for (const container of result.containers) {
-      const job = await enqueueContainerLabelJob({
-        type: 'container_label',
-        containerId: container.containerId,
-        warehouseId: result.warehouseId,
-        data: {
-          container_code: container.containerCode,
-          product_name: result.productName,
-          qty: container.qty,
-        },
-        createdBy: userId ?? null,
-      })
-      if (job?.id) result.printJobIds.push(job.id)
-    }
-    result.printJobId = result.printJobIds[0] ?? null
-    if (result.printJobIds.length > 0) {
-      await appendInboundEvent(
-        pool,
-        taskId,
-        'print_queued',
-        '打印提交',
-        `${result.productName} 已提交 ${result.printJobIds.length} 条库存条码打印任务`,
-        { userId, realName: null },
-        {
-          printJobIds: result.printJobIds,
-          containerCodes: result.containers.map(item => item.containerCode),
-        },
-      )
-    }
-  } catch (e) {
-    logger.warn(`[inbound receive] 打印队列失败（收货已成功）: ${e.message}`)
   }
 
   return result

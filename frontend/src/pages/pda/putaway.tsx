@@ -74,6 +74,9 @@ function PutawayRunner({ taskId }: { taskId: number }) {
           blockedReason={putawayAction.blockedReason}
           pendingRecord={putawayAction.pendingRecord}
           confirming={putawayAction.confirming}
+          phase={putawayAction.phase}
+          phaseMessage={putawayAction.phaseMessage}
+          lastErrorMessage={putawayAction.lastErrorMessage}
           onConfirm={() => {
             void putawayAction.confirmPending().then((status) => {
               if (!status) return
@@ -83,6 +86,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
             })
           }}
           onClear={() => putawayAction.clearPending()}
+          onDismissError={() => putawayAction.clearError()}
         />
         {closureCopy ? (
           <div className="mb-3">
