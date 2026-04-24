@@ -43,6 +43,9 @@ cleanup_docker_space() {
   fi
 }
 
+echo "==> 检查旧桌面下载目录是否被误用..."
+node scripts/check-deprecated-downloads.js
+
 echo "==> 运行报表烟雾检查..."
 docker compose exec -T backend npm run smoke:reports
 

@@ -13,10 +13,7 @@ const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf-8
 import react from '@vitejs/plugin-react'
 import legacy from '@vitejs/plugin-legacy'
 
-/**
- * 局域网只暴露 5173 时：把 Vite 开发服收到的 Host（如 192.168.x.x:5173）转发给后端，
- * 否则 app-update 会拼出 http://localhost:3000/downloads/…，其它机器去连自己的 localhost 会失败。
- */
+/** 本地开发 API 代理：仅用于 Vite dev / preview 下的 /api 请求。 */
 function devProxyToBackend(target: string): ProxyOptions {
   return {
     target,
@@ -135,7 +132,6 @@ export default defineConfig(({ command }) => {
       host: true,
       proxy: {
         '/api': devProxyToBackend('http://localhost:3000'),
-        '/downloads': devProxyToBackend('http://localhost:3000'),
       },
     },
     preview: {
@@ -143,7 +139,6 @@ export default defineConfig(({ command }) => {
       host: true,
       proxy: {
         '/api': devProxyToBackend('http://localhost:3000'),
-        '/downloads': devProxyToBackend('http://localhost:3000'),
       },
     },
   }

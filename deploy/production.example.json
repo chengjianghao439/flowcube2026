@@ -1,0 +1,14 @@
+{
+  "name": "production-example",
+  "erpOrigin": "https://erp.example.com",
+  "server": {
+    "host": "example-host",
+    "user": "deploy",
+    "sshPort": 22,
+    "appPath": "/opt/flowcube",
+    "downloadsPath": "/var/www/flowcube-downloads"
+  },
+  "desktop": {
+    "releaseRepo": "owner/repo"
+  }
+}

@@ -7,7 +7,8 @@
 - 生产浏览器地址：`http://47.93.228.251`
 - 生产服务器：`root@47.93.228.251`
 - 生产项目目录：`/opt/flowcube`
-- 下载目录：`/opt/flowcube/backend/downloads`
+- 桌面下载目录：`/var/www/flowcube-downloads`
+- 桌面更新入口：`/latest.json`
 - 仓库：`chengjianghao439/flowcube2026`
 - 仓库内配置文件：[deploy/production.json](/Users/chengjianghao/flowcube/deploy/production.json)
 
@@ -17,6 +18,7 @@
 - `desktop/package.json` 的 `version` 是桌面安装包 tag 的唯一来源。
 - 生产服务器信息放在仓库配置里，GitHub Actions 不再额外保存 `SERVER_HOST` / `SERVER_USER` / `SERVER_DOWNLOADS_PATH` 这类非敏感信息。
 - GitHub Actions 只保留敏感项：`SSH_PRIVATE_KEY`。
+- 桌面端安装包必须通过 `scripts/release-desktop.js` 发布到 `/var/www/flowcube-downloads`，禁止手工复制到旧目录。
 
 ## 以后怎么发布
 
@@ -39,6 +41,30 @@ npm run release:prod
    - 推送对应 `v<version>` tag
    - 触发 `Build Desktop Installer`
    - GitHub Release 自动生成/更新安装包
+   - 已配置 SSH 时，CI 会把安装包交给服务器 `scripts/release-desktop.js`，写入 `/var/www/flowcube-downloads/versions/v<version>/` 并更新 `/latest.json` 与 `/current/`
+
+## 桌面端发布目录结构
+
+```text
+/var/www/flowcube-downloads/
+  latest.json
+  versions/
+    v1.0.0/
+      FlowCube-Setup-1.0.0.exe
+      metadata.json
+  current/
+    FlowCube-Setup.exe
+    version.txt
+  quarantine/
+```
+
+手工应急发布时，只允许执行：
+
+```bash
+node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.exe
+```
+
+`latest.json` 是唯一权威入口。`backend/downloads` 已废弃，仅保留废弃说明，不再用于发布。
 
 ## 一次性初始化
 

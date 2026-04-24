@@ -50,11 +50,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [ -f deploy/production.json ] || { echo "::error::缺少 deploy/production.json"; exit 1; }
+          if ! node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
+            echo "server_deploy_configured=false" >> "$GITHUB_OUTPUT"
+            echo "erp_origin=" >> "$GITHUB_OUTPUT"
+            echo "server_host=" >> "$GITHUB_OUTPUT"
+            echo "server_user=" >> "$GITHUB_OUTPUT"
+            echo "server_ssh_port=22" >> "$GITHUB_OUTPUT"
+            echo "server_app_path=" >> "$GITHUB_OUTPUT"
+            echo "server_downloads_path=" >> "$GITHUB_OUTPUT"
+            echo "::notice::未找到部署配置，本次只构建安装包并上传 GitHub Release，不执行服务器发布。"
+            cat /tmp/flowcube-deploy-config.err || true
+            exit 0
+          fi
+          echo "server_deploy_configured=true" >> "$GITHUB_OUTPUT"
           echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
           echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
           echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
           echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
+          echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
           echo "server_downloads_path=$(node scripts/read-deploy-config.js server.downloadsPath)" >> "$GITHUB_OUTPUT"
 
       - name: Print commit info
@@ -415,9 +428,9 @@ jobs:
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── 推 tag / 手动触发且已配置 SSH_PRIVATE_KEY 时：上传到服务器 backend/downloads ──
+      # ── 推 tag / 手动触发且已配置 SSH_PRIVATE_KEY 时：通过服务器 release-desktop.js 发布到 canonical 下载目录 ──
       - name: Setup SSH agent
-        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' }}
+        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -432,7 +445,7 @@ jobs:
           ssh-add "$KEY_FILE"
 
       - name: Add SSH known_hosts
-        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' }}
+        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -441,8 +454,8 @@ jobs:
           ssh-keyscan -H -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_host }}" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Upload EXE to server (SCP)
-        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' }}
+      - name: Publish EXE to canonical download directory
+        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -452,12 +465,37 @@ jobs:
             echo "ERROR: desktop/release 下未找到 .exe"
             exit 1
           fi
-          echo "=== SCP → ${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:${{ steps.deploy_config.outputs.server_downloads_path }}/ (port ${{ steps.deploy_config.outputs.server_ssh_port }}) ==="
-          for f in "${files[@]}"; do
-            echo "Uploading: $f"
-            scp -P "${{ steps.deploy_config.outputs.server_ssh_port }}" -o StrictHostKeyChecking=yes -o BatchMode=yes "$f" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:${{ steps.deploy_config.outputs.server_downloads_path }}/"
-          done
-          echo "=== 上传完成；HTTP 示例: https://<API域名>/downloads/<文件名>（与 backend app.use('/downloads') 一致）==="
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "ERROR: desktop/release 下发现多个 .exe，拒绝自动选择。"
+            printf ' - %s\n' "${files[@]}"
+            exit 1
+          fi
+
+          version="${{ steps.version.outputs.version }}"
+          tag="${{ steps.version.outputs.tag }}"
+          app_path="${{ steps.deploy_config.outputs.server_app_path }}"
+          downloads_path="${{ steps.deploy_config.outputs.server_downloads_path }}"
+          remote_tmp="/tmp/flowcube-desktop-release/${tag}"
+          remote_artifact="${remote_tmp}/$(basename "${files[0]}")"
+          ssh_target="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
+          ssh_port="${{ steps.deploy_config.outputs.server_ssh_port }}"
+
+          echo "=== 创建远端临时目录: ${remote_tmp} ==="
+          ssh -p "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "$ssh_target" "mkdir -p '$remote_tmp'"
+
+          echo "=== 上传构建产物到远端临时目录 ==="
+          scp -P "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "${files[0]}" "${ssh_target}:${remote_artifact}"
+
+          echo "=== 通过 scripts/release-desktop.js 发布到 ${downloads_path} ==="
+          ssh -p "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "$ssh_target" \
+            "cd '$app_path' && docker run --rm --user 0:0 \
+              -v '$app_path/scripts:/release-scripts:ro' \
+              -v '$downloads_path:$downloads_path' \
+              -v '$remote_tmp:$remote_tmp:ro' \
+              -e FLOWCUBE_DOWNLOADS_ROOT='$downloads_path' \
+              flowcube-backend node /release-scripts/release-desktop.js '$version' --artifact='$remote_artifact' --notes='GitHub Actions ${GITHUB_SHA}'"
+
+          echo "=== 发布完成；权威入口: /latest.json，安装包路径: /versions/${tag}/FlowCube-Setup-${version}.exe ==="
 
       # 推送 git tag：创建/更新 GitHub Release 并附上 exe
       - name: Upload EXE to Release

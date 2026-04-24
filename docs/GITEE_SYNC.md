@@ -66,7 +66,13 @@ git push gitee --tags
 
 ## 4. 桌面安装包与 `latest.json`
 
-- **Gitee Releases**：可在 Gitee 上为该仓库创建 Release，并上传 `Jixu-Flow-Setup-*.exe`（与 GitHub Release 二选一或双发均可）。
-- **服务器 `/downloads/`**：与是否用 GitHub/Gitee 无关；仍须将 `backend/downloads/latest.json` 与同名 exe 部署到线上（见 `scripts/upload-downloads-to-server.sh`、`docs/RELEASE.md`）。
+- **Gitee Releases**：可在 Gitee 上为该仓库创建 Release，并上传桌面安装包（与 GitHub Release 二选一或双发均可）。
+- **服务器 canonical 下载目录**：与是否用 GitHub/Gitee 无关；正式更新入口固定为 `/var/www/flowcube-downloads/latest.json`，对外暴露为 `/latest.json`。
 
-若你从 **Gitee Release** 拉取安装包，请把下载直链写入自建脚本或下载说明；仓库内默认的 GitHub Release 直链示例见 `scripts/upload-downloads-to-server.sh` 中的 `DOWNLOAD_RELEASE_TAG` 说明。
+若你从 **Gitee Release** 拉取安装包，请先把安装包下载到服务器临时目录，再执行：
+
+```bash
+node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.exe
+```
+
+`backend/downloads` 已废弃，不允许再作为 `latest.json` 或安装包发布目录。

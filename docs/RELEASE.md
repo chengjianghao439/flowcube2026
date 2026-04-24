@@ -11,11 +11,11 @@
 
 - 触发：`push` 到 `v*` **tag**（推荐发版路径）、或 `push` 到 `main`（验证构建）、或 Actions 里 **手动运行**（仅产物/artifact，**不**创建 Release）。
 - Runner：`windows-latest`。
-- 步骤概要：`npm ci`（frontend → desktop）→ `npm run build`（frontend，桌面包）→ 固定下载 **NSIS 3.0.4.1** → `dist:win`（electron-builder NSIS）→ 校验产物内部为 **`Nullsoft Install System v3.04`** → 将 `desktop/release/*.exe` 上传 **GitHub Release**（**仅 tag 推送**）。
+- 步骤概要：`npm ci`（frontend → desktop）→ `npm run build`（frontend，桌面包）→ 固定下载 **NSIS 3.0.4.1** → `dist:win`（electron-builder NSIS）→ 校验产物内部为 **`Nullsoft Install System v3.04`** → 将 `desktop/release/*.exe` 上传 **GitHub Release**（**仅 tag 推送**）→ 通过服务器 `scripts/release-desktop.js` 发布到 canonical 下载目录。
 - 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
 
-发版请严格使用下面「推荐发布流程」，执行 `npm run release:tag-desktop` 推送 tag 后即可在仓库 **Releases** 下载安装包（当前正式安装包名为 `Jixu-Flow-Setup-<version>.exe`）。
+发版请严格使用下面「推荐发布流程」，执行 `npm run release:tag-desktop` 推送 tag 后即可在仓库 **Releases** 下载安装包；服务器 canonical 发布目录中的正式文件名统一为 `FlowCube-Setup-<version>.exe`。
 
 ### 桌面安装器约束（本次问题后的固定规则）
 
@@ -25,7 +25,38 @@
 - 因此：
   - **允许** 本地做功能开发和调试。
   - **不允许** 用本机随手打出来的桌面 EXE 作为最终上线包。
-  - 最终上线包以 **GitHub Release** 和服务器 `/downloads` 中的同版本文件为准。
+  - 最终上线包以 **GitHub Release** 和服务器 `/var/www/flowcube-downloads/versions/` 中的同版本文件为准。
+
+## 桌面端发布规范
+
+桌面端更新链只有一个发布目录认知：
+
+```text
+/var/www/flowcube-downloads/
+  latest.json
+  versions/
+    v1.0.0/
+      FlowCube-Setup-1.0.0.exe
+      metadata.json
+  current/
+    FlowCube-Setup.exe
+    version.txt
+  quarantine/
+```
+
+发布命令：
+
+```bash
+node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.exe
+```
+
+规则：
+
+- `latest.json` 是桌面更新的唯一权威入口，对外路径为 `/latest.json`。
+- 历史版本统一放在 `/versions/vX.Y.Z/`。
+- 当前安装包统一通过 `/current/FlowCube-Setup.exe` 暴露。
+- 不允许手工复制安装包到发布目录；必须使用 `scripts/release-desktop.js`，由脚本生成 `metadata.json`、`latest.json` 和 `current/version.txt`。
+- `backend/downloads` 已废弃，不再参与构建、部署或更新链。
 
 ### 桌面默认 API 地址（避免每次填写服务器）
 
@@ -81,7 +112,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 
 ## 获取 EXE
 
-打开本仓库的 GitHub **Releases** 页面（URL 形如 `https://github.com/<你的用户或组织>/<仓库名>/releases`），进入对应版本（例如 `v0.3.64`），在 **Assets** 中下载 NSIS 安装包（当前正式命名通常为 `Jixu-Flow-Setup-<version>.exe`）。
+打开本仓库的 GitHub **Releases** 页面（URL 形如 `https://github.com/<你的用户或组织>/<仓库名>/releases`），进入对应版本（例如 `v0.3.64`），在 **Assets** 中下载 NSIS 安装包。服务器发布目录中的安装包由 `scripts/release-desktop.js` 规范化为 `FlowCube-Setup-<version>.exe`。
 
 ## 验证（必做）
 

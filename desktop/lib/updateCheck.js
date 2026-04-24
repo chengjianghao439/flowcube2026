@@ -98,15 +98,15 @@ function isValidDownloadUrl(url) {
 }
 
 /**
- * 解析最终下载 URL：优先接口绝对地址；否则相对路径拼 origin；再用 filename 拼 /downloads/
- * 若接口返回 GitHub 直链，改为同域 /downloads/，避免境内网络无法直连 GitHub。
+ * 解析最终下载 URL：优先接口绝对地址；否则相对路径拼 origin；再用 filename 拼 /current/
+ * 若接口返回 GitHub 直链，改为同域 /current/，避免境内网络无法直连 GitHub。
  */
 function resolveDownloadUrl(payload, origin) {
   const base = String(origin || '').replace(/\/$/, '')
   let url = typeof payload.url === 'string' ? payload.url.trim() : ''
   const fn = typeof payload.filename === 'string' ? payload.filename.trim() : ''
   if (isValidDownloadUrl(url) && isGitHubReleaseOrCdnUrl(url) && fn && base) {
-    const sameOrigin = `${base}/downloads/${encodeURIComponent(fn)}`
+    const sameOrigin = `${base}/current/${encodeURIComponent(fn)}`
     if (isValidDownloadUrl(sameOrigin)) return sameOrigin
   }
   if (isValidDownloadUrl(url)) return url
@@ -115,7 +115,7 @@ function resolveDownloadUrl(payload, origin) {
     if (isValidDownloadUrl(built)) return built
   }
   if (fn && base) {
-    const built = `${base}/downloads/${encodeURIComponent(fn)}`
+    const built = `${base}/current/${encodeURIComponent(fn)}`
     if (isValidDownloadUrl(built)) return built
   }
   return ''
@@ -504,13 +504,13 @@ async function runDiagnosticUpdateCheck(app, parentWindow, origin) {
         : ''
 
     if (!url && fn) {
-      url = `${base}/downloads/${encodeURIComponent(fn)}`
+      url = `${base}/current/${encodeURIComponent(fn)}`
       latest._constructedUrl = true
     } else if (url && url.startsWith('/') && !/^https?:\/\//i.test(url)) {
       url = `${base}${url}`
       latest._constructedUrl = true
     } else if (url && !/^https?:\/\//i.test(url) && fn) {
-      url = `${base}/downloads/${encodeURIComponent(fn)}`
+      url = `${base}/current/${encodeURIComponent(fn)}`
       latest._constructedUrl = true
     }
 

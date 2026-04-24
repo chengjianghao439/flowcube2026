@@ -62,15 +62,22 @@ const env = {
   TRUST_PROXY: readBool('TRUST_PROXY', false),
   APP_PUBLIC_URL: readString('APP_PUBLIC_URL', { defaultValue: '', allowEmpty: true }).replace(/\/$/, ''),
   APP_UPDATE_USE_GITHUB_DIRECT_URL: readBool('APP_UPDATE_USE_GITHUB_DIRECT_URL', false),
-  APP_UPDATE_DOWNLOADS_DIR: readString('APP_UPDATE_DOWNLOADS_DIR', { defaultValue: '', allowEmpty: true }),
+  APP_UPDATE_DOWNLOADS_DIR: readString('APP_UPDATE_DOWNLOADS_DIR', {
+    defaultValue: '/var/www/flowcube-downloads',
+  }),
   APP_UPDATE_MANIFEST_PATH: readString('APP_UPDATE_MANIFEST_PATH', { defaultValue: '', allowEmpty: true }),
   GITHUB_OWNER: readString('GITHUB_OWNER', { defaultValue: 'chengjianghao439' }),
   GITHUB_REPO: readString('GITHUB_REPO', { defaultValue: 'flowcube2026' }),
 }
 
 if (IS_PROD) {
+  if (!env.DB_HOST) throw new Error('生产环境必须显式设置 DB_HOST')
   if (!env.DB_USER) throw new Error('生产环境必须显式设置 DB_USER')
   if (!env.DB_PASSWORD) throw new Error('生产环境必须显式设置 DB_PASSWORD')
+  if (!env.DB_NAME) throw new Error('生产环境必须显式设置 DB_NAME')
+  if (!env.APP_PUBLIC_URL) {
+    throw new Error('生产环境必须显式设置 APP_PUBLIC_URL，避免桌面更新链进入半残运行')
+  }
 }
 
 module.exports = { env }

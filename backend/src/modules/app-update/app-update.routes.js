@@ -7,8 +7,8 @@ const { env } = require('../../config/env')
 const router = express.Router()
 
 /**
- * GitHub Release 直链 / CDN：境内用户直连常失败，应由同域 /downloads/ 提供安装包。
- * 设为 1 时仍向客户端返回 GitHub 绝对地址（适合境外或已可直连 GitHub 的环境）。
+ * 桌面更新以本地 canonical manifest 为权威来源。
+ * GitHub Release 仅在显式开启 direct URL 时作为降级排障能力，避免多发布源竞争。
  */
 const USE_GITHUB_DIRECT_URL = env.APP_UPDATE_USE_GITHUB_DIRECT_URL
 
@@ -35,7 +35,6 @@ function isGitHubReleaseOrCdnUrl(urlString) {
 
 /**
  * 为 Electron / 客户端生成可请求的绝对下载地址（相对路径或仅 filename 时补全）。
- * 从 GitHub API 拿到的 browser_download_url 默认不直接下发，改为同域 /downloads/（需服务器已部署 exe）。
  */
 function absolutizeUpdateAssetUrl(req, url, filename) {
   let pathPart = null
@@ -46,17 +45,12 @@ function absolutizeUpdateAssetUrl(req, url, filename) {
     if (/^https?:\/\//i.test(rawUrl)) {
       const allowGithub = USE_GITHUB_DIRECT_URL || !isGitHubReleaseOrCdnUrl(rawUrl)
       if (allowGithub) return rawUrl
-      // 有 filename 时走自有域名静态文件，避免客户端直连 GitHub
-      if (fn) {
-        pathPart = `/downloads/${encodeURIComponent(fn)}`
-      } else {
-        return rawUrl
-      }
+      return null
     } else {
       pathPart = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`
     }
   } else if (fn) {
-    pathPart = `/downloads/${encodeURIComponent(fn)}`
+    pathPart = `/current/${encodeURIComponent(fn)}`
   }
   if (!pathPart) return null
 
@@ -75,8 +69,7 @@ function absolutizeUpdateAssetUrl(req, url, filename) {
   return `${proto}://${host}${pathPart}`
 }
 
-const defaultDownloadsDir = path.join(__dirname, '../../../downloads')
-const DOWNLOADS_DIR = env.APP_UPDATE_DOWNLOADS_DIR || defaultDownloadsDir
+const DOWNLOADS_DIR = env.APP_UPDATE_DOWNLOADS_DIR
 const MANIFEST_PATH = env.APP_UPDATE_MANIFEST_PATH || path.join(DOWNLOADS_DIR, 'latest.json')
 
 // GitHub 配置
@@ -191,57 +184,74 @@ async function fetchFromLocal() {
   const manifest = JSON.parse(raw)
   
   const url = manifest.url ? String(manifest.url).trim() : ''
-  const filename = manifest.filename ? String(manifest.filename).trim() : ''
+  const filename = manifest.filename || manifest.fileName
+    ? String(manifest.filename || manifest.fileName).trim()
+    : path.basename(url.split('?')[0] || '')
 
   return {
     version: manifest.version,
     url: url || null,
     filename: filename || null,
     notes: manifest.notes || '',
+    sha256: manifest.sha256 || null,
+    publishedAt: manifest.publishedAt || null,
   }
+}
+
+function resolveManifestAssetPath(manifest) {
+  const rawUrl = typeof manifest.url === 'string' ? manifest.url.trim() : ''
+  if (!rawUrl || /^https?:\/\//i.test(rawUrl)) return ''
+  const pathname = rawUrl.split('?')[0]
+  if (pathname.startsWith('/versions/')) {
+    return path.join(DOWNLOADS_DIR, pathname.slice('/'.length))
+  }
+  if (pathname.startsWith('/current/')) {
+    return path.join(DOWNLOADS_DIR, pathname.slice('/'.length))
+  }
+  // Deprecated compatibility path. Canonical manifests must use /versions/ or /current/.
+  if (pathname.startsWith('/downloads/')) {
+    return path.join(DOWNLOADS_DIR, pathname.slice('/downloads/'.length))
+  }
+  return path.join(DOWNLOADS_DIR, pathname.replace(/^\/+/, ''))
 }
 
 /**
  * GET /latest
- * 获取最新版本信息：优先从 GitHub API 获取，回退到本地 latest.json
+ * 获取最新版本信息：本地 latest.json 是唯一默认权威入口
  */
 router.get('/latest', async (req, res, next) => {
   try {
-    let data = null
     let local = null
     try {
       local = await fetchFromLocal()
-    } catch (_) { /* 本地无 manifest 时忽略 */ }
+    } catch (err) {
+      if (!err || err.code !== 'ENOENT') throw err
+      /* 本地无 manifest 时忽略 */
+    }
 
-    // 优先尝试从 GitHub 获取
-    try {
-      data = await fetchFromGitHub()
-      console.log('[app-update] Fetched from GitHub:', data.version)
-    } catch (githubErr) {
-      console.warn('[app-update] GitHub fetch failed:', githubErr.message)
-
-      if (local && local.version) {
-        data = local
-        console.log('[app-update] Using local manifest:', data.version)
-      } else {
+    if (!local || !local.version) {
+      if (USE_GITHUB_DIRECT_URL) {
+        try {
+          const github = await fetchFromGitHub()
+          const githubUrl = absolutizeUpdateAssetUrl(req, github.url, github.filename)
+          return successResponse(res, {
+            version: github.version,
+            notes: sanitizeReleaseNotes(github.notes || ''),
+            url: githubUrl,
+            filename: github.filename,
+          }, 'ok')
+        } catch (githubErr) {
+          console.warn('[app-update] GitHub direct fallback failed:', githubErr.message)
+        }
+      }
         return res.status(404).json({
           success: false,
           message: '暂无发布版本',
           data: null,
         })
-      }
     }
 
-    if (
-      local &&
-      local.version &&
-      (!data || !data.version || compareVersions(local.version, data.version) > 0)
-    ) {
-      data = local
-      console.log('[app-update] Prefer newer local manifest:', data.version)
-    }
-
-    if (!data.version) {
+    if (!local.version) {
       return res.status(500).json({
         success: false,
         message: '版本信息无效',
@@ -249,58 +259,31 @@ router.get('/latest', async (req, res, next) => {
       })
     }
 
-    let notes = sanitizeReleaseNotes(data.notes || '')
-    if (
-      local &&
-      local.version &&
-      String(local.version) === String(data.version) &&
-      local.notes &&
-      String(local.notes).trim().length > notes.length
-    ) {
-      notes = String(local.notes).trim()
-    } else if ((!notes || notes.length < 40) && local && local.notes && String(local.notes).trim()) {
-      const ln = String(local.notes).trim()
-      if (!local.version || String(local.version) === String(data.version)) {
-        notes = ln
-      }
+    const notes = sanitizeReleaseNotes(local.notes || '')
+    const assetPath = resolveManifestAssetPath(local)
+    if (assetPath && !await fileExists(assetPath)) {
+      return res.status(500).json({
+        success: false,
+        message: `更新 manifest 指向的安装包不存在: ${local.url}`,
+        data: null,
+      })
     }
-
-    // GitHub 资产名与服务器 static 文件名可能不一致（如 CI 产出「-Flow-Setup-x.exe」）；
-    // 若本地 manifest 版本与 GitHub 一致且提供了 filename，仅在服务器已存在该文件时才优先走 /downloads。
-    let serveFilename = data.filename || null
-    let urlForResolve = data.url
-    const localFn = local && local.filename ? String(local.filename).trim() : ''
-    const localManifestAssetPath = localFn ? path.join(DOWNLOADS_DIR, localFn) : ''
-    if (
-      local &&
-      local.version &&
-      String(local.version) === String(data.version) &&
-      localFn &&
-      await fileExists(localManifestAssetPath)
-    ) {
-      serveFilename = localFn
-      urlForResolve = ''
-    }
-    const resolvedAssetPath = serveFilename ? path.join(DOWNLOADS_DIR, serveFilename) : ''
-    const hasLocalAsset = await fileExists(resolvedAssetPath)
-    let absoluteUrl = absolutizeUpdateAssetUrl(req, urlForResolve, serveFilename)
-
-    // 默认优先返回同域 /downloads，但如果服务端并没有该文件，客户端会一直拿到 404。
-    // 这种情况下回退到 GitHub Release 直链，保证桌面端至少能拿到真实安装包。
-    if (
-      serveFilename &&
-      !hasLocalAsset &&
-      typeof data.url === 'string' &&
-      isGitHubReleaseOrCdnUrl(data.url)
-    ) {
-      absoluteUrl = data.url
+    const absoluteUrl = absolutizeUpdateAssetUrl(req, local.url, local.filename)
+    if (!absoluteUrl) {
+      return res.status(500).json({
+        success: false,
+        message: '更新 manifest 下载地址无效',
+        data: null,
+      })
     }
 
     return successResponse(res, {
-      version: data.version,
+      version: local.version,
       notes: notes || '',
       url: absoluteUrl,
-      filename: serveFilename,
+      filename: local.filename,
+      sha256: local.sha256,
+      publishedAt: local.publishedAt,
     }, 'ok')
   } catch (e) {
     next(e)

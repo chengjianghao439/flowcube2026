@@ -7,6 +7,7 @@ const errorHandler    = require('./middleware/errorHandler')
 const opLogger        = require('./middleware/opLogger')
 const requestLogger   = require('./middleware/requestLogger')
 const { env } = require('./config/env')
+const { successResponse } = require('./utils/response')
 
 // ─── 启动安全校验 ─────────────────────────────────────────────────────────────
 
@@ -70,12 +71,12 @@ app.use(opLogger)
 // ─── 健康检查 ─────────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
-  res.json({ success: true, message: '极序 Flow API is running', data: null })
+  return successResponse(res, null, '极序 Flow API is running')
 })
 
 // /api/health — PDA 网络状态检测（无需登录，高优先级）
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() })
+  return successResponse(res, { status: 'ok', timestamp: new Date().toISOString() }, 'ok')
 })
 
 // ─── 业务路由（按模块在此注册）────────────────────────────────────────────────
@@ -123,10 +124,12 @@ app.use('/api/pda',            require('./modules/pda/pda.routes'))
 app.use('/api/printer-bindings', require('./modules/printer-bindings/printer-bindings.routes'))
 app.use('/api/app-update',     require('./modules/app-update/app-update.routes'))
 
-// ─── /downloads 静态资源（必须在所有 /api 之后、404 之前）────────────────────────
+// ─── 桌面端安装包静态资源（必须在所有 /api 之后、404 之前）────────────────────────
 // express.static 对「目录 URL」无 index 时会 next()，若无下列路由会落到全局 404 →「接口不存在」
-const downloadsPath = path.join(__dirname, '../downloads')
-console.log('[Downloads] 📦 静态目录绝对路径:', downloadsPath)
+const downloadsPath = env.APP_UPDATE_DOWNLOADS_DIR
+const versionsPath = path.join(downloadsPath, 'versions')
+const currentPath = path.join(downloadsPath, 'current')
+console.log('[Downloads] 📦 权威静态目录绝对路径:', downloadsPath)
 if (!fs.existsSync(downloadsPath)) {
   fs.mkdirSync(downloadsPath, { recursive: true })
   console.log('[Downloads] ❌→✅ 目录不存在，已自动创建')
@@ -141,24 +144,23 @@ try {
 }
 
 app.get(/^\/downloads\/?$/, (req, res) => {
-  // 生产环境关闭目录列举，避免暴露文件名与路径信息；直链 /downloads/*.exe 仍由 static 提供
+  // /downloads is deprecated; keep only non-indexed compatibility access for old clients.
   if (isProd) {
     return res.status(404).json({ success: false, message: '接口不存在', data: null })
   }
   try {
     const files = fs.readdirSync(downloadsPath).filter((n) => !n.startsWith('.'))
     res.set('Cache-Control', 'no-store')
-    res.json({
-      success: true,
-      message: 'ok',
-      data: { files },
-    })
+    return successResponse(res, { files }, 'ok')
   } catch (e) {
     res.status(500).json({ success: false, message: e.message, data: null })
   }
 })
 
+// /downloads is kept only as a deprecated compatibility alias. New manifests use /versions/ or /current/.
 app.use('/downloads', express.static(downloadsPath))
+app.use('/versions', express.static(versionsPath))
+app.use('/current', express.static(currentPath))
 
 // ─── 404 处理 ─────────────────────────────────────────────────────────────────
 

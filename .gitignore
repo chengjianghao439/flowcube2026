@@ -18,12 +18,17 @@ frontend/.pda-server-url
 logs/
 TEMP_BRAND_SYNC/
 
+# 生产部署拓扑只允许保留本地覆盖文件或外部路径，不允许真实配置进仓库
+deploy/production*.json
+!deploy/production.example.json
+
 # 本地/服务器全库备份（勿提交）
 flowcube_backup.sql
 
-# 安装包/压缩包体积大，勿提交（由 CI 或服务器生成）
-backend/downloads/*.zip
-backend/downloads/*.exe
+# 旧桌面发布目录已废弃；仅保留废弃说明，正式发布目录为 /var/www/flowcube-downloads
+backend/downloads/*
+!backend/downloads/.gitignore
+!backend/downloads/README.md
 backend/apk/*.apk
 
 # 测试种子脚本（含数据库凭据，仅在本地使用）

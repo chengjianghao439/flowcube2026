@@ -45,10 +45,11 @@ services:
       CORS_ALLOW_NULL_ORIGIN: ${CORS_ALLOW_NULL_ORIGIN:-0}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
+      APP_UPDATE_DOWNLOADS_DIR: /var/www/flowcube-downloads
     ports:
       - "3000:3000"
     volumes:
-      - ./backend/downloads:/app/downloads
+      - ${FLOWCUBE_DOWNLOADS_DIR:-./backend/downloads}:/var/www/flowcube-downloads
 
   frontend:
     build:
@@ -61,7 +62,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./backend/downloads:/usr/share/nginx/downloads:ro
+      - ${FLOWCUBE_DOWNLOADS_DIR:-./backend/downloads}:/usr/share/nginx/downloads:ro
 
 volumes:
   mysql_data:

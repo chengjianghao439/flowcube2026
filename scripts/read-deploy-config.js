@@ -4,14 +4,23 @@ const fs = require('fs')
 const path = require('path')
 
 const root = path.resolve(__dirname, '..')
-const configPath = path.join(root, 'deploy', 'production.json')
+const candidatePaths = [
+  process.env.FLOWCUBE_DEPLOY_CONFIG,
+  path.join(root, 'deploy', 'production.local.json'),
+  path.join(root, 'deploy', 'production.json'),
+].filter(Boolean)
 
-if (!fs.existsSync(configPath)) {
-  console.error(`Missing deploy config: ${configPath}`)
+const configPath = candidatePaths.find((candidate) => fs.existsSync(path.resolve(candidate)))
+
+if (!configPath) {
+  console.error(
+    `Missing deploy config. Set FLOWCUBE_DEPLOY_CONFIG or create ${path.join(root, 'deploy', 'production.local.json')} from deploy/production.example.json`,
+  )
   process.exit(1)
 }
 
-const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+const resolvedConfigPath = path.resolve(configPath)
+const config = JSON.parse(fs.readFileSync(resolvedConfigPath, 'utf8'))
 
 function readByPath(target, dottedPath) {
   return dottedPath.split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), target)
