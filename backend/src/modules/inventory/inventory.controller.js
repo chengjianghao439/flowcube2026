@@ -1,6 +1,6 @@
 const svc = require('./inventory.service')
 const { successResponse } = require('../../utils/response')
-const { pool } = require('../../config/db')
+const { getOperatorFromRequest } = require('../../utils/operator')
 
 async function trace(req, res, next) {
   try {
@@ -58,11 +58,9 @@ async function logs(req, res, next) {
 
 async function inbound(req, res, next) {
   try {
-    // 获取操作人真实姓名
-    const [[user]] = await pool.query('SELECT real_name FROM sys_users WHERE id=?', [req.user.userId])
     const result = await svc.changeStock({
       type: 1, ...req.body,
-      operator: { userId: req.user.userId, realName: user?.real_name || '未知' },
+      operator: getOperatorFromRequest(req),
     })
     return successResponse(res, result, '入库成功')
   } catch(e){next(e)}
@@ -70,10 +68,9 @@ async function inbound(req, res, next) {
 
 async function outbound(req, res, next) {
   try {
-    const [[user]] = await pool.query('SELECT real_name FROM sys_users WHERE id=?', [req.user.userId])
     const result = await svc.changeStock({
       type: 2, ...req.body,
-      operator: { userId: req.user.userId, realName: user?.real_name || '未知' },
+      operator: getOperatorFromRequest(req),
     })
     return successResponse(res, result, '出库成功')
   } catch(e){next(e)}
@@ -81,10 +78,9 @@ async function outbound(req, res, next) {
 
 async function adjust(req, res, next) {
   try {
-    const [[user]] = await pool.query('SELECT real_name FROM sys_users WHERE id=?', [req.user.userId])
     const result = await svc.changeStock({
       type: 3, ...req.body,
-      operator: { userId: req.user.userId, realName: user?.real_name || '未知' },
+      operator: getOperatorFromRequest(req),
     })
     return successResponse(res, result, '调整成功')
   } catch(e){next(e)}

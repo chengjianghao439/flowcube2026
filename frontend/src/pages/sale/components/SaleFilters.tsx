@@ -2,6 +2,7 @@ import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SALE_STATUS_OPTIONS } from '@/generated/status'
 
 interface SaleFiltersProps {
   search: string
@@ -13,15 +14,6 @@ interface SaleFiltersProps {
   productName?: string
   onPickProduct: () => void
 }
-
-const STATUS_OPTIONS = [
-  { value: '',  label: '全部状态' },
-  { value: '1', label: '草稿'   },
-  { value: '2', label: '已占库' },
-  { value: '3', label: '拣货中' },
-  { value: '4', label: '已出库' },
-  { value: '5', label: '已取消' },
-]
 
 export function SaleFilters({
   search,
@@ -56,7 +48,7 @@ export function SaleFilters({
             <SelectValue placeholder="全部状态" />
           </SelectTrigger>
           <SelectContent>
-            {STATUS_OPTIONS.map(o => (
+            {SALE_STATUS_OPTIONS.map(o => (
               <SelectItem key={o.value || '__all__'} value={o.value || '__all__'}>{o.label}</SelectItem>
             ))}
           </SelectContent>

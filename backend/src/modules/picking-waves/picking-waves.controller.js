@@ -1,5 +1,6 @@
 const svc = require('./picking-waves.service')
 const { successResponse } = require('../../utils/response')
+const { getOperatorFromRequest } = require('../../utils/operator')
 
 exports.list = async (req, res, next) => {
   try {
@@ -27,10 +28,7 @@ exports.create = async (req, res, next) => {
 
 exports.start = async (req, res, next) => {
   try {
-    await svc.startPicking(+req.params.id, {
-      userId: req.user.userId,
-      userName: req.user.realName || req.user.username,
-    })
+    await svc.startPicking(+req.params.id, getOperatorFromRequest(req))
     return successResponse(res, null, '拣货已开始')
   } catch (e) { next(e) }
 }

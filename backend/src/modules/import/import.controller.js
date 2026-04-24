@@ -1,6 +1,7 @@
 const { successResponse } = require('../../utils/response')
 const AppError = require('../../utils/AppError')
 const importService = require('./import.service')
+const { getOperatorFromRequest } = require('../../utils/operator')
 
 function sendWorkbook(res, { filename, buffer }) {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -42,7 +43,7 @@ async function importStock(req, res, next) {
     const result = await importService.importStock({
       fileBuffer: req.file.buffer,
       originalName: req.file.originalname,
-      userId: req.user.userId,
+      operator: getOperatorFromRequest(req),
     })
     return successResponse(res, result.data, result.message)
   } catch (error) {

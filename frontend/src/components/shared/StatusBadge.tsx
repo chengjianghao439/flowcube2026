@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { WT_STATUS, WT_STATUS_NAME, WT_STATUS_CLASS } from '@/constants/warehouseTaskStatus'
+import { SALE_STATUS_NAME, SALE_STATUS_TONE } from '@/generated/status'
+import { WT_STATUS_NAME, WT_STATUS_CLASS } from '@/constants/warehouseTaskStatus'
 import type { WtStatus } from '@/constants/warehouseTaskStatus'
 
 export type OrderType = 'purchase' | 'sale' | 'transfer' | 'task' | 'stockcheck' | 'returns'
@@ -10,14 +11,25 @@ interface StatusConfig {
   className: string
 }
 
+export const SOFT_STATUS_CLASS = {
+  draft: 'bg-secondary text-secondary-foreground border-secondary',
+  active: 'bg-primary/10 text-primary border-primary/20',
+  success: 'bg-success/10 text-success border-success/20',
+  danger: 'bg-destructive/10 text-destructive border-destructive/20',
+} as const
+
+const SALE_STATUS_CONFIG = Object.fromEntries(
+  Object.entries(SALE_STATUS_NAME).map(([status, label]) => [
+    Number(status),
+    {
+      label,
+      className: SOFT_STATUS_CLASS[SALE_STATUS_TONE[status as keyof typeof SALE_STATUS_TONE]],
+    },
+  ]),
+) as Record<number, StatusConfig>
+
 const CONFIG: Record<OrderType, Record<number, StatusConfig>> = {
-  sale: {
-    1: { label: '草稿',   className: 'bg-secondary text-secondary-foreground border-secondary' },
-    2: { label: '已占库', className: 'bg-primary/10 text-primary border-primary/20' },
-    3: { label: '拣货中', className: 'bg-primary/10 text-primary border-primary/20' },
-    4: { label: '已出库', className: 'bg-success/10 text-success border-success/20' },
-    5: { label: '已取消', className: 'bg-destructive/10 text-destructive border-destructive/20' },
-  },
+  sale: SALE_STATUS_CONFIG,
   purchase: {
     1: { label: '草稿',   className: 'bg-secondary text-secondary-foreground border-secondary' },
     2: { label: '已提交', className: 'bg-primary/10 text-primary border-primary/20' },
@@ -48,13 +60,6 @@ const CONFIG: Record<OrderType, Record<number, StatusConfig>> = {
     4: { label: '已取消', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   },
 }
-
-export const SOFT_STATUS_CLASS = {
-  draft: 'bg-secondary text-secondary-foreground border-secondary',
-  active: 'bg-primary/10 text-primary border-primary/20',
-  success: 'bg-success/10 text-success border-success/20',
-  danger: 'bg-destructive/10 text-destructive border-destructive/20',
-} as const
 
 interface StatusBadgeProps {
   type: OrderType

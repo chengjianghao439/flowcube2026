@@ -6,7 +6,8 @@ import {
   getWavePickRouteApi, markRouteCompletedApi,
 } from '@/api/picking-waves'
 import type { WaveItem, WaveRouteStep, WaveRouteContainer, WavePickLine } from '@/api/picking-waves'
-import client from '@/api/client'
+import { getContainerByBarcodeApi } from '@/api/inventory'
+import { payloadClient as client } from '@/api/client'
 
 // ── 容器查询 ──────────────────────────────────────────────────────────────────
 
@@ -22,8 +23,7 @@ interface ContainerInfo {
 }
 
 async function fetchContainerByBarcode(bc: string): Promise<ContainerInfo> {
-  const res = await client.get<{ data: ContainerInfo }>(`/inventory/containers/barcode/${bc}`)
-  return res
+  return getContainerByBarcodeApi(bc)
 }
 
 function allocatePickLine(pickLines: WavePickLine[] | undefined, productId: number): WavePickLine | null {

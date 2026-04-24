@@ -1,5 +1,5 @@
 import { payloadClient as client } from './client'
-import type { ApiResponse, PaginatedData } from '@/types'
+import type { PaginatedData } from '@/types'
 
 // ── 类型定义 ──────────────────────────────────────────────────────────────────
 
@@ -116,28 +116,28 @@ export interface WaveRouteData {
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const getWavesApi = (params?: Record<string, string | number>) =>
-  client.get<ApiResponse<PaginatedData<PickingWave>>>('/picking-waves', { params })
+  client.get<PaginatedData<PickingWave>>('/picking-waves', { params })
 
 export const getWaveByIdApi = (id: number) =>
-  client.get<ApiResponse<PickingWave>>(`/picking-waves/${id}`)
+  client.get<PickingWave>(`/picking-waves/${id}`)
 
 export const createWaveApi = (taskIds: number[], priority?: number, remark?: string) =>
-  client.post<ApiResponse<{ waveId: number; waveNo: string }>>('/picking-waves', { taskIds, priority: priority ?? 2, remark })
+  client.post<{ waveId: number; waveNo: string }>('/picking-waves', { taskIds, priority: priority ?? 2, remark })
 
 export const startWaveApi = (id: number) =>
-  client.post<ApiResponse<null>>(`/picking-waves/${id}/start`)
+  client.post<null>(`/picking-waves/${id}/start`)
 
 export const finishPickingApi = (id: number) =>
-  client.post<ApiResponse<null>>(`/picking-waves/${id}/finish-picking`)
+  client.post<null>(`/picking-waves/${id}/finish-picking`)
 
 export const finishWaveApi = (id: number) =>
-  client.post<ApiResponse<null>>(`/picking-waves/${id}/finish`)
+  client.post<null>(`/picking-waves/${id}/finish`)
 
 export const cancelWaveApi = (id: number) =>
-  client.post<ApiResponse<null>>(`/picking-waves/${id}/cancel`)
+  client.post<null>(`/picking-waves/${id}/cancel`)
 
 export const getWavePickRouteApi = (id: number) =>
-  client.get<ApiResponse<WaveRouteData>>(`/picking-waves/${id}/pick-route`)
+  client.get<WaveRouteData>(`/picking-waves/${id}/pick-route`)
 
 export const markRouteCompletedApi = (waveId: number, barcode: string) =>
-  client.post<ApiResponse<null>>(`/picking-waves/${waveId}/route-completed`, { barcode })
+  client.post<null>(`/picking-waves/${waveId}/route-completed`, { barcode })

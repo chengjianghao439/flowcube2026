@@ -1,12 +1,7 @@
 const svc = require('./inbound-tasks.service')
 const { successResponse } = require('../../utils/response')
-const { pool } = require('../../config/db')
 const { extractRequestKey } = require('../../utils/requestKey')
-
-async function getOp(userId) {
-  const [[u]] = await pool.query('SELECT id, username, real_name FROM sys_users WHERE id=?', [userId])
-  return { userId: u.id, username: u.username, realName: u.real_name }
-}
+const { getOperatorFromRequest } = require('../../utils/operator')
 
 const pendingContainers = async (req, res, next) => {
   try {
@@ -52,7 +47,7 @@ const detail = async (req, res, next) => {
 
 const submit = async (req, res, next) => {
   try {
-    const operator = await getOp(req.user.userId)
+    const operator = getOperatorFromRequest(req)
     const data = await svc.submit(+req.params.id, operator)
     return successResponse(res, data, '已提交到 PDA')
   } catch (e) { next(e) }
@@ -60,7 +55,7 @@ const submit = async (req, res, next) => {
 
 const audit = async (req, res, next) => {
   try {
-    const operator = await getOp(req.user.userId)
+    const operator = getOperatorFromRequest(req)
     const data = await svc.audit(+req.params.id, req.body || {}, operator)
     return successResponse(res, data, req.body?.action === 'reject' ? '已退回收货订单' : '已审核通过')
   } catch (e) { next(e) }
@@ -68,7 +63,7 @@ const audit = async (req, res, next) => {
 
 const reprint = async (req, res, next) => {
   try {
-    const operator = await getOp(req.user.userId)
+    const operator = getOperatorFromRequest(req)
     const data = await svc.reprint(+req.params.id, req.body || {}, operator)
     return successResponse(res, data, '补打任务已加入打印队列')
   } catch (e) { next(e) }
@@ -92,7 +87,7 @@ const receive = async (req, res, next) => {
 
 const putaway = async (req, res, next) => {
   try {
-    const operator = await getOp(req.user.userId)
+    const operator = getOperatorFromRequest(req)
     const data = await svc.putaway(+req.params.id, req.body, operator, {
       requestKey: extractRequestKey(req),
     })

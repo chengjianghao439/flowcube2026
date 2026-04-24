@@ -8,6 +8,7 @@
     "release:prod": "bash scripts/release-prod.sh",
     "release:gate": "bash scripts/release-gate.sh",
     "release:check-downloads": "node scripts/check-deprecated-downloads.js",
+    "generate:status": "node scripts/generate-status-constants.js",
     "deploy:keygen": "bash scripts/setup-deploy-key.sh",
     "smoke:concurrency-guards": "node tests/concurrency-guards.smoke.test.js",
     "smoke:mainline": "node tests/mainline.smoke.test.js",

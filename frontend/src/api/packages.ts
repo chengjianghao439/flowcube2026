@@ -1,6 +1,6 @@
 import { payloadClient as client } from './client'
 import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
-import type { ApiResponse } from '@/types'
+
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 
 export interface PackageItem {
@@ -24,30 +24,30 @@ export interface Package {
 }
 
 export const getPackagesApi = (taskId: number) =>
-  client.get<ApiResponse<Package[]>>('/packages', { params: { taskId } })
+  client.get<Package[]>('/packages', { params: { taskId } })
 
 export const createPackageApi = (warehouseTaskId: number, remark?: string) =>
-  client.post<ApiResponse<Package>>('/packages', { warehouseTaskId, remark })
+  client.post<Package>('/packages', { warehouseTaskId, remark })
 
 export const addPackageItemApi = (
   packageId: number,
   productCode: string,
   qty: number,
 ) =>
-  client.post<ApiResponse<PackageItem>>(`/packages/${packageId}/add-item`, {
+  client.post<PackageItem>(`/packages/${packageId}/add-item`, {
     productCode,
     qty,
   })
 
 export const finishPackageApi = (packageId: number, requestKey?: string) =>
-  client.put<ApiResponse<{ id: number; status: number; statusName: string; allPackagesDone?: boolean; printQueued?: boolean; printJobId?: number | null }>>(
+  client.put<{ id: number; status: number; statusName: string; allPackagesDone?: boolean; printQueued?: boolean; printJobId?: number | null }>(
     `/packages/${packageId}/finish`,
     undefined,
     requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined,
   )
 
 export const printPackageLabelApi = (packageId: number, requestKey?: string) =>
-  client.post<ApiResponse<{
+  client.post<{
     queued: boolean
     job: {
       id?: number
@@ -55,7 +55,7 @@ export const printPackageLabelApi = (packageId: number, requestKey?: string) =>
       contentType?: string
       printerName?: string | null
     } | unknown
-  }>>(`/packages/${packageId}/print-label`, undefined, {
+  }>(`/packages/${packageId}/print-label`, undefined, {
     headers: requestKey
       ? withRequestKeyHeaders(requestKey, desktopLocalPrintRequestHeaders())
       : desktopLocalPrintRequestHeaders(),
@@ -85,4 +85,4 @@ export interface PackageShipInfo {
 }
 
 export const getPackageByBarcodeApi = (barcode: string) =>
-  client.get<ApiResponse<PackageShipInfo>>(`/packages/barcode/${encodeURIComponent(barcode)}`)
+  client.get<PackageShipInfo>(`/packages/barcode/${encodeURIComponent(barcode)}`)

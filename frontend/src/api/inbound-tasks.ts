@@ -1,5 +1,5 @@
 import { payloadClient as client } from './client'
-import type { ApiResponse, PaginatedData, QueryParams } from '@/types'
+import type { PaginatedData, QueryParams } from '@/types'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type {
   InboundTask,
@@ -16,31 +16,31 @@ import type {
 } from '@/types/inbound-tasks'
 
 export const getInboundTasksApi = (params: QueryParams & { status?: number; productId?: number }) =>
-  client.get<ApiResponse<PaginatedData<InboundTask>>>('/inbound-tasks', { params })
+  client.get<PaginatedData<InboundTask>>('/inbound-tasks', { params })
 
 export const getInboundPurchaseCandidatesApi = (params: { supplierId: number; keyword?: string }) =>
-  client.get<ApiResponse<InboundPurchaseCandidate[]>>('/inbound-tasks/purchase-items', { params })
+  client.get<InboundPurchaseCandidate[]>('/inbound-tasks/purchase-items', { params })
 
 export const createInboundTaskApi = (data: CreateInboundTaskParams) =>
-  client.post<ApiResponse<CreateInboundTaskResult>>('/inbound-tasks', data)
+  client.post<CreateInboundTaskResult>('/inbound-tasks', data)
 
 export const getInboundTaskByIdApi = (id: number) =>
-  client.get<ApiResponse<InboundTask>>(`/inbound-tasks/${id}`)
+  client.get<InboundTask>(`/inbound-tasks/${id}`)
 
 export const submitInboundTaskApi = (id: number) =>
-  client.post<ApiResponse<InboundTask>>(`/inbound-tasks/${id}/submit`)
+  client.post<InboundTask>(`/inbound-tasks/${id}/submit`)
 
 export const auditInboundTaskApi = (id: number, data: AuditInboundTaskParams) =>
-  client.post<ApiResponse<InboundTask>>(`/inbound-tasks/${id}/audit`, data)
+  client.post<InboundTask>(`/inbound-tasks/${id}/audit`, data)
 
 export const reprintInboundTaskApi = (id: number, data: ReprintInboundTaskParams) =>
-  client.post<ApiResponse<ReprintInboundTaskResult>>(`/inbound-tasks/${id}/reprint`, data)
+  client.post<ReprintInboundTaskResult>(`/inbound-tasks/${id}/reprint`, data)
 
 export const getInboundTaskContainersApi = (id: number) =>
-  client.get<ApiResponse<InboundContainersResult>>(`/inbound-tasks/${id}/containers`)
+  client.get<InboundContainersResult>(`/inbound-tasks/${id}/containers`)
 
 export const receiveInboundApi = (id: number, data: ReceiveParams, requestKey?: string) =>
-  client.post<ApiResponse<ReceivePackageResult>>(`/inbound-tasks/${id}/receive`, data, requestKey
+  client.post<ReceivePackageResult>(`/inbound-tasks/${id}/receive`, data, requestKey
     ? { headers: withRequestKeyHeaders(requestKey) }
     : undefined)
 

@@ -1,0 +1,12 @@
+{
+  "name": "flowcube-desktop-embedded-backend-legacy",
+  "version": "1.0.0",
+  "description": "DEPRECATED legacy Electron entry with embedded backend. Do not build or publish.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "node -e \"console.error('DEPRECATED: use ../../../desktop instead of docs/legacy/electron-embedded-backend'); process.exit(1)\"",
+    "build:mac": "node -e \"console.error('DEPRECATED: use ../../../desktop instead of docs/legacy/electron-embedded-backend'); process.exit(1)\"",
+    "build:win": "node -e \"console.error('DEPRECATED: use ../../../desktop instead of docs/legacy/electron-embedded-backend'); process.exit(1)\""
+  }
+}

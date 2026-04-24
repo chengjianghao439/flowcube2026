@@ -1,59 +1,16 @@
-const PATH_ALIASES: Record<string, string> = {
-  '/sales': '/sale',
-}
+import { ROUTE_ALIASES, resolveRouteTabIdentity, type RouteTabIdentity } from '@/router/routeRegistry'
 
 /**
  * 当页面主要上下文由 query 决定时，必须在这里登记。
  * 统一在路由元数据层定义 tab identity，避免页面各自手工决定是否用完整 URL 当 key。
  */
-type TabIdentityRule =
-  | { kind: 'pathname' }
-  | { kind: 'full-url' }
-  | { kind: 'query-keys'; keys: string[] }
-
 type WorkspaceRouteMeta = {
-  tabIdentity?: TabIdentityRule
+  tabIdentity?: RouteTabIdentity
 }
-
-const PATH_META: Record<string, WorkspaceRouteMeta> = {
-  '/sale': {
-    tabIdentity: { kind: 'pathname' },
-  },
-  '/purchase': {
-    tabIdentity: { kind: 'pathname' },
-  },
-  '/products': {
-    tabIdentity: { kind: 'pathname' },
-  },
-  '/warehouse-tasks': {
-    tabIdentity: { kind: 'pathname' },
-  },
-  '/inventory': {
-    tabIdentity: { kind: 'pathname' },
-  },
-  '/inventory/overview': {
-    tabIdentity: { kind: 'pathname' },
-  },
-  '/settings/barcode-print-query': {
-    tabIdentity: { kind: 'full-url' },
-  },
-  '/picking-waves': {
-    tabIdentity: { kind: 'query-keys', keys: ['waveId', 'focus'] },
-  },
-}
-
-const PATTERN_META: Array<{ pattern: RegExp; meta: WorkspaceRouteMeta }> = [
-  { pattern: /^\/sale\/(new|\d+)$/, meta: { tabIdentity: { kind: 'pathname' } } },
-  { pattern: /^\/purchase\/(new|\d+)$/, meta: { tabIdentity: { kind: 'pathname' } } },
-  { pattern: /^\/inbound-tasks\/new$/, meta: { tabIdentity: { kind: 'pathname' } } },
-  { pattern: /^\/inbound-tasks\/\d+$/, meta: { tabIdentity: { kind: 'pathname' } } },
-  { pattern: /^\/settings\/print-templates\/(new|\d+)$/, meta: { tabIdentity: { kind: 'pathname' } } },
-  { pattern: /^\/wave-scan$/, meta: { tabIdentity: { kind: 'pathname' } } },
-]
 
 export function normalizeWorkspacePath(path: string): string {
   const pathname = path.split(/[?#]/)[0] || '/'
-  return PATH_ALIASES[pathname] ?? pathname
+  return ROUTE_ALIASES[pathname] ?? pathname
 }
 
 export function getWorkspaceFullPath(pathname: string, search: string): string {
@@ -89,11 +46,11 @@ function buildCanonicalSearch(searchParams: URLSearchParams, keys?: string[]): s
 
 export function getWorkspaceRouteMeta(path: string): WorkspaceRouteMeta {
   const normalizedPath = normalizeWorkspacePath(path)
-  if (PATH_META[normalizedPath]) return PATH_META[normalizedPath]
-  return PATTERN_META.find((entry) => entry.pattern.test(normalizedPath))?.meta ?? {}
+  const tabIdentity = resolveRouteTabIdentity(normalizedPath)
+  return tabIdentity ? { tabIdentity } : {}
 }
 
-function resolveWorkspaceTabIdentity(pathname: string, search = ''): TabIdentityRule {
+function resolveWorkspaceTabIdentity(pathname: string, search = ''): RouteTabIdentity {
   const explicit = getWorkspaceRouteMeta(pathname).tabIdentity
   if (explicit) return explicit
   return search ? { kind: 'full-url' } : { kind: 'pathname' }

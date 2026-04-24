@@ -3,7 +3,7 @@
  * 无需任何网口或 IP 配置；名称须与「从本机添加」时一致
  */
 import axios from 'axios'
-import apiClient from '@/api/client'
+import { payloadClient as apiClient } from '@/api/client'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 
 /**

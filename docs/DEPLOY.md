@@ -66,6 +66,13 @@ node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.e
 
 `latest.json` 是唯一权威入口。`backend/downloads` 已废弃，仅保留废弃说明，不再用于发布。
 
+### `/downloads` 兼容别名
+
+- `/downloads/` 只用于旧客户端兼容，允许 GET/HEAD 静态访问旧 manifest 已下发的安装包路径。
+- 新客户端、新 manifest、新脚本一律使用 `/latest.json`、`/versions/`、`/current/`。
+- 生产 `docker-compose.yml` 默认挂载 `/var/www/flowcube-downloads`，不再 fallback 到 `./backend/downloads`。
+- 退场计划：目标 `v0.5.0` 后删除 alias；删除前必须确认连续 30 天无 `/downloads/` 访问，且所有受管客户端已升级到 `>=0.3.72`。
+
 ## 一次性初始化
 
 ### 1. 生成 deploy key

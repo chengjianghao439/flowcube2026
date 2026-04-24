@@ -2,11 +2,10 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getRolesApi } from '@/api/settings'
 import { toast } from '@/lib/toast'
-import client from '@/api/client'
+import { payloadClient as client } from '@/api/client'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { usePermission } from '@/hooks/usePermission'
-import type { ApiResponse } from '@/types'
 import { PERMISSIONS, PERMISSION_GROUPS } from '@/lib/permission-codes'
 
 export default function PermissionsPage() {
@@ -17,7 +16,7 @@ export default function PermissionsPage() {
   const [perms, setPerms] = useState<Set<string>>(new Set())
 
   const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r || []) })
-  const { data: rolePerms, isLoading } = useQuery({ queryKey: ['role-perms', selectedRole], queryFn: () => client.get<ApiResponse<string[]>>(`/roles/${selectedRole}/permissions`).then(r => r || []), enabled: !!selectedRole })
+  const { data: rolePerms, isLoading } = useQuery({ queryKey: ['role-perms', selectedRole], queryFn: () => client.get<string[]>(`/roles/${selectedRole}/permissions`).then(r => r || []), enabled: !!selectedRole })
 
   useEffect(() => { if (rolePerms) setPerms(new Set(rolePerms)) }, [rolePerms])
 

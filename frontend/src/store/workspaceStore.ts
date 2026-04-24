@@ -1,58 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
+export { PATH_TITLES } from '@/router/routeRegistry'
 
 export interface WorkspaceTab {
   key: string        // 唯一标识，对列表页即路径本身
   title: string
   path: string
   closable: boolean
-}
-
-/** 路径 → 标签标题映射表 */
-export const PATH_TITLES: Record<string, string> = {
-  '/dashboard':       '仪表盘',
-  '/sale':            '销售管理',
-  '/sale/new':        '新建销售单',
-  '/purchase':        '采购订单',
-  '/purchase/new':    '新建采购单',
-  '/products':        '商品管理',
-  '/categories':      '商品分类',
-  '/warehouses':      '仓库管理',
-  '/inventory':          '库存管理',
-  '/inventory/overview': '库存总览',
-  '/stockcheck':      '库存盘点',
-  '/transfer':        '库存调拨',
-  '/warehouse-tasks': '仓库任务',
-  '/inbound-tasks':   '收货订单',
-  '/inbound-tasks/new': '新建收货订单',
-  '/picking-waves':   '波次拣货',
-  '/sorting-bins':    '分拣格管理',
-  '/wave-scan':       '波次扫码',
-  '/locations':       '库位管理',
-  '/racks':           '货架管理',
-  '/customers':       '客户管理',
-  '/suppliers':       '供应商管理',
-  '/carriers':        '承运商管理',
-  '/returns':         '退货管理',
-  '/payments':        '应付/应收',
-  '/users':           '用户管理',
-  '/permissions':     '权限管理',
-  '/settings':        '系统设置',
-  '/settings/barcode-print-query': '条码打印查询',
-  '/oplogs':          '操作日志',
-  '/reports':                 '报表中心',
-  '/reports/role-workbench':   '岗位工作台',
-  '/reports/exception-workbench': '异常工作台',
-  '/reports/reconciliation':   '对账基础版',
-  '/reports/profit-analysis':  '利润 / 库存分析',
-  '/reports/approvals':        '审批与提醒',
-  '/reports/wave-performance': '波次效率报表',
-  '/reports/pda-anomaly':      'PDA 异常分析',
-  '/reports/warehouse-ops':    '仓库运营看板',
-  '/price-lists':          '价格管理',
-  '/settings/print-templates': '打印模板',
-  '/settings/printers':         '打印机管理',
 }
 
 export const HOME_TAB: WorkspaceTab = {

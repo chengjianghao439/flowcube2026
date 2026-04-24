@@ -338,8 +338,6 @@ module.exports = {
   fail,
   retry,
   createWithinTransaction,
-  normalizeJobType,
-  resolvePrinterForJob,
   STATUS,
   MAX_RETRY,
 }

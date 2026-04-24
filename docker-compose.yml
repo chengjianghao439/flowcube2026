@@ -49,7 +49,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ${FLOWCUBE_DOWNLOADS_DIR:-./backend/downloads}:/var/www/flowcube-downloads
+      # 桌面发布目录只允许指向 canonical host path；backend/downloads 已废弃，禁止作为默认 fallback。
+      - ${FLOWCUBE_DOWNLOADS_DIR:-/var/www/flowcube-downloads}:/var/www/flowcube-downloads
 
   frontend:
     build:
@@ -62,7 +63,8 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ${FLOWCUBE_DOWNLOADS_DIR:-./backend/downloads}:/usr/share/nginx/downloads:ro
+      # nginx 只暴露 canonical downloads root，下游路径为 /latest.json、/versions/、/current/。
+      - ${FLOWCUBE_DOWNLOADS_DIR:-/var/www/flowcube-downloads}:/usr/share/nginx/downloads:ro
 
 volumes:
   mysql_data:

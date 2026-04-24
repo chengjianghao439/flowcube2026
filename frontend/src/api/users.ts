@@ -1,19 +1,19 @@
 import { payloadClient as apiClient } from './client'
-import type { ApiResponse, PaginatedData, QueryParams } from '@/types'
+import type { PaginatedData, QueryParams } from '@/types'
 import type { SysUser, CreateUserParams, UpdateUserParams } from '@/types/users'
 
 export async function getUsersApi(params: QueryParams): Promise<PaginatedData<SysUser>> {
-  const res = await apiClient.get<ApiResponse<PaginatedData<SysUser>>>('/users', { params })
+  const res = await apiClient.get<PaginatedData<SysUser>>('/users', { params })
   return res
 }
 
 export async function getUserApi(id: number): Promise<SysUser> {
-  const res = await apiClient.get<ApiResponse<SysUser>>(`/users/${id}`)
+  const res = await apiClient.get<SysUser>(`/users/${id}`)
   return res
 }
 
 export async function createUserApi(data: CreateUserParams): Promise<{ id: number }> {
-  const res = await apiClient.post<ApiResponse<{ id: number }>>('/users', data)
+  const res = await apiClient.post<{ id: number }>('/users', data)
   return res
 }
 

@@ -18,183 +18,26 @@
  * - 工作区切换标签、顶栏导航不拦截（KeepAlive 保留草稿）
  */
 
-import { lazy, Suspense, useEffect, useRef } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useWorkspaceStore, PATH_TITLES, HOME_TAB } from '@/store/workspaceStore'
+import { useWorkspaceStore, HOME_TAB } from '@/store/workspaceStore'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import { usePermission } from '@/hooks/usePermission'
-import type { PermCode } from '@/lib/permissions'
-import { PERMISSIONS } from '@/lib/permission-codes'
 import {
   normalizeWorkspacePath as normalizePath,
   getWorkspaceFullPath as getFullPath,
   buildWorkspaceTabRegistration,
   buildWorkspaceTabRegistrationFromPath,
 } from '@/router/workspaceRouteMeta'
+import {
+  PATH_TITLES,
+  isRegisteredErpRoute,
+  resolveRouteComponent,
+  resolveRoutePermission,
+  resolveRouteTitle,
+} from '@/router/routeRegistry'
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
 import { TabPathContext } from './TabPathContext'
-
-// ── 路径 → 所需权限（固定路径） ──────────────────────────────────────────────
-const PATH_PERMS: Record<string, PermCode> = {
-  '/dashboard':       PERMISSIONS.DASHBOARD_VIEW,
-  '/sale':            PERMISSIONS.SALE_ORDER_VIEW,
-  '/sale/new':        PERMISSIONS.SALE_ORDER_VIEW,
-  '/purchase':        PERMISSIONS.PURCHASE_ORDER_VIEW,
-  '/products':        PERMISSIONS.PRODUCT_VIEW,
-  '/categories':      PERMISSIONS.CATEGORY_VIEW,
-  '/warehouses':      PERMISSIONS.WAREHOUSE_VIEW,
-  '/inventory':          PERMISSIONS.INVENTORY_VIEW,
-  '/inventory/overview': PERMISSIONS.INVENTORY_VIEW,
-  '/stockcheck':      PERMISSIONS.STOCKCHECK_VIEW,
-  '/transfer':        PERMISSIONS.TRANSFER_ORDER_VIEW,
-  '/warehouse-tasks': PERMISSIONS.WAREHOUSE_TASK_VIEW,
-  '/inbound-tasks':   PERMISSIONS.INBOUND_ORDER_VIEW,
-  '/inbound-tasks/new': PERMISSIONS.INBOUND_ORDER_VIEW,
-  '/picking-waves':   PERMISSIONS.PICKING_WAVE_VIEW,
-  '/sorting-bins':    PERMISSIONS.SORTING_BIN_VIEW,
-  '/locations':       PERMISSIONS.LOCATION_VIEW,
-  '/racks':           PERMISSIONS.RACK_VIEW,
-  '/customers':       PERMISSIONS.CUSTOMER_VIEW,
-  '/carriers':        PERMISSIONS.CARRIER_VIEW,
-  '/suppliers':       PERMISSIONS.SUPPLIER_VIEW,
-  '/returns':         PERMISSIONS.RETURN_ORDER_VIEW,
-  '/payments':        PERMISSIONS.PAYMENT_VIEW,
-  '/users':           PERMISSIONS.USER_VIEW,
-  '/permissions':     PERMISSIONS.ROLE_VIEW,
-  '/settings':        PERMISSIONS.SETTINGS_VIEW,
-  '/settings/barcode-print-query': PERMISSIONS.PRINT_JOB_VIEW,
-  '/oplogs':          PERMISSIONS.AUDIT_LOG_VIEW,
-  '/reports':         PERMISSIONS.REPORT_VIEW,
-  '/reports/role-workbench': PERMISSIONS.REPORT_VIEW,
-  '/reports/exception-workbench': PERMISSIONS.REPORT_VIEW,
-  '/reports/reconciliation': PERMISSIONS.REPORT_VIEW,
-  '/reports/profit-analysis': PERMISSIONS.REPORT_VIEW,
-  '/reports/approvals': PERMISSIONS.REPORT_VIEW,
-  '/reports/wave-performance': PERMISSIONS.REPORT_VIEW,
-  '/reports/pda-anomaly':      PERMISSIONS.REPORT_VIEW,
-  '/reports/warehouse-ops':    PERMISSIONS.REPORT_VIEW,
-  '/price-lists':               PERMISSIONS.PRICE_LIST_VIEW,
-  '/settings/print-templates':  PERMISSIONS.PRINT_TEMPLATE_VIEW,
-  '/settings/printers':          PERMISSIONS.PRINT_PRINTER_VIEW,
-}
-
-// ── 固定路径 → 组件映射（代码分割仍然有效）────────────────────────────────────
-const PAGE_MAP: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
-  '/dashboard':       lazy(() => import('@/pages/dashboard')),
-  '/sale':            lazy(() => import('@/pages/sale')),
-  '/purchase':        lazy(() => import('@/pages/purchase')),
-  '/products':        lazy(() => import('@/pages/products')),
-  '/categories':      lazy(() => import('@/pages/categories')),
-  '/warehouses':      lazy(() => import('@/pages/warehouses')),
-  '/inventory':          lazy(() => import('@/pages/inventory')),
-  '/inventory/overview': lazy(() => import('@/pages/inventory/overview')),
-  '/stockcheck':      lazy(() => import('@/pages/stockcheck')),
-  '/transfer':        lazy(() => import('@/pages/transfer')),
-  '/warehouse-tasks': lazy(() => import('@/pages/warehouse-tasks')),
-  '/inbound-tasks':   lazy(() => import('@/pages/inbound-tasks')),
-  '/picking-waves':   lazy(() => import('@/pages/picking-waves')),
-  '/sorting-bins':    lazy(() => import('@/pages/sorting-bins')),
-  '/locations':       lazy(() => import('@/pages/locations')),
-  '/racks':           lazy(() => import('@/pages/racks')),
-  '/customers':       lazy(() => import('@/pages/customers')),
-  '/carriers':        lazy(() => import('@/pages/carriers')),
-  '/suppliers':       lazy(() => import('@/pages/suppliers')),
-  '/returns':         lazy(() => import('@/pages/returns')),
-  '/payments':        lazy(() => import('@/pages/payments')),
-  '/users':           lazy(() => import('@/pages/users')),
-  '/permissions':     lazy(() => import('@/pages/permissions')),
-  '/settings':        lazy(() => import('@/pages/settings')),
-  '/settings/barcode-print-query': lazy(() => import('@/pages/settings/barcode-print-query')),
-  '/oplogs':          lazy(() => import('@/pages/oplogs')),
-  '/reports':         lazy(() => import('@/pages/reports')),
-  '/reports/role-workbench': lazy(() => import('@/pages/reports/role-workbench')),
-  '/reports/exception-workbench': lazy(() => import('@/pages/reports/exception-workbench')),
-  '/reports/reconciliation': lazy(() => import('@/pages/reports/reconciliation')),
-  '/reports/profit-analysis': lazy(() => import('@/pages/reports/profit-analysis')),
-  '/reports/approvals': lazy(() => import('@/pages/reports/approvals')),
-  '/reports/wave-performance': lazy(() => import('@/pages/reports/wave-performance')),
-  '/reports/pda-anomaly':      lazy(() => import('@/pages/reports/pda-anomaly')),
-  '/reports/warehouse-ops':    lazy(() => import('@/pages/reports/warehouse-ops')),
-  '/price-lists':                lazy(() => import('@/pages/price-lists')),
-  '/settings/print-templates':  lazy(() => import('@/pages/settings/print-templates')),
-  '/settings/printers':          lazy(() => import('@/pages/settings/printers')),
-}
-
-// ── 动态路由：模块级惰性加载（注意：必须在组件外声明，防止每次渲染重新 lazy） ──
-const SaleFormPage           = lazy(() => import('@/pages/sale/form'))
-const PurchaseFormPage       = lazy(() => import('@/pages/purchase/form'))
-const InboundTaskCreatePage  = lazy(() => import('@/pages/inbound-tasks/create'))
-const InboundTaskDetailPage  = lazy(() => import('@/pages/inbound-tasks/detail'))
-const PrintTemplateEditorPage = lazy(() => import('@/pages/settings/print-templates/editor'))
-const PdaWavePage            = lazy(() => import('@/pages/pda/wave'))
-
-// ── 动态路径模式配置 ──────────────────────────────────────────────────────────
-interface PathPattern {
-  pattern: RegExp
-  perm: PermCode
-  component: React.LazyExoticComponent<React.ComponentType>
-  defaultTitle: (path: string) => string
-}
-
-const PATH_PATTERNS: PathPattern[] = [
-  {
-    pattern: /^\/sale\/(new|\d+)$/,
-    perm: PERMISSIONS.SALE_ORDER_VIEW,
-    component: SaleFormPage,
-    defaultTitle: (path) => path === '/sale/new' ? '新建销售单' : `销售单 #${path.split('/').pop()}`,
-  },
-  {
-    pattern: /^\/purchase\/(new|\d+)$/,
-    perm: PERMISSIONS.PURCHASE_ORDER_VIEW,
-    component: PurchaseFormPage,
-    defaultTitle: (path) => path === '/purchase/new' ? '新建采购单' : `采购订单 #${path.split('/').pop()}`,
-  },
-  {
-    pattern: /^\/inbound-tasks\/new$/,
-    perm: PERMISSIONS.INBOUND_ORDER_VIEW,
-    component: InboundTaskCreatePage,
-    defaultTitle: () => '新建收货订单',
-  },
-  {
-    pattern: /^\/inbound-tasks\/\d+$/,
-    perm: PERMISSIONS.INBOUND_ORDER_VIEW,
-    component: InboundTaskDetailPage,
-    defaultTitle: (path) => `收货订单 #${path.split('/').pop()}`,
-  },
-  {
-    pattern: /^\/settings\/print-templates\/(new|\d+)$/,
-    perm: PERMISSIONS.PRINT_TEMPLATE_VIEW,
-    component: PrintTemplateEditorPage,
-    defaultTitle: (path) => path.endsWith('/new') ? '新建打印模板' : '编辑打印模板',
-  },
-  {
-    pattern: /^\/wave-scan$/,
-    perm: PERMISSIONS.PICKING_WAVE_VIEW,
-    component: PdaWavePage,
-    defaultTitle: () => '波次扫码',
-  },
-]
-
-/** 根据路径解析对应的页面组件（固定路径优先，其次匹配模式） */
-function resolveComponent(path: string): React.LazyExoticComponent<React.ComponentType> | undefined {
-  const normalized = normalizePath(path)
-  if (PAGE_MAP[normalized]) return PAGE_MAP[normalized]
-  return PATH_PATTERNS.find(p => p.pattern.test(normalized))?.component
-}
-
-/** 根据路径解析权限 code */
-function resolvePermission(path: string): PermCode | undefined {
-  const normalized = normalizePath(path)
-  if (PATH_PERMS[normalized]) return PATH_PERMS[normalized]
-  return PATH_PATTERNS.find(p => p.pattern.test(normalized))?.perm
-}
-
-/** 路径是否已注册（固定 + 动态） */
-function isKnownPath(path: string): boolean {
-  const normalized = normalizePath(path)
-  if (PATH_TITLES[normalized]) return true
-  return PATH_PATTERNS.some(p => p.pattern.test(normalized))
-}
 
 // ── 加载占位 ──────────────────────────────────────────────────────────────────
 function PageLoader() {

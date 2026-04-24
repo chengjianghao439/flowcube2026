@@ -1,5 +1,4 @@
 import { payloadClient as client } from './client'
-import type { ApiResponse } from '@/types'
 
 export interface PurchaseStats {
   byMonth: { month: string; orderCount: number; totalAmount: number; receivedAmount: number }[]
@@ -17,9 +16,9 @@ export interface InventoryStats {
 }
 
 const q = (p: object) => Object.entries(p).filter(([,v])=>v).map(([k,v])=>`${k}=${v}`).join('&')
-export const getPurchaseStatsApi  = (p: object) => client.get<ApiResponse<PurchaseStats>>(`/reports/purchase?${q(p)}`)
-export const getSaleStatsApi      = (p: object) => client.get<ApiResponse<SaleStats>>(`/reports/sale?${q(p)}`)
-export const getInventoryStatsApi = (p: object) => client.get<ApiResponse<InventoryStats>>(`/reports/inventory?${q(p)}`)
+export const getPurchaseStatsApi  = (p: object) => client.get<PurchaseStats>(`/reports/purchase?${q(p)}`)
+export const getSaleStatsApi      = (p: object) => client.get<SaleStats>(`/reports/sale?${q(p)}`)
+export const getInventoryStatsApi = (p: object) => client.get<InventoryStats>(`/reports/inventory?${q(p)}`)
 
 export interface PdaOperator {
   operatorId: number
@@ -37,7 +36,7 @@ export interface PdaPerformance {
 }
 
 export const getPdaPerformanceApi = () =>
-  client.get<ApiResponse<PdaPerformance>>('/reports/pda-performance')
+  client.get<PdaPerformance>('/reports/pda-performance')
 
 // ── PDA 异常分析 ──────────────────────────────────────────────────────────────
 export interface PdaAnomalySummary {
@@ -56,7 +55,7 @@ export interface PdaAnomalyReport {
 }
 
 export const getPdaAnomalyApi = (params: { startDate?: string; endDate?: string } = {}) =>
-  client.get<ApiResponse<PdaAnomalyReport>>(`/scan-logs/anomaly?${q(params)}`)
+  client.get<PdaAnomalyReport>(`/scan-logs/anomaly?${q(params)}`)
 
 // ── 仓库运营看板 ──────────────────────────────────────────────────────────────
 export interface WarehouseOpsSummary {
@@ -93,7 +92,7 @@ export interface WarehouseOpsData {
 }
 
 export const getWarehouseOpsApi = () =>
-  client.get<ApiResponse<WarehouseOpsData>>('/reports/warehouse-ops')
+  client.get<WarehouseOpsData>('/reports/warehouse-ops')
 
 export interface WorkbenchItem {
   id: number | string
@@ -146,7 +145,7 @@ export interface RoleWorkbenchData {
 }
 
 export const getRoleWorkbenchApi = () =>
-  client.get<ApiResponse<RoleWorkbenchData>>('/reports/role-workbench')
+  client.get<RoleWorkbenchData>('/reports/role-workbench')
 
 export interface ReconciliationRecord {
   id: number
@@ -189,7 +188,7 @@ export interface ReconciliationReport {
 }
 
 export const getReconciliationApi = (params: { type?: number; startDate?: string; endDate?: string; keyword?: string; status?: number | string } = {}) =>
-  client.get<ApiResponse<ReconciliationReport>>('/reports/reconciliation', { params })
+  client.get<ReconciliationReport>('/reports/reconciliation', { params })
 
 export interface ProfitSaleOrderRow {
   id: number
@@ -257,7 +256,7 @@ export interface ProfitAnalysisReport {
 }
 
 export const getProfitAnalysisApi = (params: { startDate?: string; endDate?: string } = {}) =>
-  client.get<ApiResponse<ProfitAnalysisReport>>(`/reports/profit-analysis?${q(params)}`)
+  client.get<ProfitAnalysisReport>(`/reports/profit-analysis?${q(params)}`)
 
 export interface WaveStats {
   id: number
@@ -289,4 +288,4 @@ export interface WavePerformance {
 }
 
 export const getWavePerformanceApi = (params: { startDate?: string; endDate?: string } = {}) =>
-  client.get<ApiResponse<WavePerformance>>(`/reports/wave-performance?${q(params)}`)
+  client.get<WavePerformance>(`/reports/wave-performance?${q(params)}`)

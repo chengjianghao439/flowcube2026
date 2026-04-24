@@ -1,23 +1,13 @@
 import { payloadClient as client } from './client'
-import type { ApiResponse, PaginatedData } from '@/types'
+import type { PaginatedData } from '@/types'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
+import { WT_STATUS_NAME, WT_STATUS_CLASS, type WtStatus } from '@/constants/warehouseTaskStatus'
 
-export type TaskStatus = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+export type TaskStatus = WtStatus
 export type TaskPriority = 1 | 2 | 3
 
-export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
-  1: '待拣货', 2: '拣货中', 3: '待分拣', 4: '待复核', 5: '待打包', 6: '待出库', 7: '已出库', 8: '已取消',
-}
-export const TASK_STATUS_COLOR: Record<TaskStatus, string> = {
-  1: 'bg-gray-100 text-gray-600',
-  2: 'bg-blue-100 text-blue-700',
-  3: 'bg-yellow-100 text-yellow-700',
-  4: 'bg-purple-100 text-purple-700',
-  5: 'bg-orange-100 text-orange-700',
-  6: 'bg-cyan-100 text-cyan-700',
-  7: 'bg-green-100 text-green-700',
-  8: 'bg-red-100 text-red-600',
-}
+export const TASK_STATUS_LABEL = WT_STATUS_NAME
+export const TASK_STATUS_COLOR = WT_STATUS_CLASS
 export const PRIORITY_LABEL: Record<TaskPriority, string> = { 1: '紧急', 2: '普通', 3: '低' }
 export const PRIORITY_COLOR: Record<TaskPriority, string> = {
   1: 'bg-red-100 text-red-700', 2: 'bg-blue-50 text-blue-600', 3: 'bg-gray-50 text-gray-500',
@@ -110,23 +100,23 @@ export interface WarehouseTaskStats {
 }
 
 export const getMyTasksApi = () =>
-  client.get<ApiResponse<MyTask[]>>('/warehouse-tasks/my')
+  client.get<MyTask[]>('/warehouse-tasks/my')
 
 export const getMyTaskSkuSummaryApi = () =>
-  client.get<ApiResponse<PdaTaskSkuSummary[]>>('/warehouse-tasks/my-sku-summary')
+  client.get<PdaTaskSkuSummary[]>('/warehouse-tasks/my-sku-summary')
 
 export const getTaskStatsApi = () =>
-  client.get<ApiResponse<WarehouseTaskStats>>('/warehouse-tasks/stats')
+  client.get<WarehouseTaskStats>('/warehouse-tasks/stats')
 
 export type TaskListParams = {
   page?: number; pageSize?: number; keyword?: string; status?: number; warehouseId?: number
 }
 
 export const getTasksApi = (params: TaskListParams) =>
-  client.get<ApiResponse<PaginatedData<WarehouseTask>>>('/warehouse-tasks', { params })
+  client.get<PaginatedData<WarehouseTask>>('/warehouse-tasks', { params })
 
 export const getTaskByIdApi = (id: number) =>
-  client.get<ApiResponse<WarehouseTask>>(`/warehouse-tasks/${id}`)
+  client.get<WarehouseTask>(`/warehouse-tasks/${id}`)
 
 export const assignTaskApi = (id: number, userId: number, userName: string) =>
   client.put(`/warehouse-tasks/${id}/assign`, { userId, userName })
@@ -197,7 +187,7 @@ export interface PickSuggestionsData {
 }
 
 export const getPickSuggestionsApi = (taskId: number) =>
-  client.get<ApiResponse<PickSuggestionsData>>(`/warehouse-tasks/${taskId}/pick-suggestions`)
+  client.get<PickSuggestionsData>(`/warehouse-tasks/${taskId}/pick-suggestions`)
 
 // ── 拣货路线 ─────────────────────────────────────────────────────────────────
 
@@ -222,13 +212,13 @@ export interface PickRouteData {
 }
 
 export const getPickRouteApi = (taskId: number) =>
-  client.get<ApiResponse<PickRouteData>>(`/warehouse-tasks/${taskId}/pick-route`)
+  client.get<PickRouteData>(`/warehouse-tasks/${taskId}/pick-route`)
 
 // ── 复核（须扫描容器，禁止手填明细）──────────────────────────────────────────
 
 /** 复核扫码：确认本任务拣货时扫过的容器 */
 export const submitCheckScanApi = (taskId: number, barcode: string, requestKey?: string) =>
-  client.post<ApiResponse<{ id: number; allChecked: boolean; itemId: number; qty: number }>>(
+  client.post<{ id: number; allChecked: boolean; itemId: number; qty: number }>(
     '/scan-logs/check',
     { taskId, barcode },
     {

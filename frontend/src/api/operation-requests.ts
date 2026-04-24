@@ -1,5 +1,4 @@
 import { payloadClient as client } from './client'
-import type { ApiResponse } from '@/types'
 
 export interface OperationRequestStatus {
   status: 'pending' | 'success' | 'failed' | 'not_found'
@@ -10,7 +9,7 @@ export interface OperationRequestStatus {
 }
 
 export const getOperationRequestStatusApi = (requestKey: string, action: string) =>
-  client.get<ApiResponse<OperationRequestStatus>>(`/system/request-status/${encodeURIComponent(requestKey)}`, {
+  client.get<OperationRequestStatus>(`/system/request-status/${encodeURIComponent(requestKey)}`, {
     params: { action },
     skipGlobalError: true,
   })

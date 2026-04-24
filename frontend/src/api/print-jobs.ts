@@ -1,5 +1,5 @@
 import { payloadClient as client } from './client'
-import type { ApiResponse } from '@/types'
+
 import type { BarcodePrintCategory, BarcodePrintRecordPage } from '@/types/print-jobs'
 
 export const getBarcodePrintRecordsApi = (params: {
@@ -11,16 +11,16 @@ export const getBarcodePrintRecordsApi = (params: {
   inboundTaskId?: number
   inboundTaskItemId?: number
 }) =>
-  client.get<ApiResponse<BarcodePrintRecordPage>>('/print-jobs/barcodes', { params })
+  client.get<BarcodePrintRecordPage>('/print-jobs/barcodes', { params })
 
 export const reprintBarcodeRecordApi = (data: {
   category: BarcodePrintCategory
   recordId: number
 }) =>
-  client.post<ApiResponse<{
+  client.post<{
     id: number
     printStateLabel: string
     printerCode: string | null
     printerName: string | null
     statusKey: string
-  }>>('/print-jobs/barcodes/reprint', data)
+  }>('/print-jobs/barcodes/reprint', data)

@@ -10,6 +10,7 @@ import {
   getTaskByIdApi, getPickSuggestionsApi,
   readyToShipApi, cancelTaskApi,
 } from '@/api/warehouse-tasks'
+import { getContainerByBarcodeApi } from '@/api/inventory'
 import type { PickSuggestionItem, PickSuggestionContainer } from '@/api/warehouse-tasks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,7 +22,6 @@ import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
 import PdaStepHint from '@/components/pda/PdaStepHint'
 import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
-import client from '@/api/client'
 import { useOfflineScan } from '@/hooks/useOfflineScan'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -184,8 +184,7 @@ export default function PdaTaskPage() {
       const container = match?.suggestions.find(s => s.barcode === b)
       if (!match || !container) {
         // 容器不在推荐里，尝试直接查
-        const res = await client.get<{data:{containerId:number;productId:number;productCode:string;productName:string;remainingQty:number;locationCode:string|null;unit:string}}>(`/inventory/containers/barcode/${b}`)
-        const c = res
+        const c = await getContainerByBarcodeApi(b)
         const item = task.items.find(i => i.productId === c.productId)
         if (!item) { err('该商品不属于当前任务'); return }
         if (item.pickedQty >= item.requiredQty) { err('该商品已全部拣完'); return }

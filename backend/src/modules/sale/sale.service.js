@@ -4,14 +4,14 @@ const { reserve, releaseByRef } = require('../../engine/reservationEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
+const { SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
 
-const STATUS = { 1:'草稿', 2:'已占库', 3:'拣货中', 4:'已出库', 5:'已取消' }
 const FREIGHT_TYPE = { 1:'寄付', 2:'到付', 3:'第三方付' }
 const fmt = row => ({
   id:row.id, orderNo:row.order_no,
   customerId:row.customer_id, customerName:row.customer_name,
   warehouseId:row.warehouse_id, warehouseName:row.warehouse_name,
-  status:row.status, statusName:STATUS[row.status],
+  status:row.status, statusName:SALE_STATUS_NAME[row.status],
   saleDate:row.sale_date, totalAmount:Number(row.total_amount), remark:row.remark,
   taskId:row.task_id||null, taskNo:row.task_no||null,
   carrierId:row.carrier_id||null,
@@ -103,7 +103,7 @@ async function syncPickingByWarehouseTaskWithinTransaction(conn, id, { taskId = 
   return {
     ...fmt(orderRow),
     status: rule.to,
-    statusName: STATUS[rule.to],
+    statusName: SALE_STATUS_NAME[rule.to],
     taskId: taskId != null ? Number(taskId) : (orderRow.task_id || null),
     taskNo: taskNo || orderRow.task_no || null,
   }
@@ -136,7 +136,7 @@ async function syncShippedByWarehouseTaskWithinTransaction(conn, id, { taskId = 
   return {
     ...fmt(orderRow),
     status: rule.to,
-    statusName: STATUS[rule.to],
+    statusName: SALE_STATUS_NAME[rule.to],
   }
 }
 
@@ -168,7 +168,7 @@ async function syncCancelledByWarehouseTaskWithinTransaction(conn, id, { taskId 
   return {
     ...fmt(orderRow),
     status: rule.to,
-    statusName: STATUS[rule.to],
+    statusName: SALE_STATUS_NAME[rule.to],
   }
 }
 

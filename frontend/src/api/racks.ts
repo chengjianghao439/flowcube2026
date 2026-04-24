@@ -1,34 +1,34 @@
 import { payloadClient as apiClient } from './client'
 import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
-import type { ApiResponse, PaginatedData, QueryParams } from '@/types'
+import type { PaginatedData, QueryParams } from '@/types'
 import type { Rack, CreateRackParams, UpdateRackParams } from '@/types/racks'
 
 export async function getRacksApi(
   params: QueryParams & { warehouseId?: number; zone?: string },
 ): Promise<PaginatedData<Rack>> {
-  const res = await apiClient.get<ApiResponse<PaginatedData<Rack>>>('/racks', { params })
+  const res = await apiClient.get<PaginatedData<Rack>>('/racks', { params })
   return res
 }
 
 export async function getRacksActiveApi(warehouseId?: number): Promise<Rack[]> {
-  const res = await apiClient.get<ApiResponse<Rack[]>>('/racks/active', {
+  const res = await apiClient.get<Rack[]>('/racks/active', {
     params: warehouseId ? { warehouseId } : {},
   })
   return res
 }
 
 export async function getRackByIdApi(id: number): Promise<Rack> {
-  const res = await apiClient.get<ApiResponse<Rack>>(`/racks/${id}`)
+  const res = await apiClient.get<Rack>(`/racks/${id}`)
   return res
 }
 
 export async function createRackApi(data: CreateRackParams): Promise<Rack> {
-  const res = await apiClient.post<ApiResponse<Rack>>('/racks', data)
+  const res = await apiClient.post<Rack>('/racks', data)
   return res
 }
 
 export async function updateRackApi(id: number, data: UpdateRackParams): Promise<Rack> {
-  const res = await apiClient.put<ApiResponse<Rack>>(`/racks/${id}`, data)
+  const res = await apiClient.put<Rack>(`/racks/${id}`, data)
   return res
 }
 
@@ -55,7 +55,7 @@ export interface PrintRackLabelResult {
 }
 
 export async function printRackLabelApi(id: number): Promise<PrintRackLabelResult> {
-  const res = await apiClient.post<ApiResponse<PrintRackLabelResult>>(
+  const res = await apiClient.post<PrintRackLabelResult>(
     `/racks/${Number(id)}/print-label`,
     {},
     { skipGlobalError: true, headers: desktopLocalPrintRequestHeaders() },
@@ -81,6 +81,6 @@ export async function scanRackHintApi(body: {
   scanRaw: string
   excludeRackId?: number
 }): Promise<RackScanHintResult> {
-  const res = await apiClient.post<ApiResponse<RackScanHintResult>>('/racks/scan-hint', body)
+  const res = await apiClient.post<RackScanHintResult>('/racks/scan-hint', body)
   return res
 }

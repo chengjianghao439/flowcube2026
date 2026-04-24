@@ -1095,6 +1095,189 @@ async function getTaskStats() {
   return counts
 }
 
+async function findEvents(taskId) {
+  const [events] = await pool.query(
+    `SELECT id, event_type, from_status, to_status, operator_name, detail, created_at
+     FROM warehouse_task_events
+     WHERE task_id=?
+     ORDER BY created_at ASC`,
+    [taskId],
+  )
+  return events
+}
+
+async function getDebugSnapshot(taskId) {
+  const [[task]] = await pool.query(
+    `SELECT t.*,
+            wh.name AS warehouse_name_full,
+            sb.code AS sorting_bin_code_live,
+            sb.status AS sorting_bin_status_live,
+            sb.current_task_id AS sorting_bin_task_id_live
+     FROM warehouse_tasks t
+     LEFT JOIN inventory_warehouses wh ON wh.id = t.warehouse_id
+     LEFT JOIN sorting_bins         sb ON sb.current_task_id = t.id
+     WHERE t.id = ?`,
+    [taskId],
+  )
+  if (!task) throw new AppError('任务不存在', 404)
+
+  const [items] = await pool.query(
+    `SELECT id, product_id, product_code, product_name, unit,
+            required_qty, picked_qty, sorted_qty, checked_qty
+     FROM warehouse_task_items WHERE task_id=? ORDER BY id`,
+    [taskId],
+  )
+  const [lockedContainers] = await pool.query(
+    `SELECT ic.id, ic.barcode, ic.remaining_qty, ic.status,
+            ic.locked_by_task_id, ic.locked_at,
+            p.name AS product_name,
+            loc.code AS location_code
+     FROM inventory_containers ic
+     LEFT JOIN product_items        p   ON p.id   = ic.product_id
+     LEFT JOIN warehouse_locations  loc ON loc.id = ic.location_id
+     WHERE ic.locked_by_task_id = ?
+       AND ic.deleted_at IS NULL`,
+    [taskId],
+  )
+  const [packages] = await pool.query(
+    `SELECT p.id, p.barcode, p.status,
+            COUNT(pi.id) AS item_types,
+            SUM(pi.qty)  AS total_qty
+     FROM packages p
+     LEFT JOIN package_items pi ON pi.package_id = p.id
+     WHERE p.warehouse_task_id = ?
+     GROUP BY p.id`,
+    [taskId],
+  )
+  const [[sortingBin]] = await pool.query(
+    `SELECT id, code, status, current_task_id
+     FROM sorting_bins WHERE id = ?`,
+    [task.sorting_bin_id || 0],
+  ).catch(() => [[null]])
+  const [events] = await pool.query(
+    `SELECT id, event_type, from_status, to_status, operator_name, detail, created_at
+     FROM warehouse_task_events
+     WHERE task_id=?
+     ORDER BY created_at DESC LIMIT 20`,
+    [taskId],
+  ).catch(() => [[]])
+  const [scanLogs] = await pool.query(
+    `SELECT id, barcode, action, result, operator_name, created_at
+     FROM scan_logs
+     WHERE task_id=?
+     ORDER BY created_at DESC LIMIT 10`,
+    [taskId],
+  ).catch(() => [[]])
+
+  const checks = []
+  if (items.some(i => Number(i.sorted_qty) > Number(i.picked_qty))) {
+    checks.push({ level: 'error', msg: 'sorted_qty 超出 picked_qty，数据异常' })
+  }
+  if (items.some(i => Number(i.checked_qty) > Number(i.required_qty))) {
+    checks.push({ level: 'error', msg: 'checked_qty 超出 required_qty，数据异常' })
+  }
+  if (task.sorting_bin_id && sortingBin && sortingBin.current_task_id !== taskId) {
+    checks.push({ level: 'warn', msg: `分拣格 ${sortingBin.code} 的 current_task_id 与任务不一致` })
+  }
+  if ([2, 3, 4, 5].includes(task.status) && items.length === 0) {
+    checks.push({ level: 'error', msg: '进行中任务无明细记录，流程无法推进' })
+  }
+  if (checks.length === 0) checks.push({ level: 'ok', msg: '数据一致性检查通过' })
+
+  return {
+    snapshot: {
+      task: {
+        id: task.id,
+        taskNo: task.task_no,
+        status: task.status,
+        statusName: WT_STATUS_NAME[task.status] ?? task.status,
+        priority: task.priority,
+        customerName: task.customer_name,
+        warehouseId: task.warehouse_id,
+        warehouseName: task.warehouse_name_full,
+        assignedName: task.assigned_name,
+        sortingBinId: task.sorting_bin_id,
+        sortingBinCode: task.sorting_bin_code,
+        createdAt: task.created_at,
+        updatedAt: task.updated_at,
+        shippedAt: task.shipped_at,
+      },
+      items: items.map(i => ({
+        id: i.id,
+        productCode: i.product_code,
+        productName: i.product_name,
+        unit: i.unit,
+        requiredQty: Number(i.required_qty),
+        pickedQty: Number(i.picked_qty),
+        sortedQty: Number(i.sorted_qty ?? 0),
+        checkedQty: Number(i.checked_qty ?? 0),
+        pickProgress: `${i.picked_qty}/${i.required_qty}`,
+        sortProgress: `${i.sorted_qty ?? 0}/${i.picked_qty}`,
+        checkProgress: `${i.checked_qty ?? 0}/${i.required_qty}`,
+      })),
+      sortingBin: sortingBin ? {
+        id: sortingBin.id,
+        code: sortingBin.code,
+        status: sortingBin.status,
+        statusName: sortingBin.status === 1 ? '空闲' : '占用',
+        currentTaskId: sortingBin.current_task_id,
+        consistent: sortingBin.current_task_id === taskId,
+      } : null,
+      lockedContainers: lockedContainers.map(c => ({
+        id: c.id,
+        barcode: c.barcode,
+        productName: c.product_name,
+        remainingQty: Number(c.remaining_qty),
+        status: c.status,
+        locationCode: c.location_code,
+        lockedAt: c.locked_at,
+      })),
+      packages: packages.map(p => ({
+        id: p.id,
+        barcode: p.barcode,
+        status: p.status,
+        statusName: p.status === 2 ? '已完成' : '打包中',
+        itemTypes: Number(p.item_types ?? 0),
+        totalQty: Number(p.total_qty ?? 0),
+      })),
+      recentEvents: events,
+      recentScanLogs: scanLogs,
+      consistencyChecks: checks,
+    },
+  }
+}
+
+async function getShipContext(taskId) {
+  const task = await findById(taskId)
+  const [[saleOrder]] = await pool.query(
+    'SELECT id, order_no, status, warehouse_id, total_amount, customer_name FROM sale_orders WHERE id=?',
+    [task.saleOrderId],
+  )
+  if (!saleOrder) throw new AppError('关联销售单不存在', 404)
+
+  const [wmsItems] = await pool.query(
+    `SELECT wti.product_id, wti.product_name, wti.picked_qty, soi.unit_price
+     FROM warehouse_task_items wti
+     LEFT JOIN sale_order_items soi ON soi.order_id = ? AND soi.product_id = wti.product_id
+     WHERE wti.task_id = ?`,
+    [saleOrder.id, taskId],
+  )
+  if (!wmsItems.length) throw new AppError('任务无出库明细', 400)
+
+  return {
+    saleOrderId: saleOrder.id,
+    warehouseId: saleOrder.warehouse_id,
+    totalAmount: Number(saleOrder.total_amount),
+    customerName: saleOrder.customer_name,
+    items: wmsItems.map(i => ({
+      productId: i.product_id,
+      productName: i.product_name,
+      quantity: Number(i.picked_qty),
+      unitPrice: i.unit_price != null ? Number(i.unit_price) : null,
+    })),
+  }
+}
+
 /**
  * 复核：批量更新明细的 checked_qty
  * 当所有明细 checked_qty >= required_qty 时，在任务上记录复核完成时间
@@ -1111,6 +1294,9 @@ async function checkItems(taskId, items) {
 module.exports = {
   findAll,
   findById,
+  findEvents,
+  getDebugSnapshot,
+  getShipContext,
   findMyTasks,
   findMyTaskSkuSummary,
   getTaskStats,

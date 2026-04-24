@@ -7,6 +7,7 @@ const crypto = require('crypto')
 const ROOT = path.resolve(__dirname, '..')
 const DEFAULT_DOWNLOAD_ROOT = '/var/www/flowcube-downloads'
 const DOWNLOAD_ROOT = path.resolve(process.env.FLOWCUBE_DOWNLOADS_ROOT || process.env.APP_UPDATE_DOWNLOADS_DIR || DEFAULT_DOWNLOAD_ROOT)
+const LEGACY_BACKEND_DOWNLOADS = path.join(ROOT, 'backend', 'downloads')
 
 function usage() {
   console.error('Usage: node scripts/release-desktop.js <version> [--dry-run] [--rollback] [--manifest-only] [--artifact=/path/to/installer.exe] [--notes="..."]')
@@ -64,10 +65,26 @@ function statOrNull(filePath) {
   }
 }
 
+function isInsideDir(filePath, dirPath) {
+  const relative = path.relative(path.resolve(dirPath), path.resolve(filePath))
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
+function assertNotLegacyDownloadsArtifact(filePath) {
+  if (isInsideDir(filePath, LEGACY_BACKEND_DOWNLOADS)) {
+    fail(`backend/downloads 已废弃，禁止从旧目录发布安装包: ${filePath}`)
+  }
+}
+
+function assertCanonicalManifestUrl(url) {
+  if (!String(url || '').startsWith('/versions/')) {
+    fail(`latest.json 只允许指向 /versions/，禁止生成旧 /downloads URL: ${url}`)
+  }
+}
+
 function findArtifacts(searchVersion) {
   const candidates = [
     path.join(ROOT, 'desktop', 'release'),
-    path.join(ROOT, 'backend', 'downloads'),
   ]
   const matches = []
   for (const dir of candidates) {
@@ -139,6 +156,7 @@ if (rollback) {
     notes: metadata.notes || '',
     publishedAt,
   }
+  assertCanonicalManifestUrl(latest.url)
   log(`下载根目录: ${DOWNLOAD_ROOT}`)
   log(`回滚目标: ${versionDir}`)
   log(`安装包: ${existingExe}`)
@@ -167,6 +185,7 @@ if (!artifact) {
 if (!fs.existsSync(artifact)) {
   fail(`安装包不存在: ${artifact}`)
 }
+assertNotLegacyDownloadsArtifact(artifact)
 
 const artifactStat = fs.statSync(artifact)
 if (!artifactStat.isFile()) fail(`安装包路径不是文件: ${artifact}`)
@@ -195,6 +214,7 @@ const latest = {
   notes,
   publishedAt,
 }
+assertCanonicalManifestUrl(latest.url)
 
 log(`下载根目录: ${DOWNLOAD_ROOT}`)
 log(`版本目录: ${versionDir}`)

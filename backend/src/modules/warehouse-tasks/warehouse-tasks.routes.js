@@ -4,23 +4,16 @@ const svc = require('./warehouse-tasks.service')
 const { successResponse } = require('../../utils/response')
 const { extractRequestKey } = require('../../utils/requestKey')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
-const { pool } = require('../../config/db')
 const { PERMISSIONS } = require('../../constants/permissions')
-
-async function getOp(userId) {
-  const [[u]] = await pool.query('SELECT id, username, real_name FROM sys_users WHERE id=?', [userId])
-  return { userId: u.id, username: u.username, realName: u.real_name }
-}
+const { getOperatorFromRequest } = require('../../utils/operator')
+const AppError = require('../../utils/AppError')
+const { asyncRoute, validateBody } = require('../../utils/route')
 
 const router = Router()
 router.use(authMiddleware)
 
 function vBody(schema) {
-  return (req, res, next) => {
-    const r = schema.safeParse(req.body)
-    if (!r.success) return res.status(400).json({ success: false, message: r.error.errors.map(e => e.message).join('；'), data: null })
-    req.body = r.data; next()
-  }
+  return validateBody(schema)
 }
 
 // GET /api/warehouse-tasks — 列表（支持 status / warehouseId / keyword / page / pageSize）
@@ -72,7 +65,7 @@ router.put('/:id/assign', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), 
 function pdaOnly(req, res, next) {
   const client = req.headers['x-client'] || ''
   if (client.toLowerCase() !== 'pda') {
-    return res.status(403).json({ success: false, message: '此操作只能由 PDA 执行', data: null })
+    return next(new AppError('此操作只能由 PDA 执行', 403, 'PDA_ONLY'))
   }
   next()
 }
@@ -83,17 +76,13 @@ router.put('/:id/start-picking', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PI
 })
 
 // PUT /api/warehouse-tasks/:id/items/:itemId/picked-qty — 已禁用（已拣数量仅允许由 PDA 拣货扫码累加）
-router.put('/:id/items/:itemId/picked-qty', (req, res) => {
+router.put('/:id/items/:itemId/picked-qty', asyncRoute(async (req) => {
   const client = (req.headers['x-client'] || '').toLowerCase()
   if (client !== 'pda') {
-    return res.status(403).json({ success: false, message: '此操作只能由 PDA 执行', data: null })
+    throw new AppError('此操作只能由 PDA 执行', 403, 'PDA_ONLY')
   }
-  return res.status(400).json({
-    success: false,
-    message: '已拣数量仅可通过拣货扫码写入，禁止手动修改',
-    data: null,
-  })
-})
+  throw new AppError('已拣数量仅可通过拣货扫码写入，禁止手动修改', 400, 'PICK_QTY_MANUAL_UPDATE_DISABLED')
+}))
 
 // PUT /api/warehouse-tasks/:id/ready — 拣货完成，待分拣（2→3）
 router.put('/:id/ready', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK), pdaOnly, async (req, res, next) => {
@@ -109,14 +98,7 @@ router.put('/:id/ready', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK), pd
 // GET /api/warehouse-tasks/:id/events — 查询任务事件历史
 router.get('/:id/events', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), async (req, res, next) => {
   try {
-    const [events] = await pool.query(
-      `SELECT id, event_type, from_status, to_status, operator_name, detail, created_at
-       FROM warehouse_task_events
-       WHERE task_id=?
-       ORDER BY created_at ASC`,
-      [+req.params.id],
-    )
-    return successResponse(res, events, 'ok')
+    return successResponse(res, await svc.findEvents(+req.params.id), 'ok')
   } catch (e) { next(e) }
 })
 
@@ -124,160 +106,7 @@ router.get('/:id/events', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), as
 // 一次返回任务在所有关联表的完整状态，用于快速定位流程问题
 router.get('/:id/debug', requirePermission(PERMISSIONS.WAREHOUSE_TASK_DEBUG), async (req, res, next) => {
   try {
-    const taskId = +req.params.id
-
-    // 1. 任务主体
-    const [[task]] = await pool.query(
-      `SELECT t.*,
-              wh.name AS warehouse_name_full,
-              sb.code AS sorting_bin_code_live,
-              sb.status AS sorting_bin_status_live,
-              sb.current_task_id AS sorting_bin_task_id_live
-       FROM warehouse_tasks t
-       LEFT JOIN inventory_warehouses wh ON wh.id = t.warehouse_id
-       LEFT JOIN sorting_bins         sb ON sb.current_task_id = t.id
-       WHERE t.id = ?`,
-      [taskId],
-    )
-    if (!task) return res.status(404).json({ success: false, message: '任务不存在', data: null })
-
-    // 2. 任务明细（含 sorted_qty / checked_qty）
-    const [items] = await pool.query(
-      `SELECT id, product_id, product_code, product_name, unit,
-              required_qty, picked_qty, sorted_qty, checked_qty
-       FROM warehouse_task_items WHERE task_id=? ORDER BY id`,
-      [taskId],
-    )
-
-    // 3. 容器锁（被本任务锁定的容器）
-    const [lockedContainers] = await pool.query(
-      `SELECT ic.id, ic.barcode, ic.remaining_qty, ic.status,
-              ic.locked_by_task_id, ic.locked_at,
-              p.name AS product_name,
-              loc.code AS location_code
-       FROM inventory_containers ic
-       LEFT JOIN product_items        p   ON p.id   = ic.product_id
-       LEFT JOIN warehouse_locations  loc ON loc.id = ic.location_id
-       WHERE ic.locked_by_task_id = ?
-         AND ic.deleted_at IS NULL`,
-      [taskId],
-    )
-
-    // 4. 打包信息
-    const [packages] = await pool.query(
-      `SELECT p.id, p.barcode, p.status,
-              COUNT(pi.id) AS item_types,
-              SUM(pi.qty)  AS total_qty
-       FROM packages p
-       LEFT JOIN package_items pi ON pi.package_id = p.id
-       WHERE p.warehouse_task_id = ?
-       GROUP BY p.id`,
-      [taskId],
-    )
-
-    // 5. 分拣格实时状态
-    const [[sortingBin]] = await pool.query(
-      `SELECT id, code, status, current_task_id
-       FROM sorting_bins WHERE id = ?`,
-      [task.sorting_bin_id || 0],
-    ).catch(() => [[null]])
-
-    // 6. 事件历史（最近 20 条）
-    const [events] = await pool.query(
-      `SELECT id, event_type, from_status, to_status, operator_name, detail, created_at
-       FROM warehouse_task_events
-       WHERE task_id=?
-       ORDER BY created_at DESC LIMIT 20`,
-      [taskId],
-    ).catch(() => [[]])
-
-    // 7. 扫码日志（最近 10 条）
-    const [scanLogs] = await pool.query(
-      `SELECT id, barcode, action, result, operator_name, created_at
-       FROM scan_logs
-       WHERE task_id=?
-       ORDER BY created_at DESC LIMIT 10`,
-      [taskId],
-    ).catch(() => [[]])
-
-    // 8. 数据一致性快速检查
-    const checks = []
-    if (items.some(i => Number(i.sorted_qty) > Number(i.picked_qty))) {
-      checks.push({ level: 'error', msg: 'sorted_qty 超出 picked_qty，数据异常' })
-    }
-    if (items.some(i => Number(i.checked_qty) > Number(i.required_qty))) {
-      checks.push({ level: 'error', msg: 'checked_qty 超出 required_qty，数据异常' })
-    }
-    if (task.sorting_bin_id && sortingBin && sortingBin.current_task_id !== taskId) {
-      checks.push({ level: 'warn', msg: `分拣格 ${sortingBin.code} 的 current_task_id 与任务不一致` })
-    }
-    if ([2,3,4,5].includes(task.status) && items.length === 0) {
-      checks.push({ level: 'error', msg: '进行中任务无明细记录，流程无法推进' })
-    }
-    const { WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
-    if (checks.length === 0) checks.push({ level: 'ok', msg: '数据一致性检查通过' })
-
-    return successResponse(res, {
-      snapshot: {
-        task: {
-          id:               task.id,
-          taskNo:           task.task_no,
-          status:           task.status,
-          statusName:       WT_STATUS_NAME[task.status] ?? task.status,
-          priority:         task.priority,
-          customerName:     task.customer_name,
-          warehouseId:      task.warehouse_id,
-          warehouseName:    task.warehouse_name_full,
-          assignedName:     task.assigned_name,
-          sortingBinId:     task.sorting_bin_id,
-          sortingBinCode:   task.sorting_bin_code,
-          createdAt:        task.created_at,
-          updatedAt:        task.updated_at,
-          shippedAt:        task.shipped_at,
-        },
-        items: items.map(i => ({
-          id:          i.id,
-          productCode: i.product_code,
-          productName: i.product_name,
-          unit:        i.unit,
-          requiredQty: Number(i.required_qty),
-          pickedQty:   Number(i.picked_qty),
-          sortedQty:   Number(i.sorted_qty ?? 0),
-          checkedQty:  Number(i.checked_qty ?? 0),
-          pickProgress:  `${i.picked_qty}/${i.required_qty}`,
-          sortProgress:  `${i.sorted_qty ?? 0}/${i.picked_qty}`,
-          checkProgress: `${i.checked_qty ?? 0}/${i.required_qty}`,
-        })),
-        sortingBin: sortingBin ? {
-          id:            sortingBin.id,
-          code:          sortingBin.code,
-          status:        sortingBin.status,
-          statusName:    sortingBin.status === 1 ? '空闲' : '占用',
-          currentTaskId: sortingBin.current_task_id,
-          consistent:    sortingBin.current_task_id === taskId,
-        } : null,
-        lockedContainers: lockedContainers.map(c => ({
-          id:           c.id,
-          barcode:      c.barcode,
-          productName:  c.product_name,
-          remainingQty: Number(c.remaining_qty),
-          status:       c.status,
-          locationCode: c.location_code,
-          lockedAt:     c.locked_at,
-        })),
-        packages: packages.map(p => ({
-          id:         p.id,
-          barcode:    p.barcode,
-          status:     p.status,
-          statusName: p.status === 2 ? '已完成' : '打包中',
-          itemTypes:  Number(p.item_types ?? 0),
-          totalQty:   Number(p.total_qty ?? 0),
-        })),
-        recentEvents:  events,
-        recentScanLogs: scanLogs,
-        consistencyChecks: checks,
-      },
-    }, '任务数据快照')
+    return successResponse(res, await svc.getDebugSnapshot(+req.params.id), '任务数据快照')
   } catch (e) { next(e) }
 })
 
@@ -316,41 +145,7 @@ router.put('/:id/pack-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK_D
 router.put('/:id/ship', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SHIP), pdaOnly, async (req, res, next) => {
   try {
     const taskId = +req.params.id
-    const op     = await getOp(req.user.userId)
-
-    // 读取任务以获取关联销售单ID
-    const task = await svc.findById(taskId)
-
-    // 在 route 层直接查询销售单（避免 WMS service 依赖 ERP service）
-    const [[saleOrder]] = await pool.query(
-      'SELECT id, order_no, status, warehouse_id, total_amount, customer_name FROM sale_orders WHERE id=?',
-      [task.saleOrderId]
-    )
-    if (!saleOrder)          return res.status(404).json({ success: false, message: '关联销售单不存在', data: null })
-
-    const [wmsItems] = await pool.query(
-      `SELECT wti.product_id, wti.product_name, wti.picked_qty, soi.unit_price
-       FROM warehouse_task_items wti
-       LEFT JOIN sale_order_items soi ON soi.order_id = ? AND soi.product_id = wti.product_id
-       WHERE wti.task_id = ?`,
-      [saleOrder.id, taskId],
-    )
-    if (!wmsItems.length) {
-      return res.status(400).json({ success: false, message: '任务无出库明细', data: null })
-    }
-
-    const data = await svc.ship(taskId, op, {
-      saleOrderId:  saleOrder.id,
-      warehouseId:  saleOrder.warehouse_id,
-      totalAmount:  Number(saleOrder.total_amount),
-      customerName: saleOrder.customer_name,
-      items: wmsItems.map(i => ({
-        productId:   i.product_id,
-        productName: i.product_name,
-        quantity:    Number(i.picked_qty),
-        unitPrice:   i.unit_price != null ? Number(i.unit_price) : null,
-      })),
-    }, {
+    const data = await svc.ship(taskId, getOperatorFromRequest(req), await svc.getShipContext(taskId), {
       requestKey: extractRequestKey(req),
     })
     return successResponse(res, data, '出库成功')
@@ -378,12 +173,12 @@ router.put('/:id/check',
 router.put('/:id/cancel', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL), (req, res, next) => {
   const client = (req.headers['x-client'] || '').toLowerCase()
   if (client === 'pda') {
-    return res.status(403).json({ success: false, message: 'PDA 不允许取消任务，请在 ERP 后台操作', data: null })
+    return next(new AppError('PDA 不允许取消任务，请在 ERP 后台操作', 403, 'PDA_CANCEL_FORBIDDEN'))
   }
   next()
 }, async (req, res, next) => {
   try {
-    await svc.cancel(+req.params.id, { operator: await getOp(req.user.userId) })
+    await svc.cancel(+req.params.id, { operator: getOperatorFromRequest(req) })
     return successResponse(res, null, '任务已取消')
   } catch (e) { next(e) }
 })

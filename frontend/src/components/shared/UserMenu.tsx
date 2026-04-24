@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import client from '@/api/client'
+import { payloadClient as client } from '@/api/client'
 import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'

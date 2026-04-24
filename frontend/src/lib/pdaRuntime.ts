@@ -8,7 +8,6 @@ import { ERP_PRODUCTION_ORIGIN, PDA_FALLBACK_API_ORIGIN } from '@/config/env'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/lib/toast'
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
-import type { ApiResponse } from '@/types'
 
 /** 标签打印机 ID（数字），供 window.printLabel 提交 print-jobs */
 export const PDA_LABEL_PRINTER_ID_KEY = 'flowcube:pdaLabelPrinterId'
@@ -163,7 +162,7 @@ async function waitPrintJobTerminal(jobId: number): Promise<{ ok: boolean; detai
   const t0 = Date.now()
   while (Date.now() - t0 < PRINT_JOB_POLL_MAX_MS) {
     try {
-      const j = await payloadClient.get<ApiResponse<PrintJobDetail>>(`/print-jobs/${jobId}`, {
+      const j = await payloadClient.get<PrintJobDetail>(`/print-jobs/${jobId}`, {
         skipGlobalError: true,
       })
       if (!j) return { ok: false, detail: '无法读取任务状态' }
@@ -197,7 +196,7 @@ export function installPdaGlobals(): void {
       return
     }
     try {
-      const res = await payloadClient.post<ApiResponse<{ id: number }>>(
+      const res = await payloadClient.post<{ id: number }>(
         '/print-jobs',
         {
           printerId: pid,

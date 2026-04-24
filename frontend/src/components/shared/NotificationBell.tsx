@@ -1,11 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import client from '@/api/client'
-import type { ApiResponse } from '@/types'
-import { getNotificationCategoryLabel, normalizeNotifications, type NotificationEntry } from '@/lib/notifications'
-
-interface NotifData { total: number; items: NotificationEntry[] }
+import { getNotificationsApi } from '@/api/notifications'
+import { getNotificationCategoryLabel, normalizeNotifications } from '@/lib/notifications'
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
@@ -13,7 +10,7 @@ export default function NotificationBell() {
 
   const { data } = useQuery({
     queryKey: ['notifications'],
-    queryFn: () => client.get<ApiResponse<NotifData>>('/notifications'),
+    queryFn: getNotificationsApi,
     refetchInterval: 60000, // 每分钟刷新
   })
 

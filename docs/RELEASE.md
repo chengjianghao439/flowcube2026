@@ -58,6 +58,13 @@ node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.e
 - 不允许手工复制安装包到发布目录；必须使用 `scripts/release-desktop.js`，由脚本生成 `metadata.json`、`latest.json` 和 `current/version.txt`。
 - `backend/downloads` 已废弃，不再参与构建、部署或更新链。
 
+### `/downloads` 兼容别名退场计划
+
+- `/downloads/` 仅保留给旧桌面客户端或旧 manifest 的 GET/HEAD 静态下载兼容，不是新发布入口。
+- 新版本 manifest 禁止生成 `/downloads/...` URL，只允许使用 `/versions/vX.Y.Z/...` 或 `/current/...`。
+- `scripts/release-desktop.js` 会拒绝从 `backend/downloads` 发布安装包，并强制 `latest.json` 指向 `/versions/`。
+- 计划在 `v0.5.0` 后移除 `/downloads/` alias。移除前置条件：连续 30 天访问日志无 `/downloads/` 命中，且受管客户端均已升级到 `>=0.3.72`。
+
 ### 桌面默认 API 地址（避免每次填写服务器）
 
 Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默认连 `http://localhost:3000`，正式用户必须在登录前改地址。

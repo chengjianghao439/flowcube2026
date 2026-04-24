@@ -140,11 +140,6 @@ async function createImportBatch(fileName) {
   }
 }
 
-async function loadOperatorName(userId) {
-  const [[user]] = await pool.query('SELECT real_name FROM sys_users WHERE id=?', [userId])
-  return user?.real_name || '未知'
-}
-
 async function importSingleStockRow({
   batchId,
   rowIndex,
@@ -250,10 +245,11 @@ async function importSingleStockRow({
   }
 }
 
-async function importStock({ fileBuffer, originalName, userId }) {
+async function importStock({ fileBuffer, originalName, operator }) {
   const dataRows = parseStockImportRows(fileBuffer)
   const batchId = await createImportBatch(originalName)
-  const operatorName = await loadOperatorName(userId)
+  const userId = operator?.userId ?? null
+  const operatorName = operator?.realName || operator?.operatorName || '未知'
 
   let success = 0
   const errors = []

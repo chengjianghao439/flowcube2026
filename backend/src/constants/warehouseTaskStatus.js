@@ -42,6 +42,17 @@ const WT_STATUS_NAME = Object.freeze({
   [WT_STATUS.CANCELLED]: '已取消',
 })
 
+const WT_STATUS_TONE = Object.freeze({
+  [WT_STATUS.PENDING]:   'draft',
+  [WT_STATUS.PICKING]:   'active',
+  [WT_STATUS.SORTING]:   'active',
+  [WT_STATUS.CHECKING]:  'active',
+  [WT_STATUS.PACKING]:   'active',
+  [WT_STATUS.SHIPPING]:  'active',
+  [WT_STATUS.SHIPPED]:   'success',
+  [WT_STATUS.CANCELLED]: 'danger',
+})
+
 /** 进行中的状态（未完成且未取消）*/
 const WT_STATUS_ACTIVE = [
   WT_STATUS.PENDING,
@@ -261,6 +272,7 @@ function assertWarehouseTaskAction(action, status) {
 module.exports = {
   WT_STATUS,
   WT_STATUS_NAME,
+  WT_STATUS_TONE,
   WT_STATUS_ACTIVE,
   WT_STATUS_PICK_POOL,
   WT_STATUS_TERMINAL,

@@ -210,6 +210,7 @@ function resolveManifestAssetPath(manifest) {
   }
   // Deprecated compatibility path. Canonical manifests must use /versions/ or /current/.
   if (pathname.startsWith('/downloads/')) {
+    console.warn('[app-update] DEPRECATED latest.json url uses /downloads; regenerate manifest with scripts/release-desktop.js:', pathname)
     return path.join(DOWNLOADS_DIR, pathname.slice('/downloads/'.length))
   }
   return path.join(DOWNLOADS_DIR, pathname.replace(/^\/+/, ''))

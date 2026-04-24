@@ -143,22 +143,40 @@ try {
   console.warn('[Downloads] 无法读取目录:', e.message)
 }
 
-app.get(/^\/downloads\/?$/, (req, res) => {
-  // /downloads is deprecated; keep only non-indexed compatibility access for old clients.
-  if (isProd) {
-    return res.status(404).json({ success: false, message: '接口不存在', data: null })
-  }
-  try {
-    const files = fs.readdirSync(downloadsPath).filter((n) => !n.startsWith('.'))
-    res.set('Cache-Control', 'no-store')
-    return successResponse(res, { files }, 'ok')
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message, data: null })
-  }
-})
+function logDeprecatedDownloadsAccess(req) {
+  console.warn('[Downloads] DEPRECATED /downloads alias accessed; use /versions/ or /current/ for new clients.', {
+    method: req.method,
+    path: req.originalUrl,
+    ip: req.ip,
+    userAgent: req.get('user-agent') || '',
+  })
+}
 
-// /downloads is kept only as a deprecated compatibility alias. New manifests use /versions/ or /current/.
-app.use('/downloads', express.static(downloadsPath))
+function deprecatedDownloadsOnly(req, res, next) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.set('Allow', 'GET, HEAD')
+    return res.status(405).json({
+      success: false,
+      message: '/downloads 已废弃，仅保留 GET/HEAD 静态兼容访问',
+      data: null,
+    })
+  }
+  logDeprecatedDownloadsAccess(req)
+  res.set('Warning', '299 FlowCube "/downloads is deprecated; use /versions or /current"')
+  res.set('X-FlowCube-Deprecated-Alias', '/downloads; use /versions or /current')
+  next()
+}
+
+app.use('/downloads', deprecatedDownloadsOnly)
+
+// /downloads is kept only as a deprecated GET/HEAD compatibility alias. New manifests must use /versions/ or /current/.
+app.use('/downloads', express.static(downloadsPath, {
+  index: false,
+  setHeaders(res) {
+    res.setHeader('Warning', '299 FlowCube "/downloads is deprecated; use /versions or /current"')
+    res.setHeader('X-FlowCube-Deprecated-Alias', '/downloads; use /versions or /current')
+  },
+}))
 app.use('/versions', express.static(versionsPath))
 app.use('/current', express.static(currentPath))
 

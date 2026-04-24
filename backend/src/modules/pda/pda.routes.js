@@ -3,6 +3,8 @@ const path = require('path')
 const fs   = require('fs')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
 const { successResponse } = require('../../utils/response')
+const AppError = require('../../utils/AppError')
+const { asyncRoute } = require('../../utils/route')
 const router = Router()
 
 // APK 存放目录（放在 backend/apk/ 下，与 index.js 同级）
@@ -44,12 +46,12 @@ function resolvePublicBase(req) {
  *   }
  * }
  */
-router.get('/version', (req, res) => {
+router.get('/version', asyncRoute(async (req, res) => {
   let meta = null
   try {
     meta = loadVersionMeta()
   } catch {
-    return res.status(500).json({ success: false, message: '版本信息读取失败' })
+    throw new AppError('版本信息读取失败', 500, 'PDA_VERSION_READ_FAILED')
   }
 
   if (!meta) {
@@ -72,26 +74,26 @@ router.get('/version', (req, res) => {
     publishedAt: meta.publishedAt || new Date().toISOString(),
     available: true,
   })
-})
+}))
 
 /**
  * GET /api/pda/download
  * 下载最新 APK 文件（支持 Range 断点续传）
  */
-router.get('/download', (req, res) => {
+router.get('/download', asyncRoute(async (req, res) => {
   let meta
   try {
     meta = loadVersionMeta()
   } catch {
-    return res.status(500).json({ success: false, message: '版本信息 JSON 损坏' })
+    throw new AppError('版本信息 JSON 损坏', 500, 'PDA_VERSION_INVALID')
   }
   if (!meta) {
-    return res.status(404).json({ success: false, message: 'APK 未部署' })
+    throw new AppError('APK 未部署', 404, 'PDA_APK_NOT_DEPLOYED')
   }
 
   const apkPath = resolveApkPath(meta)
   if (!fs.existsSync(apkPath)) {
-    return res.status(404).json({ success: false, message: 'APK 文件不存在' })
+    throw new AppError('APK 文件不存在', 404, 'PDA_APK_NOT_FOUND')
   }
 
   const stat     = fs.statSync(apkPath)
@@ -117,6 +119,6 @@ router.get('/download', (req, res) => {
     res.status(200)
     fs.createReadStream(apkPath).pipe(res)
   }
-})
+}))
 
 module.exports = router

@@ -6,7 +6,7 @@
  *   const { submitScan, logError, logUndo } = useOfflineScan()
  */
 import { useCallback } from 'react'
-import client from '@/api/client'
+import { payloadClient as client } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 

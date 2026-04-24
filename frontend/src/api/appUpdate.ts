@@ -1,5 +1,4 @@
 import { payloadClient as client } from '@/api/client'
-import type { ApiResponse } from '@/types'
 
 export interface AppUpdateLatestPayload {
   version: string
@@ -9,7 +8,7 @@ export interface AppUpdateLatestPayload {
 }
 
 export function getAppUpdateLatestApi() {
-  return client.get<ApiResponse<AppUpdateLatestPayload>>('/app-update/latest', {
+  return client.get<AppUpdateLatestPayload>('/app-update/latest', {
     skipGlobalError: true,
   })
 }

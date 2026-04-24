@@ -1,3 +1,35 @@
+SET @column_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'sale_customers'
+    AND COLUMN_NAME = 'price_list_id'
+);
+SET @ddl_sql := IF(
+  @column_exists = 0,
+  'ALTER TABLE `sale_customers` ADD COLUMN `price_list_id` BIGINT UNSIGNED DEFAULT NULL AFTER `is_active`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @ddl_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @column_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'sale_customers'
+    AND COLUMN_NAME = 'price_list_name'
+);
+SET @ddl_sql := IF(
+  @column_exists = 0,
+  'ALTER TABLE `sale_customers` ADD COLUMN `price_list_name` VARCHAR(100) DEFAULT NULL AFTER `price_list_id`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @ddl_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 ALTER TABLE `product_items`
   ADD COLUMN `sale_price_a` DECIMAL(12,4) NULL DEFAULT NULL AFTER `sale_price`,
   ADD COLUMN `sale_price_b` DECIMAL(12,4) NULL DEFAULT NULL AFTER `sale_price_a`,

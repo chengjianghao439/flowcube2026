@@ -46,6 +46,19 @@ SET @has_inventory_logs := (
 SET @sql := IF(@has_inventory_logs = 0, 'SELECT 1', (
   SELECT IF(
     COUNT(*) = 0,
+    'ALTER TABLE inventory_logs ADD COLUMN `move_type` TINYINT UNSIGNED DEFAULT NULL AFTER id',
+    'SELECT 1'
+  )
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'inventory_logs'
+    AND COLUMN_NAME = 'move_type'
+));
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql := IF(@has_inventory_logs = 0, 'SELECT 1', (
+  SELECT IF(
+    COUNT(*) = 0,
     'ALTER TABLE inventory_logs ADD COLUMN `type` TINYINT UNSIGNED NOT NULL DEFAULT 3 COMMENT ''1入库 2出库 3调整'' AFTER move_type',
     'SELECT 1'
   )

@@ -1,14 +1,15 @@
 const svc = require('./scan-logs.service')
 const { successResponse } = require('../../utils/response')
 const { extractRequestKey } = require('../../utils/requestKey')
+const { getOperatorFromRequest } = require('../../utils/operator')
 
 const create = async (req, res, next) => {
   try {
-    const operator = req.user || {}
+    const operator = getOperatorFromRequest(req)
     const data = await svc.createScanLog({
       ...req.body,
-      operatorId:   operator.userId,
-      operatorName: operator.realName || operator.username,
+      operatorId:   operator.operatorId,
+      operatorName: operator.operatorName,
       requestKey: extractRequestKey(req),
     })
     return successResponse(res, data, '扫描记录已保存', 201)
@@ -17,12 +18,12 @@ const create = async (req, res, next) => {
 
 const createCheckScan = async (req, res, next) => {
   try {
-    const operator = req.user || {}
+    const operator = getOperatorFromRequest(req)
     const data = await svc.createCheckScanLog({
       taskId: req.body.taskId,
       barcode: req.body.barcode.trim(),
-      operatorId:   operator.userId,
-      operatorName: operator.realName || operator.username,
+      operatorId:   operator.operatorId,
+      operatorName: operator.operatorName,
       requestKey: extractRequestKey(req),
     })
     return successResponse(res, data, data.allChecked ? '复核完成，已进入待打包' : '复核扫码已记录', 201)
@@ -38,11 +39,11 @@ const listByTask = async (req, res, next) => {
 
 const logError = async (req, res, next) => {
   try {
-    const operator = req.user || {}
+    const operator = getOperatorFromRequest(req)
     await svc.logScanError({
       ...req.body,
-      operatorId:   operator.userId,
-      operatorName: operator.realName || operator.username,
+      operatorId:   operator.operatorId,
+      operatorName: operator.operatorName,
     })
     return successResponse(res, null, '错误日志已记录', 201)
   } catch (e) { next(e) }
@@ -50,11 +51,11 @@ const logError = async (req, res, next) => {
 
 const logUndo = async (req, res, next) => {
   try {
-    const operator = req.user || {}
+    const operator = getOperatorFromRequest(req)
     await svc.logUndo({
       ...req.body,
-      operatorId:   operator.userId,
-      operatorName: operator.realName || operator.username,
+      operatorId:   operator.operatorId,
+      operatorName: operator.operatorName,
     })
     return successResponse(res, null, '撤销日志已记录', 201)
   } catch (e) { next(e) }

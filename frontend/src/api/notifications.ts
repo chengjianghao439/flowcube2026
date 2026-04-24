@@ -1,5 +1,4 @@
 import { payloadClient as client } from './client'
-import type { ApiResponse } from '@/types'
 
 export interface NotificationItem {
   code?: string
@@ -19,4 +18,4 @@ export interface NotificationData {
 }
 
 export const getNotificationsApi = () =>
-  client.get<ApiResponse<NotificationData>>('/notifications')
+  client.get<NotificationData>('/notifications')

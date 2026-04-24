@@ -1,5 +1,4 @@
 import { payloadClient as client } from './client'
-import type { ApiResponse } from '@/types'
 
 export interface SystemHealthIssue {
   checkType: string
@@ -75,16 +74,16 @@ export interface SystemAutoFixType {
 }
 
 export const runSystemHealthApi = () =>
-  client.get<ApiResponse<SystemHealthRunResult>>('/system/health')
+  client.get<SystemHealthRunResult>('/system/health')
 
 export const getSystemHealthLogsApi = (limit = 100) =>
-  client.get<ApiResponse<SystemHealthLog[]>>('/system/health/logs', { params: { limit } })
+  client.get<SystemHealthLog[]>('/system/health/logs', { params: { limit } })
 
 export const getSystemHealthRunsApi = (limit = 20) =>
-  client.get<ApiResponse<SystemHealthRunSummary[]>>('/system/health/runs', { params: { limit } })
+  client.get<SystemHealthRunSummary[]>('/system/health/runs', { params: { limit } })
 
 export const runSystemAutoFixApi = () =>
-  client.post<ApiResponse<SystemAutoFixResult>>('/system/health/autofix')
+  client.post<SystemAutoFixResult>('/system/health/autofix')
 
 export const getSystemAutoFixTypesApi = () =>
-  client.get<ApiResponse<SystemAutoFixType[]>>('/system/health/autofix/types')
+  client.get<SystemAutoFixType[]>('/system/health/autofix/types')
