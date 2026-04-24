@@ -45,12 +45,31 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.checkout_ref != '' && github.event.inputs.checkout_ref || github.ref }}
 
-      - name: Load tracked deploy config
+      - name: Resolve deploy config
         id: deploy_config
         shell: bash
+        env:
+          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
+          SERVER_HOST_VAR: ${{ vars.FLOWCUBE_SERVER_HOST }}
+          SERVER_USER_VAR: ${{ vars.FLOWCUBE_SERVER_USER }}
+          SERVER_SSH_PORT_VAR: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
+          SERVER_APP_PATH_VAR: ${{ vars.FLOWCUBE_SERVER_APP_PATH }}
+          SERVER_DOWNLOADS_PATH_VAR: ${{ vars.FLOWCUBE_DOWNLOADS_PATH }}
         run: |
           set -euo pipefail
-          if ! node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
+          if node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
+            echo "server_deploy_configured=true" >> "$GITHUB_OUTPUT"
+            echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
+            echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
+            echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
+            echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
+            echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
+            echo "server_downloads_path=$(node scripts/read-deploy-config.js server.downloadsPath)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          ERP_ORIGIN="${ERP_ORIGIN_VAR:-}"
+          if [ -z "$ERP_ORIGIN" ]; then
             echo "server_deploy_configured=false" >> "$GITHUB_OUTPUT"
             echo "erp_origin=" >> "$GITHUB_OUTPUT"
             echo "server_host=" >> "$GITHUB_OUTPUT"
@@ -62,13 +81,18 @@ jobs:
             cat /tmp/flowcube-deploy-config.err || true
             exit 0
           fi
+          SERVER_HOST="${SERVER_HOST_VAR:-$(node -e "const u=new URL(process.argv[1]); console.log(u.hostname)" "$ERP_ORIGIN")}"
+          SERVER_USER="${SERVER_USER_VAR:-root}"
+          SERVER_SSH_PORT="${SERVER_SSH_PORT_VAR:-22}"
+          SERVER_APP_PATH="${SERVER_APP_PATH_VAR:-/opt/flowcube}"
+          SERVER_DOWNLOADS_PATH="${SERVER_DOWNLOADS_PATH_VAR:-/var/www/flowcube-downloads}"
           echo "server_deploy_configured=true" >> "$GITHUB_OUTPUT"
-          echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
-          echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
-          echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
-          echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
-          echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
-          echo "server_downloads_path=$(node scripts/read-deploy-config.js server.downloadsPath)" >> "$GITHUB_OUTPUT"
+          echo "erp_origin=$ERP_ORIGIN" >> "$GITHUB_OUTPUT"
+          echo "server_host=$SERVER_HOST" >> "$GITHUB_OUTPUT"
+          echo "server_user=$SERVER_USER" >> "$GITHUB_OUTPUT"
+          echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
+          echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
+          echo "server_downloads_path=$SERVER_DOWNLOADS_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Print commit info
         shell: bash

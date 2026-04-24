@@ -26,13 +26,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Load tracked deploy config
+      - name: Resolve deploy config
         id: deploy_config
         shell: bash
+        env:
+          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
         run: |
           set -euo pipefail
-          [ -f deploy/production.json ] || { echo "::error::缺少 deploy/production.json"; exit 1; }
-          echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
+          if node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
+            echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ERP_ORIGIN="${ERP_ORIGIN_VAR:-}"
+          [ -n "$ERP_ORIGIN" ] || { echo "::error::缺少部署配置：设置 deploy/production.local.json 或 GitHub Variable VITE_ERP_PRODUCTION_ORIGIN"; cat /tmp/flowcube-deploy-config.err || true; exit 1; }
+          echo "erp_origin=$ERP_ORIGIN" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

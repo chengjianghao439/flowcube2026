@@ -20,26 +20,46 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Load tracked deploy config
+      - name: Resolve deploy config
         id: deploy_config
         shell: bash
+        env:
+          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
+          SERVER_HOST_VAR: ${{ vars.FLOWCUBE_SERVER_HOST }}
+          SERVER_USER_VAR: ${{ vars.FLOWCUBE_SERVER_USER }}
+          SERVER_SSH_PORT_VAR: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
+          SERVER_APP_PATH_VAR: ${{ vars.FLOWCUBE_SERVER_APP_PATH }}
         run: |
           set -euo pipefail
-          [ -f deploy/production.json ] || { echo "::error::缺少 deploy/production.json"; exit 1; }
-          echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
-          echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
-          echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
-          echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
-          echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
+          if node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
+            echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
+            echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
+            echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
+            echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
+            echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          ERP_ORIGIN="${ERP_ORIGIN_VAR:-}"
+          [ -n "$ERP_ORIGIN" ] || { echo "::error::缺少部署配置：设置 deploy/production.local.json 或 GitHub Variable VITE_ERP_PRODUCTION_ORIGIN"; cat /tmp/flowcube-deploy-config.err || true; exit 1; }
+          SERVER_HOST="${SERVER_HOST_VAR:-$(node -e "const u=new URL(process.argv[1]); console.log(u.hostname)" "$ERP_ORIGIN")}"
+          SERVER_USER="${SERVER_USER_VAR:-root}"
+          SERVER_SSH_PORT="${SERVER_SSH_PORT_VAR:-22}"
+          SERVER_APP_PATH="${SERVER_APP_PATH_VAR:-/opt/flowcube}"
+          echo "erp_origin=$ERP_ORIGIN" >> "$GITHUB_OUTPUT"
+          echo "server_host=$SERVER_HOST" >> "$GITHUB_OUTPUT"
+          echo "server_user=$SERVER_USER" >> "$GITHUB_OUTPUT"
+          echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
+          echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Validate deploy inputs
         shell: bash
         run: |
           set -euo pipefail
-          [ -n "${{ steps.deploy_config.outputs.erp_origin }}" ] || { echo "::error::deploy/production.json 缺少 erpOrigin"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_host }}" ] || { echo "::error::deploy/production.json 缺少 server.host"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_user }}" ] || { echo "::error::deploy/production.json 缺少 server.user"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_app_path }}" ] || { echo "::error::deploy/production.json 缺少 server.appPath"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.erp_origin }}" ] || { echo "::error::缺少 erp_origin"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.server_host }}" ] || { echo "::error::缺少 server_host"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.server_user }}" ] || { echo "::error::缺少 server_user"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.server_app_path }}" ] || { echo "::error::缺少 server_app_path"; exit 1; }
           [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Setup SSH agent
