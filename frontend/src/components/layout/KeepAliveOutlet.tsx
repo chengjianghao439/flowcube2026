@@ -65,7 +65,7 @@ function TabPanel({ tabKey, path, isActive }: TabPanelProps) {
   if (isActive) mountedRef.current = true
   if (!mountedRef.current) return null
 
-  const Comp = resolveComponent(path)
+  const Comp = resolveRouteComponent(normalizePath(path))
 
   return (
     // TabPathContext 向下传递该 Tab 自己的路径，供动态路由页面读取
@@ -164,10 +164,10 @@ export function KeepAliveOutlet() {
       return
     }
 
-    if (!isKnownPath(normalizedPath)) return
+    if (!isRegisteredErpRoute(normalizedPath)) return
 
     // 权限拦截
-    const requiredPerm = resolvePermission(normalizedPath)
+    const requiredPerm = resolveRoutePermission(normalizedPath)
     if (requiredPerm && !can(requiredPerm)) {
       navigate('/403', { replace: true })
       return
@@ -175,15 +175,14 @@ export function KeepAliveOutlet() {
 
     // 如果 tab 已存在（由导航发起方提前 addTab），则只激活；
     // 否则用 PATH_TITLES 或动态默认标题注册新 tab。
-    const patternCfg = PATH_PATTERNS.find(p => p.pattern.test(normalizedPath))
-    const title = PATH_TITLES[normalizedPath] ?? patternCfg?.defaultTitle(normalizedPath) ?? normalizedPath
+    const title = resolveRouteTitle(normalizedPath) ?? normalizedPath
     syncFromLocation(tabRegistration.path, title)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.search])
 
   const currentPath = getFullPath(location.pathname, location.search)
   const normalizedCurrentPath = normalizePath(currentPath)
-  if (normalizedCurrentPath !== '/' && normalizedCurrentPath !== '/dashboard' && !isKnownPath(normalizedCurrentPath)) {
+  if (normalizedCurrentPath !== '/' && normalizedCurrentPath !== '/dashboard' && !isRegisteredErpRoute(normalizedCurrentPath)) {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <div className="card-base w-full max-w-xl p-6 text-center">
@@ -202,7 +201,7 @@ export function KeepAliveOutlet() {
           key: locationRegistration.key,
           path: locationRegistration.path,
           title: PATH_TITLES[normalizedCurrentPath]
-            ?? PATH_PATTERNS.find((p) => p.pattern.test(normalizedCurrentPath))?.defaultTitle(normalizedCurrentPath)
+            ?? resolveRouteTitle(normalizedCurrentPath)
             ?? normalizedCurrentPath,
           closable: locationRegistration.key !== HOME_TAB.key,
         },
