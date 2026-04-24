@@ -6,6 +6,7 @@ import apiClient from '@/api/client'
 import {
   getEffectiveApiOrigin,
   getApiBase,
+  isHealthyApiPayload,
   normalizeApiBase,
   setApiBase,
 } from '@/config/api'
@@ -59,8 +60,8 @@ export async function checkErpApiHealth(): Promise<boolean> {
   try {
     const res = await fetch(url, { method: 'GET', cache: 'no-store' })
     if (!res.ok) return false
-    const j = (await res.json()) as { success?: boolean; status?: string }
-    return j?.success === true && j?.status === 'ok'
+    const j = await res.json()
+    return isHealthyApiPayload(j)
   } catch {
     return false
   }

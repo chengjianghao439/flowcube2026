@@ -9,6 +9,18 @@ export const API_BASE_STORAGE_KEY = 'API_BASE_URL'
 /** 旧版键名，读取时兼容；写入统一用 API_BASE_URL */
 const LEGACY_ERP_ORIGIN_KEY = 'flowcube:apiOrigin'
 
+type HealthPayload = {
+  success?: boolean
+  status?: string
+  data?: {
+    status?: string
+  }
+}
+
+export function isHealthyApiPayload(payload: HealthPayload | null | undefined): boolean {
+  return payload?.success === true && (payload.status === 'ok' || payload.data?.status === 'ok')
+}
+
 function readStorageValue(key: string): string {
   if (typeof localStorage === 'undefined') return ''
   return localStorage.getItem(key)?.trim() || ''
@@ -119,8 +131,8 @@ export function probeErpApiOrigin(origin: string): Promise<boolean> {
     try {
       const res = await fetch(`${o}/api/health`, { method: 'GET', cache: 'no-store' })
       if (!res.ok) return false
-      const j = (await res.json()) as { success?: boolean; status?: string }
-      return j?.success === true && j?.status === 'ok'
+      const j = (await res.json()) as HealthPayload
+      return isHealthyApiPayload(j)
     } catch {
       return false
     }
@@ -138,8 +150,8 @@ export function probeRelativeErpApi(): Promise<boolean> {
         cache: 'no-store',
       })
       if (!res.ok) return false
-      const j = (await res.json()) as { success?: boolean; status?: string }
-      return j?.success === true && j?.status === 'ok'
+      const j = (await res.json()) as HealthPayload
+      return isHealthyApiPayload(j)
     } catch {
       return false
     }

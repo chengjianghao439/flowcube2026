@@ -3,7 +3,7 @@
  */
 import { Capacitor } from '@capacitor/core'
 import apiClient, { payloadClient } from '@/api/client'
-import { API_BASE_STORAGE_KEY, normalizeApiBase } from '@/config/api'
+import { API_BASE_STORAGE_KEY, isHealthyApiPayload, normalizeApiBase } from '@/config/api'
 import { ERP_PRODUCTION_ORIGIN, PDA_FALLBACK_API_ORIGIN } from '@/config/env'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/lib/toast'
@@ -142,8 +142,8 @@ export async function checkPdaApiHealth(): Promise<boolean> {
   try {
     const res = await fetch(`${origin}/api/health`, { method: 'GET', cache: 'no-store' })
     if (!res.ok) return false
-    const j = (await res.json()) as { success?: boolean; status?: string }
-    return j?.success === true && j?.status === 'ok'
+    const j = await res.json()
+    return isHealthyApiPayload(j)
   } catch {
     return false
   }
