@@ -1,5 +1,7 @@
 const PERMISSIONS = {
   DASHBOARD_VIEW: 'dashboard.view',
+  SYSTEM_HEALTH_VIEW: 'system.health.view',
+  SYSTEM_HEALTH_AUTOFIX: 'system.health.autofix',
   ADMIN_PUTAWAY_EXECUTE: 'admin.putaway.execute',
   IMPORT_PRODUCT_EXECUTE: 'import.product.execute',
   IMPORT_STOCK_EXECUTE: 'import.stock.execute',
@@ -107,7 +109,12 @@ const PERMISSIONS = {
   WAREHOUSE_TASK_PICK: 'warehouse.task.pick',
   WAREHOUSE_TASK_CHECK: 'warehouse.task.check',
   WAREHOUSE_TASK_PACK: 'warehouse.task.pack',
+  WAREHOUSE_TASK_SORT: 'warehouse.task.sort',
+  WAREHOUSE_TASK_CHECK_DONE: 'warehouse.task.check_done',
+  WAREHOUSE_TASK_PACK_DONE: 'warehouse.task.pack_done',
   WAREHOUSE_TASK_SHIP: 'warehouse.task.ship',
+  WAREHOUSE_TASK_CANCEL: 'warehouse.task.cancel',
+  WAREHOUSE_TASK_PRIORITY: 'warehouse.task.priority',
   WAREHOUSE_TASK_DEBUG: 'warehouse.task.debug',
 
   PICKING_WAVE_VIEW: 'picking.wave.view',

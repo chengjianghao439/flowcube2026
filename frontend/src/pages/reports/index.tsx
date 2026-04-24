@@ -153,17 +153,17 @@ export default function ReportsPage() {
 
   const purchaseQ = useQuery({
     queryKey: ['report-purchase', applied],
-    queryFn: () => getPurchaseStatsApi(applied).then(r => r.data.data!),
+    queryFn: () => getPurchaseStatsApi(applied),
     enabled: tab === 'purchase',
   })
   const saleQ = useQuery({
     queryKey: ['report-sale', applied],
-    queryFn: () => getSaleStatsApi(applied).then(r => r.data.data!),
+    queryFn: () => getSaleStatsApi(applied),
     enabled: tab === 'sale',
   })
   const invQ = useQuery({
     queryKey: ['report-inv', applied],
-    queryFn: () => getInventoryStatsApi(applied).then(r => r.data.data!),
+    queryFn: () => getInventoryStatsApi(applied),
     enabled: tab === 'inventory',
   })
 

@@ -50,7 +50,7 @@ export default function PdaSortPage() {
 
   const { data: bins, isLoading, refetch } = useQuery({
     queryKey: ['sorting-bins-occupied'],
-    queryFn: () => getSortingBinsApi().then(r => r.data.data ?? []),
+    queryFn: () => getSortingBinsApi().then(r => r ?? []),
     refetchInterval: 15_000,
   })
 
@@ -61,7 +61,7 @@ export default function PdaSortPage() {
     setScanning(true)
     try {
       const res = await scanProductForSortApi(code)
-      const result = res.data.data
+      const result = res
       if (!result) { err('未找到备货中的商品，请确认条码正确'); return }
       if (!result.sortingBinCode) { err(`任务 ${result.taskNo} 未分配分拣格`); return }
       setHint({
@@ -85,7 +85,7 @@ export default function PdaSortPage() {
     setScanning(true)
     try {
       const submitted = await sortAction.run((requestKey) =>
-        sortDoneApi(hint.taskId, [{ itemId: hint.itemId, sortedQty: hint.qty }], requestKey).then((res) => res.data.data!),
+        sortDoneApi(hint.taskId, [{ itemId: hint.itemId, sortedQty: hint.qty }], requestKey).then((res) => res!),
       )
       if (submitted.kind === 'pending') {
         err('网络中断，分拣结果待确认。请先确认结果，再决定是否重扫。')

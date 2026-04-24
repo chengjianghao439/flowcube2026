@@ -48,7 +48,7 @@ export default function ProfitAnalysisPage() {
     queryFn: () => getProfitAnalysisApi({
       startDate: applied.startDate || undefined,
       endDate: applied.endDate || undefined,
-    }).then(r => r.data.data!),
+    }),
   })
 
   const { data, isLoading, isError, error, refetch } = profitQ

@@ -66,7 +66,7 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
  */
 async function releaseByRef(conn, refType, refId) {
   const [rows] = await conn.query(
-    'SELECT * FROM stock_reservations WHERE ref_type=? AND ref_id=? AND status=1',
+    'SELECT * FROM stock_reservations WHERE ref_type=? AND ref_id=? AND status=1 FOR UPDATE',
     [refType, refId]
   )
   if (!rows.length) return   // 无有效预占，可能未曾确认过

@@ -1,4 +1,4 @@
-import client from './client'
+import { payloadClient as client } from './client'
 import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
 import type { ApiResponse } from '@/types'
 import { withRequestKeyHeaders } from '@/lib/requestKey'

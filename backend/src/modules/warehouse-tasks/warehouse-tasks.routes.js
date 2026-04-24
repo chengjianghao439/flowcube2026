@@ -37,6 +37,14 @@ router.get('/my', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), async (req
   try { return successResponse(res, await svc.findMyTasks(), '查询成功') } catch (e) { next(e) }
 })
 
+router.get('/my-sku-summary', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), async (req, res, next) => {
+  try { return successResponse(res, await svc.findMyTaskSkuSummary(), '查询成功') } catch (e) { next(e) }
+})
+
+router.get('/stats', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), async (req, res, next) => {
+  try { return successResponse(res, await svc.getTaskStats(), '查询成功') } catch (e) { next(e) }
+})
+
 // GET /api/warehouse-tasks/:id/pick-suggestions — 推荐拣货容器
 router.get('/:id/pick-suggestions', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), async (req, res, next) => {
   try { return successResponse(res, await svc.getPickSuggestions(+req.params.id)) } catch (e) { next(e) }
@@ -275,7 +283,7 @@ router.get('/:id/debug', requirePermission(PERMISSIONS.WAREHOUSE_TASK_DEBUG), as
 
 
 // body 可选：{ items: [{itemId, sortedQty}] } — 逐件上报时传入；不传则视为整任务完成
-router.put('/:id/sort-done', pdaOnly, async (req, res, next) => {
+router.put('/:id/sort-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SORT), pdaOnly, async (req, res, next) => {
   try {
     const sortedItems = req.body?.items ?? null
     const result = await svc.sortTask(+req.params.id, sortedItems, {
@@ -288,12 +296,12 @@ router.put('/:id/sort-done', pdaOnly, async (req, res, next) => {
 })
 
 // PUT /api/warehouse-tasks/:id/check-done — 复核完成，待打包（4→5）
-router.put('/:id/check-done', pdaOnly, async (req, res, next) => {
+router.put('/:id/check-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK_DONE), pdaOnly, async (req, res, next) => {
   try { await svc.checkDone(+req.params.id); return successResponse(res, null, '已标记为待打包') } catch (e) { next(e) }
 })
 
 // PUT /api/warehouse-tasks/:id/pack-done — 打包完成，待出库（5→6）
-router.put('/:id/pack-done', pdaOnly, async (req, res, next) => {
+router.put('/:id/pack-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK_DONE), pdaOnly, async (req, res, next) => {
   try {
     const data = await svc.packDone(+req.params.id, {
       requestKey: extractRequestKey(req),
@@ -305,7 +313,7 @@ router.put('/:id/pack-done', pdaOnly, async (req, res, next) => {
 
 // PUT /api/warehouse-tasks/:id/ship — 执行出库（6→7）
 // 在 route 层获取销售单数据，消除 WMS service → ERP service 循环依赖
-router.put('/:id/ship', pdaOnly, async (req, res, next) => {
+router.put('/:id/ship', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SHIP), pdaOnly, async (req, res, next) => {
   try {
     const taskId = +req.params.id
     const op     = await getOp(req.user.userId)
@@ -367,18 +375,21 @@ router.put('/:id/check',
 )
 
 // PUT /api/warehouse-tasks/:id/cancel — 取消任务（仅 ERP 后台，PDA 不允许调用）
-router.put('/:id/cancel', (req, res, next) => {
+router.put('/:id/cancel', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL), (req, res, next) => {
   const client = (req.headers['x-client'] || '').toLowerCase()
   if (client === 'pda') {
     return res.status(403).json({ success: false, message: 'PDA 不允许取消任务，请在 ERP 后台操作', data: null })
   }
   next()
 }, async (req, res, next) => {
-  try { await svc.cancel(+req.params.id); return successResponse(res, null, '任务已取消') } catch (e) { next(e) }
+  try {
+    await svc.cancel(+req.params.id, { operator: await getOp(req.user.userId) })
+    return successResponse(res, null, '任务已取消')
+  } catch (e) { next(e) }
 })
 
 // PUT /api/warehouse-tasks/:id/priority — 修改优先级
-router.put('/:id/priority', vBody(z.object({ priority: z.number().int().min(1).max(3) })), async (req, res, next) => {
+router.put('/:id/priority', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PRIORITY), vBody(z.object({ priority: z.number().int().min(1).max(3) })), async (req, res, next) => {
   try { await svc.updatePriority(+req.params.id, req.body.priority); return successResponse(res, null, '优先级已更新') } catch (e) { next(e) }
 })
 

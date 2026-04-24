@@ -10,6 +10,7 @@ import { usePdaRole } from '@/hooks/usePdaRole'
 import type { PdaPerm } from '@/hooks/usePdaRole'
 import { usePdaOnboarding } from '@/hooks/usePdaOnboarding'
 import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
+import { PdaEmptyCard } from '@/components/pda/PdaEmptyState'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
 // ── 作业入口（带权限过滤）────────────────────────────────────────────────────
@@ -28,9 +29,10 @@ const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = 
 export default function PdaWorkbench() {
   const navigate = useNavigate()
   const user     = useAuthStore(s => s.user)
+  const logout   = useAuthStore(s => s.logout)
   const hour     = new Date().getHours()
   const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
-  const { roleLabel, roleIcon, roleColor, can } = usePdaRole()
+  const { roleLabel, roleIcon, roleColor, can, permissionsMissing } = usePdaRole()
   const { OnboardingGate } = usePdaOnboarding()
 
   const allowedOps = ALL_OPS.filter(op => can(op.perm))
@@ -76,15 +78,31 @@ export default function PdaWorkbench() {
 
         <div>
           <p className="text-xs text-muted-foreground mb-3">{roleIcon} {roleLabel} 可用作业（{allowedOps.length} 项）</p>
-          <div className="grid grid-cols-2 gap-3">
-            {allowedOps.map(op => (
-              <button key={op.path} onClick={() => navigate(op.path)}
-                className="flex flex-col items-start rounded-2xl border border-border bg-card p-4 text-left active:scale-95 transition-all">
-                <span className="text-3xl mb-3">{op.icon}</span>
-                <p className="text-base font-medium text-foreground">{op.label}</p>
-              </button>
-            ))}
-          </div>
+          {permissionsMissing ? (
+            <PdaEmptyCard
+              icon="🔐"
+              title="权限未加载，PDA 已切到受限模式"
+              description="当前账号没有收到后端返回的权限信息，因此不会放开任何 PDA 作业入口。请重新登录；若仍异常，请联系管理员检查账号权限。"
+              actionText="重新登录"
+              onAction={() => { logout(); navigate('/pda/login') }}
+            />
+          ) : allowedOps.length === 0 ? (
+            <PdaEmptyCard
+              icon="⛔"
+              title="当前账号没有可用 PDA 作业权限"
+              description="后端未授予收货、拣货、分拣、复核、打包、出库等 PDA 权限。请联系管理员分配真实权限。"
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {allowedOps.map(op => (
+                <button key={op.path} onClick={() => navigate(op.path)}
+                  className="flex flex-col items-start rounded-2xl border border-border bg-card p-4 text-left active:scale-95 transition-all">
+                  <span className="text-3xl mb-3">{op.icon}</span>
+                  <p className="text-base font-medium text-foreground">{op.label}</p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

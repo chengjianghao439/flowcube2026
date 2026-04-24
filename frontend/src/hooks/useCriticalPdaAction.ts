@@ -45,8 +45,7 @@ export function useCriticalPdaAction<T>({
     setPhaseMessage(`正在确认${pendingRecord.label}的结果，请勿重复提交。`)
     setLastErrorMessage(null)
     try {
-      const res = await getOperationRequestStatusApi(pendingRecord.requestKey, pendingRecord.action)
-      const status = res.data.data!
+      const status = await getOperationRequestStatusApi(pendingRecord.requestKey, pendingRecord.action)
       if (status.status === 'success') {
         removePending(action)
         setPhase('idle')

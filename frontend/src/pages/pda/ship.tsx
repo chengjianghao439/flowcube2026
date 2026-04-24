@@ -44,7 +44,7 @@ export default function PdaShipPage() {
   const shipMut = useMutation({
     mutationFn: async (taskId: number) => {
       const result = await shipAction.run((requestKey) =>
-        shipTaskApi(taskId, requestKey).then((res) => res.data.data as { taskId: number }),
+        shipTaskApi(taskId, requestKey).then((res) => res as { taskId: number }),
       )
       return result
     },
@@ -64,7 +64,7 @@ export default function PdaShipPage() {
     setLoading(true)
     try {
       const res  = await getPackageByBarcodeApi(raw)
-      const data = res.data.data!
+      const data = res!
       if (data.taskStatus === WT_STATUS.SHIPPED)   { err('该订单已完成出库'); return }
       if (data.taskStatus === WT_STATUS.CANCELLED) { err('该任务已取消'); return }
       setInfo(data)

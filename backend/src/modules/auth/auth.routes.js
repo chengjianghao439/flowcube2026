@@ -48,16 +48,9 @@ router.post('/refresh', authMiddleware, authController.refresh)
 // PUT /api/auth/change-password — 修改自己的密码
 router.put('/change-password', authMiddleware, validateBody(z.object({ oldPassword:z.string().min(1), newPassword:z.string().min(6,'新密码至少6位') })), async (req, res, next) => {
   try {
-    const bcrypt = require('bcryptjs')
-    const { pool } = require('../../config/db')
     const { successResponse } = require('../../utils/response')
-    const AppError = require('../../utils/AppError')
-    const [[user]] = await pool.query('SELECT password FROM sys_users WHERE id=? AND deleted_at IS NULL', [req.user.userId])
-    if (!user) throw new AppError('用户不存在', 404)
-    const ok = await bcrypt.compare(req.body.oldPassword, user.password)
-    if (!ok) throw new AppError('旧密码错误', 400)
-    const hash = await bcrypt.hash(req.body.newPassword, 10)
-    await pool.query('UPDATE sys_users SET password=? WHERE id=?', [hash, req.user.userId])
+    const authService = require('./auth.service')
+    await authService.changePassword(req.user.userId, req.body.oldPassword, req.body.newPassword)
     return successResponse(res, null, '密码修改成功，请重新登录')
   } catch (e) { next(e) }
 })

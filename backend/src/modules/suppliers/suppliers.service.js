@@ -21,6 +21,20 @@ function fmt(row) {
   }
 }
 
+async function assertSupplierDeletable(id) {
+  const checks = [
+    'SELECT 1 FROM purchase_orders WHERE supplier_id=? LIMIT 1',
+    'SELECT 1 FROM purchase_returns WHERE supplier_id=? LIMIT 1',
+    'SELECT 1 FROM inventory_logs WHERE supplier_id=? LIMIT 1',
+  ]
+  for (const sql of checks) {
+    const [rows] = await pool.query(sql, [id])
+    if (rows[0]) {
+      throw new AppError('供应商已被业务单据或库存流水引用，禁止删除；请改为停用', 409)
+    }
+  }
+}
+
 async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
@@ -72,6 +86,7 @@ async function update(id, { name, contact, phone, email, address, remark, isActi
 
 async function softDelete(id) {
   await findById(id)
+  await assertSupplierDeletable(id)
   await pool.query('UPDATE supply_suppliers SET deleted_at=NOW() WHERE id=? AND deleted_at IS NULL', [id])
 }
 

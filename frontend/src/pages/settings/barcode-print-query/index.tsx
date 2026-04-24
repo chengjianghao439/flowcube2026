@@ -68,7 +68,7 @@ export default function BarcodePrintQueryPage() {
       pageSize: 20,
       inboundTaskId: category === 'inbound' ? initialInboundTaskId : undefined,
       inboundTaskItemId: category === 'inbound' ? initialInboundTaskItemId : undefined,
-    }).then(r => r.data.data),
+    }),
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 3000 : false,
   })
@@ -77,7 +77,7 @@ export default function BarcodePrintQueryPage() {
     mutationFn: (row: BarcodePrintRecord) => reprintBarcodeRecordApi({
       category: row.category,
       recordId: row.recordId,
-    }).then(r => r.data.data),
+    }),
     onSuccess: (data, row) => {
       toast.success(
         data?.printerCode

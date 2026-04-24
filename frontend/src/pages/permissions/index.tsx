@@ -16,8 +16,8 @@ export default function PermissionsPage() {
   const [selectedRole, setSelectedRole] = useState<number>(2)
   const [perms, setPerms] = useState<Set<string>>(new Set())
 
-  const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r.data.data || []) })
-  const { data: rolePerms, isLoading } = useQuery({ queryKey: ['role-perms', selectedRole], queryFn: () => client.get<ApiResponse<string[]>>(`/roles/${selectedRole}/permissions`).then(r => r.data.data || []), enabled: !!selectedRole })
+  const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r || []) })
+  const { data: rolePerms, isLoading } = useQuery({ queryKey: ['role-perms', selectedRole], queryFn: () => client.get<ApiResponse<string[]>>(`/roles/${selectedRole}/permissions`).then(r => r || []), enabled: !!selectedRole })
 
   useEffect(() => { if (rolePerms) setPerms(new Set(rolePerms)) }, [rolePerms])
 

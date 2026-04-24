@@ -173,7 +173,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         remark: remark || undefined,
         items: items.map(({ _key, ...rest }) => rest),
       })
-      const id = res.data.data?.id
+      const id = res?.id
       closeTab(id ? `/purchase/${id}` : '/purchase')
     } catch (_) {
     } finally {

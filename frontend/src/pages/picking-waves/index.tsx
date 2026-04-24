@@ -86,12 +86,12 @@ export default function PickingWavesPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['picking-waves', keyword, statusFilter, page],
-    queryFn: () => getWavesApi({ keyword, status: statusFilter || undefined, page, pageSize: 20 }).then(r => r.data.data),
+    queryFn: () => getWavesApi({ keyword, status: statusFilter || undefined, page, pageSize: 20 }),
   })
 
   const { data: detail } = useQuery({
     queryKey: ['picking-wave-detail', selectedWaveId],
-    queryFn: () => getWaveByIdApi(selectedWaveId!).then(r => r.data.data),
+    queryFn: () => getWaveByIdApi(selectedWaveId!),
     enabled: !!selectedWaveId,
   })
 

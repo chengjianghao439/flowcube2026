@@ -25,7 +25,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
   const { warn, err } = usePdaFeedback()
   const { data: task } = useQuery({
     queryKey: ['pda-inbound-task', taskId],
-    queryFn: () => getInboundTaskByIdApi(taskId).then(r => r.data.data!),
+    queryFn: () => getInboundTaskByIdApi(taskId),
     enabled: taskId > 0,
   })
   const putawayAction = useCriticalPdaAction<void>({
@@ -133,7 +133,7 @@ export default function PdaPutawayPage() {
 
   const { data: task, isLoading } = useQuery({
     queryKey: ['pda-inbound-task', taskId],
-    queryFn: () => getInboundTaskByIdApi(taskId).then(r => r.data.data!),
+    queryFn: () => getInboundTaskByIdApi(taskId),
     enabled: taskId > 0,
   })
 

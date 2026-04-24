@@ -3,8 +3,8 @@ import { getPurchaseListApi, getPurchaseDetailApi, createPurchaseApi, confirmPur
 import { useInvalidate } from '@/hooks/useInvalidate'
 import type { CreatePurchaseParams } from '@/types/purchase'
 
-export const usePurchaseList   = (params: object) => useQuery({ queryKey: ['purchase', params], queryFn: () => getPurchaseListApi(params).then(r => r.data.data!) })
-export const usePurchaseDetail = (id: number)     => useQuery({ queryKey: ['purchase', id],     queryFn: () => getPurchaseDetailApi(id).then(r => r.data.data!), enabled: !!id })
+export const usePurchaseList   = (params: object) => useQuery({ queryKey: ['purchase', params], queryFn: () => getPurchaseListApi(params) })
+export const usePurchaseDetail = (id: number)     => useQuery({ queryKey: ['purchase', id],     queryFn: () => getPurchaseDetailApi(id), enabled: !!id })
 
 export const useCreatePurchase = () => {
   const invalidate = useInvalidate()

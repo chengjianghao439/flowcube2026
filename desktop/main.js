@@ -146,7 +146,7 @@ function buildDesktopClientInfo() {
 async function getRendererApiOrigin(win) {
   const script = `(function(){
     try {
-      var v = localStorage.getItem('API_BASE_URL') || localStorage.getItem('flowcube:apiOrigin') || '';
+      var v = localStorage.getItem('API_BASE_URL') || window.__FLOWCUBE_DEFAULT_API_ORIGIN__ || '';
       return v.trim();
     } catch (e) { return ''; }
   })()`
@@ -333,8 +333,17 @@ function createWindow() {
           }
           if (!origin) {
             console.warn(
-              '[FlowCube] 更新检查跳过：渲染进程未配置 API 根地址（API_BASE_URL）；请确认已保存 ERP API 设置',
+              '[FlowCube] 更新检查已禁用：未解析到 API 根地址（API_BASE_URL runtime override 或构建期默认值）',
             )
+            void dialog.showMessageBox(win, {
+              type: 'warning',
+              title: '更新检查未启用',
+              message: '桌面端未解析到 ERP API 根地址，已拒绝启用自动更新检查。',
+              detail: '请确认安装包已注入默认 ERP 地址，或已在运行时保存 API_BASE_URL。',
+              buttons: ['知道了'],
+              defaultId: 0,
+              noLink: true,
+            }).catch(() => {})
             return
           }
           triggerPackagedUpdateCheck(win, origin)

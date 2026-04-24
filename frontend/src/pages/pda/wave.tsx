@@ -23,7 +23,7 @@ interface ContainerInfo {
 
 async function fetchContainerByBarcode(bc: string): Promise<ContainerInfo> {
   const res = await client.get<{ data: ContainerInfo }>(`/inventory/containers/barcode/${bc}`)
-  return res.data.data
+  return res
 }
 
 function allocatePickLine(pickLines: WavePickLine[] | undefined, productId: number): WavePickLine | null {
@@ -68,7 +68,7 @@ export default function PdaWavePage() {
 
   const { data: wave, isLoading, error: loadError, refetch } = useQuery({
     queryKey: ['pda-wave', waveId],
-    queryFn: () => getWaveByIdApi(waveId).then(r => r.data.data!),
+    queryFn: () => getWaveByIdApi(waveId),
     enabled: waveId > 0,
     refetchOnWindowFocus: false,
   })
@@ -77,7 +77,7 @@ export default function PdaWavePage() {
 
   const { data: routeData, refetch: refetchRoute } = useQuery({
     queryKey: ['pda-wave-route', waveId],
-    queryFn: () => getWavePickRouteApi(waveId).then(r => r.data.data),
+    queryFn: () => getWavePickRouteApi(waveId),
     enabled: waveId > 0 && !!wave && wave.status === 2,
     refetchOnWindowFocus: false,
   })

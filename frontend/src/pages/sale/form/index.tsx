@@ -164,8 +164,8 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       void (async () => {
         try {
           const r = await getCustomerPriceApi(+cid, i.productId)
-          if (r.data.data?.salePrice !== undefined) {
-            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r.data.data!.salePrice, priceSource: 'list', resolvedPrice: r.data.data!.salePrice, resolvedPriceLevel: r.data.data!.priceLevel } : x))
+          if (r?.salePrice !== undefined) {
+            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r!.salePrice, priceSource: 'list', resolvedPrice: r!.salePrice, resolvedPriceLevel: r!.priceLevel } : x))
           }
         } catch (_) {}
       })()
@@ -235,8 +235,8 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       setPriceLoading(prev => ({ ...prev, [k]: true }))
       try {
         const r = await getCustomerPriceApi(+customerId, product.id)
-        if (r.data.data?.salePrice !== undefined)
-          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r.data.data!.salePrice, priceSource: 'list', resolvedPrice: r.data.data!.salePrice, resolvedPriceLevel: r.data.data!.priceLevel } : i))
+        if (r?.salePrice !== undefined)
+          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r!.salePrice, priceSource: 'list', resolvedPrice: r!.salePrice, resolvedPriceLevel: r!.priceLevel } : i))
       } catch (_) {}
       setPriceLoading(prev => ({ ...prev, [k]: false }))
     }
@@ -505,8 +505,8 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
       ;(async () => {
         try {
           const r = await getCustomerPriceApi(+cid, i.productId)
-          if (r.data.data?.salePrice !== undefined)
-            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r.data.data!.salePrice, priceSource: 'list', resolvedPrice: r.data.data!.salePrice, resolvedPriceLevel: r.data.data!.priceLevel } : x))
+          if (r?.salePrice !== undefined)
+            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r!.salePrice, priceSource: 'list', resolvedPrice: r!.salePrice, resolvedPriceLevel: r!.priceLevel } : x))
         } catch (_) {}
       })()
       return i
@@ -575,8 +575,8 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
       setPriceLoading(prev => ({ ...prev, [k]: true }))
       try {
         const r = await getCustomerPriceApi(+customerId, product.id)
-        if (r.data.data?.salePrice !== undefined)
-          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r.data.data!.salePrice, priceSource: 'list', resolvedPrice: r.data.data!.salePrice, resolvedPriceLevel: r.data.data!.priceLevel } : i))
+        if (r?.salePrice !== undefined)
+          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r!.salePrice, priceSource: 'list', resolvedPrice: r!.salePrice, resolvedPriceLevel: r!.priceLevel } : i))
       } catch (_) {}
       setPriceLoading(prev => ({ ...prev, [k]: false }))
     }

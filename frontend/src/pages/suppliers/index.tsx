@@ -71,7 +71,7 @@ export default function SuppliersPage() {
       <ConfirmDialog
         open={!!confirmTarget}
         title="确认删除"
-        description={`删除供应商「${confirmTarget?.name}」？该操作不可撤销。`}
+        description={`删除供应商「${confirmTarget?.name}」？仅未被采购、退货或库存流水引用的供应商允许删除；若已被引用，请改为编辑后停用。`}
         variant="destructive"
         confirmText="删除"
         onConfirm={() => { del(confirmTarget!.id); setConfirmTarget(null) }}

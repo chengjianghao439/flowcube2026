@@ -2,6 +2,7 @@ const { Router } = require('express')
 const path = require('path')
 const fs   = require('fs')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
+const { successResponse } = require('../../utils/response')
 const router = Router()
 
 // APK 存放目录（放在 backend/apk/ 下，与 index.js 同级）
@@ -52,27 +53,24 @@ router.get('/version', (req, res) => {
   }
 
   if (!meta) {
-    return res.json({ success: true, data: null })  // 尚未部署 APK
+    return successResponse(res, null)  // 尚未部署 APK
   }
 
   const apkPath = resolveApkPath(meta)
   if (!fs.existsSync(apkPath)) {
-    return res.json({ success: true, data: null })
+    return successResponse(res, null)
   }
 
   const size = fs.statSync(apkPath).size
   const base = resolvePublicBase(req)
-  return res.json({
-    success: true,
-    data: {
-      version:     meta.version,
-      versionCode: Number(meta.versionCode) || 0,
-      releaseNote: meta.releaseNote || '',
-      downloadUrl: base ? `${base}/api/pda/download` : '/api/pda/download',
-      size,
-      publishedAt: meta.publishedAt || new Date().toISOString(),
-      available: true,
-    },
+  return successResponse(res, {
+    version:     meta.version,
+    versionCode: Number(meta.versionCode) || 0,
+    releaseNote: meta.releaseNote || '',
+    downloadUrl: base ? `${base}/api/pda/download` : '/api/pda/download',
+    size,
+    publishedAt: meta.publishedAt || new Date().toISOString(),
+    available: true,
   })
 })
 

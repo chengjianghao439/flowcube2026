@@ -16,6 +16,24 @@ type WorkspaceRouteMeta = {
 }
 
 const PATH_META: Record<string, WorkspaceRouteMeta> = {
+  '/sale': {
+    tabIdentity: { kind: 'pathname' },
+  },
+  '/purchase': {
+    tabIdentity: { kind: 'pathname' },
+  },
+  '/products': {
+    tabIdentity: { kind: 'pathname' },
+  },
+  '/warehouse-tasks': {
+    tabIdentity: { kind: 'pathname' },
+  },
+  '/inventory': {
+    tabIdentity: { kind: 'pathname' },
+  },
+  '/inventory/overview': {
+    tabIdentity: { kind: 'pathname' },
+  },
   '/settings/barcode-print-query': {
     tabIdentity: { kind: 'full-url' },
   },

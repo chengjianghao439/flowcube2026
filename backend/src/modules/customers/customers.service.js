@@ -27,6 +27,20 @@ const fmt = r => ({
   createdAt:r.created_at,
 })
 
+async function assertCustomerDeletable(id) {
+  const checks = [
+    'SELECT 1 FROM sale_orders WHERE customer_id=? LIMIT 1',
+    'SELECT 1 FROM sale_returns WHERE customer_id=? LIMIT 1',
+    'SELECT 1 FROM warehouse_tasks WHERE customer_id=? LIMIT 1',
+  ]
+  for (const sql of checks) {
+    const [rows] = await pool.query(sql, [id])
+    if (rows[0]) {
+      throw new AppError('客户已被业务单据或任务引用，禁止删除；请改为停用', 409)
+    }
+  }
+}
+
 async function findAll({ page=1, pageSize=20, keyword='' }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
   const [rows] = await pool.query(`SELECT * FROM sale_customers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?) ORDER BY created_at DESC LIMIT ? OFFSET ?`,[like,like,pageSize,offset])
@@ -55,6 +69,7 @@ async function update(id,{name,contact,phone,email,address,remark,isActive}) {
 }
 async function softDelete(id) {
   await findById(id)
+  await assertCustomerDeletable(id)
   await pool.query('UPDATE sale_customers SET deleted_at=NOW() WHERE id=? AND deleted_at IS NULL',[id])
 }
 module.exports = { findAll, findAllActive, findById, create, update, softDelete }

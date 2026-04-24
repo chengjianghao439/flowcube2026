@@ -67,7 +67,7 @@ export default function PdaAnomalyPage() {
 
   const pdaAnomalyQ = useQuery({
     queryKey: ['pda-anomaly', applied],
-    queryFn: () => getPdaAnomalyApi(applied).then(r => r.data.data!),
+    queryFn: () => getPdaAnomalyApi(applied),
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 60_000 : false,
   })

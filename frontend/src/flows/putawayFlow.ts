@@ -4,11 +4,9 @@
  */
 import type { FlowDef } from '@/hooks/usePdaFlow'
 import { parseBarcode } from '@/utils/barcode'
-import apiClient from '@/api/client'
+import { payloadClient as apiClient } from '@/api/client'
 import { getContainerByBarcodeApi } from '@/api/inventory'
 import { putawayInboundApi } from '@/api/inbound-tasks'
-import type { ApiResponse } from '@/types'
-
 interface LocationInfo {
   id: number
   code: string
@@ -53,8 +51,7 @@ export function makePutawayFlow(
           }
           const parsed = parseBarcode(trimmed)
           if (parsed.type !== 'container') return { ok: false, message: '扫描库存条码' }
-          const res = await getContainerByBarcodeApi(trimmed)
-          const d = res.data.data!
+          const d = await getContainerByBarcodeApi(trimmed)
           if (d.containerStatus !== 'waiting_putaway') {
             return { ok: false, message: '该库存条码不是待上架状态' }
           }
@@ -82,8 +79,7 @@ export function makePutawayFlow(
           const parsed = parseBarcode(trimmed)
           if (parsed.type !== 'location') return { ok: false, message: '扫描货架条码' }
           if (!ctx.containerId) return { ok: false, message: '扫描库存条码' }
-          const res = await apiClient.get<ApiResponse<LocationInfo>>(`/locations/code/${encodeURIComponent(trimmed)}`)
-          const loc = res.data.data!
+          const loc = await apiClient.get<LocationInfo>(`/locations/code/${encodeURIComponent(trimmed)}`)
           if (opts?.submitPutaway) {
             await opts.submitPutaway({ taskId: ctx.taskId, containerId: ctx.containerId, locationId: loc.id })
           } else {

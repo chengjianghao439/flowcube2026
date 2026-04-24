@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { moveStock, MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { releaseByRef } = require('../../engine/reservationEngine')
 const { unlockContainersByTask } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
@@ -825,6 +826,10 @@ async function cancel(id, options = {}) {
     await unlockContainersByTask(conn, id)
     await sortingBinSvc.releaseByTask(conn, id)
 
+    if (taskRow.sale_order_id) {
+      await releaseByRef(conn, 'sale_order', Number(taskRow.sale_order_id))
+    }
+
     if (taskRow.sale_order_id && options.syncSaleStatus !== false) {
       const saleSvc = require('../sale/sale.service')
       await saleSvc.syncCancelledByWarehouseTaskWithinTransaction(conn, Number(taskRow.sale_order_id), {
@@ -838,7 +843,12 @@ async function cancel(id, options = {}) {
         eventType:  WT_EVENT.TASK_CANCELLED,
         fromStatus: taskRow.status,
         toStatus:   rule.toStatus,
-        detail:     { saleOrderId: taskRow.sale_order_id != null ? Number(taskRow.sale_order_id) : null },
+        operatorId: options.operator?.userId ?? null,
+        operatorName: options.operator?.realName ?? null,
+        detail:     {
+          saleOrderId: taskRow.sale_order_id != null ? Number(taskRow.sale_order_id) : null,
+          reservationReleased: taskRow.sale_order_id != null,
+        },
       })
     } catch (_) {}
     if (manageConn) await conn.commit()
@@ -1019,6 +1029,72 @@ async function findMyTasks() {
   }))
 }
 
+async function findMyTaskSkuSummary() {
+  const [rows] = await pool.query(`
+    SELECT
+      wti.product_id AS product_id,
+      wti.product_code AS product_code,
+      wti.product_name AS product_name,
+      wti.unit AS unit,
+      COALESCE(SUM(wti.required_qty),0) AS total_required,
+      COALESCE(SUM(wti.picked_qty),0) AS total_picked,
+      COUNT(DISTINCT wt.id) AS order_count,
+      GROUP_CONCAT(DISTINCT wt.id ORDER BY wt.id ASC) AS task_ids
+    FROM warehouse_tasks wt
+    INNER JOIN warehouse_task_items wti ON wti.task_id = wt.id
+    WHERE wt.status IN (${WT_STATUS_PICK_POOL.join(',')})
+      AND wt.deleted_at IS NULL
+    GROUP BY wti.product_id, wti.product_code, wti.product_name, wti.unit
+    ORDER BY
+      CASE WHEN COALESCE(SUM(wti.picked_qty),0) >= COALESCE(SUM(wti.required_qty),0) THEN 1 ELSE 0 END ASC,
+      wti.product_name ASC,
+      wti.product_code ASC
+  `)
+  return rows.map((row) => ({
+    productId: Number(row.product_id),
+    productCode: row.product_code,
+    productName: row.product_name,
+    unit: row.unit,
+    totalRequired: Number(row.total_required),
+    totalPicked: Number(row.total_picked),
+    orderCount: Number(row.order_count),
+    taskIds: String(row.task_ids || '')
+      .split(',')
+      .map((v) => Number(v))
+      .filter((v) => Number.isFinite(v) && v > 0),
+  }))
+}
+
+async function getTaskStats() {
+  const counts = { picking: 0, sorting: 0, checking: 0, packing: 0, shipping: 0, done: 0, urgent: 0 }
+  const [rows] = await pool.query(`
+    SELECT status, COUNT(*) AS total
+    FROM warehouse_tasks
+    WHERE deleted_at IS NULL
+    GROUP BY status
+  `)
+  for (const row of rows) {
+    const status = Number(row.status)
+    const total = Number(row.total)
+    if (status === WT_STATUS.PICKING) counts.picking = total
+    else if (status === WT_STATUS.SORTING) counts.sorting = total
+    else if (status === WT_STATUS.CHECKING) counts.checking = total
+    else if (status === WT_STATUS.PACKING) counts.packing = total
+    else if (status === WT_STATUS.SHIPPING) counts.shipping = total
+    else if (status === WT_STATUS.SHIPPED) counts.done = total
+  }
+  const [[urgentRow]] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM warehouse_tasks
+     WHERE deleted_at IS NULL
+       AND priority = 1
+       AND status < ?`,
+    [WT_STATUS.SHIPPED],
+  )
+  counts.urgent = Number(urgentRow?.total || 0)
+  return counts
+}
+
 /**
  * 复核：批量更新明细的 checked_qty
  * 当所有明细 checked_qty >= required_qty 时，在任务上记录复核完成时间
@@ -1036,6 +1112,8 @@ module.exports = {
   findAll,
   findById,
   findMyTasks,
+  findMyTaskSkuSummary,
+  getTaskStats,
   createForSaleOrder,
   assign,
   startPicking,

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getTasksApi } from '@/api/warehouse-tasks'
-import { WT_STATUS } from '@/constants/warehouseTaskStatus'
+import { getTaskStatsApi } from '@/api/warehouse-tasks'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 
 interface StatItem {
@@ -13,24 +12,13 @@ export function TaskStatCards() {
   const isActiveTab = useActiveWorkspaceTab()
   const { data } = useQuery({
     queryKey: ['warehouse-tasks-stats'],
-    queryFn: () => getTasksApi({ pageSize: 999 }).then(r => r.data.data!.list),
+    queryFn: () => getTaskStatsApi(),
     enabled: isActiveTab,
     staleTime: 10_000,
     refetchInterval: isActiveTab ? 15_000 : false,
   })
 
-  const counts = { picking: 0, sorting: 0, checking: 0, packing: 0, shipping: 0, done: 0, urgent: 0 }
-  if (data) {
-    data.forEach(t => {
-      if (t.status === WT_STATUS.PICKING)   counts.picking++
-      else if (t.status === WT_STATUS.SORTING)   counts.sorting++
-      else if (t.status === WT_STATUS.CHECKING)  counts.checking++
-      else if (t.status === WT_STATUS.PACKING)   counts.packing++
-      else if (t.status === WT_STATUS.SHIPPING)  counts.shipping++
-      else if (t.status === WT_STATUS.SHIPPED)   counts.done++
-      if (t.priority === 1 && t.status < WT_STATUS.SHIPPED) counts.urgent++
-    })
-  }
+  const counts = data ?? { picking: 0, sorting: 0, checking: 0, packing: 0, shipping: 0, done: 0, urgent: 0 }
 
   const cards: StatItem[] = [
     { label: '拣货中', value: counts.picking, accentClass: 'text-primary' },

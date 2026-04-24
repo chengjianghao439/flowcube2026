@@ -94,23 +94,23 @@ function deriveGenericBarcodeStatus(row) {
 function assertCanComplete(job) {
   if (job.status === STATUS.DONE) return
   if (job.status === STATUS.FAILED) {
-    throw new AppError('任务已失败，无法标记为完成', 400)
+    throw new AppError('任务已失败，无法标记为完成', 400, 'PRINT_JOB_ALREADY_FAILED')
   }
 }
 
 function assertCanCompleteLocalDesktop(job, ackTokenPresent) {
   if (job.status === STATUS.DONE) return
   if (job.status === STATUS.FAILED) {
-    throw new AppError('任务已失败，无法核销', 400)
+    throw new AppError('任务已失败，无法核销', 400, 'PRINT_JOB_ALREADY_FAILED')
   }
   if (job.status === STATUS.PRINTING) {
-    throw new AppError('任务已被打印工作站领取，无法本机核销', 409)
+    throw new AppError('任务已被打印工作站领取，无法本机核销', 409, 'PRINT_JOB_CLAIMED_BY_CLIENT')
   }
   if (job.status !== STATUS.PENDING) {
-    throw new AppError('无法核销该任务', 400)
+    throw new AppError('无法核销该任务', 400, 'PRINT_JOB_COMPLETE_INVALID')
   }
   if (ackTokenPresent) {
-    throw new AppError('任务已下发至工作站，请使用打印客户端确认完成', 409)
+    throw new AppError('任务已下发至工作站，请使用打印客户端确认完成', 409, 'PRINT_JOB_LOCAL_COMPLETE_FORBIDDEN')
   }
 }
 

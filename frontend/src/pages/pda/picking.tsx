@@ -8,9 +8,9 @@
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMyTasksApi, startPickingApi, getTaskByIdApi } from '@/api/warehouse-tasks'
-import type { MyTask, WarehouseTaskItem } from '@/api/warehouse-tasks'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getMyTasksApi, getMyTaskSkuSummaryApi, startPickingApi } from '@/api/warehouse-tasks'
+import type { MyTask, PdaTaskSkuSummary } from '@/api/warehouse-tasks'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
 import { Badge } from '@/components/ui/badge'
@@ -69,20 +69,9 @@ function TaskCard({ task, onStart, starting }: { task: MyTask; onStart: () => vo
 
 // ─── SKU 汇总行类型 ───────────────────────────────────────────────────────────
 
-interface SkuSummary {
-  productId: number
-  productCode: string
-  productName: string
-  unit: string
-  totalRequired: number
-  totalPicked: number
-  orderCount: number         // 涉及订单数
-  taskIds: number[]          // 关联任务 ID（点击进入）
-}
-
 // ─── SKU 卡片 ─────────────────────────────────────────────────────────────────
 
-function SkuCard({ sku, onTap }: { sku: SkuSummary; onTap: () => void }) {
+function SkuCard({ sku, onTap }: { sku: PdaTaskSkuSummary; onTap: () => void }) {
   const pct = sku.totalRequired > 0 ? Math.min(100, Math.round(sku.totalPicked / sku.totalRequired * 100)) : 0
   const done = pct >= 100
   return (
@@ -138,55 +127,19 @@ export default function PdaPickingPage() {
   // ── 任务列表 ────────────────────────────────────────────────────────────────
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-my-tasks'],
-    queryFn: () => getMyTasksApi().then(r => r.data.data ?? []),
+    queryFn: () => getMyTasksApi().then(r => r ?? []),
     refetchInterval: 30_000, retry: 1,
   })
   const tasks = data ?? []
 
-  // ── 任务详情（SKU 视图需要 items）─────────────────────────────────────────
-  const detailQueries = useQueries({
-    queries: tasks.map(t => ({
-      queryKey: ['pda-task-detail', t.id],
-      queryFn: () => getTaskByIdApi(t.id).then(r => r.data.data!),
-      enabled: viewMode === 'sku' && tasks.length > 0,
-      staleTime: 60_000,
-    })),
+  const { data: skuData, isLoading: skuLoading } = useQuery({
+    queryKey: ['pda-my-task-sku-summary'],
+    queryFn: () => getMyTaskSkuSummaryApi().then(r => r ?? []),
+    enabled: viewMode === 'sku',
+    refetchInterval: viewMode === 'sku' ? 30_000 : false,
+    retry: 1,
   })
-
-  const detailsLoading = detailQueries.some(q => q.isLoading)
-
-  // ── SKU 汇总 ──────────────────────────────────────────────────────────────
-  const skuList: SkuSummary[] = (() => {
-    const map: Record<number, SkuSummary> = {}
-    detailQueries.forEach((q, idx) => {
-      const detail = q.data
-      if (!detail?.items) return
-      const taskId = tasks[idx]?.id
-      detail.items.forEach((item: WarehouseTaskItem) => {
-        if (!map[item.productId]) {
-          map[item.productId] = {
-            productId:     item.productId,
-            productCode:   item.productCode,
-            productName:   item.productName,
-            unit:          item.unit,
-            totalRequired: 0,
-            totalPicked:   0,
-            orderCount:    0,
-            taskIds:       [],
-          }
-        }
-        map[item.productId].totalRequired += item.requiredQty
-        map[item.productId].totalPicked   += item.pickedQty
-        map[item.productId].orderCount    += 1
-        if (taskId && !map[item.productId].taskIds.includes(taskId)) {
-          map[item.productId].taskIds.push(taskId)
-        }
-      })
-    })
-    return Object.values(map).sort((a, b) =>
-      (a.totalPicked >= a.totalRequired ? 1 : 0) - (b.totalPicked >= b.totalRequired ? 1 : 0)
-    )
-  })()
+  const skuList = skuData ?? []
 
   // ── 开始/继续拣货 ──────────────────────────────────────────────────────────
   const startMut = useMutation({
@@ -238,7 +191,7 @@ export default function PdaPickingPage() {
         </p>
 
         {/* 加载中 */}
-        {(isLoading || (viewMode === 'sku' && detailsLoading)) && <PdaLoading className="h-32" />}
+        {(isLoading || (viewMode === 'sku' && skuLoading)) && <PdaLoading className="h-32" />}
 
         {/* 加载失败 */}
         {isError && (
@@ -249,7 +202,7 @@ export default function PdaPickingPage() {
         )}
 
         {/* SKU 视图 */}
-        {viewMode === 'sku' && !isLoading && !detailsLoading && !isError && (
+        {viewMode === 'sku' && !isLoading && !skuLoading && !isError && (
           skuList.length === 0
             ? <PdaEmptyCard icon="📦" title="暂无待拣商品" description="后台确认订单后将在此显示" />
             : skuList.map(sku => (

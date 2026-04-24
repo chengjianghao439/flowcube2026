@@ -1,10 +1,9 @@
-import client from '@/api/client'
-import type { ApiResponse } from '@/types'
+import { payloadClient as client } from '@/api/client'
 
 export async function getNextCarrierCode(): Promise<string> {
   try {
-    const res = await client.get<ApiResponse<{ code: string }>>('/carriers/next-code')
-    return res.data.data?.code || 'CAR-0001'
+    const res = await client.get<{ code: string }>('/carriers/next-code')
+    return res?.code || 'CAR-0001'
   } catch {
     return 'CAR-0001'
   }

@@ -34,7 +34,7 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
   const navigate = useNavigate()
   const { data, isLoading } = useQuery({
     queryKey: ['pda-pack-tasks'],
-    queryFn: () => getTasksApi({ status: WT_STATUS.PACKING, pageSize: 50 }).then(r => r.data.data!),
+    queryFn: () => getTasksApi({ status: WT_STATUS.PACKING, pageSize: 50 }),
   })
   const tasks = data?.list ?? []
   return (
@@ -178,7 +178,7 @@ export default function PdaPackPage() {
 
   const { data: packages = [], isLoading: pkgLoading } = useQuery({
     queryKey: ['pda-packages', taskId],
-    queryFn:  () => getPackagesApi(taskId).then(r => r.data.data!),
+    queryFn:  () => getPackagesApi(taskId),
     enabled:  taskId > 0,
     onSuccess: (pkgs) => {
       if (!activePackageId) {
@@ -194,7 +194,7 @@ export default function PdaPackPage() {
   const createMut = useMutation({
     mutationFn: () => createPackageApi(taskId),
     onSuccess: (res) => {
-      const pkg = res.data.data!
+      const pkg = res!
       ok(`已创建箱子 ${pkg.barcode}`)
       setActivePackageId(pkg.id)
       refetch()
@@ -205,7 +205,7 @@ export default function PdaPackPage() {
   const addMut = useMutation({
     mutationFn: ({ code, qty }: { code: string; qty: number }) => addPackageItemApi(activePackageId!, code, qty),
     onSuccess: (res) => {
-      const item = res.data.data!
+      const item = res!
       ok(`✓ ${item.productName} × ${item.qty} ${item.unit} 已装箱`)
       refetch()
     },
@@ -215,7 +215,7 @@ export default function PdaPackPage() {
   const printLabelMut = useMutation({
     mutationFn: async (pkgId: number) => {
       const result = await printAction.run((requestKey) =>
-        printPackageLabelApi(pkgId, requestKey).then(r => r.data.data!),
+        printPackageLabelApi(pkgId, requestKey),
       )
       return result
     },
@@ -271,7 +271,7 @@ export default function PdaPackPage() {
   const finishMut = useMutation({
     mutationFn: async (pkgId: number) => {
       const result = await finishAction.run((requestKey) =>
-        finishPackageApi(pkgId, requestKey).then((res) => res.data.data!),
+        finishPackageApi(pkgId, requestKey).then((res) => res!),
       )
       return result
     },
@@ -288,7 +288,7 @@ export default function PdaPackPage() {
   const finalizeMut = useMutation({
     mutationFn: async () => {
       const result = await finalizeAction.run((requestKey) =>
-        packDoneApi(taskId, requestKey).then((res) => res.data.data as { taskId: number }),
+        packDoneApi(taskId, requestKey).then((res) => res as { taskId: number }),
       )
       return result
     },

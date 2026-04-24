@@ -108,7 +108,10 @@ async function resetPassword(id, newPassword) {
   await findById(id)
   const hashed = await bcrypt.hash(newPassword, 10)
   await pool.query(
-    'UPDATE sys_users SET password = ? WHERE id = ? AND deleted_at IS NULL',
+    `UPDATE sys_users
+        SET password = ?,
+            token_version = COALESCE(token_version, 0) + 1
+      WHERE id = ? AND deleted_at IS NULL`,
     [hashed, id],
   )
 }

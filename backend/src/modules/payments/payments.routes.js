@@ -5,6 +5,8 @@ const { successResponse } = require('../../utils/response')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const AppError = require('../../utils/AppError')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
+const { getRequestId } = require('../../utils/requestContext')
 const router = Router()
 router.use(authMiddleware)
 
@@ -38,8 +40,37 @@ router.get('/', requirePermission(PERMISSIONS.PAYMENT_VIEW), async (req, res, ne
 router.post('/', requirePermission(PERMISSIONS.PAYMENT_CREATE), vBody(z.object({ type:z.number().int().min(1).max(2), orderNo:z.string(), partyName:z.string(), totalAmount:z.number().positive(), dueDate:z.string().optional(), remark:z.string().optional() })), async (req,res,next) => {
   try {
     const { type, orderNo, partyName, totalAmount, dueDate, remark } = req.body
-    const [r] = await pool.query(`INSERT INTO payment_records (type,order_no,party_name,total_amount,balance,due_date,remark) VALUES (?,?,?,?,?,?,?)`,[type,orderNo,partyName,totalAmount,totalAmount,dueDate||null,remark||null])
-    return successResponse(res, { id:r.insertId }, '创建成功', 201)
+    const conn = await pool.getConnection()
+    try {
+      await conn.beginTransaction()
+      const [[u]] = await conn.query('SELECT real_name, username FROM sys_users WHERE id=?', [req.user.userId])
+      const [r] = await conn.query(`INSERT INTO payment_records (type,order_no,party_name,total_amount,balance,due_date,remark) VALUES (?,?,?,?,?,?,?)`,[type,orderNo,partyName,totalAmount,totalAmount,dueDate||null,remark||null])
+      await recordPaymentEvent(conn, {
+        paymentRecordId: r.insertId,
+        orderNo,
+        eventType: PAYMENT_EVENT.CREATED,
+        title: '账款记录已创建',
+        description: `${type === 1 ? '应付' : '应收'}账款已创建`,
+        operatorId: req.user.userId,
+        operatorName: u?.real_name || '未知',
+        requestId: getRequestId(),
+        payload: {
+          type,
+          partyName,
+          totalAmount,
+          balance: totalAmount,
+          dueDate: dueDate || null,
+          remark: remark || null,
+        },
+      })
+      await conn.commit()
+      return successResponse(res, { id:r.insertId }, '创建成功', 201)
+    } catch (e) {
+      await conn.rollback()
+      throw e
+    } finally {
+      conn.release()
+    }
   } catch (e) { next(e) }
 })
 
@@ -47,17 +78,47 @@ router.post('/', requirePermission(PERMISSIONS.PAYMENT_CREATE), vBody(z.object({
 router.post('/:id/pay', requirePermission(PERMISSIONS.PAYMENT_EXECUTE), vParams(idParam), vBody(z.object({ amount:z.number().positive('金额必须大于0'), paymentDate:z.string(), method:z.string().optional(), remark:z.string().optional() })), async (req,res,next) => {
   try {
     const id = +req.params.id
-    const [[record]] = await pool.query('SELECT * FROM payment_records WHERE id=?',[id])
-    if (!record) throw new AppError('账款记录不存在',404)
-    if (record.status===3) throw new AppError('该账款已付清',400)
-    const newPaid = Number(record.paid_amount) + req.body.amount
-    if (newPaid > Number(record.total_amount)) throw new AppError(`付款金额超出余额 ¥${Number(record.balance).toFixed(2)}`,400)
-    const newBalance = Number(record.total_amount) - newPaid
-    const newStatus = newBalance <= 0 ? 3 : 2
-    await pool.query('UPDATE payment_records SET paid_amount=?,balance=?,status=? WHERE id=?',[newPaid,newBalance,newStatus,id])
-    const [[u]] = await pool.query('SELECT real_name FROM sys_users WHERE id=?',[req.user.userId])
-    await pool.query(`INSERT INTO payment_entries (record_id,amount,payment_date,method,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?)`,[id,req.body.amount,req.body.paymentDate,req.body.method||null,req.body.remark||null,req.user.userId,u?.real_name||'未知'])
-    return successResponse(res, { newPaid, newBalance, status:newStatus }, '登记成功')
+    const conn = await pool.getConnection()
+    try {
+      await conn.beginTransaction()
+      const [[record]] = await conn.query('SELECT * FROM payment_records WHERE id=? FOR UPDATE',[id])
+      if (!record) throw new AppError('账款记录不存在',404)
+      if (record.status===3) throw new AppError('该账款已付清',400)
+      const newPaid = Number(record.paid_amount) + req.body.amount
+      if (newPaid > Number(record.total_amount)) throw new AppError(`付款金额超出余额 ¥${Number(record.balance).toFixed(2)}`,400)
+      const newBalance = Number(record.total_amount) - newPaid
+      const newStatus = newBalance <= 0 ? 3 : 2
+      await conn.query('UPDATE payment_records SET paid_amount=?,balance=?,status=? WHERE id=?',[newPaid,newBalance,newStatus,id])
+      const [[u]] = await conn.query('SELECT real_name FROM sys_users WHERE id=?',[req.user.userId])
+      const [entryResult] = await conn.query(`INSERT INTO payment_entries (record_id,amount,payment_date,method,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?)`,[id,req.body.amount,req.body.paymentDate,req.body.method||null,req.body.remark||null,req.user.userId,u?.real_name||'未知'])
+      await recordPaymentEvent(conn, {
+        paymentRecordId: id,
+        orderNo: record.order_no,
+        eventType: PAYMENT_EVENT.PAYMENT_RECORDED,
+        title: '账款登记成功',
+        description: newStatus === 3 ? '账款已付清' : '账款部分结清',
+        operatorId: req.user.userId,
+        operatorName: u?.real_name || '未知',
+        requestId: getRequestId(),
+        payload: {
+          entryId: entryResult.insertId,
+          amount: req.body.amount,
+          paymentDate: req.body.paymentDate,
+          method: req.body.method || null,
+          remark: req.body.remark || null,
+          newPaid,
+          newBalance,
+          status: newStatus,
+        },
+      })
+      await conn.commit()
+      return successResponse(res, { newPaid, newBalance, status:newStatus }, '登记成功')
+    } catch (e) {
+      await conn.rollback()
+      throw e
+    } finally {
+      conn.release()
+    }
   } catch (e) { next(e) }
 })
 

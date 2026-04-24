@@ -95,7 +95,7 @@ export default function WarehousesPage() {
       <ConfirmDialog
         open={!!confirmTarget}
         title="确认删除"
-        description={`确定删除仓库「${confirmTarget?.name}」吗？该操作不可撤销。`}
+        description={`确定删除仓库「${confirmTarget?.name}」吗？仅未被库位、库存、任务或业务单据引用的仓库允许删除；若已被引用，请改为编辑后停用。`}
         variant="destructive"
         confirmText="删除"
         onConfirm={() => { deleteWarehouse(confirmTarget!.id); setConfirmTarget(null) }}

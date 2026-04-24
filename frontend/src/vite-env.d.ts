@@ -5,7 +5,9 @@ declare const __APP_VERSION__: string
 interface ImportMetaEnv {
   readonly VITE_ELECTRON?: string
   /**
-   * ERP 生产 API 根（不含 /api）。桌面安装包登录预填、**安卓 PDA APK** 在未填 flowcube:pdaApiOrigin 时也用作默认后端。
+   * ERP 生产 API 根（不含 /api）。
+   * 这是桌面安装包 / 安卓 PDA APK 的 build-time default；
+   * runtime override 统一使用 API_BASE_URL。
    * 例：https://api.example.com 或 http://192.168.1.10:3000
    */
   readonly VITE_ERP_PRODUCTION_ORIGIN?: string
@@ -16,6 +18,7 @@ interface ImportMetaEnv {
 }
 
 interface Window {
+  __FLOWCUBE_DEFAULT_API_ORIGIN__?: string
   /** PDA：ZPL 经后端 POST /api/print-jobs 入队，由打印客户端执行 */
   printLabel?: (zpl: string) => Promise<void>
   /** Electron 预加载脚本注入 */

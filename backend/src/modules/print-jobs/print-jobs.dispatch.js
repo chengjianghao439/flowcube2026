@@ -6,7 +6,7 @@ const { STATUS, EXPIRE_MESSAGE, ttlMinutes } = require('./print-jobs.status')
 
 async function claimClientJobs({ clientId, limit = 3 } = {}) {
   const cid = String(clientId || '').trim()
-  if (!cid) throw new AppError('clientId 必填', 400)
+  if (!cid) throw new AppError('clientId 必填', 400, 'PRINT_CLIENT_ID_REQUIRED')
   const n = Math.min(10, Math.max(1, Number(limit) || 3))
 
   const conn = await pool.getConnection()

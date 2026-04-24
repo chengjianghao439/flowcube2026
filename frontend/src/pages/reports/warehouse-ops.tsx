@@ -85,7 +85,7 @@ export default function WarehouseOpsPage() {
   const isActiveTab = useActiveWorkspaceTab()
   const warehouseOpsQ = useQuery({
     queryKey: ['warehouse-ops'],
-    queryFn:  () => getWarehouseOpsApi().then(r => r.data.data!),
+    queryFn:  () => getWarehouseOpsApi(),
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 60_000 : false,   // 每分钟自动刷新
   })

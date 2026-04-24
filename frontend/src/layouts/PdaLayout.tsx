@@ -16,6 +16,7 @@ import { usePdaUpdate } from '@/hooks/usePdaUpdate'
 import PdaUpdateDialog from '@/components/pda/PdaUpdateDialog'
 import PdaNetworkBar from '@/components/pda/PdaNetworkBar'
 import PdaErrorBoundary from '@/components/pda/PdaErrorBoundary'
+import { getHashRouterWindowLocation } from '@/router/hashLocation'
 
 export default function PdaLayout() {
   const location = useLocation()
@@ -47,7 +48,8 @@ export default function PdaLayout() {
     window.history.pushState(null, '', location.href)
 
     const handleBack = () => {
-      if (!window.location.pathname.startsWith('/pda')) {
+      const target = getHashRouterWindowLocation()
+      if (!target.pathname.startsWith('/pda')) {
         navigate('/pda', { replace: true })
       } else {
         window.history.pushState(null, '', window.location.href)

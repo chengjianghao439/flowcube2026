@@ -1,4 +1,4 @@
-import client from './client'
+import { payloadClient as client } from './client'
 import type { ApiResponse } from '@/types'
 export interface PaymentRecord { id:number; type:1|2; typeName:string; orderNo:string; partyName:string; totalAmount:number; paidAmount:number; balance:number; status:1|2|3; statusName:string; dueDate?:string; remark?:string; createdAt:string }
 export interface PaymentEntry { id:number; amount:number; paymentDate:string; method?:string; remark?:string; operatorName:string; createdAt:string }

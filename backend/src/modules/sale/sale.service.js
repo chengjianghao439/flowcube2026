@@ -426,7 +426,8 @@ async function cancel(id, operator) {
         throw new AppError('销售单处于拣货中但未关联仓库任务，请先排查异常', 409)
       }
       const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
-      await taskSvc.cancel(orderRow.task_id, { conn, syncSaleStatus: false })
+      await taskSvc.cancel(orderRow.task_id, { conn, syncSaleStatus: false, operator })
+      await releaseByRef(conn, 'sale_order', id)
     }
 
     await compareAndSetStatus(conn, {

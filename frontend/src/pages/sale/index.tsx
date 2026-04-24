@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -15,6 +15,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { ProductFinder } from '@/components/finder'
+import { readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import type { SaleOrder } from '@/types/sale'
 import type { ProductFinderResult } from '@/types/products'
 import type { TableColumn } from '@/types'
@@ -32,11 +33,30 @@ const EMPTY_CONFIRM: ConfirmState = { open: false, title: '', description: '', o
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function SalePage() {
-  const [page,         setPage]         = useState(1)
-  const [keyword,      setKeyword]      = useState('')
-  const [search,       setSearch]       = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [product,      setProduct]      = useState<ProductFinderResult | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page = readPositiveIntParam(searchParams, 'page', 1)
+  const keyword = readStringParam(searchParams, 'keyword')
+  const statusFilter = readStringParam(searchParams, 'status')
+  const productId = Number(searchParams.get('productId') || '')
+  const productCode = readStringParam(searchParams, 'productCode')
+  const productName = readStringParam(searchParams, 'productName')
+  const product = useMemo<ProductFinderResult | null>(() => {
+    if (!Number.isInteger(productId) || productId <= 0) return null
+    return {
+      id: productId,
+      code: productCode,
+      name: productName,
+      categoryId: null,
+      categoryName: null,
+      categoryPath: null,
+      unit: '',
+      spec: null,
+      salePrice: null,
+      costPrice: null,
+      stock: 0,
+    }
+  }, [productCode, productId, productName])
+  const [search, setSearch] = useState(keyword)
   const [productFinderOpen, setProductFinderOpen] = useState(false)
   const [confirmState, setConfirmState] = useState<ConfirmState>(EMPTY_CONFIRM)
   const [printOrder,   setPrintOrder]   = useState<SaleOrder | null>(null)
@@ -49,6 +69,14 @@ export default function SalePage() {
   const deleteMutate  = useDeleteSale()
   const navigate  = useNavigate()
   const { addTab } = useWorkspaceStore()
+
+  useEffect(() => {
+    setSearch(keyword)
+  }, [keyword])
+
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
 
   function goToNew() {
     addTab({ key: '/sale/new', title: '新建销售单', path: '/sale/new' })
@@ -69,16 +97,19 @@ export default function SalePage() {
   async function handlePrint(id: number) {
     try {
       const res = await getSaleDetailApi(id)
-      setPrintOrder(res.data.data)
+      setPrintOrder(res)
     } catch {
       toast.error('获取订单详情失败，无法打印')
     }
   }
 
   // ── 筛选操作 ──
-  function handleSearch() { setKeyword(search); setPage(1) }
-  function handleReset()  { setSearch(''); setKeyword(''); setStatusFilter(''); setProduct(null); setPage(1) }
-  function handleStatusChange(v: string) { setStatusFilter(v); setPage(1) }
+  function handleSearch() { updateParams({ keyword: search, page: 1 }) }
+  function handleReset()  {
+    setSearch('')
+    updateParams({ keyword: null, status: null, productId: null, productCode: null, productName: null, page: 1 })
+  }
+  function handleStatusChange(v: string) { updateParams({ status: v, page: 1 }) }
 
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
@@ -98,7 +129,7 @@ export default function SalePage() {
             <StatusBadge type="sale" status={v as number} />
             {r.taskNo && (
               <button
-                onClick={() => navigate('/warehouse-tasks')}
+                onClick={() => navigate(r.taskId ? `/warehouse-tasks?taskId=${r.taskId}` : '/warehouse-tasks')}
                 className="rounded-full border border-primary/20 bg-primary/5 px-1.5 py-0.5 text-doc-code text-primary transition-colors hover:bg-primary/10"
               >
                 {r.taskNo}
@@ -124,7 +155,7 @@ export default function SalePage() {
             onShipSale={id => ship.mutate(id)}
             onCancelSale={id => cancel.mutate(id)}
             onDeleteSale={id => deleteMutate.mutate(id)}
-            onViewTask={() => navigate('/warehouse-tasks')}
+            onViewTask={() => navigate(row.taskId ? `/warehouse-tasks?taskId=${row.taskId}` : '/warehouse-tasks')}
             onDetail={() => goToDetail(r)}
             onPrint={() => handlePrint(r.id)}
           />
@@ -176,7 +207,7 @@ export default function SalePage() {
         data={data?.list ?? []}
         loading={isLoading}
         pagination={data?.pagination}
-        onPageChange={setPage}
+        onPageChange={(nextPage) => updateParams({ page: nextPage })}
         onRowDoubleClick={goToDetail}
       />
 
@@ -200,8 +231,13 @@ export default function SalePage() {
         open={productFinderOpen}
         onClose={() => setProductFinderOpen(false)}
         onConfirm={(selected) => {
-          setProduct(selected)
-          setPage(1)
+          updateParams({
+            productId: selected.id,
+            productCode: selected.code,
+            productName: selected.name,
+            page: 1,
+          })
+          setProductFinderOpen(false)
         }}
       />
     </div>

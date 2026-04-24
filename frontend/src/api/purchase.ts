@@ -1,4 +1,4 @@
-import client from './client'
+import { payloadClient as client } from './client'
 import type { ApiResponse, PaginatedData } from '@/types'
 import type { PurchaseOrder, CreatePurchaseParams } from '@/types/purchase'
 export const getPurchaseListApi = (params: object) => client.get<ApiResponse<PaginatedData<PurchaseOrder>>>('/purchase', { params })

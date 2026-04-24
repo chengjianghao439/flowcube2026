@@ -13,7 +13,7 @@ export default function NotificationBell() {
 
   const { data } = useQuery({
     queryKey: ['notifications'],
-    queryFn: () => client.get<ApiResponse<NotifData>>('/notifications').then(r => r.data.data!),
+    queryFn: () => client.get<ApiResponse<NotifData>>('/notifications'),
     refetchInterval: 60000, // 每分钟刷新
   })
 

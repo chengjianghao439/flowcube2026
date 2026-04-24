@@ -14,13 +14,28 @@ function readStorageValue(key: string): string {
   return localStorage.getItem(key)?.trim() || ''
 }
 
-function getStoredApiBaseCandidates(): Array<{ key: string; raw: string; normalized: string }> {
-  return [API_BASE_STORAGE_KEY, LEGACY_ERP_ORIGIN_KEY]
-    .map((key) => {
-      const raw = readStorageValue(key)
-      return { key, raw, normalized: raw ? normalizeApiBase(raw) : '' }
-    })
-    .filter((item) => Boolean(item.raw))
+function migrateLegacyApiBaseStorage(): string {
+  if (typeof localStorage === 'undefined') return ''
+
+  const current = normalizeApiBase(readStorageValue(API_BASE_STORAGE_KEY))
+  if (current) {
+    localStorage.removeItem(LEGACY_ERP_ORIGIN_KEY)
+    return current
+  }
+
+  const legacy = normalizeApiBase(readStorageValue(LEGACY_ERP_ORIGIN_KEY))
+  if (legacy) {
+    localStorage.setItem(API_BASE_STORAGE_KEY, legacy)
+  }
+  localStorage.removeItem(LEGACY_ERP_ORIGIN_KEY)
+  return legacy
+}
+
+function getStoredApiBaseOverride(): string {
+  const migrated = migrateLegacyApiBaseStorage()
+  if (migrated) return migrated
+  const raw = readStorageValue(API_BASE_STORAGE_KEY)
+  return raw ? normalizeApiBase(raw) : ''
 }
 
 function isFileProtocol(): boolean {
@@ -61,12 +76,11 @@ export function isStaleLocalViteProxyOrigin(raw: string): boolean {
 export function clearElectronStaleViteOrigins(): void {
   if (!IS_ELECTRON_DESKTOP) return
   if (typeof localStorage === 'undefined') return
-  for (const key of [API_BASE_STORAGE_KEY, LEGACY_ERP_ORIGIN_KEY]) {
-    const raw = readStorageValue(key)
-    if (raw && isStaleLocalViteProxyOrigin(raw)) {
-      localStorage.removeItem(key)
-    }
+  const raw = readStorageValue(API_BASE_STORAGE_KEY)
+  if (raw && isStaleLocalViteProxyOrigin(raw)) {
+    localStorage.removeItem(API_BASE_STORAGE_KEY)
   }
+  localStorage.removeItem(LEGACY_ERP_ORIGIN_KEY)
 }
 
 /**
@@ -147,7 +161,7 @@ export function collectErpApiFallbackCandidates(): string[] {
     }
   }
 
-  for (const item of getStoredApiBaseCandidates()) add(item.raw)
+  add(getStoredApiBaseOverride())
 
   if (typeof window !== 'undefined') {
     add(getDynamicDefaultApi())
@@ -163,11 +177,12 @@ export function collectErpApiFallbackCandidates(): string[] {
 
 /** 已保存地址或动态默认（含旧键迁移） */
 export function getApiBase(): string {
-  for (const item of getStoredApiBaseCandidates()) {
-    if (item.normalized && IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(item.raw)) {
+  const override = getStoredApiBaseOverride()
+  if (override) {
+    if (IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(override)) {
       return getDynamicDefaultApi()
     }
-    if (item.normalized) return item.normalized
+    return override
   }
   return getDynamicDefaultApi()
 }
@@ -177,31 +192,23 @@ export function getApiBase(): string {
  * 用于桌面端：避免启动探测或 axios 网络重试时「本机 localhost 先连通」覆盖用户真实服务器，导致空库与乱码感知的错配数据。
  */
 export function hasUserConfiguredApiOrigin(): boolean {
-  return getStoredApiBaseCandidates().some((item) => Boolean(item.normalized))
+  return Boolean(getStoredApiBaseOverride())
 }
 
 /** 仅已写入 localStorage 的地址（去重、归一化），主键优先于旧键 */
 export function getUserConfiguredApiOriginsInOrder(): string[] {
-  const out: string[] = []
-  const seen = new Set<string>()
-  const push = (normalized: string) => {
-    if (!normalized || seen.has(normalized)) return
-    seen.add(normalized)
-    out.push(normalized)
-  }
-  for (const item of getStoredApiBaseCandidates()) {
-    push(item.normalized)
-  }
-  return out
+  const override = getStoredApiBaseOverride()
+  return override ? [override] : []
 }
 
 function getStoredEffectiveApiOrigin(): string | null {
-  for (const item of getStoredApiBaseCandidates()) {
-    if (IS_ELECTRON_DESKTOP && item.normalized && isStaleLocalViteProxyOrigin(item.raw)) {
+  const override = getStoredApiBaseOverride()
+  if (override) {
+    if (IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(override)) {
       const dynamic = normalizeApiBase(getDynamicDefaultApi())
       return dynamic || null
     }
-    if (item.normalized) return item.normalized
+    return override
   }
   return null
 }
@@ -232,6 +239,14 @@ export function getEffectiveApiOrigin(): string | null {
   const d = normalizeApiBase(getDynamicDefaultApi())
   return d || null
 }
+
+function publishDefaultApiOriginToWindow(): void {
+  if (typeof window === 'undefined') return
+  const hostWindow = window as typeof window & { __FLOWCUBE_DEFAULT_API_ORIGIN__?: string }
+  hostWindow.__FLOWCUBE_DEFAULT_API_ORIGIN__ = normalizeApiBase(getDynamicDefaultApi()) || ''
+}
+
+publishDefaultApiOriginToWindow()
 
 /** 登录成功后固化当前 API 根 */
 export function persistErpApiBaseAfterLogin(): void {

@@ -1,11 +1,12 @@
 const svc = require('./printers.service')
 const { pool } = require('../../config/db')
+const { successResponse } = require('../../utils/response')
 
-const list   = async (req, res, next) => { try { res.json({ success:true, data: await svc.findAll({ type: req.query.type ? +req.query.type : undefined }) }) } catch(e) { next(e) } }
-const detail = async (req, res, next) => { try { res.json({ success:true, data: await svc.findById(+req.params.id) }) } catch(e) { next(e) } }
-const create = async (req, res, next) => { try { res.status(201).json({ success:true, data: await svc.create(req.body) }) } catch(e) { next(e) } }
-const update = async (req, res, next) => { try { res.json({ success:true, data: await svc.update(+req.params.id, req.body) }) } catch(e) { next(e) } }
-const remove = async (req, res, next) => { try { await svc.remove(+req.params.id); res.json({ success:true, data:null }) } catch(e) { next(e) } }
+const list   = async (req, res, next) => { try { return successResponse(res, await svc.findAll({ type: req.query.type ? +req.query.type : undefined })) } catch(e) { next(e) } }
+const detail = async (req, res, next) => { try { return successResponse(res, await svc.findById(+req.params.id)) } catch(e) { next(e) } }
+const create = async (req, res, next) => { try { return successResponse(res, await svc.create(req.body), '创建成功', 201) } catch(e) { next(e) } }
+const update = async (req, res, next) => { try { return successResponse(res, await svc.update(+req.params.id, req.body)) } catch(e) { next(e) } }
+const remove = async (req, res, next) => { try { await svc.remove(+req.params.id); return successResponse(res, null) } catch(e) { next(e) } }
 
 const updateClientAlias = async (req, res, next) => {
   try {
@@ -17,7 +18,7 @@ const updateClientAlias = async (req, res, next) => {
     )
     if (r.affectedRows === 0) return res.status(404).json({ success: false, message: '客户端不存在' })
     const [[row]] = await pool.query('SELECT * FROM print_clients WHERE client_id=?', [clientId])
-    res.json({ success: true, data: row })
+    return successResponse(res, row)
   } catch (e) { next(e) }
 }
 
@@ -66,13 +67,10 @@ const heartbeatClient = async (req, res, next) => {
       [clientId],
     )
 
-    res.json({
-      success: true,
-      data: {
-        clientId,
-        hostname,
-        printers: ownedPrinters,
-      },
+    return successResponse(res, {
+      clientId,
+      hostname,
+      printers: ownedPrinters,
     })
   } catch (e) { next(e) }
 }
@@ -113,7 +111,7 @@ const listOnlineClients = async (req, res, next) => {
       })
     }
 
-    res.json({ success: true, data })
+    return successResponse(res, data)
   } catch (e) { next(e) }
 }
 
@@ -122,7 +120,7 @@ const listAllClients = async (req, res, next) => {
   try {
     await markOfflineClients()
     const [rows] = await pool.query('SELECT * FROM print_clients ORDER BY last_seen DESC')
-    res.json({ success: true, data: rows })
+    return successResponse(res, rows)
   } catch (e) { next(e) }
 }
 

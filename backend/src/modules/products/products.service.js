@@ -144,6 +144,29 @@ function fmtProduct(row) {
   }
 }
 
+async function assertProductDeletable(id) {
+  const checks = [
+    ['sale_order_items', 'SELECT 1 FROM sale_order_items WHERE product_id=? LIMIT 1'],
+    ['purchase_order_items', 'SELECT 1 FROM purchase_order_items WHERE product_id=? LIMIT 1'],
+    ['warehouse_task_items', 'SELECT 1 FROM warehouse_task_items WHERE product_id=? LIMIT 1'],
+    ['inbound_task_items', 'SELECT 1 FROM inbound_task_items WHERE product_id=? LIMIT 1'],
+    ['inventory_check_items', 'SELECT 1 FROM inventory_check_items WHERE product_id=? LIMIT 1'],
+    ['purchase_return_items', 'SELECT 1 FROM purchase_return_items WHERE product_id=? LIMIT 1'],
+    ['sale_return_items', 'SELECT 1 FROM sale_return_items WHERE product_id=? LIMIT 1'],
+    ['package_items', 'SELECT 1 FROM package_items WHERE product_id=? LIMIT 1'],
+    ['inventory_containers', 'SELECT 1 FROM inventory_containers WHERE product_id=? LIMIT 1'],
+    ['inventory_stock', 'SELECT 1 FROM inventory_stock WHERE product_id=? LIMIT 1'],
+    ['inventory_logs', 'SELECT 1 FROM inventory_logs WHERE product_id=? LIMIT 1'],
+    ['scan_logs', 'SELECT 1 FROM scan_logs WHERE product_id=? LIMIT 1'],
+  ]
+  for (const [, sql] of checks) {
+    const [rows] = await pool.query(sql, [id])
+    if (rows[0]) {
+      throw new AppError('商品已被业务单据、库存或任务引用，禁止删除；请改为停用', 409)
+    }
+  }
+}
+
 async function findAll({ page=1, pageSize=20, keyword='', categoryId=null }) {
   const offset = (page-1)*pageSize
   const like = `%${keyword}%`
@@ -213,6 +236,7 @@ async function update(id, { name, categoryId, unit, spec, barcode, costPrice, re
 
 async function softDelete(id) {
   await findById(id)
+  await assertProductDeletable(id)
   await pool.query('UPDATE product_items SET deleted_at=NOW() WHERE id=? AND deleted_at IS NULL',[id])
 }
 

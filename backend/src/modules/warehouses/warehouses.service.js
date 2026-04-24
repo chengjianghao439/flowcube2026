@@ -20,6 +20,33 @@ function formatRow(row) {
   }
 }
 
+async function assertWarehouseDeletable(id) {
+  const checks = [
+    'SELECT 1 FROM warehouse_locations WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM warehouse_racks WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM sorting_bins WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM printers WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM sale_orders WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM purchase_orders WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM warehouse_tasks WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM inbound_tasks WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM purchase_returns WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM sale_returns WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM transfer_orders WHERE from_warehouse_id=? OR to_warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM inventory_checks WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM inventory_containers WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM inventory_stock WHERE warehouse_id=? LIMIT 1',
+    'SELECT 1 FROM inventory_logs WHERE warehouse_id=? LIMIT 1',
+  ]
+  for (const sql of checks) {
+    const params = sql.includes('OR to_warehouse_id=?') ? [id, id] : [id]
+    const [rows] = await pool.query(sql, params)
+    if (rows[0]) {
+      throw new AppError('仓库已被库位、库存、任务或业务单据引用，禁止删除；请改为停用', 409)
+    }
+  }
+}
+
 async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
@@ -78,6 +105,7 @@ async function update(id, { name, type, manager, phone, address, remark, isActiv
 
 async function softDelete(id) {
   await findById(id)
+  await assertWarehouseDeletable(id)
   await pool.query(
     'UPDATE inventory_warehouses SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL',
     [id],

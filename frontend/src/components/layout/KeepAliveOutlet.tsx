@@ -31,6 +31,7 @@ import {
   buildWorkspaceTabRegistration,
   buildWorkspaceTabRegistrationFromPath,
 } from '@/router/workspaceRouteMeta'
+import { getHashRouterWindowLocation } from '@/router/hashLocation'
 import { TabPathContext } from './TabPathContext'
 
 // ── 路径 → 所需权限（固定路径） ──────────────────────────────────────────────
@@ -274,7 +275,8 @@ export function KeepAliveOutlet() {
 
   useEffect(() => {
     const handlePopState = () => {
-      const targetPathname = getFullPath(window.location.pathname, window.location.search)
+      const targetLocation = getHashRouterWindowLocation()
+      const targetPathname = getFullPath(targetLocation.pathname, targetLocation.search)
       const currentPathname = locationPathRef.current
 
       if (targetPathname === currentPathname) return

@@ -8,6 +8,7 @@ const { Router } = require('express')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { pool } = require('../../config/db')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { successResponse } = require('../../utils/response')
 const router = Router()
 
 const VALID_TYPES = [
@@ -20,7 +21,7 @@ const VALID_TYPES = [
 
 router.use(authMiddleware)
 
-// 获取所有绑定（data 仍为全仓默认 warehouse_id=0 的 map，兼容旧前端；完整列表见 routes）
+// 获取所有绑定（默认绑定和完整绑定列表都放在 data 内，避免私有顶层字段漂移）
 router.get('/', requirePermission(PERMISSIONS.PRINT_PRINTER_VIEW), async (req, res, next) => {
   try {
     const [rows] = await pool.query(
@@ -34,7 +35,10 @@ router.get('/', requirePermission(PERMISSIONS.PRINT_PRINTER_VIEW), async (req, r
       const k = r.print_type
       if (!map[k]) map[k] = r
     }
-    res.json({ success: true, data: map, routes: rows })
+    return successResponse(res, {
+      defaultBindings: map,
+      routes: rows,
+    })
   } catch (e) {
     next(e)
   }
@@ -62,14 +66,11 @@ router.put('/:type', requirePermission(PERMISSIONS.PRINT_PRINTER_MANAGE), async 
        ON DUPLICATE KEY UPDATE printer_id=VALUES(printer_id), printer_code=VALUES(printer_code)`,
       [warehouseId, type, printer.id, printer.code],
     )
-    res.json({
-      success: true,
-      data: {
-        warehouse_id: warehouseId,
-        print_type: type,
-        printer_id: printer.id,
-        printer_code: printer.code,
-      },
+    return successResponse(res, {
+      warehouse_id: warehouseId,
+      print_type: type,
+      printer_id: printer.id,
+      printer_code: printer.code,
     })
   } catch (e) { next(e) }
 })
@@ -87,7 +88,7 @@ router.delete('/:type', requirePermission(PERMISSIONS.PRINT_PRINTER_MANAGE), asy
       'DELETE FROM printer_bindings WHERE print_type=? AND warehouse_id=?',
       [type, warehouseId],
     )
-    res.json({ success: true, data: null })
+    return successResponse(res, null)
   } catch (e) { next(e) }
 })
 

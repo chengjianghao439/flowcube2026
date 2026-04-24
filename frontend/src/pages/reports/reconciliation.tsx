@@ -65,7 +65,7 @@ export default function ReconciliationPage() {
       startDate: applied.startDate || undefined,
       endDate: applied.endDate || undefined,
       status: applied.status || undefined,
-    }).then(r => r.data.data!),
+    }),
   })
 
   const { data, isLoading, isError, error, refetch } = reconciliationQ

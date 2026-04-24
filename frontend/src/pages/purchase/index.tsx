@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
@@ -16,12 +16,14 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { ProductFinder } from '@/components/finder'
+import { readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import type { PurchaseOrder } from '@/types/purchase'
 import type { ProductFinderResult } from '@/types/products'
 import type { TableColumn } from '@/types'
 
 export default function PurchasePage() {
   const navigate   = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { addTab } = useWorkspaceStore()
 
   function goToNew() {
@@ -35,11 +37,29 @@ export default function PurchasePage() {
     navigate(key)
   }
 
-  const [page, setPage] = useState(1)
-  const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [product, setProduct] = useState<ProductFinderResult | null>(null)
+  const page = readPositiveIntParam(searchParams, 'page', 1)
+  const keyword = readStringParam(searchParams, 'keyword')
+  const statusFilter = readStringParam(searchParams, 'status')
+  const productId = Number(searchParams.get('productId') || '')
+  const productCode = readStringParam(searchParams, 'productCode')
+  const productName = readStringParam(searchParams, 'productName')
+  const product = useMemo<ProductFinderResult | null>(() => {
+    if (!Number.isInteger(productId) || productId <= 0) return null
+    return {
+      id: productId,
+      code: productCode,
+      name: productName,
+      categoryId: null,
+      categoryName: null,
+      categoryPath: null,
+      unit: '',
+      spec: null,
+      salePrice: null,
+      costPrice: null,
+      stock: 0,
+    }
+  }, [productCode, productId, productName])
+  const [search, setSearch] = useState(keyword)
   const [productFinderOpen, setProductFinderOpen] = useState(false)
   const [printId, setPrintId]   = useState<number | null>(null)
 
@@ -55,6 +75,14 @@ export default function PurchasePage() {
   const confirm = useConfirmPurchase()
   const cancel = useCancelPurchase()
   const { data: printDetail } = usePurchaseDetail(printId || 0)
+
+  useEffect(() => {
+    setSearch(keyword)
+  }, [keyword])
+
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
 
   function openConfirm(
     title: string,
@@ -141,9 +169,9 @@ export default function PurchasePage() {
             value={search}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
             className="h-9 w-56"
-            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
+            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') updateParams({ keyword: search, page: 1 }) }}
           />
-          <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
+          <Select value={statusFilter || '__all__'} onValueChange={v => { updateParams({ status: v === '__all__' ? null : v, page: 1 }) }}>
             <SelectTrigger className="h-9 w-36">
               <SelectValue placeholder="全部状态" />
             </SelectTrigger>
@@ -157,8 +185,11 @@ export default function PurchasePage() {
           <Button variant="outline" className="h-9 min-w-[180px] justify-start font-normal" onClick={() => setProductFinderOpen(true)}>
             {product ? `${product.name} (${product.code})` : '按产品筛选'}
           </Button>
-          <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setProduct(null); setPage(1) }}>重置</Button>
+          <Button size="sm" variant="outline" onClick={() => updateParams({ keyword: search, page: 1 })}>搜索</Button>
+          <Button size="sm" variant="ghost" onClick={() => {
+            setSearch('')
+            updateParams({ keyword: null, status: null, productId: null, productCode: null, productName: null, page: 1 })
+          }}>重置</Button>
         </div>
       </FilterCard>
 
@@ -167,7 +198,7 @@ export default function PurchasePage() {
         data={data?.list || []}
         loading={isLoading}
         pagination={data?.pagination}
-        onPageChange={setPage}
+        onPageChange={(nextPage) => updateParams({ page: nextPage })}
         onRowDoubleClick={goToDetail}
       />
 
@@ -216,8 +247,13 @@ export default function PurchasePage() {
         open={productFinderOpen}
         onClose={() => setProductFinderOpen(false)}
         onConfirm={(selected) => {
-          setProduct(selected)
-          setPage(1)
+          updateParams({
+            productId: selected.id,
+            productCode: selected.code,
+            productName: selected.name,
+            page: 1,
+          })
+          setProductFinderOpen(false)
         }}
       />
     </div>

@@ -70,7 +70,7 @@ export default function WavePerformancePage() {
 
   const wavePerformanceQ = useQuery({
     queryKey: ['wave-performance', applied],
-    queryFn:  () => getWavePerformanceApi(applied).then(r => r.data.data!),
+    queryFn:  () => getWavePerformanceApi(applied),
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 60_000 : false,
   })

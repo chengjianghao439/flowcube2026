@@ -12,8 +12,9 @@ CREATE TABLE IF NOT EXISTS `sale_customers` (
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted_at` DATETIME DEFAULT NULL,
+  `active_unique_guard` TINYINT GENERATED ALWAYS AS (CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END) STORED COMMENT '活跃唯一性保护列：活跃=1，删除=NULL',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_code` (`code`,`deleted_at`)
+  UNIQUE KEY `uk_sale_customers_code_active` (`code`,`active_unique_guard`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 采购单主表

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import apiClient from '@/api/client'
+import { payloadClient as apiClient } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 
@@ -52,12 +52,12 @@ async function heartbeatClient(info: ClientInfo) {
 }
 
 async function claimClientJobs(info: ClientInfo): Promise<ClaimedJob[]> {
-  const res = await apiClient.post<{ success: boolean; data: ClaimedJob[] }>(
+  const res = await apiClient.post<ClaimedJob[]>(
     '/print-jobs/claim-client',
     { clientId: info.clientId, limit: 3 },
     { skipGlobalError: true },
   )
-  return Array.isArray(res.data?.data) ? res.data.data : []
+  return Array.isArray(res) ? res : []
 }
 
 async function completeClientJob(info: ClientInfo, jobId: number, ackToken?: string | null) {

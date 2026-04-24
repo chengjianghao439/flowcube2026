@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
@@ -17,13 +17,14 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { toast } from '@/lib/toast'
-import client from '@/api/client'
+import { payloadClient as client } from '@/api/client'
 import { getSettingsApi } from '@/api/settings'
 import { printProductLabelApi } from '@/api/products'
 import {
   isDesktopLocalPrintError,
   tryDesktopLocalZplThenComplete,
 } from '@/lib/desktopLocalPrint'
+import { readNullableIntParam, readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import type { Product } from '@/types/products'
 import type { TableColumn } from '@/types'
 import type { Category } from '@/types/categories'
@@ -43,8 +44,11 @@ function buildCategoryPathMap(nodes: Category[], ancestors: string[] = [], map =
 
 export default function ProductsPage() {
   const navigate = useNavigate()
-  const [page, setPage] = useState(1); const [keyword, setKeyword] = useState(''); const [search, setSearch] = useState('')
-  const [catFilter, setCatFilter] = useState<number|null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page = readPositiveIntParam(searchParams, 'page', 1)
+  const keyword = readStringParam(searchParams, 'keyword')
+  const catFilter = readNullableIntParam(searchParams, 'categoryId')
+  const [search, setSearch] = useState(keyword)
   const [open, setOpen] = useState(false); const [edit, setEdit] = useState<Product|null>(null)
   const [form, setForm] = useState(emptyProd)
   const [importOpen, setImportOpen] = useState(false)
@@ -58,7 +62,7 @@ export default function ProductsPage() {
     const fd = new FormData(); fd.append('file', file)
     try {
       const r = await client.post('/import/products', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-      setImportResult(r.data.data)
+      setImportResult(r as { success: number; skip: number; errors: string[] })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '导入失败'
       toast.error(msg)
@@ -75,8 +79,16 @@ export default function ProductsPage() {
   const set = (k:string, v:unknown) => setForm(f=>({...f,[k]:v}))
 
   useEffect(() => {
+    setSearch(keyword)
+  }, [keyword])
+
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
+
+  useEffect(() => {
     void getSettingsApi().then(r => {
-      const map = r.data.data?.map ?? {}
+      const map = r?.map ?? {}
       setPriceRates({
         A: Number(map.price_rate_a?.value ?? DEFAULT_RATES.A),
         B: Number(map.price_rate_b?.value ?? DEFAULT_RATES.B),
@@ -187,21 +199,23 @@ export default function ProductsPage() {
       } />
 
       <FilterCard>
-        <Input placeholder="搜索编码/名称/条码" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&(setPage(1),setKeyword(search))} className="h-9 w-60" />
+        <Input placeholder="搜索编码/名称/条码" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&updateParams({ keyword: search, page: 1 })} className="h-9 w-60" />
         <CategoryTreeSelect
           value={catFilter}
           onChange={(v) => {
-            setCatFilter(v)
-            setPage(1)
+            updateParams({ categoryId: v, page: 1 })
           }}
           emptyLabel="全部分类"
           leafOnly
           className="w-48"
         />
-        <Button size="sm" variant="outline" onClick={()=>{setPage(1);setKeyword(search)}}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('');setPage(1)}}>重置</Button>}
+        <Button size="sm" variant="outline" onClick={()=>updateParams({ keyword: search, page: 1 })}>搜索</Button>
+        {(keyword || catFilter) && <Button size="sm" variant="ghost" onClick={()=>{
+          setSearch('')
+          updateParams({ keyword: null, categoryId: null, page: 1 })
+        }}>重置</Button>}
       </FilterCard>
-      <DataTable columns={cols} data={data?.list??[]} loading={isLoading} pagination={data?.pagination} onPageChange={setPage} rowKey="id" />
+      <DataTable columns={cols} data={data?.list??[]} loading={isLoading} pagination={data?.pagination} onPageChange={(nextPage)=>updateParams({ page: nextPage })} rowKey="id" />
 
       {/* 商品表单 */}
       <Dialog open={open} onOpenChange={v=>!v&&setOpen(false)}>
@@ -285,7 +299,7 @@ export default function ProductsPage() {
       <ConfirmDialog
         open={!!confirmProduct}
         title="确认删除商品"
-        description={`删除商品「${confirmProduct?.name}」？该操作不可撤销。`}
+        description={`删除商品「${confirmProduct?.name}」？仅未被单据、库存或任务引用的商品允许删除；若已被引用，请改为编辑后停用。`}
         variant="destructive"
         confirmText="删除"
         onConfirm={() => { del(confirmProduct!.id); setConfirmProduct(null) }}

@@ -30,6 +30,7 @@ export interface CreateLocationParams {
   level?: string
   position?: string
   capacity?: number
+  status?: number
   remark?: string
 }
 

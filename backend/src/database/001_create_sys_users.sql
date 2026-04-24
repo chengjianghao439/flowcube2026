@@ -13,8 +13,9 @@ CREATE TABLE IF NOT EXISTS `sys_users` (
   `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted_at` DATETIME        DEFAULT NULL,
+  `active_unique_guard` TINYINT GENERATED ALWAYS AS (CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END) STORED COMMENT '活跃唯一性保护列：活跃=1，删除=NULL',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_username` (`username`, `deleted_at`)
+  UNIQUE KEY `uk_sys_users_username_active` (`username`, `active_unique_guard`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统用户表';
 
 -- 初始管理员账号默认禁用，需通过 `backend/scripts/bootstrap-admin.js` 显式设置密码后再启用

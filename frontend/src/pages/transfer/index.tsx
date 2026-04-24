@@ -34,7 +34,7 @@ export default function TransferPage() {
   const [submitting,setSubmitting]=useState(false)
   const [pendingId,setPendingId]=useState<number|null>(null)
 
-  const {data,isLoading}=useQuery({queryKey:['transfer',{page,keyword}],queryFn:()=>getTransferListApi({page,pageSize:20,keyword}).then(r=>r.data.data!)})
+  const {data,isLoading}=useQuery({queryKey:['transfer',{page,keyword}],queryFn:()=>getTransferListApi({page,pageSize:20,keyword}).then(r=>r!)})
   const {data:warehouses}=useWarehousesActive()
   const {data:products}=useProducts({page:1,pageSize:200,keyword:''})
   const sameWarehouseSelected = !!fromWh && fromWh === toWh

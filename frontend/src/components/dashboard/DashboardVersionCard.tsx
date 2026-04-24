@@ -31,8 +31,8 @@ export default function DashboardVersionCard() {
     queryKey: ['app-update-latest'],
     queryFn: async () => {
       const res = await getAppUpdateLatestApi()
-      if (!res.data.success || !res.data.data?.version) return null
-      return res.data.data
+      if (!res?.version) return null
+      return res
     },
     staleTime: 1000 * 60 * 5,
     retry: 1,

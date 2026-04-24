@@ -26,7 +26,7 @@ export default function OpLogsPage() {
   const [module, setModule] = useState('')
   const [clearConfirm, setClearConfirm] = useState(false)
 
-  const { data, isLoading } = useQuery({ queryKey: ['oplogs', { page, keyword, module }], queryFn: () => getOpLogsApi({ page, pageSize: 30, keyword, module }).then(r => r.data.data!) })
+  const { data, isLoading } = useQuery({ queryKey: ['oplogs', { page, keyword, module }], queryFn: () => getOpLogsApi({ page, pageSize: 30, keyword, module }) })
   const clear = useMutation({ mutationFn: clearLogsApi, onSuccess: () => qc.invalidateQueries({ queryKey: ['oplogs'] }) })
 
   const columns: TableColumn<OpLog>[] = [

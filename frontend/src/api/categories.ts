@@ -1,15 +1,15 @@
-import apiClient from './client'
+import { payloadClient as apiClient } from './client'
 import type { ApiResponse } from '@/types'
 import type { Category, CreateCategoryParams, UpdateCategoryParams } from '@/types/categories'
 
 const BASE = '/categories'
 
-export const getCategoryTreeApi   = async () => (await apiClient.get<ApiResponse<Category[]>>(`${BASE}/tree`)).data.data
-export const getCategoryFlatApi   = async () => (await apiClient.get<ApiResponse<Category[]>>(`${BASE}/flat`)).data.data
-export const getCategoryLeavesApi = async () => (await apiClient.get<ApiResponse<Category[]>>(`${BASE}/leaves`)).data.data
+export const getCategoryTreeApi   = async () => apiClient.get<ApiResponse<Category[]>>(`${BASE}/tree`)
+export const getCategoryFlatApi   = async () => apiClient.get<ApiResponse<Category[]>>(`${BASE}/flat`)
+export const getCategoryLeavesApi = async () => apiClient.get<ApiResponse<Category[]>>(`${BASE}/leaves`)
 
 export const createCategoryApi = async (d: CreateCategoryParams) =>
-  (await apiClient.post<ApiResponse<{ id: number }>>(`${BASE}`, d)).data.data
+  apiClient.post<ApiResponse<{ id: number }>>(`${BASE}`, d)
 
 export const updateCategoryApi = async (id: number, d: UpdateCategoryParams) => {
   await apiClient.put(`${BASE}/${id}`, d)

@@ -60,7 +60,7 @@ export default function PdaInboundPage() {
   const navigate = useNavigate()
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['pda-inbound-tasks'],
-    queryFn: () => getInboundTasksApi({ page:1, pageSize:50, status:undefined }).then(r => r.data.data?.list ?? []),
+    queryFn: () => getInboundTasksApi({ page:1, pageSize:50, status:undefined }).then(r => r?.list ?? []),
     refetchInterval: 30_000,
   })
   const tasks = (data ?? []).filter((t:InboundTask) => !!t.submittedAt && [1,2,3].includes(t.status))

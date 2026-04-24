@@ -30,8 +30,8 @@ export default function PaymentsPage() {
   const [payMethod, setPayMethod] = useState('转账')
   const [payRemark, setPayRemark] = useState('')
 
-  const { data, isLoading } = useQuery({ queryKey: ['payments', { type: tab, page, status: statusFilter }], queryFn: () => getPaymentsApi({ type: tab, page, pageSize: 20, status: statusFilter || undefined }).then(r => r.data.data!) })
-  const { data: entries } = useQuery({ queryKey: ['payment-entries', selectedRecord?.id], queryFn: () => getEntriesApi(selectedRecord!.id).then(r => r.data.data || []), enabled: !!selectedRecord && entriesOpen })
+  const { data, isLoading } = useQuery({ queryKey: ['payments', { type: tab, page, status: statusFilter }], queryFn: () => getPaymentsApi({ type: tab, page, pageSize: 20, status: statusFilter || undefined }) })
+  const { data: entries } = useQuery({ queryKey: ['payment-entries', selectedRecord?.id], queryFn: () => getEntriesApi(selectedRecord!.id).then(r => r || []), enabled: !!selectedRecord && entriesOpen })
   const payMut = useMutation({ mutationFn: ({ id, d }: { id: number; d: object }) => payApi(id, d), onSuccess: () => { qc.invalidateQueries({ queryKey: ['payments'] }); setPayOpen(false); setPayAmount(''); setPayRemark('') } })
 
   const handlePay = async (e: React.FormEvent) => {

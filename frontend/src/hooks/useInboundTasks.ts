@@ -20,14 +20,14 @@ const QUERY_KEY = 'inbound-tasks'
 export function useInboundTasks(params: QueryParams & { status?: number; productId?: number }) {
   return useQuery({
     queryKey: [QUERY_KEY, params],
-    queryFn: () => getInboundTasksApi(params).then(r => r.data.data),
+    queryFn: () => getInboundTasksApi(params),
   })
 }
 
 export function useInboundTaskDetail(id: number | null) {
   return useQuery({
     queryKey: [QUERY_KEY, 'detail', id],
-    queryFn: () => getInboundTaskByIdApi(id!).then(r => r.data.data),
+    queryFn: () => getInboundTaskByIdApi(id!),
     enabled: !!id,
   })
 }
@@ -35,7 +35,7 @@ export function useInboundTaskDetail(id: number | null) {
 export function useInboundTaskContainers(id: number | null) {
   return useQuery({
     queryKey: [QUERY_KEY, 'containers', id],
-    queryFn: () => getInboundTaskContainersApi(id!).then(r => r.data.data!),
+    queryFn: () => getInboundTaskContainersApi(id!),
     enabled: !!id,
   })
 }
@@ -43,7 +43,7 @@ export function useInboundTaskContainers(id: number | null) {
 export function useInboundPurchaseCandidates(supplierId: number | null, keyword: string) {
   return useQuery({
     queryKey: [QUERY_KEY, 'purchase-items', supplierId, keyword],
-    queryFn: () => getInboundPurchaseCandidatesApi({ supplierId: supplierId!, keyword }).then(r => r.data.data ?? []),
+    queryFn: () => getInboundPurchaseCandidatesApi({ supplierId: supplierId!, keyword }).then(r => r ?? []),
     enabled: !!supplierId,
   })
 }
@@ -51,7 +51,7 @@ export function useInboundPurchaseCandidates(supplierId: number | null, keyword:
 export function useCreateInboundTask() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (data: CreateInboundTaskParams) => createInboundTaskApi(data).then(r => r.data.data!),
+    mutationFn: (data: CreateInboundTaskParams) => createInboundTaskApi(data),
     onSettled: () => invalidate('inbound_create'),
   })
 }
@@ -61,7 +61,7 @@ export function useReceiveInbound() {
   return useMutation({
     mutationFn: async ({ id, data }: { id: number; data: ReceiveParams }) => {
       const res = await receiveInboundApi(id, data)
-      return res.data.data as ReceivePackageResult
+      return res as ReceivePackageResult
     },
     onSuccess: () => invalidate('inbound_receive'),
   })
@@ -70,7 +70,7 @@ export function useReceiveInbound() {
 export function useSubmitInboundTask() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (id: number) => submitInboundTaskApi(id).then(r => r.data.data!),
+    mutationFn: (id: number) => submitInboundTaskApi(id),
     onSuccess: () => invalidate('inbound_submit'),
   })
 }
@@ -78,7 +78,7 @@ export function useSubmitInboundTask() {
 export function useAuditInboundTask() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: AuditInboundTaskParams }) => auditInboundTaskApi(id, data).then(r => r.data.data!),
+    mutationFn: ({ id, data }: { id: number; data: AuditInboundTaskParams }) => auditInboundTaskApi(id, data),
     onSuccess: () => invalidate('inbound_submit'),
   })
 }
@@ -86,7 +86,7 @@ export function useAuditInboundTask() {
 export function useReprintInboundTask() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: ReprintInboundTaskParams }) => reprintInboundTaskApi(id, data).then(r => r.data.data!),
+    mutationFn: ({ id, data }: { id: number; data: ReprintInboundTaskParams }) => reprintInboundTaskApi(id, data),
     onSuccess: () => invalidate('inbound_receive'),
   })
 }

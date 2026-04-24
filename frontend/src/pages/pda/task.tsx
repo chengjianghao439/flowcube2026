@@ -134,13 +134,13 @@ export default function PdaTaskPage() {
   // ── Queries ───────────────────────────────────────────────────────────
   const { data: task, isLoading } = useQuery({
     queryKey: ['pda-task', taskId],
-    queryFn:  () => getTaskByIdApi(taskId).then(r => r.data.data!),
+    queryFn:  () => getTaskByIdApi(taskId),
     enabled:  taskId > 0, refetchOnWindowFocus: false,
   })
 
   const { data: sugData, refetch: refetchSug } = useQuery({
     queryKey: ['pda-suggestions', taskId],
-    queryFn:  () => getPickSuggestionsApi(taskId).then(r => r.data.data!),
+    queryFn:  () => getPickSuggestionsApi(taskId),
     enabled:  taskId > 0 && task?.status === 2,
     refetchOnWindowFocus: false,
   })
@@ -185,7 +185,7 @@ export default function PdaTaskPage() {
       if (!match || !container) {
         // 容器不在推荐里，尝试直接查
         const res = await client.get<{data:{containerId:number;productId:number;productCode:string;productName:string;remainingQty:number;locationCode:string|null;unit:string}}>(`/inventory/containers/barcode/${b}`)
-        const c = res.data.data
+        const c = res
         const item = task.items.find(i => i.productId === c.productId)
         if (!item) { err('该商品不属于当前任务'); return }
         if (item.pickedQty >= item.requiredQty) { err('该商品已全部拣完'); return }

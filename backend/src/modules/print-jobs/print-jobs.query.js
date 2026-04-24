@@ -65,7 +65,7 @@ async function findByIdWithExecutor(exec, id) {
      WHERE j.id=?`,
     [id],
   )
-  if (!row) throw new AppError('打印任务不存在', 404)
+  if (!row) throw new AppError('打印任务不存在', 404, 'PRINT_JOB_NOT_FOUND')
   return fmt(row, {
     statusKey: statusKey(row.status),
     printStateLabel: printStateLabel(row.status),
@@ -100,7 +100,7 @@ async function listPrinterHealth() {
 async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null } = {}) {
   const type = String(category || '').trim().toLowerCase()
   if (!['inbound', 'outbound', 'logistics'].includes(type)) {
-    throw new AppError('条码分类无效', 400)
+    throw new AppError('条码分类无效', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
   }
   const normalizedStatus = normalizeBarcodeRecordStatus(status)
   if (type === 'inbound') return findInboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, inboundTaskId, inboundTaskItemId })
@@ -108,8 +108,66 @@ async function findBarcodeRecords({ category, keyword = '', status, page = 1, pa
   return findLogisticsBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize })
 }
 
+function inboundStatusClause(status, thresholdMinutes) {
+  if (!status) return { sql: '', params: [] }
+  if (status === 'cancelled') {
+    return { sql: 'AND t.status = 5', params: [] }
+  }
+  if (status === 'timeout') {
+    return {
+      sql: `AND IFNULL(t.status, 0) <> 5
+            AND (
+              (pj.status IN (?, ?) AND pj.updated_at IS NOT NULL AND pj.updated_at <= DATE_SUB(NOW(), INTERVAL ? MINUTE))
+              OR (pj.status = ? AND IFNULL(pj.error_message, '') = ?)
+            )`,
+      params: [STATUS.PENDING, STATUS.PRINTING, thresholdMinutes, STATUS.FAILED, 'no printer available'],
+    }
+  }
+  if (status === 'success') return { sql: 'AND IFNULL(t.status, 0) <> 5 AND pj.status = ?', params: [STATUS.DONE] }
+  if (status === 'failed') {
+    return {
+      sql: "AND IFNULL(t.status, 0) <> 5 AND pj.status = ? AND IFNULL(pj.error_message, '') <> ?",
+      params: [STATUS.FAILED, 'no printer available'],
+    }
+  }
+  if (status === 'printing') {
+    return {
+      sql: `AND IFNULL(t.status, 0) <> 5
+            AND pj.status = ?
+            AND (pj.updated_at IS NULL OR pj.updated_at > DATE_SUB(NOW(), INTERVAL ? MINUTE))`,
+      params: [STATUS.PRINTING, thresholdMinutes],
+    }
+  }
+  if (status === 'queued') {
+    return {
+      sql: `AND IFNULL(t.status, 0) <> 5
+            AND (
+              pj.status IS NULL
+              OR (
+                pj.status = ?
+                AND (pj.updated_at IS NULL OR pj.updated_at > DATE_SUB(NOW(), INTERVAL ? MINUTE))
+              )
+            )`,
+      params: [STATUS.PENDING, thresholdMinutes],
+    }
+  }
+  return { sql: '', params: [] }
+}
+
+function genericStatusClause(status, alias = 'j') {
+  if (!status) return { sql: '', params: [] }
+  if (status === 'timeout') return { sql: `AND ${alias}.status = ? AND IFNULL(${alias}.error_message, '') = ?`, params: [STATUS.FAILED, 'no printer available'] }
+  if (status === 'success') return { sql: `AND ${alias}.status = ?`, params: [STATUS.DONE] }
+  if (status === 'failed') return { sql: `AND ${alias}.status = ? AND IFNULL(${alias}.error_message, '') <> ?`, params: [STATUS.FAILED, 'no printer available'] }
+  if (status === 'printing') return { sql: `AND ${alias}.status = ?`, params: [STATUS.PRINTING] }
+  if (status === 'queued') return { sql: `AND (${alias}.status IS NULL OR ${alias}.status = ?)`, params: [STATUS.PENDING] }
+  if (status === 'cancelled') return { sql: 'AND 1=0', params: [] }
+  return { sql: '', params: [] }
+}
+
 async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null } = {}) {
   const thresholds = await getInboundClosureThresholds()
+  const timeoutMinutes = Number(thresholds.printTimeoutMinutes || 30)
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
   const inboundTaskIdNum = Number(inboundTaskId)
   const inboundTaskItemIdNum = Number(inboundTaskItemId)
@@ -125,8 +183,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
   }
 
   const offset = (page - 1) * pageSize
-  const paginateSql = status ? '' : 'LIMIT ? OFFSET ?'
-  const paginateParams = status ? [] : [pageSize, offset]
+  const statusClause = inboundStatusClause(status, timeoutMinutes)
   const [rows] = await pool.query(
     `SELECT
         c.id AS record_id,
@@ -185,9 +242,10 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
          OR IFNULL(p.name, '') LIKE ?
          OR IFNULL(t.task_no, '') LIKE ?
        )
+       ${statusClause.sql}
      ORDER BY c.id DESC
-     ${paginateSql}`,
-    [...inboundFilterParams, like, like, like, like, ...paginateParams],
+     LIMIT ? OFFSET ?`,
+    [...inboundFilterParams, like, like, like, like, ...statusClause.params, pageSize, offset],
   )
 
   const mapped = rows.map((row) => {
@@ -226,36 +284,43 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
       canReprint: true,
     }
   })
-  const filtered = status ? mapped.filter(row => (row.latestJob?.statusKey ?? 'queued') === status) : mapped
-  const total = status
-    ? filtered.length
-    : Number((await pool.query(
-      `SELECT COUNT(*) AS total
-       FROM inventory_containers c
-       LEFT JOIN product_items p ON p.id = c.product_id
-       LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
-       WHERE c.deleted_at IS NULL
-         AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
-         ${inboundFilterSql.join(' ')}
-         AND (
-           c.barcode LIKE ?
-           OR IFNULL(p.code, '') LIKE ?
-           OR IFNULL(p.name, '') LIKE ?
-           OR IFNULL(t.task_no, '') LIKE ?
-         )`,
-      [...inboundFilterParams, like, like, like, like],
-    ))[0][0].total)
+  const [[{ total }]] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM inventory_containers c
+     LEFT JOIN product_items p ON p.id = c.product_id
+     LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
+     LEFT JOIN (
+       SELECT j.*
+       FROM print_jobs j
+       INNER JOIN (
+         SELECT ref_id, MAX(id) AS max_id
+         FROM print_jobs
+         WHERE ref_type = 'inventory_container'
+         GROUP BY ref_id
+       ) latest ON latest.max_id = j.id
+     ) pj ON pj.ref_id = c.id
+     WHERE c.deleted_at IS NULL
+       AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+       ${inboundFilterSql.join(' ')}
+       AND (
+         c.barcode LIKE ?
+         OR IFNULL(p.code, '') LIKE ?
+         OR IFNULL(p.name, '') LIKE ?
+         OR IFNULL(t.task_no, '') LIKE ?
+       )
+       ${statusClause.sql}`,
+    [...inboundFilterParams, like, like, like, like, ...statusClause.params],
+  )
   return {
-    list: status ? filtered.slice(offset, offset + pageSize) : filtered,
-    pagination: { page, pageSize, total },
+    list: mapped,
+    pagination: { page, pageSize, total: Number(total) },
   }
 }
 
 async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20 } = {}) {
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
   const offset = (page - 1) * pageSize
-  const paginateSql = status ? '' : 'LIMIT ? OFFSET ?'
-  const paginateParams = status ? [] : [pageSize, offset]
+  const statusClause = genericStatusClause(status, 'pj')
 
   const [rows] = await pool.query(
     `SELECT
@@ -299,12 +364,15 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
          GROUP BY ref_id
        ) latest ON latest.max_id = j.id
      ) pj ON pj.ref_id = p.id
-     WHERE p.barcode LIKE ?
-        OR IFNULL(wt.task_no, '') LIKE ?
-        OR IFNULL(wt.customer_name, '') LIKE ?
+     WHERE (
+          p.barcode LIKE ?
+          OR IFNULL(wt.task_no, '') LIKE ?
+          OR IFNULL(wt.customer_name, '') LIKE ?
+       )
+       ${statusClause.sql}
      ORDER BY p.id DESC
-     ${paginateSql}`,
-    [like, like, like, ...paginateParams],
+     LIMIT ? OFFSET ?`,
+    [like, like, like, ...statusClause.params, pageSize, offset],
   )
   const mapped = rows.map((row) => {
     const derived = deriveGenericBarcodeStatus(row)
@@ -344,28 +412,39 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
     }
   })
 
-  const filtered = status ? mapped.filter(row => (row.latestJob?.statusKey ?? 'queued') === status) : mapped
   const [[{ total: totalRaw }]] = await pool.query(
     `SELECT COUNT(*) AS total
      FROM packages p
      INNER JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
-     WHERE p.barcode LIKE ?
-        OR IFNULL(wt.task_no, '') LIKE ?
-        OR IFNULL(wt.customer_name, '') LIKE ?`,
-    [like, like, like],
+     LEFT JOIN (
+       SELECT j.*
+       FROM print_jobs j
+       INNER JOIN (
+         SELECT ref_id, MAX(id) AS max_id
+         FROM print_jobs
+         WHERE ref_type = 'package'
+         GROUP BY ref_id
+       ) latest ON latest.max_id = j.id
+     ) j ON j.ref_id = p.id
+     WHERE (
+          p.barcode LIKE ?
+          OR IFNULL(wt.task_no, '') LIKE ?
+          OR IFNULL(wt.customer_name, '') LIKE ?
+       )
+       ${statusClause.sql}`,
+    [like, like, like, ...statusClause.params],
   )
 
   return {
-    list: status ? filtered.slice(offset, offset + pageSize) : filtered,
-    pagination: { page, pageSize, total: status ? filtered.length : Number(totalRaw) },
+    list: mapped,
+    pagination: { page, pageSize, total: Number(totalRaw) },
   }
 }
 
 async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20 } = {}) {
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
   const offset = (page - 1) * pageSize
-  const paginateSql = status ? '' : 'LIMIT ? OFFSET ?'
-  const paginateParams = status ? [] : [pageSize, offset]
+  const statusClause = genericStatusClause(status, 'j')
   const [rows] = await pool.query(
     `SELECT j.*, p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j
@@ -375,9 +454,10 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
          IFNULL(j.ref_code, '') LIKE ?
          OR IFNULL(j.title, '') LIKE ?
        )
+       ${statusClause.sql}
      ORDER BY j.id DESC
-     ${paginateSql}`,
-    [like, like, ...paginateParams],
+     LIMIT ? OFFSET ?`,
+    [like, like, ...statusClause.params, pageSize, offset],
   )
   const mapped = rows.map((row) => {
     const derived = deriveGenericBarcodeStatus(row)
@@ -411,7 +491,6 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
       canReprint: true,
     }
   })
-  const filtered = status ? mapped.filter(row => (row.latestJob?.statusKey ?? 'queued') === status) : mapped
   const [[{ total: totalRaw }]] = await pool.query(
     `SELECT COUNT(*) AS total
      FROM print_jobs j
@@ -419,13 +498,14 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
        AND (
          IFNULL(j.ref_code, '') LIKE ?
          OR IFNULL(j.title, '') LIKE ?
-       )`,
-    [like, like],
+       )
+       ${statusClause.sql}`,
+    [like, like, ...statusClause.params],
   )
 
   return {
-    list: status ? filtered.slice(offset, offset + pageSize) : filtered,
-    pagination: { page, pageSize, total: status ? filtered.length : Number(totalRaw) },
+    list: mapped,
+    pagination: { page, pageSize, total: Number(totalRaw) },
   }
 }
 

@@ -4,11 +4,13 @@ import { useAuthStore } from '@/store/authStore'
 import AppLayout from '@/layouts/AppLayout'
 import PdaLayout from '@/layouts/PdaLayout'
 import PdaConnectionGate from '@/components/pda/PdaConnectionGate'
+import PdaRoutePermission from '@/components/pda/PdaRoutePermission'
 import ErpDesktopConnectionGate from '@/components/erp/ErpDesktopConnectionGate'
 import ErpApiBaseHotkeyDialog from '@/components/erp/ErpApiBaseHotkeyDialog'
 import { DesktopQuitUnloadBridge } from '@/components/desktop/DesktopQuitUnloadBridge'
 import DesktopPrintClientBridge from '@/components/desktop/DesktopPrintClientBridge'
 import GlobalDesktopUpdateDialog from '@/components/desktop/GlobalDesktopUpdateDialog'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
 const LoginPage       = lazy(() => import('@/pages/login'))
@@ -99,20 +101,20 @@ export default function AppRouter() {
           <Route path="/pda" element={<PdaProtectedRoute />}>
             <Route element={<PdaLayout />}>
               <Route index element={<PdaIndexPage />} />
-              <Route path="inbound" element={<PdaInboundPage />} />
-              <Route path="receive/:id" element={<PdaReceivePage />} />
-              <Route path="putaway/:id" element={<PdaPutawayPage />} />
-              <Route path="putaway" element={<PdaPutawayPage />} />
-              <Route path="picking" element={<PdaPickingPage />} />
-              <Route path="task/:id" element={<PdaTaskPage />} />
-              <Route path="check/:id" element={<PdaCheckPage />} />
-              <Route path="check" element={<PdaCheckPage />} />
-              <Route path="pack/:id" element={<PdaPackPage />} />
-              <Route path="pack" element={<PdaPackPage />} />
-              <Route path="split" element={<PdaSplitPage />} />
-              <Route path="ship/:id" element={<PdaShipPage />} />
-              <Route path="ship" element={<PdaShipPage />} />
-              <Route path="sort" element={<PdaSortPage />} />
+              <Route path="inbound" element={<PdaRoutePermission title="收货订单" required={[PERMISSIONS.INBOUND_ORDER_VIEW]}><PdaInboundPage /></PdaRoutePermission>} />
+              <Route path="receive/:id" element={<PdaRoutePermission title="收货登记" required={[PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.INBOUND_RECEIVE_EXECUTE]}><PdaReceivePage /></PdaRoutePermission>} />
+              <Route path="putaway/:id" element={<PdaRoutePermission title="扫码上架" required={[PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.INBOUND_PUTAWAY_EXECUTE]}><PdaPutawayPage /></PdaRoutePermission>} />
+              <Route path="putaway" element={<PdaRoutePermission title="扫码上架" required={[PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.INBOUND_PUTAWAY_EXECUTE]}><PdaPutawayPage /></PdaRoutePermission>} />
+              <Route path="picking" element={<PdaRoutePermission title="拣货任务" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PICK]}><PdaPickingPage /></PdaRoutePermission>} />
+              <Route path="task/:id" element={<PdaRoutePermission title="扫码拣货" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PICK]}><PdaTaskPage /></PdaRoutePermission>} />
+              <Route path="check/:id" element={<PdaRoutePermission title="复核作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_CHECK]}><PdaCheckPage /></PdaRoutePermission>} />
+              <Route path="check" element={<PdaRoutePermission title="复核作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_CHECK]}><PdaCheckPage /></PdaRoutePermission>} />
+              <Route path="pack/:id" element={<PdaRoutePermission title="打包作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]}><PdaPackPage /></PdaRoutePermission>} />
+              <Route path="pack" element={<PdaRoutePermission title="打包作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]}><PdaPackPage /></PdaRoutePermission>} />
+              <Route path="split" element={<PdaRoutePermission title="容器拆分" required={[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]}><PdaSplitPage /></PdaRoutePermission>} />
+              <Route path="ship/:id" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
+              <Route path="ship" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
+              <Route path="sort" element={<PdaRoutePermission title="分拣作业" required={[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT]}><PdaSortPage /></PdaRoutePermission>} />
             </Route>
           </Route>
 

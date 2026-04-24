@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -17,6 +17,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { StockItem, InventoryLog } from '@/types/inventory'
 import type { TableColumn } from '@/types'
 import type { ProductFinderResult } from '@/types/products'
+import { readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 
 type Tab = 'stock' | 'logs'
 type OpType = 'outbound'
@@ -28,10 +29,14 @@ const emptyOp = {
 }
 
 export default function InventoryPage() {
-  const navigate = useNavigate()
-  const [tab, setTab] = useState<Tab>('stock')
-  const [stockPage, setStockPage] = useState(1); const [stockKw, setStockKw] = useState(''); const [stockSearch, setStockSearch] = useState('')
-  const [logPage, setLogPage] = useState(1); const [logType, setLogType] = useState<number|null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = (searchParams.get('tab') === 'logs' ? 'logs' : 'stock') as Tab
+  const stockPage = readPositiveIntParam(searchParams, 'stockPage', 1)
+  const stockKw = readStringParam(searchParams, 'stockKeyword')
+  const logPage = readPositiveIntParam(searchParams, 'logPage', 1)
+  const rawLogType = Number(searchParams.get('logType') || '')
+  const logType = Number.isInteger(rawLogType) && rawLogType > 0 ? rawLogType : null
+  const [stockSearch, setStockSearch] = useState(stockKw)
   const [opOpen, setOpOpen] = useState(false); const [opType, setOpType] = useState<OpType>('outbound')
   const [form, setForm] = useState(emptyOp)
   const [productFinderOpen,  setProductFinderOpen]  = useState(false)
@@ -41,6 +46,14 @@ export default function InventoryPage() {
   const { data: logs, isLoading: logLoading } = useLogs({ page:logPage, pageSize:20, type:logType })
   const { mutate: outbound, isPending } = useOutbound()
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  useEffect(() => {
+    setStockSearch(stockKw)
+  }, [stockKw])
+
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
 
   function openOp(t: OpType) { setOpType(t); setForm(emptyOp); setOpOpen(true) }
   function handleOp(e: React.FormEvent<HTMLFormElement>) {
@@ -95,7 +108,7 @@ export default function InventoryPage() {
       {/* 标签切换 */}
       <div className="mb-4 flex gap-1 border-b border-border">
         {(['stock','logs'] as Tab[]).map(t=>(
-          <button key={t} onClick={()=>setTab(t)}
+          <button key={t} onClick={()=>updateParams({ tab: t })}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab===t?'border-primary text-foreground':'border-transparent text-muted-foreground hover:text-foreground'}`}>
             {t==='stock'?'当前库存':'出入库记录'}
           </button>
@@ -108,11 +121,14 @@ export default function InventoryPage() {
             当前库存显示的是在库数量（on-hand）。销售单“已占库”会增加预占、减少可用，但不会直接减少在库；只有仓库任务实际出库后，在库才会下降。
           </div>
           <FilterCard>
-            <Input placeholder="搜索商品编码或名称" value={stockSearch} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setStockSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&(setStockPage(1),setStockKw(stockSearch))} className="h-9 w-60" />
-            <Button size="sm" variant="outline" onClick={()=>{setStockPage(1);setStockKw(stockSearch)}}>搜索</Button>
-            {stockKw&&<Button size="sm" variant="ghost" onClick={()=>{setStockSearch('');setStockKw('');setStockPage(1)}}>重置</Button>}
+            <Input placeholder="搜索商品编码或名称" value={stockSearch} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setStockSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&updateParams({ stockKeyword: stockSearch, stockPage: 1 })} className="h-9 w-60" />
+            <Button size="sm" variant="outline" onClick={()=>updateParams({ stockKeyword: stockSearch, stockPage: 1 })}>搜索</Button>
+            {stockKw&&<Button size="sm" variant="ghost" onClick={()=>{
+              setStockSearch('')
+              updateParams({ stockKeyword: null, stockPage: 1 })
+            }}>重置</Button>}
           </FilterCard>
-          <DataTable columns={stockCols} data={stocks?.list??[]} loading={stockLoading} pagination={stocks?.pagination} onPageChange={setStockPage} rowKey="id" emptyText="暂无库存记录，请先进行入库操作" />
+          <DataTable columns={stockCols} data={stocks?.list??[]} loading={stockLoading} pagination={stocks?.pagination} onPageChange={(nextPage)=>updateParams({ stockPage: nextPage })} rowKey="id" emptyText="暂无库存记录，请先进行入库操作" />
         </>
       )}
 
@@ -122,8 +138,7 @@ export default function InventoryPage() {
             <Select
               value={logType == null ? '__all__' : String(logType)}
               onValueChange={v => {
-                setLogType(v === '__all__' ? null : +v)
-                setLogPage(1)
+                updateParams({ logType: v === '__all__' ? null : +v, logPage: 1 })
               }}
             >
               <SelectTrigger className="h-9 w-36">
@@ -137,7 +152,7 @@ export default function InventoryPage() {
               </SelectContent>
             </Select>
           </FilterCard>
-          <DataTable columns={logCols} data={logs?.list??[]} loading={logLoading} pagination={logs?.pagination} onPageChange={setLogPage} rowKey="id" />
+          <DataTable columns={logCols} data={logs?.list??[]} loading={logLoading} pagination={logs?.pagination} onPageChange={(nextPage)=>updateParams({ logPage: nextPage })} rowKey="id" />
         </>
       )}
 

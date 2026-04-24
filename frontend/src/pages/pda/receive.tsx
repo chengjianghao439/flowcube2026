@@ -281,7 +281,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       receiveInboundApi(task.id, {
         productId: activeProduct.productId,
         packages: normalizedBoxes.map(box => ({ qty: box.qty })),
-      }, requestKey).then((res) => res.data.data!),
+      }, requestKey).then((res) => res!),
     ).then((result) => {
       if (result.kind === 'success') {
         if ((activeProduct.remainingQty - totalQty) > 0) {
@@ -434,7 +434,7 @@ export default function PdaReceivePage() {
 
   const { data: task, isLoading } = useQuery({
     queryKey: ['pda-inbound-task', taskId],
-    queryFn: () => getInboundTaskByIdApi(taskId).then(r => r.data.data!),
+    queryFn: () => getInboundTaskByIdApi(taskId),
     enabled: taskId > 0,
   })
 

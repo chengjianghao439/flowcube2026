@@ -4,8 +4,8 @@ import { useInvalidate } from '@/hooks/useInvalidate'
 import { toast } from '@/lib/toast'
 import type { CreateSaleParams, UpdateSaleParams } from '@/types/sale'
 
-export const useSaleList   = (params: object) => useQuery({ queryKey: ['sale', params], queryFn: () => getSaleListApi(params).then(r => r.data.data!) })
-export const useSaleDetail = (id: number)     => useQuery({ queryKey: ['sale', id],     queryFn: () => getSaleDetailApi(id).then(r => r.data.data!), enabled: !!id })
+export const useSaleList   = (params: object) => useQuery({ queryKey: ['sale', params], queryFn: () => getSaleListApi(params) })
+export const useSaleDetail = (id: number)     => useQuery({ queryKey: ['sale', id],     queryFn: () => getSaleDetailApi(id), enabled: !!id })
 
 export const useCreateSale = () => {
   const invalidate = useInvalidate()

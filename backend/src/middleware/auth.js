@@ -3,6 +3,8 @@ const AppError = require('../utils/AppError')
 const { loadRolePermissions } = require('./loadRolePermissions')
 const { env } = require('../config/env')
 const { getCurrentAuthUser } = require('../modules/auth/currentAuthUser')
+const { recordAuthAudit, AUTH_AUDIT_EVENT } = require('../modules/auth/auth-audit.service')
+const { updateRequestContext } = require('../utils/requestContext')
 
 /**
  * JWT 认证中间件。
@@ -12,13 +14,18 @@ const { getCurrentAuthUser } = require('../modules/auth/currentAuthUser')
 async function authMiddleware(req, res, next) {
   const authHeader = req.headers['authorization']
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return next(new AppError('未提供认证 Token', 401))
+    return next(new AppError('未提供认证 Token', 401, 'AUTH_TOKEN_MISSING'))
   }
 
   const token = authHeader.slice(7)
   try {
     const payload = jwt.verify(token, env.JWT_SECRET)
     const user = await getCurrentAuthUser(payload.userId)
+    const currentTokenVersion = Number(user.token_version || 0)
+    const tokenVersion = Number(payload.tokenVersion)
+    if (!Number.isFinite(tokenVersion) || tokenVersion !== currentTokenVersion) {
+      return next(new AppError('登录状态已失效，请重新登录', 401, 'AUTH_SESSION_INVALID'))
+    }
     req.user = {
       ...payload,
       userId: user.id,
@@ -26,17 +33,19 @@ async function authMiddleware(req, res, next) {
       username: user.username,
       realName: user.real_name,
       roleName: user.role_name,
+      tokenVersion: currentTokenVersion,
     }
+    updateRequestContext({ userId: user.id, username: user.username })
     next()
   } catch (err) {
     if (err instanceof AppError) {
       return next(err)
     }
     if (err.name === 'TokenExpiredError') {
-      return next(new AppError('Token 已过期，请重新登录', 401))
+      return next(new AppError('Token 已过期，请重新登录', 401, 'AUTH_TOKEN_EXPIRED'))
     }
     if (err.name === 'JsonWebTokenError' || err.name === 'NotBeforeError') {
-      return next(new AppError('Token 无效', 401))
+      return next(new AppError('Token 无效', 401, 'AUTH_TOKEN_INVALID'))
     }
     return next(err)
   }
@@ -53,7 +62,18 @@ function permissionMiddleware(permissionCode, options = {}) {
     if (superAdminRoleIds.includes(req.user?.roleId)) return next()
     const userPermissions = req.user?.permissions ?? []
     if (!userPermissions.includes(permissionCode)) {
-      return next(new AppError('无操作权限', 403))
+      void recordAuthAudit({
+        eventType: AUTH_AUDIT_EVENT.PERMISSION_DENIED,
+        title: '权限校验拒绝',
+        description: `请求缺少权限 ${permissionCode}`,
+        userId: req.user?.userId ?? null,
+        username: req.user?.username ?? null,
+        payload: {
+          permission: permissionCode,
+          roleId: req.user?.roleId ?? null,
+        },
+      })
+      return next(new AppError('无操作权限', 403, 'PERMISSION_DENIED', { permission: permissionCode }))
     }
     next()
   }

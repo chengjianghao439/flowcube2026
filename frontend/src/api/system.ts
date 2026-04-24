@@ -1,4 +1,4 @@
-import client from './client'
+import { payloadClient as client } from './client'
 import type { ApiResponse } from '@/types'
 
 export interface SystemHealthIssue {

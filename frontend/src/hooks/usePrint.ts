@@ -6,7 +6,7 @@
  *  await print({ printerId: 1, title: '包裹标签', content: html, contentType: 'html' })
  */
 import { useState, useCallback } from 'react'
-import apiClient from '@/api/client'
+import { payloadClient as apiClient } from '@/api/client'
 import { toast } from '@/lib/toast'
 
 interface PrintParams {
@@ -24,7 +24,7 @@ export function usePrint() {
   const print = useCallback(async (params: PrintParams) => {
     setPrinting(true)
     try {
-      const res = await apiClient.post('/print-jobs', {
+      const res = await apiClient.post<{ id: number }>('/print-jobs', {
         printerId:   params.printerId,
         title:       params.title,
         content:     params.content,
@@ -33,7 +33,7 @@ export function usePrint() {
         templateId:  params.templateId,
       })
       toast.success(`打印任务已发送：${params.title}`)
-      return res.data.data
+      return res
     } catch (e: any) {
       toast.error(e?.response?.data?.message || '打印失败')
       throw e

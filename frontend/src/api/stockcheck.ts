@@ -1,4 +1,4 @@
-import client from './client'
+import { payloadClient as client } from './client'
 import type { ApiResponse, PaginatedData } from '@/types'
 import type { StockCheck, CreateCheckParams } from '@/types/stockcheck'
 export const getCheckListApi   = (params: object) => client.get<ApiResponse<PaginatedData<StockCheck>>>('/stockcheck', { params })

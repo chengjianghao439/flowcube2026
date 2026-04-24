@@ -86,7 +86,7 @@ export function PrintPreviewOverlay({ order, onClose }: OverlayProps) {
     setLoading(true)
     getPrintTemplateListApi({ type: 1 })
       .then(res => {
-        const list = res.data.data ?? []
+        const list = res ?? []
         setTemplates(list)
         // 优先使用默认模板，没有则取第一个
         setSelected(list.find(t => t.isDefault) ?? list[0] ?? null)

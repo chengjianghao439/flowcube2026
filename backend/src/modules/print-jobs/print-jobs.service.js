@@ -7,12 +7,10 @@ const { STATUS, parseListStatus, EXPIRE_MESSAGE } = require('./print-jobs.status
 dispatch.startPrintJobSweeper()
 
 async function findAll(params) {
-  await dispatch.expireStaleJobs()
   return query.findAll(params)
 }
 
 async function getStatsCounts() {
-  await dispatch.expireStaleJobs()
   return query.getStatsCounts()
 }
 

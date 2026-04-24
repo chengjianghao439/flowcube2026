@@ -87,7 +87,7 @@ function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () 
   const mut = useMutation({
     mutationFn: () => batchCreateSortingBinsApi({ warehouseId: +warehouseId, prefix, from: +from, to: +to }),
     onSuccess: (res) => {
-      toast.success(`已创建 ${res.data.data?.length ?? 0} 个分拣格`)
+      toast.success(`已创建 ${res?.length ?? 0} 个分拣格`)
       onSuccess(); onClose()
     },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '批量创建失败'),
@@ -144,7 +144,7 @@ export default function SortingBinsPage() {
   const { data: bins, isLoading } = useQuery({
     queryKey: ['sorting-bins', keyword, statusFilter],
     queryFn: () => getSortingBinsApi({ keyword, status: statusFilter ? +statusFilter : undefined })
-      .then(r => r.data.data ?? []),
+      .then(r => r ?? []),
   })
 
   function invalidate() { qc.invalidateQueries({ queryKey: ['sorting-bins'] }) }

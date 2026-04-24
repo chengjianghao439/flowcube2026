@@ -11,15 +11,21 @@
 
 const IS_DEV = process.env.NODE_ENV !== 'production'
 const SLOW_MS = parseInt(process.env.SLOW_API_MS || '800', 10)
+const { getRequestContext } = require('./requestContext')
 
 function timestamp() {
   return new Date().toISOString().replace('T', ' ').slice(0, 23)
 }
 
 function fmt(level, module_, msg, meta) {
+  const ctx = getRequestContext() || {}
+  const mergedMeta = { ...(meta || {}) }
+  if (ctx.requestId && !mergedMeta.requestId) {
+    mergedMeta.requestId = ctx.requestId
+  }
   const m = module_ ? `[${module_}] ` : ''
-  const metaStr = meta && Object.keys(meta).length
-    ? ' ' + JSON.stringify(meta)
+  const metaStr = mergedMeta && Object.keys(mergedMeta).length
+    ? ' ' + JSON.stringify(mergedMeta)
     : ''
   return `[${timestamp()}] [${level}] ${m}${msg}${metaStr}`
 }

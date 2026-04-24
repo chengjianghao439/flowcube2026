@@ -25,7 +25,7 @@ export default function PrintTemplatesPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['print-templates'],
-    queryFn: () => getPrintTemplateListApi().then(r => r.data.data ?? []),
+    queryFn: () => getPrintTemplateListApi().then(r => r ?? []),
   })
 
   function invalidate() { qc.invalidateQueries({ queryKey: ['print-templates'] }) }

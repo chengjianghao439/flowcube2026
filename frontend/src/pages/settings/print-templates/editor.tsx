@@ -494,7 +494,7 @@ export default function PrintTemplateEditor() {
   // ── Remote data ──────────────────────────────────────────────
   const { data: remote, isLoading } = useQuery({
     queryKey: ['print-template', id],
-    queryFn: () => getPrintTemplateDetailApi(+id!).then(r => r.data.data!),
+    queryFn: () => getPrintTemplateDetailApi(+id!),
     enabled: !isNew,
   })
 
@@ -574,7 +574,7 @@ export default function PrintTemplateEditor() {
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['print-templates'] })
       toast.success('模板已保存')
-      const newPath = `/settings/print-templates/${res.data.data!.id}`
+      const newPath = `/settings/print-templates/${res!.id}`
       navigate(newPath, { replace: true })
     },
   })

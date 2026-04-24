@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import client from '@/api/client'
-import type { ApiResponse } from '@/types'
+import { payloadClient as client } from '@/api/client'
 
 interface SearchResult { id: number; type: string; typeLabel: string; title: string; subtitle: string; path: string }
 
@@ -40,8 +39,8 @@ export default function GlobalSearch() {
     timer.current = setTimeout(async () => {
       setLoading(true)
       try {
-        const r = await client.get<ApiResponse<SearchResult[]>>('/search', { params: { q } })
-        setResults(r.data.data || [])
+        const r = await client.get<SearchResult[]>('/search', { params: { q } })
+        setResults(r || [])
       } catch (_) {}
       setLoading(false)
     }, 300)

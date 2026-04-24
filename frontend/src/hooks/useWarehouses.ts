@@ -8,6 +8,7 @@ import {
 } from '@/api/warehouses'
 import type { QueryParams } from '@/types'
 import type { CreateWarehouseParams, UpdateWarehouseParams } from '@/types/warehouses'
+import { toast } from '@/lib/toast'
 
 const QUERY_KEY = 'warehouses'
 
@@ -48,5 +49,6 @@ export function useDeleteWarehouse() {
   return useMutation({
     mutationFn: (id: number) => deleteWarehouseApi(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: [QUERY_KEY] }),
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '删除失败'),
   })
 }

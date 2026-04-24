@@ -30,7 +30,7 @@ export default function PdaSplitPage() {
   const loadMut = useMutation({
     mutationFn: async (bc: string) => {
       const res = await getContainerByBarcodeApi(bc)
-      return res.data.data!
+      return res!
     },
     onSuccess: (d) => {
       if (d.containerStatus === 'waiting_putaway') {

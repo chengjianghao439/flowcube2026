@@ -1,9 +1,8 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LayoutGrid, List, ScanBarcode } from 'lucide-react'
-import { useInvalidate } from '@/hooks/useInvalidate'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -20,6 +19,7 @@ import { TaskStatCards } from './components/TaskStatCards'
 import { KanbanBoard } from './components/KanbanBoard'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getOutboundClosureCopy } from '@/lib/outboundClosure'
+import { readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import {
   getTasksApi, getTaskByIdApi, cancelTaskApi, updateTaskPriorityApi,
   PRIORITY_LABEL, PRIORITY_COLOR,
@@ -240,32 +240,41 @@ import { WT_STATUS_OPTIONS } from '@/constants/warehouseTaskStatus'
 
 export default function WarehouseTasksPage() {
   const nav = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const qc = useQueryClient()
-  const invalidate = useInvalidate()
   const isActiveTab = useActiveWorkspaceTab()
-  const [page, setPage] = useState(1)
-  const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [view, setView] = useState<'kanban' | 'list'>('kanban')
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const page = readPositiveIntParam(searchParams, 'page', 1)
+  const keyword = readStringParam(searchParams, 'keyword')
+  const statusFilter = readStringParam(searchParams, 'status')
+  const view = searchParams.get('view') === 'list' ? 'list' : 'kanban'
+  const taskId = Number(searchParams.get('taskId') || '')
+  const selectedId = Number.isInteger(taskId) && taskId > 0 ? taskId : null
+  const detailOpen = selectedId != null
+  const [search, setSearch] = useState(keyword)
   const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; description: string; onConfirm: () => void }>({ open: false, title: '', description: '', onConfirm: () => {} })
 
+  useEffect(() => {
+    setSearch(keyword)
+  }, [keyword])
+
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
+
   const { data, isLoading } = useQuery({
-    queryKey: ['warehouse-tasks', page, keyword, statusFilter],
-    queryFn: () => getTasksApi({ page, pageSize: view === 'kanban' ? 200 : 20, keyword, status: statusFilter ? +statusFilter : undefined }).then(r => r.data.data!),
+    queryKey: ['warehouse-tasks', view, page, keyword, statusFilter],
+    queryFn: () => getTasksApi({ page, pageSize: view === 'kanban' ? 200 : 20, keyword, status: statusFilter ? +statusFilter : undefined }),
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 15_000 : false,
   })
 
   const { data: detail, isLoading: detailLoading } = useQuery({
     queryKey: ['warehouse-task-detail', selectedId],
-    queryFn: () => getTaskByIdApi(selectedId!).then(r => r.data.data!),
+    queryFn: () => getTaskByIdApi(selectedId!),
     enabled: !!selectedId && detailOpen,
   })
 
-  const openDetail = (id: number) => { setSelectedId(id); setDetailOpen(true) }
+  const openDetail = (id: number) => updateParams({ taskId: id })
   const openConfirm = (title: string, description: string, onConfirm: () => void) => setConfirmState({ open: true, title, description, onConfirm })
   const closeConfirm = () => setConfirmState(s => ({ ...s, open: false }))
 
@@ -330,10 +339,10 @@ export default function WarehouseTasksPage() {
         description="管理销售出库任务，从备货到发货的完整生命周期"
         actions={
           <div className="flex rounded-lg border border-border bg-muted/40 p-0.5">
-            <button onClick={() => setView('kanban')} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === 'kanban' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            <button onClick={() => updateParams({ view: 'kanban' })} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === 'kanban' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
               <LayoutGrid className="h-3.5 w-3.5" /> 看板
             </button>
-            <button onClick={() => setView('list')} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === 'list' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            <button onClick={() => updateParams({ view: 'list' })} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === 'list' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
               <List className="h-3.5 w-3.5" /> 列表
             </button>
           </div>
@@ -345,9 +354,9 @@ export default function WarehouseTasksPage() {
       <div className="flex flex-wrap gap-2">
         <Input placeholder="搜索任务编号/客户/销售单" value={search}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') updateParams({ keyword: search, page: 1 }) }}
           className="w-64" />
-        <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
+        <Select value={statusFilter || '__all__'} onValueChange={v => updateParams({ status: v === '__all__' ? null : v, page: 1 })}>
           <SelectTrigger className="h-10 w-40">
             <SelectValue placeholder="全部状态" />
           </SelectTrigger>
@@ -357,18 +366,21 @@ export default function WarehouseTasksPage() {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-        {(keyword || statusFilter) && <Button variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setPage(1) }}>清除</Button>}
+        <Button variant="outline" onClick={() => updateParams({ keyword: search, page: 1 })}>搜索</Button>
+        {(keyword || statusFilter) && <Button variant="ghost" onClick={() => {
+          setSearch('')
+          updateParams({ keyword: null, status: null, page: 1 })
+        }}>清除</Button>}
       </div>
 
       {view === 'kanban'
         ? <KanbanBoard tasks={data?.list ?? []} onDetail={openDetail} />
-        : <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} pagination={data?.pagination} onPageChange={setPage} rowKey="id" onRowDoubleClick={r => openDetail(r.id)} />
+        : <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} pagination={data?.pagination} onPageChange={(nextPage) => updateParams({ page: nextPage })} rowKey="id" onRowDoubleClick={r => openDetail(r.id)} />
       }
 
       <TaskDetailDialog
         open={detailOpen}
-        onClose={() => { setDetailOpen(false); setSelectedId(null) }}
+        onClose={() => updateParams({ taskId: null })}
         task={detail ?? null}
         loading={detailLoading}
         onAction={refresh}

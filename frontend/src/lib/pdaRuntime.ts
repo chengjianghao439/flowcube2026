@@ -2,14 +2,13 @@
  * PDA 独立 App（Capacitor bundled）运行时：API 根地址、全局打印桥
  */
 import { Capacitor } from '@capacitor/core'
-import apiClient from '@/api/client'
-import { API_BASE_STORAGE_KEY } from '@/config/api'
+import apiClient, { payloadClient } from '@/api/client'
+import { API_BASE_STORAGE_KEY, normalizeApiBase } from '@/config/api'
 import { ERP_PRODUCTION_ORIGIN, PDA_FALLBACK_API_ORIGIN } from '@/config/env'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/lib/toast'
-
-/** localStorage：后端 HTTP 根（不要带 /api） */
-export const PDA_API_ORIGIN_KEY = 'flowcube:pdaApiOrigin'
+import { getHashRouterWindowLocation } from '@/router/hashLocation'
+import type { ApiResponse } from '@/types'
 
 /** 标签打印机 ID（数字），供 window.printLabel 提交 print-jobs */
 export const PDA_LABEL_PRINTER_ID_KEY = 'flowcube:pdaLabelPrinterId'
@@ -22,14 +21,7 @@ export const PDA_LABEL_PRINTER_ID_KEY = 'flowcube:pdaLabelPrinterId'
  * - 不再内置固定公网地址，避免打包产物把测试/生产地址写死
  */
 export function normalizePdaApiOrigin(raw: string): string {
-  const t = raw.trim().replace(/\/$/, '')
-  if (!t) return ''
-  try {
-    const u = new URL(t.startsWith('http') ? t : `http://${t}`)
-    return `${u.protocol}//${u.host}`
-  } catch {
-    return ''
-  }
+  return normalizeApiBase(raw)
 }
 
 /** 扫码内容是否为可保存的后端根地址 */
@@ -44,7 +36,7 @@ export function tryParseScannedServerUrl(raw: string): string | null {
 export function isPdaViteLiveHost(): boolean {
   if (typeof window === 'undefined') return false
   const p = window.location.port
-  return (p === '5173' || p === '4173') && window.location.pathname.startsWith('/pda')
+  return (p === '5173' || p === '4173') && getHashRouterWindowLocation().pathname.startsWith('/pda')
 }
 
 /** APK 构建时注入的默认后端根（与桌面共用 VITE_ERP_PRODUCTION_ORIGIN） */
@@ -53,22 +45,23 @@ export function getBuiltPdaDefaultApiOrigin(): string {
   return normalizePdaApiOrigin(PDA_FALLBACK_API_ORIGIN)
 }
 
+function getStoredPdaApiOverride(): string {
+  if (typeof window === 'undefined') return ''
+  return normalizeApiBase(localStorage.getItem(API_BASE_STORAGE_KEY) || '')
+}
+
 /**
- * 独立 App 实际使用的 API 根（不写 https://localhost）。
- * 原生 PDA 优先使用打包时内置的后端地址，避免旧版残留 localStorage 把正确地址覆盖掉。
+ * 独立 App 实际使用的 API 根：
+ * - runtime override：API_BASE_URL
+ * - build-time default：VITE_ERP_PRODUCTION_ORIGIN / VITE_PDA_FALLBACK_API_ORIGIN
  */
 export function getResolvedPdaApiOrigin(): string {
   if (typeof window === 'undefined') return ''
-  return getBuiltPdaDefaultApiOrigin()
+  return getStoredPdaApiOverride() || getBuiltPdaDefaultApiOrigin()
 }
 
 export async function resolveHealthyPdaApiOrigin(): Promise<string> {
-  const origin = getBuiltPdaDefaultApiOrigin()
-  if (origin) {
-    localStorage.setItem(PDA_API_ORIGIN_KEY, origin)
-    localStorage.setItem(API_BASE_STORAGE_KEY, origin)
-  }
-  return origin
+  return getResolvedPdaApiOrigin()
 }
 
 /** 将服务端返回的相对地址补成 PDA 可访问的绝对地址 */
@@ -104,8 +97,6 @@ export async function applyPdaApiBaseFromStorage(): Promise<string> {
   const origin = await resolveHealthyPdaApiOrigin()
   if (origin) {
     apiClient.defaults.baseURL = `${origin}/api`
-    localStorage.setItem(PDA_API_ORIGIN_KEY, origin)
-    localStorage.setItem(API_BASE_STORAGE_KEY, origin)
   }
   return origin
 }
@@ -128,11 +119,10 @@ export async function syncPdaLabelPrinterBinding(): Promise<number | null> {
   if (!useAuthStore.getState().token) return null
 
   try {
-    const res = await apiClient.get<{
-      success: boolean
-      data?: Record<string, PrinterBindingLike | undefined>
+    const res = await payloadClient.get<{
+      defaultBindings?: Record<string, PrinterBindingLike | undefined>
     }>('/printer-bindings', { skipGlobalError: true })
-    const binding = res.data?.data?.container_label
+    const binding = res?.defaultBindings?.container_label
     const pid = Number(binding?.printer_id ?? binding?.printerId ?? '')
     if (Number.isFinite(pid) && pid > 0) {
       localStorage.setItem(PDA_LABEL_PRINTER_ID_KEY, String(pid))
@@ -173,10 +163,9 @@ async function waitPrintJobTerminal(jobId: number): Promise<{ ok: boolean; detai
   const t0 = Date.now()
   while (Date.now() - t0 < PRINT_JOB_POLL_MAX_MS) {
     try {
-      const r = await apiClient.get<{ success: boolean; data: PrintJobDetail }>(`/print-jobs/${jobId}`, {
+      const j = await payloadClient.get<ApiResponse<PrintJobDetail>>(`/print-jobs/${jobId}`, {
         skipGlobalError: true,
       })
-      const j = r.data?.data
       if (!j) return { ok: false, detail: '无法读取任务状态' }
       if (j.statusKey === 'success') return { ok: true }
       if (j.statusKey === 'failed') return { ok: false, detail: j.errorMessage?.trim() || undefined }
@@ -208,7 +197,7 @@ export function installPdaGlobals(): void {
       return
     }
     try {
-      const res = await apiClient.post<{ success: boolean; data: { id: number } }>(
+      const res = await payloadClient.post<ApiResponse<{ id: number }>>(
         '/print-jobs',
         {
           printerId: pid,
@@ -219,7 +208,7 @@ export function installPdaGlobals(): void {
         },
         { skipGlobalError: true },
       )
-      const jobId = res.data?.data?.id
+      const jobId = res?.id
       if (!jobId) {
         toast.error('未返回打印任务 ID')
         return

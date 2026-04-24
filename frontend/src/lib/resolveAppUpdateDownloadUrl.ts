@@ -32,7 +32,7 @@ export function resolveAppUpdateDownloadUrl(
   let url = typeof payload.url === 'string' ? payload.url.trim() : ''
   const fn = typeof payload.filename === 'string' ? payload.filename.trim() : ''
   if (isValidDownloadUrl(url) && isGitHubReleaseOrCdnUrl(url) && fn && base) {
-    const sameOrigin = `${base}/downloads/${encodeURIComponent(fn)}`
+    const sameOrigin = `${base}/current/${encodeURIComponent(fn)}`
     if (isValidDownloadUrl(sameOrigin)) return sameOrigin
   }
   if (isValidDownloadUrl(url)) return url
@@ -41,7 +41,7 @@ export function resolveAppUpdateDownloadUrl(
     if (isValidDownloadUrl(built)) return built
   }
   if (fn && base) {
-    const built = `${base}/downloads/${encodeURIComponent(fn)}`
+    const built = `${base}/current/${encodeURIComponent(fn)}`
     if (isValidDownloadUrl(built)) return built
   }
   return ''

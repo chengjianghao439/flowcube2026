@@ -44,7 +44,7 @@ export default function InboundTasksPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['inbound-tasks', keyword, statusFilter, product?.id ?? null, page],
     queryFn: () => getInboundTasksApi({ keyword, status: statusFilter ? +statusFilter : undefined, productId: product?.id, page, pageSize: 20 })
-      .then(r => r.data.data),
+      ,
   })
 
   function openDetail(row: InboundTask) {

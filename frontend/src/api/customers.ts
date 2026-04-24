@@ -1,4 +1,4 @@
-import client from './client'
+import { payloadClient as client } from './client'
 import type { ApiResponse, PaginatedData } from '@/types'
 import type { Customer, CustomerOption, CreateCustomerParams, UpdateCustomerParams } from '@/types/customers'
 export const getCustomersApi = (params: object) => client.get<ApiResponse<PaginatedData<Customer>>>('/customers', { params })

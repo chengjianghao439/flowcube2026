@@ -1,4 +1,4 @@
-import client from './client'
+import { payloadClient as client } from './client'
 import type { ApiResponse } from '@/types'
 import type { DashboardSummary, LowStockItem, TrendPoint, TopStockItem } from '@/types/dashboard'
 export const getDashboardSummaryApi = () => client.get<ApiResponse<DashboardSummary>>('/dashboard/summary')

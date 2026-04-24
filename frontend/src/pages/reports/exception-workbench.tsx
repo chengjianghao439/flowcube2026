@@ -94,25 +94,25 @@ export default function ExceptionWorkbenchPage() {
 
   const runsQ = useQuery({
     queryKey: ['system-health-runs'],
-    queryFn: () => getSystemHealthRunsApi(12).then(r => r.data.data ?? []),
+    queryFn: () => getSystemHealthRunsApi(12).then(r => r ?? []),
   })
   const logsQ = useQuery({
     queryKey: ['system-health-logs'],
-    queryFn: () => getSystemHealthLogsApi(80).then(r => r.data.data ?? []),
+    queryFn: () => getSystemHealthLogsApi(80).then(r => r ?? []),
   })
   const autoFixTypesQ = useQuery({
     queryKey: ['system-health-autofix-types'],
-    queryFn: () => getSystemAutoFixTypesApi().then(r => r.data.data ?? []),
+    queryFn: () => getSystemAutoFixTypesApi().then(r => r ?? []),
   })
   const notificationsQ = useQuery({
     queryKey: ['exception-workbench-notifications'],
-    queryFn: () => getNotificationsApi().then(r => r.data.data!),
+    queryFn: () => getNotificationsApi(),
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 60_000 : false,
   })
 
   const runHealthMut = useMutation({
-    mutationFn: () => runSystemHealthApi().then(r => r.data.data!),
+    mutationFn: () => runSystemHealthApi(),
     onSuccess: (data) => {
       toast.success(data.healthy ? '巡检完成，当前未发现异常' : `巡检完成，发现 ${data.totalIssues} 项异常`)
       qc.invalidateQueries({ queryKey: ['system-health-runs'] })
@@ -125,7 +125,7 @@ export default function ExceptionWorkbenchPage() {
   })
 
   const autoFixMut = useMutation({
-    mutationFn: () => runSystemAutoFixApi().then(r => r.data.data!),
+    mutationFn: () => runSystemAutoFixApi(),
     onSuccess: (data) => {
       toast.success(data.fixedCount > 0 ? `自动修复完成，共修复 ${data.fixedCount} 项` : '没有发现可自动修复的异常')
       qc.invalidateQueries({ queryKey: ['system-health-logs'] })

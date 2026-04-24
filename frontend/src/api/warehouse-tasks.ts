@@ -1,4 +1,4 @@
-import client from './client'
+import { payloadClient as client } from './client'
 import type { ApiResponse, PaginatedData } from '@/types'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 
@@ -88,8 +88,35 @@ export interface MyTask {
   createdAt: string
 }
 
+export interface PdaTaskSkuSummary {
+  productId: number
+  productCode: string
+  productName: string
+  unit: string
+  totalRequired: number
+  totalPicked: number
+  orderCount: number
+  taskIds: number[]
+}
+
+export interface WarehouseTaskStats {
+  picking: number
+  sorting: number
+  checking: number
+  packing: number
+  shipping: number
+  done: number
+  urgent: number
+}
+
 export const getMyTasksApi = () =>
   client.get<ApiResponse<MyTask[]>>('/warehouse-tasks/my')
+
+export const getMyTaskSkuSummaryApi = () =>
+  client.get<ApiResponse<PdaTaskSkuSummary[]>>('/warehouse-tasks/my-sku-summary')
+
+export const getTaskStatsApi = () =>
+  client.get<ApiResponse<WarehouseTaskStats>>('/warehouse-tasks/stats')
 
 export type TaskListParams = {
   page?: number; pageSize?: number; keyword?: string; status?: number; warehouseId?: number

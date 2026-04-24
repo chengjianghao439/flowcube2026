@@ -36,7 +36,7 @@ export default function CarriersPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['carriers', keyword, page],
-    queryFn: () => getCarriersApi({ keyword, page, pageSize: 20 }).then(r => r.data.data),
+    queryFn: () => getCarriersApi({ keyword, page, pageSize: 20 }),
   })
 
   function invalidate() { qc.invalidateQueries({ queryKey: ['carriers'] }) }

@@ -88,14 +88,14 @@ export default function ApprovalsPage() {
 
   const notificationsQ = useQuery({
     queryKey: ['notifications-page'],
-    queryFn: () => getNotificationsApi().then(r => r.data.data!),
+    queryFn: () => getNotificationsApi(),
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 60_000 : false,
   })
 
   const workbenchQ = useQuery({
     queryKey: ['approvals-workbench'],
-    queryFn: () => getRoleWorkbenchApi().then(r => r.data.data!),
+    queryFn: () => getRoleWorkbenchApi(),
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 60_000 : false,
   })

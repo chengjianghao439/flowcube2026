@@ -2,8 +2,15 @@
 
 export interface ApiResponse<T = unknown> {
   success: boolean
-  message: string
+  message?: string
   data: T
+}
+
+export interface ApiErrorResponse<T = unknown> {
+  success: false
+  code?: string | null
+  message?: string
+  data?: T | null
 }
 
 export interface PaginatedData<T> {

@@ -188,7 +188,7 @@ export default function RoleWorkbenchPage() {
 
   const workbenchQ = useQuery({
     queryKey: ['role-workbench'],
-    queryFn: () => getRoleWorkbenchApi().then(r => r.data.data!),
+    queryFn: () => getRoleWorkbenchApi(),
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 60_000 : false,
   })

@@ -154,7 +154,7 @@ async function enqueueRackLabelJob(payload) {
     row = rows[0]
   } catch (e) {
     if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column ['`]?barcode/i.test(String(e.message))) {
-      throw new AppError('数据库缺少 warehouse_racks.barcode，请执行迁移 051_warehouse_racks_barcode.sql', 503)
+      throw new AppError('数据库缺少 warehouse_racks.barcode，请执行迁移 051_warehouse_racks_barcode.sql', 503, 'DB_CONFIG_MISSING')
     }
     throw e
   }
@@ -209,7 +209,7 @@ async function enqueueRackLabelJob(payload) {
     }
   } catch (e) {
     if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/i.test(String(e.message))) {
-      throw new AppError('打印入库失败：数据库字段异常，请先执行迁移或联系管理员', 503)
+      throw new AppError('打印入库失败：数据库字段异常，请先执行迁移或联系管理员', 503, 'DB_CONFIG_MISSING')
     }
     throw e
   }
@@ -341,7 +341,7 @@ async function enqueueProductLabelJob(payload) {
 
 async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
   const id = Number(recordId)
-  if (!Number.isFinite(id) || id <= 0) throw new AppError('入库条码不存在', 404)
+  if (!Number.isFinite(id) || id <= 0) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
   const [[row]] = await pool.query(
     `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, p.name AS product_name
      FROM inventory_containers c
@@ -349,7 +349,7 @@ async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
      WHERE c.id = ? AND c.deleted_at IS NULL`,
     [id],
   )
-  if (!row) throw new AppError('入库条码不存在', 404)
+  if (!row) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
   return enqueueContainerLabelJob({
     containerId: id,
     warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
@@ -365,7 +365,7 @@ async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
 
 async function reprintOutboundBarcode(recordId, { createdBy = null } = {}) {
   const id = Number(recordId)
-  if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404)
+  if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
   return enqueuePackageLabelJob({
     packageId: id,
     createdBy,
@@ -375,10 +375,10 @@ async function reprintOutboundBarcode(recordId, { createdBy = null } = {}) {
 
 async function reprintLogisticsBarcode(recordId, { createdBy = null } = {}) {
   const id = Number(recordId)
-  if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404)
+  if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
   const job = await findById(id)
   if (job.jobType !== 'waybill' && job.refType !== 'waybill') {
-    throw new AppError('该记录不是物流条码打印任务', 400)
+    throw new AppError('该记录不是物流条码打印任务', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
   }
   return create({
     printerId: job.printerId,
@@ -402,7 +402,7 @@ async function reprintBarcodeRecord({ category, recordId, createdBy = null } = {
   if (type === 'inbound') return reprintInboundBarcode(recordId, { createdBy })
   if (type === 'outbound') return reprintOutboundBarcode(recordId, { createdBy })
   if (type === 'logistics') return reprintLogisticsBarcode(recordId, { createdBy })
-  throw new AppError('条码分类无效', 400)
+  throw new AppError('条码分类无效', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
 }
 
 module.exports = {

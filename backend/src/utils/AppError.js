@@ -8,12 +8,19 @@ class AppError extends Error {
   /**
    * @param {string} message
    * @param {number} [statusCode=400]
+   * @param {string|Record<string, unknown>|null} [codeOrData]
    * @param {Record<string, unknown>|null} [data] 随错误返回给客户端的结构化数据（如 429 配额详情）
    */
-  constructor(message, statusCode = 400, data = null) {
+  constructor(message, statusCode = 400, codeOrData = null, data = null) {
     super(message)
     this.statusCode = statusCode
-    this.data = data
+    if (typeof codeOrData === 'string') {
+      this.code = codeOrData
+      this.data = data
+    } else {
+      this.code = null
+      this.data = codeOrData
+    }
     this.isOperational = true
     Error.captureStackTrace(this, this.constructor)
   }

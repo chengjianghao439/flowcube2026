@@ -19,9 +19,10 @@ function successResponse(res, data = null, message = '操作成功', statusCode 
  * @param {string} message
  * @param {number} statusCode
  */
-function errorResponse(res, message = '操作失败', statusCode = 400, data = null) {
+function errorResponse(res, message = '操作失败', statusCode = 400, data = null, code = null) {
   return res.status(statusCode).json({
     success: false,
+    code: code ?? null,
     message,
     data: data ?? null,
   })

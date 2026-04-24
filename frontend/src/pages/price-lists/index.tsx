@@ -18,7 +18,7 @@ const LEVELS = [
 export default function PriceListsPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { data, isLoading } = useQuery({ queryKey: ['settings'], queryFn: () => getSettingsApi().then(r => r.data.data!) })
+  const { data, isLoading } = useQuery({ queryKey: ['settings'], queryFn: () => getSettingsApi() })
   const save = useMutation({
     mutationFn: updateSettingsApi,
     onSuccess: () => {

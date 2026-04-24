@@ -1,5 +1,6 @@
 const router = require('express').Router()
-const { authMiddleware: auth } = require('../../middleware/auth')
+const { authMiddleware: auth, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
 const { runAllChecks, getRecentLogs, getRunSummaries } = require('./healthCheck.service')
 const { runAutoFix, AUTO_FIXABLE_CHECK_TYPES } = require('./healthCheck.autoFix')
 const { getOperationRequestStatus } = require('../../utils/operationRequest')
@@ -10,7 +11,7 @@ const { getOperationRequestStatus } = require('../../utils/operationRequest')
  * 同时将发现的问题持久化到 system_health_logs
  * 权限：需要登录（管理员角色建议在前端控制）
  */
-router.get('/health', auth, async (req, res, next) => {
+router.get('/health', auth, requirePermission(PERMISSIONS.SYSTEM_HEALTH_VIEW), async (req, res, next) => {
   try {
     const result = await runAllChecks()
     res.json({ success: true, message: '巡检完成', data: result })
@@ -23,7 +24,7 @@ router.get('/health', auth, async (req, res, next) => {
  * GET /api/system/health/logs?limit=100
  * 查询历史巡检日志明细（按 created_at 降序）
  */
-router.get('/health/logs', auth, async (req, res, next) => {
+router.get('/health/logs', auth, requirePermission(PERMISSIONS.SYSTEM_HEALTH_VIEW), async (req, res, next) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 100, 500)
     const logs  = await getRecentLogs(limit)
@@ -37,7 +38,7 @@ router.get('/health/logs', auth, async (req, res, next) => {
  * GET /api/system/health/runs?limit=20
  * 查询历史巡检摘要（按 run_id 聚合，每次巡检一行）
  */
-router.get('/health/runs', auth, async (req, res, next) => {
+router.get('/health/runs', auth, requirePermission(PERMISSIONS.SYSTEM_HEALTH_VIEW), async (req, res, next) => {
   try {
     const limit    = Math.min(Number(req.query.limit) || 20, 100)
     const summaries = await getRunSummaries(limit)
@@ -52,7 +53,7 @@ router.get('/health/runs', auth, async (req, res, next) => {
  * 执行可自动修复的仓库流程异常（孤立资源释放）
  * 权限：需要登录
  */
-router.post('/health/autofix', auth, async (req, res, next) => {
+router.post('/health/autofix', auth, requirePermission(PERMISSIONS.SYSTEM_HEALTH_AUTOFIX), async (req, res, next) => {
   try {
     const result = await runAutoFix('manual')
     const msg = result.fixedCount > 0
@@ -68,7 +69,7 @@ router.post('/health/autofix', auth, async (req, res, next) => {
  * GET /api/system/health/autofix/types
  * 查询当前支持自动修复的异常类型列表
  */
-router.get('/health/autofix/types', auth, async (req, res) => {
+router.get('/health/autofix/types', auth, requirePermission(PERMISSIONS.SYSTEM_HEALTH_VIEW), async (req, res) => {
   res.json({ success: true, message: 'ok', data: AUTO_FIXABLE_CHECK_TYPES })
 })
 

@@ -48,9 +48,9 @@ export default function SaleFormDialog({ open, onClose }: Props) {
       if (!item.productId) continue
       try {
         const r = await getCustomerPriceApi(+cid, item.productId)
-        if (r.data.data?.salePrice !== undefined) {
+        if (r?.salePrice !== undefined) {
           setItems(prev => prev.map(i =>
-            i._key === item._key ? { ...i, unitPrice: r.data.data!.salePrice, priceSource: 'list' } : i
+            i._key === item._key ? { ...i, unitPrice: r!.salePrice, priceSource: 'list' } : i
           ))
         }
       } catch (_) {}
@@ -87,9 +87,9 @@ export default function SaleFormDialog({ open, onClose }: Props) {
       setPriceLoading(prev => ({ ...prev, [k]: true }))
       try {
         const r = await getCustomerPriceApi(+customerId, product.id)
-        if (r.data.data?.salePrice !== undefined) {
+        if (r?.salePrice !== undefined) {
           setItems(prev => prev.map(i =>
-            i._key === k ? { ...i, unitPrice: r.data.data!.salePrice, priceSource: 'list' } : i
+            i._key === k ? { ...i, unitPrice: r!.salePrice, priceSource: 'list' } : i
           ))
         }
       } catch (_) {}

@@ -17,14 +17,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { getLocationsApi, createLocationApi, updateLocationApi, deleteLocationApi } from '@/api/locations'
 import { getWarehousesActiveApi } from '@/api/warehouses'
-import type { Location, CreateLocationParams } from '@/types/locations'
+import { LOCATION_STATUS_OPTIONS, type Location, type CreateLocationParams } from '@/types/locations'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 
 const STATUS_VARIANT: Record<number, 'default' | 'outline' | 'secondary'> = { 1: 'default', 2: 'outline' }
 const STATUS_LABEL:   Record<number, string> = { 1: '启用', 2: '停用' }
 
-const EMPTY_FORM: CreateLocationParams = { warehouseId: 0, code: '', zone: '', aisle: '', rack: '', level: '', position: '', capacity: 0, remark: '' }
+const EMPTY_FORM: CreateLocationParams = { warehouseId: 0, code: '', zone: '', aisle: '', rack: '', level: '', position: '', capacity: 0, status: 1, remark: '' }
 
 export default function LocationsPage() {
   const navigate = useNavigate()
@@ -65,13 +65,13 @@ export default function LocationsPage() {
   const deleteMut = useMutation({
     mutationFn: (id: number) => deleteLocationApi(id),
     onSuccess: () => { toast.success('已删除'); invalidate() },
-    onError: () => toast.error('删除失败'),
+    onError: (e: unknown) => toast.error((e as Error).message || '删除失败'),
   })
 
   function openCreate() { setEditTarget(null); setForm(EMPTY_FORM); setDialogOpen(true) }
   function openEdit(loc: Location) {
     setEditTarget(loc)
-    setForm({ warehouseId: loc.warehouseId, code: loc.code, zone: loc.zone ?? '', aisle: loc.aisle ?? '', rack: loc.rack ?? '', level: loc.level ?? '', position: loc.position ?? '', capacity: loc.capacity, remark: loc.remark ?? '' })
+    setForm({ warehouseId: loc.warehouseId, code: loc.code, zone: loc.zone ?? '', aisle: loc.aisle ?? '', rack: loc.rack ?? '', level: loc.level ?? '', position: loc.position ?? '', capacity: loc.capacity, status: loc.status, remark: loc.remark ?? '' })
     setDialogOpen(true)
   }
   function closeDialog() { setDialogOpen(false); setEditTarget(null); setForm(EMPTY_FORM) }
@@ -162,6 +162,19 @@ export default function LocationsPage() {
               <div><Label>层</Label><Input className="mt-1" placeholder="可选" value={form.level} onChange={e => set('level', e.target.value)} /></div>
             </div>
             <div><Label>容量</Label><Input className="mt-1" type="number" min={0} value={form.capacity} onChange={e => set('capacity', +e.target.value)} /></div>
+            {editTarget && (
+              <div>
+                <Label>状态</Label>
+                <Select value={String(form.status ?? editTarget.status ?? 1)} onValueChange={v => set('status' as keyof CreateLocationParams, +v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="选择状态" /></SelectTrigger>
+                  <SelectContent>
+                    {LOCATION_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={String(option.value)}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div><Label>备注</Label><Input className="mt-1" placeholder="可选" value={form.remark} onChange={e => set('remark', e.target.value)} /></div>
           </div>
           <DialogFooter>
@@ -179,7 +192,7 @@ export default function LocationsPage() {
       <ConfirmDialog
         open={!!deleteTarget}
         title="删除库位"
-        description={`确认删除库位 ${deleteTarget?.code}？`}
+        description={`确认删除库位 ${deleteTarget?.code}？仅未被库存容器引用的库位允许删除；若仍在使用，请改为编辑后停用。`}
         variant="destructive"
         confirmText="确认删除"
         onConfirm={() => { deleteMut.mutate(deleteTarget!.id); setDeleteTarget(null) }}

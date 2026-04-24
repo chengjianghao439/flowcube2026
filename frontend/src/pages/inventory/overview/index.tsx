@@ -9,7 +9,8 @@
  *   - 点击「查看容器」打开右侧侧滑面板（ContainerDrawer）
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Package, Warehouse, Lock, CheckCircle } from 'lucide-react'
 import { Button }         from '@/components/ui/button'
 import { Input }          from '@/components/ui/input'
@@ -21,6 +22,7 @@ import CategoryTreeSelect       from '@/components/shared/CategoryTreeSelect'
 import CategoryPathDisplay      from '@/components/shared/CategoryPathDisplay'
 import type { InventoryOverviewItem } from '@/types/inventory'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { readNullableIntParam, readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 
 // ─── 统计卡片 ─────────────────────────────────────────────────────────────────
 
@@ -50,11 +52,12 @@ function StatCard({ icon, label, value, sub, accent = 'text-foreground' }: StatC
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function InventoryOverviewPage() {
-  const [keyword,     setKeyword]     = useState('')
-  const [search,      setSearch]      = useState('')
-  const [warehouseId, setWarehouseId] = useState<number | null>(null)
-  const [categoryId,  setCategoryId]  = useState<number | null>(null)
-  const [page,        setPage]        = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const keyword = readStringParam(searchParams, 'keyword')
+  const warehouseId = readNullableIntParam(searchParams, 'warehouseId')
+  const categoryId = readNullableIntParam(searchParams, 'categoryId')
+  const page = readPositiveIntParam(searchParams, 'page', 1)
+  const [search, setSearch] = useState(keyword)
 
   // 容器侧滑面板状态
   const [drawerItem,  setDrawerItem]  = useState<InventoryOverviewItem | null>(null)
@@ -71,15 +74,21 @@ export default function InventoryOverviewPage() {
 
   const { data: warehouses  } = useWarehousesActive()
 
+  useEffect(() => {
+    setSearch(keyword)
+  }, [keyword])
+
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
+
   function doSearch() {
-    setKeyword(search)
-    setPage(1)
+    updateParams({ keyword: search, page: 1 })
   }
 
   function handleReset() {
-    setSearch(''); setKeyword('')
-    setWarehouseId(null); setCategoryId(null)
-    setPage(1)
+    setSearch('')
+    updateParams({ keyword: null, warehouseId: null, categoryId: null, page: 1 })
   }
 
   function openDrawer(row: InventoryOverviewItem) {
@@ -143,8 +152,7 @@ export default function InventoryOverviewPage() {
           <CategoryTreeSelect
             value={categoryId}
             onChange={(v) => {
-              setCategoryId(v)
-              setPage(1)
+              updateParams({ categoryId: v, page: 1 })
             }}
             emptyLabel="全部分类"
             leafOnly
@@ -154,8 +162,7 @@ export default function InventoryOverviewPage() {
           <Select
             value={warehouseId == null ? '__all__' : String(warehouseId)}
             onValueChange={v => {
-              setWarehouseId(v === '__all__' ? null : +v)
-              setPage(1)
+              updateParams({ warehouseId: v === '__all__' ? null : +v, page: 1 })
             }}
           >
             <SelectTrigger className="h-10 w-44">
@@ -270,6 +277,18 @@ export default function InventoryOverviewPage() {
         </div>
 
       </div>
+
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
+          <span>第 {pagination.page} / {pagination.totalPages} 页</span>
+          <Button size="sm" variant="outline" disabled={pagination.page <= 1} onClick={() => updateParams({ page: pagination.page - 1 })}>
+            上一页
+          </Button>
+          <Button size="sm" variant="outline" disabled={pagination.page >= pagination.totalPages} onClick={() => updateParams({ page: pagination.page + 1 })}>
+            下一页
+          </Button>
+        </div>
+      )}
 
       {/* 容器侧滑面板 */}
       <ContainerDrawer

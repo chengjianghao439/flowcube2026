@@ -1,0 +1,2 @@
+ALTER TABLE sys_users
+  ADD COLUMN IF NOT EXISTS token_version INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '会话版本，密码变更后递增以使旧 JWT 失效';

@@ -1,5 +1,6 @@
 /**
- * ERP / 桌面端：后端 HTTP 根地址；存储键为 API_BASE_URL（见 @/config/api），兼容旧键 flowcube:apiOrigin。
+ * ERP / 桌面端：后端 HTTP 根地址；唯一 runtime override 存储键为 API_BASE_URL。
+ * 旧键 flowcube:apiOrigin 仅在读取时自动迁移，不再作为独立配置源。
  */
 import apiClient from '@/api/client'
 import {

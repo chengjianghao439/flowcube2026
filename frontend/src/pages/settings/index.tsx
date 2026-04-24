@@ -15,8 +15,8 @@ export default function SettingsPage() {
   const canUpdate = can(PERMISSIONS.SETTINGS_UPDATE)
   const qc = useQueryClient()
 
-  const { data } = useQuery({ queryKey: ['settings'], queryFn: () => getSettingsApi().then(r => r.data.data!) })
-  const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r.data.data || []) })
+  const { data } = useQuery({ queryKey: ['settings'], queryFn: () => getSettingsApi() })
+  const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r || []) })
   const save = useMutation({ mutationFn: updateSettingsApi, onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings'] }); toast.success('保存成功') } })
 
   const [form, setForm] = useState<Record<string, string>>({})

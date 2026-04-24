@@ -12,33 +12,44 @@
  */
 
 const logger = require('../utils/logger')
+const { randomUUID } = require('crypto')
+const { runWithRequestContext } = require('../utils/requestContext')
 
 function requestLogger(req, res, next) {
-  const start = Date.now()
+  const requestId = String(req.headers['x-request-id'] || randomUUID())
+  const method = req.method
+  const path = req.originalUrl || req.path
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null
+  const userAgent = req.headers['user-agent'] || null
 
-  // 在响应结束后记录（finish 事件确保状态码已写入）
-  res.on('finish', () => {
-    const ms = Date.now() - start
-    const userId = req.user?.userId ?? '-'
-    const method = req.method
-    const path   = req.originalUrl || req.path
-    const status = res.statusCode
+  req.requestId = requestId
+  res.setHeader('X-Request-Id', requestId)
 
-    const meta = { ms, status, userId }
+  return runWithRequestContext({ requestId, method, path, ip, userAgent }, () => {
+    const start = Date.now()
 
-    if (status >= 500) {
-      logger.error(`${method} ${path}`, null, meta, 'HTTP')
-    } else if (status >= 400) {
-      logger.warn(`${method} ${path}`, meta, 'HTTP')
-    } else {
-      logger.info(`${method} ${path}`, meta, 'HTTP')
-    }
+    // 在响应结束后记录（finish 事件确保状态码已写入）
+    res.on('finish', () => {
+      const ms = Date.now() - start
+      const userId = req.user?.userId ?? '-'
+      const status = res.statusCode
 
-    // 慢接口告警
-    logger.slowApi(method, path, ms)
+      const meta = { ms, status, userId, path, method }
+
+      if (status >= 500) {
+        logger.error(`${method} ${path}`, null, meta, 'HTTP')
+      } else if (status >= 400) {
+        logger.warn(`${method} ${path}`, meta, 'HTTP')
+      } else {
+        logger.info(`${method} ${path}`, meta, 'HTTP')
+      }
+
+      // 慢接口告警
+      logger.slowApi(method, path, ms)
+    })
+
+    next()
   })
-
-  next()
 }
 
 module.exports = requestLogger

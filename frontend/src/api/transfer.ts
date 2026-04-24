@@ -1,4 +1,4 @@
-import client from './client'
+import { payloadClient as client } from './client'
 import type { ApiResponse, PaginatedData } from '@/types'
 export interface TransferItem { id:number; productId:number; productCode:string; productName:string; unit:string; quantity:number; remark?:string }
 export interface TransferOrder { id:number; orderNo:string; fromWarehouseId:number; fromWarehouseName:string; toWarehouseId:number; toWarehouseName:string; status:1|2|3|4; statusName:string; remark?:string; operatorName:string; createdAt:string; items?:TransferItem[] }

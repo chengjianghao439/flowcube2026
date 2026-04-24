@@ -38,7 +38,7 @@ function TaskSelectStep({
   const navigate = useNavigate()
   const { data, isLoading } = useQuery({
     queryKey: ['pda-check-tasks'],
-    queryFn: () => getTasksApi({ status: WT_STATUS.CHECKING, pageSize: 50 }).then(r => r.data.data!),
+    queryFn: () => getTasksApi({ status: WT_STATUS.CHECKING, pageSize: 50 }),
   })
 
   const tasks = data?.list ?? []
@@ -167,7 +167,7 @@ export default function PdaCheckPage() {
 
   const { data: taskDetail, isLoading: taskLoading } = useQuery({
     queryKey: ['pda-check-task', taskId],
-    queryFn: () => getTaskByIdApi(taskId).then(r => r.data.data!),
+    queryFn: () => getTaskByIdApi(taskId),
     enabled: taskId > 0,
   })
 
@@ -176,7 +176,7 @@ export default function PdaCheckPage() {
   const scanMut = useMutation({
     mutationFn: async (barcode: string) => {
       const result = await checkAction.run((requestKey) =>
-        submitCheckScanApi(taskId, barcode, requestKey).then((res) => res.data.data!),
+        submitCheckScanApi(taskId, barcode, requestKey).then((res) => res!),
       )
       return result
     },

@@ -5,6 +5,8 @@ const { transferContainers, SOURCE_TYPE, getAvailableStockForDecision } = requir
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
+const { TRANSFER_EVENT, record: recordTransferEvent } = require('./transfer-events.service')
+const { getRequestId } = require('../../utils/requestContext')
 const STATUS = { 1:'草稿', 2:'已确认', 3:'已执行', 4:'已取消' }
 
 const fmt = r => ({ id:r.id, orderNo:r.order_no, fromWarehouseId:r.from_warehouse_id, fromWarehouseName:r.from_warehouse_name, toWarehouseId:r.to_warehouse_id, toWarehouseName:r.to_warehouse_name, status:r.status, statusName:STATUS[r.status], remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
@@ -77,12 +79,28 @@ async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWar
     const orderNo=await genNo(conn)
     const [r]=await conn.query(`INSERT INTO transfer_orders (order_no,from_warehouse_id,from_warehouse_name,to_warehouse_id,to_warehouse_name,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?)`,[orderNo,fromWarehouseId,fromWarehouseName,toWarehouseId,toWarehouseName,remark||null,operator.userId,operator.realName])
     for(const item of items) await conn.query(`INSERT INTO transfer_order_items (order_id,product_id,product_code,product_name,unit,quantity,remark) VALUES (?,?,?,?,?,?,?)`,[r.insertId,item.productId,item.productCode,item.productName,item.unit,item.quantity,item.remark||null])
+    await recordTransferEvent(conn, {
+      transferOrderId: r.insertId,
+      orderNo,
+      eventType: TRANSFER_EVENT.CREATED,
+      title: '调拨单已创建',
+      description: `源仓 ${fromWarehouseName} -> 目标仓 ${toWarehouseName}`,
+      operatorId: operator.userId,
+      operatorName: operator.realName,
+      requestId: getRequestId(),
+      payload: {
+        fromWarehouseId,
+        toWarehouseId,
+        lineCount: items.length,
+        totalQty: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+      },
+    })
     await conn.commit()
     return { id:r.insertId, orderNo }
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function confirm(id) {
+async function confirm(id, operator = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -105,6 +123,22 @@ async function confirm(id) {
       fromStatus: rule.from,
       toStatus: rule.to,
       entityName: '调拨单',
+    })
+    await recordTransferEvent(conn, {
+      transferOrderId: Number(orderRow.id),
+      orderNo: orderRow.order_no,
+      eventType: TRANSFER_EVENT.CONFIRMED,
+      title: '调拨单已确认',
+      description: '调拨单确认完成，等待执行',
+      operatorId: operator?.userId ?? null,
+      operatorName: operator?.realName ?? null,
+      requestId: getRequestId(),
+      payload: {
+        fromWarehouseId: Number(orderRow.from_warehouse_id),
+        toWarehouseId: Number(orderRow.to_warehouse_id),
+        lineCount: itemRows.length,
+        totalQty: itemRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0),
+      },
     })
     await conn.commit()
   } catch (e) {
@@ -199,16 +233,32 @@ async function execute(id, operator) {
       toStatus: rule.to,
       entityName: '调拨单',
     })
+    await recordTransferEvent(conn, {
+      transferOrderId: o.id,
+      orderNo: o.orderNo,
+      eventType: TRANSFER_EVENT.EXECUTED,
+      title: '调拨单已执行',
+      description: '调拨库存移动已完成',
+      operatorId: operator.userId,
+      operatorName: operator.realName,
+      requestId: getRequestId(),
+      payload: {
+        fromWarehouseId: o.fromWarehouseId,
+        toWarehouseId: o.toWarehouseId,
+        lineCount: o.items.length,
+        totalQty: o.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+      },
+    })
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
 }
 
-async function cancel(id) {
+async function cancel(id, operator = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, columns: 'id, status', entityName: '调拨单' })
+    const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, columns: 'id, order_no, status', entityName: '调拨单' })
     const rule = assertStatusAction('transfer', 'cancel', orderRow.status)
     await compareAndSetStatus(conn, {
       table: 'transfer_orders',
@@ -216,6 +266,16 @@ async function cancel(id) {
       fromStatus: rule.from,
       toStatus: rule.to,
       entityName: '调拨单',
+    })
+    await recordTransferEvent(conn, {
+      transferOrderId: Number(orderRow.id),
+      orderNo: orderRow.order_no,
+      eventType: TRANSFER_EVENT.CANCELLED,
+      title: '调拨单已取消',
+      description: '调拨单已取消，未执行库存移动',
+      operatorId: operator?.userId ?? null,
+      operatorName: operator?.realName ?? null,
+      requestId: getRequestId(),
     })
     await conn.commit()
   } catch (e) {

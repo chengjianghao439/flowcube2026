@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import apiClient from '@/api/client'
+import { payloadClient as apiClient } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -70,6 +70,10 @@ interface Printer {
 }
 
 type BindingMap = Record<string, { print_type: string; printer_code: string; printer_name: string }>
+type PrinterBindingsPayload = {
+  defaultBindings: BindingMap
+  routes: Array<Record<string, unknown>>
+}
 
 interface BindDialogProps {
   printer: Printer
@@ -155,7 +159,7 @@ export default function PrintersPage() {
 
   const { data: printers = [], isLoading } = useQuery<Printer[]>({
     queryKey: ['printers'],
-    queryFn: () => apiClient.get('/printers').then(r => r.data.data),
+    queryFn: () => apiClient.get<Printer[]>('/printers'),
   })
 
   const existingCodes = useMemo(() => new Set(printers.map(p => p.code)), [printers])
@@ -167,7 +171,10 @@ export default function PrintersPage() {
 
   const { data: bindings = {} } = useQuery<BindingMap>({
     queryKey: ['printer-bindings'],
-    queryFn: () => apiClient.get('/printer-bindings').then(r => r.data.data),
+    queryFn: async () => {
+      const payload = await apiClient.get<PrinterBindingsPayload>('/printer-bindings')
+      return payload?.defaultBindings ?? {}
+    },
   })
 
   const updateLabelFmt = useMutation({

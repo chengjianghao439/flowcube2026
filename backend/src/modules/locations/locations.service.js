@@ -34,6 +34,16 @@ function formatRow(row) {
   }
 }
 
+async function assertLocationDeletable(id) {
+  const [containers] = await pool.query(
+    'SELECT 1 FROM inventory_containers WHERE location_id=? LIMIT 1',
+    [id],
+  )
+  if (containers[0]) {
+    throw new AppError('库位仍被库存容器引用，禁止删除；请改为停用', 409)
+  }
+}
+
 async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
@@ -146,6 +156,7 @@ async function update(id, data) {
 
 async function softDelete(id) {
   await findById(id)
+  await assertLocationDeletable(id)
   await pool.query(
     'UPDATE warehouse_locations SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL',
     [id],

@@ -3,8 +3,8 @@ import { getCheckListApi, getCheckDetailApi, createCheckApi, updateCheckItemsApi
 import { useInvalidate } from '@/hooks/useInvalidate'
 import type { CreateCheckParams } from '@/types/stockcheck'
 
-export const useCheckList   = (params: object) => useQuery({ queryKey: ['stockcheck', params], queryFn: () => getCheckListApi(params).then(r => r.data.data!) })
-export const useCheckDetail = (id: number)     => useQuery({ queryKey: ['stockcheck', id],     queryFn: () => getCheckDetailApi(id).then(r => r.data.data!), enabled: !!id, refetchInterval: false })
+export const useCheckList   = (params: object) => useQuery({ queryKey: ['stockcheck', params], queryFn: () => getCheckListApi(params) })
+export const useCheckDetail = (id: number)     => useQuery({ queryKey: ['stockcheck', id],     queryFn: () => getCheckDetailApi(id), enabled: !!id, refetchInterval: false })
 
 export const useCreateCheck = () => {
   const invalidate = useInvalidate()

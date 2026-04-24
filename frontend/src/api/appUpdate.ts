@@ -1,4 +1,4 @@
-import client from '@/api/client'
+import { payloadClient as client } from '@/api/client'
 import type { ApiResponse } from '@/types'
 
 export interface AppUpdateLatestPayload {
