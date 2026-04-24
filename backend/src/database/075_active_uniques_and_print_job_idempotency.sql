@@ -84,36 +84,101 @@ PREPARE stmt FROM @abort_sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
-ALTER TABLE `sys_users`
-  ADD COLUMN IF NOT EXISTS `active_unique_guard` TINYINT
-    GENERATED ALWAYS AS (CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END) STORED
-    COMMENT '活跃唯一性保护列：活跃=1，删除=NULL' AFTER `deleted_at`;
+SET @column_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'sys_users'
+    AND COLUMN_NAME = 'active_unique_guard'
+);
+SET @ddl_sql := IF(
+  @column_exists = 0,
+  'ALTER TABLE `sys_users` ADD COLUMN `active_unique_guard` TINYINT GENERATED ALWAYS AS (CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END) STORED COMMENT ''活跃唯一性保护列：活跃=1，删除=NULL'' AFTER `deleted_at`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @ddl_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-ALTER TABLE `inventory_warehouses`
-  ADD COLUMN IF NOT EXISTS `active_unique_guard` TINYINT
-    GENERATED ALWAYS AS (CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END) STORED
-    COMMENT '活跃唯一性保护列：活跃=1，删除=NULL' AFTER `deleted_at`;
+SET @column_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'inventory_warehouses'
+    AND COLUMN_NAME = 'active_unique_guard'
+);
+SET @ddl_sql := IF(
+  @column_exists = 0,
+  'ALTER TABLE `inventory_warehouses` ADD COLUMN `active_unique_guard` TINYINT GENERATED ALWAYS AS (CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END) STORED COMMENT ''活跃唯一性保护列：活跃=1，删除=NULL'' AFTER `deleted_at`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @ddl_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-ALTER TABLE `sale_customers`
-  ADD COLUMN IF NOT EXISTS `active_unique_guard` TINYINT
-    GENERATED ALWAYS AS (CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END) STORED
-    COMMENT '活跃唯一性保护列：活跃=1，删除=NULL' AFTER `deleted_at`;
+SET @column_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'sale_customers'
+    AND COLUMN_NAME = 'active_unique_guard'
+);
+SET @ddl_sql := IF(
+  @column_exists = 0,
+  'ALTER TABLE `sale_customers` ADD COLUMN `active_unique_guard` TINYINT GENERATED ALWAYS AS (CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END) STORED COMMENT ''活跃唯一性保护列：活跃=1，删除=NULL'' AFTER `deleted_at`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @ddl_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
-ALTER TABLE `print_jobs`
-  ADD COLUMN IF NOT EXISTS `idem_scope_warehouse_key` BIGINT UNSIGNED
-    GENERATED ALWAYS AS (COALESCE(`warehouse_id`, 0)) STORED
-    COMMENT '打印幂等范围：仓库空值归一到 0' AFTER `warehouse_id`,
-  ADD COLUMN IF NOT EXISTS `idem_scope_job_type_key` VARCHAR(50)
-    GENERATED ALWAYS AS (COALESCE(`job_type`, '')) STORED
-    COMMENT '打印幂等范围：job_type 空值归一到空串' AFTER `job_type`,
-  ADD COLUMN IF NOT EXISTS `idem_scope_live_guard` TINYINT
-    GENERATED ALWAYS AS (
-      CASE
-        WHEN `job_unique_key` IS NOT NULL AND `status` IN (0, 1, 2) THEN 1
-        ELSE NULL
-      END
-    ) STORED
-    COMMENT '打印幂等保护列：待打/打印中/完成=1，失败=NULL' AFTER `status`;
+SET @column_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'print_jobs'
+    AND COLUMN_NAME = 'idem_scope_warehouse_key'
+);
+SET @ddl_sql := IF(
+  @column_exists = 0,
+  'ALTER TABLE `print_jobs` ADD COLUMN `idem_scope_warehouse_key` BIGINT UNSIGNED GENERATED ALWAYS AS (COALESCE(`warehouse_id`, 0)) STORED COMMENT ''打印幂等范围：仓库空值归一到 0'' AFTER `warehouse_id`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @ddl_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @column_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'print_jobs'
+    AND COLUMN_NAME = 'idem_scope_job_type_key'
+);
+SET @ddl_sql := IF(
+  @column_exists = 0,
+  'ALTER TABLE `print_jobs` ADD COLUMN `idem_scope_job_type_key` VARCHAR(50) GENERATED ALWAYS AS (COALESCE(`job_type`, '''')) STORED COMMENT ''打印幂等范围：job_type 空值归一到空串'' AFTER `job_type`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @ddl_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @column_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'print_jobs'
+    AND COLUMN_NAME = 'idem_scope_live_guard'
+);
+SET @ddl_sql := IF(
+  @column_exists = 0,
+  'ALTER TABLE `print_jobs` ADD COLUMN `idem_scope_live_guard` TINYINT GENERATED ALWAYS AS (CASE WHEN `job_unique_key` IS NOT NULL AND `status` IN (0, 1, 2) THEN 1 ELSE NULL END) STORED COMMENT ''打印幂等保护列：待打/打印中/完成=1，失败=NULL'' AFTER `status`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @ddl_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 SET @idx_exists := (
   SELECT COUNT(*)
