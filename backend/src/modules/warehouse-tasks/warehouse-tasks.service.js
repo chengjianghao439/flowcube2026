@@ -10,9 +10,36 @@ const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const { WT_STATUS, WT_STATUS_NAME, WT_STATUS_PICK_POOL, isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const logger = require('../../utils/logger')
 
 const TASK_STATUS = WT_STATUS_NAME
 const PRIORITY    = { 1:'紧急',   2:'普通',   3:'低优先级' }
+
+function logSideEffectFailure(message, error, meta = {}) {
+  logger.error(
+    message,
+    error instanceof Error ? error : new Error(String(error)),
+    { degradation: 'side_effect_failed', ...meta },
+    'WarehouseTask',
+  )
+}
+
+async function optionalTaskDetailQuery(metricName, promise, fallback) {
+  try {
+    return await promise
+  } catch (e) {
+    logger.warn(
+      '仓库任务详情可选区块查询失败，已返回明确降级值',
+      {
+        metricName,
+        degradation: 'task_detail_optional_block_failed',
+        error: e?.message || String(e),
+      },
+      'WarehouseTask',
+    )
+    return fallback
+  }
+}
 
 /**
  * 拣货闭环：已拣满 + 扫码合计与 picked_qty 一致 + 锁定容器集合与拣货扫码容器一致
@@ -299,11 +326,31 @@ async function createForSaleOrder({ saleOrderId, saleOrderNo, customerId, custom
       )
       try {
         await recordEvent(useConn, { taskId, taskNo, eventType: WT_EVENT.SORTING_BIN_ASSIGNED, detail: { binCode: bin.binCode } })
-      } catch (_) {}
+      } catch (eventErr) {
+        logSideEffectFailure('仓库任务事件写入失败：分拣格分配事件', eventErr, {
+          taskId,
+          taskNo,
+          eventType: WT_EVENT.SORTING_BIN_ASSIGNED,
+        })
+      }
     }
   } catch (binErr) {
     // 分拣格分配失败：尝试释放可能已占用的格，确保不产生孤立锁
-    try { await sortingBinSvc.releaseByTask(useConn, taskId) } catch (_) {}
+    logSideEffectFailure('分拣格自动分配失败，任务继续创建但进入待人工分配降级状态', binErr, {
+      taskId,
+      taskNo,
+      warehouseId,
+      degradation: 'sorting_bin_assignment_failed',
+    })
+    try {
+      await sortingBinSvc.releaseByTask(useConn, taskId)
+    } catch (releaseErr) {
+      logSideEffectFailure('分拣格分配失败后的释放兜底也失败', releaseErr, {
+        taskId,
+        taskNo,
+        degradation: 'sorting_bin_release_after_assignment_failed',
+      })
+    }
   }
   // 记录任务创建事件
   try {
@@ -313,7 +360,13 @@ async function createForSaleOrder({ saleOrderId, saleOrderNo, customerId, custom
       toStatus:   WT_STATUS.PICKING,
       detail:     { itemCount: items.length },
     })
-  } catch (_) {}
+  } catch (eventErr) {
+    logSideEffectFailure('仓库任务事件写入失败：任务创建事件', eventErr, {
+      taskId,
+      taskNo,
+      eventType: WT_EVENT.TASK_CREATED,
+    })
+  }
   return { taskId, taskNo }
 }
 
@@ -424,7 +477,15 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {
       fromStatus: taskRow.status,
       toStatus: rule.toStatus,
     })
-  } catch (_) {}
+  } catch (eventErr) {
+    logSideEffectFailure('仓库任务事件写入失败：拣货完成事件', eventErr, {
+      taskId: id,
+      taskNo: taskRow.task_no,
+      eventType: WT_EVENT.PICKING_DONE,
+      fromStatus: taskRow.status,
+      toStatus: rule.toStatus,
+    })
+  }
   const payload = { taskId: id, status: rule.toStatus }
   if (requestState.enabled) {
     await completeOperationRequest(conn, requestState, {
@@ -505,7 +566,13 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
         eventType: WT_EVENT.SORT_PROGRESS,
         detail: { done, total: updatedItems.length, progress: `${done}/${updatedItems.length}` },
       })
-    } catch (_) {}
+    } catch (eventErr) {
+      logSideEffectFailure('仓库任务事件写入失败：分拣进度事件', eventErr, {
+        taskId: id,
+        taskNo: taskRow.task_no,
+        eventType: WT_EVENT.SORT_PROGRESS,
+      })
+    }
     const payload = { allSorted: false, progress: `${done}/${updatedItems.length}` }
     await completeOperationRequest(conn, requestState, {
       data: payload,
@@ -540,7 +607,13 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
       eventType: WT_EVENT.SORTING_BIN_RELEASED,
       detail: { binCode: taskRow.sorting_bin_code },
     })
-  } catch (_) {}
+  } catch (eventErr) {
+    logSideEffectFailure('仓库任务事件写入失败：分拣完成/分拣格释放事件', eventErr, {
+      taskId: id,
+      taskNo: taskRow.task_no,
+      eventTypes: [WT_EVENT.SORT_DONE, WT_EVENT.SORTING_BIN_RELEASED],
+    })
+  }
 
   const payload = { allSorted: true }
   await completeOperationRequest(conn, requestState, {
@@ -603,7 +676,13 @@ async function checkDoneWithinTransaction(conn, id) {
       fromStatus: taskRow.status,
       toStatus: rule.toStatus,
     })
-  } catch (_) {}
+  } catch (eventErr) {
+    logSideEffectFailure('仓库任务事件写入失败：复核完成事件', eventErr, {
+      taskId: id,
+      taskNo: taskRow.task_no,
+      eventType: WT_EVENT.CHECK_DONE,
+    })
+  }
   return { taskId: id, status: rule.toStatus }
 }
 
@@ -644,7 +723,13 @@ async function packDoneWithinTransaction(conn, id, { requestKey, userId } = {}) 
       fromStatus: taskRow.status,
       toStatus: rule.toStatus,
     })
-  } catch (_) {}
+  } catch (eventErr) {
+    logSideEffectFailure('仓库任务事件写入失败：打包完成事件', eventErr, {
+      taskId: id,
+      taskNo: taskRow.task_no,
+      eventType: WT_EVENT.PACK_DONE,
+    })
+  }
   const payload = { taskId: id, status: rule.toStatus }
   await completeOperationRequest(conn, requestState, {
     data: payload,
@@ -767,7 +852,14 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
       operatorName: operator.realName,
       detail: { saleOrderId, totalAmount, itemCount: items.length },
     })
-  } catch (_) {}
+  } catch (eventErr) {
+    logSideEffectFailure('仓库任务事件写入失败：出库完成事件', eventErr, {
+      taskId: id,
+      taskNo: taskRow.task_no,
+      eventType: WT_EVENT.SHIP_DONE,
+      saleOrderId,
+    })
+  }
 
   const payload = { taskId: id, status: rule.toStatus, shippedAt: shippedAt.toISOString() }
   await completeOperationRequest(conn, requestState, {
@@ -850,7 +942,13 @@ async function cancel(id, options = {}) {
           reservationReleased: taskRow.sale_order_id != null,
         },
       })
-    } catch (_) {}
+    } catch (eventErr) {
+      logSideEffectFailure('仓库任务事件写入失败：任务取消事件', eventErr, {
+        taskId: id,
+        taskNo: taskRow.task_no,
+        eventType: WT_EVENT.TASK_CANCELLED,
+      })
+    }
     if (manageConn) await conn.commit()
   } catch (e) {
     if (manageConn) await conn.rollback()
@@ -1149,25 +1247,25 @@ async function getDebugSnapshot(taskId) {
      GROUP BY p.id`,
     [taskId],
   )
-  const [[sortingBin]] = await pool.query(
+  const [[sortingBin]] = await optionalTaskDetailQuery('detail.sortingBin', pool.query(
     `SELECT id, code, status, current_task_id
      FROM sorting_bins WHERE id = ?`,
     [task.sorting_bin_id || 0],
-  ).catch(() => [[null]])
-  const [events] = await pool.query(
+  ), [[null]])
+  const [events] = await optionalTaskDetailQuery('detail.events', pool.query(
     `SELECT id, event_type, from_status, to_status, operator_name, detail, created_at
      FROM warehouse_task_events
      WHERE task_id=?
      ORDER BY created_at DESC LIMIT 20`,
     [taskId],
-  ).catch(() => [[]])
-  const [scanLogs] = await pool.query(
+  ), [[]])
+  const [scanLogs] = await optionalTaskDetailQuery('detail.scanLogs', pool.query(
     `SELECT id, barcode, action, result, operator_name, created_at
      FROM scan_logs
      WHERE task_id=?
      ORDER BY created_at DESC LIMIT 10`,
     [taskId],
-  ).catch(() => [[]])
+  ), [[]])
 
   const checks = []
   if (items.some(i => Number(i.sorted_qty) > Number(i.picked_qty))) {

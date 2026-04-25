@@ -50,18 +50,25 @@ function getVersionApiUrl(): string {
 export function usePdaUpdate() {
   const [newVersion, setNewVersion] = useState<PdaVersionInfo | null>(null)
   const [checking, setChecking]     = useState(false)
+  const nativeUpdateSupported = Capacitor.isNativePlatform()
 
   useEffect(() => {
+    if (!nativeUpdateSupported) return
     // 延迟 3 秒检查，避免影响启动速度
     void readInstalledVersionCode().then((code) => {
       if (code > 0) localStorage.setItem(LOCAL_VERSION_KEY, String(code))
     })
     const timer = setTimeout(() => { void checkUpdate() }, 3000)
     return () => clearTimeout(timer)
-  }, [])
+  }, [nativeUpdateSupported])
 
   async function checkUpdate(options?: { manual?: boolean }) {
     const manual = options?.manual === true
+    if (!nativeUpdateSupported) {
+      if (manual) toast.success('浏览器端已随服务器发布更新，无需安装 PDA APK')
+      setNewVersion(null)
+      return
+    }
     try {
       setChecking(true)
       const versionApi = getVersionApiUrl()

@@ -3,7 +3,7 @@
  * 路由：/pda/pack
  */
 import { useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
 import PdaScanner from '@/components/pda/PdaScanner'
@@ -16,7 +16,7 @@ import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import PdaStat, { PdaStatGrid } from '@/components/pda/PdaStat'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { getTasksApi, packDoneApi } from '@/api/warehouse-tasks'
+import { getTaskByIdApi, getTasksApi, packDoneApi } from '@/api/warehouse-tasks'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { getPackagesApi, createPackageApi, addPackageItemApi, finishPackageApi, printPackageLabelApi } from '@/api/packages'
 import type { Package } from '@/api/packages'
@@ -29,6 +29,51 @@ import {
 } from '@/lib/desktopLocalPrint'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
+import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
+
+function readPositiveId(value: string | undefined | null): number {
+  const n = Number(value)
+  return Number.isInteger(n) && n > 0 ? n : 0
+}
+
+function PdaTaskState({
+  title,
+  description,
+  actionText,
+  onAction,
+  secondaryText,
+  onSecondary,
+}: {
+  title: string
+  description: string
+  actionText: string
+  onAction: () => void
+  secondaryText?: string
+  onSecondary?: () => void
+}) {
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <PdaHeader title={title} onBack={onAction} />
+      <div className="flex-1 px-4 py-10">
+        <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
+          <p className="mb-4 text-5xl">⚠️</p>
+          <h2 className="text-lg font-bold text-foreground">{title}</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+          <div className="mt-6 flex gap-3">
+            {secondaryText && onSecondary ? (
+              <Button variant="outline" className="flex-1" onClick={onSecondary}>
+                {secondaryText}
+              </Button>
+            ) : null}
+            <Button className="flex-1" onClick={onAction}>
+              {actionText}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) {
   const navigate = useNavigate()
@@ -134,19 +179,41 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
 
 export default function PdaPackPage() {
   const navigate = useNavigate()
+  const routeParams = useParams()
+  const [params] = useSearchParams()
   const qc       = useQueryClient()
   const { flash, ok, err } = usePdaFeedback()
+  const routeTaskId = readPositiveId(routeParams.id) || readPositiveId(params.get('taskId'))
 
   const [task, setTask]                       = useState<WarehouseTask | null>(null)
   const [activePackageId, setActivePackageId] = useState<number | null>(null)
   const [allDone, setAllDone]                 = useState(false)
 
-  const taskId = task?.id ?? 0
+  const taskId = task?.id ?? routeTaskId
+  const goSelectTask = useCallback(() => {
+    setTask(null)
+    setActivePackageId(null)
+    setAllDone(false)
+    navigate('/pda/pack')
+  }, [navigate])
+
+  const {
+    data: taskDetail,
+    isLoading: taskLoading,
+    isError: taskError,
+    error: taskLoadError,
+  } = useQuery({
+    queryKey: ['pda-pack-task', taskId],
+    queryFn: () => getTaskByIdApi(taskId),
+    enabled: taskId > 0,
+  })
+
   const finishAction = useCriticalPdaAction<{
     id: number
     allPackagesDone?: boolean
   }>({
     action: `package.finish.${taskId || 'none'}`,
+    requestAction: 'package.finish',
     label: '完成箱子',
     onConfirmed: async (data) => {
       await refetch()
@@ -154,6 +221,22 @@ export default function PdaPackPage() {
       if (data.allPackagesDone) {
         ok('所有箱子已完成。请确认箱贴打印完成后，再结束打包进入待出库。')
       }
+    },
+    resolveServerState: async ({ record }) => {
+      const packageId = Number(record.metadata?.packageId ?? 0)
+      const recordTaskId = Number(record.metadata?.taskId ?? taskId)
+      if (!packageId || !recordTaskId) return { effective: false }
+      const latestPackages = await getPackagesApi(recordTaskId)
+      const latestPackage = latestPackages.find(pkg => Number(pkg.id) === packageId)
+      if (latestPackage?.status === 2) {
+        const allPackagesDone = latestPackages.length > 0 && latestPackages.every(pkg => pkg.status === 2)
+        return {
+          effective: true,
+          data: { id: packageId, allPackagesDone },
+          message: `箱子 ${latestPackage.barcode} 已完成，箱贴任务已入链或可追踪。`,
+        }
+      }
+      return { effective: false }
     },
   })
   const printAction = useCriticalPdaAction<{
@@ -166,20 +249,29 @@ export default function PdaPackPage() {
     } | unknown
   }>({
     action: `package.print.${taskId || 'none'}`,
+    requestAction: 'package.print-label',
     label: '箱贴打印',
   })
   const finalizeAction = useCriticalPdaAction<{ taskId: number }>({
     action: `warehouse.pack-done.${taskId || 'none'}`,
+    requestAction: 'warehouse.pack-done',
     label: '打包收口',
     onConfirmed: async () => {
       setAllDone(true)
+    },
+    resolveServerState: async () => {
+      const latest = await getTaskByIdApi(taskId)
+      if (taskReachedStatus(latest, WT_STATUS.SHIPPING)) {
+        return { effective: true, data: { taskId }, message: stateConfirmedMessage('打包收口', latest.statusName) }
+      }
+      return { effective: false }
     },
   })
 
   const { data: packages = [], isLoading: pkgLoading } = useQuery({
     queryKey: ['pda-packages', taskId],
     queryFn:  () => getPackagesApi(taskId),
-    enabled:  taskId > 0,
+    enabled:  taskId > 0 && !taskLoading && taskDetail?.status === WT_STATUS.PACKING,
     onSuccess: (pkgs) => {
       if (!activePackageId) {
         const open = pkgs.find(p => p.status === 1)
@@ -192,30 +284,42 @@ export default function PdaPackPage() {
   const onlineBlocked = finishAction.networkStatus !== 'online'
 
   const createMut = useMutation({
-    mutationFn: () => createPackageApi(taskId),
+    mutationFn: () => {
+      if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
+      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能新建箱子')
+      return createPackageApi(taskId)
+    },
     onSuccess: (res) => {
       const pkg = res!
       ok(`已创建箱子 ${pkg.barcode}`)
       setActivePackageId(pkg.id)
       refetch()
     },
-    onError: (e: unknown) => err((e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '创建失败'),
+    onError: (e: unknown) => err((e as { message?: string; response?: { data?: { message?: string } } })?.response?.data?.message ?? (e as { message?: string })?.message ?? '创建失败'),
   })
 
   const addMut = useMutation({
-    mutationFn: ({ code, qty }: { code: string; qty: number }) => addPackageItemApi(activePackageId!, code, qty),
+    mutationFn: ({ code, qty }: { code: string; qty: number }) => {
+      if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
+      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能装箱')
+      if (!activePackageId) throw new Error('请先创建或选择一个箱子')
+      return addPackageItemApi(activePackageId, code, qty)
+    },
     onSuccess: (res) => {
       const item = res!
       ok(`✓ ${item.productName} × ${item.qty} ${item.unit} 已装箱`)
       refetch()
     },
-    onError: (e: unknown) => err((e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '添加失败'),
+    onError: (e: unknown) => err((e as { message?: string; response?: { data?: { message?: string } } })?.response?.data?.message ?? (e as { message?: string })?.message ?? '添加失败'),
   })
 
   const printLabelMut = useMutation({
     mutationFn: async (pkgId: number) => {
+      if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
+      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能打印箱贴')
       const result = await printAction.run((requestKey) =>
         printPackageLabelApi(pkgId, requestKey),
+        { taskId, packageId: pkgId },
       )
       return result
     },
@@ -270,8 +374,11 @@ export default function PdaPackPage() {
 
   const finishMut = useMutation({
     mutationFn: async (pkgId: number) => {
+      if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
+      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能完成箱子')
       const result = await finishAction.run((requestKey) =>
         finishPackageApi(pkgId, requestKey).then((res) => res!),
+        { taskId, packageId: pkgId },
       )
       return result
     },
@@ -287,8 +394,11 @@ export default function PdaPackPage() {
   })
   const finalizeMut = useMutation({
     mutationFn: async () => {
+      if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
+      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能收口')
       const result = await finalizeAction.run((requestKey) =>
         packDoneApi(taskId, requestKey).then((res) => res as { taskId: number }),
+        { taskId },
       )
       return result
     },
@@ -302,21 +412,80 @@ export default function PdaPackPage() {
 
   const handleScan = useCallback((raw: string) => {
     if (onlineBlocked) { err('网络已断开，打包装箱已阻断，请恢复网络后再继续'); return }
+    if (taskLoading) { err('任务数据加载中，请稍后扫码'); return }
+    if (!taskDetail) { err('任务不存在或加载失败，请返回任务列表重新选择'); return }
+    if (taskDetail.status !== WT_STATUS.PACKING) { err(`当前任务状态为「${taskDetail.statusName}」，不能打包`); return }
     if (!activePackageId) { err('请先创建或选择一个箱子'); return }
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'product' && parsed.type !== 'unknown') { err('扫描产品条码'); return }
     // 扫码即直接装箱（默认数量 1），无需额外确认
     addMut.mutate({ code: raw, qty: 1 })
-  }, [activePackageId, err, addMut, onlineBlocked])
+  }, [activePackageId, err, addMut, onlineBlocked, taskDetail, taskLoading])
+
+  // ── 任务未选 ────────────────────────────────────────────────────────────
+  if (!task && !routeTaskId) return <TaskSelectStep onSelect={t => { setTask(t); setActivePackageId(null) }} />
+
+  if (taskId <= 0) {
+    return (
+      <PdaTaskState
+        title="缺少打包任务"
+        description="当前页面没有有效任务号，请从待打包任务列表重新选择。"
+        actionText="选择任务"
+        onAction={goSelectTask}
+        secondaryText="返回工作台"
+        onSecondary={() => navigate('/pda')}
+      />
+    )
+  }
+
+  if (taskLoading) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <PdaHeader title="打包作业" onBack={goSelectTask} />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="space-y-3 text-center">
+            <PdaLoading className="h-10" />
+            <p className="text-sm text-muted-foreground">正在加载任务数据…</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (taskError || !taskDetail) {
+    return (
+      <PdaTaskState
+        title="打包任务不存在"
+        description={(taskLoadError as { message?: string })?.message || `未找到任务 #${taskId}，请确认任务是否已被删除或状态已变化。`}
+        actionText="选择其他任务"
+        onAction={goSelectTask}
+        secondaryText="返回工作台"
+        onSecondary={() => navigate('/pda')}
+      />
+    )
+  }
+
+  if (!allDone && taskDetail.status !== WT_STATUS.PACKING) {
+    return (
+      <PdaTaskState
+        title="当前任务不能打包"
+        description={`任务 ${taskDetail.taskNo} 当前状态为「${taskDetail.statusName}」。打包页只允许处理「待打包」任务，请回到仓库任务确认主流程状态。`}
+        actionText="选择其他任务"
+        onAction={goSelectTask}
+        secondaryText="打开仓库任务"
+        onSecondary={() => navigate('/warehouse-tasks')}
+      />
+    )
+  }
 
   const totalBoxes = packages.length
   const doneBoxes  = packages.filter(p => p.status === 2).length
   const totalItems = packages.reduce((s, p) => s + p.items.reduce((ss, i) => ss + i.qty, 0), 0)
   const closureCopy = getOutboundClosureCopy({
-    status: task.status,
-    statusName: task.statusName,
-    taskNo: task.taskNo,
-    customerName: task.customerName,
+    status: taskDetail.status,
+    statusName: taskDetail.statusName,
+    taskNo: taskDetail.taskNo,
+    customerName: taskDetail.customerName,
     packageSummary: {
       totalPackages: totalBoxes,
       openPackages: packages.filter(p => p.status !== 2).length,
@@ -333,15 +502,12 @@ export default function PdaPackPage() {
       recentPrinter: null,
     },
   })
-  // ── 任务未选 ────────────────────────────────────────────────────────────
-  if (!task) return <TaskSelectStep onSelect={t => { setTask(t); setActivePackageId(null) }} />
-
   // ── 全部完成页 ────────────────────────────────────────────────────────────
   if (allDone) return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
       <div className="text-6xl mb-6">🎉</div>
       <h2 className="text-2xl font-bold text-foreground">打包完成！</h2>
-      <p className="text-muted-foreground mt-2 mb-1">任务：<span className="font-mono font-semibold text-foreground">{task.taskNo}</span></p>
+      <p className="text-muted-foreground mt-2 mb-1">任务：<span className="font-mono font-semibold text-foreground">{taskDetail.taskNo}</span></p>
       <p className="text-muted-foreground mb-4">共 {totalBoxes} 箱，{totalItems.toFixed(0)} 件商品</p>
       <div className="mb-6 w-full max-w-md">
         <PdaFlowPanel
@@ -358,7 +524,7 @@ export default function PdaPackPage() {
         />
       </div>
       <div className="flex gap-3 w-full max-w-xs">
-        <Button variant="outline" className="flex-1" onClick={() => { setTask(null); setAllDone(false) }}>继续打包</Button>
+        <Button variant="outline" className="flex-1" onClick={goSelectTask}>继续打包</Button>
         <Button className="flex-1" onClick={() => navigate('/pda')}>返回工作台</Button>
       </div>
     </div>
@@ -368,9 +534,9 @@ export default function PdaPackPage() {
     <div className="flex min-h-screen flex-col bg-background">
 
       <PdaHeader
-        title={task.taskNo}
-        subtitle={task.customerName}
-        onBack={() => setTask(null)}
+        title={taskDetail.taskNo}
+        subtitle={taskDetail.customerName}
+        onBack={goSelectTask}
         right={<span className="text-xs text-muted-foreground">{doneBoxes}/{totalBoxes} 箱</span>}
       />
 
@@ -415,7 +581,7 @@ export default function PdaPackPage() {
             stepText="先把当前箱装满并完成箱贴打印，再处理下一箱；若箱贴失败或超时，先收口打印异常，再继续装箱或推进到出库。"
             actions={[
               { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-              { label: '打开出库补打', onClick: () => navigate(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(task.taskNo)}`) },
+              { label: '打开出库补打', onClick: () => navigate(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(taskDetail.taskNo)}`) },
               { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
             ]}
           />

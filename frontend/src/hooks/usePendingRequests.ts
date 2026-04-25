@@ -6,8 +6,10 @@ const STORAGE_KEY = 'pda_pending_request_confirmations'
 export interface PendingRequestRecord {
   requestKey: string
   action: string
+  requestAction?: string
   label: string
   createdAt: string
+  metadata?: Record<string, unknown>
 }
 
 function loadPendingRequests(): PendingRequestRecord[] {

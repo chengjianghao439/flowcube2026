@@ -1,5 +1,6 @@
 import type { PackageShipInfo } from '@/api/packages'
 import type { WarehouseTask } from '@/api/warehouse-tasks'
+import { WT_STATUS_NAME } from '@/constants/warehouseTaskStatus'
 
 type PackageSummary = {
   totalPackages: number
@@ -115,9 +116,16 @@ export function getPackageShipClosureCopy(info: PackageShipInfo | null) {
     }
   }
 
+  const warehouseStatus = info.warehouseTaskStatus ?? info.taskStatus
+  const warehouseStatusName =
+    info.warehouseTaskStatusName
+    ?? info.taskStatusName
+    ?? WT_STATUS_NAME[String(warehouseStatus) as keyof typeof WT_STATUS_NAME]
+    ?? `状态 ${warehouseStatus}`
+
   const derived = getOutboundClosureCopy({
-    status: info.taskStatus as TaskLike['status'],
-    statusName: info.taskStatusName ?? '待出库',
+    status: warehouseStatus as TaskLike['status'],
+    statusName: warehouseStatusName,
     taskNo: info.taskNo,
     customerName: info.customerName,
     ...summarizeShipInfo(info),

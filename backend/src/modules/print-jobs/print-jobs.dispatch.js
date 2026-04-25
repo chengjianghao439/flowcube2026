@@ -1,6 +1,7 @@
 const crypto = require('crypto')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const logger = require('../../utils/logger')
 const { listJobsByIds, findById } = require('./print-jobs.query')
 const { STATUS, EXPIRE_MESSAGE, ttlMinutes } = require('./print-jobs.status')
 
@@ -129,7 +130,14 @@ function startPrintJobSweeper() {
   const ms = raw === 0 ? 0 : Number.isFinite(raw) && raw > 0 ? raw : 60_000
   if (ms <= 0) return
   const tick = () => {
-    expireStaleJobs().catch(() => {})
+    expireStaleJobs().catch((e) => {
+      logger.error(
+        '打印任务过期扫描失败，队列可能存在卡住的 pending/printing 任务',
+        e instanceof Error ? e : new Error(String(e)),
+        { degradation: 'print_job_sweeper_failed' },
+        'PrintJobs',
+      )
+    })
   }
   tick()
   setInterval(tick, ms)

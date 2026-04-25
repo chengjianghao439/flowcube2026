@@ -48,9 +48,8 @@ async function finish(req, res, next) {
     if (requestState.replay) {
       return successResponse(res, requestState.responseData, requestState.responseMessage || '箱子已完成并已进入打印链')
     }
-    const result = await svc.finishPackageWithPrint(id, {
+    const result = await svc.finishPackage(id, {
       createdBy: req.user.userId,
-      requestKey,
     })
     await completeOperationRequest(pool, requestState, {
       data: result,

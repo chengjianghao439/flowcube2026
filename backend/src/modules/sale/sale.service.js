@@ -5,6 +5,7 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
+const { WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
 
 const FREIGHT_TYPE = { 1:'寄付', 2:'到付', 3:'第三方付' }
 const fmt = row => ({
@@ -14,6 +15,10 @@ const fmt = row => ({
   status:row.status, statusName:SALE_STATUS_NAME[row.status],
   saleDate:row.sale_date, totalAmount:Number(row.total_amount), remark:row.remark,
   taskId:row.task_id||null, taskNo:row.task_no||null,
+  warehouseTaskStatus: row.warehouse_task_status != null ? Number(row.warehouse_task_status) : null,
+  warehouseTaskStatusName: row.warehouse_task_status != null
+    ? (WT_STATUS_NAME[Number(row.warehouse_task_status)] || null)
+    : null,
   carrierId:row.carrier_id||null,
   carrier: row.carrier_name || row.carrier || null,   // 优先承运商表名称，回退文本字段
   freightType:row.freight_type||null,
@@ -203,25 +208,39 @@ function mapTimeline(rows, order) {
 async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
   const params=[like,like]
+  const countParams=[like,like]
   let cond=''
+  let countCond=''
   if (status) {
-    cond += ' AND status=?'
+    cond += ' AND so.status=?'
+    countCond += ' AND status=?'
     params.push(status)
+    countParams.push(status)
   }
   if (productId) {
-    cond += ' AND EXISTS (SELECT 1 FROM sale_order_items soi WHERE soi.order_id = sale_orders.id AND soi.product_id = ?)'
+    cond += ' AND EXISTS (SELECT 1 FROM sale_order_items soi WHERE soi.order_id = so.id AND soi.product_id = ?)'
+    countCond += ' AND EXISTS (SELECT 1 FROM sale_order_items soi WHERE soi.order_id = sale_orders.id AND soi.product_id = ?)'
     params.push(productId)
+    countParams.push(productId)
   }
-  const [rows] = await pool.query(`SELECT * FROM sale_orders WHERE deleted_at IS NULL AND (order_no LIKE ? OR customer_name LIKE ?) ${cond} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,pageSize,offset])
-  const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_orders WHERE deleted_at IS NULL AND (order_no LIKE ? OR customer_name LIKE ?) ${cond}`,params)
+  const [rows] = await pool.query(
+    `SELECT so.*, wt.status AS warehouse_task_status
+     FROM sale_orders so
+     LEFT JOIN warehouse_tasks wt ON wt.id = so.task_id AND wt.deleted_at IS NULL
+     WHERE so.deleted_at IS NULL AND (so.order_no LIKE ? OR so.customer_name LIKE ?) ${cond}
+     ORDER BY so.created_at DESC LIMIT ? OFFSET ?`,
+    [...params,pageSize,offset],
+  )
+  const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_orders WHERE deleted_at IS NULL AND (order_no LIKE ? OR customer_name LIKE ?) ${countCond}`,countParams)
   return { list:rows.map(fmt), pagination:{page,pageSize,total} }
 }
 
 async function findById(id) {
   const [rows] = await pool.query(
-    `SELECT so.*, c.name AS carrier_name
+    `SELECT so.*, c.name AS carrier_name, wt.status AS warehouse_task_status
      FROM sale_orders so
      LEFT JOIN carriers c ON c.id = so.carrier_id AND c.deleted_at IS NULL
+     LEFT JOIN warehouse_tasks wt ON wt.id = so.task_id AND wt.deleted_at IS NULL
      WHERE so.id=? AND so.deleted_at IS NULL`,
     [id]
   )

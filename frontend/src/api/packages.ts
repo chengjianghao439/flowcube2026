@@ -70,8 +70,12 @@ export interface PackageShipInfo {
   taskNo: string
   customerName: string
   warehouseName: string
+  warehouseTaskStatus?: number
+  warehouseTaskStatusName?: string | null
+  /** @deprecated Use warehouseTaskStatus. Kept for older backend payloads. */
   taskStatus: number
-  taskStatusName?: string
+  /** @deprecated Use warehouseTaskStatusName. Kept for older backend payloads. */
+  taskStatusName?: string | null
   printSummary?: {
     totalPackages: number
     successCount: number

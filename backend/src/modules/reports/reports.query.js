@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const { buildDateFilter } = require('./reports.helpers')
 const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
+const logger = require('../../utils/logger')
 
 async function fetchOne(sql, params = []) {
   const [[row]] = await pool.query(sql, params)
@@ -10,6 +11,24 @@ async function fetchOne(sql, params = []) {
 async function fetchMany(sql, params = []) {
   const [rows] = await pool.query(sql, params)
   return rows || []
+}
+
+async function fetchOptional(metricName, promise, fallback) {
+  try {
+    return await promise
+  } catch (e) {
+    logger.warn(
+      '报表可选指标查询失败，已返回明确降级值',
+      {
+        metricName,
+        degradation: 'report_metric_fallback',
+        fallback,
+        error: e?.message || String(e),
+      },
+      'Reports',
+    )
+    return fallback
+  }
 }
 
 async function fetchPurchaseStatsRows({ startDate, endDate }) {
@@ -227,38 +246,38 @@ async function fetchWavePerformanceRows({ startDate = null, endDate = null } = {
 
 async function fetchWarehouseOpsRows() {
   const today = new Date().toISOString().slice(0, 10)
-  const todayShipped = await fetchOne(
+  const todayShipped = await fetchOptional('warehouseOps.todayShipped', fetchOne(
     `SELECT COUNT(*) AS shipped_count
      FROM warehouse_tasks
      WHERE status = 5 AND DATE(updated_at) = ?`,
     [today],
-  ).catch(() => ({ shipped_count: 0 }))
-  const todayPicking = await fetchOne(
+  ), { shipped_count: 0 })
+  const todayPicking = await fetchOptional('warehouseOps.todayPicking', fetchOne(
     `SELECT COUNT(*) AS picking_count
      FROM warehouse_tasks WHERE status IN (2,3,4)`,
-  ).catch(() => ({ picking_count: 0 }))
-  const todayInbound = await fetchOne(
+  ), { picking_count: 0 })
+  const todayInbound = await fetchOptional('warehouseOps.todayInbound', fetchOne(
     `SELECT COUNT(*) AS inbound_count
      FROM inbound_tasks
      WHERE status = 3 AND DATE(updated_at) = ?`,
     [today],
-  ).catch(() => ({ inbound_count: 0 }))
-  const scanSummary = await fetchOne(
+  ), { inbound_count: 0 })
+  const scanSummary = await fetchOptional('warehouseOps.scanSummary', fetchOne(
     `SELECT COUNT(*) AS scan_count, COALESCE(SUM(qty),0) AS pick_qty
      FROM scan_logs WHERE DATE(scanned_at) = ?`,
     [today],
-  ).catch(() => ({ scan_count: 0, pick_qty: 0 }))
-  const errSummary = await fetchOne(
+  ), { scan_count: 0, pick_qty: 0 })
+  const errSummary = await fetchOptional('warehouseOps.errSummary', fetchOne(
     `SELECT COUNT(*) AS error_count
      FROM pda_error_logs WHERE DATE(created_at) = ?`,
     [today],
-  ).catch(() => ({ error_count: 0 }))
-  const undoSummary = await fetchOne(
+  ), { error_count: 0 })
+  const undoSummary = await fetchOptional('warehouseOps.undoSummary', fetchOne(
     `SELECT COUNT(*) AS undo_count
      FROM pda_undo_logs WHERE DATE(created_at) = ?`,
     [today],
-  ).catch(() => ({ undo_count: 0 }))
-  const byOperator = await fetchMany(
+  ), { undo_count: 0 })
+  const byOperator = await fetchOptional('warehouseOps.byOperator', fetchMany(
     `SELECT
        sl.operator_id AS operatorId,
        sl.operator_name AS operatorName,
@@ -271,31 +290,31 @@ async function fetchWarehouseOpsRows() {
      GROUP BY sl.operator_id, sl.operator_name
      ORDER BY scanCount DESC LIMIT 20`,
     [today],
-  ).catch(() => [])
-  const errByOp = await fetchMany(
+  ), [])
+  const errByOp = await fetchOptional('warehouseOps.errByOp', fetchMany(
     `SELECT operator_id AS operatorId, COUNT(*) AS errCount
      FROM pda_error_logs WHERE DATE(created_at) = ?
      GROUP BY operator_id`,
     [today],
-  ).catch(() => [])
-  const flowRows = await fetchMany(
+  ), [])
+  const flowRows = await fetchOptional('warehouseOps.flowRows', fetchMany(
     `SELECT status, COUNT(*) AS cnt
      FROM warehouse_tasks
      WHERE status IN (1,2,3,4,5)
      GROUP BY status`,
-  ).catch(() => [])
-  const hourlyRows = await fetchMany(
+  ), [])
+  const hourlyRows = await fetchOptional('warehouseOps.hourlyRows', fetchMany(
     `SELECT HOUR(scanned_at) AS hr, COUNT(*) AS cnt
      FROM scan_logs
      WHERE DATE(scanned_at) = ?
      GROUP BY HOUR(scanned_at) ORDER BY hr ASC`,
     [today],
-  ).catch(() => [])
-  const recentErrors = await fetchMany(
+  ), [])
+  const recentErrors = await fetchOptional('warehouseOps.recentErrors', fetchMany(
     `SELECT id, task_id AS taskId, barcode, reason, operator_name AS operatorName, created_at AS createdAt
      FROM pda_error_logs
      ORDER BY created_at DESC LIMIT 10`,
-  ).catch(() => [])
+  ), [])
   return {
     today,
     todayShipped,

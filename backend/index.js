@@ -9,32 +9,64 @@ const { env } = require('./src/config/env')
 
 const PORT = env.PORT
 const IS_DEV = !env.IS_PROD
+let server = null
+let shuttingDown = false
 
-// ── 全局异常兜底（防止进程崩溃）─────────────────────────────────────────────
+function normalizeFatalReason(reason) {
+  if (reason instanceof Error) return reason
+  if (typeof reason === 'string') return new Error(reason)
+  try {
+    return new Error(JSON.stringify(reason))
+  } catch (_) {
+    return new Error(String(reason))
+  }
+}
+
+function shouldShutdownOnUnhandledRejection(reason) {
+  const err = normalizeFatalReason(reason)
+  if (err.isOperational === true) return false
+  return true
+}
+
+function gracefulShutdown(reason, err, exitCode = 1) {
+  if (shuttingDown) return
+  shuttingDown = true
+  logger.error(`进程进入优雅退出：${reason}`, err, { exitCode }, 'PROCESS')
+  const timeout = setTimeout(() => {
+    logger.error('优雅退出超时，强制退出', null, { reason, exitCode }, 'PROCESS')
+    process.exit(exitCode)
+  }, 10_000)
+  timeout.unref?.()
+  if (!server) {
+    process.exit(exitCode)
+    return
+  }
+  server.close(() => {
+    logger.info('HTTP 服务已关闭，进程退出', { reason, exitCode }, 'PROCESS')
+    process.exit(exitCode)
+  })
+}
+
+// ── 全局异常兜底 ────────────────────────────────────────────────────────────
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('未处理的 Promise 拒绝', reason instanceof Error ? reason : new Error(String(reason)), {}, 'PROCESS')
-  if (IS_DEV) {
-    // 开发环境直接崩溃，方便发现问题
-    process.exit(1)
+  const err = normalizeFatalReason(reason)
+  logger.error('未处理的 Promise 拒绝', err, { fatal: shouldShutdownOnUnhandledRejection(reason) }, 'PROCESS')
+  if (IS_DEV || shouldShutdownOnUnhandledRejection(reason)) {
+    gracefulShutdown('unhandledRejection', err, 1)
   }
-  // 生产环境：记录日志，保持进程运行
 })
 
 process.on('uncaughtException', (err) => {
-  logger.error('未捕获的同步异常', err, {}, 'PROCESS')
-  if (IS_DEV) {
-    process.exit(1)
-  }
-  // 生产环境：某些未捕获异常可能导致状态不一致
-  // 此处记录后继续运行，建议配合进程守护（PM2 / Docker restart）
+  logger.error('未捕获的同步异常', err, { fatal: true }, 'PROCESS')
+  gracefulShutdown('uncaughtException', err, 1)
 })
 
 // ── 启动 ──────────────────────────────────────────────────────────────────────
 
 async function bootstrap() {
   await testConnection()
-  app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     logger.info(`FlowCube API 已启动 http://localhost:${PORT}  env=${env.NODE_ENV}`, {}, 'Server')
   })
   logger.info('数据库迁移已改为显式执行：请在部署前运行 `npm run migrate`', {}, 'Server')

@@ -58,6 +58,8 @@ async function runMigrations() {
       console.log(`[Migrate] 完成，共执行 ${ran} 个迁移文件`)
     }
 
+    const legacyRuntimePatchesEnabled = isLegacyRuntimePatchesEnabled()
+
     // ── 货架主数据表（供 051 迁移与业务查询依赖）──────────────────────────────
     await conn.query(`
       CREATE TABLE IF NOT EXISTS warehouse_racks (
@@ -80,56 +82,70 @@ async function runMigrations() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='货架主数据'
     `)
 
-    // 动态 ALTER TABLE：为 sale_customers 添加价格表字段
-    await safeAlter(conn, `ALTER TABLE sale_customers ADD COLUMN price_list_id BIGINT UNSIGNED DEFAULT NULL AFTER is_active`)
-    await safeAlter(conn, `ALTER TABLE sale_customers ADD COLUMN price_list_name VARCHAR(100) DEFAULT NULL AFTER price_list_id`)
-    // 为 sale_orders 添加仓库任务关联字段
-    await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN task_id BIGINT UNSIGNED DEFAULT NULL AFTER remark`)
-    await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN task_no VARCHAR(30) DEFAULT NULL AFTER task_id`)
-    // 为 sale_orders 添加发货/物流字段
-    await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN carrier VARCHAR(100) DEFAULT NULL COMMENT '承运商' AFTER task_no`)
-    await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN freight_type TINYINT DEFAULT NULL COMMENT '运费方式 1寄付 2到付 3第三方付' AFTER carrier`)
-    await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN receiver_name VARCHAR(100) DEFAULT NULL COMMENT '收货人' AFTER freight_type`)
-    await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN receiver_phone VARCHAR(50) DEFAULT NULL COMMENT '收货电话' AFTER receiver_name`)
-    await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN receiver_address VARCHAR(255) DEFAULT NULL COMMENT '收货地址' AFTER receiver_phone`)
+    await runLegacyRuntimePatch('078', 'sale_customers price list fields', legacyRuntimePatchesEnabled, async () => {
+      // 动态 ALTER TABLE：为 sale_customers 添加价格表字段
+      await safeAlter(conn, `ALTER TABLE sale_customers ADD COLUMN price_list_id BIGINT UNSIGNED DEFAULT NULL AFTER is_active`)
+      await safeAlter(conn, `ALTER TABLE sale_customers ADD COLUMN price_list_name VARCHAR(100) DEFAULT NULL AFTER price_list_id`)
+    })
 
-    // 为 inventory_stock 添加库存预占字段
-    await safeAlter(conn, `ALTER TABLE inventory_stock ADD COLUMN reserved DECIMAL(12,4) NOT NULL DEFAULT 0 COMMENT '已预占数量' AFTER quantity`)
-    // 为 inventory_stock 添加最近更新时间（由 MySQL ON UPDATE 自动维护，库存总览页使用）
-    await safeAlter(conn, `ALTER TABLE inventory_stock ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最近更新时间' AFTER reserved`)
+    await runLegacyRuntimePatch('078', 'sale_orders task and shipping fields', legacyRuntimePatchesEnabled, async () => {
+      // 为 sale_orders 添加仓库任务关联字段
+      await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN task_id BIGINT UNSIGNED DEFAULT NULL AFTER remark`)
+      await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN task_no VARCHAR(30) DEFAULT NULL AFTER task_id`)
+      // 为 sale_orders 添加发货/物流字段
+      await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN carrier VARCHAR(100) DEFAULT NULL COMMENT '承运商' AFTER task_no`)
+      await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN freight_type TINYINT DEFAULT NULL COMMENT '运费方式 1寄付 2到付 3第三方付' AFTER carrier`)
+      await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN receiver_name VARCHAR(100) DEFAULT NULL COMMENT '收货人' AFTER freight_type`)
+      await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN receiver_phone VARCHAR(50) DEFAULT NULL COMMENT '收货电话' AFTER receiver_name`)
+      await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN receiver_address VARCHAR(255) DEFAULT NULL COMMENT '收货地址' AFTER receiver_phone`)
+      // 为 sale_orders 添加承运商外键
+      await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN carrier_id BIGINT UNSIGNED DEFAULT NULL COMMENT '承运商ID' AFTER carrier`)
+    })
 
-    // 为 inventory_logs 添加引擎可追溯字段
-    // move_type: 1采购入库 2销售出库 3盘点 4调拨出 5调拨入 6采购退货出库 7销售退货入库 8仓库任务出库
-    await safeAlter(conn, `ALTER TABLE inventory_logs ADD COLUMN move_type TINYINT UNSIGNED DEFAULT NULL AFTER id`)
-    await safeAlter(conn, `ALTER TABLE inventory_logs ADD COLUMN ref_type VARCHAR(30) DEFAULT NULL AFTER operator_name`)
-    await safeAlter(conn, `ALTER TABLE inventory_logs ADD COLUMN ref_id BIGINT UNSIGNED DEFAULT NULL AFTER ref_type`)
-    await safeAlter(conn, `ALTER TABLE inventory_logs ADD COLUMN ref_no VARCHAR(30) DEFAULT NULL AFTER ref_id`)
+    await runLegacyRuntimePatch('078', 'inventory_stock reservation projection fields', legacyRuntimePatchesEnabled, async () => {
+      // 为 inventory_stock 添加库存预占字段
+      await safeAlter(conn, `ALTER TABLE inventory_stock ADD COLUMN reserved DECIMAL(12,4) NOT NULL DEFAULT 0 COMMENT '已预占数量' AFTER quantity`)
+      // 为 inventory_stock 添加最近更新时间（由 MySQL ON UPDATE 自动维护，库存总览页使用）
+      await safeAlter(conn, `ALTER TABLE inventory_stock ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最近更新时间' AFTER reserved`)
+    })
 
-    // ── product_categories 树形结构升级 ──────────────────────────────────────
-    await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN code VARCHAR(50) DEFAULT NULL COMMENT '分类编码' AFTER name`)
-    await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN parent_id BIGINT UNSIGNED DEFAULT NULL COMMENT '父分类ID' AFTER id`)
-    await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN level TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '层级 1-4' AFTER parent_id`)
-    await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN sort_order INT NOT NULL DEFAULT 0 COMMENT '排序' AFTER level`)
-    await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN status TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1启用 0停用' AFTER sort_order`)
-    await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN path VARCHAR(500) NOT NULL DEFAULT '' COMMENT '祖先路径 如 1/2/3' AFTER status`)
-    await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN remark VARCHAR(500) DEFAULT NULL AFTER path`)
-    await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER remark`)
-    await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at`)
+    await runLegacyRuntimePatch('078', 'inventory_logs traceability fields', legacyRuntimePatchesEnabled, async () => {
+      // 为 inventory_logs 添加引擎可追溯字段
+      // move_type: 1采购入库 2销售出库 3盘点 4调拨出 5调拨入 6采购退货出库 7销售退货入库 8仓库任务出库
+      await safeAlter(conn, `ALTER TABLE inventory_logs ADD COLUMN move_type TINYINT UNSIGNED DEFAULT NULL AFTER id`)
+      await safeAlter(conn, `ALTER TABLE inventory_logs ADD COLUMN ref_type VARCHAR(30) DEFAULT NULL AFTER operator_name`)
+      await safeAlter(conn, `ALTER TABLE inventory_logs ADD COLUMN ref_id BIGINT UNSIGNED DEFAULT NULL AFTER ref_type`)
+      await safeAlter(conn, `ALTER TABLE inventory_logs ADD COLUMN ref_no VARCHAR(30) DEFAULT NULL AFTER ref_id`)
+    })
 
-    // 为 sale_orders 添加承运商外键
-    await safeAlter(conn, `ALTER TABLE sale_orders ADD COLUMN carrier_id BIGINT UNSIGNED DEFAULT NULL COMMENT '承运商ID' AFTER carrier`)
+    await runLegacyRuntimePatch('078', 'product_categories tree fields', legacyRuntimePatchesEnabled, async () => {
+      // ── product_categories 树形结构升级 ──────────────────────────────────────
+      await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN code VARCHAR(50) DEFAULT NULL COMMENT '分类编码' AFTER name`)
+      await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN parent_id BIGINT UNSIGNED DEFAULT NULL COMMENT '父分类ID' AFTER id`)
+      await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN level TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '层级 1-4' AFTER parent_id`)
+      await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN sort_order INT NOT NULL DEFAULT 0 COMMENT '排序' AFTER level`)
+      await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN status TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1启用 0停用' AFTER sort_order`)
+      await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN path VARCHAR(500) NOT NULL DEFAULT '' COMMENT '祖先路径 如 1/2/3' AFTER status`)
+      await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN remark VARCHAR(500) DEFAULT NULL AFTER path`)
+      await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER remark`)
+      await safeAlter(conn, `ALTER TABLE product_categories ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at`)
+    })
 
-    // 为 carriers 添加承运商类型字段
-    await safeAlter(conn, `ALTER TABLE carriers ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'express' COMMENT '承运商类型：delivery=送货 express=快递 freight=快运 logistics=物流' AFTER name`)
+    await runLegacyRuntimePatch('078', 'carriers type field', legacyRuntimePatchesEnabled, async () => {
+      // 为 carriers 添加承运商类型字段
+      await safeAlter(conn, `ALTER TABLE carriers ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'express' COMMENT '承运商类型：delivery=送货 express=快递 freight=快运 logistics=物流' AFTER name`)
+    })
 
-    // 为 inventory_containers 添加库位关联
-    await safeAlter(conn, `ALTER TABLE inventory_containers ADD COLUMN location_id BIGINT UNSIGNED DEFAULT NULL COMMENT '库位ID' AFTER warehouse_id`)
-    await safeAlter(conn, `ALTER TABLE inventory_containers ADD INDEX idx_container_location (location_id)`)
+    await runLegacyRuntimePatch('078', 'inventory_containers location and locking fields', legacyRuntimePatchesEnabled, async () => {
+      // 为 inventory_containers 添加库位关联
+      await safeAlter(conn, `ALTER TABLE inventory_containers ADD COLUMN location_id BIGINT UNSIGNED DEFAULT NULL COMMENT '库位ID' AFTER warehouse_id`)
+      await safeAlter(conn, `ALTER TABLE inventory_containers ADD INDEX idx_container_location (location_id)`)
 
-    // 为 inventory_containers 添加任务锁定字段
-    await safeAlter(conn, `ALTER TABLE inventory_containers ADD COLUMN locked_by_task_id BIGINT UNSIGNED DEFAULT NULL COMMENT '锁定该容器的仓库任务ID' AFTER location_id`)
-    await safeAlter(conn, `ALTER TABLE inventory_containers ADD COLUMN locked_at DATETIME DEFAULT NULL COMMENT '锁定时间' AFTER locked_by_task_id`)
-    await safeAlter(conn, `ALTER TABLE inventory_containers ADD INDEX idx_container_locked (locked_by_task_id)`)
+      // 为 inventory_containers 添加任务锁定字段
+      await safeAlter(conn, `ALTER TABLE inventory_containers ADD COLUMN locked_by_task_id BIGINT UNSIGNED DEFAULT NULL COMMENT '锁定该容器的仓库任务ID' AFTER location_id`)
+      await safeAlter(conn, `ALTER TABLE inventory_containers ADD COLUMN locked_at DATETIME DEFAULT NULL COMMENT '锁定时间' AFTER locked_by_task_id`)
+      await safeAlter(conn, `ALTER TABLE inventory_containers ADD INDEX idx_container_locked (locked_by_task_id)`)
+    })
 
     // ── 字段长度规范化（三端统一：DB / 后端 / 前端）──────────────────────────
     // 这批 MODIFY 语句会触发表重建，启动期容易卡住；默认不在每次启动都执行。
@@ -162,15 +178,21 @@ async function runMigrations() {
       await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN receiver_address VARCHAR(30)  DEFAULT NULL COMMENT '收货地址'`)
       await safeModify(conn, `ALTER TABLE sale_orders MODIFY COLUMN remark           VARCHAR(30)  DEFAULT NULL COMMENT '备注'`)
     } else {
-      await safeAlter(conn, `ALTER TABLE product_items ADD COLUMN cost_price DECIMAL(12,4) NOT NULL DEFAULT 0 COMMENT '成本价' AFTER barcode`)
+      await runLegacyRuntimePatch('078', 'product_items cost_price field', legacyRuntimePatchesEnabled, async () => {
+        await safeAlter(conn, `ALTER TABLE product_items ADD COLUMN cost_price DECIMAL(12,4) NOT NULL DEFAULT 0 COMMENT '成本价' AFTER barcode`)
+      })
     }
 
-    // 为 picking_waves 添加优先级字段（表由 025 创建，需在 SQL 执行后）
-    await safeAlter(conn, `ALTER TABLE picking_waves ADD COLUMN priority TINYINT UNSIGNED NOT NULL DEFAULT 2 COMMENT '1紧急 2普通 3低' AFTER status`)
+    await runLegacyRuntimePatch('078', 'picking_waves priority field', legacyRuntimePatchesEnabled, async () => {
+      // 为 picking_waves 添加优先级字段（表由 025 创建，需在 SQL 执行后）
+      await safeAlter(conn, `ALTER TABLE picking_waves ADD COLUMN priority TINYINT UNSIGNED NOT NULL DEFAULT 2 COMMENT '1紧急 2普通 3低' AFTER status`)
+    })
 
-    // 为 warehouse_tasks 添加分拣格关联字段（030 迁移支持）
-    await safeAlter(conn, `ALTER TABLE warehouse_tasks ADD COLUMN sorting_bin_id BIGINT UNSIGNED DEFAULT NULL COMMENT '分配的分拣格ID' AFTER remark`)
-    await safeAlter(conn, `ALTER TABLE warehouse_tasks ADD COLUMN sorting_bin_code VARCHAR(20) DEFAULT NULL COMMENT '分拣格编号' AFTER sorting_bin_id`)
+    await runLegacyRuntimePatch('078', 'warehouse_tasks sorting bin fields', legacyRuntimePatchesEnabled, async () => {
+      // 为 warehouse_tasks 添加分拣格关联字段（030 迁移支持）
+      await safeAlter(conn, `ALTER TABLE warehouse_tasks ADD COLUMN sorting_bin_id BIGINT UNSIGNED DEFAULT NULL COMMENT '分配的分拣格ID' AFTER remark`)
+      await safeAlter(conn, `ALTER TABLE warehouse_tasks ADD COLUMN sorting_bin_code VARCHAR(20) DEFAULT NULL COMMENT '分拣格编号' AFTER sorting_bin_id`)
+    })
 
     // ── 货架主数据表（电脑端管理，库位由 PDA 上架时自动生成）────────────────
     await conn.query(`
@@ -194,8 +216,10 @@ async function runMigrations() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='货架主数据'
     `)
 
-    // ── 种入默认打印模板（仅在该类型无模板时执行）──────────────────────────
-    await seedDefaultPrintTemplates(conn)
+    await runLegacyRuntimePatch('079', 'default print template seeds', legacyRuntimePatchesEnabled, async () => {
+      // ── 种入默认打印模板（仅在该类型无模板时执行）──────────────────────────
+      await seedDefaultPrintTemplates(conn)
+    })
 
   } finally {
     await conn.end()
@@ -323,6 +347,20 @@ async function seedDefaultPrintTemplates(conn) {
 // 忽略"列已存在"(1060) 和"重复索引名"(1061) 错误
 async function safeAlter(conn, sql) {
   try { await conn.query(sql) } catch (e) { if (e.errno !== 1060 && e.errno !== 1061) throw e }
+}
+
+function isLegacyRuntimePatchesEnabled() {
+  return String(process.env.FLOWCUBE_ENABLE_LEGACY_RUNTIME_PATCHES || 'true').trim().toLowerCase() !== 'false'
+}
+
+async function runLegacyRuntimePatch(coveredBy, description, enabled, fn) {
+  if (!enabled) {
+    console.warn(`[Migrate] ⚠ legacy runtime patch skipped by FLOWCUBE_ENABLE_LEGACY_RUNTIME_PATCHES=false; covered by migration 078/079 (${coveredBy}): ${description}`)
+    return
+  }
+
+  console.warn(`[Migrate] ⚠ legacy runtime patch executed; covered by migration 078/079 (${coveredBy}): ${description}`)
+  await fn()
 }
 
 async function ensureLegacyTableCompatibility(conn, databaseName) {

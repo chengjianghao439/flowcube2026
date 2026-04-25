@@ -54,12 +54,9 @@ export default class PdaErrorBoundary extends Component<Props, State> {
         <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
           <p className="text-5xl mb-4">⚠️</p>
           <h2 className="text-xl font-bold text-foreground mb-2">页面出现错误</h2>
-          <p className="text-sm text-muted-foreground mb-1">当前操作未完成，请选择恢复方式</p>
-          {this.state.errorMsg && (
-            <p className="font-mono text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-6 max-w-xs break-all">
-              {this.state.errorMsg}
-            </p>
-          )}
+          <p className="text-sm text-muted-foreground mb-6 max-w-xs">
+            当前操作未完成，错误已记录。请先重试；如果仍不能恢复，请返回工作台重新进入任务。
+          </p>
           <div className="flex gap-3 w-full max-w-xs">
             <button
               onClick={this.handleRetry}

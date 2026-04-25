@@ -29,6 +29,24 @@ async function findExistingActiveJob(exec, { jobUniqueKey, warehouseId, jobType 
   return findByIdWithExecutor(exec, Number(dup.id))
 }
 
+async function printOptionalSideEffect(sideEffectName, promise, meta = {}) {
+  try {
+    return await promise
+  } catch (e) {
+    logger.warn(
+      '打印任务非阻断副作用失败，主打印状态已按主链推进',
+      {
+        sideEffectName,
+        degradation: 'print_side_effect_failed',
+        error: e?.message || String(e),
+        ...meta,
+      },
+      'PrintJobs',
+    )
+    return null
+  }
+}
+
 async function createRecord(exec, {
   printerId,
   warehouseId: warehouseIdIn,
@@ -249,15 +267,19 @@ async function complete(id, { ackToken } = {}) {
     'UPDATE print_jobs SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW() WHERE id=?',
     [STATUS.DONE, id],
   )
-  await appendInboundPrintEventByJob(
+  await printOptionalSideEffect('appendInboundPrintEvent:complete', appendInboundPrintEventByJob(
     job,
     'print_completed',
     '库存条码打印成功',
     job.refCode ? `库存条码 ${job.refCode} 已打印` : '库存条码已打印',
     { printJobId: job.id, barcode: job.refCode || null },
-  ).catch(() => {})
+  ), { printJobId: job.id, refCode: job.refCode || null })
   if (latRow?.printer_id && latencyMs != null) {
-    await recordPrintSuccess(latRow.printer_id, latencyMs).catch(() => {})
+    await printOptionalSideEffect(
+      'recordPrintSuccess',
+      recordPrintSuccess(latRow.printer_id, latencyMs),
+      { printJobId: job.id, printerId: latRow.printer_id, latencyMs },
+    )
   }
   return findById(id)
 }
@@ -274,13 +296,13 @@ async function completeLocalDesktop(id) {
   if (!ur.affectedRows) {
     throw new AppError('任务状态已变更，请刷新后重试', 409, 'STATE_CONFLICT')
   }
-  await appendInboundPrintEventByJob(
+  await printOptionalSideEffect('appendInboundPrintEvent:completeLocalDesktop', appendInboundPrintEventByJob(
     job,
     'print_completed',
     '库存条码打印成功',
     job.refCode ? `库存条码 ${job.refCode} 已打印` : '库存条码已打印',
     { printJobId: job.id, barcode: job.refCode || null },
-  ).catch(() => {})
+  ), { printJobId: job.id, refCode: job.refCode || null })
   return findById(id)
 }
 
@@ -289,7 +311,11 @@ async function fail(id, errorMessage) {
   const next = nextFailState(job)
   if (next.done) return job
 
-  await recordPrintFailure(job.printerId).catch(() => {})
+  await printOptionalSideEffect(
+    'recordPrintFailure',
+    recordPrintFailure(job.printerId),
+    { printJobId: job.id, printerId: job.printerId },
+  )
 
   const msg = errorMessage || '未知错误'
   if (next.status === STATUS.PENDING) {
@@ -308,13 +334,13 @@ async function fail(id, errorMessage) {
     const [[printer]] = await pool.query('SELECT code FROM printers WHERE id=?', [job.printerId])
     if (printer) await pushToClients(printer.code, updated)
   }
-  await appendInboundPrintEventByJob(
+  await printOptionalSideEffect('appendInboundPrintEvent:fail', appendInboundPrintEventByJob(
     job,
     next.status === STATUS.FAILED ? 'print_failed' : 'print_retrying',
     next.status === STATUS.FAILED ? '库存条码打印失败' : '库存条码打印重试',
     msg,
     { printJobId: job.id, barcode: job.refCode || null, retryCount: next.retryCount },
-  ).catch(() => {})
+  ), { printJobId: job.id, nextStatus: next.status, retryCount: next.retryCount })
   return findById(id)
 }
 

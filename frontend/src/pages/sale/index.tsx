@@ -30,6 +30,21 @@ interface ConfirmState {
 
 const EMPTY_CONFIRM: ConfirmState = { open: false, title: '', description: '', onConfirm: () => {} }
 
+function SaleFulfillmentStatus({ order }: { order: SaleOrder }) {
+  if (!order.taskNo) {
+    return <span className="text-xs text-muted-foreground">未进入仓库</span>
+  }
+  if (order.warehouseTaskStatus == null) {
+    return <span className="text-xs text-muted-foreground">履约状态未同步</span>
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">履约</span>
+      <StatusBadge type="task" status={order.warehouseTaskStatus} ariaLabel={order.warehouseTaskStatusName || undefined} />
+    </div>
+  )
+}
+
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function SalePage() {
@@ -121,12 +136,15 @@ export default function SalePage() {
       render: v => <span className="font-medium tabular-nums">¥{Number(v).toFixed(2)}</span>,
     },
     {
-      key: 'status', title: '状态', width: 160,
+      key: 'status', title: '销售/履约状态', width: 230,
       render: (v, row) => {
         const r = row as SaleOrder
         return (
-          <div className="flex items-center gap-1.5">
-            <StatusBadge type="sale" status={v as number} />
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">销售</span>
+              <StatusBadge type="sale" status={v as number} />
+            </div>
             {r.taskNo && (
               <button
                 onClick={() => navigate(r.taskId ? `/warehouse-tasks?taskId=${r.taskId}` : '/warehouse-tasks')}
@@ -135,6 +153,7 @@ export default function SalePage() {
                 {r.taskNo}
               </button>
             )}
+            <SaleFulfillmentStatus order={r} />
           </div>
         )
       },

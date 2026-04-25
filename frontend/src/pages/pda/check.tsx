@@ -5,7 +5,7 @@
  * 须扫描拣货阶段使用过的库存条码 / 塑料盒条码（I/B，兼容旧版 CNT），由后端按库存单元累加 checked_qty；禁止手填。
  */
 import { useState, useCallback } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
 import PdaScanner from '@/components/pda/PdaScanner'
@@ -23,12 +23,57 @@ import type { WarehouseTask, WarehouseTaskItem } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
+import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 
 interface CheckItem extends WarehouseTaskItem {
   checkedQty: number
 }
 
 type Step = 'select-task' | 'checking' | 'done'
+
+function readPositiveId(value: string | undefined | null): number {
+  const n = Number(value)
+  return Number.isInteger(n) && n > 0 ? n : 0
+}
+
+function PdaTaskState({
+  title,
+  description,
+  actionText,
+  onAction,
+  secondaryText,
+  onSecondary,
+}: {
+  title: string
+  description: string
+  actionText: string
+  onAction: () => void
+  secondaryText?: string
+  onSecondary?: () => void
+}) {
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <PdaHeader title={title} onBack={onAction} />
+      <div className="flex-1 px-4 py-10">
+        <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
+          <p className="mb-4 text-5xl">⚠️</p>
+          <h2 className="text-lg font-bold text-foreground">{title}</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+          <div className="mt-6 flex gap-3">
+            {secondaryText && onSecondary ? (
+              <Button variant="outline" className="flex-1" onClick={onSecondary}>
+                {secondaryText}
+              </Button>
+            ) : null}
+            <Button className="flex-1" onClick={onAction}>
+              {actionText}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function TaskSelectStep({
   onSelect,
@@ -136,19 +181,23 @@ function CheckItemRow({ item }: { item: CheckItem }) {
 export default function PdaCheckPage() {
   const navigate   = useNavigate()
   const [params]   = useSearchParams()
+  const routeParams = useParams()
   const qc         = useQueryClient()
+  const routeTaskId = readPositiveId(routeParams.id) || readPositiveId(params.get('taskId'))
 
   const [step, setStep]           = useState<Step>(
-    params.get('taskId') ? 'checking' : 'select-task',
+    routeTaskId ? 'checking' : 'select-task',
   )
   const [selectedTask, setSelectedTask] = useState<WarehouseTask | null>(null)
   const [allChecked, setAllChecked]     = useState(false)
+  const taskId = selectedTask?.id ?? routeTaskId
 
   const { flash, ok, err } = usePdaFeedback()
   const checkAction = useCriticalPdaAction<{
     allChecked: boolean
   }>({
     action: `warehouse.check-scan.${taskId}`,
+    requestAction: 'scan-log.check',
     label: `复核任务 ${taskId}`,
     onConfirmed: async (payload) => {
       await qc.invalidateQueries({ queryKey: ['pda-check-task', taskId] })
@@ -161,11 +210,20 @@ export default function PdaCheckPage() {
         ok('✓ 已记录复核扫码')
       }
     },
+    resolveServerState: async () => {
+      const latest = await getTaskByIdApi(taskId)
+      if (taskReachedStatus(latest, WT_STATUS.PACKING)) {
+        return {
+          effective: true,
+          data: { allChecked: true },
+          message: stateConfirmedMessage(`复核任务 ${taskId}`, latest.statusName),
+        }
+      }
+      return { effective: false }
+    },
   })
 
-  const taskId = selectedTask?.id ?? (params.get('taskId') ? Number(params.get('taskId')) : 0)
-
-  const { data: taskDetail, isLoading: taskLoading } = useQuery({
+  const { data: taskDetail, isLoading: taskLoading, isError: taskError, error: taskLoadError } = useQuery({
     queryKey: ['pda-check-task', taskId],
     queryFn: () => getTaskByIdApi(taskId),
     enabled: taskId > 0,
@@ -175,6 +233,8 @@ export default function PdaCheckPage() {
 
   const scanMut = useMutation({
     mutationFn: async (barcode: string) => {
+      if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
+      if (taskDetail.status !== WT_STATUS.CHECKING) throw new Error('当前任务不是待复核状态，不能执行复核扫码')
       const result = await checkAction.run((requestKey) =>
         submitCheckScanApi(taskId, barcode, requestKey).then((res) => res!),
       )
@@ -193,12 +253,24 @@ export default function PdaCheckPage() {
   const handleScan = useCallback((raw: string) => {
     const b = raw.trim()
     if (!b) return
+    if (taskLoading) {
+      err('任务数据加载中，请稍后扫码')
+      return
+    }
+    if (!taskDetail) {
+      err('任务不存在或加载失败，请返回任务列表重新选择')
+      return
+    }
+    if (taskDetail.status !== WT_STATUS.CHECKING) {
+      err(`当前任务状态为「${taskDetail.statusName}」，不能执行复核`)
+      return
+    }
     if (parseBarcode(b).type !== 'container') {
       err('扫描库存条码')
       return
     }
     scanMut.mutate(b)
-  }, [err, scanMut])
+  }, [err, scanMut, taskDetail, taskLoading])
 
   const totalPick   = items.reduce((s, i) => s + i.pickedQty, 0)
   const totalChecked = items.reduce((s, i) => s + (i.checkedQty ?? 0), 0)
@@ -223,6 +295,59 @@ export default function PdaCheckPage() {
           setSelectedTask(task)
           setStep('checking')
         }}
+      />
+    )
+  }
+
+  if (taskId <= 0) {
+    return (
+      <PdaTaskState
+        title="缺少复核任务"
+        description="当前页面没有有效任务号，请从待复核任务列表重新选择。"
+        actionText="选择任务"
+        onAction={() => setStep('select-task')}
+        secondaryText="返回工作台"
+        onSecondary={() => navigate('/pda')}
+      />
+    )
+  }
+
+  if (taskLoading) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <PdaHeader title="复核作业" onBack={() => setStep('select-task')} />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="space-y-3 text-center">
+            <PdaLoading className="h-10" />
+            <p className="text-sm text-muted-foreground">正在加载任务数据…</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (taskError || !taskDetail) {
+    return (
+      <PdaTaskState
+        title="复核任务不存在"
+        description={(taskLoadError as { message?: string })?.message || `未找到任务 #${taskId}，请确认任务是否已被删除或状态已变化。`}
+        actionText="选择其他任务"
+        onAction={() => setStep('select-task')}
+        secondaryText="返回工作台"
+        onSecondary={() => navigate('/pda')}
+      />
+    )
+  }
+
+  if (step !== 'done' && taskDetail.status !== WT_STATUS.CHECKING) {
+    return (
+      <PdaTaskState
+        title="当前任务不能复核"
+        description={`任务 ${taskDetail.taskNo} 当前状态为「${taskDetail.statusName}」。复核页只允许处理「待复核」任务，请回到仓库任务确认主流程状态。`}
+        actionText="选择其他任务"
+        onAction={() => setStep('select-task')}
+        secondaryText="打开仓库任务"
+        onSecondary={() => navigate('/warehouse-tasks')}
       />
     )
   }

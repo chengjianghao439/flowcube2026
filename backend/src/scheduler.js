@@ -10,6 +10,7 @@
  */
 
 const cron = require('node-cron')
+const logger = require('./utils/logger')
 const { runAllChecks } = require('./modules/system/healthCheck.service')
 const { runContainerLockCleanup } = require('./jobs/containerLockCleanup')
 
@@ -55,7 +56,14 @@ function scheduleContainerLockCleanup() {
     return
   }
   cron.schedule(EXPR, () => {
-    runContainerLockCleanup().catch(() => {})
+    runContainerLockCleanup().catch((err) => {
+      logger.error(
+        '容器锁兜底清理失败，可能保留终态任务的容器锁',
+        err instanceof Error ? err : new Error(String(err)),
+        { degradation: 'container_lock_cleanup_failed' },
+        'Scheduler',
+      )
+    })
   }, { timezone: 'Asia/Shanghai' })
   console.log(`[Scheduler] 容器锁清理已注册（${EXPR}，Asia/Shanghai）`)
 }

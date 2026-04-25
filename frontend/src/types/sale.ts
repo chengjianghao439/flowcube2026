@@ -33,6 +33,8 @@ export interface SaleOrder {
   warehouseName: string
   status: 1 | 2 | 3 | 4 | 5
   statusName: string
+  warehouseTaskStatus?: number | null
+  warehouseTaskStatusName?: string | null
   saleDate?: string
   totalAmount: number
   remark?: string

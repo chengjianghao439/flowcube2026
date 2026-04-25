@@ -4,6 +4,7 @@ const { lockContainer } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 const { checkDoneWithinTransaction } = require('../warehouse-tasks/warehouse-tasks.service')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const logger = require('../../utils/logger')
 
 const fmt = r => ({
   id:           r.id,
@@ -23,6 +24,35 @@ const fmt = r => ({
 })
 
 const SCAN_PURPOSE = { PICK: 1, CHECK: 2 }
+
+function logPdaAuditDegradation(message, error, meta = {}) {
+  logger.warn(
+    message,
+    {
+      degradation: 'pda_audit_log_failed',
+      error: error?.message || String(error),
+      ...meta,
+    },
+    'ScanLogs',
+  )
+}
+
+async function pdaOptionalQuery(metricName, promise, fallback) {
+  try {
+    return await promise
+  } catch (e) {
+    logger.warn(
+      'PDA 统计/异常分析可选查询失败，已返回明确降级值',
+      {
+        metricName,
+        degradation: 'pda_report_fallback',
+        error: e?.message || String(e),
+      },
+      'ScanLogs',
+    )
+    return fallback
+  }
+}
 
 /**
  * 拣货扫码：锁定容器 + 写 scan_logs(用途=拣货) + 递增 picked_qty（同一事务）
@@ -299,7 +329,14 @@ async function logScanError({ taskId, barcode, reason, operatorId, operatorName 
        VALUES (?,?,?,?,?)`,
       [taskId || null, barcode || null, reason || null, operatorId || null, operatorName || null],
     )
-  } catch { /* 日志写入失败不影响主流程 */ }
+  } catch (e) {
+    logPdaAuditDegradation('PDA 错误扫码日志写入失败，主流程继续', e, {
+      taskId: taskId || null,
+      barcode: barcode || null,
+      reason: reason || null,
+      operatorId: operatorId || null,
+    })
+  }
 }
 
 /**
@@ -325,7 +362,14 @@ async function logUndo({ taskId, itemId, barcode, prevQty, newQty, operatorId, o
        VALUES (?,?,?,?,?,?,?)`,
       [taskId, itemId, barcode, prevQty, newQty, operatorId || null, operatorName || null],
     )
-  } catch { /* 日志写入失败不影响主流程 */ }
+  } catch (e) {
+    logPdaAuditDegradation('PDA 撤销日志写入失败，主流程继续', e, {
+      taskId,
+      itemId,
+      barcode,
+      operatorId: operatorId || null,
+    })
+  }
 }
 
 /**
@@ -350,7 +394,7 @@ async function getStats({ startDate, endDate } = {}) {
     params,
   )
 
-  const [errRows] = await pool.query(
+  const [errRows] = await pdaOptionalQuery('stats.errorRows', pool.query(
     `SELECT
        operator_id   AS operatorId,
        COUNT(*)      AS errorCount
@@ -358,7 +402,7 @@ async function getStats({ startDate, endDate } = {}) {
      WHERE operator_id IS NOT NULL ${dateFilter.replace('sl.scanned_at', 'created_at')}
      GROUP BY operator_id`,
     params,
-  ).catch(() => [[]])
+  ), [[]])
 
   const errMap = Object.fromEntries(errRows.map(r => [r.operatorId, Number(r.errorCount)]))
 
@@ -383,67 +427,67 @@ async function getAnomalyReport({ startDate, endDate } = {}) {
   const dateFilter = hasDate ? 'AND created_at BETWEEN ? AND ?' : ''
 
   // 确保表存在
-  await pool.query(`CREATE TABLE IF NOT EXISTS pda_error_logs (
+  await pdaOptionalQuery('anomaly.ensurePdaErrorLogs', pool.query(`CREATE TABLE IF NOT EXISTS pda_error_logs (
     id INT AUTO_INCREMENT PRIMARY KEY, task_id INT, barcode VARCHAR(64),
     reason VARCHAR(255), operator_id INT, operator_name VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`).catch(() => {})
-  await pool.query(`CREATE TABLE IF NOT EXISTS pda_undo_logs (
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`), null)
+  await pdaOptionalQuery('anomaly.ensurePdaUndoLogs', pool.query(`CREATE TABLE IF NOT EXISTS pda_undo_logs (
     id INT AUTO_INCREMENT PRIMARY KEY, task_id INT, item_id INT, barcode VARCHAR(64),
     prev_qty DECIMAL(10,2), new_qty DECIMAL(10,2), operator_id INT, operator_name VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`).catch(() => {})
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`), null)
 
   // 1. 按操作员统计错误
-  const [byOperator] = await pool.query(
+  const [byOperator] = await pdaOptionalQuery('anomaly.byOperator', pool.query(
     `SELECT operator_id AS operatorId, operator_name AS operatorName,
        COUNT(*) AS errorCount
      FROM pda_error_logs WHERE 1=1 ${dateFilter}
      GROUP BY operator_id, operator_name ORDER BY errorCount DESC LIMIT 20`,
     dateParams,
-  ).catch(() => [[]])
+  ), [[]])
 
   // 2. 按错误原因分类
-  const [byReason] = await pool.query(
+  const [byReason] = await pdaOptionalQuery('anomaly.byReason', pool.query(
     `SELECT reason, COUNT(*) AS cnt
      FROM pda_error_logs WHERE 1=1 ${dateFilter}
      GROUP BY reason ORDER BY cnt DESC LIMIT 10`,
     dateParams,
-  ).catch(() => [[]])
+  ), [[]])
 
   // 3. 按条码统计（哪类商品最容易出错）
-  const [byBarcode] = await pool.query(
+  const [byBarcode] = await pdaOptionalQuery('anomaly.byBarcode', pool.query(
     `SELECT barcode, COUNT(*) AS cnt
      FROM pda_error_logs WHERE 1=1 ${dateFilter}
      GROUP BY barcode ORDER BY cnt DESC LIMIT 10`,
     dateParams,
-  ).catch(() => [[]])
+  ), [[]])
 
   // 4. 撤销统计按操作员
-  const [undoByOperator] = await pool.query(
+  const [undoByOperator] = await pdaOptionalQuery('anomaly.undoByOperator', pool.query(
     `SELECT operator_id AS operatorId, operator_name AS operatorName,
        COUNT(*) AS undoCount
      FROM pda_undo_logs WHERE 1=1 ${dateFilter}
      GROUP BY operator_id, operator_name ORDER BY undoCount DESC LIMIT 20`,
     dateParams,
-  ).catch(() => [[]])
+  ), [[]])
 
   // 5. 每日趋势
-  const [dailyTrend] = await pool.query(
+  const [dailyTrend] = await pdaOptionalQuery('anomaly.dailyTrend', pool.query(
     `SELECT DATE(created_at) AS date, COUNT(*) AS errorCount
      FROM pda_error_logs WHERE 1=1 ${dateFilter}
      GROUP BY DATE(created_at) ORDER BY date ASC`,
     dateParams,
-  ).catch(() => [[]])
+  ), [[]])
 
   // 6. 总体汇总
-  const [[summary]] = await pool.query(
+  const [[summary]] = await pdaOptionalQuery('anomaly.summary', pool.query(
     `SELECT
        (SELECT COUNT(*) FROM pda_error_logs WHERE 1=1 ${dateFilter}) AS totalErrors,
        (SELECT COUNT(*) FROM pda_undo_logs  WHERE 1=1 ${dateFilter}) AS totalUndos,
        (SELECT COUNT(*) FROM scan_logs WHERE 1=1 ${dateFilter.replace('created_at','scanned_at')}) AS totalScans`,
     [...dateParams, ...dateParams, ...dateParams],
-  ).catch(() => [[{ totalErrors: 0, totalUndos: 0, totalScans: 0 }]])
+  ), [[{ totalErrors: 0, totalUndos: 0, totalScans: 0 }]])
 
   return {
     summary: {

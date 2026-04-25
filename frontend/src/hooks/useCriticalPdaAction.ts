@@ -16,15 +16,34 @@ function isTransientFailure(message: string) {
 
 type ConfirmContext = { recovered: boolean; requestKey: string }
 export type CriticalPdaActionPhase = 'idle' | 'submitting' | 'pending' | 'confirming' | 'failed'
+export type CriticalPdaConfirmResult = OperationRequestStatus | {
+  status: 'state_confirmed'
+  data: unknown
+  message: string
+}
+
+type ServerStateResult<T> =
+  | { effective: true; data?: T; message?: string }
+  | { effective: false; message?: string }
+
+type ResolveServerState<T> = (ctx: {
+  record: PendingRequestRecord
+  operationStatus?: OperationRequestStatus | null
+  error?: unknown
+}) => Promise<ServerStateResult<T> | null | undefined>
 
 export function useCriticalPdaAction<T>({
   action,
+  requestAction,
   label,
   onConfirmed,
+  resolveServerState,
 }: {
   action: string
+  requestAction?: string
   label: string
   onConfirmed?: (data: T, ctx: ConfirmContext) => void | Promise<void>
+  resolveServerState?: ResolveServerState<T>
 }) {
   const networkStatus = useNetworkStatus()
   const { records, addPending, removePending } = usePendingRequests()
@@ -37,15 +56,45 @@ export function useCriticalPdaAction<T>({
   const [phaseMessage, setPhaseMessage] = useState<string | null>(null)
   const [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null)
   const autoConfirmRef = useRef<string | null>(null)
+  const statusAction = requestAction || action
 
-  const confirmPending = useCallback(async (): Promise<OperationRequestStatus | null> => {
+  const confirmByServerState = useCallback(async (
+    record: PendingRequestRecord,
+    operationStatus?: OperationRequestStatus | null,
+    error?: unknown,
+  ): Promise<CriticalPdaConfirmResult | null> => {
+    if (!resolveServerState) return null
+    const serverState = await resolveServerState({ record, operationStatus, error })
+    if (!serverState?.effective) return null
+    const data = (serverState.data ?? operationStatus?.data ?? null) as T
+    removePending(action)
+    setPhase('idle')
+    setPhaseMessage(serverState.message || `${record.label}已成功，任务状态已更新。`)
+    setLastErrorMessage(null)
+    if (onConfirmed) {
+      await onConfirmed(data, {
+        recovered: true,
+        requestKey: record.requestKey,
+      })
+    }
+    return {
+      status: 'state_confirmed',
+      data,
+      message: serverState.message || `${record.label}已成功，任务状态已更新。`,
+    }
+  }, [action, onConfirmed, removePending, resolveServerState])
+
+  const confirmPending = useCallback(async (): Promise<CriticalPdaConfirmResult | null> => {
     if (!pendingRecord || networkStatus !== 'online' || confirming) return null
     setConfirming(true)
     setPhase('confirming')
     setPhaseMessage(`正在确认${pendingRecord.label}的结果，请勿重复提交。`)
     setLastErrorMessage(null)
     try {
-      const status = await getOperationRequestStatusApi(pendingRecord.requestKey, pendingRecord.action)
+      const status = await getOperationRequestStatusApi(
+        pendingRecord.requestKey,
+        pendingRecord.requestAction || statusAction,
+      )
       if (status.status === 'success') {
         removePending(action)
         setPhase('idle')
@@ -58,18 +107,24 @@ export function useCriticalPdaAction<T>({
         }
       }
       if (status.status === 'failed') {
+        const stateConfirmed = await confirmByServerState(pendingRecord, status)
+        if (stateConfirmed) return stateConfirmed
         removePending(action)
         setPhase('failed')
         setPhaseMessage(null)
-        setLastErrorMessage(status.message || `${pendingRecord.label}未成功，请检查后重试。`)
+        setLastErrorMessage(status.message || `${pendingRecord.label}服务端明确返回失败，任务状态未确认推进。请检查后重试。`)
       }
       if (status.status === 'not_found') {
+        const stateConfirmed = await confirmByServerState(pendingRecord, status)
+        if (stateConfirmed) return stateConfirmed
         removePending(action)
         setPhase('failed')
         setPhaseMessage(null)
-        setLastErrorMessage(`系统未找到 ${pendingRecord.label} 的提交记录。请先刷新任务状态，再决定是否重试。`)
+        setLastErrorMessage(`未找到 ${pendingRecord.label} 的提交记录，且任务状态未发现推进。请刷新任务状态后再决定是否重试。`)
       }
       if (status.status === 'pending') {
+        const stateConfirmed = await confirmByServerState(pendingRecord, status)
+        if (stateConfirmed) return stateConfirmed
         setPhase('pending')
         setPhaseMessage(`服务端仍未确认${pendingRecord.label}结果，请稍后重试确认，暂勿重复提交。`)
       }
@@ -81,14 +136,16 @@ export function useCriticalPdaAction<T>({
         setPhaseMessage(`网络波动，暂时无法确认${pendingRecord.label}结果。请恢复网络后再次确认。`)
         return null
       }
+      const stateConfirmed = await confirmByServerState(pendingRecord, null, error)
+      if (stateConfirmed) return stateConfirmed
       setPhase('failed')
       setPhaseMessage(null)
-      setLastErrorMessage(message || `确认 ${pendingRecord.label} 结果失败，请稍后重试。`)
+      setLastErrorMessage(message || `确认 ${pendingRecord.label} 结果失败，且未能证明任务状态已推进。请稍后重试。`)
       return null
     } finally {
       setConfirming(false)
     }
-  }, [action, confirming, networkStatus, onConfirmed, pendingRecord, removePending])
+  }, [action, confirmByServerState, confirming, networkStatus, onConfirmed, pendingRecord, removePending, statusAction])
 
   useEffect(() => {
     if (networkStatus !== 'online' || !pendingRecord) return
@@ -109,6 +166,7 @@ export function useCriticalPdaAction<T>({
 
   const run = useCallback(async (
     executor: (requestKey: string) => Promise<T>,
+    metadata?: Record<string, unknown>,
   ): Promise<{ kind: 'success'; data: T } | { kind: 'pending'; requestKey: string }> => {
     if (networkStatus !== 'online') {
       throw new Error('网络已断开，关键操作不可提交')
@@ -124,8 +182,10 @@ export function useCriticalPdaAction<T>({
     const record: PendingRequestRecord = {
       requestKey,
       action,
+      requestAction: statusAction,
       label,
       createdAt: new Date().toISOString(),
+      metadata,
     }
     addPending(record)
 
@@ -145,13 +205,17 @@ export function useCriticalPdaAction<T>({
         setPhaseMessage(`网络波动，${label}结果待确认。请先确认结果，避免重复提交。`)
         return { kind: 'pending', requestKey }
       }
+      const stateConfirmed = await confirmByServerState(record, null, error)
+      if (stateConfirmed) {
+        return { kind: 'success', data: stateConfirmed.data as T }
+      }
       removePending(action)
       setPhase('failed')
       setPhaseMessage(null)
-      setLastErrorMessage(message || `${label}提交失败，请检查后重试。`)
+      setLastErrorMessage(message || `${label}未提交成功，任务状态未确认推进。请检查后重试。`)
       throw error
     }
-  }, [action, addPending, label, networkStatus, onConfirmed, pendingRecord, removePending])
+  }, [action, addPending, confirmByServerState, label, networkStatus, onConfirmed, pendingRecord, removePending, statusAction])
 
   return {
     networkStatus,

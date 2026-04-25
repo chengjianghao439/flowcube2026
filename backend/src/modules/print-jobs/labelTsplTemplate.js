@@ -4,6 +4,7 @@
 
 const { pool } = require('../../config/db')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
+const logger = require('../../utils/logger')
 
 const LABEL_TEMPLATE_TYPES = [5, 6, 7, 8, 9]
 
@@ -188,7 +189,12 @@ async function getLabelTsplFromDefaultTemplate(templateType, vars) {
   if (typeof layout === 'string') {
     try {
       layout = safeJsonParse(layout, 'labelTsplTemplate.layout_json', {})
-    } catch {
+    } catch (e) {
+      logger.warn('TSPL 默认模板解析失败，降级使用内置模板', {
+        templateType: t,
+        degradation: 'print_template_parse_fallback',
+        error: e?.message || String(e),
+      }, 'PrintJobs')
       return null
     }
   }

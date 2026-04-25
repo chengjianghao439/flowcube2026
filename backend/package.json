@@ -10,7 +10,9 @@
     "lint": "eslint src/",
     "smoke:reports": "node scripts/smoke-reports.js",
     "migrate": "node scripts/migrate.js",
-    "bootstrap:admin": "node scripts/bootstrap-admin.js"
+    "bootstrap:admin": "node scripts/bootstrap-admin.js",
+    "test:package-add-item": "node scripts/test-package-add-item-overpack.js",
+    "test:package-finish-print": "node scripts/test-package-finish-print-closure.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

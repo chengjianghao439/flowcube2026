@@ -80,7 +80,7 @@ const WT_STATUS_TERMINAL = [WT_STATUS.SHIPPED, WT_STATUS.CANCELLED]
  * │ PICKING(2)   │ 1. 自动分配空闲分拣格（assignToTask）                         │
  * │              │ 2. 清除孤立容器锁（startPicking 兼容路径）                    │
  * ├──────────────┼──────────────────────────────────────────────────────────────┤
- * │ SORTING(3)   │ 1. 同步销售单状态 → 3（待出库/分拣中）                        │
+ * │ SORTING(3)   │ 1. 同步销售单状态 → 3（拣货中/仓库履约中）                    │
  * │              │    sale_orders.status = 3                                    │
  * ├──────────────┼──────────────────────────────────────────────────────────────┤
  * │ CHECKING(4)  │ 1. 释放分拣格（releaseByTask）                                │

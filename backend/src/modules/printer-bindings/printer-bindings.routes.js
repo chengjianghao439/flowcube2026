@@ -19,6 +19,7 @@ const VALID_TYPES = [
   'inventory_label',
   'rack_label',
   'container_label',
+  'package_label',
 ]
 
 const typeParamSchema = z.object({

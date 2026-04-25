@@ -26,6 +26,8 @@ import { useOfflineScan } from '@/hooks/useOfflineScan'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
+import { WT_STATUS } from '@/constants/warehouseTaskStatus'
+import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 
 // ─── 子组件：商品拣货卡片 ──────────────────────────────────────────────────────
 function SuggestionRow({ c, onTap, disabled }: {
@@ -105,23 +107,47 @@ export default function PdaTaskPage() {
 
   const inputRef  = useRef<HTMLInputElement>(null)
   const [inputVal, setInputVal]   = useState('')
-  const { flash, ok, err }        = usePdaFeedback()
+  const { flash, ok, err, warn }  = usePdaFeedback()
   const [scanning, setScanning]   = useState(false)
   const [finished, setFinished] = useState<'completed'|null>(null)
   const pickAction = useCriticalPdaAction<void>({
     action: `warehouse.pick-scan.${taskId}`,
+    requestAction: 'scan-log.pick',
     label: `拣货任务 ${taskId}`,
     onConfirmed: async () => {
       await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
+      const latest = await qc.fetchQuery({
+        queryKey: ['pda-task', taskId],
+        queryFn: () => getTaskByIdApi(taskId),
+      })
+      if (taskReachedStatus(latest, WT_STATUS.SORTING)) {
+        setFinished('completed')
+        ok('拣货已成功，任务状态已更新为「待分拣」')
+      }
+    },
+    resolveServerState: async () => {
+      const latest = await getTaskByIdApi(taskId)
+      if (taskReachedStatus(latest, WT_STATUS.SORTING)) {
+        return { effective: true, message: stateConfirmedMessage(`拣货任务 ${taskId}`, latest.statusName) }
+      }
+      return { effective: false }
     },
   })
   const readyAction = useCriticalPdaAction<{ taskId: number }>({
     action: `warehouse.ready.${taskId}`,
+    requestAction: 'warehouse.ready-to-ship',
     label: `拣货任务 ${taskId} 收口`,
     onConfirmed: async () => {
       setFinished('completed')
       await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       await qc.invalidateQueries({ queryKey: ['pda-suggestions', taskId] })
+    },
+    resolveServerState: async () => {
+      const latest = await getTaskByIdApi(taskId)
+      if (taskReachedStatus(latest, WT_STATUS.SORTING)) {
+        return { effective: true, data: { taskId }, message: stateConfirmedMessage(`拣货任务 ${taskId} 收口`, latest.statusName) }
+      }
+      return { effective: false }
     },
   })
   const taskNoticeAction =

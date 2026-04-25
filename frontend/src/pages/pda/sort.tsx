@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getSortingBinsApi, scanProductForSortApi } from '@/api/sorting-bins'
 import type { SortingBin } from '@/api/sorting-bins'
-import { sortDoneApi } from '@/api/warehouse-tasks'
+import { getTaskByIdApi, sortDoneApi } from '@/api/warehouse-tasks'
 import { Button } from '@/components/ui/button'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
@@ -23,6 +23,8 @@ import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
+import { WT_STATUS } from '@/constants/warehouseTaskStatus'
+import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 
 type Step = 'scan-product' | 'confirm-bin'
 
@@ -44,8 +46,25 @@ export default function PdaSortPage() {
   const [scanning, setScanning] = useState(false)
   const { flash, ok, err }  = usePdaFeedback()
   const sortAction = useCriticalPdaAction<{ allSorted: boolean; progress?: string }>({
-    action: `warehouse.sort.${hint?.taskId ?? 'none'}`,
+    action: 'warehouse.sort',
+    requestAction: 'warehouse.sort',
     label: '分拣确认',
+    onConfirmed: async (_data, ctx) => {
+      if (ctx.recovered) ok('分拣已成功，任务状态已更新')
+    },
+    resolveServerState: async ({ record }) => {
+      const taskId = Number(record.metadata?.taskId ?? hint?.taskId ?? 0)
+      if (!taskId) return { effective: false }
+      const latest = await getTaskByIdApi(taskId)
+      if (taskReachedStatus(latest, WT_STATUS.CHECKING)) {
+        return {
+          effective: true,
+          data: { allSorted: true },
+          message: stateConfirmedMessage(`任务 ${latest.taskNo} 分拣`, latest.statusName),
+        }
+      }
+      return { effective: false }
+    },
   })
 
   const { data: bins, isLoading, refetch } = useQuery({
@@ -86,6 +105,7 @@ export default function PdaSortPage() {
     try {
       const submitted = await sortAction.run((requestKey) =>
         sortDoneApi(hint.taskId, [{ itemId: hint.itemId, sortedQty: hint.qty }], requestKey).then((res) => res!),
+        { taskId: hint.taskId, itemId: hint.itemId },
       )
       if (submitted.kind === 'pending') {
         err('网络中断，分拣结果待确认。请先确认结果，再决定是否重扫。')

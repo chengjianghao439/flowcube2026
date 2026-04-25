@@ -34,7 +34,7 @@ import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { getCustomerPriceApi } from '@/api/price-lists'
 
 const PHONE_RE = /^1\d{10}$/
-import type { SaleOrderItem } from '@/types/sale'
+import type { SaleOrder, SaleOrderItem } from '@/types/sale'
 import type { ProductFinderResult } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
 
@@ -82,6 +82,25 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div className="card-base p-5">
       <h3 className="text-section-title mb-4 pb-2 border-b border-border/50">{title}</h3>
       {children}
+    </div>
+  )
+}
+
+function SalesAndFulfillmentStatus({ order }: { order: SaleOrder }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-muted-foreground">销售状态</span>
+      <StatusBadge type="sale" status={order.status} />
+      {order.taskNo && order.warehouseTaskStatus != null && (
+        <>
+          <span className="text-xs text-muted-foreground">履约状态</span>
+          <StatusBadge
+            type="task"
+            status={order.warehouseTaskStatus}
+            ariaLabel={order.warehouseTaskStatusName || undefined}
+          />
+        </>
+      )}
     </div>
   )
 }
@@ -612,7 +631,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
     <div className="flex flex-col gap-4">
       <ActionBar
         title={order.orderNo}
-        subtitle={<StatusBadge type="sale" status={order.status} />}
+        subtitle={<SalesAndFulfillmentStatus order={order} />}
         rightActions={
           <>
             <Button variant="outline" onClick={closeTab} disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending}>关闭</Button>
@@ -912,13 +931,15 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
         )}
         {order.status === 3 && (
           <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/[0.08] px-4 py-3 text-sm text-muted-foreground">
-            当前订单已进入仓库执行阶段。仓库任务创建后，库存仍以在库数量展示；只有仓库实际完成出库，当前库存才会减少。
+            当前销售状态表示订单已进入仓库履约中；真实作业阶段以仓库任务状态为准。库存仍以在库数量展示，只有仓库实际完成出库，当前库存才会减少。
           </div>
         )}
         <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
             ['客户',     order.customerName],
             ['仓库',     order.warehouseName],
+            ['销售状态', order.statusName],
+            ['履约状态', order.warehouseTaskStatusName || (order.taskNo ? '仓库任务状态未同步' : '未进入仓库')],
             ['销售日期', order.saleDate ?? '—'],
             ['经办人',   order.operatorName],
             ['创建时间', formatDisplayDateTime(order.createdAt)],

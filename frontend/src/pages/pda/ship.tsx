@@ -18,13 +18,14 @@ import PdaStat, { PdaStatGrid } from '@/components/pda/PdaStat'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getPackageByBarcodeApi } from '@/api/packages'
-import { shipTaskApi } from '@/api/warehouse-tasks'
-import { WT_STATUS } from '@/constants/warehouseTaskStatus'
+import { getTaskByIdApi, shipTaskApi } from '@/api/warehouse-tasks'
+import { WT_STATUS, WT_STATUS_CLASS, WT_STATUS_NAME } from '@/constants/warehouseTaskStatus'
 import type { PackageShipInfo } from '@/api/packages'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { getPackageShipClosureCopy } from '@/lib/outboundClosure'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
+import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 
 export default function PdaShipPage() {
   const navigate = useNavigate()
@@ -34,10 +35,20 @@ export default function PdaShipPage() {
   const [done, setDone]       = useState(false)
   const shipAction = useCriticalPdaAction<{ taskId: number }>({
     action: `warehouse.ship.confirm`,
+    requestAction: 'warehouse.ship',
     label: '出库确认',
     onConfirmed: async () => {
       ok('出库成功！')
       setDone(true)
+    },
+    resolveServerState: async ({ record }) => {
+      const taskId = Number(record.metadata?.taskId ?? info?.warehouseTaskId ?? 0)
+      if (!taskId) return { effective: false }
+      const latest = await getTaskByIdApi(taskId)
+      if (taskReachedStatus(latest, WT_STATUS.SHIPPED)) {
+        return { effective: true, data: { taskId }, message: stateConfirmedMessage('出库确认', latest.statusName) }
+      }
+      return { effective: false }
     },
   })
 
@@ -45,6 +56,7 @@ export default function PdaShipPage() {
     mutationFn: async (taskId: number) => {
       const result = await shipAction.run((requestKey) =>
         shipTaskApi(taskId, requestKey).then((res) => res as { taskId: number }),
+        { taskId },
       )
       return result
     },
@@ -57,6 +69,30 @@ export default function PdaShipPage() {
       err((e as { message?: string })?.message ?? '出库失败'),
   })
 
+  function warehouseStatusName(data: PackageShipInfo) {
+    const status = data.warehouseTaskStatus ?? data.taskStatus
+    return data.warehouseTaskStatusName || data.taskStatusName || WT_STATUS_NAME[String(status) as keyof typeof WT_STATUS_NAME] || `状态 ${status}`
+  }
+
+  function warehouseStatus(data: PackageShipInfo) {
+    return Number(data.warehouseTaskStatus ?? data.taskStatus)
+  }
+
+  function canShip(data: PackageShipInfo) {
+    return warehouseStatus(data) === WT_STATUS.SHIPPING
+  }
+
+  function shipBlockedMessage(data: PackageShipInfo) {
+    const statusName = warehouseStatusName(data)
+    if (warehouseStatus(data) === WT_STATUS.PACKING) {
+      const openPackages = data.packages.filter(pkg => pkg.status !== 2).length
+      return openPackages > 0
+        ? `当前仓库任务仍为「${statusName}」，且还有 ${openPackages} 箱未完成打包，不能出库。`
+        : `当前仓库任务仍为「${statusName}」，请先完成打包收口并进入「待出库」。`
+    }
+    return `当前仓库任务状态为「${statusName}」，不能执行出库。`
+  }
+
   // 扫码后自动查询并立即出库，无需额外确认按钮
   const handleScan = useCallback(async (raw: string) => {
     const parsed = parseBarcode(raw)
@@ -65,9 +101,13 @@ export default function PdaShipPage() {
     try {
       const res  = await getPackageByBarcodeApi(raw)
       const data = res!
-      if (data.taskStatus === WT_STATUS.SHIPPED)   { err('该订单已完成出库'); return }
-      if (data.taskStatus === WT_STATUS.CANCELLED) { err('该任务已取消'); return }
+      if (warehouseStatus(data) === WT_STATUS.SHIPPED)   { err('该订单已完成出库'); return }
+      if (warehouseStatus(data) === WT_STATUS.CANCELLED) { err('该任务已取消'); return }
       setInfo(data)
+      if (!canShip(data)) {
+        err(shipBlockedMessage(data))
+        return
+      }
       // 自动触发出库，无需用户再次确认
       shipMut.mutate(data.warehouseTaskId)
     } catch (e: unknown) {
@@ -101,6 +141,11 @@ export default function PdaShipPage() {
   const totalQty   = mergedItems.reduce((s, i) => s + i.qty, 0)
   const totalBoxes = info?.packages.length ?? 0
   const closureCopy = getPackageShipClosureCopy(info)
+  const currentWarehouseStatusName = info ? warehouseStatusName(info) : null
+  const currentWarehouseStatusClass = info
+    ? WT_STATUS_CLASS[warehouseStatus(info) as keyof typeof WT_STATUS_CLASS] ?? 'bg-muted text-muted-foreground border-border'
+    : ''
+  const currentCanShip = info ? canShip(info) : false
   // BODY_SPLIT
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -170,9 +215,16 @@ export default function PdaShipPage() {
               {/* 订单信息 */}
               <PdaSection title="订单信息">
                 <div className="flex items-center justify-between -mt-1 mb-1">
-                  <span />
-                  <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">待出库</Badge>
+                  <span className="text-xs text-muted-foreground">仓库任务状态</span>
+                  <Badge className={`${currentWarehouseStatusClass} text-xs`}>
+                    {currentWarehouseStatusName}
+                  </Badge>
                 </div>
+                {!currentCanShip ? (
+                  <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                    {shipBlockedMessage(info)}
+                  </div>
+                ) : null}
                 <PdaStatGrid cols={2}>
                   <PdaStat label="任务号" value={info.taskNo} />
                   <PdaStat label="客户" value={info.customerName} />
