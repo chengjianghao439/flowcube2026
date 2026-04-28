@@ -92,6 +92,12 @@ jobs:
           ssh -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" <<EOF
           set -euo pipefail
           cd "${{ steps.deploy_config.outputs.server_app_path }}"
+          if git diff --name-only --diff-filter=U | grep -q .; then
+            echo "==> 检测到服务器 Git 工作区存在未解决冲突，重置到当前发布提交"
+            git reset --hard HEAD
+          fi
+          git fetch origin main
+          git reset --hard "${{ github.sha }}"
           SKIP_RELEASE_GATE=1 bash scripts/server-update.sh
           EOF
 
