@@ -9,7 +9,6 @@ import { parseBarcode } from '@/utils/barcode'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
-import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import PdaSection from '@/components/pda/PdaSection'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
@@ -29,7 +28,7 @@ import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState
 
 export default function PdaShipPage() {
   const navigate = useNavigate()
-  const { flash, ok, err } = usePdaFeedback()
+  const { flash, ok, err, warn } = usePdaFeedback()
   const [info, setInfo]       = useState<PackageShipInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [done, setDone]       = useState(false)
@@ -62,7 +61,7 @@ export default function PdaShipPage() {
     },
     onSuccess: (result) => {
       if (result.kind === 'pending') {
-        err('网络中断，出库结果待确认。请先确认结果，避免重复扫码出库。')
+        warn('网络中断，出库结果待确认。请先确认结果，避免重复扫码出库。')
       }
     },
     onError: (e: unknown) =>
@@ -165,8 +164,9 @@ export default function PdaShipPage() {
             onConfirm={() => {
               void shipAction.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
-                if (status.status === 'not_found') err('未找到上次出库记录，请先刷新任务状态再决定是否重扫')
+                if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
+                if (status.status === 'state_unconfirmed') warn(status.message)
+                if (status.status === 'not_found') warn(status.message || '未找到上次出库记录；请先刷新任务状态再决定是否重扫')
                 if (status.status === 'failed') err(status.message || '上次出库未成功，请检查后重试')
               })
             }}
@@ -174,19 +174,16 @@ export default function PdaShipPage() {
             onDismissError={() => shipAction.clearError()}
           />
           <div className="space-y-2">
-            <PdaFlowPanel
-              badge="出库闭环提示"
-              title={`当前阶段：${closureCopy.stageLabel}`}
-              description={closureCopy.description}
-              nextAction={closureCopy.nextAction}
-              stepText="先收口物流和箱贴打印异常，再扫描物流条码完成出库；如果发现流程卡点，回异常工作台或仓库任务继续处理。"
-              actions={[
-                { label: '物流补打', onClick: () => navigate('/settings/barcode-print-query?category=logistics&status=failed') },
-                { label: '异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-              ]}
-            />
             {closureCopy.printSummary ? (
-              <div className="grid grid-cols-4 gap-2 pt-1 text-center text-xs">
+              <div className="grid grid-cols-3 gap-2 pt-1 text-center text-xs">
+                <div className="rounded-lg bg-white/80 px-2 py-2">
+                  <p className="text-muted-foreground">未生成</p>
+                  <p className="mt-1 font-semibold text-foreground">{closureCopy.printSummary.noJobCount ?? 0}</p>
+                </div>
+                <div className="rounded-lg bg-white/80 px-2 py-2">
+                  <p className="text-muted-foreground">待派发</p>
+                  <p className="mt-1 font-semibold text-foreground">{closureCopy.printSummary.pendingCount ?? 0}</p>
+                </div>
                 <div className="rounded-lg bg-white/80 px-2 py-2">
                   <p className="text-muted-foreground">已打印</p>
                   <p className="mt-1 font-semibold text-foreground">{closureCopy.printSummary.successCount}</p>

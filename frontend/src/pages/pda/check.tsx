@@ -14,7 +14,6 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
-import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getTasksApi, getTaskByIdApi, submitCheckScanApi } from '@/api/warehouse-tasks'
@@ -93,18 +92,6 @@ function TaskSelectStep({
       <PdaHeader title="选择复核任务" onBack={() => navigate('/pda')} right={<span className="text-xs text-muted-foreground">{tasks.length} 个待复核</span>} />
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
-          <PdaFlowPanel
-            badge="复核闭环提示"
-            title="复核页负责确认“已拣数量”和“已核数量”一致，再把任务推进到待打包"
-            description="先选任务，再连续扫库存条码完成复核。若发现任务卡住、分拣未完成或数量不一致，回仓库任务、PDA 分拣或异常工作台继续处理。"
-            nextAction="选择待复核任务"
-            stepText="先确认任务已经完成分拣，再做复核扫码；复核完成后继续打包，不要绕过待打包阶段直接出库。"
-            actions={[
-              { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-              { label: '打开 PDA 分拣', onClick: () => navigate('/pda/sort') },
-              { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-            ]}
-          />
 
           {isLoading && <PdaLoading className="h-40" />}
           {!isLoading && tasks.length === 0 && (
@@ -192,7 +179,7 @@ export default function PdaCheckPage() {
   const [allChecked, setAllChecked]     = useState(false)
   const taskId = selectedTask?.id ?? routeTaskId
 
-  const { flash, ok, err } = usePdaFeedback()
+  const { flash, ok, err, warn } = usePdaFeedback()
   const checkAction = useCriticalPdaAction<{
     allChecked: boolean
   }>({
@@ -242,7 +229,7 @@ export default function PdaCheckPage() {
     },
     onSuccess: (result) => {
       if (result.kind === 'pending') {
-        err('网络中断，复核结果待确认。请先确认结果，避免重复扫码。')
+        warn('网络中断，复核结果待确认。请先确认结果，避免重复扫码。')
       }
     },
     onError: (e: unknown) => {
@@ -276,17 +263,6 @@ export default function PdaCheckPage() {
   const totalChecked = items.reduce((s, i) => s + (i.checkedQty ?? 0), 0)
   const pct         = totalPick > 0 ? Math.min(100, Math.round(totalChecked / totalPick * 100)) : 0
   const linesDone   = items.length > 0 && items.every(i => (i.checkedQty ?? 0) === i.pickedQty)
-  const phaseCopy = linesDone
-    ? {
-        stage: '复核收口',
-        description: '当前各明细已核数量已与拣货一致，可以结束复核并推进到待打包。',
-        nextAction: '确认复核完成并进入待打包',
-      }
-    : {
-        stage: '复核进行中',
-        description: '当前优先连续扫描库存条码，让已核数量追平已拣数量。发现缺少分拣或数量不一致时，回分拣或异常入口继续处理。',
-        nextAction: '继续扫描库存条码',
-      }
 
   if (step === 'select-task') {
     return (
@@ -407,25 +383,14 @@ export default function PdaCheckPage() {
             onConfirm={() => {
               void checkAction.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
-                if (status.status === 'not_found') err('未找到上次复核记录，请刷新任务后再决定是否重扫')
+                if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
+                if (status.status === 'state_unconfirmed') warn(status.message)
+                if (status.status === 'not_found') warn(status.message || '未找到上次复核记录；请刷新任务后再决定是否重扫')
                 if (status.status === 'failed') err(status.message || '上次复核未成功，请检查后重试')
               })
             }}
             onClear={() => checkAction.clearPending()}
             onDismissError={() => checkAction.clearError()}
-          />
-          <PdaFlowPanel
-            badge="复核闭环提示"
-            title={phaseCopy.stage}
-            description={phaseCopy.description}
-            nextAction={phaseCopy.nextAction}
-            stepText="先追平复核数量，再结束当前任务；复核完成后优先去 PDA 打包，异常时回仓库任务和异常工作台。"
-            actions={[
-              { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-              { label: '打开 PDA 打包', onClick: () => navigate('/pda/pack') },
-              { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-            ]}
           />
 
           {taskLoading && (

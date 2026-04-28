@@ -12,13 +12,10 @@ import { useQuery } from '@tanstack/react-query'
 import { getSortingBinsApi, scanProductForSortApi } from '@/api/sorting-bins'
 import type { SortingBin } from '@/api/sorting-bins'
 import { getTaskByIdApi, sortDoneApi } from '@/api/warehouse-tasks'
-import { Button } from '@/components/ui/button'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
-import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
-import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -44,7 +41,7 @@ export default function PdaSortPage() {
   const [step, setStep]     = useState<Step>('scan-product')
   const [hint, setHint]     = useState<BinHint | null>(null)
   const [scanning, setScanning] = useState(false)
-  const { flash, ok, err }  = usePdaFeedback()
+  const { flash, ok, err, warn }  = usePdaFeedback()
   const sortAction = useCriticalPdaAction<{ allSorted: boolean; progress?: string }>({
     action: 'warehouse.sort',
     requestAction: 'warehouse.sort',
@@ -104,16 +101,23 @@ export default function PdaSortPage() {
     setScanning(true)
     try {
       const submitted = await sortAction.run((requestKey) =>
-        sortDoneApi(hint.taskId, [{ itemId: hint.itemId, sortedQty: hint.qty }], requestKey).then((res) => res!),
+        sortDoneApi(hint.taskId, [{ itemId: hint.itemId, sortedQty: hint.qty }], requestKey)
+          .then((res) => res as { allSorted: boolean; progress?: string }),
         { taskId: hint.taskId, itemId: hint.itemId },
       )
       if (submitted.kind === 'pending') {
-        err('网络中断，分拣结果待确认。请先确认结果，再决定是否重扫。')
+        warn('网络中断，分拣结果待确认。请先确认结果，再决定是否重扫。')
         return
       }
       const result = submitted.data
-      if (result?.allSorted) ok(`✓ 任务 ${hint.taskNo} 分拣全部完成！`)
-      else ok(`✓ 已放入 ${hint.binCode}（${result?.progress ?? '?'}）`)
+      const latest = await getTaskByIdApi(hint.taskId)
+      if (taskReachedStatus(latest, WT_STATUS.CHECKING)) {
+        ok(stateConfirmedMessage(`任务 ${latest.taskNo} 分拣`, latest.statusName))
+      } else if (result?.allSorted) {
+        warn(`分拣请求已返回完成，但服务端最新任务状态仍为「${latest.statusName ?? latest.status}」。请稍后刷新确认，暂勿重复扫码。`)
+      } else {
+        ok(`✓ 已放入 ${hint.binCode}（${result?.progress ?? '?'}）`)
+      }
     } catch (error: unknown) { err((error as { message?: string })?.message ?? '上报分拣失败，请重试') }
     finally { setScanning(false) }
     setStep('scan-product')
@@ -132,17 +136,6 @@ export default function PdaSortPage() {
 
   const occupiedBins = (bins ?? []).filter(b => b.status === 2)
   const freeBins     = (bins ?? []).filter(b => b.status === 1)
-  const phaseCopy = hint
-    ? {
-        stage: '分拣确认',
-        description: '系统已经定位到目标格口，当前优先扫描分拣格条码完成落格，再回波次或异常入口查看整体推进。',
-        nextAction: `扫描分拣格 ${hint.binCode} 完成落格`,
-      }
-    : {
-        stage: '分拣准备',
-        description: '当前优先扫描产品条码，系统会自动定位目标分拣格。若格口未分配、占用异常或波次卡点，请回 ERP 的分拣格管理和异常工作台继续处理。',
-        nextAction: '扫描产品条码获取目标分拣格',
-      }
 
   return (
     <div className="min-h-screen bg-background">
@@ -163,26 +156,14 @@ export default function PdaSortPage() {
           onConfirm={() => {
             void sortAction.confirmPending().then((status) => {
               if (!status) return
-              if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
-              if (status.status === 'not_found') err('未找到上次分拣确认记录，请先刷新任务状态后再决定是否重扫')
+              if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
+              if (status.status === 'state_unconfirmed') warn(status.message)
+              if (status.status === 'not_found') warn(status.message || '未找到上次分拣确认记录；请先刷新任务状态后再决定是否重扫')
               if (status.status === 'failed') err(status.message || '上次分拣确认未成功，请检查后重试')
             })
           }}
           onClear={() => sortAction.clearPending()}
           onDismissError={() => sortAction.clearError()}
-        />
-
-        <PdaFlowPanel
-          badge="分拣闭环提示"
-          title={phaseCopy.stage}
-          description={phaseCopy.description}
-          nextAction={phaseCopy.nextAction}
-          stepText="先扫商品找格口，再扫分拣格确认，最后回波次详情或异常工作台看整体推进。"
-          actions={[
-            { label: '打开分拣格管理', onClick: () => nav('/sorting-bins') },
-            { label: '打开波次详情', onClick: () => nav('/picking-waves?waveId=1&focus=print-closure') },
-            { label: '打开异常工作台', onClick: () => nav('/reports/exception-workbench') },
-          ]}
         />
 
         {/* 步骤进度 */}

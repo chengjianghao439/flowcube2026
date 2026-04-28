@@ -70,11 +70,12 @@ async function claimClientJobs({ clientId, limit = 3 } = {}) {
 }
 
 async function getDispatchHintForJob(printerCode, jobId) {
-  const withClients = (code, message, onlineClients = 0) => ({
+  const withClients = (code, message, onlineClients = 0, extra = {}) => ({
     code,
     message,
     onlineClients,
     sseClients: onlineClients,
+    ...extra,
   })
   const jid = Number(jobId)
   if (!Number.isFinite(jid) || jid <= 0) {
@@ -101,10 +102,55 @@ async function getDispatchHintForJob(printerCode, jobId) {
   }
   if (st !== STATUS.PENDING) return withClients('unknown', '', 0)
 
+  const [[printer]] = await pool.query(
+    `SELECT
+        p.id,
+        p.code,
+        p.name,
+        p.client_id,
+        pc.status AS client_status,
+        pc.last_seen,
+        TIMESTAMPDIFF(SECOND, pc.last_seen, NOW()) AS seconds_since_seen
+     FROM printers p
+     LEFT JOIN print_clients pc ON pc.client_id = p.client_id
+     WHERE p.id = ?`,
+    [job.printerId],
+  )
+  const secondsSinceSeen = Number(printer?.seconds_since_seen)
+  const clientOnline =
+    Number(printer?.client_status) === 1
+    && Number.isFinite(secondsSinceSeen)
+    && secondsSinceSeen >= 0
+    && secondsSinceSeen <= 30
+  const base = {
+    printerId: job.printerId,
+    printerCode: printer?.code ?? job.printerCode ?? null,
+    printerName: printer?.name ?? job.printerName ?? null,
+    clientId: printer?.client_id ?? null,
+    clientOnline,
+    clientLastSeen: printer?.last_seen ?? null,
+  }
+  if (!printer?.client_id) {
+    return withClients(
+      'client_not_bound',
+      '任务已入队，但绑定打印机尚未关联桌面客户端。请在连接该打印机的 FlowCube 桌面端「从本机添加」打印机后继续派发。',
+      0,
+      base,
+    )
+  }
+  if (!clientOnline) {
+    return withClients(
+      'client_offline',
+      '任务已入队，绑定打印机的桌面客户端当前离线。请启动连接该打印机的 FlowCube 桌面端，客户端上线后会继续领取待派发任务。',
+      0,
+      base,
+    )
+  }
   return withClients(
-    'no_print_client',
-    '任务已入队。请使用 FlowCube 桌面端，在「打印机管理」通过「从本机添加」绑定标签机并绑定用途后，再执行打印；桌面端将按打印机名称本机出纸并核销队列。',
-    0,
+    'waiting_client',
+    '任务已入队，正在等待绑定打印机的桌面客户端领取。',
+    1,
+    base,
   )
 }
 

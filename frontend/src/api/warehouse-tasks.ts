@@ -51,6 +51,8 @@ export interface WarehouseTask {
   }
   printSummary?: {
     totalPackages: number
+    noJobCount?: number
+    pendingCount?: number
     successCount: number
     failedCount: number
     timeoutCount: number

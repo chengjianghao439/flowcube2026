@@ -45,16 +45,18 @@ async function resolveLabelPrinterId() {
   return first?.id ?? null
 }
 
-async function resolveLabelPrinter({ warehouseId, jobType }) {
+async function resolveLabelPrinter({ warehouseId, jobType, requireBinding = false, allowBindingFallback = true }) {
   const wh = warehouseId != null ? Number(warehouseId) : null
   const resolved = await resolvePrinterForJob({
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : undefined,
     jobType,
     contentType: 'zpl',
+    requireBinding,
+    allowBindingFallback,
   })
   let printerId = resolved.printerId
   let dispatchReason = resolved.dispatchReason || 'fallback'
-  if (!printerId) {
+  if (!printerId && !requireBinding) {
     printerId = await resolveLabelPrinterId()
     dispatchReason = 'fallback'
   }
@@ -203,6 +205,8 @@ async function enqueuePackageLabelJob(payload) {
   const { printerId, dispatchReason } = await resolveLabelPrinter({
     warehouseId: wh,
     jobType: 'package_label',
+    requireBinding: true,
+    allowBindingFallback: false,
   })
   if (!printerId) return null
   const vars = {

@@ -14,7 +14,8 @@ const fmt = row => ({
   warehouseId:row.warehouse_id, warehouseName:row.warehouse_name,
   status:row.status, statusName:SALE_STATUS_NAME[row.status],
   saleDate:row.sale_date, totalAmount:Number(row.total_amount), remark:row.remark,
-  taskId:row.task_id||null, taskNo:row.task_no||null,
+  taskId:row.warehouse_task_id||row.task_id||null,
+  taskNo:row.warehouse_task_no||row.task_no||null,
   warehouseTaskStatus: row.warehouse_task_status != null ? Number(row.warehouse_task_status) : null,
   warehouseTaskStatusName: row.warehouse_task_status != null
     ? (WT_STATUS_NAME[Number(row.warehouse_task_status)] || null)
@@ -27,6 +28,26 @@ const fmt = row => ({
   receiverAddress:row.receiver_address||null,
   operatorId:row.operator_id, operatorName:row.operator_name, createdAt:row.created_at,
 })
+
+const latestWarehouseTaskJoin = `
+  LEFT JOIN (
+    SELECT wt.*
+    FROM warehouse_tasks wt
+    INNER JOIN (
+      SELECT sale_order_id, MAX(id) AS id
+      FROM warehouse_tasks
+      WHERE deleted_at IS NULL AND sale_order_id IS NOT NULL
+      GROUP BY sale_order_id
+    ) latest_wt ON latest_wt.id = wt.id
+  ) wt_by_sale ON wt_by_sale.sale_order_id = so.id
+  LEFT JOIN warehouse_tasks wt_by_id ON wt_by_id.id = so.task_id AND wt_by_id.deleted_at IS NULL
+`
+
+const warehouseTaskProjection = `
+  COALESCE(wt_by_sale.id, wt_by_id.id) AS warehouse_task_id,
+  COALESCE(wt_by_sale.task_no, wt_by_id.task_no) AS warehouse_task_no,
+  COALESCE(wt_by_sale.status, wt_by_id.status) AS warehouse_task_status
+`
 
 const genOrderNo = conn => generateDailyCode(conn, 'SO', 'sale_orders', 'order_no')
 
@@ -224,9 +245,9 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     countParams.push(productId)
   }
   const [rows] = await pool.query(
-    `SELECT so.*, wt.status AS warehouse_task_status
+    `SELECT so.*, ${warehouseTaskProjection}
      FROM sale_orders so
-     LEFT JOIN warehouse_tasks wt ON wt.id = so.task_id AND wt.deleted_at IS NULL
+     ${latestWarehouseTaskJoin}
      WHERE so.deleted_at IS NULL AND (so.order_no LIKE ? OR so.customer_name LIKE ?) ${cond}
      ORDER BY so.created_at DESC LIMIT ? OFFSET ?`,
     [...params,pageSize,offset],
@@ -237,10 +258,10 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
 
 async function findById(id) {
   const [rows] = await pool.query(
-    `SELECT so.*, c.name AS carrier_name, wt.status AS warehouse_task_status
+    `SELECT so.*, c.name AS carrier_name, ${warehouseTaskProjection}
      FROM sale_orders so
      LEFT JOIN carriers c ON c.id = so.carrier_id AND c.deleted_at IS NULL
-     LEFT JOIN warehouse_tasks wt ON wt.id = so.task_id AND wt.deleted_at IS NULL
+     ${latestWarehouseTaskJoin}
      WHERE so.id=? AND so.deleted_at IS NULL`,
     [id]
   )

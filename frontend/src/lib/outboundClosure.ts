@@ -11,6 +11,8 @@ type PackageSummary = {
 
 type PrintSummary = {
   totalPackages: number
+  noJobCount?: number
+  pendingCount?: number
   successCount: number
   failedCount: number
   timeoutCount: number
@@ -53,6 +55,14 @@ export function getOutboundClosureCopy(task: TaskLike | null) {
       stageLabel: '待选择任务',
       description: '先选择具体出库任务或扫描物流条码，再继续打包、打印与出库。',
       nextAction: '先打开具体任务',
+    }
+  }
+
+  if ((printSummary?.noJobCount ?? 0) > 0) {
+    return {
+      stageLabel: '箱贴未入链',
+      description: `当前有 ${printSummary?.noJobCount ?? 0} 个包裹未生成箱贴打印任务，不能视为打印处理中。请回打包页重新完成箱贴入链或在出库补打中处理。`,
+      nextAction: '先生成可追踪的箱贴打印任务',
     }
   }
 

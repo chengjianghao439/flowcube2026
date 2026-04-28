@@ -113,6 +113,9 @@ function inboundStatusClause(status, thresholdMinutes) {
   if (status === 'cancelled') {
     return { sql: 'AND t.status = 5', params: [] }
   }
+  if (status === 'no_job') {
+    return { sql: 'AND IFNULL(t.status, 0) <> 5 AND pj.id IS NULL', params: [] }
+  }
   if (status === 'timeout') {
     return {
       sql: `AND IFNULL(t.status, 0) <> 5
@@ -141,13 +144,9 @@ function inboundStatusClause(status, thresholdMinutes) {
   if (status === 'queued') {
     return {
       sql: `AND IFNULL(t.status, 0) <> 5
-            AND (
-              pj.status IS NULL
-              OR (
-                pj.status = ?
-                AND (pj.updated_at IS NULL OR pj.updated_at > DATE_SUB(NOW(), INTERVAL ? MINUTE))
-              )
-            )`,
+            AND pj.id IS NOT NULL
+            AND pj.status = ?
+            AND (pj.updated_at IS NULL OR pj.updated_at > DATE_SUB(NOW(), INTERVAL ? MINUTE))`,
       params: [STATUS.PENDING, thresholdMinutes],
     }
   }
@@ -156,11 +155,12 @@ function inboundStatusClause(status, thresholdMinutes) {
 
 function genericStatusClause(status, alias = 'j') {
   if (!status) return { sql: '', params: [] }
+  if (status === 'no_job') return { sql: `AND ${alias}.id IS NULL`, params: [] }
   if (status === 'timeout') return { sql: `AND ${alias}.status = ? AND IFNULL(${alias}.error_message, '') = ?`, params: [STATUS.FAILED, 'no printer available'] }
   if (status === 'success') return { sql: `AND ${alias}.status = ?`, params: [STATUS.DONE] }
   if (status === 'failed') return { sql: `AND ${alias}.status = ? AND IFNULL(${alias}.error_message, '') <> ?`, params: [STATUS.FAILED, 'no printer available'] }
   if (status === 'printing') return { sql: `AND ${alias}.status = ?`, params: [STATUS.PRINTING] }
-  if (status === 'queued') return { sql: `AND (${alias}.status IS NULL OR ${alias}.status = ?)`, params: [STATUS.PENDING] }
+  if (status === 'queued') return { sql: `AND ${alias}.id IS NOT NULL AND ${alias}.status = ?`, params: [STATUS.PENDING] }
   if (status === 'cancelled') return { sql: 'AND 1=0', params: [] }
   return { sql: '', params: [] }
 }

@@ -46,7 +46,7 @@ const BIND_TYPES = [
   { key: 'inventory_label', label: '库存标签', desc: '库存盘点、通用库存 ZPL' },
   { key: 'rack_label', label: '货架条码', desc: '货架位条码；未单独绑定时使用「库存标签」绑定' },
   { key: 'container_label', label: '库存条码', desc: '当前收货入库与库存单元共用；未单独绑定时使用「库存标签」绑定' },
-  { key: 'package_label', label: '箱贴标签', desc: '打包完成箱贴；未单独绑定时使用「库存标签」绑定' },
+  { key: 'package_label', label: '箱贴标签', desc: '打包完成箱贴；必须单独绑定，不使用其他标签用途兜底' },
 ] as const
 
 type BindType = (typeof BIND_TYPES)[number]['key']

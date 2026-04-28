@@ -7,8 +7,8 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "[1/4] 构建前端静态资源（跳过 PWA）..."
-BUILD_TARGET=pda npm run build
+echo "[1/4] 构建前端静态资源（注入 PDA 默认服务器地址）..."
+node ../scripts/build-frontend-bundle.js pda
 
 echo "[2/4] 同步到 Android 项目..."
 npx cap copy android

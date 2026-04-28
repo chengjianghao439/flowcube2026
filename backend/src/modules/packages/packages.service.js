@@ -9,6 +9,7 @@ const {
   assertTaskPackagingClosure,
 } = require('../warehouse-tasks/warehouse-tasks.service')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+const { buildPackagePrintSummary } = require('../../utils/printSummary')
 
 // ─── 查询任务下所有箱子（含明细）────────────────────────────────────────────
 async function listByTask(taskId) {
@@ -241,6 +242,9 @@ async function buildFinishedPackagePrintResult(exec, packageId, warehouseTaskId,
     'SELECT COUNT(*) AS remaining FROM packages WHERE warehouse_task_id=? AND status=1',
     [warehouseTaskId],
   )
+  const dispatchHint = job?.id
+    ? await printJobs.getDispatchHintForJob(job.printerCode, Number(job.id))
+    : null
   return {
     id: Number(packageId),
     warehouseTaskId: Number(warehouseTaskId),
@@ -250,6 +254,17 @@ async function buildFinishedPackagePrintResult(exec, packageId, warehouseTaskId,
     printQueued: true,
     printJobId: Number(job.id),
     printJobStatus: Number(job.status),
+    printJob: {
+      id: Number(job.id),
+      jobType: job.jobType ?? 'package_label',
+      status: Number(job.status),
+      statusKey: job.statusKey ?? null,
+      printStateLabel: job.printStateLabel ?? null,
+      printerId: job.printerId ?? null,
+      printerCode: job.printerCode ?? null,
+      printerName: job.printerName ?? null,
+      dispatchHint,
+    },
   }
 }
 
@@ -325,6 +340,7 @@ async function finishPackage(packageId, { createdBy } = {}) {
     warehouseId: Number(pkg.warehouse_id),
     jobType: 'package_label',
     contentType: 'zpl',
+    requireClientOnline: false,
   })
 
   const conn = await pool.getConnection()
@@ -340,7 +356,7 @@ async function finishPackage(packageId, { createdBy } = {}) {
     })
     if (!job) {
       throw new AppError(
-        '箱贴未进入打印链，请先检查打印机绑定、用途配置和桌面客户端在线状态',
+        '箱贴未进入打印链，请先检查 package_label 打印机绑定和用途配置',
         409,
         'PACKAGE_LABEL_JOB_NOT_QUEUED',
       )
@@ -376,6 +392,7 @@ async function getByBarcode(barcode) {
   const allPkgs = await listByTask(pkg.warehouse_task_id)
   const [printRows] = await pool.query(
     `SELECT
+        j.id AS job_id,
         j.status,
         j.updated_at,
         j.error_message,
@@ -396,24 +413,9 @@ async function getByBarcode(barcode) {
      WHERE p.warehouse_task_id = ?`,
     [pkg.warehouse_task_id],
   )
-  const printSummary = {
-    totalPackages: allPkgs.length,
-    successCount: 0,
-    failedCount: 0,
-    timeoutCount: 0,
-    processingCount: 0,
-    recentError: null,
-    recentPrinter: null,
-  }
-  for (const row of printRows) {
-    const status = Number(row.status)
-    if (status === 2) printSummary.successCount += 1
-    else if (status === 3) printSummary.failedCount += 1
-    else if ((status === 0 || status === 1) && row.updated_at && (Date.now() - new Date(row.updated_at).getTime()) >= Number(inboundThresholds.printTimeoutMinutes) * 60 * 1000) printSummary.timeoutCount += 1
-    else if (status === 0 || status === 1) printSummary.processingCount += 1
-    if (!printSummary.recentError && row.error_message) printSummary.recentError = row.error_message
-    if (!printSummary.recentPrinter && (row.printer_code || row.printer_name)) printSummary.recentPrinter = row.printer_code || row.printer_name
-  }
+  const printSummary = buildPackagePrintSummary(printRows, allPkgs.length, {
+    timeoutMinutes: inboundThresholds.printTimeoutMinutes,
+  })
 
   return {
     packageId:        pkg.id,

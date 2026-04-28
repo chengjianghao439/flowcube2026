@@ -69,11 +69,11 @@ node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.e
 
 Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默认连 `http://localhost:3000`，正式用户必须在登录前改地址。
 
-- 生产默认地址已固定在 [deploy/production.json](/Users/chengjianghao/flowcube/deploy/production.json) 的 `erpOrigin`。
-- **Build Desktop Installer** 工作流在 `npm run build`（frontend）时会自动读取该配置；重新打 tag 构建的安装包会把这个地址作为登录页默认值。
+- 生产默认地址来自 `VITE_ERP_PRODUCTION_ORIGIN`，或 [deploy/production.local.json](/Users/chengjianghao/flowcube/deploy/production.local.json) 的 `erpOrigin`（CI 可用 GitHub Variable `VITE_ERP_PRODUCTION_ORIGIN`）。
+- **Build Desktop Installer** 工作流和本地 `desktop` 打包脚本都会强制注入该地址；缺失时直接失败，避免安装包默认连 `localhost:3000`。
 - 仍可在登录页「服务器地址」或 **Ctrl+Shift+S** 修改为其它环境。
 
-本地桌面打包示例：`VITE_ERP_PRODUCTION_ORIGIN=https://api.example.com npm run build`（在 `frontend` 目录）。
+本地桌面打包示例：`VITE_ERP_PRODUCTION_ORIGIN=https://api.example.com npm run dist:win --prefix desktop`。
 
 ## Browser 自动部署（main 推送后浏览器直接看到新版本）
 

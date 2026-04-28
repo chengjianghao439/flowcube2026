@@ -31,7 +31,7 @@ export function isFileProtocol(): boolean {
 
 /**
  * 根据本地配置同步 axios baseURL。
- * - 已配置或 file:// 默认：使用绝对 `${origin}/api`
+ * - 已配置或安装包内置默认：使用绝对 `${origin}/api`
  * - 浏览器未配置：相对 `/api`
  */
 export function applyErpApiBaseFromStorage(): void {

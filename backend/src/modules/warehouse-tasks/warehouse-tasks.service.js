@@ -10,6 +10,7 @@ const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const { WT_STATUS, WT_STATUS_NAME, WT_STATUS_PICK_POOL, isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { buildPackagePrintSummary } = require('../../utils/printSummary')
 const logger = require('../../utils/logger')
 
 const TASK_STATUS = WT_STATUS_NAME
@@ -137,6 +138,7 @@ async function assertTaskPackagePrintClosure(conn, taskId) {
     `SELECT
         p.id AS package_id,
         p.barcode,
+        j.id AS job_id,
         j.status,
         j.error_message
      FROM packages p
@@ -157,7 +159,7 @@ async function assertTaskPackagePrintClosure(conn, taskId) {
   if (!rows.length) {
     throw new AppError('没有已完成的箱子，无法推进到待出库', 400)
   }
-  const missing = rows.find((row) => row.status == null)
+  const missing = rows.find((row) => row.job_id == null)
   if (missing) {
     throw new AppError(`箱贴未进入打印链：箱号 ${missing.barcode} 还没有打印任务`, 409)
   }
@@ -254,6 +256,7 @@ async function findById(id) {
 
   const [printRows] = await pool.query(
     `SELECT
+        j.id AS job_id,
         j.status,
         j.updated_at,
         j.error_message,
@@ -274,24 +277,9 @@ async function findById(id) {
      WHERE p.warehouse_task_id = ?`,
     [id],
   )
-  task.printSummary = {
-    totalPackages: packageRows.length,
-    successCount: 0,
-    failedCount: 0,
-    timeoutCount: 0,
-    processingCount: 0,
-    recentError: null,
-    recentPrinter: null,
-  }
-  for (const row of printRows) {
-    const status = Number(row.status)
-    if (status === 2) task.printSummary.successCount += 1
-    else if (status === 3) task.printSummary.failedCount += 1
-    else if ((status === 0 || status === 1) && row.updated_at && (Date.now() - new Date(row.updated_at).getTime()) >= Number(inboundThresholds.printTimeoutMinutes) * 60 * 1000) task.printSummary.timeoutCount += 1
-    else if (status === 0 || status === 1) task.printSummary.processingCount += 1
-    if (!task.printSummary.recentError && row.error_message) task.printSummary.recentError = row.error_message
-    if (!task.printSummary.recentPrinter && (row.printer_code || row.printer_name)) task.printSummary.recentPrinter = row.printer_code || row.printer_name
-  }
+  task.printSummary = buildPackagePrintSummary(printRows, packageRows.length, {
+    timeoutMinutes: inboundThresholds.printTimeoutMinutes,
+  })
   return task
 }
 

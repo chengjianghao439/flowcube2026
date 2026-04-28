@@ -97,7 +97,7 @@ export function clearElectronStaleViteOrigins(): void {
 
 /**
  * 按当前页面 hostname 推断默认 API 根：
- * - Electron / file://：页面无 hostname，优先 VITE_ERP_PRODUCTION_ORIGIN（打包时注入），否则 localhost:3000
+ * - Electron / file://：页面无 hostname，使用 VITE_ERP_PRODUCTION_ORIGIN（打包时注入）；缺失时不再静默退回 localhost
  * - Vite dev(5173) / preview(4173)：统一用当前页面 origin，API 走 /api 代理（局域网用 Mac IP 打开时勿直连 :3000，否则连到访问者本机或未监听端口）
  * - 浏览器 localhost / 127.0.0.1 → http://localhost:3000（直连后端，本机开发）
  * - 浏览器 192.168.* 且非上述端口 → http://{同主机}:3000
@@ -109,7 +109,7 @@ export function getDynamicDefaultApi(): string {
 
   if (isFileProtocol() || IS_ELECTRON_DESKTOP) {
     if (envProd) return envProd
-    return 'http://localhost:3000'
+    return ''
   }
 
   const port = window.location.port
@@ -160,7 +160,7 @@ export function probeRelativeErpApi(): Promise<boolean> {
 
 /**
  * fallback 尝试顺序（去重）：
- * localStorage → 动态默认 → localhost:3000 → 构建期生产地址
+ * localStorage → 动态默认 → localhost:3000（仅浏览器开发态）→ 构建期生产地址
  */
 export function collectErpApiFallbackCandidates(): string[] {
   const out: string[] = []
@@ -177,7 +177,9 @@ export function collectErpApiFallbackCandidates(): string[] {
 
   if (typeof window !== 'undefined') {
     add(getDynamicDefaultApi())
-    add('http://localhost:3000')
+    if (!IS_ELECTRON_DESKTOP && !IS_CAPACITOR_PDA) {
+      add('http://localhost:3000')
+    }
     add(ERP_PRODUCTION_ORIGIN)
   } else {
     add('http://localhost:3000')
@@ -242,7 +244,7 @@ export function setApiBase(url: string): void {
 
 /**
  * axios：浏览器未手动配置时返回 null → 相对路径 /api；
- * file:// 或未配置时用动态默认（保证 Electron 等可连）。
+ * file:// 使用安装包内置默认地址；未注入时返回 null，由连接门控提示配置问题。
  */
 export function getEffectiveApiOrigin(): string | null {
   const stored = getStoredEffectiveApiOrigin()

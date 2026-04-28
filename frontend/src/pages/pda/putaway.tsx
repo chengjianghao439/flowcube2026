@@ -10,7 +10,6 @@ import PdaHeader from '@/components/pda/PdaHeader'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaEmptyState, { PdaLoading } from '@/components/pda/PdaEmptyState'
-import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { usePdaFlow } from '@/hooks/usePdaFlow'
 import PdaFlowSteps from '@/components/pda/PdaFlowSteps'
 import { makePutawayFlow, type PutawayFlowContext } from '@/flows/putawayFlow'
@@ -23,11 +22,6 @@ function PutawayRunner({ taskId }: { taskId: number }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { warn, err } = usePdaFeedback()
-  const { data: task } = useQuery({
-    queryKey: ['pda-inbound-task', taskId],
-    queryFn: () => getInboundTaskByIdApi(taskId),
-    enabled: taskId > 0,
-  })
   const putawayAction = useCriticalPdaAction<void>({
     action: `inbound.putaway.${taskId}`,
     label: `收货单 ${taskId} 上架`,
@@ -57,7 +51,6 @@ function PutawayRunner({ taskId }: { taskId: number }) {
 
   const initialContext: PutawayFlowContext = { taskId, containerId: null }
   const engine = usePdaFlow(flowDef, initialContext, `inbound-putaway-${taskId}`)
-  const closureCopy = task ? getInboundClosureCopy(task) : null
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -80,30 +73,15 @@ function PutawayRunner({ taskId }: { taskId: number }) {
           onConfirm={() => {
             void putawayAction.confirmPending().then((status) => {
               if (!status) return
-              if (status.status === 'pending') warn('服务端仍未确认结果，请稍后再查或刷新任务状态')
-              if (status.status === 'not_found') warn('未找到上次上架记录，请先刷新确认是否已落账，再手动重试')
+              if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查或刷新任务状态')
+              if (status.status === 'state_unconfirmed') warn(status.message)
+              if (status.status === 'not_found') warn(status.message || '未找到上次上架记录；请先刷新确认是否已落账，再手动重试')
               if (status.status === 'failed') err(status.message || '上架未成功，请检查后重试')
             })
           }}
           onClear={() => putawayAction.clearPending()}
           onDismissError={() => putawayAction.clearError()}
         />
-        {closureCopy ? (
-          <div className="mb-3">
-            <PdaFlowPanel
-              badge="上架执行中"
-              title={`当前阶段：${closureCopy.stageLabel}`}
-              description={closureCopy.description}
-              nextAction={closureCopy.nextAction}
-              stepText="先扫描库存条码，再扫描货架条码完成上架；如果发现库位不匹配或待上架数据不对，先回收货列表、异常工作台或 ERP 收货详情处理。"
-              actions={[
-                { label: '返回收货列表', onClick: () => navigate('/pda/inbound') },
-                { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-                { label: '打开收货详情', onClick: () => navigate(`/inbound-tasks/${taskId}`) },
-              ]}
-            />
-          </div>
-        ) : null}
         <PdaFlowSteps steps={flowDef.steps} currentId={engine.stepId} />
         <p className="text-xs text-muted-foreground mt-2">{engine.currentStep.label}</p>
       </div>

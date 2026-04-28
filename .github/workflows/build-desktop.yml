@@ -70,16 +70,9 @@ jobs:
 
           ERP_ORIGIN="${ERP_ORIGIN_VAR:-}"
           if [ -z "$ERP_ORIGIN" ]; then
-            echo "server_deploy_configured=false" >> "$GITHUB_OUTPUT"
-            echo "erp_origin=" >> "$GITHUB_OUTPUT"
-            echo "server_host=" >> "$GITHUB_OUTPUT"
-            echo "server_user=" >> "$GITHUB_OUTPUT"
-            echo "server_ssh_port=22" >> "$GITHUB_OUTPUT"
-            echo "server_app_path=" >> "$GITHUB_OUTPUT"
-            echo "server_downloads_path=" >> "$GITHUB_OUTPUT"
-            echo "::notice::未找到部署配置，本次只构建安装包并上传 GitHub Release，不执行服务器发布。"
+            echo "::error::缺少部署配置：桌面安装包必须注入 VITE_ERP_PRODUCTION_ORIGIN，避免默认连到 localhost。请设置 deploy/production.local.json 或 GitHub Variable VITE_ERP_PRODUCTION_ORIGIN。"
             cat /tmp/flowcube-deploy-config.err || true
-            exit 0
+            exit 1
           fi
           SERVER_HOST="${SERVER_HOST_VAR:-$(node -e "const u=new URL(process.argv[1]); console.log(u.hostname)" "$ERP_ORIGIN")}"
           SERVER_USER="${SERVER_USER_VAR:-root}"
@@ -360,6 +353,7 @@ jobs:
         shell: bash
         env:
           VITE_ELECTRON: 1
+          VITE_ERP_PRODUCTION_ORIGIN: ${{ steps.deploy_config.outputs.erp_origin }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           set -euo pipefail
@@ -497,6 +491,12 @@ jobs:
 
           version="${{ steps.version.outputs.version }}"
           tag="${{ steps.version.outputs.tag }}"
+          notes_file="docs/release-notes/${version}.md"
+          if [ -f "$notes_file" ]; then
+            notes_b64="$(node -e "process.stdout.write(Buffer.from(require('fs').readFileSync(process.argv[1], 'utf8')).toString('base64'))" "$notes_file")"
+          else
+            notes_b64="$(node -e "process.stdout.write(Buffer.from(process.argv[1]).toString('base64'))" "极序 Flow v${version} 已发布，包含本次 main 分支更新。")"
+          fi
           app_path="${{ steps.deploy_config.outputs.server_app_path }}"
           downloads_path="${{ steps.deploy_config.outputs.server_downloads_path }}"
           remote_tmp="/tmp/flowcube-desktop-release/${tag}"
@@ -517,7 +517,8 @@ jobs:
               -v '$downloads_path:$downloads_path' \
               -v '$remote_tmp:$remote_tmp:ro' \
               -e FLOWCUBE_DOWNLOADS_ROOT='$downloads_path' \
-              flowcube-backend node /release-scripts/release-desktop.js '$version' --artifact='$remote_artifact' --notes='GitHub Actions ${GITHUB_SHA}'"
+              -e FLOWCUBE_RELEASE_NOTES_B64='$notes_b64' \
+              flowcube-backend node /release-scripts/release-desktop.js '$version' --artifact='$remote_artifact'"
 
           echo "=== 发布完成；权威入口: /latest.json，安装包路径: /versions/${tag}/FlowCube-Setup-${version}.exe ==="
 

@@ -78,6 +78,8 @@ export interface PickingWave {
   pickLines?: WavePickLine[]
   printSummary?: {
     totalPackages: number
+    noJobCount?: number
+    pendingCount?: number
     successCount: number
     failedCount: number
     timeoutCount: number

@@ -1,7 +1,7 @@
 {
-  "version": "1.1.20",
-  "versionCode": 22,
+  "version": "1.1.21",
+  "versionCode": 23,
   "filename": "app-release.apk",
-  "releaseNote": "修复 PDA 主流程崩溃、状态回执误判、装箱超装与打包打印入链问题；浏览器 PDA 不再误弹 APK 更新提示。",
-  "publishedAt": "2026-04-25T15:44:05.000Z"
+  "releaseNote": "移除 PDA 新手引导与现场闭环提示卡片，保留核心作业入口；强化出库打印、装箱与状态回执闭环。",
+  "publishedAt": "2026-04-28T00:00:00.000Z"
 }

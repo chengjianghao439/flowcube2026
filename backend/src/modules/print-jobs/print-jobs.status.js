@@ -55,7 +55,7 @@ function normalizeBarcodeQueryKeyword(raw) {
 function normalizeBarcodeRecordStatus(raw) {
   if (raw === undefined || raw === null || raw === '') return undefined
   const value = String(raw).trim().toLowerCase()
-  if (['pending', 'queued', 'printing', 'success', 'failed', 'timeout', 'cancelled'].includes(value)) {
+  if (['no_job', 'pending', 'queued', 'printing', 'success', 'failed', 'timeout', 'cancelled'].includes(value)) {
     return value === 'pending' ? 'queued' : value
   }
   return undefined
@@ -76,7 +76,7 @@ function deriveInboundBarcodeStatus(row, thresholds = DEFAULT_INBOUND_THRESHOLDS
   if (rawStatus === STATUS.FAILED) return { statusKey: 'failed', printStateLabel: '打印失败' }
   if (rawStatus === STATUS.PRINTING) return { statusKey: 'printing', printStateLabel: '打印中' }
   if (rawStatus === STATUS.PENDING) return { statusKey: 'queued', printStateLabel: '待派发' }
-  return { statusKey: 'queued', printStateLabel: '待派发' }
+  return { statusKey: 'no_job', printStateLabel: '未生成打印任务' }
 }
 
 function deriveGenericBarcodeStatus(row) {
@@ -88,7 +88,7 @@ function deriveGenericBarcodeStatus(row) {
   if (rawStatus === STATUS.FAILED) return { statusKey: 'failed', printStateLabel: '打印失败' }
   if (rawStatus === STATUS.PRINTING) return { statusKey: 'printing', printStateLabel: '打印中' }
   if (rawStatus === STATUS.PENDING) return { statusKey: 'queued', printStateLabel: '待派发' }
-  return { statusKey: 'queued', printStateLabel: '待派发' }
+  return { statusKey: 'no_job', printStateLabel: '未生成打印任务' }
 }
 
 function assertCanComplete(job) {

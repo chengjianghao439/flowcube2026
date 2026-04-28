@@ -32,6 +32,7 @@ import { useCarriersActive } from '@/hooks/useCarriers'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { getCustomerPriceApi } from '@/api/price-lists'
+import { WT_STATUS_CLASS } from '@/constants/warehouseTaskStatus'
 
 const PHONE_RE = /^1\d{10}$/
 import type { SaleOrder, SaleOrderItem } from '@/types/sale'
@@ -94,11 +95,12 @@ function SalesAndFulfillmentStatus({ order }: { order: SaleOrder }) {
       {order.taskNo && order.warehouseTaskStatus != null && (
         <>
           <span className="text-xs text-muted-foreground">履约状态</span>
-          <StatusBadge
-            type="task"
-            status={order.warehouseTaskStatus}
-            ariaLabel={order.warehouseTaskStatusName || undefined}
-          />
+          <Badge
+            variant="outline"
+            className={`text-xs font-medium ${WT_STATUS_CLASS[order.warehouseTaskStatus as keyof typeof WT_STATUS_CLASS] ?? 'bg-secondary text-secondary-foreground border-secondary'}`}
+          >
+            {order.warehouseTaskStatusName || `状态 ${order.warehouseTaskStatus}`}
+          </Badge>
         </>
       )}
     </div>

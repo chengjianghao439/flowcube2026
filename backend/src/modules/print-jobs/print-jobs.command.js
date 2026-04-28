@@ -196,8 +196,16 @@ async function assertQueueReady({
   warehouseId,
   jobType,
   contentType = 'zpl',
+  requireClientOnline = true,
 }) {
-  const resolved = await resolvePrinterForJob({ warehouseId, jobType, contentType })
+  const requiresExactBinding = String(jobType || '').trim().toLowerCase() === 'package_label'
+  const resolved = await resolvePrinterForJob({
+    warehouseId,
+    jobType,
+    contentType,
+    requireBinding: requiresExactBinding,
+    allowBindingFallback: !requiresExactBinding,
+  })
   if (!resolved?.printerId) {
     throw new AppError('未找到可用打印机，请先在打印机管理中绑定对应用途', 409, 'PRINT_BINDING_MISSING')
   }
@@ -210,7 +218,8 @@ async function assertQueueReady({
         p.status,
         p.client_id,
         pc.status AS client_status,
-        pc.last_seen
+        pc.last_seen,
+        TIMESTAMPDIFF(SECOND, pc.last_seen, NOW()) AS seconds_since_seen
      FROM printers p
      LEFT JOIN print_clients pc ON pc.client_id = p.client_id
      WHERE p.id = ?`,
@@ -219,17 +228,18 @@ async function assertQueueReady({
   if (!printer || Number(printer.status) !== 1) {
     throw new AppError('打印机未启用，请先检查打印机状态', 409, 'PRINT_PRINTER_DISABLED')
   }
-  if (!printer.client_id) {
+  if (requireClientOnline && !printer.client_id) {
     throw new AppError('打印机未绑定桌面客户端，请先在打印机管理中从本机添加并绑定用途', 409, 'PRINT_CLIENT_NOT_BOUND')
   }
 
-  const lastSeenMs = printer.last_seen ? new Date(printer.last_seen).getTime() : 0
+  const secondsSinceSeen = Number(printer.seconds_since_seen)
   const clientOnline =
     Number(printer.client_status) === 1
-    && Number.isFinite(lastSeenMs)
-    && (Date.now() - lastSeenMs) <= 30_000
+    && Number.isFinite(secondsSinceSeen)
+    && secondsSinceSeen >= 0
+    && secondsSinceSeen <= 30
 
-  if (!clientOnline) {
+  if (requireClientOnline && !clientOnline) {
     throw new AppError('打印客户端离线，请在连接打印机的 FlowCube 桌面端重新上线后再继续', 409, 'PRINT_CLIENT_OFFLINE')
   }
 
@@ -238,6 +248,8 @@ async function assertQueueReady({
     printerCode: printer.code,
     printerName: printer.name,
     clientId: printer.client_id,
+    clientOnline,
+    clientLastSeen: printer.last_seen,
   }
 }
 

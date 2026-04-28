@@ -39,8 +39,44 @@ export const addPackageItemApi = (
     qty,
   })
 
+export interface PackagePrintDispatchHint {
+  code?: string
+  message?: string
+  onlineClients?: number
+  sseClients?: number
+  printerId?: number | null
+  printerCode?: string | null
+  printerName?: string | null
+  clientId?: string | null
+  clientOnline?: boolean
+  clientLastSeen?: string | null
+}
+
+export interface PackagePrintJob {
+  id?: number
+  jobType?: string | null
+  status?: number
+  statusKey?: string | null
+  printStateLabel?: string | null
+  content?: string
+  contentType?: string
+  printerId?: number | null
+  printerCode?: string | null
+  printerName?: string | null
+  dispatchHint?: PackagePrintDispatchHint | null
+}
+
 export const finishPackageApi = (packageId: number, requestKey?: string) =>
-  client.put<{ id: number; status: number; statusName: string; allPackagesDone?: boolean; printQueued?: boolean; printJobId?: number | null }>(
+  client.put<{
+    id: number
+    status: number
+    statusName: string
+    allPackagesDone?: boolean
+    printQueued?: boolean
+    printJobId?: number | null
+    printJobStatus?: number | null
+    printJob?: PackagePrintJob
+  }>(
     `/packages/${packageId}/finish`,
     undefined,
     requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined,
@@ -49,12 +85,7 @@ export const finishPackageApi = (packageId: number, requestKey?: string) =>
 export const printPackageLabelApi = (packageId: number, requestKey?: string) =>
   client.post<{
     queued: boolean
-    job: {
-      id?: number
-      content?: string
-      contentType?: string
-      printerName?: string | null
-    } | unknown
+    job: PackagePrintJob | unknown
   }>(`/packages/${packageId}/print-label`, undefined, {
     headers: requestKey
       ? withRequestKeyHeaders(requestKey, desktopLocalPrintRequestHeaders())
@@ -78,6 +109,8 @@ export interface PackageShipInfo {
   taskStatusName?: string | null
   printSummary?: {
     totalPackages: number
+    noJobCount?: number
+    pendingCount?: number
     successCount: number
     failedCount: number
     timeoutCount: number

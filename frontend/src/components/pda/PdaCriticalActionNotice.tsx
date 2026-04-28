@@ -74,7 +74,7 @@ export default function PdaCriticalActionNotice({
             {confirming ? '确认中…' : '确认刚才结果'}
           </Button>
           <Button type="button" size="sm" variant="outline" className="flex-1" onClick={onClear}>
-            结果未找到后再重试
+            确认无推进后清除
           </Button>
         </div>
       ) : null}

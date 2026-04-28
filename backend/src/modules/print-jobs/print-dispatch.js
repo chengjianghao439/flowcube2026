@@ -33,7 +33,7 @@ function bindingFallbackChain(primary) {
   const map = {
     rack_label: ['rack_label', 'inventory_label'],
     container_label: ['container_label', 'inventory_label'],
-    package_label: ['package_label', 'inventory_label'],
+    package_label: ['package_label'],
     waybill: ['waybill'],
     product_label: ['product_label'],
     inventory_label: ['inventory_label'],
@@ -43,7 +43,7 @@ function bindingFallbackChain(primary) {
 
 async function fetchBindingCandidates(printType, whNum) {
   const params = [printType]
-  let sql = `SELECT b.printer_id FROM printer_bindings b
+  let sql = `SELECT b.printer_id, b.warehouse_id FROM printer_bindings b
      WHERE b.print_type = ?`
   if (whNum) {
     sql += ` AND (b.warehouse_id = 0 OR b.warehouse_id = ?)`
@@ -58,6 +58,13 @@ async function fetchBindingCandidates(printType, whNum) {
     sql += ` ORDER BY b.printer_id ASC`
   }
   const [bindRows] = await pool.query(sql, params)
+  if (whNum) {
+    const exactIds = bindRows
+      .filter((r) => Number(r.warehouse_id) === whNum)
+      .map((r) => Number(r.printer_id))
+      .filter(Boolean)
+    if (exactIds.length) return exactIds
+  }
   return bindRows.map((r) => Number(r.printer_id)).filter(Boolean)
 }
 
@@ -86,10 +93,12 @@ async function fetchHeartbeatMap(printerIds) {
  *   warehouseId?: number|null,
  *   jobType?: string|null,
  *   contentType?: string
+ *   requireBinding?: boolean
+ *   allowBindingFallback?: boolean
  * }} opts
  * @returns {Promise<{ printerId: number|null, dispatchReason: string|null, explorationRate?: number }>}
  */
-async function resolvePrinterForJob({ warehouseId, jobType, contentType }) {
+async function resolvePrinterForJob({ warehouseId, jobType, contentType, requireBinding = false, allowBindingFallback = true }) {
   const wh = warehouseId != null && warehouseId !== '' ? Number(warehouseId) : null
   const ptype = normalizeJobType(jobType, contentType)
   const whNum = Number.isFinite(wh) && wh > 0 ? wh : null
@@ -98,7 +107,7 @@ async function resolvePrinterForJob({ warehouseId, jobType, contentType }) {
   let fromBinding = false
 
   if (ptype) {
-    const chain = bindingFallbackChain(ptype)
+    const chain = allowBindingFallback ? bindingFallbackChain(ptype) : [ptype]
     for (const pt of chain) {
       const ids = await fetchBindingCandidates(pt, whNum)
       if (ids.length) {
@@ -107,6 +116,10 @@ async function resolvePrinterForJob({ warehouseId, jobType, contentType }) {
         break
       }
     }
+  }
+
+  if (!candidates.length && requireBinding) {
+    return { printerId: null, dispatchReason: null }
   }
 
   if (!candidates.length) {

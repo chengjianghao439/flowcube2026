@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useLogin } from '@/hooks/useAuth'
-import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
+import { applyErpApiBaseFromStorage, getStoredApiOrigin } from '@/lib/apiOrigin'
 import { loadSavedLoginForm } from '@/lib/loginCredentials'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 
 export default function LoginPage() {
   const { mutate: login, isPending, error } = useLogin()
+  const defaultApiOrigin = IS_ELECTRON_DESKTOP ? getStoredApiOrigin() : ''
 
   const [username, setUsername] = useState(() => loadSavedLoginForm().username)
   const [password, setPassword] = useState('')
@@ -109,7 +110,7 @@ export default function LoginPage() {
             <p className="text-slate-500 dark:text-slate-400">请输入账号信息登录系统</p>
             {IS_ELECTRON_DESKTOP && (
               <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-                服务器地址已随安装包配置；若无法连接，请按{' '}
+                {defaultApiOrigin ? '服务器地址已随安装包配置；若无法连接，请按 ' : '安装包未配置服务器地址，请按 '}
                 <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">Ctrl</kbd>+
                 <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">Shift</kbd>+
                 <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">S</kbd>{' '}

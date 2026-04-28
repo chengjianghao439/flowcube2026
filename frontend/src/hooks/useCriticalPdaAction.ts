@@ -20,6 +20,11 @@ export type CriticalPdaConfirmResult = OperationRequestStatus | {
   status: 'state_confirmed'
   data: unknown
   message: string
+} | {
+  status: 'state_unconfirmed'
+  data: null
+  message: string
+  reason: 'receipt_missing' | 'state_not_advanced'
 }
 
 type ServerStateResult<T> =
@@ -31,6 +36,13 @@ type ResolveServerState<T> = (ctx: {
   operationStatus?: OperationRequestStatus | null
   error?: unknown
 }) => Promise<ServerStateResult<T> | null | undefined>
+
+function stateUnconfirmedMessage(label: string, reason: 'receipt_missing' | 'state_not_advanced') {
+  if (reason === 'receipt_missing') {
+    return `${label}的提交回执未找到；已重新拉取服务端状态，但尚未确认推进。请刷新任务状态或稍后再次确认，暂勿重复扫码。`
+  }
+  return `${label}未确认成功；已重新拉取服务端状态，但任务状态尚未推进。请检查当前状态后再决定是否重试。`
+}
 
 export function useCriticalPdaAction<T>({
   action,
@@ -85,7 +97,7 @@ export function useCriticalPdaAction<T>({
   }, [action, onConfirmed, removePending, resolveServerState])
 
   const confirmPending = useCallback(async (): Promise<CriticalPdaConfirmResult | null> => {
-    if (!pendingRecord || networkStatus !== 'online' || confirming) return null
+    if (!pendingRecord || networkStatus !== 'online' || confirming || phase === 'submitting') return null
     setConfirming(true)
     setPhase('confirming')
     setPhaseMessage(`正在确认${pendingRecord.label}的结果，请勿重复提交。`)
@@ -112,21 +124,27 @@ export function useCriticalPdaAction<T>({
         removePending(action)
         setPhase('failed')
         setPhaseMessage(null)
-        setLastErrorMessage(status.message || `${pendingRecord.label}服务端明确返回失败，任务状态未确认推进。请检查后重试。`)
+        setLastErrorMessage(status.message || `${pendingRecord.label}服务端明确返回失败；已重新拉取状态，任务状态未推进。请检查后重试。`)
       }
       if (status.status === 'not_found') {
         const stateConfirmed = await confirmByServerState(pendingRecord, status)
         if (stateConfirmed) return stateConfirmed
-        removePending(action)
-        setPhase('failed')
-        setPhaseMessage(null)
-        setLastErrorMessage(`未找到 ${pendingRecord.label} 的提交记录，且任务状态未发现推进。请刷新任务状态后再决定是否重试。`)
+        const message = stateUnconfirmedMessage(pendingRecord.label, 'receipt_missing')
+        setPhase('pending')
+        setPhaseMessage(message)
+        setLastErrorMessage(null)
+        return {
+          status: 'state_unconfirmed',
+          data: null,
+          message,
+          reason: 'receipt_missing',
+        }
       }
       if (status.status === 'pending') {
         const stateConfirmed = await confirmByServerState(pendingRecord, status)
         if (stateConfirmed) return stateConfirmed
         setPhase('pending')
-        setPhaseMessage(`服务端仍未确认${pendingRecord.label}结果，请稍后重试确认，暂勿重复提交。`)
+        setPhaseMessage(status.message || `服务端仍未确认${pendingRecord.label}结果，请稍后重试确认，暂勿重复提交。`)
       }
       return status
     } catch (error) {
@@ -140,19 +158,20 @@ export function useCriticalPdaAction<T>({
       if (stateConfirmed) return stateConfirmed
       setPhase('failed')
       setPhaseMessage(null)
-      setLastErrorMessage(message || `确认 ${pendingRecord.label} 结果失败，且未能证明任务状态已推进。请稍后重试。`)
+      setLastErrorMessage(message || stateUnconfirmedMessage(pendingRecord.label, 'state_not_advanced'))
       return null
     } finally {
       setConfirming(false)
     }
-  }, [action, confirmByServerState, confirming, networkStatus, onConfirmed, pendingRecord, removePending, statusAction])
+  }, [action, confirmByServerState, confirming, networkStatus, onConfirmed, pendingRecord, phase, removePending, statusAction])
 
   useEffect(() => {
     if (networkStatus !== 'online' || !pendingRecord) return
+    if (phase === 'submitting') return
     if (autoConfirmRef.current === pendingRecord.requestKey) return
     autoConfirmRef.current = pendingRecord.requestKey
     void confirmPending()
-  }, [networkStatus, pendingRecord, confirmPending])
+  }, [networkStatus, pendingRecord, phase, confirmPending])
 
   const blockedReason = useMemo(() => {
     if (networkStatus !== 'online') {

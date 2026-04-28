@@ -8,7 +8,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getTaskByIdApi, getPickSuggestionsApi,
-  readyToShipApi, cancelTaskApi,
+  readyToShipApi,
 } from '@/api/warehouse-tasks'
 import { getContainerByBarcodeApi } from '@/api/inventory'
 import type { PickSuggestionItem, PickSuggestionContainer } from '@/api/warehouse-tasks'
@@ -21,7 +21,6 @@ import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
 import PdaStepHint from '@/components/pda/PdaStepHint'
-import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { useOfflineScan } from '@/hooks/useOfflineScan'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -185,7 +184,7 @@ export default function PdaTaskPage() {
   const lastScanRef = useRef<{ barcode: string; time: number } | null>(null)
 
   // ── Scan handler ─────────────────────────────────────────────────────
-  async function handleScan(barcode: string, hint?: { containerId: number; locationCode: string|null; remainingQty: number }) {
+  async function handleScan(barcode: string) {
     const b = barcode.trim()
     if (!b || !task?.items?.length) return
     if (parseBarcode(b).type !== 'container') {
@@ -260,7 +259,6 @@ export default function PdaTaskPage() {
   const items: PickSuggestionItem[] = sugData?.items ?? []
   const totalReq  = items.reduce((s,i) => s + i.requiredQty, 0)
   const totalPick = items.reduce((s,i) => s + i.pickedQty,   0)
-  const pct       = totalReq > 0 ? Math.min(100, Math.round(totalPick / totalReq * 100)) : 0
 
   if (finished) return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
@@ -299,8 +297,9 @@ export default function PdaTaskPage() {
               if (!handler) return
               void handler.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
-                if (status.status === 'not_found') warn('未找到上次提交记录，请先刷新任务后再重试')
+                if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
+                if (status.status === 'state_unconfirmed') warn(status.message)
+                if (status.status === 'not_found') warn(status.message || '未找到上次提交记录；请先刷新任务后再重试')
                 if (status.status === 'failed') err(status.message || '上次操作未成功，请检查后重试')
               })
             }}
@@ -313,22 +312,10 @@ export default function PdaTaskPage() {
               readyAction.clearError()
             }}
           />
-          <PdaFlowPanel
-            badge="拣货执行中"
-            title={task ? `当前任务：${task.taskNo}` : '当前任务拣货执行'}
-            description="这里优先把每个商品的已拣数量追平需求数量。推荐库位扫完后，再确认是否全部完成并推进到待分拣。"
-            nextAction={finished ? '返回拣货列表' : '继续扫描库存条码'}
-            stepText="先扫推荐库存条码完成拣货；若推荐库位不足或条码不匹配，先核对库存与异常，再继续执行。"
-            actions={[
-              { label: '打开拣货列表', onClick: () => navigate('/pda/picking') },
-              { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-              { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-            ]}
-          />
           {isLoading && <PdaLoading className="h-32" />}
           {items.map(item => (
             <ProductCard key={item.id} item={item} scanning={scanning}
-              onScan={(b,c) => handleScan(b,{containerId:c.containerId,locationCode:c.locationCode,remainingQty:c.remainingQty})} />
+              onScan={(b) => handleScan(b)} />
           ))}
           {!isLoading && items.length===0 && task?.status!==2 && (
             <div className="py-10 text-center"><p className="text-muted-foreground text-sm">任务状态：{task?.statusName??'…'}</p></div>

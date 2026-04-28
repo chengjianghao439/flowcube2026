@@ -81,10 +81,6 @@ async function printLabel(req, res, next) {
     if (requestState.replay) {
       return successResponse(res, requestState.responseData, requestState.responseMessage || '已加入打印队列')
     }
-    await printJobs.assertQueueReady({
-      jobType: 'package_label',
-      contentType: 'zpl',
-    })
     const job = await printJobs.enqueuePackageLabelJob({
       packageId: +req.params.id,
       createdBy: req.user.userId,
@@ -96,7 +92,8 @@ async function printLabel(req, res, next) {
     if (!job) {
       return res.status(409).json({ success: false, message: '箱贴未进入打印链，请检查打印配置后重试', data: null })
     }
-    const payload = { queued: true, job }
+    const dispatchHint = await printJobs.getDispatchHintForJob(job.printerCode, job.id)
+    const payload = { queued: true, job: { ...job, dispatchHint } }
     await completeOperationRequest(pool, requestState, {
       data: payload,
       message: '已加入打印队列',

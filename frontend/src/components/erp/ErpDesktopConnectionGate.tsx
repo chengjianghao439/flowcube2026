@@ -12,7 +12,7 @@ type Phase = 'ok' | 'checking' | 'fail'
 
 function initialPhase(): Phase {
   if (!IS_ELECTRON_DESKTOP) return 'ok'
-  return getStoredApiOrigin() ? 'checking' : 'ok'
+  return getStoredApiOrigin() ? 'checking' : 'fail'
 }
 
 export default function ErpDesktopConnectionGate({ children }: { children: React.ReactNode }) {
@@ -27,7 +27,7 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
     void (async () => {
       const origin = getStoredApiOrigin()
       if (!origin) {
-        if (!cancelled) setPhase('ok')
+        if (!cancelled) setPhase('fail')
         return
       }
       if (!cancelled) setPhase('checking')
@@ -57,14 +57,19 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
     )
   }
 
-  if (origin && phase === 'fail' && !onLogin) {
+  if (phase === 'fail' && !onLogin) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-        <p className="text-base font-medium text-destructive">无法连接服务器，请检查地址与网络</p>
-        <p className="max-w-md break-all font-mono text-xs text-muted-foreground">
-          正在连接：<span className="text-foreground">{origin}</span>
+        <p className="text-base font-medium text-destructive">
+          {origin ? '无法连接服务器，请检查地址与网络' : '安装包未配置服务器地址'}
         </p>
+        {origin ? (
+          <p className="max-w-md break-all font-mono text-xs text-muted-foreground">
+            正在连接：<span className="text-foreground">{origin}</span>
+          </p>
+        ) : null}
         <p className="max-w-md text-xs text-muted-foreground">
+          {origin ? '请确认后端已启动，服务器网络可达。' : '请重新构建安装包并注入生产 API 地址，或先在登录页手动配置。'}
           若填的是本机 <code className="rounded border px-0.5">localhost:5173</code>，安装包会改回默认；局域网{' '}
           <code className="rounded border px-0.5">192.168.x.x:5173</code> 表示连 Mac 上 Vite 代理，可保留。请确认后端已启动，服务器上设置{' '}
           <code className="rounded border px-0.5">CORS_REFLECT=1</code> 或{' '}
@@ -76,9 +81,11 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
           <Button type="button" variant="default" onClick={() => navigate('/login', { replace: true })}>
             前往登录页
           </Button>
-          <Button type="button" variant="outline" onClick={() => setTick((t) => t + 1)}>
-            重试
-          </Button>
+          {origin ? (
+            <Button type="button" variant="outline" onClick={() => setTick((t) => t + 1)}>
+              重试
+            </Button>
+          ) : null}
         </div>
       </div>
     )

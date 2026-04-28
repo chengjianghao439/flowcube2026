@@ -5,6 +5,7 @@ const { unlockContainersByTask } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 const { readyToShipWithinTransaction } = require('../warehouse-tasks/warehouse-tasks.service')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+const { buildPackagePrintSummary } = require('../../utils/printSummary')
 
 /**
  * 按各任务明细汇总刷新波次行的 picked_qty（只读任务表，禁止反向写任务）
@@ -160,6 +161,7 @@ async function findById(id) {
     `SELECT
         p.id,
         p.barcode,
+        j.id AS job_id,
         j.status,
         j.updated_at,
         j.error_message,
@@ -181,25 +183,9 @@ async function findById(id) {
      WHERE pwt.wave_id = ?`,
     [id],
   )
-  const printSummary = {
-    totalPackages: packagePrintRows.length,
-    successCount: 0,
-    failedCount: 0,
-    timeoutCount: 0,
-    processingCount: 0,
-    recentError: null,
-    recentPrinter: null,
-  }
-  for (const row of packagePrintRows) {
-    const status = Number(row.status)
-    if (status === 2) printSummary.successCount += 1
-    else if (status === 3) printSummary.failedCount += 1
-    else if ((status === 0 || status === 1) && row.updated_at && (Date.now() - new Date(row.updated_at).getTime()) >= Number(inboundThresholds.printTimeoutMinutes) * 60 * 1000) printSummary.timeoutCount += 1
-    else if (status === 0 || status === 1) printSummary.processingCount += 1
-    if (!printSummary.recentError && row.error_message) printSummary.recentError = row.error_message
-    if (!printSummary.recentPrinter && (row.printer_code || row.printer_name)) printSummary.recentPrinter = row.printer_code || row.printer_name
-  }
-  wave.printSummary = printSummary
+  wave.printSummary = buildPackagePrintSummary(packagePrintRows, packagePrintRows.length, {
+    timeoutMinutes: inboundThresholds.printTimeoutMinutes,
+  })
 
   return wave
 }

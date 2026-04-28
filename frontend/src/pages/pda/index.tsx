@@ -8,8 +8,6 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { usePdaRole } from '@/hooks/usePdaRole'
 import type { PdaPerm } from '@/hooks/usePdaRole'
-import { usePdaOnboarding } from '@/hooks/usePdaOnboarding'
-import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { PdaEmptyCard } from '@/components/pda/PdaEmptyState'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
@@ -23,6 +21,8 @@ const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = 
   { icon: '📦', label: '打包作业', path: '/pda/pack',      perm: PERMISSIONS.WAREHOUSE_TASK_PACK },
   { icon: '✂️', label: '容器拆分', path: '/pda/split',     perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT },
   { icon: '🚚', label: '出库确认', path: '/pda/ship',      perm: PERMISSIONS.WAREHOUSE_TASK_SHIP },
+  { icon: '⚠️', label: '异常工作台', path: '/reports/exception-workbench', perm: PERMISSIONS.REPORT_VIEW },
+  { icon: '🖨️', label: '物流补打', path: '/settings/barcode-print-query?category=logistics&status=failed', perm: PERMISSIONS.PRINT_JOB_VIEW },
 ]
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────
@@ -33,13 +33,11 @@ export default function PdaWorkbench() {
   const hour     = new Date().getHours()
   const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
   const { roleLabel, roleIcon, roleColor, can, permissionsMissing } = usePdaRole()
-  const { OnboardingGate } = usePdaOnboarding()
 
   const allowedOps = ALL_OPS.filter(op => can(op.perm))
 
   return (
     <div className="min-h-screen bg-background">
-      <OnboardingGate />
       <div className="border-b border-border bg-card px-4 pt-4 pb-4">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between gap-3">
@@ -63,19 +61,6 @@ export default function PdaWorkbench() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-4">
-        <PdaFlowPanel
-          badge="现场闭环入口"
-          title="PDA 工作台负责把收货、拣货、分拣、复核、打包、出库按主链顺序串起来"
-          description="进入具体作业前先判断当前卡在哪个阶段。遇到优先级冲突回岗位工作台，遇到打印或流程异常回异常工作台。"
-          nextAction="按主链顺序选择当前作业"
-          stepText="收货与上架完成后，再推进拣货、分拣、复核、打包和出库；不要跳过中间状态直接做后续动作。"
-          actions={[
-            { label: '岗位工作台', onClick: () => navigate('/reports/role-workbench') },
-            { label: '异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-            { label: '物流补打', onClick: () => navigate('/settings/barcode-print-query?category=logistics&status=failed') },
-          ]}
-        />
-
         <div>
           <p className="text-xs text-muted-foreground mb-3">{roleIcon} {roleLabel} 可用作业（{allowedOps.length} 项）</p>
           {permissionsMissing ? (

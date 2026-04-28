@@ -24,6 +24,7 @@ const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint
 
 const STATUS_OPTIONS = [
   { value: '__all__', label: '全部状态' },
+  { value: 'no_job', label: '未生成任务' },
   { value: 'queued', label: '待派发' },
   { value: 'printing', label: '打印中' },
   { value: 'success', label: '已打印' },
@@ -33,7 +34,7 @@ const STATUS_OPTIONS = [
 ] as const
 
 function statusBadge(job: BarcodePrintRecord['latestJob']) {
-  if (!job) return <Badge variant="secondary">未打印</Badge>
+  if (!job) return <Badge variant="secondary">未生成打印任务</Badge>
   if (job.statusKey === 'success') return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50">已打印</Badge>
   if (job.statusKey === 'timeout') return <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50">超时待确认</Badge>
   if (job.statusKey === 'failed') return <Badge variant="destructive">打印失败</Badge>

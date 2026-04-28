@@ -12,7 +12,6 @@ import PdaScanner from '@/components/pda/PdaScanner'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
-import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { parseBarcode } from '@/utils/barcode'
@@ -313,18 +312,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       <PdaFlash flash={flash} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
-        <PdaFlowPanel
-          badge="收货执行中"
-          title={`当前阶段：${closureCopy.stageLabel}`}
-          description={closureCopy.description}
-          nextAction={closureCopy.nextAction}
-          stepText="先按商品逐箱登记并打印库存条码，再确认待上架数量是否正确；如果打印异常或数量不一致，先回打印查询或异常工作台，不要跳过上架直接收口。"
-          actions={[
-            { label: '返回收货列表', onClick: () => navigate('/pda/inbound') },
-            { label: '打开入库补打', onClick: () => navigate(`/settings/barcode-print-query?category=inbound&inboundTaskId=${task.id}&status=failed`) },
-            { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-          ]}
-        />
         <PdaCriticalActionNotice
           blockedReason={receiveAction.blockedReason}
           pendingRecord={receiveAction.pendingRecord}
@@ -335,8 +322,9 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           onConfirm={() => {
             void receiveAction.confirmPending().then((status) => {
               if (!status) return
-              if (status.status === 'pending') warn('服务端仍未确认结果，请稍后再查或刷新页面校验')
-              if (status.status === 'not_found') warn('服务端未找到该次收货记录，请检查明细后再手动重试')
+              if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查或刷新页面校验')
+              if (status.status === 'state_unconfirmed') warn(status.message)
+              if (status.status === 'not_found') warn(status.message || '服务端未找到该次收货记录；请检查明细后再手动重试')
               if (status.status === 'failed') err(status.message || '上次收货未成功，请检查后重试')
             })
           }}

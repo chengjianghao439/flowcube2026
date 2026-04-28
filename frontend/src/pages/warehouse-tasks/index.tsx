@@ -130,12 +130,15 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                     <p className="text-xs text-muted-foreground">优先收口箱贴失败、超时和待确认任务，再继续现场出库。</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div><span className="text-muted-foreground">未生成任务：</span>{task.printSummary?.noJobCount ?? 0}</div>
+                    <div><span className="text-muted-foreground">待派发：</span>{task.printSummary?.pendingCount ?? 0}</div>
                     <div><span className="text-muted-foreground">已打印：</span>{task.printSummary?.successCount ?? 0}</div>
                     <div><span className="text-muted-foreground">打印失败：</span>{task.printSummary?.failedCount ?? 0}</div>
                     <div><span className="text-muted-foreground">超时待确认：</span>{task.printSummary?.timeoutCount ?? 0}</div>
                     <div><span className="text-muted-foreground">打印中：</span>{task.printSummary?.processingCount ?? 0}</div>
                   </div>
                   <p className="text-xs text-muted-foreground">
+                    {(task.printSummary?.noJobCount ?? 0) > 0 ? `有 ${task.printSummary?.noJobCount ?? 0} 个包裹未生成打印任务。` : ''}
                     {task.printSummary?.recentPrinter ? `最近打印机：${task.printSummary.recentPrinter}。` : ''}
                     {task.printSummary?.recentError ? ` 最近异常：${task.printSummary.recentError}。` : ''}
                   </p>

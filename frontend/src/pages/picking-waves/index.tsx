@@ -323,15 +323,19 @@ export default function PickingWavesPage() {
                   </Button>
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-5">
+              <div className="grid gap-3 md:grid-cols-7">
                 <StatBlock label="包裹总数" value={printSummary?.totalPackages ?? 0} />
+                <StatBlock label="未生成任务" value={printSummary?.noJobCount ?? 0} />
+                <StatBlock label="待派发" value={printSummary?.pendingCount ?? 0} />
                 <StatBlock label="已打印" value={printSummary?.successCount ?? 0} />
                 <StatBlock label="打印失败" value={printSummary?.failedCount ?? 0} />
                 <StatBlock label="超时待确认" value={printSummary?.timeoutCount ?? 0} />
                 <StatBlock label="排队 / 打印中" value={printSummary?.processingCount ?? 0} />
               </div>
               <div className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                {printSummary?.failedCount || printSummary?.timeoutCount
+                {printSummary?.noJobCount
+                  ? `当前有 ${printSummary.noJobCount} 个包裹未生成打印任务，请先回打包或补打入口生成可追踪任务。`
+                  : printSummary?.failedCount || printSummary?.timeoutCount
                   ? `当前仍有 ${Number(printSummary?.failedCount ?? 0) + Number(printSummary?.timeoutCount ?? 0)} 个出库标签需要处理。建议先补打，再继续分拣或出库。`
                   : '当前未发现阻断出库的打印异常，可继续推进波次执行。'}
                 {printSummary?.recentPrinter ? ` 最近打印机：${printSummary.recentPrinter}。` : ''}

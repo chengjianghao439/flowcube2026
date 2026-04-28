@@ -29,7 +29,18 @@ const rollback = args.includes('--rollback')
 const manifestOnly = args.includes('--manifest-only')
 const notesArg = args.find((arg) => arg.startsWith('--notes='))
 const artifactArg = args.find((arg) => arg.startsWith('--artifact='))
-const notes = notesArg ? notesArg.slice('--notes='.length) : ''
+function readReleaseNotes() {
+  if (notesArg) return notesArg.slice('--notes='.length)
+  if (process.env.FLOWCUBE_RELEASE_NOTES_B64) {
+    try {
+      return Buffer.from(process.env.FLOWCUBE_RELEASE_NOTES_B64, 'base64').toString('utf8')
+    } catch {
+      return ''
+    }
+  }
+  return process.env.FLOWCUBE_RELEASE_NOTES || ''
+}
+const notes = readReleaseNotes()
 
 const tag = `v${version}`
 const fileName = `FlowCube-Setup-${version}.exe`

@@ -73,14 +73,15 @@ async function createPackageWithItem() {
   return { taskId, packageId }
 }
 
-async function createOnlinePackagePrinter() {
-  const clientId = `${prefix}_client`
-  const printerCode = `${prefix}_printer`
+async function createPackagePrinter(printType = 'package_label', { clientStatus = 1, lastSeenSql = 'NOW()' } = {}) {
+  const suffix = createdPrinterIds.length + 1
+  const clientId = `${prefix}_client_${suffix}`
+  const printerCode = `${prefix}_printer_${suffix}`
   createdClientIds.push(clientId)
   await pool.query(
     `INSERT INTO print_clients (client_id, hostname, ip_address, last_seen, status)
-     VALUES (?, 'package-finish-test', '127.0.0.1', NOW(), 1)`,
-    [clientId],
+     VALUES (?, 'package-finish-test', '127.0.0.1', ${lastSeenSql}, ?)`,
+    [clientId, clientStatus],
   )
   const [printerResult] = await pool.query(
     `INSERT INTO printers
@@ -92,10 +93,22 @@ async function createOnlinePackagePrinter() {
   createdPrinterIds.push(printerId)
   await pool.query(
     `INSERT INTO printer_bindings (warehouse_id, print_type, printer_id, printer_code)
-     VALUES (?, 'package_label', ?, ?)`,
-    [warehouseId, printerId, printerCode],
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE printer_id=VALUES(printer_id), printer_code=VALUES(printer_code)`,
+    [warehouseId, printType, printerId, printerCode],
   )
   return printerId
+}
+
+async function createOnlinePackagePrinter(printType = 'package_label') {
+  return createPackagePrinter(printType)
+}
+
+async function createOfflinePackagePrinter(printType = 'package_label') {
+  return createPackagePrinter(printType, {
+    clientStatus: 0,
+    lastSeenSql: 'DATE_SUB(NOW(), INTERVAL 10 MINUTE)',
+  })
 }
 
 async function packageStatus(packageId) {
@@ -112,6 +125,17 @@ async function packagePrintJobs(packageId) {
     [packageId],
   )
   return rows
+}
+
+async function hasPackageLabelBindingForWarehouse() {
+  const [[row]] = await pool.query(
+    `SELECT COUNT(*) AS c
+     FROM printer_bindings
+     WHERE print_type='package_label'
+       AND warehouse_id IN (0, ?)`,
+    [warehouseId],
+  )
+  return Number(row?.c || 0) > 0
 }
 
 function assert(condition, message) {
@@ -152,6 +176,23 @@ async function testEnqueueFailureRollsBack() {
   assert((await packagePrintJobs(packageId)).length === 0, 'print enqueue failure must not leave print job')
 }
 
+async function testPackageFinishRequiresExactPackageBinding() {
+  if (await hasPackageLabelBindingForWarehouse()) {
+    console.log('skip exact package_label missing regression because this environment has a default package_label binding')
+    return
+  }
+  await createOnlinePackagePrinter('inventory_label')
+  const { packageId } = await createPackageWithItem()
+  try {
+    await finishPackage(packageId, { createdBy: null })
+    throw new Error('finish should not fall back to inventory_label when package_label binding is missing')
+  } catch (error) {
+    assert(error?.code === 'PRINT_BINDING_MISSING', `expected PRINT_BINDING_MISSING, got ${error?.code || error?.message}`)
+  }
+  assert(await packageStatus(packageId) === 1, 'missing package_label binding must keep package in packing status')
+  assert((await packagePrintJobs(packageId)).length === 0, 'missing package_label binding must not create print job')
+}
+
 async function testFinishCreatesTraceablePrintJobOnce() {
   await createOnlinePackagePrinter()
   const { packageId } = await createPackageWithItem()
@@ -167,6 +208,20 @@ async function testFinishCreatesTraceablePrintJobOnce() {
   assert(jobs.length === 1, `finish retry must not duplicate package label job, got ${jobs.length}`)
   assert(jobs[0].job_type === 'package_label', `package label job_type should be package_label, got ${jobs[0].job_type}`)
   assert(jobs[0].job_unique_key === `package_label:package:${packageId}`, 'package finish must use stable package print idempotency key')
+}
+
+async function testFinishCreatesTraceablePrintJobWhenClientOffline() {
+  await createOfflinePackagePrinter()
+  const { packageId } = await createPackageWithItem()
+  const result = await finishPackage(packageId, { createdBy: null })
+  const jobs = await packagePrintJobs(packageId)
+
+  assert(await packageStatus(packageId) === 2, 'offline client must not block package finish after print job is traceable')
+  assert(jobs.length === 1, `offline client must still create one package label print job, got ${jobs.length}`)
+  assert(jobs[0].status === 0, `offline client print job should remain pending, got ${jobs[0].status}`)
+  assert(jobs[0].job_type === 'package_label', `offline client job_type should be package_label, got ${jobs[0].job_type}`)
+  assert(Number(result.printJobId) === Number(jobs[0].id), 'finish result must expose traceable printJobId')
+  assert(result.printJob?.dispatchHint?.code === 'client_offline', `expected client_offline dispatch hint, got ${result.printJob?.dispatchHint?.code}`)
 }
 
 async function cleanup() {
@@ -189,7 +244,10 @@ async function cleanup() {
     await pool.query(`DELETE FROM warehouse_task_items WHERE task_id IN (${createdTaskIds.map(() => '?').join(',')})`, createdTaskIds)
     await pool.query(`DELETE FROM warehouse_tasks WHERE id IN (${createdTaskIds.map(() => '?').join(',')})`, createdTaskIds)
   }
-  await pool.query('DELETE FROM printer_bindings WHERE warehouse_id=? AND print_type=?', [warehouseId, 'package_label'])
+  await pool.query(
+    'DELETE FROM printer_bindings WHERE warehouse_id=? AND print_type IN (?, ?)',
+    [warehouseId, 'package_label', 'inventory_label'],
+  )
   if (createdPrinterIds.length) {
     await pool.query(`DELETE FROM printers WHERE id IN (${createdPrinterIds.map(() => '?').join(',')})`, createdPrinterIds)
   }
@@ -209,8 +267,12 @@ async function main() {
     console.log('ok PRINT_BINDING_MISSING blocks without state advance')
     await testEnqueueFailureRollsBack()
     console.log('ok package label enqueue failure rolls back package finish')
+    await testPackageFinishRequiresExactPackageBinding()
+    console.log('ok package finish requires exact package_label binding')
     await testFinishCreatesTraceablePrintJobOnce()
     console.log('ok finish advances package and creates exactly one traceable package label job')
+    await testFinishCreatesTraceablePrintJobWhenClientOffline()
+    console.log('ok offline print client still leaves traceable pending package label job')
   } finally {
     await cleanup()
     await pool.end()

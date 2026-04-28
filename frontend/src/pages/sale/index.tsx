@@ -6,6 +6,7 @@ import DataTable from '@/components/shared/DataTable'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { SaleFilters } from './components/SaleFilters'
 import { SaleRowActions } from './components/SaleRowActions'
 import { useSaleList, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
@@ -16,6 +17,7 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { ProductFinder } from '@/components/finder'
 import { readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import { WT_STATUS_CLASS } from '@/constants/warehouseTaskStatus'
 import type { SaleOrder } from '@/types/sale'
 import type { ProductFinderResult } from '@/types/products'
 import type { TableColumn } from '@/types'
@@ -40,7 +42,12 @@ function SaleFulfillmentStatus({ order }: { order: SaleOrder }) {
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-xs text-muted-foreground">履约</span>
-      <StatusBadge type="task" status={order.warehouseTaskStatus} ariaLabel={order.warehouseTaskStatusName || undefined} />
+      <Badge
+        variant="outline"
+        className={`text-xs font-medium ${WT_STATUS_CLASS[order.warehouseTaskStatus as keyof typeof WT_STATUS_CLASS] ?? 'bg-secondary text-secondary-foreground border-secondary'}`}
+      >
+        {order.warehouseTaskStatusName || `状态 ${order.warehouseTaskStatus}`}
+      </Badge>
     </div>
   )
 }

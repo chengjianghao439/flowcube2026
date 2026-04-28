@@ -12,17 +12,15 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
-import PdaFlowPanel from '@/components/pda/PdaFlowPanel'
 import PdaStat, { PdaStatGrid } from '@/components/pda/PdaStat'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getTaskByIdApi, getTasksApi, packDoneApi } from '@/api/warehouse-tasks'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { getPackagesApi, createPackageApi, addPackageItemApi, finishPackageApi, printPackageLabelApi } from '@/api/packages'
-import type { Package } from '@/api/packages'
+import type { Package, PackagePrintJob } from '@/api/packages'
 import type { WarehouseTask } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
-import { getOutboundClosureCopy } from '@/lib/outboundClosure'
 import {
   isDesktopLocalPrintError,
   tryDesktopLocalZplThenComplete,
@@ -34,6 +32,23 @@ import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState
 function readPositiveId(value: string | undefined | null): number {
   const n = Number(value)
   return Number.isInteger(n) && n > 0 ? n : 0
+}
+
+function packageLabelTraceMessage(job?: PackagePrintJob | null): string {
+  const hint = job?.dispatchHint ?? null
+  const printer = hint?.printerName || job?.printerName || hint?.printerCode || job?.printerCode || '未识别打印机'
+  const clientState = hint?.clientOnline
+    ? '在线'
+    : hint?.code === 'client_not_bound'
+      ? '未绑定客户端'
+      : '离线'
+  const next = hint?.clientOnline
+    ? '等待客户端领取并打印。'
+    : hint?.code === 'client_not_bound'
+      ? '请在连接该打印机的 FlowCube 桌面端从本机添加打印机后继续派发。'
+      : '请启动连接该打印机的 FlowCube 桌面端，客户端上线后继续派发。'
+  const jobId = job?.id ? ` #${job.id}` : ''
+  return `箱贴任务${jobId}已入链：用途 package_label，绑定打印机 ${printer}，客户端${clientState}。${next}`
 }
 
 function PdaTaskState({
@@ -87,18 +102,6 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
       <PdaHeader title="选择打包任务" onBack={() => navigate('/pda')} right={<span className="text-xs text-muted-foreground">{tasks.length} 个待打包</span>} />
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
-          <PdaFlowPanel
-            badge="打包闭环提示"
-            title="打包页负责把复核后的任务装成箱，并把箱贴打印收口后再推进到待出库"
-            description="先选待打包任务，再创建箱子、扫码装箱并打印箱贴。发现箱贴失败、超时或任务卡住时，回仓库任务、出库补打或异常工作台继续处理。"
-            nextAction="选择待打包任务"
-            stepText="先确认复核已经完成，再开始装箱；箱贴打印状态正常后，再推进到待出库，不要跳过打包阶段直接出库。"
-            actions={[
-              { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-              { label: '打开出库补打', onClick: () => navigate('/settings/barcode-print-query?category=outbound&status=failed') },
-              { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-            ]}
-          />
           {isLoading && <PdaLoading className="h-40" />}
           {!isLoading && tasks.length === 0 && (
             <PdaEmptyCard icon="📦" title="暂无待打包任务" />
@@ -182,7 +185,7 @@ export default function PdaPackPage() {
   const routeParams = useParams()
   const [params] = useSearchParams()
   const qc       = useQueryClient()
-  const { flash, ok, err } = usePdaFeedback()
+  const { flash, ok, err, warn } = usePdaFeedback()
   const routeTaskId = readPositiveId(routeParams.id) || readPositiveId(params.get('taskId'))
 
   const [task, setTask]                       = useState<WarehouseTask | null>(null)
@@ -211,6 +214,7 @@ export default function PdaPackPage() {
   const finishAction = useCriticalPdaAction<{
     id: number
     allPackagesDone?: boolean
+    printJob?: PackagePrintJob
   }>({
     action: `package.finish.${taskId || 'none'}`,
     requestAction: 'package.finish',
@@ -241,12 +245,7 @@ export default function PdaPackPage() {
   })
   const printAction = useCriticalPdaAction<{
     queued: boolean
-    job?: {
-      id?: number
-      content?: string
-      contentType?: string
-      printerName?: string | null
-    } | unknown
+    job?: PackagePrintJob | unknown
   }>({
     action: `package.print.${taskId || 'none'}`,
     requestAction: 'package.print-label',
@@ -325,17 +324,12 @@ export default function PdaPackPage() {
     },
     onSuccess: async (d) => {
       if (d.kind === 'pending') {
-        err('网络中断，箱贴打印结果待确认。请先确认是否已入队或已出纸，再决定是否重试。')
+        warn('网络中断，箱贴打印结果待确认。请先确认是否已入队或已出纸，再决定是否重试。')
         return
       }
       const payload = d.data
       if (payload.queued && payload.job && typeof payload.job === 'object') {
-        const job = payload.job as {
-          id?: number
-          content?: string
-          contentType?: string
-          printerName?: string | null
-        }
+        const job = payload.job as PackagePrintJob
         const local = await tryDesktopLocalZplThenComplete({
           jobId: job.id,
           content: job.content,
@@ -367,7 +361,12 @@ export default function PdaPackPage() {
           return
         }
       }
-      if (payload.queued) ok('箱贴已加入打印队列')
+      if (payload.queued) {
+        const job = payload.job && typeof payload.job === 'object' ? payload.job as PackagePrintJob : null
+        const hint = job?.dispatchHint
+        if (hint && hint.clientOnline === false) warn(packageLabelTraceMessage(job), 5000)
+        else ok(packageLabelTraceMessage(job), 4000)
+      }
     },
     onError: (e: unknown) => err((e as { message?: string })?.message ?? '打印失败'),
   })
@@ -384,9 +383,12 @@ export default function PdaPackPage() {
     },
     onSuccess: (res) => {
       if (res.kind === 'pending') {
-        err('网络中断，装箱结果待确认。请先确认刚才那次是否成功，再决定是否重试。')
+        warn('网络中断，装箱结果待确认。请先确认刚才那次是否成功，再决定是否重试。')
         return
       }
+      const job = res.data.printJob
+      if (job?.dispatchHint?.clientOnline === false) warn(packageLabelTraceMessage(job), 5000)
+      else ok(packageLabelTraceMessage(job), 4000)
       setActivePackageId(null)
       refetch()
     },
@@ -404,7 +406,7 @@ export default function PdaPackPage() {
     },
     onSuccess: (result) => {
       if (result.kind === 'pending') {
-        err('网络中断，打包收口结果待确认。请先确认是否已进入待出库。')
+        warn('网络中断，打包收口结果待确认。请先确认是否已进入待出库。')
       }
     },
     onError: (e: unknown) => err((e as { message?: string })?.message ?? '打包收口失败'),
@@ -481,27 +483,6 @@ export default function PdaPackPage() {
   const totalBoxes = packages.length
   const doneBoxes  = packages.filter(p => p.status === 2).length
   const totalItems = packages.reduce((s, p) => s + p.items.reduce((ss, i) => ss + i.qty, 0), 0)
-  const closureCopy = getOutboundClosureCopy({
-    status: taskDetail.status,
-    statusName: taskDetail.statusName,
-    taskNo: taskDetail.taskNo,
-    customerName: taskDetail.customerName,
-    packageSummary: {
-      totalPackages: totalBoxes,
-      openPackages: packages.filter(p => p.status !== 2).length,
-      donePackages: doneBoxes,
-      totalItems,
-    },
-    printSummary: {
-      totalPackages: totalBoxes,
-      successCount: 0,
-      failedCount: 0,
-      timeoutCount: 0,
-      processingCount: 0,
-      recentError: null,
-      recentPrinter: null,
-    },
-  })
   // ── 全部完成页 ────────────────────────────────────────────────────────────
   if (allDone) return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
@@ -510,18 +491,6 @@ export default function PdaPackPage() {
       <p className="text-muted-foreground mt-2 mb-1">任务：<span className="font-mono font-semibold text-foreground">{taskDetail.taskNo}</span></p>
       <p className="text-muted-foreground mb-4">共 {totalBoxes} 箱，{totalItems.toFixed(0)} 件商品</p>
       <div className="mb-6 w-full max-w-md">
-        <PdaFlowPanel
-          badge="打包收口"
-          title="当前任务已完成打包，可以继续推进到待出库"
-          description="优先确认箱贴和物流标签没有异常，再去 PDA 出库或仓库任务继续现场执行。"
-          nextAction="进入出库确认"
-          stepText="先确认打印异常清零，再继续出库；如果需要重新排优先级或查看异常，分别回岗位工作台和异常工作台。"
-          actions={[
-            { label: '打开 PDA 出库', onClick: () => navigate('/pda/ship') },
-            { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-            { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-          ]}
-        />
       </div>
       <div className="flex gap-3 w-full max-w-xs">
         <Button variant="outline" className="flex-1" onClick={goSelectTask}>继续打包</Button>
@@ -562,8 +531,9 @@ export default function PdaPackPage() {
                   : finalizeAction
               void handler.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') err('服务端仍未确认结果，请稍后再查')
-                if (status.status === 'not_found') err('未找到上次提交记录，请先刷新箱子和任务状态后再重试')
+                if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
+                if (status.status === 'state_unconfirmed') warn(status.message)
+                if (status.status === 'not_found') warn(status.message || '未找到上次提交记录；请先刷新箱子和任务状态后再重试')
                 if (status.status === 'failed') err(status.message || '上次操作未成功，请检查后重试')
               })
             }}
@@ -572,18 +542,6 @@ export default function PdaPackPage() {
               if (printAction.pendingRecord) printAction.clearPending()
               if (finalizeAction.pendingRecord) finalizeAction.clearPending()
             }}
-          />
-          <PdaFlowPanel
-            badge="打包执行中"
-            title={`当前阶段：${closureCopy.stageLabel}`}
-            description={closureCopy.description}
-            nextAction={closureCopy.nextAction}
-            stepText="先把当前箱装满并完成箱贴打印，再处理下一箱；若箱贴失败或超时，先收口打印异常，再继续装箱或推进到出库。"
-            actions={[
-              { label: '打开仓库任务', onClick: () => navigate('/warehouse-tasks') },
-              { label: '打开出库补打', onClick: () => navigate(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(taskDetail.taskNo)}`) },
-              { label: '打开异常工作台', onClick: () => navigate('/reports/exception-workbench') },
-            ]}
           />
 
           {/* 统计行 */}
