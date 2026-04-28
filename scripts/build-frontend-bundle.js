@@ -79,11 +79,12 @@ console.log(
   `[build-frontend-bundle] target=${target} api=${productionOrigin || '(local fallback allowed)'}`,
 )
 
-const command = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const command = 'npm'
 const args = ['run', target === 'pda' ? 'build:pda' : 'build']
 const result = spawnSync(command, args, {
   cwd: frontendDir,
   env,
+  shell: process.platform === 'win32',
   stdio: 'inherit',
 })
 
