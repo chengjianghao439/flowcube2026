@@ -10,7 +10,7 @@ const DOWNLOAD_ROOT = path.resolve(process.env.FLOWCUBE_DOWNLOADS_ROOT || proces
 const LEGACY_BACKEND_DOWNLOADS = path.join(ROOT, 'backend', 'downloads')
 
 function usage() {
-  console.error('Usage: node scripts/release-desktop.js <version> [--dry-run] [--rollback] [--manifest-only] [--artifact=/path/to/installer.exe] [--notes="..."]')
+  console.error('Usage: node scripts/release-desktop.js <version> [--dry-run] [--rollback] [--manifest-only] [--overwrite] [--artifact=/path/to/installer.exe] [--notes="..."]')
   process.exit(1)
 }
 
@@ -27,6 +27,7 @@ if (!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(version)) {
 const dryRun = args.includes('--dry-run')
 const rollback = args.includes('--rollback')
 const manifestOnly = args.includes('--manifest-only')
+const overwrite = args.includes('--overwrite') || process.env.FLOWCUBE_RELEASE_OVERWRITE === '1'
 const notesArg = args.find((arg) => arg.startsWith('--notes='))
 const artifactArg = args.find((arg) => arg.startsWith('--artifact='))
 function readReleaseNotes() {
@@ -124,6 +125,10 @@ function writeJsonAtomic(filePath, data) {
 
 function ensureNoExistingVersion() {
   if (fs.existsSync(versionDir)) {
+    if (overwrite) {
+      log(`版本目录已存在，将覆盖: ${versionDir}`)
+      return
+    }
     fail(`版本目录已存在，拒绝覆盖: ${versionDir}`)
   }
 }
@@ -251,6 +256,9 @@ if (dryRun) {
 
 fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'versions'), { recursive: true })
 if (!manifestOnly) {
+  if (overwrite && fs.existsSync(versionDir)) {
+    fs.rmSync(versionDir, { recursive: true, force: true })
+  }
   fs.mkdirSync(versionDir, { recursive: false })
 }
 fs.mkdirSync(currentDir, { recursive: true })

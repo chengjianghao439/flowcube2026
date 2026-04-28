@@ -518,7 +518,7 @@ jobs:
               -v '$remote_tmp:$remote_tmp:ro' \
               -e FLOWCUBE_DOWNLOADS_ROOT='$downloads_path' \
               -e FLOWCUBE_RELEASE_NOTES_B64='$notes_b64' \
-              flowcube-backend node /release-scripts/release-desktop.js '$version' --artifact='$remote_artifact'"
+              flowcube-backend node /release-scripts/release-desktop.js '$version' --overwrite --artifact='$remote_artifact'"
 
           echo "=== 发布完成；权威入口: /latest.json，安装包路径: /versions/${tag}/FlowCube-Setup-${version}.exe ==="
 
