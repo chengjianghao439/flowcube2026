@@ -72,7 +72,11 @@ export function usePdaUpdate() {
     try {
       setChecking(true)
       const versionApi = getVersionApiUrl()
-      const res = await axios.get(versionApi, { timeout: 8000 })
+      const res = await axios.get(versionApi, {
+        timeout: 8000,
+        params: { _: Date.now() },
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      })
       const info: PdaVersionInfo | null = res.data?.data
       if (!info || info.available === false || !info.downloadUrl) {
         if (manual) toast.success('当前没有可下载的 PDA 更新包')

@@ -43,6 +43,23 @@ npm run release:prod
    - GitHub Release 自动生成/更新安装包
    - 已配置 SSH 时，CI 会把安装包交给服务器 `scripts/release-desktop.js`，写入 `/var/www/flowcube-downloads/versions/v<version>/` 并更新 `/latest.json` 与 `/current/`
 
+3. `Build PDA APK`
+   - `main` 推送且包含 `frontend/**` 或 `backend/apk/version.json` 变更时自动触发
+   - 使用 `frontend/android/app/build.gradle` 的 `versionName/versionCode` 构建签名 APK
+   - 将 APK 发布到生产服务器 `backend/apk/app-release.apk`
+   - 将 `backend/apk/version.json` 同步到服务器
+   - 重建后端容器并校验 `/api/pda/version` 与 `/api/pda/download`
+
+PDA 自动更新的权威关系：
+
+```text
+frontend/android/app/build.gradle     # APK 内置版本号
+backend/apk/version.json              # 后端对 PDA 公布的新版本号
+backend/apk/app-release.apk           # PDA 实际下载的安装包，未提交进 Git，由 CI 上传到服务器
+```
+
+发布 PDA 时必须同时提升 `versionCode` 和 `versionName`，并保持 `backend/apk/version.json` 一致。否则 PDA 会认为没有新版本，或看到新版本但下载到旧安装包。
+
 ## 桌面端发布目录结构
 
 ```text

@@ -17,6 +17,10 @@ export const HOME_TAB: WorkspaceTab = {
   closable: false,
 }
 
+function isDesktopWorkspacePath(path: string) {
+  return !(path === '/pda' || path.startsWith('/pda/'))
+}
+
 interface WorkspaceState {
   tabs: WorkspaceTab[]
   activeKey: string
@@ -37,6 +41,7 @@ function sanitizeTabs(rawTabs: unknown): WorkspaceTab[] {
   for (const tab of tabs) {
     const rawPath = typeof tab.path === 'string' && tab.path ? tab.path : (typeof tab.key === 'string' ? tab.key : '')
     if (!rawPath) continue
+    if (!isDesktopWorkspacePath(rawPath)) continue
     const normalized = buildWorkspaceTabRegistrationFromPath(rawPath)
     if (normalized.key === HOME_TAB.key) continue
     deduped.set(normalized.key, {
@@ -57,6 +62,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       addTab: (tab) => {
         const { tabs } = get()
+        if (!isDesktopWorkspacePath(tab.path)) return false
         const normalized = buildWorkspaceTabRegistrationFromPath(tab.path)
         const title = tab.title
         const existing = tabs.find((t) => t.key === normalized.key)
@@ -105,6 +111,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       closeAll: () => set({ tabs: [HOME_TAB], activeKey: HOME_TAB.key }),
 
       syncFromLocation: (path, title) => {
+        if (!isDesktopWorkspacePath(path)) return
         const normalized = buildWorkspaceTabRegistrationFromPath(path)
         const { tabs } = get()
         const existing = tabs.find((tab) => tab.key === normalized.key)

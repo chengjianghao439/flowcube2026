@@ -29,6 +29,19 @@ function resolvePublicBase(req) {
   return `${proto}://${host}`
 }
 
+function setNoStoreHeaders(res) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+  res.setHeader('Surrogate-Control', 'no-store')
+}
+
+function buildPdaDownloadPath(meta, stat) {
+  const versionCode = Number(meta.versionCode) || 0
+  const stamp = Number(stat?.mtimeMs) || Date.now()
+  return `/api/pda/download?v=${encodeURIComponent(String(meta.version || 'latest'))}&code=${versionCode}&t=${Math.round(stamp)}`
+}
+
 /**
  * GET /api/pda/version
  * 返回当前最新 APK 版本信息（无需登录，PDA 启动时静默检查）
@@ -47,6 +60,7 @@ function resolvePublicBase(req) {
  * }
  */
 router.get('/version', asyncRoute(async (req, res) => {
+  setNoStoreHeaders(res)
   let meta = null
   try {
     meta = loadVersionMeta()
@@ -63,13 +77,15 @@ router.get('/version', asyncRoute(async (req, res) => {
     return successResponse(res, null)
   }
 
-  const size = fs.statSync(apkPath).size
+  const stat = fs.statSync(apkPath)
+  const size = stat.size
   const base = resolvePublicBase(req)
+  const downloadPath = buildPdaDownloadPath(meta, stat)
   return successResponse(res, {
     version:     meta.version,
     versionCode: Number(meta.versionCode) || 0,
     releaseNote: meta.releaseNote || '',
-    downloadUrl: base ? `${base}/api/pda/download` : '/api/pda/download',
+    downloadUrl: base ? `${base}${downloadPath}` : downloadPath,
     size,
     publishedAt: meta.publishedAt || new Date().toISOString(),
     available: true,
@@ -81,6 +97,7 @@ router.get('/version', asyncRoute(async (req, res) => {
  * 下载最新 APK 文件（支持 Range 断点续传）
  */
 router.get('/download', asyncRoute(async (req, res) => {
+  setNoStoreHeaders(res)
   let meta
   try {
     meta = loadVersionMeta()
@@ -103,6 +120,8 @@ router.get('/download', asyncRoute(async (req, res) => {
   res.setHeader('Content-Type', 'application/vnd.android.package-archive')
   res.setHeader('Content-Disposition', `attachment; filename="JiXu-Flow-PDA-${meta.version}.apk"`)
   res.setHeader('Accept-Ranges', 'bytes')
+  res.setHeader('X-FlowCube-PDA-Version', String(meta.version || ''))
+  res.setHeader('X-FlowCube-PDA-Version-Code', String(Number(meta.versionCode) || 0))
 
   if (range) {
     // 断点续传

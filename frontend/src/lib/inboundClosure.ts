@@ -19,7 +19,7 @@ export function getInboundClosureCopy(task?: Partial<InboundTask> | null): Inbou
     return {
       stageLabel: '已取消',
       ownerLabel: 'ERP',
-      description: '该收货订单已取消，不再进入 PDA 收货、打印或上架流程。',
+      description: '该收货订单已取消，不再进入现场收货、打印或上架流程。',
       nextAction: '如需继续收货，请重新创建收货订单。',
       actionMode: 'cancelled',
       primaryActionLabel: '返回列表',
@@ -66,7 +66,7 @@ export function getInboundClosureCopy(task?: Partial<InboundTask> | null): Inbou
       description: '库存条码已经打印，但仍有箱未在时限内完成上架，需要优先回到 PDA 现场收口。',
       nextAction: '先在 PDA 扫描库存条码与货架条码完成上架，再回 ERP 继续审核。',
       actionMode: 'putaway',
-      primaryActionLabel: '前往 PDA 扫码上架',
+      primaryActionLabel: '现场扫码上架',
     }
   }
 
@@ -86,9 +86,9 @@ export function getInboundClosureCopy(task?: Partial<InboundTask> | null): Inbou
       stageLabel: '待上架',
       ownerLabel: 'PDA',
       description: '收货已完成并已生成库存条码，当前阶段应由 PDA 执行扫码上架。',
-      nextAction: '前往 PDA 扫描库存条码和货架条码，完成待上架箱的现场上架。',
+      nextAction: '由现场作业端扫描库存条码和货架条码，完成待上架箱的现场上架。',
       actionMode: 'putaway',
-      primaryActionLabel: '前往 PDA 扫码上架',
+      primaryActionLabel: '现场扫码上架',
     }
   }
 
@@ -99,7 +99,7 @@ export function getInboundClosureCopy(task?: Partial<InboundTask> | null): Inbou
       description: 'ERP 已提交收货订单，现场收货、打印库存条码和作业反馈以 PDA 为主入口。',
       nextAction: '在 PDA 按商品逐箱收货，系统会同步生成库存条码并进入打印任务中心。',
       actionMode: 'receive',
-      primaryActionLabel: '前往 PDA 收货',
+      primaryActionLabel: '现场收货',
     }
   }
 

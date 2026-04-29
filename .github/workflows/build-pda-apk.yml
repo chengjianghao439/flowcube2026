@@ -8,6 +8,8 @@ on:
       - '.github/workflows/build-pda-apk.yml'
       - 'frontend/**'
       - 'backend/apk/version.json'
+      - 'backend/src/modules/pda/**'
+      - 'docker-compose.yml'
   workflow_dispatch:
 
 permissions:
@@ -31,15 +33,41 @@ jobs:
         shell: bash
         env:
           ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
+          SERVER_HOST_VAR: ${{ vars.FLOWCUBE_SERVER_HOST }}
+          SERVER_USER_VAR: ${{ vars.FLOWCUBE_SERVER_USER }}
+          SERVER_SSH_PORT_VAR: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
+          SERVER_APP_PATH_VAR: ${{ vars.FLOWCUBE_SERVER_APP_PATH }}
         run: |
           set -euo pipefail
           if node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
             echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
+            echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
+            echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
+            echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
+            echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           ERP_ORIGIN="${ERP_ORIGIN_VAR:-}"
           [ -n "$ERP_ORIGIN" ] || { echo "::error::缺少部署配置：设置 deploy/production.local.json 或 GitHub Variable VITE_ERP_PRODUCTION_ORIGIN"; cat /tmp/flowcube-deploy-config.err || true; exit 1; }
+          SERVER_HOST="${SERVER_HOST_VAR:-$(node -e "const u=new URL(process.argv[1]); console.log(u.hostname)" "$ERP_ORIGIN")}"
+          SERVER_USER="${SERVER_USER_VAR:-root}"
+          SERVER_SSH_PORT="${SERVER_SSH_PORT_VAR:-22}"
+          SERVER_APP_PATH="${SERVER_APP_PATH_VAR:-/opt/flowcube}"
           echo "erp_origin=$ERP_ORIGIN" >> "$GITHUB_OUTPUT"
+          echo "server_host=$SERVER_HOST" >> "$GITHUB_OUTPUT"
+          echo "server_user=$SERVER_USER" >> "$GITHUB_OUTPUT"
+          echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
+          echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Validate deploy inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${{ steps.deploy_config.outputs.erp_origin }}" ] || { echo "::error::缺少 erp_origin"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.server_host }}" ] || { echo "::error::缺少 server_host"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.server_user }}" ] || { echo "::error::缺少 server_user"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.server_app_path }}" ] || { echo "::error::缺少 server_app_path"; exit 1; }
+          [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -114,7 +142,8 @@ jobs:
       - name: Rename APK
         run: |
           mkdir -p out
-          cp frontend/android/app/build/outputs/apk/release/app-release.apk "out/FlowCubePDA-${GITHUB_SHA::7}.apk"
+          VERSION="$(node -p "require('./backend/apk/version.json').version")"
+          cp frontend/android/app/build/outputs/apk/release/app-release.apk "out/FlowCubePDA-${VERSION}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
@@ -122,3 +151,72 @@ jobs:
           name: flowcube-pda-apk
           path: out/*.apk
           if-no-files-found: error
+
+      - name: Setup SSH agent
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          KEY_FILE=~/.ssh/flowcube_ci_key
+          printf '%s\n' '${{ secrets.SSH_PRIVATE_KEY }}' > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          ssh-add "$KEY_FILE"
+
+      - name: Add SSH known_hosts
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_host }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Publish PDA APK to server
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="frontend/android/app/build/outputs/apk/release/app-release.apk"
+          VERSION_JSON="backend/apk/version.json"
+          REMOTE="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
+          PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
+          APP_PATH="${{ steps.deploy_config.outputs.server_app_path }}"
+          scp -P "$PORT" "$APK_PATH" "$REMOTE:/tmp/flowcube-pda-app-release.apk"
+          scp -P "$PORT" "$VERSION_JSON" "$REMOTE:/tmp/flowcube-pda-version.json"
+          ssh -p "$PORT" "$REMOTE" <<EOF
+          set -euo pipefail
+          cd "$APP_PATH"
+          git fetch origin main
+          git reset --hard "$GITHUB_SHA"
+          mkdir -p backend/apk
+          install -m 0644 /tmp/flowcube-pda-app-release.apk backend/apk/app-release.apk
+          install -m 0644 /tmp/flowcube-pda-version.json backend/apk/version.json
+          rm -f /tmp/flowcube-pda-app-release.apk /tmp/flowcube-pda-version.json
+          if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
+            docker compose up -d --build backend
+          fi
+          EOF
+
+      - name: Verify live PDA update endpoint
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_VERSION="$(node -p "require('./backend/apk/version.json').version")"
+          EXPECTED_CODE="$(node -p "require('./backend/apk/version.json').versionCode")"
+          VERSION_JSON="$(curl -fsSL -H 'Cache-Control: no-cache' "${{ steps.deploy_config.outputs.erp_origin }}/api/pda/version?_=${GITHUB_RUN_ID}")"
+          echo "$VERSION_JSON"
+          ACTUAL_VERSION="$(node -e "const j=JSON.parse(process.argv[1]); console.log(j.data?.version || '')" "$VERSION_JSON")"
+          ACTUAL_CODE="$(node -e "const j=JSON.parse(process.argv[1]); console.log(j.data?.versionCode || '')" "$VERSION_JSON")"
+          DOWNLOAD_URL="$(node -e "const j=JSON.parse(process.argv[1]); console.log(j.data?.downloadUrl || '')" "$VERSION_JSON")"
+          test "$ACTUAL_VERSION" = "$EXPECTED_VERSION"
+          test "$ACTUAL_CODE" = "$EXPECTED_CODE"
+          printf '%s' "$DOWNLOAD_URL" | grep -F "code=${EXPECTED_CODE}" >/dev/null
+          curl -fsSI -H 'Cache-Control: no-cache' "$DOWNLOAD_URL" | tee /tmp/pda-download-head.txt
+          grep -Fi "x-flowcube-pda-version-code: ${EXPECTED_CODE}" /tmp/pda-download-head.txt >/dev/null

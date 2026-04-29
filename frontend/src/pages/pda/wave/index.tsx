@@ -1,6 +1,6 @@
 /**
  * PDA 波次扫码页
- * 路由：/wave-scan
+ * 旧波次扫码占位页，当前不挂载到桌面路由。
  */
 export default function PdaWavePage() {
   return (

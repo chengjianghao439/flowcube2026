@@ -1,7 +1,7 @@
 {
-  "version": "1.1.21",
-  "versionCode": 23,
+  "version": "1.1.22",
+  "versionCode": 24,
   "filename": "app-release.apk",
-  "releaseNote": "移除 PDA 新手引导与现场闭环提示卡片，保留核心作业入口；强化出库打印、装箱与状态回执闭环。",
-  "publishedAt": "2026-04-28T00:00:00.000Z"
+  "releaseNote": "隔离 PDA 与桌面系统入口，移除跨端跳转；修复 PDA 自动更新固定下载地址可能命中旧 APK 缓存的问题。",
+  "publishedAt": "2026-04-29T00:00:00.000Z"
 }

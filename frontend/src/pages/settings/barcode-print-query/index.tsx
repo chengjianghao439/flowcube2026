@@ -346,13 +346,10 @@ export default function BarcodePrintQueryPage() {
             <div>
               <p className="text-sm font-semibold text-foreground">当前正在处理物流标签链路</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                物流标签打印异常会直接影响现场出库确认。建议先处理失败 / 超时，再回 PDA 扫描物流条码继续出库。
+                物流标签打印异常会直接影响现场出库确认。建议先处理失败 / 超时，再由现场继续扫描物流条码完成出库。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => openPath('/pda/ship', 'PDA 出库确认')}>
-                打开 PDA 出库
-              </Button>
               <Button size="sm" variant="ghost" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
                 打开异常工作台
               </Button>

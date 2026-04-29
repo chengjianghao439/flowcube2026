@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react'
-import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { lazy, Suspense, useEffect, useRef } from 'react'
+import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import AppLayout from '@/layouts/AppLayout'
 import PdaLayout from '@/layouts/PdaLayout'
@@ -42,6 +42,30 @@ function PageLoader() {
   )
 }
 
+function isPdaPath(pathname: string) {
+  return pathname === '/pda' || pathname.startsWith('/pda/')
+}
+
+function CrossClientNavigationGuard() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const previous = useRef<string | null>(null)
+
+  useEffect(() => {
+    const current = `${location.pathname}${location.search}`
+    const prev = previous.current
+
+    if (prev && isPdaPath(prev) !== isPdaPath(location.pathname)) {
+      navigate(prev, { replace: true })
+      return
+    }
+
+    previous.current = current
+  }, [location.pathname, location.search, navigate])
+
+  return null
+}
+
 /** ERP 已登录守卫：未登录跳 /login */
 function ErpProtectedRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -73,6 +97,7 @@ function PdaGuestRoute() {
 export default function AppRouter() {
   return (
     <HashRouter>
+      <CrossClientNavigationGuard />
       <GlobalDesktopUpdateDialog />
       <PdaConnectionGate>
         {/*

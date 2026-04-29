@@ -117,11 +117,6 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                     <div><span className="text-muted-foreground">未完成：</span>{task.packageSummary?.openPackages ?? 0}</div>
                     <div><span className="text-muted-foreground">装箱总件：</span>{task.packageSummary?.totalItems ?? 0}</div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => nav('/pda/pack')}>
-                      打开 PDA 打包
-                    </Button>
-                  </div>
                 </div>
 
                 <div className="rounded-xl border border-border p-4 space-y-3">
@@ -148,9 +143,6 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => nav(`/settings/barcode-print-query?category=logistics&keyword=${encodeURIComponent(task.taskNo)}`)}>
                       打开物流补打
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => nav('/pda/ship')}>
-                      打开 PDA 出库
                     </Button>
                   </div>
                 </div>
@@ -215,10 +207,6 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                       {task.status === 3 && '仓库人员需在 PDA 上确认扫码后执行出库'}
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" className="shrink-0 border-blue-500/30 text-blue-300 hover:bg-blue-500/10"
-                    onClick={() => nav('/pda')}>
-                    前往 PDA
-                  </Button>
                 </div>
               )}
               {![4, 5].includes(task.status) && (

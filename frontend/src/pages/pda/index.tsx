@@ -21,8 +21,6 @@ const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = 
   { icon: '📦', label: '打包作业', path: '/pda/pack',      perm: PERMISSIONS.WAREHOUSE_TASK_PACK },
   { icon: '✂️', label: '容器拆分', path: '/pda/split',     perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT },
   { icon: '🚚', label: '出库确认', path: '/pda/ship',      perm: PERMISSIONS.WAREHOUSE_TASK_SHIP },
-  { icon: '⚠️', label: '异常工作台', path: '/reports/exception-workbench', perm: PERMISSIONS.REPORT_VIEW },
-  { icon: '🖨️', label: '物流补打', path: '/settings/barcode-print-query?category=logistics&status=failed', perm: PERMISSIONS.PRINT_JOB_VIEW },
 ]
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────

@@ -260,9 +260,6 @@ export default function ExceptionWorkbenchPage() {
             <Button size="sm" variant="outline" onClick={() => openPath('/settings/barcode-print-query?category=logistics', '条码打印查询')}>
               打开物流补打
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => openPath('/pda/ship', 'PDA 出库确认')}>
-              打开 PDA 出库
-            </Button>
           </div>
         </div>
         {logisticsReminders.length === 0 ? (
@@ -283,7 +280,7 @@ export default function ExceptionWorkbenchPage() {
                   <span className="font-medium text-foreground">{item.text}</span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  直接进入物流标签打印查询，先处理失败或超时记录，再继续 PDA 出库确认。
+                  直接进入物流标签打印查询，先处理失败或超时记录，再由现场继续出库确认。
                 </p>
                 <p className="mt-3 text-xs text-muted-foreground">点击后将打开物流标签补打入口</p>
               </button>

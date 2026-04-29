@@ -319,11 +319,11 @@ export default function PdaCheckPage() {
     return (
       <PdaTaskState
         title="当前任务不能复核"
-        description={`任务 ${taskDetail.taskNo} 当前状态为「${taskDetail.statusName}」。复核页只允许处理「待复核」任务，请回到仓库任务确认主流程状态。`}
+        description={`任务 ${taskDetail.taskNo} 当前状态为「${taskDetail.statusName}」。复核页只允许处理「待复核」任务，请选择其他待复核任务。`}
         actionText="选择其他任务"
         onAction={() => setStep('select-task')}
-        secondaryText="打开仓库任务"
-        onSecondary={() => navigate('/warehouse-tasks')}
+        secondaryText="返回工作台"
+        onSecondary={() => navigate('/pda')}
       />
     )
   }
@@ -347,8 +347,8 @@ export default function PdaCheckPage() {
               继续复核
             </Button>
           )}
-          <Button variant="outline" className="flex-1" onClick={() => navigate('/warehouse-tasks')}>
-            仓库任务
+          <Button variant="outline" className="flex-1" onClick={() => setStep('select-task')}>
+            选择任务
           </Button>
           <Button className="flex-1" onClick={() => navigate(allChecked ? '/pda/pack' : '/pda')}>
             {allChecked ? '去打包' : '返回工作台'}

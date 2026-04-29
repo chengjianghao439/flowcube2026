@@ -84,7 +84,6 @@ const PriceListsPage = lazy(() => import('@/pages/price-lists'))
 const PrintTemplatesPage = lazy(() => import('@/pages/settings/print-templates'))
 const PrintTemplateEditorPage = lazy(() => import('@/pages/settings/print-templates/editor'))
 const PrintersPage = lazy(() => import('@/pages/settings/printers'))
-const PdaWavePage = lazy(() => import('@/pages/pda/wave'))
 
 export const routeRegistry: RouteRegistryEntry[] = [
   {
@@ -285,15 +284,6 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '仓库任务', order: 30 },
-  },
-  {
-    path: '/wave-scan',
-    title: '波次扫码',
-    permission: PERMISSIONS.PICKING_WAVE_VIEW,
-    component: PdaWavePage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '仓库任务', order: 40 },
   },
   {
     path: '/reports',

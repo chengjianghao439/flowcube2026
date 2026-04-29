@@ -214,10 +214,10 @@ export default function PdaWavePage() {
         <div className="text-center">
           <div className="mb-4 text-6xl opacity-30">📦</div>
           <h1 className="mb-2 text-xl font-bold">缺少波次参数</h1>
-          <p className="mb-6 text-sm text-gray-400">请从波次拣货页面进入</p>
-          <button onClick={() => navigate('/picking-waves')}
+          <p className="mb-6 text-sm text-gray-400">请从 PDA 拣货任务进入</p>
+          <button onClick={() => navigate('/pda/picking')}
             className="rounded-xl bg-white/10 px-8 py-3 text-base font-medium text-white hover:bg-white/20 active:scale-95">
-            返回波次列表
+            返回拣货任务
           </button>
         </div>
       </div>
@@ -242,9 +242,9 @@ export default function PdaWavePage() {
           <div className="mb-4 text-5xl text-red-400">✕</div>
           <h1 className="mb-2 text-xl font-bold">波次加载失败</h1>
           <p className="mb-6 text-sm text-gray-400">{(loadError as Error)?.message || '波次不存在'}</p>
-          <button onClick={() => navigate('/picking-waves')}
+          <button onClick={() => navigate('/pda/picking')}
             className="rounded-xl bg-white/10 px-8 py-3 text-base font-medium text-white hover:bg-white/20 active:scale-95">
-            返回波次列表
+            返回拣货任务
           </button>
         </div>
       </div>
@@ -265,9 +265,9 @@ export default function PdaWavePage() {
               拣货 <span className="font-bold text-green-400">{totalPicked}</span> 件
             </p>
           )}
-          <button onClick={() => navigate('/picking-waves')}
+          <button onClick={() => navigate('/pda/picking')}
             className="rounded-xl bg-white/10 px-8 py-4 text-lg font-medium text-white hover:bg-white/20 active:scale-95">
-            返回波次列表
+            返回拣货任务
           </button>
         </div>
       </div>

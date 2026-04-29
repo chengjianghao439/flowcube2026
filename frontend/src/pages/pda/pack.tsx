@@ -471,11 +471,11 @@ export default function PdaPackPage() {
     return (
       <PdaTaskState
         title="当前任务不能打包"
-        description={`任务 ${taskDetail.taskNo} 当前状态为「${taskDetail.statusName}」。打包页只允许处理「待打包」任务，请回到仓库任务确认主流程状态。`}
+        description={`任务 ${taskDetail.taskNo} 当前状态为「${taskDetail.statusName}」。打包页只允许处理「待打包」任务，请选择其他待打包任务。`}
         actionText="选择其他任务"
         onAction={goSelectTask}
-        secondaryText="打开仓库任务"
-        onSecondary={() => navigate('/warehouse-tasks')}
+        secondaryText="返回工作台"
+        onSecondary={() => navigate('/pda')}
       />
     )
   }

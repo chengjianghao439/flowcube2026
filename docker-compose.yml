@@ -51,6 +51,8 @@ services:
     volumes:
       # 桌面发布目录只允许指向 canonical host path；backend/downloads 已废弃，禁止作为默认 fallback。
       - ${FLOWCUBE_DOWNLOADS_DIR:-/var/www/flowcube-downloads}:/var/www/flowcube-downloads
+      # PDA 自动更新包从服务器工作区 backend/apk 发布；挂载后 CI 上传新 APK 可被后端立即读取。
+      - ./backend/apk:/app/apk:ro
 
   frontend:
     build:
