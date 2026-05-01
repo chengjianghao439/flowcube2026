@@ -42,11 +42,12 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
     )
   }
 
-  // 增加 reserved（行不存在时先 insert，这种情况 onHand=0 available=0 会在上面被拦截）
+  // 增加 reserved。quantity 是容器汇总缓存，只能由 syncStockFromContainers() 写入；
+  // 此处仅确保 stock 行存在，不能把容器投影 onHand 回写到 quantity。
   await conn.query(
-    `INSERT INTO inventory_stock (product_id, warehouse_id, quantity, reserved) VALUES (?,?,?,?)
-     ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), reserved = reserved + VALUES(reserved)`,
-    [productId, warehouseId, onHand, qty]
+    `INSERT INTO inventory_stock (product_id, warehouse_id, quantity, reserved) VALUES (?,?,0,?)
+     ON DUPLICATE KEY UPDATE reserved = reserved + VALUES(reserved)`,
+    [productId, warehouseId, qty]
   )
 
   // 写入预占记录，供取消时释放使用

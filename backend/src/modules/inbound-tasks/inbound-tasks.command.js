@@ -498,6 +498,7 @@ async function receive(taskId, payload, { userId, requestKey } = {}) {
 async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } = {}, operator = null) {
   const normalizedMode = String(mode || 'task').trim().toLowerCase()
   if (!['task', 'item', 'barcode'].includes(normalizedMode)) throw new AppError('补打模式无效', 400)
+  const reprintBucket = Math.floor(Date.now() / 10000)
 
   const conn = await pool.getConnection()
   try {
@@ -568,7 +569,7 @@ async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } 
           qty: container.remaining_qty,
         },
         createdBy: operator?.userId ?? null,
-        jobUniqueKey: `reprint_inbound:${taskId}:${normalizedMode}:${container.id}:${Date.now()}`,
+        jobUniqueKey: `reprint_inbound:${taskId}:${normalizedMode}:${container.id}:${reprintBucket}`,
       })
       if (job) jobs.push(job)
     }

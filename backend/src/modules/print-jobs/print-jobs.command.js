@@ -10,9 +10,7 @@ const {
   MAX_RETRY,
   ttlMinutes,
   parsePriority,
-  assertCanComplete,
   assertCanCompleteLocalDesktop,
-  nextFailState,
 } = require('./print-jobs.status')
 const { pushToClients } = require('./print-jobs.dispatch')
 
@@ -255,15 +253,11 @@ async function assertQueueReady({
 
 async function complete(id, { ackToken } = {}) {
   const job = await findById(id)
-  assertCanComplete(job)
-  if (job.status === STATUS.DONE) return job
-  const [[sec]] = await pool.query('SELECT ack_token FROM print_jobs WHERE id=?', [id])
-  if (sec?.ack_token) {
-    const t = String(ackToken || '').trim()
-    if (!t || t !== sec.ack_token) {
-      throw new AppError('打印确认令牌无效或缺失', 400, 'PRINT_ACK_TOKEN_INVALID')
-    }
+  const token = String(ackToken || '').trim()
+  if (!token) {
+    throw new AppError('打印确认令牌无效或缺失', 400, 'PRINT_ACK_TOKEN_INVALID')
   }
+
   const [[latRow]] = await pool.query(
     `SELECT printer_id,
             TIMESTAMPDIFF(MICROSECOND, dispatched_at, NOW()) / 1000 AS latency_ms
@@ -275,10 +269,15 @@ async function complete(id, { ackToken } = {}) {
       ? Number(latRow.latency_ms)
       : null
 
-  await pool.query(
-    'UPDATE print_jobs SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW() WHERE id=?',
-    [STATUS.DONE, id],
+  const [ur] = await pool.query(
+    `UPDATE print_jobs
+     SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW()
+     WHERE id=? AND status=? AND ack_token=?`,
+    [STATUS.DONE, id, STATUS.PRINTING, token],
   )
+  if (!ur.affectedRows) {
+    throw new AppError('打印任务状态或确认令牌已变化，请刷新后重试', 409, 'PRINT_JOB_STATE_CONFLICT')
+  }
   await printOptionalSideEffect('appendInboundPrintEvent:complete', appendInboundPrintEventByJob(
     job,
     'print_completed',
@@ -320,48 +319,44 @@ async function completeLocalDesktop(id) {
 
 async function fail(id, errorMessage) {
   const job = await findById(id)
-  const next = nextFailState(job)
-  if (next.done) return job
+  const retryCount = Math.min(Number(job.retryCount || 0) + 1, MAX_RETRY)
 
+  const msg = errorMessage || '未知错误'
+  const [ur] = await pool.query(
+    `UPDATE print_jobs
+     SET status=?, retry_count=?, error_message=?, ack_token=NULL, dispatched_at=NULL
+     WHERE id=? AND status IN (?, ?)`,
+    [STATUS.FAILED, retryCount, msg, id, STATUS.PENDING, STATUS.PRINTING],
+  )
+  if (!ur.affectedRows) {
+    throw new AppError('打印任务状态已变化，无法标记失败', 409, 'PRINT_JOB_STATE_CONFLICT')
+  }
   await printOptionalSideEffect(
     'recordPrintFailure',
     recordPrintFailure(job.printerId),
     { printJobId: job.id, printerId: job.printerId },
   )
-
-  const msg = errorMessage || '未知错误'
-  if (next.status === STATUS.PENDING) {
-    await pool.query(
-      'UPDATE print_jobs SET status=?, retry_count=?, error_message=?, ack_token=NULL, dispatched_at=NULL, expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id=?',
-      [next.status, next.retryCount, msg, ttlMinutes(), id],
-    )
-  } else {
-    await pool.query(
-      'UPDATE print_jobs SET status=?, retry_count=?, error_message=?, ack_token=NULL, dispatched_at=NULL WHERE id=?',
-      [next.status, next.retryCount, msg, id],
-    )
-  }
-  if (next.status === STATUS.PENDING) {
-    const updated = await findById(id)
-    const [[printer]] = await pool.query('SELECT code FROM printers WHERE id=?', [job.printerId])
-    if (printer) await pushToClients(printer.code, updated)
-  }
   await printOptionalSideEffect('appendInboundPrintEvent:fail', appendInboundPrintEventByJob(
     job,
-    next.status === STATUS.FAILED ? 'print_failed' : 'print_retrying',
-    next.status === STATUS.FAILED ? '库存条码打印失败' : '库存条码打印重试',
+    'print_failed',
+    '库存条码打印失败',
     msg,
-    { printJobId: job.id, barcode: job.refCode || null, retryCount: next.retryCount },
-  ), { printJobId: job.id, nextStatus: next.status, retryCount: next.retryCount })
+    { printJobId: job.id, barcode: job.refCode || null, retryCount },
+  ), { printJobId: job.id, nextStatus: STATUS.FAILED, retryCount })
   return findById(id)
 }
 
 async function retry(id) {
   const job = await findById(id)
-  await pool.query(
-    'UPDATE print_jobs SET status=0, retry_count=0, error_message=NULL, ack_token=NULL, dispatched_at=NULL, expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id=?',
-    [ttlMinutes(), id],
+  const [ur] = await pool.query(
+    `UPDATE print_jobs
+     SET status=?, retry_count=0, error_message=NULL, ack_token=NULL, dispatched_at=NULL, expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE)
+     WHERE id=? AND status=?`,
+    [STATUS.PENDING, ttlMinutes(), id, STATUS.FAILED],
   )
+  if (!ur.affectedRows) {
+    throw new AppError('打印任务状态已变化，无法重试', 409, 'PRINT_JOB_STATE_CONFLICT')
+  }
   const updated = await findById(id)
   const [[printer]] = await pool.query('SELECT code FROM printers WHERE id=?', [job.printerId])
   if (printer) await pushToClients(printer.code, updated)

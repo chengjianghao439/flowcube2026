@@ -57,24 +57,34 @@ async function listByTask(taskId) {
 
 // ─── 创建新物流条码（L + 6位 ID）───────────────────────────────────────────────
 async function createPackage(taskId, remark = null) {
-  const [[task]] = await pool.query(
-    'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL',
-    [taskId],
-  )
-  if (!task) throw new AppError('任务不存在', 404)
-  if (Number(task.status) !== WT_STATUS.PACKING) {
-    throw new AppError('仅「待打包」任务可创建装箱', 400)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[task]] = await conn.query(
+      'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [taskId],
+    )
+    if (!task) throw new AppError('任务不存在', 404)
+    if (Number(task.status) !== WT_STATUS.PACKING) {
+      throw new AppError('仅「待打包」任务可创建装箱', 400)
+    }
+
+    const [result] = await conn.query(
+      'INSERT INTO packages (barcode, warehouse_task_id, remark) VALUES (?, ?, ?)',
+      ['TMP', taskId, remark],
+    )
+    const newId  = result.insertId
+    const barcode = `L${String(newId).padStart(6, '0')}`
+    await conn.query('UPDATE packages SET barcode=? WHERE id=?', [barcode, newId])
+    await conn.commit()
+
+    return { id: newId, barcode, warehouseTaskId: taskId, status: 1, items: [] }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
   }
-
-  const [result] = await pool.query(
-    'INSERT INTO packages (barcode, warehouse_task_id, remark) VALUES (?, ?, ?)',
-    ['TMP', taskId, remark],
-  )
-  const newId  = result.insertId
-  const barcode = `L${String(newId).padStart(6, '0')}`
-  await pool.query('UPDATE packages SET barcode=? WHERE id=?', [barcode, newId])
-
-  return { id: newId, barcode, warehouseTaskId: taskId, status: 1, items: [] }
 }
 
 const QTY_SCALE = 10000

@@ -154,6 +154,7 @@ router.put('/:id/ship', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SHIP), pdaO
 
 // PUT /api/warehouse-tasks/:id/check — 已关闭手动复核（须 POST /scan-logs/check）
 router.put('/:id/check',
+  requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK_DONE),
   pdaOnly,
   vBody(z.object({
     items: z.array(z.object({

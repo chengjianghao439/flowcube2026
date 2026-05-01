@@ -527,11 +527,41 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
 
   await assertTaskPickScanClosure(conn, id)
 
-  if (sortedItems && sortedItems.length > 0) {
+  if (sortedItems != null && !Array.isArray(sortedItems)) {
+    throw new AppError('分拣明细格式无效', 400)
+  }
+
+  if (Array.isArray(sortedItems)) {
+    if (!sortedItems.length) throw new AppError('分拣明细不能为空', 400)
+    const [taskItems] = await conn.query(
+      'SELECT id, picked_qty FROM warehouse_task_items WHERE task_id=? FOR UPDATE',
+      [id],
+    )
+    const itemMap = new Map(taskItems.map(item => [Number(item.id), Number(item.picked_qty)]))
+    const seenItemIds = new Set()
     for (const { itemId, sortedQty } of sortedItems) {
+      const normalizedItemId = Number(itemId)
+      const normalizedSortedQty = Number(sortedQty)
+      if (!Number.isInteger(normalizedItemId) || normalizedItemId <= 0) {
+        throw new AppError('分拣明细无效', 400)
+      }
+      if (seenItemIds.has(normalizedItemId)) {
+        throw new AppError('分拣明细不能重复提交', 400)
+      }
+      seenItemIds.add(normalizedItemId)
+      if (!itemMap.has(normalizedItemId)) {
+        throw new AppError('分拣明细不属于当前任务', 400)
+      }
+      const pickedQty = itemMap.get(normalizedItemId)
+      if (!Number.isFinite(normalizedSortedQty) || normalizedSortedQty < 0) {
+        throw new AppError('分拣数量必须为大于或等于 0 的有效数字', 400)
+      }
+      if (normalizedSortedQty > pickedQty) {
+        throw new AppError('分拣数量不能超过已拣数量', 400)
+      }
       await conn.query(
         'UPDATE warehouse_task_items SET sorted_qty=? WHERE id=? AND task_id=?',
-        [sortedQty, itemId, id],
+        [normalizedSortedQty, normalizedItemId, id],
       )
     }
   } else {

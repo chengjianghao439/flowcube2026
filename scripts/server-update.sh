@@ -43,7 +43,19 @@ ensure_docker_space() {
 
 SKIP_GIT_PULL="${SKIP_GIT_PULL:-0}"
 if [ "$SKIP_GIT_PULL" = "1" ]; then
-  echo "==> 已跳过代码拉取（SKIP_GIT_PULL=1）"
+  CURRENT_COMMIT="$(git rev-parse HEAD)"
+  EXPECTED_DEPLOY_COMMIT="${EXPECTED_COMMIT:-${GITHUB_SHA:-}}"
+  echo "!! WARNING: 当前处于跳过 git pull 模式（SKIP_GIT_PULL=1）"
+  echo "!! WARNING: 该模式仅建议 CI / GitHub Actions 在已精确 checkout/reset 到发布提交后使用"
+  echo "==> 当前服务器代码 commit: $CURRENT_COMMIT"
+  if [ -n "$EXPECTED_DEPLOY_COMMIT" ]; then
+    echo "==> 期望部署 commit: $EXPECTED_DEPLOY_COMMIT"
+    if [ "$CURRENT_COMMIT" != "$EXPECTED_DEPLOY_COMMIT" ]; then
+      echo "!! WARNING: 当前 commit 与期望 commit 不一致；继续部署可能会重建错误版本"
+    fi
+  else
+    echo "!! WARNING: 未提供 EXPECTED_COMMIT 或 GITHUB_SHA，无法校验跳过 pull 后的部署提交是否正确"
+  fi
 else
   echo "==> 拉取代码..."
   git pull --rebase --autostash origin main

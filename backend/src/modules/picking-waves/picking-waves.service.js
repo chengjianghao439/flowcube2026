@@ -196,26 +196,49 @@ async function create({ taskIds, remark, priority = 2 }) {
   if (!taskIds?.length || taskIds.length < 2) {
     throw new AppError('请选择至少 2 个任务创建波次', 400)
   }
+  const normalizedTaskIds = taskIds.map(id => Number(id)).filter(id => Number.isFinite(id) && id > 0)
+  const uniqueTaskIds = [...new Set(normalizedTaskIds)].sort((a, b) => a - b)
+  if (uniqueTaskIds.length !== taskIds.length) {
+    throw new AppError('波次任务不可重复选择', 400)
+  }
 
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
 
-    // 查询选中的任务
+    // 查询并锁定选中的任务。按 id 排序加锁，避免并发创建波次时同一批任务重复绑定。
     const [tasks] = await conn.query(
       `SELECT t.*, wh.name AS warehouse_name
        FROM warehouse_tasks t
        LEFT JOIN inventory_warehouses wh ON wh.id = t.warehouse_id
-       WHERE t.id IN (?) AND t.deleted_at IS NULL`,
-      [taskIds],
+       WHERE t.id IN (?) AND t.deleted_at IS NULL
+       ORDER BY t.id ASC
+       FOR UPDATE`,
+      [uniqueTaskIds],
     )
 
-    if (tasks.length !== taskIds.length) {
+    if (tasks.length !== uniqueTaskIds.length) {
       throw new AppError('部分任务不存在', 400)
     }
 
+    const [activeWaveRows] = await conn.query(
+      `SELECT pwt.task_id, pw.wave_no, pw.status
+       FROM picking_wave_tasks pwt
+       INNER JOIN picking_waves pw ON pw.id = pwt.wave_id
+       WHERE pwt.task_id IN (?) AND pw.status <> 5
+       FOR UPDATE`,
+      [uniqueTaskIds],
+    )
+    if (activeWaveRows.length) {
+      const task = tasks.find(t => Number(t.id) === Number(activeWaveRows[0].task_id))
+      throw new AppError(
+        `任务 ${task?.task_no || activeWaveRows[0].task_id} 已在波次 ${activeWaveRows[0].wave_no} 中，不能重复创建波次`,
+        409,
+      )
+    }
+
     // 校验：所有任务状态必须为 2（备货中）
-    const invalid = tasks.find(t => t.status !== 2)
+    const invalid = tasks.find(t => Number(t.status) !== WT_STATUS.PICKING)
     if (invalid) {
       throw new AppError(`任务 ${invalid.task_no} 状态不是"备货中"，无法创建波次`, 400)
     }
@@ -253,7 +276,7 @@ async function create({ taskIds, remark, priority = 2 }) {
        FROM warehouse_task_items
        WHERE task_id IN (?)
        GROUP BY product_id, product_code, product_name, unit`,
-      [taskIds],
+      [uniqueTaskIds],
     )
 
     for (const item of allItems) {
