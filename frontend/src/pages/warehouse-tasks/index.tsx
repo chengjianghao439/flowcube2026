@@ -279,7 +279,7 @@ export default function WarehouseTasksPage() {
   const setPriority  = useMutation({ mutationFn: ({ id, p }: { id: number; p: number }) => updateTaskPriorityApi(id, p), onSuccess: () => qc.invalidateQueries({ queryKey: ['warehouse-tasks'] }) })
 
   const columns: TableColumn<WarehouseTask>[] = [
-    { key: 'priority', title: '优先级', width: 100, render: (v, r) => {
+    { key: 'priority', title: '优先级', width: 96, render: (v, r) => {
       const pri = v as 1 | 2 | 3
       return (
         <Select value={String(v)} onValueChange={val => setPriority.mutate({ id: r.id, p: +val })}>
@@ -299,27 +299,52 @@ export default function WarehouseTasksPage() {
         </Select>
       )
     }},
-    { key: 'taskNo', title: '任务编号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'saleOrderNo', title: '销售单', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'customerName', title: '客户' },
-    { key: 'warehouseName', title: '仓库', width: 100 },
-    { key: 'status', title: '状态', width: 110, render: v => <StatusBadge type="task" status={v as number} /> },
-    { key: 'createdAt', title: '创建时间', width: 120, render: v => formatDisplayDateTime(v) },
-    { key: 'id', title: '操作', width: 160, render: (_, r) => (
-      <TableActionsMenu
-        primaryLabel="详情"
-        onPrimaryClick={() => openDetail(r.id)}
-        items={
-          ![4, 5].includes(r.status)
-            ? [{
-                label: '取消',
-                destructive: true,
-                onClick: () => openConfirm('取消任务', `确认取消任务 ${r.taskNo}？`, () => { closeConfirm(); cancel.mutate(r.id) }),
-                disabled: cancel.isPending,
-              }]
-            : []
-        }
-      />
+    { key: 'taskNo', title: '任务编号', width: 176, render: v => <span className="block truncate whitespace-nowrap text-doc-code" title={String(v)}>{String(v)}</span> },
+    { key: 'saleOrderNo', title: '销售单', width: 176, render: v => <span className="block truncate whitespace-nowrap text-doc-code" title={String(v)}>{String(v)}</span> },
+    {
+      key: 'customerName',
+      title: '客户',
+      width: 240,
+      render: v => {
+        const text = String(v ?? '')
+        return text
+          ? <span className="block truncate whitespace-nowrap" title={text}>{text}</span>
+          : <span className="whitespace-nowrap text-muted-foreground">—</span>
+      },
+    },
+    {
+      key: 'warehouseName',
+      title: '仓库',
+      width: 140,
+      render: v => {
+        const text = String(v ?? '')
+        return text
+          ? <span className="block truncate whitespace-nowrap" title={text}>{text}</span>
+          : <span className="whitespace-nowrap text-muted-foreground">—</span>
+      },
+    },
+    { key: 'status', title: '状态', width: 128, render: v => <div className="whitespace-nowrap"><StatusBadge type="task" status={v as number} /></div> },
+    { key: 'createdAt', title: '创建时间', width: 176, render: v => {
+      const text = formatDisplayDateTime(v)
+      return <span className="block whitespace-nowrap font-mono text-xs" title={text}>{text}</span>
+    } },
+    { key: 'id', title: '操作', width: 180, render: (_, r) => (
+      <div className="flex justify-end whitespace-nowrap">
+        <TableActionsMenu
+          primaryLabel="详情"
+          onPrimaryClick={() => openDetail(r.id)}
+          items={
+            ![4, 5].includes(r.status)
+              ? [{
+                  label: '取消',
+                  destructive: true,
+                  onClick: () => openConfirm('取消任务', `确认取消任务 ${r.taskNo}？`, () => { closeConfirm(); cancel.mutate(r.id) }),
+                  disabled: cancel.isPending,
+                }]
+              : []
+          }
+        />
+      </div>
     )},
   ]
 
@@ -366,7 +391,16 @@ export default function WarehouseTasksPage() {
 
       {view === 'kanban'
         ? <KanbanBoard tasks={data?.list ?? []} onDetail={openDetail} />
-        : <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} pagination={data?.pagination} onPageChange={(nextPage) => updateParams({ page: nextPage })} rowKey="id" onRowDoubleClick={r => openDetail(r.id)} />
+        : <DataTable
+            columns={columns}
+            data={data?.list ?? []}
+            loading={isLoading}
+            pagination={data?.pagination}
+            onPageChange={(nextPage) => updateParams({ page: nextPage })}
+            rowKey="id"
+            onRowDoubleClick={r => openDetail(r.id)}
+            columnStorageKey="warehouse-tasks:list:v2"
+          />
       }
 
       <TaskDetailDialog

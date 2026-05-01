@@ -57,29 +57,43 @@ export default function InboundTasksPage() {
     {
       key: 'taskNo',
       title: '任务单号',
-      width: 160,
-      render: v => <span className="text-doc-code">{v as string}</span>,
+      width: 176,
+      render: v => <span className="block truncate whitespace-nowrap text-doc-code" title={String(v)}>{v as string}</span>,
     },
     {
       key: 'purchaseOrderNo',
       title: '关联采购',
-      width: 160,
-      render: v => v ? <span className="text-doc-code">{v as string}</span> : <span className="text-muted-foreground">混合采购</span>,
+      width: 176,
+      render: v => v
+        ? <span className="block truncate whitespace-nowrap text-doc-code" title={String(v)}>{v as string}</span>
+        : <span className="whitespace-nowrap text-muted-foreground">混合采购</span>,
     },
     {
       key: 'supplierName',
       title: '供应商',
-      render: v => v ?? <span className="text-muted-foreground">—</span>,
+      width: 240,
+      render: v => {
+        const text = String(v ?? '')
+        return text
+          ? <span className="block truncate whitespace-nowrap" title={text}>{text}</span>
+          : <span className="whitespace-nowrap text-muted-foreground">—</span>
+      },
     },
     {
       key: 'warehouseName',
       title: '仓库',
-      render: v => v ?? <span className="text-muted-foreground">—</span>,
+      width: 140,
+      render: v => {
+        const text = String(v ?? '')
+        return text
+          ? <span className="block truncate whitespace-nowrap" title={text}>{text}</span>
+          : <span className="whitespace-nowrap text-muted-foreground">—</span>
+      },
     },
     {
       key: 'status',
       title: '状态',
-      width: 220,
+      width: 160,
       render: (_, row) => {
         const task = row as InboundTask
         const closureCopy = getInboundClosureCopy(task)
@@ -91,9 +105,9 @@ export default function InboundTasksPage() {
               ? 'draft'
               : 'active'
         return (
-          <div className="space-y-1">
+          <div className="min-w-0" title={closureCopy.nextAction}>
             <SoftStatusLabel label={task.receiptStatus?.label ?? INBOUND_STATUS_LABEL[task.status]} tone={tone} />
-            <p className="text-xs text-muted-foreground">{closureCopy.nextAction}</p>
+            <p className="mt-1 truncate whitespace-nowrap text-xs text-muted-foreground">{closureCopy.stageLabel}</p>
           </div>
         )
       },
@@ -101,18 +115,27 @@ export default function InboundTasksPage() {
     {
       key: 'operatorName',
       title: '操作人',
-      render: v => v ?? <span className="text-muted-foreground">—</span>,
+      width: 120,
+      render: v => {
+        const text = String(v ?? '')
+        return text
+          ? <span className="block truncate whitespace-nowrap" title={text}>{text}</span>
+          : <span className="whitespace-nowrap text-muted-foreground">—</span>
+      },
     },
     {
       key: 'createdAt',
       title: '创建时间',
-      width: 160,
-      render: v => formatDisplayDateTime(v),
+      width: 176,
+      render: v => {
+        const text = formatDisplayDateTime(v)
+        return <span className="block whitespace-nowrap font-mono text-xs" title={text}>{text}</span>
+      },
     },
     {
       key: 'id',
       title: '操作',
-      width: 140,
+      width: 180,
       render: (_, row) => {
         const task = row as InboundTask
         const items = []
@@ -148,11 +171,13 @@ export default function InboundTasksPage() {
           },
         })
         return (
-          <TableActionsMenu
-            primaryLabel="详情"
-            onPrimaryClick={() => openDetail(task)}
-            items={items}
-          />
+          <div className="flex justify-end whitespace-nowrap">
+            <TableActionsMenu
+              primaryLabel="详情"
+              onPrimaryClick={() => openDetail(task)}
+              items={items}
+            />
+          </div>
         )
       },
     },
@@ -220,6 +245,7 @@ export default function InboundTasksPage() {
         data={data?.list ?? []}
         loading={isLoading}
         rowKey="id"
+        columnStorageKey="inbound-tasks:v2"
       />
       <ProductFinder
         open={productFinderOpen}

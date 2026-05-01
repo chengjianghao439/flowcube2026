@@ -132,7 +132,11 @@ export default function DataTable<T extends object>({
 
   const getColumnWidth = (col: TableColumn<T>) => {
     const key = String(col.key)
-    return columnWidths[key] ?? col.width ?? (isAction(key, col.title) ? 200 : 160)
+    const fallback = isAction(key, col.title) ? 180 : 160
+    const width = columnWidths[key] ?? col.width ?? fallback
+    if (typeof width === 'number' && Number.isFinite(width)) return width
+    const parsed = Number.parseInt(String(width), 10)
+    return Number.isFinite(parsed) ? parsed : fallback
   }
 
   const tableWidth = useMemo(() => {
@@ -200,7 +204,7 @@ export default function DataTable<T extends object>({
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="table-fixed text-sm" style={{ width: tableWidth }}>
+        <table className="w-full table-fixed text-sm" style={{ minWidth: tableWidth }}>
           <colgroup>
             {selectable && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
@@ -210,7 +214,7 @@ export default function DataTable<T extends object>({
           <thead>
             <tr className="border-b border-border bg-muted/30">
               {selectable && (
-                <th className="px-4 py-3 w-10">
+                <th className="w-10 px-4 py-2.5">
                   <input
                     type="checkbox"
                     checked={allSelected}
@@ -233,15 +237,15 @@ export default function DataTable<T extends object>({
                     moveColumn(String(col.key))
                   }}
                   onDragEnd={() => setDraggingKey(null)}
-                  className={`px-4 py-3 text-left text-table-head ${
+                  className={`px-4 py-2.5 text-left text-table-head ${
                     isAction(String(col.key), col.title)
-                      ? 'sticky right-0 z-20 min-w-[200px] bg-muted/30 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
+                      ? 'sticky right-0 z-20 min-w-[180px] bg-muted/30 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
                       : 'cursor-move select-none'
                   }`}
                   style={getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined}
                 >
                   <div className="group flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate">{col.title}</span>
+                    <span className="min-w-0 flex-1 whitespace-nowrap" title={col.title}>{col.title}</span>
                     <button
                       type="button"
                       aria-label={`调整${col.title}列宽`}
@@ -261,9 +265,9 @@ export default function DataTable<T extends object>({
               // Skeleton rows
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b border-border last:border-0">
-                  {selectable && <td className="px-4 min-h-12 py-3" />}
+                  {selectable && <td className="min-h-12 px-4 py-2.5" />}
                   {orderedColumns.map((col) => (
-                    <td key={String(col.key)} className="px-4 min-h-12 py-3">
+                    <td key={String(col.key)} className="min-h-12 px-4 py-2.5">
                       <div className="h-3.5 w-3/4 animate-pulse rounded bg-muted" />
                     </td>
                   ))}
@@ -304,10 +308,10 @@ export default function DataTable<T extends object>({
                       <td
                         key={String(col.key)}
                         onDoubleClick={isAction(String(col.key), col.title) ? e => e.stopPropagation() : undefined}
-                        className={`px-4 text-foreground align-top ${
+                        className={`px-4 text-foreground align-middle ${
                           isAction(String(col.key), col.title)
-                            ? 'sticky right-0 z-10 min-w-[200px] bg-card py-3 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.08)] group-hover:bg-muted/30'
-                            : 'py-3'
+                            ? 'sticky right-0 z-10 min-w-[180px] bg-card py-2.5 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.08)] group-hover:bg-muted/30'
+                            : 'py-2.5'
                         }`}
                         style={getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined}
                       >
