@@ -41,8 +41,13 @@ ensure_docker_space() {
   fi
 }
 
-echo "==> 拉取代码..."
-git pull --rebase --autostash origin main
+SKIP_GIT_PULL="${SKIP_GIT_PULL:-0}"
+if [ "$SKIP_GIT_PULL" = "1" ]; then
+  echo "==> 已跳过代码拉取（SKIP_GIT_PULL=1）"
+else
+  echo "==> 拉取代码..."
+  git pull --rebase --autostash origin main
+fi
 
 SKIP_RELEASE_GATE="${SKIP_RELEASE_GATE:-0}"
 

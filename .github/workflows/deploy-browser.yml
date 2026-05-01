@@ -98,7 +98,7 @@ jobs:
           fi
           git fetch origin main
           git reset --hard "${{ github.sha }}"
-          SKIP_RELEASE_GATE=1 bash scripts/server-update.sh
+          SKIP_GIT_PULL=1 SKIP_RELEASE_GATE=1 bash scripts/server-update.sh
           EOF
 
       - name: Verify server repo moved to current commit
