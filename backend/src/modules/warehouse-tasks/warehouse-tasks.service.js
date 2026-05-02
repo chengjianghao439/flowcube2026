@@ -7,7 +7,14 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
-const { WT_STATUS, WT_STATUS_NAME, WT_STATUS_PICK_POOL, isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
+const {
+  WT_STATUS,
+  WT_STATUS_NAME,
+  WT_STATUS_PICK_POOL,
+  WT_STATUS_TERMINAL,
+  isValidTransition,
+  assertWarehouseTaskAction,
+} = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { buildPackagePrintSummary } = require('../../utils/printSummary')
@@ -981,8 +988,19 @@ async function cancel(id, options = {}) {
  */
 async function updatePriority(id, priority) {
   if (![1,2,3].includes(priority)) throw new AppError('优先级无效', 400)
-  await findById(id)
-  await pool.query('UPDATE warehouse_tasks SET priority=? WHERE id=?', [priority, id])
+  const task = await findById(id)
+  if (WT_STATUS_TERMINAL.includes(Number(task.status))) {
+    throw new AppError('已出库或已取消的任务不允许修改优先级', 409, 'WAREHOUSE_TASK_TERMINAL_PRIORITY_FORBIDDEN')
+  }
+  const [result] = await pool.query(
+    `UPDATE warehouse_tasks
+     SET priority=?
+     WHERE id=? AND deleted_at IS NULL AND status NOT IN (?)`,
+    [priority, id, WT_STATUS_TERMINAL],
+  )
+  if (result.affectedRows !== 1) {
+    throw new AppError('任务状态已变化，请刷新后重试', 409, 'WAREHOUSE_TASK_PRIORITY_STATUS_CONFLICT')
+  }
 }
 
 /**

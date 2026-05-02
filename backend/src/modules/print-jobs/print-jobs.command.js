@@ -12,7 +12,6 @@ const {
   parsePriority,
   assertCanCompleteLocalDesktop,
 } = require('./print-jobs.status')
-const { pushToClients } = require('./print-jobs.dispatch')
 
 async function findExistingActiveJob(exec, { jobUniqueKey, warehouseId, jobType }) {
   if (!jobUniqueKey) return null
@@ -61,7 +60,7 @@ async function createRecord(exec, {
   content,
   copies = 1,
   createdBy,
-  pushAfterCreate = false,
+  reloadAfterCreate = false,
 }) {
   if (!content) throw new AppError('打印内容不能为空', 400, 'PRINT_CONTENT_REQUIRED')
   if (!title) throw new AppError('任务标题不能为空', 400, 'PRINT_TITLE_REQUIRED')
@@ -160,33 +159,20 @@ async function createRecord(exec, {
   }
   const job = await findByIdWithExecutor(exec, insertId)
 
-  if (pushAfterCreate) {
-    try {
-      await pushToClients(printer.code, job)
-    } catch (e) {
-      logger.error(
-        `[print-jobs] pushToClients 失败（任务已入库 id=${insertId}）`,
-        e instanceof Error ? e : new Error(String(e)),
-        { printerCode: printer.code },
-        'PrintJobs',
-      )
-    }
-  }
-
-  return pushAfterCreate ? findById(insertId) : job
+  return reloadAfterCreate ? findById(insertId) : job
 }
 
 async function create(args) {
   return createRecord(pool, {
     ...args,
-    pushAfterCreate: true,
+    reloadAfterCreate: true,
   })
 }
 
 async function createWithinTransaction(conn, args) {
   return createRecord(conn, {
     ...args,
-    pushAfterCreate: false,
+    reloadAfterCreate: false,
   })
 }
 
@@ -347,7 +333,7 @@ async function fail(id, errorMessage) {
 }
 
 async function retry(id) {
-  const job = await findById(id)
+  await findById(id)
   const [ur] = await pool.query(
     `UPDATE print_jobs
      SET status=?, retry_count=0, error_message=NULL, ack_token=NULL, dispatched_at=NULL, expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE)
@@ -357,10 +343,7 @@ async function retry(id) {
   if (!ur.affectedRows) {
     throw new AppError('打印任务状态已变化，无法重试', 409, 'PRINT_JOB_STATE_CONFLICT')
   }
-  const updated = await findById(id)
-  const [[printer]] = await pool.query('SELECT code FROM printers WHERE id=?', [job.printerId])
-  if (printer) await pushToClients(printer.code, updated)
-  return updated
+  return findById(id)
 }
 
 module.exports = {

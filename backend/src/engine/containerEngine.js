@@ -652,16 +652,57 @@ async function adjustContainerStock(conn, {
  * @param {object} conn   - 事务连接
  * @param {number} containerId
  * @param {number} taskId
+ * @param {object} [options]
+ * @param {number} [options.expectedProductId]
+ * @param {number} [options.expectedWarehouseId]
+ * @param {string} [options.expectedBarcode]
+ * @param {number} [options.minRemainingQty]
+ * @param {number} [options.expectedStatus]
  */
-async function lockContainer(conn, containerId, taskId) {
+async function lockContainer(conn, containerId, taskId, options = {}) {
+  const {
+    expectedProductId,
+    expectedWarehouseId,
+    expectedBarcode,
+    minRemainingQty,
+    expectedStatus = CONTAINER_STATUS.ACTIVE,
+  } = options
+  const conditions = [
+    'id = ?',
+    'deleted_at IS NULL',
+    '(locked_by_task_id IS NULL OR locked_by_task_id = ?)',
+  ]
+  const params = [containerId, taskId]
+
+  if (expectedProductId != null) {
+    conditions.push('product_id = ?')
+    params.push(expectedProductId)
+  }
+  if (expectedWarehouseId != null) {
+    conditions.push('warehouse_id = ?')
+    params.push(expectedWarehouseId)
+  }
+  if (expectedBarcode != null) {
+    conditions.push('barcode = ?')
+    params.push(expectedBarcode)
+  }
+  if (minRemainingQty != null) {
+    conditions.push('remaining_qty >= ?')
+    params.push(minRemainingQty)
+  }
+  if (expectedStatus != null) {
+    conditions.push('status = ?')
+    params.push(expectedStatus)
+  }
+
   const [result] = await conn.query(
     `UPDATE inventory_containers
      SET locked_by_task_id = ?, locked_at = NOW()
-     WHERE id = ? AND (locked_by_task_id IS NULL OR locked_by_task_id = ?)`,
-    [taskId, containerId, taskId],
+     WHERE ${conditions.join(' AND ')}`,
+    [taskId, ...params],
   )
   if (result.affectedRows === 0) {
-    throw new AppError('该容器已被其他任务占用', 409)
+    throw new AppError('容器不满足拣货锁定条件，可能已被其它任务锁定或库存/商品/仓库/条码不匹配', 409)
   }
 }
 

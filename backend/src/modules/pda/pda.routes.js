@@ -1,10 +1,13 @@
 const { Router } = require('express')
 const path = require('path')
 const fs   = require('fs')
+const { z } = require('zod')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
 const { successResponse } = require('../../utils/response')
 const AppError = require('../../utils/AppError')
-const { asyncRoute } = require('../../utils/route')
+const { asyncRoute, validateBody } = require('../../utils/route')
+const { authMiddleware } = require('../../middleware/auth')
+const pdaSessions = require('./pda.sessions.service')
 const router = Router()
 
 // APK 存放目录（放在 backend/apk/ 下，与 index.js 同级）
@@ -41,6 +44,29 @@ function buildPdaDownloadPath(meta, stat) {
   const stamp = Number(stat?.mtimeMs) || Date.now()
   return `/api/pda/download?v=${encodeURIComponent(String(meta.version || 'latest'))}&code=${versionCode}&t=${Math.round(stamp)}`
 }
+
+const createSessionSchema = z.object({
+  device_code:   z.string().min(1).max(64),
+  device_secret: z.string().min(1).max(255),
+})
+
+/**
+ * POST /api/pda/sessions
+ * 第一阶段设备会话能力：要求用户已登录，但不影响既有 PDA 作业路径。
+ */
+router.post('/sessions', authMiddleware, validateBody(createSessionSchema), asyncRoute(async (req, res) => {
+  const data = await pdaSessions.createSession({
+    deviceCode: req.body.device_code,
+    deviceSecret: req.body.device_secret,
+    userId: req.user.userId,
+  })
+  return successResponse(res, {
+    session_token: data.sessionToken,
+    scopes: data.scopes,
+    expires_at: data.expiresAt,
+    warehouse_id: data.warehouseId,
+  }, 'PDA 设备会话已创建')
+}))
 
 /**
  * GET /api/pda/version

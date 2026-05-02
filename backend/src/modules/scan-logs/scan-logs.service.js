@@ -1,6 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { lockContainer } = require('../../engine/containerEngine')
+const { lockContainer, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 const { checkDoneWithinTransaction } = require('../warehouse-tasks/warehouse-tasks.service')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
@@ -76,7 +76,7 @@ async function createScanLog({
     }
 
     const [[taskRow]] = await conn.query(
-      'SELECT id, status FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, warehouse_id, status FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
@@ -98,6 +98,40 @@ async function createScanLog({
       throw new AppError(`扫码数量超过待拣数量（剩余 ${needRemain}）`, 400)
     }
 
+    const [[containerRow]] = await conn.query(
+      `SELECT id, barcode, product_id, warehouse_id, status, remaining_qty, locked_by_task_id
+       FROM inventory_containers
+       WHERE id = ? AND deleted_at IS NULL
+       FOR UPDATE`,
+      [containerId],
+    )
+    if (!containerRow) throw new AppError('容器不存在', 404)
+    if (String(containerRow.barcode) !== String(barcode)) {
+      throw new AppError('容器条码不匹配', 400)
+    }
+    if (Number(containerRow.product_id) !== Number(itemRow.product_id)) {
+      throw new AppError('容器商品不属于当前任务明细', 400)
+    }
+    if (Number(containerRow.warehouse_id) !== Number(taskRow.warehouse_id)) {
+      throw new AppError('容器仓库与任务仓库不一致', 400)
+    }
+    if (Number(containerRow.status) !== CONTAINER_STATUS.ACTIVE) {
+      throw new AppError('容器状态不可拣货', 400)
+    }
+    const remainingQty = Number(containerRow.remaining_qty)
+    if (remainingQty <= 0) {
+      throw new AppError('容器库存不足', 400)
+    }
+    if (qty > remainingQty) {
+      throw new AppError(`扫码数量超过容器可用数量（剩余 ${remainingQty}）`, 400)
+    }
+    if (
+      containerRow.locked_by_task_id != null
+      && Number(containerRow.locked_by_task_id) !== Number(taskId)
+    ) {
+      throw new AppError('容器已被其它任务锁定', 409)
+    }
+
     if (scanMode === '整件') {
       const [[dup]] = await conn.query(
         `SELECT id FROM scan_logs
@@ -115,14 +149,20 @@ async function createScanLog({
     )
     if (recent) throw new AppError('请勿重复扫描（5秒内已记录相同条码）', 409)
 
-    await lockContainer(conn, containerId, taskId)
+    await lockContainer(conn, containerId, taskId, {
+      expectedProductId: itemRow.product_id,
+      expectedWarehouseId: taskRow.warehouse_id,
+      expectedBarcode: barcode,
+      minRemainingQty: qty,
+      expectedStatus: CONTAINER_STATUS.ACTIVE,
+    })
 
     const [r] = await conn.query(
       `INSERT INTO scan_logs
          (task_id, item_id, container_id, barcode, product_id,
           qty, scan_mode, scan_purpose, operator_id, operator_name, location_code)
        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      [taskId, itemId, containerId, barcode, productId,
+      [taskId, itemId, containerId, containerRow.barcode, itemRow.product_id,
         qty, scanMode, SCAN_PURPOSE.PICK, operatorId || null, operatorName || null, locationCode || null],
     )
 

@@ -3,6 +3,7 @@ const { z } = require('zod')
 const ctrl = require('./scan-logs.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { pdaSessionOptional } = require('../../middleware/pdaSession')
 
 const router = Router()
 
@@ -55,8 +56,8 @@ const checkScanSchema = z.object({
 })
 
 // 扫码记录（仅 PDA）
-router.post('/',             requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, vBody(createSchema), ctrl.create)
-router.post('/check',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, vBody(checkScanSchema), ctrl.createCheckScan)
+router.post('/',             requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionOptional(), vBody(createSchema), ctrl.create)
+router.post('/check',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionOptional(), vBody(checkScanSchema), ctrl.createCheckScan)
 router.get('/task/:taskId',  requirePermission(PERMISSIONS.SCAN_LOG_VIEW), ctrl.listByTask)
 
 // 错误日志

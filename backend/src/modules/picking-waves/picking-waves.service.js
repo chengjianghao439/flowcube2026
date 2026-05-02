@@ -3,7 +3,10 @@ const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { unlockContainersByTask } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
-const { readyToShipWithinTransaction } = require('../warehouse-tasks/warehouse-tasks.service')
+const {
+  assertTaskPickScanClosure,
+  readyToShipWithinTransaction,
+} = require('../warehouse-tasks/warehouse-tasks.service')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { buildPackagePrintSummary } = require('../../utils/printSummary')
 
@@ -30,7 +33,21 @@ async function refreshWavePickedFromTasks(exec, waveId) {
   }
 }
 
-const WAVE_STATUS   = { 1: '待拣货', 2: '拣货中', 3: '待分拣', 4: '已完成', 5: '已取消' }
+const WAVE_STATUS_CODE = {
+  PENDING: 1,
+  PICKING: 2,
+  SORTING: 3,
+  DONE: 4,
+  CANCELLED: 5,
+}
+
+const WAVE_STATUS   = {
+  [WAVE_STATUS_CODE.PENDING]: '待拣货',
+  [WAVE_STATUS_CODE.PICKING]: '拣货中',
+  [WAVE_STATUS_CODE.SORTING]: '待分拣',
+  [WAVE_STATUS_CODE.DONE]: '已完成',
+  [WAVE_STATUS_CODE.CANCELLED]: '已取消',
+}
 const WAVE_PRIORITY = { 1: '紧急', 2: '普通', 3: '低' }
 
 const fmt = r => ({
@@ -51,6 +68,28 @@ const fmt = r => ({
 })
 
 const genWaveNo = conn => generateDailyCode(conn, 'W', 'picking_waves', 'wave_no')
+
+async function lockWaveForTransition(conn, id) {
+  const [[wave]] = await conn.query(
+    'SELECT id, status FROM picking_waves WHERE id = ? FOR UPDATE',
+    [id],
+  )
+  if (!wave) throw new AppError('波次不存在', 404)
+  return wave
+}
+
+async function casWaveStatus(conn, { id, fromStatus, toStatus, extraSet = '', extraParams = [] }) {
+  const setExtra = extraSet ? `, ${extraSet}` : ''
+  const [result] = await conn.query(
+    `UPDATE picking_waves
+     SET status = ?${setExtra}
+     WHERE id = ? AND status = ?`,
+    [toStatus, ...extraParams, id, fromStatus],
+  )
+  if (result.affectedRows !== 1) {
+    throw new AppError('波次状态已变化，请刷新后重试', 409)
+  }
+}
 
 // ── 列表查询 ──────────────────────────────────────────────────────────────────
 
@@ -300,13 +339,27 @@ async function create({ taskIds, remark, priority = 2 }) {
 // ── 开始拣货（1 → 2）──────────────────────────────────────────────────────────
 
 async function startPicking(id, { userId, userName }) {
-  const wave = await findById(id)
-  if (wave.status !== 1) throw new AppError('只有"待拣货"状态可以开始拣货', 400)
-
-  await pool.query(
-    'UPDATE picking_waves SET status = 2, operator_id = ?, operator_name = ? WHERE id = ?',
-    [userId, userName, id],
-  )
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const wave = await lockWaveForTransition(conn, id)
+    if (Number(wave.status) !== WAVE_STATUS_CODE.PENDING) {
+      throw new AppError('只有"待拣货"状态可以开始拣货', 409)
+    }
+    await casWaveStatus(conn, {
+      id,
+      fromStatus: WAVE_STATUS_CODE.PENDING,
+      toStatus: WAVE_STATUS_CODE.PICKING,
+      extraSet: 'operator_id = ?, operator_name = ?',
+      extraParams: [userId, userName],
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 
   // 开始拣货时自动生成并缓存路线
   await generateAndCacheRoute(id)
@@ -315,12 +368,13 @@ async function startPicking(id, { userId, userName }) {
 // ── 完成拣货（2 → 3 待分拣）────────────────────────────────────────────────────
 
 async function finishPicking(id) {
-  const wave = await findById(id)
-  if (wave.status !== 2) throw new AppError('只有"拣货中"状态可以完成拣货', 400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const wave = await lockWaveForTransition(conn, id)
+    if (Number(wave.status) !== WAVE_STATUS_CODE.PICKING) {
+      throw new AppError('只有"拣货中"状态可以完成拣货', 409)
+    }
     await refreshWavePickedFromTasks(conn, id)
     const [waveTasks] = await conn.query(
       'SELECT task_id FROM picking_wave_tasks WHERE wave_id = ? ORDER BY id ASC',
@@ -329,7 +383,11 @@ async function finishPicking(id) {
     for (const t of waveTasks) {
       await assertTaskPickScanClosure(conn, t.task_id)
     }
-    await conn.query('UPDATE picking_waves SET status = 3 WHERE id = ?', [id])
+    await casWaveStatus(conn, {
+      id,
+      fromStatus: WAVE_STATUS_CODE.PICKING,
+      toStatus: WAVE_STATUS_CODE.SORTING,
+    })
     await conn.commit()
   } catch (e) {
     await conn.rollback()
@@ -342,12 +400,13 @@ async function finishPicking(id) {
 // ── 完成分拣（3 → 4 已完成）─ 将已拣数量回写到各任务 ──────────────────────────
 
 async function finish(id) {
-  const wave = await findById(id)
-  if (wave.status !== 3) throw new AppError('只有"待分拣"状态可以完成波次', 400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const wave = await lockWaveForTransition(conn, id)
+    if (Number(wave.status) !== WAVE_STATUS_CODE.SORTING) {
+      throw new AppError('只有"待分拣"状态可以完成波次', 409)
+    }
     await refreshWavePickedFromTasks(conn, id)
 
     const [waveTasks] = await conn.query(
@@ -358,7 +417,11 @@ async function finish(id) {
       await readyToShipWithinTransaction(conn, Number(t.task_id))
     }
 
-    await conn.query('UPDATE picking_waves SET status = 4 WHERE id = ?', [id])
+    await casWaveStatus(conn, {
+      id,
+      fromStatus: WAVE_STATUS_CODE.SORTING,
+      toStatus: WAVE_STATUS_CODE.DONE,
+    })
     await conn.commit()
   } catch (e) {
     await conn.rollback()
@@ -371,17 +434,23 @@ async function finish(id) {
 // ── 取消波次 ──────────────────────────────────────────────────────────────────
 
 async function cancel(id) {
-  const wave = await findById(id)
-  if (wave.status >= 4) throw new AppError('波次已完成或已取消', 400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const wave = await lockWaveForTransition(conn, id)
+    const currentStatus = Number(wave.status)
+    if (currentStatus === WAVE_STATUS_CODE.DONE || currentStatus === WAVE_STATUS_CODE.CANCELLED) {
+      throw new AppError('波次已完成或已取消', 409)
+    }
     const [waveTasks] = await conn.query('SELECT task_id FROM picking_wave_tasks WHERE wave_id = ?', [id])
     for (const t of waveTasks) {
       await unlockContainersByTask(conn, t.task_id)
     }
-    await conn.query('UPDATE picking_waves SET status = 5 WHERE id = ?', [id])
+    await casWaveStatus(conn, {
+      id,
+      fromStatus: currentStatus,
+      toStatus: WAVE_STATUS_CODE.CANCELLED,
+    })
     await conn.commit()
   } catch (e) {
     await conn.rollback()

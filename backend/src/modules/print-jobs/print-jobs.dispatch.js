@@ -5,6 +5,8 @@ const logger = require('../../utils/logger')
 const { listJobsByIds, findById } = require('./print-jobs.query')
 const { STATUS, EXPIRE_MESSAGE, ttlMinutes } = require('./print-jobs.status')
 
+// 打印调度当前为客户端轮询模式：桌面客户端通过 claimClientJobs() 领取 PENDING 任务。
+// 本模块不提供实时推送通道，避免创建/重试路径误以为存在 push dispatch。
 async function claimClientJobs({ clientId, limit = 3 } = {}) {
   const cid = String(clientId || '').trim()
   if (!cid) throw new AppError('clientId 必填', 400, 'PRINT_CLIENT_ID_REQUIRED')
@@ -154,10 +156,6 @@ async function getDispatchHintForJob(printerCode, jobId) {
   )
 }
 
-async function pushToClients(_printerCode, _job) {
-  return
-}
-
 async function expireStaleJobs() {
   const [r] = await pool.query(
     `UPDATE print_jobs
@@ -192,7 +190,6 @@ function startPrintJobSweeper() {
 module.exports = {
   claimClientJobs,
   getDispatchHintForJob,
-  pushToClients,
   expireStaleJobs,
   startPrintJobSweeper,
 }
