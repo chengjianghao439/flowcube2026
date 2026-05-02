@@ -30,6 +30,7 @@ import {
   type InboundTaskItem,
 } from '@/types/inbound-tasks'
 import type { InboundRecentPrintJob } from '@/types/inbound-tasks'
+import { formatErrorMessage, formatPrintReason, formatPrintStatus } from '@/utils/displayFormatters'
 
 function skuRemainToReceive(items: InboundTaskItem[] | undefined, productId: number): number {
   if (!items?.length) return 0
@@ -731,10 +732,24 @@ export default function InboundTaskDetailPage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="font-medium text-foreground">{job.productName ?? job.barcode ?? '库存条码'}</div>
-                      <SoftStatusLabel label={job.statusLabel ?? '未知'} tone={printStatusTone(job.statusKey)} />
+                      <SoftStatusLabel
+                        label={formatPrintStatus(job.statusKey, job.statusLabel, job.errorMessage)}
+                        tone={printStatusTone(job.statusKey)}
+                      />
                     </div>
-                    <div className="text-doc-code-muted">{job.barcode ?? '—'} · {job.dispatchReason ?? 'default'}</div>
-                    <div className="text-helper">{job.printerCode ?? job.printerName ?? '未绑定打印机'}{job.errorMessage ? ` · ${job.errorMessage}` : ''}</div>
+                    <div className="text-doc-code-muted">
+                      {job.barcode ?? '—'} · {formatPrintReason(job.dispatchReason)}
+                    </div>
+                    <div className="text-helper">
+                      {job.printerName ?? (job.printerCode ? `打印机编号：${job.printerCode}` : '未绑定打印机')}
+                      {job.printerName && job.printerCode ? ` · 打印机编号：${job.printerCode}` : ''}
+                      {job.errorMessage ? ` · ${formatErrorMessage(job.errorMessage, '打印失败，可尝试补打')}` : ''}
+                    </div>
+                    {job.errorMessage && (
+                      <div className="text-[11px] text-muted-foreground" title={job.errorMessage}>
+                        原始错误：{job.errorMessage}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-helper">{job.updatedAt}</span>

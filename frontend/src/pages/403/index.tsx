@@ -14,11 +14,11 @@ export default function ForbiddenPage() {
           </div>
         </div>
 
-        <h1 className="mb-2 text-4xl font-bold text-foreground">403</h1>
-        <h2 className="mb-3 text-lg font-semibold text-foreground">无访问权限</h2>
+        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">403</p>
+        <h1 className="mb-3 text-4xl font-bold text-foreground">无访问权限</h1>
         <p className="mb-8 text-sm text-muted-foreground">
-          您没有权限访问此页面。<br />
-          如需开通权限，请联系系统管理员。
+          你没有访问这个页面的权限，<br />
+          请联系管理员开通。
         </p>
 
         <div className="flex justify-center gap-3">

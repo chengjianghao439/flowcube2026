@@ -26,6 +26,7 @@ import {
   pickSystemPrinterRow,
   type SystemPrinterRow,
 } from '@/utils/printerName'
+import { formatPrinterRawMode, formatPrinterSource } from '@/utils/displayFormatters'
 
 /** 打印机硬件分类（与「绑定用途」独立：用途决定业务走哪台机；类型用于列表展示与无绑定时的兜底调度） */
 const TYPE_LABEL: Record<number, string> = {
@@ -138,9 +139,9 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
 }
 
 function sourceBadgeLabel(source?: string) {
-  if (source === 'client') return 'client'
+  if (source === 'client') return '打印客户端'
   if (source === 'local_desktop') return '本机'
-  return 'manual'
+  return '手动添加'
 }
 
 export default function PrintersPage() {
@@ -192,7 +193,7 @@ export default function PrintersPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['printers'] })
-      toast.success('已更新 RAW 指令集')
+      toast.success('已更新标签机指令集')
     },
     onError: (e: unknown) =>
       toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'),
@@ -375,7 +376,7 @@ export default function PrintersPage() {
 
       {IS_ELECTRON_DESKTOP && (
         <div className="rounded-xl border border-border bg-card p-4">
-          <h3 className="text-card-title">本机打印标签（RAW）</h3>
+          <h3 className="text-card-title">本机打印标签（原始指令模式）</h3>
           <p className="mt-2 text-muted-body leading-relaxed">
             无需填写任何网络地址。请使用下方「从本机添加」，在系统已安装的打印机里选中您的标签机，并在用途中绑定「库存标签」等；打印时软件会按该打印机在系统中的名称自动出纸。请勿随意修改 ERP
             里该打印机的「名称」，以免与系统不一致导致打不出来。
@@ -461,16 +462,16 @@ export default function PrintersPage() {
       <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-muted/40">
-            <tr>
-              <th className="px-4 py-3 text-left text-table-head">名称</th>
-              <th className="px-4 py-3 text-left text-table-head">编码</th>
-              <th className="px-4 py-3 text-left text-table-head">类型</th>
-              <th
-                className="px-4 py-3 text-left text-table-head"
-                title="本机 RAW：ZPL 适用于斑马等；TSPL 适用于通用 TSPL 标签机"
-              >
-                RAW
-              </th>
+	            <tr>
+	              <th className="px-4 py-3 text-left text-table-head">名称</th>
+	              <th className="px-4 py-3 text-left text-table-head">编码</th>
+	              <th className="px-4 py-3 text-left text-table-head">类型</th>
+	              <th
+	                className="px-4 py-3 text-left text-table-head"
+	                title="打印机指令集：ZPL 适用于斑马等；TSPL 适用于通用 TSPL 标签机"
+	              >
+	                指令集
+	              </th>
               <th className="px-4 py-3 text-left text-table-head">状态</th>
               <th className="px-4 py-3 text-left text-table-head">来源</th>
               <th className="px-4 py-3 text-left text-table-head">所属设备</th>
@@ -502,15 +503,15 @@ export default function PrintersPage() {
                       updateLabelFmt.mutate({ ...p, labelRawFormat: v as 'zpl' | 'tspl' })
                     }
                     disabled={updateLabelFmt.isPending}
-                  >
-                    <SelectTrigger className="h-8 w-[92px] text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="zpl">ZPL</SelectItem>
-                      <SelectItem value="tspl">TSPL</SelectItem>
-                    </SelectContent>
-                  </Select>
+	                  >
+	                    <SelectTrigger className="h-8 w-[150px] text-xs">
+	                      <SelectValue placeholder={formatPrinterRawMode(p.labelRawFormat)} />
+	                    </SelectTrigger>
+	                    <SelectContent>
+	                      <SelectItem value="zpl">标签机指令 ZPL</SelectItem>
+	                      <SelectItem value="tspl">标签机指令 TSPL</SelectItem>
+	                    </SelectContent>
+	                  </Select>
                 </td>
                 <td className="px-4 py-3">
                   <button onClick={() => toggleStatus.mutate(p)} className="flex items-center gap-1.5">
@@ -518,10 +519,13 @@ export default function PrintersPage() {
                     <span className={`text-xs ${p.status === 1 ? 'text-green-600' : 'text-muted-foreground'}`}>{p.status === 1 ? '在线' : '离线'}</span>
                   </button>
                 </td>
-                <td className="px-4 py-3 text-xs">
-                  <span className={`rounded-full border px-2 py-0.5 ${p.source === 'client' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : p.source === 'local_desktop' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>
-                    {sourceBadgeLabel(p.source)}
-                  </span>
+	                <td className="px-4 py-3 text-xs">
+	                  <span
+	                    className={`rounded-full border px-2 py-0.5 ${p.source === 'client' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : p.source === 'local_desktop' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}
+	                    title={p.source ? `原始来源：${p.source}` : undefined}
+	                  >
+	                    {formatPrinterSource(p.source) || sourceBadgeLabel(p.source)}
+	                  </span>
                 </td>
                 <td className="px-4 py-3 text-helper">
                   {p.clientId ? (

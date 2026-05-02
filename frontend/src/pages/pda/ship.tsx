@@ -25,6 +25,7 @@ import { getPackageShipClosureCopy } from '@/lib/outboundClosure'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
+import { formatPdaErrorMessage } from '@/utils/displayFormatters'
 
 export default function PdaShipPage() {
   const navigate = useNavigate()
@@ -65,7 +66,7 @@ export default function PdaShipPage() {
       }
     },
     onError: (e: unknown) =>
-      err((e as { message?: string })?.message ?? '出库失败'),
+      err(formatPdaErrorMessage((e as { message?: string })?.message, '出库失败，请确认任务状态或联系管理员')),
   })
 
   function warehouseStatusName(data: PackageShipInfo) {
@@ -110,7 +111,7 @@ export default function PdaShipPage() {
       // 自动触发出库，无需用户再次确认
       shipMut.mutate(data.warehouseTaskId)
     } catch (e: unknown) {
-      err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '物流条码不存在')
+      err(formatPdaErrorMessage((e as { response?: { data?: { message?: string } } })?.response?.data?.message, '出库失败，请确认任务状态或联系管理员'))
     } finally { setLoading(false) }
   }, [err, shipMut])
 
@@ -164,10 +165,10 @@ export default function PdaShipPage() {
             onConfirm={() => {
               void shipAction.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
-                if (status.status === 'state_unconfirmed') warn(status.message)
-                if (status.status === 'not_found') warn(status.message || '未找到上次出库记录；请先刷新任务状态再决定是否重扫')
-                if (status.status === 'failed') err(status.message || '上次出库未成功，请检查后重试')
+                if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '服务端仍未确认结果，请稍后再查'))
+                if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '任务状态还未确认，请稍后再查'))
+                if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次出库记录；请先刷新任务状态再决定是否重扫'))
+                if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '出库失败，请确认任务状态或联系管理员'))
               })
             }}
             onClear={() => shipAction.clearPending()}

@@ -15,6 +15,7 @@ import type { TableColumn } from '@/types'
 import type { BarcodePrintCategory, BarcodePrintRecord } from '@/types/print-jobs'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { formatPrintStatus } from '@/utils/displayFormatters'
 
 const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint: string }> = [
   { value: 'inbound', label: '入库条码', hint: '库存条码、塑料盒条码的打印状态与补打' },
@@ -82,7 +83,7 @@ export default function BarcodePrintQueryPage() {
     onSuccess: (data, row) => {
       toast.success(
         data?.printerCode
-          ? `${row.barcode} 已重新加入打印队列 → ${data.printerCode}`
+          ? `${row.barcode} 已重新加入打印队列（打印机编号：${data.printerCode}）`
           : `${row.barcode} 已重新加入打印队列`,
       )
       qc.invalidateQueries({ queryKey: ['barcode-print-records'] })
@@ -154,10 +155,13 @@ export default function BarcodePrintQueryPage() {
         width: 220,
         render: (_, row) => (
           <div className="space-y-1 text-sm">
-            <div>{row.latestJob?.printerCode ?? row.latestJob?.printerName ?? '—'}</div>
-            <div className="text-xs text-muted-foreground line-clamp-2">
-              {row.latestJob?.errorMessage || row.latestJob?.printStateLabel || '尚未生成打印任务'}
+            <div>{row.latestJob?.printerName ?? (row.latestJob?.printerCode ? '已绑定打印机' : '—')}</div>
+            <div className="text-xs text-muted-foreground line-clamp-2" title={row.latestJob?.errorMessage ?? row.latestJob?.printStateLabel ?? undefined}>
+              {formatPrintStatus(row.latestJob?.statusKey, row.latestJob?.printStateLabel, row.latestJob?.errorMessage)}
             </div>
+            {row.latestJob?.printerCode && (
+              <div className="text-[11px] text-muted-foreground">打印机编号：{row.latestJob.printerCode}</div>
+            )}
           </div>
         ),
       },

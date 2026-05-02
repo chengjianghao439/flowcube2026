@@ -13,6 +13,7 @@ import {
   setApiBase,
 } from '@/config/api'
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
+import { formatBackendCode, formatErrorMessage } from '@/utils/displayFormatters'
 
 /** 独立 APK：勿走 ERP 浏览器的候选地址回退（易误连占位域名或 localhost） */
 function isNativePdaNoViteLive(): boolean {
@@ -195,8 +196,11 @@ apiClient.interceptors.response.use(
       ?? (transportCode === 'ECONNABORTED' ? 'REQUEST_TIMEOUT' : null)
       ?? (transportCode === 'ERR_NETWORK' ? 'NETWORK_ERROR' : null)
       ?? null
+    const displayMessage = businessCode
+      ? formatBackendCode(businessCode, formatErrorMessage(message))
+      : formatErrorMessage(message)
     const structuredError = new ApiClientError({
-      message,
+      message: displayMessage,
       status,
       code: normalizedCode,
       data: payload ?? null,
@@ -211,9 +215,9 @@ apiClient.interceptors.response.use(
     // skipGlobalError: true 时由调用方自行处理，不触发全局 toast
     if (!error.config?.skipGlobalError) {
       if ((status === 429 || normalizedCode === 'PRINT_QUOTA_EXCEEDED') && payload && typeof payload === 'object') {
-        toast.error(formatPrintQuotaToast(message, payload))
+        toast.error(formatPrintQuotaToast(displayMessage, payload))
       } else {
-        toast.error(message)
+        toast.error(displayMessage)
       }
     }
 

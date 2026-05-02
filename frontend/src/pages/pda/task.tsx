@@ -27,6 +27,7 @@ import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
+import { formatPdaErrorMessage } from '@/utils/displayFormatters'
 
 // ─── 子组件：商品拣货卡片 ──────────────────────────────────────────────────────
 function SuggestionRow({ c, onTap, disabled }: {
@@ -250,9 +251,9 @@ export default function PdaTaskPage() {
         }
       }
     } catch (e: unknown) {
-      const msg = (e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '扫码失败，请重试'
-      err(msg)
-      logError({ taskId, barcode: b, reason: msg })
+      const rawMsg = (e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '扫码失败，请重试'
+      err(formatPdaErrorMessage(rawMsg, '扫码失败，请检查条码或任务状态'))
+      logError({ taskId, barcode: b, reason: rawMsg })
     } finally { setScanning(false); setInputVal(''); setTimeout(focusInput, 80) }
   }
 
@@ -297,10 +298,10 @@ export default function PdaTaskPage() {
               if (!handler) return
               void handler.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
-                if (status.status === 'state_unconfirmed') warn(status.message)
-                if (status.status === 'not_found') warn(status.message || '未找到上次提交记录；请先刷新任务后再重试')
-                if (status.status === 'failed') err(status.message || '上次操作未成功，请检查后重试')
+                if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '服务端仍未确认结果，请稍后再查'))
+                if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '任务状态还未确认，请稍后再查'))
+                if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次提交记录；请先刷新任务后再重试'))
+                if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '扫码失败，请检查条码或任务状态'))
               })
             }}
             onClear={() => {

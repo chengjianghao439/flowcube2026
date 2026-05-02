@@ -195,13 +195,17 @@ export default function InventoryOverviewPage() {
                   { label: '商品名称',          cls: 'text-left' },
                   { label: '分类路径',          cls: 'text-left' },
                   { label: '仓库',              cls: 'w-28 text-left' },
-                  { label: '在库 (on_hand)',    cls: 'w-28 text-right' },
-                  { label: '预占 (reserved)',   cls: 'w-28 text-right' },
-                  { label: '可用 (available)',  cls: 'w-28 text-right' },
+                  { label: '在库数量',          cls: 'w-28 text-right' },
+                  { label: '已预占数量',        cls: 'w-28 text-right' },
+                  { label: '可用库存',          cls: 'w-28 text-right', title: '可用库存 = 在库数量 - 已预占数量' },
                   { label: '最近更新',          cls: 'w-36 text-right' },
                   { label: '操作',              cls: 'w-24 text-right' },
-                ].map(col => (
-                  <th key={col.label} className={`px-4 py-2.5 text-xs font-semibold text-muted-foreground ${col.cls}`}>
+	                ].map(col => (
+	                  <th
+	                    key={col.label}
+	                    title={'title' in col ? col.title : undefined}
+	                    className={`px-4 py-2.5 text-xs font-semibold text-muted-foreground ${col.cls}`}
+	                  >
                     {col.label}
                   </th>
                 ))}

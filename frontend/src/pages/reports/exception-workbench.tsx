@@ -19,12 +19,20 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
 import { getInboundExceptionNotifications, getOutboundExceptionNotifications, getLogisticsExceptionNotifications } from '@/lib/notifications'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { formatDatabaseTableName, formatExceptionType } from '@/utils/displayFormatters'
 
 function severityBadge(level: string) {
   if (level === 'high' || level === 'danger') return <Badge variant="destructive">高风险</Badge>
   if (level === 'medium' || level === 'warning') return <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50">中风险</Badge>
   if (level === 'fix_failed') return <Badge variant="destructive">修复失败</Badge>
   return <Badge variant="outline">低风险</Badge>
+}
+
+function riskLabel(risk: string) {
+  if (risk === 'high') return '高'
+  if (risk === 'medium') return '中'
+  if (risk === 'low') return '低'
+  return '未知'
 }
 
 function detectActionTarget(
@@ -359,10 +367,12 @@ export default function ExceptionWorkbenchPage() {
                   <div key={`${issue.checkType}-${issue.relatedId ?? idx}`} className="rounded-xl border border-border p-4 space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
                       {severityBadge(issue.severity)}
-                      <span className="font-medium text-foreground">{issue.checkType}</span>
+                      <span className="font-medium text-foreground" title={`原始异常类型：${issue.checkType}`}>
+                        {formatExceptionType(issue.checkType)}
+                      </span>
                       {issue.relatedTable && (
-                        <span className="text-helper">
-                          {issue.relatedTable}{issue.relatedId ? ` #${issue.relatedId}` : ''}
+                        <span className="text-helper" title={`原始数据表：${issue.relatedTable}`}>
+                          {formatDatabaseTableName(issue.relatedTable)}{issue.relatedId ? ` #${issue.relatedId}` : ''}
                         </span>
                       )}
                     </div>
@@ -391,10 +401,12 @@ export default function ExceptionWorkbenchPage() {
             {(autoFixTypesQ.data ?? []).map(item => (
               <div key={item.checkType} className="rounded-xl border border-border px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium text-foreground">{item.checkType}</p>
-                  <Badge variant={item.risk === 'medium' ? 'secondary' : 'outline'}>
-                    风险 {item.risk}
-                  </Badge>
+                  <p className="font-medium text-foreground" title={`原始异常类型：${item.checkType}`}>
+                    {formatExceptionType(item.checkType)}
+                  </p>
+	                  <Badge variant={item.risk === 'medium' ? 'secondary' : 'outline'} title={`原始风险：${item.risk}`}>
+	                    风险 {riskLabel(item.risk)}
+	                  </Badge>
                 </div>
                 <p className="mt-1 text-muted-body">{item.description}</p>
               </div>
@@ -444,10 +456,17 @@ export default function ExceptionWorkbenchPage() {
                 <div key={log.id} className="rounded-xl border border-border px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
                     {severityBadge(log.severity)}
-                    <span className="font-medium text-foreground">{log.check_type}</span>
+                    <span className="font-medium text-foreground" title={`原始异常类型：${log.check_type}`}>
+                      {formatExceptionType(log.check_type)}
+                    </span>
                     <span className="text-helper">
                       {formatDisplayDateTime(log.created_at)}
                     </span>
+                    {log.related_table && (
+                      <span className="text-helper" title={`原始数据表：${log.related_table}`}>
+                        {formatDatabaseTableName(log.related_table)}{log.related_id ? ` #${log.related_id}` : ''}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-2 text-sm leading-relaxed text-foreground">{log.message}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
