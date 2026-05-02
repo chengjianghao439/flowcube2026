@@ -7,7 +7,7 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { getOperatorFromRequest } = require('../../utils/operator')
 const AppError = require('../../utils/AppError')
-const { asyncRoute, validateBody } = require('../../utils/route')
+const { validateBody } = require('../../utils/route')
 const { pdaSessionOptional } = require('../../middleware/pdaSession')
 
 const router = Router()
@@ -77,8 +77,11 @@ router.put('/:id/start-picking', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PI
 })
 
 // PUT /api/warehouse-tasks/:id/items/:itemId/picked-qty — 已禁用（已拣数量仅允许由 PDA 拣货扫码累加）
-router.put('/:id/items/:itemId/picked-qty', asyncRoute(async () => {
-  throw new AppError('该旧接口已废弃，请使用 PDA 拣货扫码路径 POST /api/scan-logs', 410, 'WAREHOUSE_TASK_PICKED_QTY_GONE')
+router.put('/:id/items/:itemId/picked-qty', (req, res) => res.status(410).json({
+  success: false,
+  code: 'WAREHOUSE_TASK_PICKED_QTY_GONE',
+  message: '该接口已废弃，请使用 PDA 拣货扫码路径 POST /api/scan-logs',
+  data: null,
 }))
 
 // PUT /api/warehouse-tasks/:id/ready — 拣货完成，待分拣（2→3）
@@ -150,8 +153,11 @@ router.put('/:id/ship', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SHIP), pdaO
 })
 
 // PUT /api/warehouse-tasks/:id/check — 已关闭手动复核（须 POST /scan-logs/check）
-router.put('/:id/check', asyncRoute(async () => {
-  throw new AppError('该旧接口已废弃，请使用 PDA 复核扫码路径 POST /api/scan-logs/check', 410, 'WAREHOUSE_TASK_MANUAL_CHECK_GONE')
+router.put('/:id/check', (req, res) => res.status(410).json({
+  success: false,
+  code: 'WAREHOUSE_TASK_MANUAL_CHECK_GONE',
+  message: '该接口已废弃，请使用 PDA 复核扫码路径 POST /api/scan-logs/check',
+  data: null,
 }))
 
 // PUT /api/warehouse-tasks/:id/cancel — 取消任务（仅 ERP 后台，PDA 不允许调用）
