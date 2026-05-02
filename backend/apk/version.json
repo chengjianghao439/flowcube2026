@@ -1,7 +1,7 @@
 {
-  "version": "0.3.79",
-  "versionCode": 25,
+  "version": "0.3.80",
+  "versionCode": 26,
   "filename": "app-release.apk",
-  "releaseNote": "提升 PDA 拣货扫码、仓库任务状态、打印任务回执和 PDA 设备会话识别稳定性；浏览器、PDA、桌面端统一到 v0.3.79。",
-  "publishedAt": "2026-05-03T00:00:00.000Z"
+  "releaseNote": "提升 PDA 拣货扫码、仓库任务状态、打印任务回执、页面白话提示和 PDA 设备会话识别稳定性；浏览器、PDA、桌面端统一到 v0.3.80。",
+  "publishedAt": "2026-05-02T17:41:40.000Z"
 }
