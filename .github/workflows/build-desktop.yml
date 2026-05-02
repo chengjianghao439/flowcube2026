@@ -522,31 +522,74 @@ jobs:
 
           echo "=== 发布完成；权威入口: /latest.json，安装包路径: /versions/${tag}/FlowCube-Setup-${version}.exe ==="
 
-      # 推送 git tag：创建/更新 GitHub Release 并附上 exe
+      # 推送 git tag：创建/更新 GitHub Release 并附上 exe。
+      # 使用 gh CLI，避免依赖第三方 action runtime 触发 Node 20 deprecation 告警。
       - name: Upload EXE to Release
         if: ${{ github.ref_type == 'tag' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: FlowCube ERP ${{ steps.version.outputs.version }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          make_latest: 'true'
-          fail_on_unmatched_files: true
-          files: desktop/release/*.exe
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          version="${{ steps.version.outputs.version }}"
+          shopt -s nullglob
+          files=(desktop/release/*.exe)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "ERROR: desktop/release 下未找到 .exe"
+            exit 1
+          fi
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "ERROR: desktop/release 下发现多个 .exe，拒绝自动选择。"
+            printf ' - %s\n' "${files[@]}"
+            exit 1
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[0]}" --clobber
+            gh release edit "$tag" --title "FlowCube ERP ${version}" --latest
+          else
+            gh release create "$tag" "${files[0]}" \
+              --title "FlowCube ERP ${version}" \
+              --generate-notes \
+              --latest
+          fi
 
       # 手动运行：补传 exe 到已存在的 Release（例如先用 gh release create 建了空 Release、或 tag 构建失败）
       - name: Upload EXE to existing Release (workflow_dispatch)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.attach_to_github_release == 'true' && github.event.inputs.release_tag != '' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.inputs.release_tag }}
-          draft: false
-          prerelease: false
-          generate_release_notes: false
-          fail_on_unmatched_files: true
-          files: desktop/release/*.exe
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_tag="${{ github.event.inputs.release_tag }}"
+          shopt -s nullglob
+          files=(desktop/release/*.exe)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "ERROR: desktop/release 下未找到 .exe"
+            exit 1
+          fi
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "ERROR: desktop/release 下发现多个 .exe，拒绝自动选择。"
+            printf ' - %s\n' "${files[@]}"
+            exit 1
+          fi
+          gh release view "$release_tag" >/dev/null
+          gh release upload "$release_tag" "${files[0]}" --clobber
+
+      - name: Detect portable ZIP artifact
+        id: portable_zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(desktop/release/*.zip)
+          if [ "${#files[@]}" -gt 0 ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No portable ZIP artifact generated; skipping ZIP artifact upload."
+          fi
 
       - name: DEBUG — before upload-artifact (exe)
         shell: bash
@@ -564,11 +607,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # 当前 win 目标多为 NSIS 仅 .exe；无 zip 时用 warn 记录日志且 job 仍成功（与「忽略 || true」不同，仍会输出警告）
+      # 当前 win 目标多为 NSIS 仅 .exe；只有实际生成 zip 时才上传 portable artifact。
       - name: Upload portable ZIP artifact (optional)
+        if: steps.portable_zip.outputs.present == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: FlowCube-Desktop-Portable
           path: desktop/release/*.zip
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
