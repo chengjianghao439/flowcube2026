@@ -1,7 +1,7 @@
 {
-  "version": "1.1.22",
-  "versionCode": 24,
+  "version": "0.3.79",
+  "versionCode": 25,
   "filename": "app-release.apk",
-  "releaseNote": "隔离 PDA 与桌面系统入口，移除跨端跳转；修复 PDA 自动更新固定下载地址可能命中旧 APK 缓存的问题。",
-  "publishedAt": "2026-04-29T00:00:00.000Z"
+  "releaseNote": "提升 PDA 拣货扫码、仓库任务状态、打印任务回执和 PDA 设备会话识别稳定性；浏览器、PDA、桌面端统一到 v0.3.79。",
+  "publishedAt": "2026-05-03T00:00:00.000Z"
 }
