@@ -20,6 +20,6 @@ router.get('/active', requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.listAct
 router.get('/',       requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.list)
 router.get('/:id',    requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.detail)
 router.post('/',      requirePermission(PERMISSIONS.CUSTOMER_CREATE), vBody(base), ctrl.create)
-router.put('/:id',    requirePermission(PERMISSIONS.CUSTOMER_UPDATE), vBody(base.extend({isActive:z.boolean()})), ctrl.update)
+router.put('/:id',    requirePermission(PERMISSIONS.CUSTOMER_UPDATE), vBody(z.object({ name:z.string().min(1,'名称不能为空').max(20,'客户名称最多 20 个字符'), contact:z.string().max(5,'联系人最多 5 个字符').optional(), phone:phoneRule, email:z.string().email().max(100).optional().or(z.literal('')), address:z.string().max(30,'地址最多 30 个字符').optional(), remark:z.string().max(30,'备注最多 30 个字符').optional(), isActive:z.boolean() })), ctrl.update)
 router.delete('/:id', requirePermission(PERMISSIONS.CUSTOMER_DELETE), ctrl.remove)
 module.exports = router
