@@ -78,6 +78,7 @@ export default function InboundTaskDetailPage() {
   }
 
   const items = Array.isArray(task?.items) ? task.items : []
+  const printSummary = task?.printSummary ?? null
   const putawaySummary = task?.putawaySummary ?? null
   const receiptStatus = task?.receiptStatus ?? null
   const putawayStatus = task?.putawayStatus ?? null
@@ -220,14 +221,14 @@ export default function InboundTaskDetailPage() {
             <p className="mt-1 text-helper">审核人 {task.auditedByName}</p>
           )}
         </div>
+        <div className="rounded-xl border border-border bg-card px-4 py-3">
+          <p className="text-helper">条码打印</p>
+          <p className="mt-1 text-lg font-semibold">{printSummary?.success ?? 0} / {printSummary?.total ?? 0}</p>
+          <p className="mt-1 text-helper">成功 {printSummary?.success ?? 0} 条，失败 {printSummary?.failed ?? 0} 条</p>
+        </div>
       </div>
 
       <Section title="任务明细" sectionId="task-items">
-        {!task.submittedAt && (
-          <div className="space-y-1.5 rounded-lg border border-slate-500/30 bg-slate-500/[0.06] px-4 py-3 text-helper">
-            <p className="font-medium text-foreground">当前仍是草稿收货订单。</p>
-          </div>
-        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
