@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
@@ -16,8 +15,6 @@ import {
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
-import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
-import { getInboundExceptionNotifications, getOutboundExceptionNotifications, getLogisticsExceptionNotifications } from '@/lib/notifications'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { formatDatabaseTableName, formatExceptionType } from '@/utils/displayFormatters'
 
@@ -112,12 +109,6 @@ export default function ExceptionWorkbenchPage() {
     queryKey: ['system-health-autofix-types'],
     queryFn: () => getSystemAutoFixTypesApi().then(r => r ?? []),
   })
-  const notificationsQ = useQuery({
-    queryKey: ['exception-workbench-notifications'],
-    queryFn: () => getNotificationsApi(),
-    enabled: isActiveTab,
-    refetchInterval: isActiveTab ? 60_000 : false,
-  })
 
   const runHealthMut = useMutation({
     mutationFn: () => runSystemHealthApi(),
@@ -151,18 +142,6 @@ export default function ExceptionWorkbenchPage() {
   const latestSummary = runsQ.data?.[0]
   const recentLogs = logsQ.data ?? []
   const latestIssues = latestRun?.issues ?? []
-  const inboundReminders = useMemo(
-    () => getInboundExceptionNotifications(notificationsQ.data?.items ?? []),
-    [notificationsQ.data],
-  )
-  const outboundReminders = useMemo(
-    () => getOutboundExceptionNotifications(notificationsQ.data?.items ?? []),
-    [notificationsQ.data],
-  )
-  const logisticsReminders = useMemo(
-    () => getLogisticsExceptionNotifications(notificationsQ.data?.items ?? []),
-    [notificationsQ.data],
-  )
   const highCount = latestRun?.severity.high ?? latestSummary?.severity.high ?? 0
   const mediumCount = latestRun?.severity.medium ?? latestSummary?.severity.medium ?? 0
   const lowCount = latestRun?.severity.low ?? latestSummary?.severity.low ?? 0
@@ -175,28 +154,10 @@ export default function ExceptionWorkbenchPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="异常工作台"
-        description="集中查看系统巡检、自动修复、打印失败与仓库流程异常，并直接跳转处理。"
+        title="系统巡检"
+        description="查看系统巡检结果、自动修复与异常日志，定位问题并跳转处理。"
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => openPath('/settings/barcode-print-query', '条码打印查询')}
-            >
-              打开补打中心
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => openPath('/inbound-tasks', '收货订单')}
-            >
-              打开收货订单
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => openPath('/reports/pda-anomaly', 'PDA 异常分析')}
-            >
-              查看 PDA 异常
-            </Button>
             <Button onClick={() => runHealthMut.mutate()} disabled={runHealthMut.isPending}>
               {runHealthMut.isPending ? '巡检中…' : '立即巡检'}
             </Button>
@@ -217,129 +178,6 @@ export default function ExceptionWorkbenchPage() {
           hint={latestSummary ? `耗时 ${latestSummary.elapsedMs}ms` : '点击立即巡检'}
         />
       </div>
-
-      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-card-title">收货异常闭环</h2>
-            <p className="text-muted-body">统一收口打印失败、上架超时、审核超时与退回处理，所有入口都落到同一条收货详情处理链。</p>
-          </div>
-          <Button size="sm" variant="outline" onClick={() => openPath('/inbound-tasks', '收货订单')}>
-            打开收货订单
-          </Button>
-        </div>
-        {inboundReminders.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border py-10 text-center text-muted-body">
-            当前没有待处理的收货异常
-          </div>
-        ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {inboundReminders.map((item: NotificationItem, index) => (
-              <button
-                key={`${item.code ?? item.path}-${index}`}
-                type="button"
-                onClick={() => openPath(item.path, item.text)}
-                className="w-full rounded-xl border border-border px-4 py-4 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{item.icon}</span>
-                  <span className="font-medium text-foreground">{item.text}</span>
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {item.code === 'INBOUND_PRINT_FAILED' && '直接进入收货详情的打印批次区，先补打失败或超时条码。'}
-                  {item.code === 'INBOUND_PUTAWAY_TIMEOUT' && '直接进入待上架区，优先处理已打印但久未上架的箱。'}
-                  {item.code === 'INBOUND_AUDIT_TIMEOUT' && '直接进入审核处理区，确认异常已收口后尽快审核。'}
-                  {item.code === 'INBOUND_AUDIT_REJECTED' && '直接进入退回处理区，按退回原因补打、补录并重新审核。'}
-                </p>
-                <p className="mt-3 text-xs text-muted-foreground">点击后将打开对应收货详情焦点区域</p>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-card-title">物流标签闭环</h2>
-            <p className="text-muted-body">统一收口物流标签补打、面单打印失败与出库现场扫描衔接问题，优先回到打印查询继续处理。</p>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => openPath('/settings/barcode-print-query?category=logistics', '条码打印查询')}>
-              打开物流补打
-            </Button>
-          </div>
-        </div>
-        {logisticsReminders.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border py-10 text-center text-muted-body">
-            当前没有待处理的物流标签异常
-          </div>
-        ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {logisticsReminders.map((item: NotificationItem, index) => (
-              <button
-                key={`${item.code ?? item.path}-logistics-${index}`}
-                type="button"
-                onClick={() => openPath(item.path, item.text)}
-                className="w-full rounded-xl border border-border px-4 py-4 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{item.icon}</span>
-                  <span className="font-medium text-foreground">{item.text}</span>
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  直接进入物流标签打印查询，先处理失败或超时记录，再由现场继续出库确认。
-                </p>
-                <p className="mt-3 text-xs text-muted-foreground">点击后将打开物流标签补打入口</p>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-card-title">出库异常闭环</h2>
-            <p className="text-muted-body">统一收口出库条码补打与波次推进异常，所有入口都能落到波次详情或打印查询继续处理。</p>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => openPath('/picking-waves', '波次拣货')}>
-              打开波次拣货
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => openPath('/settings/barcode-print-query?category=outbound', '条码打印查询')}>
-              打开出库补打
-            </Button>
-          </div>
-        </div>
-        {outboundReminders.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border py-10 text-center text-muted-body">
-            当前没有待处理的出库异常
-          </div>
-        ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {outboundReminders.map((item: NotificationItem, index) => (
-              <button
-                key={`${item.code ?? item.path}-outbound-${index}`}
-                type="button"
-                onClick={() => openPath(item.path, item.text)}
-                className="w-full rounded-xl border border-border px-4 py-4 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{item.icon}</span>
-                  <span className="font-medium text-foreground">{item.text}</span>
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {item.code === 'OUTBOUND_PRINT_FAILED' && '直接进入波次详情的出库打印区，先处理失败或超时的箱贴条码，再继续出库。'}
-                  {item.code === 'WAVE_STALE_PICKING' && '直接进入波次详情，优先查看拣货进度、路线完成度与打印补打状态。'}
-                  {item.code === 'WAVE_STALE_SORTING' && '直接进入波次详情，优先确认待分拣波次是否因补打、拣货残留或现场操作卡住。'}
-                </p>
-                <p className="mt-3 text-xs text-muted-foreground">点击后将打开对应波次或打印查询处理入口</p>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
