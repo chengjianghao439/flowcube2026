@@ -3,7 +3,7 @@
  * 路由：/inbound-tasks/:id（多标签）
  */
 import { useContext, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,7 +46,6 @@ export default function InboundTaskDetailPage() {
   const tabPath = useContext(TabPathContext)
   const params = useParams<{ id?: string }>()
   const navigate = useNavigate()
-  const location = useLocation()
   const addTab = useWorkspaceStore(s => s.addTab)
   const rawId = (tabPath || params.id || '').split('/').filter(Boolean).pop() ?? ''
   const taskId = Number(rawId)
@@ -95,21 +94,6 @@ export default function InboundTaskDetailPage() {
       : receiptStatus?.key === 'draft'
         ? 'draft'
         : 'active'
-  const focusSection = useMemo(() => {
-    const search = new URLSearchParams(location.search)
-    return search.get('focus')
-  }, [location.search])
-
-  useEffect(() => {
-    if (!focusSection || isLoading || !task) return
-    const node = document.getElementById(focusSection)
-    if (!node) return
-    const timer = window.setTimeout(() => {
-      node.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 120)
-    return () => window.clearTimeout(timer)
-  }, [focusSection, isLoading, task])
-
   if (!validId) {
     return (
       <div className="p-6">
