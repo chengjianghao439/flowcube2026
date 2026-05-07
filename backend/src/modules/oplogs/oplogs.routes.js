@@ -34,7 +34,7 @@ router.get('/', requirePermission(PERMISSIONS.AUDIT_LOG_VIEW), async (req, res, 
 router.delete('/clear', requirePermission(PERMISSIONS.AUDIT_LOG_CLEAR), async (req, res, next) => {
   try {
     await pool.query('DELETE FROM operation_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)')
-    return successResponse(res, null, '已清理 30 天前的日志')
+    return successResponse(res, null, '已清理 30 天前的操作日志')
   } catch (e) { next(e) }
 })
 

@@ -191,7 +191,7 @@ export default function PdaPickingPage() {
         {/* SKU 视图 */}
         {viewMode === 'sku' && !isLoading && !skuLoading && !isError && (
           skuList.length === 0
-            ? <PdaEmptyCard icon="📦" title="暂无待拣商品" description="后台确认订单后将在此显示" />
+            ? <PdaEmptyCard icon="📦" title="暂无待拣商品" description="订单确认后会自动显示在这里" />
             : skuList.map(sku => (
                 <SkuCard
                   key={sku.productId}
@@ -208,7 +208,7 @@ export default function PdaPickingPage() {
         {/* 订单视图 */}
         {viewMode === 'order' && !isLoading && !isError && (
           tasks.length === 0
-            ? <PdaEmptyCard icon="🗂️" title="暂无拣货任务" description="后台确认订单后将在此显示" />
+            ? <PdaEmptyCard icon="🗂️" title="暂无拣货任务" description="订单确认后会自动显示在这里" />
             : tasks.map(t => (
                 <TaskCard
                   key={t.id}

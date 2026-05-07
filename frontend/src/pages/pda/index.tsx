@@ -65,7 +65,7 @@ export default function PdaWorkbench() {
             <PdaEmptyCard
               icon="🔐"
               title="权限未加载，PDA 已切到受限模式"
-              description="当前账号没有收到后端返回的权限信息，因此不会放开任何 PDA 作业入口。请重新登录；若仍异常，请联系管理员检查账号权限。"
+              description="未获取到权限信息，PDA 部分功能不可用。请重新登录；若仍异常，请联系管理员。"
               actionText="重新登录"
               onAction={() => { logout(); navigate('/pda/login') }}
             />
@@ -73,7 +73,7 @@ export default function PdaWorkbench() {
             <PdaEmptyCard
               icon="⛔"
               title="当前账号没有可用 PDA 作业权限"
-              description="后端未授予收货、拣货、分拣、复核、打包、出库等 PDA 权限。请联系管理员分配真实权限。"
+              description="当前账号没有收货、拣货、分拣、复核、打包、出库等操作权限。请联系管理员分配权限。"
             />
           ) : (
             <div className="grid grid-cols-2 gap-3">

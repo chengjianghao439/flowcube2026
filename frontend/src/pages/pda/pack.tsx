@@ -431,7 +431,7 @@ export default function PdaPackPage() {
     return (
       <PdaTaskState
         title="缺少打包任务"
-        description="当前页面没有有效任务号，请从待打包任务列表重新选择。"
+        description="未找到打包任务信息，请返回列表重新选择。"
         actionText="选择任务"
         onAction={goSelectTask}
         secondaryText="返回工作台"

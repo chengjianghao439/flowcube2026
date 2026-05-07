@@ -146,7 +146,7 @@ export default function WarehouseOpsPage() {
             helper="用于查看拣货、复核、打包、完成的积压情况"
             empty={data.flowBottleneck.length === 0}
             emptyTitle="暂无流程瓶颈数据"
-            emptyDescription="当前时段没有可展示的流程堆积"
+            emptyDescription="暂无流程堆积"
           >
             <FlowBar items={data.flowBottleneck} />
           </ReportPanel>
@@ -154,10 +154,10 @@ export default function WarehouseOpsPage() {
           <ReportPanel
             title="今日作业趋势"
             description="每小时扫码量"
-            helper="一眼看出今天哪个时段最忙"
+            helper="查看今日各时段繁忙程度"
             empty={data.hourlyTrend.length === 0}
             emptyTitle="暂无作业趋势"
-            emptyDescription="当前时段没有可展示的扫码趋势"
+            emptyDescription="暂无扫码趋势"
           >
             <>
               <HourlyChart data={data.hourlyTrend} />
@@ -175,7 +175,7 @@ export default function WarehouseOpsPage() {
             helper="查看每个操作员的拣货表现"
             empty={data.operators.length === 0}
             emptyTitle="暂无今日人员数据"
-            emptyDescription="当前没有可展示的人员效率数据"
+            emptyDescription="暂无人员效率数据"
           >
             <div className="space-y-3">
               {data.operators.map((op: OpsOperator) => (
@@ -209,7 +209,7 @@ export default function WarehouseOpsPage() {
             helper="关注扫码错误、撤销和条码问题"
             empty={data.recentErrors.length === 0}
             emptyTitle="暂无异常记录"
-            emptyDescription="当前没有可展示的异常日志"
+            emptyDescription="暂无异常日志"
           >
             <div className="space-y-2">
               {data.recentErrors.slice(0, 6).map(e => (

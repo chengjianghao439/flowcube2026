@@ -23,7 +23,7 @@ export function ReportPanel({
   onAction,
   empty = false,
   emptyTitle = '暂无数据',
-  emptyDescription = '当前条件下没有可展示的内容',
+  emptyDescription = '当前条件下暂无数据',
   children,
   className,
 }: ReportPanelProps) {

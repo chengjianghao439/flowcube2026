@@ -95,7 +95,7 @@ function TaskSelectStep({
 
           {isLoading && <PdaLoading className="h-40" />}
           {!isLoading && tasks.length === 0 && (
-            <PdaEmptyCard icon="✅" title="暂无待复核任务" description="任务完成分拣后进入此列表" />
+            <PdaEmptyCard icon="✅" title="暂无待复核任务" description="分拣完成后自动出现在这里" />
           )}
 
           {tasks.map(task => {
@@ -279,7 +279,7 @@ export default function PdaCheckPage() {
     return (
       <PdaTaskState
         title="缺少复核任务"
-        description="当前页面没有有效任务号，请从待复核任务列表重新选择。"
+        description="未找到复核任务信息，请返回列表重新选择。"
         actionText="选择任务"
         onAction={() => setStep('select-task')}
         secondaryText="返回工作台"

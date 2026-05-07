@@ -165,7 +165,7 @@ export default function PdaAnomalyPage() {
             helper="聚焦培训和流程修正"
             empty={data.byOperator.length === 0}
             emptyTitle="暂无操作员错误数据"
-            emptyDescription="当前没有可展示的操作员错误记录"
+            emptyDescription="暂无操作员错误记录"
           >
             <div className="space-y-2">
               {data.byOperator.map(r => (
@@ -180,7 +180,7 @@ export default function PdaAnomalyPage() {
             helper="用于排查误扫或流程不熟"
             empty={data.undoByOperator.length === 0}
             emptyTitle="暂无撤销数据"
-            emptyDescription="当前没有可展示的撤销统计"
+            emptyDescription="暂无撤销统计"
           >
             <div className="space-y-2">
               {data.undoByOperator.map(r => (
@@ -195,7 +195,7 @@ export default function PdaAnomalyPage() {
             helper="查看流程或设备问题"
             empty={data.byReason.length === 0}
             emptyTitle="暂无错误原因数据"
-            emptyDescription="当前没有可展示的错误原因分布"
+            emptyDescription="暂无错误原因分布"
           >
             <div className="space-y-2">
               {data.byReason.map(r => (
@@ -207,10 +207,10 @@ export default function PdaAnomalyPage() {
           <ReportPanel
             title="问题最多的条码 Top 10"
             description="最容易出错的条码集中在哪些"
-            helper="便于针对性修正"
+            helper="方便定位并修正问题"
             empty={data.byBarcode.length === 0}
             emptyTitle="暂无条码异常数据"
-            emptyDescription="当前没有可展示的条码问题记录"
+            emptyDescription="暂无条码问题记录"
           >
             <div className="space-y-2">
               {data.byBarcode.map(r => (

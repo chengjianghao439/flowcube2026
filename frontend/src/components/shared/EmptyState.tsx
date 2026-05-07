@@ -41,12 +41,12 @@ const VARIANT_MAP: Record<EmptyVariant, VariantConfig> = {
   'no-data': {
     icon:        <Inbox className="h-10 w-10" />,
     title:       '暂无数据',
-    description: '当前列表没有任何记录',
+    description: '暂无记录',
   },
   'no-result': {
     icon:        <SearchX className="h-10 w-10" />,
     title:       '未找到结果',
-    description: '没有符合条件的记录，请尝试调整筛选条件',
+    description: '没有匹配的记录，试试调整筛选条件',
   },
   error: {
     icon:        <ServerCrash className="h-10 w-10" />,

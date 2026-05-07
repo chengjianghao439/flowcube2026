@@ -134,7 +134,7 @@ function ReturnForm({ type, onClose, onSuccess }: { type:'purchase'|'sale'; onCl
         <div className="space-y-1">
           <Label>关联原单号</Label>
           <div className="flex gap-2">
-            <Input value={orderNo} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>{ const next=e.target.value; setOrderNo(next); if(boundSource && next.trim()!==boundSource.orderNo){ setBoundSource(null); setItems([]) } }} placeholder="优先基于原单带价" disabled={loadingSource} />
+            <Input value={orderNo} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>{ const next=e.target.value; setOrderNo(next); if(boundSource && next.trim()!==boundSource.orderNo){ setBoundSource(null); setItems([]) } }} placeholder="输入原单号" disabled={loadingSource} />
             <Button type="button" variant="outline" onClick={loadSourceOrder} disabled={loadingSource || !orderNo.trim()}>
               {loadingSource?'载入中...':'载入原单'}
             </Button>

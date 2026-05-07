@@ -164,7 +164,7 @@ router.put('/:id/check', (req, res) => res.status(410).json({
 router.put('/:id/cancel', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL), (req, res, next) => {
   const client = (req.headers['x-client'] || '').toLowerCase()
   if (client === 'pda') {
-    return next(new AppError('PDA 不允许取消任务，请在 ERP 后台操作', 403, 'PDA_CANCEL_FORBIDDEN'))
+    return next(new AppError('请在电脑端 ERP 中取消任务', 403, 'PDA_CANCEL_FORBIDDEN'))
   }
   next()
 }, async (req, res, next) => {

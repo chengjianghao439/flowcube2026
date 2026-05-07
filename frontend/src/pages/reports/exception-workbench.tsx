@@ -210,7 +210,7 @@ export default function ExceptionWorkbenchPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="高风险异常" value={highCount} hint="需优先处理" />
         <StatCard label="中风险异常" value={mediumCount} hint="建议尽快排查" />
-        <StatCard label="低风险异常" value={lowCount} hint="可集中收口" />
+        <StatCard label="低风险异常" value={lowCount} hint="可在统一入口处理" />
         <StatCard
           label="最近巡检"
           value={latestSummary ? formatDisplayDateTime(latestSummary.checkedAt, '未执行') : '未执行'}

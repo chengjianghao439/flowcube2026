@@ -49,7 +49,7 @@ export default function PdaCriticalActionNotice({
     bodyTone = 'text-amber-800'
   } else if (submitting) {
     title = '提交中'
-    body = phaseMessage || '请求已发出，请保持当前页面并等待结果返回。'
+    body = phaseMessage || '请求已提交，请等待处理完成。'
     tone = 'border-sky-300 bg-sky-50/80 text-sky-900'
     bodyTone = 'text-sky-800'
   } else if (failed) {
