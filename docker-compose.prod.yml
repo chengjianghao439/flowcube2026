@@ -1,0 +1,48 @@
+# ============================================================
+# 极序 Flow — 生产环境 Docker Compose 覆盖配置
+# 使用：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ============================================================
+version: '3.9'
+
+services:
+  mysql:
+    # 生产环境禁止暴露 MySQL 端口到宿主机
+    # 仅允许 backend 容器通过内部网络访问
+    ports: []
+
+  backend:
+    # 生产环境后端也建议不暴露端口到宿主机，
+    # 由反代（Nginx / Caddy）通过内部网络或 Unix socket 转发
+    # 如仍需要宿主机访问，注释下面这行即可
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      # 生产环境强制 HTTPS，确保桌面端更新下载走 HTTPS
+      TRUST_PROXY: "1"
+      # 生产环境 CORS 严格限定
+      CORS_REFLECT: "0"
+      CORS_ALLOW_NULL_ORIGIN: "0"
+    # 生产环境应添加健康启动延迟
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    # 生产环境前端可绑定 HTTPS 端口
+    # 更推荐的做法：在宿主机或反代容器上终止 TLS
+    ports:
+      - "80:80"
+    # 如果使用 HTTPS 反代，可在此挂载证书目录给 nginx
+    # volumes:
+    #   - /etc/ssl/certs:/etc/ssl/certs:ro
+    #   - /etc/ssl/private:/etc/ssl/private:ro
+
+volumes:
+  mysql_data:
+    # 生产环境建议使用外部存储或定期备份到 backups/
+    # external: true
+    # name: flowcube-mysql-data-prod

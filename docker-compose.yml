@@ -14,7 +14,7 @@ services:
       - mysql_data:/var/lib/mysql
       - ./backend/src/database:/docker-entrypoint-initdb.d
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -47,7 +47,7 @@ services:
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
       APP_UPDATE_DOWNLOADS_DIR: /var/www/flowcube-downloads
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       # 桌面发布目录只允许指向 canonical host path；backend/downloads 已废弃，禁止作为默认 fallback。
       - ${FLOWCUBE_DOWNLOADS_DIR:-/var/www/flowcube-downloads}:/var/www/flowcube-downloads
