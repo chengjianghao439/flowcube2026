@@ -318,9 +318,6 @@ export default function PickingWavesPage() {
                   <Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>
                     打开出库补打
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
-                    打开异常工作台
-                  </Button>
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-7">

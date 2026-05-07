@@ -106,7 +106,6 @@ app.use('/api/notifications',  require('./modules/notifications/notifications.ro
 app.use('/api/search',         require('./modules/search/search.routes'))
 app.use('/api/warehouse-tasks', require('./modules/warehouse-tasks/warehouse-tasks.routes'))
 app.use('/api/price-lists',    require('./modules/price-lists/price-lists.routes'))
-app.use('/api/system',        require('./modules/system/system.routes'))
 app.use('/api/categories',    require('./modules/categories/categories.routes'))
 app.use('/api/print-templates', require('./modules/print-templates/print-templates.routes'))
 app.use('/api/printers',       require('./modules/printers/printers.routes'))

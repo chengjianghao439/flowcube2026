@@ -76,14 +76,6 @@ export default function ReportsPage() {
         tabTitle: '岗位工作台',
         tone: 'border-emerald-200 bg-emerald-50',
       },
-      {
-        title: '异常工作台',
-        description: '统一收口收货、出库、物流标签等异常闭环，适合排查打印失败、超时和跨页追踪问题。',
-        hint: '优先处理收货异常闭环与物流标签闭环',
-        path: '/reports/exception-workbench',
-        tabTitle: '异常工作台',
-        tone: 'border-amber-200 bg-amber-50',
-      },
     ]
 
     const management: HubCard[] = [
@@ -181,9 +173,6 @@ export default function ReportsPage() {
             </Button>
             <Button variant="outline" onClick={() => openPage('/reports/reconciliation', '对账基础版')}>
               对账核对
-            </Button>
-            <Button variant="outline" onClick={() => openPage('/reports/exception-workbench', '异常工作台')}>
-              异常闭环
             </Button>
           </div>
         }

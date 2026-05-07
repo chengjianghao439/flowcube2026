@@ -225,9 +225,6 @@ export default function RoleWorkbenchPage() {
         description="按岗位聚合待办，优先收口收货、出库、库存和管理异常。"
         actions={(
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
-              打开异常工作台
-            </Button>
             <Button variant="outline" onClick={() => openPath('/reports/warehouse-ops', '仓库运营看板')}>
               打开仓库运营看板
             </Button>
@@ -290,9 +287,6 @@ export default function RoleWorkbenchPage() {
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">{section.description}</p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
-                  查看异常工作台
-                </Button>
               </div>
               <div className="grid gap-4 xl:grid-cols-2">
                 {section.cards

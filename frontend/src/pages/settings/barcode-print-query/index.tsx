@@ -275,13 +275,6 @@ export default function BarcodePrintQueryPage() {
               >
                 返回收货详情
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => openPath('/reports/exception-workbench', '异常工作台')}
-              >
-                打开异常工作台
-              </Button>
             </div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
@@ -317,13 +310,6 @@ export default function BarcodePrintQueryPage() {
                 onClick={() => openPath(`/picking-waves?waveId=${outboundContext.waveId}&focus=print-closure`, `波次 ${outboundContext.waveNo}`)}
               >
                 返回波次详情
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => openPath('/reports/exception-workbench', '异常工作台')}
-              >
-                打开异常工作台
               </Button>
             </div>
           </div>

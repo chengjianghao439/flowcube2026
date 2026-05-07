@@ -73,7 +73,6 @@ const BarcodePrintQueryPage = lazy(() => import('@/pages/settings/barcode-print-
 const OplogsPage = lazy(() => import('@/pages/oplogs'))
 const ReportsPage = lazy(() => import('@/pages/reports'))
 const RoleWorkbenchPage = lazy(() => import('@/pages/reports/role-workbench'))
-const ExceptionWorkbenchPage = lazy(() => import('@/pages/reports/exception-workbench'))
 const ReconciliationPage = lazy(() => import('@/pages/reports/reconciliation'))
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
 const ApprovalsPage = lazy(() => import('@/pages/reports/approvals'))
@@ -302,15 +301,6 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '数据', order: 20 },
-  },
-  {
-    path: '/reports/exception-workbench',
-    title: '异常工作台',
-    permission: PERMISSIONS.REPORT_VIEW,
-    component: ExceptionWorkbenchPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '数据', order: 30 },
   },
   {
     path: '/reports/reconciliation',
