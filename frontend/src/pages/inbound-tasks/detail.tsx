@@ -14,7 +14,6 @@ import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
-import { getInboundClosureCopy } from '@/lib/inboundClosure'
 import {
   useInboundTaskDetail,
   useInboundTaskContainers,
@@ -255,7 +254,6 @@ export default function InboundTaskDetailPage() {
         }
       })
   }, [timeline])
-  const closureCopy = useMemo(() => getInboundClosureCopy(task), [task])
   const focusSection = useMemo(() => {
     const search = new URLSearchParams(location.search)
     return search.get('focus')
@@ -439,86 +437,24 @@ export default function InboundTaskDetailPage() {
         </div>
       </div>
 
-      <Section title="主链提示" sectionId="closure-guidance">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <SoftStatusLabel label={closureCopy.stageLabel} tone={closureCopy.actionMode === 'done' ? 'success' : closureCopy.actionMode === 'exception' ? 'danger' : closureCopy.actionMode === 'submit' ? 'draft' : 'active'} />
-            <span className="text-sm text-muted-foreground">当前主负责：{closureCopy.ownerLabel}</span>
-          </div>
-          <p className="text-sm text-foreground">{closureCopy.description}</p>
-          <p className="text-sm text-muted-foreground">{closureCopy.nextAction}</p>
-        </div>
-      </Section>
-
       {!!exceptionLines.length && (
-        <Section title="异常提醒" sectionId="exception-alerts">
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 space-y-2">
-            {exceptionLines.map(line => (
-              <p key={line} className="text-sm text-foreground">{line}</p>
-            ))}
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-rose-800">异常提醒</span>
             {task.auditRemark && auditFlowStatus?.key === 'rejected' && (
-              <p className="text-sm text-foreground">退回原因：{task.auditRemark}</p>
+              <span className="text-sm text-rose-600">· 退回原因：{task.auditRemark}</span>
             )}
-            <div className="pt-1">
-              <Button size="sm" variant="outline" onClick={() => openPrintQuery({ status: 'failed' })}>
-                去补打 / 排查
-              </Button>
-            </div>
           </div>
-        </Section>
-      )}
-
-      {(auditFlowStatus?.key === 'rejected' || manualReceiveEvents.length > 0) && (
-        <Section title="审核处理与补录" sectionId="audit-follow-up">
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <div className="space-y-3">
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm space-y-1.5">
-                <p className="font-medium text-foreground">退回后的处理顺序</p>
-                <p className="text-muted-foreground">先补打失败条码或补录缺失箱数，再确认上架与打印状态无异常，最后从本页重新审核通过。</p>
-                {task.auditRemark && auditFlowStatus?.key === 'rejected' && (
-                  <p className="text-foreground">最新退回原因：{task.auditRemark}</p>
-                )}
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Button size="sm" variant="outline" onClick={() => openPrintQuery({ status: 'failed' })}>
-                    查看失败补打
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => openPrintQuery()}>
-                    打开本单打印记录
-                  </Button>
-                  {canAudit && auditFlowStatus?.key === 'rejected' && (
-                    <Button size="sm" onClick={() => setApproveConfirmOpen(true)} disabled={auditMut.isPending}>
-                      重新审核通过
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h4 className="font-medium text-foreground">最近补录动作</h4>
-                <span className="text-helper">{manualReceiveEvents.length} 条</span>
-              </div>
-              {manualReceiveEvents.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                  当前没有补录记录
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {manualReceiveEvents.slice(0, 5).map(event => (
-                    <ManualReceiveCard
-                      key={event.id}
-                      title={event.title}
-                      subtitle={event.subtitle}
-                      createdAt={event.createdAt}
-                      createdByName={event.createdByName}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+          <ul className="list-disc list-inside text-sm text-rose-700 space-y-0.5">
+            {exceptionLines.map(line => <li key={line}>{line}</li>)}
+          </ul>
+          <div className="flex gap-2 pt-1">
+            <Button size="sm" variant="outline" onClick={() => openPrintQuery({ status: 'failed' })}>去补打</Button>
+            {canAudit && auditFlowStatus?.key === 'rejected' && (
+              <Button size="sm" onClick={() => setApproveConfirmOpen(true)} disabled={auditMut.isPending}>重新审核通过</Button>
+            )}
           </div>
-        </Section>
+        </div>
       )}
 
       <Section title="任务明细（应到 / 已收 / 已上架）" sectionId="task-items">
@@ -605,99 +541,77 @@ export default function InboundTaskDetailPage() {
         </div>
       </Section>
 
-      {canPutaway && (
-        <Section title="待上架库存" sectionId="waiting-putaway">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-xl border border-border bg-card px-4 py-3">
-              <p className="text-helper">待上架箱数</p>
-              <p className="mt-1 text-2xl font-bold">{waitingCount}</p>
-              <p className="mt-1 text-helper">合计数量 {totalWaitingQty}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card px-4 py-3">
-              <p className="text-helper">已上架箱数</p>
-              <p className="mt-1 text-2xl font-bold">{storedCount}</p>
-              <p className="mt-1 text-helper">合计数量 {totalStoredQty}</p>
-            </div>
+      <Section title="库存容器" sectionId="containers">
+        <div className="grid gap-3 md:grid-cols-3 mb-4">
+          <div className="rounded-xl border border-border bg-card px-4 py-3">
+            <p className="text-helper">待上架</p>
+            <p className="mt-1 text-2xl font-bold">{waitingCount} 箱</p>
+            <p className="text-helper">共 {totalWaitingQty} 件</p>
           </div>
-          <div className="rounded-lg border border-sky-500/35 bg-sky-500/[0.08] px-4 py-3 text-sm space-y-1.5">
-            <p className="font-medium text-sky-950 dark:text-sky-100">请使用 PDA 扫码完成上架</p>
-            <p className="text-muted-body">
-              在 PDA「扫码上架」进入本任务，依次扫描库存条码（I）与货架条码（R）。如果库存条码丢失或打印残缺，可直接去本单的打印查询补打。
-            </p>
-            <Button size="sm" variant="outline" onClick={() => openPrintQuery()} className="mt-1">打开本单补打</Button>
+          <div className="rounded-xl border border-border bg-card px-4 py-3">
+            <p className="text-helper">已上架</p>
+            <p className="mt-1 text-2xl font-bold">{storedCount} 箱</p>
+            <p className="text-helper">共 {totalStoredQty} 件</p>
           </div>
+          <div className="rounded-xl border border-sky-500/35 bg-sky-500/[0.08] px-4 py-3">
+            <p className="text-sm font-medium text-sky-800">请使用 PDA 扫码上架</p>
+            <p className="text-xs text-sky-700 mt-0.5">在 PDA「扫码上架」中扫描库存条码（I）与货架条码（R）</p>
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => openPrintQuery()}>补打条码</Button>
+          </div>
+        </div>
 
-          {!containers?.waiting?.length ? (
-            <p className="pt-1 text-muted-body">暂无待上架库存</p>
-          ) : (
-            <div className="overflow-x-auto pt-2">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-table-head">
-                    <th className="text-left py-2 pr-2">库存条码</th>
-                    <th className="text-left py-2">商品</th>
-                    <th className="text-right py-2 w-24">数量</th>
-                    <th className="text-right py-2 w-28">补打</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {containers.waiting.map((c: InboundContainerRow) => (
-                    <tr key={c.id}>
-                      <td className="py-2.5 whitespace-nowrap"><span className="text-doc-code">{c.barcode}</span></td>
-                      <td className="py-2.5">
-                        <span className="font-medium">{c.productName ?? '—'}</span>
-                        {c.productCode && (
-                          <span className="block text-doc-code-muted">{c.productCode}</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 text-right tabular-nums">
-                        {c.qty}{c.unit ? ` ${c.unit}` : ''}
-                      </td>
-                      <td className="py-2.5 text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={reprintMut.isPending}
-                          onClick={() => triggerReprint({ mode: 'barcode', barcode: c.barcode }, `${c.barcode} 补打已提交`)}
-                        >
-                          补打条码
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-table-head">
+                <th className="text-left py-2">条码</th>
+                <th className="text-left py-2">商品</th>
+                <th className="text-right py-2 w-24">数量</th>
+                <th className="text-left py-2 w-20">状态</th>
+                <th className="text-left py-2 w-28">库位</th>
+                <th className="text-right py-2 w-24">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {!containers?.waiting?.length && !containers?.stored?.length ? (
+                <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">暂无容器</td></tr>
+              ) : (
+                <>
+                  {(containers?.waiting ?? []).map(c => (
+                    <tr key={`w-${c.id}`}>
+                      <td className="py-2 whitespace-nowrap"><span className="text-doc-code">{c.barcode}</span></td>
+                      <td className="py-2"><span className="font-medium">{c.productName ?? '—'}</span></td>
+                      <td className="py-2 text-right tabular-nums">{c.qty}{c.unit ? ` ${c.unit}` : ''}</td>
+                      <td className="py-2"><span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-xs font-medium">待上架</span></td>
+                      <td className="py-2 text-muted-foreground">—</td>
+                      <td className="py-2 text-right">
+                        <Button size="sm" variant="outline" disabled={reprintMut.isPending}
+                          onClick={() => triggerReprint({ mode: 'barcode', barcode: c.barcode }, `${c.barcode} 补打已提交`)}>
+                          补打
                         </Button>
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Section>
-      )}
-
-      <Section title="容器：已上架" sectionId="stored-containers">
-        {!containers?.stored?.length ? (
-          <p className="text-muted-body">暂无</p>
-        ) : (
-          <ul className="text-sm space-y-2">
-            {containers.stored.map(c => (
-              <li key={c.id} className="flex flex-wrap justify-between gap-2 border rounded-lg px-3 py-2">
-                <div className="min-w-0">
-                  <span className="text-doc-code">{c.barcode}</span>
-                  <span className="ml-3">{c.productName} × {c.qty}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">{c.locationCode ?? '—'}</span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={reprintMut.isPending}
-                    onClick={() => triggerReprint({ mode: 'barcode', barcode: c.barcode }, `${c.barcode} 补打已提交`)}
-                  >
-                    补打
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+                  {(containers?.stored ?? []).map(c => (
+                    <tr key={`s-${c.id}`}>
+                      <td className="py-2 whitespace-nowrap"><span className="text-doc-code">{c.barcode}</span></td>
+                      <td className="py-2"><span className="font-medium">{c.productName ?? '—'}</span></td>
+                      <td className="py-2 text-right tabular-nums">{c.qty}{c.unit ? ` ${c.unit}` : ''}</td>
+                      <td className="py-2"><span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium">已上架</span></td>
+                      <td className="py-2">{c.locationCode ?? '—'}</td>
+                      <td className="py-2 text-right">
+                        <Button size="sm" variant="outline" disabled={reprintMut.isPending}
+                          onClick={() => triggerReprint({ mode: 'barcode', barcode: c.barcode }, `${c.barcode} 补打已提交`)}>
+                          补打
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
       </Section>
 
       <Section title="打印批次与补打结果" sectionId="print-batches">

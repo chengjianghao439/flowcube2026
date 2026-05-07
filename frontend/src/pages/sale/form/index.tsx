@@ -19,6 +19,7 @@ import { Label }   from '@/components/ui/label'
 import { Badge }   from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TabPathContext } from '@/components/layout/TabPathContext'
+import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -32,7 +33,6 @@ import { useCarriersActive } from '@/hooks/useCarriers'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { getCustomerPriceApi } from '@/api/price-lists'
-import { WT_STATUS_CLASS } from '@/constants/warehouseTaskStatus'
 
 const PHONE_RE = /^1\d{10}$/
 import type { SaleOrder, SaleOrderItem } from '@/types/sale'
@@ -87,21 +87,60 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function SalesAndFulfillmentStatus({ order }: { order: SaleOrder }) {
+function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
+  const steps = [
+    { status: 2, label: '拣货中' },
+    { status: 3, label: '待分拣' },
+    { status: 4, label: '待复核' },
+    { status: 5, label: '待打包' },
+    { status: 6, label: '待出库' },
+    { status: 7, label: '已出库' },
+  ]
+  const current = order.warehouseTaskStatus ?? 0
+  const currentIdx = steps.findIndex(s => s.status === current)
+  const isCancelled = current === 8
+  const isPicking = current >= 2
+
+  if (!order.taskNo) return null
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-muted-foreground">销售状态</span>
-      <StatusBadge type="sale" status={order.status} />
-      {order.taskNo && order.warehouseTaskStatus != null && (
-        <>
-          <span className="text-xs text-muted-foreground">履约状态</span>
-          <Badge
-            variant="outline"
-            className={`text-xs font-medium ${WT_STATUS_CLASS[order.warehouseTaskStatus as keyof typeof WT_STATUS_CLASS] ?? 'bg-secondary text-secondary-foreground border-secondary'}`}
-          >
-            {order.warehouseTaskStatusName || `状态 ${order.warehouseTaskStatus}`}
+    <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">履约进度</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">任务单号：{order.taskNo}</p>
+        </div>
+        {isCancelled ? (
+          <Badge variant="destructive" className="rounded-full">已取消</Badge>
+        ) : isPicking ? (
+          <Badge variant="outline" className="rounded-full border-blue-200 bg-blue-50 text-blue-700">
+            {order.warehouseTaskStatusName || `阶段 ${current}`}
           </Badge>
-        </>
+        ) : null}
+      </div>
+
+      {isPicking && !isCancelled && (
+        <div className="flex items-center gap-1">
+          {steps.map((step, idx) => {
+            const isDone = idx < currentIdx
+            const isCurrent = idx === currentIdx
+            return (
+              <div key={step.status} className="flex items-center gap-1 flex-1 last:flex-none">
+                <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                  isDone ? 'bg-primary/10 text-primary'
+                    : isCurrent ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : 'bg-muted/30 text-muted-foreground'
+                }`}>
+                  <span>{isDone ? '✓' : isCurrent ? '●' : '○'}</span>
+                  <span>{step.label}</span>
+                </div>
+                {idx < steps.length - 1 && (
+                  <div className={`h-px flex-1 min-w-[8px] ${isDone ? 'bg-primary/30' : 'bg-border'}`} />
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )
@@ -633,7 +672,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
     <div className="flex flex-col gap-4">
       <ActionBar
         title={order.orderNo}
-        subtitle={<SalesAndFulfillmentStatus order={order} />}
+        subtitle={<FulfillmentProgressCard order={order} />}
         rightActions={
           <>
             <Button variant="outline" onClick={closeTab} disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending}>关闭</Button>

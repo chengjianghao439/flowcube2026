@@ -19,6 +19,8 @@ function fmtOrder(row) {
     statusName: STATUS[row.status],
     expectedDate: row.expected_date,
     totalAmount: Number(row.total_amount),
+    totalOrderedQty: Number(row.total_ordered_qty || 0),
+    totalReceivedQty: Number(row.total_received_qty || 0),
     remark: row.remark,
     operatorId: row.operator_id,
     operatorName: row.operator_name,
@@ -47,7 +49,19 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     params.push(productId)
   }
   const [rows] = await pool.query(
-    `SELECT ${PO_COLUMNS}
+    `SELECT ${PO_COLUMNS},
+       COALESCE((
+         SELECT SUM(iti.ordered_qty)
+         FROM inbound_tasks it
+         JOIN inbound_task_items iti ON iti.task_id = it.id
+         WHERE it.purchase_order_id = po.id AND it.deleted_at IS NULL
+       ), 0) AS total_ordered_qty,
+       COALESCE((
+         SELECT SUM(iti.received_qty)
+         FROM inbound_tasks it
+         JOIN inbound_task_items iti ON iti.task_id = it.id
+         WHERE it.purchase_order_id = po.id AND it.deleted_at IS NULL
+       ), 0) AS total_received_qty
      FROM purchase_orders po
      WHERE po.deleted_at IS NULL AND (po.order_no LIKE ? OR po.supplier_name LIKE ?) ${whereExtra}
      ORDER BY po.created_at DESC LIMIT ? OFFSET ?`,

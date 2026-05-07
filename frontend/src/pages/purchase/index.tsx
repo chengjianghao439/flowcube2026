@@ -100,6 +100,24 @@ export default function PurchasePage() {
     { key: 'orderNo', title: '采购单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'supplierName', title: '供应商' },
     { key: 'warehouseName', title: '仓库', width: 120 },
+    {
+      key: 'totalReceivedQty', title: '收货进度', width: 120,
+      render: (v, row) => {
+        const r = row as PurchaseOrder
+        const received = r.totalReceivedQty ?? 0
+        const ordered = r.totalOrderedQty ?? 0
+        if (ordered === 0) return <span className="text-xs text-muted-foreground">-</span>
+        const pct = Math.min(100, Math.round((received / ordered) * 100))
+        return (
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+              <div className={`h-full rounded-full ${pct >= 100 ? 'bg-primary' : 'bg-amber-400'}`} style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-xs tabular-nums text-muted-foreground">{received}/{ordered}</span>
+          </div>
+        )
+      }
+    },
     { key: 'totalAmount', title: '金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
     {
       key: 'status', title: '状态', width: 100,

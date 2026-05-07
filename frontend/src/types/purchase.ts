@@ -20,6 +20,8 @@ export interface PurchaseOrder {
   statusName: string
   expectedDate?: string
   totalAmount: number
+  totalOrderedQty?: number
+  totalReceivedQty?: number
   remark?: string
   operatorId: number
   operatorName: string
