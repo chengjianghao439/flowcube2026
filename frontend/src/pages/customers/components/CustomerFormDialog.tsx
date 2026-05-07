@@ -32,12 +32,16 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (f.phone && !PHONE_RE.test(f.phone)) { toast.error('请输入正确的手机号'); return }
-    if (isEdit && customer) {
-      await update.mutateAsync({ id:customer.id, data:{ ...f, isActive:customer.isActive } })
-    } else {
-      await create.mutateAsync(f)
+    try {
+      if (isEdit && customer) {
+        await update.mutateAsync({ id:customer.id, data:{ ...f, isActive:customer.isActive } })
+      } else {
+        await create.mutateAsync(f)
+      }
+      onClose()
+    } catch {
+      // Toast 已在 hooks 的 onError 中处理
     }
-    onClose()
   }
 
   const loading = create.isPending || update.isPending
