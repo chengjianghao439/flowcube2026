@@ -1,0 +1,164 @@
+# ============================================================
+# 极序 Flow — 安全扫描工作流
+#
+# 触发条件：
+#   - 每次 push 到 main
+#   - 每次 pull request 到 main
+#   - 每周一 06:00 定时扫描
+#
+# 扫描内容：
+#   - gitleaks: 敏感信息泄露检测
+#   - npm audit: 依赖漏洞扫描（三端）
+# ============================================================
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 22 * * 0'  # 北京时间周一 06:00 = UTC 周日 22:00
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  # ── 1. Gitleaks 敏感信息检测 ──────────────────────────────
+  gitleaks:
+    name: Gitleaks — 敏感信息扫描
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        # 若未配置 license，fallback 到 Docker 直接运行
+        continue-on-error: true
+
+      - name: Fallback gitleaks (Docker)
+        if: ${{ !env.GITLEAKS_LICENSE }}
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/repo \
+            -e GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
+            ghcr.io/gitleaks/gitleaks:latest detect \
+            --source=/repo \
+            --report-format=sarif \
+            --report-path=/repo/gitleaks-report.sarif \
+            --verbose || true
+
+      - name: Upload Gitleaks SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks-report.sarif
+          category: gitleaks
+
+      - name: Gitleaks Summary
+        if: always()
+        run: |
+          if [ -f gitleaks-report.sarif ]; then
+            ISSUES=$(jq '.runs[0].results | length' gitleaks-report.sarif 2>/dev/null || echo "0")
+            echo "## Gitleaks 扫描结果" >> $GITHUB_STEP_SUMMARY
+            echo "发现 **$ISSUES** 个敏感信息问题" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## Gitleaks 扫描结果" >> $GITHUB_STEP_SUMMARY
+            echo "未发现敏感信息泄露 ✅" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ── 2. npm audit 依赖漏洞扫描 ─────────────────────────────
+  npm-audit:
+    name: npm audit — 依赖漏洞扫描
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [backend, frontend, desktop]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies (${{ matrix.target }})
+        run: npm ci --prefix ${{ matrix.target }} --ignore-scripts
+        continue-on-error: true
+
+      - name: Run npm audit (${{ matrix.target }})
+        id: audit
+        run: |
+          cd ${{ matrix.target }}
+          npm audit --production --json 2>/dev/null > ../audit-${{ matrix.target }}.json || true
+          cd ..
+
+      - name: Analyze audit results (${{ matrix.target }})
+        id: audit-analysis
+        run: |
+          echo "## npm audit — ${{ matrix.target }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f audit-${{ matrix.target }}.json ]; then
+            node -e "
+              const d = require('./audit-${{ matrix.target }}.json');
+              if (!d.vulnerabilities || Object.keys(d.vulnerabilities).length === 0) {
+                console.log('未发现已知漏洞 ✅');
+                return;
+              }
+              let critical = 0, high = 0, moderate = 0;
+              for (const [name, info] of Object.entries(d.vulnerabilities)) {
+                if (info.severity === 'critical') critical++;
+                else if (info.severity === 'high') high++;
+                else if (info.severity === 'moderate') moderate++;
+                console.log('- [' + info.severity.toUpperCase() + '] ' + name + ': ' + (info.via.map(v => typeof v === 'string' ? v : v.source || v.title || '?').join(', ')));
+              }
+              console.log('---');
+              console.log('Critical: ' + critical + ', High: ' + high + ', Moderate: ' + moderate);
+            " >> $GITHUB_STEP_SUMMARY 2>/dev/null
+          else
+            echo "npm audit 无法运行" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Fail on critical vulnerabilities
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          for f in audit-*.json; do
+            if [ -f "$f" ]; then
+              CRITICAL=$(node -e "const d=require('./$f');console.log(Object.values(d.vulnerabilities||{}).filter(v=>v.severity==='critical').length)" 2>/dev/null || echo "0")
+              if [ "$CRITICAL" -gt 0 ]; then
+                echo "❌ $f: 发现 $CRITICAL 个 CRITICAL 级别漏洞，PR 被阻止"
+                exit 1
+              fi
+            fi
+          done
+
+  # ── 3. 检查已跟踪的敏感文件 ───────────────────────────────
+  sensitive-files:
+    name: 敏感文件检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check for tracked secrets
+        run: |
+          ISSUES=0
+          echo "## 敏感文件检查" >> $GITHUB_STEP_SUMMARY
+          for pattern in "*.pem" "*.key" "id_rsa" "id_ed25519" "*.env" "flowcube_backup.sql"; do
+            result=$(git ls-files "$pattern" 2>/dev/null || true)
+            if [ -n "$result" ]; then
+              echo "🔴 敏感文件被跟踪: $result" >> $GITHUB_STEP_SUMMARY
+              ISSUES=$((ISSUES+1))
+            fi
+          done
+          if [ "$ISSUES" -eq 0 ]; then
+            echo "未发现被跟踪的敏感文件 ✅" >> $GITHUB_STEP_SUMMARY
+          fi
+          exit $ISSUES

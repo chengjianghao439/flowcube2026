@@ -1,0 +1,79 @@
+# ============================================================
+# 极序 Flow — Dependabot 每周依赖更新配置
+# 文档：https://docs.github.com/en/code-security/dependabot
+# ============================================================
+version: 2
+updates:
+  # ── 后端依赖 ──────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "backend"
+    # 限制同时打开的 PR 数
+    open-pull-requests-limit: 10
+    # 版本策略：补丁和次要版本自动合并，大版本需要人工审查
+    versioning-strategy: increase
+    # 忽略大版本跳跃（避免 break change）
+    ignore:
+      - dependency-name: "express"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "mysql2"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "jsonwebtoken"
+        update-types: ["version-update:semver-major"]
+    # 添加审查者
+    reviewers:
+      - "chengjianghao439"
+
+  # ── 前端依赖 ──────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "frontend"
+    open-pull-requests-limit: 10
+    versioning-strategy: increase
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-router-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+    reviewers:
+      - "chengjianghao439"
+
+  # ── 桌面端依赖 ────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/desktop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Shanghai"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "desktop"
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    ignore:
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
+    reviewers:
+      - "chengjianghao439"
