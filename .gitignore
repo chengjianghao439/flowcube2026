@@ -37,3 +37,30 @@ tests/resetBusinessData.js
 
 # Playwright CLI 烟雾检查临时产物
 .playwright-cli/
+
+# 编辑器 / IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 临时文件
+*.tmp
+*.bak
+frontend/logs/
+
+# Gitleaks 扫描报告
+gitleaks-report.json
+
+# Python 缓存（部分脚本用 Python 实现时）
+__pycache__/
+*.pyc
+
+# 本地部署密钥（已废弃，仅保留文档示例）
+deploy/*.local.json
+
+# 临时下载目录
+.tmp-flowcube-downloads/
+
+# 安全扫描 CI 报告产物
+security-scan-report*
