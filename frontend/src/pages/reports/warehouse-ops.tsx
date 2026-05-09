@@ -6,6 +6,7 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { Layers, BarChart3, AlertTriangle, Truck, PackageOpen, Undo2 } from 'lucide-react'
 import { getWarehouseOpsApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -17,7 +18,7 @@ import type { OpsOperator, FlowBottleneck } from '@/api/reports'
 
 // ── 数字卡片 ────────────────────────────────────────────────────────────────
 function KpiCard({ icon, label, value, sub, danger }: {
-  icon: string; label: string; value: string | number; sub?: string; danger?: boolean
+  icon: React.ReactNode; label: string; value: string | number; sub?: string; danger?: boolean
 }) {
   return (
     <div className={`rounded-xl border p-4 ${danger ? 'border-red-200 bg-red-50' : 'border-border bg-card'}`}>
@@ -131,12 +132,12 @@ export default function WarehouseOpsPage() {
 
         {/* 今日核心指标 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard icon="🚚" label="今日出库单数" value={s?.shippedToday ?? 0} sub="已完成出库" />
-          <KpiCard icon="🗂️" label="正在拣货" value={s?.pickingNow ?? 0} sub="进行中任务" />
-          <KpiCard icon="📥" label="今日入库" value={s?.inboundToday ?? 0} sub="已完成收货" />
-          <KpiCard icon="📊" label="今日扫码" value={s?.scanCount ?? 0} sub={`拣货 ${s?.pickQty ?? 0} 件`} />
-          <KpiCard icon="⚠️" label="扫码错误" value={s?.errorCount ?? 0} sub={`错误率 ${s?.errorRate}`} danger={(s?.errorCount ?? 0) > 0} />
-          <KpiCard icon="↩️" label="撤销次数" value={s?.undoCount ?? 0} sub="今日" danger={(s?.undoCount ?? 0) > 5} />
+          <KpiCard icon={<Truck className="size-5" />} label="今日出库单数" value={s?.shippedToday ?? 0} sub="已完成出库" />
+          <KpiCard icon={<Layers className="size-5" />} label="正在拣货" value={s?.pickingNow ?? 0} sub="进行中任务" />
+          <KpiCard icon={<PackageOpen className="size-5" />} label="今日入库" value={s?.inboundToday ?? 0} sub="已完成收货" />
+          <KpiCard icon={<BarChart3 className="size-5" />} label="今日扫码" value={s?.scanCount ?? 0} sub={`拣货 ${s?.pickQty ?? 0} 件`} />
+          <KpiCard icon={<AlertTriangle className="size-5" />} label="扫码错误" value={s?.errorCount ?? 0} sub={`错误率 ${s?.errorRate}`} danger={(s?.errorCount ?? 0) > 0} />
+          <KpiCard icon={<Undo2 className="size-5" />} label="撤销次数" value={s?.undoCount ?? 0} sub="今日" danger={(s?.undoCount ?? 0) > 5} />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

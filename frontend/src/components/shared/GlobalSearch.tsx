@@ -1,10 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Package, Factory, User, ShoppingCart, Truck } from 'lucide-react'
 import { payloadClient as client } from '@/api/client'
 
 interface SearchResult { id: number; type: string; typeLabel: string; title: string; subtitle: string; path: string }
 
-const TYPE_ICON: Record<string, string> = { product:'📦', supplier:'🏭', customer:'👤', purchase:'🛒', sale:'🚚' }
+const TYPE_ICON: Record<string, React.ComponentType<{className?: string}>> = {
+  product: Package,
+  supplier: Factory,
+  customer: User,
+  purchase: ShoppingCart,
+  sale: Truck,
+}
 const TYPE_COLOR: Record<string, string> = {
   product:'text-blue-600 bg-blue-50',
   supplier:'text-purple-600 bg-purple-50',
@@ -82,10 +89,11 @@ export default function GlobalSearch() {
               {['product','supplier','customer','purchase','sale'].map(type => {
                 const group = results.filter(r => r.type === type)
                 if (!group.length) return null
+                const Icon = TYPE_ICON[type]
                 return (
                   <div key={type}>
-                    <div className={`px-3 py-1 text-xs font-semibold ${TYPE_COLOR[type]} border-b`}>
-                      {TYPE_ICON[type]} {group[0].typeLabel}
+                    <div className={`px-3 py-1 text-xs font-semibold ${TYPE_COLOR[type]} border-b flex items-center gap-1`}>
+                      <Icon className="size-3.5" /> {group[0].typeLabel}
                     </div>
                     {group.map(r => (
                       <button key={r.id} onClick={() => go(r)}
