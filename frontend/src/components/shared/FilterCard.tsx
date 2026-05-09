@@ -2,8 +2,8 @@
  * FilterCard — 筛选区容器卡片
  *
  * 用于包裹筛选条件（搜索框、下拉、日期等）。
- * 已内置 rounded-xl + border + bg-card + shadow-sm，
- * 调用方只需传入筛选内容，无需关心外层卡片样式。
+ * 默认模式无外层卡片包裹，筛选控件直接展示。
+ * 折叠模式（collapsible=true）使用小圆角、去阴影的轻量卡片。
  *
  * 使用示例：
  * ```tsx
@@ -48,14 +48,14 @@ export function FilterCard({
 
   if (!collapsible) {
     return (
-      <div className={cn('rounded-xl border border-border bg-card px-4 py-3 shadow-sm', className)}>
-        <div className="flex flex-wrap items-center gap-2">{children}</div>
+      <div className={cn('flex flex-wrap items-center gap-2', className)}>
+        {children}
       </div>
     )
   }
 
   return (
-    <div className={cn('rounded-xl border border-border bg-card shadow-sm', className)}>
+    <div className={cn('rounded-lg border border-border bg-card', className)}>
       {/* 折叠触发器 */}
       <button
         type="button"
