@@ -72,9 +72,9 @@ export default function PaymentsPage() {
       {/* 汇总卡片 */}
       {summary && (
         <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm"><p className="text-sm text-muted-foreground">总金额</p><p className="tabular-nums text-2xl font-bold text-foreground">¥{summary.totalAmount.toFixed(2)}</p></div>
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm"><p className="text-sm text-muted-foreground">已付/已收</p><p className="tabular-nums text-2xl font-bold text-success">¥{summary.paidAmount.toFixed(2)}</p></div>
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm"><p className="text-sm text-muted-foreground">待付/待收余额</p><p className="tabular-nums text-2xl font-bold text-destructive">¥{summary.balance.toFixed(2)}</p></div>
+          <div className="rounded-lg border border-border bg-card p-4"><p className="text-sm text-muted-foreground">总金额</p><p className="tabular-nums text-2xl font-bold text-foreground">¥{summary.totalAmount.toFixed(2)}</p></div>
+          <div className="rounded-lg border border-border bg-card p-4"><p className="text-sm text-muted-foreground">已付/已收</p><p className="tabular-nums text-2xl font-bold text-success">¥{summary.paidAmount.toFixed(2)}</p></div>
+          <div className="rounded-lg border border-border bg-card p-4"><p className="text-sm text-muted-foreground">待付/待收余额</p><p className="tabular-nums text-2xl font-bold text-destructive">¥{summary.balance.toFixed(2)}</p></div>
         </div>
       )}
 

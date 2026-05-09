@@ -26,7 +26,7 @@ export function SaleFilters({
   onPickProduct,
 }: SaleFiltersProps) {
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+    <div className="rounded-lg border border-border bg-card px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         {/* 搜索框 */}
         <div className="relative">

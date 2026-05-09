@@ -141,7 +141,7 @@ export default function OpLogsPage() {
           </DialogHeader>
           {detail && (
             <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline" className={METHOD_BADGE_CLASS}>{formatHttpMethod(detail.method)}</Badge>
                   <Badge variant="outline" className={RESULT_BADGE_CLASS[getStatusTone(detail.statusCode)]}>

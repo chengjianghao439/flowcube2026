@@ -103,7 +103,7 @@ export default function PriceListsPage() {
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {previews.map(item => (
-              <div key={item.key} className="rounded-xl border border-border bg-muted/20 p-4">
+              <div key={item.key} className="rounded-lg border border-border bg-muted/20 p-4">
                 <p className={`text-sm font-semibold ${item.color}`}>价格{item.code}</p>
                 <p className="mt-2 text-2xl font-bold">¥{item.price}</p>
                 <p className="mt-1 text-xs text-muted-foreground">进价 + {Number.isFinite(item.rate) ? item.rate : 0}%</p>

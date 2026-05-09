@@ -38,7 +38,7 @@ export default function SettingsPage() {
       />
 
       {/* 基础参数 */}
-      <div className="rounded-xl border border-border bg-card p-6 space-y-5">
+      <div className="rounded-lg border border-border bg-card p-6 space-y-5">
         <h2 className="font-semibold text-base border-b pb-3">基础参数</h2>
         {data?.list.map(s => (
           <div key={s.key_name} className="grid grid-cols-3 gap-4 items-start">
@@ -65,7 +65,7 @@ export default function SettingsPage() {
       </div>
 
       {/* 角色说明 */}
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="rounded-lg border border-border bg-card p-6">
         <h2 className="font-semibold text-base border-b pb-3 mb-4">角色权限说明</h2>
         <div className="space-y-3">
           {roles?.map(r => (

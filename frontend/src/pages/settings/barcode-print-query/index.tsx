@@ -259,7 +259,7 @@ export default function BarcodePrintQueryPage() {
       />
 
       {inboundContext && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 space-y-3">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-foreground">当前正在处理收货打印链路</p>
@@ -278,15 +278,15 @@ export default function BarcodePrintQueryPage() {
             </div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-rose-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-rose-200 bg-white px-4 py-3">
               <p className="text-helper">打印失败</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{inboundContext.failedCount}</p>
             </div>
-            <div className="rounded-xl border border-amber-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-amber-200 bg-white px-4 py-3">
               <p className="text-helper">超时待确认</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{inboundContext.timeoutCount}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
               <p className="text-helper">仍在排队 / 打印中</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{inboundContext.printingCount}</p>
             </div>
@@ -295,7 +295,7 @@ export default function BarcodePrintQueryPage() {
       )}
 
       {outboundContext && (
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 space-y-3">
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-4 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-foreground">当前正在处理出库打印链路</p>
@@ -314,15 +314,15 @@ export default function BarcodePrintQueryPage() {
             </div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-rose-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-rose-200 bg-white px-4 py-3">
               <p className="text-helper">打印失败</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{outboundContext.failedCount}</p>
             </div>
-            <div className="rounded-xl border border-amber-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-amber-200 bg-white px-4 py-3">
               <p className="text-helper">超时待确认</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{outboundContext.timeoutCount}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
               <p className="text-helper">仍在排队 / 打印中</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{outboundContext.printingCount}</p>
             </div>
@@ -331,7 +331,7 @@ export default function BarcodePrintQueryPage() {
       )}
 
       {logisticsContext && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 space-y-3">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-foreground">当前正在处理物流标签链路</p>
@@ -346,15 +346,15 @@ export default function BarcodePrintQueryPage() {
             </div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-rose-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-rose-200 bg-white px-4 py-3">
               <p className="text-helper">打印失败</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{logisticsContext.failedCount}</p>
             </div>
-            <div className="rounded-xl border border-amber-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-amber-200 bg-white px-4 py-3">
               <p className="text-helper">超时待确认</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{logisticsContext.timeoutCount}</p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
               <p className="text-helper">仍在排队 / 打印中</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{logisticsContext.printingCount}</p>
             </div>
@@ -375,9 +375,9 @@ export default function BarcodePrintQueryPage() {
               setPage(1)
             }}
             className={[
-              'rounded-2xl border p-4 text-left transition-colors',
+              'rounded-lg border p-4 text-left transition-colors',
               category === item.value
-                ? 'border-primary bg-primary/5 shadow-sm'
+                ? 'border-primary bg-primary/5'
                 : 'border-border bg-card hover:bg-muted/40',
             ].join(' ')}
           >

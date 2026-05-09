@@ -90,7 +90,7 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="w-[22rem] max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl"
+        className="w-[22rem] max-h-[90vh] overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-xl"
         onClick={e => e.stopPropagation()}
       >
         <p className="mb-1 text-card-title">绑定业务用途</p>
@@ -111,7 +111,7 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
                 disabled={busy}
                 onClick={() => onToggleBind(t.key, printer)}
                 className={[
-                  'w-full rounded-xl border px-4 py-3 text-left text-sm transition-colors disabled:opacity-60',
+                  'w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors disabled:opacity-60',
                   isBound ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-border hover:bg-muted/40',
                 ].join(' ')}
               >
@@ -375,7 +375,7 @@ export default function PrintersPage() {
       </div>
 
       {IS_ELECTRON_DESKTOP && (
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="text-card-title">本机打印标签（原始指令模式）</h3>
           <p className="mt-2 text-muted-body leading-relaxed">
             无需填写任何网络地址。请使用下方「从本机添加」，在系统已安装的打印机里选中您的标签机，并在用途中绑定「库存标签」等；打印时软件会按该打印机在系统中的名称自动出纸。请勿随意修改 ERP
@@ -459,7 +459,7 @@ export default function PrintersPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-muted/40">
 	            <tr>
