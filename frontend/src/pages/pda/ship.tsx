@@ -172,8 +172,6 @@ export default function PdaShipPage() {
             onClear={() => shipAction.clearPending()}
             onDismissError={() => shipAction.clearError()}
           />
-          <div className="space-y-2">
-
           {/* 扫码区移至底栏，此处保留加载状态 */}
           {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">查询中…</span></div>}
 
