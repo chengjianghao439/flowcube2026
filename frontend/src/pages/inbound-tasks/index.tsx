@@ -175,6 +175,7 @@ export default function InboundTasksPage() {
             <TableActionsMenu
               primaryLabel="详情"
               onPrimaryClick={() => openDetail(task)}
+              primaryVariant="outline"
               items={items}
             />
           </div>

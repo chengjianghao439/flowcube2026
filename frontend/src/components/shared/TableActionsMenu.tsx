@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
 
 export interface TableActionItem {
   label: string
@@ -21,7 +22,7 @@ export interface TableActionItem {
 interface TableActionsMenuProps {
   primaryLabel: string
   onPrimaryClick: () => void
-  primaryVariant?: 'default' | 'outline' | 'ghost' | 'destructive'
+  primaryVariant?: 'default' | 'outline'
   primaryDisabled?: boolean
   items: TableActionItem[]
 }
@@ -29,42 +30,61 @@ interface TableActionsMenuProps {
 export default function TableActionsMenu({
   primaryLabel,
   onPrimaryClick,
-  primaryVariant = 'outline',
+  primaryVariant = 'default',
   primaryDisabled = false,
   items,
 }: TableActionsMenuProps) {
   const visibleItems = items.filter(item => !item.disabled)
 
-  return (
-    <div className="flex items-center gap-1">
+  if (visibleItems.length === 0) {
+    return (
       <Button size="sm" variant={primaryVariant} disabled={primaryDisabled} onClick={onPrimaryClick}>
         {primaryLabel}
       </Button>
-      {visibleItems.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="outline" className="px-2" disabled={primaryDisabled && visibleItems.every(item => item.disabled)}>
-              更多
-              <ChevronDown className="ml-0.5 size-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {visibleItems.map((item, index) => (
-              <div key={`${item.label}-${index}`}>
-                {item.separatorBefore && <DropdownMenuSeparator />}
-                <DropdownMenuItem
-                  disabled={item.disabled}
-                  className={item.destructive ? 'text-destructive focus:text-destructive' : undefined}
-                  onClick={item.onClick}
-                >
-                  {item.icon}
-                  {item.label}
-                </DropdownMenuItem>
-              </div>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+    )
+  }
+
+  return (
+    <div className="inline-flex items-center rounded-md border border-border overflow-hidden">
+      <button
+        type="button"
+        disabled={primaryDisabled}
+        onClick={onPrimaryClick}
+        className={cn(
+          'px-3 py-1.5 text-xs font-medium border-r border-border/60 transition-colors',
+          primaryVariant === 'outline'
+            ? 'bg-transparent text-foreground hover:bg-muted'
+            : 'bg-primary text-primary-foreground hover:bg-primary/90'
+        )}
+      >
+        {primaryLabel}
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            disabled={primaryDisabled && visibleItems.every(item => item.disabled)}
+            className="px-1.5 py-1.5 text-muted-foreground hover:bg-muted transition-colors"
+          >
+            <ChevronDown className="size-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {visibleItems.map((item, index) => (
+            <div key={`${item.label}-${index}`}>
+              {item.separatorBefore && <DropdownMenuSeparator />}
+              <DropdownMenuItem
+                disabled={item.disabled}
+                className={item.destructive ? 'text-destructive focus:text-destructive' : undefined}
+                onClick={item.onClick}
+              >
+                {item.icon}
+                {item.label}
+              </DropdownMenuItem>
+            </div>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

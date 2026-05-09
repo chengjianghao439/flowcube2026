@@ -333,6 +333,7 @@ export default function WarehouseTasksPage() {
         <TableActionsMenu
           primaryLabel="详情"
           onPrimaryClick={() => openDetail(r.id)}
+          primaryVariant="outline"
           items={
             ![4, 5].includes(r.status)
               ? [{

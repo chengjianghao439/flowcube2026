@@ -207,6 +207,7 @@ export default function PickingWavesPage() {
         <TableActionsMenu
           primaryLabel="详情"
           onPrimaryClick={() => openWaveDetail(row)}
+          primaryVariant="outline"
           items={[
             { label: '查看打印闭环', onClick: () => openWaveDetail(row, 'print-closure') },
             { label: '打开出库补打', onClick: () => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(row.waveNo)}`, '条码打印查询') },

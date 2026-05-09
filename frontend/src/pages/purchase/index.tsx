@@ -132,6 +132,7 @@ export default function PurchasePage() {
           <TableActionsMenu
             primaryLabel="详情"
             onPrimaryClick={() => goToDetail(r)}
+            primaryVariant="outline"
             items={[
               ...(r.status === 1 ? [{
                 label: '提交',

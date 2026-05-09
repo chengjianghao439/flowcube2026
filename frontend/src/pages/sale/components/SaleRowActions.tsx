@@ -23,7 +23,7 @@ export function SaleRowActions({
   if (row.status === 1) {
     return (
       <TableActionsMenu
-        primaryLabel="占用库存"
+        primaryLabel="占用"
         primaryDisabled={anyPending}
         onPrimaryClick={() => onAsk('占用库存', '将预占该销售单所需库存，库存可用量减少，是否继续？', () => onReserveSale(row.id))}
         items={[
@@ -52,7 +52,7 @@ export function SaleRowActions({
   if (row.status === 3) {
     return (
       <TableActionsMenu
-        primaryLabel="查看任务"
+        primaryLabel="查看"
         onPrimaryClick={onViewTask}
         primaryVariant="outline"
         items={[
@@ -68,6 +68,7 @@ export function SaleRowActions({
       <TableActionsMenu
         primaryLabel="详情"
         onPrimaryClick={onDetail}
+        primaryVariant="outline"
         items={[
           { label: '打印订单', onClick: onPrint },
         ]}
@@ -79,6 +80,7 @@ export function SaleRowActions({
     <TableActionsMenu
       primaryLabel="详情"
       onPrimaryClick={onDetail}
+      primaryVariant="outline"
       items={[
         { label: '删除订单', onClick: () => onAsk('确认删除订单', '删除后订单将无法恢复。', () => onDeleteSale(row.id)), destructive: true, separatorBefore: true, disabled: anyPending },
       ]}
