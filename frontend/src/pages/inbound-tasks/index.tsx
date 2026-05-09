@@ -129,7 +129,7 @@ export default function InboundTasksPage() {
       width: 176,
       render: v => {
         const text = formatDisplayDateTime(v)
-        return <span className="block whitespace-nowrap font-mono text-xs" title={text}>{text}</span>
+        return <span className="block whitespace-nowrap text-xs" title={text}>{text}</span>
       },
     },
     {

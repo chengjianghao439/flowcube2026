@@ -119,7 +119,7 @@ export default function SalePage() {
     { key: 'warehouseName',title: '仓库',     width: 120 },
     {
       key: 'totalAmount', title: '金额', width: 110,
-      render: v => <span className="font-medium tabular-nums">¥{Number(v).toFixed(2)}</span>,
+      render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span>,
     },
     {
       key: 'status', title: '状态', width: 90,

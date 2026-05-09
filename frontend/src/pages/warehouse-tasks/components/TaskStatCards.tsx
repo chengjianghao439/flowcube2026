@@ -35,7 +35,7 @@ export function TaskStatCards() {
       {cards.map(c => (
         <div key={c.label} className="card-base p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{c.label}</p>
-          <p className={`mt-1.5 text-2xl font-bold tabular-nums ${c.accentClass}`}>{c.value}</p>
+          <p className={`mt-1.5 text-2xl font-bold ${c.accentClass}`}>{c.value}</p>
         </div>
       ))}
     </div>

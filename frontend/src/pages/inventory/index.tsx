@@ -77,9 +77,9 @@ export default function InventoryPage() {
     { key:'productName', title:'商品名称' },
     { key:'unit', title:'单位', width:70 },
     { key:'warehouseName', title:'仓库', width:130 },
-    { key:'quantity', title:'当前库存', width:110, render:(_,r)=><span className={`font-mono font-medium ${r.quantity<=0?'text-destructive':''}`}>{r.quantity}</span> },
-    { key:'reserved', title:'已占用', width:100, render:(_,r)=><span className="font-mono text-amber-600">{r.reserved ? r.reserved : '—'}</span> },
-    { key:'available', title:'可用库存', width:110, render:(_,r)=><span className="font-mono text-emerald-600">{r.available ?? r.quantity}</span> },
+    { key:'quantity', title:'当前库存', width:110, render:(_,r)=><span className={`font-medium ${r.quantity<=0?'text-destructive':''}`}>{r.quantity}</span> },
+    { key:'reserved', title:'已占用', width:100, render:(_,r)=><span className="text-amber-600">{r.reserved ? r.reserved : '—'}</span> },
+    { key:'available', title:'可用库存', width:110, render:(_,r)=><span className="text-emerald-600">{r.available ?? r.quantity}</span> },
   ]
 
   const logCols: TableColumn<InventoryLog>[] = [
@@ -87,9 +87,9 @@ export default function InventoryPage() {
     { key:'typeName', title:'类型', width:80, render:(_,r)=><Badge variant={TYPE_VARIANT[r.type]??'outline'}>{TYPE_NAMES[r.type]}</Badge> },
     { key:'productName', title:'商品' },
     { key:'warehouseName', title:'仓库', width:120 },
-    { key:'quantity', title:'数量', width:90, render:(_,r)=><span className="font-mono">{r.type===2?`-${r.quantity}`:r.quantity}</span> },
-    { key:'beforeQty', title:'变动前', width:90, render:v=><span className="font-mono text-muted-foreground">{v as number}</span> },
-    { key:'afterQty', title:'变动后', width:90, render:v=><span className="font-mono">{v as number}</span> },
+    { key:'quantity', title:'数量', width:90, render:(_,r)=><span>{r.type===2?`-${r.quantity}`:r.quantity}</span> },
+    { key:'beforeQty', title:'变动前', width:90, render:v=><span className="text-muted-foreground">{v as number}</span> },
+    { key:'afterQty', title:'变动后', width:90, render:v=><span>{v as number}</span> },
     { key:'supplierName', title:'供应商', width:120, render:v=>(v as string)||'-' },
     { key:'operatorName', title:'操作人', width:90 },
     { key:'remark', title:'备注', render:v=>(v as string)||'-' },

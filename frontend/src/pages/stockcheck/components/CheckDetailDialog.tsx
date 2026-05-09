@@ -157,9 +157,9 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                 <div className="col-span-2">编码</div>
                 <div className="col-span-3">名称</div>
                 <div className="col-span-1">单位</div>
-                <div className="col-span-2 text-right">账面数量</div>
-                <div className="col-span-2 text-right">实盘数量</div>
-                <div className="col-span-2 text-right">差异</div>
+                <div className="col-span-2">账面数量</div>
+                <div className="col-span-2">实盘数量</div>
+                <div className="col-span-2">差异</div>
               </div>
               {check.items?.map((item: CheckItem)=>{
                 const actualRaw = actuals[item.id]
@@ -171,7 +171,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                     <div className="col-span-2 text-sm">{item.productCode}</div>
                     <div className="col-span-3 text-sm">{item.productName}</div>
                     <div className="col-span-1 text-sm text-muted-foreground">{item.unit}</div>
-                    <div className="col-span-2 text-right text-sm">{item.bookQty}</div>
+                    <div className="col-span-2 text-sm">{item.bookQty}</div>
                     <div className="col-span-2">
                       {check.status===1 ? (
                         <div className="space-y-1">
@@ -179,18 +179,18 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                             type="number"
                             min="0"
                             step="0.01"
-                            className="h-8 text-right text-sm"
+                            className="h-8 text-sm"
                             value={actuals[item.id]??''}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>)=>handleActualChange(item.id, e.target.value)}
                             aria-invalid={hasError}
                           />
-                          {hasError ? <p className="text-right text-xs text-destructive">{fieldErrors[item.id]}</p> : null}
+                          {hasError ? <p className="text-xs text-destructive">{fieldErrors[item.id]}</p> : null}
                         </div>
                       ) : (
-                        <span className="text-sm text-right block">{item.actualQty??'-'}</span>
+                        <span className="text-sm block">{item.actualQty??'-'}</span>
                       )}
                     </div>
-                    <div className={`col-span-2 text-right text-sm font-medium ${diff!=null&&diff>0?'text-green-600':diff!=null&&diff<0?'text-red-600':''}`}>
+                    <div className={`col-span-2 text-sm font-medium ${diff!=null&&diff>0?'text-green-600':diff!=null&&diff<0?'text-red-600':''}`}>
                       {diff!=null ? (diff>0?'+':'')+diff.toFixed(2) : '-'}
                     </div>
                   </div>

@@ -413,7 +413,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
           <span className="text-center">单位</span>
           <span>数量</span>
           <span>单价 (¥)</span>
-          <span className="text-right">金额</span>
+          <span>金额</span>
           <span />
         </div>
 
@@ -454,7 +454,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
               <PriceMetaHint item={item} loading={!!priceLoading[item._key]} />
             </div>
 
-            <div className="text-right text-sm font-medium">
+            <div className="text-sm font-medium">
               ¥{(item.quantity * item.unitPrice).toFixed(2)}
             </div>
 
@@ -481,7 +481,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
                 </p>
               )}
             </div>
-            <div className="text-right">
+            <div>
               <p className="mb-1 text-helper">合计金额</p>
               <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
             </div>
@@ -759,7 +759,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
       {/* 商品明细 */}
       <Section title="商品明细">
         <div className="text-table-head mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3">
-          <span>商品</span><span className="text-center">单位</span><span>数量</span><span>单价 (¥)</span><span className="text-right">金额</span><span />
+          <span>商品</span><span className="text-center">单位</span><span>数量</span><span>单价 (¥)</span><span>金额</span><span />
         </div>
         {items.map(item => (
           <div key={item._key} className="mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3 items-center">
@@ -785,7 +785,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
                 className={`text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`} />
               <PriceMetaHint item={item} loading={!!priceLoading[item._key]} />
             </div>
-            <div className="text-right text-sm font-medium">¥{(item.quantity * item.unitPrice).toFixed(2)}</div>
+            <div className="text-sm font-medium">¥{(item.quantity * item.unitPrice).toFixed(2)}</div>
             <Button type="button" size="sm" variant="ghost" className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
           </div>
         ))}
@@ -805,7 +805,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
                 </p>
               )}
             </div>
-            <div className="text-right">
+            <div>
               <p className="mb-1 text-helper">合计金额</p>
               <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
             </div>
@@ -1045,9 +1045,9 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                 <th className="pb-2 text-left">商品</th>
                 <th className="pb-2 text-left">编码</th>
                 <th className="w-16 pb-2 text-center">单位</th>
-                <th className="w-20 pb-2 text-right">数量</th>
-                <th className="w-24 pb-2 text-right">单价</th>
-                <th className="w-24 pb-2 text-right">金额</th>
+                <th className="w-20 pb-2">数量</th>
+                <th className="w-24 pb-2">单价</th>
+                <th className="w-24 pb-2">金额</th>
               </tr>
             </thead>
             <tbody>
@@ -1056,8 +1056,8 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                   <td className="py-2.5 font-medium">{item.productName}</td>
                   <td className="py-2.5"><span className="text-doc-code-muted">{item.productCode}</span></td>
                   <td className="py-2.5 text-center text-muted-foreground">{item.unit}</td>
-                  <td className="py-2.5 text-right">{item.quantity}</td>
-                  <td className="py-2.5 text-right">
+                  <td className="py-2.5">{item.quantity}</td>
+                  <td className="py-2.5">
                     <div className="space-y-1">
                       <div>¥{Number(item.unitPrice).toFixed(2)}</div>
                       {item.belowCost && item.costPrice != null && (
@@ -1068,7 +1068,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                       )}
                     </div>
                   </td>
-                  <td className="py-2.5 text-right font-semibold">¥{Number(item.amount).toFixed(2)}</td>
+                  <td className="py-2.5 font-semibold">¥{Number(item.amount).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1089,7 +1089,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                     </div>
                     {event.description && <p className="text-sm text-muted-foreground">{event.description}</p>}
                   </div>
-                  <div className="shrink-0 text-right text-xs text-muted-foreground">
+                  <div className="shrink-0 text-xs text-muted-foreground">
                     <p>{event.createdByName || '系统'}</p>
                     <p>{formatDisplayDateTime(event.createdAt)}</p>
                   </div>
@@ -1106,7 +1106,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
           <p className="text-muted-body">
             共 {order.items?.length ?? 0} 种商品
           </p>
-          <div className="text-right">
+          <div>
             <p className="mb-1 text-helper">合计金额</p>
             <p className="text-3xl font-bold">¥{Number(order.totalAmount).toFixed(2)}</p>
           </div>

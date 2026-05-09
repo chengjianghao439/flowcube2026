@@ -32,7 +32,7 @@ function StatCard({ label, value, sub, accent = 'default', trend }: StatCardProp
     <div className="card-base p-5">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <div className="mt-2 flex items-end justify-between">
-        <p className={`text-3xl font-bold tabular-nums ${valueClass}`}>{value}</p>
+        <p className={`text-3xl font-bold ${valueClass}`}>{value}</p>
         {trend && <TrendIcon className={`h-4 w-4 ${trendClass}`} />}
       </div>
       {sub && <p className="mt-1.5 text-xs text-muted-foreground">{sub}</p>}
@@ -208,7 +208,7 @@ export default function DashboardPage() {
                 <ScanLine className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase tracking-wide">今日扫码量</span>
               </div>
-              <p className="text-3xl font-bold tabular-nums text-primary">{pda?.today.scanCount ?? '-'}</p>
+              <p className="text-3xl font-bold text-primary">{pda?.today.scanCount ?? '-'}</p>
               <p className="text-xs text-muted-foreground">次扫描操作</p>
             </div>
             <div className="flex flex-col gap-1 rounded-xl border border-border bg-muted/20 p-4">
@@ -216,7 +216,7 @@ export default function DashboardPage() {
                 <Package className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase tracking-wide">今日拣货量</span>
               </div>
-              <p className="text-3xl font-bold tabular-nums text-foreground">{pda?.today.pickQty.toFixed(0) ?? '-'}</p>
+              <p className="text-3xl font-bold text-foreground">{pda?.today.pickQty.toFixed(0) ?? '-'}</p>
               <p className="text-xs text-muted-foreground">件商品已拣货</p>
             </div>
             <div className="flex flex-col gap-1 rounded-xl border border-border bg-muted/20 p-4">
