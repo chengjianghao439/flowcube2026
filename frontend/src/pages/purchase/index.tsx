@@ -113,7 +113,7 @@ export default function PurchasePage() {
             <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
               <div className={`h-full rounded-full ${pct >= 100 ? 'bg-primary' : 'bg-amber-400'}`} style={{ width: `${pct}%` }} />
             </div>
-            <span className="text-xs tabular-nums text-muted-foreground">{received}/{ordered}</span>
+            <span className="text-xs text-muted-foreground">{received}/{ordered}</span>
           </div>
         )
       }

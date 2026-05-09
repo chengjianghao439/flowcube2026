@@ -25,7 +25,7 @@ function SummaryCard({ label, value, hint, tone }: { label: string; value: numbe
         : 'border-blue-200 bg-blue-50'
   return (
     <div className={`rounded-lg border px-4 py-3 ${toneClass}`}>
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
     </div>

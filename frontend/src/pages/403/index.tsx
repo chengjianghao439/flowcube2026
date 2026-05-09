@@ -14,7 +14,7 @@ export default function ForbiddenPage() {
           </div>
         </div>
 
-        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">403</p>
+        <p className="mb-2 text-xs font-mediumr text-muted-foreground">403</p>
         <h1 className="mb-3 text-4xl font-bold text-foreground">无访问权限</h1>
         <p className="mb-8 text-sm text-muted-foreground">
           你没有访问这个页面的权限，<br />

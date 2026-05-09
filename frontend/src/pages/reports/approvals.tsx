@@ -56,8 +56,8 @@ export default function ApprovalsPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">待提醒总数</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{reminderItems.length}</p>
+          <p className="text-xs text-muted-foreground">待提醒总数</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">{reminderItems.length}</p>
           <p className="mt-1 text-xs text-muted-foreground">财务与系统级提醒</p>
         </div>
       </div>

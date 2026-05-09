@@ -1,3 +1,4 @@
+import { Lightbulb } from "lucide-react";
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from '@/lib/toast'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -163,7 +164,7 @@ export default function SaleFormDialog({ open, onClose }: Props) {
 
             {customerId && customers?.find(c => String(c.id) === customerId) && (
               <div className="flex items-center gap-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-3 py-2">
-                <span>💡</span>
+                <Lightbulb className="size-4" />
                 <span>已选择客户价格等级，商品价格将自动带入对应的 A / B / C / D 价格（如有）。</span>
               </div>
             )}

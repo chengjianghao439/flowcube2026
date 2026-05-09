@@ -1,3 +1,4 @@
+import { LogOut } from "lucide-react";
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
@@ -89,7 +90,7 @@ export default function UserMenu() {
                 }}
                 className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
               >
-                <span>↩️</span> 退出登录
+                <LogOut className="size-4" /> 退出登录
               </button>
             </div>
           </div>

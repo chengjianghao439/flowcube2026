@@ -30,7 +30,7 @@ function StatCard({ label, value, sub, accent = 'default', trend }: StatCardProp
 
   return (
     <div className="card-base p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <div className="mt-2 flex items-end justify-between">
         <p className={`text-3xl font-bold ${valueClass}`}>{value}</p>
         {trend && <TrendIcon className={`h-4 w-4 ${trendClass}`} />}
@@ -206,7 +206,7 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/20 p-4">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <ScanLine className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase tracking-wide">今日扫码量</span>
+                <span className="text-xs font-medium">今日扫码量</span>
               </div>
               <p className="text-3xl font-bold text-primary">{pda?.today.scanCount ?? '-'}</p>
               <p className="text-xs text-muted-foreground">次扫描操作</p>
@@ -214,7 +214,7 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/20 p-4">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Package className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase tracking-wide">今日拣货量</span>
+                <span className="text-xs font-medium">今日拣货量</span>
               </div>
               <p className="text-3xl font-bold text-foreground">{pda?.today.pickQty.toFixed(0) ?? '-'}</p>
               <p className="text-xs text-muted-foreground">件商品已拣货</p>
@@ -222,7 +222,7 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/20 p-4">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <User className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase tracking-wide">TOP 操作员</span>
+                <span className="text-xs font-medium">TOP 操作员</span>
               </div>
               <p className="text-lg font-bold text-foreground truncate">
                 {pda?.topOperator?.operatorName ?? '暂无'}

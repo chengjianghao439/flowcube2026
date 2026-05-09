@@ -326,7 +326,7 @@ export default function WarehouseTasksPage() {
     { key: 'status', title: '状态', width: 128, render: v => <div className="whitespace-nowrap"><StatusBadge type="task" status={v as number} /></div> },
     { key: 'createdAt', title: '创建时间', width: 176, render: v => {
       const text = formatDisplayDateTime(v)
-      return <span className="block whitespace-nowrap font-mono text-xs" title={text}>{text}</span>
+      return <span className="block whitespace-nowrap text-xs" title={text}>{text}</span>
     } },
     { key: 'id', title: '操作', width: 180, render: (_, r) => (
       <div className="flex justify-end whitespace-nowrap">

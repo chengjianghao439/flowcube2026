@@ -26,7 +26,7 @@ function KpiCard({ icon, label, value, sub, danger }: {
         <span className="text-xl">{icon}</span>
         <p className="text-helper">{label}</p>
       </div>
-      <p className={`text-3xl font-bold tabular-nums ${danger ? 'text-red-600' : 'text-foreground'}`}>{value}</p>
+      <p className={`text-3xl font-bold ${danger ? 'text-red-600' : 'text-foreground'}`}>{value}</p>
       {sub && <p className="text-helper mt-0.5">{sub}</p>}
     </div>
   )

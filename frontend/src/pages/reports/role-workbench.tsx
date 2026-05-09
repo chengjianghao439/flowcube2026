@@ -29,7 +29,7 @@ function PriorityBanner({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="rounded-full border-rose-200 bg-rose-100 text-rose-700">{badge}</Badge>
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">最优先待办</span>
+            <span className="text-xs text-muted-foreground">最优先待办</span>
           </div>
           <h2 className="mt-2 text-xl font-semibold text-foreground">{title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
@@ -37,8 +37,8 @@ function PriorityBanner({
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <div className="rounded-lg border border-rose-200 bg-white px-4 py-3 text-left">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">待处理数</p>
-            <p className="text-3xl font-bold tabular-nums text-rose-700">{count}</p>
+            <p className="text-xs text-muted-foreground">待处理数</p>
+            <p className="text-3xl font-bold text-rose-700">{count}</p>
           </div>
           <Button onClick={onOpen}>立即处理</Button>
         </div>

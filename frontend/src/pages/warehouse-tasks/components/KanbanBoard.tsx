@@ -54,7 +54,7 @@ export function KanbanBoard({ tasks, onDetail }: KanbanBoardProps) {
               {/* 列标题 */}
               <div className={`flex items-center justify-between rounded-lg px-3 py-2 ${col.accentClass}`}>
                 <span className="text-sm font-medium">{col.label}</span>
-                <span className="rounded-full bg-background/60 px-2 py-0.5 text-xs font-semibold tabular-nums">
+                <span className="rounded-full bg-background/60 px-2 py-0.5 text-xs font-semibold">
                   {colTasks.length}
                 </span>
               </div>

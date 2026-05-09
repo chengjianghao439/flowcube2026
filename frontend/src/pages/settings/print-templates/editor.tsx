@@ -784,7 +784,7 @@ export default function PrintTemplateEditor() {
                 value={canvasWidthMm}
                 onChange={e => setCanvasWidthMm(Number(e.target.value))}
                 onBlur={() => setCanvasWidthMm(w => Math.min(120, Math.max(30, Math.round(Number(w) || 80))))}
-                className="h-9 w-[4.25rem] text-sm tabular-nums"
+                className="h-9 w-[4.25rem] text-sm"
                 title="宽度 mm"
               />
               <span className="text-muted-foreground">×</span>
@@ -796,7 +796,7 @@ export default function PrintTemplateEditor() {
                 value={canvasHeightMm}
                 onChange={e => setCanvasHeightMm(Number(e.target.value))}
                 onBlur={() => setCanvasHeightMm(h => Math.min(500, Math.max(40, Math.round(Number(h) || 200))))}
-                className="h-9 w-[4.25rem] text-sm tabular-nums"
+                className="h-9 w-[4.25rem] text-sm"
                 title="高度 mm"
               />
               <span className="text-xs text-muted-foreground">宽×高</span>
@@ -855,7 +855,7 @@ export default function PrintTemplateEditor() {
               >
                 <ZoomOut className="size-3.5" />
               </Button>
-              <span className="min-w-[2.75rem] text-center text-[11px] tabular-nums text-muted-foreground">
+              <span className="min-w-[2.75rem] text-center text-[11px] text-muted-foreground">
                 {Math.round(editorZoom * 100)}%
               </span>
               <Button

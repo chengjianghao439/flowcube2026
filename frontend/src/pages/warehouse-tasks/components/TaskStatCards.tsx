@@ -34,7 +34,7 @@ export function TaskStatCards() {
     <div className="grid grid-cols-7 gap-3">
       {cards.map(c => (
         <div key={c.label} className="card-base p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{c.label}</p>
+          <p className="text-xs font-medium text-muted-foreground">{c.label}</p>
           <p className={`mt-1.5 text-2xl font-bold ${c.accentClass}`}>{c.value}</p>
         </div>
       ))}

@@ -47,7 +47,7 @@ export default function PermissionsPage() {
         <div className="bg-white rounded-lg border p-5 space-y-6">
           {PERMISSION_GROUPS.map(group => (
             <div key={group.group}>
-              <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase">{group.group}</h3>
+              <h3 className="font-semibold text-sm text-muted-foreground mb-3">{group.group}</h3>
               <div className="flex flex-wrap gap-2">
                 {group.items.map(p => {
                   const active = perms.has(p.code)
