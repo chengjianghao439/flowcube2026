@@ -202,7 +202,7 @@ export default function DataTable<T extends object>({
   const colCount = orderedColumns.length + (selectable ? 1 : 0)
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full table-fixed text-sm" style={{ minWidth: tableWidth }}>
           <colgroup>

@@ -91,8 +91,8 @@ export function StatCard({
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={cn(
-        'rounded-xl border border-border bg-card p-5 shadow-sm text-left',
-        onClick && 'cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+        'rounded-lg border border-border bg-card p-5 text-left',
+        onClick && 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
         className,
       )}
     >
