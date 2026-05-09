@@ -215,7 +215,7 @@ export default function WarehouseOpsPage() {
             <div className="space-y-2">
               {data.recentErrors.slice(0, 6).map(e => (
                 <div key={e.id} className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2">
-                  <span className="text-red-400 shrink-0 mt-0.5">⚠</span>
+                  <AlertTriangle className="size-4 text-red-400 shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-red-700 truncate">{e.reason}</p>
                     <p className="text-[10px] text-red-500">{e.operatorName} · {e.barcode} · {new Date(e.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</p>
