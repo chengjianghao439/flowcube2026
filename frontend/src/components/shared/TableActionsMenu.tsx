@@ -51,7 +51,7 @@ export default function TableActionsMenu({
         disabled={primaryDisabled}
         onClick={onPrimaryClick}
         className={cn(
-          'px-3 py-1.5 text-xs font-medium border-r border-border/60 transition-colors',
+          'px-3 py-1.5 text-xs font-medium border-r border-border/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
           primaryVariant === 'outline'
             ? 'bg-transparent text-foreground hover:bg-muted'
             : 'bg-primary text-primary-foreground hover:bg-primary/90'
@@ -63,8 +63,9 @@ export default function TableActionsMenu({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            disabled={primaryDisabled && visibleItems.every(item => item.disabled)}
-            className="px-1.5 py-1.5 text-muted-foreground hover:bg-muted transition-colors"
+            disabled={primaryDisabled || visibleItems.length === 0}
+            aria-label="更多操作"
+            className="px-1.5 py-1.5 text-muted-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           >
             <ChevronDown className="size-3.5" />
           </button>

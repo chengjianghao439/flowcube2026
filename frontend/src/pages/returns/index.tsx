@@ -225,6 +225,7 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
       return(
         <TableActionsMenu
           primaryLabel={r.status===1 ? (pendingId===r.id ? '处理中...' : '确认') : (pendingId===r.id ? '处理中...' : '执行退货')}
+          primaryVariant="outline"
           onPrimaryClick={()=>{
             if (r.status===1) mut(()=>confirmFn(r.id),r.id)
             else openConfirm('执行退货',type==='purchase'?'确认执行退货？将扣减对应库存。':'确认执行退货入库？将增加对应库存。',()=>mut(()=>executeFn(r.id),r.id))

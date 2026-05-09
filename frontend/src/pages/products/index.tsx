@@ -178,6 +178,7 @@ export default function ProductsPage() {
     { key:'id', title:'操作', width:160, render:(_,r)=>(
       <TableActionsMenu
         primaryLabel="编辑"
+        primaryVariant="outline"
         onPrimaryClick={()=>openEdit(r)}
         items={[
           { label:'打印标签', onClick:()=>void handlePrintProductLabel(r) },

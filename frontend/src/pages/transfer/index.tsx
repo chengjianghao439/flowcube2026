@@ -81,6 +81,7 @@ export default function TransferPage() {
       return(
         <TableActionsMenu
           primaryLabel={r.status===1 ? (pendingId===r.id?'处理中...':'确认') : (pendingId===r.id?'处理中...':'执行调拨')}
+          primaryVariant="outline"
           onPrimaryClick={()=> {
             if (r.status===1) mut(()=>confirmTransferApi(r.id),r.id)
             else openConfirm('执行调拨','确认执行调拨？将同步两个仓库库存，不可撤销。',()=>mut(()=>executeTransferApi(r.id),r.id))

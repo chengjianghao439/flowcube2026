@@ -58,6 +58,7 @@ export default function CustomersPage() {
     { key: 'id', title: '操作', width: 160, render:(_, row)=>(
       <TableActionsMenu
         primaryLabel="编辑"
+        primaryVariant="outline"
         onPrimaryClick={()=>{ setEditing(row as Customer); setDialogOpen(true) }}
         items={[
           { label: '绑定价格', onClick:()=>openBind(row as Customer) },
