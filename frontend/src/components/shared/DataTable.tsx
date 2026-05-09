@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Inbox } from 'lucide-react'
 import type { Pagination, TableColumn } from '@/types'
 
@@ -30,10 +30,8 @@ export default function DataTable<T extends object>({
 }: DataTableProps<T>) {
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
-  const [initialized, setInitialized] = useState(false)
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
   const columnWidthsRef = useRef<Record<string, number>>({})
-  const containerRef = useRef<HTMLDivElement>(null)
 
   const resolvedStorageKey = useMemo(() => {
     if (columnStorageKey) return `flowcube:table-columns:${columnStorageKey}`
@@ -83,7 +81,6 @@ export default function DataTable<T extends object>({
           )
         : {}
       setColumnWidths(widths)
-      if (Object.keys(widths).length > 0) setInitialized(true)
     } catch {
       setColumnOrder(columns.map(col => String(col.key)))
       setColumnWidths({})
@@ -99,29 +96,6 @@ export default function DataTable<T extends object>({
     ]
     return merged
   }, [columnOrder, columns])
-
-  // 首次渲染且无存储宽度：按比例分配容器宽度
-  useLayoutEffect(() => {
-    if (initialized) return
-    if (!containerRef.current) return
-    const containerWidth = containerRef.current.getBoundingClientRect().width
-    if (containerWidth <= 0) return
-    const cols = orderedColumns.length ? orderedColumns : columns
-    if (cols.length === 0) return
-    const defaults = cols.map(c => {
-      const key = String(c.key)
-      if (isAction(key, c.title)) return 120
-      return (c.width as number) ?? 160
-    })
-    const total = defaults.reduce((s, w) => s + w, 0) + (selectable ? 56 : 0)
-    const w: Record<string, number> = {}
-    cols.forEach((c, i) => {
-      w[String(c.key)] = Math.round(defaults[i] / total * containerWidth)
-    })
-    setColumnWidths(w)
-    columnWidthsRef.current = w
-    setInitialized(true)
-  }, [initialized, orderedColumns, columns, selectable])
 
   useEffect(() => {
     columnWidthsRef.current = columnWidths
@@ -158,7 +132,7 @@ export default function DataTable<T extends object>({
 
   const getColumnWidth = (col: TableColumn<T>) => {
     const key = String(col.key)
-    const fallback = isAction(key, col.title) ? 120 : 160
+    const fallback = isAction(key, col.title) ? 180 : 160
     const width = columnWidths[key] ?? col.width ?? fallback
     if (typeof width === 'number' && Number.isFinite(width)) return width
     const parsed = Number.parseInt(String(width), 10)
@@ -176,16 +150,16 @@ export default function DataTable<T extends object>({
     if (typeof window === 'undefined') return
     const key = String(col.key)
     const startX = event.clientX
-    const currentWidth = getColumnWidth(col)
-    const minWidth = isAction(key, col.title) ? 120 : 80
+    const startWidth = columnWidths[key] ?? col.width ?? 160
+    const minWidth = isAction(key, col.title) ? 180 : 96
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const nextWidth = Math.max(minWidth, Math.round(currentWidth + moveEvent.clientX - startX))
+      const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
       setColumnWidths(prev => ({ ...prev, [key]: nextWidth }))
     }
 
     const handleMouseUp = (moveEvent: MouseEvent) => {
-      const nextWidth = Math.max(minWidth, Math.round(currentWidth + moveEvent.clientX - startX))
+      const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
       const nextWidths = { ...columnWidthsRef.current, [key]: nextWidth }
       persistLayout(columnOrder.length ? columnOrder : columns.map(item => String(item.key)), nextWidths)
       window.removeEventListener('mousemove', handleMouseMove)
@@ -228,9 +202,9 @@ export default function DataTable<T extends object>({
   const colCount = orderedColumns.length + (selectable ? 1 : 0)
 
   return (
-    <div ref={containerRef} className="rounded-lg border border-border bg-card overflow-hidden">
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="table-fixed text-sm" style={{ width: tableWidth, minWidth: tableWidth }}>
+        <table className="w-full table-fixed text-sm" style={{ minWidth: tableWidth }}>
           <colgroup>
             {selectable && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
