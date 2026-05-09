@@ -90,6 +90,16 @@ export default function DataTable<T extends object>({
     }
   }, [columns, resolvedStorageKey])
 
+  const orderedColumns = useMemo(() => {
+    if (!columnOrder.length) return columns
+    const byKey = new Map(columns.map(col => [String(col.key), col]))
+    const merged = [
+      ...columnOrder.map(key => byKey.get(key)).filter((col): col is TableColumn<T> => !!col),
+      ...columns.filter(col => !columnOrder.includes(String(col.key))),
+    ]
+    return merged
+  }, [columnOrder, columns])
+
   // 首次渲染且无存储宽度：按比例分配容器宽度
   useLayoutEffect(() => {
     if (initialized) return
@@ -112,16 +122,6 @@ export default function DataTable<T extends object>({
     columnWidthsRef.current = w
     setInitialized(true)
   }, [initialized, orderedColumns, columns, selectable])
-
-  const orderedColumns = useMemo(() => {
-    if (!columnOrder.length) return columns
-    const byKey = new Map(columns.map(col => [String(col.key), col]))
-    const merged = [
-      ...columnOrder.map(key => byKey.get(key)).filter((col): col is TableColumn<T> => !!col),
-      ...columns.filter(col => !columnOrder.includes(String(col.key))),
-    ]
-    return merged
-  }, [columnOrder, columns])
 
   useEffect(() => {
     columnWidthsRef.current = columnWidths
