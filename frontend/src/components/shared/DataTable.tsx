@@ -30,11 +30,10 @@ export default function DataTable<T extends object>({
 }: DataTableProps<T>) {
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
-  const [locked, setLocked] = useState(false)
+  const [sizingMode, setSizingMode] = useState<'auto' | 'fixed'>('auto')
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
   const columnWidthsRef = useRef<Record<string, number>>({})
   const tableRef = useRef<HTMLTableElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
 
   const resolvedStorageKey = useMemo(() => {
     if (columnStorageKey) return `flowcube:table-columns:${columnStorageKey}`
@@ -84,7 +83,7 @@ export default function DataTable<T extends object>({
           )
         : {}
       setColumnWidths(widths)
-      if (Object.keys(widths).length > 0) setLocked(true)
+      if (Object.keys(widths).length > 0) setSizingMode('fixed')
     } catch {
       setColumnOrder(columns.map(col => String(col.key)))
       setColumnWidths({})
@@ -134,34 +133,6 @@ export default function DataTable<T extends object>({
     setDraggingKey(null)
   }
 
-  // 首次渲染：按比例分配容器宽度给各列
-  useEffect(() => {
-    if (locked) return
-    if (!containerRef.current) return
-    const containerWidth = containerRef.current.getBoundingClientRect().width
-    if (containerWidth <= 0) return
-    const allCols = orderedColumns.length ? orderedColumns : columns
-    if (allCols.length === 0) return
-    // 计算总默认宽度
-    const defaults = allCols.map(c => {
-      const key = String(c.key)
-      if (isAction(key, c.title)) return 120
-      return (c.width as number) ?? 160
-    })
-    const totalDefault = defaults.reduce((a, b) => a + b, 0) + (selectable ? 56 : 0)
-    const available = containerWidth
-    // 按比例分配
-    const widths: Record<string, number> = {}
-    allCols.forEach((c, i) => {
-      const key = String(c.key)
-      const ratio = defaults[i] / totalDefault
-      widths[key] = Math.round(ratio * available)
-    })
-    setColumnWidths(widths)
-    columnWidthsRef.current = widths
-    setLocked(true)
-  }, [locked, orderedColumns, columns, selectable])
-
   const getColumnWidth = (col: TableColumn<T>) => {
     const key = String(col.key)
     const fallback = isAction(key, col.title) ? 120 : 160
@@ -184,6 +155,23 @@ export default function DataTable<T extends object>({
     const startX = event.clientX
     const currentWidth = getColumnWidth(col)
     const minWidth = isAction(key, col.title) ? 120 : 80
+
+    // 首次拖拽：锁定所有列的当前渲染宽度，切换到固定模式
+    if (sizingMode === 'auto' && tableRef.current) {
+      const snapshot: Record<string, number> = {}
+      const allCols = orderedColumns.length ? orderedColumns : columns
+      const thElements = tableRef.current.querySelectorAll('thead th')
+      thElements.forEach((th, i) => {
+        const idx = selectable ? i - 1 : i
+        if (selectable && i === 0) return
+        if (idx >= 0 && idx < allCols.length) {
+          snapshot[String(allCols[idx].key)] = th.getBoundingClientRect().width
+        }
+      })
+      setColumnWidths(snapshot)
+      columnWidthsRef.current = snapshot
+      setSizingMode('fixed')
+    }
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextWidth = Math.max(minWidth, Math.round(currentWidth + moveEvent.clientX - startX))
@@ -234,9 +222,13 @@ export default function DataTable<T extends object>({
   const colCount = orderedColumns.length + (selectable ? 1 : 0)
 
   return (
-    <div ref={containerRef} className="rounded-lg border border-border bg-card overflow-hidden">
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table ref={tableRef} className="table-fixed text-sm" style={{ width: tableWidth, minWidth: tableWidth }}>
+        <table
+          ref={tableRef}
+          className={sizingMode === 'auto' ? 'w-full table-auto text-sm' : 'table-fixed text-sm'}
+          style={sizingMode === 'fixed' ? { width: tableWidth, minWidth: tableWidth } : undefined}
+        >
           <colgroup>
             {selectable && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
