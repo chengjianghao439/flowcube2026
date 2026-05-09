@@ -126,7 +126,7 @@ export default function PurchasePage() {
     { key: 'operatorName', title: '经办人', width: 90 },
     { key: 'createdAt', title: '创建时间', width: 160, render: (v) => formatDisplayDateTime(v) },
     {
-      key: 'id', title: '操作', width: 160, render: (_, row) => {
+      key: 'id', title: '操作', width: 120, render: (_, row) => {
         const r = row as PurchaseOrder
         return (
           <TableActionsMenu

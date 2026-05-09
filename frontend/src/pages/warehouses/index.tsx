@@ -55,7 +55,7 @@ export default function WarehousesPage() {
       ),
     },
     {
-      key: 'id', title: '操作', width: 140,
+      key: 'id', title: '操作', width: 120,
       render: (_, row) => (
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => handleEdit(row)}>编辑</Button>

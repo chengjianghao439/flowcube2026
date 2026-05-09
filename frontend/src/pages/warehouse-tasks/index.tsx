@@ -328,7 +328,7 @@ export default function WarehouseTasksPage() {
       const text = formatDisplayDateTime(v)
       return <span className="block whitespace-nowrap text-xs" title={text}>{text}</span>
     } },
-    { key: 'id', title: '操作', width: 180, render: (_, r) => (
+    { key: 'id', title: '操作', width: 120, render: (_, r) => (
       <div className="flex justify-end whitespace-nowrap">
         <TableActionsMenu
           primaryLabel="详情"

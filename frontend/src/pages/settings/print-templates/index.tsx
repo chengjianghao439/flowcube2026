@@ -56,7 +56,7 @@ export default function PrintTemplatesPage() {
     { key: 'createdAt', title: '创建时间', width: 160,
       render: v => formatDisplayDateTime(v) },
     {
-      key: 'id', title: '操作', width: 140,
+      key: 'id', title: '操作', width: 120,
       render: (_, row) => (
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => goToEdit(row)}>编辑</Button>

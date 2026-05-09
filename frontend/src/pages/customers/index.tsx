@@ -55,7 +55,7 @@ export default function CustomersPage() {
     { key: 'email', title: '邮箱', width: 160 },
     { key: 'priceLevelName' as keyof Customer, title: '价格等级', width: 120, render: (_, row) => <Badge variant="outline" className="text-primary border-primary/30">价格{row.priceLevel ?? 'A'}</Badge> },
     { key: 'isActive', title: '状态', width: 70, render:(v)=> <Badge variant={v ? 'default' : 'secondary'}>{v ? '启用' : '停用'}</Badge> },
-    { key: 'id', title: '操作', width: 160, render:(_, row)=>(
+    { key: 'id', title: '操作', width: 120, render:(_, row)=>(
       <TableActionsMenu
         primaryLabel="编辑"
         primaryVariant="outline"

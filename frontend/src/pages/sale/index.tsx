@@ -141,7 +141,7 @@ export default function SalePage() {
     { key: 'operatorName', title: '经办人',   width: 90 },
     { key: 'createdAt',    title: '创建时间', width: 152, render: v => formatDisplayDateTime(v) },
     {
-      key: 'id', title: '操作', width: 248,
+      key: 'id', title: '操作', width: 120,
       render: (_, row) => {
         const r = row as SaleOrder
         return (

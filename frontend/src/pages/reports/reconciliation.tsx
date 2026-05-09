@@ -145,7 +145,7 @@ export default function ReconciliationPage() {
     } },
     { key: 'dueDate', title: '到期日', width: 120, render: v => v ? String(v) : <span className="text-muted-foreground">-</span> },
     { key: 'createdAt', title: '创建时间', width: 160, render: v => formatDisplayDateTime(String(v)) },
-    { key: 'id', title: '操作', width: 220, render: (_, row) => {
+    { key: 'id', title: '操作', width: 120, render: (_, row) => {
       const r = row as ReconciliationRecord
       return (
         <div className="flex flex-wrap gap-2">

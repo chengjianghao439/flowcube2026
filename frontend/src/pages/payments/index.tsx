@@ -55,7 +55,7 @@ export default function PaymentsPage() {
       const overdue = d && r.status !== 3 && new Date(d) < new Date()
       return d ? <span className={overdue ? 'font-bold text-destructive' : ''}>{d}{overdue ? ' 逾期' : ''}</span> : <span className="text-muted-foreground">-</span>
     }},
-    { key: 'id', title: '操作', width: 160, render: (_, row) => {
+    { key: 'id', title: '操作', width: 120, render: (_, row) => {
       const r = row as PaymentRecord
       return (
         <div className="flex gap-1">
