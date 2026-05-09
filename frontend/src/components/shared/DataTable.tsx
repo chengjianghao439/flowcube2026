@@ -31,7 +31,9 @@ export default function DataTable<T extends object>({
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
+  const [allLocked, setAllLocked] = useState(false)
   const columnWidthsRef = useRef<Record<string, number>>({})
+  const colgroupRef = useRef<HTMLTableColElement>(null)
 
   const resolvedStorageKey = useMemo(() => {
     if (columnStorageKey) return `flowcube:table-columns:${columnStorageKey}`
@@ -81,6 +83,7 @@ export default function DataTable<T extends object>({
           )
         : {}
       setColumnWidths(widths)
+      if (Object.keys(widths).length > 0) setAllLocked(true)
     } catch {
       setColumnOrder(columns.map(col => String(col.key)))
       setColumnWidths({})
@@ -149,9 +152,30 @@ export default function DataTable<T extends object>({
     event.stopPropagation()
     if (typeof window === 'undefined') return
     const key = String(col.key)
+
+    // 首次拖拽：锁定所有列的当前渲染宽度
+    if (!allLocked && colgroupRef.current) {
+      const snapshot: Record<string, number> = {}
+      const colEls = colgroupRef.current.querySelectorAll('col')
+      const allCols = orderedColumns.length ? orderedColumns : columns
+      let ci = selectable ? 1 : 0
+      colEls.forEach(el => {
+        if (selectable && ci === 0) { ci++; return }
+        if (ci < allCols.length + (selectable ? 1 : 0)) {
+          snapshot[String(allCols[selectable ? ci - 1 : ci].key)] = el.getBoundingClientRect().width
+        }
+        ci++
+      })
+      setColumnWidths(snapshot)
+      columnWidthsRef.current = snapshot
+      setAllLocked(true)
+    }
+
     const startX = event.clientX
-    const startWidth = columnWidths[key] ?? col.width ?? 160
-    const minWidth = isAction(key, col.title) ? 180 : 96
+    const startWidth = allLocked
+      ? (columnWidthsRef.current[key] ?? columnWidths[key] ?? col.width ?? 160)
+      : (columnWidths[key] ?? col.width ?? 160)
+    const minWidth = isAction(key, col.title) ? 120 : 80
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
@@ -204,8 +228,11 @@ export default function DataTable<T extends object>({
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full table-fixed text-sm" style={{ minWidth: tableWidth }}>
-          <colgroup>
+        <table
+          className={allLocked ? 'table-fixed text-sm' : 'w-full table-fixed text-sm'}
+          style={allLocked ? { width: tableWidth, minWidth: tableWidth } : { minWidth: tableWidth }}
+        >
+          <colgroup ref={colgroupRef}>
             {selectable && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
               <col key={String(col.key)} style={{ width: getColumnWidth(col) }} />
