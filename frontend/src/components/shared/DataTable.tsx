@@ -229,11 +229,14 @@ export default function DataTable<T extends object>({
           className={sizingMode === 'auto' ? 'w-full table-auto text-sm' : 'table-fixed text-sm'}
           style={sizingMode === 'fixed' ? { width: tableWidth, minWidth: tableWidth } : undefined}
         >
-          <colgroup>
-            {selectable && <col style={{ width: 56 }} />}
-            {orderedColumns.map(col => (
-              <col key={String(col.key)} style={{ width: getColumnWidth(col) }} />
-            ))}
+          {sizingMode === 'fixed' && (
+            <colgroup>
+              {selectable && <col style={{ width: 56 }} />}
+              {orderedColumns.map(col => (
+                <col key={String(col.key)} style={{ width: getColumnWidth(col) }} />
+              ))}
+            </colgroup>
+          )}
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/30">
