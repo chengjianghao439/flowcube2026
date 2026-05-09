@@ -237,7 +237,6 @@ export default function DataTable<T extends object>({
               ))}
             </colgroup>
           )}
-          </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/30">
               {selectable && (
