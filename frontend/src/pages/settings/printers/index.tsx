@@ -354,7 +354,7 @@ export default function PrintersPage() {
 
   function openAddDialog() {
     if (!canUseSystemPrinters) {
-      toast.error('添加打印机需在 FlowCube 桌面客户端中操作，以便读取本机已安装打印机。')
+      toast.error('添加打印机需在 极序 Flow 桌面客户端中操作，以便读取本机已安装打印机。')
       return
     }
     setShowAddDialog(true)

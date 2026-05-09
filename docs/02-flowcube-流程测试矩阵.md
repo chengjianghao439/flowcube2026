@@ -1,4 +1,4 @@
-# FlowCube 当前流程状态说明
+# 极序 Flow 当前流程状态说明
 
 > 状态：生效中  
 > 唯一真实来源：`backend/src/constants/warehouseTaskStatus.js`

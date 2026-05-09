@@ -45,8 +45,8 @@ function packageLabelTraceMessage(job?: PackagePrintJob | null): string {
   const next = hint?.clientOnline
     ? '等待客户端领取并打印。'
     : hint?.code === 'client_not_bound'
-      ? '请在连接该打印机的 FlowCube 桌面端从本机添加打印机后继续派发。'
-      : '请启动连接该打印机的 FlowCube 桌面端，客户端上线后继续派发。'
+      ? '请在连接该打印机的 极序 Flow 桌面端从本机添加打印机后继续派发。'
+      : '请启动连接该打印机的 极序 Flow 桌面端，客户端上线后继续派发。'
   const jobId = job?.id ? ` #${job.id}` : ''
   return `箱贴任务${jobId}已入链：用途 package_label，绑定打印机 ${printer}，客户端${clientState}。${next}`
 }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-FlowCube (极序 Flow) is an ERP/WMS system with three client surfaces: browser (React SPA), Windows desktop (Electron shell), and PDA (Android Capacitor app). Deployed via Docker Compose on Alibaba Cloud (`47.93.228.251`).
+极序 Flow is an ERP/WMS system with three client surfaces: browser (React SPA), Windows desktop (Electron shell), and PDA (Android Capacitor app). Deployed via Docker Compose on Alibaba Cloud (`47.93.228.251`).
 
 ```
 flowcube/

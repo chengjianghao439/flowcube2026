@@ -1,5 +1,5 @@
 /**
- * FlowCube 桌面端：按任务绑定的逻辑打印机名称本机打 ZPL，并 POST complete-local 核销队列
+ * 极序 Flow 桌面端：按任务绑定的逻辑打印机名称本机打 ZPL，并 POST complete-local 核销队列
  * 无需任何网口或 IP 配置；名称须与「从本机添加」时一致
  */
 import axios from 'axios'
