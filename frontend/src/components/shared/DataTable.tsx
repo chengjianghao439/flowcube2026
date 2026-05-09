@@ -30,9 +30,11 @@ export default function DataTable<T extends object>({
 }: DataTableProps<T>) {
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
+  const [locked, setLocked] = useState(false)
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
   const columnWidthsRef = useRef<Record<string, number>>({})
   const tableRef = useRef<HTMLTableElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const resolvedStorageKey = useMemo(() => {
     if (columnStorageKey) return `flowcube:table-columns:${columnStorageKey}`
@@ -82,6 +84,7 @@ export default function DataTable<T extends object>({
           )
         : {}
       setColumnWidths(widths)
+      if (Object.keys(widths).length > 0) setLocked(true)
     } catch {
       setColumnOrder(columns.map(col => String(col.key)))
       setColumnWidths({})
@@ -131,9 +134,37 @@ export default function DataTable<T extends object>({
     setDraggingKey(null)
   }
 
+  // 首次渲染：按比例分配容器宽度给各列
+  useEffect(() => {
+    if (locked) return
+    if (!containerRef.current) return
+    const containerWidth = containerRef.current.getBoundingClientRect().width
+    if (containerWidth <= 0) return
+    const allCols = orderedColumns.length ? orderedColumns : columns
+    if (allCols.length === 0) return
+    // 计算总默认宽度
+    const defaults = allCols.map(c => {
+      const key = String(c.key)
+      if (isAction(key, c.title)) return 120
+      return (c.width as number) ?? 160
+    })
+    const totalDefault = defaults.reduce((a, b) => a + b, 0) + (selectable ? 56 : 0)
+    const available = containerWidth
+    // 按比例分配
+    const widths: Record<string, number> = {}
+    allCols.forEach((c, i) => {
+      const key = String(c.key)
+      const ratio = defaults[i] / totalDefault
+      widths[key] = Math.round(ratio * available)
+    })
+    setColumnWidths(widths)
+    columnWidthsRef.current = widths
+    setLocked(true)
+  }, [locked, orderedColumns, columns, selectable])
+
   const getColumnWidth = (col: TableColumn<T>) => {
     const key = String(col.key)
-    const fallback = isAction(key, col.title) ? 180 : 160
+    const fallback = isAction(key, col.title) ? 120 : 160
     const width = columnWidths[key] ?? col.width ?? fallback
     if (typeof width === 'number' && Number.isFinite(width)) return width
     const parsed = Number.parseInt(String(width), 10)
@@ -150,34 +181,18 @@ export default function DataTable<T extends object>({
     event.stopPropagation()
     if (typeof window === 'undefined') return
     const key = String(col.key)
-
-    // 首次拖拽时锁定所有列的实际渲染宽度
-    const snapshot: Record<string, number> = {}
-    const keys = orderedColumns.length ? orderedColumns.map(String) : columns.map(c => String(c.key))
-    const thElements = tableRef.current?.querySelectorAll('thead th')
-    if (thElements) {
-      thElements.forEach((th, i) => {
-        const idx = selectable ? i - 1 : i
-        if (selectable && i === 0) return
-        if (idx >= 0 && idx < keys.length) {
-          snapshot[keys[idx]] = th.getBoundingClientRect().width
-        }
-      })
-    }
-
     const startX = event.clientX
-    const startWidth = snapshot[key] ?? columnWidths[key] ?? col.width ?? 160
-    const minWidth = isAction(key, col.title) ? 180 : 96
+    const currentWidth = getColumnWidth(col)
+    const minWidth = isAction(key, col.title) ? 120 : 80
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
+      const nextWidth = Math.max(minWidth, Math.round(currentWidth + moveEvent.clientX - startX))
       setColumnWidths(prev => ({ ...prev, [key]: nextWidth }))
     }
 
     const handleMouseUp = (moveEvent: MouseEvent) => {
-      const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
-      // 合并快照宽度 + 当前已存宽度 + 新宽度，只改变被拖拽列
-      const nextWidths = { ...snapshot, ...columnWidthsRef.current, [key]: nextWidth }
+      const nextWidth = Math.max(minWidth, Math.round(currentWidth + moveEvent.clientX - startX))
+      const nextWidths = { ...columnWidthsRef.current, [key]: nextWidth }
       persistLayout(columnOrder.length ? columnOrder : columns.map(item => String(item.key)), nextWidths)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
@@ -219,9 +234,9 @@ export default function DataTable<T extends object>({
   const colCount = orderedColumns.length + (selectable ? 1 : 0)
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
+    <div ref={containerRef} className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table ref={tableRef} className="w-full table-fixed text-sm" style={{ minWidth: tableWidth }}>
+        <table ref={tableRef} className="table-fixed text-sm" style={{ width: tableWidth, minWidth: tableWidth }}>
           <colgroup>
             {selectable && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
