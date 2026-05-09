@@ -122,24 +122,19 @@ export default function SalePage() {
       render: v => <span className="font-medium tabular-nums">¥{Number(v).toFixed(2)}</span>,
     },
     {
-      key: 'status', title: '状态', width: 200,
+      key: 'status', title: '状态', width: 90,
       render: (v, row) => {
         const r = row as SaleOrder
         const ws = getSaleWorkflowStatus(r)
+        const hasTask = r.taskNo && r.taskId
         return (
-          <div className="flex flex-col gap-1">
-            <Badge variant="outline" className={`text-xs font-medium ${ws.className}`}>
-              {ws.label}
-            </Badge>
-            {r.taskNo && (
-              <button
-                onClick={() => navigate(r.taskId ? `/warehouse-tasks?taskId=${r.taskId}` : '/warehouse-tasks')}
-                className="rounded-full border border-primary/20 bg-primary/5 px-1.5 py-0.5 text-doc-code text-primary text-xs transition-colors hover:bg-primary/10"
-              >
-                {r.taskNo}
-              </button>
-            )}
-          </div>
+          <Badge
+            variant="outline"
+            className={`text-xs font-medium ${ws.className} ${hasTask ? 'cursor-pointer hover:opacity-80' : ''}`}
+            onClick={() => hasTask && navigate(`/warehouse-tasks?taskId=${r.taskId}`)}
+          >
+            {ws.label}
+          </Badge>
         )
       },
     },
