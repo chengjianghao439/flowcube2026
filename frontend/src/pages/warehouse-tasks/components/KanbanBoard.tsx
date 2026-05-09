@@ -52,7 +52,7 @@ export function KanbanBoard({ tasks, onDetail }: KanbanBoardProps) {
           return (
             <div key={col.status} className="flex w-64 shrink-0 flex-col gap-2">
               {/* 列标题 */}
-              <div className={`flex items-center justify-between rounded-xl px-3 py-2 ${col.accentClass}`}>
+              <div className={`flex items-center justify-between rounded-lg px-3 py-2 ${col.accentClass}`}>
                 <span className="text-sm font-medium">{col.label}</span>
                 <span className="rounded-full bg-background/60 px-2 py-0.5 text-xs font-semibold tabular-nums">
                   {colTasks.length}
@@ -62,7 +62,7 @@ export function KanbanBoard({ tasks, onDetail }: KanbanBoardProps) {
               {/* 任务卡片 */}
               <div className="flex flex-col gap-2">
                 {colTasks.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
+                  <div className="rounded-lg border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
                     暂无任务
                   </div>
                 )}

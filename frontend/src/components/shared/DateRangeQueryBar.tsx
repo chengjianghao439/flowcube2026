@@ -35,7 +35,7 @@ export function DateRangeQueryBar({
   updatedAt,
 }: DateRangeQueryBarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-4 py-3">
       <span className="text-sm font-medium text-muted-foreground">{label}：</span>
       {presets?.length ? (
         <div className="flex flex-wrap gap-2">

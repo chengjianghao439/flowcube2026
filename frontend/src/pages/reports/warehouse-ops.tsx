@@ -21,7 +21,7 @@ function KpiCard({ icon, label, value, sub, danger }: {
   icon: React.ReactNode; label: string; value: string | number; sub?: string; danger?: boolean
 }) {
   return (
-    <div className={`rounded-xl border p-4 ${danger ? 'border-red-200 bg-red-50' : 'border-border bg-card'}`}>
+    <div className={`rounded-lg border p-4 ${danger ? 'border-red-200 bg-red-50' : 'border-border bg-card'}`}>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-xl">{icon}</span>
         <p className="text-helper">{label}</p>

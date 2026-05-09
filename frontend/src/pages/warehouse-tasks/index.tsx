@@ -82,20 +82,20 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
 
         {task && !loading && (
           <div className="space-y-5 py-2">
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground">当前闭环阶段：{closureCopy.stageLabel}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{closureCopy.description}</p>
                 </div>
-                <div className="rounded-xl border border-border bg-white px-4 py-3 text-left">
+                <div className="rounded-lg border border-border bg-white px-4 py-3 text-left">
                   <p className="text-helper">下一步动作</p>
                   <p className="mt-1 font-semibold text-foreground">{closureCopy.nextAction}</p>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/40 p-4 text-sm">
+            <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/40 p-4 text-sm">
               <div><span className="text-muted-foreground">任务编号：</span><span className="text-doc-code-strong">{task.taskNo}</span></div>
               <div><span className="text-muted-foreground">关联销售单：</span><span className="text-doc-code">{task.saleOrderNo}</span></div>
               <div><span className="text-muted-foreground">客户：</span>{task.customerName}</div>
@@ -106,7 +106,7 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
 
             {(task.packageSummary || task.printSummary) && (
               <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-border p-4 space-y-3">
+                <div className="rounded-lg border border-border p-4 space-y-3">
                   <div>
                     <p className="font-medium text-foreground">装箱进度</p>
                     <p className="text-xs text-muted-foreground">统一查看当前任务的打包完成度。</p>
@@ -119,7 +119,7 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border p-4 space-y-3">
+                <div className="rounded-lg border border-border p-4 space-y-3">
                   <div>
                     <p className="font-medium text-foreground">打印闭环</p>
                     <p className="text-xs text-muted-foreground">优先收口箱贴失败、超时和待确认任务，再继续现场出库。</p>
@@ -164,7 +164,7 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
 
             <div>
               <Label className="text-base font-semibold">商品明细</Label>
-              <div className="mt-2 overflow-hidden rounded-xl border">
+              <div className="mt-2 overflow-hidden rounded-lg border">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
@@ -198,7 +198,7 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
             <div className="flex flex-wrap gap-2 border-t pt-3">
               {/* PDA 提示 — 执行操作只能由 PDA 驱动 */}
               {[2, 3].includes(task.status) && (
-                <div className="flex w-full items-start gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 mb-1">
+                <div className="flex w-full items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 mb-1">
                   <ScanBarcode className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
                   <div className="text-xs text-blue-300 flex-1">
                     <p className="font-medium">任务执行由 PDA 驱动</p>
@@ -356,10 +356,10 @@ export default function WarehouseTasksPage() {
         description="管理销售出库任务，从备货到发货的完整生命周期"
         actions={
           <div className="flex rounded-lg border border-border bg-muted/40 p-0.5">
-            <button onClick={() => updateParams({ view: 'kanban' })} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === 'kanban' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            <button onClick={() => updateParams({ view: 'kanban' })} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === 'kanban' ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
               <LayoutGrid className="h-3.5 w-3.5" /> 看板
             </button>
-            <button onClick={() => updateParams({ view: 'list' })} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === 'list' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            <button onClick={() => updateParams({ view: 'list' })} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === 'list' ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
               <List className="h-3.5 w-3.5" /> 列表
             </button>
           </div>

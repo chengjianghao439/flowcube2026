@@ -79,7 +79,7 @@ export default function GlobalSearch() {
       </div>
 
       {showDropdown && (
-        <div className="absolute top-full left-0 mt-1 w-80 bg-white rounded-xl shadow-xl border z-50 overflow-hidden">
+        <div className="absolute top-full left-0 mt-1 w-80 bg-white rounded-lg shadow-xl border z-50 overflow-hidden">
           {results.length === 0 && !loading && (
             <div className="py-8 text-center text-sm text-muted-foreground">未找到「{query}」相关内容</div>
           )}

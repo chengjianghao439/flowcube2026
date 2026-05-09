@@ -53,7 +53,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-8">
-        <div className="w-full max-w-lg rounded-2xl border border-destructive/20 bg-card p-8 shadow-lg">
+        <div className="w-full max-w-lg rounded-lg border border-destructive/20 bg-card p-8 shadow-lg">
           {/* 图标 */}
           <div className="mb-6 flex justify-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">

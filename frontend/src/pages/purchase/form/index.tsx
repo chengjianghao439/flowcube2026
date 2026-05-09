@@ -275,7 +275,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         </div>
 
         {items.length === 0 ? (
-          <div className="rounded-2xl bg-slate-50 px-6 py-14 text-center text-sm text-slate-500">
+          <div className="rounded-lg bg-slate-50 px-6 py-14 text-center text-sm text-slate-500">
             还没有商品明细，点击右上角“添加商品”开始录入。
           </div>
         ) : (

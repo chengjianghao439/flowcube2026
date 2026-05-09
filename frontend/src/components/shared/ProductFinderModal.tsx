@@ -72,7 +72,7 @@ function FinderCategoryAccordion({
             <button
               type="button"
               className={cn(
-                'flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors',
+                'flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors',
                 selected
                   ? 'border-primary/40 bg-primary/10 font-medium text-primary'
                   : 'border-border/70 bg-muted/20 text-foreground hover:border-primary/30 hover:bg-primary/5',
@@ -90,7 +90,7 @@ function FinderCategoryAccordion({
             </button>
 
             {hasChildren && expanded && (
-              <div className="rounded-xl border border-border/60 bg-background/80 p-2">
+              <div className="rounded-lg border border-border/60 bg-background/80 p-2">
                 <FinderCategoryAccordion
                   nodes={cat.children!}
                   selectedId={selectedId}

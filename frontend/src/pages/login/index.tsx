@@ -59,7 +59,7 @@ export default function LoginPage() {
           </ul>
 
           {/* 预览卡片 */}
-          <div className="relative rounded-xl border border-slate-200 bg-white p-4 shadow-xl transition-transform duration-700 dark:border-slate-700 dark:bg-slate-800">
+          <div className="relative rounded-lg border border-slate-200 bg-white p-4 shadow-xl transition-transform duration-700 dark:border-slate-700 dark:bg-slate-800">
             <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-700">
               <div className="flex gap-1.5">
                 <div className="h-3 w-3 rounded-full bg-red-400/20" />
@@ -121,7 +121,7 @@ export default function LoginPage() {
 
           {/* 错误提示 */}
           {error && (
-            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
               {error.message || '登录失败，请检查账号和密码'}
             </div>
           )}
@@ -148,7 +148,7 @@ export default function LoginPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   disabled={isPending}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-slate-900 outline-none placeholder:text-slate-400 transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-slate-900 outline-none placeholder:text-slate-400 transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white"
                 />
               </div>
             </div>
@@ -180,7 +180,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isPending}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-12 text-slate-900 outline-none placeholder:text-slate-400 transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 pl-11 pr-12 text-slate-900 outline-none placeholder:text-slate-400 transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white"
                 />
                 <button
                   type="button"
@@ -203,7 +203,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isPending || !username.trim() || !password.trim()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 font-bold text-white transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 font-bold text-white transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPending ? (
                 <>

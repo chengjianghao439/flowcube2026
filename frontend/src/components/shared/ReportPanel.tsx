@@ -28,7 +28,7 @@ export function ReportPanel({
   className,
 }: ReportPanelProps) {
   return (
-    <section className={cn('rounded-xl border border-border bg-card p-4', className)}>
+    <section className={cn('rounded-lg border border-border bg-card p-4', className)}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-card-title">{title}</p>

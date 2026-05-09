@@ -197,7 +197,7 @@ export default function InboundTaskCreatePage() {
           )}
 
           {supplier && (
-            <div className="overflow-hidden rounded-xl border border-border">
+            <div className="overflow-hidden rounded-lg border border-border">
               <div className="grid grid-cols-[140px_110px_minmax(220px,1fr)_120px_90px_90px_120px] gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
                 <span>采购单</span>
                 <span>SKU</span>

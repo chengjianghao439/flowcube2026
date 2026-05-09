@@ -45,7 +45,7 @@ export default function NotificationBell() {
           {/* 遮罩 */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           {/* 下拉面板 */}
-          <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border z-50 overflow-hidden">
+          <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="font-semibold text-sm">通知中心</h3>
               {total > 0 && <span className="text-xs text-muted-foreground">{total} 条待处理</span>}

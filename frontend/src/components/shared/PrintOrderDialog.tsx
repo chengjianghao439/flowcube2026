@@ -63,7 +63,7 @@ export default function PrintOrderDialog({ open, onClose, data }: Props) {
                 transformOrigin: 'top center',
               }}
             >
-              <div ref={printRef} className="bg-white p-6 shadow-sm">
+              <div ref={printRef} className="bg-white p-6">
           <h2>{data.type}</h2>
           <p className="subtitle">单号：{data.orderNo} &nbsp;|&nbsp; 状态：{data.status}</p>
           <div className="info-grid">

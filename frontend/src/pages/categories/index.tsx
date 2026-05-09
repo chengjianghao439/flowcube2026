@@ -211,7 +211,7 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
     <div className="space-y-2">
       <div
         className={cn(
-          'group flex items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-3 transition-colors hover:border-primary/30 hover:bg-primary/5',
+          'group flex items-center gap-2 rounded-lg border border-border/70 bg-card px-3 py-3 transition-colors hover:border-primary/30 hover:bg-primary/5',
           cat.status === 0 && 'opacity-50',
           expanded && 'border-primary/30 bg-primary/5',
         )}
@@ -287,7 +287,7 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
       </div>
 
       {hasChildren && expanded && (
-        <div className="space-y-2 rounded-xl border border-border/60 bg-muted/15 p-3">
+        <div className="space-y-2 rounded-lg border border-border/60 bg-muted/15 p-3">
           {cat.children!.map(child => (
             <CategoryNode
               key={child.id}

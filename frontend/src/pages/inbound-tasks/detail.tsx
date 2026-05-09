@@ -98,7 +98,7 @@ export default function InboundTaskDetailPage() {
   if (!validId) {
     return (
       <div className="p-6">
-        <div className="rounded-xl border border-border bg-card p-5 text-muted-foreground">
+        <div className="rounded-lg border border-border bg-card p-5 text-muted-foreground">
           <p className="font-medium text-foreground">收货订单路径无效</p>
           <p className="mt-1">请从收货订单列表重新打开该详情页。</p>
         </div>
@@ -204,16 +204,16 @@ export default function InboundTaskDetailPage() {
       />
 
       <div className="grid gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
           <p className="text-helper">收货状态</p>
           <p className="mt-1 text-lg font-semibold">{receiptStatus?.label ?? '—'}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
           <p className="text-helper">上架状态</p>
           <p className="mt-1 text-lg font-semibold">{putawayStatus?.label ?? '—'}</p>
           <p className="mt-1 text-helper">待上架 {putawaySummary?.waitingContainers ?? 0} / 已上架 {putawaySummary?.storedContainers ?? 0}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
           <p className="text-helper">审核状态</p>
           <p className="mt-1 text-lg font-semibold">{auditFlowStatus?.label ?? '—'}</p>
           <p className="mt-1 text-helper">{task.auditedAt ? `审核于 ${task.auditedAt}` : ''}</p>
@@ -221,7 +221,7 @@ export default function InboundTaskDetailPage() {
             <p className="mt-1 text-helper">审核人 {task.auditedByName}</p>
           )}
         </div>
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
           <p className="text-helper">条码打印</p>
           <p className="mt-1 text-lg font-semibold">{printSummary?.success ?? 0} / {printSummary?.total ?? 0}</p>
           <p className="mt-1 text-helper">成功 {printSummary?.success ?? 0} 条，失败 {printSummary?.failed ?? 0} 条</p>

@@ -120,7 +120,7 @@ export function FinderTrigger({ value, placeholder, onClick, onDoubleClick, disa
       disabled={disabled}
       className={[
         'h-10 w-full truncate rounded-md border border-input bg-background px-3 py-2',
-        'text-left text-sm shadow-sm transition-colors',
+        'text-left text-sm transition-colors',
         'hover:border-primary hover:bg-muted/30',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
         'disabled:cursor-not-allowed disabled:opacity-50',

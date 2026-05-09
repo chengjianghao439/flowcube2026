@@ -39,7 +39,7 @@ function HubEntryCard({
   onOpen: (path: string, title: string) => void
 }) {
   return (
-    <div className={`rounded-2xl border p-5 ${card.tone}`}>
+    <div className={`rounded-lg border p-5 ${card.tone}`}>
       <div className="space-y-2">
         <p className="text-helper">推荐入口</p>
         <h3 className="text-card-title">{card.title}</h3>
@@ -178,7 +178,7 @@ export default function ReportsPage() {
         }
       />
 
-      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
+      <section className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="space-y-1">
           <h2 className="text-card-title">主闭环入口</h2>
           <p className="text-muted-body">先处理今天必须推进的业务闭环，再进入核对、分析和绩效页面。</p>
@@ -190,7 +190,7 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
+      <section className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="space-y-1">
           <h2 className="text-card-title">管理增强入口</h2>
           <p className="text-muted-body">Phase 2 先把对账、利润 / 库存分析、审批提醒做成日常可依赖的管理闭环。</p>
@@ -202,7 +202,7 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
+      <section className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="space-y-1">
           <h2 className="text-card-title">作业绩效入口</h2>
           <p className="text-muted-body">三张作业绩效页保持统一筛选、统一空态和统一回跳，建议先看全局，再看波次和 PDA 细项。</p>
@@ -214,7 +214,7 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
+      <section className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <h2 className="text-card-title">经营总览</h2>
@@ -280,7 +280,7 @@ export default function ReportsPage() {
             {purchaseQ.data && (
               <>
                 <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="rounded-xl border border-border bg-card p-5">
+                  <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">按月趋势</h3>
                     {!purchaseQ.data.byMonth.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
                     {purchaseQ.data.byMonth.map(row => (
@@ -296,7 +296,7 @@ export default function ReportsPage() {
                       </div>
                     ))}
                   </div>
-                  <div className="rounded-xl border border-border bg-card p-5">
+                  <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">供应商排名 Top 10</h3>
                     {!purchaseQ.data.bySupplier.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
                     <table className="w-full text-sm">
@@ -322,7 +322,7 @@ export default function ReportsPage() {
                     </table>
                   </div>
                 </div>
-                <div className="rounded-xl border border-border bg-card p-5">
+                <div className="rounded-lg border border-border bg-card p-5">
                   <h3 className="mb-4 text-card-title">商品采购量 Top 20</h3>
                   {!purchaseQ.data.byProduct.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
                   <div className="overflow-x-auto">
@@ -360,7 +360,7 @@ export default function ReportsPage() {
             {saleQ.data && (
               <>
                 <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="rounded-xl border border-border bg-card p-5">
+                  <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">按月销售趋势</h3>
                     {!saleQ.data.byMonth.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
                     {saleQ.data.byMonth.map(row => (
@@ -376,7 +376,7 @@ export default function ReportsPage() {
                       </div>
                     ))}
                   </div>
-                  <div className="rounded-xl border border-border bg-card p-5">
+                  <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">客户销售排名 Top 10</h3>
                     {!saleQ.data.byCustomer.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
                     <table className="w-full text-sm">
@@ -402,7 +402,7 @@ export default function ReportsPage() {
                     </table>
                   </div>
                 </div>
-                <div className="rounded-xl border border-border bg-card p-5">
+                <div className="rounded-lg border border-border bg-card p-5">
                   <h3 className="mb-4 text-card-title">热销商品 Top 20</h3>
                   {!saleQ.data.byProduct.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
                   <div className="overflow-x-auto">
@@ -441,7 +441,7 @@ export default function ReportsPage() {
               <>
                 <div className="grid gap-4 lg:grid-cols-3">
                   {invQ.data.byWarehouse.map(item => (
-                    <div key={item.warehouseName} className="rounded-xl border border-border bg-card p-4">
+                    <div key={item.warehouseName} className="rounded-lg border border-border bg-card p-4">
                       <p className="text-sm text-muted-foreground">{item.warehouseName}</p>
                       <p className="mt-1 text-2xl font-bold">{item.totalQty.toFixed(0)}</p>
                       <p className="mt-1 text-helper">总件数 · 价值 ¥{(item.totalValue / 10000).toFixed(2)}万</p>
@@ -451,7 +451,7 @@ export default function ReportsPage() {
                     <p className="col-span-3 py-6 text-center text-muted-body">暂无数据</p>
                   )}
                 </div>
-                <div className="rounded-xl border border-border bg-card p-5">
+                <div className="rounded-lg border border-border bg-card p-5">
                   <h3 className="mb-4 text-card-title">商品出入库量 Top 30</h3>
                   {!invQ.data.turnover.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
                   <div className="overflow-x-auto">

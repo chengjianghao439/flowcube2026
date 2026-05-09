@@ -33,7 +33,7 @@ function SummaryCard({ label, value, sub, accent = false }: {
   label: string; value: string | number; sub?: string; accent?: boolean
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-lg border border-border bg-card p-5">
       <p className="text-table-head">{label}</p>
       <p className={`mt-2 text-3xl font-bold tabular-nums ${
         accent ? 'text-primary' : 'text-foreground'

@@ -104,7 +104,7 @@ function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
   if (!order.taskNo) return null
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
+    <div className="rounded-lg border border-border bg-card p-5 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">作业进度</h3>

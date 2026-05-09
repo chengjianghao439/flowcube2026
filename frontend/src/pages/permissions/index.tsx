@@ -44,7 +44,7 @@ export default function PermissionsPage() {
       </div>
 
       {isLoading ? <p className="text-muted-foreground text-sm">加载中...</p> : (
-        <div className="bg-white rounded-xl border p-5 space-y-6">
+        <div className="bg-white rounded-lg border p-5 space-y-6">
           {PERMISSION_GROUPS.map(group => (
             <div key={group.group}>
               <h3 className="font-semibold text-sm text-muted-foreground mb-3 uppercase">{group.group}</h3>

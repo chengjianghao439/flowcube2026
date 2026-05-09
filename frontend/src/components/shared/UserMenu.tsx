@@ -54,7 +54,7 @@ export default function UserMenu() {
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border z-50 overflow-hidden">
+          <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
             <div className="px-4 py-3 border-b">
               <p className="text-sm font-medium">{user?.realName || user?.username}</p>
               <p className="text-xs text-muted-foreground">{user?.roleName}</p>

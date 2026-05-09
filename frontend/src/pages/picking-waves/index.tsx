@@ -62,7 +62,7 @@ function getWaveClosureCopy(wave: PickingWave | null) {
 
 function StatBlock({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3">
+    <div className="rounded-lg border border-border bg-muted/20 px-4 py-3">
       <p className="text-helper">{label}</p>
       <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
       {hint ? <p className="mt-1 text-helper">{hint}</p> : null}
@@ -262,20 +262,20 @@ export default function PickingWavesPage() {
           </DialogHeader>
 
           <div className="max-h-[75vh] space-y-5 overflow-y-auto py-2">
-            <section className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4">
+            <section className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground">当前主链阶段：{detailCopy.stageLabel}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{detailCopy.description}</p>
                 </div>
-                <div className="rounded-xl border border-border bg-white px-4 py-3 text-left">
+                <div className="rounded-lg border border-border bg-white px-4 py-3 text-left">
                   <p className="text-helper">下一步动作</p>
                   <p className="mt-1 font-semibold text-foreground">{detailCopy.nextAction}</p>
                 </div>
               </div>
             </section>
 
-            <section ref={progressRef} className="space-y-4 rounded-2xl border border-border bg-card p-4">
+            <section ref={progressRef} className="space-y-4 rounded-lg border border-border bg-card p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-card-title">波次推进</h3>
@@ -290,7 +290,7 @@ export default function PickingWavesPage() {
                 <StatBlock label="当前进度" value={`${progressPct}%`} hint={detail?.operatorName ? `责任人：${detail.operatorName}` : '待分配'} />
               </div>
               {detail?.tasks?.length ? (
-                <div className="rounded-xl border border-border">
+                <div className="rounded-lg border border-border">
                   <div className="grid grid-cols-[160px_1fr_120px] gap-3 border-b border-border px-4 py-3 text-sm font-medium text-muted-foreground">
                     <span>仓库任务</span>
                     <span>销售单 / 客户</span>
@@ -309,7 +309,7 @@ export default function PickingWavesPage() {
               ) : null}
             </section>
 
-            <section ref={printClosureRef} className="space-y-4 rounded-2xl border border-border bg-card p-4">
+            <section ref={printClosureRef} className="space-y-4 rounded-lg border border-border bg-card p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-card-title">出库打印闭环</h3>
@@ -330,7 +330,7 @@ export default function PickingWavesPage() {
                 <StatBlock label="超时待确认" value={printSummary?.timeoutCount ?? 0} />
                 <StatBlock label="排队 / 打印中" value={printSummary?.processingCount ?? 0} />
               </div>
-              <div className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
                 {printSummary?.noJobCount
                   ? `当前有 ${printSummary.noJobCount} 个包裹未生成打印任务，请先回打包或补打入口生成可追踪任务。`
                   : printSummary?.failedCount || printSummary?.timeoutCount
@@ -342,7 +342,7 @@ export default function PickingWavesPage() {
             </section>
 
             {detail?.items?.length ? (
-              <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
+              <section className="space-y-3 rounded-lg border border-border bg-card p-4">
                 <div>
                   <h3 className="text-card-title">波次商品汇总</h3>
                   <p className="text-muted-body">按商品查看应拣与已拣，快速定位缺口。</p>

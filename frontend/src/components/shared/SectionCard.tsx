@@ -54,7 +54,7 @@ export function SectionCard({
   const hasHeader = title || actions
 
   return (
-    <div className={cn('rounded-xl border border-border bg-card shadow-sm', className)}>
+    <div className={cn('rounded-lg border border-border bg-card', className)}>
       {/* 标题行 */}
       {hasHeader && (
         <div className="flex items-center justify-between border-b border-border px-5 py-3.5">

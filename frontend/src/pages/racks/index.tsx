@@ -207,7 +207,7 @@ export default function RacksPage() {
 
       {localPrintEnv !== 'ok' && (
         <div
-          className={`rounded-xl border px-4 py-3 text-sm leading-relaxed ${
+          className={`rounded-lg border px-4 py-3 text-sm leading-relaxed ${
             localPrintEnv === 'electron_no_bridge'
               ? 'border-destructive/50 bg-destructive/5 text-destructive'
               : 'border-amber-500/50 bg-amber-500/5 text-amber-950 dark:text-amber-100'

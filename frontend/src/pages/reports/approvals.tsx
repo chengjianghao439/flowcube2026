@@ -55,7 +55,7 @@ export default function ApprovalsPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">待提醒总数</p>
           <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{reminderItems.length}</p>
           <p className="mt-1 text-xs text-muted-foreground">财务与系统级提醒</p>
@@ -63,7 +63,7 @@ export default function ApprovalsPage() {
       </div>
 
       <div>
-        <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
+        <section className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-card-title">提醒事项</h2>
@@ -73,7 +73,7 @@ export default function ApprovalsPage() {
           </div>
           <div className="space-y-2">
             {reminderItems.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border py-12 text-center text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border py-12 text-center text-muted-foreground">
                 暂无待提醒事项
               </div>
             ) : (
@@ -82,7 +82,7 @@ export default function ApprovalsPage() {
                   key={`${item.path}-${index}`}
                   type="button"
                   onClick={() => openPath(item.path, item.text)}
-                  className={`w-full rounded-xl border px-4 py-3 text-left transition-colors hover:opacity-90 ${getReminderTone(item)}`}
+                  className={`w-full rounded-lg border px-4 py-3 text-left transition-colors hover:opacity-90 ${getReminderTone(item)}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">

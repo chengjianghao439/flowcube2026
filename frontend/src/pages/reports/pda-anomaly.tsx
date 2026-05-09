@@ -15,7 +15,7 @@ import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 ${accent ? 'border-red-200 bg-red-50' : 'border-border bg-card'}`}>
+    <div className={`rounded-lg border p-4 ${accent ? 'border-red-200 bg-red-50' : 'border-border bg-card'}`}>
       <p className="text-helper">{label}</p>
       <p className={`text-2xl font-bold mt-1 ${accent ? 'text-red-600' : 'text-foreground'}`}>{value}</p>
       {sub && <p className="text-helper mt-0.5">{sub}</p>}
