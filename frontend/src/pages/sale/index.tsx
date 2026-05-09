@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +16,7 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { ProductFinder } from '@/components/finder'
 import { readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
-import { WT_STATUS_CLASS } from '@/constants/warehouseTaskStatus'
+import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import type { SaleOrder } from '@/types/sale'
 import type { ProductFinderResult } from '@/types/products'
 import type { TableColumn } from '@/types'
@@ -31,26 +30,6 @@ interface ConfirmState {
 }
 
 const EMPTY_CONFIRM: ConfirmState = { open: false, title: '', description: '', onConfirm: () => {} }
-
-function SaleFulfillmentStatus({ order }: { order: SaleOrder }) {
-  if (!order.taskNo) {
-    return <span className="text-xs text-muted-foreground">未进入仓库</span>
-  }
-  if (order.warehouseTaskStatus == null) {
-    return <span className="text-xs text-muted-foreground">履约状态未同步</span>
-  }
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-xs text-muted-foreground">履约</span>
-      <Badge
-        variant="outline"
-        className={`text-xs font-medium ${WT_STATUS_CLASS[order.warehouseTaskStatus as keyof typeof WT_STATUS_CLASS] ?? 'bg-secondary text-secondary-foreground border-secondary'}`}
-      >
-        {order.warehouseTaskStatusName || `状态 ${order.warehouseTaskStatus}`}
-      </Badge>
-    </div>
-  )
-}
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
@@ -143,24 +122,23 @@ export default function SalePage() {
       render: v => <span className="font-medium tabular-nums">¥{Number(v).toFixed(2)}</span>,
     },
     {
-      key: 'status', title: '销售/履约状态', width: 230,
+      key: 'status', title: '状态', width: 200,
       render: (v, row) => {
         const r = row as SaleOrder
+        const ws = getSaleWorkflowStatus(r)
         return (
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">销售</span>
-              <StatusBadge type="sale" status={v as number} />
-            </div>
+            <Badge variant="outline" className={`text-xs font-medium ${ws.className}`}>
+              {ws.label}
+            </Badge>
             {r.taskNo && (
               <button
                 onClick={() => navigate(r.taskId ? `/warehouse-tasks?taskId=${r.taskId}` : '/warehouse-tasks')}
-                className="rounded-full border border-primary/20 bg-primary/5 px-1.5 py-0.5 text-doc-code text-primary transition-colors hover:bg-primary/10"
+                className="rounded-full border border-primary/20 bg-primary/5 px-1.5 py-0.5 text-doc-code text-primary text-xs transition-colors hover:bg-primary/10"
               >
                 {r.taskNo}
               </button>
             )}
-            <SaleFulfillmentStatus order={r} />
           </div>
         )
       },

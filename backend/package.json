@@ -1,6 +1,6 @@
 {
   "name": "flowcube-backend",
-  "version": "0.3.86",
+  "version": "0.3.87",
   "description": "FlowCube ERP Backend API",
   "main": "index.js",
   "type": "commonjs",

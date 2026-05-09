@@ -19,7 +19,6 @@ import { Label }   from '@/components/ui/label'
 import { Badge }   from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TabPathContext } from '@/components/layout/TabPathContext'
-import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -30,6 +29,7 @@ import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import { CustomerFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import { useCreateSale, useUpdateSale, useSaleDetail, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { useCarriersActive } from '@/hooks/useCarriers'
+import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { getCustomerPriceApi } from '@/api/price-lists'
@@ -107,8 +107,8 @@ function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
     <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">履约进度</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">任务单号：{order.taskNo}</p>
+          <h3 className="text-sm font-semibold text-foreground">作业进度</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">仓库任务：{order.taskNo}</p>
         </div>
         {isCancelled ? (
           <Badge variant="destructive" className="rounded-full">已取消</Badge>
@@ -972,15 +972,14 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
         )}
         {order.status === 3 && (
           <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/[0.08] px-4 py-3 text-sm text-muted-foreground">
-            当前销售状态表示订单已进入仓库履约中；真实作业阶段以仓库任务状态为准。库存仍以在库数量展示，只有仓库实际完成出库，当前库存才会减少。
+            订单已进入仓库作业；具体阶段以上方作业进度为准。库存仍以在库数量展示，只有仓库实际完成出库，当前库存才会减少。
           </div>
         )}
         <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
             ['客户',     order.customerName],
             ['仓库',     order.warehouseName],
-            ['销售状态', order.statusName],
-            ['履约状态', order.warehouseTaskStatusName || (order.taskNo ? '仓库任务状态未同步' : '未进入仓库')],
+            ['状态', getSaleWorkflowStatus(order).label],
             ['销售日期', order.saleDate ?? '—'],
             ['经办人',   order.operatorName],
             ['创建时间', formatDisplayDateTime(order.createdAt)],
