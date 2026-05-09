@@ -26,7 +26,7 @@ function AmountBar({ value, max }: { value: number; max: number }) {
       <div className="h-3 flex-1 overflow-hidden rounded bg-gray-100">
         <div className="h-full rounded bg-blue-400" style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-24 shrink-0 text-right text-xs">¥{value.toFixed(0)}</span>
+      <span className="w-24 shrink-0 text-left text-xs">¥{value.toFixed(0)}</span>
     </div>
   )
 }
@@ -303,8 +303,8 @@ export default function ReportsPage() {
                       <thead>
                         <tr className="text-table-head">
                           <th className="pb-2 text-left">供应商</th>
-                          <th className="pb-2 text-right">单数</th>
-                          <th className="pb-2 text-right">金额</th>
+                          <th className="pb-2 text-left">单数</th>
+                          <th className="pb-2 text-left">金额</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -314,8 +314,8 @@ export default function ReportsPage() {
                               <span className="mr-2 text-muted-foreground">#{index + 1}</span>
                               {row.supplierName}
                             </td>
-                            <td className="text-right">{row.orderCount}</td>
-                            <td className="text-right font-medium">¥{row.totalAmount.toFixed(2)}</td>
+                            <td className="text-left">{row.orderCount}</td>
+                            <td className="text-left font-medium">¥{row.totalAmount.toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -330,8 +330,8 @@ export default function ReportsPage() {
                       <thead>
                         <tr className="text-table-head border-b">
                           <th className="pb-2 text-left">商品</th>
-                          <th className="pb-2 text-right">数量</th>
-                          <th className="pb-2 text-right">金额</th>
+                          <th className="pb-2 text-left">数量</th>
+                          <th className="pb-2 text-left">金额</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -341,8 +341,8 @@ export default function ReportsPage() {
                               <span className="mr-2 text-muted-foreground">#{index + 1}</span>
                               {row.productName}
                             </td>
-                            <td className="text-right">{row.totalQty}</td>
-                            <td className="text-right font-medium">¥{row.totalAmount.toFixed(2)}</td>
+                            <td className="text-left">{row.totalQty}</td>
+                            <td className="text-left font-medium">¥{row.totalAmount.toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -383,8 +383,8 @@ export default function ReportsPage() {
                       <thead>
                         <tr className="text-table-head">
                           <th className="pb-2 text-left">客户</th>
-                          <th className="pb-2 text-right">单数</th>
-                          <th className="pb-2 text-right">金额</th>
+                          <th className="pb-2 text-left">单数</th>
+                          <th className="pb-2 text-left">金额</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -394,8 +394,8 @@ export default function ReportsPage() {
                               <span className="mr-2 text-muted-foreground">#{index + 1}</span>
                               {row.customerName}
                             </td>
-                            <td className="text-right">{row.orderCount}</td>
-                            <td className="text-right font-medium">¥{row.totalAmount.toFixed(2)}</td>
+                            <td className="text-left">{row.orderCount}</td>
+                            <td className="text-left font-medium">¥{row.totalAmount.toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -410,8 +410,8 @@ export default function ReportsPage() {
                       <thead>
                         <tr className="text-table-head border-b">
                           <th className="pb-2 text-left">商品</th>
-                          <th className="pb-2 text-right">销售量</th>
-                          <th className="pb-2 text-right">销售额</th>
+                          <th className="pb-2 text-left">销售量</th>
+                          <th className="pb-2 text-left">销售额</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -421,8 +421,8 @@ export default function ReportsPage() {
                               <span className="mr-2 text-muted-foreground">#{index + 1}</span>
                               {row.productName}
                             </td>
-                            <td className="text-right">{row.totalQty}</td>
-                            <td className="text-right font-medium">¥{row.totalAmount.toFixed(2)}</td>
+                            <td className="text-left">{row.totalQty}</td>
+                            <td className="text-left font-medium">¥{row.totalAmount.toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -460,10 +460,10 @@ export default function ReportsPage() {
                         <tr className="text-table-head border-b">
                           <th className="pb-2 text-left">编码</th>
                           <th className="pb-2 text-left">名称</th>
-                          <th className="pb-2 text-right">单位</th>
-                          <th className="pb-2 text-right">入库量</th>
-                          <th className="pb-2 text-right">出库量</th>
-                          <th className="pb-2 text-right">当前库存</th>
+                          <th className="pb-2 text-left">单位</th>
+                          <th className="pb-2 text-left">入库量</th>
+                          <th className="pb-2 text-left">出库量</th>
+                          <th className="pb-2 text-left">当前库存</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -471,10 +471,10 @@ export default function ReportsPage() {
                           <tr key={item.code} className="border-b last:border-0">
                             <td className="py-1.5 text-muted-foreground">{item.code}</td>
                             <td className="py-1.5 font-medium">{item.name}</td>
-                            <td className="text-right">{item.unit}</td>
-                            <td className="text-right text-green-600">+{item.inboundQty}</td>
-                            <td className="text-right text-red-500">-{item.outboundQty}</td>
-                            <td className="text-right font-semibold">{item.currentQty}</td>
+                            <td className="text-left">{item.unit}</td>
+                            <td className="text-left text-green-600">+{item.inboundQty}</td>
+                            <td className="text-left text-red-500">-{item.outboundQty}</td>
+                            <td className="text-left font-semibold">{item.currentQty}</td>
                           </tr>
                         ))}
                       </tbody>

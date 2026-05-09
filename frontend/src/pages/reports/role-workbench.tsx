@@ -36,7 +36,7 @@ function PriorityBanner({
           <p className="mt-2 text-xs text-muted-foreground">来源：{sectionTitle}</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <div className="rounded-2xl border border-rose-200 bg-white px-4 py-3 text-right shadow-sm">
+          <div className="rounded-2xl border border-rose-200 bg-white px-4 py-3 text-left shadow-sm">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">待处理数</p>
             <p className="text-3xl font-bold tabular-nums text-rose-700">{count}</p>
           </div>

@@ -50,7 +50,7 @@ function EfficiencyBar({ value, max }: { value: number; max: number }) {
       <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
         <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs font-mono text-foreground w-16 text-right shrink-0">
+      <span className="text-xs text-foreground w-16 text-left shrink-0">
         {value.toFixed(1)} 件/分
       </span>
     </div>
@@ -110,7 +110,7 @@ export default function WavePerformancePage() {
     const active = sortField === field
     return (
       <th
-        className={`pb-2 text-right cursor-pointer select-none hover:text-foreground transition-colors ${
+        className={`pb-2 text-left cursor-pointer select-none hover:text-foreground transition-colors ${
           active ? 'text-primary' : 'text-muted-foreground'
         }`}
         onClick={() => toggleSort(field)}
@@ -213,7 +213,7 @@ export default function WavePerformancePage() {
                   <SortTh field="skuCount">SKU</SortTh>
                   <SortTh field="totalPickedQty">拣货量</SortTh>
                   <SortTh field="durationMinutes">时长</SortTh>
-                  <th className="pb-3 pr-5 text-right">拣货效率</th>
+                  <th className="pb-3 pr-5 text-left">拣货效率</th>
                 </tr>
               </thead>
               <tbody>
@@ -227,16 +227,16 @@ export default function WavePerformancePage() {
                       <Badge className={`${STATUS_COLOR[w.status]} text-xs border-0`}>{w.statusName}</Badge>
                     </td>
                     <td className="py-3 text-foreground">{w.operatorName}</td>
-                    <td className="py-3 text-right text-foreground">{w.taskCount}</td>
-                    <td className="py-3 text-right">
+                    <td className="py-3 text-left text-foreground">{w.taskCount}</td>
+                    <td className="py-3 text-left">
                       <span className="font-semibold text-foreground">{w.skuCount}</span>
                       <span className="text-muted-foreground text-xs ml-1">种</span>
                     </td>
-                    <td className="py-3 text-right">
+                    <td className="py-3 text-left">
                       <span className="font-semibold text-primary">{w.totalPickedQty.toFixed(0)}</span>
                       <span className="text-muted-foreground text-xs ml-1">件</span>
                     </td>
-                    <td className="py-3 text-right text-foreground">{fmtDuration(w.durationMinutes)}</td>
+                    <td className="py-3 text-left text-foreground">{fmtDuration(w.durationMinutes)}</td>
                     <td className="py-3 pr-5 min-w-[140px]">
                       {w.efficiency != null
                         ? <EfficiencyBar value={w.efficiency} max={maxEfficiency} />

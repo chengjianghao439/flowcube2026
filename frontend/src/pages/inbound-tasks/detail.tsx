@@ -234,11 +234,11 @@ export default function InboundTaskDetailPage() {
             <thead>
               <tr className="border-b text-table-head">
                 <th className="text-left py-2">商品</th>
-                <th className="text-right py-2 w-24">应到</th>
-                <th className="text-right py-2 w-24">已收</th>
-                <th className="text-right py-2 w-20">剩余</th>
-                <th className="text-right py-2 w-24">已上架</th>
-                {canReceive && <th className="text-right py-2 min-w-[200px]">本包收货</th>}
+                <th className="text-left py-2 w-24">应到</th>
+                <th className="text-left py-2 w-24">已收</th>
+                <th className="text-left py-2 w-20">剩余</th>
+                <th className="text-left py-2 w-24">已上架</th>
+                {canReceive && <th className="text-left py-2 min-w-[200px]">本包收货</th>}
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -251,15 +251,15 @@ export default function InboundTaskDetailPage() {
                       <div className="font-medium">{it.productName}</div>
                       <div className="text-doc-code-muted">{it.productCode}</div>
                     </td>
-                    <td className="text-right">{it.orderedQty}</td>
-                    <td className="text-right">{it.receivedQty}</td>
-                    <td className="text-right text-muted-foreground">{lineRemain}</td>
-                    <td className="text-right">{it.putawayQty}</td>
+                    <td className="text-left">{it.orderedQty}</td>
+                    <td className="text-left">{it.receivedQty}</td>
+                    <td className="text-left text-muted-foreground">{lineRemain}</td>
+                    <td className="text-left">{it.putawayQty}</td>
                     {canReceive && (
-                      <td className="py-2 text-right">
-                        <div className="flex flex-col items-end gap-1 sm:flex-row sm:justify-end sm:items-center">
+                      <td className="py-2 text-left">
+                        <div className="flex flex-col items-start gap-1 sm:flex-row sm:justify-start sm:items-center">
                           <Input
-                            className="h-8 w-24 text-right"
+                            className="h-8 w-24 text-left"
                             placeholder="本包"
                             value={lineQty[it.id] ?? ''}
                             onChange={e => setLineQty(p => ({ ...p, [it.id]: e.target.value }))}

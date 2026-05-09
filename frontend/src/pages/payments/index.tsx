@@ -148,7 +148,7 @@ export default function PaymentsPage() {
             {entries?.map((e: PaymentEntry) => (
               <div key={e.id} className="flex justify-between items-center border-b pb-2 text-sm">
                 <div><p className="font-medium">¥{e.amount.toFixed(2)}</p><p className="text-xs text-muted-foreground">{e.paymentDate} · {e.method} · {e.operatorName}</p></div>
-                {e.remark && <p className="text-xs text-muted-foreground max-w-32 text-right">{e.remark}</p>}
+                {e.remark && <p className="text-xs text-muted-foreground max-w-32 text-left">{e.remark}</p>}
               </div>
             ))}
           </div>

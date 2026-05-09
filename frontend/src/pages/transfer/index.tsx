@@ -188,7 +188,7 @@ export default function TransferPage() {
                     </Select></div>
                   <div className="col-span-2 text-sm text-muted-foreground text-center">{item.unit||'-'}</div>
                   <div className="col-span-4"><Input type="number" min="0.01" step="0.01" placeholder="数量" value={item.quantity} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>updateQty(item._key,+e.target.value)} className="text-sm" /></div>
-                  <div className="col-span-1 text-right"><Button type="button" size="sm" variant="ghost" className="text-red-500 px-2" onClick={()=>removeItem(item._key)}>✕</Button></div>
+                  <div className="col-span-1 text-left"><Button type="button" size="sm" variant="ghost" className="text-red-500 px-2" onClick={()=>removeItem(item._key)}>✕</Button></div>
                 </div>
               ))}
             </div>

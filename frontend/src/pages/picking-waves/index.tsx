@@ -268,7 +268,7 @@ export default function PickingWavesPage() {
                   <p className="text-sm font-semibold text-foreground">当前主链阶段：{detailCopy.stageLabel}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{detailCopy.description}</p>
                 </div>
-                <div className="rounded-xl border border-border bg-white px-4 py-3 text-right">
+                <div className="rounded-xl border border-border bg-white px-4 py-3 text-left">
                   <p className="text-helper">下一步动作</p>
                   <p className="mt-1 font-semibold text-foreground">{detailCopy.nextAction}</p>
                 </div>
@@ -351,8 +351,8 @@ export default function PickingWavesPage() {
                   <thead>
                     <tr className="border-b border-border text-left text-muted-foreground">
                       <th className="px-3 py-2">商品</th>
-                      <th className="px-3 py-2 text-right">应拣</th>
-                      <th className="px-3 py-2 text-right">已拣</th>
+                      <th className="px-3 py-2 text-left">应拣</th>
+                      <th className="px-3 py-2 text-left">已拣</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -362,8 +362,8 @@ export default function PickingWavesPage() {
                           <div className="font-medium">{item.productName}</div>
                           <div className="text-xs text-muted-foreground">{item.productCode}</div>
                         </td>
-                        <td className="px-3 py-2 text-right">{item.totalQty}</td>
-                        <td className="px-3 py-2 text-right">{item.pickedQty}</td>
+                        <td className="px-3 py-2 text-left">{item.totalQty}</td>
+                        <td className="px-3 py-2 text-left">{item.pickedQty}</td>
                       </tr>
                     ))}
                   </tbody>

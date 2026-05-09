@@ -31,7 +31,7 @@ function BarRow({ label, value, max, color = 'bg-red-400' }: { label: string; va
       <div className="flex-1 h-2.5 rounded-full bg-muted overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="w-10 text-right text-sm font-semibold text-foreground">{value}</p>
+      <p className="w-10 text-left text-sm font-semibold text-foreground">{value}</p>
     </div>
   )
 }

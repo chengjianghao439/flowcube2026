@@ -170,15 +170,15 @@ function ReturnForm({ type, onClose, onSuccess }: { type:'purchase'|'sale'; onCl
             <div className="col-span-1 text-sm text-center text-muted-foreground">{item.unit||'-'}</div>
             <div className="col-span-3"><Input type="number" min="0.01" step="0.01" placeholder="数量" value={item.quantity} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>updateItem(item._key,'quantity',+e.target.value)} className="text-sm" /></div>
             <div className="col-span-3"><Input type="number" min="0" step="0.01" placeholder="单价" value={item.unitPrice} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>updateItem(item._key,'unitPrice',+e.target.value)} className="text-sm" /></div>
-            <div className="col-span-1 text-right"><Button type="button" size="sm" variant="ghost" className="text-red-500 px-2" onClick={()=>removeItem(item._key)}>✕</Button></div>
+            <div className="col-span-1 text-left"><Button type="button" size="sm" variant="ghost" className="text-red-500 px-2" onClick={()=>removeItem(item._key)}>✕</Button></div>
             {(item.originalQty != null || item.returnedQty != null || item.remainingQty != null) && (
-              <div className="col-span-12 -mt-1 text-right text-[11px] text-muted-foreground">
+              <div className="col-span-12 -mt-1 text-left text-[11px] text-muted-foreground">
                 原单数量 {Number(item.originalQty || 0).toFixed(2)}，已退 {Number(item.returnedQty || 0).toFixed(2)}，剩余可退 {Number(item.remainingQty || 0).toFixed(2)}
               </div>
             )}
           </div>
         ))}
-        {items.length>0&&<div className="text-right text-sm font-semibold mt-2">合计：¥{total.toFixed(2)}</div>}
+        {items.length>0&&<div className="text-left text-sm font-semibold mt-2">合计：¥{total.toFixed(2)}</div>}
       </div>
       <DialogFooter><Button type="button" variant="outline" onClick={onClose} disabled={submitting}>取消</Button><Button type="submit" disabled={submitting}>{submitting?'创建中...':'创建退货单'}</Button></DialogFooter>
     </form>

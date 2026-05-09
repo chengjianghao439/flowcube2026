@@ -203,9 +203,9 @@ export default function InboundTaskCreatePage() {
                 <span>SKU</span>
                 <span>商品</span>
                 <span>仓库</span>
-                <span className="text-right">已分配</span>
-                <span className="text-right">可建单</span>
-                <span className="text-right">本次到货</span>
+                <span className="text-left">已分配</span>
+                <span className="text-left">可建单</span>
+                <span className="text-left">本次到货</span>
               </div>
 
               <div className="max-h-[52vh] overflow-auto">
@@ -228,11 +228,11 @@ export default function InboundTaskCreatePage() {
                         <div className="text-xs text-muted-foreground">{item.unit ?? '—'}</div>
                       </div>
                       <div className="text-muted-foreground">{item.warehouseName}</div>
-                      <div className="text-right text-muted-foreground">{item.assignedQty}</div>
-                      <div className="text-right font-medium text-foreground">{item.remainingQty}</div>
+                      <div className="text-left text-muted-foreground">{item.assignedQty}</div>
+                      <div className="text-left font-medium text-foreground">{item.remainingQty}</div>
                       <div>
                         <Input
-                          className="text-right"
+                          className="text-left"
                           placeholder="0"
                           value={qtyMap[item.purchaseItemId] ?? ''}
                           onChange={e => setLineQty(item.purchaseItemId, item.remainingQty, e.target.value)}
@@ -253,7 +253,7 @@ export default function InboundTaskCreatePage() {
             <p>已选商品：{selectedRows.length} 行</p>
             <p>供应商：{supplier?.name ?? '未选择'}</p>
           </div>
-          <div className="text-right">
+          <div className="text-left">
             <p className="mb-1 text-xs text-muted-foreground">本次到货总数</p>
             <p className="text-3xl font-bold text-foreground">
               {selectedRows.reduce((sum, entry) => sum + entry.qty, 0)}

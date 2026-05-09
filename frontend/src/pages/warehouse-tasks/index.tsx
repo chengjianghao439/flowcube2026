@@ -88,7 +88,7 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                   <p className="text-sm font-semibold text-foreground">当前闭环阶段：{closureCopy.stageLabel}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{closureCopy.description}</p>
                 </div>
-                <div className="rounded-xl border border-border bg-white px-4 py-3 text-right">
+                <div className="rounded-xl border border-border bg-white px-4 py-3 text-left">
                   <p className="text-helper">下一步动作</p>
                   <p className="mt-1 font-semibold text-foreground">{closureCopy.nextAction}</p>
                 </div>
@@ -158,7 +158,7 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                   <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${pickProgress}%` }} />
                 </div>
-                <p className="text-right text-xs text-muted-foreground">{pickProgress}%</p>
+                <p className="text-left text-xs text-muted-foreground">{pickProgress}%</p>
               </div>
             )}
 
@@ -170,8 +170,8 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                     <tr>
                       <th className="px-4 py-2 text-left font-medium">商品</th>
                       <th className="w-16 px-3 py-2 text-left font-medium">单位</th>
-                      <th className="w-24 px-3 py-2 text-right font-medium">需备货</th>
-                      <th className="w-28 px-3 py-2 text-right font-medium">已备货</th>
+                      <th className="w-24 px-3 py-2 text-left font-medium">需备货</th>
+                      <th className="w-28 px-3 py-2 text-left font-medium">已备货</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -182,8 +182,8 @@ function TaskDetailDialog({ open, onClose, task, loading, onAction }: DetailProp
                           <p className="text-xs text-muted-foreground">{item.productCode}</p>
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{item.unit}</td>
-                        <td className="px-3 py-2 text-right font-semibold">{item.requiredQty}</td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-3 py-2 text-left font-semibold">{item.requiredQty}</td>
+                        <td className="px-3 py-2 text-left">
                           <span className={item.pickedQty >= item.requiredQty ? 'font-semibold text-success' : 'text-muted-foreground'}>
                             {item.pickedQty}
                           </span>

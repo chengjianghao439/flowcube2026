@@ -72,7 +72,7 @@ function FlowBar({ items }: { items: FlowBottleneck[] }) {
               style={{ width: `${Math.max(2, (item.count / max) * 100)}%` }}
             />
           </div>
-          <p className="w-8 text-right text-sm font-bold text-foreground">{item.count}</p>
+          <p className="w-8 text-left text-sm font-bold text-foreground">{item.count}</p>
         </div>
       ))}
     </div>

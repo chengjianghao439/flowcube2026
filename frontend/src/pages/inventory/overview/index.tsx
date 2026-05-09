@@ -195,11 +195,11 @@ export default function InventoryOverviewPage() {
                   { label: '商品名称',          cls: 'text-left' },
                   { label: '分类路径',          cls: 'text-left' },
                   { label: '仓库',              cls: 'w-28 text-left' },
-                  { label: '在库数量',          cls: 'w-28 text-right' },
-                  { label: '已预占数量',        cls: 'w-28 text-right' },
-                  { label: '可用库存',          cls: 'w-28 text-right', title: '可用库存 = 在库数量 - 已预占数量' },
-                  { label: '最近更新',          cls: 'w-36 text-right' },
-                  { label: '操作',              cls: 'w-24 text-right' },
+                  { label: '在库数量',          cls: 'w-28 text-left' },
+                  { label: '已预占数量',        cls: 'w-28 text-left' },
+                  { label: '可用库存',          cls: 'w-28 text-left', title: '可用库存 = 在库数量 - 已预占数量' },
+                  { label: '最近更新',          cls: 'w-36 text-left' },
+                  { label: '操作',              cls: 'w-24 text-left' },
 	                ].map(col => (
 	                  <th
 	                    key={col.label}
@@ -246,24 +246,24 @@ export default function InventoryOverviewPage() {
                       <CategoryPathDisplay path={row.categoryPath} />
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{row.warehouseName}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                    <td className="px-4 py-3 text-left">
                       <span className="font-medium">{formatQty(row.onHand)}</span>
                       <span className="ml-1 text-xs text-muted-foreground">{row.unit}</span>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                    <td className="px-4 py-3 text-left">
                       {row.reserved > 0 ? (
                         <span className="font-medium text-amber-600">{formatQty(row.reserved)}</span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                    <td className="px-4 py-3 text-left">
                       <AvailableBadge available={row.available} onHand={row.onHand} />
                     </td>
-                    <td className="px-4 py-3 text-right text-xs text-muted-foreground">
+                    <td className="px-4 py-3 text-left text-xs text-muted-foreground">
                       {formatDisplayDateTime(row.updatedAt)}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-left">
                       <Button
                         size="sm"
                         variant={drawerItem?.id === row.id && drawerOpen ? 'secondary' : 'ghost'}
