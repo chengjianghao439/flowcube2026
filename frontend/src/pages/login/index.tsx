@@ -108,7 +108,7 @@ export default function LoginPage() {
           <div className="mb-10">
             <h3 className="mb-2 text-3xl font-bold text-slate-900 dark:text-white">欢迎登录</h3>
             <p className="text-slate-500 dark:text-slate-400">请输入账号信息登录系统</p>
-            {IS_ELECTRON_DESKTOP && (
+            {IS_ELECTRON_DESKTOP && !import.meta.env.DEV && (
               <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
                 {defaultApiOrigin ? '服务器地址已随安装包配置；若无法连接，请按 ' : '安装包未配置服务器地址，请按 '}
                 <kbd className="rounded border border-slate-300 px-1 dark:border-slate-600">Ctrl</kbd>+

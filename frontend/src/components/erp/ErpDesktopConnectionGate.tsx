@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 type Phase = 'ok' | 'checking' | 'fail'
 
 function initialPhase(): Phase {
-  if (!IS_ELECTRON_DESKTOP) return 'ok'
+  if (!IS_ELECTRON_DESKTOP || import.meta.env.DEV) return 'ok'
   return getStoredApiOrigin() ? 'checking' : 'fail'
 }
 
@@ -22,7 +22,7 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    if (!IS_ELECTRON_DESKTOP) return
+    if (!IS_ELECTRON_DESKTOP || import.meta.env.DEV) return
     let cancelled = false
     void (async () => {
       const origin = getStoredApiOrigin()
@@ -40,7 +40,7 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
     }
   }, [location.pathname, tick])
 
-  if (!IS_ELECTRON_DESKTOP) return <>{children}</>
+  if (!IS_ELECTRON_DESKTOP || import.meta.env.DEV) return <>{children}</>
 
   const origin = getStoredApiOrigin()
   const onLogin = location.pathname === '/login'

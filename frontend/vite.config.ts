@@ -131,14 +131,14 @@ export default defineConfig(({ command }) => {
       port: 5173,
       host: true,
       proxy: {
-        '/api': devProxyToBackend('http://localhost:3000'),
+        '/api': devProxyToBackend('http://47.93.228.251'),
       },
     },
     preview: {
       port: 4173,
       host: true,
       proxy: {
-        '/api': devProxyToBackend('http://localhost:3000'),
+        '/api': devProxyToBackend('http://47.93.228.251'),
       },
     },
   }
