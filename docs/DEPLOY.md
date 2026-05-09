@@ -10,7 +10,7 @@
 - 桌面下载目录：`/var/www/flowcube-downloads`
 - 桌面更新入口：`/latest.json`
 - 仓库：`chengjianghao439/flowcube2026`
-- 仓库内配置文件：[deploy/production.json](/Users/chengjianghao/flowcube/deploy/production.json)
+- 仓库内配置文件：`deploy/production.local.json`（从 `deploy/production.example.json` 复制并填写真实值）
 
 ## 发布原则
 

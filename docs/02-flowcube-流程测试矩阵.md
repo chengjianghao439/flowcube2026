@@ -1,10 +1,7 @@
 # FlowCube 当前流程状态说明
 
 > 状态：生效中  
-> 替代文档：`docs/legacy/02-flowcube-流程测试矩阵.v2-deprecated.md`  
 > 唯一真实来源：`backend/src/constants/warehouseTaskStatus.js`
-
-旧版 `02-flowcube-流程测试矩阵.md` 已移入 `docs/legacy`。旧文档仍保留历史测试结构，但其中销售接口、销售状态、仓库任务状态均与当前代码不一致，不得再作为验收依据。
 
 ## 状态数字维护规则
 
@@ -67,7 +64,7 @@ PENDING(1) -> PICKING(2) -> SORTING(3) -> CHECKING(4) -> PACKING(5) -> SHIPPING(
 
 ## 旧状态污染清单
 
-旧版 `docs/legacy/02-flowcube-流程测试矩阵.v2-deprecated.md` 中保留了以下过期描述，仅供历史追溯：
+以下过期描述仅供历史追溯：
 
 | 旧描述 | 当前正确值 |
 | --- | --- |
