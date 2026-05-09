@@ -239,7 +239,7 @@ export default function DataTable<T extends object>({
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full table-fixed text-sm" style={{ minWidth: tableWidth }}>
+        <table className="w-full table-fixed text-sm">
           <colgroup ref={colgroupRef}>
             {selectable && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
