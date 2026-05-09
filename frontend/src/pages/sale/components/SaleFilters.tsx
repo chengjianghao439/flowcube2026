@@ -26,41 +26,38 @@ export function SaleFilters({
   onPickProduct,
 }: SaleFiltersProps) {
   return (
-    <div className="rounded-lg border border-border bg-card px-4 py-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {/* 搜索框 */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="搜索单号 / 客户..."
-            value={search}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && onSearch()}
-            className="h-9 w-56 pl-8 text-sm"
-          />
-        </div>
-
-        <Select
-          value={statusFilter || '__all__'}
-          onValueChange={v => onStatusFilterChange(v === '__all__' ? '' : v)}
-        >
-          <SelectTrigger className="h-9 w-36">
-            <SelectValue placeholder="全部状态" />
-          </SelectTrigger>
-          <SelectContent>
-            {SALE_STATUS_OPTIONS.map(o => (
-              <SelectItem key={o.value || '__all__'} value={o.value || '__all__'}>{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Button variant="outline" className="h-9 min-w-[180px] justify-start font-normal" onClick={onPickProduct}>
-          {productName || '按产品筛选'}
-        </Button>
-
-        <Button size="sm" variant="outline" onClick={onSearch}>搜索</Button>
-        <Button size="sm" variant="ghost"   onClick={onReset}>重置</Button>
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <Input
+          placeholder="搜索单号 / 客户..."
+          value={search}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
+          onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && onSearch()}
+          className="h-9 w-56 pl-8 text-sm"
+        />
       </div>
+
+      <Select
+        value={statusFilter || '__all__'}
+        onValueChange={v => onStatusFilterChange(v === '__all__' ? '' : v)}
+      >
+        <SelectTrigger className="h-9 w-36">
+          <SelectValue placeholder="全部状态" />
+        </SelectTrigger>
+        <SelectContent>
+          {SALE_STATUS_OPTIONS.map(o => (
+            <SelectItem key={o.value || '__all__'} value={o.value || '__all__'}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Button variant="outline" className="h-9 min-w-[180px] justify-start font-normal" onClick={onPickProduct}>
+        {productName || '按产品筛选'}
+      </Button>
+
+      <Button size="sm" variant="outline" onClick={onSearch}>搜索</Button>
+      <Button size="sm" variant="ghost"   onClick={onReset}>重置</Button>
     </div>
   )
 }
