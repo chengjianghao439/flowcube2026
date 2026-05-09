@@ -31,7 +31,6 @@ export default function DataTable<T extends object>({
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
-  const [allLocked, setAllLocked] = useState(false)
   const columnWidthsRef = useRef<Record<string, number>>({})
   const colgroupRef = useRef<HTMLTableColElement>(null)
 
@@ -83,7 +82,6 @@ export default function DataTable<T extends object>({
           )
         : {}
       setColumnWidths(widths)
-      if (Object.keys(widths).length > 0) setAllLocked(true)
     } catch {
       setColumnOrder(columns.map(col => String(col.key)))
       setColumnWidths({})
@@ -153,38 +151,49 @@ export default function DataTable<T extends object>({
     if (typeof window === 'undefined') return
     const key = String(col.key)
 
-    // 首次拖拽：锁定所有列的当前渲染宽度
-    if (!allLocked && colgroupRef.current) {
-      const snapshot: Record<string, number> = {}
+    // 快照所有列当前渲染宽度 + 找到最后一列作为补偿列
+    const allCols = orderedColumns.length ? orderedColumns : columns
+    const lastCol = allCols[allCols.length - 1]
+    const lastKey = String(lastCol.key)
+    const isLast = key === lastKey
+    const lastMinW = isAction(lastKey, lastCol.title) ? 120 : 80
+    const minWidth = isAction(key, col.title) ? 120 : 80
+
+    const snapshot: Record<string, number> = {}
+    if (colgroupRef.current) {
       const colEls = colgroupRef.current.querySelectorAll('col')
-      const allCols = orderedColumns.length ? orderedColumns : columns
       let ci = selectable ? 1 : 0
       colEls.forEach(el => {
         if (selectable && ci === 0) { ci++; return }
-        if (ci < allCols.length + (selectable ? 1 : 0)) {
-          snapshot[String(allCols[selectable ? ci - 1 : ci].key)] = el.getBoundingClientRect().width
+        const idx = selectable ? ci - 1 : ci
+        if (idx >= 0 && idx < allCols.length) {
+          snapshot[String(allCols[idx].key)] = el.getBoundingClientRect().width
         }
         ci++
       })
-      setColumnWidths(snapshot)
-      columnWidthsRef.current = snapshot
-      setAllLocked(true)
+    } else {
+      allCols.forEach(c => { snapshot[String(c.key)] = getColumnWidth(c) })
     }
 
     const startX = event.clientX
-    const startWidth = allLocked
-      ? (columnWidthsRef.current[key] ?? columnWidths[key] ?? col.width ?? 160)
-      : (columnWidths[key] ?? col.width ?? 160)
-    const minWidth = isAction(key, col.title) ? 120 : 80
+    // 如果拖拽的不是最后一列，最后一列补偿 delta；如果拖拽最后一列，前一列补偿
+    const compKey = isLast ? String(allCols[allCols.length - 2].key) : lastKey
+    const compMinW = isLast
+      ? (isAction(String(allCols[allCols.length - 2].key), allCols[allCols.length - 2].title) ? 120 : 80)
+      : lastMinW
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
-      setColumnWidths(prev => ({ ...prev, [key]: nextWidth }))
+      const newTarget = Math.max(minWidth, Math.round(snapshot[key] + moveEvent.clientX - startX))
+      const delta = newTarget - snapshot[key]
+      const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - delta))
+      setColumnWidths(prev => ({ ...prev, [key]: newTarget, [compKey]: newComp }))
     }
 
     const handleMouseUp = (moveEvent: MouseEvent) => {
-      const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
-      const nextWidths = { ...columnWidthsRef.current, [key]: nextWidth }
+      const newTarget = Math.max(minWidth, Math.round(snapshot[key] + moveEvent.clientX - startX))
+      const delta = newTarget - snapshot[key]
+      const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - delta))
+      const nextWidths = { ...snapshot, [key]: newTarget, [compKey]: newComp }
       persistLayout(columnOrder.length ? columnOrder : columns.map(item => String(item.key)), nextWidths)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
@@ -228,10 +237,7 @@ export default function DataTable<T extends object>({
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table
-          className={allLocked ? 'table-fixed text-sm' : 'w-full table-fixed text-sm'}
-          style={allLocked ? { width: tableWidth, minWidth: tableWidth } : { minWidth: tableWidth }}
-        >
+        <table className="w-full table-fixed text-sm" style={{ minWidth: tableWidth }}>
           <colgroup ref={colgroupRef}>
             {selectable && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
