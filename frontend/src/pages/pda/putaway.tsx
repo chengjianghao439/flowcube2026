@@ -13,7 +13,7 @@ import PdaEmptyState, { PdaLoading } from '@/components/pda/PdaEmptyState'
 import { usePdaFlow } from '@/hooks/usePdaFlow'
 import PdaFlowSteps from '@/components/pda/PdaFlowSteps'
 import { makePutawayFlow, type PutawayFlowContext } from '@/flows/putawayFlow'
-import { getInboundClosureCopy } from '@/lib/inboundClosure'
+
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
@@ -140,14 +140,13 @@ export default function PdaPutawayPage() {
   }
 
   if (task.status < 3) {
-    const copy = getInboundClosureCopy(task)
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon="⏳"
-          title={copy.stageLabel}
-          description={copy.nextAction}
+          title="待上架"
+          description="收货尚未完成，请先完成收货后再上架。"
           actionText="返回收货订单"
           onAction={() => navigate('/pda/inbound')}
         />
@@ -156,14 +155,13 @@ export default function PdaPutawayPage() {
   }
 
   if (!task.submittedAt) {
-    const copy = getInboundClosureCopy(task)
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon="📤"
-          title={copy.stageLabel}
-          description={copy.nextAction}
+          title="未提交"
+          description="收货订单尚未提交，请先在 ERP 中提交。"
           actionText="返回收货订单"
           onAction={() => navigate('/pda/inbound')}
         />
@@ -172,14 +170,13 @@ export default function PdaPutawayPage() {
   }
 
   if (task.putawayStatus?.key === 'completed' || task.status >= 4) {
-    const copy = getInboundClosureCopy(task)
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon="✅"
-          title={copy.stageLabel}
-          description={copy.nextAction}
+          title="已完成"
+          description="该订单上架已完成。"
           actionText="返回收货订单"
           onAction={() => navigate('/pda/inbound')}
         />
