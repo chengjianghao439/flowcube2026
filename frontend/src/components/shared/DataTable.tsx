@@ -32,6 +32,7 @@ export default function DataTable<T extends object>({
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
   const columnWidthsRef = useRef<Record<string, number>>({})
+  const colgroupRef = useRef<HTMLTableColElement>(null)
 
   const resolvedStorageKey = useMemo(() => {
     if (columnStorageKey) return `flowcube:table-columns:${columnStorageKey}`
@@ -149,8 +150,19 @@ export default function DataTable<T extends object>({
     event.stopPropagation()
     if (typeof window === 'undefined') return
     const key = String(col.key)
+
+    // 首次拖拽时，锁定所有列当前的渲染宽度
+    const snapshot: Record<string, number> = {}
+    if (colgroupRef.current) {
+      const colEls = colgroupRef.current.querySelectorAll('col')
+      const keys = orderedColumns.length ? orderedColumns.map(String) : columns.map(c => String(c.key))
+      colEls.forEach((el, i) => {
+        if (i < keys.length) snapshot[keys[i]] = el.getBoundingClientRect().width
+      })
+    }
+
     const startX = event.clientX
-    const startWidth = columnWidths[key] ?? col.width ?? 160
+    const startWidth = snapshot[key] ?? columnWidths[key] ?? col.width ?? 160
     const minWidth = isAction(key, col.title) ? 180 : 96
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -160,7 +172,7 @@ export default function DataTable<T extends object>({
 
     const handleMouseUp = (moveEvent: MouseEvent) => {
       const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX))
-      const nextWidths = { ...columnWidthsRef.current, [key]: nextWidth }
+      const nextWidths = { ...snapshot, ...columnWidthsRef.current, [key]: nextWidth }
       persistLayout(columnOrder.length ? columnOrder : columns.map(item => String(item.key)), nextWidths)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
@@ -204,8 +216,8 @@ export default function DataTable<T extends object>({
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="table-fixed text-sm" style={{ width: tableWidth, minWidth: tableWidth }}>
-          <colgroup>
+        <table className="w-full table-fixed text-sm" style={{ minWidth: tableWidth }}>
+          <colgroup ref={colgroupRef}>
             {selectable && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
               <col key={String(col.key)} style={{ width: getColumnWidth(col) }} />
