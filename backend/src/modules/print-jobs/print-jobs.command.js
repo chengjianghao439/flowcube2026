@@ -224,7 +224,7 @@ async function assertQueueReady({
     && secondsSinceSeen <= 30
 
   if (requireClientOnline && !clientOnline) {
-    throw new AppError('打印客户端离线，请在连接打印机的 FlowCube 桌面端重新上线后再继续', 409, 'PRINT_CLIENT_OFFLINE')
+    throw new AppError('打印客户端离线，请在连接打印机的 极序 Flow 桌面端重新上线后再继续', 409, 'PRINT_CLIENT_OFFLINE')
   }
 
   return {

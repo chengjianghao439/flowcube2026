@@ -75,7 +75,7 @@ async function printLabel(req, res, next) {
           ? '任务已入队，但未连接打印客户端（详见说明）'
           : hint?.code === 'queued_concurrency'
             ? '任务已入队，因并发上限排队中'
-            : '已加入打印队列（按「库存标签」绑定；请使用 FlowCube 桌面端本机直连出纸）'
+            : '已加入打印队列（按「库存标签」绑定；请使用 极序 Flow 桌面端本机直连出纸）'
     return successResponse(
       res,
       {

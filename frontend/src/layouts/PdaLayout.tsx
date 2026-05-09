@@ -1,6 +1,6 @@
 /**
  * PdaLayout — PDA 独立子系统布局
- * 继承 FlowCube 设计系统（bg-background / text-foreground）
+ * 继承 极序 Flow 设计系统（bg-background / text-foreground）
  *
  * 路由锁定：防止浏览器「返回」跳出 /pda/* 到 ERP 后台页面。
  * 逻辑：

@@ -1,5 +1,5 @@
 /**
- * FlowCube 分级日志工具
+ * 极序 Flow 分级日志工具
  *
  * 级别：info → warn → error
  * 格式：[时间戳] [级别] [模块] 消息 {meta}

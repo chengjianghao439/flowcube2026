@@ -135,7 +135,7 @@ async function getDispatchHintForJob(printerCode, jobId) {
   if (!printer?.client_id) {
     return withClients(
       'client_not_bound',
-      '任务已入队，但绑定打印机尚未关联桌面客户端。请在连接该打印机的 FlowCube 桌面端「从本机添加」打印机后继续派发。',
+      '任务已入队，但绑定打印机尚未关联桌面客户端。请在连接该打印机的 极序 Flow 桌面端「从本机添加」打印机后继续派发。',
       0,
       base,
     )
@@ -143,7 +143,7 @@ async function getDispatchHintForJob(printerCode, jobId) {
   if (!clientOnline) {
     return withClients(
       'client_offline',
-      '任务已入队，绑定打印机的桌面客户端当前离线。请启动连接该打印机的 FlowCube 桌面端，客户端上线后会继续领取待派发任务。',
+      '任务已入队，绑定打印机的桌面客户端当前离线。请启动连接该打印机的 极序 Flow 桌面端，客户端上线后会继续领取待派发任务。',
       0,
       base,
     )

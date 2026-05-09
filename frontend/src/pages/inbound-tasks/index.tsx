@@ -28,7 +28,7 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import type { ProductFinderResult } from '@/types/products'
-import { getInboundClosureCopy } from '@/lib/inboundClosure'
+
 
 export default function InboundTasksPage() {
   const navigate = useNavigate()
@@ -96,7 +96,6 @@ export default function InboundTasksPage() {
       width: 160,
       render: (_, row) => {
         const task = row as InboundTask
-        const closureCopy = getInboundClosureCopy(task)
         const tone = task.receiptStatus?.key === 'audited'
           ? 'success'
           : task.receiptStatus?.key === 'exception'
@@ -105,9 +104,8 @@ export default function InboundTasksPage() {
               ? 'draft'
               : 'active'
         return (
-          <div className="min-w-0" title={closureCopy.nextAction}>
+          <div className="min-w-0">
             <SoftStatusLabel label={task.receiptStatus?.label ?? INBOUND_STATUS_LABEL[task.status]} tone={tone} />
-            <p className="mt-1 truncate whitespace-nowrap text-xs text-muted-foreground">{closureCopy.stageLabel}</p>
           </div>
         )
       },

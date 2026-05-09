@@ -1,7 +1,7 @@
 {
   "name": "flowcube-backend",
   "version": "0.3.89",
-  "description": "FlowCube ERP Backend API",
+  "description": "极序 Flow ERP Backend API",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
