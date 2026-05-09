@@ -183,16 +183,18 @@ export default function DataTable<T extends object>({
       : lastMinW
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const newTarget = Math.max(minWidth, Math.round(snapshot[key] + moveEvent.clientX - startX))
-      const delta = newTarget - snapshot[key]
-      const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - delta))
+      const rawTarget = Math.round(snapshot[key] + moveEvent.clientX - startX)
+      const maxTarget = snapshot[key] + snapshot[compKey] - compMinW
+      const newTarget = Math.max(minWidth, Math.min(maxTarget, rawTarget))
+      const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - (newTarget - snapshot[key])))
       setColumnWidths(prev => ({ ...prev, [key]: newTarget, [compKey]: newComp }))
     }
 
     const handleMouseUp = (moveEvent: MouseEvent) => {
-      const newTarget = Math.max(minWidth, Math.round(snapshot[key] + moveEvent.clientX - startX))
-      const delta = newTarget - snapshot[key]
-      const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - delta))
+      const rawTarget = Math.round(snapshot[key] + moveEvent.clientX - startX)
+      const maxTarget = snapshot[key] + snapshot[compKey] - compMinW
+      const newTarget = Math.max(minWidth, Math.min(maxTarget, rawTarget))
+      const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - (newTarget - snapshot[key])))
       const nextWidths = { ...snapshot, [key]: newTarget, [compKey]: newComp }
       persistLayout(columnOrder.length ? columnOrder : columns.map(item => String(item.key)), nextWidths)
       window.removeEventListener('mousemove', handleMouseMove)
