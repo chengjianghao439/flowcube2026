@@ -1,6 +1,9 @@
 export { CustomerFinder } from './CustomerFinder'
 export type { CustomerFinderProps } from './CustomerFinder'
 
+export { CategoryFinder } from './CategoryFinder'
+export type { CategoryFinderProps } from './CategoryFinder'
+
 export { SupplierFinder } from './SupplierFinder'
 export type { SupplierFinderProps } from './SupplierFinder'
 

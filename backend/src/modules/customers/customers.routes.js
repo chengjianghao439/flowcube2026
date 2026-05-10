@@ -3,16 +3,17 @@ const { z } = require('zod')
 const ctrl = require('./customers.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { pool } = require('../../config/db')
 const router = Router()
 const vBody = schema => (req,res,next) => { const r=schema.safeParse(req.body); if(!r.success) return res.status(400).json({success:false,message:r.error.errors.map(e=>e.message).join('；'),data:null}); req.body=r.data; next() }
 const phoneRule = z.string().max(11).regex(/^1\d{10}$/, '请输入正确的手机号').optional().or(z.literal(''))
 const base = z.object({ code:z.string().min(1).max(30), name:z.string().min(1,'名称不能为空').max(20,'客户名称最多 20 个字符'), contact:z.string().max(5,'联系人最多 5 个字符').optional(), phone:phoneRule, email:z.string().email().max(100).optional().or(z.literal('')), address:z.string().max(30,'地址最多 30 个字符').optional(), remark:z.string().max(30,'备注最多 30 个字符').optional() })
-const generateCode = require('../../utils/generateCode')
+const { generateMasterCode } = require('../../utils/codeGenerator')
 const { successResponse } = require('../../utils/response')
 router.use(authMiddleware)
 router.get('/next-code', async (req, res, next) => {
   try {
-    const code = await generateCode('sale_customers', 'code', 'code_prefix_customer', 'CUS-')
+    const code = await generateMasterCode(pool, 'CUS', 'sale_customers')
     return successResponse(res, { code }, '生成成功')
   } catch (e) { next(e) }
 })

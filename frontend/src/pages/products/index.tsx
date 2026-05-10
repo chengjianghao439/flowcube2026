@@ -10,15 +10,13 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '@/hooks/useProducts'
+import { useProducts, useDeleteProduct } from '@/hooks/useProducts'
 import { useCategoryTree } from '@/hooks/useCategories'
 import { downloadExport } from '@/lib/exportDownload'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { LimitedInput } from '@/components/shared/LimitedInput'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { toast } from '@/lib/toast'
 import { payloadClient as client } from '@/api/client'
-import { getSettingsApi } from '@/api/settings'
 import { printProductLabelApi } from '@/api/products'
 import {
   isDesktopLocalPrintError,
@@ -28,10 +26,6 @@ import { readNullableIntParam, readPositiveIntParam, readStringParam, upsertSear
 import type { Product } from '@/types/products'
 import type { TableColumn } from '@/types'
 import type { Category } from '@/types/categories'
-
-const emptyProd = { name:'', categoryId:null as number|null, unit:'个', spec:'', barcode:'', costPrice:'' as string, salePrice:'' as string, remark:'', isActive:true }
-
-const DEFAULT_RATES = { A: 10, B: 20, C: 30, D: 40 }
 
 function buildCategoryPathMap(nodes: Category[], ancestors: string[] = [], map = new Map<number, string>()) {
   for (const node of nodes) {
@@ -49,8 +43,6 @@ export default function ProductsPage() {
   const keyword = readStringParam(searchParams, 'keyword')
   const catFilter = readNullableIntParam(searchParams, 'categoryId')
   const [search, setSearch] = useState(keyword)
-  const [open, setOpen] = useState(false); const [edit, setEdit] = useState<Product|null>(null)
-  const [form, setForm] = useState(emptyProd)
   const [importOpen, setImportOpen] = useState(false)
   const [confirmProduct, setConfirmProduct] = useState<Product | null>(null)
   const [importing, setImporting] = useState(false)
@@ -71,12 +63,7 @@ export default function ProductsPage() {
 
   const { data, isLoading } = useProducts({ page, pageSize:20, keyword, categoryId:catFilter })
   const { data: categoryTree = [] } = useCategoryTree()
-  const [priceRates, setPriceRates] = useState(DEFAULT_RATES)
-  const { mutate: create, isPending: creating } = useCreateProduct()
-  const { mutate: update, isPending: updating } = useUpdateProduct()
   const { mutate: del } = useDeleteProduct()
-  const isPending = creating || updating
-  const set = (k:string, v:unknown) => setForm(f=>({...f,[k]:v}))
 
   useEffect(() => {
     setSearch(keyword)
@@ -85,18 +72,6 @@ export default function ProductsPage() {
   function updateParams(updates: Record<string, string | number | null | undefined>) {
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
-
-  useEffect(() => {
-    void getSettingsApi().then(r => {
-      const map = r?.map ?? {}
-      setPriceRates({
-        A: Number(map.price_rate_a?.value ?? DEFAULT_RATES.A),
-        B: Number(map.price_rate_b?.value ?? DEFAULT_RATES.B),
-        C: Number(map.price_rate_c?.value ?? DEFAULT_RATES.C),
-        D: Number(map.price_rate_d?.value ?? DEFAULT_RATES.D),
-      })
-    }).catch(() => {})
-  }, [])
 
   async function handlePrintProductLabel(p: Product) {
     try {
@@ -139,47 +114,22 @@ export default function ProductsPage() {
     }
   }
 
-  function openCreate() { setEdit(null); setForm(emptyProd); setOpen(true) }
-  function openEdit(p:Product) { setEdit(p); setForm({ name:p.name, categoryId:p.categoryId, unit:p.unit, spec:p.spec??'', barcode:p.barcode??'', costPrice:p.costPrice!=null?String(p.costPrice):'', salePrice:p.salePrice!=null?String(p.salePrice):'', remark:p.remark??'', isActive:p.isActive }); setOpen(true) }
-  function handleSubmit(e:React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!form.categoryId) { toast.warning('请选择商品分类'); return }
-    if (!form.barcode.trim()) { toast.warning('请输入产品条码'); return }
-    if (form.costPrice === '' || Number(form.costPrice) <= 0) { toast.warning('请输入大于 0 的进价'); return }
-    const d = { name:form.name, categoryId:form.categoryId||undefined, unit:form.unit||'个', spec:form.spec||undefined, barcode:form.barcode||undefined, costPrice:form.costPrice!==''?Number(form.costPrice):null, remark:form.remark||undefined }
-    if (edit) update({ id:edit.id, data:{...d,isActive:form.isActive} }, { onSuccess:()=>setOpen(false) })
-    else create(d, { onSuccess:()=>setOpen(false) })
-  }
-
   const categoryPathMap = useMemo(() => buildCategoryPathMap(categoryTree), [categoryTree])
-  const previewPrices = useMemo(() => {
-    const cost = Number(form.costPrice || 0)
-    const mk = (rate: number) => Number.isFinite(cost) ? (cost * (1 + rate / 100)).toFixed(2) : '0.00'
-    return {
-      A: mk(priceRates.A),
-      B: mk(priceRates.B),
-      C: mk(priceRates.C),
-      D: mk(priceRates.D),
-    }
-  }, [form.costPrice, priceRates])
 
   const cols:TableColumn<Product>[] = [
-    { key:'code', title:'编码', width:130 },
+    { key:'code', title:'编码', width:120 },
+    { key:'articleNumber', title:'货号', width:100, render:v=>(v as string)||'-' },
+    { key:'spec', title:'型号', render:v=>(v as string)||'-' },
     { key:'name', title:'商品名称' },
-    { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
-    { key:'unit', title:'单位', width:70 },
-    { key:'spec', title:'规格', render:v=>(v as string)||'-' },
-    { key:'costPrice', title:'成本价', width:90, render:v=>v!=null?`¥${v}`:'-' },
-    { key:'salePriceA', title:'价格A', width:90, render:v=>v!=null?`¥${v}`:'-' },
-    { key:'salePriceB', title:'价格B', width:90, render:v=>v!=null?`¥${v}`:'-' },
-    { key:'salePriceC', title:'价格C', width:90, render:v=>v!=null?`¥${v}`:'-' },
-    { key:'salePriceD', title:'价格D', width:90, render:v=>v!=null?`¥${v}`:'-' },
-    { key:'isActive', title:'状态', width:80, render:(_,r)=><Badge variant={r.isActive?'default':'destructive'}>{r.isActive?'启用':'停用'}</Badge> },
-    { key:'id', title:'操作', width:160, render:(_,r)=>(
+    { key:'color', title:'颜色', width:80, render:v=>(v as string)||'-' },
+    { key:'unit', title:'单位', width:60 },
+    { key:'supplierName', title:'供应商', width:100, render:v=>(v as string)||'-' },
+    { key:'isActive', title:'状态', width:70, render:(_,r)=><Badge variant="outline" className={`text-xs font-medium ${r.isActive ? 'text-green-700 border-green-300 bg-green-50' : 'text-muted-foreground border-muted-foreground/30 bg-muted/20'}`}>{r.isActive?'启用':'停用'}</Badge> },
+    { key:'id', title:'操作', width:140, render:(_,r)=>(
       <TableActionsMenu
         primaryLabel="编辑"
         primaryVariant="outline"
-        onPrimaryClick={()=>openEdit(r)}
+        onPrimaryClick={()=>navigate(`/products/${r.id}`)}
         items={[
           { label:'打印标签', onClick:()=>void handlePrintProductLabel(r) },
           { label:'删除', onClick:()=>setConfirmProduct(r), destructive:true, separatorBefore:true },
@@ -195,7 +145,7 @@ export default function ProductsPage() {
           <Button variant="outline" onClick={()=>downloadExport('/export/stock').catch(e=>toast.error((e as Error).message))}>导出库存</Button>
           <Button variant="outline" onClick={()=>setImportOpen(true)}>批量导入</Button>
           <Button variant="outline" onClick={()=>navigate('/categories')}>分类管理</Button>
-          <Button onClick={openCreate}>新增商品</Button>
+          <Button onClick={()=>navigate('/products/new')}>新增商品</Button>
         </div>
       } />
 
@@ -217,51 +167,6 @@ export default function ProductsPage() {
         }}>重置</Button>}
       </FilterCard>
       <DataTable columns={cols} data={data?.list??[]} loading={isLoading} pagination={data?.pagination} onPageChange={(nextPage)=>updateParams({ page: nextPage })} rowKey="id" />
-
-      {/* 商品表单 */}
-      <Dialog open={open} onOpenChange={v=>!v&&setOpen(false)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle>{edit?'编辑商品':'新增商品'}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
-              {edit && (
-                <div className="space-y-1">
-                  <Label>商品编码</Label>
-                  <Input value={edit.code} disabled className="bg-muted/50 font-mono text-sm" />
-                </div>
-              )}
-              <div className="space-y-2"><Label>名称 *</Label><Input value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} disabled={isPending}/></div>
-              <div className="space-y-2"><Label>分类 *</Label>
-                <CategoryTreeSelect
-                  value={form.categoryId}
-                  onChange={(v) => set('categoryId', v)}
-                  emptyLabel="请选择分类"
-                  leafOnly
-                  className="w-full justify-between"
-                  disabled={isPending}
-                />
-              </div>
-              <div className="space-y-2"><Label>单位</Label><Input value={form.unit} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('unit',e.target.value)} disabled={isPending} placeholder="个"/></div>
-              <div className="space-y-2"><Label>规格型号</Label><LimitedInput maxLength={5} value={form.spec} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('spec',e.target.value)} disabled={isPending}/></div>
-              <div className="space-y-2"><Label>产品条码 *</Label><Input value={form.barcode} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('barcode',e.target.value)} disabled={isPending} placeholder="唯一产品条码"/></div>
-              <div className="space-y-2"><Label>进价 *</Label><Input type="number" step="0.01" min="0.01" value={form.costPrice} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('costPrice',e.target.value)} disabled={isPending}/></div>
-              <div className="col-span-2 rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-sm font-medium">默认销售价格</p>
-                <p className="mt-1 text-xs text-muted-foreground">按系统设置的加价比例自动生成，保存后生效。</p>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div className="rounded-md border bg-background px-3 py-2 text-sm">价格A：¥{previewPrices.A}</div>
-                  <div className="rounded-md border bg-background px-3 py-2 text-sm">价格B：¥{previewPrices.B}</div>
-                  <div className="rounded-md border bg-background px-3 py-2 text-sm">价格C：¥{previewPrices.C}</div>
-                  <div className="rounded-md border bg-background px-3 py-2 text-sm">价格D：¥{previewPrices.D}</div>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-2"><Label>备注</Label><LimitedInput maxLength={30} value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)} disabled={isPending}/></div>
-            {edit && <div className="flex items-center gap-2"><input type="checkbox" id="pd-active" checked={form.isActive} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('isActive',e.target.checked)} className="accent-primary"/><Label htmlFor="pd-active" className="cursor-pointer">启用</Label></div>}
-            <DialogFooter><Button type="button" variant="outline" onClick={()=>setOpen(false)} disabled={isPending}>取消</Button><Button type="submit" disabled={isPending||!form.name}>{isPending?'保存中...':'保存'}</Button></DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* 批量导入弹窗 */}
       <Dialog open={importOpen} onOpenChange={v=>{ setImportOpen(v); if(!v) setImportResult(null) }}>

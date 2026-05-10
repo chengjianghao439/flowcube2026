@@ -11,7 +11,7 @@ async function ensureCategoryExists(categoryId) {
 }
 
 async function ensureBarcodeUnique(barcode, currentId = null) {
-  if (!barcode || !String(barcode).trim()) throw new AppError('产品条码不能为空', 400)
+  if (!barcode || !String(barcode).trim()) return null
   const normalized = String(barcode).trim()
   const [rows] = currentId
     ? await pool.query('SELECT id FROM product_items WHERE barcode=? AND deleted_at IS NULL AND id<>? LIMIT 1', [normalized, currentId])
@@ -90,10 +90,11 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
 
   const offset = (page - 1) * pageSize
   const [rows] = await pool.query(
-    `SELECT p.id, p.code, p.name, p.category_id, p.unit, p.sale_price, p.sale_price_a, p.sale_price_b, p.sale_price_c, p.sale_price_d, p.cost_price, p.spec, p.barcode,
-            c.name AS category_name, ${stockCol} AS stock
+    `SELECT p.id, p.code, p.sku_code, p.article_number, p.name, p.category_id, p.supplier_id, p.unit, p.sale_price, p.sale_price_a, p.sale_price_b, p.sale_price_c, p.sale_price_d, p.cost_price, p.spec, p.color, p.barcode,
+            c.name AS category_name, s.name AS supplier_name, ${stockCol} AS stock
      FROM product_items p
      LEFT JOIN product_categories c ON p.category_id = c.id AND c.deleted_at IS NULL
+     LEFT JOIN supply_suppliers s ON p.supplier_id = s.id
      ${stockJoin}
      ${where}
      ORDER BY p.name ASC LIMIT ? OFFSET ?`,
@@ -111,10 +112,12 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
   return {
     list: rows.map(r => ({
       id: r.id, code: r.code, name: r.name,
+      skuCode: r.sku_code || null, articleNumber: r.article_number || null,
       categoryId:   r.category_id   || null,
       categoryName: r.category_name || null,
       categoryPath: buildPath(r.category_id),
-      unit: r.unit, spec: r.spec || null,
+      supplierId: r.supplier_id || null, supplierName: r.supplier_name || null,
+      unit: r.unit, spec: r.spec || null, color: r.color || null,
       salePrice: r.sale_price_a != null ? Number(r.sale_price_a) : (r.sale_price != null ? Number(r.sale_price) : null),
       salePriceA: r.sale_price_a != null ? Number(r.sale_price_a) : (r.sale_price != null ? Number(r.sale_price) : null),
       salePriceB: r.sale_price_b != null ? Number(r.sale_price_b) : null,
@@ -132,8 +135,10 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
 function fmtProduct(row) {
   return {
     id: row.id, code: row.code, name: row.name,
+    skuCode: row.sku_code || null, articleNumber: row.article_number || null,
     categoryId: row.category_id, categoryName: row.category_name||null,
-    unit: row.unit, spec: row.spec, barcode: row.barcode,
+    supplierId: row.supplier_id || null, supplierName: row.supplier_name || null,
+    unit: row.unit, spec: row.spec, color: row.color || null, barcode: row.barcode,
     costPrice: row.cost_price != null ? Number(row.cost_price) : null,
     salePrice: row.sale_price_a != null ? Number(row.sale_price_a) : (row.sale_price != null ? Number(row.sale_price) : null),
     salePriceA: row.sale_price_a != null ? Number(row.sale_price_a) : (row.sale_price != null ? Number(row.sale_price) : null),
@@ -176,8 +181,9 @@ async function findAll({ page=1, pageSize=20, keyword='', categoryId=null }) {
     : [like, like, like, pageSize, offset]
 
   const [rows] = await pool.query(
-    `SELECT p.*, c.name AS category_name
+    `SELECT p.*, c.name AS category_name, s.name AS supplier_name
      FROM product_items p LEFT JOIN product_categories c ON p.category_id=c.id
+     LEFT JOIN supply_suppliers s ON p.supplier_id=s.id
      WHERE p.deleted_at IS NULL AND (p.code LIKE ? OR p.name LIKE ? OR p.barcode LIKE ?)
      ${catFilter} ORDER BY p.created_at DESC LIMIT ? OFFSET ?`,
     params,
@@ -201,36 +207,50 @@ async function findAllActive() {
 
 async function findById(id) {
   const [rows] = await pool.query(
-    `SELECT p.*, c.name AS category_name FROM product_items p
+    `SELECT p.*, c.name AS category_name, s.name AS supplier_name FROM product_items p
      LEFT JOIN product_categories c ON p.category_id=c.id
+     LEFT JOIN supply_suppliers s ON p.supplier_id=s.id
      WHERE p.id=? AND p.deleted_at IS NULL`, [id],
   )
   if (!rows[0]) throw new AppError('商品不存在',404)
   return fmtProduct(rows[0])
 }
 
-async function create({ name, categoryId, unit, spec, barcode, costPrice, remark }) {
+async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD }) {
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
   const code = await generateMasterCode(pool, 'P', 'product_items')
+  const generatedSku = skuCode || await generateMasterCode(pool, 'SKU', 'product_items', 'sku_code')
+  const generatedArticle = articleNumber || String(Math.floor(100000 + Math.random() * 900000))
+  const generatedBarcode = normalizedBarcode || await generateMasterCode(pool, 'BC', 'product_items', 'barcode')
   const rates = await loadPriceRates(pool)
-  const prices = computeTierPrices(normalizedCost, rates)
+  const auto = computeTierPrices(normalizedCost, rates)
+  const spA = salePriceA != null ? Number(salePriceA) : auto.salePriceA
+  const spB = salePriceB != null ? Number(salePriceB) : auto.salePriceB
+  const spC = salePriceC != null ? Number(salePriceC) : auto.salePriceC
+  const spD = salePriceD != null ? Number(salePriceD) : auto.salePriceD
+  const sp = spA // 售价默认取价格A
   const [r] = await pool.query(
-    `INSERT INTO product_items (code,name,category_id,unit,spec,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [code, String(name).trim(), categoryId||null, unit||'个', spec||null, normalizedBarcode, prices.costPrice, prices.salePrice, prices.salePriceA, prices.salePriceB, prices.salePriceC, prices.salePriceD, remark||null],
+    `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null],
   )
-  return { id: r.insertId, code }
+  return { id: r.insertId, code, skuCode: generatedSku, articleNumber: generatedArticle }
 }
 
-async function update(id, { name, categoryId, unit, spec, barcode, costPrice, remark, isActive }) {
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD }) {
   await findById(id)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const rates = await loadPriceRates(pool)
-  const prices = computeTierPrices(normalizedCost, rates)
+  const auto = computeTierPrices(normalizedCost, rates)
+  const spA = salePriceA != null ? Number(salePriceA) : auto.salePriceA
+  const spB = salePriceB != null ? Number(salePriceB) : auto.salePriceB
+  const spC = salePriceC != null ? Number(salePriceC) : auto.salePriceC
+  const spD = salePriceD != null ? Number(salePriceD) : auto.salePriceD
+  const sp = spA
   await pool.query(
-    `UPDATE product_items SET name=?,category_id=?,unit=?,spec=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?
+    `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?
      WHERE id=? AND deleted_at IS NULL`,
-    [String(name).trim(), categoryId||null, unit||'个', spec||null, normalizedBarcode, prices.costPrice, prices.salePrice, prices.salePriceA, prices.salePriceB, prices.salePriceC, prices.salePriceD, remark||null, isActive?1:0, id],
+    [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, id],
   )
 }
 

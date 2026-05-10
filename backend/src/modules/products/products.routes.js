@@ -3,6 +3,7 @@ const { z } = require('zod')
 const ctrl = require('./products.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { pool } = require('../../config/db')
 
 const router = Router()
 function vBody(schema) {
@@ -14,22 +15,30 @@ function vBody(schema) {
 }
 
 const productBase = z.object({
-  code:       z.string().min(1,'编码不能为空').max(50).optional(),
-  name:       z.string().min(1,'名称不能为空').max(150),
-  categoryId: z.number().int().positive('请选择商品分类'),
-  unit:       z.string().min(1).max(20).optional(),
-  spec:       z.string().max(5,'商品规格最多 5 个字符').optional(),
-  barcode:    z.string().min(1,'产品条码不能为空').max(60),
-  costPrice:  z.number().positive('进价必须大于 0'),
-  remark:     z.string().max(30,'备注最多 30 个字符').optional(),
+  code:           z.string().min(1,'编码不能为空').max(50).optional(),
+  skuCode:        z.string().max(50).optional(),
+  articleNumber:  z.string().max(50).optional(),
+  name:           z.string().min(1,'名称不能为空').max(150),
+  categoryId:     z.number().int().positive('请选择商品分类'),
+  supplierId:     z.number().int().positive('请选择供应商'),
+  unit:           z.string().min(1,'单位不能为空').max(20),
+  spec:           z.string().min(1,'型号不能为空').max(100),
+  color:          z.string().min(1,'颜色不能为空').max(30),
+  barcode:        z.string().max(60).optional(),
+  costPrice:      z.number().positive('进价必须大于 0'),
+  salePriceA:     z.number().positive().optional(),
+  salePriceB:     z.number().positive().optional(),
+  salePriceC:     z.number().positive().optional(),
+  salePriceD:     z.number().positive().optional(),
+  remark:         z.string().max(30,'备注最多 30 个字符').optional(),
 })
 
-const generateCode = require('../../utils/generateCode')
+const { generateMasterCode } = require('../../utils/codeGenerator')
 const { successResponse } = require('../../utils/response')
 router.use(authMiddleware)
 router.get('/next-code', async (req, res, next) => {
   try {
-    const code = await generateCode('product_items', 'code', 'code_prefix_product', 'P')
+    const code = await generateMasterCode(pool, 'P', 'product_items')
     return successResponse(res, { code }, '生成成功')
   } catch (e) { next(e) }
 })

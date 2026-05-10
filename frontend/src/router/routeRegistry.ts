@@ -47,6 +47,7 @@ const SaleFormPage = lazy(() => import('@/pages/sale/form'))
 const PurchasePage = lazy(() => import('@/pages/purchase'))
 const PurchaseFormPage = lazy(() => import('@/pages/purchase/form'))
 const ProductPage = lazy(() => import('@/pages/products'))
+const ProductFormPage = lazy(() => import('@/pages/products/form'))
 const CategoryPage = lazy(() => import('@/pages/categories'))
 const WarehousePage = lazy(() => import('@/pages/warehouses'))
 const InventoryPage = lazy(() => import('@/pages/inventory'))
@@ -79,7 +80,6 @@ const ApprovalsPage = lazy(() => import('@/pages/reports/approvals'))
 const WavePerformancePage = lazy(() => import('@/pages/reports/wave-performance'))
 const PdaAnomalyPage = lazy(() => import('@/pages/reports/pda-anomaly'))
 const WarehouseOpsPage = lazy(() => import('@/pages/reports/warehouse-ops'))
-const PriceListsPage = lazy(() => import('@/pages/price-lists'))
 const PrintTemplatesPage = lazy(() => import('@/pages/settings/print-templates'))
 const PrintTemplateEditorPage = lazy(() => import('@/pages/settings/print-templates/editor'))
 const PrintersPage = lazy(() => import('@/pages/settings/printers'))
@@ -148,15 +148,6 @@ export const routeRegistry: RouteRegistryEntry[] = [
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '销售', order: 30 },
     aliases: ['/sales'],
-  },
-  {
-    path: '/price-lists',
-    title: '价格管理',
-    permission: PERMISSIONS.PRICE_LIST_VIEW,
-    component: PriceListsPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '销售', order: 40 },
   },
   {
     path: '/returns',
@@ -422,6 +413,14 @@ export const routeRegistry: RouteRegistryEntry[] = [
 ]
 
 export const routePatterns: RoutePatternEntry[] = [
+  {
+    pattern: /^\/products\/(new|\d+)$/,
+    title: (path) => path === '/products/new' ? '新增商品' : `编辑商品 #${path.split('/').pop()}`,
+    permission: PERMISSIONS.PRODUCT_VIEW,
+    component: ProductFormPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+  },
   {
     pattern: /^\/sale\/(new|\d+)$/,
     title: (path) => path === '/sale/new' ? '新建销售单' : `销售单 #${path.split('/').pop()}`,

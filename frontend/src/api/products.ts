@@ -6,6 +6,7 @@ import type { Product, ProductOption, CreateProductParams, UpdateProductParams, 
 export const getProductsForFinderApi = async (p: ProductFinderParams) =>
   apiClient.get<PaginatedData<ProductFinderResult>>('/products/finder', { params: p })
 
+export const getProductApi        = async (id: number) => apiClient.get<Product>(`/products/${id}`)
 export const getProductsApi       = async (p: QueryParams) => apiClient.get<PaginatedData<Product>>('/products', { params: p })
 export const getProductsActiveApi = async () => apiClient.get<ProductOption[]>('/products/active')
 export const createProductApi     = async (d: CreateProductParams) => apiClient.post<{id:number}>('/products', d)

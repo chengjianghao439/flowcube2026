@@ -3,6 +3,7 @@ const { z } = require('zod')
 const ctrl = require('./suppliers.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { pool } = require('../../config/db')
 
 const router = Router()
 function vBody(schema) {
@@ -24,12 +25,12 @@ const base = z.object({
   remark:  z.string().max(30,'备注最多 30 个字符').optional(),
 })
 
-const generateCode = require('../../utils/generateCode')
+const { generateMasterCode } = require('../../utils/codeGenerator')
 const { successResponse } = require('../../utils/response')
 router.use(authMiddleware)
 router.get('/next-code', async (req, res, next) => {
   try {
-    const code = await generateCode('supply_suppliers', 'code', 'code_prefix_supplier', 'SUP-')
+    const code = await generateMasterCode(pool, 'SUP', 'supply_suppliers')
     return successResponse(res, { code }, '生成成功')
   } catch (e) { next(e) }
 })
