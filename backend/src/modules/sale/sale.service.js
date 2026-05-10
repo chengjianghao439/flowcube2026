@@ -121,8 +121,8 @@ async function syncPickingByWarehouseTaskWithinTransaction(conn, id, { taskId = 
     conn,
     id,
     'warehouse_ready_to_sort',
-    '仓库任务推进到待分拣',
-    `销售单 ${orderRow.order_no} 已随仓库任务进入拣货完成阶段`,
+    '拣货完成',
+    `销售单 ${orderRow.order_no} 已进入待分拣阶段`,
     null,
     { taskId: taskId != null ? Number(taskId) : null, taskNo: taskNo || null },
   )
@@ -154,8 +154,8 @@ async function syncShippedByWarehouseTaskWithinTransaction(conn, id, { taskId = 
     conn,
     id,
     'warehouse_shipped',
-    '仓库完成出库',
-    `销售单 ${orderRow.order_no} 已由仓库任务完成出库`,
+    '已完成出库',
+    `销售单 ${orderRow.order_no} 已完成出库`,
     null,
     { taskId: taskId != null ? Number(taskId) : null, taskNo: taskNo || null },
   )
@@ -186,8 +186,8 @@ async function syncCancelledByWarehouseTaskWithinTransaction(conn, id, { taskId 
     conn,
     id,
     'warehouse_task_cancelled',
-    '仓库任务取消联动',
-    `销售单 ${orderRow.order_no} 已随仓库任务取消`,
+    '仓库任务已取消',
+    `销售单 ${orderRow.order_no} 对应的仓库任务已取消`,
     null,
     { taskId: taskId != null ? Number(taskId) : null, taskNo: taskNo || null },
   )
@@ -202,7 +202,7 @@ function mapTimeline(rows, order) {
   const base = rows.some(r => r.event_type === 'created') ? [] : [{
     id: `created-${order.id}`,
     eventType: 'created',
-    title: '创建销售单',
+    title: '创建订单',
     description: `销售单 ${order.orderNo} 已创建`,
     createdBy: order.operatorId,
     createdByName: order.operatorName,
@@ -274,11 +274,23 @@ async function findById(id) {
      WHERE soi.order_id=?`,
     [id],
   )
+  // 查询扫描记录
+  let scans = []
+  if (order.taskId) {
+    const [scanRows] = await pool.query(
+      `SELECT item_id, product_id, barcode, qty, operator_name, scanned_at
+       FROM scan_logs WHERE task_id=? ORDER BY scanned_at ASC`,
+      [order.taskId],
+    )
+    scans = scanRows
+  }
   order.items = items.map(r=>({
     id:r.id,
     productId:r.product_id,
     productCode:r.product_code,
     productName:r.product_name,
+    spec:r.spec||null,
+    color:r.color||null,
     unit:r.unit,
     quantity:Number(r.quantity),
     unitPrice:Number(r.unit_price),
@@ -286,7 +298,42 @@ async function findById(id) {
     remark:r.remark,
     costPrice: r.cost_price != null ? Number(r.cost_price) : null,
     belowCost: r.cost_price != null ? Number(r.unit_price) < Number(r.cost_price) : false,
+    scans: scans
+      .filter(s => s.product_id === r.product_id)
+      .map(s => ({
+        barcode: s.barcode,
+        qty: Number(s.qty),
+        operatorName: s.operator_name,
+        scannedAt: s.scanned_at,
+      })),
   }))
+  // 装箱数据
+  let packages = []
+  if (order.taskId) {
+    const [pkgRows] = await pool.query(
+      `SELECT id, barcode, status FROM packages WHERE warehouse_task_id=? ORDER BY id`,
+      [order.taskId],
+    )
+    if (pkgRows.length > 0) {
+      const pkgIds = pkgRows.map(p => p.id)
+      const [itemRows] = await pool.query(
+        `SELECT package_id, product_code, product_name, unit, qty FROM package_items WHERE package_id IN (?) ORDER BY id`,
+        [pkgIds],
+      )
+      packages = pkgRows.map(p => ({
+        id: p.id,
+        barcode: p.barcode,
+        status: p.status,
+        items: itemRows.filter(i => i.package_id === p.id).map(i => ({
+          productCode: i.product_code,
+          productName: i.product_name,
+          unit: i.unit,
+          qty: Number(i.qty),
+        })),
+      }))
+    }
+  }
+  order.packages = packages
   const [events] = await pool.query(
     `SELECT id,event_type,title,description,payload_json,created_by,created_by_name,created_at
      FROM sale_order_events WHERE sale_order_id=? ORDER BY created_at DESC, id DESC`,
@@ -309,9 +356,9 @@ async function create({ customerId, customerName, warehouseId, warehouseName, re
     )
     const orderId = r.insertId
     for(const item of items) {
-      await conn.query(`INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?)`,[orderId,item.productId,item.productCode,item.productName,item.unit,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null])
+      await conn.query(`INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[orderId,item.productId,item.productCode,item.productName,item.unit,item.spec||null,item.color||null,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null])
     }
-    await appendSaleEvent(conn, orderId, 'created', '创建销售单', `创建销售单 ${orderNo}，共 ${items.length} 条明细`, operator)
+    await appendSaleEvent(conn, orderId, 'created', '创建订单', `共 ${items.length} 条明细`, operator)
     await buildPricingEvents(conn, orderId, items, operator)
     await conn.commit()
     return { id:orderId, orderNo }
@@ -336,11 +383,11 @@ async function update(id, { customerId, customerName, warehouseId, warehouseName
     await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
     for (const item of items) {
       await conn.query(
-        `INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?)`,
-        [id, item.productId, item.productCode, item.productName, item.unit, item.quantity, item.unitPrice, item.quantity*item.unitPrice, item.remark||null]
+        `INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [id, item.productId, item.productCode, item.productName, item.unit, item.spec||null, item.color||null, item.quantity, item.unitPrice, item.quantity*item.unitPrice, item.remark||null]
       )
     }
-    await appendSaleEvent(conn, id, 'updated', '编辑销售单', `更新销售单，现有 ${items.length} 条明细`, operator)
+    await appendSaleEvent(conn, id, 'updated', '编辑订单', `现有 ${items.length} 条明细`, operator)
     await buildPricingEvents(conn, id, items, operator)
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
@@ -374,7 +421,7 @@ async function reserveStock(id, operator) {
       toStatus: rule.to,
       entityName: '销售单',
     })
-    await appendSaleEvent(conn, id, 'reserved', '占用库存', `销售单 ${orderRow.order_no} 已占用库存`, operator)
+    await appendSaleEvent(conn, id, 'reserved', '确认占库', `已预占库存`, operator)
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -422,7 +469,7 @@ async function ship(id, operator) {
         task_no: taskNo,
       },
     })
-    await appendSaleEvent(conn, id, 'ship_requested', '创建出库任务', `已创建仓库任务 ${taskNo}，等待仓库执行`, operator, { taskId, taskNo })
+    await appendSaleEvent(conn, id, 'ship_requested', '发起出库', `已创建仓库任务，等待拣货`, operator, { taskId, taskNo })
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -477,7 +524,7 @@ async function cancel(id, operator) {
       toStatus: rule.to,
       entityName: '销售单',
     })
-    await appendSaleEvent(conn, id, 'cancelled', '取消销售单', `销售单 ${orderRow.order_no} 已取消`, operator)
+    await appendSaleEvent(conn, id, 'cancelled', '取消订单', `销售单已取消`, operator)
     await conn.commit()
   } catch (e) {
     await conn.rollback()

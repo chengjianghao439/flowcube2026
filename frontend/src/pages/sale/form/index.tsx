@@ -41,6 +41,8 @@ import type { FinderResult } from '@/types/finder'
 
 interface DraftItem extends Omit<SaleOrderItem, 'id' | 'amount'> {
   _key: number
+  spec?: string | null
+  color?: string | null
   priceSource?: 'list' | 'default' | 'manual'
 }
 
@@ -157,10 +159,9 @@ export default function SaleFormPage() {
 
   // ── 关闭当前 Tab 并返回 ──
   function closeTab() {
-    const { removeTab, tabs } = useWorkspaceStore.getState()
-    const nextKey = removeTab(tabPath || '/sale/new')
-    const nextTab = tabs.find(t => t.key === nextKey)
-    navigate(nextTab?.path ?? '/sale')
+    const { removeTab } = useWorkspaceStore.getState()
+    removeTab(tabPath || '/sale/new')
+    navigate('/sale')
   }
 
   // ─── ① 新建模式 ─────────────────────────────────────────────────────────────
@@ -172,7 +173,7 @@ export default function SaleFormPage() {
   if (!saleId) {
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
-        <p className="text-muted-body">销售单路由无效，请从列表重新打开</p>
+        <p className="text-sm">销售单路由无效，请从列表重新打开</p>
         <Button size="sm" variant="outline" onClick={closeTab}>关闭页面</Button>
       </div>
     )
@@ -201,7 +202,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const [receiverAddress, setReceiverAddress] = useState('')
   const counterRef    = useRef(0)
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
-  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
+  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', spec: null, color: null, unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
   const { data: carrierOptions = [] } = useCarriersActive()
 
@@ -286,7 +287,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     if (finderItemKey === null) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
       : i
     ))
     // 商品选择后自动聚焦到该行数量框
@@ -482,7 +483,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
               )}
             </div>
             <div>
-              <p className="mb-1 text-helper">合计金额</p>
+              <p className="mb-1 text-xs">合计金额</p>
               <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
             </div>
           </div>
@@ -539,7 +540,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
   const [receiverAddress, setReceiverAddress] = useState(order.receiverAddress ?? '')
   const counterRef    = useRef((order.items ?? []).length)
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
-  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
+  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', spec: null, color: null, unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
   const { data: carrierOptions = [] } = useCarriersActive()
 
@@ -626,7 +627,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
     if (finderItemKey === null) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
       : i
     ))
     // 商品选择后自动聚焦到该行数量框
@@ -806,7 +807,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
               )}
             </div>
             <div>
-              <p className="mb-1 text-helper">合计金额</p>
+              <p className="mb-1 text-xs">合计金额</p>
               <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
             </div>
           </div>
@@ -869,6 +870,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
   const deleteMutate   = useDeleteSale()
 
   const [printOpen, setPrintOpen] = useState(false)
+  const [detailTab, setDetailTab] = useState<'info'|'progress'|'scan'|'pack'|'log'>('info')
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; onConfirm: () => void
@@ -894,7 +896,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
   if (!order) {
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
-        <p className="text-muted-body">销售单不存在或已删除</p>
+        <p className="text-sm">销售单不存在或已删除</p>
         <Button size="sm" variant="outline" onClick={closeTab}>关闭页面</Button>
       </div>
     )
@@ -909,209 +911,295 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
 
   return (
     <div className="flex flex-col gap-4">
-      <ActionBar
-        title={order.orderNo}
-        subtitle={<StatusBadge type="sale" status={order.status} />}
-        rightActions={
-          <>
-            {/* RESERVED（已占库）：发货 + 取消占库 */}
+      {/* 选项卡切换 */}
+      <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
+        {([
+          ['info', '订单信息'],
+          ['progress', '作业进度'],
+          ['scan', '取货明细'],
+          ['pack', '装箱进度'],
+          ['log', '操作记录'],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setDetailTab(key)}
+            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
+              detailTab === key
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {detailTab === 'info' && (
+        <>
+          {/* 基础信息 */}
+          <Section title="基础信息">
             {order.status === 2 && (
-              <>
-                <Button disabled={isPending} className="gap-1.5"
-                  onClick={() => ask('发起出库', '将创建仓库出库任务，由仓库人员执行拣货后完成出库，是否继续？', 'default', () => {
-                    closeAsk(); shipMutate.mutate(order.id)
-                  })}>
-                  <Truck className="h-4 w-4" />发货
-                </Button>
-                <Button variant="outline" disabled={isPending} className="gap-1.5"
-                  onClick={() => ask('取消占库', '将释放已预占的库存并将订单恢复为草稿状态，是否继续？', 'destructive', () => {
-                    closeAsk(); releaseMutate.mutate(order.id)
-                  })}>
-                  取消占库
-                </Button>
-              </>
+              <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm">
+                当前“已占库”仅表示这张销售单已经预占库存：会增加已占用、减少可用库存，但不会直接扣减当前库存，也不会自动生成仓库任务。点击“发货”后才会创建仓库任务进入仓库执行。
+              </div>
             )}
-
-            {/* PICKING（发货中）：查看仓库任务 */}
-            {order.status === 3 && order.taskNo && (
-              <Button variant="outline" disabled={isPending}
-                className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
-                onClick={() => navigate('/warehouse-tasks')}>
-                <Warehouse className="h-4 w-4" />查看任务 · {order.taskNo}
-              </Button>
-            )}
-
-            {/* SHIPPED（已出库）：打印 */}
-            {order.status === 4 && (
-              <Button variant="outline" className="gap-1.5" onClick={() => setPrintOpen(true)}>
-                <Printer className="h-4 w-4" />打印订单
-              </Button>
-            )}
-
-            {/* CANCELLED（已取消）：删除 */}
-            {order.status === 5 && (
-              <Button variant="destructive" disabled={isPending} className="gap-1.5"
-                onClick={() => ask('确认删除订单', '删除后订单将无法恢复。', 'destructive', () => {
-                  closeAsk(); deleteMutate.mutate(order.id, { onSuccess: closeTab })
-                })}>
-                <Trash2 className="h-4 w-4" />删除订单
-              </Button>
-            )}
-
-            <Button variant="outline" onClick={closeTab}>关闭</Button>
-          </>
-        }
-      />
-
-      {/* 基础信息 */}
-      <Section title="基础信息">
-        {order.status === 2 && (
-          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm text-muted-foreground">
-            当前“已占库”仅表示这张销售单已经预占库存：会增加已占用、减少可用库存，但不会直接扣减当前库存，也不会自动生成仓库任务。点击“发货”后才会创建仓库任务进入仓库执行。
-          </div>
-        )}
-        {order.status === 3 && (
-          <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/[0.08] px-4 py-3 text-sm text-muted-foreground">
-            订单已进入仓库作业；具体阶段以上方作业进度为准。库存仍以在库数量展示，只有仓库实际完成出库，当前库存才会减少。
-          </div>
-        )}
-        <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
-          {[
-            ['客户',     order.customerName],
-            ['仓库',     order.warehouseName],
-            ['状态', getSaleWorkflowStatus(order).label],
-            ['销售日期', order.saleDate ? [new Date(order.saleDate).getFullYear(), String(new Date(order.saleDate).getMonth()+1).padStart(2,"0"), String(new Date(order.saleDate).getDate()).padStart(2,"0")].join("-") : '—'],
-            ['经办人',   order.operatorName],
-            ['创建时间', formatDisplayDateTime(order.createdAt)],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <dt className="mb-0.5 text-helper">{label}</dt>
-              <dd className="font-medium">{value}</dd>
+            <div className="space-y-2 text-sm">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-8 gap-y-3">
+                <div><span className="text-muted-foreground">客户：</span><span>{order.customerName}</span></div>
+                <div><span className="text-muted-foreground">仓库：</span><span>{order.warehouseName}</span></div>
+                <div><span className="text-muted-foreground">时间：</span><span>{formatDisplayDateTime(order.createdAt)}</span></div>
+                <div><span className="text-muted-foreground">经办人：</span><span>{order.operatorName}</span></div>
+                <div><span className="text-muted-foreground">承运商：</span><span>{order.carrier || '-'}</span></div>
+                <div><span className="text-muted-foreground">运费方式：</span><span>{order.freightTypeName || '-'}</span></div>
+                <div><span className="text-muted-foreground">收货人：</span><span>{order.receiverName || '-'}</span></div>
+                <div><span className="text-muted-foreground">联系电话：</span><span>{order.receiverPhone || '-'}</span></div>
+                <div className="col-span-2"><span className="text-muted-foreground">收货地址：</span><span>{order.receiverAddress || '-'}</span></div>
+                <div><span className="text-muted-foreground">备注：</span><span>{order.remark || '-'}</span></div>
+              </div>
             </div>
-          ))}
-          {order.remark && (
-            <div className="col-span-3">
-              <dt className="mb-0.5 text-helper">备注</dt>
-              <dd>{order.remark}</dd>
-            </div>
-          )}
-        </dl>
-      </Section>
+          </Section>
 
-      {/* 物流信息 */}
-      {(order.carrier || order.freightType || order.receiverName || order.receiverPhone || order.receiverAddress) && (
-        <Section title="物流信息">
-          <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
-            {order.carrier && (
-              <div>
-                <dt className="mb-0.5 text-helper">承运商</dt>
-                <dd className="font-medium">{order.carrier}</dd>
-              </div>
-            )}
-            {order.freightType && (
-              <div>
-                <dt className="mb-0.5 text-helper">运费方式</dt>
-                <dd className="font-medium">{order.freightTypeName}</dd>
-              </div>
-            )}
-            {order.receiverName && (
-              <div>
-                <dt className="mb-0.5 text-helper">收货人</dt>
-                <dd className="font-medium">{order.receiverName}</dd>
-              </div>
-            )}
-            {order.receiverPhone && (
-              <div>
-                <dt className="mb-0.5 text-helper">联系电话</dt>
-                <dd className="font-medium">{order.receiverPhone}</dd>
-              </div>
-            )}
-            {order.receiverAddress && (
-              <div className="col-span-3">
-                <dt className="mb-0.5 text-helper">收货地址</dt>
-                <dd className="font-medium">{order.receiverAddress}</dd>
-              </div>
-            )}
-          </dl>
-        </Section>
-      )}
-
-      {/* 商品明细 */}
-      <Section title="商品明细">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-table-head">
-                <th className="pb-2 text-left">商品</th>
-                <th className="pb-2 text-left">编码</th>
-                <th className="w-16 pb-2 text-center">单位</th>
-                <th className="w-20 pb-2">数量</th>
-                <th className="w-24 pb-2">单价</th>
-                <th className="w-24 pb-2">金额</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(order.items ?? []).map(item => (
-                <tr key={item.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
-                  <td className="py-2.5 font-medium">{item.productName}</td>
-                  <td className="py-2.5"><span className="text-doc-code-muted">{item.productCode}</span></td>
-                  <td className="py-2.5 text-center text-muted-foreground">{item.unit}</td>
-                  <td className="py-2.5">{item.quantity}</td>
-                  <td className="py-2.5">
-                    <div className="space-y-1">
-                      <div>¥{Number(item.unitPrice).toFixed(2)}</div>
-                      {item.belowCost && item.costPrice != null && (
-                        <div className="inline-flex items-center gap-1 text-[11px] text-destructive">
-                          <AlertTriangle className="h-3 w-3" />
-                          低于进价 ¥{Number(item.costPrice).toFixed(2)}
+          {/* 商品明细 */}
+          <Section title="商品明细">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-table-head">
+                    <th className="pb-2 text-left">编码</th>
+                    <th className="pb-2 text-left">型号</th>
+                    <th className="pb-2 text-left">名称</th>
+                    <th className="pb-2 text-left">颜色</th>
+                    <th className="w-16 pb-2 text-center">单位</th>
+                    <th className="w-20 pb-2 text-center">数量</th>
+                    <th className="w-24 pb-2 text-center">单价</th>
+                    <th className="w-24 pb-2 text-center">金额</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(order.items ?? []).map(item => (
+                    <tr key={item.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
+                      <td className="py-2.5"><span>{item.productCode}</span></td>
+                      <td className="py-2.5">{item.spec || '-'}</td>
+                      <td className="py-2.5">{item.productName}</td>
+                      <td className="py-2.5">{item.color || '-'}</td>
+                      <td className="py-2.5 text-center">{item.unit}</td>
+                      <td className="py-2.5 text-center">{item.quantity}</td>
+                      <td className="py-2.5 text-center">
+                        <div className="space-y-1">
+                          <div>¥{Number(item.unitPrice).toFixed(2)}</div>
+                          {item.belowCost && item.costPrice != null && (
+                            <div className="inline-flex items-center gap-1 text-[11px] text-destructive">
+                              <AlertTriangle className="h-3 w-3" />
+                              低于进价 ¥{Number(item.costPrice).toFixed(2)}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-2.5 font-semibold">¥{Number(item.amount).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Section>
+                      </td>
+                      <td className="py-2.5 text-center font-semibold">¥{Number(item.amount).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
 
-      {!!order.timeline?.length && (
-        <Section title="操作时间线">
-          <div className="space-y-3">
-            {order.timeline.map(event => (
-              <div key={event.id} className="rounded-lg border border-border/70 bg-card px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{event.title}</p>
-                      <Badge variant="outline" className="text-[11px]">{event.eventType}</Badge>
-                    </div>
-                    {event.description && <p className="text-sm text-muted-foreground">{event.description}</p>}
-                  </div>
-                  <div className="shrink-0 text-xs text-muted-foreground">
-                    <p>{event.createdByName || '系统'}</p>
-                    <p>{formatDisplayDateTime(event.createdAt)}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
+          {/* 金额统计 */}
+          <Section title="金额统计">
+            <div className="flex items-center justify-between">
+              <p className="text-sm">共 {order.items?.length ?? 0} 种商品</p>
+              <div><p className="mb-1 text-xs">合计金额</p><p className="text-3xl font-bold">¥{Number(order.totalAmount).toFixed(2)}</p></div>
+            </div>
+          </Section>
+        </>
       )}
 
-      {/* 金额统计 */}
-      <Section title="金额统计">
-        <div className="flex items-center justify-between">
-          <p className="text-muted-body">
-            共 {order.items?.length ?? 0} 种商品
-          </p>
-          <div>
-            <p className="mb-1 text-helper">合计金额</p>
-            <p className="text-3xl font-bold">¥{Number(order.totalAmount).toFixed(2)}</p>
-          </div>
+      {detailTab === 'progress' && (
+        <div className="card-base p-5">
+          {order.taskNo ? (
+            <div className="space-y-4">
+              <FulfillmentProgressCard order={order} />
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-table-head">
+                      <th className="pb-2 text-left">编码</th>
+                      <th className="pb-2 text-left">型号</th>
+                      <th className="pb-2 text-left">名称</th>
+                      <th className="pb-2 text-left">颜色</th>
+                      <th className="w-16 pb-2 text-center">单位</th>
+                      <th className="w-20 pb-2 text-center">订单数量</th>
+                      <th className="w-20 pb-2 text-center">取货数量</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(order.items ?? []).map(item => {
+                      const picked = (item.scans ?? []).reduce((s, sc) => s + sc.qty, 0)
+                      return (
+                      <tr key={item.id} className="border-b border-border/40">
+                        <td className="py-2.5">{item.productCode}</td>
+                        <td className="py-2.5">{item.spec || '-'}</td>
+                        <td className="py-2.5">{item.productName}</td>
+                        <td className="py-2.5">{item.color || '-'}</td>
+                        <td className="py-2.5 text-center">{item.unit}</td>
+                        <td className="py-2.5 text-center">{item.quantity}</td>
+                        <td className="py-2.5 text-center">{picked || '-'}</td>
+                      </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务，订单状态为 {getSaleWorkflowStatus(order).label}</p>
+          )}
         </div>
-      </Section>
+      )}
+
+      {detailTab === 'scan' && (
+        <div className="card-base p-5">
+          {order.taskNo ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-table-head">
+                    <th className="w-20 pb-2 text-left">编码</th>
+                    <th className="w-16 pb-2 text-left">型号</th>
+                    <th className="w-36 pb-2 text-left">名称</th>
+                    <th className="w-14 pb-2 text-left">颜色</th>
+                    <th className="w-12 pb-2 text-center">单位</th>
+                    <th className="w-24 pb-2 text-left">条码</th>
+                    <th className="w-16 pb-2 text-center">条码数量</th>
+                    <th className="w-14 pb-2 text-right">操作人</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(order.items ?? []).flatMap(item => {
+                    const scans = item.scans ?? []
+                    if (scans.length === 0) {
+                      return [(
+                        <tr key={item.id} className="border-b border-border/40">
+                          <td className="py-2.5">{item.productCode}</td>
+                          <td className="py-2.5">{item.spec || '-'}</td>
+                          <td className="py-2.5">{item.productName}</td>
+                          <td className="py-2.5">{item.color || '-'}</td>
+                          <td className="py-2.5 text-center">{item.unit}</td>
+                          <td className="py-2.5">-</td>
+                          <td className="py-2.5 text-center">0/{item.quantity}</td>
+                          <td className="py-2.5 text-right">-</td>
+                        </tr>
+                      )]
+                    }
+                    return scans.map((sc, si) => (
+                      <tr key={`${item.id}-${si}`} className="border-b border-border/40">
+                        <td className="py-2.5">{item.productCode}</td>
+                        <td className="py-2.5">{item.spec || '-'}</td>
+                        <td className="py-2.5">{item.productName}</td>
+                        <td className="py-2.5">{item.color || '-'}</td>
+                        <td className="py-2.5 text-center">{item.unit}</td>
+                        <td className="py-2.5">{sc.barcode}</td>
+                        <td className="py-2.5 text-center">{sc.qty}</td>
+                        <td className="py-2.5 text-right">{sc.operatorName || '-'}</td>
+                      </tr>
+                    ))
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务</p>
+          )}
+        </div>
+      )}
+
+      {detailTab === 'pack' && (
+        <div className="card-base p-5">
+          {order.taskNo ? (
+            <div className="space-y-4">
+              {(() => {
+                const pkgs = order.packages ?? []
+                const done = pkgs.filter(p => p.status === 2).length
+                const totalItems = pkgs.reduce((s, p) => s + p.items.reduce((ss, it) => ss + it.qty, 0), 0)
+                return (
+                  <div className="grid grid-cols-4 gap-3 text-sm">
+                    <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                      <p className="text-2xl font-bold">{pkgs.length}</p>
+                      <p className="text-xs text-muted-foreground">箱子总数</p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                      <p className="text-2xl font-bold text-success">{done}</p>
+                      <p className="text-xs text-muted-foreground">已完成</p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                      <p className="text-2xl font-bold">{pkgs.length - done}</p>
+                      <p className="text-xs text-muted-foreground">未完成</p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                      <p className="text-2xl font-bold">{totalItems}</p>
+                      <p className="text-xs text-muted-foreground">装箱总件</p>
+                    </div>
+                  </div>
+                )
+              })()}
+              {(order.packages ?? []).length > 0 ? (
+                (order.packages ?? []).map(pkg => (
+                  <div key={pkg.id} className="rounded-lg border border-border/70 bg-card px-4 py-3">
+                    <div className="mb-2 text-sm font-medium">{pkg.barcode}</div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-table-head">
+                          <th className="pb-2 text-left">编码</th>
+                          <th className="pb-2 text-left">名称</th>
+                          <th className="w-12 pb-2 text-center">单位</th>
+                          <th className="w-12 pb-2 text-center">数量</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pkg.items.map((it, idx) => (
+                          <tr key={idx} className="border-b border-border/40">
+                            <td className="py-2.5">{it.productCode}</td>
+                            <td className="py-2.5">{it.productName}</td>
+                            <td className="py-2.5 text-center">{it.unit}</td>
+                            <td className="py-2.5 text-center">{it.qty}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))
+              ) : (
+                <p className="py-4 text-center text-sm text-muted-foreground">暂无装箱记录</p>
+              )}
+            </div>
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务</p>
+          )}
+        </div>
+      )}
+
+      {detailTab === 'log' && (
+        <div className="card-base p-5">
+          {order.timeline?.length ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_auto_1fr] gap-4 border-b pb-2 text-table-head text-sm">
+                <span>事项</span>
+                <span className="text-center">时间</span>
+                <span className="text-right">操作人</span>
+              </div>
+              {order.timeline.map(event => (
+                <div key={event.id} className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center rounded-lg border border-border/70 bg-card px-4 py-3 text-sm">
+                  <span>{event.title}</span>
+                  <span className="text-center text-muted-foreground">{formatDisplayDateTime(event.createdAt)}</span>
+                  <span className="text-right text-muted-foreground">{event.createdByName || '系统'}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">暂无操作记录</p>
+          )}
+        </div>
+      )}
 
       {/* 底部安全间距 */}
       <div className="h-4" />

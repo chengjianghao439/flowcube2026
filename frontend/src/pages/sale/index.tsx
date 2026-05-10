@@ -121,6 +121,7 @@ export default function SalePage() {
       key: 'totalAmount', title: '金额', width: 110,
       render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span>,
     },
+    { key: 'remark', title: '备注', width: 120, render: v => (v as string) || '-' },
     {
       key: 'status', title: '状态', width: 90,
       render: (v, row) => {
@@ -131,7 +132,7 @@ export default function SalePage() {
           <Badge
             variant="outline"
             className={`text-xs font-medium ${ws.className} ${hasTask ? 'cursor-pointer hover:opacity-80' : ''}`}
-            onClick={() => hasTask && navigate(`/warehouse-tasks?taskId=${r.taskId}`)}
+            onClick={() => hasTask && navigate(`/sale/${r.id}`)}
           >
             {ws.label}
           </Badge>
@@ -154,7 +155,7 @@ export default function SalePage() {
             onShipSale={id => ship.mutate(id)}
             onCancelSale={id => cancel.mutate(id)}
             onDeleteSale={id => deleteMutate.mutate(id)}
-            onViewTask={() => navigate(row.taskId ? `/warehouse-tasks?taskId=${row.taskId}` : '/warehouse-tasks')}
+            onViewTask={() => goToDetail(r)}
             onDetail={() => goToDetail(r)}
             onPrint={() => handlePrint(r.id)}
           />

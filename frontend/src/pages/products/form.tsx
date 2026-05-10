@@ -172,7 +172,8 @@ export default function ProductFormPage() {
   }
 
   function closeTab() {
-    removeTab(tabPath)
+    const { removeTab: rmTab } = useWorkspaceStore.getState()
+    rmTab(tabPath)
     navigate('/products')
   }
 

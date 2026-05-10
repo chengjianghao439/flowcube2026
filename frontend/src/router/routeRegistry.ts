@@ -54,7 +54,6 @@ const InventoryPage = lazy(() => import('@/pages/inventory'))
 const InventoryOverviewPage = lazy(() => import('@/pages/inventory/overview'))
 const StockcheckPage = lazy(() => import('@/pages/stockcheck'))
 const TransferPage = lazy(() => import('@/pages/transfer'))
-const WarehouseTasksPage = lazy(() => import('@/pages/warehouse-tasks'))
 const InboundTasksPage = lazy(() => import('@/pages/inbound-tasks'))
 const InboundTaskCreatePage = lazy(() => import('@/pages/inbound-tasks/create'))
 const InboundTaskDetailPage = lazy(() => import('@/pages/inbound-tasks/detail'))
@@ -247,15 +246,6 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '库存', order: 90 },
-  },
-  {
-    path: '/warehouse-tasks',
-    title: '仓库任务',
-    permission: PERMISSIONS.WAREHOUSE_TASK_VIEW,
-    component: WarehouseTasksPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '仓库任务', order: 10, label: '出库看板' },
   },
   {
     path: '/picking-waves',

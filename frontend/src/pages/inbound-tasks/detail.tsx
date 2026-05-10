@@ -66,10 +66,10 @@ export default function InboundTaskDetailPage() {
   const [rejectReason, setRejectReason] = useState('')
 
   function closeTab() {
-    const { removeTab, tabs } = useWorkspaceStore.getState()
-    const nextKey = removeTab(tabPath || '/inbound-tasks')
-    const nextTab = tabs.find(t => t.key === nextKey)
-    navigate(nextTab?.path ?? '/inbound-tasks')
+    const { removeTab } = useWorkspaceStore.getState()
+    removeTab(tabPath || '/inbound-tasks')
+    navigate('/inbound-tasks')
+  }
   }
 
   async function afterMutation() {

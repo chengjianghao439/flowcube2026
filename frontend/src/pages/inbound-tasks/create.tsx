@@ -49,10 +49,10 @@ export default function InboundTaskCreatePage() {
   useDirtyGuard(tabPath, isDirty)
 
   function closeTab() {
-    const { removeTab, tabs } = useWorkspaceStore.getState()
-    const nextKey = removeTab(tabPath || '/inbound-tasks/new')
-    const nextTab = tabs.find(t => t.key === nextKey)
-    navigate(nextTab?.path ?? '/inbound-tasks')
+    const { removeTab } = useWorkspaceStore.getState()
+    removeTab(tabPath || '/inbound-tasks/new')
+    navigate('/inbound-tasks')
+  }
   }
 
   function handleSupplierConfirm(result: FinderResult) {

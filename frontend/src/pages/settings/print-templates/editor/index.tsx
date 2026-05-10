@@ -15,7 +15,9 @@ export default function PrintTemplateEditorPage() {
   const { removeTab } = useWorkspaceStore()
 
   function closeTab() {
+    const { removeTab } = useWorkspaceStore.getState()
     removeTab(tabPath)
+    navigate('/settings/print-templates')
   }
 
   return (

@@ -1,8 +1,17 @@
+export interface ScanLog {
+  barcode: string
+  qty: number
+  operatorName: string | null
+  scannedAt: string
+}
+
 export interface SaleOrderItem {
   id: number
   productId: number
   productCode: string
   productName: string
+  spec?: string | null
+  color?: string | null
   unit: string
   quantity: number
   unitPrice: number
@@ -13,6 +22,7 @@ export interface SaleOrderItem {
   resolvedPriceLevel?: string | null
   costPrice?: number | null
   belowCost?: boolean
+  scans?: ScanLog[]
 }
 export interface SaleOrderTimelineEvent {
   id: number | string
@@ -24,6 +34,20 @@ export interface SaleOrderTimelineEvent {
   createdAt: string
   payload?: Record<string, unknown> | null
 }
+export interface PackageItem {
+  productCode: string
+  productName: string
+  unit: string
+  qty: number
+}
+
+export interface Package {
+  id: number
+  barcode: string
+  status: number
+  items: PackageItem[]
+}
+
 export interface SaleOrder {
   id: number
   orderNo: string
@@ -52,6 +76,7 @@ export interface SaleOrder {
   createdAt: string
   items?: SaleOrderItem[]
   timeline?: SaleOrderTimelineEvent[]
+  packages?: Package[]
 }
 export interface CreateSaleParams {
   customerId: number
