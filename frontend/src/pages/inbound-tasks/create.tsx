@@ -53,6 +53,7 @@ export default function InboundTaskCreatePage() {
     removeTab(tabPath || '/inbound-tasks/new')
     navigate('/inbound-tasks')
   }
+
   function handleSupplierConfirm(result: FinderResult) {
     setSupplier(result)
     setKeyword('')

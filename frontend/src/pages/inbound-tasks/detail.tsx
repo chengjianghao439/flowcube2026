@@ -74,6 +74,8 @@ export default function InboundTaskDetailPage() {
   async function afterMutation() {
     await refetchTask()
     await refetchContainers()
+  }
+
   const items = Array.isArray(task?.items) ? task.items : []
   const printSummary = task?.printSummary ?? null
   const putawaySummary = task?.putawaySummary ?? null
@@ -101,8 +103,12 @@ export default function InboundTaskDetailPage() {
         </div>
       </div>
     )
+  }
+
   if (isLoading || !task) {
     return <p className="p-6 text-muted-body">加载中…</p>
+  }
+
   function submitOnePackage(it: InboundTaskItem) {
     if (!validId || !task) return
     const raw = lineQty[it.id]?.trim()
@@ -135,6 +141,8 @@ export default function InboundTaskDetailPage() {
         },
       },
     )
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
