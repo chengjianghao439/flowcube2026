@@ -14,7 +14,7 @@
     "dist:win:zip": "npm run prebuild && npm run build:renderer && npx electron-builder --win zip --x64"
   },
   "dependencies": {
-    "semver": "^7.6.3"
+    "semver": "^7.8.0"
   },
   "devDependencies": {
     "electron": "^33.2.1",
