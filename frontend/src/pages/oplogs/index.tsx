@@ -167,7 +167,7 @@ export default function OpLogsPage() {
                 <DetailRow label="原始 IP" value={detail.ip} />
                 <DetailRow label="userId" value={detail.userId} />
                 <DetailRow label="时间" value={formatDisplayDateTime(detail.createdAt)} />
-                <DetailRow label="createdAt" value={detail.createdAt} />
+                <DetailRow label="createdAt" value={formatDisplayDateTime(detail.createdAt)} />
                 <DetailRow label="日志 ID" value={detail.id} />
                 <DetailRow label="请求内容" value={detail.requestBody} />
               </div>

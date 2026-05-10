@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { getPaymentsApi, payApi, getEntriesApi } from '@/api/payments'
 import type { PaymentRecord, PaymentEntry } from '@/api/payments'
 import type { TableColumn } from '@/types'
+import { formatDisplayDate } from '@/lib/dateTime'
 
 const ST_COLOR: Record<number,'default'|'secondary'|'outline'> = { 1:'secondary', 2:'default', 3:'outline' }
 
@@ -50,7 +51,7 @@ export default function PaymentsPage() {
     { key: 'balance', title: '余额', width: 100, render: (v) => <span className={`tabular-nums ${Number(v) > 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
     { key: 'status', title: '状态', width: 90, render: (v, row) => <Badge variant={ST_COLOR[v as number]}>{(row as PaymentRecord).statusName}</Badge> },
     { key: 'dueDate', title: '到期日', width: 100, render: (v, row) => {
-      const d = v ? String(v).slice(0, 10) : null
+      const d = v ? formatDisplayDate(v) : null
       const r = row as PaymentRecord
       const overdue = d && r.status !== 3 && new Date(d) < new Date()
       return d ? <span className={overdue ? 'font-bold text-destructive' : ''}>{d}{overdue ? ' 逾期' : ''}</span> : <span className="text-muted-foreground">-</span>

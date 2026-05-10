@@ -23,6 +23,7 @@ import { getPrintTemplateListApi } from '@/api/print-templates'
 import TemplateRenderer from './TemplateRenderer'
 import type { SaleOrder, SaleOrderItem } from '@/types/sale'
 import type { PrintTemplate } from '@/types/print-template'
+import { formatDisplayDate } from '@/lib/dateTime'
 
 // ─── @media print（动态注入）────────────────────────────────────────────────
 
@@ -239,7 +240,7 @@ export default function SaleOrderPrintTemplate({
   const resolvedItems = items ?? order.items ?? []
   const total = Number(order.totalAmount)
   const dateStr =
-    order.saleDate || (order.createdAt ? String(order.createdAt).slice(0, 10) : '—')
+    formatDisplayDate(order.saleDate || order.createdAt, '—')
 
   return (
     <div

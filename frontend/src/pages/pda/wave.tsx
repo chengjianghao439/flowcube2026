@@ -8,6 +8,7 @@ import {
 import type { WaveItem, WaveRouteStep, WaveRouteContainer, WavePickLine } from '@/api/picking-waves'
 import { getContainerByBarcodeApi } from '@/api/inventory'
 import { payloadClient as client } from '@/api/client'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 // ── 容器查询 ──────────────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ interface ScanRecord {
 }
 
 function now(): string {
-  return new Date().toLocaleTimeString('zh-CN', { hour12: false })
+  return formatDisplayDateTime(new Date())
 }
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────

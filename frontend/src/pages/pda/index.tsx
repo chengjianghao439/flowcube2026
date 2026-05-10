@@ -10,6 +10,7 @@ import { usePdaRole } from '@/hooks/usePdaRole'
 import type { PdaPerm } from '@/hooks/usePdaRole'
 import { PdaEmptyCard } from '@/components/pda/PdaEmptyState'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 // ── 作业入口（带权限过滤）────────────────────────────────────────────────────
 const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = [
@@ -53,7 +54,7 @@ export default function PdaWorkbench() {
             <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${roleColor}`}>{roleIcon} {roleLabel}</span>
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
+            {formatDisplayDateTime(new Date())}
           </p>
         </div>
       </div>

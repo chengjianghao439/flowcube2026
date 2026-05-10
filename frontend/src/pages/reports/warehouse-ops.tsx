@@ -14,6 +14,7 @@ import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Button } from '@/components/ui/button'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { OpsOperator, FlowBottleneck } from '@/api/reports'
 
 // ── 数字卡片 ────────────────────────────────────────────────────────────────
@@ -95,7 +96,7 @@ export default function WarehouseOpsPage() {
 
   const s  = data?.summary
   const updatedTime = dataUpdatedAt
-    ? new Date(dataUpdatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    ? formatDisplayDateTime(new Date(dataUpdatedAt))
     : '--'
 
   function openPath(path: string, title: string) {
@@ -218,7 +219,7 @@ export default function WarehouseOpsPage() {
                   <AlertTriangle className="size-4 text-red-400 shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-red-700 truncate">{e.reason}</p>
-                    <p className="text-[10px] text-red-500">{e.operatorName} · {e.barcode} · {new Date(e.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-[10px] text-red-500">{e.operatorName} · {e.barcode} · {formatDisplayDateTime(e.createdAt)}</p>
                   </div>
                 </div>
               ))}

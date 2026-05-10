@@ -11,6 +11,7 @@
 import type { TemplateLayout, TemplateElement } from '@/types/print-template'
 import { isZplTemplateLayout } from '@/types/print-template'
 import type { SaleOrder } from '@/types/sale'
+import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ function resolveField(fieldKey: string, order: SaleOrder): string {
     title:           '销售订单',
     orderNo:         order.orderNo ?? '',
     customerName:    order.customerName ?? '',
-    orderDate:       order.saleDate ?? String(order.createdAt ?? '').slice(0, 10),
+    orderDate:       formatDisplayDate(order.saleDate || order.createdAt, ''),
     warehouseName:   order.warehouseName ?? '',
     salesperson:     order.operatorName ?? '',
     receiverName:    order.receiverName ?? '',
@@ -51,7 +52,7 @@ function resolveField(fieldKey: string, order: SaleOrder): string {
     totalAmount:     `¥ ${Number(order.totalAmount ?? 0).toFixed(2)}`,
     remark:          order.remark ?? '',
     operator:        order.operatorName ?? '',
-    printDate:       new Date().toLocaleDateString('zh-CN'),
+    printDate:       formatDisplayDateTime(new Date()),
   }
   return map[fieldKey] ?? ''
 }

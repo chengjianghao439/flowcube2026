@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCheckList, useCreateCheck } from '@/hooks/useStockCheck'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import CheckDetailDialog from './components/CheckDetailDialog'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { StockCheck } from '@/types/stockcheck'
 import type { TableColumn } from '@/types'
 
@@ -36,7 +37,7 @@ export default function StockCheckPage() {
     { key:'warehouseName', title:'仓库' },
     { key:'status', title:'状态', width:90, render:(v,row)=><Badge variant={STATUS_COLOR[v as number]}>{(row as StockCheck).statusName}</Badge> },
     { key:'operatorName', title:'经办人', width:100 },
-    { key:'createdAt', title:'创建时间', width:160, render:(v)=>String(v).slice(0,16) },
+    { key:'createdAt', title:'创建时间', width:160, render:(v)=>formatDisplayDateTime(v) },
     { key:'id', title:'操作', width:100, render:(_,row)=>(
       <Button size="sm" variant="outline" onClick={()=>setDetailId((row as StockCheck).id)}>查看/填写</Button>
     )}

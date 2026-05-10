@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { escapeHtmlText, printHtmlDocument } from '@/lib/printHtmlDocument'
 import { PrintPreviewZoomControls } from '@/components/shared/PrintPreviewZoomControls'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 interface OrderItem { productCode:string; productName:string; unit:string; quantity:number; unitPrice:number; amount:number; remark?:string }
 interface PrintOrderData {
@@ -71,7 +72,7 @@ export default function PrintOrderDialog({ open, onClose, data }: Props) {
             <div className="info-item"><span className="info-label">仓库：</span><span>{data.warehouseName}</span></div>
             {data.date && <div className="info-item"><span className="info-label">日期：</span><span>{data.date}</span></div>}
             <div className="info-item"><span className="info-label">经办人：</span><span>{data.operatorName}</span></div>
-            <div className="info-item"><span className="info-label">创建时间：</span><span>{String(data.createdAt).slice(0,16)}</span></div>
+            <div className="info-item"><span className="info-label">创建时间：</span><span>{formatDisplayDateTime(data.createdAt)}</span></div>
             {data.remark && <div className="info-item col-span-2"><span className="info-label">备注：</span><span>{data.remark}</span></div>}
           </div>
           <table>

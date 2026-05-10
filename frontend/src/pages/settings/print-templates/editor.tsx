@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import PageHeader from '@/components/shared/PageHeader'
 import type { PaperSize, TemplateElement, TemplateLayout, TemplateType } from '@/types/print-template'
 import { isZplTemplateLayout } from '@/types/print-template'
@@ -163,7 +164,7 @@ const SAMPLE: Record<string, string> = {
   totalAmount:     '¥ 3,200.00',
   remark:          '请注意包装，易碎品。',
   operator:        '王五',
-  printDate:       new Date().toLocaleDateString('zh-CN'),
+  printDate:       formatDisplayDateTime(new Date()),
 }
 
 const SAMPLE_ITEMS = [

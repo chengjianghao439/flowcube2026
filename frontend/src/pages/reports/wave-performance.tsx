@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { WaveStats } from '@/api/reports'
 
 const STATUS_COLOR: Record<number, string> = {
@@ -155,7 +156,7 @@ export default function WavePerformancePage() {
           setApplied({ startDate: preset.startDate, endDate: preset.endDate })
         }}
         onRefresh={() => refetch()}
-        updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : undefined}
+        updatedAt={dataUpdatedAt ? formatDisplayDateTime(new Date(dataUpdatedAt)) : undefined}
       />
 
       {/* 汇总卡片 */}
@@ -221,7 +222,7 @@ export default function WavePerformancePage() {
                   <tr key={w.id} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="py-3 px-5">
                       <p className="text-doc-code-strong">{w.waveNo}</p>
-                      <p className="text-helper">{new Date(w.createdAt).toLocaleDateString('zh-CN')}</p>
+                      <p className="text-helper">{formatDisplayDateTime(w.createdAt)}</p>
                     </td>
                     <td className="py-3">
                       <Badge className={`${STATUS_COLOR[w.status]} text-xs border-0`}>{w.statusName}</Badge>

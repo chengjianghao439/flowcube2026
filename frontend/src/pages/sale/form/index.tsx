@@ -20,7 +20,7 @@ import { Badge }   from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar }      from '@/components/shared/ActionBar'
@@ -980,7 +980,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
             ['客户',     order.customerName],
             ['仓库',     order.warehouseName],
             ['状态', getSaleWorkflowStatus(order).label],
-            ['销售日期', order.saleDate ?? '—'],
+            ['销售日期', order.saleDate ? [new Date(order.saleDate).getFullYear(), String(new Date(order.saleDate).getMonth()+1).padStart(2,"0"), String(new Date(order.saleDate).getDate()).padStart(2,"0")].join("-") : '—'],
             ['经办人',   order.operatorName],
             ['创建时间', formatDisplayDateTime(order.createdAt)],
           ].map(([label, value]) => (

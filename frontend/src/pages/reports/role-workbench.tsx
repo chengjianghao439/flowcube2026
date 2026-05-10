@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getRoleWorkbenchApi, type WorkbenchCard } from '@/api/reports'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 function PriorityBanner({
   title,
@@ -79,7 +80,7 @@ function SectionList({ cards, onOpen }: { cards: WorkbenchCard[]; onOpen: (path:
                       </div>
                       {item.subtitle && <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.subtitle}</p>}
                     </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">{item.hint || (item.createdAt ? new Date(item.createdAt).toLocaleDateString('zh-CN') : '待处理')}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{item.hint || (item.createdAt ? formatDisplayDateTime(item.createdAt) : '待处理')}</span>
                   </div>
                 </button>
               ))}

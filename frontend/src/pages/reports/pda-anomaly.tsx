@@ -12,6 +12,7 @@ import { ReportPanel } from '@/components/shared/ReportPanel'
 import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
   return (
@@ -126,7 +127,7 @@ export default function PdaAnomalyPage() {
           setApplied({ startDate: preset.startDate, endDate: preset.endDate })
         }}
         onRefresh={() => refetch()}
-        updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : undefined}
+        updatedAt={dataUpdatedAt ? formatDisplayDateTime(new Date(dataUpdatedAt)) : undefined}
       />
 
       {isLoading && <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}
