@@ -192,7 +192,7 @@ export default function ProductFormPage() {
         subtitle={isEdit && product ? <span className="text-sm text-muted-foreground">编码：<code className="font-mono">{product.code}</code></span> : undefined}
         rightActions={
           <>
-            <Button variant="outline" onClick={closeTab} disabled={submitting}>取消</Button>
+
             <Button onClick={handleSubmit} disabled={submitting || !form.name} className="gap-1.5">
               {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />保存中...</> : <><Save className="h-4 w-4" />保存</>}
             </Button>

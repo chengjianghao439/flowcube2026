@@ -197,7 +197,7 @@ export default function InboundTaskDetailPage() {
                 取消任务
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={closeTab}>关闭</Button>
+
           </div>
         }
       />

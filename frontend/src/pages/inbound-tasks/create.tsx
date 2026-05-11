@@ -125,9 +125,7 @@ export default function InboundTaskCreatePage() {
         title="新建收货订单"
         rightActions={
           <>
-            <Button variant="outline" onClick={closeTab} disabled={createInbound.isPending}>
-              取消
-            </Button>
+
             <Button onClick={submit} disabled={createInbound.isPending} className="gap-1.5">
               {createInbound.isPending ? (
                 <>

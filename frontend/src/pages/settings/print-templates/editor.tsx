@@ -657,10 +657,6 @@ export default function PrintTemplateEditor() {
     toast.success('已恢复默认布局')
   }
 
-  function goBack() {
-    navigate('/settings/print-templates')
-  }
-
   // ── Palette → Canvas drag (HTML5 drag API) ───────────────────
   const handlePaletteDragStart = useCallback((field: FieldDef) => {
     draggingField.current = field
@@ -751,7 +747,7 @@ export default function PrintTemplateEditor() {
       <PageHeader
         title={isNew ? '新建打印模板' : `编辑打印模板 #${id}`}
         description="拖拽字段到画布编排版式；热敏标签与单据均使用毫米坐标；标签打印为 ZPL 或 TSPL 由打印机 RAW 设置决定。工具栏「画布」可缩放以便编辑。"
-        actions={<Button variant="outline" size="sm" onClick={goBack}>关闭页面</Button>}
+        actions={undefined}
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">

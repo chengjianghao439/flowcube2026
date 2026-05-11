@@ -174,7 +174,6 @@ export default function SaleFormPage() {
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
         <p className="text-sm">销售单路由无效，请从列表重新打开</p>
-        <Button size="sm" variant="outline" onClick={closeTab}>关闭页面</Button>
       </div>
     )
   }
@@ -335,7 +334,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         title="新建销售单"
         rightActions={
           <>
-            <Button variant="outline" onClick={closeTab} disabled={createMutate.isPending}>取消</Button>
+
             <Button onClick={handleSubmit} disabled={createMutate.isPending} className="gap-1.5">
               {createMutate.isPending
                 ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</>
@@ -676,7 +675,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
         subtitle={<FulfillmentProgressCard order={order} />}
         rightActions={
           <>
-            <Button variant="outline" onClick={closeTab} disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending}>关闭</Button>
+
             <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5"
               onClick={() => setCancelConfirmOpen(true)}
               disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending}>
@@ -897,7 +896,6 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
         <p className="text-sm">销售单不存在或已删除</p>
-        <Button size="sm" variant="outline" onClick={closeTab}>关闭页面</Button>
       </div>
     )
   }

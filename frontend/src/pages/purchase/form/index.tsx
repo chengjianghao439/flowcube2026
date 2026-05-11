@@ -190,13 +190,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         title="新建采购单"
         rightActions={
           <>
-            <Button
-              variant="outline"
-              onClick={() => requestLeave(() => closeTab('/purchase'))}
-              disabled={createMutate.isPending || submitLocked}
-            >
-              取消
-            </Button>
+
             <Button onClick={handleSubmit} disabled={createMutate.isPending || submitLocked} className="gap-1.5">
               {createMutate.isPending || submitLocked ? (
                 <>
@@ -436,7 +430,6 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: (t
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
         <p className="text-sm">采购单不存在或已删除</p>
-        <Button size="sm" variant="outline" onClick={closeTab}>关闭页面</Button>
       </div>
     )
   }
@@ -470,7 +463,7 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: (t
                 提交
               </Button>
             )}
-            <Button variant="outline" onClick={() => closeTab('/purchase')}>关闭</Button>
+
           </>
         }
       />
