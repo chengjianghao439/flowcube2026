@@ -101,7 +101,7 @@ router.use(authMiddleware)
 function pdaOnly(req, res, next) {
   const client = (req.headers['x-client'] || '').toLowerCase()
   if (client !== 'pda') {
-    return res.status(403).json({ success: false, message: '上架仅允许通过 PDA 扫码完成', data: null })
+    return res.status(403).json({ success: false, message: '收货和上架仅允许通过 PDA 扫码完成', data: null })
   }
   next()
 }
@@ -115,7 +115,7 @@ router.get('/:id',           requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), 
 router.post('/:id/submit',   requirePermission(PERMISSIONS.INBOUND_ORDER_SUBMIT), ctrl.submit)
 router.post('/:id/audit',    requirePermission(PERMISSIONS.INBOUND_ORDER_AUDIT), vBody(auditSchema), ctrl.audit)
 router.post('/:id/reprint',  requirePermission(PERMISSIONS.INBOUND_PRINT_REPRINT), vBody(reprintSchema), ctrl.reprint)
-router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), vBody(receiveSchema), ctrl.receive)
+router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaOnly, vBody(receiveSchema), ctrl.receive)
 router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaOnly, vBody(putawaySchema), ctrl.putaway)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.cancel)
 
