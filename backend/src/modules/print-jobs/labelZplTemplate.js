@@ -83,7 +83,7 @@ function generateZplFromElements(layout, vars, paperSize) {
     } else if (el.type === 'title' || el.type === 'text') {
       const t = sanitizeZplValue(rawVal)
       if (!t) continue
-      const fs = Math.max(16, Math.min(72, Math.round((el.fontSize || 10) * 2.2)))
+      const fs = Math.max(16, Math.min(72, Math.round((el.fontSize || 10) * 203 / 72)))
       body += `^FO${x},${y}^A0N,${fs},${fs}^FD${t}^FS`
       segments += 1
     }
