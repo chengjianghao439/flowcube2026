@@ -24,7 +24,7 @@ export default function PdaSplitPage() {
   const [sourceKind, setSourceKind] = useState<'inventory' | 'plastic_box'>('inventory')
   const [remaining, setRemaining] = useState<number>(0)
   const [qtyStr, setQtyStr] = useState('1')
-  const [printLabel, setPrintLabel] = useState(true)
+  const [printLabel, setPrintLabel] = useState(false)
 
   const loadMut = useMutation({
     mutationFn: async (bc: string) => {

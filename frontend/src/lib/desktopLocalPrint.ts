@@ -50,17 +50,6 @@ export function validateZplForLocalPrint(content: string | null | undefined): st
   return null
 }
 
-/** TSPL 本机 RAW 校验 */
-export function validateTsplForLocalPrint(content: string | null | undefined): string | null {
-  const s = content != null ? String(content).trim() : ''
-  if (!s) return 'TSPL 内容为空，无法本机打印'
-  const u = s.toUpperCase()
-  if (!u.includes('SIZE') || !u.includes('CLS') || !u.includes('PRINT')) {
-    return 'TSPL 不完整（应含 SIZE、CLS、PRINT），无法送 RAW。请检查模板或打印机「指令集」是否为 TSPL'
-  }
-  return null
-}
-
 export async function printZplOnDesktop(
   content: string,
   opts: { printerName: string | null | undefined },
@@ -109,7 +98,7 @@ export async function tryDesktopLocalZplThenComplete(opts: {
   if (!isDesktopLocalPrintAvailable()) return 'skipped_no_desktop'
   const { jobId, content, contentType, printerName } = opts
   const ct = String(contentType || '').toLowerCase()
-  if (!content || (ct !== 'zpl' && ct !== 'tspl') || jobId == null || !Number.isFinite(Number(jobId))) {
+  if (!content || ct !== 'zpl' || jobId == null || !Number.isFinite(Number(jobId))) {
     return 'skipped_no_payload'
   }
   if (!hasDesktopZplTargetConfigured(printerName)) {
@@ -119,29 +108,7 @@ export async function tryDesktopLocalZplThenComplete(opts: {
     }
   }
   const body = String(content).trimStart()
-  const bodyU = body.toUpperCase()
-  const looksZpl = body.includes('^XA') && body.includes('^XZ')
-  const looksTspl =
-    bodyU.includes('SIZE') && bodyU.includes('CLS') && bodyU.includes('PRINT')
-  if (ct === 'tspl' && looksZpl) {
-    return {
-      error:
-        '下发内容为 ZPL（含 ^XA/^XZ），但当前按 TSPL 标记。请在「打印机管理」将该标签机的 **RAW 指令集** 改为 **ZPL** 并保存；若已改过仍如此，请硬刷新浏览器（Ctrl+Shift+R）或检查是否连错环境/数据库。',
-    }
-  }
-  if (
-    ct === 'zpl' &&
-    /^\s*SIZE\s+/i.test(body) &&
-    bodyU.includes('PRINT') &&
-    bodyU.includes('CLS') &&
-    !looksZpl
-  ) {
-    return {
-      error:
-        '下发内容为 TSPL（以 SIZE 开头），但当前按 ZPL 标记。请在「打印机管理」将 **RAW 指令集** 改为 **TSPL** 并保存后再打印。',
-    }
-  }
-  const rawErr = ct === 'tspl' ? validateTsplForLocalPrint(content) : validateZplForLocalPrint(content)
+  const rawErr = validateZplForLocalPrint(body)
   if (rawErr) return { error: rawErr }
   try {
     await printZplOnDesktop(String(content).trim(), { printerName })

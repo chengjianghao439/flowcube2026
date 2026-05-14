@@ -52,6 +52,7 @@ const CategoryPage = lazy(() => import('@/pages/categories'))
 const WarehousePage = lazy(() => import('@/pages/warehouses'))
 const InventoryPage = lazy(() => import('@/pages/inventory'))
 const InventoryOverviewPage = lazy(() => import('@/pages/inventory/overview'))
+const PlasticBoxesPage = lazy(() => import('@/pages/plastic-boxes'))
 const StockcheckPage = lazy(() => import('@/pages/stockcheck'))
 const TransferPage = lazy(() => import('@/pages/transfer'))
 const InboundTasksPage = lazy(() => import('@/pages/inbound-tasks'))
@@ -228,6 +229,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '库存', order: 70 },
+  },
+  {
+    path: '/plastic-boxes',
+    title: '塑料盒管理',
+    permission: PERMISSIONS.INVENTORY_VIEW,
+    component: PlasticBoxesPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '库存', order: 75 },
   },
   {
     path: '/stockcheck',

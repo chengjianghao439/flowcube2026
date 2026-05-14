@@ -58,8 +58,8 @@ interface Printer {
   code: string
   type: number
   typeName: string
-  /** 本机 RAW：zpl 斑马系；tspl 通用 TSPL 标签机 */
-  labelRawFormat?: 'zpl' | 'tspl'
+  /** 本机 RAW：ZPL 斑马系 */
+  labelRawFormat?: 'zpl'
   description: string
   status: number
   warehouseId?: number | null
@@ -468,7 +468,7 @@ export default function PrintersPage() {
 	              <th className="px-4 py-3 text-left text-table-head">类型</th>
 	              <th
 	                className="px-4 py-3 text-left text-table-head"
-	                title="打印机指令集：ZPL 适用于斑马等；TSPL 适用于通用 TSPL 标签机"
+	                title="打印机指令集：ZPL 适用于斑马等"
 	              >
 	                指令集
 	              </th>
@@ -500,7 +500,7 @@ export default function PrintersPage() {
                   <Select
                     value={p.labelRawFormat ?? 'zpl'}
                     onValueChange={v =>
-                      updateLabelFmt.mutate({ ...p, labelRawFormat: v as 'zpl' | 'tspl' })
+                      updateLabelFmt.mutate({ ...p, labelRawFormat: v as 'zpl' })
                     }
                     disabled={updateLabelFmt.isPending}
 	                  >
@@ -509,7 +509,7 @@ export default function PrintersPage() {
 	                    </SelectTrigger>
 	                    <SelectContent>
 	                      <SelectItem value="zpl">标签机指令 ZPL</SelectItem>
-	                      <SelectItem value="tspl">标签机指令 TSPL</SelectItem>
+
 	                    </SelectContent>
 	                  </Select>
                 </td>

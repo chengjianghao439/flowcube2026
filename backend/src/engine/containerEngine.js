@@ -738,9 +738,10 @@ function fmtSqlDate(d) {
  * @param {{ containerId: number, qty: number, remark?: string|null }} params
  * @returns {Promise<{ sourceContainerId: number, sourceBarcode: string, sourceRemainingAfter: number, newContainerId: number, newBarcode: string, newContainerKind: 'plastic_box', productId: number, warehouseId: number }>}
  */
-async function splitContainer(conn, { containerId, qty, remark = null }) {
+async function splitContainer(conn, { containerId, qty, remark = null, targetContainerId = null }) {
   const cid = Number(containerId)
   const q = Number(qty)
+  const tid = targetContainerId != null ? Number(targetContainerId) : null
   if (!Number.isFinite(cid) || cid <= 0) throw new AppError('无效容器 ID', 400)
   if (!Number.isFinite(q) || q <= 0) throw new AppError('拆分数量须为正数', 400)
 
@@ -760,8 +761,56 @@ async function splitContainer(conn, { containerId, qty, remark = null }) {
     throw new AppError('容器已被任务锁定，不可拆分', 409)
   }
   const rem = Number(row.remaining_qty)
-  if (q >= rem) throw new AppError('拆分数量须小于剩余数量', 400)
+  if (q > rem) throw new AppError('拆分数量不能超过剩余数量', 400)
 
+  // 转入已有塑料盒
+  if (tid) {
+    const [[target]] = await conn.query(
+      `SELECT id, barcode, product_id, warehouse_id, remaining_qty, status
+       FROM inventory_containers
+       WHERE id = ? AND barcode LIKE 'B%' AND deleted_at IS NULL
+       FOR UPDATE`,
+      [tid],
+    )
+    if (!target) throw new AppError('目标塑料盒不存在', 404)
+    if (Number(target.status) !== CONTAINER_STATUS.ACTIVE && Number(target.remaining_qty) !== 0) {
+      throw new AppError('目标塑料盒状态异常', 400)
+    }
+    if (Number(target.product_id) !== Number(row.product_id)) {
+      throw new AppError('目标塑料盒绑定产品不匹配', 400)
+    }
+
+    const newRem = rem - q
+    const newStatus = newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE
+    await conn.query(
+      'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
+      [newRem, newStatus, cid],
+    )
+
+    const targetNewQty = Number(target.remaining_qty) + q
+    await conn.query(
+      'UPDATE inventory_containers SET remaining_qty = ?, status = 1 WHERE id = ?',
+      [targetNewQty, tid],
+    )
+
+    await syncStockFromContainers(conn, row.product_id, row.warehouse_id)
+
+    return {
+      sourceContainerId:   cid,
+      sourceBarcode:         row.barcode,
+      sourceRemainingAfter:  newRem,
+      targetContainerId:     tid,
+      targetBarcode:         target.barcode,
+      targetQtyAfter:        targetNewQty,
+      newContainerId:        tid,
+      newBarcode:            target.barcode,
+      newContainerKind:      'plastic_box',
+      productId:             row.product_id,
+      warehouseId:           row.warehouse_id,
+    }
+  }
+
+  // 创建新塑料盒（原有逻辑）
   const newRem = rem - q
   const newStatus = newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE
   await conn.query(

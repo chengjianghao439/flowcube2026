@@ -8,7 +8,7 @@ const { pool } = require('../../config/db')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
 const logger = require('../../utils/logger')
 
-/** 与 print_templates.type 一致：5 货架 6 散件容器 7 物流箱贴 8 商品 9 库存 */
+/** 与 print_templates.type 一致：5 货架 6 库存容器 7 物流箱贴 8 商品 9 塑料盒 */
 const LABEL_TEMPLATE_TYPES = [5, 6, 7, 8, 9]
 
 /** 203 dpi：1mm ≈ 8 点 */

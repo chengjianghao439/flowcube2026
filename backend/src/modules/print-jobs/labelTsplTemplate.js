@@ -1,5 +1,5 @@
 /**
- * 标签 TSPL（TSC）：默认模板 type 5–9；layout.format=tspl + body；画布 elements（与 ZPL 同源 mm 坐标）；或内置兜底布局。
+ * 标签 TSPL（TSC）：默认模板 type 5–8；layout.format=tspl + body；画布 elements（与 ZPL 同源 mm 坐标）；或内置兜底布局。
  */
 
 const { pool } = require('../../config/db')
@@ -173,7 +173,7 @@ function buildProductLabelTspl({ product_code, product_name, spec, unit, price }
 }
 
 /**
- * @param {number} templateType 5–9
+ * @param {number} templateType 5–8
  * @param {Record<string, string|number|null|undefined>} vars
  */
 async function getLabelTsplFromDefaultTemplate(templateType, vars) {

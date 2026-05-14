@@ -4,14 +4,8 @@ const logger = require('../../utils/logger')
 const { resolvePrinterForJob } = require('./print-dispatch')
 const { getLabelZplFromDefaultTemplate } = require('./labelZplTemplate')
 const {
-  buildRackLabelTspl,
-  buildContainerLabelTspl,
-  buildPackageLabelTspl,
-  buildProductLabelTspl,
-  getLabelTsplFromDefaultTemplate,
-} = require('./labelTsplTemplate')
-const {
   buildContainerLabelZpl,
+  buildPlasticBoxLabelZpl,
   buildRackLabelZpl,
   buildPackageLabelZpl,
   buildProductLabelZpl,
@@ -20,12 +14,8 @@ const { create, createWithinTransaction } = require('./print-jobs.command')
 const { findById } = require('./print-jobs.query')
 const { getDispatchHintForJob } = require('./print-jobs.dispatch')
 
-async function getPrinterLabelRawFormat(printerId) {
-  const id = Number(printerId)
-  if (!Number.isFinite(id) || id <= 0) return 'zpl'
-  const [[row]] = await pool.query('SELECT label_raw_format FROM printers WHERE id=?', [id])
-  const f = String(row?.label_raw_format || 'zpl').toLowerCase()
-  return f === 'tspl' ? 'tspl' : 'zpl'
+function getPrinterLabelRawFormat(_printerId) {
+  return 'zpl'
 }
 
 async function resolveLabelPrinterId() {
@@ -63,16 +53,9 @@ async function resolveLabelPrinter({ warehouseId, jobType, requireBinding = fals
   return { printerId, dispatchReason }
 }
 
-async function buildLabelBody({ printerId, templateType, vars, tsplBuilder, zplBuilder }) {
-  const labelFmt = await getPrinterLabelRawFormat(printerId)
-  const useTspl = labelFmt === 'tspl'
-  const content = useTspl
-    ? (await getLabelTsplFromDefaultTemplate(templateType, vars)) ?? tsplBuilder(vars)
-    : (await getLabelZplFromDefaultTemplate(templateType, vars)) ?? zplBuilder(vars)
-  return {
-    contentType: useTspl ? 'tspl' : 'zpl',
-    content,
-  }
+async function buildLabelBody({ templateType, vars, zplBuilder }) {
+  const content = (await getLabelZplFromDefaultTemplate(templateType, vars)) ?? zplBuilder(vars)
+  return { contentType: 'zpl', content }
 }
 
 async function enqueueContainerLabelJob(payload) {
@@ -92,12 +75,12 @@ async function enqueueContainerLabelJob(payload) {
     product_name: data.product_name,
     qty: data.qty,
   }
+  const isPlasticBox = String(data.container_code || '').toUpperCase().startsWith('B')
   const label = await buildLabelBody({
     printerId,
-    templateType: 6,
+    templateType: isPlasticBox ? 9 : 6,
     vars,
-    tsplBuilder: buildContainerLabelTspl,
-    zplBuilder: buildContainerLabelZpl,
+    zplBuilder: isPlasticBox ? buildPlasticBoxLabelZpl : buildContainerLabelZpl,
   })
   const createJob = conn ? createWithinTransaction.bind(null, conn) : create
   return createJob({
@@ -105,7 +88,7 @@ async function enqueueContainerLabelJob(payload) {
     dispatchReason,
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
     jobType: 'container_label',
-    title: `容器标 ${data.container_code}`,
+    title: `${isPlasticBox ? '塑料盒标' : '容器标'} ${data.container_code}`,
     contentType: label.contentType,
     content: label.content,
     copies: 1,
@@ -152,7 +135,6 @@ async function enqueueRackLabelJob(payload) {
     printerId,
     templateType: 5,
     vars,
-    tsplBuilder: buildRackLabelTspl,
     zplBuilder: buildRackLabelZpl,
   })
   try {
@@ -191,17 +173,32 @@ async function enqueuePackageLabelJob(payload) {
   const conn = payload?.conn || null
   const exec = conn || pool
   const [[row]] = await exec.query(
-    `SELECT p.id, p.barcode, wt.task_no, wt.customer_name, wt.warehouse_id,
+    `SELECT p.id, p.barcode, wt.task_no, wt.customer_name, wt.warehouse_id, wt.freight_type,
+            c.name AS carrier_name,
             (SELECT COUNT(*) FROM package_items pi WHERE pi.package_id = p.id) AS line_count,
             (SELECT COALESCE(SUM(pi.qty), 0) FROM package_items pi WHERE pi.package_id = p.id) AS total_qty
      FROM packages p
      JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
+     LEFT JOIN carriers c ON c.id = wt.carrier_id
      WHERE p.id = ?`,
     [packageId],
   )
   if (!row) return null
+
+  const [itemRows] = await exec.query(
+    `SELECT pi.qty, pr.name AS product_name
+     FROM package_items pi
+     JOIN product_items pr ON pr.id = pi.product_id
+     WHERE pi.package_id = ?
+     ORDER BY pi.id`,
+    [packageId],
+  )
+  const itemList = (itemRows || []).map(it => `${it.product_name}×${it.qty}`).join(', ')
+  const freightLabels = { 1: '寄付', 2: '到付', 3: '第三方付' }
+  const freightName = freightLabels[row.freight_type] || ''
+  const pieceCount = `${Number(row.total_qty)} 件`
+
   const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
-  const summary = `${Number(row.line_count)} 行 / ${Number(row.total_qty)} 件`
   const { printerId, dispatchReason } = await resolveLabelPrinter({
     warehouseId: wh,
     jobType: 'package_label',
@@ -213,13 +210,16 @@ async function enqueuePackageLabelJob(payload) {
     box_code: row.barcode,
     task_no: row.task_no,
     customer_name: row.customer_name,
-    summary,
+    carrier_name: row.carrier_name || '',
+    freight_type_name: freightName,
+    piece_count: pieceCount,
+    item_list: itemList,
+    summary: `${Number(row.line_count)} 行 / ${Number(row.total_qty)} 件`,
   }
   const label = await buildLabelBody({
     printerId,
     templateType: 7,
     vars,
-    tsplBuilder: buildPackageLabelTspl,
     zplBuilder: buildPackageLabelZpl,
   })
   const createJob = conn ? createWithinTransaction.bind(null, conn) : create
@@ -267,7 +267,6 @@ async function enqueueProductLabelJob(payload) {
     printerId,
     templateType: 8,
     vars,
-    tsplBuilder: buildProductLabelTspl,
     zplBuilder: buildProductLabelZpl,
   })
 

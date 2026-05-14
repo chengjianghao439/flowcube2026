@@ -130,11 +130,12 @@ async function assignContainerLocation(req, res, next) {
 async function splitContainer(req, res, next) {
   try {
     const id = +req.params.id
-    const { qty, remark, printLabel } = req.body
+    const { qty, remark, printLabel, targetContainerId } = req.body
     const result = await svc.splitContainerOp(id, {
       qty,
       remark,
       printLabel: !!printLabel,
+      targetContainerId: targetContainerId != null ? Number(targetContainerId) : null,
       userId:     req.user.userId,
     })
     return successResponse(res, result, '拆分成功')

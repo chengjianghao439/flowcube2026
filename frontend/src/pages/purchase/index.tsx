@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { usePurchaseList, useConfirmPurchase, useCancelPurchase, usePurchaseDetail } from '@/hooks/usePurchase'
-import PrintOrderDialog from '@/components/shared/PrintOrderDialog'
+import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
+import { mapPurchaseOrderToPrint } from '@/lib/orderPrintData'
 import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -221,32 +222,14 @@ export default function PurchasePage() {
         onRowDoubleClick={goToDetail}
       />
 
-      <PrintOrderDialog
-        open={!!printId}
-        onClose={() => setPrintId(null)}
-        data={printDetail ? {
-          orderNo: printDetail.orderNo,
-          type: '采购单',
-          status: printDetail.statusName,
-          partyLabel: '供应商',
-          partyName: printDetail.supplierName,
-          warehouseName: printDetail.warehouseName,
-          date: printDetail.expectedDate,
-          totalAmount: printDetail.totalAmount,
-          operatorName: printDetail.operatorName,
-          createdAt: printDetail.createdAt,
-          remark: printDetail.remark,
-          items: (printDetail.items || []).map(i => ({
-            productCode: i.productCode,
-            productName: i.productName,
-            unit: i.unit,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-            amount: i.amount,
-            remark: i.remark,
-          })),
-        } : null}
-      />
+      {printDetail && (
+        <OrderPrintOverlay
+          templateType={2}
+          title={printDetail.orderNo}
+          {...mapPurchaseOrderToPrint(printDetail)}
+          onClose={() => setPrintId(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmState.open}

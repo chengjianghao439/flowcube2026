@@ -1,5 +1,6 @@
 /**
- * 收货订单详情 — 收货 / 上架 / 容器列表
+ * 收货订单详情 — 上架 / 审核 / 打印
+ * 收货和上架仅允许通过 PDA 完成
  * 路由：/inbound-tasks/:id（多标签）
  */
 import { useContext, useState } from 'react'
@@ -20,6 +21,8 @@ import {
   useAuditInboundTask,
   useCancelInbound,
 } from '@/hooks/useInboundTasks'
+import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
+import { mapInboundTaskToPrint } from '@/lib/orderPrintData'
 
 function Section({ title, children, sectionId }: { title: string; children: React.ReactNode; sectionId?: string }) {
   return (
@@ -50,6 +53,7 @@ export default function InboundTaskDetailPage() {
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
   const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  const [printOpen, setPrintOpen] = useState(false)
 
   function closeTab() {
     const { removeTab } = useWorkspaceStore.getState()
@@ -148,7 +152,7 @@ export default function InboundTaskDetailPage() {
                 取消任务
               </Button>
             )}
-
+            <Button variant="outline" size="sm" onClick={() => setPrintOpen(true)}>打印</Button>
           </div>
         }
       />
@@ -325,6 +329,15 @@ export default function InboundTaskDetailPage() {
           />
         </div>
       </AppDialog>
+
+      {printOpen && task && (
+        <OrderPrintOverlay
+          templateType={2}
+          title={task.taskNo}
+          {...mapInboundTaskToPrint(task)}
+          onClose={() => setPrintOpen(false)}
+        />
+      )}
     </div>
   )
 }

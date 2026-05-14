@@ -12,6 +12,8 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getPurchaseReturnsApi, createPurchaseReturnApi, confirmPurchaseReturnApi, executePurchaseReturnApi, cancelPurchaseReturnApi, getSaleReturnsApi, createSaleReturnApi, confirmSaleReturnApi, executeSaleReturnApi, cancelSaleReturnApi, getPurchaseReturnSourceOrderApi, getSaleReturnSourceOrderApi } from '@/api/returns'
 import { downloadExport } from '@/lib/exportDownload'
+import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
+import { mapReturnOrderToPrint } from '@/lib/orderPrintData'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { useSuppliers } from '@/hooks/useSuppliers'
@@ -193,6 +195,7 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
   const openConfirm=(title:string,description:string,onConfirm:()=>void)=>setConfirmState({open:true,title,description,onConfirm})
   const closeConfirm=()=>setConfirmState(s=>({...s,open:false}))
   const [pendingId,setPendingId]=useState<number|null>(null)
+  const [printTarget,setPrintTarget]=useState<RowType|null>(null)
   const apiList = type==='purchase'?getPurchaseReturnsApi:getSaleReturnsApi
   const {data,isLoading}=useQuery({queryKey:['returns',type,{page,keyword}],queryFn:()=>apiList({page,pageSize:20,keyword}).then(r=>r!)})
   const inv=()=>qc.invalidateQueries({queryKey:['returns',type]})
@@ -221,7 +224,7 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
     {key:'operatorName',title:'经办人',width:90},
     {key:'createdAt',title:'时间',width:160,render:(v)=>formatDisplayDateTime(v)},
     {key:'id',title:'操作',width:120,render:(_,row)=>{const r=row as RowType;
-      if (r.status !== 1 && r.status !== 2) return <span className="text-xs text-muted-foreground">—</span>
+      if (r.status === 5) return <span className="text-xs text-muted-foreground">—</span>
       return(
         <TableActionsMenu
           primaryLabel={r.status===1 ? (pendingId===r.id ? '处理中...' : '确认') : (pendingId===r.id ? '处理中...' : '执行退货')}
@@ -232,6 +235,10 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
           }}
           primaryDisabled={pendingId===r.id}
           items={[
+            {
+              label: '打印',
+              onClick: () => setPrintTarget(r),
+            },
             {
               label: pendingId===r.id ? '处理中...' : '取消',
               onClick:()=>openConfirm('取消退货单','确认取消此退货单？',()=>mut(()=>cancelFn(r.id),r.id)),
@@ -273,6 +280,14 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
           <ReturnForm type={type} onClose={()=>setOpen(false)} onSuccess={inv} />
         </DialogContent>
       </Dialog>
+      {printTarget && (
+        <OrderPrintOverlay
+          templateType={3}
+          title={printTarget.returnNo}
+          {...mapReturnOrderToPrint({...printTarget, type})}
+          onClose={() => setPrintTarget(null)}
+        />
+      )}
     </div>
   )
 }
