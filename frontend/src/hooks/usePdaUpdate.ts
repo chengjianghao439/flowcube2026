@@ -54,12 +54,9 @@ export function usePdaUpdate() {
 
   useEffect(() => {
     if (!nativeUpdateSupported) return
-    // 延迟 3 秒检查，避免影响启动速度
     void readInstalledVersionCode().then((code) => {
       if (code > 0) localStorage.setItem(LOCAL_VERSION_KEY, String(code))
     })
-    const timer = setTimeout(() => { void checkUpdate() }, 3000)
-    return () => clearTimeout(timer)
   }, [nativeUpdateSupported])
 
   async function checkUpdate(options?: { manual?: boolean }) {

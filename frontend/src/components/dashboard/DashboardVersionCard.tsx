@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Package, BellRing, Download } from 'lucide-react'
+import { Package, BellRing, Download, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,9 @@ import { resolveAppUpdateDownloadUrl } from '@/lib/resolveAppUpdateDownloadUrl'
 import { toast } from '@/lib/toast'
 
 export default function DashboardVersionCard() {
+  const qc = useQueryClient()
   const [updateBusy, setUpdateBusy] = useState(false)
+  const [checking, setChecking] = useState(false)
 
   const { data: desktopRuntime } = useQuery({
     queryKey: ['desktop-runtime-info'],
@@ -37,6 +39,19 @@ export default function DashboardVersionCard() {
     staleTime: 1000 * 60 * 5,
     retry: 1,
   })
+
+  async function handleCheckUpdate() {
+    setChecking(true)
+    try {
+      await qc.invalidateQueries({ queryKey: ['app-update-latest'] })
+      const d = window.flowcubeDesktop
+      if (d?.triggerUpdateCheck) {
+        await d.triggerUpdateCheck()
+      }
+    } finally {
+      setChecking(false)
+    }
+  }
 
   const latestVer = data?.version
   const notes = data?.notes?.trim() || ''
@@ -81,6 +96,17 @@ export default function DashboardVersionCard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              disabled={checking}
+              onClick={() => void handleCheckUpdate()}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />
+              {checking ? '检查中…' : '检查更新'}
+            </Button>
             {showNewAvailable && (
               <Badge variant="default" className="gap-1 bg-amber-600 hover:bg-amber-600/90">
                 <BellRing className="h-3 w-3" />

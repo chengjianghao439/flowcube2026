@@ -9,7 +9,7 @@ import ErpDesktopConnectionGate from '@/components/erp/ErpDesktopConnectionGate'
 import ErpApiBaseHotkeyDialog from '@/components/erp/ErpApiBaseHotkeyDialog'
 import { DesktopQuitUnloadBridge } from '@/components/desktop/DesktopQuitUnloadBridge'
 import DesktopPrintClientBridge from '@/components/desktop/DesktopPrintClientBridge'
-import GlobalDesktopUpdateDialog from '@/components/desktop/GlobalDesktopUpdateDialog'
+
 import { PERMISSIONS } from '@/lib/permission-codes'
 
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
@@ -98,7 +98,6 @@ export default function AppRouter() {
   return (
     <HashRouter>
       <CrossClientNavigationGuard />
-      <GlobalDesktopUpdateDialog />
       <PdaConnectionGate>
         {/*
           桌面：beforeunload 闸门 / API 热键 必须挂在 ErpDesktopConnectionGate 之外。
