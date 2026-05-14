@@ -48,6 +48,14 @@ function resolveLabelWidthMm(layout, paperSize) {
   return paperSize === 'thermal58' ? 58 : 80
 }
 
+function calcBarcodeModuleWidth(codeLen, desiredWidthDots) {
+  if (!codeLen || !desiredWidthDots) return 2
+  // Code128: start(11) + data(11×N) + check(11) + stop(13) + quiet(20) ≈ 11N + 55
+  const totalModules = codeLen * 11 + 55
+  const by = Math.round(desiredWidthDots / totalModules)
+  return Math.max(1, Math.min(10, by))
+}
+
 function generateZplFromElements(layout, vars, paperSize) {
   const elements = layout?.elements
   if (!Array.isArray(elements) || elements.length === 0) return null
@@ -68,7 +76,9 @@ function generateZplFromElements(layout, vars, paperSize) {
       const code = String(rawVal ?? '').replace(/[\r\n^~]/g, '')
       if (!code) continue
       const barH = Math.max(28, Math.min(120, Math.round((el.height || 14) * MM_TO_DOT)))
-      body += `^FO${x},${y}^BY2^BCN,${barH},Y,N,N^FD${code}^FS`
+      const desiredWidth = Math.round((el.width || 72) * MM_TO_DOT)
+      const by = calcBarcodeModuleWidth(code.length, desiredWidth)
+      body += `^FO${x},${y}^BY${by}^BCN,${barH},Y,N,N^FD${code}^FS`
       segments += 1
     } else if (el.type === 'title' || el.type === 'text') {
       const t = sanitizeZplValue(rawVal)
