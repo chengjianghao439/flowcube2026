@@ -11,7 +11,7 @@ const TYPE_NAME = {
   6: '库存条码标签(ZPL)',
   7: '物流条码标签(ZPL)',
   8: '产品条码标签(ZPL)',
-  9: '库存标签(ZPL)',
+  9: '塑料盒标签(ZPL)',
 }
 
 function validateLayout(type, layout) {

@@ -60,7 +60,7 @@ const TEMPLATE_TYPES: { value: TemplateType; label: string }[] = [
   { value: 6, label: '库存条码标签 (画布)' },
   { value: 7, label: '物流条码标签 (画布)' },
   { value: 8, label: '产品条码标签 (画布)' },
-  { value: 9, label: '库存标签 (画布)' },
+  { value: 9, label: '塑料盒标签 (画布)' },
 ]
 
 function isZplLabelType(t: number): t is 5 | 6 | 7 | 8 | 9 {
@@ -90,10 +90,13 @@ const LABEL_FIELD_DEFS_BY_TYPE: Record<number, FieldDef[]> = {
     { key: 'qty', label: '数量', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 7 },
   ],
   7: [
-    { key: 'box_code', label: '物流条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
-    { key: 'task_no', label: '任务号', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 7 },
-    { key: 'customer_name', label: '客户', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 8 },
-    { key: 'summary', label: '摘要', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 10 },
+    { key: 'box_code', label: '物流条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 12 },
+    { key: 'task_no', label: '任务号', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 6 },
+    { key: 'customer_name', label: '客户', type: 'text', icon: <Type className="size-3.5" />, defaultW: 40, defaultH: 6 },
+    { key: 'carrier_name', label: '快递', type: 'text', icon: <Type className="size-3.5" />, defaultW: 32, defaultH: 6 },
+    { key: 'freight_type_name', label: '运费方式', type: 'text', icon: <Type className="size-3.5" />, defaultW: 32, defaultH: 6 },
+    { key: 'piece_count', label: '件数', type: 'text', icon: <Type className="size-3.5" />, defaultW: 32, defaultH: 6 },
+    { key: 'item_list', label: '装箱内容', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 12 },
   ],
   8: [
     { key: 'product_code', label: '产品条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
@@ -101,10 +104,8 @@ const LABEL_FIELD_DEFS_BY_TYPE: Record<number, FieldDef[]> = {
     { key: 'spec', label: '规格', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 7 },
   ],
   9: [
-    { key: 'sku', label: 'SKU 条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
-    { key: 'product_name', label: '品名', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 10 },
-    { key: 'qty', label: '数量', type: 'text', icon: <Type className="size-3.5" />, defaultW: 36, defaultH: 7 },
-    { key: 'warehouse', label: '仓库', type: 'text', icon: <Type className="size-3.5" />, defaultW: 34, defaultH: 7 },
+    { key: 'container_code', label: '塑料盒条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 16 },
+    { key: 'product_name', label: '品名', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 12 },
   ],
 }
 
@@ -746,7 +747,7 @@ export default function PrintTemplateEditor() {
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden px-4 pb-4 pt-2">
       <PageHeader
         title={isNew ? '新建打印模板' : `编辑打印模板 #${id}`}
-        description="拖拽字段到画布编排版式；热敏标签与单据均使用毫米坐标；标签打印为 ZPL 或 TSPL 由打印机 RAW 设置决定。工具栏「画布」可缩放以便编辑。"
+        description="拖拽字段到画布编排版式；热敏标签与单据均使用毫米坐标；标签打印统一使用 ZPL 指令集。工具栏「画布」可缩放以便编辑。"
         actions={undefined}
       />
 
@@ -914,7 +915,7 @@ export default function PrintTemplateEditor() {
             {!preview && (
               <p className="text-xs text-muted-foreground text-center max-w-xl">
                 {isZplLabelType(type)
-                  ? '从左侧拖拽字段到画布 · 打印时按毫米坐标生成 ZPL 或 TSPL（取决于打印机 RAW 设置）· 工具栏可放大画布 · '
+                  ? '从左侧拖拽字段到画布 · 打印时按毫米坐标生成 ZPL · 工具栏可放大画布 · '
                   : '从左侧拖拽字段到画布 · 点击选中元素后可拖动位置或在右侧修改属性 · 工具栏可放大画布 · '}
                 <kbd className="rounded border px-1">Delete</kbd> 删除
               </p>

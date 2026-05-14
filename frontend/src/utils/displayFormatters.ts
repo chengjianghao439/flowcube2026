@@ -167,9 +167,5 @@ export function formatPrinterSource(source?: string | null): string {
 }
 
 export function formatPrinterRawMode(mode?: string | null): string {
-  const raw = asTrimmedString(mode).toLowerCase()
-  if (raw === 'zpl') return '标签机指令 ZPL'
-  if (raw === 'tspl') return '标签机指令 TSPL'
-  if (raw === 'raw') return '原始指令模式'
   return '标签机指令 ZPL'
 }

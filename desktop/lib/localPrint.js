@@ -133,12 +133,10 @@ async function printZpl(opts) {
     throw new Error('缺少打印机名称：请在 ERP「打印机管理」用「从本机添加」添加标签机并绑定用途。')
   }
   const isZpl = content.includes('^XA') && content.includes('^XZ')
-  const u = content.toUpperCase()
-  const isTspl = u.includes('SIZE') && u.includes('CLS') && u.includes('PRINT')
-  if (!isZpl && !isTspl) {
-    throw new Error('RAW 格式异常：须为 ZPL（^XA…^XZ）或 TSPL（含 SIZE、CLS、PRINT），请检查模板或打印机指令集设置')
+  if (!isZpl) {
+    throw new Error('RAW 格式异常：须为 ZPL（^XA…^XZ），请检查模板或打印机指令集设置')
   }
-  const kind = isZpl ? 'ZPL' : 'TSPL'
+  const kind = 'ZPL'
   const platform = os.platform()
   const winPayload = platform === 'win32' ? bufferForWindowsRaw(content) : null
   try {

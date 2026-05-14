@@ -25,7 +25,8 @@ SELECT '默认产品条码标签模板', 8, 'thermal80', '{"elements":[{"id":"lb
 WHERE EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'print_templates')
   AND NOT EXISTS (SELECT 1 FROM print_templates WHERE type = 8 AND name = '默认产品条码标签模板');
 
+
 INSERT INTO print_templates (name, type, paper_size, layout_json, is_default)
-SELECT '默认库存标签模板', 9, 'thermal80', '{"elements":[{"id":"lb9_bc","type":"barcode","fieldKey":"sku","label":"SKU 条码","x":4,"y":4,"width":72,"height":14,"fontSize":10,"fontWeight":"normal","textAlign":"left","border":false},{"id":"lb9_pn","type":"text","fieldKey":"product_name","label":"品名","x":4,"y":22,"width":72,"height":10,"fontSize":10,"fontWeight":"normal","textAlign":"left","border":false},{"id":"lb9_q","type":"text","fieldKey":"qty","label":"数量","x":4,"y":36,"width":36,"height":7,"fontSize":9,"fontWeight":"normal","textAlign":"left","border":false},{"id":"lb9_wh","type":"text","fieldKey":"warehouse","label":"仓库","x":42,"y":36,"width":34,"height":7,"fontSize":9,"fontWeight":"normal","textAlign":"left","border":false}]}', 1
+SELECT '默认塑料盒标签模板', 9, 'thermal80', '{"elements":[{"id":"lb9_bc","type":"barcode","fieldKey":"container_code","label":"塑料盒条码","x":4,"y":4,"width":72,"height":16,"fontSize":10,"fontWeight":"normal","textAlign":"left","border":false},{"id":"lb9_pn","type":"text","fieldKey":"product_name","label":"品名","x":4,"y":24,"width":72,"height":12,"fontSize":11,"fontWeight":"normal","textAlign":"left","border":false}]}', 1
 WHERE EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'print_templates')
-  AND NOT EXISTS (SELECT 1 FROM print_templates WHERE type = 9 AND name = '默认库存标签模板');
+  AND NOT EXISTS (SELECT 1 FROM print_templates WHERE type = 9 AND name = '默认塑料盒标签模板');

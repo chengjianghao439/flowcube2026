@@ -4,13 +4,12 @@ const AppError = require('../../utils/AppError')
 const TYPE_NAME = { 1: '标签打印机', 2: '面单打印机', 3: 'A4打印机' }
 
 function fmt(row) {
-  const lr = String(row.label_raw_format || 'zpl').toLowerCase()
   return {
     id:          row.id,
     name:        row.name,
     code:        row.code,
     type:        row.type,
-    labelRawFormat: lr === 'tspl' ? 'tspl' : 'zpl',
+    labelRawFormat: 'zpl',
     warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
     typeName:    TYPE_NAME[row.type] || '其他',
     description: row.description,
@@ -101,11 +100,10 @@ async function create({
   const src =
     source === 'local_desktop' || source === 'client' || source === 'manual' ? source : null
   const clientIdVal = clientId != null ? String(clientId).trim().slice(0, 200) || null : null
-  const lr = String(labelRawFormat || '').toLowerCase() === 'tspl' ? 'tspl' : 'zpl'
   const finalCode = await allocateUniqueCodeGlobally(code)
   const [r] = await pool.query(
     'INSERT INTO printers (name, code, type, label_raw_format, warehouse_id, description, source, client_id) VALUES (?,?,?,?,?,?,?,?)',
-    [nameNorm, finalCode, type, lr, wh, description || null, src, clientIdVal],
+    [nameNorm, finalCode, type, 'zpl', wh, description || null, src, clientIdVal],
   )
   return findById(r.insertId)
 }
@@ -123,10 +121,7 @@ async function update(id, {
   const existing = await findById(id)
   const nameVal = name !== undefined ? normalizePrinterName(name) : existing.name
   if (name !== undefined && !nameVal) throw new AppError('名称不能为空', 400)
-  const lrVal =
-    labelRawFormat !== undefined
-      ? (String(labelRawFormat).toLowerCase() === 'tspl' ? 'tspl' : 'zpl')
-      : (existing.labelRawFormat || 'zpl')
+  const lrVal = 'zpl'
   const clientIdVal =
     clientId === undefined
       ? (existing.clientId || null)

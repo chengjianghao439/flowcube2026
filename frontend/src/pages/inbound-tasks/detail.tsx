@@ -1,12 +1,12 @@
 /**
- * 收货订单详情 — 收货 / 上架 / 容器列表
+ * 收货订单详情 — 上架 / 审核 / 打印
+ * 收货和上架仅允许通过 PDA 完成
  * 路由：/inbound-tasks/:id（多标签）
  */
 import { useContext, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -17,21 +17,12 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
   useInboundTaskDetail,
   useInboundTaskContainers,
-  useReceiveInbound,
   useSubmitInboundTask,
   useAuditInboundTask,
   useCancelInbound,
 } from '@/hooks/useInboundTasks'
-import {
-  type InboundTaskItem,
-} from '@/types/inbound-tasks'
-
-function skuRemainToReceive(items: InboundTaskItem[] | undefined, productId: number): number {
-  if (!items?.length) return 0
-  return items
-    .filter(i => i.productId === productId)
-    .reduce((s, i) => s + Math.max(0, i.orderedQty - i.receivedQty), 0)
-}
+import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
+import { mapInboundTaskToPrint } from '@/lib/orderPrintData'
 
 function Section({ title, children, sectionId }: { title: string; children: React.ReactNode; sectionId?: string }) {
   return (
@@ -54,16 +45,15 @@ export default function InboundTaskDetailPage() {
   const { data: task, isLoading, refetch: refetchTask } = useInboundTaskDetail(validId)
   const { data: containers, refetch: refetchContainers } = useInboundTaskContainers(validId)
 
-  const receiveMut = useReceiveInbound()
   const submitMut = useSubmitInboundTask()
   const auditMut = useAuditInboundTask()
   const cancelMut = useCancelInbound()
 
-  const [lineQty, setLineQty] = useState<Record<number, string>>({})
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
   const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  const [printOpen, setPrintOpen] = useState(false)
 
   function closeTab() {
     const { removeTab } = useWorkspaceStore.getState()
@@ -84,7 +74,6 @@ export default function InboundTaskDetailPage() {
   const auditFlowStatus = task?.auditFlowStatus ?? null
 
   const canSubmit = receiptStatus?.key === 'draft'
-  const canReceive = receiptStatus?.key === 'submitted' || receiptStatus?.key === 'receiving'
   const canAudit = auditFlowStatus?.key === 'pending' || auditFlowStatus?.key === 'rejected'
   const canCancel = task?.status === 1
   const statusTone = receiptStatus?.key === 'audited'
@@ -107,40 +96,6 @@ export default function InboundTaskDetailPage() {
 
   if (isLoading || !task) {
     return <p className="p-6 text-muted-body">加载中…</p>
-  }
-
-  function submitOnePackage(it: InboundTaskItem) {
-    if (!validId || !task) return
-    const raw = lineQty[it.id]?.trim()
-    if (!raw) {
-      toast.error('请填写本包数量')
-      return
-    }
-    const q = Number(raw.replace(/,/g, '.'))
-    if (!Number.isFinite(q) || q <= 0) {
-      toast.error(`数量无效：${it.productName}`)
-      return
-    }
-    const remainSku = skuRemainToReceive(items, it.productId)
-    if (q > remainSku) {
-      toast.error(`${it.productName} 超出待收（该 SKU 最多还可收 ${remainSku}）`)
-      return
-    }
-    receiveMut.mutate(
-      { id: validId, data: { productId: it.productId, qty: q } },
-      {
-        onSuccess: async (data) => {
-          const pj = data.printJobId ? '，已排队打印标签' : '（未配置 INBOUND_LABEL_PRINTER_CODE 则未打印）'
-          toast.success(`本包容器 ${data.containerCode}${pj}`)
-          setLineQty(p => ({ ...p, [it.id]: '' }))
-          await afterMutation()
-        },
-        onError: (err: unknown) => {
-          const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '收货失败'
-          toast.error(msg)
-        },
-      },
-    )
   }
 
   return (
@@ -197,7 +152,7 @@ export default function InboundTaskDetailPage() {
                 取消任务
               </Button>
             )}
-
+            <Button variant="outline" size="sm" onClick={() => setPrintOpen(true)}>打印</Button>
           </div>
         }
       />
@@ -237,13 +192,11 @@ export default function InboundTaskDetailPage() {
                 <th className="text-left py-2 w-24">已收</th>
                 <th className="text-left py-2 w-20">剩余</th>
                 <th className="text-left py-2 w-24">已上架</th>
-                {canReceive && <th className="text-left py-2 min-w-[200px]">本包收货</th>}
               </tr>
             </thead>
             <tbody className="divide-y">
-              {items.map((it: InboundTaskItem) => {
+              {items.map((it) => {
                 const lineRemain = Math.max(0, it.orderedQty - it.receivedQty)
-                const skuRemain = skuRemainToReceive(items, it.productId)
                 return (
                   <tr key={it.id}>
                     <td className="py-2">
@@ -254,28 +207,6 @@ export default function InboundTaskDetailPage() {
                     <td className="text-left">{it.receivedQty}</td>
                     <td className="text-left text-muted-foreground">{lineRemain}</td>
                     <td className="text-left">{it.putawayQty}</td>
-                    {canReceive && (
-                      <td className="py-2 text-left">
-                        <div className="flex flex-col items-start gap-1 sm:flex-row sm:justify-start sm:items-center">
-                          <Input
-                            className="h-8 w-24 text-left"
-                            placeholder="本包"
-                            value={lineQty[it.id] ?? ''}
-                            onChange={e => setLineQty(p => ({ ...p, [it.id]: e.target.value }))}
-                            disabled={skuRemain <= 0 || receiveMut.isPending}
-                          />
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            disabled={skuRemain <= 0 || receiveMut.isPending}
-                            onClick={() => submitOnePackage(it)}
-                          >
-                            提交本包
-                          </Button>
-                        </div>
-                      </td>
-                    )}
                   </tr>
                 )
               })}
@@ -398,6 +329,15 @@ export default function InboundTaskDetailPage() {
           />
         </div>
       </AppDialog>
+
+      {printOpen && task && (
+        <OrderPrintOverlay
+          templateType={2}
+          title={task.taskNo}
+          {...mapInboundTaskToPrint(task)}
+          onClose={() => setPrintOpen(false)}
+        />
+      )}
     </div>
   )
 }
