@@ -366,6 +366,42 @@ async function createForSaleOrder({ saleOrderId, saleOrderNo, customerId, custom
 }
 
 /**
+ * 为采购退货创建出库任务（仅拣货→出库，无分拣/复核/打包环节）
+ */
+async function createForPurchaseReturn({ returnId, returnNo, supplierName, warehouseId, warehouseName, items, conn }) {
+  const taskNo = await genTaskNo(conn)
+  const [r] = await conn.query(
+    `INSERT INTO warehouse_tasks
+       (task_no, task_type, return_id, sale_order_id, sale_order_no,
+        customer_id, customer_name, warehouse_id, warehouse_name, status, priority)
+     VALUES (?, 'purchase_return', ?, NULL, NULL, NULL, ?, ?, ?, ${WT_STATUS.PICKING}, 2)`,
+    [taskNo, returnId, supplierName, warehouseId, warehouseName],
+  )
+  const taskId = r.insertId
+  for (const item of items) {
+    await conn.query(
+      `INSERT INTO warehouse_task_items
+         (task_id, product_id, product_code, product_name, unit, required_qty, picked_qty)
+       VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      [taskId, item.productId, item.productCode, item.productName, item.unit, item.quantity],
+    )
+  }
+  try {
+    await recordEvent(conn, {
+      taskId, taskNo,
+      eventType: WT_EVENT.TASK_CREATED,
+      toStatus: WT_STATUS.PICKING,
+      detail: { itemCount: items.length, taskType: 'purchase_return', returnId, returnNo },
+    })
+  } catch (eventErr) {
+    logSideEffectFailure('仓库任务事件写入失败：退货任务创建事件', eventErr, {
+      taskId, taskNo, eventType: WT_EVENT.TASK_CREATED,
+    })
+  }
+  return { taskId, taskNo }
+}
+
+/**
  * 分配操作员
  */
 async function assign(id, { userId, userName }) {
@@ -429,12 +465,20 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status, sale_order_id',
+    columns: 'id, task_no, task_type, status, sale_order_id',
     entityName: '仓库任务',
   })
-  const rule = assertWarehouseTaskAction('readyToShip', taskRow.status)
-  if (!isValidTransition(taskRow.status, rule.toStatus)) {
-    throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+  const isPurchaseReturn = taskRow.task_type === 'purchase_return'
+
+  // 采购退货：拣货完成后直接跳到待出库（跳过排序/复核/打包）
+  const targetStatus = isPurchaseReturn ? WT_STATUS.SHIPPING : WT_STATUS.SORTING
+  const action = isPurchaseReturn ? 'readyToShip' : 'readyToShip'
+
+  if (!isPurchaseReturn) {
+    const rule = assertWarehouseTaskAction(action, taskRow.status)
+    if (!isValidTransition(taskRow.status, rule.toStatus)) {
+      throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+    }
   }
 
   let requestState = { enabled: false }
@@ -454,10 +498,10 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {
     table: 'warehouse_tasks',
     id,
     fromStatus: taskRow.status,
-    toStatus: rule.toStatus,
+    toStatus: targetStatus,
     entityName: '仓库任务',
   })
-  if (taskRow.sale_order_id) {
+  if (!isPurchaseReturn && taskRow.sale_order_id) {
     const saleSvc = require('../sale/sale.service')
     await saleSvc.syncPickingByWarehouseTaskWithinTransaction(conn, Number(taskRow.sale_order_id), {
       taskId: Number(taskRow.id),
@@ -470,7 +514,7 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {
       taskNo: taskRow.task_no,
       eventType: WT_EVENT.PICKING_DONE,
       fromStatus: taskRow.status,
-      toStatus: rule.toStatus,
+      toStatus: targetStatus,
     })
   } catch (eventErr) {
     logSideEffectFailure('仓库任务事件写入失败：拣货完成事件', eventErr, {
@@ -478,14 +522,14 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {
       taskNo: taskRow.task_no,
       eventType: WT_EVENT.PICKING_DONE,
       fromStatus: taskRow.status,
-      toStatus: rule.toStatus,
+      toStatus: targetStatus,
     })
   }
-  const payload = { taskId: id, status: rule.toStatus }
+  const payload = { taskId: id, status: targetStatus }
   if (requestState.enabled) {
     await completeOperationRequest(conn, requestState, {
       data: payload,
-      message: '已标记为待分拣',
+      message: isPurchaseReturn ? '已标记为待出库' : '已标记为待分拣',
       resourceType: 'warehouse_task',
       resourceId: id,
     })
@@ -784,11 +828,10 @@ async function packDone(id, { requestKey, userId } = {}) {
  * 执行出库（6→7）：扣减库存 + 更新销售单状态 + 生成应收账款
  */
 async function shipWithinTransaction(conn, id, operator, saleData, { requestKey } = {}) {
-  const { saleOrderId, warehouseId, totalAmount, customerName, items } = saleData
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status',
+    columns: 'id, task_no, task_type, status, return_id',
     entityName: '仓库任务',
   })
   const rule = assertWarehouseTaskAction('ship', taskRow.status)
@@ -802,12 +845,18 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
     return requestState.responseData
   }
 
-  await assertTaskPickScanClosure(conn, id)
-  await assertTaskCheckScanClosure(conn, id)
-  await assertTaskPackagingClosure(conn, id)
-  await assertTaskPackagePrintClosure(conn, id)
+  const isPurchaseReturn = taskRow.task_type === 'purchase_return'
 
-  if (saleOrderId) {
+  await assertTaskPickScanClosure(conn, id)
+  if (!isPurchaseReturn) {
+    await assertTaskCheckScanClosure(conn, id)
+    await assertTaskPackagingClosure(conn, id)
+    await assertTaskPackagePrintClosure(conn, id)
+  }
+
+  const { saleOrderId, warehouseId, totalAmount, customerName, items } = saleData
+
+  if (!isPurchaseReturn && saleOrderId) {
     const saleRow = await lockStatusRow(conn, {
       table: 'sale_orders',
       id: saleOrderId,
@@ -833,21 +882,32 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
       refType: 'warehouse_task',
       refId: taskRow.id,
       refNo: taskRow.task_no,
-      reservationRefType: 'sale_order',
-      reservationRefId: saleOrderId,
+      reservationRefType: isPurchaseReturn ? null : 'sale_order',
+      reservationRefId: isPurchaseReturn ? null : saleOrderId,
       operatorId: operator.userId,
       operatorName: operator.realName,
       lockedByTaskId: id,
     })
   }
 
-  if (saleOrderId) {
+  if (!isPurchaseReturn && saleOrderId) {
     const saleSvc = require('../sale/sale.service')
     await saleSvc.syncShippedByWarehouseTaskWithinTransaction(conn, saleOrderId, {
       taskId: Number(id),
       taskNo: taskRow.task_no,
     })
   }
+
+  // 采购退货出库完成：同步退货单状态 + 冲减应付账款
+  if (isPurchaseReturn && taskRow.return_id) {
+    const returnSvc = require('../returns/returns.service')
+    await returnSvc.syncPurchaseReturnShipped(conn, Number(taskRow.return_id), {
+      taskId: Number(id),
+      taskNo: taskRow.task_no,
+      operator,
+    })
+  }
+
   const shippedAt = new Date()
   await compareAndSetStatus(conn, {
     table: 'warehouse_tasks',
@@ -862,10 +922,12 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
 
   await unlockContainersByTask(conn, id)
 
-  await conn.query(
-    `INSERT IGNORE INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,due_date) VALUES (2,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL 30 DAY))`,
-    [saleOrderId, taskRow.task_no, customerName, totalAmount, totalAmount],
-  )
+  if (!isPurchaseReturn) {
+    await conn.query(
+      `INSERT IGNORE INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,due_date) VALUES (2,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL 30 DAY))`,
+      [saleOrderId, taskRow.task_no, customerName, totalAmount, totalAmount],
+    )
+  }
 
   try {
     await recordEvent(conn, {
@@ -875,7 +937,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
       toStatus: rule.toStatus,
       operatorId: operator.userId,
       operatorName: operator.realName,
-      detail: { saleOrderId, totalAmount, itemCount: items.length },
+      detail: { saleOrderId, totalAmount, itemCount: items.length, isPurchaseReturn },
     })
   } catch (eventErr) {
     logSideEffectFailure('仓库任务事件写入失败：出库完成事件', eventErr, {
@@ -940,11 +1002,48 @@ async function cancel(id, options = {}) {
     })
 
     // 只有任务真实切换到 CANCELLED 后，才执行资源释放与单据同步副作用。
+
+    // 解锁前查询所有被锁容器及其库位，用于归还指引
+    const [lockedContainers] = await conn.query(
+      `SELECT c.id, c.barcode, c.container_type,
+              loc.code AS location_code,
+              loc.zone, loc.aisle, loc.rack, loc.level, loc.position
+       FROM inventory_containers c
+       LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
+       WHERE c.locked_by_task_id = ?`,
+      [id],
+    )
+    const containersToReturn = lockedContainers.map(c => ({
+      containerId: Number(c.id),
+      barcode: c.barcode,
+      containerKind: Number(c.container_type) === 2 || /^B/i.test(String(c.barcode || ''))
+        ? 'plastic_box' : 'inventory',
+      locationCode: c.location_code || null,
+      zone: c.zone || null,
+      aisle: c.aisle || null,
+      rack: c.rack || null,
+      level: c.level || null,
+      position: c.position || null,
+    }))
+
     await unlockContainersByTask(conn, id)
     await sortingBinSvc.releaseByTask(conn, id)
 
     if (taskRow.sale_order_id) {
       await releaseByRef(conn, 'sale_order', Number(taskRow.sale_order_id))
+    }
+
+    // 取消关联的包裹（标记 status=3）并清理包裹打印任务
+    const packagesSvc = require('../packages/packages.service')
+    const cancelledPkgCount = await packagesSvc.cancelByTaskId(conn, id)
+    if (cancelledPkgCount > 0) {
+      await conn.query(
+        `UPDATE print_jobs SET status = 3, error_message = '仓库任务已取消'
+         WHERE ref_type = 'package'
+           AND ref_id IN (SELECT id FROM packages WHERE warehouse_task_id = ?)
+           AND status IN (0, 1)`,
+        [id],
+      )
     }
 
     if (taskRow.sale_order_id && options.syncSaleStatus !== false) {
@@ -965,6 +1064,8 @@ async function cancel(id, options = {}) {
         detail:     {
           saleOrderId: taskRow.sale_order_id != null ? Number(taskRow.sale_order_id) : null,
           reservationReleased: taskRow.sale_order_id != null,
+          packagesCancelled: cancelledPkgCount,
+          containersToReturn,
         },
       })
     } catch (eventErr) {
@@ -1435,6 +1536,7 @@ module.exports = {
   findMyTaskSkuSummary,
   getTaskStats,
   createForSaleOrder,
+  createForPurchaseReturn,
   assign,
   startPicking,
   updatePickedQty,

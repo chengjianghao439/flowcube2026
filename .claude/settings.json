@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "Bash": {
+      "git status:*": "allow",
+      "git diff:*": "allow",
+      "git log:*": "allow",
+      "git branch:*": "allow",
+      "npm run:*": "allow",
+      "npm --prefix:*": "allow",
+      "npx:*": "allow",
+      "ls:*": "allow",
+      "find *:*": "allow",
+      "grep *:*": "allow",
+      "node scripts:*": "allow",
+      "git add:*": "allow",
+      "git commit:*": "allow",
+      "git push:*": "allow",
+      "git tag:*": "allow",
+      "ssh flowcube-prod:*": "allow",
+      "docker compose:*": "allow"
+    }
+  }
+}
