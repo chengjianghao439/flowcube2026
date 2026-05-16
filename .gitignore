@@ -65,3 +65,4 @@ deploy/*.local.json
 # 安全扫描 CI 报告产物
 security-scan-report*
 .superpowers/
+.claude/worktrees/
