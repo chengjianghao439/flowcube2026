@@ -23,6 +23,7 @@ const CONTAINER_STATUS = {
   EMPTY:            2,
   VOID:             3,
   PENDING_PUTAWAY:  4,
+  PENDING_QA:       5,
 }
 
 /** 写入 inventory_containers.source_type 的规范取值 */
@@ -42,7 +43,6 @@ const ALLOWED_SOURCE_TYPES = new Set(Object.values(SOURCE_TYPE))
 /** 允许 createContainer 直接落 status=ACTIVE(1) 的来源（调拨入、销售退货、同仓拆分）；其余须先 4 再 promote */
 const DIRECT_ACTIVE_SOURCE_TYPES = new Set([
   SOURCE_TYPE.TRANSFER,
-  SOURCE_TYPE.RETURN,
   SOURCE_TYPE.CONTAINER_SPLIT,
 ])
 

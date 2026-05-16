@@ -29,6 +29,9 @@ const PdaPackPage    = lazy(() => import('@/pages/pda/pack'))
 const PdaSplitPage   = lazy(() => import('@/pages/pda/split'))
 const PdaShipPage    = lazy(() => import('@/pages/pda/ship'))
 const PdaSortPage    = lazy(() => import('@/pages/pda/sort'))
+const PdaSaleReturnListPage = lazy(() => import('@/pages/pda/sale-return'))
+const PdaSaleReturnReceivePage = lazy(() => import('@/pages/pda/sale-return-receive'))
+const PdaSaleReturnPutawayPage = lazy(() => import('@/pages/pda/sale-return-putaway'))
 
 function PageLoader() {
   return (
@@ -139,6 +142,9 @@ export default function AppRouter() {
               <Route path="ship/:id" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
               <Route path="ship" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
               <Route path="sort" element={<PdaRoutePermission title="分拣作业" required={[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT]}><PdaSortPage /></PdaRoutePermission>} />
+              <Route path="sale-return" element={<PdaRoutePermission title="销售退货" required={[PERMISSIONS.RETURN_ORDER_VIEW]}><PdaSaleReturnListPage /></PdaRoutePermission>} />
+              <Route path="sale-return/:id/receive" element={<PdaRoutePermission title="退货收货" required={[PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.RETURN_ORDER_EXECUTE]}><PdaSaleReturnReceivePage /></PdaRoutePermission>} />
+              <Route path="sale-return/:id/putaway" element={<PdaRoutePermission title="退货上架" required={[PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.RETURN_ORDER_EXECUTE]}><PdaSaleReturnPutawayPage /></PdaRoutePermission>} />
             </Route>
           </Route>
 

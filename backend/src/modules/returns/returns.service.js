@@ -105,6 +105,14 @@ async function loadPurchaseSourceOrderByNo(orderNo) {
   const [items] = await pool.query(
     `SELECT poi.*,
             COALESCE((
+              SELECT SUM(iti.received_qty)
+              FROM inbound_task_items iti
+              JOIN inbound_tasks it ON it.id = iti.task_id
+              WHERE iti.purchase_item_id = poi.id
+                AND it.deleted_at IS NULL
+                AND it.status IN (3, 4)
+            ), 0) AS received_qty,
+            COALESCE((
               SELECT SUM(pri.quantity)
               FROM purchase_return_items pri
               INNER JOIN purchase_returns pr ON pr.id = pri.return_id
@@ -125,7 +133,7 @@ async function loadPurchaseSourceOrderByNo(orderNo) {
     warehouseId: Number(order.warehouse_id),
     warehouseName: order.warehouse_name,
     items: items.map((row) => {
-      const quantity = Number(row.quantity || 0)
+      const receivedQty = Number(row.received_qty || 0)
       const returnedQty = Number(row.returned_qty || 0)
       return {
         sourceItemId: Number(row.id),
@@ -133,9 +141,10 @@ async function loadPurchaseSourceOrderByNo(orderNo) {
         productCode: row.product_code,
         productName: row.product_name,
         unit: row.unit,
-        quantity,
+        quantity: Number(row.quantity || 0),
+        receivedQty,
         returnedQty,
-        remainingQty: Number(Math.max(0, quantity - returnedQty).toFixed(4)),
+        remainingQty: Number(Math.max(0, receivedQty - returnedQty).toFixed(4)),
         unitPrice: Number(row.unit_price || 0),
         amount: Number(row.amount || 0),
       }
@@ -152,6 +161,15 @@ async function loadSaleSourceOrderByNo(orderNo) {
   const order = rows[0]
   const [items] = await pool.query(
     `SELECT soi.*,
+            COALESCE((
+              SELECT SUM(wti.picked_qty)
+              FROM warehouse_task_items wti
+              JOIN warehouse_tasks wt ON wt.id = wti.task_id
+              WHERE wt.sale_order_id = soi.order_id
+                AND wt.status = 7
+                AND wt.deleted_at IS NULL
+                AND wti.product_id = soi.product_id
+            ), 0) AS shipped_qty,
             COALESCE((
               SELECT SUM(sri.quantity)
               FROM sale_return_items sri
@@ -173,7 +191,7 @@ async function loadSaleSourceOrderByNo(orderNo) {
     warehouseId: Number(order.warehouse_id),
     warehouseName: order.warehouse_name,
     items: items.map((row) => {
-      const quantity = Number(row.quantity || 0)
+      const shippedQty = Number(row.shipped_qty || 0)
       const returnedQty = Number(row.returned_qty || 0)
       return {
         sourceItemId: Number(row.id),
@@ -181,9 +199,10 @@ async function loadSaleSourceOrderByNo(orderNo) {
         productCode: row.product_code,
         productName: row.product_name,
         unit: row.unit,
-        quantity,
+        quantity: Number(row.quantity || 0),
+        shippedQty,
         returnedQty,
-        remainingQty: Number(Math.max(0, quantity - returnedQty).toFixed(4)),
+        remainingQty: Number(Math.max(0, shippedQty - returnedQty).toFixed(4)),
         unitPrice: Number(row.unit_price || 0),
         amount: Number(row.amount || 0),
       }
@@ -195,6 +214,14 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items) {
   if (!purchaseOrderId) return
   const [rows] = await conn.query(
     `SELECT poi.id, poi.product_id, poi.quantity,
+            COALESCE((
+              SELECT SUM(iti.received_qty)
+              FROM inbound_task_items iti
+              JOIN inbound_tasks it ON it.id = iti.task_id
+              WHERE iti.purchase_item_id = poi.id
+                AND it.deleted_at IS NULL
+                AND it.status IN (3, 4)
+            ), 0) AS received_qty,
             COALESCE((
               SELECT SUM(pri.quantity)
               FROM purchase_return_items pri
@@ -222,9 +249,9 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items) {
       Number(item.sourceItemId),
       Number((requestedQtyBySource.get(Number(item.sourceItemId)) || 0) + Number(item.quantity || 0)),
     )
-    const remainingQty = Number(source.quantity || 0) - Number(source.returned_qty || 0)
+    const remainingQty = Number(source.received_qty || 0) - Number(source.returned_qty || 0)
     if (Number(requestedQtyBySource.get(Number(item.sourceItemId)).toFixed(4)) > Number(remainingQty.toFixed(4))) {
-      throw new AppError(`商品 ${item.productName} 退货数量超出原采购剩余可退数量`, 409)
+      throw new AppError(`商品 ${item.productName} 退货数量超出实际收货数量`, 409)
     }
   }
 }
@@ -233,6 +260,15 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
   if (!saleOrderId) return
   const [rows] = await conn.query(
     `SELECT soi.id, soi.product_id, soi.quantity,
+            COALESCE((
+              SELECT SUM(wti.picked_qty)
+              FROM warehouse_task_items wti
+              JOIN warehouse_tasks wt ON wt.id = wti.task_id
+              WHERE wt.sale_order_id = soi.order_id
+                AND wt.status = 7
+                AND wt.deleted_at IS NULL
+                AND wti.product_id = soi.product_id
+            ), 0) AS shipped_qty,
             COALESCE((
               SELECT SUM(sri.quantity)
               FROM sale_return_items sri
@@ -260,9 +296,9 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
       Number(item.sourceItemId),
       Number((requestedQtyBySource.get(Number(item.sourceItemId)) || 0) + Number(item.quantity || 0)),
     )
-    const remainingQty = Number(source.quantity || 0) - Number(source.returned_qty || 0)
+    const remainingQty = Number(source.shipped_qty || 0) - Number(source.returned_qty || 0)
     if (Number(requestedQtyBySource.get(Number(item.sourceItemId)).toFixed(4)) > Number(remainingQty.toFixed(4))) {
-      throw new AppError(`商品 ${item.productName} 退货数量超出原销售剩余可退数量`, 409)
+      throw new AppError(`商品 ${item.productName} 退货数量超出实际发货数量`, 409)
     }
   }
 }
@@ -344,7 +380,7 @@ async function confirmPR(id, operator = null) {
     const retRow = await lockStatusRow(conn, {
       table: 'purchase_returns',
       id,
-      columns: 'id, return_no, status',
+      columns: 'id, return_no, purchase_order_id, purchase_order_no, supplier_id, supplier_name, warehouse_id, warehouse_name, status',
       entityName: '采购退货单',
     })
     const rule = assertStatusAction('purchaseReturn', 'confirm', retRow.status)
@@ -355,16 +391,39 @@ async function confirmPR(id, operator = null) {
       toStatus: rule.to,
       entityName: '采购退货单',
     })
+
+    // 确认后自动创建仓库任务（拣货→出库）
+    const [itemRows] = await conn.query(
+      'SELECT * FROM purchase_return_items WHERE return_id=? ORDER BY id', [id],
+    )
+    const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
+    const { taskId, taskNo } = await taskSvc.createForPurchaseReturn({
+      returnId: Number(retRow.id),
+      returnNo: retRow.return_no,
+      supplierName: retRow.supplier_name,
+      warehouseId: Number(retRow.warehouse_id),
+      warehouseName: retRow.warehouse_name,
+      items: itemRows.map(r => ({
+        productId: Number(r.product_id),
+        productCode: r.product_code,
+        productName: r.product_name,
+        unit: r.unit,
+        quantity: Number(r.quantity),
+      })),
+      conn,
+    })
+
     await recordReturnEvent(conn, {
       returnType: 'purchase',
       returnId: Number(retRow.id),
       returnNo: retRow.return_no,
       eventType: RETURN_EVENT.CONFIRMED,
       title: '采购退货单已确认',
-      description: '采购退货单确认完成，等待执行',
+      description: `已生成仓库拣货任务 ${taskNo}，请提交到 PDA 执行`,
       operatorId: operator?.userId ?? null,
       operatorName: operator?.realName ?? null,
       requestId: getRequestId(),
+      payload: { taskId, taskNo },
     })
     await conn.commit()
   } catch (e) {
@@ -505,6 +564,119 @@ async function cancelPR(id, operator = null) {
   }
 }
 
+/**
+ * 采购退货出库完成回调（由 WT ship 事务内调用）
+ * 容器扣减已在 moveStock 中完成，此处仅做退货单状态同步和账款冲减
+ */
+async function syncPurchaseReturnShipped(conn, returnId, { taskId, taskNo, operator }) {
+  const retRow = await lockStatusRow(conn, {
+    table: 'purchase_returns',
+    id: returnId,
+    columns: 'id, return_no, purchase_order_id, purchase_order_no, supplier_id, warehouse_id, status',
+    entityName: '采购退货单',
+  })
+  if (Number(retRow.status) !== 2) {
+    throw new AppError(`采购退货单状态异常（当前非已确认），无法完成出库`, 409)
+  }
+  const rule = assertStatusAction('purchaseReturn', 'execute', retRow.status)
+
+  // 账款冲减：从应付账款中减去退货金额
+  const [[{ totalAmount }]] = await conn.query(
+    'SELECT COALESCE(SUM(quantity * unit_price), 0) AS totalAmount FROM purchase_return_items WHERE return_id = ?',
+    [returnId],
+  )
+  if (retRow.purchase_order_id && totalAmount > 0) {
+    await adjustPaymentRecordForReturn(conn, {
+      recordType: 1,
+      orderId: Number(retRow.purchase_order_id),
+      orderNo: retRow.purchase_order_no,
+      returnNo: retRow.return_no,
+      returnType: 'purchase',
+      amount: Number(totalAmount),
+      operator: operator || {},
+    })
+  }
+
+  await compareAndSetStatus(conn, {
+    table: 'purchase_returns',
+    id: returnId,
+    fromStatus: rule.from,
+    toStatus: rule.to,
+    entityName: '采购退货单',
+  })
+
+  await recordReturnEvent(conn, {
+    returnType: 'purchase',
+    returnId: Number(retRow.id),
+    returnNo: retRow.return_no,
+    eventType: RETURN_EVENT.EXECUTED,
+    title: '采购退货出库完成',
+    description: `仓库任务 ${taskNo} 已出库，退货单自动完成`,
+    operatorId: operator?.userId ?? null,
+    operatorName: operator?.realName ?? null,
+    requestId: getRequestId(),
+    payload: {
+      taskId,
+      taskNo,
+      totalAmount: Number(totalAmount),
+      inventoryDirection: 'out',
+    },
+  })
+}
+
+/**
+ * 销售退货入仓完成回调（由 return_tasks putaway 事务内调用）
+ * 容器已通过 PDA 流程上架，此处仅做退货单状态同步和账款冲减
+ */
+async function syncSaleReturnCompleted(conn, returnId, { taskId, taskNo }) {
+  const retRow = await lockStatusRow(conn, {
+    table: 'sale_returns',
+    id: returnId,
+    columns: 'id, return_no, sale_order_id, sale_order_no, warehouse_id, status',
+    entityName: '销售退货单',
+  })
+  if (Number(retRow.status) !== 2) {
+    throw new AppError(`销售退货单状态异常（当前非已确认），无法完成入仓`, 409)
+  }
+  const rule = assertStatusAction('saleReturn', 'execute', retRow.status)
+
+  // 账款冲减：从应收账款中减去退货金额
+  const [[{ totalAmount }]] = await conn.query(
+    'SELECT COALESCE(SUM(quantity * unit_price), 0) AS totalAmount FROM sale_return_items WHERE return_id = ?',
+    [returnId],
+  )
+  if (retRow.sale_order_id && totalAmount > 0) {
+    await adjustPaymentRecordForReturn(conn, {
+      recordType: 2,
+      orderId: Number(retRow.sale_order_id),
+      orderNo: retRow.sale_order_no,
+      returnNo: retRow.return_no,
+      returnType: 'sale',
+      amount: Number(totalAmount),
+      operator: {},
+    })
+  }
+
+  await compareAndSetStatus(conn, {
+    table: 'sale_returns',
+    id: returnId,
+    fromStatus: rule.from,
+    toStatus: rule.to,
+    entityName: '销售退货单',
+  })
+
+  await recordReturnEvent(conn, {
+    returnType: 'sale',
+    returnId: Number(retRow.id),
+    returnNo: retRow.return_no,
+    eventType: RETURN_EVENT.EXECUTED,
+    title: '销售退货入仓完成',
+    description: `PDA 退货任务 ${taskNo} 已上架完成，退货单自动完成`,
+    requestId: getRequestId(),
+    payload: { taskId, taskNo, totalAmount: Number(totalAmount), inventoryDirection: 'in' },
+  })
+}
+
 // 销售退货
 async function findAllSR({ page=1, pageSize=20, keyword='', status=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
@@ -582,7 +754,7 @@ async function confirmSR(id, operator = null) {
     const retRow = await lockStatusRow(conn, {
       table: 'sale_returns',
       id,
-      columns: 'id, return_no, status',
+      columns: 'id, return_no, customer_id, customer_name, warehouse_id, warehouse_name, status',
       entityName: '销售退货单',
     })
     const rule = assertStatusAction('saleReturn', 'confirm', retRow.status)
@@ -593,16 +765,40 @@ async function confirmSR(id, operator = null) {
       toStatus: rule.to,
       entityName: '销售退货单',
     })
+
+    // 确认后自动创建退货 PDA 任务（收货→质检→上架）
+    const [itemRows] = await conn.query(
+      'SELECT * FROM sale_return_items WHERE return_id=? ORDER BY id', [id],
+    )
+    const taskSvc = require('../return-tasks/return-tasks.service')
+    const { taskId, taskNo } = await taskSvc.create(conn, {
+      returnId: Number(retRow.id),
+      returnNo: retRow.return_no,
+      returnType: 'sale',
+      warehouseId: Number(retRow.warehouse_id),
+      warehouseName: retRow.warehouse_name,
+      partyName: retRow.customer_name,
+      items: itemRows.map((r, i) => ({
+        returnItemId: Number(r.id),
+        productId: Number(r.product_id),
+        productCode: r.product_code,
+        productName: r.product_name,
+        unit: r.unit,
+        quantity: Number(r.quantity),
+      })),
+    })
+
     await recordReturnEvent(conn, {
       returnType: 'sale',
       returnId: Number(retRow.id),
       returnNo: retRow.return_no,
       eventType: RETURN_EVENT.CONFIRMED,
       title: '销售退货单已确认',
-      description: '销售退货单确认完成，等待执行',
+      description: `已生成退货收货任务 ${taskNo}，请提交到 PDA 执行`,
       operatorId: operator?.userId ?? null,
       operatorName: operator?.realName ?? null,
       requestId: getRequestId(),
+      payload: { taskId, taskNo },
     })
     await conn.commit()
   } catch (e) {
@@ -749,6 +945,8 @@ module.exports = {
   confirmPR,
   executePR,
   cancelPR,
+  syncPurchaseReturnShipped,
+  syncSaleReturnCompleted,
   findAllSR,
   findByIdSR,
   createSR,

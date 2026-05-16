@@ -99,10 +99,13 @@ const WT_STATUS_TERMINAL = [WT_STATUS.SHIPPED, WT_STATUS.CANCELLED]
  * │              │ 4. 写入应收账款记录（INSERT IGNORE payment_records）          │
  * │              │ 5. 写入 warehouse_tasks.shipped_at = NOW()                   │
  * ├──────────────┼──────────────────────────────────────────────────────────────┤
- * │ CANCELLED(8) │ 1. 释放容器锁（unlockContainersByTask）                       │
- * │              │ 2. 释放分拣格（releaseByTask）                                │
- * │              │ 3. 清空 warehouse_tasks.sorting_bin_id / sorting_bin_code    │
- * │              │ 4. 同步销售单状态 → 5（已取消）                               │
+ * │ CANCELLED(8) │ 1. 查询锁定容器的库位信息（记录归还位置到事件）            │
+ * │              │ 2. 释放容器锁（unlockContainersByTask）                       │
+ * │              │ 3. 释放分拣格（releaseByTask）                                │
+ * │              │ 4. 清空 warehouse_tasks.sorting_bin_id / sorting_bin_code    │
+ * │              │ 5. 取消关联包裹（packages.status → 3）                        │
+ * │              │ 6. 取消包裹打印任务（print_jobs.status → 3）                   │
+ * │              │ 7. 同步销售单状态 → 5（已取消）                               │
  * │              │    sale_orders.status = 5                                    │
  * └──────────────┴──────────────────────────────────────────────────────────────┘
  */
@@ -114,7 +117,7 @@ const WT_ON_ENTER_ACTIONS = Object.freeze({
   [WT_STATUS.PACKING]:   [],
   [WT_STATUS.SHIPPING]:  ['autoTriggerByFinishPackage'],
   [WT_STATUS.SHIPPED]:   ['deductStock', 'unlockContainers', 'syncSaleOrderStatus:4', 'createPaymentRecord', 'setShippedAt'],
-  [WT_STATUS.CANCELLED]: ['unlockContainers', 'releaseSortingBin', 'clearSortingBinFields', 'syncSaleOrderStatus:5'],
+  [WT_STATUS.CANCELLED]: ['recordContainerReturnLocations', 'cancelPackages', 'cancelPackagePrintJobs', 'unlockContainers', 'releaseSortingBin', 'clearSortingBinFields', 'syncSaleOrderStatus:5'],
 })
 
 /**
@@ -150,9 +153,12 @@ const WT_ON_ENTER_ACTIONS = Object.freeze({
  * │              │    在 status 推进到 SHIPPED 之后执行（同一事务内）             │
  * ├──────────────┬──────────────────────────────────────────────────────────────┤
  * │ 任意进行中    │ （cancel 路径）                                               │
- * │ →CANCELLED   │ 1. 释放容器锁（unlockContainersByTask）                       │
- * │              │ 2. 释放分拣格（sortingBinSvc.releaseByTask）                  │
- * │              │ 3. 清空 sorting_bin_id / sorting_bin_code                    │
+ * │ →CANCELLED   │ 1. 查询锁定容器的库位信息（记录归还位置到事件）                │
+ * │              │ 2. 释放容器锁（unlockContainersByTask）                       │
+ * │              │ 3. 释放分拣格（sortingBinSvc.releaseByTask）                  │
+ * │              │ 4. 清空 sorting_bin_id / sorting_bin_code                    │
+ * │              │ 5. 取消关联包裹（packages.status → 3）                        │
+ * │              │ 6. 取消包裹打印任务（print_jobs.status → 3）                   │
  * └──────────────┴──────────────────────────────────────────────────────────────┘
  */
 const WT_ON_EXIT_ACTIONS = Object.freeze({
@@ -163,7 +169,7 @@ const WT_ON_EXIT_ACTIONS = Object.freeze({
   [WT_STATUS.PACKING]:   ['validatePackageHasItems', 'validateAllPackagesDone'],  // 不满足则中止推进
   [WT_STATUS.SHIPPING]:  ['deductStock'],                 // 失败则整个事务回滚
   [WT_STATUS.SHIPPED]:   [],
-  [WT_STATUS.CANCELLED]: ['unlockContainers', 'releaseSortingBin', 'clearSortingBinFields'],
+  [WT_STATUS.CANCELLED]: ['recordContainerReturnLocations', 'cancelPackages', 'cancelPackagePrintJobs', 'unlockContainers', 'releaseSortingBin', 'clearSortingBinFields'],
 })
 
 /**
@@ -180,11 +186,10 @@ const WT_ON_EXIT_ACTIONS = Object.freeze({
  *   SHIPPING(6) → SHIPPED(7)   ship
  *   任意进行中   → CANCELLED(8) cancel
  *
- * 注意：取消（→CANCELLED）由 cancel() 函数独立处理，
- *       因为它允许从任意进行中状态触发，不在此表中列举。
+ * 取消（→CANCELLED）可从任意进行中状态（1-6）触发。
  */
 const WT_TRANSITIONS = Object.freeze({
-  [WT_STATUS.PENDING]:  [WT_STATUS.PICKING],
+  [WT_STATUS.PENDING]:  [WT_STATUS.PICKING, WT_STATUS.CANCELLED],
   [WT_STATUS.PICKING]:  [WT_STATUS.SORTING,   WT_STATUS.CANCELLED],
   [WT_STATUS.SORTING]:  [WT_STATUS.CHECKING,  WT_STATUS.CANCELLED],
   [WT_STATUS.CHECKING]: [WT_STATUS.PACKING,   WT_STATUS.CANCELLED],

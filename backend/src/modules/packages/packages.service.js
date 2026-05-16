@@ -48,7 +48,7 @@ async function listByTask(taskId) {
     id:        p.id,
     barcode:   p.barcode,
     status:    p.status,
-    statusName: p.status === 2 ? '已完成' : '打包中',
+    statusName: p.status === 3 ? '已取消' : p.status === 2 ? '已完成' : '打包中',
     remark:    p.remark  || null,
     createdAt: p.created_at,
     items:     itemMap[p.id] || [],
@@ -431,7 +431,7 @@ async function getByBarcode(barcode) {
     packageId:        pkg.id,
     barcode:          pkg.barcode,
     packageStatus:    pkg.status,
-    packageStatusName: pkg.status === 2 ? '已完成' : '打包中',
+    packageStatusName: pkg.status === 3 ? '已取消' : pkg.status === 2 ? '已完成' : '打包中',
     warehouseTaskId:  pkg.warehouse_task_id,
     taskNo:           pkg.task_no,
     customerName:     pkg.customer_name,
@@ -445,4 +445,22 @@ async function getByBarcode(barcode) {
   }
 }
 
-module.exports = { listByTask, createPackage, addItem, finishPackage, finishPackageWithPrint, getByBarcode }
+// ─── 取消任务下所有未取消包裹 ────────────────────────────────────────────────
+async function cancelByTaskId(conn, taskId) {
+  const [result] = await conn.query(
+    `UPDATE packages SET status = 3
+     WHERE warehouse_task_id = ? AND status IN (1, 2)`,
+    [taskId],
+  )
+  return result.affectedRows
+}
+
+module.exports = {
+  listByTask,
+  createPackage,
+  addItem,
+  finishPackage,
+  finishPackageWithPrint,
+  getByBarcode,
+  cancelByTaskId,
+}
