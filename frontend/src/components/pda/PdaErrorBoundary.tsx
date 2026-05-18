@@ -45,7 +45,6 @@ export default class PdaErrorBoundary extends Component<Props, State> {
   handleHome = () => {
     this.setState(s => ({ hasError: false, errorMsg: '', errorKey: s.errorKey + 1 }))
     window.location.hash = '#/pda'
-    window.location.href = '/pda'
   }
 
   render() {

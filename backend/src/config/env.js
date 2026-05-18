@@ -52,9 +52,7 @@ const env = {
   DB_USER: readString('DB_USER', { defaultValue: 'flowcube' }),
   DB_PASSWORD: readString('DB_PASSWORD', { defaultValue: '', allowEmpty: true }),
   DB_NAME: readString('DB_NAME', { defaultValue: 'flowcube' }),
-  get JWT_SECRET() {
-    return readJwtSecret()
-  },
+  JWT_SECRET: readJwtSecret(),
   JWT_EXPIRES_IN: readString('JWT_EXPIRES_IN', { defaultValue: '7d' }),
   CORS_ORIGIN: readString('CORS_ORIGIN', { defaultValue: IS_PROD ? '' : 'http://localhost:5173', allowEmpty: true }),
   CORS_REFLECT: readBool('CORS_REFLECT', false),
@@ -68,6 +66,7 @@ const env = {
   APP_UPDATE_MANIFEST_PATH: readString('APP_UPDATE_MANIFEST_PATH', { defaultValue: '', allowEmpty: true }),
   GITHUB_OWNER: readString('GITHUB_OWNER', { defaultValue: 'chengjianghao439' }),
   GITHUB_REPO: readString('GITHUB_REPO', { defaultValue: 'flowcube2026' }),
+  DB_POOL_SIZE: readInt('DB_POOL_SIZE', { defaultValue: 10 }),
 }
 
 if (IS_PROD) {

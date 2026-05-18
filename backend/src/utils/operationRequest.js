@@ -155,10 +155,54 @@ async function getOperationRequestStatus({ requestKey, action, userId }) {
   }
 }
 
+/**
+ * 清理超过 TTL 的 operation_requests 记录，防止表无限增长。
+ * 默认保留 7 天。
+ */
+async function cleanupExpiredRequests({ ttlDays = 7 } = {}) {
+  try {
+    const [r] = await pool.query(
+      'DELETE FROM operation_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)',
+      [ttlDays],
+    )
+    if (r.affectedRows > 0) {
+      // 静默清理，不打印日志避免启动期噪音
+    }
+  } catch (e) {
+    // 表可能不存在，静默忽略
+    if (e.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('[OperationRequests] TTL 清理失败:', e.message)
+    }
+  }
+}
+
+/**
+ * 启动定期 TTL 清理（每 6 小时一次）
+ */
+let cleanupTimer = null
+
+function startCleanupSweeper({ intervalMs = 6 * 60 * 60 * 1000, ttlDays = 7 } = {}) {
+  if (cleanupTimer) return
+  cleanupTimer = setInterval(() => cleanupExpiredRequests({ ttlDays }), intervalMs)
+  cleanupTimer.unref() // 不阻止进程退出
+  // 启动时立即执行一次
+  void cleanupExpiredRequests({ ttlDays })
+}
+
+function stopCleanupSweeper() {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer)
+    cleanupTimer = null
+  }
+}
+
 module.exports = {
   STATUS,
   beginOperationRequest,
   completeOperationRequest,
   failOperationRequest,
   getOperationRequestStatus,
+  cleanupExpiredRequests,
+  startCleanupSweeper,
+  stopCleanupSweeper,
 }

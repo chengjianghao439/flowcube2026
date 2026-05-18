@@ -194,27 +194,7 @@ async function runMigrations() {
       await safeAlter(conn, `ALTER TABLE warehouse_tasks ADD COLUMN sorting_bin_code VARCHAR(20) DEFAULT NULL COMMENT '分拣格编号' AFTER sorting_bin_id`)
     })
 
-    // ── 货架主数据表（电脑端管理，库位由 PDA 上架时自动生成）────────────────
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS warehouse_racks (
-        id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-        warehouse_id BIGINT UNSIGNED NOT NULL              COMMENT '所属仓库',
-        zone         VARCHAR(20)     NOT NULL DEFAULT ''   COMMENT '库区，如 A / B',
-        code         VARCHAR(50)     NOT NULL              COMMENT '货架编码，如 A01',
-        name         VARCHAR(100)    NOT NULL DEFAULT ''   COMMENT '货架名称',
-        max_levels   TINYINT UNSIGNED NOT NULL DEFAULT 5   COMMENT '最大层数',
-        max_positions TINYINT UNSIGNED NOT NULL DEFAULT 10 COMMENT '每层最大位数',
-        status       TINYINT(1)      NOT NULL DEFAULT 1    COMMENT '1=启用 2=停用',
-        remark       VARCHAR(200)    DEFAULT NULL,
-        deleted_at   DATETIME        DEFAULT NULL,
-        created_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        UNIQUE KEY uk_rack_code (warehouse_id, code),
-        INDEX idx_rack_warehouse (warehouse_id),
-        INDEX idx_rack_zone (warehouse_id, zone)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='货架主数据'
-    `)
+    // ── 货架主数据已在顶部创建（第64行），此处不再重复 ──────────────────────
 
     await runLegacyRuntimePatch('079', 'default print template seeds', legacyRuntimePatchesEnabled, async () => {
       // ── 种入默认打印模板（仅在该类型无模板时执行）──────────────────────────

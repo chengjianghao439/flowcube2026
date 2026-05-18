@@ -120,9 +120,7 @@ export default function ProductFormPage() {
   const { mutateAsync: create } = useCreateProduct()
   const { mutateAsync: update } = useUpdateProduct()
 
-  useDirtyGuard(
-    () => JSON.stringify(formRef.current) !== JSON.stringify(initialForm),
-  )
+  useDirtyGuard(tabPath, JSON.stringify(formRef.current) !== JSON.stringify(initialForm))
 
   const priceLevels = [
     { key: 'A', field: 'salePriceA' as const, rate: priceRates.A, color: 'text-blue-600' },
