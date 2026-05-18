@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld('flowcubeDesktop', {
     ipcRenderer.invoke('flowcube:start-update-download', downloadUrl),
   ignoreUpdateVersion: (version) =>
     ipcRenderer.invoke('flowcube:ignore-update-version', version),
+  /** 手动触发更新检查（仪表盘「检查更新」按钮） */
+  triggerUpdateCheck: () =>
+    ipcRenderer.invoke('flowcube:trigger-update-check'),
   /** ERP 引导完成后的 API 根，供主进程触发自动更新（避免早于 localStorage 写入的竞态） */
   notifyApiOriginReady: (origin) => {
     ipcRenderer.send('flowcube:api-origin-ready', origin)
