@@ -131,7 +131,7 @@ export default function DashboardVersionCard() {
               <Button
                 type="button"
                 size="sm"
-                className="gap-1.5"
+                className="gap-1.5 active:scale-95 transition-transform"
                 disabled={updateBusy}
                 onClick={() => void handleDesktopUpdate()}
               >
