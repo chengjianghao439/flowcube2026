@@ -44,10 +44,25 @@ export default function DashboardVersionCard() {
     setChecking(true)
     try {
       await qc.invalidateQueries({ queryKey: ['app-update-latest'] })
+      // 等待 React Query 重新获取最新数据
+      await new Promise(r => setTimeout(r, 800))
+      const fresh = qc.getQueryData<typeof data>(['app-update-latest'])
+      const freshVer = (fresh as any)?.version
+
+      if (freshVer && isRemoteNewer(currentDisplay, freshVer)) {
+        toast.success(`发现新版本 v${normalizeVersion(freshVer)}，可在下方查看更新内容`)
+      } else if (freshVer) {
+        toast.success(`已是最新版本 v${normalizeVersion(currentDisplay)}`)
+      } else {
+        toast.warning('暂无法获取服务端版本，请稍后重试')
+      }
+
       const d = window.flowcubeDesktop
       if (d?.triggerUpdateCheck) {
         await d.triggerUpdateCheck()
       }
+    } catch {
+      toast.error('检查更新失败，请检查网络连接')
     } finally {
       setChecking(false)
     }
@@ -99,8 +114,7 @@ export default function DashboardVersionCard() {
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              className="gap-1.5"
+              className="gap-1.5 active:scale-95 transition-transform"
               disabled={checking}
               onClick={() => void handleCheckUpdate()}
             >
