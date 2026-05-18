@@ -42,9 +42,9 @@ async function generateMasterCode(conn, prefix, table, codeField = 'code') {
 /**
  * 生成业务单据编码（日期流水）。
  *
- * 使用 UPDATE + SELECT 原子递增，避免 COUNT 并发竞争。
+ * 使用 UPDATE + LAST_INSERT_ID 原子递增，避免 COUNT 并发竞争。
  *
- * @param {object} conn        - mysql2 连接（必须在事务内调用）
+ * @param {object} conn        - mysql2 连接（建议在事务内调用以保证读写一致性）
  * @param {string} prefix      - 单据前缀，如 'SO'、'PO'
  * @param {string} table       - 数据表名
  * @param {string} codeField   - 编码列名，如 'order_no'
@@ -56,17 +56,26 @@ async function generateDailyCode(conn, prefix, table, codeField) {
   const todayPrefix = `${prefix}${dateStr}`
   const seqKey = `${table}:${codeField}:${dateStr}`
 
-  // 用 daily_sequences 表做原子递增，比 COUNT 方式更安全
-  await conn.query(
-    `INSERT INTO daily_sequences (seq_key, seq_value) VALUES (?, 1)
-     ON DUPLICATE KEY UPDATE seq_value = seq_value + 1`,
-    [seqKey],
-  )
-  const [[{ seq }]] = await conn.query(
-    'SELECT seq_value AS seq FROM daily_sequences WHERE seq_key = ?',
-    [seqKey],
-  )
-  return `${todayPrefix}${String(seq).padStart(3, '0')}`
+  // LAST_INSERT_ID 依赖连接一致性；若传入的是 pool 则需要获取专用连接
+  const isPool = typeof conn.getConnection === 'function'
+  let dedicated = null
+  const db = isPool ? (dedicated = await conn.getConnection()) : conn
+  try {
+    // 先确保行存在（幂等），再用 UPDATE + LAST_INSERT_ID 原子递增
+    await db.query(
+      `INSERT INTO daily_sequences (seq_key, seq_value) VALUES (?, 0)
+       ON DUPLICATE KEY UPDATE seq_key = seq_key`,
+      [seqKey],
+    )
+    await db.query(
+      `UPDATE daily_sequences SET seq_value = LAST_INSERT_ID(seq_value + 1) WHERE seq_key = ?`,
+      [seqKey],
+    )
+    const [[{ seq }]] = await db.query('SELECT LAST_INSERT_ID() AS seq')
+    return `${todayPrefix}${String(seq).padStart(3, '0')}`
+  } finally {
+    if (dedicated) dedicated.release()
+  }
 }
 
 /**

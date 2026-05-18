@@ -539,7 +539,12 @@ async function deleteOrder(id) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const order = await findById(id)
+    // 在事务内读取并锁定订单行，防止并发状态变更
+    const [[order]] = await conn.query(
+      'SELECT id, status, order_no FROM sale_orders WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [id],
+    )
+    if (!order) throw new AppError('订单不存在', 404)
     assertStatusAction('sale', 'delete', order.status)
     await conn.query('UPDATE sale_orders SET deleted_at=NOW() WHERE id=?', [id])
     await conn.commit()

@@ -591,9 +591,11 @@ async function traceByProductId(productId, {
   // 按来源类型分组，批量解析文档（避免 N+1）
   const grouped = new Map()
   for (const r of rows) {
+    const st = r.sourceType || 'unknown'
+    const sri = r.sourceRefId ?? 'null'
     if (!r.sourceRefId || !Number.isFinite(Number(r.sourceRefId))) continue
-    const key = `${r.sourceType}:${r.sourceRefId}`
-    if (!grouped.has(key)) grouped.set(key, { sourceType: r.sourceType, sourceRefId: r.sourceRefId })
+    const key = `${st}:${sri}`
+    if (!grouped.has(key)) grouped.set(key, { sourceType: st, sourceRefId: sri })
   }
   const docMap = await resolveSourceDocumentsBatch([...grouped.values()])
 
