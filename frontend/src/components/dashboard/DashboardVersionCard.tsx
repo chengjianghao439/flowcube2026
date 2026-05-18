@@ -114,7 +114,6 @@ export default function DashboardVersionCard() {
             <Button
               type="button"
               size="sm"
-              className="gap-1.5 active:scale-95 transition-transform"
               disabled={checking}
               onClick={() => void handleCheckUpdate()}
             >
@@ -131,7 +130,6 @@ export default function DashboardVersionCard() {
               <Button
                 type="button"
                 size="sm"
-                className="gap-1.5 active:scale-95 transition-transform"
                 disabled={updateBusy}
                 onClick={() => void handleDesktopUpdate()}
               >
