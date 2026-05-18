@@ -183,6 +183,21 @@ ipcMain.handle('flowcube:get-app-version', () => app.getVersion())
 
 ipcMain.handle('flowcube:is-packaged', () => app.isPackaged)
 
+ipcMain.handle('flowcube:trigger-update-check', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win || win.isDestroyed()) return
+  try {
+    const origin = await getRendererApiOrigin(win)
+    if (!origin) {
+      console.warn('[FlowCube] 手动更新检查：无法获取 API 根地址')
+      return
+    }
+    await checkAppUpdate(app, win, () => origin, { ui: 'ipc', quitForInstall: quitForInstaller })
+  } catch (err) {
+    console.error('[FlowCube] 手动更新检查失败:', err)
+  }
+})
+
 ipcMain.handle('flowcube:start-update-download', async (event, downloadUrl) => {
   const url = typeof downloadUrl === 'string' ? downloadUrl.trim() : ''
   if (!isValidDownloadUrl(url)) {
