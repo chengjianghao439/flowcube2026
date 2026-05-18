@@ -190,6 +190,7 @@ export default function InboundTasksPage() {
         actions={
           <>
             <Button
+              size="sm"
               variant="outline"
               onClick={() => downloadExport('/export/inbound-tasks', {
                 ...(statusFilter ? { status: statusFilter } : {}),
@@ -199,6 +200,7 @@ export default function InboundTasksPage() {
               导出 Excel
             </Button>
             <Button
+              size="sm"
               onClick={() => {
                 const path = '/inbound-tasks/new'
                 addTab({ key: path, title: '新建收货订单', path })
@@ -231,11 +233,11 @@ export default function InboundTasksPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" className="h-9 min-w-[180px] justify-start font-normal" onClick={() => setProductFinderOpen(true)}>
+          <Button size="sm" variant="outline" className="min-w-[180px] justify-start font-normal" onClick={() => setProductFinderOpen(true)}>
             {product ? `${product.name} (${product.code})` : '按产品筛选'}
           </Button>
-          <Button variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-          <Button variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setProduct(null); setPage(1) }}>重置</Button>
+          <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setProduct(null); setPage(1) }}>重置</Button>
         </div>
       </FilterCard>
 
