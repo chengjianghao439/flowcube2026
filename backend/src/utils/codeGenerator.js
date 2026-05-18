@@ -42,7 +42,9 @@ async function generateMasterCode(conn, prefix, table, codeField = 'code') {
 /**
  * 生成业务单据编码（日期流水）。
  *
- * @param {object} conn        - mysql2 连接或连接池
+ * 使用 UPDATE + SELECT 原子递增，避免 COUNT 并发竞争。
+ *
+ * @param {object} conn        - mysql2 连接（必须在事务内调用）
  * @param {string} prefix      - 单据前缀，如 'SO'、'PO'
  * @param {string} table       - 数据表名
  * @param {string} codeField   - 编码列名，如 'order_no'
@@ -52,11 +54,19 @@ async function generateDailyCode(conn, prefix, table, codeField) {
   const d = new Date()
   const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
   const todayPrefix = `${prefix}${dateStr}`
-  const [[{ cnt }]] = await conn.query(
-    `SELECT COUNT(*) AS cnt FROM \`${table}\` WHERE \`${codeField}\` LIKE ?`,
-    [`${todayPrefix}%`],
+  const seqKey = `${table}:${codeField}:${dateStr}`
+
+  // 用 daily_sequences 表做原子递增，比 COUNT 方式更安全
+  await conn.query(
+    `INSERT INTO daily_sequences (seq_key, seq_value) VALUES (?, 1)
+     ON DUPLICATE KEY UPDATE seq_value = seq_value + 1`,
+    [seqKey],
   )
-  return `${todayPrefix}${String(cnt + 1).padStart(3, '0')}`
+  const [[{ seq }]] = await conn.query(
+    'SELECT seq_value AS seq FROM daily_sequences WHERE seq_key = ?',
+    [seqKey],
+  )
+  return `${todayPrefix}${String(seq).padStart(3, '0')}`
 }
 
 /**

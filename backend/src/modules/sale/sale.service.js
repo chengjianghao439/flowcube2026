@@ -536,9 +536,19 @@ async function cancel(id, operator) {
 
 // 删除订单：仅 CANCELLED(5) 可删
 async function deleteOrder(id) {
-  const order = await findById(id)
-  assertStatusAction('sale', 'delete', order.status)
-  await pool.query('UPDATE sale_orders SET deleted_at=NOW() WHERE id=?', [id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const order = await findById(id)
+    assertStatusAction('sale', 'delete', order.status)
+    await conn.query('UPDATE sale_orders SET deleted_at=NOW() WHERE id=?', [id])
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 module.exports = {

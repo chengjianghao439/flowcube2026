@@ -1,6 +1,7 @@
 import { KeepAliveOutlet } from '@/components/layout/KeepAliveOutlet'
 import { TopNav } from '@/components/layout/TopNav'
 import { WorkspaceTabs } from '@/components/layout/WorkspaceTabs'
+import TabErrorBoundary from '@/components/shared/TabErrorBoundary'
 import { DirtyGuardDialog } from '@/components/shared/DirtyGuardDialog'
 import { AppToast } from '@/components/shared/AppToast'
 import { GlobalConfirmDialog } from '@/components/shared/GlobalConfirmDialog'
@@ -44,7 +45,9 @@ export default function AppLayout() {
       </header>
 
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
-        <KeepAliveOutlet />
+        <TabErrorBoundary>
+          <KeepAliveOutlet />
+        </TabErrorBoundary>
       </main>
 
       <DirtyGuardDialog />

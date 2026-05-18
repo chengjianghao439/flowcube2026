@@ -452,6 +452,76 @@ async function resolveSourceDocument(sourceType, sourceRefId) {
 }
 
 /**
+ * 批量解析容器来源文档（避免 N+1 查询）
+ */
+async function resolveSourceDocumentsBatch(items) {
+  const result = new Map()
+  if (!items.length) return result
+
+  // 按 sourceType 分组收集 ID
+  const byType = new Map()
+  for (const { sourceType, sourceRefId } of items) {
+    const rid = Number(sourceRefId)
+    if (!Number.isFinite(rid) || rid <= 0 || !sourceType) continue
+    if (!byType.has(sourceType)) byType.set(sourceType, new Set())
+    byType.get(sourceType).add(rid)
+  }
+
+  const queries = {
+    inbound_task: 'SELECT id, task_no, status, purchase_order_no, warehouse_name FROM inbound_tasks WHERE id IN (?) AND deleted_at IS NULL',
+    stockcheck: 'SELECT id, check_no, status, warehouse_name FROM inventory_checks WHERE id IN (?) AND deleted_at IS NULL',
+    transfer: 'SELECT id, order_no, status, from_warehouse_name, to_warehouse_name FROM transfer_orders WHERE id IN (?) AND deleted_at IS NULL',
+    import: 'SELECT id, file_name, row_count, created_at FROM inventory_import_batches WHERE id IN (?)',
+    manual: 'SELECT id, username, real_name FROM sys_users WHERE id IN (?)',
+  }
+
+  const rowMappers = {
+    inbound_task: r => ({ kind: 'inbound_task', id: r.id, no: r.task_no, status: r.status, purchaseOrderNo: r.purchase_order_no, warehouseName: r.warehouse_name }),
+    stockcheck: r => ({ kind: 'stockcheck', id: r.id, no: r.check_no, status: r.status, warehouseName: r.warehouse_name }),
+    transfer: r => ({ kind: 'transfer', id: r.id, no: r.order_no, status: r.status, fromWarehouseName: r.from_warehouse_name, toWarehouseName: r.to_warehouse_name }),
+    import: r => ({ kind: 'import', id: r.id, fileName: r.file_name, rowCount: r.row_count, createdAt: r.created_at }),
+    manual: r => ({ kind: 'manual', operatorUserId: r.id, username: r.username, realName: r.real_name }),
+  }
+
+  for (const [sourceType, ids] of byType) {
+    const sql = queries[sourceType]
+    if (!sql) continue
+    try {
+      const idList = [...ids]
+      const [rows] = await pool.query(sql, [idList])
+      for (const r of rows) {
+        const key = `${sourceType}:${r.id}`
+        result.set(key, rowMappers[sourceType](r))
+      }
+    } catch (e) {
+      if (e.code !== 'ER_NO_SUCH_TABLE') throw e
+    }
+  }
+
+  // 处理 return 类型（需要同时查两张表）
+  if (byType.has('return')) {
+    const idList = [...byType.get('return')]
+    try {
+      const [srRows] = await pool.query('SELECT id, return_no, status FROM sale_returns WHERE id IN (?) AND deleted_at IS NULL', [idList])
+      for (const r of srRows) {
+        result.set(`return:${r.id}`, { kind: 'sale_return', id: r.id, no: r.return_no, status: r.status })
+      }
+      const remaining = idList.filter(id => !result.has(`return:${id}`))
+      if (remaining.length) {
+        const [prRows] = await pool.query('SELECT id, return_no, status FROM purchase_returns WHERE id IN (?) AND deleted_at IS NULL', [remaining])
+        for (const r of prRows) {
+          result.set(`return:${r.id}`, { kind: 'purchase_return', id: r.id, no: r.return_no, status: r.status })
+        }
+      }
+    } catch (e) {
+      if (e.code !== 'ER_NO_SUCH_TABLE') throw e
+    }
+  }
+
+  return result
+}
+
+/**
  * 按商品聚合在库容器及来源（status=1），支持按容器/来源/单据过滤；默认排除 is_legacy
  */
 async function traceByProductId(productId, {
@@ -518,8 +588,18 @@ async function traceByProductId(productId, {
   }
 
   const chains = []
+  // 按来源类型分组，批量解析文档（避免 N+1）
+  const grouped = new Map()
   for (const r of rows) {
-    const doc = await resolveSourceDocument(r.sourceType, r.sourceRefId)
+    if (!r.sourceRefId || !Number.isFinite(Number(r.sourceRefId))) continue
+    const key = `${r.sourceType}:${r.sourceRefId}`
+    if (!grouped.has(key)) grouped.set(key, { sourceType: r.sourceType, sourceRefId: r.sourceRefId })
+  }
+  const docMap = await resolveSourceDocumentsBatch([...grouped.values()])
+
+  for (const r of rows) {
+    const key = `${r.sourceType || 'unknown'}:${r.sourceRefId ?? 'null'}`
+    const doc = docMap.get(key) || null
     chains.push({
       container: {
         containerId: r.containerId,
@@ -573,28 +653,26 @@ async function checkStockConsistency({ productId = null, warehouseId = null, lim
   if (productId) { condC.push('c.product_id = ?'); paramsC.push(productId) }
   if (warehouseId) { condC.push('c.warehouse_id = ?'); paramsC.push(warehouseId) }
 
-  const [agg] = await pool.query(
+  // 单次 LEFT JOIN 查询，避免 N+1
+  const [rows] = await pool.query(
     `SELECT c.product_id AS productId, c.warehouse_id AS warehouseId,
-            SUM(c.remaining_qty) AS containerQty
+            SUM(c.remaining_qty) AS containerQty,
+            COALESCE(s.quantity, 0) AS stockQty
      FROM inventory_containers c
+     LEFT JOIN inventory_stock s ON s.product_id = c.product_id AND s.warehouse_id = c.warehouse_id
      WHERE ${condC.join(' AND ')}
-     GROUP BY c.product_id, c.warehouse_id`,
-    paramsC,
+     GROUP BY c.product_id, c.warehouse_id
+     LIMIT ?`,
+    [...paramsC, limit],
   )
 
   const mismatches = []
-  for (const row of agg) {
-    const pid = row.productId
-    const wid = row.warehouseId
+  for (const row of rows) {
     const cQty = Number(row.containerQty)
-    const [[s]] = await pool.query(
-      'SELECT COALESCE(quantity,0) AS q FROM inventory_stock WHERE product_id=? AND warehouse_id=?',
-      [pid, wid],
-    )
-    const sQty = s ? Number(s.q) : 0
+    const sQty = Number(row.stockQty)
     const diff = sQty - cQty
     if (Math.abs(diff) > 0.0001) {
-      mismatches.push({ productId: pid, warehouseId: wid, containerQty: cQty, stockQty: sQty, diff })
+      mismatches.push({ productId: row.productId, warehouseId: row.warehouseId, containerQty: cQty, stockQty: sQty, diff })
     }
   }
 
@@ -688,33 +766,45 @@ async function getContainerByBarcode(barcode) {
  * @returns {{ containerId, barcode, locationCode }}
  */
 async function assignContainerLocation(containerId, locationId) {
-  // 校验容器存在且状态有效（status=1 ACTIVE）
-  const [[container]] = await pool.query(
-    'SELECT id, barcode, status FROM inventory_containers WHERE id=? AND deleted_at IS NULL',
-    [containerId],
-  )
-  if (!container) throw new AppError('容器不存在', 404)
-  if (Number(container.status) === 4) {
-    throw new AppError('待上架容器请使用「入库任务」上架接口绑定库位', 400)
-  }
-  if (Number(container.status) !== 1) throw new AppError('容器已清空或作废，无法移动库位', 400)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
 
-  // 校验库位存在
-  const [[location]] = await pool.query(
-    'SELECT id, code FROM warehouse_locations WHERE id=? AND deleted_at IS NULL',
-    [locationId],
-  )
-  if (!location) throw new AppError('库位不存在', 404)
+    // 校验容器存在且状态有效（status=1 ACTIVE）
+    const [[container]] = await conn.query(
+      'SELECT id, barcode, status FROM inventory_containers WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [containerId],
+    )
+    if (!container) throw new AppError('容器不存在', 404)
+    if (Number(container.status) === 4) {
+      throw new AppError('待上架容器请使用「入库任务」上架接口绑定库位', 400)
+    }
+    if (Number(container.status) !== 1) throw new AppError('容器已清空或作废，无法移动库位', 400)
 
-  await pool.query(
-    'UPDATE inventory_containers SET location_id=? WHERE id=?',
-    [locationId, containerId],
-  )
+    // 校验库位存在
+    const [[location]] = await conn.query(
+      'SELECT id, code FROM warehouse_locations WHERE id=? AND deleted_at IS NULL',
+      [locationId],
+    )
+    if (!location) throw new AppError('库位不存在', 404)
 
-  return {
-    containerId: container.id,
-    barcode:     container.barcode,
-    locationCode: location.code,
+    await conn.query(
+      'UPDATE inventory_containers SET location_id=? WHERE id=?',
+      [locationId, containerId],
+    )
+
+    await conn.commit()
+
+    return {
+      containerId: container.id,
+      barcode:     container.barcode,
+      locationCode: location.code,
+    }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
   }
 }
 
@@ -781,6 +871,7 @@ module.exports = {
   traceByProductId,
   checkStockConsistency,
   resolveSourceDocument,
+  resolveSourceDocumentsBatch,
   getContainerByBarcode,
   assignContainerLocation,
   splitContainerOp,

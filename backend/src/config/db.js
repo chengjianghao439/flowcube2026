@@ -8,10 +8,12 @@ const pool = mysql.createPool({
   password: env.DB_PASSWORD,
   database: env.DB_NAME,
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: env.DB_POOL_SIZE,
   queueLimit: 0,
   timezone: '+08:00',
   charset: 'utf8mb4',
+  connectTimeout: 10000,
+  acquireTimeout: 10000,
 })
 
 /** 会话字符集与排序规则，避免极少数环境下连接未按 utf8mb4 解释中文（姓名乱码、排序异常） */

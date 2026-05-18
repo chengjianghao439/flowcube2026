@@ -5,7 +5,22 @@ const { PERMISSIONS } = require('../../constants/permissions')
 const controller = require('./import.controller')
 
 const router = Router()
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv',
+    ]
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error('仅支持 Excel (.xlsx/.xls) 或 CSV 文件'))
+    }
+  },
+})
 
 router.use(authMiddleware)
 
