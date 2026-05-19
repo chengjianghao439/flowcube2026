@@ -190,7 +190,6 @@ export default function InboundTasksPage() {
         actions={
           <>
             <Button
-              size="sm"
               variant="outline"
               onClick={() => downloadExport('/export/inbound-tasks', {
                 ...(statusFilter ? { status: statusFilter } : {}),
@@ -200,7 +199,6 @@ export default function InboundTasksPage() {
               导出 Excel
             </Button>
             <Button
-              size="sm"
               onClick={() => {
                 const path = '/inbound-tasks/new'
                 addTab({ key: path, title: '新建收货订单', path })
