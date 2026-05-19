@@ -97,7 +97,7 @@ export default function CarriersPage() {
       <PageHeader
         title="承运商管理"
         description="管理物流、快递等承运商信息"
-        actions={<Button size="sm" onClick={openCreate}>+ 新建承运商</Button>}
+        actions={<Button onClick={openCreate}>+ 新建承运商</Button>}
       />
 
       <FilterCard>
@@ -108,8 +108,8 @@ export default function CarriersPage() {
               onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
             />
           </div>
-          <Button size="sm" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-          <Button size="sm" variant="outline" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>
+          <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>
         </div>
       </FilterCard>
 
