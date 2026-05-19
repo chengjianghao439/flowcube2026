@@ -76,7 +76,7 @@ export default function TableActionsMenu({
               {item.separatorBefore && <DropdownMenuSeparator />}
               <DropdownMenuItem
                 disabled={item.disabled}
-                className={item.destructive ? 'text-destructive focus:text-destructive' : undefined}
+                className={cn('text-xs', item.destructive && 'text-destructive focus:text-destructive')}
                 onClick={item.onClick}
               >
                 {item.icon}
