@@ -10,6 +10,7 @@ import { useUsers, useDeleteUser } from '@/hooks/useUsers'
 import UserFormDialog from './components/UserFormDialog'
 import ResetPasswordDialog from './components/ResetPasswordDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { SysUser } from '@/types/users'
 import type { TableColumn } from '@/types'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -79,23 +80,17 @@ export default function UsersPage() {
       title: '操作',
       width: 200,
       render: (_, row) => (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => handleEdit(row)}>
-            编辑
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => handleResetPassword(row)}>
-            重置密码
-          </Button>
-          {row.id !== currentUser?.id && (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => handleDelete(row)}
-            >
-              删除
-            </Button>
-          )}
-        </div>
+        <TableActionsMenu
+          primaryLabel="编辑"
+          primaryVariant="outline"
+          onPrimaryClick={() => handleEdit(row)}
+          items={[
+            { label: '重置密码', onClick: () => handleResetPassword(row) },
+            ...(row.id !== currentUser?.id
+              ? [{ label: '删除', destructive: true, separatorBefore: true, onClick: () => handleDelete(row) }]
+              : []),
+          ]}
+        />
       ),
     },
   ]

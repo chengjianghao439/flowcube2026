@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -58,11 +59,17 @@ export default function PaymentsPage() {
     }},
     { key: 'id', title: '操作', width: 120, render: (_, row) => {
       const r = row as PaymentRecord
-      return (
-        <div className="flex gap-1">
-          {r.status !== 3 && <Button size="sm" variant="outline" onClick={() => { setSelectedRecord(r); setPayOpen(true) }}>登记付款</Button>}
-          <Button size="sm" variant="outline" onClick={() => { setSelectedRecord(r); setEntriesOpen(true) }}>流水</Button>
-        </div>
+      return r.status !== 3 ? (
+        <TableActionsMenu
+          primaryLabel="登记付款"
+          primaryVariant="outline"
+          onPrimaryClick={() => { setSelectedRecord(r); setPayOpen(true) }}
+          items={[
+            { label: '流水', onClick: () => { setSelectedRecord(r); setEntriesOpen(true) } },
+          ]}
+        />
+      ) : (
+        <Button size="sm" variant="outline" onClick={() => { setSelectedRecord(r); setEntriesOpen(true) }}>流水</Button>
       )
     }}
   ]
