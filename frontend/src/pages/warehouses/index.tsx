@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { useWarehouses, useDeleteWarehouse } from '@/hooks/useWarehouses'
 import WarehouseFormDialog from './components/WarehouseFormDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { Warehouse } from '@/types/warehouses'
 import type { TableColumn } from '@/types'
 
@@ -57,10 +58,14 @@ export default function WarehousesPage() {
     {
       key: 'id', title: '操作', width: 120,
       render: (_, row) => (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => handleEdit(row)}>编辑</Button>
-          <Button size="sm" variant="destructive" onClick={() => handleDelete(row)}>删除</Button>
-        </div>
+        <TableActionsMenu
+          primaryLabel="编辑"
+          primaryVariant="outline"
+          onPrimaryClick={() => handleEdit(row)}
+          items={[
+            { label: '删除', destructive: true, onClick: () => handleDelete(row) },
+          ]}
+        />
       ),
     },
   ]

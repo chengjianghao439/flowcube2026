@@ -19,6 +19,7 @@ import { getLocationsApi, createLocationApi, updateLocationApi, deleteLocationAp
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import { LOCATION_STATUS_OPTIONS, type Location, type CreateLocationParams } from '@/types/locations'
 import DataTable from '@/components/shared/DataTable'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { TableColumn } from '@/types'
 
 const STATUS_VARIANT: Record<number, 'default' | 'outline' | 'secondary'> = { 1: 'default', 2: 'outline' }
@@ -94,10 +95,14 @@ export default function LocationsPage() {
     {
       key: 'id', title: '操作', width: 120,
       render: (_, row) => (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => openEdit(row)}>编辑</Button>
-          <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
-        </div>
+        <TableActionsMenu
+          primaryLabel="编辑"
+          primaryVariant="outline"
+          onPrimaryClick={() => openEdit(row)}
+          items={[
+            { label: '删除', destructive: true, onClick: () => setDeleteTarget(row) },
+          ]}
+        />
       ),
     },
   ]

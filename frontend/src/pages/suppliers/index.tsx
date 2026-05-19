@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,10 +52,14 @@ export default function SuppliersPage() {
     { key:'email', title:'邮箱', render:v=>(v as string)||'-' },
     { key:'isActive', title:'状态', width:80, render:(_,r)=><Badge variant={r.isActive?'default':'destructive'}>{r.isActive?'启用':'停用'}</Badge> },
     { key:'id', title:'操作', width:140, render:(_,r)=>(
-      <div className="flex gap-2">
-        <Button size="sm" variant="outline" onClick={()=>openEdit(r)}>编辑</Button>
-        <Button size="sm" variant="destructive" onClick={()=> setConfirmTarget(r)}>删除</Button>
-      </div>
+      <TableActionsMenu
+        primaryLabel="编辑"
+        primaryVariant="outline"
+        onPrimaryClick={() => openEdit(r)}
+        items={[
+          { label: '删除', destructive: true, separatorBefore: true, onClick: () => setConfirmTarget(r) },
+        ]}
+      />
     )},
   ]
 
