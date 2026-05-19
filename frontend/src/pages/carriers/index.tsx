@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { getCarriersApi, createCarrierApi, updateCarrierApi, deleteCarrierApi } from '@/api/carriers'
 import { CARRIER_TYPE_OPTIONS, CARRIER_TYPE_LABELS, type Carrier, type CarrierType, type CreateCarrierParams } from '@/types/carriers'
 import DataTable from '@/components/shared/DataTable'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { TableColumn } from '@/types'
 
 type FormState = CreateCarrierParams & { isActive: boolean }
@@ -84,10 +85,14 @@ export default function CarriersPage() {
     {
       key: 'id', title: '操作', width: 120,
       render: (_, row) => (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => openEdit(row)}>编辑</Button>
-          <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
-        </div>
+        <TableActionsMenu
+          primaryLabel="编辑"
+          primaryVariant="outline"
+          onPrimaryClick={() => openEdit(row)}
+          items={[
+            { label: '删除', destructive: true, onClick: () => setDeleteTarget(row) },
+          ]}
+        />
       ),
     },
   ]

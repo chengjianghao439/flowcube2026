@@ -23,6 +23,7 @@ import type { SortingBin } from '@/api/sorting-bins'
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import type { TableColumn } from '@/types'
 import DataTable from '@/components/shared/DataTable'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 
 const STATUS_VARIANT: Record<number, 'default'|'secondary'|'outline'> = { 1:'outline', 2:'default' }
 const STATUS_LABEL:   Record<number, string> = { 1:'空闲', 2:'占用' }
@@ -176,12 +177,18 @@ export default function SortingBinsPage() {
     {
       key: 'id', title: '操作', width: 120,
       render: (_, row) => (
-        <div className="flex gap-2">
-          {row.status === 2 && (
-            <Button size="sm" variant="outline" onClick={() => setReleaseTarget(row)}>释放</Button>
-          )}
+        row.status === 2 ? (
+          <TableActionsMenu
+            primaryLabel="释放"
+            primaryVariant="outline"
+            onPrimaryClick={() => setReleaseTarget(row)}
+            items={[
+              { label: '删除', destructive: true, onClick: () => setDeleteTarget(row) },
+            ]}
+          />
+        ) : (
           <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
-        </div>
+        )
       ),
     },
   ]
