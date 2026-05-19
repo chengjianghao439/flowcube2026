@@ -180,7 +180,7 @@ export default function SortingBinsPage() {
           {row.status === 2 && (
             <Button size="sm" variant="outline" onClick={() => setReleaseTarget(row)}>释放</Button>
           )}
-          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
+          <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
         </div>
       ),
     },

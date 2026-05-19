@@ -95,8 +95,8 @@ export default function LocationsPage() {
       key: 'id', title: '操作', width: 120,
       render: (_, row) => (
         <div className="flex gap-2">
-          <Button size="sm" variant="ghost" onClick={() => openEdit(row)}>编辑</Button>
-          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
+          <Button size="sm" variant="outline" onClick={() => openEdit(row)}>编辑</Button>
+          <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
         </div>
       ),
     },
