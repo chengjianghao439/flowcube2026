@@ -15,6 +15,7 @@ import { getRacksApi, deleteRackApi, printRackLabelApi } from '@/api/racks'
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import DataTable from '@/components/shared/DataTable'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { TableColumn } from '@/types'
 import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
@@ -23,14 +24,6 @@ import {
   isDesktopLocalPrintError,
   tryDesktopLocalZplThenComplete,
 } from '@/lib/desktopLocalPrint'
-import { ChevronDown, Edit2, Printer, Trash2 } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 
 export default function RacksPage() {
   const navigate = useNavigate()
@@ -153,46 +146,25 @@ export default function RacksPage() {
       title: '操作',
       width: 152,
       render: (_, row) => (
-        <div className="flex items-center justify-end gap-1 shrink-0">
-          <Button
-            size="sm"
-            variant="outline"
-            className="px-2"
-            disabled={printMut.isPending && printMut.variables === row.id}
-            onClick={() => printMut.mutate(row.id)}
-          >
-            <Printer className="size-3.5 mr-0.5" />
-            打印
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" disabled={deleteMut.isPending} className="px-2">
-                更多
-                <ChevronDown className="ml-0.5 size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => {
-                  setEditItem(row)
-                  setFormOpen(true)
-                }}
-              >
-                <Edit2 className="size-4" />
-                编辑
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                disabled={deleteMut.isPending}
-                onClick={() => setDeleteTarget(row)}
-              >
-                <Trash2 className="size-4" />
-                删除
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <TableActionsMenu
+          primaryLabel="打印"
+          primaryVariant="outline"
+          primaryDisabled={printMut.isPending && printMut.variables === row.id}
+          onPrimaryClick={() => printMut.mutate(row.id)}
+          items={[
+            {
+              label: '编辑',
+              onClick: () => { setEditItem(row); setFormOpen(true) },
+            },
+            {
+              label: '删除',
+              destructive: true,
+              separatorBefore: true,
+              disabled: deleteMut.isPending,
+              onClick: () => setDeleteTarget(row),
+            },
+          ]}
+        />
       ),
     },
   ]

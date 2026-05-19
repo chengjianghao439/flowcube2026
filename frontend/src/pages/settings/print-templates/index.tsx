@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import PageHeader from '@/components/shared/PageHeader'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import DataTable from '@/components/shared/DataTable'
@@ -58,10 +59,14 @@ export default function PrintTemplatesPage() {
     {
       key: 'id', title: '操作', width: 120,
       render: (_, row) => (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => goToEdit(row)}>编辑</Button>
-          <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
-        </div>
+        <TableActionsMenu
+          primaryLabel="编辑"
+          primaryVariant="outline"
+          onPrimaryClick={() => goToEdit(row)}
+          items={[
+            { label: '删除', destructive: true, onClick: () => setDeleteTarget(row) },
+          ]}
+        />
       ),
     },
   ]

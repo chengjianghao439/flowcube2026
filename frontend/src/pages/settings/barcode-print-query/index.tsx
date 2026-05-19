@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
 import DataTable from '@/components/shared/DataTable'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -175,36 +176,25 @@ export default function BarcodePrintQueryPage() {
         key: 'action',
         title: '操作',
         width: 210,
-        render: (_, row) => (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!row.canReprint || (reprintMut.isPending && reprintMut.variables?.recordId === row.recordId)}
-              onClick={() => reprintMut.mutate(row)}
-            >
-              {reprintMut.isPending && reprintMut.variables?.recordId === row.recordId ? '处理中…' : '重新打印'}
-            </Button>
-            {row.category === 'inbound' && row.inboundTaskId ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => openPath(`/inbound-tasks/${row.inboundTaskId}?focus=print-batches`, row.bizNo || `收货订单 #${row.inboundTaskId}`)}
-              >
-                打开收货详情
-              </Button>
-            ) : null}
-            {row.category === 'outbound' && row.waveId ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => openPath(`/picking-waves?waveId=${row.waveId}&focus=print-closure`, row.waveNo || `波次 #${row.waveId}`)}
-              >
-                打开波次详情
-              </Button>
-            ) : null}
-          </div>
-        ),
+        render: (_, row) => {
+          const isReprinting = reprintMut.isPending && reprintMut.variables?.recordId === row.recordId
+          return (
+            <TableActionsMenu
+              primaryLabel={isReprinting ? '处理中…' : '重新打印'}
+              primaryVariant="outline"
+              primaryDisabled={!row.canReprint || isReprinting}
+              onPrimaryClick={() => reprintMut.mutate(row)}
+              items={[
+                ...(row.category === 'inbound' && row.inboundTaskId
+                  ? [{ label: '打开收货详情', onClick: () => openPath(`/inbound-tasks/${row.inboundTaskId}?focus=print-batches`, row.bizNo || `收货订单 #${row.inboundTaskId}`) }]
+                  : []),
+                ...(row.category === 'outbound' && row.waveId
+                  ? [{ label: '打开波次详情', onClick: () => openPath(`/picking-waves?waveId=${row.waveId}&focus=print-closure`, row.waveNo || `波次 #${row.waveId}`) }]
+                  : []),
+              ]}
+            />
+          )
+        },
       },
     ]
   }, [category, reprintMut.isPending, reprintMut.variables])
