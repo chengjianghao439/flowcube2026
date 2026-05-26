@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Layers, CircleCheck, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { useLogin } from '@/hooks/useAuth'
 import { applyErpApiBaseFromStorage, getStoredApiOrigin } from '@/lib/apiOrigin'
 import { loadSavedLoginForm } from '@/lib/loginCredentials'
@@ -30,7 +31,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
-            <span className="material-symbols-outlined text-[20px]">layers</span>
+            <Layers className="size-5" />
           </div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">极序 Flow</h1>
           <div className="absolute -bottom-4 left-11 whitespace-nowrap text-[10px] font-medium uppercase tracking-widest text-slate-400">
@@ -45,15 +46,15 @@ export default function LoginPage() {
           </h2>
           <ul className="mb-10 space-y-4">
             <li className="flex items-center gap-3 font-medium text-slate-600 dark:text-slate-300">
-              <span className="material-symbols-outlined text-[22px] text-primary">check_circle</span>
+              <CircleCheck className="size-[22px] text-primary" />
               <span>进销存一体化管理</span>
             </li>
             <li className="flex items-center gap-3 font-medium text-slate-600 dark:text-slate-300">
-              <span className="material-symbols-outlined text-[22px] text-primary">check_circle</span>
+              <CircleCheck className="size-[22px] text-primary" />
               <span>实时库存与批次追踪</span>
             </li>
             <li className="flex items-center gap-3 font-medium text-slate-600 dark:text-slate-300">
-              <span className="material-symbols-outlined text-[22px] text-primary">check_circle</span>
+              <CircleCheck className="size-[22px] text-primary" />
               <span>仓库作业 PDA 条码扫描</span>
             </li>
           </ul>
@@ -96,7 +97,7 @@ export default function LoginPage() {
           {/* Mobile Logo（仅小屏显示） */}
           <div className="relative mb-12 flex items-center gap-3 lg:hidden">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
-              <span className="material-symbols-outlined text-[20px]">layers</span>
+              <Layers className="size-5" />
             </div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">极序 Flow</h1>
             <div className="absolute -bottom-4 left-11 whitespace-nowrap text-[10px] font-medium uppercase tracking-widest text-slate-400">
@@ -135,9 +136,7 @@ export default function LoginPage() {
                 登录账号
               </label>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] text-slate-400">
-                  mail
-                </span>
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
                 <input
                   id="username"
                   name="username"
@@ -168,9 +167,7 @@ export default function LoginPage() {
                 </a>
               </div>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] text-slate-400">
-                  lock
-                </span>
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
                 <input
                   id="password"
                   name="password"
@@ -188,9 +185,7 @@ export default function LoginPage() {
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
                   onClick={() => setShowPassword((v) => !v)}
                 >
-                  <span className="material-symbols-outlined text-[20px]">
-                    {showPassword ? 'visibility_off' : 'visibility'}
-                  </span>
+                  {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
                 </button>
               </div>
             </div>
@@ -216,7 +211,7 @@ export default function LoginPage() {
               ) : (
                 <>
                   <span>登录系统</span>
-                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                  <ArrowRight className="size-[18px]" />
                 </>
               )}
             </button>

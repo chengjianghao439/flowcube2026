@@ -4,8 +4,7 @@
  */
 const { Router } = require('express')
 const { z } = require('zod')
-const svc = require('./sorting-bins.service')
-const { successResponse } = require('../../utils/response')
+const ctrl = require('./sorting-bins.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 
@@ -21,36 +20,15 @@ function vBody(schema) {
 }
 
 // GET /api/sorting-bins/scan?code=xxx
-// PDA 扫商品条码 → 查找对应任务的分拣格
-router.get('/scan', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), async (req, res, next) => {
-  try {
-    const { code } = req.query
-    if (!code) return res.status(400).json({ success: false, message: '条码不能为空', data: null })
-    const data = await svc.scanProduct(String(code))
-    return successResponse(res, data, '查询成功')
-  } catch (e) { next(e) }
-})
+router.get('/scan', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), ctrl.scan)
 
 // GET /api/sorting-bins?warehouseId=&keyword=&status=
-// 管理页：所有仓库的分拣格
-router.get('/', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), async (req, res, next) => {
-  try {
-    const { keyword = '', status } = req.query
-    const data = await svc.findAllWarehouses({ keyword, status: status ? +status : null })
-    return successResponse(res, data, '查询成功')
-  } catch (e) { next(e) }
-})
+router.get('/', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), ctrl.listAllWarehouses)
 
 // GET /api/sorting-bins/warehouse/:warehouseId
-// PDA 或特定仓库查询
-router.get('/warehouse/:warehouseId', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), async (req, res, next) => {
-  try {
-    const data = await svc.findAll(+req.params.warehouseId)
-    return successResponse(res, data, '查询成功')
-  } catch (e) { next(e) }
-})
+router.get('/warehouse/:warehouseId', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), ctrl.listByWarehouse)
 
-// POST /api/sorting-bins — 新建单个
+// POST /api/sorting-bins
 router.post('/',
   requirePermission(PERMISSIONS.SORTING_BIN_MANAGE),
   vBody(z.object({
@@ -58,15 +36,10 @@ router.post('/',
     warehouseId: z.number().int().positive(),
     remark:      z.string().max(200).optional(),
   })),
-  async (req, res, next) => {
-    try {
-      const data = await svc.create(req.body)
-      return successResponse(res, data, '分拣格已创建')
-    } catch (e) { next(e) }
-  },
+  ctrl.create,
 )
 
-// POST /api/sorting-bins/batch — 批量创建（如 A01-A10）
+// POST /api/sorting-bins/batch
 router.post('/batch',
   requirePermission(PERMISSIONS.SORTING_BIN_MANAGE),
   vBody(z.object({
@@ -75,40 +48,20 @@ router.post('/batch',
     from:        z.number().int().min(1),
     to:          z.number().int().min(1),
   })),
-  async (req, res, next) => {
-    try {
-      const data = await svc.batchCreate(req.body)
-      return successResponse(res, data, `已创建 ${data.length} 个分拣格`)
-    } catch (e) { next(e) }
-  },
+  ctrl.batchCreate,
 )
 
-// PATCH /api/sorting-bins/:id — 修改备注
+// PATCH /api/sorting-bins/:id
 router.patch('/:id',
   requirePermission(PERMISSIONS.SORTING_BIN_MANAGE),
   vBody(z.object({ remark: z.string().max(200).optional() })),
-  async (req, res, next) => {
-    try {
-      await svc.update(+req.params.id, req.body)
-      return successResponse(res, null, '已更新')
-    } catch (e) { next(e) }
-  },
+  ctrl.update,
 )
 
-// POST /api/sorting-bins/:id/release — 管理员强制释放
-router.post('/:id/release', requirePermission(PERMISSIONS.SORTING_BIN_MANAGE), async (req, res, next) => {
-  try {
-    await svc.forceRelease(+req.params.id)
-    return successResponse(res, null, '分拣格已释放')
-  } catch (e) { next(e) }
-})
+// POST /api/sorting-bins/:id/release
+router.post('/:id/release', requirePermission(PERMISSIONS.SORTING_BIN_MANAGE), ctrl.forceRelease)
 
 // DELETE /api/sorting-bins/:id
-router.delete('/:id', requirePermission(PERMISSIONS.SORTING_BIN_MANAGE), async (req, res, next) => {
-  try {
-    await svc.remove(+req.params.id)
-    return successResponse(res, null, '已删除')
-  } catch (e) { next(e) }
-})
+router.delete('/:id', requirePermission(PERMISSIONS.SORTING_BIN_MANAGE), ctrl.remove)
 
 module.exports = router

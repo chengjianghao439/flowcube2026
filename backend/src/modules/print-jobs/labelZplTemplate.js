@@ -45,7 +45,9 @@ function applyZplTemplate(body, vars) {
 function resolveLabelWidthMm(layout, paperSize) {
   const n = Number(layout?.canvasWidthMm)
   if (Number.isFinite(n) && n >= 30 && n <= 120) return Math.round(n)
-  return paperSize === 'thermal58' ? 58 : 80
+  if (paperSize === 'thermal58') return 58
+  if (paperSize === 'thermal75') return 75
+  return 80
 }
 
 function calcBarcodeModuleWidth(codeLen, desiredWidthDots) {

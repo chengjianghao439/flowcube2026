@@ -19,6 +19,7 @@ const PAPER_MM: Record<string, { w: number; h: number }> = {
   A5:        { w: 148, h: 210 },
   A6:        { w: 105, h: 148 },
   thermal80: { w: 80,  h: 200 },
+  thermal75: { w: 75,  h: 50  },
   thermal58: { w: 58,  h: 150 },
 }
 

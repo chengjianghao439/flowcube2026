@@ -94,7 +94,7 @@ async function create({ name, type, paperSize, layout, createdBy }) {
   validateLayout(type, layout)
   const t = Number(type)
   const paper =
-    t >= 5 && t <= 9 ? paperSize || 'thermal80' : paperSize || 'A4'
+    t >= 5 && t <= 9 ? paperSize || 'thermal75' : paperSize || 'A4'
   const [r] = await pool.query(
     `INSERT INTO print_templates (name, type, paper_size, layout_json, created_by) VALUES (?,?,?,?,?)`,
     [name, type, paper, JSON.stringify(layout), createdBy || null]
@@ -107,7 +107,7 @@ async function update(id, { name, type, paperSize, layout }) {
   validateLayout(type, layout)
   const t = Number(type)
   const paper =
-    t >= 5 && t <= 9 ? paperSize || 'thermal80' : paperSize || 'A4'
+    t >= 5 && t <= 9 ? paperSize || 'thermal75' : paperSize || 'A4'
   await pool.query(
     `UPDATE print_templates SET name=?, type=?, paper_size=?, layout_json=? WHERE id=?`,
     [name, type, paper, JSON.stringify(layout), id]

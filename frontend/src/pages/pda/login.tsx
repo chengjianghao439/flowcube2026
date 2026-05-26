@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ScanLine, User, Lock, Eye, EyeOff, LogIn } from 'lucide-react'
 import { useLogin } from '@/hooks/useAuth'
 import { loadSavedLoginForm } from '@/lib/loginCredentials'
 
@@ -21,7 +22,7 @@ export default function PdaLoginPage() {
       {/* Logo */}
       <div className="mb-8 flex flex-col items-center gap-2">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/20">
-          <span className="material-symbols-outlined text-[32px]">barcode_scanner</span>
+          <ScanLine className="size-8" />
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">极序 Flow</h1>
         <p className="text-sm text-muted-foreground">仓库作业终端</p>
@@ -46,9 +47,7 @@ export default function PdaLoginPage() {
               登录账号
             </label>
             <div className="relative">
-              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[20px] text-muted-foreground">
-                person
-              </span>
+              <User className="absolute left-3.5 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
               <input
                 id="pda-username"
                 type="text"
@@ -69,9 +68,7 @@ export default function PdaLoginPage() {
               登录密码
             </label>
             <div className="relative">
-              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[20px] text-muted-foreground">
-                lock
-              </span>
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
               <input
                 id="pda-password"
                 type={showPassword ? 'text' : 'password'}
@@ -88,9 +85,7 @@ export default function PdaLoginPage() {
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => setShowPassword((v) => !v)}
               >
-                <span className="material-symbols-outlined text-[20px]">
-                  {showPassword ? 'visibility_off' : 'visibility'}
-                </span>
+                {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
               </button>
             </div>
           </div>
@@ -115,7 +110,7 @@ export default function PdaLoginPage() {
               </>
             ) : (
               <>
-                <span className="material-symbols-outlined text-[18px]">login</span>
+                <LogIn className="size-[18px]" />
                 <span>进入作业终端</span>
               </>
             )}

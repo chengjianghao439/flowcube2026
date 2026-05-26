@@ -33,7 +33,7 @@ import { DEFAULT_LABEL_ELEMENTS, LABEL_PREVIEW_SAMPLE } from '@/constants/labelZ
 // Constants
 // ──────────────────────────────────────────────────────────────────────────
 
-const MM_PX = 3.0 // 1mm → px，编辑器显示比例（3.0 在 13 寸屏可完整显示 A4 三栏）
+const MM_PX = 5.0 // 1mm → px，编辑器显示比例
 
 const EDITOR_ZOOM_MIN = 0.35
 const EDITOR_ZOOM_MAX = 3
@@ -48,6 +48,7 @@ const PAPER_SIZES: Record<PaperSize, { w: number; h: number; label: string }> = 
   A5:        { w: 148, h: 210, label: 'A5 (148×210mm)' },
   A6:        { w: 105, h: 148, label: 'A6 (105×148mm)' },
   thermal80: { w: 80,  h: 200, label: '热敏纸 80mm' },
+  thermal75: { w: 75,  h: 50,  label: '热敏纸 75×50mm (标签)' },
   thermal58: { w: 58,  h: 150, label: '热敏纸 58mm' },
 }
 
@@ -255,7 +256,7 @@ function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, o
     top:      px(el.y),
     width:    px(el.width),
     height:   px(el.height),
-    fontSize: `${el.fontSize * 1.2}px`,
+    fontSize: `${el.fontSize * scale * 0.4}px`,
     fontWeight: el.fontWeight,
     textAlign: el.textAlign,
     border:   (el.border && el.type !== 'table') ? '1px solid #999' : undefined,
@@ -296,7 +297,7 @@ function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, o
   if (el.type === 'table') {
     const cols = el.tableColumns ?? ['name', 'qty', 'price', 'amount']
     const colDefs = cols.map(k => TABLE_COLUMN_OPTIONS.find(c => c.key === k)!).filter(Boolean)
-    const cellStyle: React.CSSProperties = { border: '1px solid #ddd', padding: '1px 3px', fontSize: `${el.fontSize * 1.2}px` }
+    const cellStyle: React.CSSProperties = { border: '1px solid #ddd', padding: '1px 3px', fontSize: `${el.fontSize * scale * 0.4}px` }
     return (
       <div style={style} onMouseDown={onMouseDown} onClick={onClick}>
         <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
@@ -506,8 +507,8 @@ export default function PrintTemplateEditor() {
   const [paperSize,  setPaperSize]  = useState<PaperSize>('A4')
   const [elements,   setElements]   = useState<TemplateElement[]>([])
   /** 标签类型 5–9：画布纸张（mm），与 layout.canvasWidthMm/HeightMm 同步 */
-  const [canvasWidthMm,  setCanvasWidthMm]  = useState(80)
-  const [canvasHeightMm, setCanvasHeightMm] = useState(200)
+  const [canvasWidthMm,  setCanvasWidthMm]  = useState(75)
+  const [canvasHeightMm, setCanvasHeightMm] = useState(50)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [preview,    setPreview]    = useState(false)
   const [hydrated,   setHydrated]   = useState(isNew)
@@ -524,14 +525,14 @@ export default function PrintTemplateEditor() {
         setElements(cloneDefaultLabelElements(remote.type))
         toast.warning('原 ZPL 文本模板已切换为可视化布局，保存后即按新格式存储')
         if (isZplLabelType(remote.type)) {
-          setCanvasWidthMm(80)
-          setCanvasHeightMm(200)
+          setCanvasWidthMm(75)
+          setCanvasHeightMm(50)
         }
       } else {
         setElements(Array.isArray(remote.layout.elements) ? remote.layout.elements : [])
         if (isZplLabelType(remote.type)) {
           const lo = remote.layout as { canvasWidthMm?: number; canvasHeightMm?: number }
-          const p = PAPER_SIZES[remote.paperSize] ?? PAPER_SIZES.thermal80
+          const p = PAPER_SIZES[remote.paperSize] ?? PAPER_SIZES.thermal75
           const cw = typeof lo.canvasWidthMm === 'number' ? lo.canvasWidthMm : p.w
           const ch = typeof lo.canvasHeightMm === 'number' ? lo.canvasHeightMm : p.h
           setCanvasWidthMm(Math.min(120, Math.max(30, cw)))
@@ -547,9 +548,9 @@ export default function PrintTemplateEditor() {
     const prev = type
     setType(next)
     if (isZplLabelType(next)) {
-      setPaperSize('thermal80')
-      setCanvasWidthMm(80)
-      setCanvasHeightMm(200)
+      setPaperSize('thermal75')
+      setCanvasWidthMm(75)
+      setCanvasHeightMm(50)
       setElements(cloneDefaultLabelElements(next))
       setSelectedId(null)
     } else {
@@ -593,8 +594,8 @@ export default function PrintTemplateEditor() {
   const isPending = createMut.isPending || updateMut.isPending
 
   // ── Helpers ──────────────────────────────────────────────────
-  const safeCw = Number.isFinite(canvasWidthMm) ? canvasWidthMm : 80
-  const safeCh = Number.isFinite(canvasHeightMm) ? canvasHeightMm : 200
+  const safeCw = Number.isFinite(canvasWidthMm) ? canvasWidthMm : 75
+  const safeCh = Number.isFinite(canvasHeightMm) ? canvasHeightMm : 50
   const paper = isZplLabelType(type)
     ? {
         w: Math.min(120, Math.max(30, safeCw)),
@@ -639,7 +640,7 @@ export default function PrintTemplateEditor() {
     const cw = Math.min(120, Math.max(30, Math.round(canvasWidthMm)))
     const ch = Math.min(500, Math.max(40, Math.round(canvasHeightMm)))
     const derivedPaper: PaperSize = isZplLabelType(type)
-      ? (cw >= 69 ? 'thermal80' : 'thermal58')
+      ? (cw >= 75 ? 'thermal80' : cw >= 58 ? 'thermal75' : 'thermal58')
       : paperSize
     const layout: TemplateLayout = isZplLabelType(type)
       ? { elements, canvasWidthMm: cw, canvasHeightMm: ch }
@@ -798,6 +799,15 @@ export default function PrintTemplateEditor() {
                 title="高度 mm"
               />
               <span className="text-xs text-muted-foreground">宽×高</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => { setCanvasWidthMm(75); setCanvasHeightMm(50) }}
+              >
+                75×50
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -978,6 +988,7 @@ export default function PrintTemplateEditor() {
           )}
         </div>
       </div>
+
     </div>
   )
 }
