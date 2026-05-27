@@ -139,6 +139,7 @@ function ElementNode({
 
   const label = el.label ? `${el.label}：` : ''
   const value = data[el.fieldKey] ?? ''
+  const jc = el.textAlign === 'center' ? 'center' : el.textAlign === 'right' ? 'flex-end' : 'flex-start'
   return (
     <div
       style={{
@@ -147,6 +148,7 @@ function ElementNode({
         border: el.border ? '1px solid #ccc' : undefined,
         display: 'flex',
         alignItems: 'flex-start',
+        justifyContent: jc,
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-all',
       }}

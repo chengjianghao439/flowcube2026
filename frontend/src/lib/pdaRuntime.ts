@@ -213,8 +213,8 @@ export function installPdaGlobals(): void {
         return
       }
       const out = await waitPrintJobTerminal(jobId)
-      if (out.ok) toast.success('✔ 已打印')
-      else toast.error(out.detail ? `❌ 打印失败：${out.detail}` : '❌ 打印失败')
+      if (out.ok) toast.success('已打印')
+      else toast.error(out.detail ? `打印失败：${out.detail}` : '打印失败')
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??

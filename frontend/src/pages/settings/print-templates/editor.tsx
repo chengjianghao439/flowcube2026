@@ -256,7 +256,7 @@ function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, o
     top:      px(el.y),
     width:    px(el.width),
     height:   px(el.height),
-    fontSize: `${el.fontSize * scale * 0.4}px`,
+    fontSize: `${el.fontSize * scale * 0.35}px`,
     fontWeight: el.fontWeight,
     textAlign: el.textAlign,
     border:   (el.border && el.type !== 'table') ? '1px solid #999' : undefined,
@@ -297,7 +297,7 @@ function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, o
   if (el.type === 'table') {
     const cols = el.tableColumns ?? ['name', 'qty', 'price', 'amount']
     const colDefs = cols.map(k => TABLE_COLUMN_OPTIONS.find(c => c.key === k)!).filter(Boolean)
-    const cellStyle: React.CSSProperties = { border: '1px solid #ddd', padding: '1px 3px', fontSize: `${el.fontSize * scale * 0.4}px` }
+    const cellStyle: React.CSSProperties = { border: '1px solid #ddd', padding: '1px 3px', fontSize: `${el.fontSize * scale * 0.35}px` }
     return (
       <div style={style} onMouseDown={onMouseDown} onClick={onClick}>
         <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>

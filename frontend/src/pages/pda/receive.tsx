@@ -208,7 +208,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
       const count = data.containers?.length ?? 0
       const printCount = data.printJobIds?.length ?? 0
-      ok(`已生成 ${count} 个库存条码${printCount > 0 ? `，已提交 ${printCount} 条打印任务` : ''}`)
+      ok(`已生成 ${count} 个条码${printCount > 0 ? `，${printCount} 条已提交打印` : ''}`)
     },
   })
 

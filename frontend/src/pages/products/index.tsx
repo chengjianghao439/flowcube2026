@@ -85,7 +85,7 @@ export default function ProductsPage() {
           printerName: d.printerName,
         })
         if (local === 'ok') {
-          toast.success(d.printerName ? `已向 ${d.printerName} 提交产品条码标签` : '已提交产品条码标签')
+          toast.success('已打印')
           return
         }
         if (isDesktopLocalPrintError(local)) {
@@ -93,11 +93,11 @@ export default function ProductsPage() {
           return
         }
         if (local === 'skipped_no_desktop') {
-          toast.warning('任务已入队，请在极序 Flow 桌面端登录同一服务器后执行打印。')
+          toast.warning('已入队，请在桌面端完成打印')
           return
         }
         if (local === 'skipped_no_payload') {
-          toast.warning('任务已入队，但响应中缺少本机打印内容，请在打印任务中处理。')
+          toast.warning('已入队，请在打印任务中处理')
           return
         }
         const h = d.dispatchHint
@@ -105,10 +105,10 @@ export default function ProductsPage() {
           toast.warning(h.message)
           return
         }
-        toast.success(d.printerCode ? `已加入打印队列 → ${d.printerCode}` : '已加入打印队列')
+        toast.success('已加入打印队列')
         return
       }
-      toast.warning('未绑定「产品条码」打印机，未创建打印任务')
+      toast.warning('未绑定打印机，未创建任务')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : '打印失败')
     }

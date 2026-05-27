@@ -36,19 +36,10 @@ function readPositiveId(value: string | undefined | null): number {
 
 function packageLabelTraceMessage(job?: PackagePrintJob | null): string {
   const hint = job?.dispatchHint ?? null
-  const printer = hint?.printerName || job?.printerName || hint?.printerCode || job?.printerCode || '未识别打印机'
-  const clientState = hint?.clientOnline
-    ? '在线'
-    : hint?.code === 'client_not_bound'
-      ? '未绑定客户端'
-      : '离线'
-  const next = hint?.clientOnline
-    ? '等待客户端领取并打印。'
-    : hint?.code === 'client_not_bound'
-      ? '请在连接该打印机的 极序 Flow 桌面端从本机添加打印机后继续派发。'
-      : '请启动连接该打印机的 极序 Flow 桌面端，客户端上线后继续派发。'
-  const jobId = job?.id ? ` #${job.id}` : ''
-  return `箱贴任务${jobId}已入链：用途 package_label，绑定打印机 ${printer}，客户端${clientState}。${next}`
+  const clientOnline = hint?.clientOnline
+  if (clientOnline) return '箱贴已加入打印队列'
+  if (hint?.code === 'client_not_bound') return '箱贴已入队，打印机未绑定客户端'
+  return '箱贴已入队，打印客户端离线'
 }
 
 function PdaTaskState({
@@ -324,7 +315,7 @@ export default function PdaPackPage() {
     },
     onSuccess: async (d) => {
       if (d.kind === 'pending') {
-        warn('网络中断，箱贴打印结果待确认。请先确认是否已入队或已出纸，再决定是否重试。')
+        warn('网络中断，打印结果待确认')
         return
       }
       const payload = d.data
@@ -337,27 +328,19 @@ export default function PdaPackPage() {
           printerName: job.printerName,
         })
         if (local === 'ok') {
-          ok(
-            '已向本机提交箱贴 RAW 并核销队列。若未出纸，请核对打印机指令集是否与机型一致，并查看系统打印队列。',
-          )
+          ok('已打印')
           return
         }
         if (isDesktopLocalPrintError(local)) {
-          err(
-            `${local.error} PDA 仅提交任务；请在已安装极序 Flow 桌面端、且连接标签机的电脑上登录 ERP 执行打印，或检查打印机名称与 RAW 驱动。`,
-          )
+          err(local.error)
           return
         }
         if (local === 'skipped_no_desktop') {
-          err(
-            '当前浏览器未连接本机打印桥接（非桌面端或未注入 flowcubeDesktop），箱贴不会在本机出纸；任务已在服务器入队，请到装了极序 Flow 桌面端且挂了标签机的电脑登录后处理「打印任务」。',
-          )
+          err('未连接本机打印桥接，任务已入队')
           return
         }
         if (local === 'skipped_no_payload') {
-          err(
-            '任务已入队，但响应中缺少 ZPL 或任务 ID，本机未送 RAW。请重试或在桌面端「打印任务」中处理，并检查网络/网关是否截断响应。',
-          )
+          err('任务已入队，本机无法打印')
           return
         }
       }

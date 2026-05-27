@@ -26,7 +26,7 @@ import {
   pickSystemPrinterRow,
   type SystemPrinterRow,
 } from '@/utils/printerName'
-import { formatPrinterRawMode, formatPrinterSource } from '@/utils/displayFormatters'
+import { formatPrinterSource } from '@/utils/displayFormatters'
 
 /** 打印机硬件分类（与「绑定用途」独立：用途决定业务走哪台机；类型用于列表展示与无绑定时的兜底调度） */
 const TYPE_LABEL: Record<number, string> = {
@@ -58,8 +58,6 @@ interface Printer {
   code: string
   type: number
   typeName: string
-  /** 本机 RAW：ZPL 斑马系 */
-  labelRawFormat?: 'zpl'
   description: string
   status: number
   warehouseId?: number | null
@@ -177,26 +175,6 @@ export default function PrintersPage() {
       const payload = await apiClient.get<PrinterBindingsPayload>('/printer-bindings')
       return payload?.defaultBindings ?? {}
     },
-  })
-
-  const updateLabelFmt = useMutation({
-    mutationFn: async (printer: Printer) => {
-      await apiClient.put(`/printers/${printer.id}`, {
-        name: printer.name,
-        code: printer.code,
-        type: printer.type,
-        description: printer.description ?? '',
-        status: printer.status,
-        warehouseId: printer.warehouseId ?? null,
-        labelRawFormat: printer.labelRawFormat ?? 'zpl',
-      })
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['printers'] })
-      toast.success('已更新标签机指令集')
-    },
-    onError: (e: unknown) =>
-      toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'),
   })
 
   const loadSystemPrinters = useCallback(async () => {
@@ -467,11 +445,6 @@ export default function PrintersPage() {
 	              <th className="px-4 py-3 text-left text-table-head">编码</th>
 	              <th className="px-4 py-3 text-left text-table-head">类型</th>
 	              <th
-	                className="px-4 py-3 text-left text-table-head"
-	                title="打印机指令集：ZPL 适用于斑马等"
-	              >
-	                指令集
-	              </th>
               <th className="px-4 py-3 text-left text-table-head">状态</th>
               <th className="px-4 py-3 text-left text-table-head">来源</th>
               <th className="px-4 py-3 text-left text-table-head">所属设备</th>
@@ -481,10 +454,10 @@ export default function PrintersPage() {
           </thead>
           <tbody className="divide-y divide-border">
             {isLoading && (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">加载中...</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">加载中...</td></tr>
             )}
             {!isLoading && printers.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">暂无打印机</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">暂无打印机</td></tr>
             )}
             {printers.map(p => (
               <tr key={p.id} className="hover:bg-muted/20">
@@ -495,23 +468,6 @@ export default function PrintersPage() {
                 <td className="px-4 py-3"><span className="text-doc-code-muted">{p.code}</span></td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[p.type]}`}>{TYPE_LABEL[p.type]}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <Select
-                    value={p.labelRawFormat ?? 'zpl'}
-                    onValueChange={v =>
-                      updateLabelFmt.mutate({ ...p, labelRawFormat: v as 'zpl' })
-                    }
-                    disabled={updateLabelFmt.isPending}
-	                  >
-	                    <SelectTrigger className="h-8 w-[150px] text-xs">
-	                      <SelectValue placeholder={formatPrinterRawMode(p.labelRawFormat)} />
-	                    </SelectTrigger>
-	                    <SelectContent>
-	                      <SelectItem value="zpl">标签机指令 ZPL</SelectItem>
-
-	                    </SelectContent>
-	                  </Select>
                 </td>
                 <td className="px-4 py-3">
                   <button onClick={() => toggleStatus.mutate(p)} className="flex items-center gap-1.5">

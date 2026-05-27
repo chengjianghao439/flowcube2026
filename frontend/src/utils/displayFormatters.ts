@@ -166,6 +166,3 @@ export function formatPrinterSource(source?: string | null): string {
   return '手动添加'
 }
 
-export function formatPrinterRawMode(mode?: string | null): string {
-  return '标签机指令 ZPL'
-}

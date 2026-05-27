@@ -9,7 +9,6 @@ function fmt(row) {
     name:        row.name,
     code:        row.code,
     type:        row.type,
-    labelRawFormat: 'zpl',
     warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
     typeName:    TYPE_NAME[row.type] || '其他',
     description: row.description,
@@ -87,7 +86,6 @@ async function create({
   warehouseId,
   source,
   clientId,
-  labelRawFormat,
 }) {
   const nameNorm = normalizePrinterName(name)
   if (!nameNorm) throw new AppError('名称不能为空', 400)
@@ -102,8 +100,8 @@ async function create({
   const clientIdVal = clientId != null ? String(clientId).trim().slice(0, 200) || null : null
   const finalCode = await allocateUniqueCodeGlobally(code)
   const [r] = await pool.query(
-    'INSERT INTO printers (name, code, type, label_raw_format, warehouse_id, description, source, client_id) VALUES (?,?,?,?,?,?,?,?)',
-    [nameNorm, finalCode, type, 'zpl', wh, description || null, src, clientIdVal],
+    'INSERT INTO printers (name, code, type, warehouse_id, description, source, client_id) VALUES (?,?,?,?,?,?,?)',
+    [nameNorm, finalCode, type, wh, description || null, src, clientIdVal],
   )
   return findById(r.insertId)
 }
@@ -116,12 +114,10 @@ async function update(id, {
   status,
   warehouseId,
   clientId,
-  labelRawFormat,
 }) {
   const existing = await findById(id)
   const nameVal = name !== undefined ? normalizePrinterName(name) : existing.name
   if (name !== undefined && !nameVal) throw new AppError('名称不能为空', 400)
-  const lrVal = 'zpl'
   const clientIdVal =
     clientId === undefined
       ? (existing.clientId || null)
@@ -138,10 +134,9 @@ async function update(id, {
     'type=?',
     'description=?',
     'status=?',
-    'label_raw_format=?',
     'client_id=?',
   ]
-  const params = [nameVal, code, type, description || null, status ?? 1, lrVal, clientIdVal]
+  const params = [nameVal, code, type, description || null, status ?? 1, clientIdVal]
   if (wh !== undefined) {
     sets.push('warehouse_id=?')
     params.push(wh)

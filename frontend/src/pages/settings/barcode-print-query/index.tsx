@@ -82,11 +82,7 @@ export default function BarcodePrintQueryPage() {
       recordId: row.recordId,
     }),
     onSuccess: (data, row) => {
-      toast.success(
-        data?.printerCode
-          ? `${row.barcode} 已重新加入打印队列（打印机编号：${data.printerCode}）`
-          : `${row.barcode} 已重新加入打印队列`,
-      )
+      toast.success('已重新加入打印队列')
       qc.invalidateQueries({ queryKey: ['barcode-print-records'] })
       qc.invalidateQueries({ queryKey: ['print-jobs'] })
     },

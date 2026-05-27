@@ -85,8 +85,17 @@ function generateZplFromElements(layout, vars, paperSize) {
     } else if (el.type === 'title' || el.type === 'text') {
       const t = sanitizeZplValue(rawVal)
       if (!t) continue
-      const fs = Math.max(16, Math.min(72, Math.round((el.fontSize || 10) * 203 / 72)))
-      body += `^FO${x},${y}^A0N,${fs},${fs}^FD${t}^FS`
+      // pt → dots (203dpi)，放宽范围使大字体生效明显
+      const fs = Math.max(14, Math.min(160, Math.round((el.fontSize || 10) * 203 / 72)))
+      const align = el.textAlign || 'left'
+      const elW = Math.round((el.width || 10) * MM_TO_DOT)
+      if (align === 'center') {
+        body += `^FO${x},${y}^A0N,${fs},${fs}^FB${elW},1,0,C^FD${t}^FS`
+      } else if (align === 'right') {
+        body += `^FO${x},${y}^A0N,${fs},${fs}^FB${elW},1,0,R^FD${t}^FS`
+      } else {
+        body += `^FO${x},${y}^A0N,${fs},${fs}^FD${t}^FS`
+      }
       segments += 1
     }
   }

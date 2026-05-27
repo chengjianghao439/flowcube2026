@@ -14,10 +14,6 @@ const { create, createWithinTransaction } = require('./print-jobs.command')
 const { findById } = require('./print-jobs.query')
 const { getDispatchHintForJob } = require('./print-jobs.dispatch')
 
-function getPrinterLabelRawFormat(_printerId) {
-  return 'zpl'
-}
-
 async function resolveLabelPrinterId() {
   const code = (process.env.INBOUND_LABEL_PRINTER_CODE || process.env.PDA_LABEL_PRINTER_CODE || '').trim()
   if (code) {
@@ -368,6 +364,5 @@ module.exports = {
   enqueuePackageLabelJob,
   enqueueProductLabelJob,
   reprintBarcodeRecord,
-  getPrinterLabelRawFormat,
   resolveLabelPrinterId,
 }

@@ -86,29 +86,25 @@ export default function RacksPage() {
           return
         }
         if (local === 'skipped_no_desktop') {
-          toast.warning(
-            '未连接本机打印桥接：若您是用 Chrome / Edge 直接打开网页，Windows 打印队列里不会出现任何作业，标签机也不会动——请改用「极序 Flow ERP」桌面安装包登录同一地址再试。若已是桌面端，请重启应用，或在开发者工具控制台执行 typeof window.flowcubeDesktop?.printZpl 应为 function。任务已在服务器入队。',
-          )
+          toast.warning('已入队，请在桌面端完成打印')
           return
         }
         if (local === 'skipped_no_payload') {
-          toast.warning(
-            '任务已在服务器入队，但响应中缺少可本机打印的 ZPL 或任务 ID，本机未送 RAW，Windows 打印队列中不会看到作业。请刷新页面重试，或检查网关/代理是否截断 JSON；也可在「打印任务」中处理。',
-          )
+          toast.warning('已入队，请在打印任务中处理')
           return
         }
         const h = d.dispatchHint
         if (h?.code === 'no_print_client') {
-          toast.warning(h.message || '未检测到在线打印客户端，打印机不会出纸')
+          toast.warning('无在线打印客户端')
         } else if (h?.code === 'queued_concurrency') {
-          toast.warning(h.message || '任务已入队，因并发上限排队中')
+          toast.warning('任务排队中')
         } else if (h?.code === 'dispatched') {
-          toast.success(d.printerCode ? `已下发至工作站 → ${d.printerCode}` : '已下发至打印工作站')
+          toast.success('已下发至打印工作站')
         } else {
-          toast.success(d.printerCode ? `已入队 → ${d.printerCode}` : '已加入打印队列')
+          toast.success('已加入打印队列')
         }
       } else {
-        toast.warning('未绑定「库存标签」打印机或标签机离线，未创建任务')
+        toast.warning('未绑定打印机或离线')
       }
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '打印失败'),
