@@ -444,7 +444,6 @@ export default function PrintersPage() {
 	              <th className="px-4 py-3 text-left text-table-head">名称</th>
 	              <th className="px-4 py-3 text-left text-table-head">编码</th>
 	              <th className="px-4 py-3 text-left text-table-head">类型</th>
-	              <th
               <th className="px-4 py-3 text-left text-table-head">状态</th>
               <th className="px-4 py-3 text-left text-table-head">来源</th>
               <th className="px-4 py-3 text-left text-table-head">所属设备</th>
