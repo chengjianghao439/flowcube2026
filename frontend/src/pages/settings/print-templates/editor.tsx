@@ -28,6 +28,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import type { PaperSize, TemplateElement, TemplateLayout, TemplateType } from '@/types/print-template'
 import { isZplTemplateLayout } from '@/types/print-template'
 import { DEFAULT_LABEL_ELEMENTS, LABEL_PREVIEW_SAMPLE } from '@/constants/labelZplDefaults'
+import BarcodePreview from '@/components/print/BarcodePreview'
 
 // ──────────────────────────────────────────────────────────────────────────
 // Constants
@@ -279,30 +280,14 @@ function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, o
 
   if (el.type === 'barcode') {
     const v = (previewData[el.fieldKey] ?? '') || el.label
-    const barcodeFontSize = Math.max(8, Math.min(28, px(el.height) * 0.28))
     return (
       <div style={style} onMouseDown={onMouseDown} onClick={onClick}>
         {preview ? (
-          <div
-            className="flex h-full flex-col items-center justify-center overflow-hidden"
-            style={{
-              backgroundImage: 'repeating-linear-gradient(90deg, #222 0px, #222 1px, #fff 1px, #fff 3px, #222 3px, #222 4px, #fff 4px, #fff 6px, #222 6px, #222 8px, #fff 8px, #fff 9px, #222 9px, #222 10px, #fff 10px, #fff 13px)',
-              backgroundSize: '100% 100%',
-            }}
-          >
-            <span style={{
-              background: '#fff',
-              padding: '0 6px',
-              fontSize: `${barcodeFontSize}px`,
-              fontFamily: 'monospace',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              lineHeight: 1.2,
-              borderRadius: '2px',
-              border: '1px solid #ddd',
-            }}>
-              {v}
-            </span>
+          <div className="flex h-full flex-col overflow-hidden" style={{ padding: '2px 3px' }}>
+            <span className="shrink-0 text-[9px] leading-none text-muted-foreground">{el.label}</span>
+            <div className="flex-1 min-h-0">
+              <BarcodePreview value={v} />
+            </div>
           </div>
         ) : (
           <span className="text-muted-foreground/60">{el.label}（条码）</span>

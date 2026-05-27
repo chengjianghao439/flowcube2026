@@ -8,6 +8,7 @@
 
 import type { TemplateLayout, TemplateElement } from '@/types/print-template'
 import { isZplTemplateLayout } from '@/types/print-template'
+import BarcodePreview from '@/components/print/BarcodePreview'
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 
@@ -87,20 +88,11 @@ function ElementNode({
   if (el.type === 'barcode') {
     const v = (data[el.fieldKey] ?? '') || el.label
     return (
-      <div
-        style={{
-          ...base,
-          fontFamily: 'monospace',
-          fontWeight: 700,
-          letterSpacing: '0.08em',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundImage: 'repeating-linear-gradient(90deg, #222 0px, #222 1px, #fff 1px, #fff 3px, #222 3px, #222 4px, #fff 4px, #fff 6px, #222 6px, #222 8px, #fff 8px, #fff 9px, #222 9px, #222 10px, #fff 10px, #fff 13px)',
-          backgroundSize: '100% 100%',
-        }}
-      >
-        <span style={{ background: '#fff', padding: '0 6px', lineHeight: 1.2 }}>{v}</span>
+      <div style={{ ...base, padding: '2px 3px', display: 'flex', flexDirection: 'column' }}>
+        <span style={{ fontSize: '0.7em', color: '#888', lineHeight: 1.2 }}>{el.label}</span>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <BarcodePreview value={v} />
+        </div>
       </div>
     )
   }
