@@ -278,14 +278,31 @@ function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, o
   }
 
   if (el.type === 'barcode') {
+    const v = (previewData[el.fieldKey] ?? '') || el.label
+    const barcodeFontSize = Math.max(8, Math.min(28, px(el.height) * 0.28))
     return (
       <div style={style} onMouseDown={onMouseDown} onClick={onClick}>
         {preview ? (
-          <div className="flex h-full flex-col justify-center gap-0.5 overflow-hidden px-0.5">
-            <span className="text-[9px] leading-none text-muted-foreground">{el.label}</span>
-            <div className="rounded border border-dashed border-foreground/35 bg-muted/40 px-1 font-mono text-[11px] leading-tight">
-              {sampleVal}
-            </div>
+          <div
+            className="flex h-full flex-col items-center justify-center overflow-hidden"
+            style={{
+              backgroundImage: 'repeating-linear-gradient(90deg, #222 0px, #222 1px, #fff 1px, #fff 3px, #222 3px, #222 4px, #fff 4px, #fff 6px, #222 6px, #222 8px, #fff 8px, #fff 9px, #222 9px, #222 10px, #fff 10px, #fff 13px)',
+              backgroundSize: '100% 100%',
+            }}
+          >
+            <span style={{
+              background: '#fff',
+              padding: '0 6px',
+              fontSize: `${barcodeFontSize}px`,
+              fontFamily: 'monospace',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              lineHeight: 1.2,
+              borderRadius: '2px',
+              border: '1px solid #ddd',
+            }}>
+              {v}
+            </span>
           </div>
         ) : (
           <span className="text-muted-foreground/60">{el.label}（条码）</span>

@@ -87,8 +87,20 @@ function ElementNode({
   if (el.type === 'barcode') {
     const v = (data[el.fieldKey] ?? '') || el.label
     return (
-      <div style={{ ...base, fontFamily: 'monospace', fontSize: `${9 * scale}pt`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #bbb' }}>
-        {v}
+      <div
+        style={{
+          ...base,
+          fontFamily: 'monospace',
+          fontWeight: 700,
+          letterSpacing: '0.08em',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundImage: 'repeating-linear-gradient(90deg, #222 0px, #222 1px, #fff 1px, #fff 3px, #222 3px, #222 4px, #fff 4px, #fff 6px, #222 6px, #222 8px, #fff 8px, #fff 9px, #222 9px, #222 10px, #fff 10px, #fff 13px)',
+          backgroundSize: '100% 100%',
+        }}
+      >
+        <span style={{ background: '#fff', padding: '0 6px', lineHeight: 1.2 }}>{v}</span>
       </div>
     )
   }
