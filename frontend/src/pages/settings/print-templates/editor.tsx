@@ -283,11 +283,8 @@ function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, o
     return (
       <div style={style} onMouseDown={onMouseDown} onClick={onClick}>
         {preview ? (
-          <div className="flex h-full flex-col overflow-hidden" style={{ padding: '2px 3px' }}>
-            <span className="shrink-0 text-[9px] leading-none text-muted-foreground">{el.label}</span>
-            <div className="flex-1 min-h-0">
-              <BarcodePreview value={v} />
-            </div>
+          <div style={{ width: '100%', height: '100%', padding: '1px 2px' }}>
+            <BarcodePreview value={v} />
           </div>
         ) : (
           <span className="text-muted-foreground/60">{el.label}（条码）</span>

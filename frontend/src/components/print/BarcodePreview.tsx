@@ -3,37 +3,40 @@ import JsBarcode from 'jsbarcode'
 
 interface Props {
   value: string
-  /** 容器已含 padding，这里减掉避免溢出 */
-  pad?: number
 }
 
-export default function BarcodePreview({ value, pad = 4 }: Props) {
+export default function BarcodePreview({ value }: Props) {
   const ref = useRef<SVGSVGElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!ref.current || !value) return
+    const svg = ref.current
+    const container = containerRef.current
+    if (!svg || !container || !value) return
+    const h = container.clientHeight
+    const w = container.clientWidth
+    if (!h || !w) return
     try {
-      JsBarcode(ref.current, value, {
+      // 文字区约占 25%，留给条码 75% 高度
+      const barH = Math.max(20, Math.round(h * 0.72))
+      JsBarcode(svg, value, {
         format: 'CODE128',
         width: 2,
-        height: ref.current.clientHeight - pad,
+        height: barH,
         margin: 0,
-        displayValue: false,
+        displayValue: true,
+        fontSize: Math.max(10, Math.round(h * 0.18)),
+        textMargin: 2,
         flat: true,
       })
     } catch {
       // 无效条码值则静默
     }
-  }, [value, pad])
-
-  const w = ref.current?.clientWidth ?? 0
-  const h = ref.current?.clientHeight ?? 0
+  }, [value])
 
   return (
-    <svg
-      ref={ref}
-      style={{ width: '100%', height: '100%', display: 'block' }}
-      viewBox={w && h ? `0 0 ${w} ${h}` : undefined}
-    />
+    <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
+      <svg ref={ref} style={{ display: 'block', width: '100%', height: '100%' }} />
+    </div>
   )
 }

@@ -88,11 +88,8 @@ function ElementNode({
   if (el.type === 'barcode') {
     const v = (data[el.fieldKey] ?? '') || el.label
     return (
-      <div style={{ ...base, padding: '2px 3px', display: 'flex', flexDirection: 'column' }}>
-        <span style={{ fontSize: '0.7em', color: '#888', lineHeight: 1.2 }}>{el.label}</span>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <BarcodePreview value={v} />
-        </div>
+      <div style={{ ...base, padding: '1px 2px' }}>
+        <BarcodePreview value={v} />
       </div>
     )
   }
