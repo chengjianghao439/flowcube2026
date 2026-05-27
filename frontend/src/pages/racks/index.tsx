@@ -75,10 +75,7 @@ export default function RacksPage() {
           printerName: d.printerName,
         })
         if (local === 'ok') {
-          const q = d.printerName ? `「${d.printerName}」` : '本机打印机'
-          toast.success(
-            `已向 ${q} 提交 RAW 并核销队列。请到 Windows「设备和打印机」中打开同名打印机的队列查看是否有瞬间出现的作业；若始终为空请看页顶提示确认是否在用桌面客户端。`,
-          )
+          toast.success('已打印')
           return
         }
         if (isDesktopLocalPrintError(local)) {

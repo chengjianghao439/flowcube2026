@@ -34,7 +34,7 @@ const printLabel = async (req,res,next) => {
             printerCode: null,
             printerName: null,
           },
-      job ? '已加入打印队列' : '未配置标签机，未创建打印任务',
+      job ? '已加入打印队列' : '未绑定打印机',
     )
   } catch (e) { next(e) }
 }
