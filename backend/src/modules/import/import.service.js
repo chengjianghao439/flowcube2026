@@ -33,7 +33,7 @@ function parseStockImportRows(fileBuffer) {
 
 async function buildProductTemplate() {
   const sheet = XLSX.utils.aoa_to_sheet([
-    ['商品名称*', '单位*', '型号', '颜色', '货号', '进价', '销售价A', '销售价B', '销售价C', '销售价D'],
+    ['商品名称*', '单位*', '型号*', '颜色*', '货号', '进价*', '销售价A', '销售价B', '销售价C', '销售价D'],
     ['示例商品', '个', 'ABC-100', '红色', 'H001', '10.00', '15.00', '18.00', '20.00', '25.00'],
   ])
   sheet['!cols'] = [22, 6, 12, 8, 10, 10, 10, 10, 10, 10].map((width) => ({ wch: width }))
@@ -58,8 +58,8 @@ async function importProducts({ fileBuffer }) {
 
   for (let index = 0; index < dataRows.length; index += 1) {
     const [name, unit, spec, color, articleNumber, costPrice, salePriceA, salePriceB, salePriceC, salePriceD] = dataRows[index]
-    if (!name || !unit) {
-      errors.push(`第${index + 2}行：名称、单位为必填`)
+    if (!name || !unit || !spec || !color || !costPrice) {
+      errors.push(`第${index + 2}行：名称、单位、型号、颜色、进价为必填`)
       continue
     }
 
