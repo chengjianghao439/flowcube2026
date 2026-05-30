@@ -3,7 +3,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../../engine/containerEngine')
-const { loadPriceRates, computeTierPrices } = require('../../utils/priceLevels')
+
 
 function createWorkbookBuffer(sheets) {
   const workbook = XLSX.utils.book_new()
@@ -32,10 +32,10 @@ function parseStockImportRows(fileBuffer) {
 
 async function buildProductTemplate() {
   const sheet = XLSX.utils.aoa_to_sheet([
-    ['商品编码*', '商品名称*', '单位*', '规格', '条码', '成本价', '备注'],
-    ['P001', '示例商品', '个', '标准规格', '', '10.00', ''],
+    ['商品编码*', '商品名称*', '单位*', '型号', '颜色', '货号', '进价', '销售价A', '销售价B', '销售价C', '销售价D'],
+    ['P001', '示例商品', '个', 'ABC-100', '红色', 'H001', '10.00', '15.00', '18.00', '20.00', '25.00'],
   ])
-  sheet['!cols'] = [12, 22, 6, 14, 14, 10, 20].map((width) => ({ wch: width }))
+  sheet['!cols'] = [12, 22, 6, 12, 8, 10, 10, 10, 10, 10, 10].map((width) => ({ wch: width }))
   return {
     filename: '商品导入模板.xlsx',
     buffer: createWorkbookBuffer([{ name: '商品导入', sheet }]),
@@ -44,14 +44,19 @@ async function buildProductTemplate() {
 
 async function importProducts({ fileBuffer }) {
   const dataRows = parseProductImportRows(fileBuffer)
-  const rates = await loadPriceRates(pool)
 
   let success = 0
   let skip = 0
   const errors = []
 
+  const toPrice = (v) => {
+    if (v === '' || v === null || v === undefined) return null
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
+
   for (let index = 0; index < dataRows.length; index += 1) {
-    const [code, name, unit, spec, barcode, costPrice, remark] = dataRows[index]
+    const [code, name, unit, spec, color, articleNumber, costPrice, salePriceA, salePriceB, salePriceC, salePriceD] = dataRows[index]
     if (!code || !name || !unit) {
       errors.push(`第${index + 2}行：编码、名称、单位为必填`)
       continue
@@ -67,24 +72,29 @@ async function importProducts({ fileBuffer }) {
         continue
       }
 
-      const prices = computeTierPrices(costPrice, rates)
+      const cp = toPrice(costPrice)
+      const pa = toPrice(salePriceA)
+      const pb = toPrice(salePriceB)
+      const pc = toPrice(salePriceC)
+      const pd = toPrice(salePriceD)
+
       await pool.query(
         `INSERT INTO product_items
-          (code,name,unit,spec,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark)
+          (code, name, unit, spec, color, article_number, cost_price, sale_price, sale_price_a, sale_price_b, sale_price_c, sale_price_d)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           String(code).trim(),
           String(name).trim(),
           String(unit).trim(),
           spec || null,
-          barcode || null,
-          prices.costPrice,
-          prices.salePrice,
-          prices.salePriceA,
-          prices.salePriceB,
-          prices.salePriceC,
-          prices.salePriceD,
-          remark || null,
+          color || null,
+          articleNumber || null,
+          cp ?? 0,
+          pa ?? 0,
+          pa,
+          pb,
+          pc,
+          pd,
         ],
       )
       success += 1
