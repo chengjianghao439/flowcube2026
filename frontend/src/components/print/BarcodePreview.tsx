@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import JsBarcode from 'jsbarcode'
 
 interface Props {
@@ -6,18 +6,18 @@ interface Props {
 }
 
 export default function BarcodePreview({ value }: Props) {
-  const ref = useRef<SVGSVGElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState({ w: 0, h: 0 })
 
-  useEffect(() => {
-    const svg = ref.current
+  const render = useCallback(() => {
+    const svg = svgRef.current
     const container = containerRef.current
     if (!svg || !container || !value) return
     const h = container.clientHeight
     const w = container.clientWidth
     if (!h || !w) return
     try {
-      // 文字区约占 25%，留给条码 75% 高度
       const barH = Math.max(20, Math.round(h * 0.72))
       JsBarcode(svg, value, {
         format: 'CODE128',
@@ -29,14 +29,24 @@ export default function BarcodePreview({ value }: Props) {
         textMargin: 2,
         flat: true,
       })
+      setSize({ w, h })
     } catch {
       // 无效条码值则静默
     }
   }, [value])
 
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => render())
+    ro.observe(el)
+    render()
+    return () => ro.disconnect()
+  }, [render])
+
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
-      <svg ref={ref} style={{ display: 'block', width: '100%', height: '100%' }} />
+      <svg ref={svgRef} style={{ display: 'block', width: '100%', height: '100%' }} />
     </div>
   )
 }
