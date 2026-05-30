@@ -66,6 +66,24 @@ async function importProducts({ fileBuffer }) {
     try {
       const code = await generateMasterCode(pool, 'P', 'product_items')
 
+      // 货号：手动填写则校验6位数字，否则自动生成5开头的6位货号
+      const art = String(articleNumber || '').trim()
+      let finalArticle = null
+      if (art) {
+        if (!/^\d{6}$/.test(art)) {
+          errors.push(`第${index + 2}行：货号必须为6位数字`)
+          continue
+        }
+        finalArticle = art
+      } else {
+        const [[{ maxArt }]] = await pool.query(
+          `SELECT COALESCE(MAX(CAST(article_number AS UNSIGNED)), 500000) AS maxArt
+           FROM product_items
+           WHERE article_number REGEXP '^5[0-9]{5}$'`,
+        )
+        finalArticle = String(Number(maxArt) + 1).padStart(6, '0')
+      }
+
       const cp = toPrice(costPrice)
       const pa = toPrice(salePriceA)
       const pb = toPrice(salePriceB)
@@ -87,7 +105,7 @@ async function importProducts({ fileBuffer }) {
           cut(unit, 20),
           cut(spec, 200),
           cut(color, 60),
-          cut(articleNumber, 100),
+          finalArticle,
           cp ?? 0,
           pa ?? 0,
           pa,
