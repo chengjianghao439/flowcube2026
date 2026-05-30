@@ -33,15 +33,14 @@ export default function LocationsPage() {
   const [keyword, setKeyword]         = useState('')
   const [search, setSearch]           = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState<string>('')
-  const [page, setPage]               = useState(1)
   const [dialogOpen, setDialogOpen]   = useState(false)
   const [editTarget, setEditTarget]   = useState<Location | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Location | null>(null)
   const [form, setForm]               = useState<CreateLocationParams>(EMPTY_FORM)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['locations', keyword, warehouseFilter, page],
-    queryFn: () => getLocationsApi({ keyword, warehouseId: warehouseFilter ? +warehouseFilter : undefined, page, pageSize: 20 }),
+    queryKey: ['locations', keyword, warehouseFilter],
+    queryFn: () => getLocationsApi({ keyword, warehouseId: warehouseFilter ? +warehouseFilter : undefined, pageSize: 99999 }),
   })
 
   const { data: whData } = useQuery({
@@ -120,10 +119,10 @@ export default function LocationsPage() {
           <div className="flex-1 min-w-[180px]">
             <Input placeholder="库位编号 / 区域" value={search}
               onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
+              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
             />
           </div>
-          <Select value={warehouseFilter || '__all__'} onValueChange={v => { setWarehouseFilter(v === '__all__' ? '' : v); setPage(1) }}>
+          <Select value={warehouseFilter || '__all__'} onValueChange={v => { setWarehouseFilter(v === '__all__' ? '' : v) }}>
             <SelectTrigger className="w-36"><SelectValue placeholder="全部仓库" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部</SelectItem>
@@ -132,8 +131,8 @@ export default function LocationsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-          <Button variant="outline" onClick={() => { setSearch(''); setKeyword(''); setWarehouseFilter(''); setPage(1) }}>重置</Button>
+          <Button onClick={() => { setKeyword(search) }}>搜索</Button>
+          <Button variant="outline" onClick={() => { setSearch(''); setKeyword(''); setWarehouseFilter('') }}>重置</Button>
         </div>
       </FilterCard>
 

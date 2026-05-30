@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Inbox } from 'lucide-react'
-import type { Pagination, TableColumn } from '@/types'
+import type { TableColumn } from '@/types'
 
 interface DataTableProps<T extends object> {
   columns: TableColumn<T>[]
   data: T[]
   loading?: boolean
-  pagination?: Pagination
-  onPageChange?: (page: number) => void
   rowKey?: keyof T
   emptyText?: string
   selectable?: boolean
@@ -22,7 +20,7 @@ function isAction(key: string, title: string): boolean {
 }
 
 export default function DataTable<T extends object>({
-  columns, data, loading = false, pagination, onPageChange,
+  columns, data, loading = false,
   rowKey = 'id' as keyof T, emptyText = '暂无数据',
   selectable = false, selectedIds, onSelectChange,
   onRowDoubleClick,

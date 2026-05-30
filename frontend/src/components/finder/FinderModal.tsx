@@ -25,10 +25,6 @@ interface FinderModalProps<T extends Record<string, unknown>> {
   onKeywordChange: (v: string) => void
   searchPlaceholder?: string
 
-  page: number
-  onPageChange: (page: number) => void
-  total: number
-  pageSize?: number
   selectedLabel?: (row: T) => string
 }
 
@@ -37,9 +33,7 @@ export function FinderModal<T extends Record<string, unknown>>({
   columns, data, selected, onSelect, onConfirm, onConfirmRow,
   getRowKey, isLoading,
   keyword, onKeywordChange, searchPlaceholder,
-  page, onPageChange, total, pageSize = 10,
 }: FinderModalProps<T>) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   return (
     <AppDialog

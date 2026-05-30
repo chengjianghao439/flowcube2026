@@ -29,15 +29,14 @@ export default function CarriersPage() {
   const qc = useQueryClient()
   const [keyword, setKeyword]           = useState('')
   const [search, setSearch]             = useState('')
-  const [page, setPage]                 = useState(1)
   const [dialogOpen, setDialogOpen]     = useState(false)
   const [editTarget, setEditTarget]     = useState<Carrier | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Carrier | null>(null)
   const [form, setForm]                 = useState<FormState>(EMPTY_FORM)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['carriers', keyword, page],
-    queryFn: () => getCarriersApi({ keyword, page, pageSize: 20 }),
+    queryKey: ['carriers', keyword],
+    queryFn: () => getCarriersApi({ keyword, pageSize: 99999 }),
   })
 
   function invalidate() { qc.invalidateQueries({ queryKey: ['carriers'] }) }
@@ -110,11 +109,11 @@ export default function CarriersPage() {
           <div className="flex-1 min-w-[180px]">
             <Input placeholder="名称 / 编号" value={search}
               onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
+              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
             />
           </div>
-          <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>
+          <Button size="sm" variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>
         </div>
       </FilterCard>
 

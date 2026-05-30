@@ -23,24 +23,21 @@ const COLUMNS: FinderColumn<Row>[] = [
 export function CustomerFinder({ open, onClose, onConfirm }: CustomerFinderProps) {
   const [keyword,    setKeyword]    = useState('')
   const [searchText, setSearchText] = useState('')
-  const [page,       setPage]       = useState(1)
   const [selected,   setSelected]   = useState<Row | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
 
   // Reset state when dialog closes
   useEffect(() => {
-    if (!open) { setKeyword(''); setSearchText(''); setPage(1); setSelected(null) }
+    if (!open) { setKeyword(''); setSearchText(''); setSelected(null) }
   }, [open])
 
   // Reset page when search changes
-  useEffect(() => { setPage(1) }, [searchText])
-
-  const { data, isFetching } = useCustomers({ page, pageSize: 10, keyword: searchText })
+  const { data, isFetching } = useCustomers({ pageSize: 99999, keyword: searchText })
 
   function handleKeywordChange(v: string) {
     setKeyword(v)
     clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => { setSearchText(v); setPage(1) }, 300)
+    debounceRef.current = setTimeout(() => { setSearchText(v) }, 300)
   }
 
   function handleConfirm() {
@@ -74,9 +71,6 @@ export function CustomerFinder({ open, onClose, onConfirm }: CustomerFinderProps
       isLoading={isFetching}
       keyword={keyword}
       onKeywordChange={handleKeywordChange}
-      page={page}
-      onPageChange={setPage}
-      total={data?.pagination?.total ?? 0}
       searchPlaceholder="搜索客户名称、编码..."
       selectedLabel={r => `${r.name}${r.code ? ` (${r.code})` : ''}`}
     />

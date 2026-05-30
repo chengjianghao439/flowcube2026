@@ -58,17 +58,15 @@ export default function BarcodePrintQueryPage() {
   const [search, setSearch] = useState(initialKeyword)
   const [keyword, setKeyword] = useState(initialKeyword)
   const [status, setStatus] = useState('__all__')
-  const [page, setPage] = useState(1)
   const isActiveTab = useActiveWorkspaceTab()
 
   const query = useQuery({
-    queryKey: ['barcode-print-records', category, keyword, status, page, initialInboundTaskId, initialInboundTaskItemId],
+    queryKey: ['barcode-print-records', category, keyword, status, initialInboundTaskId, initialInboundTaskItemId],
     queryFn: () => getBarcodePrintRecordsApi({
       category,
       keyword,
         status: status === '__all__' ? undefined : status,
-      page,
-      pageSize: 20,
+      pageSize: 99999,
       inboundTaskId: category === 'inbound' ? initialInboundTaskId : undefined,
       inboundTaskItemId: category === 'inbound' ? initialInboundTaskItemId : undefined,
     }),
@@ -197,7 +195,6 @@ export default function BarcodePrintQueryPage() {
 
   const activeCategory = CATEGORY_OPTIONS.find(item => item.value === category)!
   const rows = query.data?.list ?? []
-  const pagination = query.data?.pagination
   const inboundContext = useMemo(() => {
     if (category !== 'inbound') return null
     const taskId = initialInboundTaskId || rows.find(row => row.inboundTaskId)?.inboundTaskId
@@ -358,7 +355,6 @@ export default function BarcodePrintQueryPage() {
             type="button"
             onClick={() => {
               setCategory(item.value)
-              setPage(1)
             }}
             className={[
               'rounded-lg border p-4 text-left transition-colors',
@@ -383,7 +379,6 @@ export default function BarcodePrintQueryPage() {
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   setKeyword(search.trim())
-                  setPage(1)
                 }
               }}
             />
@@ -392,7 +387,6 @@ export default function BarcodePrintQueryPage() {
             value={status}
             onValueChange={value => {
               setStatus(value)
-              setPage(1)
             }}
           >
             <SelectTrigger className="w-36">
@@ -404,14 +398,13 @@ export default function BarcodePrintQueryPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => { setKeyword(search.trim()); setPage(1) }}>搜索</Button>
+          <Button onClick={() => { setKeyword(search.trim()) }}>搜索</Button>
           <Button
             variant="outline"
             onClick={() => {
               setSearch('')
               setKeyword('')
               setStatus('__all__')
-              setPage(1)
             }}
           >
             重置
@@ -433,7 +426,7 @@ export default function BarcodePrintQueryPage() {
         rowKey="recordId"
       />
 
-      {pagination && <div className="px-1 text-helper">状态每 3 秒自动刷新</div>}
+      {<div className="px-1 text-helper">状态每 3 秒自动刷新</div>}
     </div>
   )
 }

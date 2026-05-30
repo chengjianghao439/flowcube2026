@@ -22,7 +22,6 @@ export default function PaymentsPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [tab, setTab] = useState<1|2>(1)
-  const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState('')
   const [payOpen, setPayOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<PaymentRecord | null>(null)
@@ -32,7 +31,7 @@ export default function PaymentsPage() {
   const [payMethod, setPayMethod] = useState('转账')
   const [payRemark, setPayRemark] = useState('')
 
-  const { data, isLoading } = useQuery({ queryKey: ['payments', { type: tab, page, status: statusFilter }], queryFn: () => getPaymentsApi({ type: tab, page, pageSize: 20, status: statusFilter || undefined }) })
+  const { data, isLoading } = useQuery({ queryKey: ['payments', { type: tab, status: statusFilter }], queryFn: () => getPaymentsApi({ type: tab, pageSize: 99999, status: statusFilter || undefined }) })
   const { data: entries } = useQuery({ queryKey: ['payment-entries', selectedRecord?.id], queryFn: () => getEntriesApi(selectedRecord!.id).then(r => r || []), enabled: !!selectedRecord && entriesOpen })
   const payMut = useMutation({ mutationFn: ({ id, d }: { id: number; d: object }) => payApi(id, d), onSuccess: () => { qc.invalidateQueries({ queryKey: ['payments'] }); setPayOpen(false); setPayAmount(''); setPayRemark('') } })
 
@@ -89,14 +88,14 @@ export default function PaymentsPage() {
       {/* Tab */}
       <div className="flex gap-1 border-b">
         {([1, 2] as const).map(t => (
-          <button key={t} onClick={() => { setTab(t); setPage(1) }} className={`px-4 py-2 text-sm font-medium transition-colors ${tab === t ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+          <button key={t} onClick={() => { setTab(t) }} className={`px-4 py-2 text-sm font-medium transition-colors ${tab === t ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
             {t === 1 ? '应付账款（采购）' : '应收账款（销售）'}
           </button>
         ))}
       </div>
 
       <FilterCard>
-        <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
+        <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v) }}>
           <SelectTrigger className="h-9 w-36">
             <SelectValue placeholder="全部状态" />
           </SelectTrigger>
@@ -107,10 +106,10 @@ export default function PaymentsPage() {
             <SelectItem value="3">已付清</SelectItem>
           </SelectContent>
         </Select>
-        {statusFilter && <Button size="sm" variant="ghost" onClick={() => { setStatusFilter(''); setPage(1) }}>重置</Button>}
+        {statusFilter && <Button size="sm" variant="ghost" onClick={() => { setStatusFilter('') }}>重置</Button>}
       </FilterCard>
 
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} pagination={data?.pagination as Parameters<typeof DataTable>[0]['pagination']} onPageChange={setPage} />
+      <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
 
       {/* 登记付款弹窗 */}
       <Dialog open={payOpen} onOpenChange={setPayOpen}>

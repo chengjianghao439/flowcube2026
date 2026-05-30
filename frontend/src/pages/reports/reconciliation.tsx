@@ -15,7 +15,7 @@ import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getReconciliationApi, type ReconciliationRecord } from '@/api/reports'
-import type { TableColumn, Pagination } from '@/types'
+import type { TableColumn } from '@/types'
 
 type StatementType = 1 | 2
 function SummaryCard({ label, value, hint, tone }: { label: string; value: number | string; hint: string; tone?: 'blue' | 'amber' | 'emerald' | 'rose' }) {
@@ -45,7 +45,6 @@ export default function ReconciliationPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   const [type, setType] = useState<StatementType>(1)
-  const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const recent30d = getRelativeDateRange(30)
@@ -56,11 +55,10 @@ export default function ReconciliationPage() {
   const [applied, setApplied] = useState({ keyword: '', startDate: recent30d.startDate, endDate: recent30d.endDate, status: '' })
 
   const reconciliationQ = useQuery({
-    queryKey: ['reconciliation', type, page, applied],
+    queryKey: ['reconciliation', type, applied],
     queryFn: () => getReconciliationApi({
       type,
-      page,
-      pageSize: 20,
+      pageSize: 99999,
       keyword: applied.keyword || undefined,
       startDate: applied.startDate || undefined,
       endDate: applied.endDate || undefined,
@@ -96,7 +94,6 @@ export default function ReconciliationPage() {
   }
 
   function applyFilters() {
-    setPage(1)
     setApplied({
       keyword: search.trim(),
       startDate,
@@ -111,14 +108,12 @@ export default function ReconciliationPage() {
     setEndDate(recent30d.endDate)
     setStatusFilter('')
     setApplied({ keyword: '', startDate: recent30d.startDate, endDate: recent30d.endDate, status: '' })
-    setPage(1)
   }
 
   function applyPreset(start: string, end: string) {
     setStartDate(start)
     setEndDate(end)
     setApplied(prev => ({ ...prev, startDate: start, endDate: end }))
-    setPage(1)
   }
 
   const columns: TableColumn<ReconciliationRecord>[] = [
@@ -203,7 +198,6 @@ export default function ReconciliationPage() {
             type="button"
             onClick={() => {
               setType(item.key)
-              setPage(1)
               setApplied({ keyword: '', startDate: recent30d.startDate, endDate: recent30d.endDate, status: '' })
               setSearch('')
               setStartDate(recent30d.startDate)
@@ -269,8 +263,6 @@ export default function ReconciliationPage() {
           columns={columns}
           data={displayRows}
           loading={isLoading}
-          pagination={data?.pagination as Pagination | undefined}
-          onPageChange={setPage}
           onRowDoubleClick={(row) => openPath(row.sourcePath || row.receiptPath, row.orderNo)}
           emptyText="暂无对账数据"
         />

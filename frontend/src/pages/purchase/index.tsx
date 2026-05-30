@@ -17,7 +17,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { ProductFinder } from '@/components/finder'
-import { readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import type { PurchaseOrder } from '@/types/purchase'
 import type { ProductFinderResult } from '@/types/products'
 import type { TableColumn } from '@/types'
@@ -38,7 +38,6 @@ export default function PurchasePage() {
     navigate(key)
   }
 
-  const page = readPositiveIntParam(searchParams, 'page', 1)
   const keyword = readStringParam(searchParams, 'keyword')
   const statusFilter = readStringParam(searchParams, 'status')
   const productId = Number(searchParams.get('productId') || '')
@@ -72,7 +71,7 @@ export default function PurchasePage() {
     onConfirm: () => void
   }>({ open: false, title: '', description: '', onConfirm: () => {} })
 
-  const { data, isLoading } = usePurchaseList({ page, pageSize: 20, keyword, status: statusFilter || undefined, productId: product?.id || undefined })
+  const { data, isLoading } = usePurchaseList({ pageSize: 99999, keyword, status: statusFilter || undefined, productId: product?.id || undefined })
   const confirm = useConfirmPurchase()
   const cancel = useCancelPurchase()
   const { data: printDetail } = usePurchaseDetail(printId || 0)
@@ -189,9 +188,9 @@ export default function PurchasePage() {
             value={search}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
             className="h-9 w-56"
-            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') updateParams({ keyword: search, page: 1 }) }}
+            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') updateParams({ keyword: search }) }}
           />
-          <Select value={statusFilter || '__all__'} onValueChange={v => { updateParams({ status: v === '__all__' ? null : v, page: 1 }) }}>
+          <Select value={statusFilter || '__all__'} onValueChange={v => { updateParams({ status: v === '__all__' ? null : v }) }}>
             <SelectTrigger className="h-9 w-36">
               <SelectValue placeholder="全部状态" />
             </SelectTrigger>
@@ -205,10 +204,10 @@ export default function PurchasePage() {
           <Button variant="outline" className="h-9 min-w-[180px] justify-start font-normal" onClick={() => setProductFinderOpen(true)}>
             {product ? `${product.name} (${product.code})` : '按产品筛选'}
           </Button>
-          <Button size="sm" variant="outline" onClick={() => updateParams({ keyword: search, page: 1 })}>搜索</Button>
+          <Button size="sm" variant="outline" onClick={() => updateParams({ keyword: search })}>搜索</Button>
           <Button size="sm" variant="ghost" onClick={() => {
             setSearch('')
-            updateParams({ keyword: null, status: null, productId: null, productCode: null, productName: null, page: 1 })
+            updateParams({ keyword: null, status: null, productId: null, productCode: null, productName: null })
           }}>重置</Button>
         </div>
       </FilterCard>
@@ -217,8 +216,6 @@ export default function PurchasePage() {
         columns={columns}
         data={data?.list || []}
         loading={isLoading}
-        pagination={data?.pagination}
-        onPageChange={(nextPage) => updateParams({ page: nextPage })}
         onRowDoubleClick={goToDetail}
       />
 
@@ -253,7 +250,6 @@ export default function PurchasePage() {
             productId: selected.id,
             productCode: selected.code,
             productName: selected.name,
-            page: 1,
           })
           setProductFinderOpen(false)
         }}

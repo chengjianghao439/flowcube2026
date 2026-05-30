@@ -22,7 +22,7 @@ import {
   isDesktopLocalPrintError,
   tryDesktopLocalZplThenComplete,
 } from '@/lib/desktopLocalPrint'
-import { readNullableIntParam, readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import type { Product } from '@/types/products'
 import type { TableColumn } from '@/types'
 import type { Category } from '@/types/categories'
@@ -39,7 +39,6 @@ function buildCategoryPathMap(nodes: Category[], ancestors: string[] = [], map =
 export default function ProductsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const page = readPositiveIntParam(searchParams, 'page', 1)
   const keyword = readStringParam(searchParams, 'keyword')
   const catFilter = readNullableIntParam(searchParams, 'categoryId')
   const [search, setSearch] = useState(keyword)
@@ -61,7 +60,7 @@ export default function ProductsPage() {
     } finally { setImporting(false); e.target.value = '' }
   }
 
-  const { data, isLoading } = useProducts({ page, pageSize:20, keyword, categoryId:catFilter })
+  const { data, isLoading } = useProducts({ pageSize:99999, keyword, categoryId:catFilter })
   const { data: categoryTree = [] } = useCategoryTree()
   const { mutate: del } = useDeleteProduct()
 
@@ -150,23 +149,23 @@ export default function ProductsPage() {
       } />
 
       <FilterCard>
-        <Input placeholder="搜索编码/名称/条码" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&updateParams({ keyword: search, page: 1 })} className="h-9 w-60" />
+        <Input placeholder="搜索编码/名称/条码" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&updateParams({ keyword: search })} className="h-9 w-60" />
         <CategoryTreeSelect
           value={catFilter}
           onChange={(v) => {
-            updateParams({ categoryId: v, page: 1 })
+            updateParams({ categoryId: v })
           }}
           emptyLabel="全部分类"
           leafOnly
           className="w-48"
         />
-        <Button size="sm" variant="outline" onClick={()=>updateParams({ keyword: search, page: 1 })}>搜索</Button>
+        <Button size="sm" variant="outline" onClick={()=>updateParams({ keyword: search })}>搜索</Button>
         {(keyword || catFilter) && <Button size="sm" variant="ghost" onClick={()=>{
           setSearch('')
-          updateParams({ keyword: null, categoryId: null, page: 1 })
+          updateParams({ keyword: null, categoryId: null })
         }}>重置</Button>}
       </FilterCard>
-      <DataTable columns={cols} data={data?.list??[]} loading={isLoading} pagination={data?.pagination} onPageChange={(nextPage)=>updateParams({ page: nextPage })} rowKey="id" />
+      <DataTable columns={cols} data={data?.list??[]} loading={isLoading} rowKey="id" />
 
       {/* 批量导入弹窗 */}
       <Dialog open={importOpen} onOpenChange={v=>{ setImportOpen(v); if(!v) setImportResult(null) }}>

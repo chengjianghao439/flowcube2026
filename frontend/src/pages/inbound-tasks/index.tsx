@@ -38,12 +38,11 @@ export default function InboundTasksPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [product, setProduct] = useState<ProductFinderResult | null>(null)
   const [productFinderOpen, setProductFinderOpen] = useState(false)
-  const [page, setPage] = useState(1)
   const submitMut = useSubmitInboundTask()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['inbound-tasks', keyword, statusFilter, product?.id ?? null, page],
-    queryFn: () => getInboundTasksApi({ keyword, status: statusFilter ? +statusFilter : undefined, productId: product?.id, page, pageSize: 20 })
+    queryKey: ['inbound-tasks', keyword, statusFilter, product?.id ?? null],
+    queryFn: () => getInboundTasksApi({ keyword, status: statusFilter ? +statusFilter : undefined, productId: product?.id, pageSize: 99999 })
       ,
   })
 
@@ -219,10 +218,10 @@ export default function InboundTasksPage() {
               placeholder="任务单号 / 采购单号 / 供应商"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
+              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
             />
           </div>
-          <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
+          <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v) }}>
             <SelectTrigger className="h-9 w-36"><SelectValue placeholder="全部状态" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部</SelectItem>
@@ -234,8 +233,8 @@ export default function InboundTasksPage() {
           <Button size="sm" variant="outline" className="min-w-[180px] justify-start font-normal" onClick={() => setProductFinderOpen(true)}>
             {product ? `${product.name} (${product.code})` : '按产品筛选'}
           </Button>
-          <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setProduct(null); setPage(1) }}>重置</Button>
+          <Button size="sm" variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setProduct(null) }}>重置</Button>
         </div>
       </FilterCard>
 
@@ -251,7 +250,6 @@ export default function InboundTasksPage() {
         onClose={() => setProductFinderOpen(false)}
         onConfirm={(selected) => {
           setProduct(selected)
-          setPage(1)
         }}
       />
     </div>
