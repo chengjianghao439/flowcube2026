@@ -1,6 +1,7 @@
 const XLSX = require('xlsx')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { generateMasterCode } = require('../../utils/codeGenerator')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../../engine/containerEngine')
 
@@ -32,10 +33,10 @@ function parseStockImportRows(fileBuffer) {
 
 async function buildProductTemplate() {
   const sheet = XLSX.utils.aoa_to_sheet([
-    ['商品编码*', '商品名称*', '单位*', '型号', '颜色', '货号', '进价', '销售价A', '销售价B', '销售价C', '销售价D'],
-    ['P001', '示例商品', '个', 'ABC-100', '红色', 'H001', '10.00', '15.00', '18.00', '20.00', '25.00'],
+    ['商品名称*', '单位*', '型号', '颜色', '货号', '进价', '销售价A', '销售价B', '销售价C', '销售价D'],
+    ['示例商品', '个', 'ABC-100', '红色', 'H001', '10.00', '15.00', '18.00', '20.00', '25.00'],
   ])
-  sheet['!cols'] = [12, 22, 6, 12, 8, 10, 10, 10, 10, 10, 10].map((width) => ({ wch: width }))
+  sheet['!cols'] = [22, 6, 12, 8, 10, 10, 10, 10, 10, 10].map((width) => ({ wch: width }))
   return {
     filename: '商品导入模板.xlsx',
     buffer: createWorkbookBuffer([{ name: '商品导入', sheet }]),
@@ -56,21 +57,14 @@ async function importProducts({ fileBuffer }) {
   }
 
   for (let index = 0; index < dataRows.length; index += 1) {
-    const [code, name, unit, spec, color, articleNumber, costPrice, salePriceA, salePriceB, salePriceC, salePriceD] = dataRows[index]
-    if (!code || !name || !unit) {
-      errors.push(`第${index + 2}行：编码、名称、单位为必填`)
+    const [name, unit, spec, color, articleNumber, costPrice, salePriceA, salePriceB, salePriceC, salePriceD] = dataRows[index]
+    if (!name || !unit) {
+      errors.push(`第${index + 2}行：名称、单位为必填`)
       continue
     }
 
     try {
-      const [existing] = await pool.query(
-        'SELECT id FROM product_items WHERE code=? AND deleted_at IS NULL',
-        [String(code).trim()],
-      )
-      if (existing.length) {
-        skip += 1
-        continue
-      }
+      const code = await generateMasterCode(pool, 'P', 'product_items')
 
       const cp = toPrice(costPrice)
       const pa = toPrice(salePriceA)
@@ -83,7 +77,7 @@ async function importProducts({ fileBuffer }) {
           (code, name, unit, spec, color, article_number, cost_price, sale_price, sale_price_a, sale_price_b, sale_price_c, sale_price_d)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          String(code).trim(),
+          code,
           String(name).trim(),
           String(unit).trim(),
           spec || null,
