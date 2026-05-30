@@ -78,15 +78,14 @@ export default function PickingWavesPage() {
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
-  const [page, setPage] = useState(1)
   const selectedWaveId = Number(searchParams.get('waveId') || 0) || null
   const focus = searchParams.get('focus') || ''
   const progressRef = useRef<HTMLDivElement | null>(null)
   const printClosureRef = useRef<HTMLDivElement | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['picking-waves', keyword, statusFilter, page],
-    queryFn: () => getWavesApi({ keyword, status: statusFilter || undefined, page, pageSize: 20 }),
+    queryKey: ['picking-waves', keyword, statusFilter],
+    queryFn: () => getWavesApi({ keyword, status: statusFilter || undefined, pageSize: 99999 }),
   })
 
   const { data: detail } = useQuery({
@@ -234,10 +233,10 @@ export default function PickingWavesPage() {
               placeholder="波次单号"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
+              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
             />
           </div>
-          <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v); setPage(1) }}>
+          <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v) }}>
             <SelectTrigger className="w-32"><SelectValue placeholder="全部状态" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部</SelectItem>
@@ -246,8 +245,8 @@ export default function PickingWavesPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-          <Button variant="outline" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter(''); setPage(1) }}>重置</Button>
+          <Button onClick={() => { setKeyword(search) }}>搜索</Button>
+          <Button variant="outline" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter('') }}>重置</Button>
         </div>
       </FilterCard>
 

@@ -23,7 +23,6 @@ const PRICE_LEVELS = ['A', 'B', 'C', 'D'] as const
 export default function CustomersPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -32,7 +31,7 @@ export default function CustomersPage() {
   const [bindCustomer, setBindCustomer] = useState<Customer | null>(null)
   const [selectedPriceLevel, setSelectedPriceLevel] = useState<'A' | 'B' | 'C' | 'D'>('A')
 
-  const { data, isLoading } = useCustomers({ page, pageSize: 20, keyword })
+  const { data, isLoading } = useCustomers({ pageSize: 99999, keyword })
   const del = useDeleteCustomer()
   const [confirmTarget, setConfirmTarget] = useState<Customer | null>(null)
   const bindMut = useMutation({
@@ -72,11 +71,11 @@ export default function CustomersPage() {
     <div className="space-y-4">
       <PageHeader title="客户管理" description="管理销售客户档案，可绑定价格 A / B / C / D" actions={<Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>+ 新增客户</Button>} />
       <FilterCard>
-        <Input placeholder="搜索编码/名称..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
-        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); setPage(1) }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
+        <Input placeholder="搜索编码/名称..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} />
+        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search) }}>搜索</Button>
+        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword('') }}>重置</Button>}
       </FilterCard>
-      <DataTable columns={columns} data={data?.list||[]} loading={isLoading} pagination={data?.pagination} onPageChange={setPage} />
+      <DataTable columns={columns} data={data?.list||[]} loading={isLoading} />
       <CustomerFormDialog open={dialogOpen} onClose={()=>setDialogOpen(false)} customer={editing} />
       <ConfirmDialog
         open={!!confirmTarget}

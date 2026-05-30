@@ -28,7 +28,6 @@ import {
 export default function RacksPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState<string>('')
@@ -37,11 +36,10 @@ export default function RacksPage() {
   const [deleteTarget, setDeleteTarget] = useState<Rack | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['racks', keyword, warehouseFilter, page],
+    queryKey: ['racks', keyword, warehouseFilter],
     queryFn: () =>
       getRacksApi({
-        page,
-        pageSize: 20,
+        pageSize: 99999,
         keyword,
         warehouseId: warehouseFilter ? +warehouseFilter : undefined,
       }),
@@ -108,7 +106,6 @@ export default function RacksPage() {
   })
 
   function handleSearch() {
-    setPage(1)
     setKeyword(search)
   }
 
@@ -210,7 +207,7 @@ export default function RacksPage() {
           <select
             className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             value={warehouseFilter || '__all__'}
-            onChange={e => { setWarehouseFilter(e.target.value === '__all__' ? '' : e.target.value); setPage(1) }}
+            onChange={e => { setWarehouseFilter(e.target.value === '__all__' ? '' : e.target.value) }}
           >
             <option value="__all__">全部仓库</option>
             {whData?.map(w => (
@@ -225,8 +222,6 @@ export default function RacksPage() {
         columns={columns}
         data={data?.list ?? []}
         loading={isLoading}
-        pagination={data?.pagination}
-        onPageChange={setPage}
         rowKey="id"
       />
 

@@ -19,7 +19,6 @@ import type { TableColumn } from '@/types'
 const STATUS_COLOR: Record<number, 'default' | 'secondary' | 'destructive' | 'outline'> = { 1:'default', 2:'outline', 3:'destructive' }
 
 export default function StockCheckPage() {
-  const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -28,7 +27,7 @@ export default function StockCheckPage() {
   const [remark, setRemark] = useState('')
   const [createLocked, setCreateLocked] = useState(false)
 
-  const { data, isLoading } = useCheckList({ page, pageSize:20, keyword })
+  const { data, isLoading } = useCheckList({ pageSize: 99999, keyword })
   const { data: warehouses } = useWarehousesActive()
   const create = useCreateCheck()
 
@@ -61,11 +60,11 @@ export default function StockCheckPage() {
     <div className="space-y-4">
       <PageHeader title="库存盘点" description="创建盘点单并填写实盘数量，提交后自动调整库存" actions={<Button onClick={()=>setCreateOpen(true)}>+ 新建盘点</Button>} />
       <FilterCard>
-        <Input placeholder="搜索单号/仓库..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
-        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); setPage(1) }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
+        <Input placeholder="搜索单号/仓库..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} />
+        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search) }}>搜索</Button>
+        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword('') }}>重置</Button>}
       </FilterCard>
-      <DataTable columns={columns} data={data?.list||[]} loading={isLoading} pagination={data?.pagination} onPageChange={setPage} />
+      <DataTable columns={columns} data={data?.list||[]} loading={isLoading} />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>

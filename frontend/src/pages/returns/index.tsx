@@ -189,7 +189,7 @@ function ReturnForm({ type, onClose, onSuccess }: { type:'purchase'|'sale'; onCl
 
 function ReturnList({ type }: { type: 'purchase'|'sale' }) {
   const qc=useQueryClient()
-  const [page,setPage]=useState(1); const [keyword,setKeyword]=useState(''); const [search,setSearch]=useState('')
+  const [keyword,setKeyword]=useState(''); const [search,setSearch]=useState('')
   const [open,setOpen]=useState(false)
   const [confirmState,setConfirmState]=useState<{open:boolean;title:string;description:string;onConfirm:()=>void}>({open:false,title:'',description:'',onConfirm:()=>{}})
   const openConfirm=(title:string,description:string,onConfirm:()=>void)=>setConfirmState({open:true,title,description,onConfirm})
@@ -197,7 +197,7 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
   const [pendingId,setPendingId]=useState<number|null>(null)
   const [printTarget,setPrintTarget]=useState<RowType|null>(null)
   const apiList = type==='purchase'?getPurchaseReturnsApi:getSaleReturnsApi
-  const {data,isLoading}=useQuery({queryKey:['returns',type,{page,keyword}],queryFn:()=>apiList({page,pageSize:20,keyword}).then(r=>r!)})
+  const {data,isLoading}=useQuery({queryKey:['returns',type,{keyword}],queryFn:()=>apiList({pageSize:99999,keyword}).then(r=>r!)})
   const inv=()=>qc.invalidateQueries({queryKey:['returns',type]})
   const confirmFn=type==='purchase'?confirmPurchaseReturnApi:confirmSaleReturnApi
   const executeFn=type==='purchase'?executePurchaseReturnApi:executeSaleReturnApi
@@ -255,16 +255,16 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <FilterCard className="flex-1">
-          <Input placeholder="搜索单号..." value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e:React.KeyboardEvent)=>{if(e.key==='Enter'){setKeyword(search);setPage(1)}}} />
-          <Button size="sm" variant="outline" onClick={()=>{setKeyword(search);setPage(1)}}>搜索</Button>
-          {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('');setPage(1)}}>重置</Button>}
+          <Input placeholder="搜索单号..." value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e:React.KeyboardEvent)=>{if(e.key==='Enter'){setKeyword(search)}}} />
+          <Button size="sm" variant="outline" onClick={()=>{setKeyword(search)}}>搜索</Button>
+          {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('')}}>重置</Button>}
         </FilterCard>
         <div className="flex shrink-0 gap-2">
           <Button variant="outline" onClick={()=>downloadExport(type==='purchase'?'/export/purchase-returns':'/export/sale-returns').catch(e=>toast.error((e as Error).message))}>导出 Excel</Button>
           <Button onClick={()=>setOpen(true)}>+ 新建{type==='purchase'?'采购':'销售'}退货单</Button>
         </div>
       </div>
-      <DataTable columns={columns} data={(data?.list||[]) as RowType[]} loading={isLoading} pagination={data?.pagination} onPageChange={setPage} />
+      <DataTable columns={columns} data={(data?.list||[]) as RowType[]} loading={isLoading} />
       <ConfirmDialog
         open={confirmState.open}
         title={confirmState.title}

@@ -22,7 +22,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { InventoryLog, InventoryOverviewItem } from '@/types/inventory'
 import type { TableColumn } from '@/types'
 import type { ProductFinderResult } from '@/types/products'
-import { readNullableIntParam, readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 
 type Tab = 'overview' | 'logs'
 type OpType = 'outbound'
@@ -72,11 +72,9 @@ export default function InventoryPage() {
   const keyword = readStringParam(searchParams, 'keyword')
   const warehouseId = readNullableIntParam(searchParams, 'warehouseId')
   const categoryId = readNullableIntParam(searchParams, 'categoryId')
-  const overviewPage = readPositiveIntParam(searchParams, 'page', 1)
   const [search, setSearch] = useState(keyword)
 
   // 日志参数
-  const logPage = readPositiveIntParam(searchParams, 'logPage', 1)
   const rawLogType = Number(searchParams.get('logType') || '')
   const logType = Number.isInteger(rawLogType) && rawLogType > 0 ? rawLogType : null
 
@@ -91,9 +89,9 @@ export default function InventoryPage() {
   const [warehouseFinderOpen, setWarehouseFinderOpen] = useState(false)
 
   const { data: overview, isLoading: overviewLoading } = useInventoryOverview({
-    page: overviewPage, pageSize: 20, keyword, warehouseId, categoryId,
+    pageSize: 99999, keyword, warehouseId, categoryId,
   })
-  const { data: logs, isLoading: logLoading } = useLogs({ page: logPage, pageSize: 20, type: logType })
+  const { data: logs, isLoading: logLoading } = useLogs({ pageSize: 99999, type: logType })
   const { data: warehouses } = useWarehousesActive()
   const { mutate: outbound, isPending } = useOutbound()
   const setF = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -113,7 +111,6 @@ export default function InventoryPage() {
 
   const stats = overview?.stats
   const list = overview?.list ?? []
-  const pagination = overview?.pagination
   const TYPE_VARIANT: Record<number, 'default' | 'secondary' | 'outline'> = { 1: 'default', 2: 'secondary', 3: 'outline' }
   const TYPE_NAMES: Record<number, string> = { 1: '入库', 2: '出库', 3: '调整' }
 
@@ -170,15 +167,15 @@ export default function InventoryPage() {
               <div className="flex items-center gap-2">
                 <Input placeholder="商品编码 / 名称..." value={search}
                   onChange={e => setSearch(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && updateParams({ keyword: search, page: 1 })}
+                  onKeyDown={e => e.key === 'Enter' && updateParams({ keyword: search })}
                   className="w-52" />
-                <Button variant="outline" onClick={() => updateParams({ keyword: search, page: 1 })}>搜索</Button>
+                <Button variant="outline" onClick={() => updateParams({ keyword: search })}>搜索</Button>
               </div>
               <div className="h-5 w-px bg-border" />
-              <CategoryTreeSelect value={categoryId} onChange={v => updateParams({ categoryId: v, page: 1 })}
+              <CategoryTreeSelect value={categoryId} onChange={v => updateParams({ categoryId: v })}
                 emptyLabel="全部分类" leafOnly className="h-10 w-48" />
               <Select value={warehouseId == null ? '__all__' : String(warehouseId)}
-                onValueChange={v => updateParams({ warehouseId: v === '__all__' ? null : +v, page: 1 })}>
+                onValueChange={v => updateParams({ warehouseId: v === '__all__' ? null : +v })}>
                 <SelectTrigger className="h-10 w-44"><SelectValue placeholder="全部仓库" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">全部仓库</SelectItem>
@@ -187,7 +184,7 @@ export default function InventoryPage() {
               </Select>
               {(keyword || warehouseId || categoryId) && (
                 <Button variant="ghost" size="sm" className="text-muted-foreground"
-                  onClick={() => { setSearch(''); updateParams({ keyword: null, warehouseId: null, categoryId: null, page: 1 }) }}>重置</Button>
+                  onClick={() => { setSearch(''); updateParams({ keyword: null, warehouseId: null, categoryId: null }) }}>重置</Button>
               )}
             </div>
           </FilterCard>
@@ -242,14 +239,6 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          {pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-              <span>第 {pagination.page} / {pagination.totalPages} 页</span>
-              <Button size="sm" variant="outline" disabled={pagination.page <= 1} onClick={() => updateParams({ page: pagination.page - 1 })}>上一页</Button>
-              <Button size="sm" variant="outline" disabled={pagination.page >= pagination.totalPages} onClick={() => updateParams({ page: pagination.page + 1 })}>下一页</Button>
-            </div>
-          )}
-
           <ContainerDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} item={drawerItem} />
         </>
       )}
@@ -258,7 +247,7 @@ export default function InventoryPage() {
         <>
           <FilterCard>
             <Select value={logType == null ? '__all__' : String(logType)}
-              onValueChange={v => updateParams({ logType: v === '__all__' ? null : +v, logPage: 1 })}>
+              onValueChange={v => updateParams({ logType: v === '__all__' ? null : +v })}>
               <SelectTrigger className="h-9 w-36"><SelectValue placeholder="全部类型" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">全部类型</SelectItem>
@@ -268,7 +257,7 @@ export default function InventoryPage() {
               </SelectContent>
             </Select>
           </FilterCard>
-          <DataTable columns={logCols} data={logs?.list ?? []} loading={logLoading} pagination={logs?.pagination} onPageChange={nextPage => updateParams({ logPage: nextPage })} rowKey="id" />
+          <DataTable columns={logCols} data={logs?.list ?? []} loading={logLoading} rowKey="id" />
         </>
       )}
 

@@ -114,7 +114,6 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
   const [keyword,    setKeyword]    = useState('')
   const [searchText, setSearchText] = useState('')  // 防抖后的实际查询值
   const [categoryId, setCategoryId] = useState<number | null>(null)
-  const [page,       setPage]       = useState(1)
   const [selected,   setSelected]   = useState<ProductFinderResult | null>(null)
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>()
@@ -123,17 +122,15 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
   useEffect(() => {
     if (!open) {
       setKeyword('');  setSearchText('');  setCategoryId(null)
-      setPage(1);      setSelected(null); setExpandedPath([])
+      setSelected(null); setExpandedPath([])
     }
   }, [open])
 
-  // 分类切换时回第一页
-  useEffect(() => { setPage(1) }, [categoryId, searchText])
 
   // ── 数据 ──
   const { data: categoryTree = [] } = useCategoryTree()
   const { data: finderData, isFetching } = useProductFinder(
-    { page, pageSize: 15, keyword: searchText, categoryId, warehouseId: warehouseId ?? null },
+    { pageSize: 99999, keyword: searchText, categoryId, warehouseId: warehouseId ?? null },
     open,
   )
 
@@ -152,7 +149,6 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
     clearTimeout(searchDebounceRef.current)
     searchDebounceRef.current = setTimeout(() => {
       setSearchText(val)
-      setPage(1)
     }, 300)
   }
 
@@ -166,7 +162,6 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
     onClose()
   }
 
-  const totalPages = pagination ? Math.ceil(pagination.total / pagination.pageSize) : 1
 
   return (
     <AppDialog

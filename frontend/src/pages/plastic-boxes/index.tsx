@@ -46,15 +46,14 @@ function deletePlasticBoxApi(id: number) {
 
 export default function PlasticBoxesPage() {
   const qc = useQueryClient()
-  const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<PlasticBox | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['plastic-boxes', page, keyword],
-    queryFn: () => getPlasticBoxesApi({ page, pageSize: 20, keyword }),
+    queryKey: ['plastic-boxes', keyword],
+    queryFn: () => getPlasticBoxesApi({ pageSize: 99999, keyword }),
   })
 
   const createMut = useMutation({
@@ -112,13 +111,13 @@ export default function PlasticBoxesPage() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="h-9 w-56"
-          onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
+          onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
         />
-        <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
+        <Button size="sm" variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
+        {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>}
       </FilterCard>
 
-      <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} pagination={data?.pagination} onPageChange={setPage} />
+      <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} />
 
       <CreateDialog
         open={createOpen}

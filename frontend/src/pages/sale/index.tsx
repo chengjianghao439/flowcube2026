@@ -15,7 +15,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { ProductFinder } from '@/components/finder'
-import { readPositiveIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import type { SaleOrder } from '@/types/sale'
 import type { ProductFinderResult } from '@/types/products'
@@ -35,7 +35,6 @@ const EMPTY_CONFIRM: ConfirmState = { open: false, title: '', description: '', o
 
 export default function SalePage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const page = readPositiveIntParam(searchParams, 'page', 1)
   const keyword = readStringParam(searchParams, 'keyword')
   const statusFilter = readStringParam(searchParams, 'status')
   const productId = Number(searchParams.get('productId') || '')
@@ -62,7 +61,7 @@ export default function SalePage() {
   const [confirmState, setConfirmState] = useState<ConfirmState>(EMPTY_CONFIRM)
   const [printOrder,   setPrintOrder]   = useState<SaleOrder | null>(null)
 
-  const { data, isLoading } = useSaleList({ page, pageSize: 20, keyword, status: statusFilter || undefined, productId: product?.id || undefined })
+  const { data, isLoading } = useSaleList({ pageSize: 99999, keyword, status: statusFilter || undefined, productId: product?.id || undefined })
   const reserveMutate = useReserveSale()
   const releaseMutate = useReleaseSale()
   const ship          = useShipSale()
@@ -105,12 +104,12 @@ export default function SalePage() {
   }
 
   // ── 筛选操作 ──
-  function handleSearch() { updateParams({ keyword: search, page: 1 }) }
+  function handleSearch() { updateParams({ keyword: search }) }
   function handleReset()  {
     setSearch('')
-    updateParams({ keyword: null, status: null, productId: null, productCode: null, productName: null, page: 1 })
+    updateParams({ keyword: null, status: null, productId: null, productCode: null, productName: null })
   }
-  function handleStatusChange(v: string) { updateParams({ status: v, page: 1 }) }
+  function handleStatusChange(v: string) { updateParams({ status: v }) }
 
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
@@ -206,8 +205,6 @@ export default function SalePage() {
         columns={columns}
         data={data?.list ?? []}
         loading={isLoading}
-        pagination={data?.pagination}
-        onPageChange={(nextPage) => updateParams({ page: nextPage })}
         onRowDoubleClick={goToDetail}
       />
 
@@ -235,7 +232,6 @@ export default function SalePage() {
             productId: selected.id,
             productCode: selected.code,
             productName: selected.name,
-            page: 1,
           })
           setProductFinderOpen(false)
         }}

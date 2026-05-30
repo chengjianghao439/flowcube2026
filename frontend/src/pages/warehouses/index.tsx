@@ -17,17 +17,16 @@ const TYPE_VARIANTS: Record<number, 'default' | 'secondary' | 'destructive' | 'o
 }
 
 export default function WarehousesPage() {
-  const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [editItem, setEditItem] = useState<Warehouse | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<Warehouse | null>(null)
 
-  const { data, isLoading } = useWarehouses({ page, pageSize: 20, keyword })
+  const { data, isLoading } = useWarehouses({ pageSize: 99999, keyword })
   const { mutate: deleteWarehouse } = useDeleteWarehouse()
 
-  function handleSearch() { setPage(1); setKeyword(search) }
+  function handleSearch() { setKeyword(search) }
 
   function handleEdit(item: Warehouse) { setEditItem(item); setFormOpen(true) }
 
@@ -87,12 +86,11 @@ export default function WarehousesPage() {
           className="h-9 w-60" />
         <Button size="sm" variant="outline" onClick={handleSearch}>搜索</Button>
         {keyword && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>
         )}
       </FilterCard>
 
-      <DataTable columns={columns} data={data?.list ?? []} loading={isLoading}
-        pagination={data?.pagination} onPageChange={setPage} rowKey="id" />
+      <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id" />
 
       <WarehouseFormDialog open={formOpen}
         onClose={() => { setFormOpen(false); setEditItem(null) }}

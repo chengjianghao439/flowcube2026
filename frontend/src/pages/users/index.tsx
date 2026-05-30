@@ -18,7 +18,6 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 export default function UsersPage() {
   const currentUser = useAuthStore((s) => s.user)
 
-  const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
 
@@ -29,11 +28,10 @@ export default function UsersPage() {
   const [resetTarget, setResetTarget] = useState<SysUser | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SysUser | null>(null)
 
-  const { data, isLoading } = useUsers({ page, pageSize: 20, keyword })
+  const { data, isLoading } = useUsers({ pageSize: 99999, keyword })
   const { mutate: deleteUser } = useDeleteUser()
 
   function handleSearch() {
-    setPage(1)
     setKeyword(search)
   }
 
@@ -117,7 +115,7 @@ export default function UsersPage() {
         />
         <Button size="sm" variant="outline" onClick={handleSearch}>搜索</Button>
         {keyword && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>
+          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>
             重置
           </Button>
         )}
@@ -127,8 +125,6 @@ export default function UsersPage() {
         columns={columns}
         data={data?.list ?? []}
         loading={isLoading}
-        pagination={data?.pagination}
-        onPageChange={setPage}
         rowKey="id"
       />
 

@@ -22,12 +22,11 @@ const empty = { name:'', contact:'', phone:'', email:'', address:'', remark:'', 
 
 export default function SuppliersPage() {
   const navigate = useNavigate()
-  const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState(''); const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false); const [edit, setEdit] = useState<Supplier|null>(null)
   const [confirmTarget, setConfirmTarget] = useState<Supplier|null>(null)
   const [form, setForm] = useState(empty)
-  const { data, isLoading } = useSuppliers({ page, pageSize:20, keyword })
+  const { data, isLoading } = useSuppliers({ pageSize: 99999, keyword })
   const { mutate: create, isPending: creating } = useCreateSupplier()
   const { mutate: update, isPending: updating } = useUpdateSupplier()
   const { mutate: del } = useDeleteSupplier()
@@ -67,11 +66,11 @@ export default function SuppliersPage() {
     <div className="space-y-4">
       <PageHeader title="供应商管理" description="管理采购供应商档案" actions={<Button onClick={openCreate}>新增供应商</Button>} />
       <FilterCard>
-        <Input placeholder="搜索编码或名称" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&(setPage(1),setKeyword(search))} className="h-9 w-60" />
-        <Button size="sm" variant="outline" onClick={()=>{setPage(1);setKeyword(search)}}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('');setPage(1)}}>重置</Button>}
+        <Input placeholder="搜索编码或名称" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&setKeyword(search)} className="h-9 w-60" />
+        <Button size="sm" variant="outline" onClick={()=>{setKeyword(search)}}>搜索</Button>
+        {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('')}}>重置</Button>}
       </FilterCard>
-      <DataTable columns={cols} data={data?.list??[]} loading={isLoading} pagination={data?.pagination} onPageChange={setPage} rowKey="id" />
+      <DataTable columns={cols} data={data?.list??[]} loading={isLoading} rowKey="id" />
 
       <ConfirmDialog
         open={!!confirmTarget}

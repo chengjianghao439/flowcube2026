@@ -24,7 +24,7 @@ interface DraftItem extends Omit<TransferItem,'id'> { _key:number }
 
 export default function TransferPage() {
   const qc = useQueryClient()
-  const [page,setPage]=useState(1); const [keyword,setKeyword]=useState(''); const [search,setSearch]=useState('')
+  const [keyword,setKeyword]=useState(''); const [search,setSearch]=useState('')
   const [open,setOpen]=useState(false)
   const [fromWh,setFromWh]=useState(''); const [toWh,setToWh]=useState(''); const [remark,setRemark]=useState('')
   const [items,setItems]=useState<DraftItem[]>([]); const [counter,setCounter]=useState(0)
@@ -34,7 +34,7 @@ export default function TransferPage() {
   const [submitting,setSubmitting]=useState(false)
   const [pendingId,setPendingId]=useState<number|null>(null)
 
-  const {data,isLoading}=useQuery({queryKey:['transfer',{page,keyword}],queryFn:()=>getTransferListApi({page,pageSize:20,keyword}).then(r=>r!)})
+  const {data,isLoading}=useQuery({queryKey:['transfer',{keyword}],queryFn:()=>getTransferListApi({pageSize:99999,keyword}).then(r=>r!)})
   const {data:warehouses}=useWarehousesActive()
   const {data:products}=useProducts({page:1,pageSize:200,keyword:''})
   const sameWarehouseSelected = !!fromWh && fromWh === toWh
@@ -110,11 +110,11 @@ export default function TransferPage() {
         </div>
       } />
       <FilterCard>
-        <Input placeholder="搜索单号/仓库..." value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e:React.KeyboardEvent)=>{ if(e.key==='Enter'){setKeyword(search);setPage(1)} }} />
-        <Button size="sm" variant="outline" onClick={()=>{setKeyword(search);setPage(1)}}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('');setPage(1)}}>重置</Button>}
+        <Input placeholder="搜索单号/仓库..." value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e:React.KeyboardEvent)=>{ if(e.key==='Enter'){setKeyword(search)} }} />
+        <Button size="sm" variant="outline" onClick={()=>{setKeyword(search)}}>搜索</Button>
+        {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('')}}>重置</Button>}
       </FilterCard>
-      <DataTable columns={columns} data={data?.list||[]} loading={isLoading} pagination={data?.pagination} onPageChange={setPage} />
+      <DataTable columns={columns} data={data?.list||[]} loading={isLoading} />
 
       <ConfirmDialog
         open={confirmState.open}

@@ -52,14 +52,13 @@ function DetailRow({ label, value }: { label: string; value: unknown }) {
 export default function OpLogsPage() {
   const { can } = usePermission()
   const qc = useQueryClient()
-  const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [keyword, setKeyword] = useState('')
   const [module, setModule] = useState('')
   const [clearConfirm, setClearConfirm] = useState(false)
   const [detail, setDetail] = useState<OpLog | null>(null)
 
-  const { data, isLoading } = useQuery({ queryKey: ['oplogs', { page, keyword, module }], queryFn: () => getOpLogsApi({ page, pageSize: 30, keyword, module }) })
+  const { data, isLoading } = useQuery({ queryKey: ['oplogs', { keyword, module }], queryFn: () => getOpLogsApi({ pageSize: 99999, keyword, module }) })
   const clear = useMutation({ mutationFn: clearLogsApi, onSuccess: () => qc.invalidateQueries({ queryKey: ['oplogs'] }) })
 
   const columns: TableColumn<OpLog>[] = [
@@ -110,8 +109,8 @@ export default function OpLogsPage() {
       } />
       <div className="flex gap-2 flex-wrap">
         <Input placeholder="搜索用户/路径..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} className="w-56"
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }} />
-        <Select value={module || '__all__'} onValueChange={v => { setModule(v === '__all__' ? '' : v); setPage(1) }}>
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search) } }} />
+        <Select value={module || '__all__'} onValueChange={v => { setModule(v === '__all__' ? '' : v) }}>
           <SelectTrigger className="h-10 w-40">
             <SelectValue placeholder="全部模块" />
           </SelectTrigger>
@@ -122,9 +121,9 @@ export default function OpLogsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
+        <Button variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
       </div>
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} pagination={data?.pagination} onPageChange={setPage} />
+      <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
       <ConfirmDialog
         open={clearConfirm}
         title="清理旧日志"
