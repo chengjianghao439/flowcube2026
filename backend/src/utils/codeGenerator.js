@@ -33,8 +33,8 @@ async function generateMasterCode(conn, prefix, table, codeField = 'code') {
   const [[{ maxNum }]] = await conn.query(
     `SELECT COALESCE(MAX(CAST(SUBSTRING(\`${codeField}\`, ?) AS UNSIGNED)), 0) AS maxNum
      FROM \`${table}\`
-     WHERE \`${codeField}\` LIKE ?`,
-    [prefixLen + 1, `${prefix}%`],
+     WHERE \`${codeField}\` REGEXP CONCAT('^', ?, '[0-9]{6}$')`,
+    [prefixLen + 1, prefix],
   )
   return `${prefix}${String(maxNum + 1).padStart(6, '0')}`
 }
