@@ -36,7 +36,7 @@ async function generateMasterCode(conn, prefix, table, codeField = 'code') {
      WHERE \`${codeField}\` REGEXP CONCAT('^', ?, '[0-9]{6}$')`,
     [prefixLen + 1, prefix],
   )
-  return `${prefix}${String(maxNum + 1).padStart(6, '0')}`
+  return `${prefix}${String(Number(maxNum) + 1).padStart(6, '0')}`
 }
 
 /**
