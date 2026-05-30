@@ -66,15 +66,15 @@ async function importProducts({ fileBuffer }) {
     try {
       const code = await generateMasterCode(pool, 'P', 'product_items')
 
-      // 货号：手动填写则校验6位数字，否则自动生成5开头的6位货号
+      // 货号：手动填写则补齐6位，否则自动生成5开头的6位货号
       const art = String(articleNumber || '').trim()
       let finalArticle = null
       if (art) {
-        if (!/^\d{6}$/.test(art)) {
-          errors.push(`第${index + 2}行：货号必须为6位数字`)
+        if (!/^\d+$/.test(art) || art.length > 6) {
+          errors.push(`第${index + 2}行：货号必须为不超过6位的数字`)
           continue
         }
-        finalArticle = art
+        finalArticle = art.padStart(6, '0')
       } else {
         const [[{ maxArt }]] = await pool.query(
           `SELECT COALESCE(MAX(CAST(article_number AS UNSIGNED)), 500000) AS maxArt
