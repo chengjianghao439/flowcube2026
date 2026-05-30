@@ -1,0 +1,5 @@
+-- 放宽商品字段长度以支持导入场景
+ALTER TABLE `product_items`
+  MODIFY COLUMN `spec` VARCHAR(200) DEFAULT NULL COMMENT '型号',
+  MODIFY COLUMN `color` VARCHAR(60) DEFAULT NULL COMMENT '颜色',
+  MODIFY COLUMN `article_number` VARCHAR(100) DEFAULT NULL COMMENT '货号';

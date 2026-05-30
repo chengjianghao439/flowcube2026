@@ -72,17 +72,22 @@ async function importProducts({ fileBuffer }) {
       const pc = toPrice(salePriceC)
       const pd = toPrice(salePriceD)
 
+      const cut = (v, max) => {
+        const s = String(v || '').trim()
+        return s ? s.slice(0, max) : null
+      }
+
       await pool.query(
         `INSERT INTO product_items
           (code, name, unit, spec, color, article_number, cost_price, sale_price, sale_price_a, sale_price_b, sale_price_c, sale_price_d)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           code,
-          String(name).trim(),
-          String(unit).trim(),
-          spec || null,
-          color || null,
-          articleNumber || null,
+          cut(name, 150),
+          cut(unit, 20),
+          cut(spec, 200),
+          cut(color, 60),
+          cut(articleNumber, 100),
           cp ?? 0,
           pa ?? 0,
           pa,
