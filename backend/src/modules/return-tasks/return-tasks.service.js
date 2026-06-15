@@ -264,8 +264,10 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
 
   // 验证容器
   const [[container]] = await conn.query(
-    'SELECT * FROM inventory_containers WHERE id = ? FOR UPDATE',
-    [containerId],
+    `SELECT * FROM inventory_containers
+     WHERE id = ? AND source_ref_type = 'sale_return' AND source_ref_id = ?
+     FOR UPDATE`,
+    [containerId, taskId],
   )
   if (!container) throw new AppError('容器不存在', 404)
   if (Number(container.status) !== 4) throw new AppError('容器不是待上架状态', 400)
@@ -282,8 +284,10 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
 
   // 容器上架
   await conn.query(
-    'UPDATE inventory_containers SET status = 1, location_id = ? WHERE id = ?',
-    [locationId, containerId],
+    `UPDATE inventory_containers
+     SET status = 1, location_id = ?
+     WHERE id = ? AND source_ref_type = 'sale_return' AND source_ref_id = ?`,
+    [locationId, containerId, taskId],
   )
   await syncStockFromContainers(conn, container.product_id, container.warehouse_id)
 

@@ -3,16 +3,10 @@ const ctrl = require('./return-tasks.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { pdaSessionRequired } = require('../../middleware/pdaSession')
-const AppError = require('../../utils/AppError')
+const { pdaOnly } = require('../../middleware/pdaOnly')
 
 const router = Router()
 router.use(authMiddleware)
-
-function pdaOnly(req, res, next) {
-  const client = (req.headers['x-client'] || '').toLowerCase()
-  if (client !== 'pda') return next(new AppError('此操作仅允许 PDA 扫码完成', 403))
-  next()
-}
 
 // PDA 列表
 router.get('/pda',

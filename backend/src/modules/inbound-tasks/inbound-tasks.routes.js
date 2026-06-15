@@ -3,6 +3,8 @@ const { z } = require('zod')
 const ctrl = require('./inbound-tasks.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { pdaSessionRequired } = require('../../middleware/pdaSession')
+const { pdaOnly } = require('../../middleware/pdaOnly')
 
 const router = Router()
 
@@ -97,15 +99,6 @@ const reprintSchema = z.object({
 
 router.use(authMiddleware)
 
-/** 入库上架仅允许 PDA（请求头 X-Client: pda），与出库 PDA 校验一致 */
-function pdaOnly(req, res, next) {
-  const client = (req.headers['x-client'] || '').toLowerCase()
-  if (client !== 'pda') {
-    return res.status(403).json({ success: false, message: '收货和上架仅允许通过 PDA 扫码完成', data: null })
-  }
-  next()
-}
-
 router.get('/pending-containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.pendingContainers)
 router.get('/purchase-items', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.purchaseItems)
 router.get('/',              requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.list)
@@ -115,8 +108,8 @@ router.get('/:id',           requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), 
 router.post('/:id/submit',   requirePermission(PERMISSIONS.INBOUND_ORDER_SUBMIT), ctrl.submit)
 router.post('/:id/audit',    requirePermission(PERMISSIONS.INBOUND_ORDER_AUDIT), vBody(auditSchema), ctrl.audit)
 router.post('/:id/reprint',  requirePermission(PERMISSIONS.INBOUND_PRINT_REPRINT), vBody(reprintSchema), ctrl.reprint)
-router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaOnly, vBody(receiveSchema), ctrl.receive)
-router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaOnly, vBody(putawaySchema), ctrl.putaway)
+router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaSessionRequired(), pdaOnly, vBody(receiveSchema), ctrl.receive)
+router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaSessionRequired(), pdaOnly, vBody(putawaySchema), ctrl.putaway)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.cancel)
 
 module.exports = router

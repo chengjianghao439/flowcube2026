@@ -11,7 +11,7 @@ const { validateBody } = require('../../utils/route')
 const router = Router()
 
 const loginWindowMs = Number(process.env.AUTH_LOGIN_WINDOW_MS || `${15 * 60 * 1000}`)
-const loginMaxPerIp = Number(process.env.AUTH_LOGIN_MAX_PER_IP || '300')
+const loginMaxPerIp = Number(process.env.AUTH_LOGIN_MAX_PER_IP || '20')
 
 const loginLimiter = rateLimit({
   windowMs: Number.isFinite(loginWindowMs) && loginWindowMs > 0 ? loginWindowMs : 15 * 60 * 1000,

@@ -44,7 +44,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
         # 若未配置 license，fallback 到 Docker 直接运行
-        continue-on-error: true
 
       - name: Fallback gitleaks (Docker)
         if: ${{ !env.GITLEAKS_LICENSE }}
@@ -56,7 +55,7 @@ jobs:
             --source=/repo \
             --report-format=sarif \
             --report-path=/repo/gitleaks-report.sarif \
-            --verbose || true
+            --verbose
 
       - name: Upload Gitleaks SARIF
         if: always()
@@ -134,14 +133,14 @@ jobs:
             echo "npm audit 无法运行" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Fail on critical vulnerabilities
+      - name: Fail on high+critical vulnerabilities
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           for f in audit-*.json; do
             if [ -f "$f" ]; then
-              CRITICAL=$(node -e "const d=require('./$f');console.log(Object.values(d.vulnerabilities||{}).filter(v=>v.severity==='critical').length)" 2>/dev/null || echo "0")
-              if [ "$CRITICAL" -gt 0 ]; then
-                echo "❌ $f: 发现 $CRITICAL 个 CRITICAL 级别漏洞，PR 被阻止"
+              HIGH_CRITICAL=$(node -e "const d=require('./$f');console.log(Object.values(d.vulnerabilities||{}).filter(v=>v.severity==='high'||v.severity==='critical').length)" 2>/dev/null || echo "0")
+              if [ "$HIGH_CRITICAL" -gt 0 ]; then
+                echo "❌ $f: 发现 $HIGH_CRITICAL 个 HIGH/CRITICAL 级别漏洞，PR 被阻止"
                 exit 1
               fi
             fi

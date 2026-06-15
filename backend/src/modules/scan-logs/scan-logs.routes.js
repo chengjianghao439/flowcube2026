@@ -3,7 +3,8 @@ const { z } = require('zod')
 const ctrl = require('./scan-logs.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
-const { pdaSessionOptional } = require('../../middleware/pdaSession')
+const { pdaSessionRequired } = require('../../middleware/pdaSession')
+const { pdaOnly } = require('../../middleware/pdaOnly')
 
 const router = Router()
 
@@ -42,22 +43,14 @@ const undoSchema = z.object({
 
 router.use(authMiddleware)
 
-function pdaOnly(req, res, next) {
-  const client = req.headers['x-client'] || ''
-  if (client.toLowerCase() !== 'pda') {
-    return res.status(403).json({ success: false, message: '此操作只能由 PDA 执行', data: null })
-  }
-  next()
-}
-
 const checkScanSchema = z.object({
   taskId:  z.number().int().positive(),
   barcode: z.string().min(1),
 })
 
 // 扫码记录（仅 PDA）
-router.post('/',             requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionOptional(), vBody(createSchema), ctrl.create)
-router.post('/check',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionOptional(), vBody(checkScanSchema), ctrl.createCheckScan)
+router.post('/',             requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionRequired(), vBody(createSchema), ctrl.create)
+router.post('/check',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionRequired(), vBody(checkScanSchema), ctrl.createCheckScan)
 router.get('/task/:taskId',  requirePermission(PERMISSIONS.SCAN_LOG_VIEW), ctrl.listByTask)
 
 // 错误日志

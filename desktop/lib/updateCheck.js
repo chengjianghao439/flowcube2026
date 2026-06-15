@@ -2,6 +2,7 @@ const { dialog, shell } = require('electron')
 const fs = require('fs').promises
 const fssync = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const { pipeline } = require('stream/promises')
 const { Readable, Transform } = require('stream')
 const semver = require('semver')
@@ -89,7 +90,7 @@ function isValidDownloadUrl(url) {
   if (typeof url !== 'string' || !url.trim()) return false
   try {
     const u = new URL(url.trim())
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+    if (u.protocol !== 'https:') return false
     if (!u.hostname) return false
     return true
   } catch {
@@ -260,6 +261,28 @@ async function probeDownloadUrl(url) {
 }
 
 /**
+ * 校验下载文件的 SHA-256，与 manifest 中的预期值比对。
+ * 不匹配时抛出异常，阻止安装被篡改的安装包。
+ */
+function verifyFileIntegrity(filePath, expectedSha256) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256')
+    const stream = fssync.createReadStream(filePath)
+    stream.on('data', (data) => hash.update(data))
+    stream.on('end', () => {
+      const actual = hash.digest('hex').toLowerCase()
+      const expected = expectedSha256.toLowerCase()
+      if (actual !== expected) {
+        reject(new Error(`SHA-256 mismatch: expected ${expected}, got ${actual}`))
+      } else {
+        resolve()
+      }
+    })
+    stream.on('error', reject)
+  })
+}
+
+/**
  * 下载更新包到本机；完成后询问是否安装并拉起安装程序。
  * @param {import('electron').App} app
  * @param {import('electron').BrowserWindow | null | undefined} parentWindow
@@ -347,6 +370,27 @@ async function runUpdateDownloadAndInstall(app, parentWindow, downloadUrl, optio
   }
 
   if (lastError) return
+
+  // SHA-256 完整性校验：防止下载文件被篡改
+  if (options.sha256) {
+    try {
+      await verifyFileIntegrity(destPath, options.sha256)
+      console.log('[FlowCube] SHA-256 校验通过')
+    } catch (verifyErr) {
+      console.error('[FlowCube] SHA-256 校验失败:', verifyErr.message)
+      await fs.unlink(destPath).catch(() => {})
+      await showBox(parentWindow, {
+        type: 'error',
+        title: '安全校验失败',
+        message: '下载的安装包校验失败，文件可能已被篡改。',
+        detail: verifyErr.message,
+        buttons: ['确定'],
+        defaultId: 0,
+        noLink: true,
+      })
+      return
+    }
+  }
 
   const installChoice = await showBox(parentWindow, {
     type: 'info',
@@ -587,6 +631,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
     const payload = body && body.data != null ? body.data : body
     const latest = typeof payload.version === 'string' ? payload.version.trim() : ''
     const notes = typeof payload.notes === 'string' ? payload.notes : ''
+    const sha256 = typeof payload.sha256 === 'string' ? payload.sha256.trim() : ''
 
     const resolvedUrl = resolveDownloadUrl(
       { url: payload.url, filename: payload.filename },
@@ -594,6 +639,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
     )
 
     console.log('[FlowCube] 解析后下载 URL:', resolvedUrl || '(无)')
+    if (sha256) options.sha256 = sha256
 
     if (!latest) {
       console.warn('[FlowCube] 更新检查中止：缺少版本号')
@@ -685,6 +731,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
           version: latest,
           notes,
           downloadUrl: resolvedUrl,
+          sha256,
           current,
           forceDebug: !!FORCE_UPDATE,
         }
