@@ -63,7 +63,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:80:80"
+      - "80:80"
     volumes:
       # nginx 只暴露 canonical downloads root，下游路径为 /latest.json、/versions/、/current/。
       - ${FLOWCUBE_DOWNLOADS_DIR:-/var/www/flowcube-downloads}:/usr/share/nginx/downloads:ro
