@@ -112,11 +112,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL "${{ steps.deploy_config.outputs.erp_origin }}/api/health" >/dev/null
+          curl -fsSLk "${{ steps.deploy_config.outputs.erp_origin }}/api/health" >/dev/null
 
       - name: Verify frontend responds
         shell: bash
         run: |
           set -euo pipefail
-          HTML=$(curl -fsSL "${{ steps.deploy_config.outputs.erp_origin }}/")
+          HTML=$(curl -fsSLk "${{ steps.deploy_config.outputs.erp_origin }}/")
           printf '%s' "$HTML" | grep -F '<title>极序 Flow</title>' >/dev/null
