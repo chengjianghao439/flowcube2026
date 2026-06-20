@@ -1,4 +1,5 @@
-const XLSX = require('xlsx')
+const ExcelJS = require('exceljs')
+const { Readable } = require('stream')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
@@ -6,45 +7,80 @@ const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../../engine/containerEngine')
 
 
-function createWorkbookBuffer(sheets) {
-  const workbook = XLSX.utils.book_new()
-  sheets.forEach(({ name, sheet }) => XLSX.utils.book_append_sheet(workbook, sheet, name))
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+async function buildWorkbookBuffer(sheets) {
+  const workbook = new ExcelJS.Workbook()
+  sheets.forEach(({ name, rows, widths }) => {
+    const ws = workbook.addWorksheet(name)
+    if (Array.isArray(widths)) ws.columns = widths.map((width) => ({ width }))
+    rows.forEach((row) => ws.addRow(row))
+  })
+  return workbook.xlsx.writeBuffer()
 }
 
-function readSheetRows(fileBuffer) {
-  const workbook = XLSX.read(fileBuffer, { type: 'buffer' })
-  const sheet = workbook.Sheets[workbook.SheetNames[0]]
-  return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+/** 将 ExcelJS 单元格值归一化为基础类型；空单元格返回 ''，富文本/超链接/公式取其文本或结果。 */
+function cellToValue(value) {
+  if (value === null || value === undefined) return ''
+  if (value instanceof Date) return value
+  if (typeof value === 'object') {
+    if (typeof value.text === 'string') return value.text
+    if (Array.isArray(value.richText)) return value.richText.map((part) => part.text).join('')
+    if (value.result !== undefined) return value.result
+    return ''
+  }
+  return value
 }
 
-function parseProductImportRows(fileBuffer) {
-  const rows = readSheetRows(fileBuffer)
+/** 读取上传文件第一个工作表，返回以 0 为基准的二维数组（与旧的 sheet_to_json header:1 行为一致）。 */
+async function readSheetRows(fileBuffer) {
+  const workbook = new ExcelJS.Workbook()
+  // xlsx 文件本质是 ZIP，以 "PK"(0x50 0x4B) 开头；否则按 CSV(UTF-8) 解析。
+  const isXlsx = fileBuffer.length >= 2 && fileBuffer[0] === 0x50 && fileBuffer[1] === 0x4b
+  if (isXlsx) {
+    await workbook.xlsx.load(fileBuffer)
+  } else {
+    await workbook.csv.read(Readable.from(fileBuffer.toString('utf8')))
+  }
+  const sheet = workbook.worksheets[0]
+  if (!sheet) return []
+  const colCount = sheet.columnCount || 0
+  const rows = []
+  sheet.eachRow({ includeEmpty: false }, (row) => {
+    const out = []
+    for (let c = 1; c <= colCount; c += 1) {
+      out.push(cellToValue(row.getCell(c).value))
+    }
+    rows.push(out)
+  })
+  return rows
+}
+
+async function parseProductImportRows(fileBuffer) {
+  const rows = await readSheetRows(fileBuffer)
   if (rows.length < 2) throw new AppError('文件无数据行', 400)
   return rows.slice(1).filter((row) => row[0] || row[1])
 }
 
-function parseStockImportRows(fileBuffer) {
-  const rows = readSheetRows(fileBuffer)
+async function parseStockImportRows(fileBuffer) {
+  const rows = await readSheetRows(fileBuffer)
   const dataRows = rows.slice(1).filter((row) => row[0])
   if (!dataRows.length) throw new AppError('文件无数据行', 400)
   return dataRows
 }
 
 async function buildProductTemplate() {
-  const sheet = XLSX.utils.aoa_to_sheet([
+  const rows = [
     ['商品名称*', '单位*', '型号*', '颜色*', '货号', '进价*', '销售价A', '销售价B', '销售价C', '销售价D'],
     ['示例商品', '个', 'ABC-100', '红色', 'H001', '10.00', '15.00', '18.00', '20.00', '25.00'],
-  ])
-  sheet['!cols'] = [22, 6, 12, 8, 10, 10, 10, 10, 10, 10].map((width) => ({ wch: width }))
+  ]
+  const widths = [22, 6, 12, 8, 10, 10, 10, 10, 10, 10]
   return {
     filename: '商品导入模板.xlsx',
-    buffer: createWorkbookBuffer([{ name: '商品导入', sheet }]),
+    buffer: await buildWorkbookBuffer([{ name: '商品导入', rows, widths }]),
   }
 }
 
 async function importProducts({ fileBuffer }) {
-  const dataRows = parseProductImportRows(fileBuffer)
+  const dataRows = await parseProductImportRows(fileBuffer)
 
   let success = 0
   let skip = 0
@@ -134,20 +170,20 @@ async function buildStockTemplate() {
     'SELECT id, name FROM inventory_warehouses WHERE deleted_at IS NULL AND is_active=1',
   )
 
-  const stockSheet = XLSX.utils.aoa_to_sheet([
+  const stockRows = [
     ['商品编码*（需已存在）', '仓库ID*', '库存数量*'],
     ...products.flatMap((product) => warehouses.map((warehouse) => [product.code, warehouse.id, 0])),
-  ])
-  const warehouseSheet = XLSX.utils.aoa_to_sheet([
+  ]
+  const warehouseRows = [
     ['仓库ID', '仓库名称'],
     ...warehouses.map((warehouse) => [warehouse.id, warehouse.name]),
-  ])
+  ]
 
   return {
     filename: '库存初始化模板.xlsx',
-    buffer: createWorkbookBuffer([
-      { name: '库存初始化', sheet: stockSheet },
-      { name: '仓库参考', sheet: warehouseSheet },
+    buffer: await buildWorkbookBuffer([
+      { name: '库存初始化', rows: stockRows },
+      { name: '仓库参考', rows: warehouseRows },
     ]),
   }
 }
@@ -273,7 +309,7 @@ async function importSingleStockRow({
 }
 
 async function importStock({ fileBuffer, originalName, operator }) {
-  const dataRows = parseStockImportRows(fileBuffer)
+  const dataRows = await parseStockImportRows(fileBuffer)
   const batchId = await createImportBatch(originalName)
   const userId = operator?.userId ?? null
   const operatorName = operator?.realName || operator?.operatorName || '未知'

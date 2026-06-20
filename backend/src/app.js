@@ -3,6 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const cors = require('cors')
 const helmet = require('helmet')
+const rateLimit = require('express-rate-limit')
 const errorHandler    = require('./middleware/errorHandler')
 const opLogger        = require('./middleware/opLogger')
 const requestLogger   = require('./middleware/requestLogger')
@@ -78,6 +79,23 @@ app.get('/health', (req, res) => {
 app.get('/api/health', (req, res) => {
   return successResponse(res, { status: 'ok', timestamp: new Date().toISOString() }, 'ok')
 })
+
+// ─── 全局 API 限流 ─────────────────────────────────────────────────────────────
+// 防异常爆刷的基础防护。阈值默认宽松，兼容同一客户出口 IP（NAT）下多台 PDA / 桌面端并发；
+// 可用环境变量 RATE_LIMIT_WINDOW_MS / RATE_LIMIT_MAX 调整。登录接口另有更严格的专用限流。
+// 健康检查 /health、/api/health 已在上方注册，不经过此中间件，PDA 网络探测不受影响。
+const apiRateWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000
+const apiRateMax = Number(process.env.RATE_LIMIT_MAX) || 1000
+const apiLimiter = rateLimit({
+  windowMs: apiRateWindowMs,
+  max: apiRateMax,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ success: false, message: '请求过于频繁，请稍后再试', data: null })
+  },
+})
+app.use('/api', apiLimiter)
 
 // ─── 业务路由（按模块在此注册）────────────────────────────────────────────────
 

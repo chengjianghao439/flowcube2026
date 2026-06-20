@@ -372,6 +372,28 @@ function createWindow() {
   return win
 }
 
+/**
+ * 受信任的自签名 HTTPS 服务器主机白名单。
+ * 异地使用场景：生产服务器用「IP + 自签名证书」对外提供 HTTPS，证书不在系统信任链内。
+ * 仅对下列主机放行证书校验失败，其它站点仍严格校验，避免无差别忽略证书带来的中间人风险。
+ */
+const TRUSTED_SELF_SIGNED_HOSTS = new Set(['47.93.228.251'])
+
+app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
+  let host = ''
+  try {
+    host = new URL(url).hostname
+  } catch {
+    host = ''
+  }
+  if (host && TRUSTED_SELF_SIGNED_HOSTS.has(host)) {
+    event.preventDefault()
+    callback(true)
+    return
+  }
+  callback(false)
+})
+
 const gotTheLock = app.requestSingleInstanceLock()
 
 if (!gotTheLock) {

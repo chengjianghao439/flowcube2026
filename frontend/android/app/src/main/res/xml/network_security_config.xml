@@ -5,4 +5,13 @@
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+    <!-- 异地使用：生产服务器用「IP + 自签名证书」提供 HTTPS。
+         仅对该服务器额外信任内置的自签名证书，其它域名仍走系统标准校验。 -->
+    <domain-config>
+        <domain includeSubdomains="false">47.93.228.251</domain>
+        <trust-anchors>
+            <certificates src="@raw/flowcube_server" />
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
 </network-security-config>
