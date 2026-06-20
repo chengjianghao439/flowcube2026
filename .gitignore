@@ -24,6 +24,8 @@ deploy/production*.json
 
 # 本地/服务器全库备份（勿提交）
 flowcube_backup.sql
+backups/
+*.sql.gz
 
 # 旧桌面发布目录已废弃；仅保留废弃说明，正式发布目录为 /var/www/flowcube-downloads
 backend/downloads/*
