@@ -212,7 +212,7 @@ jobs:
           EXPECTED_CODE="$(node -p "require('./backend/apk/version.json').versionCode")"
           VERSION_JSON=""
           for attempt in {1..30}; do
-            if VERSION_JSON="$(curl -fsSL -H 'Cache-Control: no-cache' "${{ steps.deploy_config.outputs.erp_origin }}/api/pda/version?_=${GITHUB_RUN_ID}-${attempt}")"; then
+            if VERSION_JSON="$(curl -fsSLk -H 'Cache-Control: no-cache' "${{ steps.deploy_config.outputs.erp_origin }}/api/pda/version?_=${GITHUB_RUN_ID}-${attempt}")"; then
               break
             fi
             echo "PDA version endpoint not ready, retry ${attempt}/30"
@@ -227,7 +227,7 @@ jobs:
           test "$ACTUAL_CODE" = "$EXPECTED_CODE"
           printf '%s' "$DOWNLOAD_URL" | grep -F "code=${EXPECTED_CODE}" >/dev/null
           for attempt in {1..30}; do
-            if curl -fsSI -H 'Cache-Control: no-cache' "$DOWNLOAD_URL" | tee /tmp/pda-download-head.txt; then
+            if curl -fsSIk -H 'Cache-Control: no-cache' "$DOWNLOAD_URL" | tee /tmp/pda-download-head.txt; then
               break
             fi
             echo "PDA download endpoint not ready, retry ${attempt}/30"
