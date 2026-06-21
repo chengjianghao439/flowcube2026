@@ -3,7 +3,7 @@
 
 const path = require('path')
 
-const XLSX = require(path.resolve(__dirname, '../backend/node_modules/xlsx'))
+const ExcelJS = require(path.resolve(__dirname, '../backend/node_modules/exceljs'))
 const {
   createLogger,
   prepareSmokeContext,
@@ -18,14 +18,12 @@ const inboundService = require('../backend/src/modules/inbound-tasks/inbound-tas
 const printJobsService = require('../backend/src/modules/print-jobs/print-jobs.service')
 const reportsService = require('../backend/src/modules/reports/reports.service')
 
-function createImportWorkbook(rows) {
-  const workbook = XLSX.utils.book_new()
-  const sheet = XLSX.utils.aoa_to_sheet([
-    ['商品编码*', '商品名称*', '单位*', '规格', '条码', '成本价', '备注'],
-    ...rows,
-  ])
-  XLSX.utils.book_append_sheet(workbook, sheet, '商品导入')
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+async function createImportWorkbook(rows) {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet('商品导入')
+  sheet.addRow(['商品编码*', '商品名称*', '单位*', '规格', '条码', '成本价', '备注'])
+  rows.forEach((row) => sheet.addRow(row))
+  return Buffer.from(await workbook.xlsx.writeBuffer())
 }
 
 async function expectJsonSuccess(log, response, label) {
@@ -276,7 +274,7 @@ async function main() {
     log.assert('库存导入模板可下载', stockTemplate.status === 200 && stockTemplate.data.length > 0, `status=${stockTemplate.status}`)
 
     const importCode = `SMOKE-IMP-${Date.now()}`
-    const importBuffer = createImportWorkbook([[importCode, 'Smoke导入商品', '个', '', '', '9.99', 'smoke import']])
+    const importBuffer = await createImportWorkbook([[importCode, 'Smoke导入商品', '个', '', '', '9.99', 'smoke import']])
     const formData = new FormData()
     formData.append('file', new Blob([importBuffer]), 'smoke-products.xlsx')
     const importProducts = await http.post('/api/import/products', {

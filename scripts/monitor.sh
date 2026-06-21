@@ -45,7 +45,8 @@ if [ -n "$use" ] && [ "$use" -ge "$DISK_THRESHOLD" ]; then
 fi
 
 # 3. 后端健康
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH_URL" 2>/dev/null || echo "000")
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH_URL" 2>/dev/null)
+code=${code:-000}
 [ "$code" != "200" ] && problems="${problems}后端健康检查 HTTP ${code}；"
 
 # 推送函数（企业微信 text 消息）

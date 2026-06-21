@@ -317,7 +317,9 @@ async function markPackageFinishedWithinTransaction(conn, packageId) {
         eventType: WT_EVENT.PACK_PROGRESS,
         detail: { packageId, remaining },
       })
-    } catch (_) {}
+    } catch (_) {
+      // 打包进度事件为 best-effort：记录失败不应阻断打包主流程，故静默忽略
+    }
   }
 
   return {
