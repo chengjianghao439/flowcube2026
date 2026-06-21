@@ -7,7 +7,7 @@
 #   2. 磁盘使用率是否超阈值
 #   3. 后端 /api/health 是否 200
 #
-# 异常时推送企业微信群机器人（webhook 从 .env 的 WECOM_WEBHOOK 读取，不入库）；
+# 异常时推送钉钉群机器人（webhook 从 .env 的 DINGTALK_WEBHOOK 读取，不入库）；
 # 未配置 webhook 时仅记录到日志。带状态去抖：仅在「正常→异常」与「异常→恢复」
 # 的状态切换时通知，避免每 5 分钟重复刷屏。
 #
@@ -23,9 +23,9 @@ CONTAINERS="${CONTAINERS:-flowcube-mysql flowcube-backend flowcube-frontend}"
 STATE_FILE="${STATE_FILE:-/opt/flowcube/backups/.monitor.state}"
 
 # webhook 从 .env 读取（敏感，不入库）
-WECOM_WEBHOOK="${WECOM_WEBHOOK:-}"
-if [ -z "$WECOM_WEBHOOK" ] && [ -f "$PROJECT_DIR/.env" ]; then
-  WECOM_WEBHOOK="$(grep -E '^WECOM_WEBHOOK=' "$PROJECT_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+DINGTALK_WEBHOOK="${DINGTALK_WEBHOOK:-}"
+if [ -z "$DINGTALK_WEBHOOK" ] && [ -f "$PROJECT_DIR/.env" ]; then
+  DINGTALK_WEBHOOK="$(grep -E '^DINGTALK_WEBHOOK=' "$PROJECT_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- || true)"
 fi
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
@@ -49,12 +49,12 @@ code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH_URL" 2>/dev
 code=${code:-000}
 [ "$code" != "200" ] && problems="${problems}后端健康检查 HTTP ${code}；"
 
-# 推送函数（企业微信 text 消息）
+# 推送函数（钉钉 text 消息）
 notify() {
   msg="$1"
-  if [ -n "$WECOM_WEBHOOK" ]; then
+  if [ -n "$DINGTALK_WEBHOOK" ]; then
     payload="{\"msgtype\":\"text\",\"text\":{\"content\":\"${msg}\"}}"
-    curl -s -m 10 -H 'Content-Type: application/json' -d "$payload" "$WECOM_WEBHOOK" >/dev/null 2>&1 || true
+    curl -s -m 10 -H 'Content-Type: application/json' -d "$payload" "$DINGTALK_WEBHOOK" >/dev/null 2>&1 || true
   fi
   echo "[$(ts)] $msg"
 }
