@@ -278,7 +278,7 @@ async function main() {
     const importCode = `SMOKE-IMP-${Date.now()}`
     const importBuffer = await createImportWorkbook([[importCode, 'Smoke导入商品', '个', '', '', '9.99', 'smoke import']])
     const formData = new FormData()
-    formData.append('file', new Blob([importBuffer]), 'smoke-products.xlsx')
+    formData.append('file', new Blob([importBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'smoke-products.xlsx')
     const importProducts = await http.post('/api/import/products', {
       token: adminToken,
       formData,
