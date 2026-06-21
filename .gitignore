@@ -68,3 +68,6 @@ deploy/*.local.json
 security-scan-report*
 .superpowers/
 .claude/worktrees/
+
+# AI agent 本地说明文件（暂不入库）
+AGENTS.md
