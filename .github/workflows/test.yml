@@ -58,6 +58,8 @@ jobs:
       JWT_SECRET: flowcube_ci_test_jwt_secret_0123456789_abcdef
       PORT: "3000"
       CORS_ORIGIN: http://localhost:5173
+      # CI runner 无权限写 /var/www，桌面下载目录指到可写的临时目录
+      APP_UPDATE_DOWNLOADS_DIR: /tmp/flowcube-downloads
 
     steps:
       - name: Checkout
