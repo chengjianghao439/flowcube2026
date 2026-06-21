@@ -125,7 +125,7 @@ async function scenarioInboundReceiveIdempotent(log, ctx, adminToken) {
   const requestKey = randomRef('recv-idem')
   const request = () => ctx.http.post(`/api/inbound-tasks/${inboundTaskId}/receive`, {
     token: adminToken,
-    headers: { 'X-Request-Key': requestKey },
+    headers: ctx.pdaHeaders({ 'X-Request-Key': requestKey }),
     json: {
       productId: Number(ctx.product.id),
       packages: [{ qty: 4 }],
@@ -158,7 +158,7 @@ async function scenarioInboundReceiveRollback(log, ctx, adminToken) {
   })
   const response = await withDisabledLabelPrinters(ctx.pool, () => ctx.http.post(`/api/inbound-tasks/${inboundTaskId}/receive`, {
     token: adminToken,
-    headers: { 'X-Request-Key': randomRef('recv-fail') },
+    headers: ctx.pdaHeaders({ 'X-Request-Key': randomRef('recv-fail') }),
     json: {
       productId: Number(ctx.product.id),
       packages: [{ qty: 5 }],

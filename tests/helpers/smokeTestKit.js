@@ -167,70 +167,85 @@ async function prepareSmokeContext() {
 
   let [suppliers] = await pool.query('SELECT id, name FROM supply_suppliers WHERE deleted_at IS NULL LIMIT 1')
   if (!suppliers.length) {
-    const [r] = await pool.query("INSERT INTO supply_suppliers (name) VALUES ('Smoke供应商')")
+    const [r] = await pool.query("INSERT INTO supply_suppliers (code, name) VALUES ('SMOKE-SUP', 'Smoke供应商')")
     suppliers = [{ id: r.insertId, name: 'Smoke供应商' }]
   }
   const supplier = suppliers[0]
 
   let [customers] = await pool.query('SELECT id, name FROM sale_customers WHERE deleted_at IS NULL LIMIT 1')
   if (!customers.length) {
-    const [r] = await pool.query("INSERT INTO sale_customers (name) VALUES ('Smoke客户')")
+    const [r] = await pool.query("INSERT INTO sale_customers (code, name) VALUES ('SMOKE-CUS', 'Smoke客户')")
     customers = [{ id: r.insertId, name: 'Smoke客户' }]
   }
   const customer = customers[0]
 
-  let [printers] = await pool.query("SELECT id, code, name, client_id FROM printers WHERE deleted_at IS NULL LIMIT 1")
+  // printers 表无 deleted_at 列；type 为 TINYINT（1=标签）
+  let [printers] = await pool.query("SELECT id, code, name, client_id FROM printers LIMIT 1")
   if (!printers.length) {
-    const [r] = await pool.query("INSERT INTO printers (code, name, client_id, type, status) VALUES ('SMOKE-PRN', 'Smoke打印机', 'smoke-client-01', 'label', 1)")
+    const [r] = await pool.query("INSERT INTO printers (code, name, client_id, type, status) VALUES ('SMOKE-PRN', 'Smoke打印机', 'smoke-client-01', 1, 1)")
     printers = [{ id: r.insertId, code: 'SMOKE-PRN', name: 'Smoke打印机', client_id: 'smoke-client-01' }]
   }
   const printer = printers[0]
+  // 测试用例以 camelCase 读取 clientId（DB 列为 client_id）
+  printer.clientId = printer.clientId ?? printer.client_id
 
   // 4. 确保测试角色和用户
   const bcrypt = require(path.resolve(__dirname, '../../backend/node_modules/bcryptjs'))
   const ADMIN_PW = bcrypt.hashSync('SmokeAdmin123!', 10)
+  const LIMITED_PW = bcrypt.hashSync('SmokeLimited123!', 10)
 
-  let [roles] = await pool.query("SELECT id FROM sys_roles WHERE code='smoke_admin' LIMIT 1")
-  let adminRoleId
-  if (!roles.length) {
-    const [r] = await pool.query("INSERT INTO sys_roles (name, code, remark, is_system) VALUES ('Smoke管理员', 'smoke_admin', 'smoke test admin role', 0)")
-    adminRoleId = r.insertId
-    // 赋予所有权限
-    const [perms] = await pool.query('SELECT id FROM sys_permissions')
-    for (const p of perms) {
-      await pool.query('INSERT IGNORE INTO sys_role_permissions (role_id, permission_id) VALUES (?,?)', [adminRoleId, p.id])
-    }
-  } else {
-    adminRoleId = roles[0].id
-  }
+  // smoke_admin 直接挂内置管理员角色（role_id=1）。permissionMiddleware 对 role 1 放行，
+  // 无需依赖任何权限点字典表（系统采用 sys_role_permissions.permission 字符串，无 sys_permissions 表）。
+  // role 1 由 066_seed_sys_roles.sql 植入。
+  await pool.query(
+    `INSERT INTO sys_users (username, password, real_name, role_id, role_name, is_active)
+       VALUES ('smoke_admin', ?, 'Smoke管理员', 1, '管理员', 1)
+       ON DUPLICATE KEY UPDATE password=VALUES(password), role_id=1, role_name='管理员', is_active=1, deleted_at=NULL`,
+    [ADMIN_PW],
+  )
 
+  // smoke_limited 用独立受限角色，仅授予「入库单查看 + 仪表盘查看」两个权限点（直接写字符串到 sys_role_permissions.permission）。
   let [limitedRoles] = await pool.query("SELECT id FROM sys_roles WHERE code='smoke_limited' LIMIT 1")
   let limitedRoleId
   if (!limitedRoles.length) {
     const [r] = await pool.query("INSERT INTO sys_roles (name, code, remark, is_system) VALUES ('Smoke受限', 'smoke_limited', 'smoke test limited role', 0)")
     limitedRoleId = r.insertId
-    // 只赋予 inbound-tasks 和 dashboard 查看权限
-    const permCodes = ['inbound.view', 'dashboard.view']
-    const [perms] = await pool.query('SELECT id, code FROM sys_permissions WHERE code IN (?,?)', permCodes)
-    for (const p of perms) {
-      await pool.query('INSERT IGNORE INTO sys_role_permissions (role_id, permission_id) VALUES (?,?)', [limitedRoleId, p.id])
-    }
   } else {
     limitedRoleId = limitedRoles[0].id
   }
-
-  await pool.query(
-    `INSERT INTO sys_users (username, password, real_name, role_id, role_name, is_active)
-       VALUES ('smoke_admin', ?, 'Smoke管理员', ?, 'Smoke管理员', 1)
-       ON DUPLICATE KEY UPDATE role_id=VALUES(role_id), is_active=1`,
-    [ADMIN_PW, adminRoleId],
-  )
+  for (const code of [PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.DASHBOARD_VIEW]) {
+    await pool.query(
+      'INSERT IGNORE INTO sys_role_permissions (role_id, permission) VALUES (?, ?)',
+      [limitedRoleId, code],
+    )
+  }
   await pool.query(
     `INSERT INTO sys_users (username, password, real_name, role_id, role_name, is_active)
        VALUES ('smoke_limited', ?, 'Smoke受限', ?, 'Smoke受限', 1)
-       ON DUPLICATE KEY UPDATE role_id=VALUES(role_id), is_active=1`,
-    [ADMIN_PW, limitedRoleId],
+       ON DUPLICATE KEY UPDATE password=VALUES(password), role_id=VALUES(role_id), role_name='Smoke受限', is_active=1, deleted_at=NULL`,
+    [LIMITED_PW, limitedRoleId],
   )
+
+  const [[adminUser]] = await pool.query("SELECT id FROM sys_users WHERE username='smoke_admin' LIMIT 1")
+  const adminUserId = adminUser?.id || 1
+
+  // 4b. PDA 设备 + 会话。收货/上架接口现在强制 PDA 设备会话（pdaSessionRequired + pdaOnly），
+  // 测试需携带 X-Client: pda 与 X-PDA-Session 头才能执行 receive/putaway。
+  const PDA_DEVICE_CODE = 'SMOKE-PDA-01'
+  const PDA_DEVICE_SECRET = 'smoke-pda-secret'
+  await pool.query(
+    `INSERT INTO pda_devices (device_code, device_name, warehouse_id, status, secret_hash)
+       VALUES (?, 'Smoke PDA', ?, 'active', ?)
+     ON DUPLICATE KEY UPDATE status='active', secret_hash=VALUES(secret_hash), warehouse_id=VALUES(warehouse_id)`,
+    [PDA_DEVICE_CODE, warehouse.id, bcrypt.hashSync(PDA_DEVICE_SECRET, 10)],
+  )
+  const { createSession } = require('../../backend/src/modules/pda/pda.sessions.service')
+  const pdaSession = await createSession({
+    deviceCode: PDA_DEVICE_CODE,
+    deviceSecret: PDA_DEVICE_SECRET,
+    userId: adminUserId,
+  })
+  const pdaSessionToken = pdaSession.sessionToken
 
   // 5. 启动 Express 服务
   const PORT = Number(process.env.TEST_API_PORT || 0) || 3100 + Math.floor(Math.random() * 1000)
@@ -247,7 +262,10 @@ async function prepareSmokeContext() {
     await pool.end()
   }
 
-  return { pool, http, baseUrl, warehouse, location, product, supplier, customer, printer, close }
+  // PDA 收货/上架请求需要的请求头（X-Client + X-PDA-Session）
+  const pdaHeaders = (extra = {}) => ({ 'X-Client': 'pda', 'X-PDA-Session': pdaSessionToken, ...extra })
+
+  return { pool, http, baseUrl, warehouse, location, product, supplier, customer, printer, pdaSessionToken, pdaHeaders, close }
 }
 
 module.exports = {

@@ -37,7 +37,7 @@ async function expectJsonSuccess(log, response, label) {
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
-  const { http, pool, warehouse, location, product, supplier, printer } = ctx
+  const { http, pool, warehouse, location, product, supplier, printer, pdaHeaders } = ctx
 
   try {
     log.section('service contract')
@@ -91,6 +91,7 @@ async function main() {
 
     const receiveBeforeSubmit = await http.post(`/api/inbound-tasks/${inboundTaskId}/receive`, {
       token: adminToken,
+      headers: pdaHeaders(),
       json: { productId: Number(product.id), qty: 1 },
     })
     log.assert('非法状态下收货被拒绝', receiveBeforeSubmit.status === 400, `status=${receiveBeforeSubmit.status}`)
@@ -100,6 +101,7 @@ async function main() {
 
     const inboundReceive = await http.post(`/api/inbound-tasks/${inboundTaskId}/receive`, {
       token: adminToken,
+      headers: pdaHeaders(),
       json: {
         productId: Number(product.id),
         packages: [{ qty: 3 }],
@@ -123,7 +125,7 @@ async function main() {
 
     const inboundPutaway = await http.post(`/api/inbound-tasks/${inboundTaskId}/putaway`, {
       token: adminToken,
-      headers: { 'X-Client': 'pda' },
+      headers: pdaHeaders(),
       json: {
         containerId: Number(pendingContainer.id),
         locationId: Number(location.id),
@@ -133,7 +135,7 @@ async function main() {
 
     const duplicatePutaway = await http.post(`/api/inbound-tasks/${inboundTaskId}/putaway`, {
       token: adminToken,
-      headers: { 'X-Client': 'pda' },
+      headers: pdaHeaders(),
       json: {
         containerId: Number(pendingContainer.id),
         locationId: Number(location.id),
@@ -318,6 +320,7 @@ async function main() {
     await http.post(`/api/inbound-tasks/${inboundTaskId2}/submit`, { token: adminToken })
     await http.post(`/api/inbound-tasks/${inboundTaskId2}/receive`, {
       token: adminToken,
+      headers: pdaHeaders(),
       json: {
         productId: Number(product.id),
         packages: [{ qty: 2 }],

@@ -1,0 +1,111 @@
+# ============================================================
+# 极序 Flow — 自动化测试门禁
+#
+# 触发：push 到 main、对 main 的 PR、手动触发
+#
+# 作用：在独立 MySQL 测试库上跑回归测试，作为发布前门禁。
+#   绝不连接任何生产数据库（仅使用 service 容器里的临时库）。
+#
+# 内容：
+#   1. 起 MySQL 8.0 service 容器（root/root，临时库）
+#   2. 安装后端依赖、建库、跑迁移建表
+#   3. smoke:mainline + smoke:concurrency-guards（主链路 + 并发/回滚护栏）
+#   4. test:integration（采购入库 → 占库 → 调拨 → 盘点 → 退货 库存一致性，
+#      使用独立测试库，避免与 smoke 数据相互污染）
+#   任一测试失败则 job 失败。
+# ============================================================
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  regression:
+    name: 回归门禁（smoke + 集成）
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: flowcube_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: flowcube_test
+      JWT_SECRET: flowcube_ci_test_jwt_secret_0123456789_abcdef
+      PORT: "3000"
+      CORS_ORIGIN: http://localhost:5173
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: 安装后端依赖
+        run: npm --prefix backend ci
+
+      - name: 等待 MySQL 就绪
+        run: |
+          set -e
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -proot --silent 2>/dev/null; then
+              echo "MySQL ready"; exit 0
+            fi
+            echo "waiting for mysql... ($i)"; sleep 2
+          done
+          echo "MySQL did not become ready in time" >&2; exit 1
+
+      - name: 创建测试数据库（smoke + 集成各一套）
+        run: |
+          set -e
+          mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "
+            CREATE DATABASE IF NOT EXISTS flowcube_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+            CREATE DATABASE IF NOT EXISTS flowcube_integration_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+      - name: 数据库迁移 — smoke 库
+        run: npm --prefix backend run migrate
+
+      - name: 数据库迁移 — 集成库
+        run: npm --prefix backend run migrate
+        env:
+          DB_NAME: flowcube_integration_test
+
+      - name: 冒烟测试 — 主链路（采购入库 / 打印 / 报表 / 导入导出 / 权限）
+        run: npm run smoke:mainline
+
+      - name: 冒烟测试 — 并发与回滚护栏（幂等 / 拆分 / 仓库任务取消）
+        run: npm run smoke:concurrency-guards
+
+      - name: 集成测试 — 库存主链路一致性（独立测试库）
+        run: npm run test:integration
+        env:
+          DB_NAME: flowcube_integration_test

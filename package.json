@@ -12,6 +12,7 @@
     "deploy:keygen": "bash scripts/setup-deploy-key.sh",
     "smoke:concurrency-guards": "node tests/concurrency-guards.smoke.test.js",
     "smoke:mainline": "node tests/mainline.smoke.test.js",
+    "test:integration": "node tests/integration.test.js",
     "smoke:reports": "npm --prefix backend run smoke:reports",
     "smoke:pages": "bash scripts/smoke-pages.sh",
     "smoke:reconciliation": "bash scripts/smoke-reconciliation-jumps.sh"
