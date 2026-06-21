@@ -609,6 +609,7 @@ async function adjustContainerStock(conn, {
   sourceRefType = null,
   sourceRefNo   = null,
   remark        = null,
+  respectReserved = true,
 }) {
   const [[stockRow]] = await conn.query(
     'SELECT COALESCE(quantity, 0) AS qty FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
@@ -635,6 +636,17 @@ async function adjustContainerStock(conn, {
     }
     createdContainerId = r.containerId
   } else if (qty < 0) {
+    // 出库方向：默认校验可用库存（已扣除销售预留），防止把被销售单预留的库存扣走导致超卖。
+    // 采购退货、手动出库等走此路径；如确需绕过（极少数场景）可显式传 respectReserved=false。
+    if (respectReserved) {
+      const { available } = await getStockProjection(conn, { productId, warehouseId, lock: true })
+      if (available < Math.abs(qty)) {
+        throw new AppError(
+          `商品「${productName}」可用库存不足（已扣除销售预留占用），无法出库：可用 ${available}，需要 ${Math.abs(qty)}`,
+          400,
+        )
+      }
+    }
     const ded = await deductFromContainers(conn, { productId, productName, warehouseId, qty: Math.abs(qty) })
     primaryDeductContainerId = ded[0]?.containerId ?? null
   }
