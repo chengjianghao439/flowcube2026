@@ -354,7 +354,8 @@ async function main() {
   }
 
   const summary = log.summary()
-  if (summary.failed > 0) process.exit(1)
+  // 强制退出：测试启动了后端连接/句柄，成功路径若不显式退出会挂住 CI
+  process.exit(summary.failed > 0 ? 1 : 0)
 }
 
 main().catch((error) => {

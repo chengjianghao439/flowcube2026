@@ -324,7 +324,8 @@ async function main() {
   } finally {
     const summary = log.summary()
     await ctx.close()
-    if (summary.failed > 0) process.exitCode = 1
+    // 强制退出：避免残留句柄导致进程挂住 CI（process.exitCode 不强制退出）
+    process.exit(summary.failed > 0 ? 1 : 0)
   }
 }
 
