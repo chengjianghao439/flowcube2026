@@ -120,9 +120,9 @@ async function confirmPurchaseOrder(http, token, purchaseId) {
 }
 
 async function createInboundTaskFromPurchase(http, token, purchaseId) {
-  return http.post('/api/inbound-tasks/from-purchase', {
+  return http.post('/api/inbound-tasks', {
     token,
-    json: { purchaseOrderId: purchaseId },
+    json: { poId: purchaseId },
   })
 }
 
