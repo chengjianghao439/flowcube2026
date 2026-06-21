@@ -159,7 +159,7 @@ async function submit(id, operator) {
             ref_type, ref_id, ref_no,
             container_id, log_source_type, log_source_ref_id,
             remark, operator_id, operator_name)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           MOVE_TYPE.STOCKCHECK,
           item.diffQty > 0 ? 1 : 2,     // 盘盈=1(入库方向), 盘亏=2(出库方向)

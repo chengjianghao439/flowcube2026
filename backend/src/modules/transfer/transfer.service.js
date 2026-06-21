@@ -197,7 +197,7 @@ async function execute(id, operator) {
             ref_type, ref_id, ref_no,
             container_id, log_source_type, log_source_ref_id,
             remark, operator_id, operator_name)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           MOVE_TYPE.TRANSFER_OUT, 2, item.productId, o.fromWarehouseId,
           item.quantity, fromBefore, fromAfter,
@@ -215,7 +215,7 @@ async function execute(id, operator) {
             ref_type, ref_id, ref_no,
             container_id, log_source_type, log_source_ref_id,
             remark, operator_id, operator_name)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           MOVE_TYPE.TRANSFER_IN, 1, item.productId, o.toWarehouseId,
           item.quantity, toBefore, toAfter,
