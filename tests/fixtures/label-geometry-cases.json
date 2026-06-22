@@ -1,0 +1,291 @@
+[
+  {
+    "name": "旧结构迁移：fontSize(pt)→mm、剔除 divider、默认不显前缀",
+    "input": {
+      "layout": {
+        "elements": [
+          {
+            "id": "bc",
+            "type": "barcode",
+            "fieldKey": "rack_barcode",
+            "label": "货架条码",
+            "x": 2,
+            "y": 2,
+            "width": 71,
+            "height": 12,
+            "fontSize": 10,
+            "fontWeight": "normal",
+            "textAlign": "left",
+            "border": false
+          },
+          {
+            "id": "rc",
+            "type": "text",
+            "fieldKey": "rack_code",
+            "label": "货架编码",
+            "x": 2,
+            "y": 16,
+            "width": 71,
+            "height": 6,
+            "fontSize": 9,
+            "fontWeight": "normal",
+            "textAlign": "left",
+            "border": false
+          },
+          {
+            "id": "div",
+            "type": "divider",
+            "fieldKey": "",
+            "label": "",
+            "x": 2,
+            "y": 24,
+            "width": 71,
+            "height": 4,
+            "fontSize": 10,
+            "fontWeight": "normal",
+            "textAlign": "left",
+            "border": false
+          }
+        ]
+      },
+      "data": {
+        "rack_barcode": "H000001",
+        "rack_code": "A-01-02"
+      },
+      "paperSize": "thermal75"
+    },
+    "expected": {
+      "widthMm": 75,
+      "heightMm": 50,
+      "primitives": [
+        {
+          "kind": "barcode",
+          "xMm": 2,
+          "yMm": 2,
+          "widthMm": 71,
+          "heightMm": 12,
+          "value": "H000001"
+        },
+        {
+          "kind": "text",
+          "xMm": 2,
+          "yMm": 16,
+          "widthMm": 71,
+          "heightMm": 6,
+          "text": "A-01-02",
+          "fontHeightMm": 3.18,
+          "align": "left"
+        }
+      ]
+    }
+  },
+  {
+    "name": "v2：showLabel 拼接、title 取值兜底 label、空值跳过、条码清洗、canvas 显式",
+    "input": {
+      "layout": {
+        "canvasWidthMm": 60,
+        "canvasHeightMm": 40,
+        "elements": [
+          {
+            "id": "t",
+            "type": "title",
+            "fieldKey": "doc_title",
+            "label": "出库单",
+            "showLabel": false,
+            "x": 0,
+            "y": 0,
+            "width": 60,
+            "height": 8,
+            "fontHeightMm": 5,
+            "textAlign": "center"
+          },
+          {
+            "id": "q",
+            "type": "text",
+            "fieldKey": "qty",
+            "label": "数量",
+            "showLabel": true,
+            "x": 2,
+            "y": 10,
+            "width": 30,
+            "height": 6,
+            "fontHeightMm": 3,
+            "textAlign": "left"
+          },
+          {
+            "id": "empty",
+            "type": "text",
+            "fieldKey": "missing",
+            "label": "缺",
+            "showLabel": false,
+            "x": 2,
+            "y": 18,
+            "width": 30,
+            "height": 6,
+            "fontHeightMm": 3,
+            "textAlign": "left"
+          },
+          {
+            "id": "bc",
+            "type": "barcode",
+            "fieldKey": "code",
+            "label": "",
+            "showLabel": false,
+            "x": 2,
+            "y": 24,
+            "width": 56,
+            "height": 10,
+            "fontHeightMm": 3,
+            "textAlign": "left"
+          }
+        ]
+      },
+      "data": {
+        "qty": 12,
+        "code": "ABC^123\n",
+        "doc_title": ""
+      },
+      "paperSize": "thermal80"
+    },
+    "expected": {
+      "widthMm": 60,
+      "heightMm": 40,
+      "primitives": [
+        {
+          "kind": "text",
+          "xMm": 0,
+          "yMm": 0,
+          "widthMm": 60,
+          "heightMm": 8,
+          "text": "出库单",
+          "fontHeightMm": 5,
+          "align": "center"
+        },
+        {
+          "kind": "text",
+          "xMm": 2,
+          "yMm": 10,
+          "widthMm": 30,
+          "heightMm": 6,
+          "text": "数量：12",
+          "fontHeightMm": 3,
+          "align": "left"
+        },
+        {
+          "kind": "barcode",
+          "xMm": 2,
+          "yMm": 24,
+          "widthMm": 56,
+          "heightMm": 10,
+          "value": "ABC123"
+        }
+      ]
+    }
+  },
+  {
+    "name": "排序按 y 再 x（乱序输入）",
+    "input": {
+      "layout": {
+        "elements": [
+          {
+            "id": "c",
+            "type": "text",
+            "fieldKey": "c",
+            "label": "",
+            "showLabel": false,
+            "x": 5,
+            "y": 20,
+            "width": 20,
+            "height": 6,
+            "fontHeightMm": 3,
+            "textAlign": "left"
+          },
+          {
+            "id": "a",
+            "type": "text",
+            "fieldKey": "a",
+            "label": "",
+            "showLabel": false,
+            "x": 9,
+            "y": 5,
+            "width": 20,
+            "height": 6,
+            "fontHeightMm": 3,
+            "textAlign": "left"
+          },
+          {
+            "id": "b",
+            "type": "text",
+            "fieldKey": "b",
+            "label": "",
+            "showLabel": false,
+            "x": 1,
+            "y": 5,
+            "width": 20,
+            "height": 6,
+            "fontHeightMm": 3,
+            "textAlign": "left"
+          }
+        ]
+      },
+      "data": {
+        "a": "A",
+        "b": "B",
+        "c": "C"
+      },
+      "paperSize": "thermal80"
+    },
+    "expected": {
+      "widthMm": 80,
+      "heightMm": 50,
+      "primitives": [
+        {
+          "kind": "text",
+          "xMm": 1,
+          "yMm": 5,
+          "widthMm": 20,
+          "heightMm": 6,
+          "text": "B",
+          "fontHeightMm": 3,
+          "align": "left"
+        },
+        {
+          "kind": "text",
+          "xMm": 9,
+          "yMm": 5,
+          "widthMm": 20,
+          "heightMm": 6,
+          "text": "A",
+          "fontHeightMm": 3,
+          "align": "left"
+        },
+        {
+          "kind": "text",
+          "xMm": 5,
+          "yMm": 20,
+          "widthMm": 20,
+          "heightMm": 6,
+          "text": "C",
+          "fontHeightMm": 3,
+          "align": "left"
+        }
+      ]
+    }
+  },
+  {
+    "name": "format=zpl 裸模板：不归几何层，primitives 为空",
+    "input": {
+      "layout": {
+        "format": "zpl",
+        "body": "^XA^FO0,0^FDx^FS^XZ"
+      },
+      "data": {},
+      "paperSize": "thermal80"
+    },
+    "expected": {
+      "widthMm": 80,
+      "heightMm": 50,
+      "primitives": []
+    }
+  }
+]
