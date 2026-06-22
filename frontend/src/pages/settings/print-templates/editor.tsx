@@ -29,6 +29,22 @@ import type { PaperSize, TemplateElement, TemplateLayout, TemplateType } from '@
 import { isZplTemplateLayout } from '@/types/print-template'
 import { DEFAULT_LABEL_ELEMENTS, LABEL_PREVIEW_SAMPLE } from '@/constants/labelZplDefaults'
 import BarcodePreview from '@/components/print/BarcodePreview'
+import { PT_TO_MM } from '@/lib/labelGeometry'
+
+/** 标签元素字高（mm）：优先 v2 fontHeightMm，旧模板回退 fontSize(pt)×PT_TO_MM —— 与后端 normalize 一致 */
+function labelFontMm(el: TemplateElement): number {
+  return typeof el.fontHeightMm === 'number' && el.fontHeightMm > 0
+    ? el.fontHeightMm
+    : Math.round(el.fontSize * PT_TO_MM * 100) / 100
+}
+
+/** 标签元素预览文本：title 取值兜底 label；text 按 showLabel 决定是否拼 "label：" —— 与后端 resolveLayout 一致 */
+function labelText(el: TemplateElement, data: Record<string, string>): string {
+  const value = data[el.fieldKey] ?? ''
+  if (el.type === 'title') return value || el.label
+  if (el.showLabel && el.label) return `${el.label}：${value}`
+  return value
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // Constants
@@ -182,8 +198,8 @@ const SAMPLE_ITEMS = [
 
 function makeId() { return `el_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` }
 
-function mkElement(field: FieldDef, xMm: number, yMm: number): TemplateElement {
-  return {
+function mkElement(field: FieldDef, xMm: number, yMm: number, isLabel = false): TemplateElement {
+  const base: TemplateElement = {
     id:           makeId(),
     type:         field.type,
     fieldKey:     field.key,
@@ -198,6 +214,11 @@ function mkElement(field: FieldDef, xMm: number, yMm: number): TemplateElement {
     border:       field.type === 'table',
     tableColumns: field.type === 'table' ? ['name', 'qty', 'price', 'amount'] : undefined,
   }
+  // 标签（5-9）：字高用 mm、去加粗、默认不显前缀
+  if (isLabel) {
+    return { ...base, fontWeight: 'normal', showLabel: false, fontHeightMm: field.type === 'title' ? 5 : 3.5 }
+  }
+  return base
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -243,11 +264,13 @@ interface ElementNodeProps {
   previewData: Record<string, string>
   /** mm → 画布 px（已含 MM_PX × 缩放） */
   scale: number
+  /** 标签类型（5-9）：字高用 mm 真实比例、去加粗、文本走 showLabel 规则，与真机 ZPL 一致 */
+  isLabel: boolean
   onMouseDown: (e: React.MouseEvent) => void
   onClick: (e: React.MouseEvent) => void
 }
 
-function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, onClick }: ElementNodeProps) {
+function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMouseDown, onClick }: ElementNodeProps) {
   const px = (mm: number) => mm * scale
   const sampleVal = previewData[el.fieldKey] ?? el.label
 
@@ -257,8 +280,9 @@ function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, o
     top:      px(el.y),
     width:    px(el.width),
     height:   px(el.height),
-    fontSize: `${el.fontSize * scale * 0.35}px`,
-    fontWeight: el.fontWeight,
+    // 标签：字高 mm × scale（真实比例，无 0.35 魔数）；单据：pt × scale × 0.35
+    fontSize: isLabel ? `${labelFontMm(el) * scale}px` : `${el.fontSize * scale * 0.35}px`,
+    fontWeight: isLabel ? 'normal' : el.fontWeight,
     textAlign: el.textAlign,
     border:   (el.border && el.type !== 'table') ? '1px solid #999' : undefined,
     outline:  (!preview && selected) ? '2px solid hsl(var(--primary))' : undefined,
@@ -323,7 +347,9 @@ function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, o
   return (
     <div style={style} onMouseDown={onMouseDown} onClick={onClick}>
       {preview ? (
-        <span className={el.type === 'title' ? 'font-semibold' : undefined}>{sampleVal}</span>
+        <span className={!isLabel && el.type === 'title' ? 'font-semibold' : undefined}>
+          {isLabel ? labelText(el, previewData) : sampleVal}
+        </span>
       ) : (
         <span className="text-muted-foreground/60">{el.label}</span>
       )}
@@ -333,11 +359,12 @@ function ElementNode({ el, selected, preview, previewData, scale, onMouseDown, o
 
 interface PropertiesPanelProps {
   el: TemplateElement | null
+  isLabel: boolean
   onChange: (id: string, patch: Partial<TemplateElement>) => void
   onDelete: (id: string) => void
 }
 
-function PropertiesPanel({ el, onChange, onDelete }: PropertiesPanelProps) {
+function PropertiesPanel({ el, isLabel, onChange, onDelete }: PropertiesPanelProps) {
   if (!el) {
     return (
       <div className="flex w-60 shrink-0 flex-col border-l bg-muted/20">
@@ -394,26 +421,51 @@ function PropertiesPanel({ el, onChange, onDelete }: PropertiesPanelProps) {
 
         {/* 字体（条码区高度由「高」控制，影响打印条码条高） */}
         {el.type !== 'divider' && el.type !== 'barcode' && (
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">字体</label>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">大小</span>
-                <Input
-                  type="number" min="6" max="72" step="1"
-                  value={el.fontSize}
-                  onChange={e => onChange(el.id, { fontSize: +e.target.value })}
-                  className="h-7 w-14 text-xs"
-                />
-              </div>
-              <Button
-                size="sm" variant={el.fontWeight === 'bold' ? 'default' : 'outline'}
-                className="size-7 p-0"
-                onClick={() => onChange(el.id, { fontWeight: el.fontWeight === 'bold' ? 'normal' : 'bold' })}
-              >
-                <Bold className="size-3.5" />
-              </Button>
+          isLabel ? (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">字高 (mm)</label>
+              <Input
+                type="number" min="1" max="30" step="0.5"
+                value={labelFontMm(el)}
+                onChange={e => onChange(el.id, { fontHeightMm: +e.target.value })}
+                className="h-7 w-20 text-xs"
+              />
             </div>
+          ) : (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">字体</label>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">大小</span>
+                  <Input
+                    type="number" min="6" max="72" step="1"
+                    value={el.fontSize}
+                    onChange={e => onChange(el.id, { fontSize: +e.target.value })}
+                    className="h-7 w-14 text-xs"
+                  />
+                </div>
+                <Button
+                  size="sm" variant={el.fontWeight === 'bold' ? 'default' : 'outline'}
+                  className="size-7 p-0"
+                  onClick={() => onChange(el.id, { fontWeight: el.fontWeight === 'bold' ? 'normal' : 'bold' })}
+                >
+                  <Bold className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+          )
+        )}
+
+        {/* 标签 text：显示「标签：」前缀开关（默认关，与真机一致） */}
+        {isLabel && el.type === 'text' && (
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-muted-foreground">显示「标签：」前缀</label>
+            <button
+              className={`relative h-5 w-9 rounded-full transition-colors ${el.showLabel ? 'bg-primary' : 'bg-input'}`}
+              onClick={() => onChange(el.id, { showLabel: !el.showLabel })}
+            >
+              <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${el.showLabel ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </button>
           </div>
         )}
 
@@ -439,8 +491,8 @@ function PropertiesPanel({ el, onChange, onDelete }: PropertiesPanelProps) {
           </div>
         )}
 
-        {/* 边框 */}
-        {el.type === 'text' && (
+        {/* 边框（仅单据画布） */}
+        {!isLabel && el.type === 'text' && (
           <div className="flex items-center justify-between">
             <label className="text-xs font-medium text-muted-foreground">显示边框</label>
             <button
@@ -680,7 +732,7 @@ export default function PrintTemplateEditor() {
     const xMm  = Math.max(0, xPx / canvasScale - field.defaultW / 2)
     const yMm  = Math.max(0, yPx / canvasScale - field.defaultH / 2)
 
-    const newEl = mkElement(field, xMm, yMm)
+    const newEl = mkElement(field, xMm, yMm, isZplLabelType(type))
     setElements(prev => [...prev, newEl])
     setSelectedId(newEl.id)
   }
@@ -960,6 +1012,7 @@ export default function PrintTemplateEditor() {
                   preview={preview}
                   previewData={previewData}
                   scale={canvasScale}
+                  isLabel={isZplLabelType(type)}
                   onMouseDown={e => handleElementMouseDown(e, el)}
                   onClick={e => { e.stopPropagation(); setSelectedId(el.id) }}
                 />
@@ -981,6 +1034,7 @@ export default function PrintTemplateEditor() {
           {!preview && (
             <PropertiesPanel
               el={selected}
+              isLabel={isZplLabelType(type)}
               onChange={patchElement}
               onDelete={deleteElement}
             />

@@ -10,12 +10,15 @@ export interface TemplateElement {
   y: number        // mm from canvas top
   width: number    // mm
   height: number   // mm
-  fontSize: number // pt
+  fontSize: number // pt（单据画布 type 1-4）
   fontWeight: 'normal' | 'bold'
   textAlign: 'left' | 'center' | 'right'
   border: boolean
   // table-specific
   tableColumns?: string[]
+  // 标签 v2（type 5-9）：字高用 mm（替代 fontSize），showLabel 控制 "label：" 前缀
+  fontHeightMm?: number
+  showLabel?: boolean
 }
 
 /** 单据画布模板 | ZPL 标签模板（标签可选手动纸张宽高 mm，供画布与打印 ^PW） */
