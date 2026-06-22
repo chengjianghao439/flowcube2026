@@ -1,121 +1,41 @@
 /**
- * 标签 ZPL：从 print_templates（type 5–9）默认模板生成 ZPL。
- * - 兼容 layout.format=zpl + body（占位符 {{key}}）
- * - 画布 layout.elements：按元素坐标生成 ZPL（mm → 点阵，203dpi）
+ * 标签 ZPL（DB 层）：从 print_templates（type 5–9）默认模板生成 ZPL。
+ * 纯映射逻辑在 labelZpl.js（零依赖、可独立测试）；本文件只负责读库 + 兜底取模板。
  */
 
 const { pool } = require('../../config/db')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
 const logger = require('../../utils/logger')
+const {
+  applyZplTemplate,
+  sanitizeZplValue,
+  generateZplFromElements,
+  MM_TO_DOT,
+} = require('./labelZpl')
 
 /** 与 print_templates.type 一致：5 货架 6 库存容器 7 物流箱贴 8 商品 9 塑料盒 */
 const LABEL_TEMPLATE_TYPES = [5, 6, 7, 8, 9]
 
-/** 203 dpi：1mm ≈ 8 点 */
-const MM_TO_DOT = 203 / 25.4
-
-function sanitizeZplValue(v) {
-  return String(v ?? '')
-    .replace(/\^/g, ' ')
-    .replace(/[\r\n\x00]/g, ' ')
-    .trim()
-}
-
-/**
- * @param {string} body
- * @param {Record<string, string|number|null|undefined>} vars
- */
-function applyZplTemplate(body, vars) {
-  let s = String(body ?? '')
-  const keys = Object.keys(vars || {})
-  for (const key of keys) {
-    const safe = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const re = new RegExp(`\\{\\{\\s*${safe}\\s*\\}\\}`, 'g')
-    s = s.replace(re, sanitizeZplValue(vars[key]))
-  }
-  return s
-}
-
-/**
- * @param {object} layout
- * @param {Record<string, string|number|null|undefined>} vars
- * @param {string} paperSize thermal80 | thermal58
- * @returns {string|null}
- */
-function resolveLabelWidthMm(layout, paperSize) {
-  const n = Number(layout?.canvasWidthMm)
-  if (Number.isFinite(n) && n >= 30 && n <= 120) return Math.round(n)
-  if (paperSize === 'thermal58') return 58
-  if (paperSize === 'thermal75') return 75
-  return 80
-}
-
-function calcBarcodeModuleWidth(codeLen, desiredWidthDots) {
-  if (!codeLen || !desiredWidthDots) return 2
-  // Code128: start(11) + data(11×N) + check(11) + stop(13) + quiet(20) ≈ 11N + 55
-  const totalModules = codeLen * 11 + 55
-  const by = Math.round(desiredWidthDots / totalModules)
-  return Math.max(1, Math.min(10, by))
-}
-
-function generateZplFromElements(layout, vars, paperSize) {
-  const elements = layout?.elements
-  if (!Array.isArray(elements) || elements.length === 0) return null
-  const paperWmm = resolveLabelWidthMm(layout, paperSize)
-  const widthDots = Math.round(paperWmm * MM_TO_DOT)
-  const sorted = [...elements]
-    .filter(e => e && e.type !== 'divider' && e.type !== 'table')
-    .sort((a, b) => (a.y || 0) - (b.y || 0) || (a.x || 0) - (b.x || 0))
-
-  let body = `^XA^CI28^LH0,0^PW${widthDots}`
-  let segments = 0
-  for (const el of sorted) {
-    const x = Math.round((el.x || 0) * MM_TO_DOT)
-    const y = Math.round((el.y || 0) * MM_TO_DOT)
-    const rawVal = vars[el.fieldKey]
-
-    if (el.type === 'barcode') {
-      const code = String(rawVal ?? '').replace(/[\r\n^~]/g, '')
-      if (!code) continue
-      const barH = Math.max(28, Math.min(120, Math.round((el.height || 14) * MM_TO_DOT)))
-      const desiredWidth = Math.round((el.width || 72) * MM_TO_DOT)
-      const by = calcBarcodeModuleWidth(code.length, desiredWidth)
-      body += `^FO${x},${y}^BY${by}^BCN,${barH},Y,N,N^FD${code}^FS`
-      segments += 1
-    } else if (el.type === 'title' || el.type === 'text') {
-      const t = sanitizeZplValue(rawVal)
-      if (!t) continue
-      // pt → dots (203dpi)，放宽范围使大字体生效明显
-      const fs = Math.max(14, Math.min(160, Math.round((el.fontSize || 10) * 203 / 72)))
-      const align = el.textAlign || 'left'
-      const elW = Math.round((el.width || 10) * MM_TO_DOT)
-      if (align === 'center') {
-        body += `^FO${x},${y}^A0N,${fs},${fs}^FB${elW},1,0,C^FD${t}^FS`
-      } else if (align === 'right') {
-        body += `^FO${x},${y}^A0N,${fs},${fs}^FB${elW},1,0,R^FD${t}^FS`
-      } else {
-        body += `^FO${x},${y}^A0N,${fs},${fs}^FD${t}^FS`
-      }
-      segments += 1
-    }
-  }
-  if (segments === 0) return null
-  body += '^XZ'
-  return body
-}
-
 /**
  * 读取默认模板并生成完整 ZPL（已替换变量）。无模板或无法生成时返回 null。
+ * 取模板优先 is_default=1；查不到则 fallback 到最近更新的同 type 模板
+ * —— 修复「编辑器存的模板 is_default=0，真机取不到，改了没变」。
  * @param {number} templateType 5–9
  * @param {Record<string, string|number|null|undefined>} vars
  */
 async function getLabelZplFromDefaultTemplate(templateType, vars) {
   const t = Number(templateType)
   if (!LABEL_TEMPLATE_TYPES.includes(t)) return null
-  const [rows] = await pool.query(
+  let [rows] = await pool.query(
     `SELECT layout_json, paper_size FROM print_templates WHERE type=? AND is_default=1 ORDER BY id ASC LIMIT 1`,
     [t],
   )
+  if (!rows[0]) {
+    ;[rows] = await pool.query(
+      `SELECT layout_json, paper_size FROM print_templates WHERE type=? ORDER BY updated_at DESC, id DESC LIMIT 1`,
+      [t],
+    )
+  }
   if (!rows[0]) return null
   let layout = rows[0].layout_json
   const paperSize = rows[0].paper_size || 'thermal80'
@@ -146,4 +66,5 @@ module.exports = {
   generateZplFromElements,
   getLabelZplFromDefaultTemplate,
   LABEL_TEMPLATE_TYPES,
+  MM_TO_DOT,
 }
