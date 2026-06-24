@@ -1,4 +1,7 @@
-const { dialog, shell } = require('electron')
+// 用 Electron net.fetch（Chromium 网络栈）而非全局 undici fetch：
+// net.fetch 遵守 main.js 的 app.on('certificate-error') 自签名白名单，能下载自签名 HTTPS 更新包；
+// undici fetch 不认自签名证书，会直接 DEPTH_ZERO_SELF_SIGNED_CERT 失败（表现为"无法下载、无加载"）。
+const { dialog, shell, net } = require('electron')
 const fs = require('fs').promises
 const fssync = require('fs')
 const path = require('path')
@@ -161,7 +164,7 @@ async function resolveSaveDir(app) {
  * @param {AbortSignal} signal
  */
 async function downloadUpdateFile(downloadUrl, destPath, signal) {
-  const res = await fetch(downloadUrl, {
+  const res = await net.fetch(downloadUrl, {
     method: 'GET',
     redirect: 'follow',
     signal,
@@ -222,7 +225,7 @@ async function probeDownloadUrl(url) {
   try {
     // GitHub Release 直链对 HEAD 常 404；objects.githubusercontent.com 亦同。用 GET Range 探测首字节。
     if (isGitHubReleaseOrCdnUrl(url)) {
-      const res = await fetch(url, {
+      const res = await net.fetch(url, {
         method: 'GET',
         headers: { ...DOWNLOAD_REQUEST_HEADERS, Range: 'bytes=0-0' },
         redirect: 'follow',
@@ -234,7 +237,7 @@ async function probeDownloadUrl(url) {
       return 'unknown'
     }
 
-    let res = await fetch(url, {
+    let res = await net.fetch(url, {
       method: 'HEAD',
       headers: { ...DOWNLOAD_REQUEST_HEADERS },
       redirect: 'follow',
@@ -242,7 +245,7 @@ async function probeDownloadUrl(url) {
     })
     if (res.ok) return 'ok'
     if (res.status === 405 || res.status === 501) {
-      res = await fetch(url, {
+      res = await net.fetch(url, {
         method: 'GET',
         headers: { ...DOWNLOAD_REQUEST_HEADERS, Range: 'bytes=0-0' },
         redirect: 'follow',
@@ -505,7 +508,7 @@ async function runDiagnosticUpdateCheck(app, parentWindow, origin) {
   }
 
   try {
-    const res = await fetch(endpoint)
+    const res = await net.fetch(endpoint)
     console.log('[FlowCube] 【诊断】fetch 完成 | HTTP:', res.status, res.statusText)
 
     let body
@@ -612,7 +615,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
     }
 
     const endpoint = `${origin}/api/app-update/latest`
-    const res = await fetch(endpoint)
+    const res = await net.fetch(endpoint)
     console.log('[FlowCube] 更新接口 HTTP:', res.status, res.statusText, '|', endpoint)
 
     if (!res.ok) {
