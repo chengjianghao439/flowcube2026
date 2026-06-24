@@ -90,13 +90,15 @@ resolveLayout(layout, data, paperSize) → DrawPrimitive[]
 
 **实现注意**：backend 是 CommonJS、frontend 是 TS/ESM，无现成共享包。`resolveLayout` 写成零依赖纯函数，两端各持一份镜像，用一组"同输入→同输出图元"的快照测试锁死一致性（防两端漂移）。
 
-## 7. 实施阶段
+## 7. 实施阶段（落地状态）
 
-- **P0 几何核心**：v2 类型 + `resolveLayout` 纯函数 + `normalize`(老→新) + 一致性快照测试。
-- **P1 后端接入**：`labelZplTemplate.js` 改用图元层生成 ZPL；is_default 兜底 fallback。
-- **P2 前端预览接入**：`TemplateRenderer` / 标签预览改用图元层 ×MM_PX。
-- **P3 编辑器重写**：mm 字高、去加粗、去 divider/table、showLabel 开关、画布按真实 mm 比例（去 0.35）；保存自动置默认。
-- **P4 验证**：同一模板在 编辑器 / 预览 / 真机 三处视觉一致；端到端实打一张。
+- ✅ **P0 几何核心**（commit a601283）：`backend/.../labelGeometry.js` 的 `resolveLayout` 纯函数 + `normalize`(老→新) + 快照 fixture + node 测试（14 项）。
+- ✅ **P1 后端接入**（5dfb34c）：拆出零依赖 `labelZpl.js`，`generateZplFromElements` 改用图元层 ×MM_TO_DOT（字高 mm 与旧 pt 数学等价）；`labelZplTemplate.js` re-export 保持 API；`getLabelZplFromDefaultTemplate` 加 fallback；`print-templates.service.js` 标签 create/update 自动置默认。ZPL 测试 9 项。
+- ✅ **P2 前端几何镜像 + 一致性锁定**（26fafc8）：`frontend/src/lib/labelGeometry.ts` 零运行时依赖镜像；`tests/label-geometry-frontend.test.js` 用 Node 类型剥离跑同一 fixture 断言两端逐例相等；`npm run test:label` 接入 CI（node<23.6 优雅跳过）。
+- ✅ **P3 编辑器接入**（80c6c01）：标签画布/预览切到统一几何 —— 去 ×0.35 改真实 mm 字高、去加粗、`labelText` 走 showLabel 规则、属性面板「字高(mm)」+「显示标签前缀」开关；新建标签元素带 `fontHeightMm/showLabel`；旧模板回退 `fontSize→mm`。单据(1-4)路径不变。tsc 通过。
+- ◑ **P4 验证**：静态验证全部通过 —— 全测试绿（14+9+4）、tsc 0 错误、确认标签几何已收敛单一 `resolveLayout`（编辑器/ZPL 共用，桌面端只 raw 转发，无第三/四套残留）。**待人工**：浏览器看编辑器预览、真机实打一张、CI 集成测试验证 is_default DB 改动（本机无 mysql）。
+
+**已知残差（几何层无法消除）**：真机 ZPL 用 `^A0` 方块字（字宽=字高），编辑器/预览用系统字体自然字宽 —— 一行可容纳字数可能略有出入。坐标、字高、文本内容、对齐、label 前缀、加粗、元素过滤等主要不一致点均已统一；Code128 条码不受字宽影响。
 
 ## 8. 历史残留处理
 
