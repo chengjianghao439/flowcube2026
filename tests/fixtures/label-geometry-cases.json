@@ -64,7 +64,9 @@
           "yMm": 2,
           "widthMm": 71,
           "heightMm": 12,
-          "value": "H000001"
+          "value": "H000001",
+          "symbology": "code128",
+          "hri": true
         },
         {
           "kind": "text",
@@ -177,7 +179,9 @@
           "yMm": 24,
           "widthMm": 56,
           "heightMm": 10,
-          "value": "ABC123"
+          "value": "ABC123",
+          "symbology": "code128",
+          "hri": true
         }
       ]
     }
@@ -286,6 +290,49 @@
       "widthMm": 80,
       "heightMm": 50,
       "primitives": []
+    }
+  },
+  {
+    "name": "barcode 参数：EAN13 + 隐藏可读数字",
+    "input": {
+      "layout": {
+        "elements": [
+          {
+            "id": "bc",
+            "type": "barcode",
+            "fieldKey": "ean",
+            "label": "条码",
+            "barcodeSymbology": "ean13",
+            "barcodeHRI": false,
+            "x": 2,
+            "y": 2,
+            "width": 50,
+            "height": 14,
+            "fontHeightMm": 3,
+            "textAlign": "left"
+          }
+        ]
+      },
+      "data": {
+        "ean": "6901234567892"
+      },
+      "paperSize": "thermal75"
+    },
+    "expected": {
+      "widthMm": 75,
+      "heightMm": 50,
+      "primitives": [
+        {
+          "kind": "barcode",
+          "xMm": 2,
+          "yMm": 2,
+          "widthMm": 50,
+          "heightMm": 14,
+          "value": "6901234567892",
+          "symbology": "ean13",
+          "hri": false
+        }
+      ]
     }
   }
 ]

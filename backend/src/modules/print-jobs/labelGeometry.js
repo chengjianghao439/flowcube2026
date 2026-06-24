@@ -81,7 +81,7 @@ function normalizeElement(raw) {
     fontHeightMm = Math.round(num(raw.fontSize, 10) * PT_TO_MM * 100) / 100
   }
 
-  return {
+  const el = {
     id: String(raw.id ?? ''),
     type,
     fieldKey: String(raw.fieldKey ?? ''),
@@ -94,6 +94,12 @@ function normalizeElement(raw) {
     fontHeightMm,
     textAlign: raw.textAlign === 'center' ? 'center' : raw.textAlign === 'right' ? 'right' : 'left',
   }
+  if (type === 'barcode') {
+    // 条码参数：码制 + 是否显示可读数字(HRI)，默认 code128 + 显示
+    el.symbology = raw.barcodeSymbology === 'ean13' ? 'ean13' : 'code128'
+    el.hri = raw.barcodeHRI !== false
+  }
+  return el
 }
 
 /**
@@ -150,6 +156,8 @@ function resolveLayout(rawLayout, data, paperSize) {
         kind: 'barcode',
         xMm: el.x, yMm: el.y, widthMm: el.width, heightMm: el.height,
         value,
+        symbology: el.symbology === 'ean13' ? 'ean13' : 'code128',
+        hri: el.hri !== false,
       })
     } else {
       const text = resolveText(el, data)

@@ -358,8 +358,10 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
   } else if (el.type === 'barcode') {
     const v = (previewData[el.fieldKey] ?? '') || el.label
     content = preview
-      ? <div style={{ width: '100%', height: '100%', padding: '1px 2px' }}><BarcodePreview value={v} /></div>
-      : <span className="text-muted-foreground/60">{el.label}（条码）</span>
+      ? <div style={{ width: '100%', height: '100%', padding: '1px 2px' }}>
+          <BarcodePreview value={v} symbology={el.barcodeSymbology} hri={el.barcodeHRI} />
+        </div>
+      : <span className="text-muted-foreground/60">{el.label}（{el.barcodeSymbology === 'ean13' ? 'EAN13' : '条码'}）</span>
   } else if (el.type === 'table') {
     const cols = el.tableColumns ?? ['name', 'qty', 'price', 'amount']
     const colDefs = cols.map(k => TABLE_COLUMN_OPTIONS.find(c => c.key === k)!).filter(Boolean)
@@ -383,9 +385,12 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
       </table>
     )
   } else {
-    // text / title
+    // text / title。标签预览用等宽字体，近似热敏打印机点阵字的字宽
     content = preview
-      ? <span className={!isLabel && el.type === 'title' ? 'font-semibold' : undefined}>{isLabel ? labelText(el, previewData) : sampleVal}</span>
+      ? <span
+          className={!isLabel && el.type === 'title' ? 'font-semibold' : undefined}
+          style={isLabel ? { fontFamily: "'Courier New', monospace" } : undefined}
+        >{isLabel ? labelText(el, previewData) : sampleVal}</span>
       : <span className="text-muted-foreground/60">{el.label}</span>
   }
 
@@ -479,6 +484,34 @@ function PropertiesPanel({ el, isLabel, onChange, onDelete, onAlign }: Propertie
             ))}
           </div>
         </div>
+
+        {/* 条码参数 */}
+        {el.type === 'barcode' && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">码制</label>
+              <Select
+                value={el.barcodeSymbology ?? 'code128'}
+                onValueChange={v => onChange(el.id, { barcodeSymbology: v as 'code128' | 'ean13' })}
+              >
+                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="code128">Code 128（通用）</SelectItem>
+                  <SelectItem value="ean13">EAN-13（13 位数字）</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">显示可读数字</label>
+              <button
+                className={`relative h-5 w-9 rounded-full transition-colors ${el.barcodeHRI !== false ? 'bg-primary' : 'bg-input'}`}
+                onClick={() => onChange(el.id, { barcodeHRI: el.barcodeHRI === false })}
+              >
+                <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${el.barcodeHRI !== false ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 字体（条码区高度由「高」控制，影响打印条码条高） */}
         {el.type !== 'divider' && el.type !== 'barcode' && (

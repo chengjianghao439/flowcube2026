@@ -11,6 +11,7 @@
 
 export type LabelElementType = 'text' | 'title' | 'barcode'
 export type TextAlign = 'left' | 'center' | 'right'
+export type BarcodeSymbology = 'code128' | 'ean13'
 
 /** v2 标签元素 */
 export interface LabelElement {
@@ -25,6 +26,9 @@ export interface LabelElement {
   height: number
   fontHeightMm: number
   textAlign: TextAlign
+  // barcode-only
+  symbology?: BarcodeSymbology
+  hri?: boolean
 }
 
 export interface LabelLayoutV2 {
@@ -36,7 +40,7 @@ export interface LabelLayoutV2 {
 
 /** 中性绘制图元（mm 单位） */
 export type DrawPrimitive =
-  | { kind: 'barcode'; xMm: number; yMm: number; widthMm: number; heightMm: number; value: string }
+  | { kind: 'barcode'; xMm: number; yMm: number; widthMm: number; heightMm: number; value: string; symbology: BarcodeSymbology; hri: boolean }
   | { kind: 'text'; xMm: number; yMm: number; widthMm: number; heightMm: number; text: string; fontHeightMm: number; align: TextAlign }
 
 export interface ResolvedLayout {
@@ -90,7 +94,7 @@ export function normalizeElement(raw: any): LabelElement | null {
     fontHeightMm = Math.round(num(raw.fontSize, 10) * PT_TO_MM * 100) / 100
   }
 
-  return {
+  const el: LabelElement = {
     id: String(raw.id ?? ''),
     type,
     fieldKey: String(raw.fieldKey ?? ''),
@@ -103,6 +107,11 @@ export function normalizeElement(raw: any): LabelElement | null {
     fontHeightMm,
     textAlign: raw.textAlign === 'center' ? 'center' : raw.textAlign === 'right' ? 'right' : 'left',
   }
+  if (type === 'barcode') {
+    el.symbology = raw.barcodeSymbology === 'ean13' ? 'ean13' : 'code128'
+    el.hri = raw.barcodeHRI !== false
+  }
+  return el
 }
 
 /**
@@ -147,7 +156,7 @@ export function resolveLayout(rawLayout: any, data: Record<string, unknown> | un
     if (el.type === 'barcode') {
       const value = String(data?.[el.fieldKey] ?? '').replace(/[\r\n^~]/g, '')
       if (!value) continue
-      primitives.push({ kind: 'barcode', xMm: el.x, yMm: el.y, widthMm: el.width, heightMm: el.height, value })
+      primitives.push({ kind: 'barcode', xMm: el.x, yMm: el.y, widthMm: el.width, heightMm: el.height, value, symbology: el.symbology === 'ean13' ? 'ean13' : 'code128', hri: el.hri !== false })
     } else {
       const text = resolveText(el, data)
       if (!text) continue

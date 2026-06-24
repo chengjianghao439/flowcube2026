@@ -78,6 +78,22 @@ check('format=zpl 裸模板 → null（不经画布几何）', () => {
   assert.strictEqual(generateZplFromElements({ format: 'zpl', body: '^XA^XZ' }, {}, 'thermal80'), null)
 })
 
+// ── 条码参数：码制 + HRI ─────────────────────────────────────────────────────
+check('Code128 默认 HRI=Y → ^BCN,h,Y,N,N', () => {
+  const z = generateZplFromElements(
+    { elements: [{ id: 'bc', type: 'barcode', fieldKey: 'c', label: '', x: 0, y: 0, width: 40, height: 10, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false }] },
+    { c: 'ABC' }, 'thermal80',
+  )
+  assert.ok(/\^BCN,\d+,Y,N,N\^FDABC\^FS/.test(z), z)
+})
+check('EAN13 + HRI=false → ^BEN,h,N,N', () => {
+  const z = generateZplFromElements(
+    { elements: [{ id: 'bc', type: 'barcode', fieldKey: 'ean', label: '', barcodeSymbology: 'ean13', barcodeHRI: false, x: 2, y: 2, width: 50, height: 14, fontHeightMm: 3, textAlign: 'left' }] },
+    { ean: '6901234567892' }, 'thermal80',
+  )
+  assert.ok(/\^BEN,\d+,N,N\^FD6901234567892\^FS/.test(z), z)
+})
+
 console.log('标签 ZPL 生成测试：')
 console.log(results.join('\n'))
 if (failures > 0) { console.error(`\n${failures} 个断言失败`); process.exit(1) }

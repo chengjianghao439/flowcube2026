@@ -68,8 +68,14 @@ function generateZplFromElements(layout, vars, paperSize) {
 
     if (p.kind === 'barcode') {
       const barH = mmDot(p.heightMm)
-      const by = calcBarcodeModuleWidth(p.value.length, Math.round(p.widthMm * MM_TO_DOT))
-      body += `^FO${x},${y}^BY${by}^BCN,${barH},Y,N,N^FD${p.value}^FS`
+      const hri = p.hri === false ? 'N' : 'Y'
+      if (p.symbology === 'ean13') {
+        // ^BE: o,h,f(HRI),g(above)
+        body += `^FO${x},${y}^BY2^BEN,${barH},${hri},N^FD${p.value}^FS`
+      } else {
+        const by = calcBarcodeModuleWidth(p.value.length, Math.round(p.widthMm * MM_TO_DOT))
+        body += `^FO${x},${y}^BY${by}^BCN,${barH},${hri},N,N^FD${p.value}^FS`
+      }
     } else {
       const t = sanitizeZplValue(p.text)
       if (!t) continue

@@ -68,6 +68,16 @@ const CASES = [
     data: {},
     layout: { format: 'zpl', body: '^XA^FO0,0^FDx^FS^XZ' },
   },
+  {
+    name: 'barcode 参数：EAN13 + 隐藏可读数字',
+    paperSize: 'thermal75',
+    data: { ean: '6901234567892' },
+    layout: {
+      elements: [
+        { id: 'bc', type: 'barcode', fieldKey: 'ean', label: '条码', barcodeSymbology: 'ean13', barcodeHRI: false, x: 2, y: 2, width: 50, height: 14, fontHeightMm: 3, textAlign: 'left' },
+      ],
+    },
+  },
 ]
 
 const results = []
@@ -93,8 +103,12 @@ check('无 canvasWidthMm 时按 thermal75 推断宽 75mm、高默认 50mm', () =
   assert.strictEqual(r0.widthMm, 75)
   assert.strictEqual(r0.heightMm, 50)
 })
-check('barcode 图元键集精确（无 fontHeightMm/align/text）', () => {
-  assert.deepStrictEqual(Object.keys(r0.primitives[0]).sort(), ['heightMm', 'kind', 'value', 'widthMm', 'xMm', 'yMm'])
+check('barcode 图元键集精确（含 symbology/hri，无 fontHeightMm/align/text）', () => {
+  assert.deepStrictEqual(Object.keys(r0.primitives[0]).sort(), ['heightMm', 'hri', 'kind', 'symbology', 'value', 'widthMm', 'xMm', 'yMm'])
+})
+check('barcode 默认 code128 + hri=true', () => {
+  assert.strictEqual(r0.primitives[0].symbology, 'code128')
+  assert.strictEqual(r0.primitives[0].hri, true)
 })
 check('text 图元键集精确（含 fontHeightMm/align/text）', () => {
   assert.deepStrictEqual(Object.keys(r0.primitives[1]).sort(), ['align', 'fontHeightMm', 'heightMm', 'kind', 'text', 'widthMm', 'xMm', 'yMm'])
@@ -137,6 +151,12 @@ const r3 = resolveLayout(CASES[3].layout, CASES[3].data, CASES[3].paperSize)
 check('format=zpl → primitives 空、normalize 返回 null', () => {
   assert.strictEqual(normalizeLabelLayout(CASES[3].layout, 'thermal80'), null)
   assert.deepStrictEqual(r3.primitives, [])
+})
+
+const r4 = resolveLayout(CASES[4].layout, CASES[4].data, CASES[4].paperSize)
+check('barcode symbology=ean13 + hri=false 透传到图元', () => {
+  assert.strictEqual(r4.primitives[0].symbology, 'ean13')
+  assert.strictEqual(r4.primitives[0].hri, false)
 })
 
 // ── 快照回归（锁跨端一致；UPDATE=1 重新生成）──────────────────────────────────
