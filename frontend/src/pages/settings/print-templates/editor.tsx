@@ -257,6 +257,38 @@ function PalettePanel({
   )
 }
 
+/** resize 手柄方向（含组合：角=两轴） */
+type ResizeDir = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
+
+const RESIZE_HANDLES: { dir: ResizeDir; css: React.CSSProperties }[] = [
+  { dir: 'nw', css: { left: -4, top: -4, cursor: 'nwse-resize' } },
+  { dir: 'n',  css: { left: '50%', top: -4, marginLeft: -4, cursor: 'ns-resize' } },
+  { dir: 'ne', css: { right: -4, top: -4, cursor: 'nesw-resize' } },
+  { dir: 'e',  css: { right: -4, top: '50%', marginTop: -4, cursor: 'ew-resize' } },
+  { dir: 'se', css: { right: -4, bottom: -4, cursor: 'nwse-resize' } },
+  { dir: 's',  css: { left: '50%', bottom: -4, marginLeft: -4, cursor: 'ns-resize' } },
+  { dir: 'sw', css: { left: -4, bottom: -4, cursor: 'nesw-resize' } },
+  { dir: 'w',  css: { left: -4, top: '50%', marginTop: -4, cursor: 'ew-resize' } },
+]
+
+function ResizeHandles({ onStart }: { onStart: (e: React.MouseEvent, dir: ResizeDir) => void }) {
+  return (
+    <>
+      {RESIZE_HANDLES.map(h => (
+        <div
+          key={h.dir}
+          onMouseDown={e => { e.stopPropagation(); onStart(e, h.dir) }}
+          style={{
+            position: 'absolute', width: 8, height: 8, zIndex: 20,
+            background: 'hsl(var(--primary))', border: '1.5px solid white', borderRadius: 2,
+            boxShadow: '0 0 0 0.5px hsl(var(--primary))', ...h.css,
+          }}
+        />
+      ))}
+    </>
+  )
+}
+
 interface ElementNodeProps {
   el: TemplateElement
   selected: boolean
@@ -268,9 +300,10 @@ interface ElementNodeProps {
   isLabel: boolean
   onMouseDown: (e: React.MouseEvent) => void
   onClick: (e: React.MouseEvent) => void
+  onResizeStart: (e: React.MouseEvent, dir: ResizeDir) => void
 }
 
-function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMouseDown, onClick }: ElementNodeProps) {
+function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMouseDown, onClick, onResizeStart }: ElementNodeProps) {
   const px = (mm: number) => mm * scale
   const sampleVal = previewData[el.fieldKey] ?? el.label
 
@@ -287,72 +320,55 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
     border:   (el.border && el.type !== 'table') ? '1px solid #999' : undefined,
     outline:  (!preview && selected) ? '2px solid hsl(var(--primary))' : undefined,
     cursor:   preview ? 'default' : 'move',
-    overflow: 'hidden',
+    // 编辑+选中时露出 resize 手柄；其余裁剪以模拟真机边界
+    overflow: (!preview && selected) ? 'visible' : 'hidden',
     boxSizing: 'border-box',
     padding:  el.type === 'divider' ? '0' : '1px 2px',
     userSelect: 'none',
     background: !preview && selected ? 'hsl(var(--primary)/0.05)' : undefined,
   }
 
+  let content: React.ReactNode
   if (el.type === 'divider') {
-    return (
-      <div style={style} onMouseDown={onMouseDown} onClick={onClick}>
-        <div className="h-px w-full bg-current" style={{ marginTop: px(el.height) / 2 - 0.5 }} />
-      </div>
-    )
-  }
-
-  if (el.type === 'barcode') {
+    content = <div className="h-px w-full bg-current" style={{ marginTop: px(el.height) / 2 - 0.5 }} />
+  } else if (el.type === 'barcode') {
     const v = (previewData[el.fieldKey] ?? '') || el.label
-    return (
-      <div style={style} onMouseDown={onMouseDown} onClick={onClick}>
-        {preview ? (
-          <div style={{ width: '100%', height: '100%', padding: '1px 2px' }}>
-            <BarcodePreview value={v} />
-          </div>
-        ) : (
-          <span className="text-muted-foreground/60">{el.label}（条码）</span>
-        )}
-      </div>
-    )
-  }
-
-  if (el.type === 'table') {
+    content = preview
+      ? <div style={{ width: '100%', height: '100%', padding: '1px 2px' }}><BarcodePreview value={v} /></div>
+      : <span className="text-muted-foreground/60">{el.label}（条码）</span>
+  } else if (el.type === 'table') {
     const cols = el.tableColumns ?? ['name', 'qty', 'price', 'amount']
     const colDefs = cols.map(k => TABLE_COLUMN_OPTIONS.find(c => c.key === k)!).filter(Boolean)
     const cellStyle: React.CSSProperties = { border: '1px solid #ddd', padding: '1px 3px', fontSize: `${el.fontSize * scale * 0.35}px` }
-    return (
-      <div style={style} onMouseDown={onMouseDown} onClick={onClick}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
-          <thead>
-            <tr>
-              {colDefs.map(c => (
-                <th key={c.key} style={{ ...cellStyle, background: '#f5f5f5', fontWeight: 'bold' }}>{c.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {(preview ? SAMPLE_ITEMS : SAMPLE_ITEMS.slice(0, 2)).map((row, i) => (
-              <tr key={i}>
-                {cols.map(k => <td key={k} style={cellStyle}>{(row as Record<string,string>)[k] ?? ''}</td>)}
-              </tr>
+    content = (
+      <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
+        <thead>
+          <tr>
+            {colDefs.map(c => (
+              <th key={c.key} style={{ ...cellStyle, background: '#f5f5f5', fontWeight: 'bold' }}>{c.label}</th>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </tr>
+        </thead>
+        <tbody>
+          {(preview ? SAMPLE_ITEMS : SAMPLE_ITEMS.slice(0, 2)).map((row, i) => (
+            <tr key={i}>
+              {cols.map(k => <td key={k} style={cellStyle}>{(row as Record<string,string>)[k] ?? ''}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     )
+  } else {
+    // text / title
+    content = preview
+      ? <span className={!isLabel && el.type === 'title' ? 'font-semibold' : undefined}>{isLabel ? labelText(el, previewData) : sampleVal}</span>
+      : <span className="text-muted-foreground/60">{el.label}</span>
   }
 
-  // text / title
   return (
     <div style={style} onMouseDown={onMouseDown} onClick={onClick}>
-      {preview ? (
-        <span className={!isLabel && el.type === 'title' ? 'font-semibold' : undefined}>
-          {isLabel ? labelText(el, previewData) : sampleVal}
-        </span>
-      ) : (
-        <span className="text-muted-foreground/60">{el.label}</span>
-      )}
+      {content}
+      {!preview && selected && <ResizeHandles onStart={onResizeStart} />}
     </div>
   )
 }
@@ -768,18 +784,67 @@ export default function PrintTemplateEditor() {
     document.addEventListener('mouseup', onMouseUp)
   }
 
-  // Delete key handler
+  // ── Element resize (drag handles) ────────────────────────────
+  function handleResizeMouseDown(e: React.MouseEvent, el: TemplateElement, dir: ResizeDir) {
+    if (preview) return
+    e.preventDefault()
+    e.stopPropagation()
+    setSelectedId(el.id)
+    const startMouse = { x: e.clientX, y: e.clientY }
+    const s = { x: el.x, y: el.y, w: el.width, h: el.height }
+    const MIN = 3 // mm 最小尺寸
+    const id = el.id
+
+    function onMouseMove(me: MouseEvent) {
+      const dxMm = (me.clientX - startMouse.x) / canvasScale
+      const dyMm = (me.clientY - startMouse.y) / canvasScale
+      let x = s.x, y = s.y, w = s.w, h = s.h
+      if (dir.includes('e')) w = s.w + dxMm
+      if (dir.includes('s')) h = s.h + dyMm
+      if (dir.includes('w')) { w = s.w - dxMm; x = s.x + dxMm }
+      if (dir.includes('n')) { h = s.h - dyMm; y = s.y + dyMm }
+      // 最小尺寸（拖左/上边时锁定对边）
+      if (w < MIN) { if (dir.includes('w')) x = s.x + s.w - MIN; w = MIN }
+      if (h < MIN) { if (dir.includes('n')) y = s.y + s.h - MIN; h = MIN }
+      // 不越出画布边界
+      if (x < 0) { w += x; x = 0 }
+      if (y < 0) { h += y; y = 0 }
+      if (x + w > paper.w) w = paper.w - x
+      if (y + h > paper.h) h = paper.h - y
+      // 吸附到 1mm 整数
+      const rx = Math.round(x), ry = Math.round(y), rw = Math.round(w), rh = Math.round(h)
+      setElements(prev => prev.map(p => p.id === id ? { ...p, x: rx, y: ry, width: rw, height: rh } : p))
+    }
+    function onMouseUp() {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }
+
+  // Keyboard: 删除 / 取消选中 / 方向键微调位置（Shift=5mm）
   useEffect(() => {
+    const ARROWS: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+    }
     function onKey(e: KeyboardEvent) {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId &&
-          !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      const inField = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !inField) {
         deleteElement(selectedId)
       }
       if (e.key === 'Escape') setSelectedId(null)
+      if (selectedId && !inField && ARROWS[e.key]) {
+        e.preventDefault()
+        const step = e.shiftKey ? 5 : 1
+        const [dx, dy] = ARROWS[e.key]
+        setElements(prev => prev.map(el => el.id === selectedId
+          ? clampEl({ ...el, x: el.x + dx * step, y: el.y + dy * step }) : el))
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId])
+  }, [selectedId, paper.w, paper.h])
 
   // ── Loading state ────────────────────────────────────────────
   if (!isNew && (isLoading || !hydrated)) {
@@ -1015,6 +1080,7 @@ export default function PrintTemplateEditor() {
                   isLabel={isZplLabelType(type)}
                   onMouseDown={e => handleElementMouseDown(e, el)}
                   onClick={e => { e.stopPropagation(); setSelectedId(el.id) }}
+                  onResizeStart={(e, dir) => handleResizeMouseDown(e, el, dir)}
                 />
               ))}
 
