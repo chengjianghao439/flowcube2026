@@ -1262,6 +1262,11 @@ export default function PrintTemplateEditor() {
                 </svg>
               )}
 
+              {/* 单据打印安全区（距纸边 5mm）：提示避让打印机不可打印区，避免边缘裁切 */}
+              {!preview && !isZplLabelType(type) && (
+                <div style={{ position: 'absolute', inset: 5 * canvasScale, border: '1px dashed rgba(236,72,153,0.35)', pointerEvents: 'none', zIndex: 1 }} />
+              )}
+
               {elements.map(el => (
                 <ElementNode
                   key={el.id}
