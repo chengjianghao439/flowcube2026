@@ -75,16 +75,28 @@ function absolutizeUpdateAssetUrl(req, url, filename) {
     pathPart = `/current/${encodeURIComponent(fn)}`
   }
   if (!pathPart) return null
-  const envBase = env.APP_PUBLIC_URL
-  if (envBase) return `${envBase}${pathPart}`
-  const host = req.get('x-forwarded-host') || req.get('host') || '127.0.0.1:3000'
-  let proto = 'http'
+  // 下载地址协议必须跟随「实际请求协议」，不能固定用 APP_PUBLIC_URL(https)。
+  // 桌面端 Electron(33) main 进程用 undici fetch 下载，它不遵守 app.on('certificate-error')
+  // 的自签名白名单，拿到 https 自签名地址会被直接拒绝（DEPTH_ZERO_SELF_SIGNED_CERT），
+  // 表现为「很干脆地无法下载、没有加载时间」。桌面端用 http 直连本机 nginx（X-Forwarded-Proto=http）
+  // → 这里给 http 地址；浏览器经 Caddy https 入口 → 给 https。host 仍优先沿用 APP_PUBLIC_URL。
+  let proto = ''
   const xfProto = req.get('x-forwarded-proto')
-  if (xfProto) {
-    proto = xfProto.split(',')[0].trim()
-  } else if (req.protocol) {
-    proto = String(req.protocol).replace(/:?$/, '')
+  if (xfProto) proto = xfProto.split(',')[0].trim()
+  else if (req.protocol) proto = String(req.protocol).replace(/:?$/, '')
+  if (proto !== 'http' && proto !== 'https') proto = 'http'
+
+  const envBase = env.APP_PUBLIC_URL
+  if (envBase) {
+    try {
+      const u = new URL(envBase)
+      u.protocol = `${proto}:`
+      return `${u.origin}${pathPart}`
+    } catch {
+      return `${envBase}${pathPart}`
+    }
   }
+  const host = req.get('x-forwarded-host') || req.get('host') || '127.0.0.1:3000'
   return `${proto}://${host}${pathPart}`
 }
 
