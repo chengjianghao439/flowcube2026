@@ -753,7 +753,8 @@ export default function PrintTemplateEditor() {
   const canvasScale = MM_PX * editorZoom
   const canvasW = paper.w * canvasScale
   const canvasH = paper.h * canvasScale
-  const paperSelectEntries = Object.entries(PAPER_SIZES)
+  // 单据类型（1-4）只用 A 系纸；热敏纸归标签类型（用 mm 输入），不在此下拉出现
+  const paperSelectEntries = Object.entries(PAPER_SIZES).filter(([k]) => !k.startsWith('thermal'))
 
   const selected = elements.find(e => e.id === selectedId) ?? null
 

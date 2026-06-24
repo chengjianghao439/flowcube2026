@@ -22,7 +22,8 @@ const PRINT_CSS = `
   #fc-print-root   { position: static !important; overflow: visible !important; background: #fff !important; }
   #fc-print-tb     { display: none !important; }
   #fc-print-page   { box-shadow: none !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; transform: none !important; }
-  @page            { size: A4; margin: 0; }
+  /* 上下留 8mm 安全边距（避免边缘裁切、续页不贴顶）；左右 0 以免 210mm 内容溢出右边 */
+  @page            { size: A4; margin: 8mm 0; }
 }
 `
 
