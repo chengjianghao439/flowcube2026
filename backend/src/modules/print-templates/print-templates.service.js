@@ -88,6 +88,12 @@ async function findById(id) {
   return fmt(row)
 }
 
+/** 将某模板设为其 type 的唯一默认（同 type 其余清零） */
+async function applyAsTypeDefault(id, type) {
+  await pool.query('UPDATE print_templates SET is_default=0 WHERE type=?', [type])
+  await pool.query('UPDATE print_templates SET is_default=1 WHERE id=?', [id])
+}
+
 async function create({ name, type, paperSize, layout, createdBy }) {
   if (!name) throw new AppError('模板名称不能为空', 400)
   if (!type) throw new AppError('请选择模板类型', 400)
@@ -99,6 +105,8 @@ async function create({ name, type, paperSize, layout, createdBy }) {
     `INSERT INTO print_templates (name, type, paper_size, layout_json, created_by) VALUES (?,?,?,?,?)`,
     [name, type, paper, JSON.stringify(layout), createdBy || null]
   )
+  // 标签模板（5–9）：保存即设为该 type 默认，修复「改了真机没变」
+  if (t >= 5 && t <= 9) await applyAsTypeDefault(r.insertId, t)
   return { id: r.insertId }
 }
 
@@ -112,12 +120,13 @@ async function update(id, { name, type, paperSize, layout }) {
     `UPDATE print_templates SET name=?, type=?, paper_size=?, layout_json=? WHERE id=?`,
     [name, type, paper, JSON.stringify(layout), id]
   )
+  // 标签模板（5–9）：保存即设为该 type 默认，修复「改了真机没变」
+  if (t >= 5 && t <= 9) await applyAsTypeDefault(id, t)
 }
 
 async function setDefault(id) {
   const tpl = await findById(id)
-  await pool.query('UPDATE print_templates SET is_default=0 WHERE type=?', [tpl.type])
-  await pool.query('UPDATE print_templates SET is_default=1 WHERE id=?', [id])
+  await applyAsTypeDefault(id, tpl.type)
 }
 
 async function remove(id) {

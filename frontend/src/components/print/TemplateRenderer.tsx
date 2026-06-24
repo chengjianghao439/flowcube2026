@@ -204,96 +204,100 @@ export default function TemplateRenderer({ layout, paperSize, data, items, displ
   }
 
   const pw = (mm: number) => mm * MM_PX * scale
+  const baseStyle: React.CSSProperties = {
+    background: '#fff',
+    fontFamily: "'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif",
+    fontSize:   `${9 * scale}pt`,
+    color:      '#000',
+  }
+
+  const tableEl = layout.elements.find(e => e.type === 'table')
+
+  // 无明细表格：单页固定版式（绝对定位），保留原行为
+  if (!tableEl) {
+    return (
+      <div style={{ ...baseStyle, position: 'relative', width: pw(paper.w), height: pw(paper.h), overflow: 'hidden' }}>
+        {layout.elements.map(el => <ElementNode key={el.id} el={el} data={data} scale={scale} />)}
+      </div>
+    )
+  }
+
+  // 有明细表格：上方定位区 + 表格流式分页 + 下方跟随区。整体高度自适应、可跨页、不裁剪。
+  const tableBottom = tableEl.y + tableEl.height
+  const aboveEls = layout.elements.filter(e => e.type !== 'table' && e.y < tableEl.y)
+  const belowEls = layout.elements.filter(e => e.type !== 'table' && e.y >= tableBottom)
+  const belowHeight = belowEls.reduce((m, e) => Math.max(m, (e.y - tableBottom) + e.height), 0)
+
   return (
-    <div
-      style={{
-        position:   'relative',
-        width:      pw(paper.w),
-        height:     pw(paper.h),
-        background: '#fff',
-        overflow:   'hidden',
-        fontFamily: "'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif",
-        fontSize:   `${9 * scale}pt`,
-        color:      '#000',
-      }}
-    >
-      {layout.elements.map(el => {
-        if (el.type === 'table') {
-          return <TableElement key={el.id} el={el} items={items} scale={scale} />
-        }
-        return <ElementNode key={el.id} el={el} data={data} scale={scale} />
-      })}
+    <div style={{ ...baseStyle, width: pw(paper.w) }}>
+      {/* 表格上方：固定版式区（页眉/单据信息） */}
+      <div style={{ position: 'relative', height: pw(tableEl.y) }}>
+        {aboveEls.map(el => <ElementNode key={el.id} el={el} data={data} scale={scale} />)}
+      </div>
+      {/* 明细表格：流式，自动撑高 + 跨页分页 + 每页重复表头 */}
+      <FlowTable el={tableEl} items={items} scale={scale} />
+      {/* 表格下方：跟随区（合计/签字/备注），相对表格底部定位 */}
+      {belowHeight > 0 && (
+        <div style={{ position: 'relative', height: pw(belowHeight), marginTop: pw(2) }}>
+          {belowEls.map(el => (
+            <ElementNode key={el.id} el={{ ...el, y: el.y - tableBottom }} data={data} scale={scale} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── 表格元素独立渲染 ──────────────────────────────────────────────────────
+// ─── 明细表格：流式渲染，自动撑高 + 跨页分页 + 每页重复表头 ─────────────────
 
-function TableElement({
-  el,
-  items,
-  scale,
-}: {
-  el: TemplateElement
-  items: PrintItem[]
-  scale: number
-}) {
-  const px = (mm: number) => mm * MM_PX * scale
+function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem[]; scale: number }) {
+  const pw = (mm: number) => mm * MM_PX * scale
   const cols = el.tableColumns ?? ['name', 'qty', 'price', 'amount']
-  const base: React.CSSProperties = {
-    position:   'absolute',
-    left:       px(el.x),
-    top:        px(el.y),
-    width:      px(el.width),
-    height:     px(el.height),
-    padding: 0,
-    overflow: 'visible',
-  }
-
   return (
-    <div style={base}>
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          fontSize: `${el.fontSize * scale}pt`,
-          fontFamily: 'inherit',
-        }}
-      >
-        <thead>
-          <tr>
-            <th style={thStyle('#', 'center')}>序号</th>
+    <table
+      style={{
+        marginLeft: pw(el.x),
+        width: pw(el.width),
+        borderCollapse: 'collapse',
+        fontSize: `${el.fontSize * scale}pt`,
+        fontFamily: 'inherit',
+        tableLayout: 'fixed',
+      }}
+    >
+      {/* table-header-group：跨页时每页顶部重复表头 */}
+      <thead style={{ display: 'table-header-group' }}>
+        <tr>
+          <th style={thStyle('#', 'center')}>序号</th>
+          {cols.map(c => (
+            <th key={c} style={thStyle(c, COL_DEF[c]?.align ?? 'left')}>
+              {COL_DEF[c]?.label ?? c}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item, i) => (
+          <tr key={i} style={{ background: i % 2 === 1 ? '#fafafa' : '#fff', breakInside: 'avoid' }}>
+            <td style={tdStyle('center')}>{i + 1}</td>
             {cols.map(c => (
-              <th key={c} style={thStyle(c, COL_DEF[c]?.align ?? 'left')}>
-                {COL_DEF[c]?.label ?? c}
-              </th>
+              <td key={c} style={tdStyle(COL_DEF[c]?.align ?? 'left')}>
+                {colValue(c, item)}
+              </td>
             ))}
           </tr>
-        </thead>
-        <tbody>
-          {items.map((item, i) => (
-            <tr key={i} style={{ background: i % 2 === 1 ? '#fafafa' : '#fff' }}>
-              <td style={tdStyle('center')}>{i + 1}</td>
-              {cols.map(c => (
-                <td key={c} style={tdStyle(COL_DEF[c]?.align ?? 'left')}>
-                  {colValue(c, item)}
-                </td>
-              ))}
-            </tr>
-          ))}
-          <tr style={{ background: '#f5f5f5', fontWeight: 600 }}>
-            <td colSpan={cols.indexOf('amount') >= 0 ? cols.indexOf('amount') + 1 : cols.length} style={tdStyle('right')}>
-              合计：
+        ))}
+        <tr style={{ background: '#f5f5f5', fontWeight: 600, breakInside: 'avoid' }}>
+          <td colSpan={cols.indexOf('amount') >= 0 ? cols.indexOf('amount') + 1 : cols.length} style={tdStyle('right')}>
+            合计：
+          </td>
+          {cols.indexOf('amount') >= 0 && (
+            <td style={tdStyle('right')}>
+              ¥{items.reduce((s, it) => s + Number(it.amount ?? 0), 0).toFixed(2)}
             </td>
-            {cols.indexOf('amount') >= 0 && (
-              <td style={tdStyle('right')}>
-                ¥{items.reduce((s, it) => s + Number(it.amount ?? 0), 0).toFixed(2)}
-              </td>
-            )}
-          </tr>
-        </tbody>
-      </table>
-    </div>
+          )}
+        </tr>
+      </tbody>
+    </table>
   )
 }
 

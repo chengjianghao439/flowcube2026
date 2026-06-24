@@ -3,9 +3,13 @@ import JsBarcode from 'jsbarcode'
 
 interface Props {
   value: string
+  /** 码制，默认 code128 */
+  symbology?: 'code128' | 'ean13'
+  /** 是否显示可读数字(HRI)，默认 true */
+  hri?: boolean
 }
 
-export default function BarcodePreview({ value }: Props) {
+export default function BarcodePreview({ value, symbology = 'code128', hri = true }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
@@ -20,20 +24,20 @@ export default function BarcodePreview({ value }: Props) {
     try {
       const barH = Math.max(20, Math.round(h * 0.72))
       JsBarcode(svg, value, {
-        format: 'CODE128',
+        format: symbology === 'ean13' ? 'EAN13' : 'CODE128',
         width: 2,
         height: barH,
         margin: 0,
-        displayValue: true,
+        displayValue: hri,
         fontSize: Math.max(10, Math.round(h * 0.18)),
         textMargin: 2,
         flat: true,
       })
       setSize({ w, h })
     } catch {
-      // 无效条码值则静默
+      // 无效条码值（如 EAN13 位数不符）则静默
     }
-  }, [value])
+  }, [value, symbology, hri])
 
   useEffect(() => {
     const el = containerRef.current

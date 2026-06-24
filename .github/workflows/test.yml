@@ -75,6 +75,9 @@ jobs:
       - name: 安装后端依赖
         run: npm --prefix backend ci
 
+      - name: 单元测试 — 标签几何/ZPL（纯函数，无需 DB）
+        run: npm run test:label
+
       - name: 等待 MySQL 就绪
         run: |
           set -e
