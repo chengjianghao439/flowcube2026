@@ -16,8 +16,12 @@ import {
   Save, Eye, EyeOff, Trash2, Loader2,
   AlignLeft, AlignCenter, AlignRight, Bold,
   Table2, Type, SeparatorHorizontal, Barcode, RotateCcw,
-  ZoomIn, ZoomOut,
+  ZoomIn, ZoomOut, Undo2, Redo2, Copy,
+  AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
+  AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
 } from 'lucide-react'
+
+type AlignDir = 'left' | 'hcenter' | 'right' | 'top' | 'vmiddle' | 'bottom'
 import { getPrintTemplateDetailApi, createPrintTemplateApi, updatePrintTemplateApi } from '@/api/print-templates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -221,6 +225,26 @@ function mkElement(field: FieldDef, xMm: number, yMm: number, isLabel = false): 
   return base
 }
 
+/** 吸附阈值（mm）：拖动元素的边/中心进入此距离即吸附到目标 */
+const SNAP_TH = 1.2
+
+/**
+ * 单轴吸附：元素在该轴有 3 个锚点（起点/中心/终点），任一进入阈值即吸附。
+ * @returns value=吸附后的起点坐标；guide=命中的参考线位置（无则 null）
+ */
+function snapAxis(pos: number, size: number, targets: number[]): { value: number; guide: number | null } {
+  const anchors = [pos, pos + size / 2, pos + size]
+  const offsets = [0, size / 2, size]
+  let best = { dist: Infinity, value: pos, guide: null as number | null }
+  anchors.forEach((a, i) => {
+    for (const t of targets) {
+      const d = Math.abs(a - t)
+      if (d < best.dist && d <= SNAP_TH) best = { dist: d, value: t - offsets[i], guide: t }
+    }
+  })
+  return { value: best.value, guide: best.guide }
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // Sub-components
 // ──────────────────────────────────────────────────────────────────────────
@@ -378,9 +402,10 @@ interface PropertiesPanelProps {
   isLabel: boolean
   onChange: (id: string, patch: Partial<TemplateElement>) => void
   onDelete: (id: string) => void
+  onAlign: (dir: AlignDir) => void
 }
 
-function PropertiesPanel({ el, isLabel, onChange, onDelete }: PropertiesPanelProps) {
+function PropertiesPanel({ el, isLabel, onChange, onDelete, onAlign }: PropertiesPanelProps) {
   if (!el) {
     return (
       <div className="flex w-60 shrink-0 flex-col border-l bg-muted/20">
@@ -431,6 +456,26 @@ function PropertiesPanel({ el, isLabel, onChange, onDelete }: PropertiesPanelPro
                   className="h-7 text-xs"
                 />
               </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 对齐到画布 */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">对齐到画布</label>
+          <div className="flex gap-1">
+            {([
+              ['left', <AlignHorizontalJustifyStart className="size-3.5" />, '左对齐'],
+              ['hcenter', <AlignHorizontalJustifyCenter className="size-3.5" />, '水平居中'],
+              ['right', <AlignHorizontalJustifyEnd className="size-3.5" />, '右对齐'],
+              ['top', <AlignVerticalJustifyStart className="size-3.5" />, '顶对齐'],
+              ['vmiddle', <AlignVerticalJustifyCenter className="size-3.5" />, '垂直居中'],
+              ['bottom', <AlignVerticalJustifyEnd className="size-3.5" />, '底对齐'],
+            ] as [AlignDir, React.ReactNode, string][]).map(([dir, icon, title]) => (
+              <Button key={dir} size="sm" variant="outline" className="flex-1 p-0" title={title}
+                onClick={() => onAlign(dir)}>
+                {icon}
+              </Button>
             ))}
           </div>
         </div>
@@ -581,6 +626,8 @@ export default function PrintTemplateEditor() {
   const [hydrated,   setHydrated]   = useState(isNew)
   /** 画布仅影响显示与拖拽换算，不改变存库的 mm 坐标 */
   const [editorZoom, setEditorZoom] = useState(1)
+  /** 拖动时的对齐参考线（mm 坐标），松手清空 */
+  const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] })
 
   // Load remote template once
   useEffect(() => {
@@ -682,6 +729,36 @@ export default function PrintTemplateEditor() {
     ? { ...(LABEL_PREVIEW_SAMPLE[type] ?? {}) }
     : { ...SAMPLE }
 
+  // ── Undo / redo history ──────────────────────────────────────
+  const historyPast = useRef<TemplateElement[][]>([])
+  const historyFuture = useRef<TemplateElement[][]>([])
+  const [, bumpHist] = useState(0)
+  // 最新 elements 引用，供键盘 effect 内的 snapshot/undo/redo 读取，规避 stale closure
+  const elementsRef = useRef(elements)
+  elementsRef.current = elements
+
+  /** 在改动 elements「之前」调用：压入当前快照、清空 redo 栈 */
+  function snapshot() {
+    historyPast.current.push(elementsRef.current)
+    if (historyPast.current.length > 100) historyPast.current.shift()
+    historyFuture.current = []
+    bumpHist(v => v + 1)
+  }
+  function undo() {
+    if (!historyPast.current.length) return
+    historyFuture.current.push(elementsRef.current)
+    setElements(historyPast.current.pop()!)
+    setSelectedId(null)
+    bumpHist(v => v + 1)
+  }
+  function redo() {
+    if (!historyFuture.current.length) return
+    historyPast.current.push(elementsRef.current)
+    setElements(historyFuture.current.pop()!)
+    setSelectedId(null)
+    bumpHist(v => v + 1)
+  }
+
   function clampEl(el: TemplateElement): TemplateElement {
     return {
       ...el,
@@ -691,12 +768,59 @@ export default function PrintTemplateEditor() {
   }
 
   function patchElement(id: string, patch: Partial<TemplateElement>) {
+    snapshot()
     setElements(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e))
   }
 
   function deleteElement(id: string) {
+    snapshot()
     setElements(prev => prev.filter(e => e.id !== id))
     if (selectedId === id) setSelectedId(null)
+  }
+
+  /** 复制选中元素，偏移 +2mm */
+  function duplicateElement(id: string) {
+    const src = elementsRef.current.find(e => e.id === id)
+    if (!src) return
+    snapshot()
+    const copy = clampEl({ ...src, id: makeId(), x: src.x + 2, y: src.y + 2 })
+    setElements(prev => [...prev, copy])
+    setSelectedId(copy.id)
+  }
+
+  /** 拖动吸附：把元素边/中心吸到画布中线或其他元素边/中心，返回吸附坐标 + 参考线 */
+  function computeSnap(x: number, y: number, w: number, h: number, selfId: string) {
+    const xT = [0, paper.w / 2, paper.w]
+    const yT = [0, paper.h / 2, paper.h]
+    for (const o of elementsRef.current) {
+      if (o.id === selfId) continue
+      xT.push(o.x, o.x + o.width / 2, o.x + o.width)
+      yT.push(o.y, o.y + o.height / 2, o.y + o.height)
+    }
+    const sx = snapAxis(x, w, xT)
+    const sy = snapAxis(y, h, yT)
+    return {
+      x: Math.max(0, sx.value),
+      y: Math.max(0, sy.value),
+      guides: { x: sx.guide != null ? [sx.guide] : [], y: sy.guide != null ? [sy.guide] : [] },
+    }
+  }
+
+  /** 选中元素对齐到画布六向 */
+  function alignSelectedToCanvas(dir: AlignDir) {
+    if (!selectedId) return
+    snapshot()
+    setElements(prev => prev.map(el => {
+      if (el.id !== selectedId) return el
+      let { x, y } = el
+      if (dir === 'left') x = 0
+      else if (dir === 'hcenter') x = Math.max(0, (paper.w - el.width) / 2)
+      else if (dir === 'right') x = Math.max(0, paper.w - el.width)
+      else if (dir === 'top') y = 0
+      else if (dir === 'vmiddle') y = Math.max(0, (paper.h - el.height) / 2)
+      else if (dir === 'bottom') y = Math.max(0, paper.h - el.height)
+      return { ...el, x: Math.round(x), y: Math.round(y) }
+    }))
   }
 
   function handleSave() {
@@ -721,6 +845,7 @@ export default function PrintTemplateEditor() {
 
   function restoreLabelLayout() {
     if (!isZplLabelType(type)) return
+    snapshot()
     setElements(cloneDefaultLabelElements(type))
     setSelectedId(null)
     toast.success('已恢复默认布局')
@@ -748,6 +873,7 @@ export default function PrintTemplateEditor() {
     const xMm  = Math.max(0, xPx / canvasScale - field.defaultW / 2)
     const yMm  = Math.max(0, yPx / canvasScale - field.defaultH / 2)
 
+    snapshot()
     const newEl = mkElement(field, xMm, yMm, isZplLabelType(type))
     setElements(prev => [...prev, newEl])
     setSelectedId(newEl.id)
@@ -763,16 +889,21 @@ export default function PrintTemplateEditor() {
     draggingElId.current   = el.id
     dragStartMouse.current = { x: e.clientX, y: e.clientY }
     dragStartEl.current    = { x: el.x, y: el.y }
+    let moved = false
 
     function onMouseMove(me: MouseEvent) {
+      if (!moved) { moved = true; snapshot() }
       const dxMm = (me.clientX - dragStartMouse.current.x) / canvasScale
       const dyMm = (me.clientY - dragStartMouse.current.y) / canvasScale
-      const newX  = Math.max(0, dragStartEl.current.x + dxMm)
-      const newY  = Math.max(0, dragStartEl.current.y + dyMm)
-      setElements(prev => prev.map(e => e.id === draggingElId.current ? { ...e, x: newX, y: newY } : e))
+      const rawX = Math.max(0, dragStartEl.current.x + dxMm)
+      const rawY = Math.max(0, dragStartEl.current.y + dyMm)
+      const snap = computeSnap(rawX, rawY, el.width, el.height, el.id)
+      setGuides(snap.guides)
+      setElements(prev => prev.map(e => e.id === draggingElId.current ? { ...e, x: snap.x, y: snap.y } : e))
     }
 
     function onMouseUp() {
+      setGuides({ x: [], y: [] })
       // clamp to canvas bounds
       setElements(prev => prev.map(e => e.id === draggingElId.current ? clampEl(e) : e))
       draggingElId.current = null
@@ -794,8 +925,10 @@ export default function PrintTemplateEditor() {
     const s = { x: el.x, y: el.y, w: el.width, h: el.height }
     const MIN = 3 // mm 最小尺寸
     const id = el.id
+    let moved = false
 
     function onMouseMove(me: MouseEvent) {
+      if (!moved) { moved = true; snapshot() }
       const dxMm = (me.clientX - startMouse.x) / canvasScale
       const dyMm = (me.clientY - startMouse.y) / canvasScale
       let x = s.x, y = s.y, w = s.w, h = s.h
@@ -830,12 +963,23 @@ export default function PrintTemplateEditor() {
     }
     function onKey(e: KeyboardEvent) {
       const inField = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && !inField && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault()
+        if (e.shiftKey) redo(); else undo()
+        return
+      }
+      if (mod && !inField && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redo(); return }
+      if (mod && !inField && (e.key === 'd' || e.key === 'D') && selectedId) {
+        e.preventDefault(); duplicateElement(selectedId); return
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !inField) {
         deleteElement(selectedId)
       }
       if (e.key === 'Escape') setSelectedId(null)
       if (selectedId && !inField && ARROWS[e.key]) {
         e.preventDefault()
+        snapshot()
         const step = e.shiftKey ? 5 : 1
         const [dx, dy] = ARROWS[e.key]
         setElements(prev => prev.map(el => el.id === selectedId
@@ -966,6 +1110,21 @@ export default function PrintTemplateEditor() {
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">{elements.length} 个元素</span>
 
+            <div className="flex items-center gap-0.5 rounded-md border border-border bg-background px-0.5 py-0.5">
+              <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                disabled={historyPast.current.length === 0} onClick={undo} title="撤销 (Ctrl+Z)">
+                <Undo2 className="size-3.5" />
+              </Button>
+              <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                disabled={historyFuture.current.length === 0} onClick={redo} title="重做 (Ctrl+Shift+Z / Ctrl+Y)">
+                <Redo2 className="size-3.5" />
+              </Button>
+              <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                disabled={!selectedId} onClick={() => selectedId && duplicateElement(selectedId)} title="复制选中元素 (Ctrl+D)">
+                <Copy className="size-3.5" />
+              </Button>
+            </div>
+
             <div className="flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5">
               <span className="text-[10px] text-muted-foreground px-0.5">画布</span>
               <Button
@@ -1084,6 +1243,13 @@ export default function PrintTemplateEditor() {
                 />
               ))}
 
+              {!preview && guides.x.map((gx, i) => (
+                <div key={`gx${i}`} style={{ position: 'absolute', left: gx * canvasScale, top: 0, width: 1, height: '100%', background: '#ec4899', zIndex: 30, pointerEvents: 'none' }} />
+              ))}
+              {!preview && guides.y.map((gy, i) => (
+                <div key={`gy${i}`} style={{ position: 'absolute', top: gy * canvasScale, left: 0, height: 1, width: '100%', background: '#ec4899', zIndex: 30, pointerEvents: 'none' }} />
+              ))}
+
               {elements.length === 0 && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground/40 pointer-events-none">
                   <Table2 className="size-10" />
@@ -1103,6 +1269,7 @@ export default function PrintTemplateEditor() {
               isLabel={isZplLabelType(type)}
               onChange={patchElement}
               onDelete={deleteElement}
+              onAlign={alignSelectedToCanvas}
             />
           )}
         </div>
