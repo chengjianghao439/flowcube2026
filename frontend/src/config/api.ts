@@ -84,12 +84,20 @@ export function isStaleLocalViteProxyOrigin(raw: string): boolean {
   }
 }
 
-/** 安装包启动时移除误同步的「本机」Vite 地址，避免连错 */
+/**
+ * 安装包启动时清理本地残留地址：
+ * - 已注入内置地址：桌面端只认内置地址，移除任何历史登录/探测固化的 override，
+ *   否则老机器旧地址会压过新版内置地址，且已无快捷键可纠正。
+ * - 内置地址缺失（漏注入）的应急态：仅清掉误同步的「本机」Vite 地址，保留 override 兜底。
+ */
 export function clearElectronStaleViteOrigins(): void {
   if (!IS_ELECTRON_DESKTOP) return
   if (typeof localStorage === 'undefined') return
+  const builtin = normalizeApiBase(getDynamicDefaultApi())
   const raw = readStorageValue(API_BASE_STORAGE_KEY)
-  if (raw && isStaleLocalViteProxyOrigin(raw)) {
+  if (builtin) {
+    if (raw) localStorage.removeItem(API_BASE_STORAGE_KEY)
+  } else if (raw && isStaleLocalViteProxyOrigin(raw)) {
     localStorage.removeItem(API_BASE_STORAGE_KEY)
   }
   localStorage.removeItem(LEGACY_ERP_ORIGIN_KEY)
@@ -191,6 +199,11 @@ export function collectErpApiFallbackCandidates(): string[] {
 
 /** 已保存地址或动态默认（含旧键迁移） */
 export function getApiBase(): string {
+  // 桌面安装包优先用构建期内置地址（见 getStoredEffectiveApiOrigin 注释）
+  if (IS_ELECTRON_DESKTOP) {
+    const builtin = normalizeApiBase(getDynamicDefaultApi())
+    if (builtin) return builtin
+  }
   const override = getStoredApiBaseOverride()
   if (override) {
     if (IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(override)) {
@@ -216,6 +229,13 @@ export function getUserConfiguredApiOriginsInOrder(): string[] {
 }
 
 function getStoredEffectiveApiOrigin(): string | null {
+  // 桌面安装包：地址固定来自构建期注入，忽略本地残留 override，
+  // 避免老机器 localStorage 残留的旧地址压过新版内置地址（改地址 = 重新打包发版即可全量生效）。
+  // 仅当内置地址缺失（漏注入）时才应急回退到残留 override。
+  if (IS_ELECTRON_DESKTOP) {
+    const builtin = normalizeApiBase(getDynamicDefaultApi())
+    if (builtin) return builtin
+  }
   const override = getStoredApiBaseOverride()
   if (override) {
     if (IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(override)) {
@@ -264,6 +284,8 @@ publishDefaultApiOriginToWindow()
 
 /** 登录成功后固化当前 API 根 */
 export function persistErpApiBaseAfterLogin(): void {
+  // 桌面安装包地址固定来自构建期注入，不写入 localStorage override（避免残留压过新版内置地址）
+  if (IS_ELECTRON_DESKTOP) return
   const existing = getEffectiveApiOrigin()
   if (existing) {
     setApiBase(existing)

@@ -69,13 +69,9 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
           </p>
         ) : null}
         <p className="max-w-md text-xs text-muted-foreground">
-          {origin ? '请确认后端已启动，服务器网络可达。' : '请重新构建安装包并注入生产 API 地址，或先在登录页手动配置。'}
-          若填的是本机 <code className="rounded border px-0.5">localhost:5173</code>，安装包会改回默认；局域网{' '}
-          <code className="rounded border px-0.5">192.168.x.x:5173</code> 表示连 Mac 上 Vite 代理，可保留。请确认后端已启动，服务器上设置{' '}
-          <code className="rounded border px-0.5">CORS_REFLECT=1</code> 或{' '}
-          <code className="rounded border px-0.5">CORS_ORIGIN=*</code> 以允许桌面端（Origin 为 null）。可按{' '}
-          <kbd className="rounded border px-1">Ctrl</kbd>+<kbd className="rounded border px-1">Shift</kbd>+
-          <kbd className="rounded border px-1">S</kbd> 修改 API 根地址。
+          {origin
+            ? '请确认后端已启动、服务器网络可达；若长期无法连接，请联系管理员。'
+            : '当前安装包未注入服务器地址，请联系管理员重新构建安装包（注入生产 API 地址）。'}
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           <Button type="button" variant="default" onClick={() => navigate('/login', { replace: true })}>

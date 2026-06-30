@@ -180,7 +180,7 @@ apiClient.interceptors.response.use(
       ?? (status == null && (transportCode === 'ERR_NETWORK' || rawMsg === 'Network Error')
         ? isNativePdaNoViteLive()
           ? '无法连接服务器，请检查网络与内置服务器地址是否可达'
-          : '无法连接服务器，请检查网络与后端地址（Ctrl+Shift+S 可配置 API）'
+          : '无法连接服务器，请检查网络与后端服务是否正常'
         : null)
       ?? (transportCode === 'ECONNABORTED' ? '请求超时，请稍后重试' : null)
       ?? rawMsg
