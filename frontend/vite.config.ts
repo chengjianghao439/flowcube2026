@@ -18,6 +18,7 @@ function devProxyToBackend(target: string): ProxyOptions {
   return {
     target,
     changeOrigin: true,
+    secure: false, // 允许指向自签名 HTTPS 后端（如生产 47.93.228.251）
     configure(proxy) {
       proxy.on('proxyReq', (proxyReq: ClientRequest, req: IncomingMessage) => {
         const host = req.headers.host
@@ -131,14 +132,14 @@ export default defineConfig(({ command }) => {
       port: 5173,
       host: true,
       proxy: {
-        '/api': devProxyToBackend('http://localhost:3000'),
+        '/api': devProxyToBackend(process.env.DEV_API_TARGET || 'http://localhost:3000'),
       },
     },
     preview: {
       port: 4173,
       host: true,
       proxy: {
-        '/api': devProxyToBackend('http://localhost:3000'),
+        '/api': devProxyToBackend(process.env.DEV_API_TARGET || 'http://localhost:3000'),
       },
     },
   }

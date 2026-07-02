@@ -18,6 +18,15 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev:pda"],
       "port": 5173
+    },
+    {
+      "name": "frontend-dev-prod-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
+      "port": 5173,
+      "env": {
+        "DEV_API_TARGET": "https://47.93.228.251"
+      }
     }
   ]
 }

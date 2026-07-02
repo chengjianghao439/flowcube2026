@@ -35,10 +35,10 @@ const PO_COLUMNS = `po.id, po.order_no, po.supplier_id, po.supplier_name, po.war
 
 const genOrderNo = conn => generateDailyCode(conn, 'PO', 'purchase_orders', 'order_no')
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operator=null }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
-  const params = [like, like]
+  const params = [like]
   let whereExtra = ''
   if (status) {
     whereExtra += ' AND po.status = ?'
@@ -47,6 +47,30 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
   if (productId) {
     whereExtra += ' AND EXISTS (SELECT 1 FROM purchase_order_items poi WHERE poi.order_id = po.id AND poi.product_id = ?)'
     params.push(productId)
+  }
+  if (supplierId) {
+    whereExtra += ' AND po.supplier_id = ?'
+    params.push(supplierId)
+  }
+  if (warehouseId) {
+    whereExtra += ' AND po.warehouse_id = ?'
+    params.push(warehouseId)
+  }
+  if (startDate) {
+    whereExtra += ' AND DATE(po.created_at) >= ?'
+    params.push(startDate)
+  }
+  if (endDate) {
+    whereExtra += ' AND DATE(po.created_at) <= ?'
+    params.push(endDate)
+  }
+  if (remark) {
+    whereExtra += ' AND po.remark LIKE ?'
+    params.push(`%${remark}%`)
+  }
+  if (operator) {
+    whereExtra += ' AND po.operator_name LIKE ?'
+    params.push(`%${operator}%`)
   }
   const [rows] = await pool.query(
     `SELECT ${PO_COLUMNS},
@@ -63,13 +87,13 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
          WHERE it.purchase_order_id = po.id AND it.deleted_at IS NULL
        ), 0) AS total_received_qty
      FROM purchase_orders po
-     WHERE po.deleted_at IS NULL AND (po.order_no LIKE ? OR po.supplier_name LIKE ?) ${whereExtra}
+     WHERE po.deleted_at IS NULL AND po.order_no LIKE ? ${whereExtra}
      ORDER BY po.created_at DESC LIMIT ? OFFSET ?`,
     [...params, pageSize, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM purchase_orders po
-     WHERE po.deleted_at IS NULL AND (po.order_no LIKE ? OR po.supplier_name LIKE ?) ${whereExtra}`,
+     WHERE po.deleted_at IS NULL AND po.order_no LIKE ? ${whereExtra}`,
     params,
   )
   return { list: rows.map(fmtOrder), pagination: { page, pageSize, total } }
