@@ -114,6 +114,16 @@ const INVALIDATION_MAP = {
     ['purchase'],
   ],
 
+  /** 编辑采购单草稿 */
+  purchase_update: [
+    ['purchase'],
+  ],
+
+  /** 关闭剩余结案采购单 */
+  purchase_close: [
+    ['purchase'],
+  ],
+
   // ── 入库任务 ──────────────────────────────────────────────────────────────
 
   /** 新建入库任务 */

@@ -4,6 +4,8 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { appendInboundEvent } = require('../inbound-tasks/inbound-tasks.helpers')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { recomputePurchasePayable } = require('../inbound-tasks/inbound-tasks.settle')
 
 const STATUS = { 1:'草稿', 2:'已提交', 3:'已完成', 4:'已取消' }
 
@@ -111,10 +113,19 @@ async function findById(id) {
   return order
 }
 
-async function create({ supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator }) {
+async function create({ supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator, requestKey }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'purchase.create',
+      userId: operator?.userId ?? null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
     const orderNo = await genOrderNo(conn)
     const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
     const [r] = await conn.query(
@@ -128,8 +139,69 @@ async function create({ supplierId, supplierName, warehouseId, warehouseName, ex
         [orderId,item.productId,item.productCode,item.productName,item.unit,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null]
       )
     }
+    const result = { id:orderId, orderNo }
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: '创建成功',
+      resourceType: 'purchase_order',
+      resourceId: orderId,
+    })
     await conn.commit()
-    return { id:orderId, orderNo }
+    return result
+  } catch(e){ await conn.rollback(); throw e }
+  finally { conn.release() }
+}
+
+async function update(id, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items }) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const row = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status', entityName: '采购单' })
+    assertStatusAction('purchase', 'edit', row.status)
+    const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
+    await conn.query(
+      `UPDATE purchase_orders SET supplier_id=?, supplier_name=?, warehouse_id=?, warehouse_name=?, expected_date=?, total_amount=?, remark=? WHERE id=?`,
+      [supplierId,supplierName,warehouseId,warehouseName,expectedDate||null,total,remark||null,id]
+    )
+    await conn.query('DELETE FROM purchase_order_items WHERE order_id=?', [id])
+    for(const item of items) {
+      await conn.query(
+        `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?)`,
+        [id,item.productId,item.productCode,item.productName,item.unit,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null]
+      )
+    }
+    await conn.commit()
+  } catch(e){ await conn.rollback(); throw e }
+  finally { conn.release() }
+  return findById(id)
+}
+
+// 短装结案：把「已提交(2)」采购单手动完成（剩余未收量作罢），前提是相关收货订单已全部审核通过且确有实收入库。
+async function closeRemaining(id, operator) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const row = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, order_no, status', entityName: '采购单' })
+    const rule = assertStatusAction('purchase', 'close', row.status)
+    const [[{ pending }]] = await conn.query(
+      `SELECT COUNT(*) AS pending FROM inbound_tasks
+        WHERE purchase_order_id=? AND deleted_at IS NULL AND status<>5 AND audit_status<>1`,
+      [id],
+    )
+    if (Number(pending) > 0) throw new AppError('存在未审核通过的收货订单，请先完成审核再关闭剩余', 409)
+    const [[{ received }]] = await conn.query(
+      `SELECT COALESCE(SUM(iti.putaway_qty),0) AS received
+         FROM inbound_tasks it JOIN inbound_task_items iti ON iti.task_id=it.id
+        WHERE it.purchase_order_id=? AND it.deleted_at IS NULL AND it.status<>5 AND it.audit_status=1`,
+      [id],
+    )
+    if (Number(received) <= 0) throw new AppError('该采购单尚无已审核入库，不能关闭结案（如需终止请改用取消）', 409)
+    await recomputePurchasePayable(conn, id)
+    await compareAndSetStatus(conn, {
+      table: 'purchase_orders', id,
+      fromStatus: rule.from, toStatus: rule.to, entityName: '采购单',
+    })
+    await conn.commit()
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
 }
@@ -219,4 +291,4 @@ async function cancel(id, operator) {
   }
 }
 
-module.exports = { findAll, findById, create, confirm, cancel }
+module.exports = { findAll, findById, create, update, confirm, cancel, closeRemaining }

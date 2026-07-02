@@ -4,6 +4,7 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
   purchase: {
     entityName: '采购单',
     actions: {
+      edit: { from: [1], message: '只有草稿状态的采购单可以编辑' },
       confirm: { from: [1], to: 2, message: '只有草稿状态的采购单可以提交' },
       createInboundTask: { from: [2], message: '只有已确认的采购单可创建入库任务' },
       cancel: {
@@ -16,6 +17,7 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
         },
       },
       complete: { from: [2], to: 3, message: '只有已提交的采购单可以完成' },
+      close: { from: [2], to: 3, message: '只有已提交的采购单可以关闭剩余结案' },
     },
   },
   sale: {

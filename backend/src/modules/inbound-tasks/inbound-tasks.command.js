@@ -20,6 +20,7 @@ const { findById } = require('./inbound-tasks.query')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { settlePurchaseOnAudit } = require('./inbound-tasks.settle')
 
 async function assertPurchaseOrderOpen(conn, purchaseOrderId) {
   if (!Number.isFinite(Number(purchaseOrderId)) || Number(purchaseOrderId) <= 0) return
@@ -283,6 +284,11 @@ async function audit(taskId, { action = 'approve', remark = '' } = {}, operator)
       operator,
       { auditStatus, remark: normalizedRemark || null },
     )
+    // 审核通过 = 采购结算闸门：重算应付（按实收）+ 收齐则自动完成采购单。
+    // 退回不结算；重新审核通过时因全量重算而幂等，不会重复计账。
+    if (normalizedAction === 'approve') {
+      await settlePurchaseOnAudit(conn, taskId)
+    }
     await conn.commit()
     return findById(taskId)
   } catch (e) {

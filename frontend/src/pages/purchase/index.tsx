@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import { usePurchaseList, useConfirmPurchase, useCancelPurchase, usePurchaseDetail } from '@/hooks/usePurchase'
+import { usePurchaseList, useConfirmPurchase, useCancelPurchase, useClosePurchase, usePurchaseDetail } from '@/hooks/usePurchase'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
 import { mapPurchaseOrderToPrint } from '@/lib/orderPrintData'
 import { downloadExport } from '@/lib/exportDownload'
@@ -87,6 +87,7 @@ export default function PurchasePage() {
   })
   const confirm = useConfirmPurchase()
   const cancel = useCancelPurchase()
+  const close = useClosePurchase()
   const { data: printDetail } = usePurchaseDetail(printId || 0)
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
@@ -206,6 +207,9 @@ export default function PurchasePage() {
             primaryVariant="outline"
             items={[
               ...(r.status === 1 ? [{
+                label: '编辑',
+                onClick: () => goToDetail(r),
+              }, {
                 label: '提交',
                 onClick: () => confirm.mutate(r.id),
                 disabled: confirm.isPending,
@@ -214,6 +218,17 @@ export default function PurchasePage() {
                 label: '打印',
                 onClick: () => setPrintId(r.id),
               },
+              ...(r.status === 2 ? [{
+                label: '关闭剩余',
+                separatorBefore: true,
+                onClick: () => openConfirm(
+                  '关闭剩余结案',
+                  '将按已审核入库的实收数量结算应付并完成采购单，未收部分作罢。仅在相关收货订单均已审核通过时可用。',
+                  () => { closeConfirm(); close.mutate(r.id) },
+                  { confirmText: '确认结案' },
+                ),
+                disabled: close.isPending,
+              }] : []),
               ...((r.status === 1 || r.status === 2) ? [{
                 label: '取消',
                 destructive: true,

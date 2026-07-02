@@ -28,11 +28,12 @@ import { SupplierFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import {
   useCreatePurchase,
+  useUpdatePurchase,
   usePurchaseDetail,
   useConfirmPurchase,
   useCancelPurchase,
 } from '@/hooks/usePurchase'
-import type { PurchaseOrderItem } from '@/types/purchase'
+import type { PurchaseOrder, PurchaseOrderItem } from '@/types/purchase'
 import type { ProductFinderResult } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
 
@@ -61,22 +62,35 @@ export default function PurchaseFormPage() {
     navigate(targetPath)
   }
 
-  if (isNew) return <CreateView closeTab={closeTab} tabPath={tabPath} />
-  return <DetailView purchaseId={purchaseId!} closeTab={closeTab} />
+  if (isNew) return <FormView closeTab={closeTab} tabPath={tabPath} />
+  return <DetailView purchaseId={purchaseId!} closeTab={closeTab} tabPath={tabPath} />
 }
 
-function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string }) {
+function FormView({ closeTab, tabPath, editOrder, onSaved }: {
+  closeTab: () => void
+  tabPath: string
+  editOrder?: PurchaseOrder
+  onSaved?: () => void
+}) {
   const navigate = useNavigate()
   const createMutate = useCreatePurchase()
+  const updateMutate = useUpdatePurchase()
+  const isEdit = !!editOrder
+  const submitting = createMutate.isPending || updateMutate.isPending
 
-  const [supplierId, setSupplierId] = useState('')
-  const [supplierName, setSupplierName] = useState('')
-  const [warehouseId, setWarehouseId] = useState('')
-  const [warehouseName, setWarehouseName] = useState('')
-  const [expectedDate, setExpectedDate] = useState('')
-  const [remark, setRemark] = useState('')
-  const [items, setItems] = useState<DraftItem[]>([])
-  const [counter, setCounter] = useState(0)
+  const [supplierId, setSupplierId] = useState(editOrder ? String(editOrder.supplierId) : '')
+  const [supplierName, setSupplierName] = useState(editOrder?.supplierName ?? '')
+  const [warehouseId, setWarehouseId] = useState(editOrder ? String(editOrder.warehouseId) : '')
+  const [warehouseName, setWarehouseName] = useState(editOrder?.warehouseName ?? '')
+  const [expectedDate, setExpectedDate] = useState(editOrder?.expectedDate ?? '')
+  const [remark, setRemark] = useState(editOrder?.remark ?? '')
+  const [items, setItems] = useState<DraftItem[]>(
+    (editOrder?.items ?? []).map((it, idx) => ({
+      _key: idx, productId: it.productId, productCode: it.productCode, productName: it.productName,
+      unit: it.unit, quantity: it.quantity, unitPrice: it.unitPrice, remark: it.remark ?? '',
+    })),
+  )
+  const [counter, setCounter] = useState(editOrder?.items?.length ?? 0)
   const [finderOpen, setFinderOpen] = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [supplierFinderOpen, setSupplierFinderOpen] = useState(false)
@@ -141,7 +155,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   }
 
   async function handleSubmit() {
-    if (submitLocked || createMutate.isPending) return
+    if (submitLocked || submitting) return
     if (!supplierId || !supplierName) {
       toast.warning('请选择供应商')
       return
@@ -162,19 +176,26 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       toast.warning('采购数量必须为大于 0 的整数')
       return
     }
+    const payload = {
+      supplierId: +supplierId,
+      supplierName,
+      warehouseId: +warehouseId,
+      warehouseName,
+      expectedDate: expectedDate || undefined,
+      remark: remark || undefined,
+      items: items.map(({ _key, ...rest }) => rest),
+    }
     try {
       setSubmitLocked(true)
-      const res = await createMutate.mutateAsync({
-        supplierId: +supplierId,
-        supplierName,
-        warehouseId: +warehouseId,
-        warehouseName,
-        expectedDate: expectedDate || undefined,
-        remark: remark || undefined,
-        items: items.map(({ _key, ...rest }) => rest),
-      })
-      const id = res?.id
-      closeTab(id ? `/purchase/${id}` : '/purchase')
+      if (isEdit && editOrder) {
+        await updateMutate.mutateAsync({ id: editOrder.id, data: payload })
+        toast.success('已保存')
+        onSaved?.()
+      } else {
+        const res = await createMutate.mutateAsync(payload)
+        const id = res?.id
+        closeTab(id ? `/purchase/${id}` : '/purchase')
+      }
     } catch (_) {
     } finally {
       setSubmitLocked(false)
@@ -187,20 +208,24 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   return (
     <div className="flex flex-col gap-4">
       <ActionBar
-        title="新建采购单"
+        title={isEdit ? '编辑采购单' : '新建采购单'}
         rightActions={
           <>
-
-            <Button onClick={handleSubmit} disabled={createMutate.isPending || submitLocked} className="gap-1.5">
-              {createMutate.isPending || submitLocked ? (
+            {isEdit && (
+              <Button variant="outline" disabled={submitting || submitLocked} onClick={() => onSaved?.()}>
+                取消编辑
+              </Button>
+            )}
+            <Button onClick={handleSubmit} disabled={submitting || submitLocked} className="gap-1.5">
+              {submitting || submitLocked ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  提交中...
+                  {isEdit ? '保存中...' : '提交中...'}
                 </>
               ) : (
                 <>
                   <Save className="h-4 w-4" />
-                  提交保存
+                  {isEdit ? '保存' : '提交保存'}
                 </>
               )}
             </Button>
@@ -395,10 +420,11 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   )
 }
 
-function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: (targetPath?: string) => void }) {
+function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; closeTab: (targetPath?: string) => void; tabPath: string }) {
   const { data: order, isLoading } = usePurchaseDetail(purchaseId)
   const confirmMutate = useConfirmPurchase()
   const cancelMutate  = useCancelPurchase()
+  const [editing, setEditing] = useState(false)
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean
@@ -434,6 +460,10 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: (t
     )
   }
 
+  if (editing) {
+    return <FormView editOrder={order} closeTab={closeTab} tabPath={tabPath} onSaved={() => setEditing(false)} />
+  }
+
   const canConfirm = order.status === 1
   const canCancel  = order.status === 1 || order.status === 2
   const isPending  = confirmMutate.isPending || cancelMutate.isPending
@@ -452,6 +482,11 @@ function DetailView({ purchaseId, closeTab }: { purchaseId: number; closeTab: (t
                   cancelMutate.mutate(order.id)
                 })}>
                 取消
+              </Button>
+            )}
+            {order.status === 1 && (
+              <Button variant="outline" disabled={isPending} onClick={() => setEditing(true)}>
+                编辑
               </Button>
             )}
             {canConfirm && (

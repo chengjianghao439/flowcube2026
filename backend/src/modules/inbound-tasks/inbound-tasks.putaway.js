@@ -8,50 +8,6 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
-async function syncPurchaseOrderStatus(conn, purchaseOrderId) {
-  if (!Number.isFinite(purchaseOrderId) || purchaseOrderId <= 0) return
-  const completeRule = assertStatusAction('purchase', 'complete', 2)
-
-  const [rows] = await conn.query(
-    `SELECT
-        poi.id,
-        poi.quantity,
-        COALESCE(SUM(
-          CASE
-            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
-            ELSE iti.putaway_qty
-          END
-        ), 0) AS putaway_qty
-      FROM purchase_order_items poi
-      LEFT JOIN inbound_task_items iti
-        ON iti.purchase_item_id = poi.id
-      LEFT JOIN inbound_tasks it
-        ON it.id = iti.task_id
-      WHERE poi.order_id = ?
-      GROUP BY poi.id, poi.quantity`,
-    [purchaseOrderId],
-  )
-
-  const completed = rows.length > 0 && rows.every(row => Number(row.putaway_qty) >= Number(row.quantity))
-  if (!completed) return
-
-  await compareAndSetStatus(conn, {
-    table: 'purchase_orders',
-    id: purchaseOrderId,
-    fromStatus: completeRule.from,
-    toStatus: completeRule.to,
-    entityName: '采购单',
-  })
-  const [[po]] = await conn.query('SELECT * FROM purchase_orders WHERE id = ?', [purchaseOrderId])
-  if (!po) return
-
-  await conn.query(
-    `INSERT IGNORE INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,due_date)
-     VALUES (1,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL 30 DAY))`,
-    [po.id, po.order_no, po.supplier_name, Number(po.total_amount), Number(po.total_amount)],
-  )
-}
-
 async function tryFinishTask(conn, taskId) {
   const finishRule = assertStatusAction('inboundTask', 'finish', 3)
   const [[{ n }]] = await conn.query(
@@ -87,17 +43,8 @@ async function tryFinishTask(conn, taskId) {
   } catch (error) {
     if (error?.statusCode !== 409) throw error
   }
-
-  const [poRows] = await conn.query(
-    `SELECT DISTINCT purchase_order_id
-     FROM inbound_task_items
-     WHERE task_id = ? AND purchase_order_id IS NOT NULL`,
-    [taskId],
-  )
-
-  for (const row of poRows) {
-    await syncPurchaseOrderStatus(conn, Number(row.purchase_order_id))
-  }
+  // 采购单「完成 + 应付」已移至审核通过时结算（见 inbound-tasks.settle.js）。
+  // 上架完成只把收货订单推进到「已完成(4)·待审核」。
 }
 
 async function putaway(taskId, { containerId, locationId }, operator, { requestKey } = {}) {
@@ -256,5 +203,4 @@ async function putaway(taskId, { containerId, locationId }, operator, { requestK
 module.exports = {
   putaway,
   tryFinishTask,
-  syncPurchaseOrderStatus,
 }
