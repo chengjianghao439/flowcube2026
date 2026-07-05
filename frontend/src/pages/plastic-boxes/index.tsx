@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Badge } from '@/components/ui/badge'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import { ProductFinder, WarehouseFinder, FinderTrigger } from '@/components/finder'
+import { ProductFinder, FinderTrigger } from '@/components/finder'
+import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { payloadClient } from '@/api/client'
@@ -143,7 +144,6 @@ function CreateDialog({ open, onClose, onSubmit, loading }: { open: boolean; onC
   const [product, setProduct] = useState<FinderResult | null>(null)
   const [warehouse, setWarehouse] = useState<FinderResult | null>(null)
   const [productFinderOpen, setProductFinderOpen] = useState(false)
-  const [warehouseFinderOpen, setWarehouseFinderOpen] = useState(false)
 
   const handleSubmit = () => {
     if (!product) { toast.warning('请选择产品'); return }
@@ -169,7 +169,11 @@ function CreateDialog({ open, onClose, onSubmit, loading }: { open: boolean; onC
           </div>
           <div className="space-y-1.5">
             <Label>所属仓库 *</Label>
-            <FinderTrigger value={warehouse?.name ?? ''} placeholder="点击选择仓库..." onClick={() => setWarehouseFinderOpen(true)} />
+            <WarehouseSelect
+              value={warehouse?.id ?? null}
+              onChange={(id, name) => setWarehouse(id ? { id, name } : null)}
+              placeholder="选择仓库"
+            />
           </div>
         </div>
         <DialogFooter>
@@ -177,7 +181,6 @@ function CreateDialog({ open, onClose, onSubmit, loading }: { open: boolean; onC
           <Button onClick={handleSubmit} disabled={loading}>{loading ? '创建中...' : '创建'}</Button>
         </DialogFooter>
         <ProductFinder open={productFinderOpen} onClose={() => setProductFinderOpen(false)} onConfirm={(p) => { setProduct(p); setProductFinderOpen(false) }} />
-        <WarehouseFinder open={warehouseFinderOpen} onClose={() => setWarehouseFinderOpen(false)} onConfirm={(w) => { setWarehouse(w); setWarehouseFinderOpen(false) }} />
       </DialogContent>
     </Dialog>
   )

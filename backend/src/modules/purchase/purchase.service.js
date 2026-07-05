@@ -37,7 +37,7 @@ const PO_COLUMNS = `po.id, po.order_no, po.supplier_id, po.supplier_name, po.war
 
 const genOrderNo = conn => generateDailyCode(conn, 'PO', 'purchase_orders', 'order_no')
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operator=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
   const params = [like]
@@ -70,9 +70,9 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     whereExtra += ' AND po.remark LIKE ?'
     params.push(`%${remark}%`)
   }
-  if (operator) {
-    whereExtra += ' AND po.operator_name LIKE ?'
-    params.push(`%${operator}%`)
+  if (operatorId) {
+    whereExtra += ' AND po.operator_id = ?'
+    params.push(operatorId)
   }
   const [rows] = await pool.query(
     `SELECT ${PO_COLUMNS},
@@ -109,7 +109,23 @@ async function findById(id) {
   if (!rows[0]) throw new AppError('采购单不存在', 404)
   const order = fmtOrder(rows[0])
   const [items] = await pool.query('SELECT * FROM purchase_order_items WHERE order_id=?',[id])
-  order.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, quantity:Number(r.quantity), unitPrice:Number(r.unit_price), amount:Number(r.amount), remark:r.remark }))
+  order.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, articleNumber:r.article_number, spec:r.spec, color:r.color, quantity:Number(r.quantity), unitPrice:Number(r.unit_price), amount:Number(r.amount), remark:r.remark }))
+
+  const [[qty]] = await pool.query(
+    `SELECT COALESCE(SUM(iti.ordered_qty),0) AS total_ordered_qty, COALESCE(SUM(iti.received_qty),0) AS total_received_qty
+     FROM inbound_tasks it JOIN inbound_task_items iti ON iti.task_id = it.id
+     WHERE it.purchase_order_id = ? AND it.deleted_at IS NULL`,
+    [id],
+  )
+  order.totalOrderedQty = Number(qty.total_ordered_qty)
+  order.totalReceivedQty = Number(qty.total_received_qty)
+
+  const [taskRows] = await pool.query(
+    `SELECT id, task_no, status FROM inbound_tasks WHERE purchase_order_id = ? AND deleted_at IS NULL ORDER BY created_at ASC`,
+    [id],
+  )
+  order.inboundTasks = taskRows.map(r => ({ id: r.id, taskNo: r.task_no, status: r.status }))
+
   return order
 }
 
@@ -135,8 +151,8 @@ async function create({ supplierId, supplierName, warehouseId, warehouseName, ex
     const orderId = r.insertId
     for(const item of items) {
       await conn.query(
-        `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?)`,
-        [orderId,item.productId,item.productCode,item.productName,item.unit,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null]
+        `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [orderId,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null]
       )
     }
     const result = { id:orderId, orderNo }
@@ -166,8 +182,8 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
     await conn.query('DELETE FROM purchase_order_items WHERE order_id=?', [id])
     for(const item of items) {
       await conn.query(
-        `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?)`,
-        [id,item.productId,item.productCode,item.productName,item.unit,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null]
+        `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null]
       )
     }
     await conn.commit()

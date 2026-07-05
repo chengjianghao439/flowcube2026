@@ -7,9 +7,6 @@ export type { CategoryFinderProps } from './CategoryFinder'
 export { SupplierFinder } from './SupplierFinder'
 export type { SupplierFinderProps } from './SupplierFinder'
 
-export { WarehouseFinder } from './WarehouseFinder'
-export type { WarehouseFinderProps } from './WarehouseFinder'
-
 export { ProductFinder } from './ProductFinder'
 export type { ProductFinderProps } from './ProductFinder'
 

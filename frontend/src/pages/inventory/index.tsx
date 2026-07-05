@@ -14,7 +14,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useLogs, useOutbound, useInventoryOverview } from '@/hooks/useInventory'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
-import { WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
+import { ProductFinder, FinderTrigger } from '@/components/finder'
+import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import ContainerDrawer from '@/components/shared/ContainerDrawer'
 import CategoryTreeSelect from '@/components/shared/CategoryTreeSelect'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
@@ -86,7 +87,6 @@ export default function InventoryPage() {
   const [opOpen, setOpOpen] = useState(false); const [, setOpType] = useState<OpType>('outbound')
   const [form, setForm] = useState(emptyOp)
   const [productFinderOpen,  setProductFinderOpen]  = useState(false)
-  const [warehouseFinderOpen, setWarehouseFinderOpen] = useState(false)
 
   const { data: overview, isLoading: overviewLoading } = useInventoryOverview({
     pageSize: 99999, keyword, warehouseId, categoryId,
@@ -267,7 +267,15 @@ export default function InventoryPage() {
           <DialogHeader><DialogTitle>出库</DialogTitle></DialogHeader>
           <form onSubmit={handleOp} className="space-y-4 py-2">
             <div className="space-y-2"><Label>商品 *</Label><FinderTrigger value={form.productName} placeholder="点击选择商品..." onClick={() => setProductFinderOpen(true)} disabled={isPending} /></div>
-            <div className="space-y-2"><Label>仓库 *</Label><FinderTrigger value={form.warehouseName} placeholder="点击选择仓库..." onClick={() => setWarehouseFinderOpen(true)} disabled={isPending} /></div>
+            <div className="space-y-2">
+              <Label>仓库 *</Label>
+              <WarehouseSelect
+                value={form.warehouseId ? +form.warehouseId : null}
+                onChange={(id, name) => setForm(f => ({ ...f, warehouseId: id ? String(id) : '', warehouseName: name }))}
+                placeholder="选择仓库"
+                disabled={isPending}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>数量 *</Label><Input type="number" step="0.0001" min="0" value={form.quantity} onChange={e => setF('quantity', e.target.value)} disabled={isPending} /></div>
               <div className="space-y-2"><Label>单价</Label><Input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setF('unitPrice', e.target.value)} disabled={isPending} placeholder="选填" /></div>
@@ -284,8 +292,6 @@ export default function InventoryPage() {
       <ProductFinder open={productFinderOpen} warehouseId={form.warehouseId ? +form.warehouseId : null}
         onConfirm={p => { setForm(f => ({ ...f, productId: String(p.id), productName: p.name })); setProductFinderOpen(false) }}
         onClose={() => setProductFinderOpen(false)} />
-      <WarehouseFinder open={warehouseFinderOpen} onClose={() => setWarehouseFinderOpen(false)}
-        onConfirm={r => { setForm(f => ({ ...f, warehouseId: String(r.id), warehouseName: r.name })); setWarehouseFinderOpen(false) }} />
     </div>
   )
 }

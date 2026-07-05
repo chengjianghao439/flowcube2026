@@ -26,7 +26,9 @@ import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar }      from '@/components/shared/ActionBar'
 import { StatusBadge }    from '@/components/shared/StatusBadge'
 import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
-import { CustomerFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
+import { SectionCard }    from '@/components/shared/SectionCard'
+import { CustomerFinder, ProductFinder, FinderTrigger } from '@/components/finder'
+import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { useCreateSale, useUpdateSale, useSaleDetail, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { useCarriersActive } from '@/hooks/useCarriers'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
@@ -79,15 +81,6 @@ function PriceMetaHint({ item, loading = false }: { item: DraftItem; loading?: b
 }
 
 // ─── 信息区块 ─────────────────────────────────────────────────────────────────
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="card-base p-5">
-      <h3 className="text-section-title mb-4 pb-2 border-b border-border/50">{title}</h3>
-      {children}
-    </div>
-  )
-}
 
 function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
   const steps = [
@@ -210,7 +203,6 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const [finderOpen,    setFinderOpen]    = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [customerFinderOpen,  setCustomerFinderOpen]  = useState(false)
-  const [warehouseFinderOpen, setWarehouseFinderOpen] = useState(false)
 
   // 未保存变更保护：已填写商品或表头字段有值才标脏
   const isDirty = !!(customerId || warehouseId || remark || carrierId || receiverName || items.some(i => i.productId > 0))
@@ -237,11 +229,6 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     setCustomerId(String(result.id))
     setCustomerName(result.name)
     void handleCustomerChange(String(result.id))
-  }
-
-  function handleWarehouseConfirm(result: FinderResult) {
-    setWarehouseId(String(result.id))
-    setWarehouseName(result.name)
   }
 
   // 删除行：至少保留一行空行
@@ -329,7 +316,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <ActionBar
         title="新建销售单"
         rightActions={
@@ -345,18 +332,22 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       />
 
       {/* 订单信息 */}
-      <Section title="订单信息">
-        {/* 三列主区域：第一行客户/仓库/承运商，第二行运费方式/收货人/联系电话 */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="space-y-1.5">
+      <SectionCard title="订单信息" compact>
+        {/* 第一行：客户/仓库/承运商/运费方式——选择类字段，固定较窄宽度 */}
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="w-56 shrink-0 space-y-1.5">
             <Label>客户 *</Label>
             <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} />
           </div>
-          <div className="space-y-1.5">
+          <div className="w-48 shrink-0 space-y-1.5">
             <Label>出库仓库 *</Label>
-            <FinderTrigger value={warehouseName} placeholder="点击选择仓库..." onClick={() => setWarehouseFinderOpen(true)} onDoubleClick={() => { setWarehouseFinderOpen(false); navigate('/warehouses') }} />
+            <WarehouseSelect
+              value={warehouseId ? +warehouseId : null}
+              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name) }}
+              placeholder="选择仓库"
+            />
           </div>
-          <div className="space-y-1.5">
+          <div className="w-48 shrink-0 space-y-1.5">
             <Label>承运商</Label>
             <Select value={carrierId || '__none__'} onValueChange={v => setCarrierId(v === '__none__' ? '' : v)}>
               <SelectTrigger className="h-10 w-full">
@@ -370,7 +361,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
+          <div className="w-40 shrink-0 space-y-1.5">
             <Label>运费方式</Label>
             <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)}>
               <SelectTrigger className="h-10 w-full">
@@ -384,30 +375,30 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
+        </div>
+        {/* 第二行：收货人/联系电话固定较窄，收货地址/备注均分剩余宽度 */}
+        <div className="mt-4 flex items-start gap-4">
+          <div className="w-32 shrink-0 space-y-1.5">
             <Label>收货人</Label>
             <LimitedInput maxLength={5} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人" />
           </div>
-          <div className="space-y-1.5">
+          <div className="w-40 shrink-0 space-y-1.5">
             <Label>联系电话</Label>
             <LimitedInput maxLength={11} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="11位手机号" inputMode="numeric" />
           </div>
-        </div>
-        {/* 第三行：收货地址 + 备注 各占一半 */}
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
+          <div className="flex-1 space-y-1.5">
             <Label>收货地址</Label>
-            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={3} />
+            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} />
           </div>
-          <div className="space-y-1.5">
+          <div className="flex-1 space-y-1.5">
             <Label>备注</Label>
-            <LimitedTextarea maxLength={30} value={remark} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRemark(e.target.value)} placeholder="选填" rows={3} />
+            <LimitedTextarea maxLength={30} value={remark} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRemark(e.target.value)} placeholder="选填" rows={1} />
           </div>
         </div>
-      </Section>
+      </SectionCard>
 
-      {/* 商品明细 */}
-      <Section title="商品明细">
+      {/* 商品明细：末行常驻空行，填完自动追加，无需"添加"按钮 */}
+      <SectionCard title="商品明细" compact>
         <div className="text-table-head mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3">
           <span>商品</span>
           <span className="text-center">单位</span>
@@ -465,15 +456,12 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             >✕</Button>
           </div>
         ))}
-      </Section>
 
-      {/* 金额统计：仅统计已选商品的行 */}
-      {items.some(i => i.productId > 0) && (
-        <Section title="金额统计">
-          <div className="flex items-center justify-between">
+        {/* 金额统计：仅统计已选商品的行 */}
+        {items.some(i => i.productId > 0) && (
+          <div className="mt-2 flex items-center justify-between border-t border-border pt-4">
             <div className="space-y-0.5 text-muted-body">
-              <p>商品种数：{items.filter(i => i.productId > 0).length} 种</p>
-              <p>合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
+              <p>商品种数：{items.filter(i => i.productId > 0).length} 种　合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
               {items.some(i => i.productId > 0 && i.costPrice != null && i.unitPrice < Number(i.costPrice)) && (
                 <p className="inline-flex items-center gap-1 text-destructive">
                   <AlertTriangle className="h-3.5 w-3.5" />
@@ -481,13 +469,13 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
                 </p>
               )}
             </div>
-            <div>
-              <p className="mb-1 text-xs">合计金额</p>
-              <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
+            <div className="text-right">
+              <p className="text-helper">合计金额</p>
+              <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
             </div>
           </div>
-        </Section>
-      )}
+        )}
+      </SectionCard>
 
       {/* 商品选择中心 */}
       <ProductFinder
@@ -502,11 +490,6 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         open={customerFinderOpen}
         onClose={() => setCustomerFinderOpen(false)}
         onConfirm={handleCustomerConfirm}
-      />
-      <WarehouseFinder
-        open={warehouseFinderOpen}
-        onClose={() => setWarehouseFinderOpen(false)}
-        onConfirm={handleWarehouseConfirm}
       />
 
       {/* 底部安全间距 */}
@@ -556,7 +539,6 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
   const [finderOpen,    setFinderOpen]    = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [customerFinderOpen,  setCustomerFinderOpen]  = useState(false)
-  const [warehouseFinderOpen, setWarehouseFinderOpen] = useState(false)
 
   const handleCustomerChange = useCallback(async (cid: string) => {
     if (!cid) return
@@ -577,11 +559,6 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
     setCustomerId(String(result.id))
     setCustomerName(result.name)
     void handleCustomerChange(String(result.id))
-  }
-
-  function handleWarehouseConfirm(result: FinderResult) {
-    setWarehouseId(String(result.id))
-    setWarehouseName(result.name)
   }
 
   // 删除行：至少保留一行空行
@@ -669,7 +646,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <ActionBar
         title={order.orderNo}
         subtitle={<FulfillmentProgressCard order={order} />}
@@ -695,18 +672,22 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
       />
 
       {/* 订单信息 */}
-      <Section title="订单信息">
-        {/* 三列主区域：第一行客户/仓库/承运商，第二行运费方式/收货人/联系电话 */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="space-y-1.5">
+      <SectionCard title="订单信息" compact>
+        {/* 第一行：客户/仓库/承运商/运费方式——选择类字段，固定较窄宽度 */}
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="w-56 shrink-0 space-y-1.5">
             <Label>客户 *</Label>
             <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} />
           </div>
-          <div className="space-y-1.5">
+          <div className="w-48 shrink-0 space-y-1.5">
             <Label>出库仓库 *</Label>
-            <FinderTrigger value={warehouseName} placeholder="点击选择仓库..." onClick={() => setWarehouseFinderOpen(true)} onDoubleClick={() => { setWarehouseFinderOpen(false); navigate('/warehouses') }} />
+            <WarehouseSelect
+              value={warehouseId ? +warehouseId : null}
+              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name) }}
+              placeholder="选择仓库"
+            />
           </div>
-          <div className="space-y-1.5">
+          <div className="w-48 shrink-0 space-y-1.5">
             <Label>承运商</Label>
             <Select value={carrierId || '__none__'} onValueChange={v => setCarrierId(v === '__none__' ? '' : v)}>
               <SelectTrigger className="h-10 w-full">
@@ -720,7 +701,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
+          <div className="w-40 shrink-0 space-y-1.5">
             <Label>运费方式</Label>
             <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)}>
               <SelectTrigger className="h-10 w-full">
@@ -734,30 +715,30 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
+        </div>
+        {/* 第二行：收货人/联系电话固定较窄，收货地址/备注均分剩余宽度 */}
+        <div className="mt-4 flex items-start gap-4">
+          <div className="w-32 shrink-0 space-y-1.5">
             <Label>收货人</Label>
             <LimitedInput maxLength={5} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人" />
           </div>
-          <div className="space-y-1.5">
+          <div className="w-40 shrink-0 space-y-1.5">
             <Label>联系电话</Label>
             <LimitedInput maxLength={11} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="11位手机号" inputMode="numeric" />
           </div>
-        </div>
-        {/* 第三行：收货地址 + 备注 各占一半 */}
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
+          <div className="flex-1 space-y-1.5">
             <Label>收货地址</Label>
-            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={3} />
+            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} />
           </div>
-          <div className="space-y-1.5">
+          <div className="flex-1 space-y-1.5">
             <Label>备注</Label>
-            <LimitedTextarea maxLength={30} value={remark} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRemark(e.target.value)} placeholder="选填" rows={3} />
+            <LimitedTextarea maxLength={30} value={remark} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRemark(e.target.value)} placeholder="选填" rows={1} />
           </div>
         </div>
-      </Section>
+      </SectionCard>
 
       {/* 商品明细 */}
-      <Section title="商品明细">
+      <SectionCard title="商品明细" compact>
         <div className="text-table-head mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3">
           <span>商品</span><span className="text-center">单位</span><span>数量</span><span>单价 (¥)</span><span>金额</span><span />
         </div>
@@ -789,11 +770,11 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
             <Button type="button" size="sm" variant="ghost" className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
           </div>
         ))}
-      </Section>
+      </SectionCard>
 
       {/* 金额统计：仅统计已选商品的行 */}
       {items.some(i => i.productId > 0) && (
-        <Section title="金额统计">
+        <SectionCard title="金额统计">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5 text-muted-body">
               <p>商品种数：{items.filter(i => i.productId > 0).length} 种</p>
@@ -810,7 +791,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
               <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
             </div>
           </div>
-        </Section>
+        </SectionCard>
       )}
 
       <ProductFinder
@@ -824,11 +805,6 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
         open={customerFinderOpen}
         onClose={() => setCustomerFinderOpen(false)}
         onConfirm={handleCustomerConfirm}
-      />
-      <WarehouseFinder
-        open={warehouseFinderOpen}
-        onClose={() => setWarehouseFinderOpen(false)}
-        onConfirm={handleWarehouseConfirm}
       />
 
       <ConfirmDialog
@@ -908,7 +884,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
   const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* 选项卡切换 */}
       <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
         {([
@@ -936,7 +912,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
       {detailTab === 'info' && (
         <>
           {/* 基础信息 */}
-          <Section title="基础信息">
+          <SectionCard title="基础信息" compact>
             {order.status === 2 && (
               <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm">
                 当前“已占库”仅表示这张销售单已经预占库存：会增加已占用、减少可用库存，但不会直接扣减当前库存，也不会自动生成仓库任务。点击“发货”后才会创建仓库任务进入仓库执行。
@@ -956,10 +932,10 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                 <div><span className="text-muted-foreground">备注：</span><span>{order.remark || '-'}</span></div>
               </div>
             </div>
-          </Section>
+          </SectionCard>
 
           {/* 商品明细 */}
-          <Section title="商品明细">
+          <SectionCard title="商品明细" compact>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -1000,15 +976,15 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                 </tbody>
               </table>
             </div>
-          </Section>
+          </SectionCard>
 
           {/* 金额统计 */}
-          <Section title="金额统计">
+          <SectionCard title="金额统计">
             <div className="flex items-center justify-between">
               <p className="text-sm">共 {order.items?.length ?? 0} 种商品</p>
               <div><p className="mb-1 text-xs">合计金额</p><p className="text-3xl font-bold">¥{Number(order.totalAmount).toFixed(2)}</p></div>
             </div>
-          </Section>
+          </SectionCard>
         </>
       )}
 

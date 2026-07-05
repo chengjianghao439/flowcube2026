@@ -4,6 +4,9 @@ export interface PurchaseOrderItem {
   productCode: string
   productName: string
   unit: string
+  articleNumber?: string | null
+  spec?: string | null
+  color?: string | null
   quantity: number
   unitPrice: number
   amount: number
@@ -27,6 +30,7 @@ export interface PurchaseOrder {
   operatorName: string
   createdAt: string
   items?: PurchaseOrderItem[]
+  inboundTasks?: { id: number; taskNo: string; status: number }[]
 }
 export interface CreatePurchaseParams {
   supplierId: number

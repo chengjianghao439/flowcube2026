@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { FinderSearch } from './FinderSearch'
 import { FinderTable } from './FinderTable'
 import type { FinderColumn } from '@/types/finder'
@@ -91,6 +92,7 @@ export function FinderModal<T extends Record<string, unknown>>({
 // ─── Shared trigger button ────────────────────────────────────────────────────
 
 interface FinderTriggerProps {
+  id?: string
   value: string
   placeholder: string
   onClick: () => void
@@ -105,21 +107,22 @@ interface FinderTriggerProps {
  * Matches the look of the native <select> used elsewhere in the forms.
  * Single click: open finder. Double click: navigate to master data page (if provided).
  */
-export function FinderTrigger({ value, placeholder, onClick, onDoubleClick, disabled, className = '' }: FinderTriggerProps) {
+export function FinderTrigger({ id, value, placeholder, onClick, onDoubleClick, disabled, className = '' }: FinderTriggerProps) {
   return (
     <button
+      id={id}
       type="button"
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       disabled={disabled}
-      className={[
+      className={cn(
         'h-10 w-full truncate rounded-md border border-input bg-background px-3 py-2',
         'text-left text-sm transition-colors',
         'hover:border-primary hover:bg-muted/30',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
         'disabled:cursor-not-allowed disabled:opacity-50',
         className,
-      ].join(' ')}
+      )}
     >
       {value
         ? <span className="truncate text-foreground">{value}</span>

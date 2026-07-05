@@ -40,6 +40,8 @@ export interface SectionCardProps {
    * DataTable 等已自带内边距的组件推荐使用。
    */
   noPadding?: boolean
+  /** 紧凑模式：收紧标题行和 Body 的内边距，适合表单类页面 */
+  compact?: boolean
   /** 额外 className（作用于卡片根节点） */
   className?: string
 }
@@ -49,6 +51,7 @@ export function SectionCard({
   actions,
   children,
   noPadding = false,
+  compact = false,
   className,
 }: SectionCardProps) {
   const hasHeader = title || actions
@@ -57,7 +60,10 @@ export function SectionCard({
     <div className={cn('rounded-lg border border-border bg-card', className)}>
       {/* 标题行 */}
       {hasHeader && (
-        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+        <div className={cn(
+          'flex items-center justify-between border-b border-border',
+          compact ? 'px-4 py-2.5' : 'px-5 py-3.5',
+        )}>
           {title && (
             <h3 className="text-card-title">{title}</h3>
           )}
@@ -68,7 +74,7 @@ export function SectionCard({
       )}
 
       {/* Body */}
-      <div className={cn(!noPadding && 'p-5')}>
+      <div className={cn(!noPadding && (compact ? 'p-4' : 'p-5'))}>
         {children}
       </div>
     </div>

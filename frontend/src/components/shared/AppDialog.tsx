@@ -181,7 +181,7 @@ export function AppDialog({
               className={cn(
                 'rounded-md p-1.5 text-muted-foreground transition-colors',
                 'hover:bg-muted hover:text-foreground',
-                'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+                'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               )}
             >
               <X className="h-4 w-4" />

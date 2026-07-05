@@ -6,6 +6,7 @@ import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { downloadExport } from '@/lib/exportDownload'
@@ -230,9 +231,9 @@ export default function ReconciliationPage() {
           className="h-9 w-60"
           onKeyDown={e => { if (e.key === 'Enter') applyFilters() }}
         />
-        <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 w-40" />
+        <DatePicker value={startDate} onChange={setStartDate} max={endDate || undefined} className="h-9 w-40" />
         <span className="text-muted-foreground">至</span>
-        <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9 w-40" />
+        <DatePicker value={endDate} onChange={setEndDate} min={startDate || undefined} className="h-9 w-40" />
         <Select value={statusFilter || '__all__'} onValueChange={v => setStatusFilter(v === '__all__' ? '' : v)}>
           <SelectTrigger className="h-9 w-36">
             <SelectValue placeholder="全部状态" />

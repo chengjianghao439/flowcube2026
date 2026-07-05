@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { SupplierFinder, WarehouseFinder, ProductFinder } from '@/components/finder'
+import { SupplierFinder, ProductFinder } from '@/components/finder'
+import { DatePicker } from '@/components/shared/DatePicker'
+import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
+import { getUserOptionsApi } from '@/api/users'
+import { useAuthStore } from '@/store/authStore'
 
 /** 采购查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface PurchaseQueryValues {
   keyword: string
   remark: string
-  operator: string
+  operatorId: number | null
+  operatorName: string
   status: string
   productId: number | null
   productCode: string
@@ -24,7 +30,7 @@ export interface PurchaseQueryValues {
 }
 
 const EMPTY: PurchaseQueryValues = {
-  keyword: '', remark: '', operator: '', status: '',
+  keyword: '', remark: '', operatorId: null, operatorName: '', status: '',
   productId: null, productCode: '', productName: '',
   supplierId: null, supplierName: '',
   warehouseId: null, warehouseName: '',
@@ -66,8 +72,16 @@ function PickerField({ label, value, placeholder, onOpen, onClear }: {
 export default function PurchaseQueryDialog({ open, initial, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<PurchaseQueryValues>(EMPTY)
   const [supplierOpen, setSupplierOpen] = useState(false)
-  const [warehouseOpen, setWarehouseOpen] = useState(false)
   const [productOpen, setProductOpen] = useState(false)
+
+  const currentUserId = useAuthStore(s => s.user?.id)
+
+  const { data: userOptions } = useQuery({
+    queryKey: ['user-options'],
+    queryFn: getUserOptionsApi,
+    staleTime: 1000 * 60 * 5,
+    enabled: open,
+  })
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -131,13 +145,17 @@ export default function PurchaseQueryDialog({ open, initial, onClose, onApply }:
             onClear={() => setDraft(d => ({ ...d, supplierId: null, supplierName: '' }))}
           />
 
-          <PickerField
-            label="仓库"
-            placeholder="选择仓库"
-            value={draft.warehouseName}
-            onOpen={() => setWarehouseOpen(true)}
-            onClear={() => setDraft(d => ({ ...d, warehouseId: null, warehouseName: '' }))}
-          />
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">仓库</span>
+            <WarehouseSelect
+              value={draft.warehouseId}
+              onChange={(id, name) => setDraft(d => ({ ...d, warehouseId: id, warehouseName: name }))}
+              allowClear
+              clearLabel="全部仓库"
+              placeholder="全部仓库"
+              className="h-9"
+            />
+          </label>
 
           <PickerField
             label="产品"
@@ -149,24 +167,38 @@ export default function PurchaseQueryDialog({ open, initial, onClose, onApply }:
 
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">经办人</span>
-            <Input
-              placeholder="按经办人姓名查询..."
-              value={draft.operator}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('operator', e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
-              className="h-9"
-            />
+            <Select
+              value={draft.operatorId ? String(draft.operatorId) : '__all__'}
+              onValueChange={v => {
+                if (v === '__all__') { setDraft(d => ({ ...d, operatorId: null, operatorName: '' })); return }
+                const id = Number(v)
+                const name = userOptions?.find(u => u.id === id)?.realName || ''
+                setDraft(d => ({ ...d, operatorId: id, operatorName: name }))
+              }}
+            >
+              <SelectTrigger className="h-9"><SelectValue placeholder="全部经办人" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">全部经办人</SelectItem>
+                {userOptions?.map(u => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.realName}
+                    {u.id === currentUserId ? '（我）' : ''}
+                    {!u.isActive ? '（已禁用）' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
 
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
-            <Input type="date" value={draft.startDate} max={draft.endDate || undefined}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('startDate', e.target.value)} className="h-9" />
+            <DatePicker value={draft.startDate} max={draft.endDate || undefined}
+              onChange={v => set('startDate', v)} className="h-9" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（止）</span>
-            <Input type="date" value={draft.endDate} min={draft.startDate || undefined}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('endDate', e.target.value)} className="h-9" />
+            <DatePicker value={draft.endDate} min={draft.startDate || undefined}
+              onChange={v => set('endDate', v)} className="h-9" />
           </label>
 
           <label className="flex flex-col gap-1 col-span-2">
@@ -186,11 +218,6 @@ export default function PurchaseQueryDialog({ open, initial, onClose, onApply }:
         open={supplierOpen}
         onClose={() => setSupplierOpen(false)}
         onConfirm={r => setDraft(d => ({ ...d, supplierId: r.id, supplierName: r.name }))}
-      />
-      <WarehouseFinder
-        open={warehouseOpen}
-        onClose={() => setWarehouseOpen(false)}
-        onConfirm={r => setDraft(d => ({ ...d, warehouseId: r.id, warehouseName: r.name }))}
       />
       <ProductFinder
         open={productOpen}

@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/shared/DatePicker'
 
 export interface DateRangePreset {
   label: string
@@ -51,17 +51,17 @@ export function DateRangeQueryBar({
           ))}
         </div>
       ) : null}
-      <Input
-        type="date"
+      <DatePicker
         value={startDate}
-        onChange={e => onStartDateChange(e.target.value)}
+        onChange={onStartDateChange}
+        max={endDate || undefined}
         className="h-9 w-40"
       />
       <span className="text-sm text-muted-foreground">至</span>
-      <Input
-        type="date"
+      <DatePicker
         value={endDate}
-        onChange={e => onEndDateChange(e.target.value)}
+        onChange={onEndDateChange}
+        min={startDate || undefined}
         className="h-9 w-40"
       />
       <Button size="sm" onClick={onApply}>查询</Button>

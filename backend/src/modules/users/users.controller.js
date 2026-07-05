@@ -15,6 +15,15 @@ async function list(req, res, next) {
   }
 }
 
+async function options(req, res, next) {
+  try {
+    const result = await usersService.listOptions(req.user?.userId ?? null)
+    return successResponse(res, result, '查询成功')
+  } catch (err) {
+    next(err)
+  }
+}
+
 async function detail(req, res, next) {
   try {
     const user = await usersService.findById(parseInt(req.params.id))
@@ -60,4 +69,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { list, detail, create, update, resetPassword, remove }
+module.exports = { list, options, detail, create, update, resetPassword, remove }

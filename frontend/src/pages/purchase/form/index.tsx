@@ -11,10 +11,11 @@
 
 import { useContext, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Plus, Save } from 'lucide-react'
+import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -23,9 +24,11 @@ import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
-import { SupplierFinder, WarehouseFinder, ProductFinder, FinderTrigger } from '@/components/finder'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { SectionCard } from '@/components/shared/SectionCard'
+import { SupplierFinder, ProductFinder, FinderTrigger } from '@/components/finder'
+import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
+import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
+import { cn } from '@/lib/utils'
 import {
   useCreatePurchase,
   useUpdatePurchase,
@@ -36,18 +39,10 @@ import {
 import type { PurchaseOrder, PurchaseOrderItem } from '@/types/purchase'
 import type { ProductFinderResult } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
+import { INBOUND_STATUS_LABEL, type InboundTaskStatus } from '@/types/inbound-tasks'
 
 interface DraftItem extends Omit<PurchaseOrderItem, 'id' | 'amount'> {
   _key: number
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="card-base p-5">
-      <h3 className="text-section-title mb-4 border-b border-border/50 pb-2">{title}</h3>
-      {children}
-    </div>
-  )
 }
 
 export default function PurchaseFormPage() {
@@ -88,14 +83,17 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     (editOrder?.items ?? []).map((it, idx) => ({
       _key: idx, productId: it.productId, productCode: it.productCode, productName: it.productName,
       unit: it.unit, quantity: it.quantity, unitPrice: it.unitPrice, remark: it.remark ?? '',
+      articleNumber: it.articleNumber ?? null, spec: it.spec ?? null, color: it.color ?? null,
     })),
   )
   const [counter, setCounter] = useState(editOrder?.items?.length ?? 0)
   const [finderOpen, setFinderOpen] = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [supplierFinderOpen, setSupplierFinderOpen] = useState(false)
-  const [warehouseFinderOpen, setWarehouseFinderOpen] = useState(false)
   const [submitLocked, setSubmitLocked] = useState(false)
+  const [supplierError, setSupplierError] = useState(false)
+  const [warehouseError, setWarehouseError] = useState(false)
+  const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
 
   const isDirty = !!(supplierId || warehouseId || expectedDate || remark || items.length)
   useDirtyGuard(tabPath, isDirty)
@@ -108,11 +106,14 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   }
 
   const addItem = () => {
+    const key = counter
     setCounter(c => c + 1)
     setItems(p => [
       ...p,
-      { _key: counter, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '' },
+      { _key: key, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '', articleNumber: null, spec: null, color: null },
     ])
+    setFinderItemKey(key)
+    setFinderOpen(true)
   }
 
   const removeItem = (k: number) => setItems(p => p.filter(i => i._key !== k))
@@ -138,29 +139,38 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               productName: product.name,
               unit: product.unit,
               unitPrice: product.costPrice ?? 0,
+              articleNumber: product.articleNumber,
+              spec: product.spec,
+              color: product.color,
             }
           : i,
       ),
     )
+    setInvalidItemKeys(prev => {
+      if (!prev.has(k)) return prev
+      const next = new Set(prev)
+      next.delete(k)
+      return next
+    })
   }
 
   function handleSupplierConfirm(result: FinderResult) {
     setSupplierId(String(result.id))
     setSupplierName(result.name)
-  }
-
-  function handleWarehouseConfirm(result: FinderResult) {
-    setWarehouseId(String(result.id))
-    setWarehouseName(result.name)
+    setSupplierError(false)
   }
 
   async function handleSubmit() {
     if (submitLocked || submitting) return
-    if (!supplierId || !supplierName) {
+    const missingSupplier = !supplierId || !supplierName
+    const missingWarehouse = !warehouseId || !warehouseName
+    setSupplierError(missingSupplier)
+    setWarehouseError(missingWarehouse)
+    if (missingSupplier) {
       toast.warning('请选择供应商')
       return
     }
-    if (!warehouseId || !warehouseName) {
+    if (missingWarehouse) {
       toast.warning('请选择仓库')
       return
     }
@@ -168,7 +178,9 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       toast.warning('请添加至少一条明细')
       return
     }
-    if (items.find(i => !i.productId)) {
+    const missingProductKeys = new Set(items.filter(i => !i.productId).map(i => i._key))
+    setInvalidItemKeys(missingProductKeys)
+    if (missingProductKeys.size) {
       toast.warning('请完整填写所有明细')
       return
     }
@@ -206,9 +218,12 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <ActionBar
         title={isEdit ? '编辑采购单' : '新建采购单'}
+        subtitle={!isEdit && isDirty ? (
+          <span className="text-xs font-normal text-muted-foreground">未保存</span>
+        ) : undefined}
         rightActions={
           <>
             {isEdit && (
@@ -220,12 +235,12 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               {submitting || submitLocked ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {isEdit ? '保存中...' : '提交中...'}
+                  保存中...
                 </>
               ) : (
                 <>
                   <Save className="h-4 w-4" />
-                  {isEdit ? '保存' : '提交保存'}
+                  {isEdit ? '保存' : '保存草稿'}
                 </>
               )}
             </Button>
@@ -233,11 +248,12 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         }
       />
 
-      <Section title="订单信息">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="space-y-1.5">
-            <Label>供应商 *</Label>
+      <SectionCard title="订单信息" compact>
+        <div className="flex items-start gap-4">
+          <div className="w-[272px] shrink-0 space-y-1.5">
+            <Label htmlFor="purchase-supplier">供应商 *</Label>
             <FinderTrigger
+              id="purchase-supplier"
               value={supplierName}
               placeholder="点击选择供应商..."
               onClick={() => setSupplierFinderOpen(true)}
@@ -245,57 +261,55 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                 setSupplierFinderOpen(false)
                 requestLeave(() => navigate('/suppliers'))
               }}
+              className={cn(supplierError && 'border-destructive/60 bg-destructive/5')}
             />
+            {supplierError && <p className="text-xs text-destructive">请选择供应商</p>}
           </div>
 
-          <div className="space-y-1.5">
-            <Label>入库仓库 *</Label>
-            <FinderTrigger
-              value={warehouseName}
-              placeholder="点击选择仓库..."
-              onClick={() => setWarehouseFinderOpen(true)}
-              onDoubleClick={() => {
-                setWarehouseFinderOpen(false)
-                requestLeave(() => navigate('/warehouses'))
-              }}
+          <div className="w-56 shrink-0 space-y-1.5">
+            <Label htmlFor="purchase-warehouse">入库仓库 *</Label>
+            <WarehouseSelect
+              id="purchase-warehouse"
+              value={warehouseId ? +warehouseId : null}
+              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
+              placeholder="选择仓库"
+              className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
             />
+            {warehouseError && <p className="text-xs text-destructive">请选择仓库</p>}
           </div>
 
-          <div className="space-y-1.5">
-            <Label>预计到货日期</Label>
+          <div className="w-48 shrink-0 space-y-1.5">
+            <Label htmlFor="purchase-expected-date">预计到货日期</Label>
+            <DatePicker id="purchase-expected-date" value={expectedDate} onChange={setExpectedDate} />
+          </div>
+
+          <div className="flex-1 space-y-1.5">
+            <Label htmlFor="purchase-remark">备注</Label>
             <Input
-              type="date"
-              value={expectedDate}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setExpectedDate(e.target.value)}
-              className="border-slate-200 bg-slate-50"
-            />
-          </div>
-
-          <div className="space-y-1.5 md:col-span-2 xl:col-span-1">
-            <Label>备注</Label>
-            <LimitedTextarea
+              id="purchase-remark"
               maxLength={50}
               value={remark}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRemark(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)}
               placeholder="选填"
-              rows={1}
             />
           </div>
         </div>
-      </Section>
+      </SectionCard>
 
-      <Section title="商品明细">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-sm text-slate-500">录入采购商品、数量和进价。</p>
-          <Button type="button" variant="outline" onClick={addItem} className="gap-2 rounded-full">
+      <SectionCard
+        title="商品明细"
+        compact
+        actions={
+          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
             <Plus className="h-4 w-4" />
             添加商品
           </Button>
-        </div>
-
+        }
+      >
         {items.length === 0 ? (
-          <div className="rounded-lg bg-slate-50 px-6 py-14 text-center text-sm text-slate-500">
-            还没有商品明细，点击右上角“添加商品”开始录入。
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
+            <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">还没有商品明细，点击上方"添加商品"开始录入</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -324,15 +338,25 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                     setFinderItemKey(null)
                     requestLeave(() => navigate('/products'))
                   }}
-                  className="truncate rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className={cn(
+                    'overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5',
+                  )}
                 >
                   {item.productName ? (
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate font-medium">{item.productName}</span>
-                      <span className="shrink-0 text-doc-code-muted">({item.productCode})</span>
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="truncate text-xs text-muted-foreground">
+                        <span className="font-mono text-doc-code-muted">{item.productCode}</span>
+                        {' · 货号 '}{item.articleNumber || '—'}
+                        {' · 型号 '}{item.spec || '—'}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate font-medium">{item.productName}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}</span>
+                      </span>
+                    </div>
                   ) : (
-                    <span className="text-slate-500">点击选择商品...</span>
+                    <span className="text-muted-foreground">点击选择商品...</span>
                   )}
                 </button>
 
@@ -366,33 +390,27 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-9 w-9 rounded-full p-0 text-slate-500 hover:text-destructive"
+                  aria-label="删除该行商品"
+                  className="h-9 w-9 rounded-full p-0 text-muted-foreground hover:text-destructive"
                   onClick={() => removeItem(item._key)}
                 >
                   ✕
                 </Button>
               </div>
             ))}
+
+            <div className="flex items-center justify-between border-t border-border pt-4">
+              <p className="text-muted-body">
+                商品种数：{items.length} 种　合计数量：{totalQuantity}
+              </p>
+              <div className="text-right">
+                <p className="text-helper">合计金额</p>
+                <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
+              </div>
+            </div>
           </div>
         )}
-      </Section>
-
-      {items.length > 0 && (
-        <Section title="金额统计">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5 text-muted-body">
-              <p>商品种数：{items.length} 种</p>
-              <p>合计数量：{totalQuantity}</p>
-              <p>预计到货：{expectedDate || '未填写'}</p>
-            </div>
-
-            <div className="text-right">
-              <p className="mb-1 text-helper">合计金额</p>
-              <p className="text-[28px] font-semibold text-foreground">¥ {total.toFixed(2)}</p>
-            </div>
-          </div>
-        </Section>
-      )}
+      </SectionCard>
 
       <ProductFinder
         open={finderOpen}
@@ -409,11 +427,6 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         onClose={() => setSupplierFinderOpen(false)}
         onConfirm={handleSupplierConfirm}
       />
-      <WarehouseFinder
-        open={warehouseFinderOpen}
-        onClose={() => setWarehouseFinderOpen(false)}
-        onConfirm={handleWarehouseConfirm}
-      />
 
       <div className="h-4" />
     </div>
@@ -421,6 +434,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 }
 
 function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; closeTab: (targetPath?: string) => void; tabPath: string }) {
+  const navigate = useNavigate()
   const { data: order, isLoading } = usePurchaseDetail(purchaseId)
   const confirmMutate = useConfirmPurchase()
   const cancelMutate  = useCancelPurchase()
@@ -469,14 +483,14 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
   const isPending  = confirmMutate.isPending || cancelMutate.isPending
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <ActionBar
         title={order.orderNo}
         subtitle={<StatusBadge type="purchase" status={order.status} />}
         rightActions={
           <>
             {canCancel && (
-              <Button variant="destructive" disabled={isPending}
+              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={isPending}
                 onClick={() => ask('取消采购单', '取消后此采购单将无法恢复，请确认操作。', 'destructive', () => {
                   setConfirmState(s => ({ ...s, open: false }))
                   cancelMutate.mutate(order.id)
@@ -503,12 +517,12 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
         }
       />
 
-      <Section title="基础信息">
+      <SectionCard title="基础信息" compact>
         <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
             ['供应商',     order.supplierName],
             ['仓库',       order.warehouseName],
-            ['预计到货',   order.expectedDate ?? '—'],
+            ['预计到货',   formatDisplayDate(order.expectedDate)],
             ['经办人',     order.operatorName],
             ['创建时间',   formatDisplayDateTime(order.createdAt)],
           ].map(([label, value]) => (
@@ -517,25 +531,51 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
               <dd className="font-medium">{value}</dd>
             </div>
           ))}
+          {(order.totalOrderedQty ?? 0) > 0 && (
+            <div>
+              <dt className="mb-0.5 text-helper">收货进度</dt>
+              <dd className="font-medium">{order.totalReceivedQty ?? 0} / {order.totalOrderedQty} 件</dd>
+            </div>
+          )}
           {order.remark && (
             <div className="col-span-3">
               <dt className="mb-0.5 text-helper">备注</dt>
               <dd>{order.remark}</dd>
             </div>
           )}
+          {!!order.inboundTasks?.length && (
+            <div className="col-span-3">
+              <dt className="mb-0.5 text-helper">关联收货入库单</dt>
+              <dd className="flex flex-wrap items-center gap-2">
+                {order.inboundTasks.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => navigate(`/inbound-tasks/${t.id}`)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:border-primary hover:bg-muted/30"
+                  >
+                    {t.taskNo}
+                    <span className="text-muted-foreground">
+                      {INBOUND_STATUS_LABEL[t.status as InboundTaskStatus] ?? '未知'}
+                    </span>
+                  </button>
+                ))}
+              </dd>
+            </div>
+          )}
         </dl>
-      </Section>
+      </SectionCard>
 
-      <Section title="商品明细">
-        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-muted-body">
-          当前采购单只负责计划与提交。收货、打印库存条码、PDA 执行与上架，将迁移到独立的收货入库单流程。
-        </div>
+      <SectionCard title="商品明细" compact>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-table-head">
+                <th className="w-28 pb-2 text-left">编码</th>
+                <th className="w-28 pb-2 text-left">货号</th>
+                <th className="w-28 pb-2 text-left">型号</th>
                 <th className="pb-2 text-left">商品</th>
-                <th className="pb-2 text-left">编码</th>
+                <th className="w-20 pb-2 text-left">颜色</th>
                 <th className="w-16 pb-2 text-center">单位</th>
                 <th className="w-20 pb-2 text-right">数量</th>
                 <th className="w-24 pb-2 text-right">单价</th>
@@ -545,8 +585,11 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             <tbody>
               {(order.items ?? []).map(item => (
                 <tr key={item.id} className="border-b border-border/40 transition-colors hover:bg-muted/20">
-                  <td className="py-2.5 font-medium">{item.productName}</td>
                   <td className="py-2.5"><span className="text-doc-code-muted">{item.productCode}</span></td>
+                  <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
+                  <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
+                  <td className="py-2.5 font-medium">{item.productName}</td>
+                  <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
                   <td className="py-2.5 text-center text-muted-foreground">{item.unit}</td>
                   <td className="py-2.5 text-right">{item.quantity}</td>
                   <td className="py-2.5 text-right">¥{Number(item.unitPrice).toFixed(2)}</td>
@@ -556,19 +599,17 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             </tbody>
           </table>
         </div>
-      </Section>
 
-      <Section title="金额统计">
-        <div className="flex items-center justify-between">
+        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
           <p className="text-muted-body">
             共 {order.items?.length ?? 0} 种商品
           </p>
           <div className="text-right">
-            <p className="mb-1 text-helper">合计金额</p>
-            <p className="text-3xl font-bold">¥{Number(order.totalAmount).toFixed(2)}</p>
+            <p className="text-helper">合计金额</p>
+            <p className="text-2xl font-semibold text-foreground">¥{Number(order.totalAmount).toFixed(2)}</p>
           </div>
         </div>
-      </Section>
+      </SectionCard>
 
       <div className="h-4" />
 

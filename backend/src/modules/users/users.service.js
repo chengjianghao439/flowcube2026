@@ -36,6 +36,18 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
   }
 }
 
+/** 精简用户列表：仅供下拉选择（如采购单"经办人"筛选），不受 user.view 权限限制
+ *  包含已禁用用户（历史单据仍需按其筛选），当前登录用户排最前，其余按姓名排序 */
+async function listOptions(currentUserId = null) {
+  const [rows] = await pool.query(
+    `SELECT id, real_name, is_active FROM sys_users
+     WHERE deleted_at IS NULL
+     ORDER BY (id = ?) DESC, is_active DESC, real_name ASC`,
+    [currentUserId],
+  )
+  return rows.map((u) => ({ id: u.id, realName: u.real_name, isActive: !!u.is_active }))
+}
+
 async function findById(id) {
   const [rows] = await pool.query(
     `SELECT id, username, real_name, role_id, role_name, is_active
@@ -125,4 +137,4 @@ async function softDelete(id, currentUserId) {
   )
 }
 
-module.exports = { findAll, findById, create, update, resetPassword, softDelete }
+module.exports = { findAll, listOptions, findById, create, update, resetPassword, softDelete }

@@ -5,7 +5,7 @@ import { getInventoryStatsApi, getPurchaseStatsApi, getSaleStatsApi } from '@/ap
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 
 type SummaryTab = 'purchase' | 'sale' | 'inventory'
@@ -222,17 +222,17 @@ export default function ReportsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-muted-body">日期范围：</span>
-            <Input
-              type="date"
+            <DatePicker
               value={startDate}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStartDate(e.target.value)}
+              onChange={setStartDate}
+              max={endDate || undefined}
               className="w-40"
             />
             <span className="text-muted-body">至</span>
-            <Input
-              type="date"
+            <DatePicker
               value={endDate}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndDate(e.target.value)}
+              onChange={setEndDate}
+              min={startDate || undefined}
               className="w-40"
             />
             <Button onClick={apply}>查询</Button>

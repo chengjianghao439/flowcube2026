@@ -168,9 +168,9 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
       open={open}
       onOpenChange={v => !v && onClose()}
       dialogId="product-finder"
-      defaultWidth={900}
+      defaultWidth={1080}
       defaultHeight={600}
-      minWidth={640}
+      minWidth={880}
       minHeight={440}
       title={
         <span className="flex items-center gap-2">
@@ -284,11 +284,14 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
           {/* 右侧商品列表 */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {/* 表头 */}
-            <div className="grid shrink-0 grid-cols-[120px_1fr_180px_60px_80px] gap-2 border-b bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground">
+            <div className="grid shrink-0 grid-cols-[96px_96px_110px_1fr_70px_56px_140px_72px] gap-2 border-b bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground">
               <span>编码</span>
+              <span>货号</span>
+              <span>型号</span>
               <span>商品名称</span>
-              <span>分类路径</span>
+              <span>颜色</span>
               <span className="text-center">单位</span>
+              <span>分类路径</span>
               <span className="text-right">{warehouseId ? '可用库存' : '库存'}</span>
             </div>
 
@@ -322,20 +325,23 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
                         if (e.key === ' ') { onConfirm(product); onClose() }
                       }}
                       className={cn(
-                        'grid cursor-pointer grid-cols-[120px_1fr_180px_60px_80px] gap-2 border-b px-4 py-2.5 text-sm transition-colors',
+                        'grid cursor-pointer grid-cols-[96px_96px_110px_1fr_70px_56px_140px_72px] gap-2 border-b px-4 py-2.5 text-sm transition-colors',
                         isSelected
                           ? 'bg-primary/10 text-primary'
                           : 'hover:bg-muted/40',
                       )}
                     >
                       <span className="truncate font-mono text-xs leading-5">{product.code}</span>
+                      <span className="truncate text-xs leading-5 text-muted-foreground">{product.articleNumber || '—'}</span>
+                      <span className="truncate text-xs leading-5 text-muted-foreground">{product.spec || '—'}</span>
                       <span className="truncate font-medium leading-5">{product.name}</span>
+                      <span className="truncate leading-5 text-muted-foreground">{product.color || '—'}</span>
+                      <span className="text-center leading-5 text-muted-foreground">{product.unit}</span>
                       <CategoryPathDisplay
                         path={product.categoryPath}
                         fallback={product.categoryName}
                         className="text-xs leading-5 text-muted-foreground"
                       />
-                      <span className="text-center leading-5 text-muted-foreground">{product.unit}</span>
                       <span className={cn(
                         'text-right leading-5',
                         warehouseId && product.stock === 0 ? 'text-destructive' : '',

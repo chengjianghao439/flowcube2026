@@ -7,6 +7,18 @@ export async function getUsersApi(params: QueryParams): Promise<PaginatedData<Sy
   return res
 }
 
+export interface UserOption {
+  id: number
+  realName: string
+  isActive: boolean
+}
+
+/** 精简用户列表：仅供下拉选择（如采购单"经办人"筛选），不受 user.view 权限限制 */
+export async function getUserOptionsApi(): Promise<UserOption[]> {
+  const res = await apiClient.get<UserOption[]>('/users/options')
+  return res
+}
+
 export async function getUserApi(id: number): Promise<SysUser> {
   const res = await apiClient.get<SysUser>(`/users/${id}`)
   return res

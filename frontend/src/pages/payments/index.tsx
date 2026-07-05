@@ -8,6 +8,7 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -124,7 +125,7 @@ export default function PaymentsPage() {
           <form onSubmit={handlePay} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1"><Label>金额 *</Label><Input type="number" min="0.01" step="0.01" value={payAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPayAmount(e.target.value)} required /></div>
-              <div className="space-y-1"><Label>日期 *</Label><Input type="date" value={payDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPayDate(e.target.value)} required /></div>
+              <div className="space-y-1"><Label>日期 *</Label><DatePicker value={payDate} onChange={setPayDate} /></div>
               <div className="space-y-1"><Label>方式</Label>
                 <Select value={payMethod} onValueChange={setPayMethod}>
                   <SelectTrigger className="h-10 w-full">

@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCreateSale } from '@/hooks/useSale'
 import { useCustomersActive } from '@/hooks/useCustomers'
@@ -154,7 +155,7 @@ export default function SaleFormDialog({ open, onClose }: Props) {
               </div>
               <div className="space-y-1">
                 <Label>销售日期</Label>
-                <Input type="date" value={saleDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSaleDate(e.target.value)} />
+                <DatePicker value={saleDate} onChange={setSaleDate} />
               </div>
               <div className="space-y-1">
                 <Label>备注</Label>

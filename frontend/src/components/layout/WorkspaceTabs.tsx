@@ -7,7 +7,7 @@
  * - 标签溢出时横向滚动（scrollbar-none）
  * - 激活标签变化时自动 scrollIntoView
  * - 右侧折叠菜单（关闭其他 / 关闭全部）
- * - 未保存变更保护：关闭标签、关闭其他、关闭全部、切换标签前均确认
+ * - 未保存变更保护：关闭标签、关闭其他、关闭全部前均确认（切换标签本身由 KeepAlive 保留状态，无需确认）
  * - 脏状态标签右上角显示橙色小圆点
  */
 
@@ -69,10 +69,10 @@ export function WorkspaceTabs() {
     })
   }
 
-  // 切换到另一个标签：若当前激活页 dirty，先确认再切换
+  // 切换到另一个标签：KeepAlive 保留组件实例与草稿，无需确认
   const handleTabClick = (key: string, path: string) => {
     if (key === activeKey) return
-    guardedAction([activeKey], () => navigate(path))
+    navigate(path)
   }
 
   // 关闭某个标签：检查该 tab 自身是否有未保存内容

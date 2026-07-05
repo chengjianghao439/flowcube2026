@@ -52,7 +52,8 @@ export default function PurchasePage() {
   // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
   const keyword       = readStringParam(searchParams, 'keyword')
   const remark        = readStringParam(searchParams, 'remark')
-  const operator      = readStringParam(searchParams, 'operator')
+  const operatorId    = Number(searchParams.get('operatorId') || '') || null
+  const operatorName  = readStringParam(searchParams, 'operatorName')
   const statusFilter  = readStringParam(searchParams, 'status')
   const productId     = Number(searchParams.get('productId') || '') || null
   const productCode   = readStringParam(searchParams, 'productCode')
@@ -77,7 +78,7 @@ export default function PurchasePage() {
     pageSize: 99999,
     keyword,
     remark: remark || undefined,
-    operator: operator || undefined,
+    operatorId: operatorId || undefined,
     status: statusFilter || undefined,
     productId: productId || undefined,
     supplierId: supplierId || undefined,
@@ -121,7 +122,7 @@ export default function PurchasePage() {
   const exportParams = {
     ...(keyword ? { keyword } : {}),
     ...(remark ? { remark } : {}),
-    ...(operator ? { operator } : {}),
+    ...(operatorId ? { operatorId: String(operatorId) } : {}),
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(productId ? { productId: String(productId) } : {}),
     ...(supplierId ? { supplierId: String(supplierId) } : {}),
@@ -132,7 +133,7 @@ export default function PurchasePage() {
 
   // 查询弹窗初始值
   const initialQuery: PurchaseQueryValues = {
-    keyword, remark, operator, status: statusFilter,
+    keyword, remark, operatorId, operatorName, status: statusFilter,
     productId, productCode, productName,
     supplierId, supplierName,
     warehouseId, warehouseName,
@@ -143,7 +144,8 @@ export default function PurchasePage() {
     updateParams({
       keyword: v.keyword || null,
       remark: v.remark || null,
-      operator: v.operator || null,
+      operatorId: v.operatorId || null,
+      operatorName: v.operatorName || null,
       status: v.status || null,
       productId: v.productId || null,
       productCode: v.productCode || null,
@@ -160,7 +162,7 @@ export default function PurchasePage() {
 
   function clearAll() {
     updateParams({
-      keyword: null, remark: null, operator: null, status: null,
+      keyword: null, remark: null, operatorId: null, operatorName: null, status: null,
       productId: null, productCode: null, productName: null,
       supplierId: null, supplierName: null,
       warehouseId: null, warehouseName: null,
@@ -172,7 +174,7 @@ export default function PurchasePage() {
   const chips = [
     keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
     remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null }) },
-    operator && { key: 'operator', label: `经办人：${operator}`, onRemove: () => updateParams({ operator: null }) },
+    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null }) },
     statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
     supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },

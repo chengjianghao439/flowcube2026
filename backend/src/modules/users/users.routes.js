@@ -38,6 +38,7 @@ const resetPasswordSchema = z.object({
 router.use(authMiddleware)
 
 router.get('/',              requirePermission(PERMISSIONS.USER_VIEW), usersController.list)
+router.get('/options',       usersController.options)
 router.get('/:id',           requirePermission(PERMISSIONS.USER_VIEW), usersController.detail)
 router.post('/',             requirePermission(PERMISSIONS.USER_CREATE), validateBody(createSchema),        usersController.create)
 router.put('/:id',           requirePermission(PERMISSIONS.USER_UPDATE), validateBody(updateSchema),        usersController.update)

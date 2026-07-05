@@ -1,7 +1,7 @@
 /**
  * TopNav — 顶栏主导航（hover 下拉，最多两级）
  *
- * 菜单结构继承自原 Sidebar 分组；使用 Link + 工作区标签与未保存守卫。
+ * 菜单结构继承自原 Sidebar 分组；点击项打开/激活对应工作区标签（KeepAlive 保留原标签状态）。
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
@@ -10,9 +10,7 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePermission } from '@/hooks/usePermission'
 import { useWorkspaceStore } from '@/store/workspaceStore'
-import { buildWorkspaceTabRegistration } from '@/router/workspaceRouteMeta'
 import { PATH_TITLES, buildTopNavSections, type NavChildItem, type TopNavSection } from '@/router/routeRegistry'
-import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 
 export const TOP_NAV_SECTIONS: TopNavSection[] = buildTopNavSections()
 
@@ -44,16 +42,16 @@ function NavItemLink(props: {
   label: string
   path: string
   active: boolean
-  navigateWithGuard: (path: string) => void
+  openNavPath: (path: string) => void
 }) {
-  const { label, path, active, navigateWithGuard } = props
+  const { label, path, active, openNavPath } = props
   return (
     <Link
       to={path}
       aria-current={active ? 'page' : undefined}
       onClick={(e) => {
         e.preventDefault()
-        navigateWithGuard(path)
+        openNavPath(path)
       }}
       className={cn(
         'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -71,9 +69,9 @@ function NavItemMenu(props: {
   label: string
   children: NavChildItem[]
   pathname: string
-  navigateWithGuard: (path: string) => void
+  openNavPath: (path: string) => void
 }) {
-  const { label, children, pathname, navigateWithGuard } = props
+  const { label, children, pathname, openNavPath } = props
   const [open, setOpen] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -138,7 +136,7 @@ function NavItemMenu(props: {
                     onClick={(e) => {
                       e.preventDefault()
                       setOpen(false)
-                      navigateWithGuard(item.path)
+                      openNavPath(item.path)
                     }}
                     className={cn(
                       'block px-3 py-2 text-sm transition-colors',
@@ -166,20 +164,14 @@ export function TopNav() {
   const { addTab } = useWorkspaceStore()
   const pathname = location.pathname
 
-  /** 打开/激活目标页：若当前页有未保存内容，先确认再跳转 */
-  const navigateWithGuard = useCallback(
+  /** 打开/激活目标页：KeepAlive 保留当前标签状态，无需确认 */
+  const openNavPath = useCallback(
     (path: string) => {
       const title = PATH_TITLES[path] ?? path
-      const currentKey = buildWorkspaceTabRegistration(location.pathname, location.search).key
-      confirmDirtyLeave({
-        dirtyKeys: [currentKey],
-        proceed: () => {
-          addTab({ key: path, title, path })
-          navigate(path)
-        },
-      })
+      addTab({ key: path, title, path })
+      navigate(path)
     },
-    [addTab, location.pathname, location.search, navigate]
+    [addTab, navigate]
   )
 
   const nodes: ReactNode[] = []
@@ -194,7 +186,7 @@ export function TopNav() {
           label={section.label}
           path={section.path}
           active={active}
-          navigateWithGuard={navigateWithGuard}
+          openNavPath={openNavPath}
         />
       )
       continue
@@ -213,7 +205,7 @@ export function TopNav() {
           label={section.label}
           path={only.path}
           active={active}
-          navigateWithGuard={navigateWithGuard}
+          openNavPath={openNavPath}
         />
       )
       continue
@@ -225,7 +217,7 @@ export function TopNav() {
         label={section.label}
         children={visible}
         pathname={pathname}
-        navigateWithGuard={navigateWithGuard}
+        openNavPath={openNavPath}
       />
     )
   }
