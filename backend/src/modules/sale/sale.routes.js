@@ -9,6 +9,8 @@ const itemSchema = z.object({
   productId:z.number().int().positive(),
   productCode:z.string(),
   productName:z.string(),
+  spec:z.string().optional().nullable(),
+  color:z.string().optional().nullable(),
   unit:z.string(),
   quantity:z.number().positive('数量必须大于0'),
   unitPrice:z.number().positive('单价必须大于0'),
