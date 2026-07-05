@@ -67,6 +67,11 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   ensure_docker_space
   echo "==> Docker：重建并启动 backend / frontend..."
   docker compose up -d --build backend frontend
+  # 数据库迁移是显式步骤（后端不在启动时自动迁移）。
+  # 必须在容器重建后、用新镜像里的迁移文件执行，否则新代码会跑在旧表结构上。
+  # 失败即中断部署（set -e）——宁可部署失败并告警，也不要静默上线一个坏 schema。
+  echo "==> 执行数据库迁移（应用本次发布新增的迁移文件）..."
+  docker compose exec -T backend npm run migrate
   wait_for_health
   if [ "$SKIP_RELEASE_GATE" = "1" ]; then
     echo "==> 已跳过发布门禁（SKIP_RELEASE_GATE=1）"
@@ -81,5 +86,7 @@ fi
 echo "==> 非 Docker：仅安装依赖，请自行重启 Node（pm2/systemd 等）"
 cd backend
 if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+echo "==> 执行数据库迁移..."
+npm run migrate
 echo "==> 请在 backend 目录配置 .env 中的 APP_PUBLIC_URL=https://你的API域名 后执行你的重启命令"
 echo "    例：pm2 restart flowcube-api"
