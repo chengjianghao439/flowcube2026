@@ -35,6 +35,7 @@ import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { getCustomerPriceApi } from '@/api/price-lists'
+import { cn } from '@/lib/utils'
 
 const PHONE_RE = /^1\d{10}$/
 import type { SaleOrder, SaleOrderItem } from '@/types/sale'
@@ -194,7 +195,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const [receiverAddress, setReceiverAddress] = useState('')
   const counterRef    = useRef(0)
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
-  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', spec: null, color: null, unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
+  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
   const { data: carrierOptions = [] } = useCarriersActive()
 
@@ -203,6 +204,9 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const [finderOpen,    setFinderOpen]    = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [customerFinderOpen,  setCustomerFinderOpen]  = useState(false)
+  const [customerError, setCustomerError] = useState(false)
+  const [warehouseError, setWarehouseError] = useState(false)
+  const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
 
   // 未保存变更保护：已填写商品或表头字段有值才标脏
   const isDirty = !!(customerId || warehouseId || remark || carrierId || receiverName || items.some(i => i.productId > 0))
@@ -228,6 +232,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   function handleCustomerConfirm(result: FinderResult) {
     setCustomerId(String(result.id))
     setCustomerName(result.name)
+    setCustomerError(false)
     void handleCustomerChange(String(result.id))
   }
 
@@ -273,7 +278,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     if (finderItemKey === null) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
       : i
     ))
     // 商品选择后自动聚焦到该行数量框
@@ -291,9 +296,15 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 
   async function handleSubmit() {
     const filledItems = items.filter(i => i.productId > 0)
-    if (!customerId || !customerName) { toast.warning('请选择客户'); return }
-    if (!warehouseId || !warehouseName) { toast.warning('请选择仓库'); return }
+    const missingCustomer = !customerId || !customerName
+    const missingWarehouse = !warehouseId || !warehouseName
+    setCustomerError(missingCustomer)
+    setWarehouseError(missingWarehouse)
+    if (missingCustomer) { toast.warning('请选择客户'); return }
+    if (missingWarehouse) { toast.warning('请选择仓库'); return }
     if (!filledItems.length) { toast.warning('请添加至少一条明细'); return }
+    const badItemKeys = new Set(filledItems.filter(i => i.quantity <= 0 || i.unitPrice <= 0).map(i => i._key))
+    setInvalidItemKeys(badItemKeys)
     if (filledItems.find(i => i.quantity <= 0)) { toast.warning('商品数量必须大于 0'); return }
     if (filledItems.find(i => i.unitPrice <= 0)) { toast.warning('商品价格必须大于 0'); return }
     if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的手机号'); return }
@@ -319,13 +330,14 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     <div className="flex flex-col gap-3">
       <ActionBar
         title="新建销售单"
+        subtitle={isDirty ? <span className="text-xs font-normal text-muted-foreground">未保存</span> : undefined}
         rightActions={
           <>
 
             <Button onClick={handleSubmit} disabled={createMutate.isPending} className="gap-1.5">
               {createMutate.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</>
-                : <><Save className="h-4 w-4" />提交保存</>}
+                ? <><Loader2 className="h-4 w-4 animate-spin" />保存中...</>
+                : <><Save className="h-4 w-4" />保存草稿</>}
             </Button>
           </>
         }
@@ -337,14 +349,15 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         <div className="flex flex-wrap items-start gap-4">
           <div className="w-56 shrink-0 space-y-1.5">
             <Label>客户 *</Label>
-            <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} />
+            <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn(customerError && 'border-destructive/60 bg-destructive/5')} />
           </div>
           <div className="w-48 shrink-0 space-y-1.5">
             <Label>出库仓库 *</Label>
             <WarehouseSelect
               value={warehouseId ? +warehouseId : null}
-              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name) }}
+              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
               placeholder="选择仓库"
+              className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
             />
           </div>
           <div className="w-48 shrink-0 space-y-1.5">
@@ -414,14 +427,23 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
               type="button"
               onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
               onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-              className="truncate rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn('overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
             >
-              {item.productName
-                ? <span className="flex items-center gap-1.5">
-                    <span className="font-medium truncate">{item.productName}</span>
-                    <span className="shrink-0 text-doc-code-muted">({item.productCode})</span>
+              {item.productName ? (
+                <div className="flex flex-col gap-0.5">
+                  <span className="truncate text-xs text-muted-foreground">
+                    <span className="font-mono text-doc-code-muted">{item.productCode}</span>
+                    {' · 货号 '}{item.articleNumber || '—'}
+                    {' · 型号 '}{item.spec || '—'}
                   </span>
-                : <span className="text-muted-foreground">点击选择商品...</span>}
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate font-medium">{item.productName}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}</span>
+                  </span>
+                </div>
+              ) : (
+                <span className="text-muted-foreground">点击选择商品...</span>
+              )}
             </button>
 
             <div className="text-center text-muted-body">{item.unit || '—'}</div>
@@ -522,7 +544,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
   const [receiverAddress, setReceiverAddress] = useState(order.receiverAddress ?? '')
   const counterRef    = useRef((order.items ?? []).length)
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
-  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', spec: null, color: null, unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
+  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
   const { data: carrierOptions = [] } = useCarriersActive()
 
@@ -539,6 +561,9 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
   const [finderOpen,    setFinderOpen]    = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [customerFinderOpen,  setCustomerFinderOpen]  = useState(false)
+  const [customerError, setCustomerError] = useState(false)
+  const [warehouseError, setWarehouseError] = useState(false)
+  const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
 
   const handleCustomerChange = useCallback(async (cid: string) => {
     if (!cid) return
@@ -558,6 +583,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
   function handleCustomerConfirm(result: FinderResult) {
     setCustomerId(String(result.id))
     setCustomerName(result.name)
+    setCustomerError(false)
     void handleCustomerChange(String(result.id))
   }
 
@@ -603,7 +629,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
     if (finderItemKey === null) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
       : i
     ))
     // 商品选择后自动聚焦到该行数量框
@@ -621,9 +647,15 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
 
   async function handleSubmit() {
     const filledItems = items.filter(i => i.productId > 0)
-    if (!customerId || !customerName) { toast.warning('请选择客户'); return }
-    if (!warehouseId || !warehouseName) { toast.warning('请选择仓库'); return }
+    const missingCustomer = !customerId || !customerName
+    const missingWarehouse = !warehouseId || !warehouseName
+    setCustomerError(missingCustomer)
+    setWarehouseError(missingWarehouse)
+    if (missingCustomer) { toast.warning('请选择客户'); return }
+    if (missingWarehouse) { toast.warning('请选择仓库'); return }
     if (!filledItems.length) { toast.warning('请添加至少一条明细'); return }
+    const badItemKeys = new Set(filledItems.filter(i => i.quantity <= 0 || i.unitPrice <= 0).map(i => i._key))
+    setInvalidItemKeys(badItemKeys)
     if (filledItems.find(i => i.quantity <= 0)) { toast.warning('商品数量必须大于 0'); return }
     if (filledItems.find(i => i.unitPrice <= 0)) { toast.warning('商品价格必须大于 0'); return }
     if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的手机号'); return }
@@ -677,14 +709,15 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
         <div className="flex flex-wrap items-start gap-4">
           <div className="w-56 shrink-0 space-y-1.5">
             <Label>客户 *</Label>
-            <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} />
+            <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn(customerError && 'border-destructive/60 bg-destructive/5')} />
           </div>
           <div className="w-48 shrink-0 space-y-1.5">
             <Label>出库仓库 *</Label>
             <WarehouseSelect
               value={warehouseId ? +warehouseId : null}
-              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name) }}
+              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
               placeholder="选择仓库"
+              className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
             />
           </div>
           <div className="w-48 shrink-0 space-y-1.5">
@@ -748,11 +781,23 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
               type="button"
               onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
               onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-              className="truncate rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn('overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
             >
-              {item.productName
-                ? <span className="flex items-center gap-1.5"><span className="font-medium truncate">{item.productName}</span><span className="shrink-0 text-doc-code-muted">({item.productCode})</span></span>
-                : <span className="text-muted-foreground">点击选择商品...</span>}
+              {item.productName ? (
+                <div className="flex flex-col gap-0.5">
+                  <span className="truncate text-xs text-muted-foreground">
+                    <span className="font-mono text-doc-code-muted">{item.productCode}</span>
+                    {' · 货号 '}{item.articleNumber || '—'}
+                    {' · 型号 '}{item.spec || '—'}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate font-medium">{item.productName}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}</span>
+                  </span>
+                </div>
+              ) : (
+                <span className="text-muted-foreground">点击选择商品...</span>
+              )}
             </button>
             <div className="text-center text-muted-body">{item.unit || '—'}</div>
             <Input type="number" min="0.01" step="0.01" placeholder="数量" value={item.quantity}
@@ -941,6 +986,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                 <thead>
                   <tr className="border-b text-table-head">
                     <th className="pb-2 text-left">编码</th>
+                    <th className="pb-2 text-left">货号</th>
                     <th className="pb-2 text-left">型号</th>
                     <th className="pb-2 text-left">名称</th>
                     <th className="pb-2 text-left">颜色</th>
@@ -954,6 +1000,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                   {(order.items ?? []).map(item => (
                     <tr key={item.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
                       <td className="py-2.5"><span>{item.productCode}</span></td>
+                      <td className="py-2.5">{item.articleNumber || '-'}</td>
                       <td className="py-2.5">{item.spec || '-'}</td>
                       <td className="py-2.5">{item.productName}</td>
                       <td className="py-2.5">{item.color || '-'}</td>
@@ -998,6 +1045,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                   <thead>
                     <tr className="border-b text-table-head">
                       <th className="pb-2 text-left">编码</th>
+                      <th className="pb-2 text-left">货号</th>
                       <th className="pb-2 text-left">型号</th>
                       <th className="pb-2 text-left">名称</th>
                       <th className="pb-2 text-left">颜色</th>
@@ -1011,7 +1059,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                       const picked = (item.scans ?? []).reduce((s, sc) => s + sc.qty, 0)
                       return (
                       <tr key={item.id} className="border-b border-border/40">
-                        <td className="py-2.5">{item.productCode}</td>
+                        <td className="py-2.5">{item.productCode}</td><td className="py-2.5">{item.articleNumber || '-'}</td>
                         <td className="py-2.5">{item.spec || '-'}</td>
                         <td className="py-2.5">{item.productName}</td>
                         <td className="py-2.5">{item.color || '-'}</td>
@@ -1054,7 +1102,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                     if (scans.length === 0) {
                       return [(
                         <tr key={item.id} className="border-b border-border/40">
-                          <td className="py-2.5">{item.productCode}</td>
+                          <td className="py-2.5">{item.productCode}</td><td className="py-2.5">{item.articleNumber || '-'}</td>
                           <td className="py-2.5">{item.spec || '-'}</td>
                           <td className="py-2.5">{item.productName}</td>
                           <td className="py-2.5">{item.color || '-'}</td>
@@ -1067,7 +1115,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                     }
                     return scans.map((sc, si) => (
                       <tr key={`${item.id}-${si}`} className="border-b border-border/40">
-                        <td className="py-2.5">{item.productCode}</td>
+                        <td className="py-2.5">{item.productCode}</td><td className="py-2.5">{item.articleNumber || '-'}</td>
                         <td className="py-2.5">{item.spec || '-'}</td>
                         <td className="py-2.5">{item.productName}</td>
                         <td className="py-2.5">{item.color || '-'}</td>
@@ -1124,6 +1172,7 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
                       <thead>
                         <tr className="border-b text-table-head">
                           <th className="pb-2 text-left">编码</th>
+                          <th className="pb-2 text-left">货号</th>
                           <th className="pb-2 text-left">名称</th>
                           <th className="w-12 pb-2 text-center">单位</th>
                           <th className="w-12 pb-2 text-center">数量</th>

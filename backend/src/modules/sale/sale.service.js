@@ -289,6 +289,7 @@ async function findById(id) {
     productId:r.product_id,
     productCode:r.product_code,
     productName:r.product_name,
+    articleNumber:r.article_number||null,
     spec:r.spec||null,
     color:r.color||null,
     unit:r.unit,
@@ -356,7 +357,7 @@ async function create({ customerId, customerName, warehouseId, warehouseName, re
     )
     const orderId = r.insertId
     for(const item of items) {
-      await conn.query(`INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[orderId,item.productId,item.productCode,item.productName,item.unit,item.spec||null,item.color||null,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null])
+      await conn.query(`INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,[orderId,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null])
     }
     await appendSaleEvent(conn, orderId, 'created', '创建订单', `共 ${items.length} 条明细`, operator)
     await buildPricingEvents(conn, orderId, items, operator)
@@ -383,8 +384,8 @@ async function update(id, { customerId, customerName, warehouseId, warehouseName
     await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
     for (const item of items) {
       await conn.query(
-        `INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-        [id, item.productId, item.productCode, item.productName, item.unit, item.spec||null, item.color||null, item.quantity, item.unitPrice, item.quantity*item.unitPrice, item.remark||null]
+        `INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id, item.productId, item.productCode, item.productName, item.unit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.unitPrice, item.quantity*item.unitPrice, item.remark||null]
       )
     }
     await appendSaleEvent(conn, id, 'updated', '编辑订单', `现有 ${items.length} 条明细`, operator)

@@ -10,6 +10,7 @@ export interface SaleOrderItem {
   productId: number
   productCode: string
   productName: string
+  articleNumber?: string | null
   spec?: string | null
   color?: string | null
   unit: string

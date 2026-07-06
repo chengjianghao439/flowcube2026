@@ -54,6 +54,7 @@ const InventoryPage = lazy(() => import('@/pages/inventory'))
 const PlasticBoxesPage = lazy(() => import('@/pages/plastic-boxes'))
 const StockcheckPage = lazy(() => import('@/pages/stockcheck'))
 const TransferPage = lazy(() => import('@/pages/transfer'))
+const TransferFormPage = lazy(() => import('@/pages/transfer/form'))
 const InboundTasksPage = lazy(() => import('@/pages/inbound-tasks'))
 const InboundTaskCreatePage = lazy(() => import('@/pages/inbound-tasks/create'))
 const InboundTaskDetailPage = lazy(() => import('@/pages/inbound-tasks/detail'))
@@ -426,6 +427,14 @@ export const routePatterns: RoutePatternEntry[] = [
     title: (path) => path === '/purchase/new' ? '新建采购单' : `采购订单 #${path.split('/').pop()}`,
     permission: PERMISSIONS.PURCHASE_ORDER_VIEW,
     component: PurchaseFormPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+  },
+  {
+    pattern: /^\/transfer\/(new|\d+)$/,
+    title: (path) => path === '/transfer/new' ? '新建调拨单' : `调拨单 #${path.split('/').pop()}`,
+    permission: PERMISSIONS.TRANSFER_ORDER_VIEW,
+    component: TransferFormPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
   },

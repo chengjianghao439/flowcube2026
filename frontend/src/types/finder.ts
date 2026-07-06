@@ -15,5 +15,7 @@ export interface FinderColumn<T = Record<string, unknown>> {
   title: string
   /** Fixed pixel width, or any valid CSS grid track value (e.g. '120px', '1fr'). */
   width?: number | string
+  /** Text alignment for both header and cell content (default: left). */
+  align?: 'left' | 'center' | 'right'
   render?: (value: unknown, row: T) => ReactNode
 }

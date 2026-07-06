@@ -18,6 +18,12 @@ function colTrack(col: FinderColumn): string {
   return typeof col.width === 'number' ? `${col.width}px` : col.width
 }
 
+function alignClass(align?: 'left' | 'center' | 'right'): string {
+  if (align === 'center') return 'text-center'
+  if (align === 'right') return 'text-right'
+  return ''
+}
+
 export function FinderTable<T extends Record<string, unknown>>({
   columns, data, selected, onSelect, onDoubleClickRow, getRowKey,
   isLoading,
@@ -32,7 +38,7 @@ export function FinderTable<T extends Record<string, unknown>>({
         className="sticky top-0 z-10 grid gap-2 border-b bg-muted/40 px-6 py-2 text-xs font-medium text-muted-foreground backdrop-blur-sm"
         style={{ gridTemplateColumns: gridTemplate }}
       >
-        {columns.map(col => <span key={col.key}>{col.title}</span>)}
+        {columns.map(col => <span key={col.key} className={alignClass(col.align)}>{col.title}</span>)}
       </div>
 
       {/* Rows */}
@@ -73,7 +79,7 @@ export function FinderTable<T extends Record<string, unknown>>({
               {columns.map(col => {
                 const raw = row[col.key]
                 return (
-                  <span key={col.key} className="truncate leading-5">
+                  <span key={col.key} className={cn('truncate leading-5', alignClass(col.align))}>
                     {col.render
                       ? col.render(raw, row)
                       : raw != null && raw !== '' ? String(raw) : '—'}

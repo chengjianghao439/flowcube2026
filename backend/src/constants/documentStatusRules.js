@@ -41,17 +41,21 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
     },
   },
   transfer: {
+    // 状态：1草稿 2待出库(已派发) 3在途 4已完成 5已取消
     entityName: '调拨单',
     actions: {
-      confirm: { from: [1], to: 2, message: '只有草稿可以确认' },
-      execute: { from: [2], to: 3, message: '只有已确认的调拨单可以执行' },
+      edit: { from: [1], message: '只有草稿状态的调拨单可以编辑' },
+      confirm: { from: [1], to: 2, message: '只有草稿可以确认派发' },
+      scanOut: { from: [2, 3], to: 3, message: '只有待出库/在途的调拨单可以扫码出库' },
+      scanIn: { from: [3], to: 4, message: '只有在途的调拨单可以扫码入库' },
       cancel: {
         from: [1, 2],
-        to: 4,
+        to: 5,
         message: '当前状态的调拨单不能取消',
         blocked: {
-          3: '已执行的调拨单不能取消',
-          4: '调拨单已取消',
+          3: '已开始出库(在途)的调拨单不能取消，请通过盘点处理差异',
+          4: '已完成的调拨单不能取消',
+          5: '调拨单已取消',
         },
       },
     },

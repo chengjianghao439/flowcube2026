@@ -13,17 +13,24 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Search, ChevronDown, ChevronRight, PackageSearch, Inbox } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, PackageSearch, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AppDialog } from '@/components/shared/AppDialog'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
+import { FinderTable } from '@/components/finder/FinderTable'
 import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
 import { Badge }  from '@/components/ui/badge'
 import { useCategoryTree } from '@/hooks/useCategories'
 import { useProductFinder } from '@/hooks/useProducts'
 import type { Category } from '@/types/categories'
+import type { FinderColumn } from '@/types/finder'
 import type { ProductFinderResult } from '@/types/products'
+
+type ProductRow = ProductFinderResult & Record<string, unknown>
+
+/** 分类树用法提示是否已被用户关闭（跨会话记忆，避免熟手每次打开都看到同一行字） */
+const CATEGORY_HINT_DISMISSED_KEY = 'flowcube-product-finder-category-hint-dismissed'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -115,6 +122,9 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
   const [searchText, setSearchText] = useState('')  // 防抖后的实际查询值
   const [categoryId, setCategoryId] = useState<number | null>(null)
   const [selected,   setSelected]   = useState<ProductFinderResult | null>(null)
+  const [categoryHintDismissed, setCategoryHintDismissed] = useState(
+    () => localStorage.getItem(CATEGORY_HINT_DISMISSED_KEY) === '1',
+  )
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>()
 
@@ -137,6 +147,32 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
   const products   = finderData?.list ?? []
   const pagination = finderData?.pagination
   const [expandedPath, setExpandedPath] = useState<number[]>([])
+
+  const columns: FinderColumn<ProductRow>[] = useMemo(() => [
+    { key: 'code', title: '编码', width: 96, render: v => <span className="font-mono text-xs">{v as string}</span> },
+    { key: 'articleNumber', title: '货号', width: 96, render: v => <span className="text-xs text-muted-foreground">{(v as string) || '—'}</span> },
+    { key: 'spec', title: '型号', width: 110, render: v => <span className="text-xs text-muted-foreground">{(v as string) || '—'}</span> },
+    { key: 'name', title: '商品名称', render: v => <span className="font-medium">{v as string}</span> },
+    { key: 'color', title: '颜色', width: 70, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+    { key: 'unit', title: '单位', width: 56, align: 'center', render: v => <span className="text-muted-foreground">{v as string}</span> },
+    {
+      key: 'categoryPath', title: '分类路径', width: 140,
+      render: (_, row) => (
+        <CategoryPathDisplay path={row.categoryPath} fallback={row.categoryName} className="text-xs text-muted-foreground" />
+      ),
+    },
+    {
+      key: 'stock', title: warehouseId ? '可用库存' : '库存', width: 72, align: 'right',
+      render: (_, row) => (
+        <span className={cn(
+          warehouseId && row.stock === 0 ? 'text-destructive' : '',
+          warehouseId && row.stock > 0  ? 'text-emerald-600'  : '',
+        )}>
+          {warehouseId ? row.stock : '—'}
+        </span>
+      ),
+    },
+  ], [warehouseId])
   const expandedIds = useMemo(() => new Set(expandedPath), [expandedPath])
   const breadcrumb = useMemo(() => {
     if (categoryId == null) return []
@@ -254,9 +290,22 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
                 </div>
               )}
 
-              <div className="mb-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                默认显示一级分类，点击当前分类展开或收起下一级
-              </div>
+              {!categoryHintDismissed && (
+                <div className="relative mb-2 rounded-md border border-border/60 bg-muted/20 py-2 pl-3 pr-7 text-xs text-muted-foreground">
+                  默认显示一级分类，点击当前分类展开或收起下一级
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategoryHintDismissed(true)
+                      localStorage.setItem(CATEGORY_HINT_DISMISSED_KEY, '1')
+                    }}
+                    className="absolute right-1.5 top-1.5 rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label="不再显示此提示"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
 
               <FinderCategoryAccordion
                 nodes={categoryTree}
@@ -281,80 +330,20 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
             </div>
           </aside>
 
-          {/* 右侧商品列表 */}
+          {/* 右侧商品列表：复用通用 FinderTable（行渲染/键盘导航/加载与空状态与其他 Finder 保持一致） */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            {/* 表头 */}
-            <div className="grid shrink-0 grid-cols-[96px_96px_110px_1fr_70px_56px_140px_72px] gap-2 border-b bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground">
-              <span>编码</span>
-              <span>货号</span>
-              <span>型号</span>
-              <span>商品名称</span>
-              <span>颜色</span>
-              <span className="text-center">单位</span>
-              <span>分类路径</span>
-              <span className="text-right">{warehouseId ? '可用库存' : '库存'}</span>
-            </div>
-
-            {/* 表格内容（可滚动） */}
             <div className="flex-1 overflow-y-auto">
-              {isFetching && products.length === 0 ? (
-                <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                  <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  加载中...
-                </div>
-              ) : products.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <Inbox className="mb-2 h-8 w-8 opacity-30" />
-                  <p className="text-sm">无匹配商品</p>
-                </div>
-              ) : (
-                products.map(product => {
-                  const isSelected = selected?.id === product.id
-                  return (
-                    <div
-                      key={product.id}
-                      role="row"
-                      tabIndex={0}
-                      onClick={() => setSelected(product)}
-                      onDoubleClick={() => { onConfirm(product); onClose() }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') setSelected(product)
-                        if (e.key === ' ') { onConfirm(product); onClose() }
-                      }}
-                      className={cn(
-                        'grid cursor-pointer grid-cols-[96px_96px_110px_1fr_70px_56px_140px_72px] gap-2 border-b px-4 py-2.5 text-sm transition-colors',
-                        isSelected
-                          ? 'bg-primary/10 text-primary'
-                          : 'hover:bg-muted/40',
-                      )}
-                    >
-                      <span className="truncate font-mono text-xs leading-5">{product.code}</span>
-                      <span className="truncate text-xs leading-5 text-muted-foreground">{product.articleNumber || '—'}</span>
-                      <span className="truncate text-xs leading-5 text-muted-foreground">{product.spec || '—'}</span>
-                      <span className="truncate font-medium leading-5">{product.name}</span>
-                      <span className="truncate leading-5 text-muted-foreground">{product.color || '—'}</span>
-                      <span className="text-center leading-5 text-muted-foreground">{product.unit}</span>
-                      <CategoryPathDisplay
-                        path={product.categoryPath}
-                        fallback={product.categoryName}
-                        className="text-xs leading-5 text-muted-foreground"
-                      />
-                      <span className={cn(
-                        'text-right leading-5',
-                        warehouseId && product.stock === 0 ? 'text-destructive' : '',
-                        warehouseId && product.stock > 0  ? 'text-emerald-600'  : '',
-                      )}>
-                        {warehouseId ? product.stock : '—'}
-                      </span>
-                    </div>
-                  )
-                })
-              )}
+              <FinderTable
+                columns={columns}
+                data={products as ProductRow[]}
+                selected={selected as ProductRow | null}
+                onSelect={setSelected}
+                onDoubleClickRow={p => { onConfirm(p); onClose() }}
+                getRowKey={p => p.id}
+                isLoading={isFetching}
+                emptyText="无匹配商品"
+              />
             </div>
-
           </div>
         </div>
       </div>

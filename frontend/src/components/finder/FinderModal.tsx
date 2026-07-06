@@ -34,6 +34,7 @@ export function FinderModal<T extends Record<string, unknown>>({
   columns, data, selected, onSelect, onConfirm, onConfirmRow,
   getRowKey, isLoading,
   keyword, onKeywordChange, searchPlaceholder,
+  selectedLabel,
 }: FinderModalProps<T>) {
 
   return (
@@ -78,9 +79,21 @@ export function FinderModal<T extends Record<string, unknown>>({
 
         {/* ── Footer ──────────────────────────────────────────────── */}
         <div className="shrink-0 border-t bg-muted/20 px-6 py-4">
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>取消</Button>
-            <Button disabled={!selected} onClick={onConfirm}>确认选择</Button>
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {selected && selectedLabel ? (
+                <span className="flex items-center gap-2">
+                  <span className="font-medium text-foreground">已选：</span>
+                  <span>{selectedLabel(selected)}</span>
+                </span>
+              ) : (
+                '点击行选择'
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose}>取消</Button>
+              <Button disabled={!selected} onClick={onConfirm}>确认选择</Button>
+            </div>
           </div>
         </div>
 

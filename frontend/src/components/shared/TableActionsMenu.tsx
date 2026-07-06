@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,11 +35,20 @@ export default function TableActionsMenu({
 }: TableActionsMenuProps) {
   const visibleItems = items.filter(item => !item.disabled)
 
+  // 主按钮样式：与下面拼接模式的主按钮保持完全一致（同高、同字号），避免有无下拉时大小不一
+  const primaryClass = cn(
+    'px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+    primaryVariant === 'outline'
+      ? 'bg-transparent text-foreground hover:bg-muted'
+      : 'bg-primary text-primary-foreground hover:bg-primary/90',
+  )
+
   if (visibleItems.length === 0) {
     return (
-      <Button size="sm" variant={primaryVariant} disabled={primaryDisabled} onClick={onPrimaryClick}>
+      <button type="button" disabled={primaryDisabled} onClick={onPrimaryClick}
+        className={cn('inline-flex items-center rounded-md border border-border', primaryClass)}>
         {primaryLabel}
-      </Button>
+      </button>
     )
   }
 
@@ -50,12 +58,7 @@ export default function TableActionsMenu({
         type="button"
         disabled={primaryDisabled}
         onClick={onPrimaryClick}
-        className={cn(
-          'px-3 py-1.5 text-xs font-medium border-r border-border/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
-          primaryVariant === 'outline'
-            ? 'bg-transparent text-foreground hover:bg-muted'
-            : 'bg-primary text-primary-foreground hover:bg-primary/90'
-        )}
+        className={cn('border-r border-border/60', primaryClass)}
       >
         {primaryLabel}
       </button>

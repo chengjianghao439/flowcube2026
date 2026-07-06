@@ -38,9 +38,10 @@ const CONFIG: Record<OrderType, Record<number, StatusConfig>> = {
   },
   transfer: {
     1: { label: '草稿',   className: 'bg-secondary text-secondary-foreground border-secondary' },
-    2: { label: '已确认', className: 'bg-primary/10 text-primary border-primary/20' },
-    3: { label: '已执行', className: 'bg-success/10 text-success border-success/20' },
-    4: { label: '已取消', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+    2: { label: '待出库', className: 'bg-primary/10 text-primary border-primary/20' },
+    3: { label: '在途',   className: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
+    4: { label: '已完成', className: 'bg-success/10 text-success border-success/20' },
+    5: { label: '已取消', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   },
   task: Object.fromEntries(
     (Object.keys(WT_STATUS_NAME) as unknown as WtStatus[]).map(s => [

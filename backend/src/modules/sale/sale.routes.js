@@ -9,6 +9,7 @@ const itemSchema = z.object({
   productId:z.number().int().positive(),
   productCode:z.string(),
   productName:z.string(),
+  articleNumber:z.string().optional().nullable(),
   spec:z.string().optional().nullable(),
   color:z.string().optional().nullable(),
   unit:z.string(),
