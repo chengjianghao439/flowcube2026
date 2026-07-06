@@ -38,6 +38,12 @@ import { getCustomerPriceApi } from '@/api/price-lists'
 import { cn } from '@/lib/utils'
 
 const PHONE_RE = /^1\d{10}$/
+
+function parsePositiveInteger(value: string) {
+  if (!value.trim()) return 0
+  const num = Number.parseInt(value, 10)
+  return Number.isFinite(num) ? num : 0
+}
 import type { SaleOrder, SaleOrderItem } from '@/types/sale'
 import type { ProductFinderResult } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
@@ -305,7 +311,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     if (!filledItems.length) { toast.warning('请添加至少一条明细'); return }
     const badItemKeys = new Set(filledItems.filter(i => i.quantity <= 0 || i.unitPrice <= 0).map(i => i._key))
     setInvalidItemKeys(badItemKeys)
-    if (filledItems.find(i => i.quantity <= 0)) { toast.warning('商品数量必须大于 0'); return }
+    if (filledItems.find(i => !Number.isInteger(i.quantity) || i.quantity <= 0)) { toast.warning('销售数量必须为大于 0 的整数'); return }
     if (filledItems.find(i => i.unitPrice <= 0)) { toast.warning('商品价格必须大于 0'); return }
     if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的手机号'); return }
     try {
@@ -405,7 +411,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
           </div>
           <div className="flex-1 space-y-1.5">
             <Label>备注</Label>
-            <LimitedTextarea maxLength={30} value={remark} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRemark(e.target.value)} placeholder="选填" rows={1} />
+            <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" />
           </div>
         </div>
       </SectionCard>
@@ -449,10 +455,10 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             <div className="text-center text-muted-body">{item.unit || '—'}</div>
 
             <Input
-              type="number" min="0.01" step="0.01" placeholder="数量"
+              type="number" min="1" step="1" placeholder="数量"
               value={item.quantity}
               ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
               onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
               className="text-sm"
             />
@@ -656,7 +662,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
     if (!filledItems.length) { toast.warning('请添加至少一条明细'); return }
     const badItemKeys = new Set(filledItems.filter(i => i.quantity <= 0 || i.unitPrice <= 0).map(i => i._key))
     setInvalidItemKeys(badItemKeys)
-    if (filledItems.find(i => i.quantity <= 0)) { toast.warning('商品数量必须大于 0'); return }
+    if (filledItems.find(i => !Number.isInteger(i.quantity) || i.quantity <= 0)) { toast.warning('销售数量必须为大于 0 的整数'); return }
     if (filledItems.find(i => i.unitPrice <= 0)) { toast.warning('商品价格必须大于 0'); return }
     if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的手机号'); return }
     try {
@@ -765,7 +771,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
           </div>
           <div className="flex-1 space-y-1.5">
             <Label>备注</Label>
-            <LimitedTextarea maxLength={30} value={remark} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRemark(e.target.value)} placeholder="选填" rows={1} />
+            <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" />
           </div>
         </div>
       </SectionCard>
@@ -800,9 +806,9 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
               )}
             </button>
             <div className="text-center text-muted-body">{item.unit || '—'}</div>
-            <Input type="number" min="0.01" step="0.01" placeholder="数量" value={item.quantity}
+            <Input type="number" min="1" step="1" placeholder="数量" value={item.quantity}
               ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
               onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
               className="text-sm" />
             <div>

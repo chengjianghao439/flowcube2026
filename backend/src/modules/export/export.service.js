@@ -57,17 +57,24 @@ async function getPurchaseExportPayload(query) {
 }
 
 async function getSaleExportPayload(query) {
-  const { startDate, endDate, status, productId } = query
+  const { startDate, endDate, status, productId, keyword, customerId, warehouseId, remark } = query
   let sql = `SELECT o.order_no,o.customer_name,o.warehouse_name,
     CASE o.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已出库' WHEN 4 THEN '已取消' END AS status_name,
     o.total_amount,o.sale_date,o.operator_name,DATE_FORMAT(o.created_at,'%Y-%m-%d %H:%i') AS created_at,o.remark
     FROM sale_orders o WHERE o.deleted_at IS NULL`
   const params = []
+  if (keyword) {
+    sql += ' AND o.order_no LIKE ?'
+    params.push(`%${keyword}%`)
+  }
+  if (remark) { sql += ' AND o.remark LIKE ?'; params.push(`%${remark}%`) }
   if (status) { sql += ' AND o.status=?'; params.push(+status) }
   if (productId) {
     sql += ' AND EXISTS (SELECT 1 FROM sale_order_items soi WHERE soi.order_id = o.id AND soi.product_id = ?)'
     params.push(+productId)
   }
+  if (customerId) { sql += ' AND o.customer_id=?'; params.push(+customerId) }
+  if (warehouseId) { sql += ' AND o.warehouse_id=?'; params.push(+warehouseId) }
   if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
   sql += ' ORDER BY o.created_at DESC'

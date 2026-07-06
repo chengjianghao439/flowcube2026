@@ -226,7 +226,7 @@ function mapTimeline(rows, order) {
   return [...base, ...mapped].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
 }
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, customerId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
   const params=[like,like]
   const countParams=[like,like]
@@ -243,6 +243,42 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     countCond += ' AND EXISTS (SELECT 1 FROM sale_order_items soi WHERE soi.order_id = sale_orders.id AND soi.product_id = ?)'
     params.push(productId)
     countParams.push(productId)
+  }
+  if (customerId) {
+    cond += ' AND so.customer_id=?'
+    countCond += ' AND customer_id=?'
+    params.push(customerId)
+    countParams.push(customerId)
+  }
+  if (warehouseId) {
+    cond += ' AND so.warehouse_id=?'
+    countCond += ' AND warehouse_id=?'
+    params.push(warehouseId)
+    countParams.push(warehouseId)
+  }
+  if (startDate) {
+    cond += ' AND DATE(so.created_at)>=?'
+    countCond += ' AND DATE(created_at)>=?'
+    params.push(startDate)
+    countParams.push(startDate)
+  }
+  if (endDate) {
+    cond += ' AND DATE(so.created_at)<=?'
+    countCond += ' AND DATE(created_at)<=?'
+    params.push(endDate)
+    countParams.push(endDate)
+  }
+  if (remark) {
+    cond += ' AND so.remark LIKE ?'
+    countCond += ' AND remark LIKE ?'
+    params.push(`%${remark}%`)
+    countParams.push(`%${remark}%`)
+  }
+  if (operatorId) {
+    cond += ' AND so.operator_id=?'
+    countCond += ' AND operator_id=?'
+    params.push(operatorId)
+    countParams.push(operatorId)
   }
   const [rows] = await pool.query(
     `SELECT so.*, ${warehouseTaskProjection}

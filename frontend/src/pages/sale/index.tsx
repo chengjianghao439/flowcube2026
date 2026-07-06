@@ -1,24 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { SaleFilters } from './components/SaleFilters'
 import { SaleRowActions } from './components/SaleRowActions'
+import SaleQueryDialog, { type SaleQueryValues } from './SaleQueryDialog'
 import { useSaleList, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { getSaleDetailApi } from '@/api/sale'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
-import { ProductFinder } from '@/components/finder'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import type { SaleOrder } from '@/types/sale'
-import type { ProductFinderResult } from '@/types/products'
 import type { TableColumn } from '@/types'
 
 // ─── 二次确认 state 类型 ─────────────────────────────────────────────────────
@@ -30,38 +29,54 @@ interface ConfirmState {
 }
 
 const EMPTY_CONFIRM: ConfirmState = { open: false, title: '', description: '', onConfirm: () => {} }
+const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '已占库', '3': '拣货中', '4': '已出库', '5': '已取消' }
+
+/** 首次打开销售页时默认筛选的天数窗口（最近一周） */
+const DEFAULT_RANGE_DAYS = 7
+function toYmd(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function SalePage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const keyword = readStringParam(searchParams, 'keyword')
-  const statusFilter = readStringParam(searchParams, 'status')
-  const productId = Number(searchParams.get('productId') || '')
-  const productCode = readStringParam(searchParams, 'productCode')
-  const productName = readStringParam(searchParams, 'productName')
-  const product = useMemo<ProductFinderResult | null>(() => {
-    if (!Number.isInteger(productId) || productId <= 0) return null
-    return {
-      id: productId,
-      code: productCode,
-      name: productName,
-      categoryId: null,
-      categoryName: null,
-      categoryPath: null,
-      unit: '',
-      spec: null,
-      salePrice: null,
-      costPrice: null,
-      stock: 0,
-    }
-  }, [productCode, productId, productName])
-  const [search, setSearch] = useState(keyword)
-  const [productFinderOpen, setProductFinderOpen] = useState(false)
+
+  // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
+  const keyword       = readStringParam(searchParams, 'keyword')
+  const remark        = readStringParam(searchParams, 'remark')
+  const operatorId    = Number(searchParams.get('operatorId') || '') || null
+  const operatorName  = readStringParam(searchParams, 'operatorName')
+  const statusFilter  = readStringParam(searchParams, 'status')
+  const productId     = Number(searchParams.get('productId') || '') || null
+  const productCode   = readStringParam(searchParams, 'productCode')
+  const productName   = readStringParam(searchParams, 'productName')
+  const customerId    = Number(searchParams.get('customerId') || '') || null
+  const customerName  = readStringParam(searchParams, 'customerName')
+  const warehouseId   = Number(searchParams.get('warehouseId') || '') || null
+  const warehouseName = readStringParam(searchParams, 'warehouseName')
+  const startDate     = readStringParam(searchParams, 'startDate')
+  const endDate       = readStringParam(searchParams, 'endDate')
+
+  const [queryOpen, setQueryOpen] = useState(false)
   const [confirmState, setConfirmState] = useState<ConfirmState>(EMPTY_CONFIRM)
   const [printOrder,   setPrintOrder]   = useState<SaleOrder | null>(null)
 
-  const { data, isLoading } = useSaleList({ pageSize: 99999, keyword, status: statusFilter || undefined, productId: product?.id || undefined })
+  const { data, isLoading } = useSaleList({
+    pageSize: 99999,
+    keyword,
+    remark: remark || undefined,
+    operatorId: operatorId || undefined,
+    status: statusFilter || undefined,
+    productId: productId || undefined,
+    customerId: customerId || undefined,
+    warehouseId: warehouseId || undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+  })
   const reserveMutate = useReserveSale()
   const releaseMutate = useReleaseSale()
   const ship          = useShipSale()
@@ -70,13 +85,20 @@ export default function SalePage() {
   const navigate  = useNavigate()
   const { addTab } = useWorkspaceStore()
 
-  useEffect(() => {
-    setSearch(keyword)
-  }, [keyword])
-
   function updateParams(updates: Record<string, string | number | null | undefined>) {
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
+
+  // 首次打开：无日期筛选时默认套用最近一周（打开即看本周订单；之后可自由改或清空看全部）
+  useEffect(() => {
+    if (!startDate && !endDate) {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - DEFAULT_RANGE_DAYS)
+      setSearchParams(upsertSearchParams(searchParams, { startDate: toYmd(start), endDate: toYmd(end) }), { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function goToNew() {
     addTab({ key: '/sale/new', title: '新建销售单', path: '/sale/new' })
@@ -103,17 +125,73 @@ export default function SalePage() {
     }
   }
 
-  // ── 筛选操作 ──
-  function handleSearch() { updateParams({ keyword: search }) }
-  function handleReset()  {
-    setSearch('')
-    updateParams({ keyword: null, status: null, productId: null, productCode: null, productName: null })
+  // 导出参数（与列表当前筛选保持一致）
+  const exportParams = {
+    ...(keyword ? { keyword } : {}),
+    ...(remark ? { remark } : {}),
+    ...(operatorId ? { operatorId: String(operatorId) } : {}),
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(productId ? { productId: String(productId) } : {}),
+    ...(customerId ? { customerId: String(customerId) } : {}),
+    ...(warehouseId ? { warehouseId: String(warehouseId) } : {}),
+    ...(startDate ? { startDate } : {}),
+    ...(endDate ? { endDate } : {}),
   }
-  function handleStatusChange(v: string) { updateParams({ status: v }) }
+
+  // 查询弹窗初始值
+  const initialQuery: SaleQueryValues = {
+    keyword, remark, operatorId, operatorName, status: statusFilter,
+    productId, productCode, productName,
+    customerId, customerName,
+    warehouseId, warehouseName,
+    startDate, endDate,
+  }
+
+  function applyQuery(v: SaleQueryValues) {
+    updateParams({
+      keyword: v.keyword || null,
+      remark: v.remark || null,
+      operatorId: v.operatorId || null,
+      operatorName: v.operatorName || null,
+      status: v.status || null,
+      productId: v.productId || null,
+      productCode: v.productCode || null,
+      productName: v.productName || null,
+      customerId: v.customerId || null,
+      customerName: v.customerName || null,
+      warehouseId: v.warehouseId || null,
+      warehouseName: v.warehouseName || null,
+      startDate: v.startDate || null,
+      endDate: v.endDate || null,
+    })
+    setQueryOpen(false)
+  }
+
+  function clearAll() {
+    updateParams({
+      keyword: null, remark: null, operatorId: null, operatorName: null, status: null,
+      productId: null, productCode: null, productName: null,
+      customerId: null, customerName: null,
+      warehouseId: null, warehouseName: null,
+      startDate: null, endDate: null,
+    })
+  }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
+    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null }) },
+    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null }) },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
+    customerId && { key: 'customer', label: `客户：${customerName || customerId}`, onRemove: () => updateParams({ customerId: null, customerName: null }) },
+    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
+    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null }) },
+    // 日期筛选按需求不在主页展示，仅在查询弹窗中呈现
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
-    { key: 'orderNo',      title: '销售单号', width: 160, render: v => <span className="text-sm font-medium text-primary">{String(v)}</span> },
+    { key: 'orderNo',      title: '销售单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'customerName', title: '客户' },
     { key: 'warehouseName',title: '仓库',     width: 120 },
     {
@@ -172,33 +250,29 @@ export default function SalePage() {
         description="销售单创建、确认与出库"
         actions={
           <>
-            <Button
-              variant="outline"
-              onClick={() =>
-                downloadExport('/export/sale', {
-                  ...(statusFilter ? { status: statusFilter } : {}),
-                  ...(product?.id ? { productId: String(product.id) } : {}),
-                }).catch(e => toast.error((e as Error).message))
-              }
-            >
+            <Button variant="outline"
+              onClick={() => downloadExport('/export/sale', exportParams).catch(e => toast.error((e as Error).message))}>
               导出 Excel
             </Button>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button onClick={goToNew}>+ 新建销售单</Button>
           </>
         }
       />
 
-      {/* 筛选区 */}
-      <SaleFilters
-        search={search}
-        onSearchChange={setSearch}
-        onSearch={handleSearch}
-        onReset={handleReset}
-        statusFilter={statusFilter}
-        onStatusFilterChange={handleStatusChange}
-        productName={product ? `${product.name} (${product.code})` : ''}
-        onPickProduct={() => setProductFinderOpen(true)}
-      />
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+        </div>
+      )}
 
       {/* 数据表格 */}
       <DataTable
@@ -224,17 +298,11 @@ export default function SalePage() {
         <PrintPreviewOverlay order={printOrder} onClose={() => setPrintOrder(null)} />
       )}
 
-      <ProductFinder
-        open={productFinderOpen}
-        onClose={() => setProductFinderOpen(false)}
-        onConfirm={(selected) => {
-          updateParams({
-            productId: selected.id,
-            productCode: selected.code,
-            productName: selected.name,
-          })
-          setProductFinderOpen(false)
-        }}
+      <SaleQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
       />
     </div>
   )
