@@ -186,6 +186,8 @@ async function assertTaskPackagePrintClosure(conn, taskId) {
 const fmt = r => ({
   id: r.id,
   taskNo: r.task_no,
+  taskType: r.task_type || 'sale_out',
+  returnId: r.return_id != null ? Number(r.return_id) : null,
   saleOrderId: r.sale_order_id,
   saleOrderNo: r.sale_order_no,
   customerId: r.customer_id,
@@ -1484,6 +1486,30 @@ async function getDebugSnapshot(taskId) {
 
 async function getShipContext(taskId) {
   const task = await findById(taskId)
+
+  if (task.taskType === 'purchase_return') {
+    const [wmsItems] = await pool.query(
+      `SELECT wti.product_id, wti.product_name, wti.picked_qty, pri.unit_price
+       FROM warehouse_task_items wti
+       LEFT JOIN purchase_return_items pri ON pri.return_id = ? AND pri.product_id = wti.product_id
+       WHERE wti.task_id = ?`,
+      [task.returnId, taskId],
+    )
+    if (!wmsItems.length) throw new AppError('任务无出库明细', 400)
+    return {
+      saleOrderId: null,
+      warehouseId: task.warehouseId,
+      totalAmount: wmsItems.reduce((sum, i) => sum + Number(i.picked_qty) * Number(i.unit_price || 0), 0),
+      customerName: null,
+      items: wmsItems.map(i => ({
+        productId: i.product_id,
+        productName: i.product_name,
+        quantity: Number(i.picked_qty),
+        unitPrice: i.unit_price != null ? Number(i.unit_price) : null,
+      })),
+    }
+  }
+
   const [[saleOrder]] = await pool.query(
     'SELECT id, order_no, status, warehouse_id, total_amount, customer_name FROM sale_orders WHERE id=?',
     [task.saleOrderId],

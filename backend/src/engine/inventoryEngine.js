@@ -11,8 +11,8 @@
  *   TRANSFER_OUT  → transfer.service.execute()        transferContainers
  *   TRANSFER_IN   → transfer.service.execute()        transferContainers
  *   STOCKCHECK    → stockcheck.service.submit()       adjustContainersForStockcheck
- *   PURCHASE_RET  → returns.service.executePR()       adjustContainerStock
- *   SALE_RET      → returns.service.executeSR()       adjustContainerStock
+ *   PURCHASE_RET  → warehouse-tasks.service.ship()（PDA出库，isPurchaseReturn）moveStock
+ *   SALE_RET      → return-tasks.service（PDA收货建容器+质检+上架）        createContainer/syncStockFromContainers
  *   MANUAL_IN     → inventory.service.changeStock()   adjustContainerStock
  *   MANUAL_OUT    → inventory.service.changeStock()   adjustContainerStock
  *
@@ -71,8 +71,8 @@ const MIGRATED_GUIDE = {
   [MOVE_TYPE.TRANSFER_OUT]: 'transfer.service.execute()（transferContainers）',
   [MOVE_TYPE.TRANSFER_IN]:  'transfer.service.execute()（transferContainers）',
   [MOVE_TYPE.STOCKCHECK]:   'stockcheck.service.submit()（adjustContainersForStockcheck）',
-  [MOVE_TYPE.PURCHASE_RET]: 'returns.service.executePR()（adjustContainerStock）',
-  [MOVE_TYPE.SALE_RET]:     'returns.service.executeSR()（adjustContainerStock）',
+  [MOVE_TYPE.PURCHASE_RET]: 'warehouse-tasks.service.ship()（PDA出库，moveStock）',
+  [MOVE_TYPE.SALE_RET]:     'return-tasks.service（PDA收货/质检/上架，createContainer）',
   [MOVE_TYPE.MANUAL_IN]:    'inventory.service.changeStock()（adjustContainerStock）',
   [MOVE_TYPE.MANUAL_OUT]:   'inventory.service.changeStock()（adjustContainerStock）',
 }

@@ -1,11 +1,11 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { adjustContainerStock, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { RETURN_EVENT, record: recordReturnEvent } = require('./return-events.service')
+const { WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
+const { RT_STATUS_NAME } = require('../return-tasks/return-tasks.service')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('../payments/payment-events.service')
 const { getRequestId } = require('../../utils/requestContext')
 
@@ -140,6 +140,9 @@ async function loadPurchaseSourceOrderByNo(orderNo) {
         productId: Number(row.product_id),
         productCode: row.product_code,
         productName: row.product_name,
+        articleNumber: row.article_number || null,
+        spec: row.spec || null,
+        color: row.color || null,
         unit: row.unit,
         quantity: Number(row.quantity || 0),
         receivedQty,
@@ -198,6 +201,9 @@ async function loadSaleSourceOrderByNo(orderNo) {
         productId: Number(row.product_id),
         productCode: row.product_code,
         productName: row.product_name,
+        articleNumber: row.article_number || null,
+        spec: row.spec || null,
+        color: row.color || null,
         unit: row.unit,
         quantity: Number(row.quantity || 0),
         shippedQty,
@@ -316,7 +322,12 @@ async function findByIdPR(id) {
   if(!rows[0]) throw new AppError('退货单不存在',404)
   const ret=fmtPR(rows[0])
   const [items]=await pool.query('SELECT * FROM purchase_return_items WHERE return_id=?',[id])
-  ret.items=items.map(r=>({id:r.id,sourceItemId:r.purchase_item_id||null,productId:r.product_id,productCode:r.product_code,productName:r.product_name,unit:r.unit,quantity:Number(r.quantity),unitPrice:Number(r.unit_price),amount:Number(r.amount)}))
+  ret.items=items.map(r=>({id:r.id,sourceItemId:r.purchase_item_id||null,productId:r.product_id,productCode:r.product_code,productName:r.product_name,articleNumber:r.article_number||null,spec:r.spec||null,color:r.color||null,unit:r.unit,quantity:Number(r.quantity),unitPrice:Number(r.unit_price),amount:Number(r.amount)}))
+  const [[task]]=await pool.query(
+    "SELECT id, task_no, status FROM warehouse_tasks WHERE return_id=? AND task_type='purchase_return' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1",
+    [id],
+  )
+  ret.task = task ? { id: Number(task.id), taskNo: task.task_no, status: Number(task.status), statusName: WT_STATUS_NAME[Number(task.status)] || '未知' } : null
   return ret
 }
 async function createPR({ supplierId, supplierName, warehouseId, warehouseName, purchaseOrderId = null, purchaseOrderNo, remark, items, operator }) {
@@ -352,7 +363,7 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
     const returnNo=await genNo(conn,'PR','purchase_returns','return_no')
     const total=items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
     const [r]=await conn.query(`INSERT INTO purchase_returns (return_no,supplier_id,supplier_name,warehouse_id,warehouse_name,purchase_order_id,purchase_order_no,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[returnNo,supplierId,supplierName,warehouseId,warehouseName,resolvedPurchaseOrderId,purchaseOrderNo||null,total,remark||null,operator.userId,operator.realName])
-    for(const item of items) await conn.query(`INSERT INTO purchase_return_items (return_id,purchase_item_id,product_id,product_code,product_name,unit,quantity,unit_price,amount) VALUES (?,?,?,?,?,?,?,?,?)`,[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.unit,item.quantity,item.unitPrice,item.quantity*item.unitPrice])
+    for(const item of items) await conn.query(`INSERT INTO purchase_return_items (return_id,purchase_item_id,product_id,product_code,product_name,article_number,spec,color,unit,quantity,unit_price,amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.articleNumber||null,item.spec||null,item.color||null,item.unit,item.quantity,item.unitPrice,item.quantity*item.unitPrice])
     await recordReturnEvent(conn, {
       returnType: 'purchase',
       returnId: r.insertId,
@@ -432,99 +443,6 @@ async function confirmPR(id, operator = null) {
   } finally {
     conn.release()
   }
-}
-async function executePR(id, operator) {
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-    const retRow = await lockStatusRow(conn, {
-      table: 'purchase_returns',
-      id,
-      columns: 'id, return_no, purchase_order_id, purchase_order_no, supplier_id, warehouse_id, status',
-      entityName: '采购退货单',
-    })
-    const rule = assertStatusAction('purchaseReturn', 'execute', retRow.status)
-    const [itemRows] = await conn.query('SELECT * FROM purchase_return_items WHERE return_id=? ORDER BY id', [id])
-    const ret = {
-      id: Number(retRow.id),
-      returnNo: retRow.return_no,
-      purchaseOrderId: retRow.purchase_order_id ? Number(retRow.purchase_order_id) : null,
-      purchaseOrderNo: retRow.purchase_order_no || null,
-      supplierId: Number(retRow.supplier_id),
-      warehouseId: Number(retRow.warehouse_id),
-      items: itemRows.map(r => ({
-        productId: r.product_id,
-        productName: r.product_name,
-        unit: r.unit,
-        quantity: Number(r.quantity),
-        unitPrice: Number(r.unit_price),
-      })),
-    }
-    for (const item of ret.items) {
-      // 采购退货出库：从仓库扣减容器（FIFO）→ 同步缓存
-      const { before, after, primaryDeductContainerId } = await adjustContainerStock(conn, {
-        productId:    item.productId,
-        productName:  item.productName,
-        warehouseId:  ret.warehouseId,
-        qty:          -item.quantity,   // 出库方向
-        unit:         item.unit,
-        sourceType:   SOURCE_TYPE.RETURN,
-        sourceRefId:  ret.id,
-        sourceRefType: 'purchase_return',
-        sourceRefNo:  ret.returnNo,
-        remark:       `采购退货出库 ${ret.returnNo}`,
-      })
-      await conn.query(
-        `INSERT INTO inventory_logs
-           (move_type, type, product_id, warehouse_id, supplier_id,
-            quantity, before_qty, after_qty, unit_price,
-            ref_type, ref_id, ref_no, container_id, log_source_type, log_source_ref_id,
-            remark, operator_id, operator_name)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [MOVE_TYPE.PURCHASE_RET, 2, item.productId, ret.warehouseId, ret.supplierId,
-         item.quantity, before, after, item.unitPrice,
-         'purchase_return', ret.id, ret.returnNo,
-         primaryDeductContainerId, SOURCE_TYPE.RETURN, ret.id,
-         `采购退货出库 ${ret.returnNo}`, operator.userId, operator.realName]
-      )
-    }
-    const totalAmount = ret.items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0)
-    await adjustPaymentRecordForReturn(conn, {
-      recordType: 1,
-      orderId: ret.purchaseOrderId,
-      orderNo: ret.purchaseOrderNo,
-      returnNo: ret.returnNo,
-      returnType: 'purchase',
-      amount: totalAmount,
-      operator,
-    })
-    await compareAndSetStatus(conn, {
-      table: 'purchase_returns',
-      id,
-      fromStatus: rule.from,
-      toStatus: rule.to,
-      entityName: '采购退货单',
-    })
-    await recordReturnEvent(conn, {
-      returnType: 'purchase',
-      returnId: ret.id,
-      returnNo: ret.returnNo,
-      eventType: RETURN_EVENT.EXECUTED,
-      title: '采购退货单已执行',
-      description: '采购退货库存扣减已完成',
-      operatorId: operator.userId,
-      operatorName: operator.realName,
-      requestId: getRequestId(),
-      payload: {
-        warehouseId: ret.warehouseId,
-        totalAmount,
-        totalQty: ret.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-        inventoryDirection: 'out',
-      },
-    })
-    await conn.commit()
-  } catch (e) { await conn.rollback(); throw e }
-  finally { conn.release() }
 }
 async function cancelPR(id, operator = null) {
   const conn = await pool.getConnection()
@@ -690,7 +608,12 @@ async function findByIdSR(id) {
   if(!rows[0]) throw new AppError('退货单不存在',404)
   const ret=fmtSR(rows[0])
   const [items]=await pool.query('SELECT * FROM sale_return_items WHERE return_id=?',[id])
-  ret.items=items.map(r=>({id:r.id,sourceItemId:r.sale_item_id||null,productId:r.product_id,productCode:r.product_code,productName:r.product_name,unit:r.unit,quantity:Number(r.quantity),unitPrice:Number(r.unit_price),amount:Number(r.amount)}))
+  ret.items=items.map(r=>({id:r.id,sourceItemId:r.sale_item_id||null,productId:r.product_id,productCode:r.product_code,productName:r.product_name,articleNumber:r.article_number||null,spec:r.spec||null,color:r.color||null,unit:r.unit,quantity:Number(r.quantity),unitPrice:Number(r.unit_price),amount:Number(r.amount)}))
+  const [[task]]=await pool.query(
+    "SELECT id, task_no, status FROM return_tasks WHERE return_id=? AND return_type='sale' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1",
+    [id],
+  )
+  ret.task = task ? { id: Number(task.id), taskNo: task.task_no, status: Number(task.status), statusName: RT_STATUS_NAME[Number(task.status)] || '未知' } : null
   return ret
 }
 async function createSR({ customerId, customerName, warehouseId, warehouseName, saleOrderId = null, saleOrderNo, remark, items, operator }) {
@@ -726,7 +649,7 @@ async function createSR({ customerId, customerName, warehouseId, warehouseName, 
     const returnNo=await genNo(conn,'SR','sale_returns','return_no')
     const total=items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
     const [r]=await conn.query(`INSERT INTO sale_returns (return_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_order_id,sale_order_no,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[returnNo,customerId,customerName,warehouseId,warehouseName,resolvedSaleOrderId,saleOrderNo||null,total,remark||null,operator.userId,operator.realName])
-    for(const item of items) await conn.query(`INSERT INTO sale_return_items (return_id,sale_item_id,product_id,product_code,product_name,unit,quantity,unit_price,amount) VALUES (?,?,?,?,?,?,?,?,?)`,[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.unit,item.quantity,item.unitPrice,item.quantity*item.unitPrice])
+    for(const item of items) await conn.query(`INSERT INTO sale_return_items (return_id,sale_item_id,product_id,product_code,product_name,article_number,spec,color,unit,quantity,unit_price,amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.articleNumber||null,item.spec||null,item.color||null,item.unit,item.quantity,item.unitPrice,item.quantity*item.unitPrice])
     await recordReturnEvent(conn, {
       returnType: 'sale',
       returnId: r.insertId,
@@ -787,6 +710,8 @@ async function confirmSR(id, operator = null) {
         quantity: Number(r.quantity),
       })),
     })
+    // 确认即派发到 PDA（与调拨/收货一致：ERP 端不再需要额外「提交」一步）
+    await taskSvc.submitWithinTransaction(conn, taskId, operator || {})
 
     await recordReturnEvent(conn, {
       returnType: 'sale',
@@ -807,98 +732,6 @@ async function confirmSR(id, operator = null) {
   } finally {
     conn.release()
   }
-}
-async function executeSR(id, operator) {
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-    const retRow = await lockStatusRow(conn, {
-      table: 'sale_returns',
-      id,
-      columns: 'id, return_no, sale_order_id, sale_order_no, warehouse_id, status',
-      entityName: '销售退货单',
-    })
-    const rule = assertStatusAction('saleReturn', 'execute', retRow.status)
-    const [itemRows] = await conn.query('SELECT * FROM sale_return_items WHERE return_id=? ORDER BY id', [id])
-    const ret = {
-      id: Number(retRow.id),
-      returnNo: retRow.return_no,
-      saleOrderId: retRow.sale_order_id ? Number(retRow.sale_order_id) : null,
-      saleOrderNo: retRow.sale_order_no || null,
-      warehouseId: Number(retRow.warehouse_id),
-      items: itemRows.map(r => ({
-        productId: r.product_id,
-        productName: r.product_name,
-        unit: r.unit,
-        quantity: Number(r.quantity),
-        unitPrice: Number(r.unit_price),
-      })),
-    }
-    for (const item of ret.items) {
-      // 销售退货入库：客户退回商品，创建新容器→ 同步缓存
-      const { before, after, createdContainerId } = await adjustContainerStock(conn, {
-        productId:    item.productId,
-        productName:  item.productName,
-        warehouseId:  ret.warehouseId,
-        qty:          +item.quantity,   // 入库方向
-        unit:         item.unit,
-        sourceType:   SOURCE_TYPE.RETURN,
-        sourceRefId:  ret.id,
-        sourceRefType: 'sale_return',
-        sourceRefNo:  ret.returnNo,
-        remark:       `销售退货入库 ${ret.returnNo}`,
-      })
-      await conn.query(
-        `INSERT INTO inventory_logs
-           (move_type, type, product_id, warehouse_id,
-            quantity, before_qty, after_qty, unit_price,
-            ref_type, ref_id, ref_no, container_id, log_source_type, log_source_ref_id,
-            remark, operator_id, operator_name)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [MOVE_TYPE.SALE_RET, 1, item.productId, ret.warehouseId,
-         item.quantity, before, after, item.unitPrice,
-         'sale_return', ret.id, ret.returnNo,
-         createdContainerId, SOURCE_TYPE.RETURN, ret.id,
-         `销售退货入库 ${ret.returnNo}`, operator.userId, operator.realName]
-      )
-    }
-    const totalAmount = ret.items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0)
-    await adjustPaymentRecordForReturn(conn, {
-      recordType: 2,
-      orderId: ret.saleOrderId,
-      orderNo: ret.saleOrderNo,
-      returnNo: ret.returnNo,
-      returnType: 'sale',
-      amount: totalAmount,
-      operator,
-    })
-    await compareAndSetStatus(conn, {
-      table: 'sale_returns',
-      id,
-      fromStatus: rule.from,
-      toStatus: rule.to,
-      entityName: '销售退货单',
-    })
-    await recordReturnEvent(conn, {
-      returnType: 'sale',
-      returnId: ret.id,
-      returnNo: ret.returnNo,
-      eventType: RETURN_EVENT.EXECUTED,
-      title: '销售退货单已执行',
-      description: '销售退货入库已完成',
-      operatorId: operator.userId,
-      operatorName: operator.realName,
-      requestId: getRequestId(),
-      payload: {
-        warehouseId: ret.warehouseId,
-        totalAmount,
-        totalQty: ret.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-        inventoryDirection: 'in',
-      },
-    })
-    await conn.commit()
-  } catch (e) { await conn.rollback(); throw e }
-  finally { conn.release() }
 }
 async function cancelSR(id, operator = null) {
   const conn = await pool.getConnection()
@@ -943,7 +776,6 @@ module.exports = {
   findByIdPR,
   createPR,
   confirmPR,
-  executePR,
   cancelPR,
   syncPurchaseReturnShipped,
   syncSaleReturnCompleted,
@@ -951,7 +783,6 @@ module.exports = {
   findByIdSR,
   createSR,
   confirmSR,
-  executeSR,
   cancelSR,
   loadPurchaseSourceOrderByNo,
   loadSaleSourceOrderByNo,

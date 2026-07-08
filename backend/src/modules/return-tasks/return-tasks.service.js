@@ -71,17 +71,21 @@ async function create(conn, { returnId, returnNo, returnType, warehouseId, wareh
 }
 
 // ─── 提交到 PDA ──────────────────────────────────────────────────────
-async function submit(id, operator) {
-  const row = await lockStatusRow(pool, {
+async function submitWithinTransaction(conn, id, operator) {
+  const row = await lockStatusRow(conn, {
     table: 'return_tasks', id,
     columns: 'id, task_no, status, submitted_at',
     entityName: '退货任务',
   })
   if (row.submitted_at) throw new AppError('任务已提交，无需重复提交', 400)
-  await pool.query(
+  await conn.query(
     'UPDATE return_tasks SET submitted_at = NOW(), submitted_by = ?, submitted_by_name = ? WHERE id = ?',
     [operator.userId, operator.realName, id],
   )
+}
+
+async function submit(id, operator) {
+  await submitWithinTransaction(pool, id, operator)
   return findById(id)
 }
 
@@ -136,11 +140,11 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId }
     [productId],
   )
   for (const pkg of packages) {
-    const { createdContainerId, newBarcode } = await createContainer(conn, {
+    const { containerId: createdContainerId, barcode: newBarcode } = await createContainer(conn, {
       productId,
       productName: product?.name || taskItems[0].product_name,
       warehouseId: Number(taskRow.warehouse_id),
-      qty: Number(pkg.qty),
+      initialQty: Number(pkg.qty),
       unit: product?.unit || taskItems[0].unit,
       sourceType: SOURCE_TYPE.RETURN,
       sourceRefType: 'sale_return',
@@ -403,5 +407,5 @@ function fmtItem(row) {
 
 module.exports = {
   RT_STATUS, RT_STATUS_NAME, isValidTransition,
-  findPdaTasks, findById, create, submit, receive, check, putaway, cancel,
+  findPdaTasks, findById, create, submit, submitWithinTransaction, receive, check, putaway, cancel,
 }

@@ -66,6 +66,8 @@ const CustomersPage = lazy(() => import('@/pages/customers'))
 const CarriersPage = lazy(() => import('@/pages/carriers'))
 const SuppliersPage = lazy(() => import('@/pages/suppliers'))
 const ReturnsPage = lazy(() => import('@/pages/returns'))
+const PurchaseReturnFormPage = lazy(() => import('@/pages/returns/purchase/form'))
+const SaleReturnFormPage = lazy(() => import('@/pages/returns/sale/form'))
 const PaymentsPage = lazy(() => import('@/pages/payments'))
 const UsersPage = lazy(() => import('@/pages/users'))
 const PermissionsPage = lazy(() => import('@/pages/permissions'))
@@ -435,6 +437,22 @@ export const routePatterns: RoutePatternEntry[] = [
     title: (path) => path === '/transfer/new' ? '新建调拨单' : `调拨单 #${path.split('/').pop()}`,
     permission: PERMISSIONS.TRANSFER_ORDER_VIEW,
     component: TransferFormPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+  },
+  {
+    pattern: /^\/returns\/purchase\/(new|\d+)$/,
+    title: (path) => path === '/returns/purchase/new' ? '新建采购退货单' : `采购退货单 #${path.split('/').pop()}`,
+    permission: PERMISSIONS.RETURN_ORDER_VIEW,
+    component: PurchaseReturnFormPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+  },
+  {
+    pattern: /^\/returns\/sale\/(new|\d+)$/,
+    title: (path) => path === '/returns/sale/new' ? '新建销售退货单' : `销售退货单 #${path.split('/').pop()}`,
+    permission: PERMISSIONS.RETURN_ORDER_VIEW,
+    component: SaleReturnFormPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
   },
