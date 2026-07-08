@@ -162,10 +162,31 @@ async function main() {
     const resvAfter = await dbQuery(pool, "SELECT status FROM stock_reservations WHERE ref_type='sale_order' AND ref_id=? AND product_id=?", [saleId, product.id])
     log.assert('释放后预占记录状态=3（已释放）', resvAfter.every(r => Number(r.status) === 3), JSON.stringify(resvAfter))
 
-    // ── 3. 调拨 ──────────────────────────────────────────────────
-    log.section('调拨（wh1 → wh2）')
+    // ── 3. 调拨（两阶段：确认派发 PDA → 源仓扫码出库 → 目标仓扫码入库上架）──
+    log.section('调拨（wh1 → wh2，PDA 两阶段扫码）')
     const wh1Before = (await stockQty(pool, product.id, warehouse.id)).quantity
     const wh2Before = (await stockQty(pool, product.id, wh2.id)).quantity
+
+    // 从入库容器中拆出一个 TRANSFER_QTY 大小的独立容器，用于整箱扫码调拨（scanOut 按整容器移动）
+    const [srcContainerRow] = await dbQuery(
+      pool,
+      "SELECT id FROM inventory_containers WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL ORDER BY id LIMIT 1",
+      [product.id, warehouse.id],
+    )
+    log.assert('调拨前存在可用源容器', !!srcContainerRow, JSON.stringify(srcContainerRow))
+    const splitResp = await http.post(`/api/inventory/containers/${srcContainerRow.id}/split`, {
+      token, json: { qty: TRANSFER_QTY },
+    })
+    await expectOk(log, splitResp, '拆分出调拨用容器成功')
+    const transferContainerBarcode = splitResp.data?.data?.newBarcode
+
+    // 目标仓需要一个可用库位供 PDA 扫码入库上架
+    const [wh2LocResult] = await pool.query(
+      'INSERT INTO warehouse_locations (warehouse_id, code, name) VALUES (?, ?, ?)',
+      [Number(wh2.id), `INTEG-LOC-${randomRef('L')}`, '集成测试目标库位'],
+    )
+    const wh2LocationId = wh2LocResult.insertId
+
     const transferCreate = await http.post('/api/transfer', {
       token,
       json: {
@@ -177,8 +198,17 @@ async function main() {
     })
     log.assert('创建调拨单成功(201)', transferCreate.status === 201 && !!transferCreate.data?.data?.id, `status=${transferCreate.status}`)
     const transferId = Number(transferCreate.data?.data?.id)
-    await expectOk(log, await http.post(`/api/transfer/${transferId}/confirm`, { token }), '确认调拨单成功')
-    await expectOk(log, await http.post(`/api/transfer/${transferId}/execute`, { token }), '执行调拨成功')
+    await expectOk(log, await http.post(`/api/transfer/${transferId}/confirm`, { token }), '确认调拨单成功（派发到 PDA）')
+    await expectOk(
+      log,
+      await http.post(`/api/transfer/${transferId}/scan-out`, { token, headers: ctx.pdaHeaders(), json: { containerBarcode: transferContainerBarcode } }),
+      '源仓 PDA 扫码出库成功',
+    )
+    await expectOk(
+      log,
+      await http.post(`/api/transfer/${transferId}/scan-in`, { token, headers: ctx.pdaHeaders(), json: { containerBarcode: transferContainerBarcode, locationId: wh2LocationId } }),
+      '目标仓 PDA 扫码入库成功（调拨完成）',
+    )
 
     log.assert(`调拨后源仓 quantity = ${wh1Before - TRANSFER_QTY}`, (await stockQty(pool, product.id, warehouse.id)).quantity === wh1Before - TRANSFER_QTY)
     log.assert(`调拨后目标仓 quantity = ${wh2Before + TRANSFER_QTY}`, (await stockQty(pool, product.id, wh2.id)).quantity === wh2Before + TRANSFER_QTY)
