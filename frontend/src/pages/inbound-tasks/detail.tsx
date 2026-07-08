@@ -187,7 +187,12 @@ export default function InboundTaskDetailPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-table-head">
+                <th className="text-left py-2 w-24">编码</th>
+                <th className="text-left py-2 w-24">货号</th>
+                <th className="text-left py-2 w-24">型号</th>
                 <th className="text-left py-2">商品</th>
+                <th className="text-left py-2 w-20">颜色</th>
+                <th className="text-center py-2 w-16">单位</th>
                 <th className="text-left py-2 w-24">应到</th>
                 <th className="text-left py-2 w-24">已收</th>
                 <th className="text-left py-2 w-20">剩余</th>
@@ -199,10 +204,12 @@ export default function InboundTaskDetailPage() {
                 const lineRemain = Math.max(0, it.orderedQty - it.receivedQty)
                 return (
                   <tr key={it.id}>
-                    <td className="py-2">
-                      <div className="font-medium">{it.productName}</div>
-                      <div className="text-doc-code-muted">{it.productCode}</div>
-                    </td>
+                    <td className="py-2 text-doc-code-muted">{it.productCode}</td>
+                    <td className="py-2 text-muted-foreground">{it.articleNumber || '—'}</td>
+                    <td className="py-2 text-muted-foreground">{it.spec || '—'}</td>
+                    <td className="py-2 font-medium">{it.productName}</td>
+                    <td className="py-2 text-muted-foreground">{it.color || '—'}</td>
+                    <td className="text-center text-muted-foreground">{it.unit || '—'}</td>
                     <td className="text-left">{it.orderedQty}</td>
                     <td className="text-left">{it.receivedQty}</td>
                     <td className="text-left text-muted-foreground">{lineRemain}</td>

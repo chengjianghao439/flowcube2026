@@ -17,6 +17,9 @@ export interface InboundTaskItem {
   productId: number
   productCode: string | null
   productName: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   unit: string | null
   orderedQty: number
   receivedQty: number
@@ -241,6 +244,9 @@ export interface InboundPurchaseCandidate {
   productId: number
   productCode: string
   productName: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   unit: string | null
   orderedQty: number
   assignedQty: number

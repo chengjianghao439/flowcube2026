@@ -59,9 +59,9 @@ async function createFromPoId(purchaseOrderId) {
     const taskId = r.insertId
     for (const item of order.items) {
       await conn.query(
-        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, unit, ordered_qty)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
-        [taskId, order.id, order.orderNo, item.id, item.productId, item.productCode, item.productName, item.unit, item.quantity],
+        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [taskId, order.id, order.orderNo, item.id, item.productId, item.productCode, item.productName, item.articleNumber || null, item.spec || null, item.color || null, item.unit, item.quantity],
       )
     }
     await appendInboundEvent(conn, taskId, 'created', '创建收货订单', `收货订单 ${taskNo} 已创建，等待提交到 PDA`, null, {
@@ -110,6 +110,9 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
         poi.product_id,
         poi.product_code,
         poi.product_name,
+        poi.article_number,
+        poi.spec,
+        poi.color,
         poi.unit,
         poi.quantity AS ordered_qty,
         COALESCE(SUM(
@@ -132,7 +135,7 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
       GROUP BY
         poi.id, po.id, po.order_no, po.supplier_id, po.supplier_name,
         po.warehouse_id, po.warehouse_name,
-        poi.product_id, poi.product_code, poi.product_name, poi.unit, poi.quantity`,
+        poi.product_id, poi.product_code, poi.product_name, poi.article_number, poi.spec, poi.color, poi.unit, poi.quantity`,
     [supplierIdN, ...purchaseItemIds],
   )
 
@@ -180,8 +183,8 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
 
     for (const item of taskItems) {
       await conn.query(
-        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, unit, ordered_qty)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           taskId,
           item.purchaseOrderId,
@@ -190,6 +193,9 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
           item.productId,
           item.productCode,
           item.productName,
+          item.articleNumber || null,
+          item.spec || null,
+          item.color || null,
           item.unit,
           item.qty,
         ],

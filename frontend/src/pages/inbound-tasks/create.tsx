@@ -195,9 +195,8 @@ export default function InboundTaskCreatePage() {
 
           {supplier && (
             <div className="overflow-hidden rounded-lg border border-border">
-              <div className="grid grid-cols-[140px_110px_minmax(220px,1fr)_120px_90px_90px_120px] gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_90px_120px] gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
                 <span>采购单</span>
-                <span>SKU</span>
                 <span>商品</span>
                 <span>仓库</span>
                 <span className="text-left">已分配</span>
@@ -216,13 +215,19 @@ export default function InboundTaskCreatePage() {
                   {candidates.map(item => (
                     <div
                       key={item.purchaseItemId}
-                      className="grid grid-cols-[140px_110px_minmax(220px,1fr)_120px_90px_90px_120px] gap-3 px-4 py-3 text-sm"
+                      className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_90px_120px] gap-3 px-4 py-3 text-sm"
                     >
                       <div className="text-doc-code">{item.purchaseOrderNo}</div>
-                      <div className="text-doc-code">{item.productCode}</div>
                       <div className="min-w-0">
-                        <div className="truncate font-medium text-foreground">{item.productName}</div>
-                        <div className="text-xs text-muted-foreground">{item.unit ?? '—'}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          <span className="font-mono text-doc-code-muted">{item.productCode}</span>
+                          {' · 货号 '}{item.articleNumber || '—'}
+                          {' · 型号 '}{item.spec || '—'}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate font-medium text-foreground">{item.productName}</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}（{item.unit ?? '—'}）</span>
+                        </div>
                       </div>
                       <div className="text-muted-foreground">{item.warehouseName}</div>
                       <div className="text-left text-muted-foreground">{item.assignedQty}</div>

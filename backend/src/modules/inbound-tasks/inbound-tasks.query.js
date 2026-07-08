@@ -326,6 +326,9 @@ async function findPurchasableItems({ supplierId, keyword = '' }) {
         poi.product_id,
         poi.product_code,
         poi.product_name,
+        poi.article_number,
+        poi.spec,
+        poi.color,
         poi.unit,
         poi.quantity AS ordered_qty,
         COALESCE(SUM(
@@ -358,7 +361,7 @@ async function findPurchasableItems({ supplierId, keyword = '' }) {
       GROUP BY
         poi.id, po.id, po.order_no, po.supplier_id, po.supplier_name,
         po.warehouse_id, po.warehouse_name,
-        poi.product_id, poi.product_code, poi.product_name, poi.unit, poi.quantity
+        poi.product_id, poi.product_code, poi.product_name, poi.article_number, poi.spec, poi.color, poi.unit, poi.quantity
       HAVING remaining_qty > 0
       ORDER BY po.created_at ASC, poi.id ASC`,
     [supplierIdN, like, like, like],
