@@ -242,9 +242,20 @@ async function main() {
     const checkContainer = await dbQuery(pool, "SELECT remaining_qty FROM inventory_containers WHERE product_id=? AND warehouse_id=? AND source_ref_type='stockcheck' ORDER BY id DESC LIMIT 1", [product.id, warehouse.id])
     log.assert(`盘盈生成新容器 remaining=${CHECK_SURPLUS_QTY}`, checkContainer.length > 0 && Number(checkContainer[0].remaining_qty) === CHECK_SURPLUS_QTY, JSON.stringify(checkContainer))
 
-    // ── 5. 采购退货（出库） ──────────────────────────────────────
-    log.section('采购退货（库存扣减）')
+    // ── 5. 采购退货（确认后派发 PDA 仓库任务 → 拣货扫码 → 出库）──
+    log.section('采购退货（PDA 拣货→出库，库存扣减）')
     const qtyBeforePR = (await stockQty(pool, product.id, warehouse.id)).quantity
+    const [prSrcContainer] = await dbQuery(
+      pool,
+      "SELECT id FROM inventory_containers WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL ORDER BY id LIMIT 1",
+      [product.id, warehouse.id],
+    )
+    log.assert('采购退货前存在可用源容器', !!prSrcContainer, JSON.stringify(prSrcContainer))
+    const prSplitResp = await http.post(`/api/inventory/containers/${prSrcContainer.id}/split`, { token, json: { qty: PR_QTY } })
+    await expectOk(log, prSplitResp, '拆分出采购退货用容器成功')
+    const prContainerId = prSplitResp.data?.data?.newContainerId
+    const prContainerBarcode = prSplitResp.data?.data?.newBarcode
+
     const prCreate = await http.post('/api/returns/purchase', {
       token,
       json: {
@@ -256,12 +267,24 @@ async function main() {
     })
     log.assert('创建采购退货单成功(201)', prCreate.status === 201 && !!prCreate.data?.data?.id, `status=${prCreate.status}`)
     const prId = Number(prCreate.data?.data?.id)
-    await expectOk(log, await http.post(`/api/returns/purchase/${prId}/confirm`, { token }), '确认采购退货单成功')
-    await expectOk(log, await http.post(`/api/returns/purchase/${prId}/execute`, { token }), '执行采购退货成功')
+    await expectOk(log, await http.post(`/api/returns/purchase/${prId}/confirm`, { token }), '确认采购退货单成功（自动派发 PDA）')
+
+    const [prTaskRow] = await dbQuery(pool, "SELECT id FROM warehouse_tasks WHERE return_id=? AND task_type='purchase_return' ORDER BY id DESC LIMIT 1", [prId])
+    log.assert('已自动创建采购退货仓库任务', !!prTaskRow, JSON.stringify(prTaskRow))
+    const prTaskId = prTaskRow.id
+    const [prTaskItem] = await dbQuery(pool, 'SELECT id FROM warehouse_task_items WHERE task_id=? AND product_id=?', [prTaskId, product.id])
+
+    const prScanResp = await http.post('/api/scan-logs', {
+      token, headers: ctx.pdaHeaders(),
+      json: { taskId: prTaskId, itemId: prTaskItem.id, containerId: prContainerId, barcode: prContainerBarcode, productId: Number(product.id), qty: PR_QTY, scanMode: '整件' },
+    })
+    await expectOk(log, prScanResp, 'PDA 拣货扫码成功')
+    await expectOk(log, await http.put(`/api/warehouse-tasks/${prTaskId}/ready`, { token, headers: ctx.pdaHeaders() }), '拣货收口成功（采购退货直接跳至待出库）')
+    await expectOk(log, await http.put(`/api/warehouse-tasks/${prTaskId}/ship`, { token, headers: ctx.pdaHeaders() }), 'PDA 出库成功')
     log.assert(`采购退货后 quantity = ${qtyBeforePR - PR_QTY}`, (await stockQty(pool, product.id, warehouse.id)).quantity === qtyBeforePR - PR_QTY)
 
-    // ── 6. 销售退货（入库） ──────────────────────────────────────
-    log.section('销售退货（库存入库）')
+    // ── 6. 销售退货（确认后派发 PDA 退货任务 → 收货→质检→上架）──
+    log.section('销售退货（PDA 收货→质检→上架，库存入库）')
     const qtyBeforeSR = (await stockQty(pool, product.id, warehouse.id)).quantity
     const srCreate = await http.post('/api/returns/sale', {
       token,
@@ -274,8 +297,29 @@ async function main() {
     })
     log.assert('创建销售退货单成功(201)', srCreate.status === 201 && !!srCreate.data?.data?.id, `status=${srCreate.status}`)
     const srId = Number(srCreate.data?.data?.id)
-    await expectOk(log, await http.post(`/api/returns/sale/${srId}/confirm`, { token }), '确认销售退货单成功')
-    await expectOk(log, await http.post(`/api/returns/sale/${srId}/execute`, { token }), '执行销售退货成功')
+    await expectOk(log, await http.post(`/api/returns/sale/${srId}/confirm`, { token }), '确认销售退货单成功（自动派发 PDA）')
+
+    const [srTaskRow] = await dbQuery(pool, "SELECT id, submitted_at FROM return_tasks WHERE return_id=? AND return_type='sale' ORDER BY id DESC LIMIT 1", [srId])
+    log.assert('已自动创建销售退货任务且已派发到 PDA', !!srTaskRow && !!srTaskRow.submitted_at, JSON.stringify(srTaskRow))
+    const srTaskId = srTaskRow.id
+
+    const srReceiveResp = await http.post(`/api/return-tasks/${srTaskId}/receive`, {
+      token, headers: ctx.pdaHeaders(),
+      json: { productId: Number(product.id), packages: [{ qty: SR_QTY }] },
+    })
+    await expectOk(log, srReceiveResp, 'PDA 收货成功')
+    const srContainerId = srReceiveResp.data?.data?.containers?.[0]?.containerId
+
+    await expectOk(log, await http.post(`/api/return-tasks/${srTaskId}/check`, {
+      token, headers: ctx.pdaHeaders(),
+      json: { productId: Number(product.id), passedQty: SR_QTY },
+    }), 'PDA 质检成功')
+
+    await expectOk(log, await http.post(`/api/return-tasks/${srTaskId}/putaway`, {
+      token, headers: ctx.pdaHeaders(),
+      json: { containerId: srContainerId, locationId: Number(location.id) },
+    }), 'PDA 上架成功')
+
     log.assert(`销售退货后 quantity = ${qtyBeforeSR + SR_QTY}`, (await stockQty(pool, product.id, warehouse.id)).quantity === qtyBeforeSR + SR_QTY)
     const srContainer = await dbQuery(pool, "SELECT remaining_qty FROM inventory_containers WHERE product_id=? AND warehouse_id=? AND source_ref_type='sale_return' ORDER BY id DESC LIMIT 1", [product.id, warehouse.id])
     log.assert(`销售退货生成新容器 remaining=${SR_QTY}`, srContainer.length > 0 && Number(srContainer[0].remaining_qty) === SR_QTY, JSON.stringify(srContainer))
