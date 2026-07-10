@@ -1,6 +1,6 @@
 import { useContext, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Save } from 'lucide-react'
+import { Loader2, Save, ShoppingCart, X } from 'lucide-react'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { Button } from '@/components/ui/button'
@@ -9,8 +9,9 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { SupplierFinder, FinderTrigger } from '@/components/finder'
 import type { FinderResult } from '@/types/finder'
-import { useCreateInboundTask, useInboundPurchaseCandidates } from '@/hooks/useInboundTasks'
+import { useCreateInboundTask } from '@/hooks/useInboundTasks'
 import { toast } from '@/lib/toast'
+import { PurchaseItemPickerDialog, type PickedPurchaseItem } from './PurchaseItemPickerDialog'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -29,23 +30,13 @@ export default function InboundTaskCreatePage() {
 
   const [supplierFinderOpen, setSupplierFinderOpen] = useState(false)
   const [supplier, setSupplier] = useState<FinderResult | null>(null)
-  const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
   const [remark, setRemark] = useState('')
-  const [qtyMap, setQtyMap] = useState<Record<number, string>>({})
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [selectedMap, setSelectedMap] = useState<Record<number, PickedPurchaseItem>>({})
 
-  const { data: candidates = [], isLoading } = useInboundPurchaseCandidates(supplier?.id ?? null, keyword)
+  const selectedRows = useMemo(() => Object.values(selectedMap), [selectedMap])
 
-  const selectedRows = useMemo(() => {
-    return candidates
-      .map(item => ({
-        item,
-        qty: Number(qtyMap[item.purchaseItemId] || 0),
-      }))
-      .filter(entry => Number.isFinite(entry.qty) && entry.qty > 0)
-  }, [candidates, qtyMap])
-
-  const isDirty = !!(supplier || remark || search || keyword || Object.keys(qtyMap).length)
+  const isDirty = !!(supplier || remark || selectedRows.length)
   useDirtyGuard(tabPath, isDirty)
 
   function closeTab() {
@@ -56,25 +47,39 @@ export default function InboundTaskCreatePage() {
 
   function handleSupplierConfirm(result: FinderResult) {
     setSupplier(result)
-    setKeyword('')
-    setSearch('')
-    setQtyMap({})
+    setSelectedMap({})
+  }
+
+  function handlePickerConfirm(rows: PickedPurchaseItem[]) {
+    const next: Record<number, PickedPurchaseItem> = {}
+    for (const row of rows) next[row.item.purchaseItemId] = row
+    setSelectedMap(next)
+    setPickerOpen(false)
   }
 
   function setLineQty(purchaseItemId: number, remainingQty: number, raw: string) {
+    const entry = selectedMap[purchaseItemId]
+    if (!entry) return
     const value = raw.trim()
     if (!value) {
-      setQtyMap(prev => {
+      setSelectedMap(prev => {
         const next = { ...prev }
         delete next[purchaseItemId]
         return next
       })
       return
     }
-
     const qty = Number(value.replace(/,/g, '.'))
     if (!Number.isFinite(qty) || qty < 0 || qty > remainingQty) return
-    setQtyMap(prev => ({ ...prev, [purchaseItemId]: String(qty) }))
+    setSelectedMap(prev => ({ ...prev, [purchaseItemId]: { ...entry, qty } }))
+  }
+
+  function removeLine(purchaseItemId: number) {
+    setSelectedMap(prev => {
+      const next = { ...prev }
+      delete next[purchaseItemId]
+      return next
+    })
   }
 
   function submit() {
@@ -162,60 +167,44 @@ export default function InboundTaskCreatePage() {
 
       <Section title="商品明细">
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <Input
-              className="flex-1"
-              placeholder="按采购单号 / SKU / 商品名称搜索"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') setKeyword(search.trim())
-              }}
-            />
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setKeyword(search.trim())}>搜索</Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearch('')
-                  setKeyword('')
-                  setQtyMap({})
-                }}
-              >
-                清空
-              </Button>
-            </div>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {supplier ? '从该供应商已提交的采购单中挑选本次到货商品' : '请先选择供应商'}
+            </p>
+            <Button
+              variant="outline"
+              disabled={!supplier}
+              onClick={() => setPickerOpen(true)}
+              className="gap-1.5"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              选择商品
+            </Button>
           </div>
 
-          {!supplier && (
+          {selectedRows.length === 0 && (
             <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
-              先选择供应商，再从该供应商已提交的采购单中挑选本次到货商品
+              {supplier ? '尚未选择商品，点击右上角「选择商品」挑选本次到货明细' : '先选择供应商，再选择本次到货商品'}
             </div>
           )}
 
-          {supplier && (
+          {selectedRows.length > 0 && (
             <div className="overflow-hidden rounded-lg border border-border">
-              <div className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_90px_120px] gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
+              <div className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_120px_60px] gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
                 <span>采购单</span>
                 <span>商品</span>
                 <span>仓库</span>
-                <span className="text-left">已分配</span>
-                <span className="text-left">可建单</span>
+                <span className="text-left">单价</span>
                 <span className="text-left">本次到货</span>
+                <span></span>
               </div>
 
               <div className="max-h-[52vh] overflow-auto">
-                {!isLoading && candidates.length === 0 && (
-                  <div className="py-12 text-center text-sm text-muted-foreground">
-                    暂无可用采购明细
-                  </div>
-                )}
-
                 <div className="divide-y">
-                  {candidates.map(item => (
+                  {selectedRows.map(({ item, qty }) => (
                     <div
                       key={item.purchaseItemId}
-                      className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_90px_120px] gap-3 px-4 py-3 text-sm"
+                      className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_120px_60px] gap-3 px-4 py-3 text-sm"
                     >
                       <div className="text-doc-code">{item.purchaseOrderNo}</div>
                       <div className="min-w-0">
@@ -230,15 +219,24 @@ export default function InboundTaskCreatePage() {
                         </div>
                       </div>
                       <div className="text-muted-foreground">{item.warehouseName}</div>
-                      <div className="text-left text-muted-foreground">{item.assignedQty}</div>
-                      <div className="text-left font-medium text-foreground">{item.remainingQty}</div>
+                      <div className="text-left text-muted-foreground">{item.unitPrice.toFixed(2)}</div>
                       <div>
                         <Input
                           className="text-left"
                           placeholder="0"
-                          value={qtyMap[item.purchaseItemId] ?? ''}
+                          value={String(qty)}
                           onChange={e => setLineQty(item.purchaseItemId, item.remainingQty, e.target.value)}
                         />
+                      </div>
+                      <div className="flex items-center justify-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeLine(item.purchaseItemId)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -268,6 +266,14 @@ export default function InboundTaskCreatePage() {
         open={supplierFinderOpen}
         onClose={() => setSupplierFinderOpen(false)}
         onConfirm={handleSupplierConfirm}
+      />
+
+      <PurchaseItemPickerDialog
+        open={pickerOpen}
+        supplierId={supplier?.id ?? null}
+        initialSelection={selectedMap}
+        onClose={() => setPickerOpen(false)}
+        onConfirm={handlePickerConfirm}
       />
     </div>
   )

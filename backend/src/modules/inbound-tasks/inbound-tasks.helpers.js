@@ -99,6 +99,8 @@ const fmtPurchasableItem = r => ({
   orderedQty: Number(r.ordered_qty),
   assignedQty: Number(r.assigned_qty),
   remainingQty: Number(r.remaining_qty),
+  receivedQty: Number(r.received_qty),
+  unitPrice: Number(r.unit_price),
 })
 
 function fmtContainer(r) {

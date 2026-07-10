@@ -20,12 +20,12 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
   const location = useLocation()
   const [phase, setPhase] = useState<Phase>(initialPhase)
   const [tick, setTick] = useState(0)
+  const origin = getStoredApiOrigin()
 
   useEffect(() => {
     if (!isElectronRuntime() || import.meta.env.DEV) return
     let cancelled = false
     void (async () => {
-      const origin = getStoredApiOrigin()
       if (!origin) {
         if (!cancelled) setPhase('fail')
         return
@@ -38,11 +38,13 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
     return () => {
       cancelled = true
     }
-  }, [location.pathname, tick])
+    // 只在服务器地址变化或用户点重试时重新探测；不要用 location.pathname，
+    // 否则每次内部路由切换（如切换页签）都会把 children 换成 loading 遮罩，
+    // 导致 KeepAliveOutlet 及其下所有页签被真实卸载重建，编辑中的表单丢失。
+  }, [origin, tick])
 
   if (!isElectronRuntime() || import.meta.env.DEV) return <>{children}</>
 
-  const origin = getStoredApiOrigin()
   const onLogin = location.pathname === '/login'
 
   if (origin && phase === 'checking' && !onLogin) {

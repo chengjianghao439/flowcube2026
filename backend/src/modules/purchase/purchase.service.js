@@ -78,15 +78,15 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     `SELECT ${PO_COLUMNS},
        COALESCE((
          SELECT SUM(iti.ordered_qty)
-         FROM inbound_tasks it
-         JOIN inbound_task_items iti ON iti.task_id = it.id
-         WHERE it.purchase_order_id = po.id AND it.deleted_at IS NULL
+         FROM inbound_task_items iti
+         JOIN inbound_tasks it ON it.id = iti.task_id
+         WHERE iti.purchase_order_id = po.id AND it.deleted_at IS NULL
        ), 0) AS total_ordered_qty,
        COALESCE((
          SELECT SUM(iti.received_qty)
-         FROM inbound_tasks it
-         JOIN inbound_task_items iti ON iti.task_id = it.id
-         WHERE it.purchase_order_id = po.id AND it.deleted_at IS NULL
+         FROM inbound_task_items iti
+         JOIN inbound_tasks it ON it.id = iti.task_id
+         WHERE iti.purchase_order_id = po.id AND it.deleted_at IS NULL
        ), 0) AS total_received_qty
      FROM purchase_orders po
      WHERE po.deleted_at IS NULL AND po.order_no LIKE ? ${whereExtra}
@@ -113,15 +113,18 @@ async function findById(id) {
 
   const [[qty]] = await pool.query(
     `SELECT COALESCE(SUM(iti.ordered_qty),0) AS total_ordered_qty, COALESCE(SUM(iti.received_qty),0) AS total_received_qty
-     FROM inbound_tasks it JOIN inbound_task_items iti ON iti.task_id = it.id
-     WHERE it.purchase_order_id = ? AND it.deleted_at IS NULL`,
+     FROM inbound_task_items iti JOIN inbound_tasks it ON it.id = iti.task_id
+     WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL`,
     [id],
   )
   order.totalOrderedQty = Number(qty.total_ordered_qty)
   order.totalReceivedQty = Number(qty.total_received_qty)
 
+  // 混合采购单收货单的 inbound_tasks.purchase_order_id 头字段为空，须按明细行关联查找
   const [taskRows] = await pool.query(
-    `SELECT id, task_no, status FROM inbound_tasks WHERE purchase_order_id = ? AND deleted_at IS NULL ORDER BY created_at ASC`,
+    `SELECT DISTINCT it.id, it.task_no, it.status, it.created_at
+     FROM inbound_task_items iti JOIN inbound_tasks it ON it.id = iti.task_id
+     WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL ORDER BY it.created_at ASC`,
     [id],
   )
   order.inboundTasks = taskRows.map(r => ({ id: r.id, taskNo: r.task_no, status: r.status }))
@@ -200,15 +203,16 @@ async function closeRemaining(id, operator) {
     const row = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, order_no, status', entityName: '采购单' })
     const rule = assertStatusAction('purchase', 'close', row.status)
     const [[{ pending }]] = await conn.query(
-      `SELECT COUNT(*) AS pending FROM inbound_tasks
-        WHERE purchase_order_id=? AND deleted_at IS NULL AND status<>5 AND audit_status<>1`,
+      `SELECT COUNT(DISTINCT it.id) AS pending
+         FROM inbound_task_items iti JOIN inbound_tasks it ON it.id=iti.task_id
+        WHERE iti.purchase_order_id=? AND it.deleted_at IS NULL AND it.status<>5 AND it.audit_status<>1`,
       [id],
     )
     if (Number(pending) > 0) throw new AppError('存在未审核通过的收货订单，请先完成审核再关闭剩余', 409)
     const [[{ received }]] = await conn.query(
       `SELECT COALESCE(SUM(iti.putaway_qty),0) AS received
-         FROM inbound_tasks it JOIN inbound_task_items iti ON iti.task_id=it.id
-        WHERE it.purchase_order_id=? AND it.deleted_at IS NULL AND it.status<>5 AND it.audit_status=1`,
+         FROM inbound_task_items iti JOIN inbound_tasks it ON it.id=iti.task_id
+        WHERE iti.purchase_order_id=? AND it.deleted_at IS NULL AND it.status<>5 AND it.audit_status=1`,
       [id],
     )
     if (Number(received) <= 0) throw new AppError('该采购单尚无已审核入库，不能关闭结案（如需终止请改用取消）', 409)
@@ -251,44 +255,74 @@ async function cancel(id, operator) {
     const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, entityName: '采购单' })
     const cancelRule = assertStatusAction('purchase', 'cancel', orderRow.status)
 
-    const [taskRows] = await conn.query(
-      `SELECT id, task_no, status
-       FROM inbound_tasks
-       WHERE purchase_order_id = ? AND deleted_at IS NULL AND status <> 5
-       FOR UPDATE`,
+    // 混合采购单收货单的 inbound_tasks.purchase_order_id 头字段为空，须按明细行关联查找涉及本采购单的收货单
+    const [taskIdRows] = await conn.query(
+      'SELECT DISTINCT task_id FROM inbound_task_items WHERE purchase_order_id = ?',
       [id],
     )
+    const taskIds = taskIdRows.map(r => Number(r.task_id))
+    // 与 receive() 锁的是同一行（inbound_tasks 主键），避免与 PDA 现场收货并发时产生竞态
+    const [taskRows] = taskIds.length
+      ? await conn.query(
+          `SELECT id, task_no, status FROM inbound_tasks
+           WHERE id IN (?) AND deleted_at IS NULL AND status <> 5 FOR UPDATE`,
+          [taskIds],
+        )
+      : [[]]
 
+    // 本采购单在收货单里已产生实际收货（即便是混单场景），不能随取消动作静默消失，必须先走收货流程处理
     for (const taskRow of taskRows) {
-      assertStatusAction('inboundTask', 'cancel', taskRow.status)
-      const [[{ n }]] = await conn.query(
-        `SELECT COUNT(*) AS n
-         FROM inventory_containers
-         WHERE inbound_task_id = ? AND deleted_at IS NULL`,
-        [taskRow.id],
+      const [[{ received }]] = await conn.query(
+        `SELECT COALESCE(SUM(received_qty), 0) AS received
+         FROM inbound_task_items
+         WHERE task_id = ? AND purchase_order_id = ?`,
+        [taskRow.id, id],
       )
-      if (Number(n) > 0) {
-        throw new AppError(`采购单存在进行中的收货订单 ${taskRow.task_no}，请先处理收货流程`, 409)
+      if (Number(received) > 0) {
+        throw new AppError(`采购单在收货订单 ${taskRow.task_no} 中已产生实际收货，请先处理收货流程`, 409)
       }
     }
 
+    // 校验通过：本采购单在这些收货单里都还没实际收货，安全移出对应明细；
+    // 收货单因此变空则整单级联取消（等同混单前的行为），否则保留收货单继续处理其余采购单的明细
     for (const taskRow of taskRows) {
-      await compareAndSetStatus(conn, {
-        table: 'inbound_tasks',
-        id: Number(taskRow.id),
-        fromStatus: 1,
-        toStatus: 5,
-        entityName: '收货订单',
-      })
-      await appendInboundEvent(
-        conn,
-        Number(taskRow.id),
-        'cancelled_by_purchase',
-        '采购单取消同步取消收货订单',
-        `因采购单 ${orderRow.order_no} 已取消，收货订单 ${taskRow.task_no} 自动取消`,
-        operator,
-        { purchaseOrderId: id, purchaseOrderNo: orderRow.order_no },
+      const [[{ remain }]] = await conn.query(
+        'SELECT COUNT(*) AS remain FROM inbound_task_items WHERE task_id = ? AND purchase_order_id <> ?',
+        [taskRow.id, id],
       )
+      await conn.query(
+        'DELETE FROM inbound_task_items WHERE task_id = ? AND purchase_order_id = ?',
+        [taskRow.id, id],
+      )
+      if (Number(remain) === 0) {
+        assertStatusAction('inboundTask', 'cancel', taskRow.status)
+        await compareAndSetStatus(conn, {
+          table: 'inbound_tasks',
+          id: Number(taskRow.id),
+          fromStatus: 1,
+          toStatus: 5,
+          entityName: '收货订单',
+        })
+        await appendInboundEvent(
+          conn,
+          Number(taskRow.id),
+          'cancelled_by_purchase',
+          '采购单取消同步取消收货订单',
+          `因采购单 ${orderRow.order_no} 已取消，收货订单 ${taskRow.task_no} 自动取消`,
+          operator,
+          { purchaseOrderId: id, purchaseOrderNo: orderRow.order_no },
+        )
+      } else {
+        await appendInboundEvent(
+          conn,
+          Number(taskRow.id),
+          'items_removed_by_purchase_cancel',
+          '采购单取消移出关联明细',
+          `因采购单 ${orderRow.order_no} 已取消，已从收货订单 ${taskRow.task_no} 中移出其未收货明细`,
+          operator,
+          { purchaseOrderId: id, purchaseOrderNo: orderRow.order_no },
+        )
+      }
     }
 
     await compareAndSetStatus(conn, {

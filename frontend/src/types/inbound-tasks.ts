@@ -251,4 +251,6 @@ export interface InboundPurchaseCandidate {
   orderedQty: number
   assignedQty: number
   remainingQty: number
+  receivedQty: number
+  unitPrice: number
 }

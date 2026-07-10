@@ -21,7 +21,7 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
        FROM inbound_tasks it
        JOIN inbound_task_items iti ON iti.task_id = it.id
        JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
-      WHERE it.purchase_order_id = ? AND it.deleted_at IS NULL
+      WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL
         AND it.status <> 5 AND it.audit_status = 1`,
     [poId],
   )
@@ -48,8 +48,11 @@ async function isPurchaseFullyReceivedAndAudited(conn, purchaseOrderId) {
   const poId = Number(purchaseOrderId)
   if (!Number.isFinite(poId) || poId <= 0) return false
   const [[{ pending }]] = await conn.query(
-    `SELECT COUNT(*) AS pending FROM inbound_tasks
-      WHERE purchase_order_id = ? AND deleted_at IS NULL AND status <> 5 AND audit_status <> 1`,
+    `SELECT COUNT(DISTINCT it.id) AS pending
+       FROM inbound_tasks it
+       JOIN inbound_task_items iti ON iti.task_id = it.id
+      WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL
+        AND it.status <> 5 AND it.audit_status <> 1`,
     [poId],
   )
   if (Number(pending) > 0) return false
@@ -83,19 +86,23 @@ async function tryCompletePurchase(conn, purchaseOrderId) {
 }
 
 /**
- * 收货订单审核通过后的结算：重算该采购单应付；若已收齐且无待审核订单则自动完成。
+ * 收货订单审核通过后的结算：重算涉及的每个采购单应付；若已收齐且无待审核订单则自动完成。
+ * 一张收货订单可能混合多个采购单的明细（此时 inbound_tasks.purchase_order_id 为空），
+ * 因此改从 inbound_task_items 按明细归属的采购单逐一结算，而非只看收货单头字段。
  * 在 audit 的同一事务内调用。
  */
 async function settlePurchaseOnAudit(conn, taskId) {
-  const [[task]] = await conn.query(
-    'SELECT purchase_order_id FROM inbound_tasks WHERE id = ?',
+  const [rows] = await conn.query(
+    'SELECT DISTINCT purchase_order_id FROM inbound_task_items WHERE task_id = ?',
     [taskId],
   )
-  const poId = Number(task?.purchase_order_id)
-  if (!Number.isFinite(poId) || poId <= 0) return
-  await recomputePurchasePayable(conn, poId)
-  if (await isPurchaseFullyReceivedAndAudited(conn, poId)) {
-    await tryCompletePurchase(conn, poId)
+  for (const row of rows) {
+    const poId = Number(row.purchase_order_id)
+    if (!Number.isFinite(poId) || poId <= 0) continue
+    await recomputePurchasePayable(conn, poId)
+    if (await isPurchaseFullyReceivedAndAudited(conn, poId)) {
+      await tryCompletePurchase(conn, poId)
+    }
   }
 }
 

@@ -12,7 +12,13 @@
  *   3. 调拨：创建 → 确认 → 执行，校验源/目标仓库库存与目标容器
  *   4. 盘点（盘盈）：创建 → 填实盘 → 提交，校验库存与盘盈容器
  *   5. 采购退货 / 销售退货：创建 → 确认 → 执行，校验库存出/入
- *   6. 全局一致性不变量：inventory_stock = SUM(容器 remaining)，无负库存，reserved ≤ quantity
+ *   6. 混合采购单收货订单：一张收货单合并 2 个采购单的明细 → PDA 收货/上架 → 审核，
+ *      校验每个采购单各自的应付结算金额与自动完成状态（回归测试，防止混单场景下
+ *      settlePurchaseOnAudit 只认收货单头 purchase_order_id 导致漏结算的问题复发）
+ *   7. 取消采购单联动收货单：混单场景未收货可取消（仅移出该采购单明细）、已收货则拒绝取消、
+ *      单采购单场景未收货仍按原逻辑级联整单取消（回归测试，防止 purchase.cancel 只认收货单头
+ *      purchase_order_id 导致混单场景下取消完全绕过收货流程保护的问题复发）
+ *   8. 全局一致性不变量：inventory_stock = SUM(容器 remaining)，无负库存，reserved ≤ quantity
  *
  * 说明：销售完整出库链（拣货→分拣→复核→打包→出库，均为 PDA 多步扫码 +
  *   闭合校验）由 tests/concurrency-guards.smoke.test.js 在仓库任务层面把关，
@@ -324,7 +330,247 @@ async function main() {
     const srContainer = await dbQuery(pool, "SELECT remaining_qty FROM inventory_containers WHERE product_id=? AND warehouse_id=? AND source_ref_type='sale_return' ORDER BY id DESC LIMIT 1", [product.id, warehouse.id])
     log.assert(`销售退货生成新容器 remaining=${SR_QTY}`, srContainer.length > 0 && Number(srContainer[0].remaining_qty) === SR_QTY, JSON.stringify(srContainer))
 
-    // ── 7. 全局一致性不变量 ──────────────────────────────────────
+    // ── 6. 混合采购单收货订单结算（回归：settlePurchaseOnAudit 混单场景）──
+    log.section('混合采购单收货订单（合并 2 个采购单 → 审核结算）')
+    const MIX_QTY_A = 6, MIX_PRICE_A = 50
+    const MIX_QTY_B = 4, MIX_PRICE_B = 20
+
+    const [mpA] = await pool.query(
+      "INSERT INTO product_items (code, name, unit, sale_price_a) VALUES (?, '混合测试商品A', '个', 12)",
+      [`INTEG-MIXA-${randomRef('P')}`],
+    )
+    const [mpB] = await pool.query(
+      "INSERT INTO product_items (code, name, unit, sale_price_a) VALUES (?, '混合测试商品B', '个', 12)",
+      [`INTEG-MIXB-${randomRef('P')}`],
+    )
+    const mixProductA = { id: mpA.insertId, code: `INTEG-MIXA-${mpA.insertId}`, name: '混合测试商品A', unit: '个' }
+    const mixProductB = { id: mpB.insertId, code: `INTEG-MIXB-${mpB.insertId}`, name: '混合测试商品B', unit: '个' }
+
+    const poACreate = await http.post('/api/purchase', {
+      token,
+      json: {
+        supplierId: Number(supplier.id), supplierName: supplier.name,
+        warehouseId: Number(warehouse.id), warehouseName: warehouse.name,
+        items: [{ productId: mixProductA.id, productCode: mixProductA.code, productName: mixProductA.name, unit: mixProductA.unit, quantity: MIX_QTY_A, unitPrice: MIX_PRICE_A }],
+      },
+    })
+    await expectOk(log, poACreate, '创建采购单A成功')
+    const poAId = Number(poACreate.data?.data?.id)
+    await expectOk(log, await http.post(`/api/purchase/${poAId}/confirm`, { token }), '确认采购单A成功')
+
+    const poBCreate = await http.post('/api/purchase', {
+      token,
+      json: {
+        supplierId: Number(supplier.id), supplierName: supplier.name,
+        warehouseId: Number(warehouse.id), warehouseName: warehouse.name,
+        items: [{ productId: mixProductB.id, productCode: mixProductB.code, productName: mixProductB.name, unit: mixProductB.unit, quantity: MIX_QTY_B, unitPrice: MIX_PRICE_B }],
+      },
+    })
+    await expectOk(log, poBCreate, '创建采购单B成功')
+    const poBId = Number(poBCreate.data?.data?.id)
+    await expectOk(log, await http.post(`/api/purchase/${poBId}/confirm`, { token }), '确认采购单B成功')
+
+    const poItemARows = await dbQuery(pool, 'SELECT id FROM purchase_order_items WHERE order_id=?', [poAId])
+    const poItemBRows = await dbQuery(pool, 'SELECT id FROM purchase_order_items WHERE order_id=?', [poBId])
+    const poItemAId = poItemARows[0].id
+    const poItemBId = poItemBRows[0].id
+
+    const mixTaskCreate = await http.post('/api/inbound-tasks', {
+      token,
+      json: {
+        supplierId: Number(supplier.id),
+        supplierName: supplier.name,
+        remark: randomRef('integ-mix'),
+        items: [
+          { purchaseItemId: poItemAId, qty: MIX_QTY_A },
+          { purchaseItemId: poItemBId, qty: MIX_QTY_B },
+        ],
+      },
+    })
+    await expectOk(log, mixTaskCreate, '创建混合采购单收货订单成功')
+    const mixTaskId = Number(mixTaskCreate.data?.data?.taskId)
+
+    const mixTaskRows = await dbQuery(pool, 'SELECT purchase_order_id FROM inbound_tasks WHERE id=?', [mixTaskId])
+    log.assert('混合收货单头 purchase_order_id 为空（混单标志）', mixTaskRows[0].purchase_order_id === null, JSON.stringify(mixTaskRows[0]))
+
+    await expectOk(log, await http.post(`/api/inbound-tasks/${mixTaskId}/submit`, { token }), '混合收货单提交到 PDA 成功')
+
+    await expectOk(log, await http.post(`/api/inbound-tasks/${mixTaskId}/receive`, {
+      token, headers: ctx.pdaHeaders(),
+      json: { productId: mixProductA.id, packages: [{ qty: MIX_QTY_A }] },
+    }), 'PDA 收货商品A成功')
+    await expectOk(log, await http.post(`/api/inbound-tasks/${mixTaskId}/receive`, {
+      token, headers: ctx.pdaHeaders(),
+      json: { productId: mixProductB.id, packages: [{ qty: MIX_QTY_B }] },
+    }), 'PDA 收货商品B成功')
+
+    const mixContainersResp = await http.get(`/api/inbound-tasks/${mixTaskId}/containers`, { token })
+    const waitingList = mixContainersResp.data?.data?.waiting || []
+    const containerA = waitingList.find(c => Number(c.productId) === Number(mixProductA.id))
+    const containerB = waitingList.find(c => Number(c.productId) === Number(mixProductB.id))
+    log.assert('收货后存在商品A待上架容器', !!containerA, JSON.stringify(waitingList).slice(0, 300))
+    log.assert('收货后存在商品B待上架容器', !!containerB, JSON.stringify(waitingList).slice(0, 300))
+
+    await expectOk(log, await http.post(`/api/inbound-tasks/${mixTaskId}/putaway`, {
+      token, headers: ctx.pdaHeaders(),
+      json: { containerId: Number(containerA.id), locationId: Number(location.id) },
+    }), 'PDA 上架商品A成功')
+    await expectOk(log, await http.post(`/api/inbound-tasks/${mixTaskId}/putaway`, {
+      token, headers: ctx.pdaHeaders(),
+      json: { containerId: Number(containerB.id), locationId: Number(location.id) },
+    }), 'PDA 上架商品B成功')
+
+    await expectOk(log, await http.post(`/api/inbound-tasks/${mixTaskId}/audit`, {
+      token, json: { action: 'approve' },
+    }), '混合收货单审核通过成功（触发采购结算）')
+
+    const mixPayments = await dbQuery(
+      pool,
+      'SELECT order_id, total_amount FROM payment_records WHERE type=1 AND order_id IN (?, ?) ORDER BY order_id',
+      [poAId, poBId],
+    )
+    log.assert(
+      `混单结算生成正确应付：A=${MIX_QTY_A * MIX_PRICE_A}, B=${MIX_QTY_B * MIX_PRICE_B}`,
+      mixPayments.length === 2 &&
+        Number(mixPayments.find(p => p.order_id === poAId)?.total_amount) === MIX_QTY_A * MIX_PRICE_A &&
+        Number(mixPayments.find(p => p.order_id === poBId)?.total_amount) === MIX_QTY_B * MIX_PRICE_B,
+      JSON.stringify(mixPayments),
+    )
+
+    const mixPos = await dbQuery(pool, 'SELECT id, status FROM purchase_orders WHERE id IN (?, ?)', [poAId, poBId])
+    log.assert('混单结算后两张采购单均自动完成(status=3)', mixPos.length === 2 && mixPos.every(p => Number(p.status) === 3), JSON.stringify(mixPos))
+
+    // ── 7. 取消采购单联动收货单（回归：purchase.cancel 混单场景 + 已收货保护）──
+    log.section('取消采购单联动收货单（混单移出 / 已收货阻止 / 单采购单级联）')
+
+    // 7a. 混单场景：采购单被合并进收货单但尚未收货 → 取消应成功，仅移出该采购单的明细，收货单继续处理另一采购单
+    const [pc] = await pool.query(
+      "INSERT INTO product_items (code, name, unit, sale_price_a) VALUES (?, '取消测试商品C', '个', 12)",
+      [`INTEG-CANC-${randomRef('P')}`],
+    )
+    const [pd] = await pool.query(
+      "INSERT INTO product_items (code, name, unit, sale_price_a) VALUES (?, '取消测试商品D', '个', 12)",
+      [`INTEG-CAND-${randomRef('P')}`],
+    )
+    const productC = { id: pc.insertId, code: `INTEG-CANC-${pc.insertId}`, name: '取消测试商品C', unit: '个' }
+    const productD = { id: pd.insertId, code: `INTEG-CAND-${pd.insertId}`, name: '取消测试商品D', unit: '个' }
+    const CANC_QTY_C = 3, CANC_QTY_D = 5
+
+    const poCCreate = await http.post('/api/purchase', {
+      token,
+      json: {
+        supplierId: Number(supplier.id), supplierName: supplier.name,
+        warehouseId: Number(warehouse.id), warehouseName: warehouse.name,
+        items: [{ productId: productC.id, productCode: productC.code, productName: productC.name, unit: productC.unit, quantity: CANC_QTY_C, unitPrice: 10 }],
+      },
+    })
+    await expectOk(log, poCCreate, '创建采购单C成功')
+    const poCId = Number(poCCreate.data?.data?.id)
+    await expectOk(log, await http.post(`/api/purchase/${poCId}/confirm`, { token }), '确认采购单C成功')
+
+    const poDCreate = await http.post('/api/purchase', {
+      token,
+      json: {
+        supplierId: Number(supplier.id), supplierName: supplier.name,
+        warehouseId: Number(warehouse.id), warehouseName: warehouse.name,
+        items: [{ productId: productD.id, productCode: productD.code, productName: productD.name, unit: productD.unit, quantity: CANC_QTY_D, unitPrice: 10 }],
+      },
+    })
+    await expectOk(log, poDCreate, '创建采购单D成功')
+    const poDId = Number(poDCreate.data?.data?.id)
+    await expectOk(log, await http.post(`/api/purchase/${poDId}/confirm`, { token }), '确认采购单D成功')
+
+    const poItemCId = (await dbQuery(pool, 'SELECT id FROM purchase_order_items WHERE order_id=?', [poCId]))[0].id
+    const poItemDId = (await dbQuery(pool, 'SELECT id FROM purchase_order_items WHERE order_id=?', [poDId]))[0].id
+
+    const mixCdTaskCreate = await http.post('/api/inbound-tasks', {
+      token,
+      json: {
+        supplierId: Number(supplier.id),
+        supplierName: supplier.name,
+        remark: randomRef('integ-cancel-mix'),
+        items: [
+          { purchaseItemId: poItemCId, qty: CANC_QTY_C },
+          { purchaseItemId: poItemDId, qty: CANC_QTY_D },
+        ],
+      },
+    })
+    await expectOk(log, mixCdTaskCreate, '创建混合收货单（C+D）成功')
+    const mixCdTaskId = Number(mixCdTaskCreate.data?.data?.taskId)
+
+    const cancelPoC = await http.post(`/api/purchase/${poCId}/cancel`, { token })
+    await expectOk(log, cancelPoC, '未收货的混单采购单C取消成功（应移出明细而非整单拒绝）')
+
+    const poCAfter = await dbQuery(pool, 'SELECT status FROM purchase_orders WHERE id=?', [poCId])
+    log.assert('采购单C已取消(status=4)', poCAfter[0]?.status === 4, JSON.stringify(poCAfter))
+
+    const remainItemsAfterCancel = await dbQuery(
+      pool,
+      'SELECT purchase_order_id FROM inbound_task_items WHERE task_id=?',
+      [mixCdTaskId],
+    )
+    log.assert(
+      '混合收货单已移出采购单C的明细，仅保留采购单D',
+      remainItemsAfterCancel.length === 1 && Number(remainItemsAfterCancel[0].purchase_order_id) === poDId,
+      JSON.stringify(remainItemsAfterCancel),
+    )
+
+    const mixCdTaskAfter = await dbQuery(pool, 'SELECT status FROM inbound_tasks WHERE id=?', [mixCdTaskId])
+    log.assert('混合收货单未被级联取消，继续处理采购单D(status<>5)', Number(mixCdTaskAfter[0]?.status) !== 5, JSON.stringify(mixCdTaskAfter))
+
+    // 7b. 已实际收货的采购单 → 取消应被拒绝（保护已产生的容器/标签）
+    const [pe] = await pool.query(
+      "INSERT INTO product_items (code, name, unit, sale_price_a) VALUES (?, '取消测试商品E', '个', 12)",
+      [`INTEG-CANE-${randomRef('P')}`],
+    )
+    const productE = { id: pe.insertId, code: `INTEG-CANE-${pe.insertId}`, name: '取消测试商品E', unit: '个' }
+    const CANC_QTY_E = 2
+
+    const poECreate = await createPurchaseOrder(http, token, { supplier, warehouse, product: productE, quantity: CANC_QTY_E })
+    await expectOk(log, poECreate, '创建采购单E成功')
+    const poEId = Number(poECreate.data?.data?.id)
+    await expectOk(log, await confirmPurchaseOrder(http, token, poEId), '确认采购单E成功')
+
+    const inboundECreate = await createInboundTaskFromPurchase(http, token, poEId)
+    await expectOk(log, inboundECreate, '由采购单E生成收货订单成功')
+    const taskEId = Number(inboundECreate.data?.data?.taskId)
+    await expectOk(log, await http.post(`/api/inbound-tasks/${taskEId}/submit`, { token }), '收货订单E提交到 PDA 成功')
+    await expectOk(log, await http.post(`/api/inbound-tasks/${taskEId}/receive`, {
+      token, headers: ctx.pdaHeaders(),
+      json: { productId: Number(productE.id), packages: [{ qty: CANC_QTY_E }] },
+    }), 'PDA 收货商品E成功')
+
+    const cancelPoE = await http.post(`/api/purchase/${poEId}/cancel`, { token })
+    log.assert('已收货的采购单E取消被拒绝(409)', !cancelPoE.ok && cancelPoE.status === 409, `status=${cancelPoE.status} body=${JSON.stringify(cancelPoE.data).slice(0, 300)}`)
+
+    const poEAfter = await dbQuery(pool, 'SELECT status FROM purchase_orders WHERE id=?', [poEId])
+    log.assert('采购单E仍为已提交(status=2)，未被误取消', poEAfter[0]?.status === 2, JSON.stringify(poEAfter))
+
+    // 7c. 单采购单场景（非混单）+ 尚未收货 → 保持原有级联整单取消行为不变
+    const [pf] = await pool.query(
+      "INSERT INTO product_items (code, name, unit, sale_price_a) VALUES (?, '取消测试商品F', '个', 12)",
+      [`INTEG-CANF-${randomRef('P')}`],
+    )
+    const productF = { id: pf.insertId, code: `INTEG-CANF-${pf.insertId}`, name: '取消测试商品F', unit: '个' }
+
+    const poFCreate = await createPurchaseOrder(http, token, { supplier, warehouse, product: productF, quantity: 1 })
+    await expectOk(log, poFCreate, '创建采购单F成功')
+    const poFId = Number(poFCreate.data?.data?.id)
+    await expectOk(log, await confirmPurchaseOrder(http, token, poFId), '确认采购单F成功')
+
+    const inboundFCreate = await createInboundTaskFromPurchase(http, token, poFId)
+    await expectOk(log, inboundFCreate, '由采购单F生成收货订单成功')
+    const taskFId = Number(inboundFCreate.data?.data?.taskId)
+
+    const cancelPoF = await http.post(`/api/purchase/${poFId}/cancel`, { token })
+    await expectOk(log, cancelPoF, '未收货的单采购单F取消成功（级联整单取消收货单）')
+
+    const poFAfter = await dbQuery(pool, 'SELECT status FROM purchase_orders WHERE id=?', [poFId])
+    log.assert('采购单F已取消(status=4)', poFAfter[0]?.status === 4, JSON.stringify(poFAfter))
+    const taskFAfter = await dbQuery(pool, 'SELECT status FROM inbound_tasks WHERE id=?', [taskFId])
+    log.assert('单采购单收货单被级联取消(status=5)', Number(taskFAfter[0]?.status) === 5, JSON.stringify(taskFAfter))
+
+    // ── 8. 全局一致性不变量 ──────────────────────────────────────
     log.section('全局一致性不变量')
     const inconsistencies = await dbQuery(pool, `
       SELECT s.product_id, s.warehouse_id, s.quantity AS cached_qty, COALESCE(SUM(c.remaining_qty),0) AS container_sum

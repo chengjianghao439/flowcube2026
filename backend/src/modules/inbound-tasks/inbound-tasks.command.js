@@ -34,6 +34,20 @@ async function assertPurchaseOrderOpen(conn, purchaseOrderId) {
   }
 }
 
+/**
+ * 校验收货订单涉及的所有采购单均未取消。混合采购单收货单的 inbound_tasks.purchase_order_id
+ * 头字段为空，因此从 inbound_task_items 按明细归属的采购单逐一查，而非只看头字段。
+ */
+async function assertPurchaseOrdersOpen(conn, taskId) {
+  const [rows] = await conn.query(
+    'SELECT DISTINCT purchase_order_id FROM inbound_task_items WHERE task_id = ?',
+    [taskId],
+  )
+  for (const row of rows) {
+    await assertPurchaseOrderOpen(conn, Number(row.purchase_order_id))
+  }
+}
+
 async function createFromPoId(purchaseOrderId) {
   const purchaseSvc = require('../purchase/purchase.service')
   const order = await purchaseSvc.findById(purchaseOrderId)
@@ -346,7 +360,7 @@ async function receive(taskId, payload, { userId, requestKey } = {}) {
 
     const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '入库任务' })
     assertTaskCanReceive(taskRow)
-    await assertPurchaseOrderOpen(conn, Number(taskRow.purchase_order_id))
+    await assertPurchaseOrdersOpen(conn, taskId)
 
     if (Number(taskRow.status) === 1) {
       const receiveStartRule = assertStatusAction('inboundTask', 'receiveStart', taskRow.status)

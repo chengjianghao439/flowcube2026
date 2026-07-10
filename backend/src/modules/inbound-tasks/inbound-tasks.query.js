@@ -335,6 +335,7 @@ async function findPurchasableItems({ supplierId, keyword = '' }) {
         poi.spec,
         poi.color,
         poi.unit,
+        poi.unit_price,
         poi.quantity AS ordered_qty,
         COALESCE(SUM(
           CASE
@@ -347,7 +348,13 @@ async function findPurchasableItems({ supplierId, keyword = '' }) {
             WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
             ELSE iti.ordered_qty
           END
-        ), 0) AS remaining_qty
+        ), 0) AS remaining_qty,
+        COALESCE(SUM(
+          CASE
+            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
+            ELSE iti.received_qty
+          END
+        ), 0) AS received_qty
       FROM purchase_order_items poi
       INNER JOIN purchase_orders po
         ON po.id = poi.order_id
@@ -366,7 +373,8 @@ async function findPurchasableItems({ supplierId, keyword = '' }) {
       GROUP BY
         poi.id, po.id, po.order_no, po.supplier_id, po.supplier_name,
         po.warehouse_id, po.warehouse_name,
-        poi.product_id, poi.product_code, poi.product_name, poi.article_number, poi.spec, poi.color, poi.unit, poi.quantity
+        poi.product_id, poi.product_code, poi.product_name, poi.article_number, poi.spec, poi.color, poi.unit,
+        poi.unit_price, poi.quantity
       HAVING remaining_qty > 0
       ORDER BY po.created_at ASC, poi.id ASC`,
     [supplierIdN, like, like, like],

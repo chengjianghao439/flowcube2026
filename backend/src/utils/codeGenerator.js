@@ -93,7 +93,7 @@ async function generateContainerCode(conn, prefix = 'I') {
        FROM inventory_containers
        WHERE barcode LIKE 'B%'`,
     )
-    return `B${String(maxNum + 1).padStart(6, '0')}`
+    return `B${String(Number(maxNum) + 1).padStart(6, '0')}`
   }
 
   const [[{ maxNum }]] = await conn.query(
@@ -107,7 +107,7 @@ async function generateContainerCode(conn, prefix = 'I') {
      FROM inventory_containers
      WHERE barcode LIKE 'I%' OR barcode LIKE 'CNT%'`,
   )
-  return `I${String(maxNum + 1).padStart(6, '0')}`
+  return `I${String(Number(maxNum) + 1).padStart(6, '0')}`
 }
 
 module.exports = { generateMasterCode, generateDailyCode, generateContainerCode }
