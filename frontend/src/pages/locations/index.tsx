@@ -3,7 +3,6 @@
  * 路由：/locations
  */
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -28,7 +27,6 @@ const STATUS_LABEL:   Record<number, string> = { 1: '启用', 2: '停用' }
 const EMPTY_FORM: CreateLocationParams = { warehouseId: 0, code: '', zone: '', aisle: '', rack: '', level: '', position: '', capacity: 0, status: 1, remark: '' }
 
 export default function LocationsPage() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const [keyword, setKeyword]         = useState('')
   const [search, setSearch]           = useState('')
@@ -82,15 +80,15 @@ export default function LocationsPage() {
     { key: 'code',          title: '库位编号', width: 120,
       render: v => <span className="text-doc-code-strong">{v as string}</span> },
     { key: 'warehouseName', title: '仓库',
-      render: v => v ?? <span className="text-muted-foreground">—</span> },
-    { key: 'zone',    title: '区域', render: v => v ?? <span className="text-muted-foreground">—</span> },
-    { key: 'aisle',   title: '通道', render: v => v ?? <span className="text-muted-foreground">—</span> },
-    { key: 'rack',    title: '货架', render: v => v ?? <span className="text-muted-foreground">—</span> },
+      render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
+    { key: 'zone',    title: '区域', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
+    { key: 'aisle',   title: '通道', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
+    { key: 'rack',    title: '货架', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'capacity', title: '容量', width: 80 },
     { key: 'status', title: '状态', width: 80,
       render: v => <Badge variant={STATUS_VARIANT[v as number]}>{STATUS_LABEL[v as number]}</Badge> },
     { key: 'containerCount', title: '容器数', width: 80,
-      render: v => v ?? 0 },
+      render: v => (v as number | null) ?? 0 },
     {
       key: 'id', title: '操作', width: 120,
       render: (_, row) => (

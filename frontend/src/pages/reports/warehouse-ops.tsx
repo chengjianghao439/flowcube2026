@@ -111,9 +111,17 @@ export default function WarehouseOpsPage() {
         title="仓库运营看板"
         description={`实时数据 · 每分钟自动刷新 · 更新于 ${updatedTime}`}
         actions={(
-          <Button size="sm" variant="outline" onClick={() => refetch()}>
-            立即刷新
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => openPath('/reports/wave-performance', '波次效率')}>
+              查看波次效率
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => openPath('/reports/pda-anomaly', 'PDA 异常分析')}>
+              查看异常分析
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => refetch()}>
+              立即刷新
+            </Button>
+          </div>
         )}
       />
 

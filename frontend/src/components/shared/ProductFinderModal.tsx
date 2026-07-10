@@ -145,7 +145,6 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
   )
 
   const products   = finderData?.list ?? []
-  const pagination = finderData?.pagination
   const [expandedPath, setExpandedPath] = useState<number[]>([])
 
   const columns: FinderColumn<ProductRow>[] = useMemo(() => [

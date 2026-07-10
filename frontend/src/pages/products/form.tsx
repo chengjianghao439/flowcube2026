@@ -47,7 +47,6 @@ export default function ProductFormPage() {
   const isEdit = !!editId
 
   const navigate = useNavigate()
-  const { removeTab } = useWorkspaceStore()
   const [submitting, setSubmitting] = useState(false)
 
   const { data: product, isLoading } = useProduct(editId || 0)

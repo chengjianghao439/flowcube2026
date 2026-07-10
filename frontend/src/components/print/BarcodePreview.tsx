@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
 import JsBarcode from 'jsbarcode'
 
 interface Props {
@@ -12,7 +12,6 @@ interface Props {
 export default function BarcodePreview({ value, symbology = 'code128', hri = true }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState({ w: 0, h: 0 })
 
   const render = useCallback(() => {
     const svg = svgRef.current
@@ -33,7 +32,6 @@ export default function BarcodePreview({ value, symbology = 'code128', hri = tru
         textMargin: 2,
         flat: true,
       })
-      setSize({ w, h })
     } catch {
       // 无效条码值（如 EAN13 位数不符）则静默
     }

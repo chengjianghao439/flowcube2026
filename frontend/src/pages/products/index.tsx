@@ -120,6 +120,7 @@ export default function ProductsPage() {
     { key:'articleNumber', title:'货号', width:100, render:v=>(v as string)||'-' },
     { key:'spec', title:'型号', render:v=>(v as string)||'-' },
     { key:'name', title:'商品名称' },
+    { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
     { key:'color', title:'颜色', width:80, render:v=>(v as string)||'-' },
     { key:'unit', title:'单位', width:60 },
     { key:'supplierName', title:'供应商', width:100, render:v=>(v as string)||'-' },

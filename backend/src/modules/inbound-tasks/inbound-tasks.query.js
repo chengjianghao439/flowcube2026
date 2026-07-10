@@ -267,7 +267,7 @@ async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_T
   }))
 }
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, productId = null }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, productId = null, warehouseId = null, operatorId = null, startDate = null, endDate = null, remark = null }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
   const conds = ['t.deleted_at IS NULL', '(t.task_no LIKE ? OR t.supplier_name LIKE ? OR t.purchase_order_no LIKE ?)']
@@ -277,6 +277,11 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
     conds.push('EXISTS (SELECT 1 FROM inbound_task_items iti WHERE iti.task_id = t.id AND iti.product_id = ?)')
     params.push(productId)
   }
+  if (warehouseId) { conds.push('t.warehouse_id = ?'); params.push(warehouseId) }
+  if (operatorId) { conds.push('t.operator_id = ?'); params.push(operatorId) }
+  if (startDate) { conds.push('DATE(t.created_at) >= ?'); params.push(startDate) }
+  if (endDate) { conds.push('DATE(t.created_at) <= ?'); params.push(endDate) }
+  if (remark) { conds.push('t.remark LIKE ?'); params.push(`%${remark}%`) }
   const where = conds.join(' AND ')
 
   const [rows] = await pool.query(

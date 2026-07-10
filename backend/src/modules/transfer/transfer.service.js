@@ -16,7 +16,7 @@ const genNo = conn => generateDailyCode(conn, 'TR', 'transfer_orders', 'order_no
 
 function assertDifferentWarehouses(fromWarehouseId, toWarehouseId) {
   if (Number(fromWarehouseId) === Number(toWarehouseId)) {
-    throw new AppError('源仓库和目标仓库不能相同', 400)
+    throw new AppError('调出仓库和调入仓库不能相同', 400)
   }
 }
 
@@ -53,13 +53,23 @@ async function assertTransferAvailability(conn, order) {
   }
 }
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
-  const cond=status?'AND status=?':''
-  const ext=status?[like,like,status,pageSize,offset]:[like,like,pageSize,offset]
-  const cntExt=status?[like,like,status]:[like,like]
-  const [rows]=await pool.query(`SELECT * FROM transfer_orders WHERE deleted_at IS NULL AND (order_no LIKE ? OR from_warehouse_name LIKE ? OR to_warehouse_name LIKE ?) ${cond} ORDER BY created_at DESC LIMIT ? OFFSET ?`,status?[like,like,like,status,pageSize,offset]:[like,like,like,pageSize,offset])
-  const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM transfer_orders WHERE deleted_at IS NULL AND (order_no LIKE ? OR from_warehouse_name LIKE ? OR to_warehouse_name LIKE ?) ${cond}`,status?[like,like,like,status]:[like,like,like])
+  const params=[like,like,like]
+  let whereExtra=''
+  if (status) { whereExtra += ' AND status=?'; params.push(status) }
+  if (productId) {
+    whereExtra += ' AND EXISTS (SELECT 1 FROM transfer_order_items toi WHERE toi.order_id = transfer_orders.id AND toi.product_id = ?)'
+    params.push(productId)
+  }
+  if (warehouseId) { whereExtra += ' AND (from_warehouse_id=? OR to_warehouse_id=?)'; params.push(warehouseId, warehouseId) }
+  if (operatorId) { whereExtra += ' AND operator_id=?'; params.push(operatorId) }
+  if (startDate) { whereExtra += ' AND DATE(created_at)>=?'; params.push(startDate) }
+  if (endDate) { whereExtra += ' AND DATE(created_at)<=?'; params.push(endDate) }
+  if (remark) { whereExtra += ' AND remark LIKE ?'; params.push(`%${remark}%`) }
+  const where = `deleted_at IS NULL AND (order_no LIKE ? OR from_warehouse_name LIKE ? OR to_warehouse_name LIKE ?) ${whereExtra}`
+  const [rows]=await pool.query(`SELECT * FROM transfer_orders WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,pageSize,offset])
+  const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM transfer_orders WHERE ${where}`,params)
   return { list:rows.map(fmt), pagination:{page,pageSize,total} }
 }
 
@@ -85,7 +95,7 @@ async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWar
       orderNo,
       eventType: TRANSFER_EVENT.CREATED,
       title: '调拨单已创建',
-      description: `源仓 ${fromWarehouseName} -> 目标仓 ${toWarehouseName}`,
+      description: `调出仓 ${fromWarehouseName} -> 调入仓 ${toWarehouseName}`,
       operatorId: operator.userId,
       operatorName: operator.realName,
       requestId: getRequestId(),
@@ -140,7 +150,7 @@ async function confirm(id, operator = null) {
       toStatus: rule.to,
       entityName: '调拨单',
     })
-    // 确认即派发到 PDA：记录派发元数据，源仓 PDA 可扫码出库
+    // 确认即派发到 PDA：记录派发元数据，调出仓 PDA 可扫码出库
     await conn.query(
       'UPDATE transfer_orders SET submitted_at = NOW(), submitted_by = ?, submitted_by_name = ? WHERE id = ?',
       [operator?.userId ?? null, operator?.realName ?? null, id],
@@ -150,7 +160,7 @@ async function confirm(id, operator = null) {
       orderNo: orderRow.order_no,
       eventType: TRANSFER_EVENT.CONFIRMED,
       title: '调拨单已确认并派发',
-      description: '已派发到 PDA，等待源仓扫码出库',
+      description: '已派发到 PDA，等待调出仓扫码出库',
       operatorId: operator?.userId ?? null,
       operatorName: operator?.realName ?? null,
       requestId: getRequestId(),
@@ -170,7 +180,7 @@ async function confirm(id, operator = null) {
   }
 }
 
-// 源仓 PDA 扫码出库：整容器移到目标仓设 PENDING_PUTAWAY（在途，暂不计入目标仓），源仓库存立即减。
+// 调出仓 PDA 扫码出库：整容器移到调入仓设 PENDING_PUTAWAY（在途，暂不计入调入仓），调出仓库存立即减。
 async function scanOut(id, { containerBarcode }, operator, requestKey) {
   const conn = await pool.getConnection()
   try {
@@ -189,7 +199,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey) {
       [String(containerBarcode || '').trim()],
     )
     if (!c) throw new AppError('容器条码不存在', 404)
-    if (Number(c.warehouse_id) !== fromWh) throw new AppError('该容器不在本调拨单的源仓库', 400)
+    if (Number(c.warehouse_id) !== fromWh) throw new AppError('该容器不在本调拨单的调出仓库', 400)
     if (Number(c.status) !== CONTAINER_STATUS.ACTIVE) throw new AppError('该容器不是在库状态，无法调拨出库', 400)
     if (c.locked_by_task_id) throw new AppError('该容器已被其他任务锁定', 409)
     if (c.transfer_order_id) throw new AppError('该容器已在其他调拨在途中', 409)
@@ -201,7 +211,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey) {
     if (!item) throw new AppError('该商品不在本调拨单明细内', 400)
 
     const qty = Number(c.remaining_qty)
-    // 整容器移动到目标仓，标记在途（PENDING_PUTAWAY 不计入目标仓可用库存）
+    // 整容器移动到调入仓，标记在途（PENDING_PUTAWAY 不计入调入仓可用库存）
     await conn.query(
       'UPDATE inventory_containers SET warehouse_id = ?, status = ?, location_id = NULL, transfer_order_id = ? WHERE id = ?',
       [toWh, CONTAINER_STATUS.PENDING_PUTAWAY, id, c.id],
@@ -225,7 +235,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey) {
     }
     await recordTransferEvent(conn, {
       transferOrderId: id, orderNo: orderRow.order_no, eventType: TRANSFER_EVENT.SCAN_OUT,
-      title: '源仓扫码出库', description: `容器#${c.barcode} ${c.product_name || ''} ×${qty}`,
+      title: '调出仓扫码出库', description: `容器#${c.barcode} ${c.product_name || ''} ×${qty}`,
       operatorId: operator?.userId ?? null, operatorName: operator?.realName ?? null,
       requestId: getRequestId(), payload: { containerId: c.id, barcode: c.barcode, productId: c.product_id, qty },
     })
@@ -237,7 +247,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey) {
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-// 目标仓 PDA 扫码入库上架：在途容器翻 ACTIVE + 落库位，目标仓库存立即增；全部收齐则完成。
+// 调入仓 PDA 扫码入库上架：在途容器翻 ACTIVE + 落库位，调入仓库存立即增；全部收齐则完成。
 async function scanIn(id, { containerBarcode, locationId }, operator, requestKey) {
   const conn = await pool.getConnection()
   try {
@@ -263,7 +273,7 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
       [locationId],
     )
     if (!loc) throw new AppError('库位不存在或已停用', 404)
-    if (Number(loc.warehouse_id) !== toWh) throw new AppError('库位与目标仓库不一致', 400)
+    if (Number(loc.warehouse_id) !== toWh) throw new AppError('库位与调入仓库不一致', 400)
 
     const qty = Number(c.remaining_qty)
     await conn.query(
@@ -290,7 +300,7 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
 
     await recordTransferEvent(conn, {
       transferOrderId: id, orderNo: orderRow.order_no, eventType: TRANSFER_EVENT.SCAN_IN,
-      title: '目标仓扫码入库', description: `容器#${c.barcode} ${c.product_name || ''} ×${qty} → 库位#${loc.id}`,
+      title: '调入仓扫码入库', description: `容器#${c.barcode} ${c.product_name || ''} ×${qty} → 库位#${loc.id}`,
       operatorId: operator?.userId ?? null, operatorName: operator?.realName ?? null,
       requestId: getRequestId(), payload: { containerId: c.id, barcode: c.barcode, productId: c.product_id, qty, locationId: Number(locationId) },
     })

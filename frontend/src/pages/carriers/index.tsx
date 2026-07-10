@@ -3,7 +3,6 @@
  * 路由：/carriers
  */
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -25,7 +24,6 @@ type FormState = CreateCarrierParams & { isActive: boolean }
 const EMPTY_FORM: FormState = { name: '', type: 'express', contact: '', phone: '', remark: '', isActive: true }
 
 export default function CarriersPage() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const [keyword, setKeyword]           = useState('')
   const [search, setSearch]             = useState('')
@@ -76,9 +74,9 @@ export default function CarriersPage() {
     { key: 'type',     title: '类型', width: 80,
       render: v => CARRIER_TYPE_LABELS[v as CarrierType] },
     { key: 'contact',  title: '联系人',
-      render: v => v ?? <span className="text-muted-foreground">—</span> },
+      render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'phone',    title: '电话',
-      render: v => v ?? <span className="text-muted-foreground">—</span> },
+      render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'isActive', title: '状态', width: 80,
       render: v => <Badge variant={v ? 'default' : 'outline'}>{v ? '启用' : '停用'}</Badge> },
     {

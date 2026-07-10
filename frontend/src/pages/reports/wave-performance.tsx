@@ -96,8 +96,8 @@ export default function WavePerformancePage() {
   }
 
   const waves: WaveStats[] = (data?.waves ?? []).slice().sort((a, b) => {
-    const va = (a as Record<string, unknown>)[sortField]
-    const vb = (b as Record<string, unknown>)[sortField]
+    const va = (a as unknown as Record<string, unknown>)[sortField]
+    const vb = (b as unknown as Record<string, unknown>)[sortField]
     if (va == null && vb == null) return 0
     if (va == null) return sortAsc ? -1 : 1
     if (vb == null) return sortAsc ? 1 : -1

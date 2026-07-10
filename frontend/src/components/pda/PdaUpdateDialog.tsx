@@ -84,7 +84,7 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
         received += value.length
         if (contentLength > 0) setProgress(Math.round(received / contentLength * 100))
       }
-      const blob = new Blob(chunks, { type: 'application/vnd.android.package-archive' })
+      const blob = new Blob(chunks as BlobPart[], { type: 'application/vnd.android.package-archive' })
       const url  = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

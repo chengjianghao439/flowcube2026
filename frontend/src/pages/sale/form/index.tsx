@@ -11,7 +11,7 @@
 
 import { useState, useCallback, useContext, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Loader2, Printer, Save, Trash2, Truck, Warehouse, X } from 'lucide-react'
+import { AlertTriangle, Loader2, Save, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
@@ -20,11 +20,10 @@ import { Badge }   from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
-import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar }      from '@/components/shared/ActionBar'
-import { StatusBadge }    from '@/components/shared/StatusBadge'
 import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import { SectionCard }    from '@/components/shared/SectionCard'
 import { CustomerFinder, ProductFinder, FinderTrigger } from '@/components/finder'
@@ -530,7 +529,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 // 编辑视图（草稿状态 status=1 可编辑）
 // ════════════════════════════════════════════════════════════════════════════
 
-function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; closeTab: () => void }) {
+function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; closeTab: () => void }) {
   const navigate      = useNavigate()
   const updateMutate  = useUpdateSale()
   const reserveMutate = useReserveSale()
@@ -888,8 +887,7 @@ function EditView({ order, closeTab }: { order: NonNullable<ReturnType<typeof us
 // 查看视图（已有销售单详情 + 状态操作）
 // ════════════════════════════════════════════════════════════════════════════
 
-function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: string; closeTab: () => void }) {
-  const navigate       = useNavigate()
+function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; closeTab: () => void }) {
   const { data: order, isLoading } = useSaleDetail(saleId)
   const releaseMutate  = useReleaseSale()
   const shipMutate     = useShipSale()
@@ -901,15 +899,6 @@ function DetailView({ saleId, tabPath, closeTab }: { saleId: number; tabPath: st
   const [confirmState, setConfirmState] = useState<{
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; onConfirm: () => void
   }>({ open: false, title: '', description: '', variant: 'default', onConfirm: () => {} })
-
-  function ask(
-    title: string, description: string,
-    variant: 'default' | 'destructive',
-    onConfirm: () => void,
-  ) {
-    setConfirmState({ open: true, title, description, variant, onConfirm })
-  }
-  const closeAsk = () => setConfirmState(s => ({ ...s, open: false }))
 
   if (isLoading) {
     return (

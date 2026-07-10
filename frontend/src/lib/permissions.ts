@@ -3,7 +3,7 @@ import type { PermissionCode } from '@/lib/permission-codes'
 export type PermCode = PermissionCode
 
 export function normalizePermissions(perms: string[] | undefined): Set<PermCode> {
-  return new Set(Array.isArray(perms) ? perms.filter(Boolean) : [])
+  return new Set(Array.isArray(perms) ? (perms.filter(Boolean) as PermCode[]) : [])
 }
 
 export function hasPermission(

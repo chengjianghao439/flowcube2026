@@ -9,7 +9,7 @@ const vBody=s=>(req,res,next)=>{const r=s.safeParse(req.body);if(!r.success)retu
 const vParams=s=>(req,res,next)=>{const r=s.safeParse(req.params);if(!r.success)return res.status(400).json({success:false,message:r.error.errors.map(e=>e.message).join('；'),data:null});req.params=r.data;next()}
 const idParam=z.object({id:z.coerce.number().int().positive('id 必须为正整数')})
 const itemSchema=z.object({productId:z.number().int().positive(),productCode:z.string(),productName:z.string(),unit:z.string(),articleNumber:z.string().optional().nullable(),spec:z.string().optional().nullable(),color:z.string().optional().nullable(),quantity:z.number().positive('数量必须大于0'),remark:z.string().optional()})
-const createSchema=z.object({fromWarehouseId:z.number().int().positive('请选择源仓库'),fromWarehouseName:z.string(),toWarehouseId:z.number().int().positive('请选择目标仓库'),toWarehouseName:z.string(),remark:z.string().optional(),items:z.array(itemSchema).min(1,'至少添加一条明细')})
+const createSchema=z.object({fromWarehouseId:z.number().int().positive('请选择调出仓库'),fromWarehouseName:z.string(),toWarehouseId:z.number().int().positive('请选择调入仓库'),toWarehouseName:z.string(),remark:z.string().optional(),items:z.array(itemSchema).min(1,'至少添加一条明细')})
 const scanOutSchema=z.object({containerBarcode:z.string().min(1,'请扫描容器条码')})
 const scanInSchema=z.object({containerBarcode:z.string().min(1,'请扫描容器条码'),locationId:z.number().int().positive('请扫描库位')})
 router.get('/',              requirePermission(PERMISSIONS.TRANSFER_ORDER_VIEW), ctrl.list)

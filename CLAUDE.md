@@ -65,7 +65,7 @@ POST /api/inventory/inbound
 - **No ORM** — raw SQL via `mysql2/promise` connection pool. Database migrations are sequential `.sql` files in `backend/src/database/`.
 - Auth: JWT (Bearer token), enforced by `middleware/auth.js`. Permissions are string codes like `"inventory.view"` defined in `backend/src/constants/permissions.js`. `requirePermission` loads role permissions on first check.
 
-#### Backend modules (39 total, registered in `backend/src/app.js`)
+#### Backend modules (43 total, registered in `backend/src/app.js`)
 
 | Module | Route | Purpose |
 |--------|-------|---------|
@@ -82,6 +82,7 @@ POST /api/inventory/inbound
 | categories | `/api/categories` | Product category CRUD |
 | inventory | `/api/inventory` | Stock query, container ops, trace |
 | containers | `/api/containers` | Container split/move |
+| plastic-boxes | `/api/plastic-boxes` | Reusable tote/box container query (subset of `inventory_containers`, barcode prefix `B`) |
 | purchase | `/api/purchase` | Purchase orders (CRUD + confirm/cancel) |
 | inbound-tasks | `/api/inbound-tasks` | Receiving orders (receive/putaway/audit) |
 | sale | `/api/sale` | Sales orders (CRUD + reserve/release/ship/cancel) |
@@ -91,8 +92,9 @@ POST /api/inventory/inbound
 | packages | `/api/packages` | Box/packaging CRUD + label printing |
 | scan-logs | `/api/scan-logs` | PDA barcode scan records |
 | stockcheck | `/api/stockcheck` | Stock counting |
-| transfer | `/api/transfer` | Inter-warehouse transfers |
-| returns | `/api/returns` | Purchase & sale returns |
+| transfer | `/api/transfer` | Inter-warehouse transfers (two-phase PDA scan-out/scan-in) |
+| returns | `/api/returns` | Purchase & sale returns (CRUD + confirm/cancel) |
+| return-tasks | `/api/return-tasks` | Sale-return PDA execution (receive → check/QA → putaway) |
 | payments | `/api/payments` | AR/AP payment records |
 | price-lists | `/api/price-lists` | Customer-specific pricing |
 | print-jobs | `/api/print-jobs` | Print queue: create, dispatch, ack, sweeper |
@@ -138,7 +140,7 @@ ERP sidebar menu groups:
 | 采购 | `/suppliers`, `/purchase`, `/inbound-tasks` |
 | 销售 | `/customers`, `/carriers`, `/sale` |
 | 往来 | `/returns`, `/payments` |
-| 库存 | `/products`, `/categories`, `/warehouses`, `/locations`, `/racks`, `/inventory/overview`, `/inventory`, `/stockcheck`, `/transfer` |
+| 库存 | `/products`, `/categories`, `/warehouses`, `/locations`, `/racks`, `/inventory`, `/plastic-boxes`, `/stockcheck`, `/transfer` |
 | 仓库任务 | `/picking-waves`, `/sorting-bins` |
 | 数据 | `/reports`, `/reports/role-workbench`, `/reports/reconciliation`, `/reports/profit-analysis`, `/reports/approvals`, `/reports/wave-performance`, `/reports/pda-anomaly`, `/reports/warehouse-ops`, `/oplogs` |
 | 系统 | `/users`, `/permissions`, `/settings`, `/settings/barcode-print-query`, `/settings/print-templates`, `/settings/printers` |
@@ -163,7 +165,7 @@ Vite builds **only** Electron or Capacitor targets — plain web build is blocke
 
 ### PDA (Android Capacitor) pages
 
-PDA workbench (`/pda`) grid with 8 permission-gated entries:
+PDA workbench (`/pda`) grid with 10 permission-gated entries (收货订单/扫码上架/拣货任务/订单分拣/复核任务/打包作业/容器拆分/出库确认/调拨执行/销售退货), each drilling into detail pages:
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -174,10 +176,16 @@ PDA workbench (`/pda`) grid with 8 permission-gated entries:
 | 任务执行 | `/pda/task/:id` | Scan containers, pick suggestions, route guidance |
 | 波次拣货 | `/pda/wave?waveId=X` | Wave-based multi-task batch picking |
 | 订单分拣 | `/pda/sort` | Scan product → see target bin → scan bin to confirm |
-| 复核任务 | `/pda/check` | Scan containers to verify picked quantities |
-| 打包作业 | `/pda/pack` | Create boxes, scan items, finish + print labels |
-| 出库确认 | `/pda/ship` | Scan box barcode → auto-validate + execute ship |
+| 复核任务 | `/pda/check/:id` | Scan containers to verify picked quantities |
+| 打包作业 | `/pda/pack/:id` | Create boxes, scan items, finish + print labels |
+| 出库确认 | `/pda/ship/:id` | Scan box barcode → auto-validate + execute ship |
 | 容器拆分 | `/pda/split` | Split containers |
+| 调拨执行 | `/pda/transfer` | List transfer orders submitted for two-phase scan |
+| 调拨出库 | `/pda/transfer-out/:id` | Source warehouse: scan containers out |
+| 调拨入库 | `/pda/transfer-in/:id` | Destination warehouse: scan containers in, complete transfer |
+| 销售退货 | `/pda/sale-return` | List sale-return tasks (`return_tasks`) awaiting receive/putaway |
+| 退货收货 | `/pda/sale-return/:id/receive` | Scan-receive returned goods → creates PENDING_QA containers |
+| 退货上架 | `/pda/sale-return/:id/putaway` | After QA passes (`check` API), scan container → shelf location |
 
 PDA uses `useCriticalPdaAction` for offline-resilient mutation with idempotency keys (`operation_requests` table), allowing safe retry after network interruption.
 
@@ -193,7 +201,7 @@ PDA uses `useCriticalPdaAction` for offline-resilient mutation with idempotency 
 
 MySQL 8.0, charset `utf8mb4_unicode_ci`. Tables use `[module]_[resource]` naming (e.g., `inventory_containers`, `sale_orders`). All tables have `created_at`/`updated_at` timestamps. Logical deletes via `deleted_at` column.
 
-82 sequential migration files in `backend/src/database/` (001–082). Run `npm run migrate` in backend before deployment.
+97 sequential migration files in `backend/src/database/` (001–097). Run `npm run migrate` in backend before deployment.
 
 ## Business flows
 
@@ -249,13 +257,37 @@ Client-pull model (no push):
 
 Key: dispatch is NOT user-account-based. A print job goes to whichever desktop client registered the bound printer.
 
-### Returns (退货)
+### Returns (退货) — independent page since v0.4.16
 
-Two types: `purchaseReturn` (采购退货) and `saleReturn` (销售退货). Both follow: draft(1) → confirmed(2) → executed(3) → cancelled(4). Execute deducts/adds inventory via container engine.
+Two types, both draft(1) → confirmed(2) → executed(3) → cancelled(4), but confirm triggers **different execution pipelines**:
 
-### Transfers (调拨)
+```
+采购退货 purchaseReturn (库存流出，走出库仓库任务):
+  confirm(1→2) 自动创建 warehouse-task(拣货→出库)
+  → PDA 按标准出库流程执行 → WT ship 完成
+  → syncPurchaseReturnShipped 回调：冲减应付 + 退货单(2→3已执行)
 
-Inter-warehouse stock movement: draft(1) → confirmed(2) → executed(3) → cancelled(4). Uses `containerEngine.transferContainers()` for FIFO source deduction + destination container creation.
+销售退货 saleReturn (库存流入，走独立 return_tasks 表):
+  confirm(1→2) 创建 return_tasks 行(状态见下) → submit 到 PDA
+  PDA: receive(扫码收货，生成 status=PENDING_QA 容器)
+    → check(质检确认，容器 PENDING_QA→PENDING_PUTAWAY)
+    → putaway(扫容器→扫库位，容器上架)
+  → return_tasks 全部上架完成 → syncSaleReturnCompleted 回调：
+    冲减应收 + 退货单(2→3已执行)
+```
+
+`return_tasks` has its own sub-status machine (`return-tasks.service.js`): 1待收货 2收货中 3待质检 4待上架 5已完成 6已取消. PDA routes at `/api/return-tasks` require `X-Client: pda` (`pdaOnly`) except `submit` (ERP-only). Purchase returns do **not** use `return_tasks` — they reuse the normal outbound warehouse-task pipeline.
+
+### Transfers (调拨) — two-phase PDA scan since v0.4.15
+
+Inter-warehouse stock movement: draft(1) → 待出库/已派发(2) → 在途(3) → 已完成(4) → cancelled(5).
+
+```
+ERP: 新建调拨单(草稿1) → 确认派发(待出库2)
+PDA: 源仓扫码出库 scan-out(2/3→3在途) → 目标仓扫码入库 scan-in(3→4已完成)
+```
+
+`scan-out`/`scan-in` are PDA-only (`pdaOnly` + `pdaSessionRequired`) at `/api/transfer/:id/scan-out` and `/scan-in`. Uses `containerEngine.transferContainers()` for FIFO source deduction + destination container creation. Cancel is blocked once in-transit (status 3) — must be resolved via stockcheck instead.
 
 ## Status machines
 
@@ -268,11 +300,13 @@ Defined in `backend/src/constants/documentStatusRules.js`:
 | inboundTask | 1待收货 2收货中 3待上架 4已完成 5已取消 | submit, receive, receiveComplete(2→3), putaway, finish(3→4), cancel(1→5) |
 | inboundTaskAudit | 0待审核 1已通过 2已退回 | approve(0/2→1), reject(0/2→2) |
 | warehouseTask | 2拣货中 3待分拣 4待复核 5待打包 6待出库 7已出库 8已取消 | See `warehouseTaskStatus.js` for full transition table |
-| transfer | 1草稿 2已确认 3已执行 4已取消 | confirm(1→2), execute(2→3), cancel(1/2→4) |
-| purchaseReturn / saleReturn | 1草稿 2已确认 3已执行 4已取消 | confirm(1→2), execute(2→3), cancel(1/2→4) |
+| transfer | 1草稿 2待出库 3在途 4已完成 5已取消 | confirm(1→2), scanOut(2/3→3, PDA), scanIn(3→4, PDA), cancel(1/2→5) |
+| purchaseReturn / saleReturn | 1草稿 2已确认 3已执行 4已取消 | confirm(1→2), execute(2→3), cancel(1/2→4). execute 由回调触发：purchaseReturn 靠 WT ship，saleReturn 靠 return_tasks putaway |
 | stockcheck | 1盘点中 2已完成 3已取消 | submit(1→2), cancel(1→3) |
 
 Status transitions validated by `assertStatusAction(machine, action, currentStatus)` which throws `AppError` with appropriate Chinese messages.
+
+`return_tasks` (sale-return PDA execution) is **not** in `documentStatusRules.js` — it has its own inline machine in `return-tasks.service.js`: 1待收货 2收货中 3待质检 4待上架 5已完成 6已取消, transitions validated via `RT_TRANSITIONS` + `compareAndSetStatus`.
 
 ## Key design constraints
 
@@ -285,6 +319,7 @@ Status transitions validated by `assertStatusAction(machine, action, currentStat
 - **All inventory mutations use transactions**: engines take a `conn` parameter (pool connection with active transaction). Caller manages BEGIN/COMMIT/ROLLBACK.
 - **PDA critical actions use idempotency keys**: `operation_requests` table tracks `requestKey` for dedup across network interruptions.
 - **Print dispatch is client-pull**: no SSE/WebSocket push. Desktop clients poll `claimClientJobs`.
+- **货号/型号/颜色 全链路（migrations 093–097）**: purchase, inbound-task, sale, transfer, and return order items all carry `article_number`/`spec`/`color` alongside `product_id`, so query/filter/print can work at the article-code level, not just the product level. New order-item tables should follow this pattern.
 
 ## Deploy & server
 

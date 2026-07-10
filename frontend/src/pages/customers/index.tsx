@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -21,7 +20,6 @@ import type { TableColumn } from '@/types'
 const PRICE_LEVELS = ['A', 'B', 'C', 'D'] as const
 
 export default function CustomersPage() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')

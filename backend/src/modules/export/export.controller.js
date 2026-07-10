@@ -55,7 +55,7 @@ async function exportInventoryLogs(req, res, next) {
 
 async function exportTransfer(req, res, next) {
   try {
-    await sendExport(res, await exportService.getTransferExportPayload())
+    await sendExport(res, await exportService.getTransferExportPayload(req.query))
   } catch (error) {
     next(error)
   }
@@ -63,7 +63,7 @@ async function exportTransfer(req, res, next) {
 
 async function exportPurchaseReturns(req, res, next) {
   try {
-    await sendExport(res, await exportService.getPurchaseReturnsExportPayload())
+    await sendExport(res, await exportService.getPurchaseReturnsExportPayload(req.query))
   } catch (error) {
     next(error)
   }
@@ -71,7 +71,7 @@ async function exportPurchaseReturns(req, res, next) {
 
 async function exportSaleReturns(req, res, next) {
   try {
-    await sendExport(res, await exportService.getSaleReturnsExportPayload())
+    await sendExport(res, await exportService.getSaleReturnsExportPayload(req.query))
   } catch (error) {
     next(error)
   }

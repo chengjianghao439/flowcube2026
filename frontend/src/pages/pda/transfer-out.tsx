@@ -1,6 +1,6 @@
 /**
- * PDA 调拨 · 源仓扫码出库 — 路由 /pda/transfer-out/:id
- * 扫源仓容器条码 → POST /transfer/:id/scan-out（整容器移到目标仓，标记在途）。
+ * PDA 调拨 · 调出仓扫码出库 — 路由 /pda/transfer-out/:id
+ * 扫调出仓容器条码 → POST /transfer/:id/scan-out（整容器移到调入仓，标记在途）。
  */
 import { useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -63,7 +63,7 @@ export default function PdaTransferOutPage() {
   if (!transferId) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="源仓扫码出库" onBack={() => navigate('/pda/transfer')} />
+        <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
         <PdaEmptyState icon="📤" title="请选择调拨单" description="请从调拨执行列表进入待出库调拨。" actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
       </div>
     )
@@ -71,7 +71,7 @@ export default function PdaTransferOutPage() {
   if (isLoading || !order) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="源仓扫码出库" onBack={() => navigate('/pda/transfer')} />
+        <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
         <PdaLoading className="h-40 mt-8" />
       </div>
     )
@@ -79,7 +79,7 @@ export default function PdaTransferOutPage() {
   if (order.status !== 2 && order.status !== 3) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="源仓扫码出库" onBack={() => navigate('/pda/transfer')} />
+        <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
         <PdaEmptyState icon={order.status >= 4 ? '✅' : '⏳'} title={order.statusName}
           description={order.status === 1 ? '调拨单尚未派发，请先在 ERP 确认派发。' : '该调拨单不在待出库状态。'}
           actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
@@ -90,10 +90,10 @@ export default function PdaTransferOutPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader
-        title="源仓扫码出库"
+        title="调出仓扫码出库"
         subtitle={`${order.orderNo} · ${order.fromWarehouseName} → ${order.toWarehouseName}`}
         onBack={() => navigate('/pda/transfer')}
-        right={<Badge className="text-xs">源仓：{order.fromWarehouseName}</Badge>}
+        right={<Badge className="text-xs">调出仓：{order.fromWarehouseName}</Badge>}
       />
       <PdaFlash flash={flash} />
 
@@ -118,7 +118,7 @@ export default function PdaTransferOutPage() {
             onDismissError={() => scanAction.clearError()}
           />
 
-          <p className="text-xs text-muted-foreground">扫描源仓容器条码，整容器调拨出库</p>
+          <p className="text-xs text-muted-foreground">扫描调出仓容器条码，整容器调拨出库</p>
           {(order.items ?? []).map(item => (
             <PdaCard key={item.id}>
               <div className="flex items-start justify-between gap-2">
@@ -137,7 +137,7 @@ export default function PdaTransferOutPage() {
       </div>
 
       <PdaBottomBar>
-        <PdaScanner onScan={handleScan} placeholder="扫描源仓容器条码" disabled={scanMut.isPending || scanAction.submitBlocked} allowManualEntry={false} />
+        <PdaScanner onScan={handleScan} placeholder="扫描调出仓容器条码" disabled={scanMut.isPending || scanAction.submitBlocked} allowManualEntry={false} />
       </PdaBottomBar>
     </div>
   )

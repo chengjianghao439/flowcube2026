@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
@@ -21,7 +20,6 @@ const PHONE_RE = /^1\d{10}$/
 const empty = { name:'', contact:'', phone:'', email:'', address:'', remark:'', isActive:true }
 
 export default function SuppliersPage() {
-  const navigate = useNavigate()
   const [keyword, setKeyword] = useState(''); const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false); const [edit, setEdit] = useState<Supplier|null>(null)
   const [confirmTarget, setConfirmTarget] = useState<Supplier|null>(null)

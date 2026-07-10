@@ -22,7 +22,6 @@ import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { InventoryLog, InventoryOverviewItem } from '@/types/inventory'
 import type { TableColumn } from '@/types'
-import type { ProductFinderResult } from '@/types/products'
 import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 
 type Tab = 'overview' | 'logs'

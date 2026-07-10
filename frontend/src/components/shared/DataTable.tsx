@@ -68,7 +68,7 @@ export default function DataTable<T extends object>({
       const currentKeys = columns.map(col => String(col.key))
       const savedOrder = Array.isArray(saved.order) ? saved.order : []
       const merged = [
-        ...savedOrder.filter((key): key is string => typeof key === 'string' && currentKeys.includes(key)),
+        ...savedOrder.filter((key: unknown): key is string => typeof key === 'string' && currentKeys.includes(key)),
         ...currentKeys.filter(key => !savedOrder.includes(key)),
       ]
       setColumnOrder(merged)
@@ -79,7 +79,7 @@ export default function DataTable<T extends object>({
             ),
           )
         : {}
-      setColumnWidths(widths)
+      setColumnWidths(widths as Record<string, number>)
     } catch {
       setColumnOrder(columns.map(col => String(col.key)))
       setColumnWidths({})

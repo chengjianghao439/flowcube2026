@@ -436,7 +436,7 @@ function TaskProgressCard({ task }: { task: PurchaseReturn['task'] }) {
   )
 }
 
-function DetailView({ returnId, closeTab }: { returnId: number; closeTab: () => void; tabPath: string }) {
+function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabPath: string }) {
   const qc = useQueryClient()
   const detailQuery = useQuery({
     queryKey: ['return-purchase-detail', returnId],

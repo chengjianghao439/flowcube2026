@@ -29,7 +29,7 @@ export function printHtmlDocument(fullHtml: string): void {
   })
 
   let cleaned = false
-  let fallbackTimer: ReturnType<typeof setTimeout> | undefined
+  let fallbackTimer: number | undefined
   const cleanup = () => {
     if (cleaned) return
     cleaned = true

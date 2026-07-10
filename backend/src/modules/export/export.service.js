@@ -143,7 +143,7 @@ async function getReconciliationExportPayload(query) {
 }
 
 async function getInboundTasksExportPayload(query) {
-  const { status, productId } = query
+  const { keyword, status, productId, warehouseId, operatorId, startDate, endDate, remark } = query
   let sql = `SELECT
     t.task_no,
     t.purchase_order_no,
@@ -156,11 +156,20 @@ async function getInboundTasksExportPayload(query) {
     FROM inbound_tasks t
     WHERE t.deleted_at IS NULL`
   const params = []
+  if (keyword) {
+    sql += ' AND (t.task_no LIKE ? OR t.supplier_name LIKE ? OR t.purchase_order_no LIKE ?)'
+    params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
+  }
+  if (remark) { sql += ' AND t.remark LIKE ?'; params.push(`%${remark}%`) }
   if (status) { sql += ' AND t.status=?'; params.push(+status) }
   if (productId) {
     sql += ' AND EXISTS (SELECT 1 FROM inbound_task_items iti WHERE iti.task_id = t.id AND iti.product_id = ?)'
     params.push(+productId)
   }
+  if (warehouseId) { sql += ' AND t.warehouse_id=?'; params.push(+warehouseId) }
+  if (operatorId) { sql += ' AND t.operator_id=?'; params.push(+operatorId) }
+  if (startDate) { sql += ' AND DATE(t.created_at)>=?'; params.push(startDate) }
+  if (endDate) { sql += ' AND DATE(t.created_at)<=?'; params.push(endDate) }
   sql += ' ORDER BY t.created_at DESC'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
@@ -243,20 +252,36 @@ async function getInventoryLogsExportPayload(query) {
   })
 }
 
-async function getTransferExportPayload() {
-  const [rows] = await pool.query(
-    `SELECT order_no,from_warehouse_name,to_warehouse_name,
-      CASE status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已执行' WHEN 4 THEN '已取消' END AS status_name,
-      remark,operator_name,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') AS created_at
-     FROM transfer_orders WHERE deleted_at IS NULL ORDER BY created_at DESC`,
-  )
+async function getTransferExportPayload(query = {}) {
+  const { keyword, status, productId, warehouseId, operatorId, startDate, endDate, remark } = query
+  let sql = `SELECT o.order_no,o.from_warehouse_name,o.to_warehouse_name,
+      CASE o.status WHEN 1 THEN '草稿' WHEN 2 THEN '待出库' WHEN 3 THEN '在途' WHEN 4 THEN '已完成' WHEN 5 THEN '已取消' END AS status_name,
+      o.remark,o.operator_name,DATE_FORMAT(o.created_at,'%Y-%m-%d %H:%i') AS created_at
+     FROM transfer_orders o WHERE o.deleted_at IS NULL`
+  const params = []
+  if (keyword) {
+    sql += ' AND (o.order_no LIKE ? OR o.from_warehouse_name LIKE ? OR o.to_warehouse_name LIKE ?)'
+    params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
+  }
+  if (remark) { sql += ' AND o.remark LIKE ?'; params.push(`%${remark}%`) }
+  if (status) { sql += ' AND o.status=?'; params.push(+status) }
+  if (productId) {
+    sql += ' AND EXISTS (SELECT 1 FROM transfer_order_items toi WHERE toi.order_id = o.id AND toi.product_id = ?)'
+    params.push(+productId)
+  }
+  if (warehouseId) { sql += ' AND (o.from_warehouse_id=? OR o.to_warehouse_id=?)'; params.push(+warehouseId, +warehouseId) }
+  if (operatorId) { sql += ' AND o.operator_id=?'; params.push(+operatorId) }
+  if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
+  if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
+  sql += ' ORDER BY o.created_at DESC'
+  const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '调拨单',
     sheetName: '调拨单',
     columns: [
       { header: '单号', key: 'order_no', width: 22 },
-      { header: '源仓库', key: 'from_warehouse_name', width: 18 },
-      { header: '目标仓库', key: 'to_warehouse_name', width: 18 },
+      { header: '调出仓库', key: 'from_warehouse_name', width: 18 },
+      { header: '调入仓库', key: 'to_warehouse_name', width: 18 },
       { header: '状态', key: 'status_name', width: 10 },
       { header: '经办人', key: 'operator_name', width: 12 },
       { header: '创建时间', key: 'created_at', width: 20 },
@@ -266,13 +291,30 @@ async function getTransferExportPayload() {
   })
 }
 
-async function getPurchaseReturnsExportPayload() {
-  const [rows] = await pool.query(
-    `SELECT return_no,supplier_name,warehouse_name,purchase_order_no,
-      CASE status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已退货' WHEN 4 THEN '已取消' END AS status_name,
-      total_amount,operator_name,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') AS created_at,remark
-     FROM purchase_returns WHERE deleted_at IS NULL ORDER BY created_at DESC`,
-  )
+async function getPurchaseReturnsExportPayload(query = {}) {
+  const { keyword, status, productId, supplierId, warehouseId, operatorId, startDate, endDate, remark } = query
+  let sql = `SELECT r.return_no,r.supplier_name,r.warehouse_name,r.purchase_order_no,
+      CASE r.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已退货' WHEN 4 THEN '已取消' END AS status_name,
+      r.total_amount,r.operator_name,DATE_FORMAT(r.created_at,'%Y-%m-%d %H:%i') AS created_at,r.remark
+     FROM purchase_returns r WHERE r.deleted_at IS NULL`
+  const params = []
+  if (keyword) {
+    sql += ' AND (r.return_no LIKE ? OR r.supplier_name LIKE ? OR r.purchase_order_no LIKE ?)'
+    params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
+  }
+  if (remark) { sql += ' AND r.remark LIKE ?'; params.push(`%${remark}%`) }
+  if (status) { sql += ' AND r.status=?'; params.push(+status) }
+  if (productId) {
+    sql += ' AND EXISTS (SELECT 1 FROM purchase_return_items pri WHERE pri.return_id = r.id AND pri.product_id = ?)'
+    params.push(+productId)
+  }
+  if (supplierId) { sql += ' AND r.supplier_id=?'; params.push(+supplierId) }
+  if (warehouseId) { sql += ' AND r.warehouse_id=?'; params.push(+warehouseId) }
+  if (operatorId) { sql += ' AND r.operator_id=?'; params.push(+operatorId) }
+  if (startDate) { sql += ' AND DATE(r.created_at)>=?'; params.push(startDate) }
+  if (endDate) { sql += ' AND DATE(r.created_at)<=?'; params.push(endDate) }
+  sql += ' ORDER BY r.created_at DESC'
+  const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '采购退货单',
     sheetName: '采购退货',
@@ -290,13 +332,30 @@ async function getPurchaseReturnsExportPayload() {
   })
 }
 
-async function getSaleReturnsExportPayload() {
-  const [rows] = await pool.query(
-    `SELECT return_no,customer_name,warehouse_name,sale_order_no,
-      CASE status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已退货入库' WHEN 4 THEN '已取消' END AS status_name,
-      total_amount,operator_name,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') AS created_at,remark
-     FROM sale_returns WHERE deleted_at IS NULL ORDER BY created_at DESC`,
-  )
+async function getSaleReturnsExportPayload(query = {}) {
+  const { keyword, status, productId, customerId, warehouseId, operatorId, startDate, endDate, remark } = query
+  let sql = `SELECT r.return_no,r.customer_name,r.warehouse_name,r.sale_order_no,
+      CASE r.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已退货入库' WHEN 4 THEN '已取消' END AS status_name,
+      r.total_amount,r.operator_name,DATE_FORMAT(r.created_at,'%Y-%m-%d %H:%i') AS created_at,r.remark
+     FROM sale_returns r WHERE r.deleted_at IS NULL`
+  const params = []
+  if (keyword) {
+    sql += ' AND (r.return_no LIKE ? OR r.customer_name LIKE ? OR r.sale_order_no LIKE ?)'
+    params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
+  }
+  if (remark) { sql += ' AND r.remark LIKE ?'; params.push(`%${remark}%`) }
+  if (status) { sql += ' AND r.status=?'; params.push(+status) }
+  if (productId) {
+    sql += ' AND EXISTS (SELECT 1 FROM sale_return_items sri WHERE sri.return_id = r.id AND sri.product_id = ?)'
+    params.push(+productId)
+  }
+  if (customerId) { sql += ' AND r.customer_id=?'; params.push(+customerId) }
+  if (warehouseId) { sql += ' AND r.warehouse_id=?'; params.push(+warehouseId) }
+  if (operatorId) { sql += ' AND r.operator_id=?'; params.push(+operatorId) }
+  if (startDate) { sql += ' AND DATE(r.created_at)>=?'; params.push(startDate) }
+  if (endDate) { sql += ' AND DATE(r.created_at)<=?'; params.push(endDate) }
+  sql += ' ORDER BY r.created_at DESC'
+  const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '销售退货单',
     sheetName: '销售退货',

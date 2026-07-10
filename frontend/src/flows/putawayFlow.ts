@@ -15,6 +15,7 @@ interface LocationInfo {
 export interface PutawayFlowContext {
   taskId: number
   containerId: number | null
+  [key: string]: unknown
 }
 
 function isStrictContainerScan(raw: string): boolean {
@@ -26,7 +27,6 @@ function isStrictLocationScan(raw: string): boolean {
 }
 
 export function makePutawayFlow(
-  taskId: number,
   opts?: {
     onAfterPutaway?: () => void | Promise<void>
     submitPutaway?: (payload: { taskId: number; containerId: number; locationId: number }) => Promise<void>
@@ -70,7 +70,7 @@ export function makePutawayFlow(
         id:          'scan-location',
         label:       '扫描货架条码',
         placeholder: '扫描货架条码',
-        barcodeType: 'location',
+        barcodeType: 'bin',
         handle:      async (raw, ctx) => {
           const trimmed = raw.trim()
           if (!isStrictLocationScan(trimmed)) {

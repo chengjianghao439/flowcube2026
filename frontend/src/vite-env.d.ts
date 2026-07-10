@@ -36,6 +36,8 @@ interface Window {
     isPackaged?: () => Promise<boolean>
     startUpdateDownload?: (downloadUrl: string) => Promise<void>
     ignoreUpdateVersion?: (version: string) => Promise<void>
+    /** 手动触发更新检查（仪表盘「检查更新」按钮） */
+    triggerUpdateCheck?: () => Promise<void>
     notifyApiOriginReady?: (origin: string) => void
     /** 渲染层已确认后通知主进程关闭窗口 */
     acceptClose?: () => void
@@ -66,3 +68,7 @@ interface Window {
     printZpl?: (opts: { content: string; printerName: string }) => Promise<null>
   }
 }
+
+// PDA 平台 polyfill：仅按副作用动态 import，无类型声明包
+declare module 'core-js/stable'
+declare module 'regenerator-runtime/runtime'

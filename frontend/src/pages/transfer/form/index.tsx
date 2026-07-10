@@ -148,9 +148,9 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     const missingTo = !toWarehouseId || !toWarehouseName
     setFromError(missingFrom)
     setToError(missingTo)
-    if (missingFrom) { toast.warning('请选择源仓库'); return }
-    if (missingTo) { toast.warning('请选择目标仓库'); return }
-    if (sameWarehouse) { toast.warning('源仓库和目标仓库不能相同'); return }
+    if (missingFrom) { toast.warning('请选择调出仓库'); return }
+    if (missingTo) { toast.warning('请选择调入仓库'); return }
+    if (sameWarehouse) { toast.warning('调出仓库和调入仓库不能相同'); return }
     if (!items.length) { toast.warning('请添加至少一条明细'); return }
     const missingProductKeys = new Set(items.filter(i => !i.productId).map(i => i._key))
     setInvalidItemKeys(missingProductKeys)
@@ -213,28 +213,28 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       <SectionCard title="调拨信息" compact>
         <div className="flex items-start gap-4">
           <div className="w-56 shrink-0 space-y-1.5">
-            <Label htmlFor="transfer-from">源仓库 *</Label>
+            <Label htmlFor="transfer-from">调出仓库 *</Label>
             <WarehouseSelect
               id="transfer-from"
               value={fromWarehouseId ? +fromWarehouseId : null}
               onChange={(id, name) => { setFromWarehouseId(id ? String(id) : ''); setFromWarehouseName(name); setFromError(false) }}
-              placeholder="选择源仓库"
+              placeholder="选择调出仓库"
               className={cn(fromError && 'border-destructive/60 bg-destructive/5')}
             />
-            {fromError && <p className="text-xs text-destructive">请选择源仓库</p>}
+            {fromError && <p className="text-xs text-destructive">请选择调出仓库</p>}
           </div>
 
           <div className="w-56 shrink-0 space-y-1.5">
-            <Label htmlFor="transfer-to">目标仓库 *</Label>
+            <Label htmlFor="transfer-to">调入仓库 *</Label>
             <WarehouseSelect
               id="transfer-to"
               value={toWarehouseId ? +toWarehouseId : null}
               onChange={(id, name) => { setToWarehouseId(id ? String(id) : ''); setToWarehouseName(name); setToError(false) }}
-              placeholder="选择目标仓库"
+              placeholder="选择调入仓库"
               className={cn((toError || sameWarehouse) && 'border-destructive/60 bg-destructive/5')}
             />
-            {toError && <p className="text-xs text-destructive">请选择目标仓库</p>}
-            {!toError && sameWarehouse && <p className="text-xs text-destructive">与源仓库不能相同</p>}
+            {toError && <p className="text-xs text-destructive">请选择调入仓库</p>}
+            {!toError && sameWarehouse && <p className="text-xs text-destructive">与调出仓库不能相同</p>}
           </div>
 
           <div className="flex-1 space-y-1.5">
@@ -420,8 +420,8 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
       <SectionCard title="基础信息" compact>
         <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
-            ['源仓库',   order.fromWarehouseName],
-            ['目标仓库', order.toWarehouseName],
+            ['调出仓库',   order.fromWarehouseName],
+            ['调入仓库', order.toWarehouseName],
             ['经办人',   order.operatorName],
             ['创建时间', formatDisplayDateTime(order.createdAt)],
           ].map(([label, value]) => (

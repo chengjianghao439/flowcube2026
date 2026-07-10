@@ -2,7 +2,7 @@
  * PDA 调拨任务列表
  * 路由：/pda/transfer
  *
- * 两段：待出库（status=2，源仓扫码出库） / 待入库（status=3，目标仓扫码入库）。
+ * 两段：待出库（status=2，调出仓扫码出库） / 待入库（status=3，调入仓扫码入库）。
  * 库存变动全部经 PDA 扫码，ERP 端不再直接执行调拨。
  */
 import { useNavigate } from 'react-router-dom'
@@ -35,7 +35,7 @@ function TransferCard({ order, phase, onTap }: { order: TransferOrder; phase: 'o
           ? <p className="text-xs text-muted-foreground">已出库 {deducted}</p>
           : <p className="text-xs text-muted-foreground">已出库 {deducted} · 已入库 {received}</p>}
         <Button size="lg" className="w-full" variant={phase === 'out' ? 'default' : 'outline'} onClick={onTap}>
-          {phase === 'out' ? '📤 源仓扫码出库' : '📥 目标仓扫码入库'}
+          {phase === 'out' ? '📤 调出仓扫码出库' : '📥 调入仓扫码入库'}
         </Button>
       </div>
     </PdaCard>
@@ -61,7 +61,7 @@ export default function PdaTransferPage() {
 
         {!isLoading && (
           <section className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground">待出库（源仓扫码）· {outbound.length}</p>
+            <p className="text-xs font-medium text-muted-foreground">待出库（调出仓扫码）· {outbound.length}</p>
             {outbound.length === 0
               ? <PdaEmptyCard icon="📤" title="暂无待出库调拨" />
               : outbound.map(o => <TransferCard key={o.id} order={o} phase="out" onTap={() => navigate(`/pda/transfer-out/${o.id}`)} />)}
@@ -70,7 +70,7 @@ export default function PdaTransferPage() {
 
         {!isLoading && (
           <section className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground">待入库（目标仓扫码）· {inbound.length}</p>
+            <p className="text-xs font-medium text-muted-foreground">待入库（调入仓扫码）· {inbound.length}</p>
             {inbound.length === 0
               ? <PdaEmptyCard icon="📥" title="暂无待入库调拨" />
               : inbound.map(o => <TransferCard key={o.id} order={o} phase="in" onTap={() => navigate(`/pda/transfer-in/${o.id}`)} />)}

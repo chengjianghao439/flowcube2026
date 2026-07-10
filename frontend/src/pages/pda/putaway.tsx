@@ -32,7 +32,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
   })
   const flowDef = useMemo(
     () =>
-      makePutawayFlow(taskId, {
+      makePutawayFlow({
         onAfterPutaway: async () => {
           await qc.invalidateQueries({ queryKey: ['pda-inbound-task', taskId] })
           await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
@@ -50,7 +50,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
   )
 
   const initialContext: PutawayFlowContext = { taskId, containerId: null }
-  const engine = usePdaFlow(flowDef, initialContext, `inbound-putaway-${taskId}`)
+  const engine = usePdaFlow<PutawayFlowContext>(flowDef, initialContext, `inbound-putaway-${taskId}`)
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

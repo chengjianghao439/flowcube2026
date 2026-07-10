@@ -62,7 +62,7 @@ export default function PurchaseFormPage() {
 }
 
 function FormView({ closeTab, tabPath, editOrder, onSaved }: {
-  closeTab: () => void
+  closeTab: (targetPath?: string) => void
   tabPath: string
   editOrder?: PurchaseOrder
   onSaved?: () => void

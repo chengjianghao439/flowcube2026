@@ -150,7 +150,6 @@ export function KeepAliveOutlet() {
    */
   useEffect(() => {
     const path = getFullPath(location.pathname, location.search)
-    const rawPathname = path.split(/[?#]/)[0] || '/'
     const normalizedPath = normalizePath(path)
     const tabRegistration = buildWorkspaceTabRegistration(location.pathname, location.search)
 

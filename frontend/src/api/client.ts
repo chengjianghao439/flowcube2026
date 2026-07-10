@@ -239,7 +239,7 @@ export function unwrapPayload<T>(response: AxiosResponse<T>): PayloadOf<T> {
     'success' in (body as Record<string, unknown>) &&
     'data' in (body as Record<string, unknown>)
   ) {
-    return (body as ApiResponse<PayloadOf<T>>).data
+    return (body as unknown as ApiResponse<PayloadOf<T>>).data
   }
   return body as PayloadOf<T>
 }

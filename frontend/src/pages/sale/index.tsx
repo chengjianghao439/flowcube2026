@@ -201,7 +201,7 @@ export default function SalePage() {
     { key: 'remark', title: '备注', width: 120, render: v => (v as string) || '-' },
     {
       key: 'status', title: '状态', width: 90,
-      render: (v, row) => {
+      render: (_, row) => {
         const r = row as SaleOrder
         const ws = getSaleWorkflowStatus(r)
         const hasTask = r.taskNo && r.taskId

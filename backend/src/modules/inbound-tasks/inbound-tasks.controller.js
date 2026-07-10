@@ -12,11 +12,16 @@ const pendingContainers = async (req, res, next) => {
 
 const list = async (req, res, next) => {
   try {
-    const { page = 1, pageSize = 20, keyword = '', status, productId } = req.query
+    const { page = 1, pageSize = 20, keyword = '', status, productId, warehouseId, operatorId, startDate, endDate, remark } = req.query
     const data = await svc.findAll({
       page: +page, pageSize: +pageSize, keyword,
       status: status ? +status : null,
       productId: productId ? +productId : null,
+      warehouseId: warehouseId ? +warehouseId : null,
+      operatorId: operatorId ? +operatorId : null,
+      startDate: startDate || null,
+      endDate: endDate || null,
+      remark: remark || null,
     })
     return successResponse(res, data)
   } catch (e) { next(e) }

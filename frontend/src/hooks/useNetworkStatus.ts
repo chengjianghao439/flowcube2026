@@ -6,7 +6,7 @@
  *  - offline：无网或服务器不可达
  *  - recovering：刚恢复，正在同步中
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { getApiHealthUrl } from '@/lib/apiOrigin'
 
 export type NetworkStatus = 'online' | 'offline' | 'recovering'

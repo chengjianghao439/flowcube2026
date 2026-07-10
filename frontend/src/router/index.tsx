@@ -144,8 +144,8 @@ export default function AppRouter() {
               <Route path="ship" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
               <Route path="sort" element={<PdaRoutePermission title="分拣作业" required={[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT]}><PdaSortPage /></PdaRoutePermission>} />
               <Route path="transfer" element={<PdaRoutePermission title="调拨执行" required={[PERMISSIONS.TRANSFER_ORDER_VIEW]}><PdaTransferPage /></PdaRoutePermission>} />
-              <Route path="transfer-out/:id" element={<PdaRoutePermission title="源仓扫码出库" required={[PERMISSIONS.TRANSFER_ORDER_VIEW, PERMISSIONS.TRANSFER_ORDER_EXECUTE]}><PdaTransferOutPage /></PdaRoutePermission>} />
-              <Route path="transfer-in/:id" element={<PdaRoutePermission title="目标仓扫码入库" required={[PERMISSIONS.TRANSFER_ORDER_VIEW, PERMISSIONS.TRANSFER_ORDER_EXECUTE]}><PdaTransferInPage /></PdaRoutePermission>} />
+              <Route path="transfer-out/:id" element={<PdaRoutePermission title="调出仓扫码出库" required={[PERMISSIONS.TRANSFER_ORDER_VIEW, PERMISSIONS.TRANSFER_ORDER_EXECUTE]}><PdaTransferOutPage /></PdaRoutePermission>} />
+              <Route path="transfer-in/:id" element={<PdaRoutePermission title="调入仓扫码入库" required={[PERMISSIONS.TRANSFER_ORDER_VIEW, PERMISSIONS.TRANSFER_ORDER_EXECUTE]}><PdaTransferInPage /></PdaRoutePermission>} />
               <Route path="sale-return" element={<PdaRoutePermission title="销售退货" required={[PERMISSIONS.RETURN_ORDER_VIEW]}><PdaSaleReturnListPage /></PdaRoutePermission>} />
               <Route path="sale-return/:id/receive" element={<PdaRoutePermission title="退货收货" required={[PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.RETURN_ORDER_EXECUTE]}><PdaSaleReturnReceivePage /></PdaRoutePermission>} />
               <Route path="sale-return/:id/putaway" element={<PdaRoutePermission title="退货上架" required={[PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.RETURN_ORDER_EXECUTE]}><PdaSaleReturnPutawayPage /></PdaRoutePermission>} />

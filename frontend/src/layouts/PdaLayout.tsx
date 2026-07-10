@@ -45,7 +45,7 @@ export default function PdaLayout() {
 
   // ── 路由锁定（返回键不跳出 PDA）──────────────────────────────────────
   useEffect(() => {
-    window.history.pushState(null, '', location.href)
+    window.history.pushState(null, '', window.location.href)
 
     const handleBack = () => {
       const target = getHashRouterWindowLocation()

@@ -1,5 +1,5 @@
 /**
- * PDA 调拨 · 目标仓扫码入库 — 路由 /pda/transfer-in/:id
+ * PDA 调拨 · 调入仓扫码入库 — 路由 /pda/transfer-in/:id
  * 两步：扫在途容器条码 → 扫目标库位 → POST /transfer/:id/scan-in（容器落库位、翻在库）。
  */
 import { useCallback, useState } from 'react'
@@ -85,7 +85,7 @@ export default function PdaTransferInPage() {
   if (!transferId) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="目标仓扫码入库" onBack={() => navigate('/pda/transfer')} />
+        <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
         <PdaEmptyState icon="📥" title="请选择调拨单" description="请从调拨执行列表进入待入库调拨。" actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
       </div>
     )
@@ -93,7 +93,7 @@ export default function PdaTransferInPage() {
   if (isLoading || !order) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="目标仓扫码入库" onBack={() => navigate('/pda/transfer')} />
+        <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
         <PdaLoading className="h-40 mt-8" />
       </div>
     )
@@ -101,9 +101,9 @@ export default function PdaTransferInPage() {
   if (order.status !== 3) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="目标仓扫码入库" onBack={() => navigate('/pda/transfer')} />
+        <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
         <PdaEmptyState icon={order.status >= 4 ? '✅' : '⏳'} title={order.statusName}
-          description={order.status < 3 ? '尚未出库，请先由源仓扫码出库。' : '该调拨单不在待入库状态。'}
+          description={order.status < 3 ? '尚未出库，请先由调出仓扫码出库。' : '该调拨单不在待入库状态。'}
           actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
       </div>
     )
@@ -112,10 +112,10 @@ export default function PdaTransferInPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader
-        title="目标仓扫码入库"
+        title="调入仓扫码入库"
         subtitle={`${order.orderNo} · ${order.fromWarehouseName} → ${order.toWarehouseName}`}
         onBack={() => navigate('/pda/transfer')}
-        right={<Badge className="text-xs">目标仓：{order.toWarehouseName}</Badge>}
+        right={<Badge className="text-xs">调入仓：{order.toWarehouseName}</Badge>}
       />
       <PdaFlash flash={flash} />
 

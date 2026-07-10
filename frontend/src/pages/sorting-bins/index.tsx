@@ -3,7 +3,6 @@
  * 路由：/sorting-bins
  */
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -132,7 +131,6 @@ function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () 
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 export default function SortingBinsPage() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const [keyword, setKeyword]     = useState('')
   const [search, setSearch]       = useState('')
@@ -171,9 +169,9 @@ export default function SortingBinsPage() {
     { key: 'currentTaskNo', title: '当前任务',
       render: (v) => v ? <span className="text-doc-code">{v as string}</span> : <span className="text-muted-foreground">—</span> },
     { key: 'customerName',  title: '客户',
-      render: (v) => v ?? <span className="text-muted-foreground">—</span> },
+      render: (v) => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'remark',        title: '备注',
-      render: (v) => v ?? <span className="text-muted-foreground">—</span> },
+      render: (v) => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     {
       key: 'id', title: '操作', width: 120,
       render: (_, row) => (

@@ -1,11 +1,10 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getPurchaseReturnsApi, confirmPurchaseReturnApi, cancelPurchaseReturnApi, getSaleReturnsApi, confirmSaleReturnApi, cancelSaleReturnApi } from '@/api/returns'
@@ -16,33 +15,106 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import ReturnQueryDialog, { type ReturnQueryValues } from './ReturnQueryDialog'
 import type { PurchaseReturn, SaleReturn } from '@/api/returns'
 import type { TableColumn } from '@/types'
 
 type RowType = PurchaseReturn | SaleReturn
+type ReturnType = 'purchase' | 'sale'
 
-function ReturnList({ type }: { type: 'purchase'|'sale' }) {
-  const qc=useQueryClient()
+const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '已确认', '3': '已执行', '4': '已取消' }
+
+/** 首次打开退货页时默认筛选的天数窗口（最近一周） */
+const DEFAULT_RANGE_DAYS = 7
+function toYmd(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+export default function ReturnsPage() {
+  const qc = useQueryClient()
   const navigate = useNavigate()
   const { addTab } = useWorkspaceStore()
-  const [keyword,setKeyword]=useState(''); const [search,setSearch]=useState('')
-  const [confirmState,setConfirmState]=useState<{open:boolean;title:string;description:string;onConfirm:()=>void}>({open:false,title:'',description:'',onConfirm:()=>{}})
-  const openConfirm=(title:string,description:string,onConfirm:()=>void)=>setConfirmState({open:true,title,description,onConfirm})
-  const closeConfirm=()=>setConfirmState(s=>({...s,open:false}))
-  const [pendingId,setPendingId]=useState<number|null>(null)
-  const [printTarget,setPrintTarget]=useState<RowType|null>(null)
-  const apiList = type==='purchase'?getPurchaseReturnsApi:getSaleReturnsApi
-  const {data,isLoading}=useQuery({queryKey:['returns',type,{keyword}],queryFn:()=>apiList({pageSize:99999,keyword}).then(r=>r!)})
-  const inv=()=>qc.invalidateQueries({queryKey:['returns',type]})
-  const confirmFn=type==='purchase'?confirmPurchaseReturnApi:confirmSaleReturnApi
-  const cancelFn =type==='purchase'?cancelPurchaseReturnApi:cancelSaleReturnApi
-  const mut=(fn:()=>Promise<unknown>,id?:number)=>{
-    if(id) setPendingId(id)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const type = (readStringParam(searchParams, 'type') || 'purchase') as ReturnType
+  const partyLabel = type === 'purchase' ? '供应商' : '客户'
+
+  const [queryOpen, setQueryOpen] = useState(false)
+  const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; description: string; onConfirm: () => void }>({ open: false, title: '', description: '', onConfirm: () => {} })
+  const openConfirm = (title: string, description: string, onConfirm: () => void) => setConfirmState({ open: true, title, description, onConfirm })
+  const closeConfirm = () => setConfirmState(s => ({ ...s, open: false }))
+  const [pendingId, setPendingId] = useState<number | null>(null)
+  const [printTarget, setPrintTarget] = useState<RowType | null>(null)
+
+  // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
+  const keyword       = readStringParam(searchParams, 'keyword')
+  const remark        = readStringParam(searchParams, 'remark')
+  const operatorId    = Number(searchParams.get('operatorId') || '') || null
+  const operatorName  = readStringParam(searchParams, 'operatorName')
+  const statusFilter  = readStringParam(searchParams, 'status')
+  const productId     = Number(searchParams.get('productId') || '') || null
+  const productCode   = readStringParam(searchParams, 'productCode')
+  const productName   = readStringParam(searchParams, 'productName')
+  const partyId       = Number(searchParams.get('partyId') || '') || null
+  const partyName     = readStringParam(searchParams, 'partyName')
+  const warehouseId   = Number(searchParams.get('warehouseId') || '') || null
+  const warehouseName = readStringParam(searchParams, 'warehouseName')
+  const startDate     = readStringParam(searchParams, 'startDate')
+  const endDate       = readStringParam(searchParams, 'endDate')
+
+  const apiList   = type === 'purchase' ? getPurchaseReturnsApi : getSaleReturnsApi
+  const confirmFn = type === 'purchase' ? confirmPurchaseReturnApi : confirmSaleReturnApi
+  const cancelFn  = type === 'purchase' ? cancelPurchaseReturnApi : cancelSaleReturnApi
+  const partyParamKey = type === 'purchase' ? 'supplierId' : 'customerId'
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['returns', type, { keyword, remark, operatorId, statusFilter, productId, partyId, warehouseId, startDate, endDate }],
+    queryFn: () => apiList({
+      pageSize: 99999,
+      keyword,
+      remark: remark || undefined,
+      operatorId: operatorId || undefined,
+      status: statusFilter || undefined,
+      productId: productId || undefined,
+      [partyParamKey]: partyId || undefined,
+      warehouseId: warehouseId || undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    }).then(r => r!),
+  })
+  const inv = () => qc.invalidateQueries({ queryKey: ['returns', type] })
+  const partyKey = type === 'purchase' ? 'supplierName' : 'customerName'
+
+  const mut = (fn: () => Promise<unknown>, id?: number) => {
+    if (id) setPendingId(id)
     fn()
       .then(inv)
-      .finally(() => { if(id) setPendingId(null) })
+      .finally(() => { if (id) setPendingId(null) })
   }
-  const partyKey = type==='purchase' ? 'supplierName' : 'customerName'
+
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
+
+  // 首次打开：无日期筛选时默认套用最近一周
+  useEffect(() => {
+    if (!startDate && !endDate) {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - DEFAULT_RANGE_DAYS)
+      setSearchParams(upsertSearchParams(searchParams, { startDate: toYmd(start), endDate: toYmd(end) }), { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function switchType(next: ReturnType) {
+    // 供应商/客户筛选不跨类型通用，切换标签页时一并清空
+    updateParams({ type: next, partyId: null, partyName: null })
+  }
 
   function goToNew() {
     const path = `/returns/${type}/new`
@@ -55,91 +127,181 @@ function ReturnList({ type }: { type: 'purchase'|'sale' }) {
     navigate(path)
   }
 
-  const columns:TableColumn<RowType>[]=[
-    {key:'returnNo',title:'退货单号',width:170,render:v => <span className="text-doc-code">{String(v)}</span>},
-    {key:partyKey,title:type==='purchase'?'供应商':'客户'},
-    {key:'warehouseName',title:'仓库',width:120},
-    {key:'totalAmount',title:'金额',width:100,render:(v)=>`¥${Number(v).toFixed(2)}`},
-    {key:'status',title:'状态',width:90,render:(v,row)=>{
+  // 导出参数（与列表当前筛选保持一致）
+  const exportParams = {
+    ...(keyword ? { keyword } : {}),
+    ...(remark ? { remark } : {}),
+    ...(operatorId ? { operatorId: String(operatorId) } : {}),
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(productId ? { productId: String(productId) } : {}),
+    ...(partyId ? { [partyParamKey]: String(partyId) } : {}),
+    ...(warehouseId ? { warehouseId: String(warehouseId) } : {}),
+    ...(startDate ? { startDate } : {}),
+    ...(endDate ? { endDate } : {}),
+  }
+
+  // 查询弹窗初始值
+  const initialQuery: ReturnQueryValues = {
+    keyword, remark, operatorId, operatorName, status: statusFilter,
+    productId, productCode, productName,
+    partyId, partyName,
+    warehouseId, warehouseName,
+    startDate, endDate,
+  }
+
+  function applyQuery(v: ReturnQueryValues) {
+    updateParams({
+      keyword: v.keyword || null,
+      remark: v.remark || null,
+      operatorId: v.operatorId || null,
+      operatorName: v.operatorName || null,
+      status: v.status || null,
+      productId: v.productId || null,
+      productCode: v.productCode || null,
+      productName: v.productName || null,
+      partyId: v.partyId || null,
+      partyName: v.partyName || null,
+      warehouseId: v.warehouseId || null,
+      warehouseName: v.warehouseName || null,
+      startDate: v.startDate || null,
+      endDate: v.endDate || null,
+    })
+    setQueryOpen(false)
+  }
+
+  function clearAll() {
+    updateParams({
+      keyword: null, remark: null, operatorId: null, operatorName: null, status: null,
+      productId: null, productCode: null, productName: null,
+      partyId: null, partyName: null,
+      warehouseId: null, warehouseName: null,
+      startDate: null, endDate: null,
+    })
+  }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
+    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null }) },
+    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null }) },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
+    partyId && { key: 'party', label: `${partyLabel}：${partyName || partyId}`, onRemove: () => updateParams({ partyId: null, partyName: null }) },
+    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
+    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null }) },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
+
+  const columns: TableColumn<RowType>[] = [
+    { key: 'returnNo', title: '退货单号', width: 170, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: partyKey, title: partyLabel },
+    { key: 'warehouseName', title: '仓库', width: 120 },
+    { key: 'totalAmount', title: '金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
+    { key: 'status', title: '状态', width: 90, render: (v, row) => {
       const status = v as number
       const tone = status === 3 ? 'success' : status === 4 ? 'danger' : status === 1 ? 'draft' : 'active'
       return <SoftStatusLabel label={(row as RowType).statusName} tone={tone} />
-    }},
-    {key:'operatorName',title:'经办人',width:90},
-    {key:'createdAt',title:'时间',width:160,render:(v)=>formatDisplayDateTime(v)},
-    {key:'id',title:'操作',width:140,render:(_,row)=>{const r=row as RowType;
-      return(
+    } },
+    { key: 'operatorName', title: '经办人', width: 90 },
+    { key: 'createdAt', title: '时间', width: 160, render: (v) => formatDisplayDateTime(v) },
+    {
+      key: 'remark', title: '备注', width: 200,
+      render: (v) => v
+        ? <span className="line-clamp-1 text-xs text-muted-foreground" title={String(v)}>{String(v)}</span>
+        : <span className="text-xs text-muted-foreground/50">—</span>
+    },
+    { key: 'id', title: '操作', width: 140, render: (_, row) => {
+      const r = row as RowType
+      return (
         <TableActionsMenu
           primaryLabel="详情"
           primaryVariant="outline"
           onPrimaryClick={() => goToDetail(r)}
           items={[
             ...(r.status === 1 ? [{
-              label: pendingId===r.id ? '处理中...' : '确认',
+              label: pendingId === r.id ? '处理中...' : '确认',
               onClick: () => mut(() => confirmFn(r.id), r.id),
-              disabled: pendingId===r.id,
+              disabled: pendingId === r.id,
             }] : []),
             { label: '打印', onClick: () => setPrintTarget(r) },
             ...((r.status === 1 || r.status === 2) ? [{
-              label: pendingId===r.id ? '处理中...' : '取消',
-              onClick:()=>openConfirm('取消退货单','确认取消此退货单？',()=>mut(()=>cancelFn(r.id),r.id)),
-              disabled: pendingId===r.id,
-              destructive:true,
-              separatorBefore:true,
+              label: pendingId === r.id ? '处理中...' : '取消',
+              onClick: () => openConfirm('取消退货单', '确认取消此退货单？', () => mut(() => cancelFn(r.id), r.id)),
+              disabled: pendingId === r.id,
+              destructive: true,
+              separatorBefore: true,
             }] : []),
           ]}
         />
       )
-    }}
+    } },
   ]
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <FilterCard className="flex-1">
-          <Input placeholder="搜索单号..." value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e:React.KeyboardEvent)=>{if(e.key==='Enter'){setKeyword(search)}}} />
-          <Button size="sm" variant="outline" onClick={()=>{setKeyword(search)}}>搜索</Button>
-          {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('')}}>重置</Button>}
-        </FilterCard>
-        <div className="flex shrink-0 gap-2">
-          <Button variant="outline" onClick={()=>downloadExport(type==='purchase'?'/export/purchase-returns':'/export/sale-returns').catch(e=>toast.error((e as Error).message))}>导出 Excel</Button>
-          <Button onClick={goToNew}>+ 新建{type==='purchase'?'采购':'销售'}退货单</Button>
-        </div>
+      <PageHeader
+        title="退货管理"
+        description="采购退货（减库存）与销售退货（加库存）"
+        actions={
+          <>
+            <Button variant="outline"
+              onClick={() => downloadExport(type === 'purchase' ? '/export/purchase-returns' : '/export/sale-returns', exportParams).catch(e => toast.error((e as Error).message))}>
+              导出 Excel
+            </Button>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button onClick={goToNew}>+ 新建{type === 'purchase' ? '采购' : '销售'}退货单</Button>
+          </>
+        }
+      />
+
+      <div className="flex gap-1 border-b">
+        {(['purchase', 'sale'] as const).map(t => (
+          <button key={t} onClick={() => switchType(t)} className={`px-4 py-2 text-sm font-medium transition-colors ${type === t ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+            {t === 'purchase' ? '采购退货' : '销售退货'}
+          </button>
+        ))}
       </div>
-      <DataTable columns={columns} data={(data?.list||[]) as RowType[]} loading={isLoading} onRowDoubleClick={goToDetail} />
+
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+        </div>
+      )}
+
+      <DataTable columns={columns} data={(data?.list || []) as RowType[]} loading={isLoading} onRowDoubleClick={goToDetail} />
+
       <ConfirmDialog
         open={confirmState.open}
         title={confirmState.title}
         description={confirmState.description}
-        variant={confirmState.title.includes('取消')?'destructive':'default'}
-        confirmText={confirmState.title.includes('取消')?'确认取消':'确认'}
-        onConfirm={()=>{ closeConfirm(); confirmState.onConfirm() }}
+        variant={confirmState.title.includes('取消') ? 'destructive' : 'default'}
+        confirmText={confirmState.title.includes('取消') ? '确认取消' : '确认'}
+        onConfirm={() => { closeConfirm(); confirmState.onConfirm() }}
         onCancel={closeConfirm}
       />
+
       {printTarget && (
         <OrderPrintOverlay
           templateType={3}
           title={printTarget.returnNo}
-          {...mapReturnOrderToPrint({...printTarget, type})}
+          {...mapReturnOrderToPrint({ ...printTarget, type })}
           onClose={() => setPrintTarget(null)}
         />
       )}
-    </div>
-  )
-}
 
-export default function ReturnsPage() {
-  const [tab,setTab]=useState<'purchase'|'sale'>('purchase')
-  return (
-    <div className="space-y-4">
-      <PageHeader title="退货管理" description="采购退货（减库存）与销售退货（加库存）" />
-      <div className="flex gap-1 border-b">
-        {(['purchase','sale'] as const).map(t=>(
-          <button key={t} onClick={()=>setTab(t)} className={`px-4 py-2 text-sm font-medium transition-colors ${tab===t?'border-b-2 border-primary text-primary':'text-muted-foreground hover:text-foreground'}`}>
-            {t==='purchase'?'采购退货':'销售退货'}
-          </button>
-        ))}
-      </div>
-      <ReturnList type={tab} />
+      <ReturnQueryDialog
+        open={queryOpen}
+        type={type}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
     </div>
   )
 }

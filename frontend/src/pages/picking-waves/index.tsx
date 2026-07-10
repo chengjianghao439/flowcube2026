@@ -85,7 +85,7 @@ export default function PickingWavesPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['picking-waves', keyword, statusFilter],
-    queryFn: () => getWavesApi({ keyword, status: statusFilter || undefined, pageSize: 99999 }),
+    queryFn: () => getWavesApi({ keyword, pageSize: 99999, ...(statusFilter ? { status: statusFilter } : {}) }),
   })
 
   const { data: detail } = useQuery({
@@ -163,7 +163,7 @@ export default function PickingWavesPage() {
     {
       key: 'warehouseName',
       title: '仓库',
-      render: v => v ?? <span className="text-muted-foreground">—</span>,
+      render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span>,
     },
     {
       key: 'status',
@@ -190,7 +190,7 @@ export default function PickingWavesPage() {
     {
       key: 'operatorName',
       title: '拣货人',
-      render: v => v ?? <span className="text-muted-foreground">—</span>,
+      render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span>,
     },
     {
       key: 'createdAt',

@@ -2,7 +2,7 @@
  * PDA 打包作业
  * 路由：/pda/pack
  */
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
@@ -262,13 +262,13 @@ export default function PdaPackPage() {
     queryKey: ['pda-packages', taskId],
     queryFn:  () => getPackagesApi(taskId),
     enabled:  taskId > 0 && !taskLoading && taskDetail?.status === WT_STATUS.PACKING,
-    onSuccess: (pkgs) => {
-      if (!activePackageId) {
-        const open = pkgs.find(p => p.status === 1)
-        if (open) setActivePackageId(open.id)
-      }
-    },
   })
+
+  useEffect(() => {
+    if (activePackageId) return
+    const open = packages.find(p => p.status === 1)
+    if (open) setActivePackageId(open.id)
+  }, [packages, activePackageId])
 
   const refetch = () => qc.invalidateQueries({ queryKey: ['pda-packages', taskId] })
   const onlineBlocked = finishAction.networkStatus !== 'online'

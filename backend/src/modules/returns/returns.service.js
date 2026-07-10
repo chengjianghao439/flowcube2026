@@ -310,11 +310,24 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
 }
 
 // 采购退货
-async function findAllPR({ page=1, pageSize=20, keyword='', status=null }) {
+async function findAllPR({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
-  const cond=status?'AND status=?':''
-  const [rows]=await pool.query(`SELECT * FROM purchase_returns WHERE deleted_at IS NULL AND (return_no LIKE ? OR supplier_name LIKE ?) ${cond} ORDER BY created_at DESC LIMIT ? OFFSET ?`,status?[like,like,status,pageSize,offset]:[like,like,pageSize,offset])
-  const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM purchase_returns WHERE deleted_at IS NULL AND (return_no LIKE ? OR supplier_name LIKE ?) ${cond}`,status?[like,like,status]:[like,like])
+  const params=[like,like]
+  let whereExtra=''
+  if (status) { whereExtra += ' AND status=?'; params.push(status) }
+  if (productId) {
+    whereExtra += ' AND EXISTS (SELECT 1 FROM purchase_return_items pri WHERE pri.return_id = purchase_returns.id AND pri.product_id = ?)'
+    params.push(productId)
+  }
+  if (supplierId) { whereExtra += ' AND supplier_id=?'; params.push(supplierId) }
+  if (warehouseId) { whereExtra += ' AND warehouse_id=?'; params.push(warehouseId) }
+  if (operatorId) { whereExtra += ' AND operator_id=?'; params.push(operatorId) }
+  if (startDate) { whereExtra += ' AND DATE(created_at)>=?'; params.push(startDate) }
+  if (endDate) { whereExtra += ' AND DATE(created_at)<=?'; params.push(endDate) }
+  if (remark) { whereExtra += ' AND remark LIKE ?'; params.push(`%${remark}%`) }
+  const where = `deleted_at IS NULL AND (return_no LIKE ? OR supplier_name LIKE ?) ${whereExtra}`
+  const [rows]=await pool.query(`SELECT * FROM purchase_returns WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,pageSize,offset])
+  const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM purchase_returns WHERE ${where}`,params)
   return { list:rows.map(fmtPR), pagination:{page,pageSize,total} }
 }
 async function findByIdPR(id) {
@@ -596,11 +609,24 @@ async function syncSaleReturnCompleted(conn, returnId, { taskId, taskNo }) {
 }
 
 // 销售退货
-async function findAllSR({ page=1, pageSize=20, keyword='', status=null }) {
+async function findAllSR({ page=1, pageSize=20, keyword='', status=null, productId=null, customerId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
-  const cond=status?'AND status=?':''
-  const [rows]=await pool.query(`SELECT * FROM sale_returns WHERE deleted_at IS NULL AND (return_no LIKE ? OR customer_name LIKE ?) ${cond} ORDER BY created_at DESC LIMIT ? OFFSET ?`,status?[like,like,status,pageSize,offset]:[like,like,pageSize,offset])
-  const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM sale_returns WHERE deleted_at IS NULL AND (return_no LIKE ? OR customer_name LIKE ?) ${cond}`,status?[like,like,status]:[like,like])
+  const params=[like,like]
+  let whereExtra=''
+  if (status) { whereExtra += ' AND status=?'; params.push(status) }
+  if (productId) {
+    whereExtra += ' AND EXISTS (SELECT 1 FROM sale_return_items sri WHERE sri.return_id = sale_returns.id AND sri.product_id = ?)'
+    params.push(productId)
+  }
+  if (customerId) { whereExtra += ' AND customer_id=?'; params.push(customerId) }
+  if (warehouseId) { whereExtra += ' AND warehouse_id=?'; params.push(warehouseId) }
+  if (operatorId) { whereExtra += ' AND operator_id=?'; params.push(operatorId) }
+  if (startDate) { whereExtra += ' AND DATE(created_at)>=?'; params.push(startDate) }
+  if (endDate) { whereExtra += ' AND DATE(created_at)<=?'; params.push(endDate) }
+  if (remark) { whereExtra += ' AND remark LIKE ?'; params.push(`%${remark}%`) }
+  const where = `deleted_at IS NULL AND (return_no LIKE ? OR customer_name LIKE ?) ${whereExtra}`
+  const [rows]=await pool.query(`SELECT * FROM sale_returns WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,pageSize,offset])
+  const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM sale_returns WHERE ${where}`,params)
   return { list:rows.map(fmtSR), pagination:{page,pageSize,total} }
 }
 async function findByIdSR(id) {

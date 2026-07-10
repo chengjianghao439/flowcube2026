@@ -250,7 +250,7 @@ async function deductFromContainers(conn, {
       barcode:        container.barcode,
       taken:          take,
       remainingAfter: newQty,
-      // 批次信息（供调拨目标仓库创建容器时保留）
+      // 批次信息（供调拨调入仓库创建容器时保留）
       unit:    container.unit,
       batchNo: container.batch_no,
       mfgDate: container.mfg_date,
@@ -410,7 +410,7 @@ async function getAvailableStockForDecision(conn, params) {
 }
 
 /**
- * 调拨容器操作：源仓库 FIFO 扣减 → 目标仓库创建（保留批次）→ 双仓同步
+ * 调拨容器操作：调出仓库 FIFO 扣减 → 调入仓库创建（保留批次）→ 双仓同步
  *
  * 调拨不允许占用已被预占的库存：
  *   可用库存 = SUM(container.remaining_qty) - inventory_stock.reserved
@@ -440,7 +440,7 @@ async function transferContainers(conn, {
   sourceRefNo    = null,
   remark         = null,
 }) {
-  // 1. 基于事实层容器读取源仓库当前库存，并锁定相关容器/预占行。
+  // 1. 基于事实层容器读取调出仓库当前库存，并锁定相关容器/预占行。
   const sourceProjection = await getStockProjection(conn, {
     productId,
     warehouseId: fromWarehouseId,
@@ -449,7 +449,7 @@ async function transferContainers(conn, {
   const fromBefore = sourceProjection.quantity
   const reserved = sourceProjection.reserved
 
-  // 2. 读目标仓库当前事实库存（用于日志 before_qty）
+  // 2. 读调入仓库当前事实库存（用于日志 before_qty）
   const targetProjection = await getStockProjection(conn, {
     productId,
     warehouseId: toWarehouseId,
@@ -467,12 +467,12 @@ async function transferContainers(conn, {
     )
   }
 
-  // 4. FIFO 扣减源仓库容器（同时携带批次信息）
+  // 4. FIFO 扣减调出仓库容器（同时携带批次信息）
   const deducted = await deductFromContainers(conn, {
     productId, productName, warehouseId: fromWarehouseId, qty,
   })
 
-  // 5. 在目标仓库按批次创建对应容器
+  // 5. 在调入仓库按批次创建对应容器
   let firstNewContainerId = null
   for (const d of deducted) {
     const { containerId } = await createContainer(conn, {

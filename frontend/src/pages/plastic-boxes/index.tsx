@@ -154,7 +154,7 @@ function CreateDialog({ open, onClose, onSubmit, loading }: { open: boolean; onC
       productCode: product.code,
       warehouseId: warehouse.id,
       warehouseName: warehouse.name,
-      unit: (product as Record<string, unknown>).unit || '',
+      unit: (product as unknown as Record<string, unknown>).unit || '',
     })
   }
 

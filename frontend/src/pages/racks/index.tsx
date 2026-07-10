@@ -3,7 +3,6 @@
  * 路由：/racks
  */
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -26,7 +25,6 @@ import {
 } from '@/lib/desktopLocalPrint'
 
 export default function RacksPage() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')

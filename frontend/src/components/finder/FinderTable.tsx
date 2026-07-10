@@ -13,7 +13,7 @@ interface FinderTableProps<T extends Record<string, unknown>> {
   emptyText?: string
 }
 
-function colTrack(col: FinderColumn): string {
+function colTrack<T>(col: FinderColumn<T>): string {
   if (!col.width) return '1fr'
   return typeof col.width === 'number' ? `${col.width}px` : col.width
 }

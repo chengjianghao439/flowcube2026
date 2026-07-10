@@ -175,7 +175,8 @@ export default function PdaWavePage() {
       const refetchResult = await refetch()
       await refetchRoute()
       const fresh = refetchResult.data
-      if (fresh && fresh.status === 2 && fresh.items.length > 0 && fresh.items.every(i => i.pickedQty >= i.totalQty)) {
+      const freshItems = fresh?.items ?? []
+      if (fresh && fresh.status === 2 && freshItems.length > 0 && freshItems.every(i => i.pickedQty >= i.totalQty)) {
         await finishPickingMut.mutateAsync()
       }
     } catch (err: unknown) {

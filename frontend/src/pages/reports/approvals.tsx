@@ -5,7 +5,6 @@ import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
-import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
 import { getNotificationCategoryLabel, getReminderNotifications } from '@/lib/notifications'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
@@ -34,7 +33,6 @@ export default function ApprovalsPage() {
 
   const notificationItems = notificationsQ.data?.items ?? []
   const reminderItems = useMemo(() => getReminderNotifications(notificationItems), [notificationItems])
-  const topReminder = reminderItems[0] ?? null
 
   function openPath(path: string, title: string) {
     addTab({ key: path, title, path })

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -20,7 +19,6 @@ import { formatDisplayDate } from '@/lib/dateTime'
 const ST_COLOR: Record<number,'default'|'secondary'|'outline'> = { 1:'secondary', 2:'default', 3:'outline' }
 
 export default function PaymentsPage() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const [tab, setTab] = useState<1|2>(1)
   const [statusFilter, setStatusFilter] = useState('')

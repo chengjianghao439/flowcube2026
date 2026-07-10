@@ -37,13 +37,12 @@ export default function InboundTaskDetailPage() {
   const tabPath = useContext(TabPathContext)
   const params = useParams<{ id?: string }>()
   const navigate = useNavigate()
-  const addTab = useWorkspaceStore(s => s.addTab)
   const rawId = (tabPath || params.id || '').split('/').filter(Boolean).pop() ?? ''
   const taskId = Number(rawId)
   const validId = Number.isFinite(taskId) && taskId > 0 ? taskId : null
 
   const { data: task, isLoading, refetch: refetchTask } = useInboundTaskDetail(validId)
-  const { data: containers, refetch: refetchContainers } = useInboundTaskContainers(validId)
+  const { refetch: refetchContainers } = useInboundTaskContainers(validId)
 
   const submitMut = useSubmitInboundTask()
   const auditMut = useAuditInboundTask()

@@ -79,7 +79,7 @@ const ToastInstance = memo(function ToastInstance({
   onRequestClose: (id: string) => void
 }) {
   const s = STYLES[t.type]
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<number>()
 
   useEffect(() => {
     timerRef.current = window.setTimeout(() => {
