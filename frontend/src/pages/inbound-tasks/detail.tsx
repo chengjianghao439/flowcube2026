@@ -23,12 +23,36 @@ import {
 } from '@/hooks/useInboundTasks'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
 import { mapInboundTaskToPrint } from '@/lib/orderPrintData'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 
 function Section({ title, children, sectionId }: { title: string; children: React.ReactNode; sectionId?: string }) {
   return (
     <div id={sectionId} className="card-base p-5 space-y-4 scroll-mt-24">
       <h3 className="text-section-title pb-2 border-b border-border/50">{title}</h3>
       {children}
+    </div>
+  )
+}
+
+type StatusTone = 'draft' | 'active' | 'success' | 'danger'
+
+const PUTAWAY_TONE: Record<string, StatusTone> = {
+  completed: 'success', waiting: 'active', putting_away: 'active', cancelled: 'danger', not_started: 'draft',
+}
+const AUDIT_TONE: Record<string, StatusTone> = {
+  approved: 'success', pending: 'active', rejected: 'danger', cancelled: 'danger', not_ready: 'draft',
+}
+const PRINT_TONE: Record<string, StatusTone> = {
+  success: 'success', queued: 'active', printing: 'active', failed: 'danger', timeout: 'danger', cancelled: 'draft', not_started: 'draft',
+}
+
+/** 状态小卡片：标题 + 状态徽章 + 一行补充信息，三张卡统一结构，避免各写各的 */
+function StatusCard({ label, value, tone, detail }: { label: string; value: string; tone: StatusTone; detail?: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border bg-card px-4 py-3 space-y-1.5">
+      <p className="text-helper">{label}</p>
+      <SoftStatusLabel label={value} tone={tone} />
+      {detail && <p className="text-helper">{detail}</p>}
     </div>
   )
 }
@@ -71,6 +95,15 @@ export default function InboundTaskDetailPage() {
   const receiptStatus = task?.receiptStatus ?? null
   const putawayStatus = task?.putawayStatus ?? null
   const auditFlowStatus = task?.auditFlowStatus ?? null
+  const printStatus = task?.printStatus ?? null
+
+  const printDetail = printSummary
+    ? [
+        printSummary.timeout > 0 ? `${printSummary.timeout} 条超时待确认` : null,
+        printSummary.failed > 0 ? `${printSummary.failed} 条失败` : null,
+        printSummary.queued + printSummary.printing > 0 ? `${printSummary.queued + printSummary.printing} 条待打印` : null,
+      ].filter(Boolean).join(' · ') || `${printSummary.success} / ${printSummary.total} 已成功`
+    : null
 
   const canSubmit = receiptStatus?.key === 'draft'
   const canAudit = auditFlowStatus?.key === 'pending' || auditFlowStatus?.key === 'rejected'
@@ -156,29 +189,26 @@ export default function InboundTaskDetailPage() {
         }
       />
 
-      <div className="grid gap-3 md:grid-cols-4">
-        <div className="rounded-lg border border-border bg-card px-4 py-3">
-          <p className="text-helper">收货状态</p>
-          <p className="mt-1 text-lg font-semibold">{receiptStatus?.label ?? '—'}</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card px-4 py-3">
-          <p className="text-helper">上架状态</p>
-          <p className="mt-1 text-lg font-semibold">{putawayStatus?.label ?? '—'}</p>
-          <p className="mt-1 text-helper">待上架 {putawaySummary?.waitingContainers ?? 0} / 已上架 {putawaySummary?.storedContainers ?? 0}</p>
-        </div>
-        <div className="rounded-lg border border-border bg-card px-4 py-3">
-          <p className="text-helper">审核状态</p>
-          <p className="mt-1 text-lg font-semibold">{auditFlowStatus?.label ?? '—'}</p>
-          <p className="mt-1 text-helper">{task.auditedAt ? `审核于 ${task.auditedAt}` : ''}</p>
-          {task.auditedByName && (
-            <p className="mt-1 text-helper">审核人 {task.auditedByName}</p>
-          )}
-        </div>
-        <div className="rounded-lg border border-border bg-card px-4 py-3">
-          <p className="text-helper">条码打印</p>
-          <p className="mt-1 text-lg font-semibold">{printSummary?.success ?? 0} / {printSummary?.total ?? 0}</p>
-          <p className="mt-1 text-helper">成功 {printSummary?.success ?? 0} 条，失败 {printSummary?.failed ?? 0} 条</p>
-        </div>
+      {/* 整体状态已经在标题旁的徽章里显示过，这里不重复；只展示三个组成状态各自的进度 */}
+      <div className="grid gap-3 md:grid-cols-3">
+        <StatusCard
+          label="上架状态"
+          value={putawayStatus?.label ?? '—'}
+          tone={PUTAWAY_TONE[putawayStatus?.key ?? ''] ?? 'draft'}
+          detail={`待上架 ${putawaySummary?.waitingContainers ?? 0} · 已上架 ${putawaySummary?.storedContainers ?? 0}`}
+        />
+        <StatusCard
+          label="审核状态"
+          value={auditFlowStatus?.label ?? '—'}
+          tone={AUDIT_TONE[auditFlowStatus?.key ?? ''] ?? 'draft'}
+          detail={task.auditedAt ? `${formatDisplayDateTime(task.auditedAt)} · ${task.auditedByName ?? '—'}` : undefined}
+        />
+        <StatusCard
+          label="条码打印"
+          value={printStatus?.label ?? '—'}
+          tone={PRINT_TONE[printStatus?.key ?? ''] ?? 'draft'}
+          detail={printDetail}
+        />
       </div>
 
       <Section title="任务明细" sectionId="task-items">
@@ -192,15 +222,20 @@ export default function InboundTaskDetailPage() {
                 <th className="text-left py-2">商品</th>
                 <th className="text-left py-2 w-20">颜色</th>
                 <th className="text-center py-2 w-16">单位</th>
-                <th className="text-left py-2 w-24">应到</th>
-                <th className="text-left py-2 w-24">已收</th>
-                <th className="text-left py-2 w-20">剩余</th>
-                <th className="text-left py-2 w-24">已上架</th>
+                <th className="text-right py-2 w-20">应到</th>
+                <th className="text-right py-2 w-20">已收</th>
+                <th className="text-right py-2 w-20">剩余</th>
+                <th className="text-right py-2 w-20">已上架</th>
+                <th className="text-right py-2 w-20">单价</th>
+                <th className="text-right py-2 w-24">小记</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {items.map((it) => {
                 const lineRemain = Math.max(0, it.orderedQty - it.receivedQty)
+                // 小记按「已上架」量算，跟审核结算（recomputePurchasePayable）的取数口径一致——
+                // 已收但还没上架的部分还不算真正确认入库，不计入金额，避免这里的数字和最终应付对不上。
+                const lineAmount = it.unitPrice != null ? it.putawayQty * it.unitPrice : null
                 return (
                   <tr key={it.id}>
                     <td className="py-2 text-doc-code-muted">{it.productCode}</td>
@@ -209,15 +244,31 @@ export default function InboundTaskDetailPage() {
                     <td className="py-2 font-medium">{it.productName}</td>
                     <td className="py-2 text-muted-foreground">{it.color || '—'}</td>
                     <td className="text-center text-muted-foreground">{it.unit || '—'}</td>
-                    <td className="text-left">{it.orderedQty}</td>
-                    <td className="text-left">{it.receivedQty}</td>
-                    <td className="text-left text-muted-foreground">{lineRemain}</td>
-                    <td className="text-left">{it.putawayQty}</td>
+                    <td className="text-right tabular-nums">{it.orderedQty}</td>
+                    <td className="text-right tabular-nums">{it.receivedQty}</td>
+                    <td className="text-right tabular-nums text-muted-foreground">{lineRemain}</td>
+                    <td className="text-right tabular-nums">{it.putawayQty}</td>
+                    <td className="text-right tabular-nums text-muted-foreground">
+                      {it.unitPrice != null ? `¥${it.unitPrice.toFixed(2)}` : '—'}
+                    </td>
+                    <td className="text-right tabular-nums font-medium">
+                      {lineAmount != null ? `¥${lineAmount.toFixed(2)}` : '—'}
+                    </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+          <p className="text-muted-body">共 {items.length} 种商品</p>
+          <div className="text-right">
+            <p className="text-helper">已上架金额合计</p>
+            <p className="text-2xl font-semibold text-foreground">
+              ¥{items.reduce((sum, it) => sum + (it.unitPrice != null ? it.putawayQty * it.unitPrice : 0), 0).toFixed(2)}
+            </p>
+          </div>
         </div>
       </Section>
 

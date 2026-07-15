@@ -51,7 +51,7 @@ export function PurchaseItemPickerDialog({ open, supplierId, initialSelection, o
       })
       return
     }
-    const qty = Number(value.replace(/,/g, '.'))
+    const qty = Number(value.replace(/,/g, ''))
     if (!Number.isFinite(qty) || qty < 0 || qty > remainingQty) return
     setQtyMap(prev => ({ ...prev, [purchaseItemId]: String(qty) }))
   }

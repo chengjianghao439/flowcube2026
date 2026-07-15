@@ -57,8 +57,10 @@ function groupProducts(task: InboundTask): ProductSummary[] {
   return [...map.values()]
 }
 
+// 中文环境小数点只会是"."，逗号在数量输入里只可能是千分位分隔符或误触，
+// 不能当小数点处理——否则粘贴 "1,234" 会被解析成 1.234，数量差 1000 倍且不报错。
 function parseQty(value: string): number {
-  return Number(value.trim().replace(/,/g, '.'))
+  return Number(value.trim().replace(/,/g, ''))
 }
 
 function ProductCard({
@@ -203,12 +205,32 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   }>({
     action: `inbound.receive.${task.id}`,
     label: `收货单 ${task.taskNo}`,
-    onConfirmed: async (data) => {
+    onConfirmed: async (data, ctx) => {
       await qc.invalidateQueries({ queryKey: ['pda-inbound-task', task.id] })
       await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
+      if (ctx.recovered) {
+        // 断网重连后自动核实出来的成功，没有原始响应里的容器/打印数量，不编造具体数字
+        ok('收货已确认成功，任务状态已更新。')
+        return
+      }
       const count = data.containers?.length ?? 0
       const printCount = data.printJobIds?.length ?? 0
       ok(`已生成 ${count} 个条码${printCount > 0 ? `，${printCount} 条已提交打印` : ''}`)
+    },
+    // 网络波动导致提交结果不明时，用"目标商品的已收数量是否已经涨到本次提交后
+    // 应有的水平"来核实上一次收货请求是否其实已经生效，而不是让用户凭经验重试。
+    resolveServerState: async ({ record }) => {
+      const productId = Number(record.metadata?.productId ?? 0)
+      const expectedReceivedQty = Number(record.metadata?.expectedReceivedQty ?? NaN)
+      if (!productId || !Number.isFinite(expectedReceivedQty)) return { effective: false }
+      const latest = await getInboundTaskByIdApi(task.id)
+      const line = groupProducts(latest).find(p => p.productId === productId)
+      if (!line || line.receivedQty < expectedReceivedQty) return { effective: false }
+      return {
+        effective: true,
+        data: {},
+        message: `收货已成功，${line.productName} 已收 ${line.receivedQty}。`,
+      }
     },
   })
 
@@ -250,18 +272,18 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       return
     }
 
-    const normalizedBoxes = boxes
-      .map((value, index) => ({ index, qty: parseQty(value) }))
-      .filter(box => Number.isFinite(box.qty) && box.qty > 0)
-
-    if (normalizedBoxes.length === 0) {
-      err('请至少填写一箱数量')
+    // 先按原始输入逐箱校验：非空但解析不出合法正数的，明确提示是哪一箱有问题，
+    // 不要静默丢弃——否则用户会以为提交了 3 箱，实际只提交了 2 箱。
+    const parsedBoxes = boxes.map((value, index) => ({ index, raw: value.trim(), qty: parseQty(value) }))
+    const invalidBox = parsedBoxes.find(box => box.raw !== '' && (!Number.isFinite(box.qty) || box.qty <= 0))
+    if (invalidBox) {
+      err(`箱 ${invalidBox.index + 1} 数量无效：${invalidBox.raw}`)
       return
     }
 
-    const invalidBox = normalizedBoxes.find(box => !Number.isFinite(box.qty) || box.qty <= 0)
-    if (invalidBox) {
-      err(`箱 ${invalidBox.index + 1} 数量无效`)
+    const normalizedBoxes = parsedBoxes.filter(box => Number.isFinite(box.qty) && box.qty > 0)
+    if (normalizedBoxes.length === 0) {
+      err('请至少填写一箱数量')
       return
     }
 
@@ -275,11 +297,14 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     }
 
     setSubmitting(true)
-    void receiveAction.run((requestKey) =>
-      receiveInboundApi(task.id, {
-        productId: activeProduct.productId,
-        packages: normalizedBoxes.map(box => ({ qty: box.qty })),
-      }, requestKey).then((res) => res!),
+    const expectedReceivedQty = activeProduct.receivedQty + totalQty
+    void receiveAction.run(
+      (requestKey) =>
+        receiveInboundApi(task.id, {
+          productId: activeProduct.productId,
+          packages: normalizedBoxes.map(box => ({ qty: box.qty })),
+        }, requestKey).then((res) => res!),
+      { productId: activeProduct.productId, expectedReceivedQty },
     ).then((result) => {
       if (result.kind === 'success') {
         if ((activeProduct.remainingQty - totalQty) > 0) {
@@ -289,6 +314,8 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           resetBoxes(1)
         }
       } else {
+        // 结果待确认：清空当前箱数输入，避免用户误以为这些箱子还没提交而重复填报
+        resetBoxes(1)
         warn('网络中断，收货结果待确认。请先确认刚才那次是否成功，再决定是否重试。')
       }
     }).catch((error: unknown) => {

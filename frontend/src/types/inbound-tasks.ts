@@ -24,6 +24,7 @@ export interface InboundTaskItem {
   orderedQty: number
   receivedQty: number
   putawayQty: number
+  unitPrice: number | null
 }
 
 export interface InboundStatusView {

@@ -15,7 +15,7 @@ import type {
   ReprintInboundTaskResult,
 } from '@/types/inbound-tasks'
 
-export const getInboundTasksApi = (params: QueryParams & { status?: number; productId?: number }) =>
+export const getInboundTasksApi = (params: QueryParams & { status?: number | number[]; productId?: number }) =>
   client.get<PaginatedData<InboundTask>>('/inbound-tasks', { params })
 
 export const getInboundPurchaseCandidatesApi = (params: { supplierId: number; keyword?: string }) =>

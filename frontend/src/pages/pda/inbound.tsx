@@ -31,7 +31,7 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
             <p className="text-sm text-muted-foreground mt-0.5">{task.warehouseName} · {task.items?.length ?? 0} 种商品</p>
             <p className="text-xs text-muted-foreground">采购单：{task.purchaseOrderNo ?? '—'}</p>
           </div>
-          <Badge variant={STATUS_VARIANT[task.status]}>{task.receiptStatus?.label ?? task.statusName}</Badge>
+          <Badge variant={STATUS_VARIANT[task.status] ?? 'outline'}>{task.receiptStatus?.label ?? task.statusName}</Badge>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">应到 {totalOrdered}，已收 {totalReceived}</p>
@@ -55,10 +55,11 @@ export default function PdaInboundPage() {
   const navigate = useNavigate()
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['pda-inbound-tasks'],
-    queryFn: () => getInboundTasksApi({ page:1, pageSize:99999, status:undefined }).then(r => r?.list ?? []),
+    // 待收货/收货中/待上架三种状态走服务端过滤，不再拉全量历史订单回来前端筛
+    queryFn: () => getInboundTasksApi({ page:1, pageSize:500, status:[1,2,3] }).then(r => r?.list ?? []),
     refetchInterval: 30_000,
   })
-  const tasks = (data ?? []).filter((t:InboundTask) => !!t.submittedAt && [1,2,3].includes(t.status))
+  const tasks = (data ?? []).filter((t:InboundTask) => !!t.submittedAt)
 
   return (
     <div className="min-h-screen bg-background">

@@ -5,7 +5,7 @@
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getInboundTaskByIdApi, putawayInboundApi } from '@/api/inbound-tasks'
+import { getInboundTaskByIdApi, putawayInboundApi, getInboundTaskContainersApi } from '@/api/inbound-tasks'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
@@ -29,6 +29,21 @@ function PutawayRunner({ taskId }: { taskId: number }) {
       await qc.invalidateQueries({ queryKey: ['pda-inbound-task', taskId] })
       await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
     },
+    // 网络波动导致提交结果不明时，用目标容器是否已经离开"待上架"清单来核实
+    // 上一次上架请求是否其实已经生效，而不是让用户只能凭经验决定要不要重试。
+    resolveServerState: async ({ record }) => {
+      const containerId = Number(record.metadata?.containerId ?? 0)
+      if (!containerId) return { effective: false }
+      const containers = await getInboundTaskContainersApi(taskId)
+      if (containers.waiting.some((c) => c.id === containerId)) return { effective: false }
+      const stored = containers.stored.find((c) => c.id === containerId)
+      if (!stored) return { effective: false }
+      return {
+        effective: true,
+        data: undefined,
+        message: `上架已成功，容器已上架到货架 ${stored.locationCode ?? ''}。`,
+      }
+    },
   })
   const flowDef = useMemo(
     () =>
@@ -36,10 +51,12 @@ function PutawayRunner({ taskId }: { taskId: number }) {
         onAfterPutaway: async () => {
           await qc.invalidateQueries({ queryKey: ['pda-inbound-task', taskId] })
           await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
+          await qc.invalidateQueries({ queryKey: ['inbound-tasks'] })
         },
         submitPutaway: async ({ taskId: nextTaskId, containerId, locationId }) => {
-          const result = await putawayAction.run((requestKey) =>
-            putawayInboundApi(nextTaskId, { containerId, locationId }, requestKey).then(() => undefined),
+          const result = await putawayAction.run(
+            (requestKey) => putawayInboundApi(nextTaskId, { containerId, locationId }, requestKey).then(() => undefined),
+            { containerId },
           )
           if (result.kind === 'pending') {
             throw new Error('网络中断，上架结果待确认。请先确认结果，再决定是否重试。')
@@ -91,9 +108,9 @@ function PutawayRunner({ taskId }: { taskId: number }) {
       <PdaBottomBar>
         <PdaScanner
           onScan={async (code) => {
+            // 扫容器只是校验步骤、无服务端副作用；真正的上架落库发生在扫库位
+            // 那一步，查询失效已经在 onAfterPutaway 里做了，这里不用重复触发。
             await engine.scan(code)
-            await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
-            await qc.invalidateQueries({ queryKey: ['inbound-tasks'] })
           }}
           placeholder={engine.currentStep.placeholder}
           disabled={engine.scanning || putawayAction.submitBlocked}

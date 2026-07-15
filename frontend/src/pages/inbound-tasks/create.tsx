@@ -69,7 +69,7 @@ export default function InboundTaskCreatePage() {
       })
       return
     }
-    const qty = Number(value.replace(/,/g, '.'))
+    const qty = Number(value.replace(/,/g, ''))
     if (!Number.isFinite(qty) || qty < 0 || qty > remainingQty) return
     setSelectedMap(prev => ({ ...prev, [purchaseItemId]: { ...entry, qty } }))
   }
@@ -168,14 +168,14 @@ export default function InboundTaskCreatePage() {
       <Section title="商品明细">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {supplier ? '从该供应商已提交的采购单中挑选本次到货商品' : '请先选择供应商'}
-            </p>
+            {supplier && (
+              <p className="text-sm text-muted-foreground">从该供应商已提交的采购单中挑选本次到货商品</p>
+            )}
             <Button
               variant="outline"
               disabled={!supplier}
               onClick={() => setPickerOpen(true)}
-              className="gap-1.5"
+              className="ml-auto gap-1.5"
             >
               <ShoppingCart className="h-4 w-4" />
               选择商品
@@ -189,76 +189,73 @@ export default function InboundTaskCreatePage() {
           )}
 
           {selectedRows.length > 0 && (
-            <div className="overflow-hidden rounded-lg border border-border">
-              <div className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_120px_60px] gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
-                <span>采购单</span>
-                <span>商品</span>
-                <span>仓库</span>
-                <span className="text-left">单价</span>
-                <span className="text-left">本次到货</span>
-                <span></span>
-              </div>
+            <>
+              <div className="overflow-hidden rounded-lg border border-border">
+                <div className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_120px_60px] gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
+                  <span>采购单</span>
+                  <span>商品</span>
+                  <span>仓库</span>
+                  <span className="text-right">单价</span>
+                  <span className="text-right">本次到货</span>
+                  <span></span>
+                </div>
 
-              <div className="max-h-[52vh] overflow-auto">
-                <div className="divide-y">
-                  {selectedRows.map(({ item, qty }) => (
-                    <div
-                      key={item.purchaseItemId}
-                      className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_120px_60px] gap-3 px-4 py-3 text-sm"
-                    >
-                      <div className="text-doc-code">{item.purchaseOrderNo}</div>
-                      <div className="min-w-0">
-                        <div className="truncate text-xs text-muted-foreground">
-                          <span className="font-mono text-doc-code-muted">{item.productCode}</span>
-                          {' · 货号 '}{item.articleNumber || '—'}
-                          {' · 型号 '}{item.spec || '—'}
+                <div className="max-h-[52vh] overflow-auto">
+                  <div className="divide-y">
+                    {selectedRows.map(({ item, qty }) => (
+                      <div
+                        key={item.purchaseItemId}
+                        className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_120px_60px] gap-3 px-4 py-3 text-sm"
+                      >
+                        <div className="text-doc-code">{item.purchaseOrderNo}</div>
+                        <div className="min-w-0">
+                          <div className="truncate text-xs text-muted-foreground">
+                            <span className="font-mono text-doc-code-muted">{item.productCode}</span>
+                            {' · 货号 '}{item.articleNumber || '—'}
+                            {' · 型号 '}{item.spec || '—'}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate font-medium text-foreground">{item.productName}</span>
+                            <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}（{item.unit ?? '—'}）</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate font-medium text-foreground">{item.productName}</span>
-                          <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}（{item.unit ?? '—'}）</span>
+                        <div className="text-muted-foreground">{item.warehouseName}</div>
+                        <div className="text-right tabular-nums text-muted-foreground">{item.unitPrice.toFixed(2)}</div>
+                        <div>
+                          <Input
+                            className="text-right"
+                            placeholder="0"
+                            value={String(qty)}
+                            onChange={e => setLineQty(item.purchaseItemId, item.remainingQty, e.target.value)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeLine(item.purchaseItemId)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="text-muted-foreground">{item.warehouseName}</div>
-                      <div className="text-left text-muted-foreground">{item.unitPrice.toFixed(2)}</div>
-                      <div>
-                        <Input
-                          className="text-left"
-                          placeholder="0"
-                          value={String(qty)}
-                          onChange={e => setLineQty(item.purchaseItemId, item.remainingQty, e.target.value)}
-                        />
-                      </div>
-                      <div className="flex items-center justify-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeLine(item.purchaseItemId)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      </Section>
 
-      <Section title="数量汇总">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="space-y-1 text-sm text-muted-foreground">
-            <p>已选商品：{selectedRows.length} 行</p>
-            <p>供应商：{supplier?.name ?? '未选择'}</p>
-          </div>
-          <div className="text-left">
-            <p className="mb-1 text-xs text-muted-foreground">本次到货总数</p>
-            <p className="text-3xl font-bold text-foreground">
-              {selectedRows.reduce((sum, entry) => sum + entry.qty, 0)}
-            </p>
-          </div>
+              <div className="flex items-center justify-between border-t border-border pt-4">
+                <p className="text-muted-body">共 {selectedRows.length} 种商品</p>
+                <div className="text-right">
+                  <p className="text-helper">本次到货总数</p>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {selectedRows.reduce((sum, entry) => sum + entry.qty, 0)}
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </Section>
 

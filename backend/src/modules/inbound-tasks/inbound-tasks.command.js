@@ -6,7 +6,7 @@ const {
   genTaskNo,
   appendInboundEvent,
   fmtItem,
-  fmtPurchasableItem,
+  assertPurchaseOrdersOpen,
 } = require('./inbound-tasks.helpers')
 const {
   distributeQtyToLines,
@@ -16,37 +16,11 @@ const {
   assertTaskCanReceive,
   assertTaskCanCancel,
 } = require('./inbound-tasks.status')
-const { findById } = require('./inbound-tasks.query')
+const { findById, loadPurchasableCandidates } = require('./inbound-tasks.query')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { settlePurchaseOnAudit } = require('./inbound-tasks.settle')
-
-async function assertPurchaseOrderOpen(conn, purchaseOrderId) {
-  if (!Number.isFinite(Number(purchaseOrderId)) || Number(purchaseOrderId) <= 0) return
-  const [[purchaseRow]] = await conn.query(
-    'SELECT id, order_no, status FROM purchase_orders WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-    [purchaseOrderId],
-  )
-  if (!purchaseRow) throw new AppError('关联采购单不存在', 404)
-  if (Number(purchaseRow.status) === 4) {
-    throw new AppError(`采购单 ${purchaseRow.order_no} 已取消，不能继续收货`, 409)
-  }
-}
-
-/**
- * 校验收货订单涉及的所有采购单均未取消。混合采购单收货单的 inbound_tasks.purchase_order_id
- * 头字段为空，因此从 inbound_task_items 按明细归属的采购单逐一查，而非只看头字段。
- */
-async function assertPurchaseOrdersOpen(conn, taskId) {
-  const [rows] = await conn.query(
-    'SELECT DISTINCT purchase_order_id FROM inbound_task_items WHERE task_id = ?',
-    [taskId],
-  )
-  for (const row of rows) {
-    await assertPurchaseOrderOpen(conn, Number(row.purchase_order_id))
-  }
-}
 
 async function createFromPoId(purchaseOrderId) {
   const purchaseSvc = require('../purchase/purchase.service')
@@ -111,82 +85,45 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
   }
 
   const purchaseItemIds = [...new Set(normalized.map(item => item.purchaseItemId))]
-  const placeholders = purchaseItemIds.map(() => '?').join(',')
-  const [rows] = await pool.query(
-    `SELECT
-        poi.id AS purchase_item_id,
-        po.id AS purchase_order_id,
-        po.order_no AS purchase_order_no,
-        po.supplier_id,
-        po.supplier_name,
-        po.warehouse_id,
-        po.warehouse_name,
-        poi.product_id,
-        poi.product_code,
-        poi.product_name,
-        poi.article_number,
-        poi.spec,
-        poi.color,
-        poi.unit,
-        poi.quantity AS ordered_qty,
-        COALESCE(SUM(
-          CASE
-            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
-            ELSE iti.ordered_qty
-          END
-        ), 0) AS assigned_qty
-      FROM purchase_order_items poi
-      INNER JOIN purchase_orders po
-        ON po.id = poi.order_id
-       AND po.deleted_at IS NULL
-       AND po.status = 2
-      LEFT JOIN inbound_task_items iti
-        ON iti.purchase_item_id = poi.id
-      LEFT JOIN inbound_tasks it
-        ON it.id = iti.task_id
-      WHERE po.supplier_id = ?
-        AND poi.id IN (${placeholders})
-      GROUP BY
-        poi.id, po.id, po.order_no, po.supplier_id, po.supplier_name,
-        po.warehouse_id, po.warehouse_name,
-        poi.product_id, poi.product_code, poi.product_name, poi.article_number, poi.spec, poi.color, poi.unit, poi.quantity`,
-    [supplierIdN, ...purchaseItemIds],
-  )
-
-  if (rows.length !== purchaseItemIds.length) throw new AppError('存在不可用的采购明细，请刷新后重试', 400)
-
-  const candidateMap = new Map(rows.map(row => [Number(row.purchase_item_id), fmtPurchasableItem({
-    ...row,
-    remaining_qty: Number(row.ordered_qty) - Number(row.assigned_qty),
-  })]))
-
-  const warehouseIds = new Set()
-  const taskItems = normalized.map(item => {
-    const candidate = candidateMap.get(item.purchaseItemId)
-    if (!candidate) throw new AppError('存在不可用的采购明细，请刷新后重试', 400)
-    if (candidate.remainingQty < item.qty) {
-      throw new AppError(`${candidate.productName} 超出可建单数量，最多还能建 ${candidate.remainingQty}`, 400)
-    }
-    warehouseIds.add(candidate.warehouseId)
-    return {
-      ...candidate,
-      qty: item.qty,
-    }
-  })
-
-  if (warehouseIds.size !== 1) throw new AppError('同一张收货单仅支持同仓到货，请按仓库分别建单', 400)
-
-  const warehouseId = taskItems[0].warehouseId
-  const warehouseName = taskItems[0].warehouseName
-  const purchaseOrders = [...new Set(taskItems.map(item => `${item.purchaseOrderId}:${item.purchaseOrderNo}`))]
-  const headerPurchaseOrderId = purchaseOrders.length === 1 ? taskItems[0].purchaseOrderId : null
-  const headerPurchaseOrderNo = purchaseOrders.length === 1
-    ? taskItems[0].purchaseOrderNo
-    : `${purchaseOrders.length} 单混合`
 
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+
+    // 候选明细查询在事务内加锁读取（FOR UPDATE），与并发的建单请求相互排队，
+    // 避免同一采购明细在两次并发请求里都读到"还有余量"而被超额分配。
+    const candidates = await loadPurchasableCandidates(conn, {
+      supplierId: supplierIdN,
+      purchaseItemIds,
+      forUpdate: true,
+    })
+    if (candidates.length !== purchaseItemIds.length) throw new AppError('存在不可用的采购明细，请刷新后重试', 400)
+    const candidateMap = new Map(candidates.map(c => [c.purchaseItemId, c]))
+
+    const warehouseIds = new Set()
+    const taskItems = normalized.map(item => {
+      const candidate = candidateMap.get(item.purchaseItemId)
+      if (!candidate) throw new AppError('存在不可用的采购明细，请刷新后重试', 400)
+      if (candidate.remainingQty < item.qty) {
+        throw new AppError(`${candidate.productName} 超出可建单数量，最多还能建 ${candidate.remainingQty}`, 400)
+      }
+      warehouseIds.add(candidate.warehouseId)
+      return {
+        ...candidate,
+        qty: item.qty,
+      }
+    })
+
+    if (warehouseIds.size !== 1) throw new AppError('同一张收货单仅支持同仓到货，请按仓库分别建单', 400)
+
+    const warehouseId = taskItems[0].warehouseId
+    const warehouseName = taskItems[0].warehouseName
+    const purchaseOrders = [...new Set(taskItems.map(item => `${item.purchaseOrderId}:${item.purchaseOrderNo}`))]
+    const headerPurchaseOrderId = purchaseOrders.length === 1 ? taskItems[0].purchaseOrderId : null
+    const headerPurchaseOrderNo = purchaseOrders.length === 1
+      ? taskItems[0].purchaseOrderNo
+      : `${purchaseOrders.length} 单混合`
+
     const taskNo = await genTaskNo(conn)
     const [r] = await conn.query(
       `INSERT INTO inbound_tasks (task_no, purchase_order_id, purchase_order_no, supplier_name, warehouse_id, warehouse_name, status, remark)

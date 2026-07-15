@@ -20,13 +20,18 @@ const {
   buildReceiptStatus,
   deriveInboundPrintJobState,
   buildInboundPrintBatches,
+  ensureInboundTaskExists,
 } = require('./inbound-tasks.status')
 const { EXPIRE_MESSAGE } = require('../print-jobs/print-jobs.service')
 
 function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], recentPrintJobs = [], thresholds = DEFAULT_INBOUND_THRESHOLDS) {
-  const orderedQty = items.reduce((sum, item) => sum + Number(item.orderedQty || 0), 0)
-  const receivedQty = items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0)
-  const putawayQty = items.reduce((sum, item) => sum + Number(item.putawayQty || 0), 0)
+  // 汇总数量以 summary（loadInboundTaskClosureSummary 的 SQL 聚合结果）为准，而非重新对
+  // items 求和——findAll（列表页）为省流量不传 items，若在这里对空数组 reduce 会把
+  // orderedQty/receivedQty/putawayQty 都算成 0，掩盖 summary 里已经算对的真实数据。
+  const orderedQty = Number(summary.orderedQty || 0)
+  const receivedQty = Number(summary.receivedQty || 0)
+  const putawayQty = Number(summary.putawayQty || 0)
+  const lineCount = items.length > 0 ? items.length : Number(summary.lineCount || 0)
   const printSummary = {
     total: Number(summary.totalContainers || 0),
     queued: Number(summary.queuedPrintJobs || 0),
@@ -49,7 +54,7 @@ function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], rec
     orderedQty,
     receivedQty,
     putawayQty,
-    lineCount: items.length,
+    lineCount,
     printSummary,
     putawaySummary,
     timeline,
@@ -272,7 +277,13 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
   const like = `%${keyword}%`
   const conds = ['t.deleted_at IS NULL', '(t.task_no LIKE ? OR t.supplier_name LIKE ? OR t.purchase_order_no LIKE ?)']
   const params = [like, like, like]
-  if (status) { conds.push('t.status = ?'); params.push(status) }
+  if (status) {
+    const statusList = Array.isArray(status) ? status : [status]
+    if (statusList.length) {
+      conds.push(`t.status IN (${statusList.map(() => '?').join(',')})`)
+      params.push(...statusList)
+    }
+  }
   if (productId) {
     conds.push('EXISTS (SELECT 1 FROM inbound_task_items iti WHERE iti.task_id = t.id AND iti.product_id = ?)')
     params.push(productId)
@@ -305,7 +316,15 @@ async function findById(id) {
   const [[row]] = await pool.query('SELECT * FROM inbound_tasks WHERE id = ? AND deleted_at IS NULL', [id])
   if (!row) throw new AppError('入库任务不存在', 404)
   const task = fmtTask(row)
-  const [items] = await pool.query('SELECT * FROM inbound_task_items WHERE task_id = ?', [id])
+  // 单价现查采购单明细，不落在 inbound_task_items 上——跟审核结算时 recomputePurchasePayable
+  // 的取价方式保持一致，避免出现两份价格数据源
+  const [items] = await pool.query(
+    `SELECT iti.*, poi.unit_price
+     FROM inbound_task_items iti
+     LEFT JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
+     WHERE iti.task_id = ?`,
+    [id],
+  )
   const formattedItems = items.map(fmtItem)
   const thresholds = await getInboundClosureThresholds()
   const summaryMap = await loadInboundTaskClosureSummary([id], thresholds)
@@ -314,12 +333,31 @@ async function findById(id) {
   return buildTaskWithClosure(task, formattedItems, summaryMap.get(id), timeline, recentPrintJobs, thresholds)
 }
 
-async function findPurchasableItems({ supplierId, keyword = '' }) {
+/**
+ * 「可建收货单的采购明细」查询——供应商已提交采购单里还没被收完的明细行，附带
+ * 已分配/已收/剩余数量与单价。两处调用方共用同一份 SQL，避免各自维护一份、字段漂移：
+ *   - findPurchasableItems：GET /purchase-items，前端选品弹窗按关键字浏览
+ *   - createManualTask：按 purchaseItemIds 精确取行并加锁，校验+落库在同一事务内
+ * forUpdate=true 时对涉及的 purchase_order_items/inbound_task_items 行加锁，
+ * 使并发的建单请求相互排队，避免同一采购明细被两张收货单同时超额分配。
+ */
+async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purchaseItemIds = null, forUpdate = false } = {}) {
   const supplierIdN = Number(supplierId)
   if (!Number.isFinite(supplierIdN) || supplierIdN <= 0) throw new AppError('请选择供应商', 400)
 
-  const like = `%${keyword}%`
-  const [rows] = await pool.query(
+  const params = [supplierIdN]
+  let whereExtra
+  if (Array.isArray(purchaseItemIds) && purchaseItemIds.length) {
+    whereExtra = ` AND poi.id IN (${purchaseItemIds.map(() => '?').join(',')})`
+    params.push(...purchaseItemIds)
+  } else {
+    const like = `%${keyword}%`
+    whereExtra = ' AND (poi.product_code LIKE ? OR poi.product_name LIKE ? OR po.order_no LIKE ?)'
+    params.push(like, like, like)
+  }
+  const havingClause = Array.isArray(purchaseItemIds) && purchaseItemIds.length ? '' : 'HAVING remaining_qty > 0'
+
+  const [rows] = await conn.query(
     `SELECT
         poi.id AS purchase_item_id,
         po.id AS purchase_order_id,
@@ -364,27 +402,26 @@ async function findPurchasableItems({ supplierId, keyword = '' }) {
         ON iti.purchase_item_id = poi.id
       LEFT JOIN inbound_tasks it
         ON it.id = iti.task_id
-      WHERE po.supplier_id = ?
-        AND (
-          poi.product_code LIKE ?
-          OR poi.product_name LIKE ?
-          OR po.order_no LIKE ?
-        )
+      WHERE po.supplier_id = ?${whereExtra}
       GROUP BY
         poi.id, po.id, po.order_no, po.supplier_id, po.supplier_name,
         po.warehouse_id, po.warehouse_name,
         poi.product_id, poi.product_code, poi.product_name, poi.article_number, poi.spec, poi.color, poi.unit,
         poi.unit_price, poi.quantity
-      HAVING remaining_qty > 0
-      ORDER BY po.created_at ASC, poi.id ASC`,
-    [supplierIdN, like, like, like],
+      ${havingClause}
+      ORDER BY po.created_at ASC, poi.id ASC
+      ${forUpdate ? 'FOR UPDATE' : ''}`,
+    params,
   )
 
   return rows.map(fmtPurchasableItem)
 }
 
-async function listWaitingContainers(taskId) {
-  await findById(taskId)
+async function findPurchasableItems({ supplierId, keyword = '' }) {
+  return loadPurchasableCandidates(pool, { supplierId, keyword })
+}
+
+async function queryWaitingContainers(taskId) {
   const [rows] = await pool.query(
     `SELECT c.*, p.code AS product_code, p.name AS product_name, loc.code AS location_code
      FROM inventory_containers c
@@ -398,8 +435,7 @@ async function listWaitingContainers(taskId) {
   return rows.map(fmtContainer)
 }
 
-async function listStoredContainers(taskId) {
-  await findById(taskId)
+async function queryStoredContainers(taskId) {
   const [rows] = await pool.query(
     `SELECT c.*, p.code AS product_code, p.name AS product_name, loc.code AS location_code
      FROM inventory_containers c
@@ -413,9 +449,24 @@ async function listStoredContainers(taskId) {
   return rows.map(fmtContainer)
 }
 
+// listWaitingContainers/listStoredContainers 各自校验任务存在，供独立调用；
+// listContainers 只校验一次，两条明细查询并行，避免重复的重量级 findById。
+async function listWaitingContainers(taskId) {
+  await ensureInboundTaskExists(pool, taskId)
+  return queryWaitingContainers(taskId)
+}
+
+async function listStoredContainers(taskId) {
+  await ensureInboundTaskExists(pool, taskId)
+  return queryStoredContainers(taskId)
+}
+
 async function listContainers(taskId) {
-  const waiting = await listWaitingContainers(taskId)
-  const stored = await listStoredContainers(taskId)
+  await ensureInboundTaskExists(pool, taskId)
+  const [waiting, stored] = await Promise.all([
+    queryWaitingContainers(taskId),
+    queryStoredContainers(taskId),
+  ])
   return { waiting, stored }
 }
 
@@ -482,6 +533,7 @@ module.exports = {
   findAll,
   findById,
   findPurchasableItems,
+  loadPurchasableCandidates,
   listWaitingContainers,
   listStoredContainers,
   listContainers,

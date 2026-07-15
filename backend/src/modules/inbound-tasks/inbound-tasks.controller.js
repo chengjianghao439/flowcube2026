@@ -10,12 +10,19 @@ const pendingContainers = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
+/** status 支持单值或数组（?status=1&status=2），过滤掉非法值 */
+function normalizeStatusParam(raw) {
+  if (raw === undefined || raw === null || raw === '') return null
+  const list = (Array.isArray(raw) ? raw : [raw]).map(v => +v).filter(n => Number.isFinite(n) && n > 0)
+  return list.length ? list : null
+}
+
 const list = async (req, res, next) => {
   try {
     const { page = 1, pageSize = 20, keyword = '', status, productId, warehouseId, operatorId, startDate, endDate, remark } = req.query
     const data = await svc.findAll({
       page: +page, pageSize: +pageSize, keyword,
-      status: status ? +status : null,
+      status: normalizeStatusParam(status),
       productId: productId ? +productId : null,
       warehouseId: warehouseId ? +warehouseId : null,
       operatorId: operatorId ? +operatorId : null,

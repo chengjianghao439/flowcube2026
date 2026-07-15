@@ -2,7 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { syncStockFromContainers, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { appendInboundEvent } = require('./inbound-tasks.helpers')
+const { appendInboundEvent, assertPurchaseOrdersOpen } = require('./inbound-tasks.helpers')
 const { assertTaskCanPutaway } = require('./inbound-tasks.status')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -64,18 +64,11 @@ async function putaway(taskId, { containerId, locationId }, operator, { requestK
     const taskRow = await lockStatusRow(conn, {
       table: 'inbound_tasks',
       id: taskId,
-      columns: 'id, status, lock_version, purchase_order_id',
+      columns: 'id, status, lock_version',
       entityName: '入库任务',
     })
     assertTaskCanPutaway(taskRow)
-
-    const [[purchaseRow]] = await conn.query(
-      'SELECT id, order_no, status FROM purchase_orders WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-      [Number(taskRow.purchase_order_id)],
-    )
-    if (purchaseRow && Number(purchaseRow.status) === 4) {
-      throw new AppError(`采购单 ${purchaseRow.order_no} 已取消，不能继续上架`, 409)
-    }
+    await assertPurchaseOrdersOpen(conn, taskId, '上架')
 
     const [[c]] = await conn.query(
       `SELECT c.*, t.task_no, t.purchase_order_id

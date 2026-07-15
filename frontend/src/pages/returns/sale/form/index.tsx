@@ -9,7 +9,7 @@
  * 因此本文件只有 FormView（新建）与 DetailView（详情），没有 EditView。
  */
 
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import { useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Save, X } from 'lucide-react'
@@ -294,75 +294,91 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
             <p className="text-sm text-muted-foreground">还没有退货明细，点击上方"添加商品"或先绑定原销售单</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            <div className="text-table-head grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3">
-              <span>商品</span>
-              <span className="text-center">单位</span>
-              <span>数量</span>
-              <span>单价 (¥)</span>
-              <span className="text-right">金额</span>
-              <span />
-            </div>
-            {items.map(item => (
-              <div key={item._key} className="grid grid-cols-[1fr_70px_110px_110px_90px_36px] items-center gap-3">
-                <button
-                  type="button"
-                  disabled={!!boundSource}
-                  onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
-                  onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-                  className={cn(
-                    'overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5',
-                  )}
-                >
-                  {item.productName ? (
-                    <div className="flex flex-col gap-0.5">
-                      <span className="truncate text-xs text-muted-foreground">
-                        <span className="font-mono text-doc-code-muted">{item.productCode}</span>
-                        {' · 货号 '}{item.articleNumber || '—'}
-                        {' · 型号 '}{item.spec || '—'}
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate font-medium">{item.productName}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}</span>
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">点击选择商品...</span>
-                  )}
-                </button>
-                <div className="text-center text-muted-body">{item.unit || '—'}</div>
-                <Input
-                  type="number" min="0.01" step="0.01" placeholder="数量"
-                  value={item.quantity}
-                  disabled={!!boundSource}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
-                  className="text-sm"
-                />
-                <Input
-                  type="number" min="0" step="0.01" placeholder="单价"
-                  value={item.unitPrice}
-                  disabled={!!boundSource}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                  className="text-sm"
-                />
-                <div className="text-right text-sm font-medium">¥{(item.quantity * item.unitPrice).toFixed(2)}</div>
-                <Button type="button" size="sm" variant="ghost" disabled={!!boundSource} className="h-9 w-9 rounded-full p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
-                {(item.originalQty != null || item.returnedQty != null) && (
-                  <div className="col-span-6 -mt-2 text-xs text-muted-foreground">
-                    原单数量 {Number(item.originalQty || 0).toFixed(2)}，已退 {Number(item.returnedQty || 0).toFixed(2)}，剩余可退 {Number(item.remainingQty || 0).toFixed(2)}
-                  </div>
-                )}
-              </div>
-            ))}
-            <div className="flex items-center justify-between border-t border-border pt-4">
-              <p className="text-muted-body">商品种数：{items.length} 种</p>
-              <div className="text-right">
-                <p className="text-helper">合计金额</p>
-                <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
-              </div>
+          <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-table-head">
+                  <th className="w-28 pb-2 text-left">编码</th>
+                  <th className="w-20 pb-2 text-left">货号</th>
+                  <th className="w-20 pb-2 text-left">型号</th>
+                  <th className="pb-2 text-left">商品</th>
+                  <th className="w-20 pb-2 text-left">颜色</th>
+                  <th className="w-16 pb-2 text-center">单位</th>
+                  <th className="w-20 pb-2 text-right">数量</th>
+                  <th className="w-24 pb-2 text-right">单价 (¥)</th>
+                  <th className="w-28 pb-2 text-right">金额</th>
+                  <th className="w-10 pb-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(item => (
+                  <Fragment key={item._key}>
+                    <tr className={cn('border-border/40', (item.originalQty == null && item.returnedQty == null) && 'border-b')}>
+                      <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
+                      <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
+                      <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
+                      <td className="py-2.5 pr-3">
+                        <button
+                          type="button"
+                          disabled={!!boundSource}
+                          onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+                          onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
+                          className={cn(
+                            'block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5',
+                          )}
+                        >
+                          {item.productName
+                            ? <span className="truncate font-medium">{item.productName}</span>
+                            : <span className="text-muted-foreground">点击选择商品...</span>}
+                        </button>
+                      </td>
+                      <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
+                      <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
+                      <td className="py-2.5">
+                        <Input
+                          type="number" min="0.01" step="0.01" placeholder="数量"
+                          value={item.quantity}
+                          disabled={!!boundSource}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
+                          className="text-right text-sm"
+                        />
+                      </td>
+                      <td className="py-2.5">
+                        <Input
+                          type="number" min="0" step="0.01" placeholder="单价"
+                          value={item.unitPrice}
+                          disabled={!!boundSource}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
+                          className="text-right text-sm"
+                        />
+                      </td>
+                      <td className="py-2.5 text-right font-medium tabular-nums">¥{(item.quantity * item.unitPrice).toFixed(2)}</td>
+                      <td className="py-2.5 text-center">
+                        <Button type="button" size="sm" variant="ghost" disabled={!!boundSource} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
+                      </td>
+                    </tr>
+                    {(item.originalQty != null || item.returnedQty != null) && (
+                      <tr className="border-b border-border/40">
+                        <td colSpan={10} className="pb-2.5 pt-0 text-xs text-muted-foreground">
+                          原单数量 {Number(item.originalQty || 0).toFixed(2)}，已退 {Number(item.returnedQty || 0).toFixed(2)}，剩余可退 {Number(item.remainingQty || 0).toFixed(2)}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between border-t border-border pt-4">
+            <p className="text-muted-body">商品种数：{items.length} 种</p>
+            <div className="text-right">
+              <p className="text-helper">合计金额</p>
+              <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
             </div>
           </div>
+          </>
         )}
       </SectionCard>
 

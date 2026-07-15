@@ -1,7 +1,9 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
-const { appendInboundEvent } = require('../inbound-tasks/inbound-tasks.helpers')
+const { appendInboundEvent, fmtTask } = require('../inbound-tasks/inbound-tasks.helpers')
+const { buildTaskWithClosure, loadInboundTaskClosureSummary } = require('../inbound-tasks/inbound-tasks.query')
+const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
@@ -122,12 +124,21 @@ async function findById(id) {
 
   // 混合采购单收货单的 inbound_tasks.purchase_order_id 头字段为空，须按明细行关联查找
   const [taskRows] = await pool.query(
-    `SELECT DISTINCT it.id, it.task_no, it.status, it.created_at
-     FROM inbound_task_items iti JOIN inbound_tasks it ON it.id = iti.task_id
-     WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL ORDER BY it.created_at ASC`,
+    `SELECT * FROM inbound_tasks
+     WHERE id IN (SELECT DISTINCT task_id FROM inbound_task_items WHERE purchase_order_id = ?)
+       AND deleted_at IS NULL
+     ORDER BY created_at ASC`,
     [id],
   )
-  order.inboundTasks = taskRows.map(r => ({ id: r.id, taskNo: r.task_no, status: r.status }))
+  // 展示的状态要跟收货订单详情页一致：不能只看 status（4=已完成）字段，还要叠加
+  // 打印超时/失败、上架超期、审核退回等异常——否则这里显示"已完成"，点进去却是"异常中"。
+  const thresholds = await getInboundClosureThresholds()
+  const closureSummaryMap = await loadInboundTaskClosureSummary(taskRows.map(r => r.id), thresholds)
+  order.inboundTasks = taskRows.map(r => {
+    const task = fmtTask(r)
+    const withClosure = buildTaskWithClosure(task, [], closureSummaryMap.get(task.id), [], [], thresholds)
+    return { id: task.id, taskNo: task.taskNo, status: task.status, receiptStatus: withClosure.receiptStatus }
+  })
 
   return order
 }

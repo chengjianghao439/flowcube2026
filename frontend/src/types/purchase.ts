@@ -1,3 +1,5 @@
+import type { InboundStatusView } from './inbound-tasks'
+
 export interface PurchaseOrderItem {
   id: number
   productId: number
@@ -30,7 +32,7 @@ export interface PurchaseOrder {
   operatorName: string
   createdAt: string
   items?: PurchaseOrderItem[]
-  inboundTasks?: { id: number; taskNo: string; status: number }[]
+  inboundTasks?: { id: number; taskNo: string; status: number; receiptStatus?: InboundStatusView }[]
 }
 export interface CreatePurchaseParams {
   supplierId: number

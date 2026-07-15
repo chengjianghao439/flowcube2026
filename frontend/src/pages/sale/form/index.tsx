@@ -54,38 +54,6 @@ interface DraftItem extends Omit<SaleOrderItem, 'id' | 'amount'> {
   priceSource?: 'list' | 'default' | 'manual'
 }
 
-function PriceMetaHint({ item, loading = false }: { item: DraftItem; loading?: boolean }) {
-  const belowCost = item.costPrice != null && item.costPrice > 0 && item.unitPrice < item.costPrice
-  const label =
-    item.priceSource === 'list'
-      ? (item.resolvedPriceLevel ? `等级价 ${item.resolvedPriceLevel}` : '等级价')
-      : item.priceSource === 'manual'
-        ? '手工价'
-        : '默认价'
-  const badgeClass =
-    item.priceSource === 'list'
-      ? 'border-blue-200 bg-blue-50 text-blue-700'
-      : item.priceSource === 'manual'
-        ? 'border-amber-200 bg-amber-50 text-amber-700'
-        : 'border-slate-200 bg-slate-50 text-slate-600'
-
-  return (
-    <div className="mt-1 flex flex-wrap items-center gap-2">
-      <Badge variant="outline" className={badgeClass}>{label}</Badge>
-      {loading && <span className="text-[11px] text-blue-600">查询等级价中...</span>}
-      {!loading && item.priceSource === 'manual' && item.resolvedPrice != null && (
-        <span className="text-[11px] text-muted-foreground">参考等级价 ¥{Number(item.resolvedPrice).toFixed(2)}</span>
-      )}
-      {belowCost && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
-          <AlertTriangle className="h-3 w-3" />
-          低于进价 ¥{Number(item.costPrice).toFixed(2)}
-        </span>
-      )}
-    </div>
-  )
-}
-
 // ─── 信息区块 ─────────────────────────────────────────────────────────────────
 
 function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
@@ -350,13 +318,13 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 
       {/* 订单信息 */}
       <SectionCard title="订单信息" compact>
-        {/* 第一行：客户/仓库/承运商/运费方式——选择类字段，固定较窄宽度 */}
-        <div className="flex flex-wrap items-start gap-4">
-          <div className="w-56 shrink-0 space-y-1.5">
+        {/* 第一行：客户/仓库/承运商/运费方式——选择类字段，按可用宽度均分，不留死区 */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+          <div className="space-y-1.5">
             <Label>客户 *</Label>
             <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn(customerError && 'border-destructive/60 bg-destructive/5')} />
           </div>
-          <div className="w-48 shrink-0 space-y-1.5">
+          <div className="space-y-1.5">
             <Label>出库仓库 *</Label>
             <WarehouseSelect
               value={warehouseId ? +warehouseId : null}
@@ -365,7 +333,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
               className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
             />
           </div>
-          <div className="w-48 shrink-0 space-y-1.5">
+          <div className="space-y-1.5">
             <Label>承运商</Label>
             <Select value={carrierId || '__none__'} onValueChange={v => setCarrierId(v === '__none__' ? '' : v)}>
               <SelectTrigger className="h-10 w-full">
@@ -379,7 +347,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
               </SelectContent>
             </Select>
           </div>
-          <div className="w-40 shrink-0 space-y-1.5">
+          <div className="space-y-1.5">
             <Label>运费方式</Label>
             <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)}>
               <SelectTrigger className="h-10 w-full">
@@ -394,19 +362,19 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             </Select>
           </div>
         </div>
-        {/* 第二行：收货人/联系电话固定较窄，收货地址/备注均分剩余宽度 */}
+        {/* 第二行：收货人/联系电话给够宽度装下字符计数角标，收货地址/备注均分剩余宽度 */}
         <div className="mt-4 flex items-start gap-4">
-          <div className="w-32 shrink-0 space-y-1.5">
+          <div className="w-40 shrink-0 space-y-1.5">
             <Label>收货人</Label>
             <LimitedInput maxLength={5} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人" />
           </div>
-          <div className="w-40 shrink-0 space-y-1.5">
+          <div className="w-48 shrink-0 space-y-1.5">
             <Label>联系电话</Label>
             <LimitedInput maxLength={11} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="11位手机号" inputMode="numeric" />
           </div>
           <div className="flex-1 space-y-1.5">
             <Label>收货地址</Label>
-            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} />
+            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} className="h-10 min-h-0 py-2 pb-2" />
           </div>
           <div className="flex-1 space-y-1.5">
             <Label>备注</Label>
@@ -415,74 +383,83 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         </div>
       </SectionCard>
 
-      {/* 商品明细：末行常驻空行，填完自动追加，无需"添加"按钮 */}
+      {/* 商品明细：末行常驻空行，填完自动追加，无需"添加"按钮；跟其它单据一致用平铺表格，不用网格挤在一起 */}
       <SectionCard title="商品明细" compact>
-        <div className="text-table-head mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3">
-          <span>商品</span>
-          <span className="text-center">单位</span>
-          <span>数量</span>
-          <span>单价 (¥)</span>
-          <span>金额</span>
-          <span />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-table-head">
+                <th className="w-28 pb-2 text-left">编码</th>
+                <th className="w-20 pb-2 text-left">货号</th>
+                <th className="w-20 pb-2 text-left">型号</th>
+                <th className="pb-2 text-left">商品</th>
+                <th className="w-20 pb-2 text-left">颜色</th>
+                <th className="w-16 pb-2 text-center">单位</th>
+                <th className="w-20 pb-2 text-right">数量</th>
+                <th className="w-24 pb-2 text-right">单价 (¥)</th>
+                <th className="w-28 pb-2 text-right">金额</th>
+                <th className="w-10 pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item._key} className="border-b border-border/40">
+                  <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
+                  <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
+                  <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
+                  <td className="py-2.5 pr-3">
+                    <button
+                      type="button"
+                      onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+                      onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
+                      className={cn('block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
+                    >
+                      {item.productName
+                        ? <span className="truncate font-medium">{item.productName}</span>
+                        : <span className="text-muted-foreground">点击选择商品...</span>}
+                    </button>
+                  </td>
+                  <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
+
+                  <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
+
+                  <td className="py-2.5">
+                    <Input
+                      type="number" min="1" step="1" placeholder="数量"
+                      value={item.quantity}
+                      ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
+                      className="text-right text-sm"
+                    />
+                  </td>
+
+                  <td className="py-2.5">
+                    <Input
+                      type="number" min="0" step="0.01" placeholder="单价"
+                      value={item.unitPrice}
+                      disabled={!!priceLoading[item._key]}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
+                      className={`text-right text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`}
+                    />
+                  </td>
+
+                  <td className="py-2.5 text-right font-medium tabular-nums">
+                    ¥{(item.quantity * item.unitPrice).toFixed(2)}
+                  </td>
+
+                  <td className="py-2.5 text-center">
+                    <Button
+                      type="button" size="sm" variant="ghost"
+                      className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeItem(item._key)}
+                    >✕</Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-
-        {items.map(item => (
-          <div key={item._key} className="mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3 items-center">
-            <button
-              type="button"
-              onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
-              onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-              className={cn('overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
-            >
-              {item.productName ? (
-                <div className="flex flex-col gap-0.5">
-                  <span className="truncate text-xs text-muted-foreground">
-                    <span className="font-mono text-doc-code-muted">{item.productCode}</span>
-                    {' · 货号 '}{item.articleNumber || '—'}
-                    {' · 型号 '}{item.spec || '—'}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="truncate font-medium">{item.productName}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}</span>
-                  </span>
-                </div>
-              ) : (
-                <span className="text-muted-foreground">点击选择商品...</span>
-              )}
-            </button>
-
-            <div className="text-center text-muted-body">{item.unit || '—'}</div>
-
-            <Input
-              type="number" min="1" step="1" placeholder="数量"
-              value={item.quantity}
-              ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
-              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
-              className="text-sm"
-            />
-
-            <div>
-              <Input
-                type="number" min="0" step="0.01" placeholder="单价"
-                value={item.unitPrice}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                className={`text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`}
-              />
-              <PriceMetaHint item={item} loading={!!priceLoading[item._key]} />
-            </div>
-
-            <div className="text-sm font-medium">
-              ¥{(item.quantity * item.unitPrice).toFixed(2)}
-            </div>
-
-            <Button
-              type="button" size="sm" variant="ghost"
-              className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
-              onClick={() => removeItem(item._key)}
-            >✕</Button>
-          </div>
-        ))}
 
         {/* 金额统计：仅统计已选商品的行 */}
         {items.some(i => i.productId > 0) && (
@@ -710,13 +687,13 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
 
       {/* 订单信息 */}
       <SectionCard title="订单信息" compact>
-        {/* 第一行：客户/仓库/承运商/运费方式——选择类字段，固定较窄宽度 */}
-        <div className="flex flex-wrap items-start gap-4">
-          <div className="w-56 shrink-0 space-y-1.5">
+        {/* 第一行：客户/仓库/承运商/运费方式——选择类字段，按可用宽度均分，不留死区 */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+          <div className="space-y-1.5">
             <Label>客户 *</Label>
             <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn(customerError && 'border-destructive/60 bg-destructive/5')} />
           </div>
-          <div className="w-48 shrink-0 space-y-1.5">
+          <div className="space-y-1.5">
             <Label>出库仓库 *</Label>
             <WarehouseSelect
               value={warehouseId ? +warehouseId : null}
@@ -725,7 +702,7 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
               className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
             />
           </div>
-          <div className="w-48 shrink-0 space-y-1.5">
+          <div className="space-y-1.5">
             <Label>承运商</Label>
             <Select value={carrierId || '__none__'} onValueChange={v => setCarrierId(v === '__none__' ? '' : v)}>
               <SelectTrigger className="h-10 w-full">
@@ -739,7 +716,7 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
               </SelectContent>
             </Select>
           </div>
-          <div className="w-40 shrink-0 space-y-1.5">
+          <div className="space-y-1.5">
             <Label>运费方式</Label>
             <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)}>
               <SelectTrigger className="h-10 w-full">
@@ -754,19 +731,19 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
             </Select>
           </div>
         </div>
-        {/* 第二行：收货人/联系电话固定较窄，收货地址/备注均分剩余宽度 */}
+        {/* 第二行：收货人/联系电话给够宽度装下字符计数角标，收货地址/备注均分剩余宽度 */}
         <div className="mt-4 flex items-start gap-4">
-          <div className="w-32 shrink-0 space-y-1.5">
+          <div className="w-40 shrink-0 space-y-1.5">
             <Label>收货人</Label>
             <LimitedInput maxLength={5} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人" />
           </div>
-          <div className="w-40 shrink-0 space-y-1.5">
+          <div className="w-48 shrink-0 space-y-1.5">
             <Label>联系电话</Label>
             <LimitedInput maxLength={11} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="11位手机号" inputMode="numeric" />
           </div>
           <div className="flex-1 space-y-1.5">
             <Label>收货地址</Label>
-            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} />
+            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} className="h-10 min-h-0 py-2 pb-2" />
           </div>
           <div className="flex-1 space-y-1.5">
             <Label>备注</Label>
@@ -775,51 +752,71 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
         </div>
       </SectionCard>
 
-      {/* 商品明细 */}
+      {/* 商品明细：跟其它单据一致用平铺表格，不用网格挤在一起 */}
       <SectionCard title="商品明细" compact>
-        <div className="text-table-head mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3">
-          <span>商品</span><span className="text-center">单位</span><span>数量</span><span>单价 (¥)</span><span>金额</span><span />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-table-head">
+                <th className="w-28 pb-2 text-left">编码</th>
+                <th className="w-20 pb-2 text-left">货号</th>
+                <th className="w-20 pb-2 text-left">型号</th>
+                <th className="pb-2 text-left">商品</th>
+                <th className="w-20 pb-2 text-left">颜色</th>
+                <th className="w-16 pb-2 text-center">单位</th>
+                <th className="w-20 pb-2 text-right">数量</th>
+                <th className="w-24 pb-2 text-right">单价 (¥)</th>
+                <th className="w-28 pb-2 text-right">金额</th>
+                <th className="w-10 pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item._key} className="border-b border-border/40">
+                  <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
+                  <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
+                  <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
+                  <td className="py-2.5 pr-3">
+                    <button
+                      type="button"
+                      onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+                      onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
+                      className={cn('block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
+                    >
+                      {item.productName
+                        ? <span className="truncate font-medium">{item.productName}</span>
+                        : <span className="text-muted-foreground">点击选择商品...</span>}
+                    </button>
+                  </td>
+                  <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
+
+                  <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
+
+                  <td className="py-2.5">
+                    <Input type="number" min="1" step="1" placeholder="数量" value={item.quantity}
+                      ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
+                      className="text-right text-sm" />
+                  </td>
+
+                  <td className="py-2.5">
+                    <Input type="number" min="0" step="0.01" placeholder="单价" value={item.unitPrice}
+                      disabled={!!priceLoading[item._key]}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
+                      className={`text-right text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`} />
+                  </td>
+
+                  <td className="py-2.5 text-right font-medium tabular-nums">¥{(item.quantity * item.unitPrice).toFixed(2)}</td>
+
+                  <td className="py-2.5 text-center">
+                    <Button type="button" size="sm" variant="ghost" className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        {items.map(item => (
-          <div key={item._key} className="mb-2 grid grid-cols-[1fr_70px_110px_110px_90px_36px] gap-3 items-center">
-            <button
-              type="button"
-              onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
-              onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-              className={cn('overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
-            >
-              {item.productName ? (
-                <div className="flex flex-col gap-0.5">
-                  <span className="truncate text-xs text-muted-foreground">
-                    <span className="font-mono text-doc-code-muted">{item.productCode}</span>
-                    {' · 货号 '}{item.articleNumber || '—'}
-                    {' · 型号 '}{item.spec || '—'}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="truncate font-medium">{item.productName}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}</span>
-                  </span>
-                </div>
-              ) : (
-                <span className="text-muted-foreground">点击选择商品...</span>
-              )}
-            </button>
-            <div className="text-center text-muted-body">{item.unit || '—'}</div>
-            <Input type="number" min="1" step="1" placeholder="数量" value={item.quantity}
-              ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
-              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
-              className="text-sm" />
-            <div>
-              <Input type="number" min="0" step="0.01" placeholder="单价" value={item.unitPrice}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                className={`text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`} />
-              <PriceMetaHint item={item} loading={!!priceLoading[item._key]} />
-            </div>
-            <div className="text-sm font-medium">¥{(item.quantity * item.unitPrice).toFixed(2)}</div>
-            <Button type="button" size="sm" variant="ghost" className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
-          </div>
-        ))}
       </SectionCard>
 
       {/* 金额统计：仅统计已选商品的行 */}
@@ -986,9 +983,9 @@ function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; clo
                     <th className="pb-2 text-left">名称</th>
                     <th className="pb-2 text-left">颜色</th>
                     <th className="w-16 pb-2 text-center">单位</th>
-                    <th className="w-20 pb-2 text-center">数量</th>
-                    <th className="w-24 pb-2 text-center">单价</th>
-                    <th className="w-24 pb-2 text-center">金额</th>
+                    <th className="w-20 pb-2 text-right">数量</th>
+                    <th className="w-24 pb-2 text-right">单价</th>
+                    <th className="w-24 pb-2 text-right">金额</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1000,19 +997,19 @@ function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; clo
                       <td className="py-2.5">{item.productName}</td>
                       <td className="py-2.5">{item.color || '-'}</td>
                       <td className="py-2.5 text-center">{item.unit}</td>
-                      <td className="py-2.5 text-center">{item.quantity}</td>
-                      <td className="py-2.5 text-center">
+                      <td className="py-2.5 text-right tabular-nums">{item.quantity}</td>
+                      <td className="py-2.5 text-right">
                         <div className="space-y-1">
-                          <div>¥{Number(item.unitPrice).toFixed(2)}</div>
+                          <div className="tabular-nums">¥{Number(item.unitPrice).toFixed(2)}</div>
                           {item.belowCost && item.costPrice != null && (
-                            <div className="inline-flex items-center gap-1 text-[11px] text-destructive">
+                            <div className="inline-flex items-center justify-end gap-1 text-[11px] text-destructive">
                               <AlertTriangle className="h-3 w-3" />
                               低于进价 ¥{Number(item.costPrice).toFixed(2)}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="py-2.5 text-center font-semibold">¥{Number(item.amount).toFixed(2)}</td>
+                      <td className="py-2.5 text-right font-semibold tabular-nums">¥{Number(item.amount).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
