@@ -45,6 +45,26 @@ npm run dist                  # full Windows installer build (run from CI only)
 npm start                     # launch Electron against built frontend
 ```
 
+## 本地"开发者模式"（浏览器预览调试）
+
+当用户说"开启/启动开发者模式""给我网址"时，指的是用 Browser 面板的 `preview_start` 工具（不是 Bash）按 `.claude/launch.json` 里的配置名启动本地开发服务器：
+
+- `backend-dev`（端口 3000）
+- `frontend-dev`（端口 5173，Electron target；`frontend-pda-dev` 是 PDA target，同端口）
+
+两个都起完后，把地址 `http://localhost:5173` 告诉用户，并用下面这个本地测试账号登录：
+
+```
+账号：admin
+密码：admin123
+```
+
+这是本机 MySQL（`backend/.env` 里 `DB_HOST=127.0.0.1`，真实数据库、非 mock）里已经存在的管理员测试账号，专门用于本地功能验证，不是生产账号。
+
+后端重启后 JWT 会失效，之前登录过的页面会需要重新登录；前端热更新（HMR）一般不需要重新登录。
+
+**重要**：验证完成后不要主动 `preview_stop` 停掉这两个服务——用户可能在自己的真实浏览器里也开着 `localhost:5173` 用着，把开发服务器停掉会导致用户那边"开发者模式掉了"。
+
 ## Architecture
 
 ### Backend: Express with strict layering
