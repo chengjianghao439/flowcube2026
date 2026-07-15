@@ -36,7 +36,7 @@ export default function WarehousesPage() {
 
   const columns: TableColumn<Warehouse>[] = [
     { key: 'code', title: '仓库编码', width: 120 },
-    { key: 'name', title: '仓库名称' },
+    { key: 'name', title: '仓库名称', width: 180 },
     {
       key: 'typeName', title: '类型', width: 90,
       render: (_, row) => (

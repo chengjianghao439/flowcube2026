@@ -33,7 +33,7 @@ export default function StockCheckPage() {
 
   const columns: TableColumn<StockCheck>[] = [
     { key:'checkNo', title:'盘点单号', width:160, render:(v)=><span className="text-doc-code">{String(v)}</span> },
-    { key:'warehouseName', title:'仓库' },
+    { key:'warehouseName', title:'仓库', width:140 },
     { key:'status', title:'状态', width:90, render:(v,row)=><Badge variant={STATUS_COLOR[v as number]}>{(row as StockCheck).statusName}</Badge> },
     { key:'operatorName', title:'经办人', width:100 },
     { key:'createdAt', title:'创建时间', width:160, render:(v)=>formatDisplayDateTime(v) },

@@ -15,6 +15,8 @@ import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { WaveStats } from '@/api/reports'
+import DataTable from '@/components/shared/DataTable'
+import type { TableColumn } from '@/types'
 
 const STATUS_COLOR: Record<number, string> = {
   1: 'bg-gray-100 text-gray-600',
@@ -107,19 +109,41 @@ export default function WavePerformancePage() {
 
   const maxEfficiency = Math.max(...waves.map(w => w.efficiency ?? 0), 0.01)
 
-  function SortTh({ field, children }: { field: string; children: React.ReactNode }) {
-    const active = sortField === field
-    return (
-      <th
-        className={`pb-2 text-left cursor-pointer select-none hover:text-foreground transition-colors ${
-          active ? 'text-primary' : 'text-muted-foreground'
-        }`}
-        onClick={() => toggleSort(field)}
-      >
-        {children} {active ? (sortAsc ? '↑' : '↓') : ''}
-      </th>
-    )
-  }
+  const cols: TableColumn<WaveStats>[] = [
+    {
+      key: 'waveNo', title: '波次号', width: 180,
+      render: (_, w) => (
+        <div>
+          <p className="text-doc-code-strong">{w.waveNo}</p>
+          <p className="text-helper">{formatDisplayDateTime(w.createdAt)}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'statusName', title: '状态', width: 100,
+      render: (_, w) => <Badge className={`${STATUS_COLOR[w.status]} text-xs border-0`}>{w.statusName}</Badge>,
+    },
+    { key: 'operatorName', title: '操作员', width: 110 },
+    { key: 'taskCount', title: '任务数', width: 90, sortable: true },
+    {
+      key: 'skuCount', title: 'SKU', width: 90, sortable: true,
+      render: v => <span><span className="font-semibold text-foreground">{String(v)}</span><span className="ml-1 text-xs text-muted-foreground">种</span></span>,
+    },
+    {
+      key: 'totalPickedQty', title: '拣货量', width: 100, sortable: true,
+      render: v => <span><span className="font-semibold text-primary">{Number(v).toFixed(0)}</span><span className="ml-1 text-xs text-muted-foreground">件</span></span>,
+    },
+    {
+      key: 'durationMinutes', title: '时长', width: 100, sortable: true,
+      render: v => <span>{fmtDuration(v as number | null)}</span>,
+    },
+    {
+      key: 'efficiency', title: '拣货效率', width: 160,
+      render: (v) => v != null
+        ? <EfficiencyBar value={v as number} max={maxEfficiency} />
+        : <span className="text-xs text-muted-foreground">—</span>,
+    },
+  ]
 
   return (
     <div className="space-y-6">
@@ -203,52 +227,15 @@ export default function WavePerformancePage() {
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-table-head">
-                  <th className="pb-3 px-5 text-left">波次号</th>
-                  <th className="pb-3 text-left">状态</th>
-                  <th className="pb-3 text-left">操作员</th>
-                  <SortTh field="taskCount">任务数</SortTh>
-                  <SortTh field="skuCount">SKU</SortTh>
-                  <SortTh field="totalPickedQty">拣货量</SortTh>
-                  <SortTh field="durationMinutes">时长</SortTh>
-                  <th className="pb-3 pr-5 text-left">拣货效率</th>
-                </tr>
-              </thead>
-              <tbody>
-                {waves.map(w => (
-                  <tr key={w.id} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-5">
-                      <p className="text-doc-code-strong">{w.waveNo}</p>
-                      <p className="text-helper">{formatDisplayDateTime(w.createdAt)}</p>
-                    </td>
-                    <td className="py-3">
-                      <Badge className={`${STATUS_COLOR[w.status]} text-xs border-0`}>{w.statusName}</Badge>
-                    </td>
-                    <td className="py-3 text-foreground">{w.operatorName}</td>
-                    <td className="py-3 text-left text-foreground">{w.taskCount}</td>
-                    <td className="py-3 text-left">
-                      <span className="font-semibold text-foreground">{w.skuCount}</span>
-                      <span className="text-muted-foreground text-xs ml-1">种</span>
-                    </td>
-                    <td className="py-3 text-left">
-                      <span className="font-semibold text-primary">{w.totalPickedQty.toFixed(0)}</span>
-                      <span className="text-muted-foreground text-xs ml-1">件</span>
-                    </td>
-                    <td className="py-3 text-left text-foreground">{fmtDuration(w.durationMinutes)}</td>
-                    <td className="py-3 pr-5 min-w-[140px]">
-                      {w.efficiency != null
-                        ? <EfficiencyBar value={w.efficiency} max={maxEfficiency} />
-                        : <span className="text-muted-foreground text-xs">—</span>
-                      }
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={cols}
+            data={waves}
+            rowKey="id"
+            emptyText="暂无波次数据"
+            sortKey={sortField}
+            sortDirection={sortAsc ? 'asc' : 'desc'}
+            onSortChange={toggleSort}
+          />
         )}
       </ReportPanel>
     </div>

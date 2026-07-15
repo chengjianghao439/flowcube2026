@@ -56,8 +56,7 @@ export function SaleRowActions({
         onPrimaryClick={onViewTask}
         primaryVariant="outline"
         items={[
-          { label: '查看详情', onClick: onDetail },
-          { label: '取消订单', onClick: () => onAsk('取消订单', '将同步取消关联仓库任务并释放锁定资源，是否继续？', () => onCancelSale(row.id)), destructive: true, separatorBefore: true, disabled: anyPending },
+          { label: '取消订单', onClick: () => onAsk('取消订单', '将同步取消关联仓库任务并释放锁定资源，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending },
         ]}
       />
     )

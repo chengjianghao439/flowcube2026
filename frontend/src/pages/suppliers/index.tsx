@@ -43,7 +43,7 @@ export default function SuppliersPage() {
 
   const cols:TableColumn<Supplier>[] = [
     { key:'code', title:'编码', width:120 },
-    { key:'name', title:'名称' },
+    { key:'name', title:'名称', width:180 },
     { key:'contact', title:'联系人', width:100, render:v=>(v as string)||'-' },
     { key:'phone', title:'电话', width:130, render:v=>(v as string)||'-' },
     { key:'email', title:'邮箱', render:v=>(v as string)||'-' },

@@ -192,8 +192,8 @@ export default function SalePage() {
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
     { key: 'orderNo',      title: '销售单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'customerName', title: '客户' },
-    { key: 'warehouseName',title: '仓库',     width: 120 },
+    { key: 'customerName', title: '客户', width: 140 },
+    { key: 'warehouseName',title: '仓库',     width: 140 },
     {
       key: 'totalAmount', title: '金额', width: 110,
       render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span>,

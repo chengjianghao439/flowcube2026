@@ -192,8 +192,8 @@ export default function ReturnsPage() {
 
   const columns: TableColumn<RowType>[] = [
     { key: 'returnNo', title: '退货单号', width: 170, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: partyKey, title: partyLabel },
-    { key: 'warehouseName', title: '仓库', width: 120 },
+    { key: partyKey, title: partyLabel, width: 140 },
+    { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'totalAmount', title: '金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
     { key: 'status', title: '状态', width: 90, render: (v, row) => {
       const status = v as number

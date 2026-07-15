@@ -24,6 +24,9 @@ import {
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
 import { mapInboundTaskToPrint } from '@/lib/orderPrintData'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import DataTable from '@/components/shared/DataTable'
+import type { TableColumn } from '@/types'
+import type { InboundTaskItem } from '@/types/inbound-tasks'
 
 function Section({ title, children, sectionId }: { title: string; children: React.ReactNode; sectionId?: string }) {
   return (
@@ -212,54 +215,31 @@ export default function InboundTaskDetailPage() {
       </div>
 
       <Section title="任务明细" sectionId="task-items">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-table-head">
-                <th className="text-left py-2 w-24">编码</th>
-                <th className="text-left py-2 w-24">货号</th>
-                <th className="text-left py-2 w-24">型号</th>
-                <th className="text-left py-2">商品</th>
-                <th className="text-left py-2 w-20">颜色</th>
-                <th className="text-center py-2 w-16">单位</th>
-                <th className="text-right py-2 w-20">应到</th>
-                <th className="text-right py-2 w-20">已收</th>
-                <th className="text-right py-2 w-20">剩余</th>
-                <th className="text-right py-2 w-20">已上架</th>
-                <th className="text-right py-2 w-20">单价</th>
-                <th className="text-right py-2 w-24">小记</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {items.map((it) => {
-                const lineRemain = Math.max(0, it.orderedQty - it.receivedQty)
-                // 小记按「已上架」量算，跟审核结算（recomputePurchasePayable）的取数口径一致——
-                // 已收但还没上架的部分还不算真正确认入库，不计入金额，避免这里的数字和最终应付对不上。
-                const lineAmount = it.unitPrice != null ? it.putawayQty * it.unitPrice : null
-                return (
-                  <tr key={it.id}>
-                    <td className="py-2 text-doc-code-muted">{it.productCode}</td>
-                    <td className="py-2 text-muted-foreground">{it.articleNumber || '—'}</td>
-                    <td className="py-2 text-muted-foreground">{it.spec || '—'}</td>
-                    <td className="py-2 font-medium">{it.productName}</td>
-                    <td className="py-2 text-muted-foreground">{it.color || '—'}</td>
-                    <td className="text-center text-muted-foreground">{it.unit || '—'}</td>
-                    <td className="text-right tabular-nums">{it.orderedQty}</td>
-                    <td className="text-right tabular-nums">{it.receivedQty}</td>
-                    <td className="text-right tabular-nums text-muted-foreground">{lineRemain}</td>
-                    <td className="text-right tabular-nums">{it.putawayQty}</td>
-                    <td className="text-right tabular-nums text-muted-foreground">
-                      {it.unitPrice != null ? `¥${it.unitPrice.toFixed(2)}` : '—'}
-                    </td>
-                    <td className="text-right tabular-nums font-medium">
-                      {lineAmount != null ? `¥${lineAmount.toFixed(2)}` : '—'}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={[
+            { key: 'productCode', title: '编码', width: 110, render: v => <span className="text-doc-code-muted">{(v as string) || '—'}</span> },
+            { key: 'articleNumber', title: '货号', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            { key: 'spec', title: '型号', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
+            { key: 'color', title: '颜色', width: 90, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            { key: 'orderedQty', title: '应到', width: 90 },
+            { key: 'receivedQty', title: '已收', width: 90 },
+            { key: 'lineRemain', title: '剩余', width: 90, render: v => <span className="text-muted-foreground">{String(v)}</span> },
+            { key: 'putawayQty', title: '已上架', width: 90 },
+            { key: 'unitPrice', title: '单价', width: 100, render: v => <span className="text-muted-foreground">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
+            { key: 'lineAmount', title: '小记', width: 110, render: v => <span className="font-medium">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
+          ] satisfies TableColumn<InboundTaskItem & { lineRemain: number; lineAmount: number | null }>[]}
+          data={items.map(it => ({
+            ...it,
+            lineRemain: Math.max(0, it.orderedQty - it.receivedQty),
+            // 小记按「已上架」量算，跟审核结算（recomputePurchasePayable）的取数口径一致——
+            // 已收但还没上架的部分还不算真正确认入库，不计入金额，避免这里的数字和最终应付对不上。
+            lineAmount: it.unitPrice != null ? it.putawayQty * it.unitPrice : null,
+          }))}
+          rowKey="id"
+          emptyText="暂无商品明细"
+        />
 
         <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
           <p className="text-muted-body">共 {items.length} 种商品</p>

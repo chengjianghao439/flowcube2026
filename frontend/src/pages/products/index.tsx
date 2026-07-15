@@ -119,11 +119,11 @@ export default function ProductsPage() {
     { key:'code', title:'编码', width:120 },
     { key:'articleNumber', title:'货号', width:100, render:v=>(v as string)||'-' },
     { key:'spec', title:'型号', render:v=>(v as string)||'-' },
-    { key:'name', title:'商品名称' },
+    { key:'name', title:'商品名称', width:180 },
     { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
     { key:'color', title:'颜色', width:80, render:v=>(v as string)||'-' },
     { key:'unit', title:'单位', width:60 },
-    { key:'supplierName', title:'供应商', width:100, render:v=>(v as string)||'-' },
+    { key:'supplierName', title:'供应商', width:140, render:v=>(v as string)||'-' },
     { key:'isActive', title:'状态', width:70, render:(_,r)=><Badge variant="outline" className={`text-xs font-medium ${r.isActive ? 'text-green-700 border-green-300 bg-green-50' : 'text-muted-foreground border-muted-foreground/30 bg-muted/20'}`}>{r.isActive?'启用':'停用'}</Badge> },
     { key:'id', title:'操作', width:140, render:(_,r)=>(
       <TableActionsMenu

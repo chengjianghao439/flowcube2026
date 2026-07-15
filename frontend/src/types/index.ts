@@ -56,6 +56,7 @@ export interface TableColumn<T extends object> {
   title: string
   width?: number | string
   render?: (value: unknown, record: T) => React.ReactNode
+  sortable?: boolean
 }
 
 // ─── 通用查询参数 ───────────────────────────────────────────────────────────────

@@ -119,8 +119,8 @@ export default function RacksPage() {
     },
     { key: 'code', title: '编码', width: 100 },
     { key: 'zone', title: '库区', width: 72, render: v => (v as string) || '—' },
-    { key: 'name', title: '名称', render: v => (v as string) || '—' },
-    { key: 'warehouseName', title: '仓库' },
+    { key: 'name', title: '名称', width: 180, render: v => (v as string) || '—' },
+    { key: 'warehouseName', title: '仓库', width: 140 },
     {
       key: 'status',
       title: '状态',

@@ -7,6 +7,19 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import DataTable from '@/components/shared/DataTable'
+import type { TableColumn } from '@/types'
+
+function withRank<T extends object>(rows: T[]): (T & { rank: number })[] {
+  return rows.map((row, index) => ({ ...row, rank: index + 1 }))
+}
+
+function rankColumn<T extends { rank: number }>(): TableColumn<T> {
+  return {
+    key: 'rank', title: '排名', width: 70,
+    render: v => <span className="text-muted-foreground">#{v as number}</span>,
+  }
+}
 
 type SummaryTab = 'purchase' | 'sale' | 'inventory'
 
@@ -298,56 +311,32 @@ export default function ReportsPage() {
                   </div>
                   <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">供应商排名 Top 10</h3>
-                    {!purchaseQ.data.bySupplier.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-table-head">
-                          <th className="pb-2 text-left">供应商</th>
-                          <th className="pb-2 text-left">单数</th>
-                          <th className="pb-2 text-left">金额</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {purchaseQ.data.bySupplier.map((row, index) => (
-                          <tr key={row.supplierName} className="border-t">
-                            <td className="py-1.5">
-                              <span className="mr-2 text-muted-foreground">#{index + 1}</span>
-                              {row.supplierName}
-                            </td>
-                            <td className="text-left">{row.orderCount}</td>
-                            <td className="text-left font-medium">¥{row.totalAmount.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <DataTable
+                      columns={[
+                        rankColumn(),
+                        { key: 'supplierName', title: '供应商', width: 180 },
+                        { key: 'orderCount', title: '单数', width: 90 },
+                        { key: 'totalAmount', title: '金额', width: 120, render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+                      ]}
+                      data={withRank(purchaseQ.data.bySupplier)}
+                      rowKey="rank"
+                      emptyText="暂无数据"
+                    />
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-5">
                   <h3 className="mb-4 text-card-title">商品采购量 Top 20</h3>
-                  {!purchaseQ.data.byProduct.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-table-head border-b">
-                          <th className="pb-2 text-left">商品</th>
-                          <th className="pb-2 text-left">数量</th>
-                          <th className="pb-2 text-left">金额</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {purchaseQ.data.byProduct.map((row, index) => (
-                          <tr key={row.productName} className="border-b last:border-0">
-                            <td className="py-1.5">
-                              <span className="mr-2 text-muted-foreground">#{index + 1}</span>
-                              {row.productName}
-                            </td>
-                            <td className="text-left">{row.totalQty}</td>
-                            <td className="text-left font-medium">¥{row.totalAmount.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    columns={[
+                      rankColumn(),
+                      { key: 'productName', title: '商品', width: 180 },
+                      { key: 'totalQty', title: '数量', width: 90 },
+                      { key: 'totalAmount', title: '金额', width: 120, render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+                    ]}
+                    data={withRank(purchaseQ.data.byProduct)}
+                    rowKey="rank"
+                    emptyText="暂无数据"
+                  />
                 </div>
               </>
             )}
@@ -378,56 +367,32 @@ export default function ReportsPage() {
                   </div>
                   <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">客户销售排名 Top 10</h3>
-                    {!saleQ.data.byCustomer.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-table-head">
-                          <th className="pb-2 text-left">客户</th>
-                          <th className="pb-2 text-left">单数</th>
-                          <th className="pb-2 text-left">金额</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {saleQ.data.byCustomer.map((row, index) => (
-                          <tr key={row.customerName} className="border-t">
-                            <td className="py-1.5">
-                              <span className="mr-2 text-muted-foreground">#{index + 1}</span>
-                              {row.customerName}
-                            </td>
-                            <td className="text-left">{row.orderCount}</td>
-                            <td className="text-left font-medium">¥{row.totalAmount.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <DataTable
+                      columns={[
+                        rankColumn(),
+                        { key: 'customerName', title: '客户', width: 180 },
+                        { key: 'orderCount', title: '单数', width: 90 },
+                        { key: 'totalAmount', title: '金额', width: 120, render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+                      ]}
+                      data={withRank(saleQ.data.byCustomer)}
+                      rowKey="rank"
+                      emptyText="暂无数据"
+                    />
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-5">
                   <h3 className="mb-4 text-card-title">热销商品 Top 20</h3>
-                  {!saleQ.data.byProduct.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-table-head border-b">
-                          <th className="pb-2 text-left">商品</th>
-                          <th className="pb-2 text-left">销售量</th>
-                          <th className="pb-2 text-left">销售额</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {saleQ.data.byProduct.map((row, index) => (
-                          <tr key={row.productName} className="border-b last:border-0">
-                            <td className="py-1.5">
-                              <span className="mr-2 text-muted-foreground">#{index + 1}</span>
-                              {row.productName}
-                            </td>
-                            <td className="text-left">{row.totalQty}</td>
-                            <td className="text-left font-medium">¥{row.totalAmount.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    columns={[
+                      rankColumn(),
+                      { key: 'productName', title: '商品', width: 180 },
+                      { key: 'totalQty', title: '销售量', width: 90 },
+                      { key: 'totalAmount', title: '销售额', width: 120, render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+                    ]}
+                    data={withRank(saleQ.data.byProduct)}
+                    rowKey="rank"
+                    emptyText="暂无数据"
+                  />
                 </div>
               </>
             )}
@@ -453,33 +418,19 @@ export default function ReportsPage() {
                 </div>
                 <div className="rounded-lg border border-border bg-card p-5">
                   <h3 className="mb-4 text-card-title">商品出入库量 Top 30</h3>
-                  {!invQ.data.turnover.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-table-head border-b">
-                          <th className="pb-2 text-left">编码</th>
-                          <th className="pb-2 text-left">名称</th>
-                          <th className="pb-2 text-left">单位</th>
-                          <th className="pb-2 text-left">入库量</th>
-                          <th className="pb-2 text-left">出库量</th>
-                          <th className="pb-2 text-left">当前库存</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {invQ.data.turnover.map(item => (
-                          <tr key={item.code} className="border-b last:border-0">
-                            <td className="py-1.5 text-muted-foreground">{item.code}</td>
-                            <td className="py-1.5 font-medium">{item.name}</td>
-                            <td className="text-left">{item.unit}</td>
-                            <td className="text-left text-green-600">+{item.inboundQty}</td>
-                            <td className="text-left text-red-500">-{item.outboundQty}</td>
-                            <td className="text-left font-semibold">{item.currentQty}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    columns={[
+                      { key: 'code', title: '编码', width: 120, render: v => <span className="text-muted-foreground">{String(v)}</span> },
+                      { key: 'name', title: '名称', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
+                      { key: 'unit', title: '单位', width: 80 },
+                      { key: 'inboundQty', title: '入库量', width: 100, render: v => <span className="text-green-600">+{String(v)}</span> },
+                      { key: 'outboundQty', title: '出库量', width: 100, render: v => <span className="text-red-500">-{String(v)}</span> },
+                      { key: 'currentQty', title: '当前库存', width: 100, render: v => <span className="font-semibold">{String(v)}</span> },
+                    ]}
+                    data={invQ.data.turnover.map((item, index) => ({ ...item, rank: index + 1 }))}
+                    rowKey="rank"
+                    emptyText="暂无数据"
+                  />
                 </div>
               </>
             )}

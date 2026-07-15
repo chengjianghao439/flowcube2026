@@ -13,6 +13,10 @@ interface DataTableProps<T extends object> {
   onSelectChange?: (ids: Set<number>) => void
   onRowDoubleClick?: (row: T) => void
   columnStorageKey?: string
+  /** 当前排序字段（配合 col.sortable 使用），受控由调用方维护 */
+  sortKey?: string
+  sortDirection?: 'asc' | 'desc'
+  onSortChange?: (key: string) => void
 }
 
 function isAction(key: string, title: string): boolean {
@@ -25,6 +29,7 @@ export default function DataTable<T extends object>({
   selectable = false, selectedIds, onSelectChange,
   onRowDoubleClick,
   columnStorageKey,
+  sortKey, sortDirection, onSortChange,
 }: DataTableProps<T>) {
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
@@ -278,16 +283,31 @@ export default function DataTable<T extends object>({
                   style={getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined}
                 >
                   <div className="group flex items-center gap-2">
-                    <span className="min-w-0 flex-1 whitespace-nowrap" title={col.title}>{col.title}</span>
-                    <button
-                      type="button"
-                      aria-label={`调整${col.title}列宽`}
-                      onMouseDown={(event) => startResize(event, col)}
-                      onClick={event => event.preventDefault()}
-                      className="ml-auto flex h-5 w-3 shrink-0 cursor-col-resize items-center justify-center rounded-sm opacity-70 transition-opacity group-hover:opacity-100"
-                    >
-                      <span className="block h-4 w-px bg-border/80" />
-                    </button>
+                    {col.sortable && onSortChange ? (
+                      <button
+                        type="button"
+                        onClick={() => onSortChange(String(col.key))}
+                        className={`min-w-0 flex-1 whitespace-nowrap text-left transition-colors hover:text-foreground ${
+                          sortKey === String(col.key) ? 'text-primary' : ''
+                        }`}
+                        title={col.title}
+                      >
+                        {col.title} {sortKey === String(col.key) ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                      </button>
+                    ) : (
+                      <span className="min-w-0 flex-1 whitespace-nowrap" title={col.title}>{col.title}</span>
+                    )}
+                    {!isAction(String(col.key), col.title) && (
+                      <button
+                        type="button"
+                        aria-label={`调整${col.title}列宽`}
+                        onMouseDown={(event) => startResize(event, col)}
+                        onClick={event => event.preventDefault()}
+                        className="ml-auto flex h-5 w-3 shrink-0 cursor-col-resize items-center justify-center rounded-sm opacity-70 transition-opacity group-hover:opacity-100"
+                      >
+                        <span className="block h-4 w-px bg-border/80" />
+                      </button>
+                    )}
                   </div>
                 </th>
               ))}
@@ -337,22 +357,30 @@ export default function DataTable<T extends object>({
                         />
                       </td>
                     )}
-                    {orderedColumns.map((col) => (
+                    {orderedColumns.map((col) => {
+                      const rawValue = (row as Record<string, unknown>)[String(col.key)]
+                      const textValue = String(rawValue ?? '')
+                      return (
                       <td
                         key={String(col.key)}
                         onDoubleClick={isAction(String(col.key), col.title) ? e => e.stopPropagation() : undefined}
                         className={`px-4 text-foreground align-middle ${
                           isAction(String(col.key), col.title)
                             ? 'sticky right-0 z-10 min-w-[180px] bg-card py-2.5 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.08)] group-hover:bg-muted/30'
-                            : 'py-2.5'
+                            : 'overflow-hidden py-2.5'
                         }`}
                         style={getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined}
                       >
-                        {col.render
-                          ? (col.render((row as Record<string, unknown>)[String(col.key)], row) as ReactNode)
-                          : String((row as Record<string, unknown>)[String(col.key)] ?? '')}
+                        {isAction(String(col.key), col.title)
+                          ? (col.render ? (col.render(rawValue, row) as ReactNode) : textValue)
+                          : (
+                            <div className="truncate" title={textValue}>
+                              {col.render ? (col.render(rawValue, row) as ReactNode) : textValue}
+                            </div>
+                          )}
                       </td>
-                    ))}
+                      )
+                    })}
                   </tr>
                 )
               })

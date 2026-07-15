@@ -163,6 +163,7 @@ export default function PickingWavesPage() {
     {
       key: 'warehouseName',
       title: '仓库',
+      width: 140,
       render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span>,
     },
     {

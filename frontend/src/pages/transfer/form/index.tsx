@@ -27,6 +27,8 @@ import { ProductFinder } from '@/components/finder'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { cn } from '@/lib/utils'
+import DataTable from '@/components/shared/DataTable'
+import type { TableColumn } from '@/types'
 import {
   getTransferDetailApi,
   createTransferApi,
@@ -449,38 +451,24 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
       </SectionCard>
 
       <SectionCard title="调拨明细" compact>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-table-head">
-                <th className="w-28 pb-2 text-left">编码</th>
-                <th className="w-24 pb-2 text-left">货号</th>
-                <th className="w-24 pb-2 text-left">型号</th>
-                <th className="pb-2 text-left">商品</th>
-                <th className="w-16 pb-2 text-left">颜色</th>
-                <th className="w-14 pb-2 text-center">单位</th>
-                <th className="w-20 pb-2 text-right">计划</th>
-                {showProgress && <th className="w-20 pb-2 text-right">已出库</th>}
-                {showProgress && <th className="w-20 pb-2 text-right">已入库</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {(order.items ?? []).map(item => (
-                <tr key={item.id} className="border-b border-border/40 transition-colors hover:bg-muted/20">
-                  <td className="py-2.5"><span className="text-doc-code-muted">{item.productCode}</span></td>
-                  <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
-                  <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
-                  <td className="py-2.5 font-medium">{item.productName}</td>
-                  <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
-                  <td className="py-2.5 text-center text-muted-foreground">{item.unit}</td>
-                  <td className="py-2.5 text-right">{item.quantity}</td>
-                  {showProgress && <td className="py-2.5 text-right text-amber-600">{item.deductedQty ?? 0}</td>}
-                  {showProgress && <td className="py-2.5 text-right text-emerald-600">{item.receivedQty ?? 0}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={[
+            { key: 'productCode', title: '编码', width: 130, render: v => <span className="text-doc-code-muted">{String(v)}</span> },
+            { key: 'articleNumber', title: '货号', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            { key: 'spec', title: '型号', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
+            { key: 'color', title: '颜色', width: 90, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{String(v)}</span> },
+            { key: 'quantity', title: '计划', width: 90 },
+            ...(showProgress ? [
+              { key: 'deductedQty', title: '已出库', width: 90, render: v => <span className="text-amber-600">{(v as number) ?? 0}</span> },
+              { key: 'receivedQty', title: '已入库', width: 90, render: v => <span className="text-emerald-600">{(v as number) ?? 0}</span> },
+            ] as TableColumn<TransferItem>[] : []),
+          ] satisfies TableColumn<TransferItem>[]}
+          data={order.items ?? []}
+          rowKey="id"
+          emptyText="暂无调拨明细"
+        />
 
         <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
           <p className="text-muted-body">共 {order.items?.length ?? 0} 种商品</p>

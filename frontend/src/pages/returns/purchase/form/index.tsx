@@ -34,9 +34,11 @@ import {
   createPurchaseReturnApi, confirmPurchaseReturnApi, cancelPurchaseReturnApi,
   getPurchaseReturnSourceOrderApi, getPurchaseReturnDetailApi,
 } from '@/api/returns'
-import type { PurchaseReturn, PurchaseReturnSourceOrder } from '@/api/returns'
+import type { PurchaseReturn, PurchaseReturnSourceOrder, ReturnItem } from '@/api/returns'
 import type { FinderResult } from '@/types/finder'
 import type { ProductFinderResult } from '@/types/products'
+import DataTable from '@/components/shared/DataTable'
+import type { TableColumn } from '@/types'
 
 interface DraftItem {
   _key: number
@@ -543,38 +545,22 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       </SectionCard>
 
       <SectionCard title="退货明细" compact>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-table-head">
-                <th className="w-28 pb-2 text-left">编码</th>
-                <th className="w-28 pb-2 text-left">货号</th>
-                <th className="w-28 pb-2 text-left">型号</th>
-                <th className="pb-2 text-left">商品</th>
-                <th className="w-20 pb-2 text-left">颜色</th>
-                <th className="w-16 pb-2 text-center">单位</th>
-                <th className="w-20 pb-2 text-right">数量</th>
-                <th className="w-24 pb-2 text-right">单价</th>
-                <th className="w-24 pb-2 text-right">金额</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(ret.items ?? []).map(item => (
-                <tr key={item.id} className="border-b border-border/40 transition-colors hover:bg-muted/20">
-                  <td className="py-2.5"><span className="text-doc-code-muted">{item.productCode}</span></td>
-                  <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
-                  <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
-                  <td className="py-2.5 font-medium">{item.productName}</td>
-                  <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
-                  <td className="py-2.5 text-center text-muted-foreground">{item.unit}</td>
-                  <td className="py-2.5 text-right">{item.quantity}</td>
-                  <td className="py-2.5 text-right">¥{Number(item.unitPrice).toFixed(2)}</td>
-                  <td className="py-2.5 text-right font-semibold">¥{Number(item.amount).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={[
+            { key: 'productCode', title: '编码', width: 130, render: v => <span className="text-doc-code-muted">{String(v)}</span> },
+            { key: 'articleNumber', title: '货号', width: 110, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            { key: 'spec', title: '型号', width: 110, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
+            { key: 'color', title: '颜色', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{String(v)}</span> },
+            { key: 'quantity', title: '数量', width: 90 },
+            { key: 'unitPrice', title: '单价', width: 110, render: v => `¥${Number(v).toFixed(2)}` },
+            { key: 'amount', title: '金额', width: 110, render: v => <span className="font-semibold">¥{Number(v).toFixed(2)}</span> },
+          ] satisfies TableColumn<ReturnItem>[]}
+          data={ret.items ?? []}
+          rowKey="id"
+          emptyText="暂无退货明细"
+        />
         <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
           <p className="text-muted-body">共 {ret.items?.length ?? 0} 种商品</p>
           <div className="text-right">

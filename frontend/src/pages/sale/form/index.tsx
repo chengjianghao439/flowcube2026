@@ -11,7 +11,7 @@
 
 import { useState, useCallback, useContext, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Loader2, Save, Warehouse, X } from 'lucide-react'
+import { AlertTriangle, Loader2, PackageOpen, Plus, Save, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
@@ -33,6 +33,8 @@ import { useCarriersActive } from '@/hooks/useCarriers'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
+import DataTable from '@/components/shared/DataTable'
+import type { TableColumn } from '@/types'
 import { getCustomerPriceApi } from '@/api/price-lists'
 import { cn } from '@/lib/utils'
 
@@ -52,6 +54,35 @@ interface DraftItem extends Omit<SaleOrderItem, 'id' | 'amount'> {
   spec?: string | null
   color?: string | null
   priceSource?: 'list' | 'default' | 'manual'
+}
+
+/** CreateView 和 EditView 共用的表单校验：通过则返回过滤后的有效明细，否则弹 toast 提示并返回 null */
+function validateSaleForm(input: {
+  items: DraftItem[]
+  customerId: string
+  customerName: string
+  warehouseId: string
+  warehouseName: string
+  receiverPhone: string
+  setCustomerError: (v: boolean) => void
+  setWarehouseError: (v: boolean) => void
+  setInvalidItemKeys: (v: Set<number>) => void
+}): DraftItem[] | null {
+  const { items, customerId, customerName, warehouseId, warehouseName, receiverPhone, setCustomerError, setWarehouseError, setInvalidItemKeys } = input
+  const filledItems = items.filter(i => i.productId > 0)
+  const missingCustomer = !customerId || !customerName
+  const missingWarehouse = !warehouseId || !warehouseName
+  setCustomerError(missingCustomer)
+  setWarehouseError(missingWarehouse)
+  if (missingCustomer) { toast.warning('请选择客户'); return null }
+  if (missingWarehouse) { toast.warning('请选择仓库'); return null }
+  if (!filledItems.length) { toast.warning('请添加至少一条明细'); return null }
+  const badItemKeys = new Set(filledItems.filter(i => i.quantity <= 0 || i.unitPrice <= 0).map(i => i._key))
+  setInvalidItemKeys(badItemKeys)
+  if (filledItems.find(i => !Number.isInteger(i.quantity) || i.quantity <= 0)) { toast.warning('销售数量必须为大于 0 的整数'); return null }
+  if (filledItems.find(i => i.unitPrice <= 0)) { toast.warning('商品价格必须大于 0'); return null }
+  if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的手机号'); return null }
+  return filledItems
 }
 
 // ─── 信息区块 ─────────────────────────────────────────────────────────────────
@@ -172,7 +203,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 
   const { data: carrierOptions = [] } = useCarriersActive()
 
-  const [items,        setItems]        = useState<DraftItem[]>(() => [mkEmpty()])
+  const [items,        setItems]        = useState<DraftItem[]>(() => [])
   const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
   const [finderOpen,    setFinderOpen]    = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
@@ -182,8 +213,16 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
 
   // 未保存变更保护：已填写商品或表头字段有值才标脏
-  const isDirty = !!(customerId || warehouseId || remark || carrierId || receiverName || items.some(i => i.productId > 0))
+  const isDirty = !!(customerId || warehouseId || remark || carrierId || receiverName || items.length)
   useDirtyGuard(tabPath, isDirty)
+
+  // 添加商品：新增一行并立即弹出选品对话框，与采购单/调拨单/退货单一致
+  const addItem = () => {
+    const item = mkEmpty()
+    setItems(prev => [...prev, item])
+    setFinderItemKey(item._key)
+    setFinderOpen(true)
+  }
 
   // 触发已有商品行的客户价格等级查询（只查价，不设 customerId）
   const handleCustomerChange = useCallback(async (cid: string) => {
@@ -209,43 +248,10 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     void handleCustomerChange(String(result.id))
   }
 
-  // 删除行：至少保留一行空行
-  const removeItem = (k: number) => setItems(prev => {
-    const filtered = prev.filter(i => i._key !== k)
-    return filtered.length === 0 ? [mkEmpty()] : filtered
-  })
+  const removeItem = (k: number) => setItems(prev => prev.filter(i => i._key !== k))
 
-  // 更新行：最后一行填完后自动追加新空行
   const updateItem = (k: number, field: string, val: string | number) =>
-    setItems(prev => {
-      const updated = prev.map(i => i._key === k ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource } : i)
-      const last = updated[updated.length - 1]
-      if (last._key === k && last.productId > 0 && last.quantity > 0) return [...updated, mkEmpty()]
-      return updated
-    })
-
-  // 数量框 Enter 键：跳到下一行商品，或新增行后自动打开选择器
-  const handleQuantityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, k: number) => {
-    if (e.key !== 'Enter') return
-    e.preventDefault()
-    setItems(prev => {
-      const idx = prev.findIndex(i => i._key === k)
-      if (idx === -1) return prev
-      const isLast = idx === prev.length - 1
-      const cur = prev[idx]
-      if (isLast) {
-        if (cur.productId > 0 && cur.quantity > 0) {
-          const newItem = mkEmpty()
-          setTimeout(() => { setFinderItemKey(newItem._key); setFinderOpen(true) }, 50)
-          return [...prev, newItem]
-        }
-      } else {
-        const nextKey = prev[idx + 1]._key
-        setTimeout(() => { setFinderItemKey(nextKey); setFinderOpen(true) }, 0)
-      }
-      return prev
-    })
-  }
+    setItems(prev => prev.map(i => i._key === k ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource } : i))
 
   async function handleFinderConfirm(product: ProductFinderResult) {
     if (finderItemKey === null) return
@@ -268,19 +274,11 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   }
 
   async function handleSubmit() {
-    const filledItems = items.filter(i => i.productId > 0)
-    const missingCustomer = !customerId || !customerName
-    const missingWarehouse = !warehouseId || !warehouseName
-    setCustomerError(missingCustomer)
-    setWarehouseError(missingWarehouse)
-    if (missingCustomer) { toast.warning('请选择客户'); return }
-    if (missingWarehouse) { toast.warning('请选择仓库'); return }
-    if (!filledItems.length) { toast.warning('请添加至少一条明细'); return }
-    const badItemKeys = new Set(filledItems.filter(i => i.quantity <= 0 || i.unitPrice <= 0).map(i => i._key))
-    setInvalidItemKeys(badItemKeys)
-    if (filledItems.find(i => !Number.isInteger(i.quantity) || i.quantity <= 0)) { toast.warning('销售数量必须为大于 0 的整数'); return }
-    if (filledItems.find(i => i.unitPrice <= 0)) { toast.warning('商品价格必须大于 0'); return }
-    if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的手机号'); return }
+    const filledItems = validateSaleForm({
+      items, customerId, customerName, warehouseId, warehouseName, receiverPhone,
+      setCustomerError, setWarehouseError, setInvalidItemKeys,
+    })
+    if (!filledItems) return
     try {
       await createMutate.mutateAsync({
         customerId: +customerId, customerName,
@@ -383,101 +381,118 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         </div>
       </SectionCard>
 
-      {/* 商品明细：末行常驻空行，填完自动追加，无需"添加"按钮；跟其它单据一致用平铺表格，不用网格挤在一起 */}
-      <SectionCard title="商品明细" compact>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-table-head">
-                <th className="w-28 pb-2 text-left">编码</th>
-                <th className="w-20 pb-2 text-left">货号</th>
-                <th className="w-20 pb-2 text-left">型号</th>
-                <th className="pb-2 text-left">商品</th>
-                <th className="w-20 pb-2 text-left">颜色</th>
-                <th className="w-16 pb-2 text-center">单位</th>
-                <th className="w-20 pb-2 text-right">数量</th>
-                <th className="w-24 pb-2 text-right">单价 (¥)</th>
-                <th className="w-28 pb-2 text-right">金额</th>
-                <th className="w-10 pb-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map(item => (
-                <tr key={item._key} className="border-b border-border/40">
-                  <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
-                  <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
-                  <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
-                  <td className="py-2.5 pr-3">
-                    <button
-                      type="button"
-                      onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
-                      onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-                      className={cn('block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
-                    >
-                      {item.productName
-                        ? <span className="truncate font-medium">{item.productName}</span>
-                        : <span className="text-muted-foreground">点击选择商品...</span>}
-                    </button>
-                  </td>
-                  <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
-
-                  <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
-
-                  <td className="py-2.5">
-                    <Input
-                      type="number" min="1" step="1" placeholder="数量"
-                      value={item.quantity}
-                      ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
-                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
-                      className="text-right text-sm"
-                    />
-                  </td>
-
-                  <td className="py-2.5">
-                    <Input
-                      type="number" min="0" step="0.01" placeholder="单价"
-                      value={item.unitPrice}
-                      disabled={!!priceLoading[item._key]}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                      className={`text-right text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`}
-                    />
-                  </td>
-
-                  <td className="py-2.5 text-right font-medium tabular-nums">
-                    ¥{(item.quantity * item.unitPrice).toFixed(2)}
-                  </td>
-
-                  <td className="py-2.5 text-center">
-                    <Button
-                      type="button" size="sm" variant="ghost"
-                      className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeItem(item._key)}
-                    >✕</Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* 金额统计：仅统计已选商品的行 */}
-        {items.some(i => i.productId > 0) && (
-          <div className="mt-2 flex items-center justify-between border-t border-border pt-4">
-            <div className="space-y-0.5 text-muted-body">
-              <p>商品种数：{items.filter(i => i.productId > 0).length} 种　合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
-              {items.some(i => i.productId > 0 && i.costPrice != null && i.unitPrice < Number(i.costPrice)) && (
-                <p className="inline-flex items-center gap-1 text-destructive">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  存在低于进价的销售行，提交后会记录到时间线
-                </p>
-              )}
-            </div>
-            <div className="text-right">
-              <p className="text-helper">合计金额</p>
-              <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
-            </div>
+      {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
+      <SectionCard
+        title="商品明细"
+        compact
+        actions={
+          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            添加商品
+          </Button>
+        }
+      >
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
+            <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">还没有商品明细，点击上方"添加商品"开始录入</p>
           </div>
+        ) : (
+          <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-table-head">
+                  <th className="w-28 pb-2 text-left">编码</th>
+                  <th className="w-20 pb-2 text-left">货号</th>
+                  <th className="w-20 pb-2 text-left">型号</th>
+                  <th className="pb-2 text-left">商品</th>
+                  <th className="w-20 pb-2 text-left">颜色</th>
+                  <th className="w-16 pb-2 text-center">单位</th>
+                  <th className="w-20 pb-2 text-right">数量</th>
+                  <th className="w-24 pb-2 text-right">单价 (¥)</th>
+                  <th className="w-28 pb-2 text-right">金额</th>
+                  <th className="w-10 pb-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(item => (
+                  <tr key={item._key} className="border-b border-border/40">
+                    <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
+                    <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
+                    <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
+                    <td className="py-2.5 pr-3">
+                      <button
+                        type="button"
+                        onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+                        onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
+                        className={cn('block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
+                      >
+                        {item.productName
+                          ? <span className="truncate font-medium">{item.productName}</span>
+                          : <span className="text-muted-foreground">点击选择商品...</span>}
+                      </button>
+                    </td>
+                    <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
+
+                    <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
+
+                    <td className="py-2.5">
+                      <Input
+                        type="number" min="1" step="1" placeholder="数量"
+                        value={item.quantity}
+                        ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
+                        className="text-right text-sm"
+                      />
+                    </td>
+
+                    <td className="py-2.5">
+                      <Input
+                        type="number" min="0" step="0.01" placeholder="单价"
+                        value={item.unitPrice}
+                        disabled={!!priceLoading[item._key]}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
+                        className={`text-right text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`}
+                      />
+                    </td>
+
+                    <td className="py-2.5 text-right font-medium tabular-nums">
+                      ¥{(item.quantity * item.unitPrice).toFixed(2)}
+                    </td>
+
+                    <td className="py-2.5 text-center">
+                      <Button
+                        type="button" size="sm" variant="ghost"
+                        className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeItem(item._key)}
+                      >✕</Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 金额统计：仅统计已选商品的行 */}
+          {items.some(i => i.productId > 0) && (
+            <div className="mt-2 flex items-center justify-between border-t border-border pt-4">
+              <div className="space-y-0.5 text-muted-body">
+                <p>商品种数：{items.filter(i => i.productId > 0).length} 种　合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
+                {items.some(i => i.productId > 0 && i.costPrice != null && i.unitPrice < Number(i.costPrice)) && (
+                  <p className="inline-flex items-center gap-1 text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    存在低于进价的销售行，提交后会记录到时间线
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-helper">合计金额</p>
+                <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </SectionCard>
 
@@ -530,15 +545,13 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
 
   const { data: carrierOptions = [] } = useCarriersActive()
 
-  const [items, setItems] = useState<DraftItem[]>(() => {
-    const loaded = (order.items ?? []).map((item, i) => ({
+  const [items, setItems] = useState<DraftItem[]>(() =>
+    (order.items ?? []).map((item, i) => ({
       _key: i, productId: item.productId, productCode: item.productCode,
       productName: item.productName, unit: item.unit, quantity: item.quantity,
       unitPrice: item.unitPrice, remark: item.remark ?? '', priceSource: 'default' as const, costPrice: item.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null,
-    }))
-    // 已有明细末尾追加一行空行，保持 Excel 式输入体验
-    return [...loaded, mkEmpty()]
-  })
+    })),
+  )
   const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
   const [finderOpen,    setFinderOpen]    = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
@@ -546,6 +559,14 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
   const [customerError, setCustomerError] = useState(false)
   const [warehouseError, setWarehouseError] = useState(false)
   const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
+
+  // 添加商品：新增一行并立即弹出选品对话框，与采购单/调拨单/退货单一致
+  const addItem = () => {
+    const item = mkEmpty()
+    setItems(prev => [...prev, item])
+    setFinderItemKey(item._key)
+    setFinderOpen(true)
+  }
 
   const handleCustomerChange = useCallback(async (cid: string) => {
     if (!cid) return
@@ -569,43 +590,10 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
     void handleCustomerChange(String(result.id))
   }
 
-  // 删除行：至少保留一行空行
-  const removeItem = (k: number) => setItems(prev => {
-    const filtered = prev.filter(i => i._key !== k)
-    return filtered.length === 0 ? [mkEmpty()] : filtered
-  })
+  const removeItem = (k: number) => setItems(prev => prev.filter(i => i._key !== k))
 
-  // 更新行：最后一行填完后自动追加新空行
   const updateItem = (k: number, field: string, val: string | number) =>
-    setItems(prev => {
-      const updated = prev.map(i => i._key === k ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource } : i)
-      const last = updated[updated.length - 1]
-      if (last._key === k && last.productId > 0 && last.quantity > 0) return [...updated, mkEmpty()]
-      return updated
-    })
-
-  // 数量框 Enter 键：跳到下一行商品，或新增行后自动打开选择器
-  const handleQuantityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, k: number) => {
-    if (e.key !== 'Enter') return
-    e.preventDefault()
-    setItems(prev => {
-      const idx = prev.findIndex(i => i._key === k)
-      if (idx === -1) return prev
-      const isLast = idx === prev.length - 1
-      const cur = prev[idx]
-      if (isLast) {
-        if (cur.productId > 0 && cur.quantity > 0) {
-          const newItem = mkEmpty()
-          setTimeout(() => { setFinderItemKey(newItem._key); setFinderOpen(true) }, 50)
-          return [...prev, newItem]
-        }
-      } else {
-        const nextKey = prev[idx + 1]._key
-        setTimeout(() => { setFinderItemKey(nextKey); setFinderOpen(true) }, 0)
-      }
-      return prev
-    })
-  }
+    setItems(prev => prev.map(i => i._key === k ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource } : i))
 
   async function handleFinderConfirm(product: ProductFinderResult) {
     if (finderItemKey === null) return
@@ -628,19 +616,11 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
   }
 
   async function handleSubmit() {
-    const filledItems = items.filter(i => i.productId > 0)
-    const missingCustomer = !customerId || !customerName
-    const missingWarehouse = !warehouseId || !warehouseName
-    setCustomerError(missingCustomer)
-    setWarehouseError(missingWarehouse)
-    if (missingCustomer) { toast.warning('请选择客户'); return }
-    if (missingWarehouse) { toast.warning('请选择仓库'); return }
-    if (!filledItems.length) { toast.warning('请添加至少一条明细'); return }
-    const badItemKeys = new Set(filledItems.filter(i => i.quantity <= 0 || i.unitPrice <= 0).map(i => i._key))
-    setInvalidItemKeys(badItemKeys)
-    if (filledItems.find(i => !Number.isInteger(i.quantity) || i.quantity <= 0)) { toast.warning('销售数量必须为大于 0 的整数'); return }
-    if (filledItems.find(i => i.unitPrice <= 0)) { toast.warning('商品价格必须大于 0'); return }
-    if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的手机号'); return }
+    const filledItems = validateSaleForm({
+      items, customerId, customerName, warehouseId, warehouseName, receiverPhone,
+      setCustomerError, setWarehouseError, setInvalidItemKeys,
+    })
+    if (!filledItems) return
     try {
       await updateMutate.mutateAsync({
         id: order.id,
@@ -752,71 +732,86 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
         </div>
       </SectionCard>
 
-      {/* 商品明细：跟其它单据一致用平铺表格，不用网格挤在一起 */}
-      <SectionCard title="商品明细" compact>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-table-head">
-                <th className="w-28 pb-2 text-left">编码</th>
-                <th className="w-20 pb-2 text-left">货号</th>
-                <th className="w-20 pb-2 text-left">型号</th>
-                <th className="pb-2 text-left">商品</th>
-                <th className="w-20 pb-2 text-left">颜色</th>
-                <th className="w-16 pb-2 text-center">单位</th>
-                <th className="w-20 pb-2 text-right">数量</th>
-                <th className="w-24 pb-2 text-right">单价 (¥)</th>
-                <th className="w-28 pb-2 text-right">金额</th>
-                <th className="w-10 pb-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map(item => (
-                <tr key={item._key} className="border-b border-border/40">
-                  <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
-                  <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
-                  <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
-                  <td className="py-2.5 pr-3">
-                    <button
-                      type="button"
-                      onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
-                      onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-                      className={cn('block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
-                    >
-                      {item.productName
-                        ? <span className="truncate font-medium">{item.productName}</span>
-                        : <span className="text-muted-foreground">点击选择商品...</span>}
-                    </button>
-                  </td>
-                  <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
-
-                  <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
-
-                  <td className="py-2.5">
-                    <Input type="number" min="1" step="1" placeholder="数量" value={item.quantity}
-                      ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
-                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleQuantityKeyDown(e, item._key)}
-                      className="text-right text-sm" />
-                  </td>
-
-                  <td className="py-2.5">
-                    <Input type="number" min="0" step="0.01" placeholder="单价" value={item.unitPrice}
-                      disabled={!!priceLoading[item._key]}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                      className={`text-right text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`} />
-                  </td>
-
-                  <td className="py-2.5 text-right font-medium tabular-nums">¥{(item.quantity * item.unitPrice).toFixed(2)}</td>
-
-                  <td className="py-2.5 text-center">
-                    <Button type="button" size="sm" variant="ghost" className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
-                  </td>
+      {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
+      <SectionCard
+        title="商品明细"
+        compact
+        actions={
+          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            添加商品
+          </Button>
+        }
+      >
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
+            <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">还没有商品明细，点击上方"添加商品"开始录入</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-table-head">
+                  <th className="w-28 pb-2 text-left">编码</th>
+                  <th className="w-20 pb-2 text-left">货号</th>
+                  <th className="w-20 pb-2 text-left">型号</th>
+                  <th className="pb-2 text-left">商品</th>
+                  <th className="w-20 pb-2 text-left">颜色</th>
+                  <th className="w-16 pb-2 text-center">单位</th>
+                  <th className="w-20 pb-2 text-right">数量</th>
+                  <th className="w-24 pb-2 text-right">单价 (¥)</th>
+                  <th className="w-28 pb-2 text-right">金额</th>
+                  <th className="w-10 pb-2" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {items.map(item => (
+                  <tr key={item._key} className="border-b border-border/40">
+                    <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
+                    <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
+                    <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
+                    <td className="py-2.5 pr-3">
+                      <button
+                        type="button"
+                        onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+                        onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
+                        className={cn('block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
+                      >
+                        {item.productName
+                          ? <span className="truncate font-medium">{item.productName}</span>
+                          : <span className="text-muted-foreground">点击选择商品...</span>}
+                      </button>
+                    </td>
+                    <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
+
+                    <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
+
+                    <td className="py-2.5">
+                      <Input type="number" min="1" step="1" placeholder="数量" value={item.quantity}
+                        ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
+                        className="text-right text-sm" />
+                    </td>
+
+                    <td className="py-2.5">
+                      <Input type="number" min="0" step="0.01" placeholder="单价" value={item.unitPrice}
+                        disabled={!!priceLoading[item._key]}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
+                        className={`text-right text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`} />
+                    </td>
+
+                    <td className="py-2.5 text-right font-medium tabular-nums">¥{(item.quantity * item.unitPrice).toFixed(2)}</td>
+
+                    <td className="py-2.5 text-center">
+                      <Button type="button" size="sm" variant="ghost" className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </SectionCard>
 
       {/* 金额统计：仅统计已选商品的行 */}
@@ -950,11 +945,6 @@ function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; clo
         <>
           {/* 基础信息 */}
           <SectionCard title="基础信息" compact>
-            {order.status === 2 && (
-              <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-sm">
-                当前“已占库”仅表示这张销售单已经预占库存：会增加已占用、减少可用库存，但不会直接扣减当前库存，也不会自动生成仓库任务。点击“发货”后才会创建仓库任务进入仓库执行。
-              </div>
-            )}
             <div className="space-y-2 text-sm">
               <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-8 gap-y-3">
                 <div><span className="text-muted-foreground">客户：</span><span>{order.customerName}</span></div>
@@ -973,48 +963,35 @@ function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; clo
 
           {/* 商品明细 */}
           <SectionCard title="商品明细" compact>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-table-head">
-                    <th className="pb-2 text-left">编码</th>
-                    <th className="pb-2 text-left">货号</th>
-                    <th className="pb-2 text-left">型号</th>
-                    <th className="pb-2 text-left">名称</th>
-                    <th className="pb-2 text-left">颜色</th>
-                    <th className="w-16 pb-2 text-center">单位</th>
-                    <th className="w-20 pb-2 text-right">数量</th>
-                    <th className="w-24 pb-2 text-right">单价</th>
-                    <th className="w-24 pb-2 text-right">金额</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(order.items ?? []).map(item => (
-                    <tr key={item.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
-                      <td className="py-2.5"><span>{item.productCode}</span></td>
-                      <td className="py-2.5">{item.articleNumber || '-'}</td>
-                      <td className="py-2.5">{item.spec || '-'}</td>
-                      <td className="py-2.5">{item.productName}</td>
-                      <td className="py-2.5">{item.color || '-'}</td>
-                      <td className="py-2.5 text-center">{item.unit}</td>
-                      <td className="py-2.5 text-right tabular-nums">{item.quantity}</td>
-                      <td className="py-2.5 text-right">
-                        <div className="space-y-1">
-                          <div className="tabular-nums">¥{Number(item.unitPrice).toFixed(2)}</div>
-                          {item.belowCost && item.costPrice != null && (
-                            <div className="inline-flex items-center justify-end gap-1 text-[11px] text-destructive">
-                              <AlertTriangle className="h-3 w-3" />
-                              低于进价 ¥{Number(item.costPrice).toFixed(2)}
-                            </div>
-                          )}
+            <DataTable
+              columns={[
+                { key: 'productCode', title: '编码', width: 130 },
+                { key: 'articleNumber', title: '货号', width: 110, render: v => (v as string) || '-' },
+                { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
+                { key: 'productName', title: '名称', width: 180 },
+                { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
+                { key: 'unit', title: '单位', width: 70, render: v => <span className="text-center">{String(v)}</span> },
+                { key: 'quantity', title: '数量', width: 90, render: v => <span className="tabular-nums">{String(v)}</span> },
+                {
+                  key: 'unitPrice', title: '单价', width: 130,
+                  render: (v, item) => (
+                    <div className="space-y-1">
+                      <div className="tabular-nums">¥{Number(v).toFixed(2)}</div>
+                      {item.belowCost && item.costPrice != null && (
+                        <div className="inline-flex items-center gap-1 text-[11px] text-destructive">
+                          <AlertTriangle className="h-3 w-3" />
+                          低于进价 ¥{Number(item.costPrice).toFixed(2)}
                         </div>
-                      </td>
-                      <td className="py-2.5 text-right font-semibold tabular-nums">¥{Number(item.amount).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      )}
+                    </div>
+                  ),
+                },
+                { key: 'amount', title: '金额', width: 110, render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
+              ] satisfies TableColumn<SaleOrderItem>[]}
+              data={order.items ?? []}
+              rowKey="id"
+              emptyText="暂无商品明细"
+            />
           </SectionCard>
 
           {/* 金额统计 */}
@@ -1032,38 +1009,21 @@ function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; clo
           {order.taskNo ? (
             <div className="space-y-4">
               <FulfillmentProgressCard order={order} />
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-table-head">
-                      <th className="pb-2 text-left">编码</th>
-                      <th className="pb-2 text-left">货号</th>
-                      <th className="pb-2 text-left">型号</th>
-                      <th className="pb-2 text-left">名称</th>
-                      <th className="pb-2 text-left">颜色</th>
-                      <th className="w-16 pb-2 text-center">单位</th>
-                      <th className="w-20 pb-2 text-center">订单数量</th>
-                      <th className="w-20 pb-2 text-center">取货数量</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(order.items ?? []).map(item => {
-                      const picked = (item.scans ?? []).reduce((s, sc) => s + sc.qty, 0)
-                      return (
-                      <tr key={item.id} className="border-b border-border/40">
-                        <td className="py-2.5">{item.productCode}</td><td className="py-2.5">{item.articleNumber || '-'}</td>
-                        <td className="py-2.5">{item.spec || '-'}</td>
-                        <td className="py-2.5">{item.productName}</td>
-                        <td className="py-2.5">{item.color || '-'}</td>
-                        <td className="py-2.5 text-center">{item.unit}</td>
-                        <td className="py-2.5 text-center">{item.quantity}</td>
-                        <td className="py-2.5 text-center">{picked || '-'}</td>
-                      </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={[
+                  { key: 'productCode', title: '编码', width: 130 },
+                  { key: 'articleNumber', title: '货号', width: 110, render: v => (v as string) || '-' },
+                  { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
+                  { key: 'productName', title: '名称', width: 180 },
+                  { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
+                  { key: 'unit', title: '单位', width: 70 },
+                  { key: 'quantity', title: '订单数量', width: 90 },
+                  { key: 'picked', title: '取货数量', width: 90, render: v => (v as number) || '-' },
+                ] satisfies TableColumn<SaleOrderItem & { picked: number }>[]}
+                data={(order.items ?? []).map(item => ({ ...item, picked: (item.scans ?? []).reduce((s, sc) => s + sc.qty, 0) }))}
+                rowKey="id"
+                emptyText="暂无商品明细"
+              />
             </div>
           ) : (
             <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务，订单状态为 {getSaleWorkflowStatus(order).label}</p>
@@ -1074,53 +1034,41 @@ function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; clo
       {detailTab === 'scan' && (
         <div className="card-base p-5">
           {order.taskNo ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-table-head">
-                    <th className="w-20 pb-2 text-left">编码</th>
-                    <th className="w-16 pb-2 text-left">型号</th>
-                    <th className="w-36 pb-2 text-left">名称</th>
-                    <th className="w-14 pb-2 text-left">颜色</th>
-                    <th className="w-12 pb-2 text-center">单位</th>
-                    <th className="w-24 pb-2 text-left">条码</th>
-                    <th className="w-16 pb-2 text-center">条码数量</th>
-                    <th className="w-14 pb-2 text-right">操作人</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(order.items ?? []).flatMap(item => {
-                    const scans = item.scans ?? []
-                    if (scans.length === 0) {
-                      return [(
-                        <tr key={item.id} className="border-b border-border/40">
-                          <td className="py-2.5">{item.productCode}</td><td className="py-2.5">{item.articleNumber || '-'}</td>
-                          <td className="py-2.5">{item.spec || '-'}</td>
-                          <td className="py-2.5">{item.productName}</td>
-                          <td className="py-2.5">{item.color || '-'}</td>
-                          <td className="py-2.5 text-center">{item.unit}</td>
-                          <td className="py-2.5">-</td>
-                          <td className="py-2.5 text-center">0/{item.quantity}</td>
-                          <td className="py-2.5 text-right">-</td>
-                        </tr>
-                      )]
-                    }
-                    return scans.map((sc, si) => (
-                      <tr key={`${item.id}-${si}`} className="border-b border-border/40">
-                        <td className="py-2.5">{item.productCode}</td><td className="py-2.5">{item.articleNumber || '-'}</td>
-                        <td className="py-2.5">{item.spec || '-'}</td>
-                        <td className="py-2.5">{item.productName}</td>
-                        <td className="py-2.5">{item.color || '-'}</td>
-                        <td className="py-2.5 text-center">{item.unit}</td>
-                        <td className="py-2.5">{sc.barcode}</td>
-                        <td className="py-2.5 text-center">{sc.qty}</td>
-                        <td className="py-2.5 text-right">{sc.operatorName || '-'}</td>
-                      </tr>
-                    ))
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={[
+                { key: 'productCode', title: '编码', width: 130 },
+                { key: 'articleNumber', title: '货号', width: 110, render: v => (v as string) || '-' },
+                { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
+                { key: 'productName', title: '名称', width: 180 },
+                { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
+                { key: 'unit', title: '单位', width: 70 },
+                { key: 'barcode', title: '条码', width: 140 },
+                { key: 'qtyLabel', title: '条码数量', width: 100 },
+                { key: 'operatorName', title: '操作人', width: 110, render: v => (v as string) || '-' },
+                { key: 'scannedAt', title: '操作时间', width: 150, render: v => v ? formatDisplayDateTime(v as string) : '-' },
+              ] satisfies TableColumn<{
+                rowKey: string; productCode: string; articleNumber?: string | null; spec?: string | null
+                productName: string; color?: string | null; unit: string
+                barcode: string; qtyLabel: string; operatorName: string | null; scannedAt: string | null
+              }>[]}
+              data={(order.items ?? []).flatMap(item => {
+                const scans = item.scans ?? []
+                if (scans.length === 0) {
+                  return [{
+                    rowKey: `${item.id}`, productCode: item.productCode, articleNumber: item.articleNumber,
+                    spec: item.spec, productName: item.productName, color: item.color, unit: item.unit,
+                    barcode: '-', qtyLabel: `0/${item.quantity}`, operatorName: null, scannedAt: null,
+                  }]
+                }
+                return scans.map((sc, si) => ({
+                  rowKey: `${item.id}-${si}`, productCode: item.productCode, articleNumber: item.articleNumber,
+                  spec: item.spec, productName: item.productName, color: item.color, unit: item.unit,
+                  barcode: sc.barcode, qtyLabel: String(sc.qty), operatorName: sc.operatorName, scannedAt: sc.scannedAt,
+                }))
+              })}
+              rowKey="rowKey"
+              emptyText="暂无扫码记录"
+            />
           ) : (
             <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务</p>
           )}
@@ -1160,27 +1108,21 @@ function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; clo
                 (order.packages ?? []).map(pkg => (
                   <div key={pkg.id} className="rounded-lg border border-border/70 bg-card px-4 py-3">
                     <div className="mb-2 text-sm font-medium">{pkg.barcode}</div>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-table-head">
-                          <th className="pb-2 text-left">编码</th>
-                          <th className="pb-2 text-left">货号</th>
-                          <th className="pb-2 text-left">名称</th>
-                          <th className="w-12 pb-2 text-center">单位</th>
-                          <th className="w-12 pb-2 text-center">数量</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pkg.items.map((it, idx) => (
-                          <tr key={idx} className="border-b border-border/40">
-                            <td className="py-2.5">{it.productCode}</td>
-                            <td className="py-2.5">{it.productName}</td>
-                            <td className="py-2.5 text-center">{it.unit}</td>
-                            <td className="py-2.5 text-center">{it.qty}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <DataTable
+                      columns={[
+                        { key: 'productCode', title: '编码', width: 130 },
+                        { key: 'articleNumber', title: '货号', width: 110, render: v => (v as string) || '-' },
+                        { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
+                        { key: 'productName', title: '名称', width: 180 },
+                        { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
+                        { key: 'unit', title: '单位', width: 70 },
+                        { key: 'qty', title: '数量', width: 80 },
+                        { key: 'packedAt', title: '操作时间', width: 150, render: v => v ? formatDisplayDateTime(v as string) : '-' },
+                      ]}
+                      data={pkg.items.map((it, idx) => ({ ...it, rowKey: idx }))}
+                      rowKey="rowKey"
+                      emptyText="暂无装箱明细"
+                    />
                   </div>
                 ))
               ) : (

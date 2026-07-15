@@ -72,7 +72,7 @@ export default function PlasticBoxesPage() {
   const columns: TableColumn<PlasticBox>[] = [
     { key: 'barcode', title: '条码', width: 140, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'productName', title: '绑定产品', width: 180, render: (_, row) => row.productName ? `${row.productName} (${row.productCode})` : '—' },
-    { key: 'warehouseName', title: '仓库', width: 100 },
+    { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'remainingQty', title: '当前数量', width: 80, render: v => <span className="font-semibold">{String(v)}</span> },
     {
       key: 'status', title: '状态', width: 80,

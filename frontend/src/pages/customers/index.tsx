@@ -46,7 +46,7 @@ export default function CustomersPage() {
 
   const columns: TableColumn<Customer>[] = [
     { key: 'code', title: '编码', width: 120 },
-    { key: 'name', title: '客户名称' },
+    { key: 'name', title: '客户名称', width: 180 },
     { key: 'contact', title: '联系人', width: 100 },
     { key: 'phone', title: '电话', width: 130 },
     { key: 'email', title: '邮箱', width: 160 },

@@ -184,8 +184,8 @@ export default function PurchasePage() {
 
   const columns: TableColumn<PurchaseOrder>[] = [
     { key: 'orderNo', title: '采购单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'supplierName', title: '供应商' },
-    { key: 'warehouseName', title: '仓库', width: 120 },
+    { key: 'supplierName', title: '供应商', width: 140 },
+    { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'totalAmount', title: '金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
     {
       key: 'status', title: '状态', width: 100,

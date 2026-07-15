@@ -354,7 +354,11 @@ async function findById(id) {
     if (pkgRows.length > 0) {
       const pkgIds = pkgRows.map(p => p.id)
       const [itemRows] = await pool.query(
-        `SELECT package_id, product_code, product_name, unit, qty FROM package_items WHERE package_id IN (?) ORDER BY id`,
+        `SELECT pi.package_id, pi.product_code, pi.product_name, pi.unit, pi.qty, pi.created_at,
+                p.article_number, p.spec, p.color
+         FROM package_items pi
+         LEFT JOIN product_items p ON p.id = pi.product_id
+         WHERE pi.package_id IN (?) ORDER BY pi.id`,
         [pkgIds],
       )
       packages = pkgRows.map(p => ({
@@ -364,7 +368,11 @@ async function findById(id) {
         items: itemRows.filter(i => i.package_id === p.id).map(i => ({
           productCode: i.product_code,
           productName: i.product_name,
+          articleNumber: i.article_number || null,
+          spec: i.spec || null,
+          color: i.color || null,
           unit: i.unit,
+          packedAt: i.created_at,
           qty: Number(i.qty),
         })),
       }))

@@ -38,8 +38,12 @@ export interface SaleOrderTimelineEvent {
 export interface PackageItem {
   productCode: string
   productName: string
+  articleNumber?: string | null
+  spec?: string | null
+  color?: string | null
   unit: string
   qty: number
+  packedAt?: string | null
 }
 
 export interface Package {

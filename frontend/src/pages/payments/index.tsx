@@ -44,7 +44,7 @@ export default function PaymentsPage() {
 
   const columns: TableColumn<PaymentRecord>[] = [
     { key: 'orderNo', title: '关联单号', width: 160, render: (v) => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'partyName', title: tab === 1 ? '供应商' : '客户' },
+    { key: 'partyName', title: tab === 1 ? '供应商' : '客户', width: 140 },
     { key: 'totalAmount', title: '总金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
     { key: 'paidAmount', title: '已付金额', width: 100, render: (v) => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
     { key: 'balance', title: '余额', width: 100, render: (v) => <span className={`tabular-nums ${Number(v) > 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },

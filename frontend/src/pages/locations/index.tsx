@@ -79,7 +79,7 @@ export default function LocationsPage() {
   const columns: TableColumn<Location>[] = [
     { key: 'code',          title: '库位编号', width: 120,
       render: v => <span className="text-doc-code-strong">{v as string}</span> },
-    { key: 'warehouseName', title: '仓库',
+    { key: 'warehouseName', title: '仓库', width: 140,
       render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'zone',    title: '区域', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'aisle',   title: '通道', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },

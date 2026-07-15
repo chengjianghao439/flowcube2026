@@ -49,7 +49,7 @@ export default function PrintTemplatesPage() {
   }
 
   const columns: TableColumn<PrintTemplate>[] = [
-    { key: 'name',      title: '模板名称' },
+    { key: 'name',      title: '模板名称', width: 180 },
     { key: 'typeName',  title: '类型', width: 160,
       render: (_, row) => row.typeName || String(row.type) },
     { key: 'isDefault', title: '默认', width: 80,

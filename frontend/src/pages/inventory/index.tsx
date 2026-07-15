@@ -116,12 +116,12 @@ export default function InventoryPage() {
   const logCols: TableColumn<InventoryLog>[] = [
     { key: 'createdAt', title: '时间', width: 160, render: v => formatDisplayDateTime(v) },
     { key: 'typeName', title: '类型', width: 80, render: (_, r) => <Badge variant={TYPE_VARIANT[r.type] ?? 'outline'}>{TYPE_NAMES[r.type]}</Badge> },
-    { key: 'productName', title: '商品' },
-    { key: 'warehouseName', title: '仓库', width: 120 },
+    { key: 'productName', title: '商品', width: 140 },
+    { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'quantity', title: '数量', width: 90, render: (_, r) => <span>{r.type === 2 ? `-${r.quantity}` : r.quantity}</span> },
     { key: 'beforeQty', title: '变动前', width: 90, render: v => <span className="text-muted-foreground">{v as number}</span> },
     { key: 'afterQty', title: '变动后', width: 90, render: v => <span>{v as number}</span> },
-    { key: 'supplierName', title: '供应商', width: 120, render: v => (v as string) || '-' },
+    { key: 'supplierName', title: '供应商', width: 140, render: v => (v as string) || '-' },
     { key: 'operatorName', title: '操作人', width: 90 },
     { key: 'remark', title: '备注', render: v => (v as string) || '-' },
   ]

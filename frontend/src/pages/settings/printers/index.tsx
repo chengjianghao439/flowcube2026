@@ -26,6 +26,8 @@ import {
   type SystemPrinterRow,
 } from '@/utils/printerName'
 import { formatPrinterSource } from '@/utils/displayFormatters'
+import DataTable from '@/components/shared/DataTable'
+import type { TableColumn } from '@/types'
 
 /** 打印机硬件分类（与「绑定用途」独立：用途决定业务走哪台机；类型用于列表展示与无绑定时的兜底调度） */
 const TYPE_LABEL: Record<number, string> = {
@@ -344,6 +346,75 @@ export default function PrintersPage() {
     }))
   }, [systemList, existingNamesNormalized])
 
+  const cols: TableColumn<Printer>[] = [
+    {
+      key: 'name', title: '名称', width: 180,
+      render: (_, p) => (
+        <span className="font-medium text-foreground">
+          {p.name}
+          {p.description && <span className="ml-2 text-helper">{p.description}</span>}
+        </span>
+      ),
+    },
+    { key: 'code', title: '编码', width: 130, render: v => <span className="text-doc-code-muted">{String(v)}</span> },
+    {
+      key: 'typeName', title: '类型', width: 110,
+      render: (_, p) => <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[p.type]}`}>{TYPE_LABEL[p.type]}</span>,
+    },
+    {
+      key: 'status', title: '状态', width: 90,
+      render: (_, p) => (
+        <button onClick={() => toggleStatus.mutate(p)} className="flex items-center gap-1.5">
+          <span className={`h-2 w-2 rounded-full ${p.status === 1 ? 'bg-green-500' : 'bg-gray-400'}`} />
+          <span className={`text-xs ${p.status === 1 ? 'text-green-600' : 'text-muted-foreground'}`}>{p.status === 1 ? '在线' : '离线'}</span>
+        </button>
+      ),
+    },
+    {
+      key: 'source', title: '来源', width: 110,
+      render: (_, p) => (
+        <span
+          className={`rounded-full border px-2 py-0.5 text-xs ${p.source === 'client' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : p.source === 'local_desktop' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}
+          title={p.source ? `原始来源：${p.source}` : undefined}
+        >
+          {formatPrinterSource(p.source) || sourceBadgeLabel(p.source)}
+        </span>
+      ),
+    },
+    {
+      key: 'clientId', title: '所属设备', width: 240,
+      render: (_, p) => p.clientId ? (
+        <div className="space-y-1">
+          <div className="font-medium text-foreground">🖥️ {getDeviceName(p)}</div>
+          <div className="flex items-center gap-2">
+            <input
+              className="input h-8 w-32"
+              placeholder={p.clientHostname || p.clientId}
+              value={aliasDraft[p.clientId] ?? p.clientAliasName ?? ''}
+              onChange={e => setAliasDraft(s => ({ ...s, [p.clientId!]: e.target.value }))}
+            />
+            <Button size="sm" variant="outline" onClick={() => saveAlias(p)} disabled={aliasMutation.isPending}>
+              保存
+            </Button>
+          </div>
+        </div>
+      ) : '-',
+    },
+    {
+      key: 'bindings', title: '绑定', width: 160,
+      render: (_, p) => (
+        <div>
+          <Button size="sm" variant="outline" onClick={() => setBindTarget(p)}>绑定用途</Button>
+          {getBoundLabels(p.code) && <div className="mt-1 text-xs text-blue-700">{getBoundLabels(p.code)}</div>}
+        </div>
+      ),
+    },
+    {
+      key: 'id', title: '操作', width: 100,
+      render: (_, p) => <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(p)}>删除</Button>,
+    },
+  ]
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -436,81 +507,7 @@ export default function PrintersPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-muted/40">
-	            <tr>
-	              <th className="px-4 py-3 text-left text-table-head">名称</th>
-	              <th className="px-4 py-3 text-left text-table-head">编码</th>
-	              <th className="px-4 py-3 text-left text-table-head">类型</th>
-              <th className="px-4 py-3 text-left text-table-head">状态</th>
-              <th className="px-4 py-3 text-left text-table-head">来源</th>
-              <th className="px-4 py-3 text-left text-table-head">所属设备</th>
-              <th className="px-4 py-3 text-left text-table-head">绑定</th>
-              <th className="px-4 py-3 text-left text-table-head">操作</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading && (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">加载中...</td></tr>
-            )}
-            {!isLoading && printers.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">暂无打印机</td></tr>
-            )}
-            {printers.map(p => (
-              <tr key={p.id} className="hover:bg-muted/20">
-                <td className="px-4 py-3 font-medium text-foreground">
-                  {p.name}
-                  {p.description && <span className="ml-2 text-helper">{p.description}</span>}
-                </td>
-                <td className="px-4 py-3"><span className="text-doc-code-muted">{p.code}</span></td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[p.type]}`}>{TYPE_LABEL[p.type]}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <button onClick={() => toggleStatus.mutate(p)} className="flex items-center gap-1.5">
-                    <span className={`h-2 w-2 rounded-full ${p.status === 1 ? 'bg-green-500' : 'bg-gray-400'}`} />
-                    <span className={`text-xs ${p.status === 1 ? 'text-green-600' : 'text-muted-foreground'}`}>{p.status === 1 ? '在线' : '离线'}</span>
-                  </button>
-                </td>
-	                <td className="px-4 py-3 text-xs">
-	                  <span
-	                    className={`rounded-full border px-2 py-0.5 ${p.source === 'client' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : p.source === 'local_desktop' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}
-	                    title={p.source ? `原始来源：${p.source}` : undefined}
-	                  >
-	                    {formatPrinterSource(p.source) || sourceBadgeLabel(p.source)}
-	                  </span>
-                </td>
-                <td className="px-4 py-3 text-helper">
-                  {p.clientId ? (
-                    <div className="space-y-1">
-                      <div className="font-medium text-foreground">🖥️ {getDeviceName(p)}</div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          className="input h-8 w-44"
-                          placeholder={p.clientHostname || p.clientId}
-                          value={aliasDraft[p.clientId] ?? p.clientAliasName ?? ''}
-                          onChange={e => setAliasDraft(s => ({ ...s, [p.clientId!]: e.target.value }))}
-                        />
-                        <Button size="sm" variant="outline" onClick={() => saveAlias(p)} disabled={aliasMutation.isPending}>
-                          保存
-                        </Button>
-                      </div>
-                    </div>
-                  ) : '-'}
-                </td>
-                <td className="px-4 py-3">
-                  <Button size="sm" variant="outline" onClick={() => setBindTarget(p)}>绑定用途</Button>
-                  {getBoundLabels(p.code) && <div className="mt-1 text-xs text-blue-700">{getBoundLabels(p.code)}</div>}
-                </td>
-                <td className="px-4 py-3">
-                  <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(p)}>删除</Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable columns={cols} data={printers} loading={isLoading} rowKey="id" emptyText="暂无打印机" />
 
       {bindTarget && (
         <BindDialog
