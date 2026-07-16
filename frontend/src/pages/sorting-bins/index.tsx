@@ -41,7 +41,6 @@ function CreateDialog({ open, onClose, onSuccess }: { open: boolean; onClose: ()
   const mut = useMutation({
     mutationFn: () => createSortingBinApi({ code, warehouseId: +warehouseId, remark }),
     onSuccess: () => { toast.success('分拣格已创建'); onSuccess(); onClose(); setCode(''); setRemark('') },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'),
   })
 
   return (
@@ -90,7 +89,6 @@ function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () 
       toast.success(`已创建 ${res?.length ?? 0} 个分拣格`)
       onSuccess(); onClose()
     },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '批量创建失败'),
   })
 
   const preview = prefix && from && to
@@ -151,13 +149,11 @@ export default function SortingBinsPage() {
   const releaseMut = useMutation({
     mutationFn: (id: number) => releaseSortingBinApi(id),
     onSuccess: () => { toast.success('分拣格已释放'); invalidate() },
-    onError: () => toast.error('释放失败'),
   })
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => deleteSortingBinApi(id),
     onSuccess: () => { toast.success('已删除'); invalidate() },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败'),
   })
 
   const columns: TableColumn<SortingBin>[] = [

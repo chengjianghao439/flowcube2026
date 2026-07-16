@@ -272,6 +272,15 @@ export default function PdaPackPage() {
 
   const refetch = () => qc.invalidateQueries({ queryKey: ['pda-packages', taskId] })
   const onlineBlocked = finishAction.networkStatus !== 'online'
+  // 三个并行 action 里挑一个作为提示卡片的 phase/lastErrorMessage 来源：优先未确认的 pendingRecord，其次正在提交/刚失败的
+  const packNoticeAction =
+    finishAction.pendingRecord ? finishAction
+      : printAction.pendingRecord ? printAction
+        : finalizeAction.pendingRecord ? finalizeAction
+          : finishAction.phase !== 'idle' || finishAction.lastErrorMessage ? finishAction
+            : printAction.phase !== 'idle' || printAction.lastErrorMessage ? printAction
+              : finalizeAction.phase !== 'idle' || finalizeAction.lastErrorMessage ? finalizeAction
+                : null
 
   const createMut = useMutation({
     mutationFn: () => {
@@ -506,6 +515,9 @@ export default function PdaPackPage() {
             }
             pendingRecord={finishAction.pendingRecord ?? printAction.pendingRecord ?? finalizeAction.pendingRecord}
             confirming={finishAction.confirming || printAction.confirming || finalizeAction.confirming}
+            phase={packNoticeAction?.phase}
+            phaseMessage={packNoticeAction?.phaseMessage}
+            lastErrorMessage={packNoticeAction?.lastErrorMessage}
             onConfirm={() => {
               const handler = finishAction.pendingRecord
                 ? finishAction
@@ -525,6 +537,7 @@ export default function PdaPackPage() {
               if (printAction.pendingRecord) printAction.clearPending()
               if (finalizeAction.pendingRecord) finalizeAction.clearPending()
             }}
+            onDismissError={() => packNoticeAction?.clearError()}
           />
 
           {/* 统计行 */}
@@ -567,7 +580,7 @@ export default function PdaPackPage() {
       </div>
 
       <PdaBottomBar>
-          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描产品条码" disabled={addMut.isPending || onlineBlocked} />}
+          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描产品条码" disabled={addMut.isPending || onlineBlocked} onDuplicate={() => err('重复扫码，请稍候')} />}
           <Button variant={activePackageId ? 'outline' : 'default'} className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending || onlineBlocked}>
             {createMut.isPending ? '创建中…' : '＋ 新建箱子'}
           </Button>

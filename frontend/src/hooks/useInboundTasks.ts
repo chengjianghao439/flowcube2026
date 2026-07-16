@@ -17,18 +17,20 @@ import type { AuditInboundTaskParams, CreateInboundTaskParams, ReceiveParams, Re
 
 const QUERY_KEY = 'inbound-tasks'
 
-export function useInboundTasks(params: QueryParams & { status?: number; productId?: number }) {
+export function useInboundTasks(params: QueryParams & { status?: number; productId?: number }, options?: { refetchInterval?: number | false }) {
   return useQuery({
     queryKey: [QUERY_KEY, params],
     queryFn: () => getInboundTasksApi(params),
+    refetchInterval: options?.refetchInterval,
   })
 }
 
-export function useInboundTaskDetail(id: number | null) {
+export function useInboundTaskDetail(id: number | null, options?: { refetchInterval?: number | false }) {
   return useQuery({
     queryKey: [QUERY_KEY, 'detail', id],
     queryFn: () => getInboundTaskByIdApi(id!),
     enabled: !!id,
+    refetchInterval: options?.refetchInterval,
   })
 }
 

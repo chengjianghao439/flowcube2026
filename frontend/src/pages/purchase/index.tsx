@@ -226,7 +226,7 @@ export default function PurchasePage() {
                 onClick: () => openConfirm(
                   '关闭剩余结案',
                   '将按已审核入库的实收数量结算应付并完成采购单，未收部分作罢。仅在相关收货订单均已审核通过时可用。',
-                  () => { closeConfirm(); close.mutate(r.id) },
+                  () => close.mutate(r.id, { onSettled: closeConfirm }),
                   { confirmText: '确认结案' },
                 ),
                 disabled: close.isPending,
@@ -238,7 +238,7 @@ export default function PurchasePage() {
                 onClick: () => openConfirm(
                   '取消采购单',
                   '取消后此采购单将无法恢复，请确认操作。',
-                  () => { closeConfirm(); cancel.mutate(r.id) },
+                  () => cancel.mutate(r.id, { onSettled: closeConfirm }),
                   { variant: 'destructive', confirmText: '确认取消' },
                 ),
                 disabled: cancel.isPending,
@@ -303,7 +303,7 @@ export default function PurchasePage() {
         description={confirmState.description}
         variant={confirmState.variant ?? 'default'}
         confirmText={confirmState.confirmText ?? '确认'}
-        loading={false}
+        loading={close.isPending || cancel.isPending}
         onConfirm={confirmState.onConfirm}
         onCancel={closeConfirm}
       />

@@ -45,6 +45,12 @@ function parsePositiveInteger(value: string) {
   const num = Number.parseInt(value, 10)
   return Number.isFinite(num) ? num : 0
 }
+
+function parsePrice(value: string) {
+  if (!value.trim()) return 0
+  const num = Number.parseFloat(value)
+  return Number.isFinite(num) ? num : 0
+}
 import type { SaleOrder, SaleOrderItem } from '@/types/sale'
 import type { ProductFinderResult } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
@@ -54,6 +60,20 @@ interface DraftItem extends Omit<SaleOrderItem, 'id' | 'amount'> {
   spec?: string | null
   color?: string | null
   priceSource?: 'list' | 'default' | 'manual'
+}
+
+interface ScanRow {
+  rowKey: string
+  productCode: string
+  articleNumber?: string | null
+  spec?: string | null
+  productName: string
+  color?: string | null
+  unit: string
+  barcode: string
+  qtyLabel: string
+  operatorName: string | null
+  scannedAt: string | null
 }
 
 /** CreateView 和 EditView 共用的表单校验：通过则返回过滤后的有效明细，否则弹 toast 提示并返回 null */
@@ -179,31 +199,32 @@ export default function SaleFormPage() {
   return <DetailView saleId={saleId} tabPath={tabPath} closeTab={closeTab} />
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// 新建视图
-// ════════════════════════════════════════════════════════════════════════════
-
-function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string }) {
-  const navigate     = useNavigate()
-  const createMutate = useCreateSale()
-
-  const [customerId,      setCustomerId]      = useState('')
-  const [customerName,    setCustomerName]    = useState('')
-  const [warehouseId,     setWarehouseId]     = useState('')
-  const [warehouseName,   setWarehouseName]   = useState('')
-  const [remark,          setRemark]          = useState('')
-  const [carrierId,       setCarrierId]       = useState<string>('')
-  const [freightType,     setFreightType]     = useState('')
-  const [receiverName,    setReceiverName]    = useState('')
-  const [receiverPhone,   setReceiverPhone]   = useState('')
-  const [receiverAddress, setReceiverAddress] = useState('')
-  const counterRef    = useRef(0)
+/** CreateView / EditView 共用的表单状态与操作逻辑；传 order 则从已有订单初始化（编辑），不传则从空白开始（新建）。 */
+function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof useSaleDetail>['data']>) {
+  const [customerId,      setCustomerId]      = useState(order ? String(order.customerId) : '')
+  const [customerName,    setCustomerName]    = useState(order?.customerName ?? '')
+  const [warehouseId,     setWarehouseId]     = useState(order ? String(order.warehouseId) : '')
+  const [warehouseName,   setWarehouseName]   = useState(order?.warehouseName ?? '')
+  const [remark,          setRemark]          = useState(order?.remark ?? '')
+  const [carrierId,       setCarrierId]       = useState(order?.carrierId ? String(order.carrierId) : '')
+  const [freightType,     setFreightType]     = useState(order?.freightType ? String(order.freightType) : '')
+  const [receiverName,    setReceiverName]    = useState(order?.receiverName ?? '')
+  const [receiverPhone,   setReceiverPhone]   = useState(order?.receiverPhone ?? '')
+  const [receiverAddress, setReceiverAddress] = useState(order?.receiverAddress ?? '')
+  const counterRef    = useRef((order?.items ?? []).length)
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
   const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
   const { data: carrierOptions = [] } = useCarriersActive()
 
-  const [items,        setItems]        = useState<DraftItem[]>(() => [])
+  const [items, setItems] = useState<DraftItem[]>(() =>
+    (order?.items ?? []).map((item, i) => ({
+      _key: i, productId: item.productId, productCode: item.productCode,
+      productName: item.productName, articleNumber: item.articleNumber ?? null, spec: item.spec ?? null, color: item.color ?? null,
+      unit: item.unit, quantity: item.quantity,
+      unitPrice: item.unitPrice, remark: item.remark ?? '', priceSource: 'default' as const, costPrice: item.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null,
+    })),
+  )
   const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
   const [finderOpen,    setFinderOpen]    = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
@@ -212,8 +233,14 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const [warehouseError, setWarehouseError] = useState(false)
   const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
 
-  // 未保存变更保护：已填写商品或表头字段有值才标脏
-  const isDirty = !!(customerId || warehouseId || remark || carrierId || receiverName || items.length)
+  // 编辑态初始值本就非空，"是否非空"不能代表"是否改过"，改成和进入编辑时的快照比较；
+  // 新建态没有快照可比，沿用"任意字段非空即算改过"。
+  const editSnapshotRef = useRef(order
+    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, freightType, receiverName, receiverPhone, receiverAddress, items })
+    : null)
+  const isDirty = order
+    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, freightType, receiverName, receiverPhone, receiverAddress, items }) !== editSnapshotRef.current
+    : !!(customerId || warehouseId || remark || carrierId || receiverName || items.length)
   useDirtyGuard(tabPath, isDirty)
 
   // 添加商品：新增一行并立即弹出选品对话框，与采购单/调拨单/退货单一致
@@ -273,6 +300,231 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     }
   }
 
+  const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+
+  return {
+    customerId, setCustomerId, customerName, setCustomerName,
+    warehouseId, setWarehouseId, warehouseName, setWarehouseName,
+    remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
+    receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
+    quantityRefs, carrierOptions,
+    items, priceLoading,
+    finderOpen, setFinderOpen, finderItemKey, setFinderItemKey,
+    customerFinderOpen, setCustomerFinderOpen,
+    customerError, setCustomerError, warehouseError, setWarehouseError,
+    invalidItemKeys, setInvalidItemKeys,
+    isDirty, addItem, removeItem, updateItem,
+    handleCustomerConfirm, handleFinderConfirm,
+    total,
+  }
+}
+
+/** CreateView / EditView 共用的"订单信息"表单区块，字段完全一致，只是初始值和写回目标不同（由调用方通过 props 传入）。 */
+function SaleOrderHeaderFields({
+  customerName, customerError, setCustomerFinderOpen,
+  warehouseId, setWarehouseId, setWarehouseName, warehouseError, setWarehouseError,
+  carrierId, setCarrierId, carrierOptions,
+  freightType, setFreightType,
+  receiverName, setReceiverName,
+  receiverPhone, setReceiverPhone,
+  receiverAddress, setReceiverAddress,
+  remark, setRemark,
+}: {
+  customerName: string; customerError: boolean; setCustomerFinderOpen: (v: boolean) => void
+  warehouseId: string; setWarehouseId: (v: string) => void; setWarehouseName: (v: string) => void
+  warehouseError: boolean; setWarehouseError: (v: boolean) => void
+  carrierId: string; setCarrierId: (v: string) => void; carrierOptions: { id: number; name: string }[]
+  freightType: string; setFreightType: (v: string) => void
+  receiverName: string; setReceiverName: (v: string) => void
+  receiverPhone: string; setReceiverPhone: (v: string) => void
+  receiverAddress: string; setReceiverAddress: (v: string) => void
+  remark: string; setRemark: (v: string) => void
+}) {
+  const navigate = useNavigate()
+  return (
+    <SectionCard title="订单信息" compact>
+      {/* 第一行：客户/仓库/承运商/运费方式——选择类字段，按可用宽度均分，不留死区 */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+        <div className="space-y-1.5">
+          <Label>客户 *</Label>
+          <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn(customerError && 'border-destructive/60 bg-destructive/5')} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>出库仓库 *</Label>
+          <WarehouseSelect
+            value={warehouseId ? +warehouseId : null}
+            onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
+            placeholder="选择仓库"
+            className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>承运商</Label>
+          <Select value={carrierId || '__none__'} onValueChange={v => setCarrierId(v === '__none__' ? '' : v)}>
+            <SelectTrigger className="h-10 w-full">
+              <SelectValue placeholder={carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">{carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'}</SelectItem>
+              {carrierOptions.map(c => (
+                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>运费方式</Label>
+          <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)}>
+            <SelectTrigger className="h-10 w-full">
+              <SelectValue placeholder="请选择" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">请选择</SelectItem>
+              <SelectItem value="1">寄付</SelectItem>
+              <SelectItem value="2">到付</SelectItem>
+              <SelectItem value="3">第三方付</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      {/* 第二行：收货人/联系电话给够宽度装下字符计数角标，收货地址/备注均分剩余宽度 */}
+      <div className="mt-4 flex items-start gap-4">
+        <div className="w-40 shrink-0 space-y-1.5">
+          <Label>收货人</Label>
+          <LimitedInput maxLength={5} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人" />
+        </div>
+        <div className="w-48 shrink-0 space-y-1.5">
+          <Label>联系电话</Label>
+          <LimitedInput maxLength={11} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="11位手机号" inputMode="numeric" />
+        </div>
+        <div className="flex-1 space-y-1.5">
+          <Label>收货地址</Label>
+          <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} className="h-10 min-h-0 py-2 pb-2" />
+        </div>
+        <div className="flex-1 space-y-1.5">
+          <Label>备注</Label>
+          <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" />
+        </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+/** CreateView / EditView 共用的可编辑商品明细表格（数量/单价输入 + 行内选品 + 删除行），与采购单/退货单/调拨单同款结构。 */
+function SaleOrderItemsTable({
+  items, invalidItemKeys, quantityRefs, priceLoading,
+  setFinderItemKey, setFinderOpen, updateItem, removeItem,
+}: {
+  items: DraftItem[]
+  invalidItemKeys: Set<number>
+  quantityRefs: React.MutableRefObject<Map<number, HTMLInputElement>>
+  priceLoading: Record<number, boolean>
+  setFinderItemKey: (k: number | null) => void
+  setFinderOpen: (v: boolean) => void
+  updateItem: (k: number, field: string, val: string | number) => void
+  removeItem: (k: number) => void
+}) {
+  const navigate = useNavigate()
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b text-table-head">
+            <th className="w-28 pb-2 text-left">编码</th>
+            <th className="w-20 pb-2 text-left">货号</th>
+            <th className="w-20 pb-2 text-left">型号</th>
+            <th className="pb-2 text-left">商品</th>
+            <th className="w-20 pb-2 text-left">颜色</th>
+            <th className="w-16 pb-2 text-center">单位</th>
+            <th className="w-20 pb-2 text-right">数量</th>
+            <th className="w-24 pb-2 text-right">单价 (¥)</th>
+            <th className="w-28 pb-2 text-right">金额</th>
+            <th className="w-10 pb-2" />
+          </tr>
+        </thead>
+        <tbody>
+          {items.map(item => (
+            <tr key={item._key} className="border-b border-border/40">
+              <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
+              <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
+              <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
+              <td className="py-2.5 pr-3">
+                <button
+                  type="button"
+                  onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+                  onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
+                  className={cn('block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
+                >
+                  {item.productName
+                    ? <span className="truncate font-medium">{item.productName}</span>
+                    : <span className="text-muted-foreground">点击选择商品...</span>}
+                </button>
+              </td>
+              <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
+
+              <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
+
+              <td className="py-2.5 pr-2">
+                <Input
+                  type="number" min="1" step="1" placeholder="数量"
+                  value={item.quantity}
+                  ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
+                  className="text-right text-sm"
+                />
+              </td>
+
+              <td className="py-2.5">
+                <Input
+                  type="number" min="0" step="0.01" placeholder="单价"
+                  value={item.unitPrice}
+                  disabled={!!priceLoading[item._key]}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', parsePrice(e.target.value))}
+                  className={`text-right text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`}
+                />
+              </td>
+
+              <td className="py-2.5 text-right font-medium tabular-nums">
+                ¥{(item.quantity * item.unitPrice).toFixed(2)}
+              </td>
+
+              <td className="py-2.5 text-center">
+                <Button
+                  type="button" size="sm" variant="ghost"
+                  className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => removeItem(item._key)}
+                >✕</Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 新建视图
+// ════════════════════════════════════════════════════════════════════════════
+
+function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string }) {
+  const createMutate = useCreateSale()
+  const {
+    customerId, customerName,
+    warehouseId, setWarehouseId, warehouseName, setWarehouseName,
+    remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
+    receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
+    quantityRefs, carrierOptions,
+    items, priceLoading,
+    finderOpen, setFinderOpen, setFinderItemKey,
+    customerFinderOpen, setCustomerFinderOpen,
+    customerError, setCustomerError, warehouseError, setWarehouseError,
+    invalidItemKeys, setInvalidItemKeys,
+    isDirty, addItem, removeItem, updateItem,
+    handleCustomerConfirm, handleFinderConfirm,
+    total,
+  } = useSaleOrderForm(tabPath)
+
   async function handleSubmit() {
     const filledItems = validateSaleForm({
       items, customerId, customerName, warehouseId, warehouseName, receiverPhone,
@@ -295,8 +547,6 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     } catch (_) {}
   }
 
-  const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
-
   return (
     <div className="flex flex-col gap-3">
       <ActionBar
@@ -314,72 +564,17 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         }
       />
 
-      {/* 订单信息 */}
-      <SectionCard title="订单信息" compact>
-        {/* 第一行：客户/仓库/承运商/运费方式——选择类字段，按可用宽度均分，不留死区 */}
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
-          <div className="space-y-1.5">
-            <Label>客户 *</Label>
-            <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn(customerError && 'border-destructive/60 bg-destructive/5')} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>出库仓库 *</Label>
-            <WarehouseSelect
-              value={warehouseId ? +warehouseId : null}
-              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
-              placeholder="选择仓库"
-              className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>承运商</Label>
-            <Select value={carrierId || '__none__'} onValueChange={v => setCarrierId(v === '__none__' ? '' : v)}>
-              <SelectTrigger className="h-10 w-full">
-                <SelectValue placeholder={carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">{carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'}</SelectItem>
-                {carrierOptions.map(c => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>运费方式</Label>
-            <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)}>
-              <SelectTrigger className="h-10 w-full">
-                <SelectValue placeholder="请选择" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">请选择</SelectItem>
-                <SelectItem value="1">寄付</SelectItem>
-                <SelectItem value="2">到付</SelectItem>
-                <SelectItem value="3">第三方付</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        {/* 第二行：收货人/联系电话给够宽度装下字符计数角标，收货地址/备注均分剩余宽度 */}
-        <div className="mt-4 flex items-start gap-4">
-          <div className="w-40 shrink-0 space-y-1.5">
-            <Label>收货人</Label>
-            <LimitedInput maxLength={5} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人" />
-          </div>
-          <div className="w-48 shrink-0 space-y-1.5">
-            <Label>联系电话</Label>
-            <LimitedInput maxLength={11} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="11位手机号" inputMode="numeric" />
-          </div>
-          <div className="flex-1 space-y-1.5">
-            <Label>收货地址</Label>
-            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} className="h-10 min-h-0 py-2 pb-2" />
-          </div>
-          <div className="flex-1 space-y-1.5">
-            <Label>备注</Label>
-            <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" />
-          </div>
-        </div>
-      </SectionCard>
+      <SaleOrderHeaderFields
+        customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
+        warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
+        warehouseError={warehouseError} setWarehouseError={setWarehouseError}
+        carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
+        freightType={freightType} setFreightType={setFreightType}
+        receiverName={receiverName} setReceiverName={setReceiverName}
+        receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
+        receiverAddress={receiverAddress} setReceiverAddress={setReceiverAddress}
+        remark={remark} setRemark={setRemark}
+      />
 
       {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
       <SectionCard
@@ -399,80 +594,11 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
           </div>
         ) : (
           <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-table-head">
-                  <th className="w-28 pb-2 text-left">编码</th>
-                  <th className="w-20 pb-2 text-left">货号</th>
-                  <th className="w-20 pb-2 text-left">型号</th>
-                  <th className="pb-2 text-left">商品</th>
-                  <th className="w-20 pb-2 text-left">颜色</th>
-                  <th className="w-16 pb-2 text-center">单位</th>
-                  <th className="w-20 pb-2 text-right">数量</th>
-                  <th className="w-24 pb-2 text-right">单价 (¥)</th>
-                  <th className="w-28 pb-2 text-right">金额</th>
-                  <th className="w-10 pb-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {items.map(item => (
-                  <tr key={item._key} className="border-b border-border/40">
-                    <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
-                    <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
-                    <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
-                    <td className="py-2.5 pr-3">
-                      <button
-                        type="button"
-                        onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
-                        onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-                        className={cn('block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
-                      >
-                        {item.productName
-                          ? <span className="truncate font-medium">{item.productName}</span>
-                          : <span className="text-muted-foreground">点击选择商品...</span>}
-                      </button>
-                    </td>
-                    <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
-
-                    <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
-
-                    <td className="py-2.5">
-                      <Input
-                        type="number" min="1" step="1" placeholder="数量"
-                        value={item.quantity}
-                        ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
-                        className="text-right text-sm"
-                      />
-                    </td>
-
-                    <td className="py-2.5">
-                      <Input
-                        type="number" min="0" step="0.01" placeholder="单价"
-                        value={item.unitPrice}
-                        disabled={!!priceLoading[item._key]}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                        className={`text-right text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`}
-                      />
-                    </td>
-
-                    <td className="py-2.5 text-right font-medium tabular-nums">
-                      ¥{(item.quantity * item.unitPrice).toFixed(2)}
-                    </td>
-
-                    <td className="py-2.5 text-center">
-                      <Button
-                        type="button" size="sm" variant="ghost"
-                        className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeItem(item._key)}
-                      >✕</Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SaleOrderItemsTable
+            items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
+            setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
+            updateItem={updateItem} removeItem={removeItem}
+          />
 
           {/* 金额统计：仅统计已选商品的行 */}
           {items.some(i => i.productId > 0) && (
@@ -521,99 +647,28 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 // 编辑视图（草稿状态 status=1 可编辑）
 // ════════════════════════════════════════════════════════════════════════════
 
-function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; closeTab: () => void }) {
-  const navigate      = useNavigate()
+function EditView({ order, tabPath }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; closeTab: () => void; tabPath: string }) {
   const updateMutate  = useUpdateSale()
   const reserveMutate = useReserveSale()
   const cancelMutate  = useCancelSale()
   const [reserveConfirmOpen, setReserveConfirmOpen] = useState(false)
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
 
-  const [customerId,      setCustomerId]      = useState(String(order.customerId))
-  const [customerName,    setCustomerName]    = useState(order.customerName ?? '')
-  const [warehouseId,     setWarehouseId]     = useState(String(order.warehouseId))
-  const [warehouseName,   setWarehouseName]   = useState(order.warehouseName ?? '')
-  const [remark,          setRemark]          = useState(order.remark ?? '')
-  const [carrierId,       setCarrierId]       = useState(order.carrierId ? String(order.carrierId) : '')
-  const [freightType,     setFreightType]     = useState(order.freightType ? String(order.freightType) : '')
-  const [receiverName,    setReceiverName]    = useState(order.receiverName ?? '')
-  const [receiverPhone,   setReceiverPhone]   = useState(order.receiverPhone ?? '')
-  const [receiverAddress, setReceiverAddress] = useState(order.receiverAddress ?? '')
-  const counterRef    = useRef((order.items ?? []).length)
-  const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
-  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
-
-  const { data: carrierOptions = [] } = useCarriersActive()
-
-  const [items, setItems] = useState<DraftItem[]>(() =>
-    (order.items ?? []).map((item, i) => ({
-      _key: i, productId: item.productId, productCode: item.productCode,
-      productName: item.productName, unit: item.unit, quantity: item.quantity,
-      unitPrice: item.unitPrice, remark: item.remark ?? '', priceSource: 'default' as const, costPrice: item.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null,
-    })),
-  )
-  const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
-  const [finderOpen,    setFinderOpen]    = useState(false)
-  const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
-  const [customerFinderOpen,  setCustomerFinderOpen]  = useState(false)
-  const [customerError, setCustomerError] = useState(false)
-  const [warehouseError, setWarehouseError] = useState(false)
-  const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
-
-  // 添加商品：新增一行并立即弹出选品对话框，与采购单/调拨单/退货单一致
-  const addItem = () => {
-    const item = mkEmpty()
-    setItems(prev => [...prev, item])
-    setFinderItemKey(item._key)
-    setFinderOpen(true)
-  }
-
-  const handleCustomerChange = useCallback(async (cid: string) => {
-    if (!cid) return
-    setItems(prev => prev.map(i => {
-      if (!i.productId) return i
-      ;(async () => {
-        try {
-          const r = await getCustomerPriceApi(+cid, i.productId)
-          if (r?.salePrice !== undefined)
-            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r!.salePrice, priceSource: 'list', resolvedPrice: r!.salePrice, resolvedPriceLevel: r!.priceLevel } : x))
-        } catch (_) {}
-      })()
-      return i
-    }))
-  }, [])
-
-  function handleCustomerConfirm(result: FinderResult) {
-    setCustomerId(String(result.id))
-    setCustomerName(result.name)
-    setCustomerError(false)
-    void handleCustomerChange(String(result.id))
-  }
-
-  const removeItem = (k: number) => setItems(prev => prev.filter(i => i._key !== k))
-
-  const updateItem = (k: number, field: string, val: string | number) =>
-    setItems(prev => prev.map(i => i._key === k ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource } : i))
-
-  async function handleFinderConfirm(product: ProductFinderResult) {
-    if (finderItemKey === null) return
-    const k = finderItemKey
-    setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
-      : i
-    ))
-    // 商品选择后自动聚焦到该行数量框
-    setTimeout(() => { const inp = quantityRefs.current.get(k); if (inp) { inp.focus(); inp.select() } }, 0)
-    if (customerId) {
-      setPriceLoading(prev => ({ ...prev, [k]: true }))
-      try {
-        const r = await getCustomerPriceApi(+customerId, product.id)
-        if (r?.salePrice !== undefined)
-          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r!.salePrice, priceSource: 'list', resolvedPrice: r!.salePrice, resolvedPriceLevel: r!.priceLevel } : i))
-      } catch (_) {}
-      setPriceLoading(prev => ({ ...prev, [k]: false }))
-    }
-  }
+  const {
+    customerId, customerName,
+    warehouseId, setWarehouseId, warehouseName, setWarehouseName,
+    remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
+    receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
+    quantityRefs, carrierOptions,
+    items, priceLoading,
+    finderOpen, setFinderOpen, setFinderItemKey,
+    customerFinderOpen, setCustomerFinderOpen,
+    customerError, setCustomerError, warehouseError, setWarehouseError,
+    invalidItemKeys, setInvalidItemKeys,
+    addItem, removeItem, updateItem,
+    handleCustomerConfirm, handleFinderConfirm,
+    total,
+  } = useSaleOrderForm(tabPath, order)
 
   async function handleSubmit() {
     const filledItems = validateSaleForm({
@@ -636,8 +691,6 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
       })
     } catch (_) {}
   }
-
-  const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
 
   return (
     <div className="flex flex-col gap-3">
@@ -665,72 +718,17 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
         }
       />
 
-      {/* 订单信息 */}
-      <SectionCard title="订单信息" compact>
-        {/* 第一行：客户/仓库/承运商/运费方式——选择类字段，按可用宽度均分，不留死区 */}
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
-          <div className="space-y-1.5">
-            <Label>客户 *</Label>
-            <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn(customerError && 'border-destructive/60 bg-destructive/5')} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>出库仓库 *</Label>
-            <WarehouseSelect
-              value={warehouseId ? +warehouseId : null}
-              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
-              placeholder="选择仓库"
-              className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>承运商</Label>
-            <Select value={carrierId || '__none__'} onValueChange={v => setCarrierId(v === '__none__' ? '' : v)}>
-              <SelectTrigger className="h-10 w-full">
-                <SelectValue placeholder={carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">{carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'}</SelectItem>
-                {carrierOptions.map(c => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>运费方式</Label>
-            <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)}>
-              <SelectTrigger className="h-10 w-full">
-                <SelectValue placeholder="请选择" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">请选择</SelectItem>
-                <SelectItem value="1">寄付</SelectItem>
-                <SelectItem value="2">到付</SelectItem>
-                <SelectItem value="3">第三方付</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        {/* 第二行：收货人/联系电话给够宽度装下字符计数角标，收货地址/备注均分剩余宽度 */}
-        <div className="mt-4 flex items-start gap-4">
-          <div className="w-40 shrink-0 space-y-1.5">
-            <Label>收货人</Label>
-            <LimitedInput maxLength={5} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人" />
-          </div>
-          <div className="w-48 shrink-0 space-y-1.5">
-            <Label>联系电话</Label>
-            <LimitedInput maxLength={11} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="11位手机号" inputMode="numeric" />
-          </div>
-          <div className="flex-1 space-y-1.5">
-            <Label>收货地址</Label>
-            <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} className="h-10 min-h-0 py-2 pb-2" />
-          </div>
-          <div className="flex-1 space-y-1.5">
-            <Label>备注</Label>
-            <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" />
-          </div>
-        </div>
-      </SectionCard>
+      <SaleOrderHeaderFields
+        customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
+        warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
+        warehouseError={warehouseError} setWarehouseError={setWarehouseError}
+        carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
+        freightType={freightType} setFreightType={setFreightType}
+        receiverName={receiverName} setReceiverName={setReceiverName}
+        receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
+        receiverAddress={receiverAddress} setReceiverAddress={setReceiverAddress}
+        remark={remark} setRemark={setRemark}
+      />
 
       {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
       <SectionCard
@@ -749,68 +747,11 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
             <p className="text-sm text-muted-foreground">还没有商品明细，点击上方"添加商品"开始录入</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-table-head">
-                  <th className="w-28 pb-2 text-left">编码</th>
-                  <th className="w-20 pb-2 text-left">货号</th>
-                  <th className="w-20 pb-2 text-left">型号</th>
-                  <th className="pb-2 text-left">商品</th>
-                  <th className="w-20 pb-2 text-left">颜色</th>
-                  <th className="w-16 pb-2 text-center">单位</th>
-                  <th className="w-20 pb-2 text-right">数量</th>
-                  <th className="w-24 pb-2 text-right">单价 (¥)</th>
-                  <th className="w-28 pb-2 text-right">金额</th>
-                  <th className="w-10 pb-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {items.map(item => (
-                  <tr key={item._key} className="border-b border-border/40">
-                    <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
-                    <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
-                    <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
-                    <td className="py-2.5 pr-3">
-                      <button
-                        type="button"
-                        onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
-                        onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-                        className={cn('block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
-                      >
-                        {item.productName
-                          ? <span className="truncate font-medium">{item.productName}</span>
-                          : <span className="text-muted-foreground">点击选择商品...</span>}
-                      </button>
-                    </td>
-                    <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
-
-                    <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
-
-                    <td className="py-2.5">
-                      <Input type="number" min="1" step="1" placeholder="数量" value={item.quantity}
-                        ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
-                        className="text-right text-sm" />
-                    </td>
-
-                    <td className="py-2.5">
-                      <Input type="number" min="0" step="0.01" placeholder="单价" value={item.unitPrice}
-                        disabled={!!priceLoading[item._key]}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                        className={`text-right text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`} />
-                    </td>
-
-                    <td className="py-2.5 text-right font-medium tabular-nums">¥{(item.quantity * item.unitPrice).toFixed(2)}</td>
-
-                    <td className="py-2.5 text-center">
-                      <Button type="button" size="sm" variant="ghost" className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SaleOrderItemsTable
+            items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
+            setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
+            updateItem={updateItem} removeItem={removeItem}
+          />
         )}
       </SectionCard>
 
@@ -879,18 +820,19 @@ function EditView({ order }: { order: NonNullable<ReturnType<typeof useSaleDetai
 // 查看视图（已有销售单详情 + 状态操作）
 // ════════════════════════════════════════════════════════════════════════════
 
-function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; closeTab: () => void }) {
+function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: string; closeTab: () => void }) {
   const { data: order, isLoading } = useSaleDetail(saleId)
   const releaseMutate  = useReleaseSale()
   const shipMutate     = useShipSale()
   const deleteMutate   = useDeleteSale()
+  const cancelMutate   = useCancelSale()
 
   const [printOpen, setPrintOpen] = useState(false)
   const [detailTab, setDetailTab] = useState<'info'|'progress'|'scan'|'pack'|'log'>('info')
 
   const [confirmState, setConfirmState] = useState<{
-    open: boolean; title: string; description: string; variant: 'default' | 'destructive'; onConfirm: () => void
-  }>({ open: false, title: '', description: '', variant: 'default', onConfirm: () => {} })
+    open: boolean; title: string; description: string; variant: 'default' | 'destructive'; confirmText: string; onConfirm: () => void
+  }>({ open: false, title: '', description: '', variant: 'default', confirmText: '确认', onConfirm: () => {} })
 
   if (isLoading) {
     return (
@@ -910,13 +852,66 @@ function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; clo
 
   // 草稿状态直接进入可编辑视图
   if (order.status === 1) {
-    return <EditView order={order} closeTab={closeTab} />
+    return <EditView order={order} closeTab={closeTab} tabPath={tabPath} />
   }
 
-  const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending
+  const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending
 
   return (
     <div className="flex flex-col gap-3">
+      <ActionBar
+        title={order.orderNo}
+        subtitle={<FulfillmentProgressCard order={order} />}
+        rightActions={
+          <>
+            {order.status === 5 && (
+              <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5" disabled={isPending}
+                onClick={() => setConfirmState({
+                  open: true, title: '确认删除订单', description: '删除后订单将无法恢复。', variant: 'destructive', confirmText: '确认删除',
+                  onConfirm: () => {
+                    setConfirmState(s => ({ ...s, open: false }))
+                    deleteMutate.mutate(order.id, { onSuccess: () => closeTab() })
+                  },
+                })}>
+                <X className="h-4 w-4 mr-1" />删除订单
+              </Button>
+            )}
+            {(order.status === 2 || order.status === 3) && (
+              <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5" disabled={isPending}
+                onClick={() => setConfirmState({
+                  open: true, title: '取消订单',
+                  description: order.status === 3 ? '将同步取消关联仓库任务并释放锁定资源，是否继续？' : '将释放已占用库存并取消销售单，是否继续？',
+                  variant: 'destructive', confirmText: '确认取消',
+                  onConfirm: () => { setConfirmState(s => ({ ...s, open: false })); cancelMutate.mutate(order.id) },
+                })}>
+                <X className="h-4 w-4 mr-1" />取消订单
+              </Button>
+            )}
+            {order.status === 2 && (
+              <Button variant="outline" disabled={isPending}
+                onClick={() => setConfirmState({
+                  open: true, title: '取消占库', description: '将释放已预占的库存并将订单恢复为草稿状态，是否继续？', variant: 'default', confirmText: '取消占库',
+                  onConfirm: () => { setConfirmState(s => ({ ...s, open: false })); releaseMutate.mutate(order.id) },
+                })}>
+                <Warehouse className="h-4 w-4 mr-1" />取消占库
+              </Button>
+            )}
+            {order.status === 4 && (
+              <Button variant="outline" onClick={() => setPrintOpen(true)}>打印订单</Button>
+            )}
+            {order.status === 2 && (
+              <Button disabled={isPending}
+                onClick={() => setConfirmState({
+                  open: true, title: '发起出库', description: '将创建仓库出库任务，由仓库人员执行拣货后完成出库，是否继续？', variant: 'default', confirmText: '发起出库',
+                  onConfirm: () => { setConfirmState(s => ({ ...s, open: false })); shipMutate.mutate(order.id) },
+                })}>
+                发起出库
+              </Button>
+            )}
+          </>
+        }
+      />
+
       {/* 选项卡切换 */}
       <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
         {([
@@ -1046,12 +1041,8 @@ function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; clo
                 { key: 'qtyLabel', title: '条码数量', width: 100 },
                 { key: 'operatorName', title: '操作人', width: 110, render: v => (v as string) || '-' },
                 { key: 'scannedAt', title: '操作时间', width: 150, render: v => v ? formatDisplayDateTime(v as string) : '-' },
-              ] satisfies TableColumn<{
-                rowKey: string; productCode: string; articleNumber?: string | null; spec?: string | null
-                productName: string; color?: string | null; unit: string
-                barcode: string; qtyLabel: string; operatorName: string | null; scannedAt: string | null
-              }>[]}
-              data={(order.items ?? []).flatMap(item => {
+              ] satisfies TableColumn<ScanRow>[]}
+              data={(order.items ?? []).flatMap((item): ScanRow[] => {
                 const scans = item.scans ?? []
                 if (scans.length === 0) {
                   return [{
@@ -1166,7 +1157,7 @@ function DetailView({ saleId, closeTab }: { saleId: number; tabPath: string; clo
         title={confirmState.title}
         description={confirmState.description}
         variant={confirmState.variant}
-        confirmText={confirmState.variant === 'destructive' ? '确认取消' : '确认'}
+        confirmText={confirmState.confirmText}
         loading={isPending}
         onConfirm={confirmState.onConfirm}
         onCancel={() => setConfirmState(s => ({ ...s, open: false }))}

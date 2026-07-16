@@ -338,7 +338,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                       </td>
                       <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
                       <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
-                      <td className="py-2.5">
+                      <td className="py-2.5 pr-2">
                         <Input
                           type="number" min="0.01" step="0.01" placeholder="数量"
                           value={item.quantity}

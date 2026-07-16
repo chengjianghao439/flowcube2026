@@ -194,7 +194,6 @@ PDA workbench (`/pda`) grid with 10 permission-gated entries (收货订单/扫�
 | 扫码上架 | `/pda/putaway/:id` | Two-step scan: container → shelf location |
 | 拣货任务 | `/pda/picking` | Task list + SKU summary → start picking |
 | 任务执行 | `/pda/task/:id` | Scan containers, pick suggestions, route guidance |
-| 波次拣货 | `/pda/wave?waveId=X` | Wave-based multi-task batch picking |
 | 订单分拣 | `/pda/sort` | Scan product → see target bin → scan bin to confirm |
 | 复核任务 | `/pda/check/:id` | Scan containers to verify picked quantities |
 | 打包作业 | `/pda/pack/:id` | Create boxes, scan items, finish + print labels |

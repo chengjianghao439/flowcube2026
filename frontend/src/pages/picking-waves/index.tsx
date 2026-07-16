@@ -111,22 +111,18 @@ export default function PickingWavesPage() {
   const startMut = useMutation({
     mutationFn: startWaveApi,
     onSuccess: () => { toast.success('已开始拣货'); invalidate() },
-    onError: () => toast.error('操作失败'),
   })
   const finishPickMut = useMutation({
     mutationFn: finishPickingApi,
     onSuccess: () => { toast.success('拣货完成'); invalidate() },
-    onError: () => toast.error('操作失败'),
   })
   const finishMut = useMutation({
     mutationFn: finishWaveApi,
     onSuccess: () => { toast.success('波次已完成'); invalidate(); closeDetail() },
-    onError: () => toast.error('操作失败'),
   })
   const cancelMut = useMutation({
     mutationFn: cancelWaveApi,
     onSuccess: () => { toast.success('已取消'); invalidate(); closeDetail() },
-    onError: () => toast.error('取消失败'),
   })
 
   function openWaveDetail(wave: PickingWave, nextFocus?: string) {

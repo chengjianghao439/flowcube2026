@@ -146,7 +146,7 @@ async function addItem(packageId, { productCode, qty }) {
 
     // 查找商品信息
     const [[product]] = await conn.query(
-      'SELECT id, code, name, unit FROM product_items WHERE code=? AND deleted_at IS NULL',
+      'SELECT id, code, name, unit, article_number, spec, color FROM product_items WHERE code=? AND deleted_at IS NULL',
       [productCode],
     )
     if (!product) throw new AppError(`商品 ${productCode} 不存在`, 404)
@@ -208,9 +208,9 @@ async function addItem(packageId, { productCode, qty }) {
     } else {
       const [ins] = await conn.query(
         `INSERT INTO package_items
-           (package_id, product_id, product_code, product_name, unit, qty)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [packageId, product.id, product.code, product.name, product.unit, fromQtyUnits(qtyUnits)],
+           (package_id, product_id, product_code, product_name, unit, article_number, spec, color, qty)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [packageId, product.id, product.code, product.name, product.unit, product.article_number || null, product.spec || null, product.color || null, fromQtyUnits(qtyUnits)],
       )
       result = {
         itemId:      ins.insertId,

@@ -47,7 +47,7 @@ async function tryFinishTask(conn, taskId) {
   // 上架完成只把收货订单推进到「已完成(4)·待审核」。
 }
 
-async function putaway(taskId, { containerId, locationId }, operator, { requestKey } = {}) {
+async function putaway(taskId, { containerId, locationId }, operator, { requestKey, pdaWarehouseId } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -64,9 +64,13 @@ async function putaway(taskId, { containerId, locationId }, operator, { requestK
     const taskRow = await lockStatusRow(conn, {
       table: 'inbound_tasks',
       id: taskId,
-      columns: 'id, status, lock_version',
+      columns: 'id, status, lock_version, warehouse_id',
       entityName: '入库任务',
     })
+    // PDA 设备绑定了仓库时，强制校验设备所属仓库与任务仓库一致，防止跨仓库误操作
+    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(taskRow.warehouse_id)) {
+      throw new AppError('当前设备绑定仓库与该收货订单所属仓库不一致，无法上架', 403)
+    }
     assertTaskCanPutaway(taskRow)
     await assertPurchaseOrdersOpen(conn, taskId, '上架')
 

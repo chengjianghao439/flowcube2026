@@ -28,9 +28,12 @@ async function createFromPoId(purchaseOrderId) {
   assertStatusAction('purchase', 'createInboundTask', order.status)
   if (!order.items.length) throw new AppError('采购单无明细', 400)
 
+  // 混单收货单的 inbound_tasks.purchase_order_id 头字段为空，必须按明细行关联查找，
+  // 否则混单场景下查重会漏检，导致同一采购单被重复建单、超收。
   const [[dup]] = await pool.query(
-    `SELECT id FROM inbound_tasks
-     WHERE purchase_order_id = ? AND deleted_at IS NULL AND status NOT IN (4, 5) LIMIT 1`,
+    `SELECT it.id FROM inbound_tasks it
+     JOIN inbound_task_items iti ON iti.task_id = it.id
+     WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL AND it.status NOT IN (4, 5) LIMIT 1`,
     [purchaseOrderId],
   )
   if (dup) throw new AppError('该采购单已有未完结的入库任务', 400)
@@ -232,12 +235,23 @@ async function audit(taskId, { action = 'approve', remark = '' } = {}, operator)
         taskId,
       ],
     )
+    // 审核退回：打回"收货中"，让仓库能重新扫码收货修正，不是死路一条
+    if (normalizedAction === 'reject') {
+      const reopenRule = assertStatusAction('inboundTask', 'reopenAfterReject', Number(taskRow.status))
+      await compareAndSetStatus(conn, {
+        table: 'inbound_tasks',
+        id: taskId,
+        fromStatus: reopenRule.from,
+        toStatus: reopenRule.to,
+        entityName: '收货订单',
+      })
+    }
     await appendInboundEvent(
       conn,
       taskId,
       normalizedAction === 'approve' ? 'audit_approved' : 'audit_rejected',
       normalizedAction === 'approve' ? '审核通过' : '审核退回',
-      normalizedRemark || (normalizedAction === 'approve' ? '收货订单已审核通过' : '收货订单已退回，请处理异常后重新审核'),
+      normalizedRemark || (normalizedAction === 'approve' ? '收货订单已审核通过' : '收货订单已退回并重新打回收货中，可继续扫码收货修正后重新提交审核'),
       operator,
       { auditStatus, remark: normalizedRemark || null },
     )
@@ -256,7 +270,7 @@ async function audit(taskId, { action = 'approve', remark = '' } = {}, operator)
   }
 }
 
-async function receive(taskId, payload, { userId, requestKey } = {}) {
+async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } = {}) {
   const { productId, qty, packages: rawPackages } = payload
   const productIdN = Number(productId)
   const packages = Array.isArray(rawPackages) && rawPackages.length
@@ -296,6 +310,10 @@ async function receive(taskId, payload, { userId, requestKey } = {}) {
     }
 
     const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '入库任务' })
+    // PDA 设备绑定了仓库时，强制校验设备所属仓库与任务仓库一致，防止跨仓库误操作
+    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(taskRow.warehouse_id)) {
+      throw new AppError('当前设备绑定仓库与该收货订单所属仓库不一致，无法收货', 403)
+    }
     assertTaskCanReceive(taskRow)
     await assertPurchaseOrdersOpen(conn, taskId)
 

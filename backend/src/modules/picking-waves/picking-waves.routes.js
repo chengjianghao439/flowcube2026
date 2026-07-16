@@ -25,8 +25,6 @@ router.post('/', requirePermission(PERMISSIONS.PICKING_WAVE_MANAGE), vBody(z.obj
 
 router.get('/:id', requirePermission(PERMISSIONS.PICKING_WAVE_VIEW), ctrl.detail)
 
-router.get('/:id/pick-route', requirePermission(PERMISSIONS.PICKING_WAVE_VIEW), ctrl.pickRoute)
-
 router.post('/:id/start', requirePermission(PERMISSIONS.PICKING_WAVE_MANAGE), ctrl.start)
 
 router.post('/:id/finish-picking', requirePermission(PERMISSIONS.PICKING_WAVE_MANAGE), ctrl.finishPicking)
@@ -34,9 +32,5 @@ router.post('/:id/finish-picking', requirePermission(PERMISSIONS.PICKING_WAVE_MA
 router.post('/:id/finish', requirePermission(PERMISSIONS.PICKING_WAVE_MANAGE), ctrl.finish)
 
 router.post('/:id/cancel', requirePermission(PERMISSIONS.PICKING_WAVE_MANAGE), ctrl.cancel)
-
-router.post('/:id/route-completed', requirePermission(PERMISSIONS.PICKING_WAVE_MANAGE), vBody(z.object({
-  barcode: z.string().min(1),
-})), ctrl.markRouteCompleted)
 
 module.exports = router

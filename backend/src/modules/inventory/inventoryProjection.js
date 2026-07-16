@@ -1,33 +1,22 @@
 /**
  * 展示 / 统计 projection：
- * - quantity 基于 ACTIVE 容器事实层汇总
- * - reserved 基于 inventory_stock.reserved 受控 projection
+ * - quantity / reserved 都直接读 inventory_stock 缓存表
+ *
+ * inventory_stock.quantity 由 containerEngine.syncStockFromContainers() 在每个改变
+ * ACTIVE 容器汇总的写入路径末尾同步维护（createContainer 转正、扣减、拆分、调拨、
+ * 盘点调整、退货/收货上架等，见 containerEngine.js 头部注释的不变量说明），
+ * 不再需要在展示层现算 SUM(inventory_containers.remaining_qty)。
  *
  * 注意：
  * - 仅用于 overview / dashboard / reports / finder / notifications 等展示读取
  * - 不得用于 reserve / execute / available check 等关键业务判定
+ *   （那些走 containerEngine.getStockProjection() 的实时容器聚合 + FOR UPDATE 行锁）
  */
 
 function getInventoryDisplayProjectionSql() {
   return `(
-    SELECT dims.product_id,
-           dims.warehouse_id,
-           COALESCE(c.quantity, 0) AS quantity,
-           COALESCE(s.reserved, 0) AS reserved
-    FROM (
-      SELECT product_id, warehouse_id FROM inventory_stock
-      UNION
-      SELECT product_id, warehouse_id
-      FROM inventory_containers
-      WHERE status = 1 AND deleted_at IS NULL
-    ) dims
-    LEFT JOIN (
-      SELECT product_id, warehouse_id, SUM(remaining_qty) AS quantity
-      FROM inventory_containers
-      WHERE status = 1 AND deleted_at IS NULL
-      GROUP BY product_id, warehouse_id
-    ) c ON c.product_id = dims.product_id AND c.warehouse_id = dims.warehouse_id
-    LEFT JOIN inventory_stock s ON s.product_id = dims.product_id AND s.warehouse_id = dims.warehouse_id
+    SELECT product_id, warehouse_id, quantity, reserved
+    FROM inventory_stock
   )`
 }
 

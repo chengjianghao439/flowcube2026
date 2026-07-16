@@ -91,6 +91,16 @@
   body {
     @apply font-sans bg-background text-foreground;
   }
+
+  /* 全局隐藏 number 输入框的上下调节箭头（Chrome/Safari/Edge + Firefox） */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
 }
 
 @layer utilities {
@@ -177,14 +187,6 @@
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-}
-
-/* 大按钮基础样式：最小点击区域 48×48dp，适合工业手套操作 */
-.pda-btn {
-  min-height: 48px;
-  min-width: 48px;
-  touch-action: manipulation;
-  cursor: pointer;
 }
 
 /* 输入框聚焦时无蓝色轮廓（PDA 扫码场景视觉更干净）*/

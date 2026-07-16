@@ -343,7 +343,7 @@ export default function PdaTaskPage() {
           className="flex-1 h-12 text-base"
           autoComplete="off" autoCorrect="off" spellCheck={false}
         />
-        <Button size="lg" onClick={() => handleScan(inputVal)} disabled={!inputVal||scanning||!!finished || pickAction.submitBlocked || readyAction.submitBlocked}>确认</Button>
+        <Button size="pda" onClick={() => handleScan(inputVal)} disabled={!inputVal||scanning||!!finished || pickAction.submitBlocked || readyAction.submitBlocked}>确认</Button>
       </PdaBottomBar>
 
 

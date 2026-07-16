@@ -29,24 +29,18 @@ const fmt = row => ({
   operatorId:row.operator_id, operatorName:row.operator_name, createdAt:row.created_at,
 })
 
+// 一个销售单终生最多对应一个仓库任务：ship() 用 sale_orders.task_id 是否已置位来防止重复创建
+// （见 ship() 里 `if (orderRow.task_id) throw ...`），且 createForSaleOrder 是唯一会写
+// warehouse_tasks.sale_order_id 的地方、只被 ship() 调用一次。所以直接按 so.task_id 主键点查
+// 即可拿到对应仓库任务，不需要再对整张 warehouse_tasks 表做 MAX(id) GROUP BY 聚合。
 const latestWarehouseTaskJoin = `
-  LEFT JOIN (
-    SELECT wt.*
-    FROM warehouse_tasks wt
-    INNER JOIN (
-      SELECT sale_order_id, MAX(id) AS id
-      FROM warehouse_tasks
-      WHERE deleted_at IS NULL AND sale_order_id IS NOT NULL
-      GROUP BY sale_order_id
-    ) latest_wt ON latest_wt.id = wt.id
-  ) wt_by_sale ON wt_by_sale.sale_order_id = so.id
   LEFT JOIN warehouse_tasks wt_by_id ON wt_by_id.id = so.task_id AND wt_by_id.deleted_at IS NULL
 `
 
 const warehouseTaskProjection = `
-  COALESCE(wt_by_sale.id, wt_by_id.id) AS warehouse_task_id,
-  COALESCE(wt_by_sale.task_no, wt_by_id.task_no) AS warehouse_task_no,
-  COALESCE(wt_by_sale.status, wt_by_id.status) AS warehouse_task_status
+  wt_by_id.id AS warehouse_task_id,
+  wt_by_id.task_no AS warehouse_task_no,
+  wt_by_id.status AS warehouse_task_status
 `
 
 const genOrderNo = conn => generateDailyCode(conn, 'SO', 'sale_orders', 'order_no')
@@ -223,15 +217,22 @@ function mapTimeline(rows, order) {
         : r.payload_json)
       : null,
   }))
-  return [...base, ...mapped].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+  return [...base, ...mapped].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
 async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, customerId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null }) {
-  const offset=(page-1)*pageSize, like=`%${keyword}%`
-  const params=[like,like]
-  const countParams=[like,like]
+  const offset=(page-1)*pageSize
+  const params=[]
+  const countParams=[]
   let cond=''
   let countCond=''
+  if (keyword) {
+    const like = `%${keyword}%`
+    cond += ' AND (so.order_no LIKE ? OR so.customer_name LIKE ?)'
+    countCond += ' AND (order_no LIKE ? OR customer_name LIKE ?)'
+    params.push(like, like)
+    countParams.push(like, like)
+  }
   if (status) {
     cond += ' AND so.status=?'
     countCond += ' AND status=?'
@@ -284,11 +285,11 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     `SELECT so.*, ${warehouseTaskProjection}
      FROM sale_orders so
      ${latestWarehouseTaskJoin}
-     WHERE so.deleted_at IS NULL AND (so.order_no LIKE ? OR so.customer_name LIKE ?) ${cond}
+     WHERE so.deleted_at IS NULL ${cond}
      ORDER BY so.created_at DESC LIMIT ? OFFSET ?`,
     [...params,pageSize,offset],
   )
-  const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_orders WHERE deleted_at IS NULL AND (order_no LIKE ? OR customer_name LIKE ?) ${countCond}`,countParams)
+  const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_orders WHERE deleted_at IS NULL ${countCond}`,countParams)
   return { list:rows.map(fmt), pagination:{page,pageSize,total} }
 }
 
@@ -355,9 +356,8 @@ async function findById(id) {
       const pkgIds = pkgRows.map(p => p.id)
       const [itemRows] = await pool.query(
         `SELECT pi.package_id, pi.product_code, pi.product_name, pi.unit, pi.qty, pi.created_at,
-                p.article_number, p.spec, p.color
+                pi.article_number, pi.spec, pi.color
          FROM package_items pi
-         LEFT JOIN product_items p ON p.id = pi.product_id
          WHERE pi.package_id IN (?) ORDER BY pi.id`,
         [pkgIds],
       )
@@ -558,8 +558,8 @@ async function cancel(id, operator) {
         throw new AppError('销售单处于拣货中但未关联仓库任务，请先排查异常', 409)
       }
       const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
+      // taskSvc.cancel 内部已经会释放该销售单的库存预占，这里不用再调一次 releaseByRef
       await taskSvc.cancel(orderRow.task_id, { conn, syncSaleStatus: false, operator })
-      await releaseByRef(conn, 'sale_order', id)
     }
 
     await compareAndSetStatus(conn, {

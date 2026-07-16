@@ -135,6 +135,7 @@ export default function PdaSortPage() {
       else handleBinScan(code)
     },
     enabled: !scanning && !sortAction.submitBlocked,
+    onDuplicate: () => err('重复扫码，请稍候'),
   })
 
   const occupiedBins = (bins ?? []).filter(b => b.status === 2)

@@ -289,10 +289,9 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
 
     const totalQty = normalizedBoxes.reduce((sum, box) => sum + box.qty, 0)
     if (totalQty > activeProduct.remainingQty) {
-      err(`超出待收数量，当前最多还能收 ${activeProduct.remainingQty}`)
-      return
-    }
-    if (totalQty < activeProduct.remainingQty) {
+      // 供应商多发货是常见场景，不再硬性拦截提交，只提示——超收部分会在 ERP 端标红，交给审核人工把关
+      warn(`超出待收数量 ${activeProduct.remainingQty}，将按超收 ${totalQty - activeProduct.remainingQty} 记录`)
+    } else if (totalQty < activeProduct.remainingQty) {
       warn(`当前只登记 ${totalQty}，提交后该商品还剩 ${activeProduct.remainingQty - totalQty}`)
     }
 

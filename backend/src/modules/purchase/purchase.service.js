@@ -41,9 +41,12 @@ const genOrderNo = conn => generateDailyCode(conn, 'PO', 'purchase_orders', 'ord
 
 async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null }) {
   const offset = (page - 1) * pageSize
-  const like = `%${keyword}%`
-  const params = [like]
+  const params = []
   let whereExtra = ''
+  if (keyword) {
+    whereExtra += ' AND po.order_no LIKE ?'
+    params.push(`%${keyword}%`)
+  }
   if (status) {
     whereExtra += ' AND po.status = ?'
     params.push(status)
@@ -91,13 +94,13 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
          WHERE iti.purchase_order_id = po.id AND it.deleted_at IS NULL
        ), 0) AS total_received_qty
      FROM purchase_orders po
-     WHERE po.deleted_at IS NULL AND po.order_no LIKE ? ${whereExtra}
+     WHERE po.deleted_at IS NULL ${whereExtra}
      ORDER BY po.created_at DESC LIMIT ? OFFSET ?`,
     [...params, pageSize, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM purchase_orders po
-     WHERE po.deleted_at IS NULL AND po.order_no LIKE ? ${whereExtra}`,
+     WHERE po.deleted_at IS NULL ${whereExtra}`,
     params,
   )
   return { list: rows.map(fmtOrder), pagination: { page, pageSize, total } }
@@ -263,10 +266,10 @@ async function cancel(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, entityName: '采购单' })
-    const cancelRule = assertStatusAction('purchase', 'cancel', orderRow.status)
 
-    // 混合采购单收货单的 inbound_tasks.purchase_order_id 头字段为空，须按明细行关联查找涉及本采购单的收货单
+    // 混合采购单收货单的 inbound_tasks.purchase_order_id 头字段为空，须按明细行关联查找涉及本采购单的收货单。
+    // 加锁顺序必须与 receive()/putaway()/审核结算保持一致（先 inbound_tasks 后 purchase_orders），
+    // 否则并发下两边反向加锁会触发 InnoDB 死锁。
     const [taskIdRows] = await conn.query(
       'SELECT DISTINCT task_id FROM inbound_task_items WHERE purchase_order_id = ?',
       [id],
@@ -280,6 +283,9 @@ async function cancel(id, operator) {
           [taskIds],
         )
       : [[]]
+
+    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, entityName: '采购单' })
+    const cancelRule = assertStatusAction('purchase', 'cancel', orderRow.status)
 
     // 本采购单在收货单里已产生实际收货（即便是混单场景），不能随取消动作静默消失，必须先走收货流程处理
     for (const taskRow of taskRows) {

@@ -1,6 +1,6 @@
 {
   "name": "flowcube-backend",
-  "version": "0.4.20",
+  "version": "0.4.21",
   "description": "极序 Flow ERP Backend API",
   "main": "index.js",
   "type": "commonjs",
@@ -11,6 +11,7 @@
     "smoke:reports": "node scripts/smoke-reports.js",
     "migrate": "node scripts/migrate.js",
     "bootstrap:admin": "node scripts/bootstrap-admin.js",
+    "resync:inventory-stock": "node scripts/resync-inventory-stock.js",
     "test:package-add-item": "echo 'removed'",
     "test:package-finish-print": "echo 'removed'"
   },

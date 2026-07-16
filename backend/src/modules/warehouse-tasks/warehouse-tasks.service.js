@@ -213,9 +213,13 @@ const genTaskNo = conn => generateDailyCode(conn, 'WT', 'warehouse_tasks', 'task
 
 async function findAll({ page=1, pageSize=20, keyword='', status=null, warehouseId=null }) {
   const offset = (page - 1) * pageSize
-  const like = `%${keyword}%`
-  const conds = ['deleted_at IS NULL', '(task_no LIKE ? OR customer_name LIKE ? OR sale_order_no LIKE ?)']
-  const params = [like, like, like]
+  const conds = ['deleted_at IS NULL']
+  const params = []
+  if (keyword) {
+    const like = `%${keyword}%`
+    conds.push('(task_no LIKE ? OR customer_name LIKE ? OR sale_order_no LIKE ?)')
+    params.push(like, like, like)
+  }
   if (status)      { conds.push('status=?');       params.push(status) }
   if (warehouseId) { conds.push('warehouse_id=?'); params.push(warehouseId) }
   const where = conds.join(' AND ')
@@ -856,7 +860,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
     await assertTaskPackagePrintClosure(conn, id)
   }
 
-  const { saleOrderId, warehouseId, totalAmount, customerName, items } = saleData
+  const { saleOrderId, orderNo, warehouseId, totalAmount, customerName, items } = saleData
 
   if (!isPurchaseReturn && saleOrderId) {
     const saleRow = await lockStatusRow(conn, {
@@ -927,7 +931,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
   if (!isPurchaseReturn) {
     await conn.query(
       `INSERT IGNORE INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,due_date) VALUES (2,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL 30 DAY))`,
-      [saleOrderId, taskRow.task_no, customerName, totalAmount, totalAmount],
+      [saleOrderId, orderNo, customerName, totalAmount, totalAmount],
     )
   }
 
@@ -1527,6 +1531,7 @@ async function getShipContext(taskId) {
 
   return {
     saleOrderId: saleOrder.id,
+    orderNo: saleOrder.order_no,
     warehouseId: saleOrder.warehouse_id,
     totalAmount: Number(saleOrder.total_amount),
     customerName: saleOrder.customer_name,

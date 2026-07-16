@@ -6,7 +6,8 @@ import { createRequestKey } from '@/lib/requestKey'
 import type { CreatePurchaseParams } from '@/types/purchase'
 
 export const usePurchaseList   = (params: object) => useQuery({ queryKey: ['purchase', params], queryFn: () => getPurchaseListApi(params) })
-export const usePurchaseDetail = (id: number)     => useQuery({ queryKey: ['purchase', id],     queryFn: () => getPurchaseDetailApi(id), enabled: !!id })
+export const usePurchaseDetail = (id: number, options?: { refetchInterval?: number | false }) =>
+  useQuery({ queryKey: ['purchase', id], queryFn: () => getPurchaseDetailApi(id), enabled: !!id, refetchInterval: options?.refetchInterval })
 
 export const useCreatePurchase = () => {
   const invalidate = useInvalidate()

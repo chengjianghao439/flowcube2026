@@ -58,7 +58,7 @@ function TaskCard({ task, onStart, starting }: { task: MyTask; onStart: () => vo
               style={{ width: `${pct}%`, background: pct >= 100 ? 'hsl(var(--success))' : 'hsl(var(--primary))' }} />
           </div>
         </div>
-        <Button size="lg" className="w-full" disabled={starting} onClick={onStart}>
+        <Button size="pda" className="w-full" disabled={starting} onClick={onStart}>
           {starting ? '处理中…' : '开始拣货 →'}
         </Button>
       </div>

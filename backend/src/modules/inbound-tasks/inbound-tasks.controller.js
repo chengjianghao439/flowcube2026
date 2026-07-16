@@ -92,6 +92,7 @@ const receive = async (req, res, next) => {
     const data = await svc.receive(+req.params.id, req.body, {
       userId: req.user?.userId ?? null,
       requestKey: extractRequestKey(req),
+      pdaWarehouseId: req.pda?.warehouseId ?? null,
     })
     return successResponse(res, data, '收货成功')
   } catch (e) { next(e) }
@@ -102,6 +103,7 @@ const putaway = async (req, res, next) => {
     const operator = getOperatorFromRequest(req)
     const data = await svc.putaway(+req.params.id, req.body, operator, {
       requestKey: extractRequestKey(req),
+      pdaWarehouseId: req.pda?.warehouseId ?? null,
     })
     return successResponse(res, data, '上架成功')
   } catch (e) { next(e) }

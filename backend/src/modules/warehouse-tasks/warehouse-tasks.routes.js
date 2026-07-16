@@ -6,6 +6,7 @@ const { PERMISSIONS } = require('../../constants/permissions')
 const { validateBody } = require('../../utils/route')
 const { pdaSessionRequired } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
+const AppError = require('../../utils/AppError')
 
 const router = Router()
 router.use(authMiddleware)

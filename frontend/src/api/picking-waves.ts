@@ -89,31 +89,6 @@ export interface PickingWave {
   }
 }
 
-export interface WaveRouteContainer {
-  waveItemId: number
-  containerId: number
-  barcode: string
-  productName: string
-  productCode: string
-  unit: string
-  qty: number
-  status?: 'pending' | 'completed'
-}
-
-export interface WaveRouteStep {
-  step: number
-  locationCode: string | null
-  containers: WaveRouteContainer[]
-  status?: 'pending' | 'in_progress' | 'completed'
-}
-
-export interface WaveRouteData {
-  waveId: number
-  waveNo: string
-  totalSteps: number
-  totalContainers: number
-  route: WaveRouteStep[]
-}
 
 // ── API ────────────────────────────────────────────────────────────────────────
 
@@ -137,9 +112,3 @@ export const finishWaveApi = (id: number) =>
 
 export const cancelWaveApi = (id: number) =>
   client.post<null>(`/picking-waves/${id}/cancel`)
-
-export const getWavePickRouteApi = (id: number) =>
-  client.get<WaveRouteData>(`/picking-waves/${id}/pick-route`)
-
-export const markRouteCompletedApi = (waveId: number, barcode: string) =>
-  client.post<null>(`/picking-waves/${waveId}/route-completed`, { barcode })

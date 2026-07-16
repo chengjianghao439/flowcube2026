@@ -54,14 +54,3 @@ exports.cancel = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-exports.pickRoute = async (req, res, next) => {
-  try { return successResponse(res, await svc.getPickRoute(+req.params.id)) }
-  catch (e) { next(e) }
-}
-
-exports.markRouteCompleted = async (req, res, next) => {
-  try {
-    await svc.markRouteContainerCompleted(+req.params.id, req.body.barcode)
-    return successResponse(res, null, '路线步骤已更新')
-  } catch (e) { next(e) }
-}

@@ -230,12 +230,13 @@ function buildInboundPrintBatches(recentPrintJobs = []) {
 }
 
 function distributeQtyToLines(taskItems, productId, qty) {
-  const lines = taskItems
-    .filter(i => i.productId === productId && i.receivedQty < i.orderedQty)
-    .sort((a, b) => a.id - b.id)
+  const allLines = taskItems.filter(i => i.productId === productId).sort((a, b) => a.id - b.id)
+  if (!allLines.length) throw new AppError('该商品不属于当前收货任务', 400)
+
+  const underfilled = allLines.filter(i => i.receivedQty < i.orderedQty)
   let left = +qty
   const updates = []
-  for (const line of lines) {
+  for (const line of underfilled) {
     const cap = line.orderedQty - line.receivedQty
     const add = Math.min(left, cap)
     if (add > 0) {
@@ -244,7 +245,14 @@ function distributeQtyToLines(taskItems, productId, qty) {
     }
     if (left <= 0) break
   }
-  if (left > 0) throw new AppError('收货数量超过该商品待收数量', 400)
+  // 超收：供应商多发货是常见场景，不再硬性拒绝。超出部分记在最后一行，
+  // received_qty > ordered_qty 会在 ERP 端自然呈现为"超收"，交给审核环节人工把关。
+  if (left > 0) {
+    const lastLine = allLines[allLines.length - 1]
+    const existing = updates.find(u => u.itemId === lastLine.id)
+    if (existing) existing.add += left
+    else updates.push({ itemId: lastLine.id, add: left })
+  }
   return updates
 }
 

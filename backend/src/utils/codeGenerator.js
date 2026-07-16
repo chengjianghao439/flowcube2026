@@ -79,7 +79,13 @@ async function generateDailyCode(conn, prefix, table, codeField) {
 }
 
 /**
- * 生成容器条码（累计）。
+ * 生成容器条码（累计，全局不归零）。
+ *
+ * 用 daily_sequences 表做原子自增（seq_key 不带日期，语义上是"全局累计流水"，
+ * 表结构和字段类型都能承载，详见 087 迁移），避免旧版 SELECT MAX(...)+1 方案
+ * 在并发收货下的撞号风险（无 FOR UPDATE，两个事务可能读到同一个 MAX 值）。
+ * seq_key 对应的行首次生成时，用现有 inventory_containers 里的最大编号播种，
+ * 避免和历史数据的 barcode 唯一键冲突；之后只走原子 UPDATE，不再扫描大表。
  *
  * @param {object} conn  - mysql2 连接或连接池
  * @param {'I'|'B'} [prefix='I'] - I=库存条码，B=塑料盒条码
@@ -87,27 +93,44 @@ async function generateDailyCode(conn, prefix, table, codeField) {
  */
 async function generateContainerCode(conn, prefix = 'I') {
   const upper = String(prefix || 'I').toUpperCase()
-  if (upper === 'B') {
-    const [[{ maxNum }]] = await conn.query(
-      `SELECT COALESCE(MAX(CAST(SUBSTRING(barcode, 2) AS UNSIGNED)), 0) AS maxNum
-       FROM inventory_containers
-       WHERE barcode LIKE 'B%'`,
-    )
-    return `B${String(Number(maxNum) + 1).padStart(6, '0')}`
-  }
+  const seqKey = `inventory_containers:barcode:${upper}`
 
-  const [[{ maxNum }]] = await conn.query(
-    `SELECT COALESCE(MAX(CAST(
-        CASE
-          WHEN barcode LIKE 'I%' THEN SUBSTRING(barcode, 2)
-          WHEN barcode LIKE 'CNT%' THEN SUBSTRING(barcode, 4)
-          ELSE NULL
-        END AS UNSIGNED
-      )), 0) AS maxNum
-     FROM inventory_containers
-     WHERE barcode LIKE 'I%' OR barcode LIKE 'CNT%'`,
-  )
-  return `I${String(Number(maxNum) + 1).padStart(6, '0')}`
+  const isPool = typeof conn.getConnection === 'function'
+  let dedicated = null
+  const db = isPool ? (dedicated = await conn.getConnection()) : conn
+  try {
+    const [[{ maxNum: seedMax }]] = upper === 'B'
+      ? await db.query(
+          `SELECT COALESCE(MAX(CAST(SUBSTRING(barcode, 2) AS UNSIGNED)), 0) AS maxNum
+           FROM inventory_containers WHERE barcode LIKE 'B%'`,
+        )
+      : await db.query(
+          `SELECT COALESCE(MAX(CAST(
+              CASE
+                WHEN barcode LIKE 'I%' THEN SUBSTRING(barcode, 2)
+                WHEN barcode LIKE 'CNT%' THEN SUBSTRING(barcode, 4)
+                ELSE NULL
+              END AS UNSIGNED
+            )), 0) AS maxNum
+           FROM inventory_containers WHERE barcode LIKE 'I%' OR barcode LIKE 'CNT%'`,
+        )
+
+    // 该 seq_key 第一次出现时用当前最大编号播种；此后这行已存在，ON DUPLICATE 分支不再改动 seq_value，
+    // 只靠下面的原子 UPDATE 递增——不会每次都重新扫描 inventory_containers。
+    await db.query(
+      `INSERT INTO daily_sequences (seq_key, seq_value) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE seq_key = seq_key`,
+      [seqKey, seedMax],
+    )
+    await db.query(
+      `UPDATE daily_sequences SET seq_value = LAST_INSERT_ID(seq_value + 1) WHERE seq_key = ?`,
+      [seqKey],
+    )
+    const [[{ seq }]] = await db.query('SELECT LAST_INSERT_ID() AS seq')
+    return `${upper}${String(seq).padStart(6, '0')}`
+  } finally {
+    if (dedicated) dedicated.release()
+  }
 }
 
 module.exports = { generateMasterCode, generateDailyCode, generateContainerCode }

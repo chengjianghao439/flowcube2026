@@ -34,7 +34,7 @@ function TransferCard({ order, phase, onTap }: { order: TransferOrder; phase: 'o
         {phase === 'out'
           ? <p className="text-xs text-muted-foreground">已出库 {deducted}</p>
           : <p className="text-xs text-muted-foreground">已出库 {deducted} · 已入库 {received}</p>}
-        <Button size="lg" className="w-full" variant={phase === 'out' ? 'default' : 'outline'} onClick={onTap}>
+        <Button size="pda" className="w-full" variant={phase === 'out' ? 'default' : 'outline'} onClick={onTap}>
           {phase === 'out' ? '📤 调出仓扫码出库' : '📥 调入仓扫码入库'}
         </Button>
       </div>

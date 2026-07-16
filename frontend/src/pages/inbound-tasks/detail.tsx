@@ -21,6 +21,7 @@ import {
   useAuditInboundTask,
   useCancelInbound,
 } from '@/hooks/useInboundTasks'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
 import { mapInboundTaskToPrint } from '@/lib/orderPrintData'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -68,7 +69,9 @@ export default function InboundTaskDetailPage() {
   const taskId = Number(rawId)
   const validId = Number.isFinite(taskId) && taskId > 0 ? taskId : null
 
-  const { data: task, isLoading, refetch: refetchTask } = useInboundTaskDetail(validId)
+  const isActiveTab = useActiveWorkspaceTab()
+  // 收货现场变化频繁，标签页常驻挂载时若不轮询容易停留在打开时的陈旧进度
+  const { data: task, isLoading, refetch: refetchTask } = useInboundTaskDetail(validId, { refetchInterval: isActiveTab ? 20_000 : false })
   const { refetch: refetchContainers } = useInboundTaskContainers(validId)
 
   const submitMut = useSubmitInboundTask()
@@ -224,8 +227,21 @@ export default function InboundTaskDetailPage() {
             { key: 'color', title: '颜色', width: 90, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
             { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
             { key: 'orderedQty', title: '应到', width: 90 },
-            { key: 'receivedQty', title: '已收', width: 90 },
-            { key: 'lineRemain', title: '剩余', width: 90, render: v => <span className="text-muted-foreground">{String(v)}</span> },
+            {
+              key: 'receivedQty', title: '已收', width: 90,
+              render: (v, r) => (
+                <span className={(v as number) > r.orderedQty ? 'font-semibold text-destructive' : undefined}>{String(v)}</span>
+              ),
+            },
+            {
+              key: 'lineRemain', title: '剩余', width: 90,
+              render: (v, r) => {
+                const overQty = r.receivedQty - r.orderedQty
+                return overQty > 0
+                  ? <span className="font-semibold text-destructive">超收 {overQty}</span>
+                  : <span className="text-muted-foreground">{String(v)}</span>
+              },
+            },
             { key: 'putawayQty', title: '已上架', width: 90 },
             { key: 'unitPrice', title: '单价', width: 100, render: v => <span className="text-muted-foreground">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
             { key: 'lineAmount', title: '小记', width: 110, render: v => <span className="font-medium">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
@@ -276,9 +292,12 @@ export default function InboundTaskDetailPage() {
       <ConfirmDialog
         open={approveConfirmOpen}
         title={auditFlowStatus?.key === 'rejected' ? '重新审核通过' : '审核通过'}
-        description={auditFlowStatus?.key === 'rejected'
-          ? '确认退回问题已经处理完成，并将该收货订单重新审核通过？'
-          : '确认该收货订单已完成收货、打印与上架，并正式通过审核？'}
+        description={
+          (items.some(it => it.receivedQty > it.orderedQty) ? '⚠ 存在超收商品，请核对后再确认通过。' : '')
+          + (auditFlowStatus?.key === 'rejected'
+            ? '确认退回问题已经处理完成，并将该收货订单重新审核通过？'
+            : '确认该收货订单已完成收货、打印与上架，并正式通过审核？')
+        }
         confirmText={auditFlowStatus?.key === 'rejected' ? '重新审核通过' : '审核通过'}
         loading={auditMut.isPending}
         onConfirm={() => {

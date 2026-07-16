@@ -408,7 +408,7 @@ export default function PdaCheckPage() {
       </div>
 
       <PdaBottomBar>
-        <PdaScanner onScan={handleScan} placeholder="扫描库存条码" disabled={scanMut.isPending || checkAction.submitBlocked} />
+        <PdaScanner onScan={handleScan} placeholder="扫描库存条码" disabled={scanMut.isPending || checkAction.submitBlocked} onDuplicate={() => err('重复扫码，请稍候')} />
       </PdaBottomBar>
 
     </div>

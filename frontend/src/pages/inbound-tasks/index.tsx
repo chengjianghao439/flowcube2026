@@ -19,6 +19,7 @@ import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useSubmitInboundTask } from '@/hooks/useInboundTasks'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
@@ -57,6 +58,8 @@ export default function InboundTasksPage() {
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
 
+  const isActiveTab = useActiveWorkspaceTab()
+  // 收货现场变化频繁，标签页常驻挂载时若不轮询容易停留在打开时的陈旧进度
   const { data, isLoading } = useQuery({
     queryKey: ['inbound-tasks', { keyword, remark, operatorId, statusFilter, productId, warehouseId, startDate, endDate }],
     queryFn: () => getInboundTasksApi({
@@ -70,6 +73,7 @@ export default function InboundTasksPage() {
       startDate: startDate || undefined,
       endDate: endDate || undefined,
     }),
+    refetchInterval: isActiveTab ? 20_000 : false,
   })
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {

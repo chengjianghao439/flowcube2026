@@ -43,7 +43,7 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
             <div className="h-1.5 rounded-full bg-muted"><div className="h-1.5 rounded-full transition-all" style={{width:`${pct}%`,background:'hsl(var(--primary))'}} /></div>
           </div>
         )}
-        <Button size="lg" className="w-full" variant={isReady ? 'outline' : 'default'} onClick={onTap}>
+        <Button size="pda" className="w-full" variant={isReady ? 'outline' : 'default'} onClick={onTap}>
           {isReady ? '📤 扫码上架' : '📥 开始收货'}
         </Button>
       </div>

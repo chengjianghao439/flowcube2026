@@ -9,7 +9,7 @@
  * 确保 keep-alive 多标签场景下路径隔离正确。
  */
 
-import { useContext, useState } from 'react'
+import { useContext, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -97,7 +98,11 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const [warehouseError, setWarehouseError] = useState(false)
   const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
 
-  const isDirty = !!(supplierId || warehouseId || expectedDate || remark || items.length)
+  // 编辑态：初始值本就非空，"是否非空"不能代表"是否改过"；改成与编辑开始时的快照比较
+  const editSnapshotRef = useRef(isEdit ? JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items }) : null)
+  const isDirty = isEdit
+    ? JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items }) !== editSnapshotRef.current
+    : !!(supplierId || warehouseId || expectedDate || remark || items.length)
   useDirtyGuard(tabPath, isDirty)
 
   function requestLeave(proceed: () => void) {
@@ -190,6 +195,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       toast.warning('采购数量必须为大于 0 的整数')
       return
     }
+    if (items.find(i => !Number.isFinite(i.unitPrice) || i.unitPrice < 0)) {
+      toast.warning('采购单价不能为负数')
+      return
+    }
     const payload = {
       supplierId: +supplierId,
       supplierName,
@@ -229,7 +238,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         rightActions={
           <>
             {isEdit && (
-              <Button variant="outline" disabled={submitting || submitLocked} onClick={() => onSaved?.()}>
+              <Button variant="outline" disabled={submitting || submitLocked} onClick={() => requestLeave(() => onSaved?.())}>
                 取消编辑
               </Button>
             )}
@@ -363,7 +372,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 
                     <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
 
-                    <td className="py-2.5">
+                    <td className="py-2.5 pr-2">
                       <Input
                         type="number"
                         min="1"
@@ -445,7 +454,9 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 
 function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; closeTab: (targetPath?: string) => void; tabPath: string }) {
   const navigate = useNavigate()
-  const { data: order, isLoading } = usePurchaseDetail(purchaseId)
+  const isActiveTab = useActiveWorkspaceTab()
+  // 采购/收货是 PDA 现场高频变化的单据，标签页常驻挂载时若不轮询容易看到陈旧的收货进度
+  const { data: order, isLoading } = usePurchaseDetail(purchaseId, { refetchInterval: isActiveTab ? 20_000 : false })
   const confirmMutate = useConfirmPurchase()
   const cancelMutate  = useCancelPurchase()
   const [editing, setEditing] = useState(false)

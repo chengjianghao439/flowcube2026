@@ -19,6 +19,8 @@ interface PdaScannerProps {
   autoFocus?: boolean
   /** false：仅扫码枪，隐藏「手动输入」（上架等强制扫码场景） */
   allowManualEntry?: boolean
+  /** 同一条码 1 秒内重复扫描时触发（可选，比如弹提示告诉用户"重复扫码"）；不传则静默丢弃 */
+  onDuplicate?: (barcode: string) => void
 }
 
 export default function PdaScanner({
@@ -27,6 +29,7 @@ export default function PdaScanner({
   disabled = false,
   showTypeHint = true,
   allowManualEntry = true,
+  onDuplicate,
 }: PdaScannerProps) {
   const manualInputRef = useRef<HTMLInputElement>(null)
   const [manualMode, setManualMode] = useState(false)
@@ -50,7 +53,7 @@ export default function PdaScanner({
   }, [disabled, showTypeHint, onScan])
 
   // ── 全局扫码枪监听（手动模式时暂停，避免冲突）───────────────────────────
-  usePdaScanner({ onScan: handleScan, enabled: !disabled && !manualMode })
+  usePdaScanner({ onScan: handleScan, enabled: !disabled && !manualMode, onDuplicate })
 
   // ── 进入手动输入模式 ──────────────────────────────────────────────────────
   function enterManualMode() {

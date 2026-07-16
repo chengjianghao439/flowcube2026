@@ -35,6 +35,8 @@ const buttonVariants = cva(
         sm: "h-9 rounded-md px-3",
         lg: "h-11 rounded-md px-8",
         icon: "h-10 w-10",
+        // PDA 工业终端高频操作按钮：48×48dp 最小点击区域，touch-action 消除双击缩放延迟，适合工业手套操作
+        pda: "h-12 min-w-12 rounded-md px-8 [touch-action:manipulation]",
       },
     },
     defaultVariants: {

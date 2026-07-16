@@ -11,20 +11,29 @@ import { useEffect, useRef } from 'react'
 
 const SCAN_INTERVAL_MS = 50  // 扫码枪相邻字符最大间隔（毫秒）
 const MIN_SCAN_LENGTH  = 3   // 最短有效条码长度
+const DUPLICATE_WINDOW_MS = 1000  // 同一条码在这段时间内的重复上报会被丢弃
 
 interface Options {
   onScan: (barcode: string) => void
   /** 是否激活监听（false 时暂停，用于处理中禁止重复扫码）*/
   enabled?: boolean
+  /** 命中防重复窗口时触发（可选，用于页面自定义提示）；不传则静默丢弃 */
+  onDuplicate?: (barcode: string) => void
 }
 
-export function usePdaScanner({ onScan, enabled = true }: Options) {
+export function usePdaScanner({ onScan, enabled = true, onDuplicate }: Options) {
   const bufferRef   = useRef<string>('')
   const lastTimeRef = useRef<number>(0)
   const timerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 防重复扫码：扫码枪硬件常见"回车键抖动/重复上报"，同一条码短时间内只处理一次；
+  // 这个保护原本只有 task.tsx 自己实现，现在下沉到这里，所有走 usePdaScanner/PdaScanner 的
+  // 页面（check.tsx、pack.tsx 等）默认就有，不用每个页面各自记一份 lastScanRef。
+  const lastScanRef = useRef<{ barcode: string; time: number } | null>(null)
   // ── 关键：用 ref 存 onScan，避免事件监听因回调引用变化而反复注册/销毁
   const onScanRef   = useRef(onScan)
   useEffect(() => { onScanRef.current = onScan }, [onScan])
+  const onDuplicateRef = useRef(onDuplicate)
+  useEffect(() => { onDuplicateRef.current = onDuplicate }, [onDuplicate])
 
   const enabledRef = useRef(enabled)
   useEffect(() => { enabledRef.current = enabled }, [enabled])
@@ -33,9 +42,15 @@ export function usePdaScanner({ onScan, enabled = true }: Options) {
     function flush() {
       const code = bufferRef.current.trim()
       bufferRef.current = ''
-      if (code.length >= MIN_SCAN_LENGTH) {
-        onScanRef.current(code)
+      if (code.length < MIN_SCAN_LENGTH) return
+
+      const now = Date.now()
+      if (lastScanRef.current?.barcode === code && now - lastScanRef.current.time < DUPLICATE_WINDOW_MS) {
+        onDuplicateRef.current?.(code)
+        return
       }
+      lastScanRef.current = { barcode: code, time: now }
+      onScanRef.current(code)
     }
 
     function handleKeyDown(e: KeyboardEvent) {

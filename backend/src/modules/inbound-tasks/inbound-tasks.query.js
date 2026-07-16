@@ -274,9 +274,13 @@ async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_T
 
 async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, productId = null, warehouseId = null, operatorId = null, startDate = null, endDate = null, remark = null }) {
   const offset = (page - 1) * pageSize
-  const like = `%${keyword}%`
-  const conds = ['t.deleted_at IS NULL', '(t.task_no LIKE ? OR t.supplier_name LIKE ? OR t.purchase_order_no LIKE ?)']
-  const params = [like, like, like]
+  const conds = ['t.deleted_at IS NULL']
+  const params = []
+  if (keyword) {
+    const like = `%${keyword}%`
+    conds.push('(t.task_no LIKE ? OR t.supplier_name LIKE ? OR t.purchase_order_no LIKE ?)')
+    params.push(like, like, like)
+  }
   if (status) {
     const statusList = Array.isArray(status) ? status : [status]
     if (statusList.length) {

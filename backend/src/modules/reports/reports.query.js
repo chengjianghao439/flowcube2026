@@ -81,9 +81,9 @@ async function fetchSaleStatsRows({ startDate, endDate }) {
     `SELECT DATE_FORMAT(o.created_at,'%Y-%m') AS month,
             COUNT(*) AS order_count,
             SUM(o.total_amount) AS total_amount,
-            SUM(CASE WHEN o.status=3 THEN o.total_amount ELSE 0 END) AS shipped_amount
+            SUM(CASE WHEN o.status=4 THEN o.total_amount ELSE 0 END) AS shipped_amount
      FROM sale_orders o
-     WHERE o.deleted_at IS NULL AND o.status != 4 ${dateCond}
+     WHERE o.deleted_at IS NULL AND o.status != 5 ${dateCond}
      GROUP BY month ORDER BY month ASC`,
     dateParams,
   )
@@ -93,7 +93,7 @@ async function fetchSaleStatsRows({ startDate, endDate }) {
             COUNT(*) AS order_count,
             SUM(o.total_amount) AS total_amount
      FROM sale_orders o
-     WHERE o.deleted_at IS NULL AND o.status != 4 ${dateCond}
+     WHERE o.deleted_at IS NULL AND o.status != 5 ${dateCond}
      GROUP BY o.customer_id, o.customer_name ORDER BY total_amount DESC LIMIT 20`,
     dateParams,
   )
@@ -102,7 +102,7 @@ async function fetchSaleStatsRows({ startDate, endDate }) {
     `SELECT i.product_name, SUM(i.quantity) AS total_qty, SUM(i.amount) AS total_amount
      FROM sale_order_items i
      JOIN sale_orders o ON i.order_id = o.id
-     WHERE o.deleted_at IS NULL AND o.status = 3 ${dateCond}
+     WHERE o.deleted_at IS NULL AND o.status = 4 ${dateCond}
      GROUP BY i.product_id, i.product_name ORDER BY total_amount DESC LIMIT 20`,
     dateParams,
   )

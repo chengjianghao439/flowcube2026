@@ -137,6 +137,9 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
         },
       },
       finish: { from: [3], to: 4, message: '只有待上架状态才能完成收货订单' },
+      // 审核退回后打回"收货中"，让仓库能重新扫码收货修正（比如漏扫的箱子），
+      // 而不是停在待审核状态无法处理；修正完会通过 receive/putaway 的既有流程自然重新走到待审核。
+      reopenAfterReject: { from: [4], to: 2, message: '只有已完成待审核的收货订单，审核退回后才能重新收货' },
       cancel: {
         from: [1],
         to: 5,
