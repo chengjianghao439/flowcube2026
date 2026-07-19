@@ -148,8 +148,11 @@ async function scenarioInboundReceiveIdempotent(log, ctx, adminToken) {
   log.assert('重复 receive 只生成一个标签任务', jobs.length === 1, `count=${jobs.length}`)
 }
 
-async function scenarioInboundReceiveRollback(log, ctx, adminToken) {
-  log.section('Scenario: inbound receive rollback on print task failure')
+async function scenarioInboundReceiveNoPrinterStillRecords(log, ctx, adminToken) {
+  // 收货是"货已经在库"这个事实的记录，不应该因为打印基础设施暂时没就绪而回滚
+  // （见 inbound-tasks.command.js receive() 的设计注释）：无可用打印机时 receive 仍应
+  // 成功、正常入库，只是跳过该容器的打印任务，noPrinterCount 会如实反映跳过数量。
+  log.section('Scenario: inbound receive still records stock when no printer available')
   const { inboundTaskId } = await createSubmittedInboundTask(ctx.http, adminToken, {
     supplier: ctx.supplier,
     warehouse: ctx.warehouse,
@@ -158,26 +161,33 @@ async function scenarioInboundReceiveRollback(log, ctx, adminToken) {
   })
   const response = await withDisabledLabelPrinters(ctx.pool, () => ctx.http.post(`/api/inbound-tasks/${inboundTaskId}/receive`, {
     token: adminToken,
-    headers: ctx.pdaHeaders({ 'X-Request-Key': randomRef('recv-fail') }),
+    headers: ctx.pdaHeaders({ 'X-Request-Key': randomRef('recv-no-printer') }),
     json: {
       productId: Number(ctx.product.id),
       packages: [{ qty: 5 }],
     },
   }))
-  log.assert('打印任务创建失败时 receive 返回失败', !response.ok, `status=${response.status}`)
+  log.assert('无可用打印机时 receive 仍返回成功', response.ok, `status=${response.status}`)
+  log.assert('响应体如实上报 noPrinterCount', Number(response.data?.data?.noPrinterCount) === 1, JSON.stringify(response.data?.data))
   const containers = await dbQuery(
     ctx.pool,
     'SELECT id FROM inventory_containers WHERE inbound_task_id = ? AND deleted_at IS NULL',
     [inboundTaskId],
   )
-  log.assert('receive 回滚后不生成容器', containers.length === 0, `count=${containers.length}`)
+  log.assert('收货正常生成容器', containers.length === 1, `count=${containers.length}`)
   const items = await dbQuery(
     ctx.pool,
     'SELECT received_qty FROM inbound_task_items WHERE task_id = ?',
     [inboundTaskId],
   )
   const received = items.reduce((sum, row) => sum + Number(row.received_qty || 0), 0)
-  log.assert('receive 回滚后不落收货数量', received === 0, `received=${received}`)
+  log.assert('收货数量正常落地', received === 5, `received=${received}`)
+  const jobs = await dbQuery(
+    ctx.pool,
+    `SELECT id FROM print_jobs WHERE ref_type = 'inventory_container' AND ref_id = ?`,
+    [containers[0]?.id || 0],
+  )
+  log.assert('无打印机时不生成打印任务', jobs.length === 0, `count=${jobs.length}`)
 }
 
 async function scenarioSplitConcurrent(log, ctx) {
@@ -317,7 +327,7 @@ async function main() {
     })
 
     await scenarioInboundReceiveIdempotent(log, ctx, adminToken)
-    await scenarioInboundReceiveRollback(log, ctx, adminToken)
+    await scenarioInboundReceiveNoPrinterStillRecords(log, ctx, adminToken)
     await scenarioSplitConcurrent(log, ctx)
     await scenarioSplitRollback(log, ctx)
     await scenarioWarehouseCancel(log, ctx, adminToken)
