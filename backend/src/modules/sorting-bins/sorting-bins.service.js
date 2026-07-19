@@ -19,6 +19,7 @@ const fmt = r => ({
   currentTaskNo: r.current_task_no  || null,
   customerName:  r.customer_name    || null,
   remark:        r.remark           || null,
+  capacity:      r.capacity != null ? Number(r.capacity) : null,
   createdAt:     r.created_at,
   updatedAt:     r.updated_at,
 })
@@ -179,10 +180,18 @@ async function batchCreate({ warehouseId, prefix, from, to }) {
 }
 
 /**
- * 更新备注
+ * 更新备注 / 容量阈值
  */
-async function update(id, { remark }) {
-  await pool.query('UPDATE sorting_bins SET remark=? WHERE id=?', [remark || null, id])
+async function update(id, { remark, capacity }) {
+  const cap = capacity === undefined ? undefined : (capacity === null || capacity === '' ? null : Number(capacity))
+  if (cap !== undefined && cap !== null && (!Number.isFinite(cap) || cap <= 0)) {
+    throw new AppError('容量阈值必须为大于 0 的整数', 400)
+  }
+  if (cap === undefined) {
+    await pool.query('UPDATE sorting_bins SET remark=? WHERE id=?', [remark || null, id])
+  } else {
+    await pool.query('UPDATE sorting_bins SET remark=?, capacity=? WHERE id=?', [remark || null, cap, id])
+  }
 }
 
 /**
@@ -210,6 +219,36 @@ async function assignToTask(conn, { warehouseId, taskId }) {
     [taskId, bin.id],
   )
   return { binId: bin.id, binCode: bin.code }
+}
+
+/**
+ * 查询分拣格当前占用量（按绑定任务 warehouse_task_items.sorted_qty 求和），
+ * 若配置了 capacity 且已超出，返回告警信息；否则返回 null。
+ * 在事务连接中调用，挂在 sortTaskWithinTransaction 写入 sorted_qty 之后。
+ */
+async function checkCapacityWarning(conn, binId) {
+  if (!binId) return null
+  const [[bin]] = await conn.query(
+    'SELECT id, code, capacity, current_task_id FROM sorting_bins WHERE id=?',
+    [binId],
+  )
+  if (!bin || bin.capacity == null || !bin.current_task_id) return null
+
+  const [[{ total }]] = await conn.query(
+    'SELECT COALESCE(SUM(sorted_qty),0) AS total FROM warehouse_task_items WHERE task_id=?',
+    [bin.current_task_id],
+  )
+  const currentQty = Number(total)
+  const capacity = Number(bin.capacity)
+  if (currentQty <= capacity) return null
+
+  return {
+    binId: Number(bin.id),
+    binCode: bin.code,
+    capacity,
+    currentQty,
+    message: `分拣格 ${bin.code} 已超容量：当前 ${currentQty} 件，容量 ${capacity} 件，请注意`,
+  }
 }
 
 /**
@@ -250,5 +289,5 @@ async function forceRelease(id) {
 module.exports = {
   scanProduct,
   findAll, findAllWarehouses, create, batchCreate, update, remove,
-  assignToTask, releaseByTask, forceRelease,
+  assignToTask, releaseByTask, forceRelease, checkCapacityWarning,
 }

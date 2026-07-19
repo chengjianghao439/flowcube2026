@@ -104,8 +104,6 @@ export interface InboundExceptionFlags {
   failedPrintJobs: number
   timeoutPrintJobs: number
   overduePutawayContainers: number
-  pendingAuditOverdue: boolean
-  auditRejected: boolean
   hasException: boolean
 }
 
@@ -157,6 +155,7 @@ export interface ReceiveParams {
   packages?: Array<{
     qty: number
   }>
+  confirmOverReceive?: boolean
 }
 
 export interface ReceivePackageResult {
@@ -167,6 +166,7 @@ export interface ReceivePackageResult {
   totalQty?: number
   printJobId: number | null
   printJobIds?: number[]
+  noPrinterCount?: number
   containers?: Array<{
     containerCode: string
     containerId: number
@@ -213,11 +213,6 @@ export interface CreateInboundTaskParams {
     purchaseItemId: number
     qty: number
   }>
-}
-
-export interface AuditInboundTaskParams {
-  action: 'approve' | 'reject'
-  remark?: string
 }
 
 export interface ReprintInboundTaskParams {

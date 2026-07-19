@@ -15,7 +15,6 @@ async function buildNotifications() {
   const productInventoryProjectionSql = getProductInventoryProjectionSql()
   const printTimeoutMinutes = Number(inboundThresholds.printTimeoutMinutes)
   const putawayTimeoutHours = Number(inboundThresholds.putawayTimeoutHours)
-  const auditTimeoutHours = Number(inboundThresholds.auditTimeoutHours)
 
   const [[{ pendingPurchase }]] = await pool.query(
     `SELECT COUNT(*) AS pendingPurchase FROM purchase_orders WHERE status IN (1,2) AND deleted_at IS NULL`,
@@ -100,42 +99,6 @@ async function buildNotifications() {
      ORDER BY created_at ASC
      LIMIT 1`,
     [putawayTimeoutHours],
-  )
-  const [[{ pendingInboundAudit }]] = await pool.query(
-    `SELECT COUNT(*) AS pendingInboundAudit
-     FROM inbound_tasks
-     WHERE deleted_at IS NULL
-       AND status = 4
-       AND audit_status = 0
-       AND TIMESTAMPDIFF(HOUR, updated_at, NOW()) >= ?`,
-    [auditTimeoutHours],
-  )
-  const [[pendingAuditTarget]] = await pool.query(
-    `SELECT id AS taskId
-     FROM inbound_tasks
-     WHERE deleted_at IS NULL
-       AND status = 4
-       AND audit_status = 0
-       AND TIMESTAMPDIFF(HOUR, updated_at, NOW()) >= ?
-     ORDER BY updated_at ASC
-     LIMIT 1`,
-    [auditTimeoutHours],
-  )
-  const [[{ rejectedInboundAudit }]] = await pool.query(
-    `SELECT COUNT(*) AS rejectedInboundAudit
-     FROM inbound_tasks
-     WHERE deleted_at IS NULL
-       AND status != 5
-       AND audit_status = 2`,
-  )
-  const [[rejectedAuditTarget]] = await pool.query(
-    `SELECT id AS taskId
-     FROM inbound_tasks
-     WHERE deleted_at IS NULL
-       AND status != 5
-       AND audit_status = 2
-     ORDER BY updated_at DESC
-     LIMIT 1`,
   )
   const [[{ outboundPrintFailures }]] = await pool.query(
     `SELECT COUNT(*) AS outboundPrintFailures
@@ -224,8 +187,6 @@ async function buildNotifications() {
   if (failedPrintJobs > 0) pushNotification(items, seen, { code: 'PRINT_FAILED', category: 'operations', priority: 25, type: 'warning', icon: '🖨️', text: `${failedPrintJobs} 条打印任务失败，建议补打`, path: '/settings/barcode-print-query' })
   if (inboundPrintFailures > 0) pushNotification(items, seen, { code: 'INBOUND_PRINT_FAILED', category: 'operations', priority: 20, type: 'warning', icon: '🏷️', text: `${inboundPrintFailures} 条收货条码打印失败待补打`, path: failedInboundTarget?.taskId ? `/inbound-tasks/${failedInboundTarget.taskId}?focus=print-batches` : '/settings/barcode-print-query?category=inbound&status=failed' })
   if (overdueInboundPutaway > 0) pushNotification(items, seen, { code: 'INBOUND_PUTAWAY_TIMEOUT', category: 'operations', priority: 15, type: 'warning', icon: '📦', text: `${overdueInboundPutaway} 箱已打印未上架超时`, path: putawayTimeoutTarget?.taskId ? `/inbound-tasks/${putawayTimeoutTarget.taskId}?focus=waiting-putaway` : '/inbound-tasks' })
-  if (pendingInboundAudit > 0) pushNotification(items, seen, { code: 'INBOUND_AUDIT_TIMEOUT', category: 'operations', priority: 15, type: 'warning', icon: '🧾', text: `${pendingInboundAudit} 笔收货订单待审核超时`, path: pendingAuditTarget?.taskId ? `/inbound-tasks/${pendingAuditTarget.taskId}?focus=audit-follow-up` : '/inbound-tasks' })
-  if (rejectedInboundAudit > 0) pushNotification(items, seen, { code: 'INBOUND_AUDIT_REJECTED', category: 'operations', priority: 14, type: 'warning', icon: '↩️', text: `${rejectedInboundAudit} 笔收货订单已退回待处理`, path: rejectedAuditTarget?.taskId ? `/inbound-tasks/${rejectedAuditTarget.taskId}?focus=audit-follow-up` : '/inbound-tasks' })
   if (outboundPrintFailures > 0) pushNotification(items, seen, { code: 'OUTBOUND_PRINT_FAILED', category: 'operations', priority: 21, type: 'warning', icon: '📮', text: `${outboundPrintFailures} 条出库条码打印失败待补打`, path: failedOutboundTarget?.waveId ? `/picking-waves?waveId=${failedOutboundTarget.waveId}&focus=print-closure` : '/settings/barcode-print-query?category=outbound&status=failed' })
   if (logisticsPrintFailures > 0) pushNotification(items, seen, { code: 'LOGISTICS_PRINT_FAILED', category: 'operations', priority: 22, type: 'warning', icon: '🚛', text: `${logisticsPrintFailures} 条物流标签打印失败待补打`, path: '/settings/barcode-print-query?category=logistics&status=failed' })
   if (staleWavePicking > 0) pushNotification(items, seen, { code: 'WAVE_STALE_PICKING', category: 'operations', priority: 18, type: 'warning', icon: '🛒', text: `${staleWavePicking} 个波次拣货推进缓慢`, path: staleWavePickingTarget?.waveId ? `/picking-waves?waveId=${staleWavePickingTarget.waveId}&focus=wave-progress` : '/picking-waves' })
@@ -250,8 +211,6 @@ async function buildNotifications() {
       failedPrintJobs,
       inboundPrintFailures,
       overdueInboundPutaway,
-      pendingInboundAudit,
-      rejectedInboundAudit,
       outboundPrintFailures,
       staleWavePicking,
       staleWaveSorting,

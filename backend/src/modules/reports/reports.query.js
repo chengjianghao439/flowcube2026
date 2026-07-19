@@ -378,28 +378,6 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
        ORDER BY COALESCE(c.putaway_deadline_at, c.created_at) ASC
        LIMIT 5`,
     ),
-    pendingAuditCount: await fetchOne(
-      `SELECT COUNT(*) AS count
-       FROM inbound_tasks
-       WHERE deleted_at IS NULL
-         AND status = 4
-         AND audit_status = 0`,
-    ),
-    pendingAuditRows: await fetchMany(
-      `SELECT t.id,
-              t.task_no AS title,
-              CONCAT(COALESCE(t.supplier_name, '未知供应商'), ' · ', COALESCE(t.warehouse_name, '未知仓库')) AS subtitle,
-              CONCAT('/inbound-tasks/', t.id) AS path,
-              '待审核' AS badge,
-              CONCAT('上架后 ', DATE_FORMAT(t.updated_at, '%m-%d %H:%i')) AS hint,
-              t.updated_at AS createdAt
-       FROM inbound_tasks t
-       WHERE t.deleted_at IS NULL
-         AND t.status = 4
-         AND t.audit_status = 0
-       ORDER BY t.updated_at ASC
-       LIMIT 5`,
-    ),
     printFailureCount: await fetchOne(
       `SELECT COUNT(*) AS count
        FROM print_jobs j

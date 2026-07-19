@@ -134,7 +134,7 @@ async function findById(id) {
     [id],
   )
   // 展示的状态要跟收货订单详情页一致：不能只看 status（4=已完成）字段，还要叠加
-  // 打印超时/失败、上架超期、审核退回等异常——否则这里显示"已完成"，点进去却是"异常中"。
+  // 打印超时/失败、上架超期等异常——否则这里显示"已完成"，点进去却是"异常中"。
   const thresholds = await getInboundClosureThresholds()
   const closureSummaryMap = await loadInboundTaskClosureSummary(taskRows.map(r => r.id), thresholds)
   order.inboundTasks = taskRows.map(r => {
@@ -159,6 +159,13 @@ async function create({ supplierId, supplierName, warehouseId, warehouseName, ex
       await conn.rollback()
       return requestState.responseData
     }
+    // 前端选择器已过滤停用供应商，这里补一道后端校验，防止绕过前端直接调 API 建单（禁用供应商未在下单流程过滤）
+    const [[supplierRow]] = await conn.query(
+      'SELECT is_active FROM supply_suppliers WHERE id = ? AND deleted_at IS NULL',
+      [supplierId],
+    )
+    if (!supplierRow) throw new AppError('供应商不存在', 404)
+    if (!supplierRow.is_active) throw new AppError('该供应商已停用，无法新建采购单', 400)
     const orderNo = await genOrderNo(conn)
     const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
     const [r] = await conn.query(
@@ -209,7 +216,7 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
   return findById(id)
 }
 
-// 短装结案：把「已提交(2)」采购单手动完成（剩余未收量作罢），前提是相关收货订单已全部审核通过且确有实收入库。
+// 短装结案：把「已提交(2)」采购单手动完成（剩余未收量作罢），前提是相关收货订单已全部上架完成（audit_status 随上架完成自动置1）且确有实收入库。
 async function closeRemaining(id, operator) {
   const conn = await pool.getConnection()
   try {
@@ -222,14 +229,14 @@ async function closeRemaining(id, operator) {
         WHERE iti.purchase_order_id=? AND it.deleted_at IS NULL AND it.status<>5 AND it.audit_status<>1`,
       [id],
     )
-    if (Number(pending) > 0) throw new AppError('存在未审核通过的收货订单，请先完成审核再关闭剩余', 409)
+    if (Number(pending) > 0) throw new AppError('存在未全部上架完成的收货订单，请先处理完收货/上架再关闭剩余', 409)
     const [[{ received }]] = await conn.query(
       `SELECT COALESCE(SUM(iti.putaway_qty),0) AS received
          FROM inbound_task_items iti JOIN inbound_tasks it ON it.id=iti.task_id
         WHERE iti.purchase_order_id=? AND it.deleted_at IS NULL AND it.status<>5 AND it.audit_status=1`,
       [id],
     )
-    if (Number(received) <= 0) throw new AppError('该采购单尚无已审核入库，不能关闭结案（如需终止请改用取消）', 409)
+    if (Number(received) <= 0) throw new AppError('该采购单尚无已入库数量，不能关闭结案（如需终止请改用取消）', 409)
     await recomputePurchasePayable(conn, id)
     await compareAndSetStatus(conn, {
       table: 'purchase_orders', id,
@@ -262,13 +269,54 @@ async function confirm(id, operator) {
   }
 }
 
+async function withdrawConfirm(id, operator) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    // 与 cancel()/receive() 保持同样的加锁顺序（先 inbound_tasks 后 purchase_orders），避免并发死锁。
+    // 混合采购单收货单的 inbound_tasks.purchase_order_id 头字段为空，须按明细行关联查找。
+    const [taskIdRows] = await conn.query(
+      'SELECT DISTINCT task_id FROM inbound_task_items WHERE purchase_order_id = ?',
+      [id],
+    )
+    const taskIds = taskIdRows.map(r => Number(r.task_id))
+    const [taskRows] = taskIds.length
+      ? await conn.query(
+          `SELECT id, task_no FROM inbound_tasks WHERE id IN (?) AND deleted_at IS NULL AND status <> 5 FOR UPDATE`,
+          [taskIds],
+        )
+      : [[]]
+    if (taskRows.length) {
+      throw new AppError(
+        `该采购单已创建收货订单 ${taskRows.map(t => t.task_no).join('、')}，请先取消收货订单后再撤回确认`,
+        409,
+      )
+    }
+    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status', entityName: '采购单' })
+    const rule = assertStatusAction('purchase', 'withdrawConfirm', orderRow.status)
+    await compareAndSetStatus(conn, {
+      table: 'purchase_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '采购单',
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
 async function cancel(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
 
     // 混合采购单收货单的 inbound_tasks.purchase_order_id 头字段为空，须按明细行关联查找涉及本采购单的收货单。
-    // 加锁顺序必须与 receive()/putaway()/审核结算保持一致（先 inbound_tasks 后 purchase_orders），
+    // 加锁顺序必须与 receive()/putaway()（含上架完成自动结算）保持一致（先 inbound_tasks 后 purchase_orders），
     // 否则并发下两边反向加锁会触发 InnoDB 死锁。
     const [taskIdRows] = await conn.query(
       'SELECT DISTINCT task_id FROM inbound_task_items WHERE purchase_order_id = ?',
@@ -358,4 +406,4 @@ async function cancel(id, operator) {
   }
 }
 
-module.exports = { findAll, findById, create, update, confirm, cancel, closeRemaining }
+module.exports = { findAll, findById, create, update, confirm, withdrawConfirm, cancel, closeRemaining }

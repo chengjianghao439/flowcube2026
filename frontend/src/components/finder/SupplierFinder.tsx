@@ -57,7 +57,7 @@ export function SupplierFinder({ open, onClose, onConfirm }: SupplierFinderProps
       title={<span className="flex items-center gap-2"><Truck className="h-4 w-4 text-primary" />选择供应商</span>}
       dialogId="supplier-finder"
       columns={COLUMNS}
-      data={(data?.list ?? []) as Row[]}
+      data={((data?.list ?? []) as Row[]).filter(r => r.isActive !== false)}
       selected={selected}
       onSelect={setSelected}
       onConfirm={handleConfirm}

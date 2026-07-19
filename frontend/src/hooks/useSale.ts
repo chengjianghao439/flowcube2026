@@ -1,7 +1,9 @@
+import { useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { getSaleListApi, getSaleDetailApi, createSaleApi, updateSaleApi, reserveSaleApi, releaseSaleApi, shipSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import { toast } from '@/lib/toast'
+import { createRequestKey } from '@/lib/requestKey'
 import type { CreateSaleParams, UpdateSaleParams } from '@/types/sale'
 
 export const useSaleList   = (params: object) => useQuery({ queryKey: ['sale', params], queryFn: () => getSaleListApi(params) })
@@ -9,9 +11,15 @@ export const useSaleDetail = (id: number)     => useQuery({ queryKey: ['sale', i
 
 export const useCreateSale = () => {
   const invalidate = useInvalidate()
+  // 稳定幂等键：整个组件生命周期内复用同一 key（重试/网络回退不建重单），成功后轮换供下次新建
+  const keyRef = useRef(createRequestKey('sale'))
   return useMutation({
-    mutationFn: (data: CreateSaleParams) => createSaleApi(data),
-    onSuccess: () => { invalidate('sale_create'); toast.success('销售单创建成功') },
+    mutationFn: (data: CreateSaleParams) => createSaleApi(data, keyRef.current),
+    onSuccess: () => {
+      invalidate('sale_create')
+      toast.success('销售单创建成功')
+      keyRef.current = createRequestKey('sale')
+    },
   })
 }
 

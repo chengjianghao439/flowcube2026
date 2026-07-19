@@ -696,7 +696,6 @@ function EditView({ order, tabPath }: { order: NonNullable<ReturnType<typeof use
     <div className="flex flex-col gap-3">
       <ActionBar
         title={order.orderNo}
-        subtitle={<FulfillmentProgressCard order={order} />}
         rightActions={
           <>
 
@@ -861,7 +860,6 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     <div className="flex flex-col gap-3">
       <ActionBar
         title={order.orderNo}
-        subtitle={<FulfillmentProgressCard order={order} />}
         rightActions={
           <>
             {order.status === 5 && (

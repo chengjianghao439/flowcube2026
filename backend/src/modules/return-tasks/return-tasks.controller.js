@@ -3,7 +3,7 @@ const svc = require('./return-tasks.service')
 const { successResponse } = require('../../utils/response')
 const { getOperatorFromRequest } = require('../../utils/operator')
 
-const pdaList = async(req,res,next)=>{ try{const tasks=await svc.findPdaTasks(req.pda.warehouseId);return successResponse(res,tasks)}catch(e){next(e)} }
+const pdaList = async(req,res,next)=>{ try{const tasks=await svc.findPdaTasks(req.pda?.warehouseId??null);return successResponse(res,tasks)}catch(e){next(e)} }
 const detail = async(req,res,next)=>{ try{const task=await svc.findById(+req.params.id);return successResponse(res,task)}catch(e){next(e)} }
 const submit = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);const task=await svc.submit(+req.params.id,op);return successResponse(res,task,'已提交到 PDA')}catch(e){next(e)} }
 const receive = async(req,res,next)=>{
@@ -12,7 +12,7 @@ const receive = async(req,res,next)=>{
 }
 const check = async(req,res,next)=>{
   const conn=await pool.getConnection()
-  try{await conn.beginTransaction();const{productId,passedQty}=req.body;const result=await svc.check(conn,+req.params.id,{productId,passedQty,requestKey:req.headers['x-request-key'],userId:req.user?.userId??null});await conn.commit();return successResponse(res,result)}catch(e){await conn.rollback();next(e)}finally{conn.release()}
+  try{await conn.beginTransaction();const{productId,passedQty,rejectedQty}=req.body;const result=await svc.check(conn,+req.params.id,{productId,passedQty,rejectedQty,requestKey:req.headers['x-request-key'],userId:req.user?.userId??null});await conn.commit();return successResponse(res,result)}catch(e){await conn.rollback();next(e)}finally{conn.release()}
 }
 const putaway = async(req,res,next)=>{
   const conn=await pool.getConnection()

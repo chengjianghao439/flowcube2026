@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getTaskByIdApi, getTasksApi, packDoneApi } from '@/api/warehouse-tasks'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
-import { getPackagesApi, createPackageApi, addPackageItemApi, finishPackageApi, printPackageLabelApi } from '@/api/packages'
+import { getPackagesApi, createPackageApi, addPackageItemApi, removePackageItemApi, voidPackageApi, finishPackageApi, printPackageLabelApi } from '@/api/packages'
 import type { Package, PackagePrintJob } from '@/api/packages'
 import type { WarehouseTask } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
@@ -113,21 +113,24 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
   )
 }
 
-function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabel, printingLabel }: {
+function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabel, printingLabel, onRemoveItem, removingItemId, onVoid, voiding }: {
   pkg: Package; active: boolean
   onActivate: () => void; onFinish: () => void; finishing: boolean
   onPrintLabel: () => void; printingLabel: boolean
+  onRemoveItem: (itemId: number) => void; removingItemId: number | null
+  onVoid: () => void; voiding: boolean
 }) {
   const [open, setOpen] = useState(active)
   const totalQty = pkg.items.reduce((s, i) => s + i.qty, 0)
+  const editable = active && pkg.status === 1
   return (
     <div className={`rounded-2xl border transition-all ${
-      active ? 'border-primary bg-primary/5' : pkg.status === 2 ? 'border-green-200 bg-green-50/40' : 'border-border bg-card'
+      active ? 'border-primary bg-primary/5' : pkg.status === 2 ? 'border-green-200 bg-green-50/40' : pkg.status === 3 ? 'border-border bg-muted/20 opacity-60' : 'border-border bg-card'
     }`}>
-      <button onClick={() => { setOpen(o => !o); if (!active) onActivate() }}
+      <button onClick={() => { setOpen(o => !o); if (!active && pkg.status !== 3) onActivate() }}
         className="w-full flex items-center justify-between px-4 py-3 text-left">
         <div className="flex items-center gap-2">
-          <span className="text-lg">{pkg.status === 2 ? '✅' : active ? '📦' : '🟦'}</span>
+          <span className="text-lg">{pkg.status === 2 ? '✅' : pkg.status === 3 ? '🚫' : active ? '📦' : '🟦'}</span>
           <div>
             <p className="font-mono font-bold text-foreground text-sm">{pkg.barcode}</p>
             <p className="text-xs text-muted-foreground">{pkg.items.length} 种，{totalQty.toFixed(0)} 件</p>
@@ -136,6 +139,7 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
         <div className="flex items-center gap-2">
           {active && pkg.status === 1 && <Badge className="text-xs">装箱中</Badge>}
           {pkg.status === 2 && <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">已完成</Badge>}
+          {pkg.status === 3 && <Badge variant="outline" className="text-xs">已作废</Badge>}
           <span className="text-muted-foreground text-xs">{open ? '▲' : '▼'}</span>
         </div>
       </button>
@@ -148,7 +152,20 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
                 <p className="font-medium text-foreground truncate">{item.productName}</p>
                 <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
               </div>
-              <p className="font-bold text-primary shrink-0 ml-2">{item.qty} <span className="text-xs font-normal text-muted-foreground">{item.unit}</span></p>
+              <div className="flex items-center gap-2 shrink-0 ml-2">
+                <p className="font-bold text-primary">{item.qty} <span className="text-xs font-normal text-muted-foreground">{item.unit}</span></p>
+                {editable && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                    onClick={() => onRemoveItem(item.id)}
+                    disabled={removingItemId === item.id}
+                  >
+                    {removingItemId === item.id ? '移出中…' : '移出'}
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
           <Button
@@ -160,9 +177,14 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
           >
             {printingLabel ? '打印中…' : '🖨 打印箱贴'}
           </Button>
-          {active && pkg.status === 1 && pkg.items.length > 0 && (
+          {editable && pkg.items.length > 0 && (
             <Button size="sm" className="w-full mt-1" onClick={onFinish} disabled={finishing}>
               {finishing ? '处理中…' : '✓ 完成此箱'}
+            </Button>
+          )}
+          {editable && (
+            <Button size="sm" variant="outline" className="w-full mt-1 text-destructive hover:text-destructive" onClick={onVoid} disabled={voiding}>
+              {voiding ? '作废中…' : '🗑 作废本箱（装错重来）'}
             </Button>
           )}
         </div>
@@ -310,6 +332,35 @@ export default function PdaPackPage() {
       refetch()
     },
     onError: (e: unknown) => err((e as { message?: string; response?: { data?: { message?: string } } })?.response?.data?.message ?? (e as { message?: string })?.message ?? '添加失败'),
+  })
+
+  const removeItemMut = useMutation({
+    mutationFn: ({ packageId, itemId }: { packageId: number; itemId: number }) => {
+      if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
+      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能移出商品')
+      return removePackageItemApi(packageId, itemId)
+    },
+    onSuccess: (res) => {
+      const item = res!
+      ok(item.removed ? `已移出 ${item.productName}` : `${item.productName} 数量已调整为 ${item.qty}`)
+      refetch()
+    },
+    onError: (e: unknown) => err((e as { message?: string; response?: { data?: { message?: string } } })?.response?.data?.message ?? (e as { message?: string })?.message ?? '移出失败'),
+  })
+
+  const voidMut = useMutation({
+    mutationFn: (packageId: number) => {
+      if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
+      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能作废箱子')
+      return voidPackageApi(packageId)
+    },
+    onSuccess: (res) => {
+      const pkg = res!
+      ok(`箱子 ${pkg.id} 已作废`)
+      setActivePackageId(prev => (prev === pkg.id ? null : prev))
+      refetch()
+    },
+    onError: (e: unknown) => err((e as { message?: string; response?: { data?: { message?: string } } })?.response?.data?.message ?? (e as { message?: string })?.message ?? '作废失败'),
   })
 
   const printLabelMut = useMutation({
@@ -472,9 +523,10 @@ export default function PdaPackPage() {
     )
   }
 
-  const totalBoxes = packages.length
-  const doneBoxes  = packages.filter(p => p.status === 2).length
-  const totalItems = packages.reduce((s, p) => s + p.items.reduce((ss, i) => ss + i.qty, 0), 0)
+  const activeBoxes = packages.filter(p => p.status !== 3)
+  const totalBoxes = activeBoxes.length
+  const doneBoxes  = activeBoxes.filter(p => p.status === 2).length
+  const totalItems = activeBoxes.reduce((s, p) => s + p.items.reduce((ss, i) => ss + i.qty, 0), 0)
   // ── 全部完成页 ────────────────────────────────────────────────────────────
   if (allDone) return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
@@ -559,6 +611,10 @@ export default function PdaPackPage() {
               finishing={finishMut.isPending || finishAction.submitBlocked || onlineBlocked}
               onPrintLabel={() => printLabelMut.mutate(pkg.id)}
               printingLabel={(printLabelMut.isPending && printLabelMut.variables === pkg.id) || printAction.submitBlocked || onlineBlocked}
+              onRemoveItem={(itemId) => removeItemMut.mutate({ packageId: pkg.id, itemId })}
+              removingItemId={removeItemMut.isPending ? removeItemMut.variables?.itemId ?? null : null}
+              onVoid={() => voidMut.mutate(pkg.id)}
+              voiding={voidMut.isPending && voidMut.variables === pkg.id}
             />
           ))}
           {packages.length === 0 && !pkgLoading && (
@@ -566,7 +622,7 @@ export default function PdaPackPage() {
               <p className="text-muted-foreground text-sm">点击下方「新建箱子」开始打包</p>
             </div>
           )}
-          {packages.length > 0 && packages.every((pkg) => pkg.status === 2) ? (
+          {totalBoxes > 0 && activeBoxes.every((pkg) => pkg.status === 2) ? (
             <Button
               type="button"
               className="w-full"

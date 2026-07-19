@@ -6,6 +6,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
 const { WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 const FREIGHT_TYPE = { 1:'寄付', 2:'到付', 3:'第三方付' }
 const fmt = row => ({
@@ -349,7 +350,7 @@ async function findById(id) {
   let packages = []
   if (order.taskId) {
     const [pkgRows] = await pool.query(
-      `SELECT id, barcode, status FROM packages WHERE warehouse_task_id=? ORDER BY id`,
+      `SELECT id, barcode, status FROM packages WHERE warehouse_task_id=? AND status != 3 ORDER BY id`,
       [order.taskId],
     )
     if (pkgRows.length > 0) {
@@ -389,10 +390,26 @@ async function findById(id) {
 }
 
 async function create({ customerId, customerName, warehouseId, warehouseName, remark,
-  carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator }) {
+  carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator, requestKey }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'sale.create',
+      userId: operator?.userId ?? null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
+    // 前端选择器已过滤停用客户，这里补一道后端校验，防止绕过前端直接调 API 建单（禁用客户未在下单流程过滤）
+    const [[customerRow]] = await conn.query(
+      'SELECT is_active FROM sale_customers WHERE id = ? AND deleted_at IS NULL',
+      [customerId],
+    )
+    if (!customerRow) throw new AppError('客户不存在', 404)
+    if (!customerRow.is_active) throw new AppError('该客户已停用，无法新建销售单', 400)
     const orderNo = await genOrderNo(conn)
     const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
     const [r] = await conn.query(
@@ -405,8 +422,15 @@ async function create({ customerId, customerName, warehouseId, warehouseName, re
     }
     await appendSaleEvent(conn, orderId, 'created', '创建订单', `共 ${items.length} 条明细`, operator)
     await buildPricingEvents(conn, orderId, items, operator)
+    const result = { id:orderId, orderNo }
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: '创建成功',
+      resourceType: 'sale_order',
+      resourceId: orderId,
+    })
     await conn.commit()
-    return { id:orderId, orderNo }
+    return result
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
 }

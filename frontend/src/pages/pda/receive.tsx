@@ -199,9 +199,12 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   const [selectedProductId, setSelectedProductId] = useState<number | null>(selectableProducts[0]?.productId ?? null)
   const [boxes, setBoxes] = useState<string[]>([''])
   const [submitting, setSubmitting] = useState(false)
+  // 超收比例过高时要求"再点一次同一按钮"二次确认；换商品或改数量后自动失效，不能被沿用到别的提交上
+  const [overReceiveArmed, setOverReceiveArmed] = useState<{ productId: number; qty: number } | null>(null)
   const receiveAction = useCriticalPdaAction<{
     containers?: Array<{ containerId: number }>
     printJobIds?: number[]
+    noPrinterCount?: number
   }>({
     action: `inbound.receive.${task.id}`,
     label: `收货单 ${task.taskNo}`,
@@ -216,6 +219,10 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       const count = data.containers?.length ?? 0
       const printCount = data.printJobIds?.length ?? 0
       ok(`已生成 ${count} 个条码${printCount > 0 ? `，${printCount} 条已提交打印` : ''}`)
+      if (data.noPrinterCount) {
+        // 收货本身已成功记录，只是暂无可用打印机——不是失败，但要提醒现场后续记得补打
+        warn(`${data.noPrinterCount} 个条码暂无打印机可用，收货已记录，请稍后到"查看打印/补打"里补打标签`)
+      }
     },
     // 网络波动导致提交结果不明时，用"目标商品的已收数量是否已经涨到本次提交后
     // 应有的水平"来核实上一次收货请求是否其实已经生效，而不是让用户凭经验重试。
@@ -288,8 +295,19 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     }
 
     const totalQty = normalizedBoxes.reduce((sum, box) => sum + box.qty, 0)
-    if (totalQty > activeProduct.remainingQty) {
-      // 供应商多发货是常见场景，不再硬性拦截提交，只提示——超收部分会在 ERP 端标红，交给审核人工把关
+    const orderedQty = activeProduct.orderedQty
+    const overQty = activeProduct.receivedQty + totalQty - orderedQty
+    const overRatio = orderedQty > 0 ? overQty / orderedQty : (overQty > 0 ? Infinity : 0)
+    // 超收比例超过 20% 时要求"再点一次登记"二次确认——上架完成即自动结算应付，
+    // 没有人工审核这道闸门兜底了，扫错数量的代价从"审核时能拦下来"变成"直接进正式账"
+    const needsConfirm = overQty > 0 && overRatio > 0.2
+    const alreadyArmed = overReceiveArmed?.productId === activeProduct.productId && overReceiveArmed.qty === totalQty
+    if (needsConfirm && !alreadyArmed) {
+      setOverReceiveArmed({ productId: activeProduct.productId, qty: totalQty })
+      warn(`超收比例达 ${Math.round(overRatio * 100)}%（应到 ${orderedQty}，将超收至 ${activeProduct.receivedQty + totalQty}），再次点击"打印并登记"确认提交`)
+      return
+    }
+    if (!needsConfirm && totalQty > activeProduct.remainingQty) {
       warn(`超出待收数量 ${activeProduct.remainingQty}，将按超收 ${totalQty - activeProduct.remainingQty} 记录`)
     } else if (totalQty < activeProduct.remainingQty) {
       warn(`当前只登记 ${totalQty}，提交后该商品还剩 ${activeProduct.remainingQty - totalQty}`)
@@ -302,6 +320,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
         receiveInboundApi(task.id, {
           productId: activeProduct.productId,
           packages: normalizedBoxes.map(box => ({ qty: box.qty })),
+          confirmOverReceive: needsConfirm || undefined,
         }, requestKey).then((res) => res!),
       { productId: activeProduct.productId, expectedReceivedQty },
     ).then((result) => {
@@ -322,6 +341,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       err(message)
     }).finally(() => {
       setSubmitting(false)
+      setOverReceiveArmed(null)
     })
   }
 

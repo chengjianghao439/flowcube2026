@@ -134,6 +134,7 @@ async function addItem(packageId, { productCode, qty }) {
     )
     if (!pkg) throw new AppError('箱子不存在', 404)
     if (Number(pkg.status) === 2) throw new AppError('该箱已完成，无法继续添加商品', 400)
+    if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无法继续添加商品', 400)
 
     const [[task]] = await conn.query(
       'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
@@ -169,7 +170,7 @@ async function addItem(packageId, { productCode, qty }) {
       `SELECT pi.id, pi.qty
        FROM package_items pi
        INNER JOIN packages p ON p.id = pi.package_id
-       WHERE p.warehouse_task_id=? AND pi.product_id=?
+       WHERE p.warehouse_task_id=? AND pi.product_id=? AND p.status != 3
        FOR UPDATE`,
       [pkg.warehouse_task_id, product.id],
     )
@@ -232,6 +233,100 @@ async function addItem(packageId, { productCode, qty }) {
   }
 }
 
+// ─── 从箱子移出商品（扫错/多扫纠正）────────────────────────────────────────────
+async function removeItem(packageId, { itemId, qty }) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+
+    const [[pkg]] = await conn.query(
+      'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
+      [packageId],
+    )
+    if (!pkg) throw new AppError('箱子不存在', 404)
+    if (Number(pkg.status) !== 1) throw new AppError('该箱已完成或已作废，无法移除商品', 400)
+
+    const [[task]] = await conn.query(
+      'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [pkg.warehouse_task_id],
+    )
+    if (!task) throw new AppError('任务不存在', 404)
+    if (Number(task.status) !== WT_STATUS.PACKING) {
+      throw new AppError('任务不在待打包状态，禁止移除商品', 400)
+    }
+
+    const [[item]] = await conn.query(
+      'SELECT id, product_id, product_code, product_name, unit, qty FROM package_items WHERE id=? AND package_id=? FOR UPDATE',
+      [itemId, packageId],
+    )
+    if (!item) throw new AppError('该商品明细不存在', 404)
+
+    const currentUnits = toQtyUnits(item.qty)
+    const removeUnits = qty == null ? currentUnits : toQtyUnits(qty)
+    if (!Number.isFinite(removeUnits) || removeUnits <= 0) throw new AppError('移除数量必须大于 0', 400)
+    if (removeUnits > currentUnits) throw new AppError('移除数量不能超过箱内现有数量', 400)
+
+    let result
+    if (removeUnits >= currentUnits) {
+      await conn.query('DELETE FROM package_items WHERE id=?', [item.id])
+      result = {
+        itemId: item.id, productId: item.product_id, productCode: item.product_code,
+        productName: item.product_name, unit: item.unit, removed: true, qty: 0,
+      }
+    } else {
+      const newQty = fromQtyUnits(currentUnits - removeUnits)
+      await conn.query('UPDATE package_items SET qty=? WHERE id=?', [newQty, item.id])
+      result = {
+        itemId: item.id, productId: item.product_id, productCode: item.product_code,
+        productName: item.product_name, unit: item.unit, removed: false, qty: newQty,
+      }
+    }
+
+    await conn.commit()
+    return result
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
+// ─── 作废单箱（整箱装错重来，不影响任务下其它箱子）────────────────────────────────
+async function voidPackage(packageId) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+
+    const [[pkg]] = await conn.query(
+      'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
+      [packageId],
+    )
+    if (!pkg) throw new AppError('箱子不存在', 404)
+    if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无需重复操作', 400)
+    if (Number(pkg.status) === 2) throw new AppError('该箱已完成，无法作废', 400)
+
+    const [[task]] = await conn.query(
+      'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [pkg.warehouse_task_id],
+    )
+    if (!task) throw new AppError('任务不存在', 404)
+    if (Number(task.status) !== WT_STATUS.PACKING) {
+      throw new AppError('任务不在待打包状态，禁止作废箱子', 400)
+    }
+
+    await conn.query('UPDATE packages SET status=3 WHERE id=?', [packageId])
+
+    await conn.commit()
+    return { id: packageId, warehouseTaskId: Number(pkg.warehouse_task_id), status: 3, statusName: '已取消' }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
 function packageLabelJobKey(packageId) {
   return `package_label:package:${Number(packageId)}`
 }
@@ -285,6 +380,7 @@ async function markPackageFinishedWithinTransaction(conn, packageId) {
     [packageId],
   )
   if (!pkg) throw new AppError('箱子不存在', 404)
+  if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无法完成打包', 400)
   const alreadyFinished = Number(pkg.status) === 2
 
   const [[taskRow]] = await conn.query(
@@ -461,6 +557,8 @@ module.exports = {
   listByTask,
   createPackage,
   addItem,
+  removeItem,
+  voidPackage,
   finishPackage,
   finishPackageWithPrint,
   getByBarcode,

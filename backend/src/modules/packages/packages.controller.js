@@ -35,6 +35,23 @@ async function addItem(req, res, next) {
   } catch (e) { next(e) }
 }
 
+async function removeItem(req, res, next) {
+  try {
+    const packageId = +req.params.id
+    const { itemId, qty } = req.body
+    const result = await svc.removeItem(packageId, { itemId, qty })
+    return successResponse(res, result, result.removed ? '商品已移出箱子' : '数量已调整')
+  } catch (e) { next(e) }
+}
+
+async function voidPackage(req, res, next) {
+  try {
+    const packageId = +req.params.id
+    const result = await svc.voidPackage(packageId)
+    return successResponse(res, result, '箱子已作废')
+  } catch (e) { next(e) }
+}
+
 async function finish(req, res, next) {
   const requestKey = extractRequestKey(req)
   const action = 'package.finish'
@@ -119,4 +136,4 @@ async function getByBarcode(req, res, next) {
   } catch (e) { next(e) }
 }
 
-module.exports = { list, create, addItem, finish, printLabel, getByBarcode }
+module.exports = { list, create, addItem, removeItem, voidPackage, finish, printLabel, getByBarcode }

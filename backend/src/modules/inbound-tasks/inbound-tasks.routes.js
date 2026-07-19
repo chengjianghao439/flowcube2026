@@ -3,7 +3,7 @@ const { z } = require('zod')
 const ctrl = require('./inbound-tasks.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
-const { pdaSessionRequired } = require('../../middleware/pdaSession')
+const { pdaSessionOptional } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
 
 const router = Router()
@@ -38,6 +38,7 @@ const receiveSchema = z.union([
   z.object({
     productId: z.number().int().positive('商品无效'),
     qty:       z.number().positive('本包数量必须大于 0'),
+    confirmOverReceive: z.boolean().optional(),
   }),
   z.object({
     productId: z.number().int().positive('商品无效'),
@@ -46,6 +47,7 @@ const receiveSchema = z.union([
         qty: z.number().positive('箱数量必须大于 0'),
       }),
     ).min(1, '请至少填写一箱数量'),
+    confirmOverReceive: z.boolean().optional(),
   }),
   z
     .object({
@@ -57,6 +59,7 @@ const receiveSchema = z.union([
           }),
         )
         .min(1, '请至少填写一条收货记录'),
+      confirmOverReceive: z.boolean().optional(),
     })
     .refine(d => new Set(d.items.map(item => item.productId)).size === 1, {
       message: '同一次收货仅允许提交同一商品',
@@ -66,6 +69,7 @@ const receiveSchema = z.union([
       return {
         productId: d.items[0].productId,
         packages: d.items.map(item => ({ qty: item.qty })),
+        confirmOverReceive: d.confirmOverReceive,
       }
     }),
 ])
@@ -73,15 +77,6 @@ const receiveSchema = z.union([
 const putawaySchema = z.object({
   containerId: z.number().int().positive('请选择容器'),
   locationId:  z.number().int().positive('请选择库位'),
-})
-
-const auditSchema = z.object({
-  action: z.enum(['approve', 'reject']).default('approve'),
-  remark: z.string().trim().max(200, '审核备注不能超过 200 个字').optional(),
-}).superRefine((data, ctx) => {
-  if (data.action === 'reject' && !String(data.remark || '').trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: '审核退回必须填写原因', path: ['remark'] })
-  }
 })
 
 const reprintSchema = z.object({
@@ -106,10 +101,10 @@ router.post('/',             requirePermission(PERMISSIONS.INBOUND_ORDER_CREATE)
 router.get('/:id/containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.containers)
 router.get('/:id',           requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.detail)
 router.post('/:id/submit',   requirePermission(PERMISSIONS.INBOUND_ORDER_SUBMIT), ctrl.submit)
-router.post('/:id/audit',    requirePermission(PERMISSIONS.INBOUND_ORDER_AUDIT), vBody(auditSchema), ctrl.audit)
 router.post('/:id/reprint',  requirePermission(PERMISSIONS.INBOUND_PRINT_REPRINT), vBody(reprintSchema), ctrl.reprint)
-router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaSessionRequired(), pdaOnly, vBody(receiveSchema), ctrl.receive)
-router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaSessionRequired(), pdaOnly, vBody(putawaySchema), ctrl.putaway)
+router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaSessionOptional(), pdaOnly, vBody(receiveSchema), ctrl.receive)
+router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaSessionOptional(), pdaOnly, vBody(putawaySchema), ctrl.putaway)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.cancel)
+router.post('/:id/void-receipt', requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.voidReceipt)
 
 module.exports = router

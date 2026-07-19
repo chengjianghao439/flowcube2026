@@ -24,6 +24,7 @@ router.get('/:id',          requirePermission(PERMISSIONS.PURCHASE_ORDER_VIEW), 
 router.post('/',            requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), vBody(createSchema), ctrl.create)
 router.put('/:id',          requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), vBody(createSchema), ctrl.update)
 router.post('/:id/confirm', requirePermission(PERMISSIONS.PURCHASE_ORDER_CONFIRM), ctrl.confirm)
+router.post('/:id/withdraw-confirm', requirePermission(PERMISSIONS.PURCHASE_ORDER_CONFIRM), ctrl.withdrawConfirm)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.PURCHASE_ORDER_CANCEL), ctrl.cancel)
 router.post('/:id/close',   requirePermission(PERMISSIONS.PURCHASE_ORDER_CONFIRM), ctrl.close)
 module.exports = router

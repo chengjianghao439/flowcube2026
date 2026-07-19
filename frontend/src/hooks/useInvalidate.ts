@@ -124,6 +124,11 @@ const INVALIDATION_MAP = {
     ['purchase'],
   ],
 
+  /** 撤回确认：回到草稿，仅影响采购单本身 */
+  purchase_withdraw_confirm: [
+    ['purchase'],
+  ],
+
   // ── 入库任务 ──────────────────────────────────────────────────────────────
 
   /** 新建入库任务 */
@@ -164,6 +169,18 @@ const INVALIDATION_MAP = {
   inbound_cancel: [
     ['inbound-tasks'],
     ['purchase'],
+  ],
+
+  /** 撤回收货：反冲容器/库存/应付，可能把采购单退回已提交，与上架的影响面对称 */
+  inbound_void_receipt: [
+    ['inbound-tasks'],
+    ['purchase'],
+    ['inventory-stock'],
+    ['inventory-logs'],
+    ['inventory-overview'],
+    ['inventory-containers'],
+    ['dashboard-summary'],
+    ['payments'],
   ],
 
   // ── 仓库任务 ──────────────────────────────────────────────────────────────

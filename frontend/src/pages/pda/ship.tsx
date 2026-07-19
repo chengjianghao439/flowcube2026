@@ -84,7 +84,7 @@ export default function PdaShipPage() {
   function shipBlockedMessage(data: PackageShipInfo) {
     const statusName = warehouseStatusName(data)
     if (warehouseStatus(data) === WT_STATUS.PACKING) {
-      const openPackages = data.packages.filter(pkg => pkg.status !== 2).length
+      const openPackages = data.packages.filter(pkg => pkg.status !== 2 && pkg.status !== 3).length
       return openPackages > 0
         ? `当前仓库任务仍为「${statusName}」，且还有 ${openPackages} 箱未完成打包，不能出库。`
         : `当前仓库任务仍为「${statusName}」，请先完成打包收口并进入「待出库」。`

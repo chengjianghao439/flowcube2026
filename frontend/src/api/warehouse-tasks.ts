@@ -134,7 +134,7 @@ export const readyToShipApi = (id: number, requestKey?: string) =>
   })
 
 export const sortDoneApi = (id: number, items?: { itemId: number; sortedQty: number }[], requestKey?: string) =>
-  client.put(`/warehouse-tasks/${id}/sort-done`, { items: items ?? null }, {
+  client.put<{ allSorted: boolean; progress?: string; warning?: string | null }>(`/warehouse-tasks/${id}/sort-done`, { items: items ?? null }, {
     headers: requestKey
       ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
       : { 'X-Client': 'pda' },

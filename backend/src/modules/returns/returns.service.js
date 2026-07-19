@@ -4,10 +4,12 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { RETURN_EVENT, record: recordReturnEvent } = require('./return-events.service')
-const { WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
+const { WT_STATUS_NAME, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
 const { RT_STATUS_NAME } = require('../return-tasks/return-tasks.service')
+const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('../payments/payment-events.service')
 const { getRequestId } = require('../../utils/requestContext')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 // ─── 采购退货 ────────────────────────────────────────────────
 const PR_STATUS = { 1:'草稿', 2:'已确认', 3:'已退货', 4:'已取消' }
@@ -218,6 +220,9 @@ async function loadSaleSourceOrderByNo(orderNo) {
 
 async function validatePurchaseReturnItems(conn, purchaseOrderId, items) {
   if (!purchaseOrderId) return
+  // 锁住该采购单下的明细行：不加锁时，并发创建多张退货单会各自读到同一份"还有余量"的
+  // 过期快照，都校验通过，合计超出实际已收货量退货（金额/库存双重超退）。
+  await conn.query('SELECT id FROM purchase_order_items WHERE order_id = ? FOR UPDATE', [purchaseOrderId])
   const [rows] = await conn.query(
     `SELECT poi.id, poi.product_id, poi.quantity,
             COALESCE((
@@ -264,6 +269,9 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items) {
 
 async function validateSaleReturnItems(conn, saleOrderId, items) {
   if (!saleOrderId) return
+  // 同 validatePurchaseReturnItems：锁住该销售单下的明细行，避免并发创建退货单读到同一份
+  // 过期的"已出库-已退"余量快照而合计超退。
+  await conn.query('SELECT id FROM sale_order_items WHERE order_id = ? FOR UPDATE', [saleOrderId])
   const [rows] = await conn.query(
     `SELECT soi.id, soi.product_id, soi.quantity,
             COALESCE((
@@ -343,10 +351,19 @@ async function findByIdPR(id) {
   ret.task = task ? { id: Number(task.id), taskNo: task.task_no, status: Number(task.status), statusName: WT_STATUS_NAME[Number(task.status)] || '未知' } : null
   return ret
 }
-async function createPR({ supplierId, supplierName, warehouseId, warehouseName, purchaseOrderId = null, purchaseOrderNo, remark, items, operator }) {
+async function createPR({ supplierId, supplierName, warehouseId, warehouseName, purchaseOrderId = null, purchaseOrderNo, remark, items, operator, requestKey }) {
   const conn=await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'purchaseReturn.create',
+      userId: operator?.userId ?? null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
     let resolvedPurchaseOrderId = purchaseOrderId || null
     let sourceOrder = null
     if (!resolvedPurchaseOrderId && purchaseOrderNo) {
@@ -394,7 +411,14 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
         totalQty: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
       },
     })
-    await conn.commit(); return { id:r.insertId, returnNo }
+    const result = { id: r.insertId, returnNo }
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: '创建成功',
+      resourceType: 'purchase_return',
+      resourceId: r.insertId,
+    })
+    await conn.commit(); return result
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
 }
 async function confirmPR(id, operator = null) {
@@ -475,13 +499,31 @@ async function cancelPR(id, operator = null) {
       toStatus: rule.to,
       entityName: '采购退货单',
     })
+
+    // 已确认(2)会自动创建出库仓库任务；取消时必须同步终止该任务，否则仓库端会
+    // 继续把一个"已取消"的退货单执行完，造成账实不符（P0-2）。任务已出库(SHIPPED)
+    // 的情况不会出现在这里——那条路径会先把本单据的状态推进到 3(已退货)，
+    // 与本函数只允许的 from:[1,2] 互斥（两边都对 purchase_returns 行加锁，天然互斥）。
+    const [[linkedTask]] = await conn.query(
+      `SELECT id, status FROM warehouse_tasks
+       WHERE return_id = ? AND task_type = 'purchase_return'
+       ORDER BY id DESC LIMIT 1`,
+      [id],
+    )
+    if (linkedTask && WT_STATUS_ACTIVE.includes(Number(linkedTask.status))) {
+      const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
+      await taskSvc.cancel(Number(linkedTask.id), { conn })
+    }
+
     await recordReturnEvent(conn, {
       returnType: 'purchase',
       returnId: Number(retRow.id),
       returnNo: retRow.return_no,
       eventType: RETURN_EVENT.CANCELLED,
       title: '采购退货单已取消',
-      description: '采购退货单已取消，未执行库存扣减',
+      description: linkedTask && WT_STATUS_ACTIVE.includes(Number(linkedTask.status))
+        ? '采购退货单已取消，未执行库存扣减，关联的出库仓库任务已同步终止'
+        : '采购退货单已取消，未执行库存扣减',
       operatorId: operator?.userId ?? null,
       operatorName: operator?.realName ?? null,
       requestId: getRequestId(),
@@ -639,13 +681,45 @@ async function findByIdSR(id) {
     "SELECT id, task_no, status FROM return_tasks WHERE return_id=? AND return_type='sale' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1",
     [id],
   )
-  ret.task = task ? { id: Number(task.id), taskNo: task.task_no, status: Number(task.status), statusName: RT_STATUS_NAME[Number(task.status)] || '未知' } : null
+  if (task) {
+    const [[{ rejectedQty }]] = await pool.query(
+      'SELECT COALESCE(SUM(rejected_qty),0) AS rejectedQty FROM return_task_items WHERE task_id=?',
+      [task.id],
+    )
+    const [rejectedContainers] = await pool.query(
+      `SELECT c.id, c.barcode, c.remaining_qty, c.product_id, p.name AS product_name
+       FROM inventory_containers c
+       LEFT JOIN product_items p ON p.id = c.product_id
+       WHERE c.source_ref_type = 'sale_return' AND c.source_ref_id = ? AND c.status = ?
+       ORDER BY c.id`,
+      [task.id, CONTAINER_STATUS.REJECTED],
+    )
+    ret.task = {
+      id: Number(task.id), taskNo: task.task_no, status: Number(task.status), statusName: RT_STATUS_NAME[Number(task.status)] || '未知',
+      rejectedQty: Number(rejectedQty),
+      rejectedContainers: rejectedContainers.map(r => ({
+        id: Number(r.id), barcode: r.barcode, qty: Number(r.remaining_qty),
+        productId: Number(r.product_id), productName: r.product_name,
+      })),
+    }
+  } else {
+    ret.task = null
+  }
   return ret
 }
-async function createSR({ customerId, customerName, warehouseId, warehouseName, saleOrderId = null, saleOrderNo, remark, items, operator }) {
+async function createSR({ customerId, customerName, warehouseId, warehouseName, saleOrderId = null, saleOrderNo, remark, items, operator, requestKey }) {
   const conn=await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'saleReturn.create',
+      userId: operator?.userId ?? null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
     let resolvedSaleOrderId = saleOrderId || null
     let sourceOrder = null
     if (!resolvedSaleOrderId && saleOrderNo) {
@@ -693,7 +767,14 @@ async function createSR({ customerId, customerName, warehouseId, warehouseName, 
         totalQty: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
       },
     })
-    await conn.commit(); return { id:r.insertId, returnNo }
+    const result = { id: r.insertId, returnNo }
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: '创建成功',
+      resourceType: 'sale_return',
+      resourceId: r.insertId,
+    })
+    await conn.commit(); return result
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
 }
 async function confirmSR(id, operator = null) {
@@ -777,13 +858,36 @@ async function cancelSR(id, operator = null) {
       toStatus: rule.to,
       entityName: '销售退货单',
     })
+
+    // 已确认(2)会自动创建并派发 PDA 退货任务（return_tasks）；取消时必须同步终止该任务，
+    // 否则仓库端会继续把一个"已取消"的退货单执行完，造成账实不符（P0-2，同 cancelPR）。
+    const returnTasksSvc = require('../return-tasks/return-tasks.service')
+    const [[linkedTask]] = await conn.query(
+      `SELECT id, status FROM return_tasks
+       WHERE return_id = ? AND return_type = 'sale'
+       ORDER BY id DESC LIMIT 1`,
+      [id],
+    )
+    const RT_ACTIVE = [
+      returnTasksSvc.RT_STATUS.PENDING_RECEIVE,
+      returnTasksSvc.RT_STATUS.RECEIVING,
+      returnTasksSvc.RT_STATUS.PENDING_CHECK,
+      returnTasksSvc.RT_STATUS.PENDING_PUTAWAY,
+    ]
+    const shouldCancelTask = linkedTask && RT_ACTIVE.includes(Number(linkedTask.status))
+    if (shouldCancelTask) {
+      await returnTasksSvc.cancel(Number(linkedTask.id), operator || {}, { conn })
+    }
+
     await recordReturnEvent(conn, {
       returnType: 'sale',
       returnId: Number(retRow.id),
       returnNo: retRow.return_no,
       eventType: RETURN_EVENT.CANCELLED,
       title: '销售退货单已取消',
-      description: '销售退货单已取消，未执行退货入库',
+      description: shouldCancelTask
+        ? '销售退货单已取消，未执行退货入库，关联的退货任务已同步终止'
+        : '销售退货单已取消，未执行退货入库',
       operatorId: operator?.userId ?? null,
       operatorName: operator?.realName ?? null,
       requestId: getRequestId(),

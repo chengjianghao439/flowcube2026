@@ -1,11 +1,11 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
-const { unlockContainersByTask } = require('../../engine/containerEngine')
-const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
+const { WT_STATUS, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
 const {
   assertTaskPickScanClosure,
   readyToShipWithinTransaction,
+  cancel: cancelWarehouseTask,
 } = require('../warehouse-tasks/warehouse-tasks.service')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { buildPackagePrintSummary } = require('../../utils/printSummary')
@@ -439,9 +439,21 @@ async function cancel(id) {
     if (currentStatus === WAVE_STATUS_CODE.DONE || currentStatus === WAVE_STATUS_CODE.CANCELLED) {
       throw new AppError('波次已完成或已取消', 409)
     }
-    const [waveTasks] = await conn.query('SELECT task_id FROM picking_wave_tasks WHERE wave_id = ?', [id])
+    // 波次取消必须联动取消其下仍在进行中的仓库任务，否则任务会脱离波次孤立卡在
+    // 拣货中/待分拣等状态：容器锁被下面这行简单粗暴地清空，但任务本身既没有被取消，
+    // 也没有别的入口能再管它，形成"半吊子"死状态（见拣货波次取消风险）。
+    // 改为逐个走 warehouse-tasks 完整的 cancel 流程（释放容器/分拣格/联动销售单状态)。
+    const [waveTasks] = await conn.query(
+      `SELECT wt.id, wt.status
+       FROM picking_wave_tasks pwt
+       JOIN warehouse_tasks wt ON wt.id = pwt.task_id
+       WHERE pwt.wave_id = ?`,
+      [id],
+    )
     for (const t of waveTasks) {
-      await unlockContainersByTask(conn, t.task_id)
+      if (WT_STATUS_ACTIVE.includes(Number(t.status))) {
+        await cancelWarehouseTask(Number(t.id), { conn })
+      }
     }
     await casWaveStatus(conn, {
       id,

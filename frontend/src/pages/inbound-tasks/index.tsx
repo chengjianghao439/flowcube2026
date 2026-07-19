@@ -249,18 +249,6 @@ export default function InboundTasksPage() {
             },
           })
         }
-        if (task.auditFlowStatus?.key === 'pending' || task.auditFlowStatus?.key === 'rejected') {
-          items.push(
-            {
-              label: task.auditFlowStatus?.key === 'rejected' ? '打开详情处理退回' : '打开详情处理审核',
-              onClick: () => {
-                const path = `/inbound-tasks/${task.id}`
-                addTab({ key: path, title: task.taskNo, path })
-                navigate(`${path}?focus=audit-follow-up`)
-              },
-            },
-          )
-        }
         items.push({
           label: '查看打印 / 补打',
           onClick: () => {

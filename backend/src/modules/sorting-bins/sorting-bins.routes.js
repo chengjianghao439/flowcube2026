@@ -54,7 +54,10 @@ router.post('/batch',
 // PATCH /api/sorting-bins/:id
 router.patch('/:id',
   requirePermission(PERMISSIONS.SORTING_BIN_MANAGE),
-  vBody(z.object({ remark: z.string().max(200).optional() })),
+  vBody(z.object({
+    remark:   z.string().max(200).optional(),
+    capacity: z.number().int().positive().nullable().optional(),
+  })),
   ctrl.update,
 )
 

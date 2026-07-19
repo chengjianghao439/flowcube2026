@@ -1,6 +1,6 @@
 /**
- * 收货订单详情 — 上架 / 审核 / 打印
- * 收货和上架仅允许通过 PDA 完成
+ * 收货订单详情 — 上架进度 / 打印
+ * 收货和上架仅允许通过 PDA 完成；全部上架完成后系统自动结算应付，无需人工审核
  * 路由：/inbound-tasks/:id（多标签）
  */
 import { useContext, useState } from 'react'
@@ -8,18 +8,16 @@ import { useNavigate, useParams } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { TabPathContext } from '@/components/layout/TabPathContext'
-import { AppDialog } from '@/components/shared/AppDialog'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
   useInboundTaskDetail,
   useInboundTaskContainers,
   useSubmitInboundTask,
-  useAuditInboundTask,
   useCancelInbound,
+  useVoidInboundReceipt,
 } from '@/hooks/useInboundTasks'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
@@ -44,7 +42,7 @@ const PUTAWAY_TONE: Record<string, StatusTone> = {
   completed: 'success', waiting: 'active', putting_away: 'active', cancelled: 'danger', not_started: 'draft',
 }
 const AUDIT_TONE: Record<string, StatusTone> = {
-  approved: 'success', pending: 'active', rejected: 'danger', cancelled: 'danger', not_ready: 'draft',
+  approved: 'success', cancelled: 'danger', not_ready: 'draft',
 }
 const PRINT_TONE: Record<string, StatusTone> = {
   success: 'success', queued: 'active', printing: 'active', failed: 'danger', timeout: 'danger', cancelled: 'draft', not_started: 'draft',
@@ -75,13 +73,11 @@ export default function InboundTaskDetailPage() {
   const { refetch: refetchContainers } = useInboundTaskContainers(validId)
 
   const submitMut = useSubmitInboundTask()
-  const auditMut = useAuditInboundTask()
   const cancelMut = useCancelInbound()
+  const voidReceiptMut = useVoidInboundReceipt()
 
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
-  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false)
-  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
-  const [rejectReason, setRejectReason] = useState('')
+  const [voidConfirmOpen, setVoidConfirmOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
 
   function closeTab() {
@@ -112,8 +108,8 @@ export default function InboundTaskDetailPage() {
     : null
 
   const canSubmit = receiptStatus?.key === 'draft'
-  const canAudit = auditFlowStatus?.key === 'pending' || auditFlowStatus?.key === 'rejected'
   const canCancel = task?.status === 1
+  const canVoidReceipt = task?.status === 2 || task?.status === 3 || task?.status === 4
   const statusTone = receiptStatus?.key === 'audited'
     ? 'success'
     : receiptStatus?.key === 'exception'
@@ -170,16 +166,6 @@ export default function InboundTaskDetailPage() {
                 {submitMut.isPending ? '提交中...' : '提交到 PDA'}
               </Button>
             )}
-            {canAudit && (
-              <>
-                <Button variant="secondary" size="sm" onClick={() => setApproveConfirmOpen(true)} disabled={auditMut.isPending}>
-                  {auditFlowStatus?.key === 'rejected' ? '重新审核通过' : '审核通过'}
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setRejectConfirmOpen(true)} disabled={auditMut.isPending}>
-                  审核退回
-                </Button>
-              </>
-            )}
             {canCancel && (
               <Button
                 variant="destructive"
@@ -188,6 +174,17 @@ export default function InboundTaskDetailPage() {
                 onClick={() => setCancelConfirmOpen(true)}
               >
                 取消任务
+              </Button>
+            )}
+            {canVoidReceipt && (
+              <Button
+                variant="outline"
+                className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                size="sm"
+                disabled={voidReceiptMut.isPending}
+                onClick={() => setVoidConfirmOpen(true)}
+              >
+                撤回收货
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setPrintOpen(true)}>打印</Button>
@@ -290,101 +287,34 @@ export default function InboundTaskDetailPage() {
       />
 
       <ConfirmDialog
-        open={approveConfirmOpen}
-        title={auditFlowStatus?.key === 'rejected' ? '重新审核通过' : '审核通过'}
+        open={voidConfirmOpen}
+        title="撤回收货"
         description={
-          (items.some(it => it.receivedQty > it.orderedQty) ? '⚠ 存在超收商品，请核对后再确认通过。' : '')
-          + (auditFlowStatus?.key === 'rejected'
-            ? '确认退回问题已经处理完成，并将该收货订单重新审核通过？'
-            : '确认该收货订单已完成收货、打印与上架，并正式通过审核？')
+          '整单撤回后：已扫码的库存条码将全部作废、恢复为待收货状态，可重新扫码收货。'
+          + (task.status === 4
+            ? '该收货订单已完成并自动结算过应付，撤回后会一并反冲已入库的库存、冲销已生成的应付记录，若关联采购单因此已自动完成，也会退回"已提交"状态。'
+            : '')
+          + '若容器已被后续拣货、拆分或调拨等动作动过，将无法撤回，请改用库存盘点处理差异。此操作请谨慎确认。'
         }
-        confirmText={auditFlowStatus?.key === 'rejected' ? '重新审核通过' : '审核通过'}
-        loading={auditMut.isPending}
+        variant="destructive"
+        confirmText="确定撤回"
+        loading={voidReceiptMut.isPending}
         onConfirm={() => {
           if (!validId) return
-          auditMut.mutate({ id: validId, data: { action: 'approve' } }, {
+          voidReceiptMut.mutate(validId, {
             onSuccess: async () => {
-              setApproveConfirmOpen(false)
-              toast.success('审核通过')
+              setVoidConfirmOpen(false)
+              toast.success('已撤回收货，恢复为待收货')
               await afterMutation()
             },
             onError: (err: unknown) => {
-              toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '审核失败')
+              const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '撤回失败'
+              toast.error(msg)
             },
           })
         }}
-        onCancel={() => setApproveConfirmOpen(false)}
+        onCancel={() => setVoidConfirmOpen(false)}
       />
-
-      <AppDialog
-        open={rejectConfirmOpen}
-        onOpenChange={(open) => {
-          if (!open && !auditMut.isPending) {
-            setRejectConfirmOpen(false)
-          }
-        }}
-        dialogId="inbound-audit-reject"
-        title="审核退回"
-        resizable={false}
-        defaultWidth={520}
-        defaultHeight={330}
-        minWidth={420}
-        minHeight={280}
-        footer={(
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              disabled={auditMut.isPending}
-              onClick={() => {
-                setRejectConfirmOpen(false)
-                setRejectReason('')
-              }}
-            >
-              取消
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={auditMut.isPending}
-              onClick={() => {
-                if (!validId) return
-                const remark = rejectReason.trim()
-                if (!remark) {
-                  toast.error('请填写审核退回原因')
-                  return
-                }
-                auditMut.mutate({ id: validId, data: { action: 'reject', remark } }, {
-                  onSuccess: async () => {
-                    setRejectConfirmOpen(false)
-                    setRejectReason('')
-                    toast.success('已退回')
-                    await afterMutation()
-                  },
-                  onError: (err: unknown) => {
-                    toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '退回失败')
-                  },
-                })
-              }}
-            >
-              {auditMut.isPending ? '处理中...' : '确认退回'}
-            </Button>
-          </div>
-        )}
-      >
-        <div className="space-y-4 px-5 py-4">
-          <div className="space-y-1.5 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">请明确填写退回原因</p>
-            <p>退回后该收货订单会进入异常处理，后续补打、补录和重新审核都会围绕这个原因继续处理。</p>
-          </div>
-          <LimitedTextarea
-            autoFocus
-            maxLength={200}
-            value={rejectReason}
-            onChange={e => setRejectReason(e.target.value)}
-            placeholder="例如：有 2 箱库存条码打印失败，需补打后重新审核"
-            rows={5}
-          />
-        </div>
-      </AppDialog>
 
       {printOpen && task && (
         <OrderPrintOverlay

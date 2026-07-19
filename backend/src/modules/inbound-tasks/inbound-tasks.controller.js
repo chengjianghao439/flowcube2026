@@ -65,14 +65,6 @@ const submit = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-const audit = async (req, res, next) => {
-  try {
-    const operator = getOperatorFromRequest(req)
-    const data = await svc.audit(+req.params.id, req.body || {}, operator)
-    return successResponse(res, data, req.body?.action === 'reject' ? '已退回收货订单' : '已审核通过')
-  } catch (e) { next(e) }
-}
-
 const reprint = async (req, res, next) => {
   try {
     const operator = getOperatorFromRequest(req)
@@ -116,4 +108,12 @@ const cancel = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, audit, reprint, containers, receive, putaway, cancel }
+const voidReceipt = async (req, res, next) => {
+  try {
+    const operator = getOperatorFromRequest(req)
+    const data = await svc.voidReceipt(+req.params.id, operator)
+    return successResponse(res, data, '已撤回收货，恢复为待收货')
+  } catch (e) { next(e) }
+}
+
+module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, cancel, voidReceipt }

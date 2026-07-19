@@ -36,8 +36,6 @@ export function getReminderNotifications(items: NotificationEntry[]) {
 const INBOUND_EXCEPTION_CODES = new Set([
   'INBOUND_PRINT_FAILED',
   'INBOUND_PUTAWAY_TIMEOUT',
-  'INBOUND_AUDIT_TIMEOUT',
-  'INBOUND_AUDIT_REJECTED',
 ])
 
 const OUTBOUND_EXCEPTION_CODES = new Set([

@@ -24,6 +24,7 @@ const CONTAINER_STATUS = {
   VOID:             3,
   PENDING_PUTAWAY:  4,
   PENDING_QA:       5,
+  REJECTED:         6,
 }
 
 /** 写入 inventory_containers.source_type 的规范取值 */

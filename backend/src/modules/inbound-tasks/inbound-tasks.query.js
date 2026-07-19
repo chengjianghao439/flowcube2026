@@ -62,7 +62,6 @@ function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], rec
     printBatches,
     printTimeoutMinutes: Number(thresholds.printTimeoutMinutes || DEFAULT_INBOUND_THRESHOLDS.printTimeoutMinutes),
     putawayTimeoutHours: Number(thresholds.putawayTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.putawayTimeoutHours),
-    auditTimeoutHours: Number(thresholds.auditTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.auditTimeoutHours),
   }
   base.printStatus = buildPrintStatus(printSummary, Number(task.status) === 5)
   base.putawayStatus = buildPutawayStatus(putawaySummary, Number(task.status) === 5)

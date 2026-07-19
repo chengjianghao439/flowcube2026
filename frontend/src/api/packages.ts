@@ -16,7 +16,7 @@ export interface Package {
   id: number
   barcode: string
   warehouseTaskId?: number
-  status: 1 | 2
+  status: 1 | 2 | 3
   statusName: string
   remark: string | null
   createdAt: string
@@ -38,6 +38,21 @@ export const addPackageItemApi = (
     productCode,
     qty,
   })
+
+export const removePackageItemApi = (
+  packageId: number,
+  itemId: number,
+  qty?: number,
+) =>
+  client.post<{ itemId: number; productId: number; productCode: string; productName: string; unit: string; removed: boolean; qty: number }>(
+    `/packages/${packageId}/remove-item`,
+    { itemId, qty },
+  )
+
+export const voidPackageApi = (packageId: number) =>
+  client.post<{ id: number; warehouseTaskId: number; status: number; statusName: string }>(
+    `/packages/${packageId}/void`,
+  )
 
 export interface PackagePrintDispatchHint {
   code?: string

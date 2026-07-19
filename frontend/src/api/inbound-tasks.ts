@@ -10,7 +10,6 @@ import type {
   CreateInboundTaskResult,
   CreateInboundTaskParams,
   InboundPurchaseCandidate,
-  AuditInboundTaskParams,
   ReprintInboundTaskParams,
   ReprintInboundTaskResult,
 } from '@/types/inbound-tasks'
@@ -29,9 +28,6 @@ export const getInboundTaskByIdApi = (id: number) =>
 
 export const submitInboundTaskApi = (id: number) =>
   client.post<InboundTask>(`/inbound-tasks/${id}/submit`)
-
-export const auditInboundTaskApi = (id: number, data: AuditInboundTaskParams) =>
-  client.post<InboundTask>(`/inbound-tasks/${id}/audit`, data)
 
 export const reprintInboundTaskApi = (id: number, data: ReprintInboundTaskParams) =>
   client.post<ReprintInboundTaskResult>(`/inbound-tasks/${id}/reprint`, data)
@@ -58,3 +54,6 @@ export const adminPutawayInboundApi = (data: PutawayParams & { taskId: number })
 
 export const cancelInboundApi = (id: number) =>
   client.post(`/inbound-tasks/${id}/cancel`)
+
+export const voidInboundReceiptApi = (id: number) =>
+  client.post<InboundTask>(`/inbound-tasks/${id}/void-receipt`)

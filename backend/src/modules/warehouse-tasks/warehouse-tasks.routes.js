@@ -4,7 +4,7 @@ const ctrl = require('./warehouse-tasks.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { validateBody } = require('../../utils/route')
-const { pdaSessionRequired } = require('../../middleware/pdaSession')
+const { pdaSessionOptional } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
 const AppError = require('../../utils/AppError')
 
@@ -38,13 +38,13 @@ router.get('/:id', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.deta
 router.put('/:id/assign', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), vBody(z.object({ userId: z.number().int().positive(), userName: z.string().min(1) })), ctrl.assign)
 
 // PUT /api/warehouse-tasks/:id/start-picking — 开始备货（1→2）
-router.put('/:id/start-picking', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), pdaOnly, pdaSessionRequired(), ctrl.startPicking)
+router.put('/:id/start-picking', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), pdaOnly, pdaSessionOptional(), ctrl.startPicking)
 
 // PUT /api/warehouse-tasks/:id/items/:itemId/picked-qty — 已禁用
 router.put('/:id/items/:itemId/picked-qty', ctrl.pickedQtyDeprecated)
 
 // PUT /api/warehouse-tasks/:id/ready — 拣货完成，待分拣（2→3）
-router.put('/:id/ready', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK), pdaOnly, pdaSessionRequired(), ctrl.readyToShip)
+router.put('/:id/ready', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK), pdaOnly, pdaSessionOptional(), ctrl.readyToShip)
 
 // GET /api/warehouse-tasks/:id/events — 任务事件历史
 router.get('/:id/events', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.findEvents)
@@ -53,16 +53,16 @@ router.get('/:id/events', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ct
 router.get('/:id/debug', requirePermission(PERMISSIONS.WAREHOUSE_TASK_DEBUG), ctrl.debugSnapshot)
 
 // PUT /api/warehouse-tasks/:id/sort-done — 分拣完成上报
-router.put('/:id/sort-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SORT), pdaOnly, pdaSessionRequired(), ctrl.sortDone)
+router.put('/:id/sort-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SORT), pdaOnly, pdaSessionOptional(), ctrl.sortDone)
 
 // PUT /api/warehouse-tasks/:id/check-done — 复核完成，待打包（4→5）
-router.put('/:id/check-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK_DONE), pdaOnly, pdaSessionRequired(), ctrl.checkDone)
+router.put('/:id/check-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK_DONE), pdaOnly, pdaSessionOptional(), ctrl.checkDone)
 
 // PUT /api/warehouse-tasks/:id/pack-done — 打包完成，待出库（5→6）
-router.put('/:id/pack-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK_DONE), pdaOnly, pdaSessionRequired(), ctrl.packDone)
+router.put('/:id/pack-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK_DONE), pdaOnly, pdaSessionOptional(), ctrl.packDone)
 
 // PUT /api/warehouse-tasks/:id/ship — 执行出库（6→7）
-router.put('/:id/ship', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SHIP), pdaOnly, pdaSessionRequired(), ctrl.ship)
+router.put('/:id/ship', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SHIP), pdaOnly, pdaSessionOptional(), ctrl.ship)
 
 // PUT /api/warehouse-tasks/:id/check — 已关闭手动复核
 router.put('/:id/check', ctrl.manualCheckDeprecated)

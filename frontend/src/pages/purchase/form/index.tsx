@@ -37,6 +37,7 @@ import {
   useUpdatePurchase,
   usePurchaseDetail,
   useConfirmPurchase,
+  useWithdrawConfirmPurchase,
   useCancelPurchase,
 } from '@/hooks/usePurchase'
 import type { PurchaseOrder, PurchaseOrderItem } from '@/types/purchase'
@@ -458,6 +459,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
   // 采购/收货是 PDA 现场高频变化的单据，标签页常驻挂载时若不轮询容易看到陈旧的收货进度
   const { data: order, isLoading } = usePurchaseDetail(purchaseId, { refetchInterval: isActiveTab ? 20_000 : false })
   const confirmMutate = useConfirmPurchase()
+  const withdrawConfirmMutate = useWithdrawConfirmPurchase()
   const cancelMutate  = useCancelPurchase()
   const [editing, setEditing] = useState(false)
 
@@ -500,8 +502,10 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
   }
 
   const canConfirm = order.status === 1
+  const hasActiveInboundTask = (order.inboundTasks ?? []).some(t => t.status !== 5)
+  const canWithdrawConfirm = order.status === 2 && !hasActiveInboundTask
   const canCancel  = order.status === 1 || order.status === 2
-  const isPending  = confirmMutate.isPending || cancelMutate.isPending
+  const isPending  = confirmMutate.isPending || withdrawConfirmMutate.isPending || cancelMutate.isPending
 
   return (
     <div className="flex flex-col gap-3">
@@ -522,6 +526,15 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             {order.status === 1 && (
               <Button variant="outline" disabled={isPending} onClick={() => setEditing(true)}>
                 编辑
+              </Button>
+            )}
+            {canWithdrawConfirm && (
+              <Button variant="outline" disabled={isPending}
+                onClick={() => ask('撤回确认', '撤回后采购单将恢复为草稿状态，可重新编辑后再次提交。', 'default', () => {
+                  setConfirmState(s => ({ ...s, open: false }))
+                  withdrawConfirmMutate.mutate(order.id)
+                }, '撤回确认')}>
+                撤回确认
               </Button>
             )}
             {canConfirm && (
@@ -582,7 +595,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
               <dd className="flex flex-wrap items-center gap-2">
                 {order.inboundTasks.map(t => {
                   // 跟收货订单详情页保持一致：不能只看 status（4=已完成）字段，还要看
-                  // receiptStatus——打印超时/上架超期/审核退回等异常也会让它显示"异常中"，
+                  // receiptStatus——打印超时/上架超期等异常也会让它显示"异常中"，
                   // 不然这里显示"已完成"，点进去却是异常，会让人confused
                   const label = t.receiptStatus?.label ?? INBOUND_STATUS_LABEL[t.status as InboundTaskStatus] ?? '未知'
                   const toneClass = t.receiptStatus?.key === 'exception'

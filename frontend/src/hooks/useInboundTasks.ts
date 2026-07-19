@@ -7,13 +7,13 @@ import {
   createInboundTaskApi,
   getInboundPurchaseCandidatesApi,
   submitInboundTaskApi,
-  auditInboundTaskApi,
   reprintInboundTaskApi,
   receiveInboundApi,
   cancelInboundApi,
+  voidInboundReceiptApi,
 } from '@/api/inbound-tasks'
 import type { QueryParams } from '@/types'
-import type { AuditInboundTaskParams, CreateInboundTaskParams, ReceiveParams, ReceivePackageResult, ReprintInboundTaskParams } from '@/types/inbound-tasks'
+import type { CreateInboundTaskParams, ReceiveParams, ReceivePackageResult, ReprintInboundTaskParams } from '@/types/inbound-tasks'
 
 const QUERY_KEY = 'inbound-tasks'
 
@@ -77,14 +77,6 @@ export function useSubmitInboundTask() {
   })
 }
 
-export function useAuditInboundTask() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: AuditInboundTaskParams }) => auditInboundTaskApi(id, data),
-    onSuccess: () => invalidate('inbound_submit'),
-  })
-}
-
 export function useReprintInboundTask() {
   const invalidate = useInvalidate()
   return useMutation({
@@ -98,5 +90,13 @@ export function useCancelInbound() {
   return useMutation({
     mutationFn: (id: number) => cancelInboundApi(id),
     onSuccess: () => invalidate('inbound_cancel'),
+  })
+}
+
+export function useVoidInboundReceipt() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: number) => voidInboundReceiptApi(id),
+    onSuccess: () => invalidate('inbound_void_receipt'),
   })
 }

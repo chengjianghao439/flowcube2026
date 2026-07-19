@@ -43,7 +43,7 @@ export default function PdaSortPage() {
   const [hint, setHint]     = useState<BinHint | null>(null)
   const [scanning, setScanning] = useState(false)
   const { flash, ok, err, warn }  = usePdaFeedback()
-  const sortAction = useCriticalPdaAction<{ allSorted: boolean; progress?: string }>({
+  const sortAction = useCriticalPdaAction<{ allSorted: boolean; progress?: string; warning?: string | null }>({
     action: 'warehouse.sort',
     requestAction: 'warehouse.sort',
     label: '分拣确认',
@@ -103,7 +103,7 @@ export default function PdaSortPage() {
     try {
       const submitted = await sortAction.run((requestKey) =>
         sortDoneApi(hint.taskId, [{ itemId: hint.itemId, sortedQty: hint.qty }], requestKey)
-          .then((res) => res as { allSorted: boolean; progress?: string }),
+          .then((res) => res as { allSorted: boolean; progress?: string; warning?: string | null }),
         { taskId: hint.taskId, itemId: hint.itemId },
       )
       if (submitted.kind === 'pending') {
@@ -116,6 +116,8 @@ export default function PdaSortPage() {
         ok(stateConfirmedMessage(`任务 ${latest.taskNo} 分拣`, latest.statusName))
       } else if (result?.allSorted) {
         warn(`分拣请求已返回完成，但服务端最新任务状态仍为「${latest.statusName ?? latest.status}」。请稍后刷新确认，暂勿重复扫码。`)
+      } else if (result?.warning) {
+        warn(`✓ 已放入 ${hint.binCode}（${result?.progress ?? '?'}）· ${result.warning}`)
       } else {
         ok(`✓ 已放入 ${hint.binCode}（${result?.progress ?? '?'}）`)
       }

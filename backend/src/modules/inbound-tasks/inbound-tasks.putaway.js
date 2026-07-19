@@ -7,6 +7,7 @@ const { assertTaskCanPutaway } = require('./inbound-tasks.status')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { settlePurchaseOnAudit } = require('./inbound-tasks.settle')
 
 async function tryFinishTask(conn, taskId) {
   const finishRule = assertStatusAction('inboundTask', 'finish', 3)
@@ -31,20 +32,39 @@ async function tryFinishTask(conn, taskId) {
       toStatus: finishRule.to,
       entityName: '收货订单',
     })
-    await appendInboundEvent(
-      conn,
-      taskId,
-      'putaway_completed',
-      '上架完成',
-      '收货订单已全部上架，等待审核',
-      null,
-      null,
-    )
   } catch (error) {
     if (error?.statusCode !== 409) throw error
+    return
   }
-  // 采购单「完成 + 应付」已移至审核通过时结算（见 inbound-tasks.settle.js）。
-  // 上架完成只把收货订单推进到「已完成(4)·待审核」。
+
+  await appendInboundEvent(
+    conn,
+    taskId,
+    'putaway_completed',
+    '上架完成',
+    '收货订单已全部上架',
+    null,
+    null,
+  )
+
+  // 上架完成即结算：不再需要人工审核，直接按实收（上架）量结算应付并推进采购单（见 inbound-tasks.settle.js）。
+  const auditRule = assertStatusAction('inboundTaskAudit', 'approve', 0)
+  await conn.query(
+    `UPDATE inbound_tasks
+     SET audit_status = ?, audited_at = NOW(), audited_by = NULL, audited_by_name = '系统自动结算'
+     WHERE id = ?`,
+    [auditRule.to, taskId],
+  )
+  await appendInboundEvent(
+    conn,
+    taskId,
+    'audit_approved',
+    '自动结算',
+    '收货订单上架完成，系统已按实收量自动结算应付',
+    null,
+    { auditStatus: auditRule.to },
+  )
+  await settlePurchaseOnAudit(conn, taskId)
 }
 
 async function putaway(taskId, { containerId, locationId }, operator, { requestKey, pdaWarehouseId } = {}) {

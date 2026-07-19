@@ -104,7 +104,7 @@ POST /api/inventory/inbound
 | containers | `/api/containers` | Container split/move |
 | plastic-boxes | `/api/plastic-boxes` | Reusable tote/box container query (subset of `inventory_containers`, barcode prefix `B`) |
 | purchase | `/api/purchase` | Purchase orders (CRUD + confirm/cancel) |
-| inbound-tasks | `/api/inbound-tasks` | Receiving orders (receive/putaway/audit) |
+| inbound-tasks | `/api/inbound-tasks` | Receiving orders (receive/putaway, auto-settles on putaway completion) |
 | sale | `/api/sale` | Sales orders (CRUD + reserve/release/ship/cancel) |
 | warehouse-tasks | `/api/warehouse-tasks` | Outbound task lifecycle (pick/sort/check/pack/ship) |
 | picking-waves | `/api/picking-waves` | Multi-task pick wave management |
@@ -231,19 +231,16 @@ ERP: 新建采购单(草稿1，可编辑) → 提交(已提交2)
   → 新建收货订单(待收货1) → 提交到PDA(已提交)
 
 PDA: 收货(逐箱扫描+打印标签) → 全部收完(待上架3)
-  → 扫码上架(扫容器→扫库位) → 全部上架完(收货订单已完成4·待审核)
-     ⚠ 上架完成不结算，采购单仍为「已提交2」
-
-ERP: 审核收货订单 —— 审核通过=结算闸门
-  → 按实际上架量×采购单价（全量重算，幂等）生成/累加应付
-  → 该采购单全部明细收齐 → 采购单自动完成(3)
-  → 短装(少收) → 采购单不自动完成，需人工「关闭剩余」结案(POST /purchase/:id/close)
-  → 审核退回 → 仅标记退回、不结算、不动库存，处理后可重新审核
+  → 扫码上架(扫容器→扫库位) → 全部上架完(收货订单已完成4)
+     → 同一事务内系统自动结算，无需人工审核
+       → 按实际上架量×采购单价（全量重算，幂等）生成/累加应付
+       → 该采购单全部明细收齐 → 采购单自动完成(3)
+       → 短装(少收) → 采购单不自动完成，需人工「关闭剩余」结案(POST /purchase/:id/close)
 ```
 
 Purchase orders (`/purchase`) are planning documents only; drafts are editable (`PUT /purchase/:id`), create is idempotent (`X-Request-Key`). Receiving and putaway happen through inbound tasks (`/inbound-tasks`), submitted to PDA. ERP-side receiving is disabled — receive and putaway are PDA-only (enforced by `pdaOnly` middleware checking `X-Client: pda` header).
 
-**采购结算（v0.4.13+）**：采购单「完成」+ 应付**在收货订单审核通过时**结算（不是上架时），逻辑在 `inbound-tasks.settle.js` 的 `settlePurchaseOnAudit`。应付按实收金额，依赖 `payment_records` 的 `UNIQUE(type, order_id)` 做幂等 upsert。详见 memory `purchase-settlement-on-audit`。
+**采购结算（v0.4.22+）**：采购单「完成」+ 应付**在上架全部完成时**自动结算（不再有人工审核闸门），逻辑在 `inbound-tasks.putaway.js` 的 `tryFinishTask`（内部复用 `inbound-tasks.settle.js` 的 `settlePurchaseOnAudit`，同一事务内把 `inbound_tasks.audit_status` 置为已通过后立即结算）。应付按实收（上架）金额，依赖 `payment_records` 的 `UNIQUE(type, order_id)` 做幂等 upsert。此前 v0.4.13~v0.4.21 的人工审核/退回环节（`/inbound-tasks/:id/audit`）已整体移除，详见 memory `purchase-settlement-on-audit`。
 
 ### Sales (销售) — ERP + PDA
 
@@ -314,10 +311,9 @@ Defined in `backend/src/constants/documentStatusRules.js`:
 
 | Machine | States | Key transitions |
 |---------|--------|-----------------|
-| purchase | 1草稿 2已提交 3已完成 4已取消 | edit(限1), confirm(1→2), cancel(1/2→4), complete(2→3, 收齐时审核自动), close(2→3, 短装人工关闭剩余) |
+| purchase | 1草稿 2已提交 3已完成 4已取消 | edit(限1), confirm(1→2), cancel(1/2→4), complete(2→3, 收齐上架时自动), close(2→3, 短装人工关闭剩余) |
 | sale | 1草稿 2已占库 3拣货中 4已出库 5已取消 | reserve(1→2), release(2→1), ship(2→3), completeShip(3→4), cancel(1/2/3→5) |
-| inboundTask | 1待收货 2收货中 3待上架 4已完成 5已取消 | submit, receive, receiveComplete(2→3), putaway, finish(3→4), cancel(1→5) |
-| inboundTaskAudit | 0待审核 1已通过 2已退回 | approve(0/2→1), reject(0/2→2) |
+| inboundTask | 1待收货 2收货中 3待上架 4已完成 5已取消 | submit, receive, receiveComplete(2→3), putaway, finish(3→4, 同一事务内自动结算), cancel(1→5) |
 | warehouseTask | 2拣货中 3待分拣 4待复核 5待打包 6待出库 7已出库 8已取消 | See `warehouseTaskStatus.js` for full transition table |
 | transfer | 1草稿 2待出库 3在途 4已完成 5已取消 | confirm(1→2), scanOut(2/3→3, PDA), scanIn(3→4, PDA), cancel(1/2→5) |
 | purchaseReturn / saleReturn | 1草稿 2已确认 3已执行 4已取消 | confirm(1→2), execute(2→3), cancel(1/2→4). execute 由回调触发：purchaseReturn 靠 WT ship，saleReturn 靠 return_tasks putaway |

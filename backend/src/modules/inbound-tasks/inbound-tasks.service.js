@@ -1,6 +1,7 @@
 const query = require('./inbound-tasks.query')
 const command = require('./inbound-tasks.command')
 const putaway = require('./inbound-tasks.putaway')
+const voidModule = require('./inbound-tasks.void')
 
 module.exports = {
   findAll: query.findAll,
@@ -14,9 +15,9 @@ module.exports = {
   createFromPoId: command.createFromPoId,
   createManualTask: command.createManualTask,
   submit: command.submit,
-  audit: command.audit,
   receive: command.receive,
   reprint: command.reprint,
   cancel: command.cancel,
   putaway: putaway.putaway,
+  voidReceipt: voidModule.voidReceipt,
 }

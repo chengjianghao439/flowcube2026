@@ -2,7 +2,7 @@
  * 分拣格管理页
  * 路由：/sorting-bins
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   getSortingBinsApi, createSortingBinApi, batchCreateSortingBinsApi,
-  releaseSortingBinApi, deleteSortingBinApi,
+  releaseSortingBinApi, deleteSortingBinApi, updateSortingBinApi,
 } from '@/api/sorting-bins'
 import type { SortingBin } from '@/api/sorting-bins'
 import { getWarehousesActiveApi } from '@/api/warehouses'
@@ -65,6 +65,44 @@ function CreateDialog({ open, onClose, onSuccess }: { open: boolean; onClose: ()
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>取消</Button>
           <Button disabled={!code || !warehouseId || mut.isPending} onClick={() => mut.mutate()}>创建</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── 编辑弹窗（备注 / 容量阈值）───────────────────────────────────────────────
+function EditDialog({ bin, onClose, onSuccess }: { bin: SortingBin | null; onClose: () => void; onSuccess: () => void }) {
+  const [remark, setRemark]     = useState('')
+  const [capacity, setCapacity] = useState('')
+
+  useEffect(() => {
+    if (bin) { setRemark(bin.remark ?? ''); setCapacity(bin.capacity != null ? String(bin.capacity) : '') }
+  }, [bin])
+
+  const mut = useMutation({
+    mutationFn: () => updateSortingBinApi(bin!.id, {
+      remark,
+      capacity: capacity.trim() === '' ? null : +capacity,
+    }),
+    onSuccess: () => { toast.success('已更新'); onSuccess(); onClose() },
+  })
+
+  return (
+    <Dialog open={!!bin} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>编辑分拣格 {bin?.code}</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>容量阈值（件）</Label>
+            <Input className="mt-1" type="number" min={1} placeholder="不限容量" value={capacity} onChange={e => setCapacity(e.target.value)} />
+            <p className="mt-1 text-xs text-muted-foreground">分拣件数超过阈值时，PDA 端会提醒但不阻断作业；留空表示不限容量。</p>
+          </div>
+          <div><Label>备注</Label><Input className="mt-1" placeholder="可选" value={remark} onChange={e => setRemark(e.target.value)} /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button disabled={mut.isPending} onClick={() => mut.mutate()}>保存</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -137,6 +175,7 @@ export default function SortingBinsPage() {
   const [batchOpen, setBatchOpen]       = useState(false)
   const [releaseTarget, setReleaseTarget] = useState<SortingBin | null>(null)
   const [deleteTarget, setDeleteTarget]   = useState<SortingBin | null>(null)
+  const [editTarget, setEditTarget]       = useState<SortingBin | null>(null)
 
   const { data: bins, isLoading } = useQuery({
     queryKey: ['sorting-bins', keyword, statusFilter],
@@ -166,10 +205,12 @@ export default function SortingBinsPage() {
       render: (v) => v ? <span className="text-doc-code">{v as string}</span> : <span className="text-muted-foreground">—</span> },
     { key: 'customerName',  title: '客户', width: 140,
       render: (v) => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
+    { key: 'capacity',      title: '容量阈值', width: 90,
+      render: (v) => (v != null ? `${v} 件` : <span className="text-muted-foreground">不限</span>) },
     { key: 'remark',        title: '备注',
       render: (v) => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     {
-      key: 'id', title: '操作', width: 120,
+      key: 'id', title: '操作', width: 160,
       render: (_, row) => (
         row.status === 2 ? (
           <TableActionsMenu
@@ -177,11 +218,15 @@ export default function SortingBinsPage() {
             primaryVariant="outline"
             onPrimaryClick={() => setReleaseTarget(row)}
             items={[
+              { label: '编辑', onClick: () => setEditTarget(row) },
               { label: '删除', destructive: true, onClick: () => setDeleteTarget(row) },
             ]}
           />
         ) : (
-          <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setEditTarget(row)}>编辑</Button>
+            <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(row)}>删除</Button>
+          </div>
         )
       ),
     },
@@ -230,6 +275,7 @@ export default function SortingBinsPage() {
 
       <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} onSuccess={invalidate} />
       <BatchDialog  open={batchOpen}  onClose={() => setBatchOpen(false)}  onSuccess={invalidate} />
+      <EditDialog   bin={editTarget}  onClose={() => setEditTarget(null)}  onSuccess={invalidate} />
 
       <ConfirmDialog
         open={!!releaseTarget}

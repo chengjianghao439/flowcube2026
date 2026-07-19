@@ -43,13 +43,14 @@ const MOVE_TYPE = {
   TASK_OUT:     8,   // → moveStock 路径B
   MANUAL_IN:    9,   // → inventory.service（容器引擎）
   MANUAL_OUT:   10,  // → inventory.service（容器引擎）
+  RECEIPT_VOID: 11,  // → inbound-tasks.void.js（撤回收货，容器引擎）
 }
 
 const MOVE_TYPE_LABEL = {
   1:  '采购入库',     2:  '销售出库',     3:  '盘点调整',
   4:  '调拨出',       5:  '调拨入',       6:  '采购退货出库',
   7:  '销售退货入库', 8:  '仓库任务出库',
-  9:  '手动入库',     10: '手动出库',
+  9:  '手动入库',     10: '手动出库',     11: '入库撤回',
 }
 
 /**

@@ -21,6 +21,7 @@ export default function PdaSaleReturnReceivePage() {
   const { flash, ok, err } = usePdaFeedback()
   const [selectedProduct, setSelectedProduct] = useState<{ id: number; code: string; name: string; unit: string; remaining: number } | null>(null)
   const [boxes, setBoxes] = useState<number[]>([0])
+  const [rejectedQty, setRejectedQty] = useState(0)
   const [step, setStep] = useState<'select' | 'qty' | 'check'>('select')
 
   const { data: task, isLoading } = useQuery({
@@ -56,6 +57,7 @@ export default function PdaSaleReturnReceivePage() {
     label: `退货质检 ${task?.taskNo || ''}`,
     onConfirmed: () => {
       setSelectedProduct(null)
+      setRejectedQty(0)
       setStep('select')
     },
   })
@@ -80,6 +82,7 @@ export default function PdaSaleReturnReceivePage() {
       remaining: product.totalExpected - product.totalReceived,
     })
     setBoxes([0])
+    setRejectedQty(0)
     setStep(task?.status === 3 ? 'check' : 'qty')
   }, [productList, err, ok, task?.status])
 
@@ -104,6 +107,7 @@ export default function PdaSaleReturnReceivePage() {
           <PdaCard key={p.productId} active={p.totalExpected > p.totalReceived} onClick={() => {
             setSelectedProduct({ id: p.productId, code: p.productCode, name: p.productName, unit: p.unit, remaining: p.totalExpected - p.totalReceived })
             setBoxes([0])
+            setRejectedQty(0)
             setStep(task.status === 3 ? 'check' : 'qty')
           }}>
             <div className="flex justify-between items-center">
@@ -160,6 +164,12 @@ export default function PdaSaleReturnReceivePage() {
                 onChange={e => setBoxes([Number(e.target.value) || 0])}
               />
             </div>
+            <div className="mb-1">
+              <span className="text-sm text-destructive">不合格数量：</span>
+              <Input type="number" min={0} step={0.01} value={rejectedQty || ''} className="h-10 text-lg mt-1"
+                onChange={e => setRejectedQty(Number(e.target.value) || 0)}
+              />
+            </div>
           </PdaCard>
         )}
       </div>
@@ -177,13 +187,13 @@ export default function PdaSaleReturnReceivePage() {
             确认收货 {totalQty} {selectedProduct.unit}
           </Button>
         )}
-        {step === 'check' && selectedProduct && Number(boxes[0]) > 0 && (
+        {step === 'check' && selectedProduct && (Number(boxes[0]) > 0 || rejectedQty > 0) && (
           <Button className="w-full h-12 text-lg" disabled={checkAction.phase !== 'idle'}
             onClick={() => checkAction.run(requestKey =>
-              checkReturnApi(taskId, { productId: selectedProduct.id, passedQty: Number(boxes[0]) }, requestKey).then(r => r!)
+              checkReturnApi(taskId, { productId: selectedProduct.id, passedQty: Number(boxes[0]) || 0, rejectedQty }, requestKey).then(r => r!)
             )}
           >
-            质检确认 {Number(boxes[0])} {selectedProduct.unit}
+            质检确认 合格{Number(boxes[0]) || 0}{rejectedQty > 0 ? ` 不合格${rejectedQty}` : ''} {selectedProduct.unit}
           </Button>
         )}
       </PdaBottomBar>
@@ -194,5 +204,5 @@ export default function PdaSaleReturnReceivePage() {
 // Helper type
 interface ReturnTaskItem {
   id: number; productId: number; productCode: string; productName: string; unit: string
-  expectedQty: number; receivedQty: number; checkedQty: number; putawayQty: number
+  expectedQty: number; receivedQty: number; checkedQty: number; rejectedQty: number; putawayQty: number
 }

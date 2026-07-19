@@ -4,9 +4,12 @@ const { compareAndSetStatus } = require('../../utils/statusTransition')
 /**
  * 重算并 upsert 某采购单的应付。
  *
- * 关键：**全量重算**（按该采购单下所有「已审核通过」收货订单的实际上架数量 × 采购单价求和），
- * 用 SET 覆盖而非累加——这样审核退回后重新通过、或多批到货多次结算都幂等，不会重复计账。
- * 金额=实收（上架）量，天然反映短装。依赖 payment_records 的 UNIQUE(type, order_id)（迁移 091）。
+ * 关键：**全量重算**（按该采购单下所有「已审核通过」收货订单的实际上架数量 × 采购单价求和，
+ * 再扣除该采购单下所有「已退货(3)」的采购退货单金额），用 SET 覆盖而非累加——这样审核退回后
+ * 重新通过、多批到货多次结算、以及退货发生在结算前后的任意顺序，都幂等，不会重复计账也不会
+ * 把已经冲减的退货金额覆盖回去（见 P0-1：曾经出现过"退货冲减后，下一批到货结算把退货冲减吞掉"
+ * 的静默财务问题）。金额=实收（上架）量，天然反映短装。依赖 payment_records 的
+ * UNIQUE(type, order_id)（迁移 091）。
  */
 async function recomputePurchasePayable(conn, purchaseOrderId) {
   const poId = Number(purchaseOrderId)
@@ -25,8 +28,21 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
         AND it.status <> 5 AND it.audit_status = 1`,
     [poId],
   )
-  const total = Number(amount) || 0
-  if (total <= 0) return
+  const grossTotal = Number(amount) || 0
+  const [[{ returnedAmount }]] = await conn.query(
+    `SELECT COALESCE(SUM(total_amount), 0) AS returnedAmount
+       FROM purchase_returns
+      WHERE purchase_order_id = ? AND deleted_at IS NULL AND status = 3`,
+    [poId],
+  )
+  const total = Math.max(0, grossTotal - (Number(returnedAmount) || 0))
+  // total<=0 时通常代表这张采购单从未真正结算过，不必造一条空的应付记录；
+  // 但如果之前已经结算过（存在记录），哪怕现在归零（如撤回收货全部反冲），也要如实更新，
+  // 不能让 payment_records 停留在撤回前的旧金额上。
+  if (total <= 0) {
+    const [[existing]] = await conn.query('SELECT id FROM payment_records WHERE type = 1 AND order_id = ?', [poId])
+    if (!existing) return
+  }
   await conn.query(
     `INSERT INTO payment_records
        (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, due_date)

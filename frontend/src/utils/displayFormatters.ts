@@ -27,8 +27,6 @@ const EXCEPTION_TYPE_LABELS: Record<string, string> = {
   RESERVED_EXCEEDS_ON_HAND: '预占超过在库',
   NEGATIVE_ON_HAND: '库存数量异常',
   INBOUND_PUTAWAY_TIMEOUT: '入库上架超时',
-  INBOUND_AUDIT_TIMEOUT: '入库审核超时',
-  INBOUND_AUDIT_REJECTED: '入库审核退回',
   WAVE_STALE_PICKING: '波次拣货停滞',
   WAVE_STALE_SORTING: '波次分拣停滞',
 }

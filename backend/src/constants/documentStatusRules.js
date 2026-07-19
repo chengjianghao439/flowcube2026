@@ -6,6 +6,9 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
     actions: {
       edit: { from: [1], message: '只有草稿状态的采购单可以编辑' },
       confirm: { from: [1], to: 2, message: '只有草稿状态的采购单可以提交' },
+      // 撤回确认仅用于"确认早了"这种还没进入收货流程的场景；一旦有收货订单（哪怕未收货）
+      // 就必须先处理/取消收货订单，不能让收货订单指向一张倒回草稿态的采购单。
+      withdrawConfirm: { from: [2], to: 1, message: '只有已确认的采购单可以撤回确认' },
       createInboundTask: { from: [2], message: '只有已确认的采购单可创建入库任务' },
       cancel: {
         from: [1, 2],
@@ -18,6 +21,9 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       },
       complete: { from: [2], to: 3, message: '只有已提交的采购单可以完成' },
       close: { from: [2], to: 3, message: '只有已提交的采购单可以关闭剩余结案' },
+      // 仅供「撤回收货」内部联动使用：收货订单撤回导致采购单不再满足全部收齐时，
+      // 自动把已完成(3)的采购单退回已提交(2)，不作为用户可直接调用的入口。
+      reopen: { from: [3], to: 2, message: '只有已完成的采购单可以重新打开' },
     },
   },
   sale: {
@@ -137,32 +143,29 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
         },
       },
       finish: { from: [3], to: 4, message: '只有待上架状态才能完成收货订单' },
-      // 审核退回后打回"收货中"，让仓库能重新扫码收货修正（比如漏扫的箱子），
-      // 而不是停在待审核状态无法处理；修正完会通过 receive/putaway 的既有流程自然重新走到待审核。
-      reopenAfterReject: { from: [4], to: 2, message: '只有已完成待审核的收货订单，审核退回后才能重新收货' },
       cancel: {
         from: [1],
         to: 5,
         message: '仅待收货状态的任务可取消',
       },
-      audit: {
-        from: [4],
-        message: '只有已上架完成的收货订单才能审核',
+      // 撤回收货：把已收货（含已上架/已完成自动结算）的收货订单整单打回待收货，允许重新收货。
+      // 只要有容器被后续动作（拣货锁定、拆分、移动等）碰过，业务层会在真正执行前另行校验拒绝。
+      voidReceipt: {
+        from: [2, 3, 4],
+        to: 1,
+        message: '只有收货中/待上架/已完成的收货订单可以撤回收货',
       },
     },
   },
+  // 上架完成即自动结算应付（inbound-tasks.putaway.js 的 tryFinishTask），不再需要人工审核闸门；
+  // approve 规则保留供该自动结算复用状态校验，audit_status 恒为 0→1 这一条路径（2/已退回已随人工审核一起下线，不再可达）。
   inboundTaskAudit: {
     entityName: '收货订单审核',
     actions: {
       approve: {
-        from: [0, 2],
+        from: [0],
         to: 1,
-        message: '只有待审核或已退回的收货订单才能审核通过',
-      },
-      reject: {
-        from: [0, 2],
-        to: 2,
-        message: '只有待审核或已退回的收货订单才能审核退回',
+        message: '只有待结算的收货订单才能自动结算',
       },
     },
   },

@@ -143,26 +143,12 @@ async function main() {
     })
     log.assert('非法状态下上架被拒绝', duplicatePutaway.status === 400, `status=${duplicatePutaway.status}`)
 
-    // 上架完成后采购单应仍为「已提交(2)」——完成 + 应付改由审核通过时结算（非上架时）
-    const purchaseBeforeAudit = await http.get(`/api/purchase/${purchaseId}`, { token: adminToken })
+    // 上架完成即自动结算（不再需要人工审核）：全部收齐并上架后，采购单自动完成(3)
+    const purchaseAfterPutaway = await http.get(`/api/purchase/${purchaseId}`, { token: adminToken })
     log.assert(
-      '上架完成后采购单仍为已提交(2)，未提前结算',
-      Number(purchaseBeforeAudit.data?.data?.status) === 2,
-      `status=${purchaseBeforeAudit.data?.data?.status}`,
-    )
-
-    // 审核通过 = 结算闸门：全部收齐并审核通过后，采购单自动完成(3)
-    const inboundApprove = await http.post(`/api/inbound-tasks/${inboundTaskId}/audit`, {
-      token: adminToken,
-      json: { action: 'approve' },
-    })
-    await expectJsonSuccess(log, inboundApprove, '收货订单审核通过')
-
-    const purchaseAfterAudit = await http.get(`/api/purchase/${purchaseId}`, { token: adminToken })
-    log.assert(
-      '审核通过后采购单自动完成(3)',
-      Number(purchaseAfterAudit.data?.data?.status) === 3,
-      `status=${purchaseAfterAudit.data?.data?.status}`,
+      '上架完成后采购单自动完成(3)',
+      Number(purchaseAfterPutaway.data?.data?.status) === 3,
+      `status=${purchaseAfterPutaway.data?.data?.status}`,
     )
 
     log.section('print mainline')

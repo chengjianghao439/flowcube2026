@@ -247,7 +247,7 @@ export default function BarcodePrintQueryPage() {
             <div>
               <p className="text-sm font-semibold text-foreground">当前正在处理收货打印链路</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                收货订单 <span className="text-doc-code">{inboundContext.taskNo}</span> 的库存条码都在这里追踪。先收口失败 / 超时，再回收货详情继续上架与审核。
+                收货订单 <span className="text-doc-code">{inboundContext.taskNo}</span> 的库存条码都在这里追踪。先收口失败 / 超时，再回收货详情继续上架。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

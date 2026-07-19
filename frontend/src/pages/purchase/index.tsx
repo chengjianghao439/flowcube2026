@@ -225,7 +225,7 @@ export default function PurchasePage() {
                 separatorBefore: true,
                 onClick: () => openConfirm(
                   '关闭剩余结案',
-                  '将按已审核入库的实收数量结算应付并完成采购单，未收部分作罢。仅在相关收货订单均已审核通过时可用。',
+                  '将按已入库的实收数量结算应付并完成采购单，未收部分作罢。仅在相关收货订单均已全部上架完成时可用。',
                   () => close.mutate(r.id, { onSettled: closeConfirm }),
                   { confirmText: '确认结案' },
                 ),

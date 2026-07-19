@@ -161,7 +161,7 @@ async function roleWorkbench() {
     {
       key: 'warehouse',
       title: '仓库角色',
-      description: '收货、上架、审核和补打，聚焦一线仓库收口。',
+      description: '收货、上架和补打，聚焦一线仓库收口。',
       cards: [
         {
           key: 'warehouse-pending-receive',
@@ -182,16 +182,6 @@ async function roleWorkbench() {
           actionLabel: rows.waitingPutawayRows[0] ? '打开首条' : '查看收货订单',
           accent: 'amber',
           items: rows.waitingPutawayRows.map(mapWorkbenchItem),
-        },
-        {
-          key: 'warehouse-audit',
-          title: '待复核',
-          description: '已上架但还未完成审核的收货订单。',
-          count: firstValue(rows.pendingAuditCount, 'count'),
-          path: rows.pendingAuditRows[0]?.path ?? '/inbound-tasks',
-          actionLabel: rows.pendingAuditRows[0] ? '打开首单' : '查看收货订单',
-          accent: 'emerald',
-          items: rows.pendingAuditRows.map(mapWorkbenchItem),
         },
         {
           key: 'warehouse-print',
@@ -247,16 +237,6 @@ async function roleWorkbench() {
       title: '管理角色',
       description: '看收口进度、异常任务和高风险问题，优先盯住会拖慢闭环的点。',
       cards: [
-        {
-          key: 'management-audit',
-          title: '待审核收货单',
-          description: '完成上架后等待管理审核的收货订单。',
-          count: firstValue(rows.pendingAuditCount, 'count'),
-          path: rows.pendingAuditRows[0]?.path ?? '/inbound-tasks',
-          actionLabel: rows.pendingAuditRows[0] ? '打开首单' : '查看收货订单',
-          accent: 'emerald',
-          items: rows.pendingAuditRows.map(mapWorkbenchItem),
-        },
         {
           key: 'management-anomaly-task',
           title: '异常任务',

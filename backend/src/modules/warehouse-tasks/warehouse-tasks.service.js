@@ -123,7 +123,7 @@ async function assertTaskCheckScanClosure(conn, taskId) {
 /** 打包闭环：全部箱子已完成，且存在装箱明细 */
 async function assertTaskPackagingClosure(conn, taskId) {
   const [[{ open }]] = await conn.query(
-    `SELECT COUNT(*) AS open FROM packages WHERE warehouse_task_id=? AND status <> 2`,
+    `SELECT COUNT(*) AS open FROM packages WHERE warehouse_task_id=? AND status = 1`,
     [taskId],
   )
   if (Number(open) > 0) {
@@ -568,7 +568,7 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status, sorting_bin_code',
+    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code',
     entityName: '仓库任务',
   })
   const rule = assertWarehouseTaskAction('sortTask', taskRow.status)
@@ -648,7 +648,8 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
         eventType: WT_EVENT.SORT_PROGRESS,
       })
     }
-    const payload = { allSorted: false, progress: `${done}/${updatedItems.length}` }
+    const capacityWarning = await sortingBinSvc.checkCapacityWarning(conn, taskRow.sorting_bin_id)
+    const payload = { allSorted: false, progress: `${done}/${updatedItems.length}`, warning: capacityWarning?.message ?? null }
     await completeOperationRequest(conn, requestState, {
       data: payload,
       message: `分拣进度 ${payload.progress}，继续操作`,

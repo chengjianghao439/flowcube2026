@@ -46,6 +46,19 @@ router.post('/:id/add-item',
   ctrl.addItem,
 )
 
+// POST /api/packages/:id/remove-item — 从箱子移出商品
+router.post('/:id/remove-item',
+  requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK),
+  vBody(z.object({
+    itemId: z.number().int().positive('itemId 必填'),
+    qty:    z.number().positive('数量必须大于 0').optional(),
+  })),
+  ctrl.removeItem,
+)
+
+// POST /api/packages/:id/void        — 作废单箱
+router.post('/:id/void', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK), ctrl.voidPackage)
+
 // PUT  /api/packages/:id/finish      — 完成打包
 router.put('/:id/finish', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK), ctrl.finish)
 

@@ -9,7 +9,7 @@
  * 因此本文件只有 FormView（新建）与 DetailView（详情），没有 EditView。
  */
 
-import { useState, Fragment } from 'react'
+import { useState, useRef, Fragment } from 'react'
 import { useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Save, X } from 'lucide-react'
@@ -29,6 +29,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { createRequestKey } from '@/lib/requestKey'
 import { cn } from '@/lib/utils'
 import {
   createPurchaseReturnApi, confirmPurchaseReturnApi, cancelPurchaseReturnApi,
@@ -90,6 +91,8 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
   const [loadingSource, setLoadingSource] = useState(false)
   const [boundSource, setBoundSource] = useState<PurchaseReturnSourceOrder | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // 稳定幂等键：整个组件生命周期内复用同一 key（重试/网络回退不建重单），成功后轮换供下次新建
+  const requestKeyRef = useRef(createRequestKey('purchase-return'))
 
   const [items, setItems] = useState<DraftItem[]>([])
   const [counter, setCounter] = useState(0)
@@ -200,7 +203,8 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         purchaseOrderNo: orderNo || undefined,
         remark: remark.trim() || undefined,
         items: items.map(({ _key, originalQty, returnedQty, remainingQty, ...r }) => r),
-      })
+      }, requestKeyRef.current)
+      requestKeyRef.current = createRequestKey('purchase-return')
       await qc.invalidateQueries({ queryKey: ['returns'] })
       toast.success(`采购退货单 ${res.returnNo} 已创建`)
       const path = `/returns/purchase/${res.id}`

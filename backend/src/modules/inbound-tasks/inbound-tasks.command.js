@@ -12,7 +12,6 @@ const {
   distributeQtyToLines,
   ensureInboundTaskExists,
   assertTaskCanSubmit,
-  assertTaskCanAudit,
   assertTaskCanReceive,
   assertTaskCanCancel,
 } = require('./inbound-tasks.status')
@@ -20,7 +19,6 @@ const { findById, loadPurchasableCandidates } = require('./inbound-tasks.query')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
-const { settlePurchaseOnAudit } = require('./inbound-tasks.settle')
 
 async function createFromPoId(purchaseOrderId) {
   const purchaseSvc = require('../purchase/purchase.service')
@@ -41,6 +39,21 @@ async function createFromPoId(purchaseOrderId) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+
+    // 用剩余未建单量而非采购单原始下单量：若该采购单此前已通过「混单建单」建过部分
+    // 数量的收货单（并已收讫结案），这里如果直接用 order.items[].quantity（原始下单量）
+    // 建单，会把已经收过的部分重新算一遍，造成后续收货超收、应付重复计算。
+    // 同时用 forUpdate 锁住这批采购明细行，和 createManualTask 的建单校验互斥。
+    const candidates = await loadPurchasableCandidates(conn, {
+      supplierId: order.supplierId,
+      purchaseItemIds: order.items.map(item => item.id),
+      forUpdate: true,
+    })
+    const remainingItems = candidates.filter(c => c.remainingQty > 0)
+    if (!remainingItems.length) {
+      throw new AppError('该采购单明细均已建单收讫，无需重复建单', 400)
+    }
+
     const taskNo = await genTaskNo(conn)
     const [r] = await conn.query(
       `INSERT INTO inbound_tasks (task_no, purchase_order_id, purchase_order_no, supplier_name, warehouse_id, warehouse_name, status)
@@ -48,11 +61,11 @@ async function createFromPoId(purchaseOrderId) {
       [taskNo, order.id, order.orderNo, order.supplierName, order.warehouseId, order.warehouseName],
     )
     const taskId = r.insertId
-    for (const item of order.items) {
+    for (const item of remainingItems) {
       await conn.query(
         `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [taskId, order.id, order.orderNo, item.id, item.productId, item.productCode, item.productName, item.articleNumber || null, item.spec || null, item.color || null, item.unit, item.quantity],
+        [taskId, order.id, order.orderNo, item.purchaseItemId, item.productId, item.productCode, item.productName, item.articleNumber || null, item.spec || null, item.color || null, item.unit, item.remainingQty],
       )
     }
     await appendInboundEvent(conn, taskId, 'created', '创建收货订单', `收货订单 ${taskNo} 已创建，等待提交到 PDA`, null, {
@@ -211,67 +224,12 @@ async function submit(taskId, operator) {
   }
 }
 
-async function audit(taskId, { action = 'approve', remark = '' } = {}, operator) {
-  const normalizedAction = String(action || 'approve').toLowerCase()
-  if (!['approve', 'reject'].includes(normalizedAction)) throw new AppError('审核动作无效', 400)
-  const normalizedRemark = String(remark || '').trim()
-  if (normalizedAction === 'reject' && !normalizedRemark) throw new AppError('审核退回必须填写原因', 400)
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-    const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '收货订单' })
-    assertTaskCanAudit(taskRow, normalizedAction)
-    const auditRule = assertStatusAction('inboundTaskAudit', normalizedAction, Number(taskRow.audit_status || 0))
-    const auditStatus = auditRule.to
-    await conn.query(
-      `UPDATE inbound_tasks
-       SET audit_status = ?, audit_remark = ?, audited_at = NOW(), audited_by = ?, audited_by_name = ?
-       WHERE id = ?`,
-      [
-        auditStatus,
-        normalizedRemark || null,
-        operator?.userId ?? null,
-        operator?.realName ?? operator?.username ?? null,
-        taskId,
-      ],
-    )
-    // 审核退回：打回"收货中"，让仓库能重新扫码收货修正，不是死路一条
-    if (normalizedAction === 'reject') {
-      const reopenRule = assertStatusAction('inboundTask', 'reopenAfterReject', Number(taskRow.status))
-      await compareAndSetStatus(conn, {
-        table: 'inbound_tasks',
-        id: taskId,
-        fromStatus: reopenRule.from,
-        toStatus: reopenRule.to,
-        entityName: '收货订单',
-      })
-    }
-    await appendInboundEvent(
-      conn,
-      taskId,
-      normalizedAction === 'approve' ? 'audit_approved' : 'audit_rejected',
-      normalizedAction === 'approve' ? '审核通过' : '审核退回',
-      normalizedRemark || (normalizedAction === 'approve' ? '收货订单已审核通过' : '收货订单已退回并重新打回收货中，可继续扫码收货修正后重新提交审核'),
-      operator,
-      { auditStatus, remark: normalizedRemark || null },
-    )
-    // 审核通过 = 采购结算闸门：重算应付（按实收）+ 收齐则自动完成采购单。
-    // 退回不结算；重新审核通过时因全量重算而幂等，不会重复计账。
-    if (normalizedAction === 'approve') {
-      await settlePurchaseOnAudit(conn, taskId)
-    }
-    await conn.commit()
-    return findById(taskId)
-  } catch (e) {
-    await conn.rollback()
-    throw e
-  } finally {
-    conn.release()
-  }
-}
+// 超收比例超过该阈值时，收货动作要求前端显式带 confirmOverReceive:true 二次确认才放行。
+// 审核环节下线后（v0.4.22），这是唯一挡在"扫错数量直接进正式账"前面的安全网，见 P0-3。
+const OVER_RECEIVE_CONFIRM_RATIO = 0.2
 
 async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } = {}) {
-  const { productId, qty, packages: rawPackages } = payload
+  const { productId, qty, packages: rawPackages, confirmOverReceive } = payload
   const productIdN = Number(productId)
   const packages = Array.isArray(rawPackages) && rawPackages.length
     ? rawPackages
@@ -346,6 +304,23 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
 
     const warehouseId = Number(taskRow.warehouse_id)
     const taskNo = taskRow.task_no
+
+    const productLines = taskItems.filter(i => i.productId === productIdN)
+    if (productLines.length && !confirmOverReceive) {
+      const orderedTotal = productLines.reduce((s, i) => s + Number(i.orderedQty || 0), 0)
+      const receivedBefore = productLines.reduce((s, i) => s + Number(i.receivedQty || 0), 0)
+      const receivedAfter = receivedBefore + totalQty
+      const overQty = receivedAfter - orderedTotal
+      const overRatio = orderedTotal > 0 ? overQty / orderedTotal : (overQty > 0 ? Infinity : 0)
+      if (overQty > 0 && overRatio > OVER_RECEIVE_CONFIRM_RATIO) {
+        throw new AppError(
+          `本次收货后将超收 ${overQty}${productLines[0]?.unit || ''}（应到 ${orderedTotal}，已收 ${receivedBefore}，本次 ${totalQty}），请确认后重试`,
+          409,
+          'OVER_RECEIVE_CONFIRM_REQUIRED',
+          { productId: productIdN, orderedQty: orderedTotal, receivedQty: receivedBefore, thisQty: totalQty, overQty },
+        )
+      }
+    }
 
     const updates = distributeQtyToLines(taskItems, productIdN, totalQty)
     for (const u of updates) {
@@ -425,6 +400,12 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
       printJobIds: [],
       containers,
     }
+    // 收货是"货已经在库"这个事实的记录，不应该因为打印基础设施暂时没就绪而回滚。
+    // enqueueContainerLabelJob 在真正找不到可用打印机时返回 null（预期状态，非异常），
+    // 这里只跳过该容器的打印任务、不中断收货；后续可通过整单/明细补打把标签补上。
+    // 若打印任务写入本身出错（如 DB 异常），enqueueContainerLabelJob 内部会直接抛错，
+    // 仍然会正确回滚整个收货事务。
+    let noPrinterCount = 0
     for (const container of containers) {
       const job = await enqueueContainerLabelJob({
         conn,
@@ -440,11 +421,13 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
         jobUniqueKey: `inbound_receive:${taskId}:container:${container.containerId}`,
       })
       if (!job?.id) {
-        throw new AppError(`容器 ${container.containerCode} 的打印任务创建失败`, 500)
+        noPrinterCount += 1
+        continue
       }
       result.printJobIds.push(Number(job.id))
     }
     result.printJobId = result.printJobIds[0] ?? null
+    result.noPrinterCount = noPrinterCount
     if (result.printJobIds.length > 0) {
       await appendInboundEvent(
         conn,
@@ -457,6 +440,17 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
           printJobIds: result.printJobIds,
           containerCodes: containers.map(item => item.containerCode),
         },
+      )
+    }
+    if (noPrinterCount > 0) {
+      await appendInboundEvent(
+        conn,
+        taskId,
+        'print_skipped_no_printer',
+        '暂无可用打印机',
+        `${productName} 有 ${noPrinterCount} 个容器暂未生成打印任务（无可用标签打印机），收货已正常记录，可稍后整单/明细补打`,
+        { userId, realName: null },
+        { noPrinterCount },
       )
     }
     await completeOperationRequest(conn, requestState, {
@@ -617,7 +611,6 @@ module.exports = {
   createFromPoId,
   createManualTask,
   submit,
-  audit,
   receive,
   reprint,
   cancel,

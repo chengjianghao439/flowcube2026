@@ -420,10 +420,7 @@ async function main() {
       json: { containerId: Number(containerB.id), locationId: Number(location.id) },
     }), 'PDA 上架商品B成功')
 
-    await expectOk(log, await http.post(`/api/inbound-tasks/${mixTaskId}/audit`, {
-      token, json: { action: 'approve' },
-    }), '混合收货单审核通过成功（触发采购结算）')
-
+    // 混合收货单第二个商品上架完成后，系统自动结算（不再需要人工审核）
     const mixPayments = await dbQuery(
       pool,
       'SELECT order_id, total_amount FROM payment_records WHERE type=1 AND order_id IN (?, ?) ORDER BY order_id',

@@ -9,8 +9,7 @@ const RECEIPT_STATUS_LABEL = {
   receiving: '收货中',
   printed_waiting_putaway: '已打印待上架',
   putaway_in_progress: '上架中',
-  pending_audit: '已上架待审核',
-  audited: '已审核',
+  audited: '已完成',
   exception: '异常中',
   cancelled: '已取消',
 }
@@ -31,10 +30,8 @@ const PUTAWAY_STATUS_LABEL = {
   cancelled: '已取消',
 }
 const AUDIT_STATUS_LABEL = {
-  not_ready: '未到审核',
-  pending: '待审核',
-  approved: '已审核',
-  rejected: '已退回',
+  not_ready: '未结算',
+  approved: '已结算',
   cancelled: '已取消',
 }
 
@@ -61,35 +58,26 @@ function buildPutawayStatus(summary, cancelled = false) {
   return { key: 'completed', label: PUTAWAY_STATUS_LABEL.completed }
 }
 
+// 上架完成即自动结算（不再需要人工审核），audit_status 恒随 status→4 同一事务置为已通过。
 function buildAuditStatus(task) {
   if (Number(task.status) === 5) return { key: 'cancelled', label: AUDIT_STATUS_LABEL.cancelled }
   if (Number(task.status) < 4) return { key: 'not_ready', label: AUDIT_STATUS_LABEL.not_ready }
-  if (Number(task.auditStatus) === 1) return { key: 'approved', label: AUDIT_STATUS_LABEL.approved }
-  if (Number(task.auditStatus) === 2) return { key: 'rejected', label: AUDIT_STATUS_LABEL.rejected }
-  return { key: 'pending', label: AUDIT_STATUS_LABEL.pending }
+  return { key: 'approved', label: AUDIT_STATUS_LABEL.approved }
 }
 
 function buildExceptionFlags(task) {
   const printSummary = task.printSummary || { failed: 0, timeout: 0 }
   const putawaySummary = task.putawaySummary || { overdueContainers: 0 }
-  const isPendingAuditOverdue = Number(task.status) === 4
-    && Number(task.auditStatus) === 0
-    && !!task.updatedAt
-    && (Date.now() - new Date(task.updatedAt).getTime()) > Number(task.auditTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.auditTimeoutHours) * 60 * 60 * 1000
   const flags = {
     failedPrintJobs: Number(printSummary.failed || 0),
     timeoutPrintJobs: Number(printSummary.timeout || 0),
     overduePutawayContainers: Number(putawaySummary.overdueContainers || 0),
-    pendingAuditOverdue: isPendingAuditOverdue,
-    auditRejected: Number(task.auditStatus) === 2,
   }
   return {
     ...flags,
     hasException: flags.failedPrintJobs > 0
       || flags.timeoutPrintJobs > 0
-      || flags.overduePutawayContainers > 0
-      || flags.pendingAuditOverdue
-      || flags.auditRejected,
+      || flags.overduePutawayContainers > 0,
   }
 }
 
@@ -97,7 +85,6 @@ function buildReceiptStatus(task) {
   if (Number(task.status) === 5) return { key: 'cancelled', label: RECEIPT_STATUS_LABEL.cancelled }
   if (task.exceptionFlags?.hasException) return { key: 'exception', label: RECEIPT_STATUS_LABEL.exception }
   if (Number(task.auditStatus) === 1) return { key: 'audited', label: RECEIPT_STATUS_LABEL.audited }
-  if (Number(task.status) === 4) return { key: 'pending_audit', label: RECEIPT_STATUS_LABEL.pending_audit }
   if (task.putawayStatus?.key === 'putting_away') return { key: 'putaway_in_progress', label: RECEIPT_STATUS_LABEL.putaway_in_progress }
   if (Number(task.status) === 3) return { key: 'printed_waiting_putaway', label: RECEIPT_STATUS_LABEL.printed_waiting_putaway }
   if (Number(task.status) === 2) return { key: 'receiving', label: RECEIPT_STATUS_LABEL.receiving }
@@ -246,7 +233,8 @@ function distributeQtyToLines(taskItems, productId, qty) {
     if (left <= 0) break
   }
   // 超收：供应商多发货是常见场景，不再硬性拒绝。超出部分记在最后一行，
-  // received_qty > ordered_qty 会在 ERP 端自然呈现为"超收"，交给审核环节人工把关。
+  // received_qty > ordered_qty 会在 ERP 端自然呈现为"超收"。注意：上架完成即自动结算（无人工审核闸门），
+  // 超收部分会直接计入应付，没有事后拦截点，异常大额超收需要靠人工肉眼在收货/上架时留意。
   if (left > 0) {
     const lastLine = allLines[allLines.length - 1]
     const existing = updates.find(u => u.itemId === lastLine.id)
@@ -270,11 +258,6 @@ async function ensureInboundTaskExists(conn, taskId) {
 function assertTaskCanSubmit(taskRow) {
   assertStatusAction('inboundTask', 'submit', Number(taskRow.status))
   if (taskRow.submitted_at) throw new AppError('该收货订单已提交到 PDA', 400)
-}
-
-function assertTaskCanAudit(taskRow, action = 'approve') {
-  assertStatusAction('inboundTask', 'audit', Number(taskRow.status))
-  assertStatusAction('inboundTaskAudit', action, Number(taskRow.audit_status || taskRow.auditStatus || 0))
 }
 
 function assertTaskCanReceive(taskRow) {
@@ -303,7 +286,6 @@ module.exports = {
   distributeQtyToLines,
   ensureInboundTaskExists,
   assertTaskCanSubmit,
-  assertTaskCanAudit,
   assertTaskCanReceive,
   assertTaskCanPutaway,
   assertTaskCanCancel,

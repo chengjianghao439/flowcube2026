@@ -11,6 +11,7 @@ export interface SortingBin {
   currentTaskNo: string | null
   customerName: string | null
   remark: string | null
+  capacity: number | null
   createdAt: string
   updatedAt: string
 }
@@ -44,7 +45,7 @@ export const createSortingBinApi = (data: { code: string; warehouseId: number; r
 export const batchCreateSortingBinsApi = (data: { warehouseId: number; prefix: string; from: number; to: number }) =>
   client.post<{ id: number; code: string }[]>('/sorting-bins/batch', data)
 
-export const updateSortingBinApi = (id: number, data: { remark?: string }) =>
+export const updateSortingBinApi = (id: number, data: { remark?: string; capacity?: number | null }) =>
   client.patch(`/sorting-bins/${id}`, data)
 
 export const releaseSortingBinApi = (id: number) =>
