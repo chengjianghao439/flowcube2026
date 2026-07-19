@@ -169,13 +169,14 @@ async function enqueuePackageLabelJob(payload) {
   const conn = payload?.conn || null
   const exec = conn || pool
   const [[row]] = await exec.query(
-    `SELECT p.id, p.barcode, wt.task_no, wt.customer_name, wt.warehouse_id, wt.freight_type,
+    `SELECT p.id, p.barcode, wt.task_no, wt.customer_name, wt.warehouse_id, so.freight_type,
             c.name AS carrier_name,
             (SELECT COUNT(*) FROM package_items pi WHERE pi.package_id = p.id) AS line_count,
             (SELECT COALESCE(SUM(pi.qty), 0) FROM package_items pi WHERE pi.package_id = p.id) AS total_qty
      FROM packages p
      JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
-     LEFT JOIN carriers c ON c.id = wt.carrier_id
+     LEFT JOIN sale_orders so ON so.id = wt.sale_order_id
+     LEFT JOIN carriers c ON c.id = so.carrier_id
      WHERE p.id = ?`,
     [packageId],
   )
