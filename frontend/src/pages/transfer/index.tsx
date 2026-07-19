@@ -6,9 +6,11 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { AppDialog } from '@/components/shared/AppDialog'
+import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import { getTransferListApi, confirmTransferApi, cancelTransferApi } from '@/api/transfer'
+import { getTransferListApi, confirmTransferApi, cancelTransferApi, forceCloseTransferApi } from '@/api/transfer'
 import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
@@ -40,6 +42,10 @@ export default function TransferPage() {
   const openConfirm = (title: string, description: string, onConfirm: () => void) => setConfirmState({ open: true, title, description, onConfirm })
   const closeConfirm = () => setConfirmState(s => ({ ...s, open: false }))
   const [pendingId, setPendingId] = useState<number | null>(null)
+  // 在途异常了结：必须填写原因，走独立的小弹窗（ConfirmDialog 在桌面端会切到系统原生消息框，
+  // 无法嵌入文本输入框，这里不能复用它）
+  const [forceCloseState, setForceCloseState] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
+  const [forceCloseReason, setForceCloseReason] = useState('')
 
   // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
   const keyword       = readStringParam(searchParams, 'keyword')
@@ -196,6 +202,13 @@ export default function TransferPage() {
               destructive: true,
               separatorBefore: true,
             }] : []),
+            ...(r.status === 3 ? [{
+              label: '异常了结（运输丢失）',
+              onClick: () => { setForceCloseReason(''); setForceCloseState({ open: true, id: r.id }) },
+              disabled: pendingId === r.id,
+              destructive: true,
+              separatorBefore: true,
+            }] : []),
           ]}
         />
       )
@@ -240,6 +253,48 @@ export default function TransferPage() {
         onConfirm={() => { closeConfirm(); confirmState.onConfirm() }}
         onCancel={closeConfirm}
       />
+
+      <AppDialog
+        open={forceCloseState.open}
+        onOpenChange={(v) => { if (!v && pendingId !== forceCloseState.id) setForceCloseState({ open: false, id: null }) }}
+        dialogId="transfer-force-close-dialog"
+        resizable={false}
+        defaultWidth={460}
+        defaultHeight={320}
+        minWidth={380}
+        minHeight={280}
+        title="在途异常了结"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setForceCloseState({ open: false, id: null })} disabled={pendingId === forceCloseState.id}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pendingId === forceCloseState.id || !forceCloseReason.trim()}
+              onClick={() => {
+                if (!forceCloseState.id) return
+                mut(() => forceCloseTransferApi(forceCloseState.id!, forceCloseReason.trim()), forceCloseState.id)
+                setForceCloseState({ open: false, id: null })
+              }}
+            >
+              {pendingId === forceCloseState.id ? '处理中...' : '确认异常了结'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3 px-1 py-1 text-sm">
+          <p className="text-muted-foreground">
+            仅用于运输途中货物丢失、长期无法送达等无法正常扫码入库的情况。确认后，该调拨单在途容器将作为运输损耗核销（不会回到调出仓，也不会计入调入仓库存），调拨单标记为已完成，此操作不可撤回。
+          </p>
+          <LimitedTextarea
+            maxLength={200}
+            placeholder="请填写异常了结原因（必填，将计入操作留痕）"
+            value={forceCloseReason}
+            onChange={(e) => setForceCloseReason(e.target.value)}
+          />
+        </div>
+      </AppDialog>
 
       <TransferQueryDialog
         open={queryOpen}

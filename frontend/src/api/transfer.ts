@@ -10,6 +10,8 @@ export const createTransferApi    = (d:CreateTransferParams) => client.post<{id:
 export const updateTransferApi    = (id:number, d:CreateTransferParams) => client.put<TransferOrder>(`/transfer/${id}`, d)
 export const confirmTransferApi   = (id:number) => client.post<null>(`/transfer/${id}/confirm`)
 export const cancelTransferApi    = (id:number) => client.post<null>(`/transfer/${id}/cancel`)
+/** 在途异常了结（运输丢失等无法正常入库时的应急收尾），需管理员权限 */
+export const forceCloseTransferApi = (id:number, reason:string) => client.post<null>(`/transfer/${id}/force-close`, { reason })
 
 // ── PDA 调拨执行（仅 PDA：后端校验 X-Client: pda + 设备会话）──
 export interface TransferScanResult { transferId:number; containerBarcode:string; productId:number; productName?:string; qty:number; completed?:boolean }

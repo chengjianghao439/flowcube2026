@@ -11,6 +11,7 @@ import {
   receiveInboundApi,
   cancelInboundApi,
   voidInboundReceiptApi,
+  closeReceivingInboundApi,
 } from '@/api/inbound-tasks'
 import type { QueryParams } from '@/types'
 import type { CreateInboundTaskParams, ReceiveParams, ReceivePackageResult, ReprintInboundTaskParams } from '@/types/inbound-tasks'
@@ -98,5 +99,13 @@ export function useVoidInboundReceipt() {
   return useMutation({
     mutationFn: (id: number) => voidInboundReceiptApi(id),
     onSuccess: () => invalidate('inbound_void_receipt'),
+  })
+}
+
+export function useCloseReceivingInbound() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: number) => closeReceivingInboundApi(id),
+    onSuccess: () => invalidate('inbound_close_receiving'),
   })
 }

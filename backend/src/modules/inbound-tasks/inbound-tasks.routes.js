@@ -106,5 +106,6 @@ router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECU
 router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaSessionOptional(), pdaOnly, vBody(putawaySchema), ctrl.putaway)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.cancel)
 router.post('/:id/void-receipt', requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.voidReceipt)
+router.post('/:id/close-receiving', requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.closeReceiving)
 
 module.exports = router

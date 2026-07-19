@@ -80,7 +80,7 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
   // 过期的"已出库-已退"余量快照而合计超退。
   await conn.query('SELECT id FROM sale_order_items WHERE order_id = ? FOR UPDATE', [saleOrderId])
   const [rows] = await conn.query(
-    `SELECT soi.id, soi.product_id, soi.quantity,
+    `SELECT soi.id, soi.product_id, soi.quantity, soi.unit_price,
             COALESCE((
               SELECT SUM(wti.picked_qty)
               FROM warehouse_task_items wti
@@ -113,6 +113,8 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
     if (Number(source.product_id) !== Number(item.productId)) {
       throw new AppError(`退货商品与原销售明细不一致`, 400)
     }
+    // 单价以原销售明细为准，不信任客户端传入值，理由同 validatePurchaseReturnItems。
+    item.unitPrice = Number(source.unit_price)
     requestedQtyBySource.set(
       Number(item.sourceItemId),
       Number((requestedQtyBySource.get(Number(item.sourceItemId)) || 0) + Number(item.quantity || 0)),

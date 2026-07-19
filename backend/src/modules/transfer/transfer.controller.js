@@ -11,5 +11,6 @@ const confirm = async(req,res,next)=>{ try{await svc.confirm(req.params.id,getOp
 const scanOut = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await svc.scanOut(req.params.id,req.body,op,extractRequestKey(req)),'出库成功')}catch(e){next(e)} }
 const scanIn  = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await svc.scanIn(req.params.id,req.body,op,extractRequestKey(req)),'入库成功')}catch(e){next(e)} }
 const cancel = async(req,res,next)=>{ try{await svc.cancel(req.params.id,getOperatorFromRequest(req));return successResponse(res,null,'已取消')}catch(e){next(e)} }
+const forceCloseInTransit = async(req,res,next)=>{ try{await svc.forceCloseInTransit(req.params.id,getOperatorFromRequest(req),{reason:req.body?.reason});return successResponse(res,null,'已异常了结')}catch(e){next(e)} }
 
-module.exports = { list, detail, create, update, confirm, scanOut, scanIn, cancel }
+module.exports = { list, detail, create, update, confirm, scanOut, scanIn, cancel, forceCloseInTransit }

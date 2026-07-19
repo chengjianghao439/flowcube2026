@@ -12,6 +12,7 @@ const itemSchema=z.object({productId:z.number().int().positive(),productCode:z.s
 const createSchema=z.object({fromWarehouseId:z.number().int().positive('请选择调出仓库'),fromWarehouseName:z.string(),toWarehouseId:z.number().int().positive('请选择调入仓库'),toWarehouseName:z.string(),remark:z.string().optional(),items:z.array(itemSchema).min(1,'至少添加一条明细')})
 const scanOutSchema=z.object({containerBarcode:z.string().min(1,'请扫描容器条码')})
 const scanInSchema=z.object({containerBarcode:z.string().min(1,'请扫描容器条码'),locationId:z.number().int().positive('请扫描库位')})
+const forceCloseSchema=z.object({reason:z.string().min(1,'必须填写异常了结原因')})
 router.get('/',              requirePermission(PERMISSIONS.TRANSFER_ORDER_VIEW), ctrl.list)
 router.get('/:id',           requirePermission(PERMISSIONS.TRANSFER_ORDER_VIEW), vParams(idParam),ctrl.detail)
 router.post('/',             requirePermission(PERMISSIONS.TRANSFER_ORDER_CREATE), vBody(createSchema),ctrl.create)
@@ -20,4 +21,5 @@ router.post('/:id/confirm',  requirePermission(PERMISSIONS.TRANSFER_ORDER_CONFIR
 router.post('/:id/scan-out', requirePermission(PERMISSIONS.TRANSFER_ORDER_EXECUTE), pdaSessionOptional(), pdaOnly, vParams(idParam),vBody(scanOutSchema),ctrl.scanOut)
 router.post('/:id/scan-in',  requirePermission(PERMISSIONS.TRANSFER_ORDER_EXECUTE), pdaSessionOptional(), pdaOnly, vParams(idParam),vBody(scanInSchema),ctrl.scanIn)
 router.post('/:id/cancel',   requirePermission(PERMISSIONS.TRANSFER_ORDER_CANCEL), vParams(idParam),ctrl.cancel)
+router.post('/:id/force-close', requirePermission(PERMISSIONS.TRANSFER_ORDER_FORCE_CLOSE), vParams(idParam),vBody(forceCloseSchema),ctrl.forceCloseInTransit)
 module.exports=router

@@ -18,6 +18,7 @@ module.exports = {
   receive: command.receive,
   reprint: command.reprint,
   cancel: command.cancel,
+  closeReceiving: command.closeReceiving,
   putaway: putaway.putaway,
   voidReceipt: voidModule.voidReceipt,
 }

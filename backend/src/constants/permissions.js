@@ -83,6 +83,7 @@ const PERMISSIONS = {
   TRANSFER_ORDER_CONFIRM: 'transfer.order.confirm',
   TRANSFER_ORDER_EXECUTE: 'transfer.order.execute',
   TRANSFER_ORDER_CANCEL: 'transfer.order.cancel',
+  TRANSFER_ORDER_FORCE_CLOSE: 'transfer.order.force-close',
 
   SALE_ORDER_VIEW: 'sale.order.view',
   SALE_ORDER_CREATE: 'sale.order.create',

@@ -607,6 +607,55 @@ async function cancel(taskId) {
   }
 }
 
+// 短装结案第一步：把「收货中(2)」的收货订单手动推进到「待上架(3)」，剩余未收量作罢。
+// 状态机层面 receiveComplete 本来就允许 2→3（正常路径是收满后自动触发），这里只是补一个
+// 手动强推入口——否则短装后任务会永久卡在收货中，且连带堵死 purchase.closeRemaining（它要求
+// 关联收货订单要么已取消要么已全部上架完成，见 purchase.service.js:227-231）。
+async function closeReceiving(taskId, operator) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const taskRow = await lockStatusRow(conn, {
+      table: 'inbound_tasks', id: taskId,
+      columns: 'id, task_no, status',
+      entityName: '收货订单',
+    })
+    if (Number(taskRow.status) !== 2) {
+      throw new AppError('只有"收货中"状态才能提前结束收货', 409)
+    }
+    const [[{ receivedTotal }]] = await conn.query(
+      'SELECT COALESCE(SUM(received_qty),0) AS receivedTotal FROM inbound_task_items WHERE task_id=?',
+      [taskId],
+    )
+    if (Number(receivedTotal) <= 0) {
+      throw new AppError('尚无任何实收数量，不能结束收货（如需终止请改用取消）', 409)
+    }
+    const rule = assertStatusAction('inboundTask', 'receiveComplete', taskRow.status)
+    await compareAndSetStatus(conn, {
+      table: 'inbound_tasks',
+      id: taskId,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '收货订单',
+    })
+    await appendInboundEvent(
+      conn,
+      taskId,
+      'receiving_closed',
+      '提前结束收货',
+      `收货订单 ${taskRow.task_no} 已提前结束收货，剩余未收量作罢，进入待上架`,
+      operator ? { userId: operator.userId, realName: operator.realName } : null,
+      null,
+    )
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
 module.exports = {
   createFromPoId,
   createManualTask,
@@ -614,4 +663,5 @@ module.exports = {
   receive,
   reprint,
   cancel,
+  closeReceiving,
 }

@@ -57,3 +57,7 @@ export const cancelInboundApi = (id: number) =>
 
 export const voidInboundReceiptApi = (id: number) =>
   client.post<InboundTask>(`/inbound-tasks/${id}/void-receipt`)
+
+/** 短装结案：提前结束收货（收货中→待上架），剩余未收量作罢 */
+export const closeReceivingInboundApi = (id: number) =>
+  client.post(`/inbound-tasks/${id}/close-receiving`)

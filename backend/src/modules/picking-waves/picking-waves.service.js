@@ -374,10 +374,15 @@ async function finishPicking(id) {
     }
     await refreshWavePickedFromTasks(conn, id)
     const [waveTasks] = await conn.query(
-      'SELECT task_id FROM picking_wave_tasks WHERE wave_id = ? ORDER BY id ASC',
+      `SELECT wt.id AS task_id, wt.status
+       FROM picking_wave_tasks pwt
+       JOIN warehouse_tasks wt ON wt.id = pwt.task_id
+       WHERE pwt.wave_id = ? ORDER BY pwt.id ASC`,
       [id],
     )
     for (const t of waveTasks) {
+      // 同 finish()：成员任务可能已被单独取消，跳过已终结的，不阻塞其余任务的拣货完成判定。
+      if (!WT_STATUS_ACTIVE.includes(Number(t.status))) continue
       await assertTaskPickScanClosure(conn, t.task_id)
     }
     await casWaveStatus(conn, {
@@ -407,10 +412,17 @@ async function finish(id) {
     await refreshWavePickedFromTasks(conn, id)
 
     const [waveTasks] = await conn.query(
-      'SELECT task_id FROM picking_wave_tasks WHERE wave_id = ? ORDER BY id ASC',
+      `SELECT wt.id AS task_id, wt.status
+       FROM picking_wave_tasks pwt
+       JOIN warehouse_tasks wt ON wt.id = pwt.task_id
+       WHERE pwt.wave_id = ? ORDER BY pwt.id ASC`,
       [id],
     )
     for (const t of waveTasks) {
+      // 成员任务可能已经脱离波次被单独取消（/warehouse-tasks/:id/cancel 不会通知所属波次），
+      // 此时它不再是 WT_STATUS_ACTIVE，强行推进会因非法状态迁移抛异常，导致整个波次永久卡在
+      // 待分拣、无法完成也无法取消。跳过已终结的成员任务，不阻塞其余仍在进行中的任务。
+      if (!WT_STATUS_ACTIVE.includes(Number(t.status))) continue
       await readyToShipWithinTransaction(conn, Number(t.task_id))
     }
 

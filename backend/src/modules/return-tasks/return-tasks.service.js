@@ -469,11 +469,13 @@ async function cancel(id, operator, options = {}) {
     if (!isValidTransition(Number(taskRow.status), RT_STATUS.CANCELLED)) {
       throw new AppError('当前状态不允许取消', 400)
     }
-    // 取消关联的待质检容器
+    // 取消关联的容器：待质检(PENDING_QA)和质检已通过但尚未上架(PENDING_PUTAWAY)的都要作废，
+    // 否则后者会永久卡在 PENDING_PUTAWAY——任务变 CANCELLED 后 putaway() 要求任务状态=4 不再满足，
+    // 这些容器既不计入库存也无法再被上架，货物实收但系统里永久找不到。
     await conn.query(
       `UPDATE inventory_containers SET status = 3
-       WHERE source_ref_type = 'sale_return' AND source_ref_id = ? AND status = ?`,
-      [id, PENDING_QA],
+       WHERE source_ref_type = 'sale_return' AND source_ref_id = ? AND status IN (?, ?)`,
+      [id, PENDING_QA, CONTAINER_STATUS.PENDING_PUTAWAY],
     )
     await compareAndSetStatus(conn, {
       table: 'return_tasks', id,

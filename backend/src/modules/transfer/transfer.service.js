@@ -360,4 +360,62 @@ async function cancel(id, operator = null) {
   }
 }
 
-module.exports = { findAll, findById, create, update, confirm, scanOut, scanIn, cancel }
+/**
+ * 在途异常了结（运输丢失/无法找到等）：状态机层面「在途(3)」明确禁止 cancel，注释称
+ * "请通过盘点处理差异"，但盘点只统计 ACTIVE 容器，在途容器是 PENDING_PUTAWAY 且绑定
+ * transfer_order_id，源仓/目的仓的盘点都覆盖不到——货物一旦运输途中出问题，调拨单和容器
+ * 会永久卡在"在途"，没有任何配套的收尾路径。
+ *
+ * 这里补一个范围很小、需要管理员权限的应急收尾动作：把该调拨单下仍在途的容器作废(VOID)，
+ * 调拨单本身复用状态4「已完成」（未新增状态码，避免牵动状态机定义/前端展示/报表等大范围
+ * 改动），但在事件记录里明确标注"异常了结"及必填原因，与正常 scanIn 完成的语义区分开、留痕
+ * 可查。作废的数量不做任何库存增补——scanOut 时已从源仓扣减，货物按实际运输损耗处理，不会
+ * 凭空回到源仓也不会凭空出现在目的仓。
+ */
+async function forceCloseInTransit(id, operator, { reason } = {}) {
+  if (!reason || !String(reason).trim()) {
+    throw new AppError('必须填写异常了结原因', 400)
+  }
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, columns: 'id, order_no, status', entityName: '调拨单' })
+    if (Number(orderRow.status) !== 3) {
+      throw new AppError('只有"在途"状态的调拨单才能异常了结', 409)
+    }
+    const [containers] = await conn.query(
+      'SELECT id, barcode, product_id, product_name, remaining_qty FROM inventory_containers WHERE transfer_order_id=? AND status=? AND deleted_at IS NULL FOR UPDATE',
+      [id, CONTAINER_STATUS.PENDING_PUTAWAY],
+    )
+    if (!containers.length) {
+      throw new AppError('该调拨单已无在途容器，无需异常了结', 409)
+    }
+    await conn.query(
+      'UPDATE inventory_containers SET status = ?, transfer_order_id = NULL WHERE transfer_order_id = ? AND status = ?',
+      [CONTAINER_STATUS.VOID, id, CONTAINER_STATUS.PENDING_PUTAWAY],
+    )
+    await compareAndSetStatus(conn, { table: 'transfer_orders', id, fromStatus: 3, toStatus: 4, entityName: '调拨单' })
+    await recordTransferEvent(conn, {
+      transferOrderId: Number(id),
+      orderNo: orderRow.order_no,
+      eventType: TRANSFER_EVENT.COMPLETED,
+      title: '调拨单异常了结（运输损耗核销）',
+      description: `原因：${reason}；核销在途容器 ${containers.length} 个：${containers.map(c => `${c.barcode}×${c.remaining_qty}`).join('、')}`,
+      operatorId: operator?.userId ?? null,
+      operatorName: operator?.realName ?? null,
+      requestId: getRequestId(),
+      payload: {
+        reason,
+        voidedContainers: containers.map(c => ({ id: c.id, barcode: c.barcode, productId: c.product_id, qty: Number(c.remaining_qty) })),
+      },
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
+module.exports = { findAll, findById, create, update, confirm, scanOut, scanIn, cancel, forceCloseInTransit }

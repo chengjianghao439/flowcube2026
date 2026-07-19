@@ -81,6 +81,7 @@ export const PERMISSIONS = {
   TRANSFER_ORDER_CONFIRM: 'transfer.order.confirm',
   TRANSFER_ORDER_EXECUTE: 'transfer.order.execute',
   TRANSFER_ORDER_CANCEL: 'transfer.order.cancel',
+  TRANSFER_ORDER_FORCE_CLOSE: 'transfer.order.force-close',
 
   SALE_ORDER_VIEW: 'sale.order.view',
   SALE_ORDER_CREATE: 'sale.order.create',
@@ -217,6 +218,7 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.TRANSFER_ORDER_CONFIRM, label: '确认调拨' },
       { code: PERMISSIONS.TRANSFER_ORDER_EXECUTE, label: '执行调拨' },
       { code: PERMISSIONS.TRANSFER_ORDER_CANCEL, label: '取消调拨' },
+      { code: PERMISSIONS.TRANSFER_ORDER_FORCE_CLOSE, label: '在途异常了结（运输损耗核销，慎用）' },
       { code: PERMISSIONS.SALE_ORDER_VIEW, label: '查看销售单' },
       { code: PERMISSIONS.SALE_ORDER_CREATE, label: '新建销售单' },
       { code: PERMISSIONS.SALE_ORDER_UPDATE, label: '编辑销售单' },

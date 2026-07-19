@@ -116,4 +116,12 @@ const voidReceipt = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, cancel, voidReceipt }
+const closeReceiving = async (req, res, next) => {
+  try {
+    const operator = getOperatorFromRequest(req)
+    await svc.closeReceiving(+req.params.id, operator)
+    return successResponse(res, null, '已结束收货，进入待上架')
+  } catch (e) { next(e) }
+}
+
+module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, cancel, voidReceipt, closeReceiving }

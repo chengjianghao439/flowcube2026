@@ -78,7 +78,7 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items) {
   // 过期快照，都校验通过，合计超出实际已收货量退货（金额/库存双重超退）。
   await conn.query('SELECT id FROM purchase_order_items WHERE order_id = ? FOR UPDATE', [purchaseOrderId])
   const [rows] = await conn.query(
-    `SELECT poi.id, poi.product_id, poi.quantity,
+    `SELECT poi.id, poi.product_id, poi.quantity, poi.unit_price,
             COALESCE((
               SELECT SUM(iti.received_qty)
               FROM inbound_task_items iti
@@ -110,6 +110,11 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items) {
     if (Number(source.product_id) !== Number(item.productId)) {
       throw new AppError(`退货商品与原采购明细不一致`, 400)
     }
+    // 单价以原采购明细为准，不信任客户端传入值：前端"添加商品"手动追加行时默认填的是
+    // 商品当前成本价，可能与下单时的采购单价不同（成本价后续会被调整），若不在此处强制
+    // 覆盖，冲减应付时算出的金额会和 recomputePurchasePayable 用原始 unit_price 重算出的
+    // 应付基准脱节，产生对不上账的永久性残差。
+    item.unitPrice = Number(source.unit_price)
     requestedQtyBySource.set(
       Number(item.sourceItemId),
       Number((requestedQtyBySource.get(Number(item.sourceItemId)) || 0) + Number(item.quantity || 0)),

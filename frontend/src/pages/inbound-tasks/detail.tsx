@@ -18,6 +18,7 @@ import {
   useSubmitInboundTask,
   useCancelInbound,
   useVoidInboundReceipt,
+  useCloseReceivingInbound,
 } from '@/hooks/useInboundTasks'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
@@ -75,9 +76,11 @@ export default function InboundTaskDetailPage() {
   const submitMut = useSubmitInboundTask()
   const cancelMut = useCancelInbound()
   const voidReceiptMut = useVoidInboundReceipt()
+  const closeReceivingMut = useCloseReceivingInbound()
 
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
   const [voidConfirmOpen, setVoidConfirmOpen] = useState(false)
+  const [closeReceivingConfirmOpen, setCloseReceivingConfirmOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
 
   function closeTab() {
@@ -110,6 +113,7 @@ export default function InboundTaskDetailPage() {
   const canSubmit = receiptStatus?.key === 'draft'
   const canCancel = task?.status === 1
   const canVoidReceipt = task?.status === 2 || task?.status === 3 || task?.status === 4
+  const canCloseReceiving = task?.status === 2
   const statusTone = receiptStatus?.key === 'audited'
     ? 'success'
     : receiptStatus?.key === 'exception'
@@ -185,6 +189,16 @@ export default function InboundTaskDetailPage() {
                 onClick={() => setVoidConfirmOpen(true)}
               >
                 撤回收货
+              </Button>
+            )}
+            {canCloseReceiving && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={closeReceivingMut.isPending}
+                onClick={() => setCloseReceivingConfirmOpen(true)}
+              >
+                结束收货
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setPrintOpen(true)}>打印</Button>
@@ -314,6 +328,29 @@ export default function InboundTaskDetailPage() {
           })
         }}
         onCancel={() => setVoidConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={closeReceivingConfirmOpen}
+        title="结束收货"
+        description="供应商短装、不再继续收货时使用：立即结束收货，剩余未收数量作罢，进入待上架，可正常上架已收到的部分。此操作不可撤回。"
+        confirmText="确定结束收货"
+        loading={closeReceivingMut.isPending}
+        onConfirm={() => {
+          if (!validId) return
+          closeReceivingMut.mutate(validId, {
+            onSuccess: async () => {
+              setCloseReceivingConfirmOpen(false)
+              toast.success('已结束收货，进入待上架')
+              await afterMutation()
+            },
+            onError: (err: unknown) => {
+              const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '结束收货失败'
+              toast.error(msg)
+            },
+          })
+        }}
+        onCancel={() => setCloseReceivingConfirmOpen(false)}
       />
 
       {printOpen && task && (
