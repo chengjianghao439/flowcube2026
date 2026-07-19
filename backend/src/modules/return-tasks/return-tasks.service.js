@@ -294,7 +294,7 @@ async function tryFinishReturnTaskPutaway(conn, taskId, taskNo, returnId) {
     fromStatus: 4, toStatus: 5, entityName: '退货任务',
   })
   if (returnId) {
-    const returnSvc = require('../returns/returns.service')
+    const returnSvc = require('../returns/returns-sale.service')
     await returnSvc.syncSaleReturnCompleted(conn, Number(returnId), { taskId, taskNo })
   }
   return true

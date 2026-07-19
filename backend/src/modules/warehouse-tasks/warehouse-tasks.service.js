@@ -907,7 +907,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
 
   // 采购退货出库完成：同步退货单状态 + 冲减应付账款
   if (isPurchaseReturn && taskRow.return_id) {
-    const returnSvc = require('../returns/returns.service')
+    const returnSvc = require('../returns/returns-purchase.service')
     await returnSvc.syncPurchaseReturnShipped(conn, Number(taskRow.return_id), {
       taskId: Number(id),
       taskNo: taskRow.task_no,

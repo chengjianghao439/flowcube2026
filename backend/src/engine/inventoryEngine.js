@@ -38,8 +38,8 @@ const MOVE_TYPE = {
   STOCKCHECK:   3,   // → stockcheck.service（容器引擎）
   TRANSFER_OUT: 4,   // → transfer.service（容器引擎）
   TRANSFER_IN:  5,   // → transfer.service（容器引擎）
-  PURCHASE_RET: 6,   // → returns.service（容器引擎）
-  SALE_RET:     7,   // → returns.service（容器引擎）
+  PURCHASE_RET: 6,   // → returns-purchase.service（容器引擎）
+  SALE_RET:     7,   // → returns-sale.service（容器引擎）
   TASK_OUT:     8,   // → moveStock 路径B
   MANUAL_IN:    9,   // → inventory.service（容器引擎）
   MANUAL_OUT:   10,  // → inventory.service（容器引擎）
