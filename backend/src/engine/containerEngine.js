@@ -792,6 +792,9 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     if (Number(target.product_id) !== Number(row.product_id)) {
       throw new AppError('目标塑料盒绑定产品不匹配', 400)
     }
+    if (Number(target.warehouse_id) !== Number(row.warehouse_id)) {
+      throw new AppError('目标塑料盒与源容器不在同一仓库，不可合并', 400)
+    }
 
     const newRem = rem - q
     const newStatus = newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE

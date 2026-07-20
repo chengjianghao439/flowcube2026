@@ -112,6 +112,10 @@ async function inboundStock(log, ctx, token, { product, warehouse, location, qua
 
 async function main() {
   const log = createLogger()
+  // 全局一致性检查要限定在"本次运行touch过的数据"上——inventory_stock 是长期复用的
+  // 本机开发库，历史上未清理的测试夹具会残留脏数据，若不限定范围，任何一次过去的
+  // 遗留漂移都会被之后每一次运行永久重新报出来，和当前代码是否有 bug 无关。
+  const runStartedAt = new Date()
   const ctx = await prepareSmokeContext()
   const { pool, http, warehouse, location, supplier, customer } = ctx
 
@@ -568,23 +572,26 @@ async function main() {
     log.assert('单采购单收货单被级联取消(status=5)', Number(taskFAfter[0]?.status) === 5, JSON.stringify(taskFAfter))
 
     // ── 8. 全局一致性不变量 ──────────────────────────────────────
+    // 全部限定 updated_at/created_at >= runStartedAt：只检查本次运行实际写过的行，
+    // 不去动本机开发库里历史遗留、本次运行完全没碰过的旧数据。
     log.section('全局一致性不变量')
     const inconsistencies = await dbQuery(pool, `
       SELECT s.product_id, s.warehouse_id, s.quantity AS cached_qty, COALESCE(SUM(c.remaining_qty),0) AS container_sum
       FROM inventory_stock s
       LEFT JOIN inventory_containers c
         ON c.product_id=s.product_id AND c.warehouse_id=s.warehouse_id AND c.status=1 AND c.deleted_at IS NULL
+      WHERE s.updated_at >= ?
       GROUP BY s.product_id, s.warehouse_id
-      HAVING ABS(cached_qty - container_sum) > 0.0001`)
+      HAVING ABS(cached_qty - container_sum) > 0.0001`, [runStartedAt])
     log.assert('inventory_stock 与容器总量完全一致', inconsistencies.length === 0, `不一致行数=${inconsistencies.length}: ${JSON.stringify(inconsistencies).slice(0, 300)}`)
 
-    const negativeStock = await dbQuery(pool, 'SELECT COUNT(*) AS cnt FROM inventory_stock WHERE quantity < 0')
+    const negativeStock = await dbQuery(pool, 'SELECT COUNT(*) AS cnt FROM inventory_stock WHERE quantity < 0 AND updated_at >= ?', [runStartedAt])
     log.assert('无负库存（quantity >= 0）', Number(negativeStock[0].cnt) === 0)
 
-    const overReserved = await dbQuery(pool, 'SELECT COUNT(*) AS cnt FROM inventory_stock WHERE reserved > quantity')
+    const overReserved = await dbQuery(pool, 'SELECT COUNT(*) AS cnt FROM inventory_stock WHERE reserved > quantity AND updated_at >= ?', [runStartedAt])
     log.assert('无 reserved > quantity', Number(overReserved[0].cnt) === 0)
 
-    const negativeContainer = await dbQuery(pool, 'SELECT COUNT(*) AS cnt FROM inventory_containers WHERE remaining_qty < 0')
+    const negativeContainer = await dbQuery(pool, 'SELECT COUNT(*) AS cnt FROM inventory_containers WHERE remaining_qty < 0 AND updated_at >= ?', [runStartedAt])
     log.assert('无 remaining_qty < 0 的容器', Number(negativeContainer[0].cnt) === 0)
   } finally {
     const summary = log.summary()
