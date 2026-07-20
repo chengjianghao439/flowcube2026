@@ -30,6 +30,22 @@ const createCheckScan = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
+const createCancelReturnScan = async (req, res, next) => {
+  try {
+    const operator = getOperatorFromRequest(req)
+    const data = await svc.createCancelReturnScanLog({
+      taskId: req.body.taskId,
+      containerId: req.body.containerId,
+      barcode: req.body.barcode.trim(),
+      locationId: req.body.locationId,
+      operatorId:   operator.operatorId,
+      operatorName: operator.operatorName,
+      requestKey: extractRequestKey(req),
+    })
+    return successResponse(res, data, data.finalized ? '归还完成，任务已取消' : '归还已记录', 201)
+  } catch (e) { next(e) }
+}
+
 const listByTask = async (req, res, next) => {
   try {
     const data = await svc.findByTask(+req.params.taskId)
@@ -77,4 +93,4 @@ const getAnomalyReport = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { create, createCheckScan, listByTask, logError, logUndo, getStats, getAnomalyReport }
+module.exports = { create, createCheckScan, createCancelReturnScan, listByTask, logError, logUndo, getStats, getAnomalyReport }

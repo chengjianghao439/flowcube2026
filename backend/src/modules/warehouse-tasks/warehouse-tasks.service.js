@@ -6,6 +6,7 @@ const check = require('./warehouse-tasks.check')
 const pack = require('./warehouse-tasks.pack')
 const ship = require('./warehouse-tasks.ship')
 const closures = require('./warehouse-tasks.helpers')
+const cancelReturn = require('./warehouse-tasks.cancel-return')
 
 module.exports = {
   findAll: query.findAll,
@@ -47,4 +48,8 @@ module.exports = {
   assertTaskCheckScanClosure: closures.assertTaskCheckScanClosure,
   assertTaskPackagingClosure: closures.assertTaskPackagingClosure,
   assertTaskPackagePrintClosure: closures.assertTaskPackagePrintClosure,
+
+  listPendingCancelReturns: cancelReturn.listPendingCancelReturns,
+  getCancelReturnDetail: cancelReturn.getCancelReturnDetail,
+  finalizeCancelWithinTransaction: cancelReturn.finalizeCancelWithinTransaction,
 }

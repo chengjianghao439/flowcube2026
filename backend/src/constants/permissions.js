@@ -114,6 +114,8 @@ const PERMISSIONS = {
   WAREHOUSE_TASK_PACK_DONE: 'warehouse.task.pack_done',
   WAREHOUSE_TASK_SHIP: 'warehouse.task.ship',
   WAREHOUSE_TASK_CANCEL: 'warehouse.task.cancel',
+  WAREHOUSE_TASK_CANCEL_RETURN: 'warehouse.task.cancel_return',
+  WAREHOUSE_TASK_CANCEL_RETURN_VIEW: 'warehouse.task.cancel_return.view',
   WAREHOUSE_TASK_PRIORITY: 'warehouse.task.priority',
   WAREHOUSE_TASK_DEBUG: 'warehouse.task.debug',
 

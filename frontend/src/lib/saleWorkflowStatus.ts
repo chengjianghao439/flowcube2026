@@ -18,6 +18,13 @@ export interface WorkflowStatus {
 }
 
 export function getSaleWorkflowStatus(order: SaleOrder): WorkflowStatus {
+  // 取消收尾中：销售单业务状态已经是「已取消」，但对应仓库任务的已拣容器还没
+  // 逐个扫码归还完（cancelRequestedAt 非空），此时不能简单显示「已取消」，
+  // 否则仓管会误以为货物已经妥善处理，实际货物可能还在拣货员手里未放回原位。
+  if (order.status === 5 && order.warehouseTaskCancelRequestedAt) {
+    return status('取消中-待归还', 'danger')
+  }
+
   // 已取消
   if (order.status === 5) return status('已取消', 'danger')
 

@@ -229,3 +229,62 @@ export const submitCheckScanApi = (taskId: number, barcode: string, requestKey?:
         : { 'X-Client': 'pda' },
     },
   )
+
+// ── 取消逆向归还（订单在拣货中被取消，已拣容器需逐个扫码放回）──────────────────
+
+export interface PendingCancelReturnTask {
+  id: number
+  taskNo: string
+  customerName: string | null
+  warehouseId: number
+  warehouseName: string
+  status: number
+  cancelRequestedAt: string
+  containersRemaining: number
+}
+
+export const getPendingCancelReturnsApi = () =>
+  client.get<PendingCancelReturnTask[]>('/warehouse-tasks/cancel-returns/pending')
+
+export interface CancelReturnContainer {
+  containerId: number
+  barcode: string
+  productId: number
+  productName: string | null
+  qty: number
+  containerKind: 'inventory' | 'plastic_box'
+  suggestedLocationCode: string | null
+  zone: string | null
+  aisle: string | null
+  rack: string | null
+  level: string | null
+  position: string | null
+}
+
+export interface CancelReturnDetail {
+  id: number
+  taskNo: string
+  status: number
+  cancelRequestedAt: string
+  warehouseId: number
+  warehouseName: string
+  customerName: string | null
+  containers: CancelReturnContainer[]
+}
+
+export const getCancelReturnDetailApi = (taskId: number) =>
+  client.get<CancelReturnDetail>(`/warehouse-tasks/${taskId}/cancel-return-detail`)
+
+/** 归还扫码：扫容器条码 + 扫目标库位条码，确认放回、解锁容器 */
+export const submitCancelReturnScanApi = (
+  taskId: number, containerId: number, barcode: string, locationId: number, requestKey?: string,
+) =>
+  client.post<{ id: number; remaining: number; finalized: boolean }>(
+    '/scan-logs/cancel-return',
+    { taskId, containerId, barcode, locationId },
+    {
+      headers: requestKey
+        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+        : { 'X-Client': 'pda' },
+    },
+  )

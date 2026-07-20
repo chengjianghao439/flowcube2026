@@ -2,7 +2,9 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { lockContainer, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
-const { checkDoneWithinTransaction } = require('../warehouse-tasks/warehouse-tasks.service')
+const { checkDoneWithinTransaction, finalizeCancelWithinTransaction } = require('../warehouse-tasks/warehouse-tasks.service')
+const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
+const { logSideEffectFailure: logWtSideEffectFailure } = require('../warehouse-tasks/warehouse-tasks.helpers')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const logger = require('../../utils/logger')
 
@@ -23,7 +25,7 @@ const fmt = r => ({
   scannedAt:    r.scanned_at,
 })
 
-const SCAN_PURPOSE = { PICK: 1, CHECK: 2 }
+const SCAN_PURPOSE = { PICK: 1, CHECK: 2, CANCEL_RETURN: 3 }
 
 function logPdaAuditDegradation(message, error, meta = {}) {
   logger.warn(
@@ -76,10 +78,13 @@ async function createScanLog({
     }
 
     const [[taskRow]] = await conn.query(
-      'SELECT id, warehouse_id, status FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, warehouse_id, status, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    if (taskRow.cancel_requested_at) {
+      throw new AppError('该任务已因订单取消停止拣货，请勿继续', 409)
+    }
     if (Number(taskRow.status) !== WT_STATUS.PICKING) {
       throw new AppError('仅「拣货中」任务允许拣货扫码', 400)
     }
@@ -333,6 +338,138 @@ async function createCheckScanLog({
 }
 
 /**
+ * 取消逆向归还扫码：逐容器确认放回原库位，解锁容器。
+ * 仓库/PDA 一侧只负责执行扫码核对，不做"放哪儿"的决策——容器的 location_id
+ * 在整个拣货过程中从未被移动过（lockContainer 只锁定，不改库位），系统本来就
+ * 知道这个容器该回哪儿，所以强制要求扫入的库位必须等于容器当前 location_id，
+ * 不接受操作员自行选择的其它库位。
+ * 归还完该任务名下最后一个容器时，在同一事务内触发 finalizeCancelWithinTransaction
+ * 真正把任务推进为已取消(8)、释放分拣格。
+ */
+async function createCancelReturnScanLog({
+  taskId, containerId, barcode, locationId,
+  operatorId, operatorName, requestKey,
+}) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'scan-log.cancel-return',
+      userId: operatorId || null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
+
+    const [[taskRow]] = await conn.query(
+      'SELECT id, task_no, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      [taskId],
+    )
+    if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    if (!taskRow.cancel_requested_at) {
+      throw new AppError('该任务未处于取消收尾状态，无需归还扫码', 400)
+    }
+
+    const [[c]] = await conn.query(
+      `SELECT id, barcode, product_id, remaining_qty, locked_by_task_id, warehouse_id, location_id
+       FROM inventory_containers WHERE id = ? AND deleted_at IS NULL FOR UPDATE`,
+      [containerId],
+    )
+    if (!c) throw new AppError('容器不存在', 404)
+    if (Number(c.locked_by_task_id) !== Number(taskId)) {
+      throw new AppError('该容器不属于当前任务的待归还清单（可能已被归还或不属于本任务）', 400)
+    }
+    if (String(c.barcode) !== String(barcode)) {
+      throw new AppError('容器条码不匹配', 400)
+    }
+
+    const [[loc]] = await conn.query(
+      `SELECT id, code, warehouse_id, status FROM warehouse_locations
+       WHERE id = ? AND deleted_at IS NULL AND status = 1 FOR UPDATE`,
+      [locationId],
+    )
+    if (!loc) throw new AppError('库位不存在或已停用', 404)
+    if (Number(loc.warehouse_id) !== Number(taskRow.warehouse_id)) {
+      throw new AppError('库位与任务所属仓库不一致', 400)
+    }
+    if (c.location_id == null || Number(loc.id) !== Number(c.location_id)) {
+      const [[originalLoc]] = c.location_id
+        ? await conn.query('SELECT code FROM warehouse_locations WHERE id = ?', [c.location_id])
+        : [[null]]
+      throw new AppError(
+        originalLoc ? `必须放回原库位 ${originalLoc.code}，不能放到其它库位` : '该容器原库位信息缺失，无法归还，请联系管理员',
+        400,
+      )
+    }
+
+    const [[itemRow]] = await conn.query(
+      'SELECT id FROM warehouse_task_items WHERE task_id = ? AND product_id = ? LIMIT 1',
+      [taskId, c.product_id],
+    )
+    if (!itemRow) throw new AppError('容器商品不属于当前任务，数据异常', 409)
+
+    await conn.query(
+      `UPDATE inventory_containers
+       SET locked_by_task_id = NULL, locked_at = NULL, location_id = ?
+       WHERE id = ?`,
+      [locationId, c.id],
+    )
+
+    const [ins] = await conn.query(
+      `INSERT INTO scan_logs
+         (task_id, item_id, container_id, barcode, product_id,
+          qty, scan_mode, scan_purpose, operator_id, operator_name, location_code)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [taskId, itemRow.id, c.id, barcode, c.product_id,
+        Number(c.remaining_qty), '归还', SCAN_PURPOSE.CANCEL_RETURN, operatorId || null, operatorName || null, loc.code],
+    )
+
+    try {
+      await recordEvent(conn, {
+        taskId: Number(taskId), taskNo: taskRow.task_no,
+        eventType: WT_EVENT.CANCEL_RETURN_SCAN,
+        operatorId: operatorId || null,
+        operatorName: operatorName || null,
+        detail: { containerId: c.id, barcode: c.barcode, locationCode: loc.code },
+      })
+    } catch (eventErr) {
+      logWtSideEffectFailure('仓库任务事件写入失败：取消归还扫码事件', eventErr, {
+        taskId: Number(taskId),
+        taskNo: taskRow.task_no,
+        eventType: WT_EVENT.CANCEL_RETURN_SCAN,
+      })
+    }
+
+    const [[{ remaining }]] = await conn.query(
+      'SELECT COUNT(*) AS remaining FROM inventory_containers WHERE locked_by_task_id = ? FOR UPDATE',
+      [taskId],
+    )
+    let finalized = false
+    if (Number(remaining) === 0) {
+      await finalizeCancelWithinTransaction(conn, taskId)
+      finalized = true
+    }
+
+    const payload = { id: ins.insertId, remaining: Number(remaining), finalized }
+    await completeOperationRequest(conn, requestState, {
+      data: payload,
+      message: finalized ? '归还完成，任务已取消' : `已归还，剩余 ${remaining} 个容器待归还`,
+      resourceType: 'scan_log',
+      resourceId: ins.insertId,
+    })
+    await conn.commit()
+    return payload
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
+/**
  * 查询某任务的扫描记录
  */
 async function findByTask(taskId) {
@@ -549,6 +686,7 @@ async function getAnomalyReport({ startDate, endDate } = {}) {
 module.exports = {
   createScanLog,
   createCheckScanLog,
+  createCancelReturnScanLog,
   findByTask,
   logScanError,
   logUndo,

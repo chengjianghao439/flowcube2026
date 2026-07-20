@@ -17,9 +17,12 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code',
+    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code, cancel_requested_at',
     entityName: '仓库任务',
   })
+  if (taskRow.cancel_requested_at) {
+    throw new AppError('该任务正在取消收尾中，不可继续分拣', 409)
+  }
   const rule = assertWarehouseTaskAction('sortTask', taskRow.status)
   if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
   const requestState = await beginOperationRequest(conn, {
@@ -116,9 +119,9 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
     entityName: '仓库任务',
   })
 
-  await sortingBinSvc.releaseByTask(conn, id)
-  await conn.query('UPDATE warehouse_tasks SET sorting_bin_id=NULL, sorting_bin_code=NULL WHERE id=?', [id])
-
+  // 分拣格在此不释放：货物未装箱前会一直放在分拣格里，要到打包完成
+  // （packDoneWithinTransaction）才真正离开分拣格。这里提前释放会导致分拣格
+  // 在"分拣完成→打包完成"这段窗口期被系统当作空闲重新分配给别的任务，造成混货。
   try {
     await recordEvent(conn, {
       taskId: id, taskNo: taskRow.task_no,
@@ -127,16 +130,11 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
       toStatus: rule.toStatus,
       detail: { itemCount: updatedItems.length },
     })
-    await recordEvent(conn, {
-      taskId: id, taskNo: taskRow.task_no,
-      eventType: WT_EVENT.SORTING_BIN_RELEASED,
-      detail: { binCode: taskRow.sorting_bin_code },
-    })
   } catch (eventErr) {
-    logSideEffectFailure('仓库任务事件写入失败：分拣完成/分拣格释放事件', eventErr, {
+    logSideEffectFailure('仓库任务事件写入失败：分拣完成事件', eventErr, {
       taskId: id,
       taskNo: taskRow.task_no,
-      eventTypes: [WT_EVENT.SORT_DONE, WT_EVENT.SORTING_BIN_RELEASED],
+      eventType: WT_EVENT.SORT_DONE,
     })
   }
 

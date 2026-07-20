@@ -166,29 +166,18 @@ async function cancel(id, options = {}) {
     const taskRow = await lockStatusRow(conn, {
       table: 'warehouse_tasks',
       id,
-      columns: 'id, task_no, status, sale_order_id, sorting_bin_id, sorting_bin_code',
+      columns: 'id, task_no, status, sale_order_id, sorting_bin_id, sorting_bin_code, cancel_requested_at',
       entityName: '仓库任务',
     })
+    if (taskRow.cancel_requested_at) {
+      throw new AppError('任务已在取消收尾中，请等待逆向归还完成', 409)
+    }
     const rule = assertWarehouseTaskAction('cancel', taskRow.status)
     if (!isValidTransition(taskRow.status, rule.toStatus)) {
       throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
     }
 
-    await compareAndSetStatus(conn, {
-      table: 'warehouse_tasks',
-      id,
-      fromStatus: taskRow.status,
-      toStatus: rule.toStatus,
-      entityName: '仓库任务',
-      extraSet: {
-        sorting_bin_id: null,
-        sorting_bin_code: null,
-      },
-    })
-
-    // 只有任务真实切换到 CANCELLED 后，才执行资源释放与单据同步副作用。
-
-    // 解锁前查询所有被锁容器及其库位，用于归还指引
+    // 解锁/清理前先查询所有被锁容器及其库位——用于判断分流路径，也用于归还指引
     const [lockedContainers] = await conn.query(
       `SELECT c.id, c.barcode, c.container_type,
               loc.code AS location_code,
@@ -210,6 +199,79 @@ async function cancel(id, options = {}) {
       level: c.level || null,
       position: c.position || null,
     }))
+
+    // 已经拣出货架、还没归位的容器不能批量后台解锁——货物实际在哪只有人知道，
+    // 批量解锁只是清空数据库字段，不会引导任何人把已经拿出来的货放回原位，
+    // 容器会立刻"看起来"可用，可能被派发给别的任务却扑空。这种情况改走逆向
+    // 归还流程：逐容器扫码确认放回位置，全部归位后才真正完成取消。
+    const needsReverseReturn = lockedContainers.length > 0
+      && [WT_STATUS.PICKING, WT_STATUS.SORTING].includes(Number(taskRow.status))
+
+    if (needsReverseReturn) {
+      const [casResult] = await conn.query(
+        `UPDATE warehouse_tasks SET cancel_requested_at = NOW()
+         WHERE id = ? AND status = ? AND cancel_requested_at IS NULL`,
+        [id, taskRow.status],
+      )
+      if (casResult.affectedRows !== 1) {
+        throw new AppError('任务状态已变化，请刷新后重试', 409)
+      }
+      // 未拣货的明细行直接撤回：required_qty 下调到当前 picked_qty，防止继续为
+      // 已取消的订单拣更多货；已经拣的部分保留原样，等逆向扫码归还。
+      await conn.query(
+        `UPDATE warehouse_task_items SET required_qty = picked_qty
+         WHERE task_id = ? AND picked_qty < required_qty`,
+        [id],
+      )
+      if (taskRow.sale_order_id) {
+        await releaseByRef(conn, 'sale_order', Number(taskRow.sale_order_id))
+        // 销售单业务状态立即变为已取消——不依赖物理归还进度。走 sale.service.cancel()
+        // 间接调用时它自己会做这一步（并传 syncSaleStatus:false 跳过这里，避免重复）；
+        // 直接调用本接口（PUT /warehouse-tasks/:id/cancel）时没有别人会做，必须在这里做。
+        if (options.syncSaleStatus !== false) {
+          const saleSvc = require('../sale/sale.service')
+          await saleSvc.syncCancelledByWarehouseTaskWithinTransaction(conn, Number(taskRow.sale_order_id), {
+            taskId: Number(taskRow.id),
+            taskNo: taskRow.task_no,
+          })
+        }
+      }
+      try {
+        await recordEvent(conn, {
+          taskId: id, taskNo: taskRow.task_no,
+          eventType: WT_EVENT.CANCEL_REQUESTED,
+          operatorId: options.operator?.userId ?? null,
+          operatorName: options.operator?.realName ?? null,
+          detail: {
+            saleOrderId: taskRow.sale_order_id != null ? Number(taskRow.sale_order_id) : null,
+            reservationReleased: taskRow.sale_order_id != null,
+            containersToReturn,
+          },
+        })
+      } catch (eventErr) {
+        logSideEffectFailure('仓库任务事件写入失败：取消收尾发起事件', eventErr, {
+          taskId: id,
+          taskNo: taskRow.task_no,
+          eventType: WT_EVENT.CANCEL_REQUESTED,
+        })
+      }
+      if (manageConn) await conn.commit()
+      return
+    }
+
+    await compareAndSetStatus(conn, {
+      table: 'warehouse_tasks',
+      id,
+      fromStatus: taskRow.status,
+      toStatus: rule.toStatus,
+      entityName: '仓库任务',
+      extraSet: {
+        sorting_bin_id: null,
+        sorting_bin_code: null,
+      },
+    })
+
+    // 只有任务真实切换到 CANCELLED 后，才执行资源释放与单据同步副作用。
 
     await unlockContainersByTask(conn, id)
     await sortingBinSvc.releaseByTask(conn, id)

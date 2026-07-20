@@ -64,6 +64,8 @@ export interface SaleOrder {
   statusName: string
   warehouseTaskStatus?: number | null
   warehouseTaskStatusName?: string | null
+  /** 非空表示仓库任务正在「取消收尾中」，已拣容器还没逐个扫码归还完，不算真正完成取消 */
+  warehouseTaskCancelRequestedAt?: string | null
   saleDate?: string
   totalAmount: number
   remark?: string

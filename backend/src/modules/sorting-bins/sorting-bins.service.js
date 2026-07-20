@@ -38,6 +38,7 @@ async function scanProduct(code) {
      FROM warehouse_task_items wti
      JOIN warehouse_tasks wt ON wt.id = wti.task_id
      WHERE wt.status IN (${WT_STATUS.PICKING},${WT_STATUS.SORTING})
+       AND wt.cancel_requested_at IS NULL
        AND wti.product_code = ?
      ORDER BY wt.created_at ASC
      LIMIT 10`,
@@ -53,6 +54,7 @@ async function scanProduct(code) {
        FROM warehouse_task_items wti
        JOIN warehouse_tasks wt ON wt.id = wti.task_id
        WHERE wt.status IN (${WT_STATUS.PICKING},${WT_STATUS.SORTING})
+         AND wt.cancel_requested_at IS NULL
          AND (wti.product_code LIKE ? OR wti.product_name LIKE ?)
        ORDER BY wt.created_at ASC
        LIMIT 5`,

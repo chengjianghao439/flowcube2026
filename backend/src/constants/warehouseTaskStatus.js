@@ -83,14 +83,15 @@ const WT_STATUS_TERMINAL = [WT_STATUS.SHIPPED, WT_STATUS.CANCELLED]
  * │ SORTING(3)   │ 1. 同步销售单状态 → 3（拣货中/仓库履约中）                    │
  * │              │    sale_orders.status = 3                                    │
  * ├──────────────┼──────────────────────────────────────────────────────────────┤
- * │ CHECKING(4)  │ 1. 释放分拣格（releaseByTask）                                │
- * │              │ 2. 清空 warehouse_tasks.sorting_bin_id / sorting_bin_code    │
- * │              │ 3. 更新 warehouse_task_items.sorted_qty（逐件或整批）         │
+ * │ CHECKING(4)  │ 1. 更新 warehouse_task_items.sorted_qty（逐件或整批）         │
+ * │              │    （分拣格在此不释放——货未装箱前一直占用，见 SHIPPING(6)）   │
  * ├──────────────┼──────────────────────────────────────────────────────────────┤
  * │ PACKING(5)   │ （无额外动作，复核通过即可进入打包）                           │
  * ├──────────────┼──────────────────────────────────────────────────────────────┤
  * │ SHIPPING(6)  │ 1. 所有箱子完成打包（packages.status 全部 = 2）后自动触发     │
- * │              │    由 finishPackage 在事务内校验并推进                        │
+ * │              │    由 packDoneWithinTransaction 在事务内校验并推进            │
+ * │              │ 2. 释放分拣格（releaseByTask，若曾分配过）                    │
+ * │              │ 3. 清空 warehouse_tasks.sorting_bin_id / sorting_bin_code    │
  * ├──────────────┼──────────────────────────────────────────────────────────────┤
  * │ SHIPPED(7)   │ 1. FIFO 扣减库存容器（moveStock / deductFromContainers）      │
  * │              │ 2. 释放容器锁（unlockContainersByTask）                       │
@@ -113,9 +114,9 @@ const WT_ON_ENTER_ACTIONS = Object.freeze({
   [WT_STATUS.PENDING]:   [],  // 待拣货：创建后直接跳过，无额外动作（当前系统以 PICKING 创建）
   [WT_STATUS.PICKING]:   ['assignSortingBin', 'clearOrphanedContainerLocks'],
   [WT_STATUS.SORTING]:   ['syncSaleOrderStatus:3'],
-  [WT_STATUS.CHECKING]:  ['releaseSortingBin', 'clearSortingBinFields', 'updateSortedQty'],
+  [WT_STATUS.CHECKING]:  ['updateSortedQty'],
   [WT_STATUS.PACKING]:   [],
-  [WT_STATUS.SHIPPING]:  ['autoTriggerByFinishPackage'],
+  [WT_STATUS.SHIPPING]:  ['autoTriggerByPackDone', 'releaseSortingBin', 'clearSortingBinFields'],
   [WT_STATUS.SHIPPED]:   ['deductStock', 'unlockContainers', 'syncSaleOrderStatus:4', 'createPaymentRecord', 'setShippedAt'],
   [WT_STATUS.CANCELLED]: ['recordContainerReturnLocations', 'cancelPackages', 'cancelPackagePrintJobs', 'unlockContainers', 'releaseSortingBin', 'clearSortingBinFields', 'syncSaleOrderStatus:5'],
 })

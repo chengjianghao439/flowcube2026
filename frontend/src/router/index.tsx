@@ -31,6 +31,7 @@ const PdaSortPage    = lazy(() => import('@/pages/pda/sort'))
 const PdaSaleReturnListPage = lazy(() => import('@/pages/pda/sale-return'))
 const PdaSaleReturnReceivePage = lazy(() => import('@/pages/pda/sale-return-receive'))
 const PdaSaleReturnPutawayPage = lazy(() => import('@/pages/pda/sale-return-putaway'))
+const PdaCancelReturnPage = lazy(() => import('@/pages/pda/cancel-return'))
 const PdaTransferPage    = lazy(() => import('@/pages/pda/transfer'))
 const PdaTransferOutPage = lazy(() => import('@/pages/pda/transfer-out'))
 const PdaTransferInPage  = lazy(() => import('@/pages/pda/transfer-in'))
@@ -143,6 +144,8 @@ export default function AppRouter() {
               <Route path="ship/:id" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
               <Route path="ship" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
               <Route path="sort" element={<PdaRoutePermission title="分拣作业" required={[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT]}><PdaSortPage /></PdaRoutePermission>} />
+              <Route path="cancel-return" element={<PdaRoutePermission title="取消清理" required={[PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW]}><PdaCancelReturnPage /></PdaRoutePermission>} />
+              <Route path="cancel-return/:id" element={<PdaRoutePermission title="取消归还" required={[PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN]}><PdaCancelReturnPage /></PdaRoutePermission>} />
               <Route path="transfer" element={<PdaRoutePermission title="调拨执行" required={[PERMISSIONS.TRANSFER_ORDER_VIEW]}><PdaTransferPage /></PdaRoutePermission>} />
               <Route path="transfer-out/:id" element={<PdaRoutePermission title="调出仓扫码出库" required={[PERMISSIONS.TRANSFER_ORDER_VIEW, PERMISSIONS.TRANSFER_ORDER_EXECUTE]}><PdaTransferOutPage /></PdaRoutePermission>} />
               <Route path="transfer-in/:id" element={<PdaRoutePermission title="调入仓扫码入库" required={[PERMISSIONS.TRANSFER_ORDER_VIEW, PERMISSIONS.TRANSFER_ORDER_EXECUTE]}><PdaTransferInPage /></PdaRoutePermission>} />

@@ -66,9 +66,12 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, task_type, status, sale_order_id',
+    columns: 'id, task_no, task_type, status, sale_order_id, cancel_requested_at',
     entityName: '仓库任务',
   })
+  if (taskRow.cancel_requested_at) {
+    throw new AppError('该任务正在取消收尾中，不可继续拣货', 409)
+  }
   const isPurchaseReturn = taskRow.task_type === 'purchase_return'
 
   // 采购退货：拣货完成后直接跳到待出库（跳过排序/复核/打包）
@@ -196,6 +199,9 @@ async function _fetchContainersForProducts(productIds, warehouseId, taskId) {
  */
 async function getPickSuggestions(taskId) {
   const task = await findById(taskId)
+  if (task.cancelRequestedAt) {
+    throw new AppError('该任务正在取消收尾中，不可继续拣货', 409)
+  }
   assertWarehouseTaskAction('viewPickWork', task.status)
 
   const pendingItems = task.items.filter(i => i.requiredQty - i.pickedQty > 0)
@@ -228,6 +234,9 @@ async function getPickSuggestions(taskId) {
  */
 async function getPickRoute(taskId) {
   const task = await findById(taskId)
+  if (task.cancelRequestedAt) {
+    throw new AppError('该任务正在取消收尾中，不可继续拣货', 409)
+  }
   assertWarehouseTaskAction('viewPickWork', task.status)
 
   const pendingItems = task.items.filter(i => i.requiredQty - i.pickedQty > 0)

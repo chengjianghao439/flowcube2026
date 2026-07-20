@@ -4,6 +4,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const {
   logSideEffectFailure,
   assertTaskCheckScanClosure,
@@ -18,7 +19,7 @@ async function packDoneWithinTransaction(conn, id, { requestKey, userId } = {}) 
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status',
+    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code',
     entityName: '仓库任务',
   })
   const rule = assertWarehouseTaskAction('packDone', taskRow.status)
@@ -41,6 +42,14 @@ async function packDoneWithinTransaction(conn, id, { requestKey, userId } = {}) 
     toStatus: rule.toStatus,
     entityName: '仓库任务',
   })
+
+  // 分拣格在这里才真正释放：货物未装箱前一直占用分拣格，打包完成货物才算真正
+  // 离开格子（见 warehouse-tasks.sort.js 里对应的说明）。
+  if (taskRow.sorting_bin_id) {
+    await sortingBinSvc.releaseByTask(conn, id)
+    await conn.query('UPDATE warehouse_tasks SET sorting_bin_id=NULL, sorting_bin_code=NULL WHERE id=?', [id])
+  }
+
   try {
     await recordEvent(conn, {
       taskId: id, taskNo: taskRow.task_no,
@@ -48,11 +57,18 @@ async function packDoneWithinTransaction(conn, id, { requestKey, userId } = {}) 
       fromStatus: taskRow.status,
       toStatus: rule.toStatus,
     })
+    if (taskRow.sorting_bin_id) {
+      await recordEvent(conn, {
+        taskId: id, taskNo: taskRow.task_no,
+        eventType: WT_EVENT.SORTING_BIN_RELEASED,
+        detail: { binCode: taskRow.sorting_bin_code },
+      })
+    }
   } catch (eventErr) {
-    logSideEffectFailure('仓库任务事件写入失败：打包完成事件', eventErr, {
+    logSideEffectFailure('仓库任务事件写入失败：打包完成/分拣格释放事件', eventErr, {
       taskId: id,
       taskNo: taskRow.task_no,
-      eventType: WT_EVENT.PACK_DONE,
+      eventTypes: [WT_EVENT.PACK_DONE, WT_EVENT.SORTING_BIN_RELEASED],
     })
   }
   const payload = { taskId: id, status: rule.toStatus }

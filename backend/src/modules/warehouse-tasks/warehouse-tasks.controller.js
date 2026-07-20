@@ -9,6 +9,8 @@ const myTaskSkuSummary = async(req,res,next)=>{ try{return successResponse(res,a
 const stats = async(req,res,next)=>{ try{return successResponse(res,await svc.getTaskStats(),'查询成功')}catch(e){next(e)} }
 const pickSuggestions = async(req,res,next)=>{ try{return successResponse(res,await svc.getPickSuggestions(+req.params.id))}catch(e){next(e)} }
 const pickRoute = async(req,res,next)=>{ try{return successResponse(res,await svc.getPickRoute(+req.params.id))}catch(e){next(e)} }
+const pendingCancelReturns = async(req,res,next)=>{ try{const{warehouseId}=req.query;return successResponse(res,await svc.listPendingCancelReturns(warehouseId?+warehouseId:null),'查询成功')}catch(e){next(e)} }
+const cancelReturnDetail = async(req,res,next)=>{ try{return successResponse(res,await svc.getCancelReturnDetail(+req.params.id),'查询成功')}catch(e){next(e)} }
 const detail = async(req,res,next)=>{ try{return successResponse(res,await svc.findById(+req.params.id),'查询成功')}catch(e){next(e)} }
 const assign = async(req,res,next)=>{ try{await svc.assign(+req.params.id,req.body);return successResponse(res,null,'已分配')}catch(e){next(e)} }
 const startPicking = async(req,res,next)=>{ try{await svc.startPicking(+req.params.id);return successResponse(res,null,'备货已开始')}catch(e){next(e)} }
@@ -24,4 +26,4 @@ const manualCheckDeprecated = (req,res)=>res.status(410).json({success:false,cod
 const cancel = async(req,res,next)=>{ try{await svc.cancel(+req.params.id,{operator:getOperatorFromRequest(req)});return successResponse(res,null,'任务已取消')}catch(e){next(e)} }
 const updatePriority = async(req,res,next)=>{ try{await svc.updatePriority(+req.params.id,req.body.priority);return successResponse(res,null,'优先级已更新')}catch(e){next(e)} }
 
-module.exports = { list, myTasks, myTaskSkuSummary, stats, pickSuggestions, pickRoute, detail, assign, startPicking, pickedQtyDeprecated, readyToShip, findEvents, debugSnapshot, sortDone, checkDone, packDone, ship, manualCheckDeprecated, cancel, updatePriority }
+module.exports = { list, myTasks, myTaskSkuSummary, stats, pickSuggestions, pickRoute, pendingCancelReturns, cancelReturnDetail, detail, assign, startPicking, pickedQtyDeprecated, readyToShip, findEvents, debugSnapshot, sortDone, checkDone, packDone, ship, manualCheckDeprecated, cancel, updatePriority }

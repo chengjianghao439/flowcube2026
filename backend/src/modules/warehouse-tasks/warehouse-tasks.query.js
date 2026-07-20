@@ -103,6 +103,7 @@ async function findMyTasks() {
     FROM warehouse_tasks wt
     LEFT JOIN warehouse_task_items wti ON wti.task_id = wt.id
     WHERE wt.status IN (${WT_STATUS_PICK_POOL.join(',')}) AND wt.deleted_at IS NULL
+      AND wt.cancel_requested_at IS NULL
     GROUP BY wt.id
     ORDER BY wt.priority ASC, wt.created_at DESC
     LIMIT 50
@@ -130,6 +131,7 @@ async function findMyTaskSkuSummary() {
     INNER JOIN warehouse_task_items wti ON wti.task_id = wt.id
     WHERE wt.status IN (${WT_STATUS_PICK_POOL.join(',')})
       AND wt.deleted_at IS NULL
+      AND wt.cancel_requested_at IS NULL
     GROUP BY wti.product_id, wti.product_code, wti.product_name, wti.unit
     ORDER BY
       CASE WHEN COALESCE(SUM(wti.picked_qty),0) >= COALESCE(SUM(wti.required_qty),0) THEN 1 ELSE 0 END ASC,

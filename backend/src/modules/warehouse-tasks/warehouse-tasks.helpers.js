@@ -187,6 +187,7 @@ const fmt = r => ({
   remark: r.remark,
   sortingBinId:   r.sorting_bin_id   || null,
   sortingBinCode: r.sorting_bin_code || null,
+  cancelRequestedAt: r.cancel_requested_at || null,
   shippedAt: r.shipped_at,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
