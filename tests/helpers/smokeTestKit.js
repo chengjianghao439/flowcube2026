@@ -179,15 +179,18 @@ async function prepareSmokeContext() {
   }
   const customer = customers[0]
 
-  // printers 表无 deleted_at 列；type 为 TINYINT（1=标签）
-  let [printers] = await pool.query("SELECT id, code, name, client_id FROM printers LIMIT 1")
-  if (!printers.length) {
-    const [r] = await pool.query("INSERT INTO printers (code, name, client_id, type, status) VALUES ('SMOKE-PRN', 'Smoke打印机', 'smoke-client-01', 1, 1)")
-    printers = [{ id: r.insertId, code: 'SMOKE-PRN', name: 'Smoke打印机', client_id: 'smoke-client-01' }]
-  }
-  const printer = printers[0]
+  // printers 表无 deleted_at 列；type 为 TINYINT（1=标签）。
+  // 不能像其它 fixture 一样 `LIMIT 1` 瞎捞——开发库里可能已有真实注册但未绑定
+  // client_id 的打印机（排序更靠前），claim-client 需要 clientId，捞错行会导致测试永远失败。
+  // 用固定 code 做幂等 upsert，保证拿到的一定是这台专属 smoke 打印机。
+  await pool.query(
+    `INSERT INTO printers (code, name, client_id, type, status)
+       VALUES ('SMOKE-PRN', 'Smoke打印机', 'smoke-client-01', 1, 1)
+     ON DUPLICATE KEY UPDATE client_id = VALUES(client_id), status = 1`,
+  )
+  const [[printer]] = await pool.query("SELECT id, code, name, client_id FROM printers WHERE code = 'SMOKE-PRN'")
   // 测试用例以 camelCase 读取 clientId（DB 列为 client_id）
-  printer.clientId = printer.clientId ?? printer.client_id
+  printer.clientId = printer.client_id
 
   // 4. 确保测试角色和用户
   const bcrypt = require(path.resolve(__dirname, '../../backend/node_modules/bcryptjs'))
