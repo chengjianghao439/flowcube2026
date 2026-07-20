@@ -55,10 +55,17 @@ const cancelReturnScanSchema = z.object({
   locationId:  z.number().int().positive(),
 })
 
+const cancelReturnBoxScanSchema = z.object({
+  taskId:    z.number().int().positive(),
+  packageId: z.number().int().positive(),
+  barcode:   z.string().min(1),
+})
+
 // 扫码记录（仅 PDA）
 router.post('/',             requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionOptional(), vBody(createSchema), ctrl.create)
 router.post('/check',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionOptional(), vBody(checkScanSchema), ctrl.createCheckScan)
 router.post('/cancel-return', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN), pdaOnly, pdaSessionOptional(), vBody(cancelReturnScanSchema), ctrl.createCancelReturnScan)
+router.post('/cancel-return/box', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN), pdaOnly, pdaSessionOptional(), vBody(cancelReturnBoxScanSchema), ctrl.createCancelReturnBoxScan)
 router.get('/task/:taskId',  requirePermission(PERMISSIONS.SCAN_LOG_VIEW), ctrl.listByTask)
 
 // 错误日志

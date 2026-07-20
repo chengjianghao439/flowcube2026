@@ -61,10 +61,13 @@ async function createPackage(taskId, remark = null) {
   try {
     await conn.beginTransaction()
     const [[task]] = await conn.query(
-      'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
     if (!task) throw new AppError('任务不存在', 404)
+    if (task.cancel_requested_at) {
+      throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
+    }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('仅「待打包」任务可创建装箱', 400)
     }
@@ -137,10 +140,13 @@ async function addItem(packageId, { productCode, qty }) {
     if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无法继续添加商品', 400)
 
     const [[task]] = await conn.query(
-      'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [pkg.warehouse_task_id],
     )
     if (!task) throw new AppError('任务不存在', 404)
+    if (task.cancel_requested_at) {
+      throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
+    }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('任务不在待打包状态，禁止装箱', 400)
     }
@@ -247,10 +253,13 @@ async function removeItem(packageId, { itemId, qty }) {
     if (Number(pkg.status) !== 1) throw new AppError('该箱已完成或已作废，无法移除商品', 400)
 
     const [[task]] = await conn.query(
-      'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [pkg.warehouse_task_id],
     )
     if (!task) throw new AppError('任务不存在', 404)
+    if (task.cancel_requested_at) {
+      throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
+    }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('任务不在待打包状态，禁止移除商品', 400)
     }
@@ -307,10 +316,13 @@ async function voidPackage(packageId) {
     if (Number(pkg.status) === 2) throw new AppError('该箱已完成，无法作废', 400)
 
     const [[task]] = await conn.query(
-      'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [pkg.warehouse_task_id],
     )
     if (!task) throw new AppError('任务不存在', 404)
+    if (task.cancel_requested_at) {
+      throw new AppError('该任务正在取消收尾中，请通过「取消清理」流程处理该箱子', 409)
+    }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('任务不在待打包状态，禁止作废箱子', 400)
     }
@@ -384,11 +396,14 @@ async function markPackageFinishedWithinTransaction(conn, packageId) {
   const alreadyFinished = Number(pkg.status) === 2
 
   const [[taskRow]] = await conn.query(
-    'SELECT id, status, task_no FROM warehouse_tasks WHERE id=? FOR UPDATE',
+    'SELECT id, status, task_no, cancel_requested_at FROM warehouse_tasks WHERE id=? FOR UPDATE',
     [pkg.warehouse_task_id],
   )
   if (!taskRow || Number(taskRow.status) !== WT_STATUS.PACKING) {
     throw new AppError('任务不在待打包状态，禁止完成装箱', 400)
+  }
+  if (taskRow.cancel_requested_at) {
+    throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
   }
 
   if (!alreadyFinished) {

@@ -2,7 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { lockContainer, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
-const { checkDoneWithinTransaction, finalizeCancelWithinTransaction } = require('../warehouse-tasks/warehouse-tasks.service')
+const { checkDoneWithinTransaction, checkCancelReturnClearedAndFinalize } = require('../warehouse-tasks/warehouse-tasks.service')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
 const { logSideEffectFailure: logWtSideEffectFailure } = require('../warehouse-tasks/warehouse-tasks.helpers')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
@@ -219,12 +219,15 @@ async function createCheckScanLog({
     }
 
     const [[taskRow]] = await conn.query(
-      'SELECT id, status, warehouse_id FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
     if (Number(taskRow.status) !== WT_STATUS.CHECKING) {
       throw new AppError('仅「待复核」任务允许复核扫码', 400)
+    }
+    if (taskRow.cancel_requested_at) {
+      throw new AppError('该任务正在取消收尾中，不可继续复核', 409)
     }
 
     const [[c]] = await conn.query(
@@ -442,22 +445,106 @@ async function createCancelReturnScanLog({
       })
     }
 
-    const [[{ remaining }]] = await conn.query(
-      'SELECT COUNT(*) AS remaining FROM inventory_containers WHERE locked_by_task_id = ? FOR UPDATE',
-      [taskId],
-    )
-    let finalized = false
-    if (Number(remaining) === 0) {
-      await finalizeCancelWithinTransaction(conn, taskId)
-      finalized = true
-    }
+    const { containersRemaining, packagesRemaining, finalized } =
+      await checkCancelReturnClearedAndFinalize(conn, taskId)
 
-    const payload = { id: ins.insertId, remaining: Number(remaining), finalized }
+    const payload = {
+      id: ins.insertId,
+      remaining: containersRemaining,
+      packagesRemaining,
+      finalized,
+    }
     await completeOperationRequest(conn, requestState, {
       data: payload,
-      message: finalized ? '归还完成，任务已取消' : `已归还，剩余 ${remaining} 个容器待归还`,
+      message: finalized
+        ? '归还完成，任务已取消'
+        : `已归还，剩余 ${containersRemaining} 个容器 / ${packagesRemaining} 个箱子待处理`,
       resourceType: 'scan_log',
       resourceId: ins.insertId,
+    })
+    await conn.commit()
+    return payload
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
+/**
+ * 取消逆向归还 — 已完成箱子拆箱确认扫码：仓库侧只负责扫码核对"这个箱子已经处理"，
+ * 不需要第二步扫库位——箱子拆散后里面的商品对应的容器仍然完整未动（装箱本身不影响
+ * 容器库存数字，见 warehouse-tasks.cancel-return.js 顶部说明），走的是同一批容器
+ * 各自的原库位归还流程，箱子本身没有一个"应该被扫回哪里"的答案。
+ */
+async function createCancelReturnBoxScanLog({
+  taskId, packageId, barcode, operatorId, operatorName, requestKey,
+}) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'scan-log.cancel-return-box',
+      userId: operatorId || null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
+
+    const [[taskRow]] = await conn.query(
+      'SELECT id, task_no, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      [taskId],
+    )
+    if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    if (!taskRow.cancel_requested_at) {
+      throw new AppError('该任务未处于取消收尾状态，无需拆箱确认', 400)
+    }
+
+    const [[pkg]] = await conn.query(
+      'SELECT id, barcode, status FROM packages WHERE id = ? AND warehouse_task_id = ? FOR UPDATE',
+      [packageId, taskId],
+    )
+    if (!pkg) throw new AppError('该箱子不属于当前任务的待拆箱清单', 400)
+    if (String(pkg.barcode) !== String(barcode)) throw new AppError('箱子条码不匹配', 400)
+    if (Number(pkg.status) !== 2) throw new AppError('该箱不在待拆箱确认状态（可能已处理）', 409)
+
+    await conn.query('UPDATE packages SET status = 3 WHERE id = ?', [pkg.id])
+    await conn.query(
+      `UPDATE print_jobs SET status = 3, error_message = '仓库任务取消收尾：箱子已拆箱作废'
+       WHERE ref_type = 'package' AND ref_id = ? AND status IN (0, 1)`,
+      [pkg.id],
+    )
+
+    try {
+      await recordEvent(conn, {
+        taskId: Number(taskId), taskNo: taskRow.task_no,
+        eventType: WT_EVENT.CANCEL_RETURN_BOX_SCAN,
+        operatorId: operatorId || null,
+        operatorName: operatorName || null,
+        detail: { packageId: pkg.id, barcode: pkg.barcode },
+      })
+    } catch (eventErr) {
+      logWtSideEffectFailure('仓库任务事件写入失败：取消归还拆箱确认事件', eventErr, {
+        taskId: Number(taskId),
+        taskNo: taskRow.task_no,
+        eventType: WT_EVENT.CANCEL_RETURN_BOX_SCAN,
+      })
+    }
+
+    const { containersRemaining, packagesRemaining, finalized } =
+      await checkCancelReturnClearedAndFinalize(conn, taskId)
+
+    const payload = { id: pkg.id, containersRemaining, packagesRemaining, finalized }
+    await completeOperationRequest(conn, requestState, {
+      data: payload,
+      message: finalized
+        ? '拆箱确认完成，任务已取消'
+        : `已确认拆箱，剩余 ${containersRemaining} 个容器 / ${packagesRemaining} 个箱子待处理`,
+      resourceType: 'scan_log',
+      resourceId: pkg.id,
     })
     await conn.commit()
     return payload
@@ -687,6 +774,7 @@ module.exports = {
   createScanLog,
   createCheckScanLog,
   createCancelReturnScanLog,
+  createCancelReturnBoxScanLog,
   findByTask,
   logScanError,
   logUndo,

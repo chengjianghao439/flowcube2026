@@ -23,9 +23,12 @@ async function checkDoneWithinTransaction(conn, id) {
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status',
+    columns: 'id, task_no, status, cancel_requested_at',
     entityName: '仓库任务',
   })
+  if (taskRow.cancel_requested_at) {
+    throw new AppError('该任务正在取消收尾中，不可继续复核', 409)
+  }
   const rule = assertWarehouseTaskAction('checkDone', taskRow.status)
   if (!isValidTransition(taskRow.status, rule.toStatus)) {
     throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)

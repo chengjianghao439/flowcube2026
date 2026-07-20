@@ -205,7 +205,8 @@ async function cancel(id, options = {}) {
     // 容器会立刻"看起来"可用，可能被派发给别的任务却扑空。这种情况改走逆向
     // 归还流程：逐容器扫码确认放回位置，全部归位后才真正完成取消。
     const needsReverseReturn = lockedContainers.length > 0
-      && [WT_STATUS.PICKING, WT_STATUS.SORTING].includes(Number(taskRow.status))
+      && [WT_STATUS.PICKING, WT_STATUS.SORTING, WT_STATUS.CHECKING, WT_STATUS.PACKING, WT_STATUS.SHIPPING]
+           .includes(Number(taskRow.status))
 
     if (needsReverseReturn) {
       const [casResult] = await conn.query(
@@ -223,6 +224,19 @@ async function cancel(id, options = {}) {
          WHERE task_id = ? AND picked_qty < required_qty`,
         [id],
       )
+      // 打包中(未完成/未打印箱贴)的箱子没有物理实体可供扫码核对，直接由系统作废；
+      // 已完成(已打印箱贴)的箱子才需要仓库人工扫码确认拆箱——两者判断依据见
+      // warehouse-tasks.cancel-return.js 顶部说明。装箱本身不影响容器库存数字
+      // （package_items 与 inventory_containers 无关联），作废箱子不需要任何数量回滚。
+      await conn.query(
+        `UPDATE packages SET status = 3 WHERE warehouse_task_id = ? AND status = 1`,
+        [id],
+      )
+      const [sealedPackages] = await conn.query(
+        `SELECT id, barcode FROM packages WHERE warehouse_task_id = ? AND status = 2`,
+        [id],
+      )
+      const packagesToUnpack = sealedPackages.map(p => ({ packageId: Number(p.id), barcode: p.barcode }))
       if (taskRow.sale_order_id) {
         await releaseByRef(conn, 'sale_order', Number(taskRow.sale_order_id))
         // 销售单业务状态立即变为已取消——不依赖物理归还进度。走 sale.service.cancel()
@@ -246,6 +260,7 @@ async function cancel(id, options = {}) {
             saleOrderId: taskRow.sale_order_id != null ? Number(taskRow.sale_order_id) : null,
             reservationReleased: taskRow.sale_order_id != null,
             containersToReturn,
+            packagesToUnpack,
           },
         })
       } catch (eventErr) {

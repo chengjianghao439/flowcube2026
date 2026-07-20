@@ -52,4 +52,5 @@ module.exports = {
   listPendingCancelReturns: cancelReturn.listPendingCancelReturns,
   getCancelReturnDetail: cancelReturn.getCancelReturnDetail,
   finalizeCancelWithinTransaction: cancelReturn.finalizeCancelWithinTransaction,
+  checkCancelReturnClearedAndFinalize: cancelReturn.checkCancelReturnClearedAndFinalize,
 }

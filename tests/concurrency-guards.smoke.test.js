@@ -510,6 +510,178 @@ async function scenarioCancelReverseReturnConcurrency(log, ctx, adminToken) {
   }
 }
 
+// 把 setupTaskWithLockedContainer 建好的任务从拣货中推进到 stage 指定的阶段：
+// 'checking' → 分拣已完成，任务处于 CHECKING，尚未做复核扫码（本轮 fixture 只有
+//              1 个单位的量，复核扫满就会自动收口进 PACKING，没法卡在"扫过但未完成"
+//              这个中间态，因此测复核阶段的取消要在扫码之前）
+// 'packing'  → 复核扫码已做（自动收口触发 checkDone），任务处于 PACKING，尚未创建任何箱子
+async function advanceTaskToStage(ctx, token, { taskId, itemId, container }, stage) {
+  const ready = await ctx.http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
+  if (!ready.ok) throw new Error(`advanceTaskToStage: ready failed: ${JSON.stringify(ready.data)}`)
+  const sortDone = await ctx.http.put(`/api/warehouse-tasks/${taskId}/sort-done`, { token, headers: ctx.pdaHeaders(), json: {} })
+  if (!sortDone.ok) throw new Error(`advanceTaskToStage: sort-done failed: ${JSON.stringify(sortDone.data)}`)
+  if (stage === 'checking') return
+  // 复核扫码：本轮 fixture 只有 1 个单位，扫满即自动收口进 PACKING（同 createCheckScanLog
+  // 内部的 checkDoneWithinTransaction 自动触发逻辑），不需要再单独调用 check-done 接口。
+  const checkScan = await ctx.http.post('/api/scan-logs/check', {
+    token, headers: ctx.pdaHeaders(),
+    json: { taskId, barcode: container.barcode },
+  })
+  if (!checkScan.ok) throw new Error(`advanceTaskToStage: check scan failed: ${JSON.stringify(checkScan.data)}`)
+}
+
+// 取消逆向归还：待打包(PACKING)阶段——混合"打包中未完成的箱子"与"已完成/已打印箱贴的箱子"
+async function scenarioCancelReverseReturnPacking(log, ctx, adminToken) {
+  log.section('Scenario: 取消逆向归还 — 待打包阶段')
+  const setup = await setupTaskWithLockedContainer(ctx, adminToken)
+  const { taskId, container } = setup
+  await advanceTaskToStage(ctx, adminToken, setup, 'packing')
+
+  const [taskAtPacking] = await dbQuery(ctx.pool, 'SELECT status FROM warehouse_tasks WHERE id=?', [taskId])
+  log.assert('任务已推进到待打包(5)', Number(taskAtPacking.status) === 5, JSON.stringify(taskAtPacking))
+
+  // 未完成的空箱：从未加过商品、从未打印过箱贴，取消时应被系统自动作废，不进入待处理清单
+  const openPkgResp = await ctx.http.post('/api/packages', { token: adminToken, json: { warehouseTaskId: taskId } })
+  const openPkgId = Number(openPkgResp.data?.data?.id)
+
+  // 已完成的箱子：装满、finish（触发箱贴打印任务），取消时需要人工扫码确认拆箱
+  const sealedPkgResp = await ctx.http.post('/api/packages', { token: adminToken, json: { warehouseTaskId: taskId } })
+  const sealedPkgId = Number(sealedPkgResp.data?.data?.id)
+  const sealedPkgBarcode = sealedPkgResp.data?.data?.barcode
+  await ctx.http.post(`/api/packages/${sealedPkgId}/add-item`, {
+    token: adminToken, json: { productCode: ctx.product.code, qty: 1 },
+  })
+  const finishResp = await ctx.http.put(`/api/packages/${sealedPkgId}/finish`, { token: adminToken })
+  log.assert('已完成箱子finish成功（含箱贴打印任务）', finishResp.ok, `status=${finishResp.status}`)
+
+  const cancelResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+  log.assert('待打包阶段取消成功（有容器锁定，走逆向归还分支）', cancelResp.ok, `status=${cancelResp.status}`)
+
+  const [openPkgAfter] = await dbQuery(ctx.pool, 'SELECT status FROM packages WHERE id=?', [openPkgId])
+  log.assert('未完成的空箱已被系统自动作废(3)', Number(openPkgAfter.status) === 3, JSON.stringify(openPkgAfter))
+
+  const [sealedPkgAfter] = await dbQuery(ctx.pool, 'SELECT status FROM packages WHERE id=?', [sealedPkgId])
+  log.assert('已完成的箱子仍保持完成(2)，等待人工拆箱确认', Number(sealedPkgAfter.status) === 2, JSON.stringify(sealedPkgAfter))
+
+  const detailResp = await ctx.http.get(`/api/warehouse-tasks/${taskId}/cancel-return-detail`, { token: adminToken })
+  const detailPkgs = detailResp.data?.data?.packages || []
+  log.assert('待处理清单只包含已完成的箱子（未完成的箱子已自动清零）',
+    detailPkgs.length === 1 && detailPkgs[0].packageId === sealedPkgId, JSON.stringify(detailPkgs))
+
+  // 取消收尾期间，打包相关操作一律应被拒绝
+  const addItemAfterCancel = await ctx.http.post('/api/packages', { token: adminToken, json: { warehouseTaskId: taskId } })
+  log.assert('取消收尾中禁止新建箱子', addItemAfterCancel.status === 409, `status=${addItemAfterCancel.status}`)
+
+  // 容器归还（复用既有流程，未受箱子分支影响）
+  const containerReturn = await ctx.http.post('/api/scan-logs/cancel-return', {
+    token: adminToken, headers: ctx.pdaHeaders(),
+    json: { taskId, containerId: container.id, barcode: container.barcode, locationId: Number(container.location_id) },
+  })
+  log.assert('容器归还成功但任务尚未finalize（箱子还没处理）',
+    containerReturn.ok && containerReturn.data?.data?.finalized === false, JSON.stringify(containerReturn.data?.data))
+
+  // 箱子条码不匹配应被拒绝
+  const wrongBarcode = await ctx.http.post('/api/scan-logs/cancel-return/box', {
+    token: adminToken, headers: ctx.pdaHeaders(),
+    json: { taskId, packageId: sealedPkgId, barcode: 'L999999' },
+  })
+  log.assert('拆箱确认条码不匹配应被拒绝', !wrongBarcode.ok && wrongBarcode.status === 400, `status=${wrongBarcode.status}`)
+
+  const boxScan = await ctx.http.post('/api/scan-logs/cancel-return/box', {
+    token: adminToken, headers: ctx.pdaHeaders(),
+    json: { taskId, packageId: sealedPkgId, barcode: sealedPkgBarcode },
+  })
+  log.assert('拆箱确认成功且finalized=true（最后一项处理完）',
+    boxScan.ok && boxScan.data?.data?.finalized === true, JSON.stringify(boxScan.data?.data))
+
+  const [taskFinal] = await dbQuery(ctx.pool, 'SELECT status, cancel_requested_at FROM warehouse_tasks WHERE id=?', [taskId])
+  log.assert('任务已真正变为已取消(8)', Number(taskFinal.status) === 8 && taskFinal.cancel_requested_at === null, JSON.stringify(taskFinal))
+
+  const [printJobAfter] = await dbQuery(ctx.pool,
+    "SELECT status FROM print_jobs WHERE ref_type='package' AND ref_id=? ORDER BY id DESC LIMIT 1", [sealedPkgId])
+  log.assert('箱子的箱贴打印任务已被取消', Number(printJobAfter.status) === 3, JSON.stringify(printJobAfter))
+}
+
+// 取消逆向归还：待出库(SHIPPING)阶段——打包完成后分拣格已释放，取消仍需正确处理已封箱子 + 拦截出库
+async function scenarioCancelReverseReturnShipping(log, ctx, adminToken) {
+  log.section('Scenario: 取消逆向归还 — 待出库阶段')
+  const setup = await setupTaskWithLockedContainer(ctx, adminToken)
+  const { taskId, container } = setup
+  await advanceTaskToStage(ctx, adminToken, setup, 'packing')
+
+  const pkgResp = await ctx.http.post('/api/packages', { token: adminToken, json: { warehouseTaskId: taskId } })
+  const pkgId = Number(pkgResp.data?.data?.id)
+  const pkgBarcode = pkgResp.data?.data?.barcode
+  await ctx.http.post(`/api/packages/${pkgId}/add-item`, {
+    token: adminToken, json: { productCode: ctx.product.code, qty: 1 },
+  })
+  const finishResp = await ctx.http.put(`/api/packages/${pkgId}/finish`, { token: adminToken })
+  // pack-done 要求箱贴打印任务已收口完成（assertTaskPackagePrintClosure），
+  // 本机没有真机打印客户端在跑，直接用 complete-local 模拟"已打印完成"。
+  const printJobId = Number(finishResp.data?.data?.printJobId)
+  await ctx.http.post(`/api/print-jobs/${printJobId}/complete-local`, { token: adminToken, json: {} })
+
+  const packDoneResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/pack-done`, { token: adminToken, headers: ctx.pdaHeaders() })
+  log.assert('打包完成成功，推进到待出库(6)', packDoneResp.ok, `status=${packDoneResp.status}`)
+
+  const [taskAtShipping] = await dbQuery(ctx.pool, 'SELECT status, sorting_bin_id FROM warehouse_tasks WHERE id=?', [taskId])
+  log.assert('任务已在待出库(6)，分拣格已随打包完成释放', Number(taskAtShipping.status) === 6, JSON.stringify(taskAtShipping))
+
+  const cancelResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+  log.assert('待出库阶段取消成功（走逆向归还分支）', cancelResp.ok, `status=${cancelResp.status}`)
+
+  const shipAfterCancel = await ctx.http.put(`/api/warehouse-tasks/${taskId}/ship`, { token: adminToken, headers: ctx.pdaHeaders() })
+  log.assert('取消收尾中禁止出库', shipAfterCancel.status === 409, `status=${shipAfterCancel.status}`)
+
+  const containerReturn = await ctx.http.post('/api/scan-logs/cancel-return', {
+    token: adminToken, headers: ctx.pdaHeaders(),
+    json: { taskId, containerId: container.id, barcode: container.barcode, locationId: Number(container.location_id) },
+  })
+  log.assert('容器归还成功但任务尚未finalize', containerReturn.ok && containerReturn.data?.data?.finalized === false)
+
+  const boxScan = await ctx.http.post('/api/scan-logs/cancel-return/box', {
+    token: adminToken, headers: ctx.pdaHeaders(),
+    json: { taskId, packageId: pkgId, barcode: pkgBarcode },
+  })
+  log.assert('拆箱确认成功且finalized=true', boxScan.ok && boxScan.data?.data?.finalized === true, JSON.stringify(boxScan.data?.data))
+
+  const [taskFinal] = await dbQuery(ctx.pool, 'SELECT status, sorting_bin_id FROM warehouse_tasks WHERE id=?', [taskId])
+  log.assert('任务已真正变为已取消(8)，分拣格释放逻辑未重复出错', Number(taskFinal.status) === 8, JSON.stringify(taskFinal))
+}
+
+// 取消逆向归还：复核(CHECKING)阶段正向流程守卫——任务进入取消收尾后，复核扫码/复核完成均应被拒绝
+async function scenarioCancelReverseReturnForwardGuards(log, ctx, adminToken) {
+  log.section('Scenario: 取消逆向归还 — 复核阶段正向守卫')
+  const setup = await setupTaskWithLockedContainer(ctx, adminToken)
+  const { taskId, container } = setup
+  await advanceTaskToStage(ctx, adminToken, setup, 'checking')
+
+  const [taskAtChecking] = await dbQuery(ctx.pool, 'SELECT status FROM warehouse_tasks WHERE id=?', [taskId])
+  log.assert('任务处于待复核(4)', Number(taskAtChecking.status) === 4, JSON.stringify(taskAtChecking))
+
+  const cancelResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+  log.assert('复核阶段取消成功（走逆向归还分支）', cancelResp.ok, `status=${cancelResp.status}`)
+
+  const rescanCheck = await ctx.http.post('/api/scan-logs/check', {
+    token: adminToken, headers: ctx.pdaHeaders(),
+    json: { taskId, barcode: container.barcode },
+  })
+  log.assert('取消收尾中的任务，复核扫码应返回409', rescanCheck.status === 409, `status=${rescanCheck.status}`)
+
+  const checkDoneAfterCancel = await ctx.http.put(`/api/warehouse-tasks/${taskId}/check-done`, { token: adminToken, headers: ctx.pdaHeaders() })
+  log.assert('取消收尾中的任务，复核完成应返回409', checkDoneAfterCancel.status === 409, `status=${checkDoneAfterCancel.status}`)
+
+  const detailResp = await ctx.http.get(`/api/warehouse-tasks/${taskId}/cancel-return-detail`, { token: adminToken })
+  log.assert('复核阶段取消无任何箱子待处理', (detailResp.data?.data?.packages || []).length === 0)
+
+  const containerReturn = await ctx.http.post('/api/scan-logs/cancel-return', {
+    token: adminToken, headers: ctx.pdaHeaders(),
+    json: { taskId, containerId: container.id, barcode: container.barcode, locationId: Number(container.location_id) },
+  })
+  log.assert('复核阶段容器归还成功且直接finalize（无箱子需处理）',
+    containerReturn.ok && containerReturn.data?.data?.finalized === true, JSON.stringify(containerReturn.data?.data))
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -529,6 +701,12 @@ async function main() {
       printerId: Number(ctx.printer.id),
       printerCode: ctx.printer.code,
     })
+    await bindPrinter(ctx.pool, {
+      warehouseId: Number(ctx.warehouse.id),
+      printType: 'package_label',
+      printerId: Number(ctx.printer.id),
+      printerCode: ctx.printer.code,
+    })
 
     await scenarioInboundReceiveIdempotent(log, ctx, adminToken)
     await scenarioInboundReceiveNoPrinterStillRecords(log, ctx, adminToken)
@@ -538,6 +716,9 @@ async function main() {
     await scenarioCancelReverseReturnBasics(log, ctx, adminToken)
     await scenarioCancelReverseReturnFinalize(log, ctx, adminToken)
     await scenarioCancelReverseReturnConcurrency(log, ctx, adminToken)
+    await scenarioCancelReverseReturnPacking(log, ctx, adminToken)
+    await scenarioCancelReverseReturnShipping(log, ctx, adminToken)
+    await scenarioCancelReverseReturnForwardGuards(log, ctx, adminToken)
   } finally {
     const summary = log.summary()
     await ctx.close()

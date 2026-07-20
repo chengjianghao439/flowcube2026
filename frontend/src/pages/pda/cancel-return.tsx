@@ -10,7 +10,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getPendingCancelReturnsApi, getCancelReturnDetailApi, submitCancelReturnScanApi,
-  type CancelReturnContainer,
+  submitCancelReturnBoxScanApi,
+  type CancelReturnContainer, type CancelReturnPackage,
 } from '@/api/warehouse-tasks'
 import { payloadClient as apiClient } from '@/api/client'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
@@ -22,6 +23,7 @@ import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
+import { parseBarcode } from '@/utils/barcode'
 
 interface LocationInfo { id: number; code: string }
 
@@ -54,7 +56,7 @@ function CancelReturnListPage() {
                 <p className="text-sm text-muted-foreground mt-0.5">{t.warehouseName}</p>
               </div>
               <span className="shrink-0 rounded-full bg-orange-100 text-orange-700 text-xs font-bold px-2.5 py-1">
-                待归还 {t.containersRemaining}
+                待归还 {t.containersRemaining}{t.packagesRemaining > 0 ? ` · 待拆箱 ${t.packagesRemaining}` : ''}
               </span>
             </div>
           </PdaCard>
@@ -72,6 +74,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   const qc = useQueryClient()
   const [step, setStep] = useState<Step>('scan-container')
   const [target, setTarget] = useState<CancelReturnContainer | null>(null)
+  const [boxTarget, setBoxTarget] = useState<CancelReturnPackage | null>(null)
   const [scanning, setScanning] = useState(false)
   const { flash, ok, err, warn } = usePdaFeedback()
 
@@ -103,6 +106,68 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
       return { effective: false }
     },
   })
+
+  const boxAction = useCriticalPdaAction<{ id: number; containersRemaining: number; packagesRemaining: number; finalized: boolean }>({
+    action: `warehouse.cancel-return-box.${taskId}`,
+    label: '取消归还拆箱确认',
+    onConfirmed: async () => {
+      await qc.invalidateQueries({ queryKey: ['pda-cancel-return-detail', taskId] })
+      await qc.invalidateQueries({ queryKey: ['pda-cancel-returns-pending'] })
+    },
+    resolveServerState: async () => {
+      // 拆箱确认是否生效，看该箱子是否还在待处理清单里即可核实，不需要额外查询接口。
+      const latest = await getCancelReturnDetailApi(taskId).catch(() => null)
+      if (!latest) return { effective: false }
+      const stillPending = latest.packages.some(p => p.packageId === boxTarget?.packageId)
+      if (!stillPending) {
+        return {
+          effective: true,
+          data: {
+            id: 0,
+            containersRemaining: latest.containers.length,
+            packagesRemaining: latest.packages.length,
+            finalized: latest.containers.length === 0 && latest.packages.length === 0,
+          },
+          message: '拆箱确认已生效，箱子已不在待处理清单中。',
+        }
+      }
+      return { effective: false }
+    },
+  })
+
+  async function handleBoxScan(raw: string) {
+    const code = raw.trim()
+    if (!code || !detail) return
+    const found = detail.packages.find(p => p.barcode.toUpperCase() === code.toUpperCase())
+    if (!found) { err('该箱子不属于本任务的待拆箱清单，请确认条码'); return }
+    if (boxAction.submitBlocked) { err(boxAction.blockedReason || '当前不可提交'); return }
+    setBoxTarget(found)
+    setScanning(true)
+    try {
+      const submitted = await boxAction.run(
+        (requestKey) => submitCancelReturnBoxScanApi(taskId, found.packageId, found.barcode, requestKey),
+        { packageId: found.packageId },
+      )
+      if (submitted.kind === 'pending') {
+        warn('网络中断，拆箱确认结果待确认。请先确认结果，再决定是否重扫。')
+        return
+      }
+      const result = submitted.data
+      if (result.finalized) {
+        ok(`✓ 已确认拆箱 ${found.barcode}，任务全部处理完成，已取消`)
+        await qc.invalidateQueries({ queryKey: ['pda-cancel-returns-pending'] })
+        navigate('/pda/cancel-return')
+        return
+      }
+      ok(`✓ 已确认拆箱 ${found.barcode}，剩余 ${result.containersRemaining} 个容器 / ${result.packagesRemaining} 个箱子待处理`)
+      await refetch()
+    } catch (error: unknown) {
+      err(formatPdaErrorMessage((error as { message?: string })?.message, '拆箱确认失败，请重试'))
+    } finally {
+      setScanning(false)
+      setBoxTarget(null)
+    }
+  }
 
   function handleContainerScan(raw: string) {
     const code = raw.trim()
@@ -149,10 +214,13 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   usePdaScanner({
     onScan: (code) => {
       if (scanning) return
-      if (step === 'scan-container') handleContainerScan(code)
-      else void handleLocationScan(code)
+      if (step === 'scan-location') { void handleLocationScan(code); return }
+      // 待归还容器和待拆箱箱子共用同一个扫码入口，按条码类型自动分流：
+      // 箱子条码（L/BOX 前缀）直接确认拆箱，其它一律当容器条码处理。
+      if (parseBarcode(code).type === 'box') { void handleBoxScan(code); return }
+      handleContainerScan(code)
     },
-    enabled: !scanning && !returnAction.submitBlocked && !isLoading,
+    enabled: !scanning && !returnAction.submitBlocked && !boxAction.submitBlocked && !isLoading,
     onDuplicate: () => err('重复扫码，请稍候'),
   })
 
@@ -192,6 +260,25 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
           onClear={() => returnAction.clearPending()}
           onDismissError={() => returnAction.clearError()}
         />
+        <PdaCriticalActionNotice
+          blockedReason={boxAction.blockedReason}
+          pendingRecord={boxAction.pendingRecord}
+          confirming={boxAction.confirming}
+          phase={boxAction.phase}
+          phaseMessage={boxAction.phaseMessage}
+          lastErrorMessage={boxAction.lastErrorMessage}
+          onConfirm={() => {
+            void boxAction.confirmPending().then((status) => {
+              if (!status) return
+              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '服务端仍未确认结果，请稍后再查'))
+              if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '拆箱确认状态还未确认，请稍后再查'))
+              if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次拆箱确认记录；请先刷新确认是否已落账，再决定是否重扫'))
+              if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '拆箱确认失败，请刷新后重试'))
+            })
+          }}
+          onClear={() => boxAction.clearPending()}
+          onDismissError={() => boxAction.clearError()}
+        />
 
         <div className={`rounded-2xl border-2 px-4 py-3 text-center transition-all ${
           scanning ? 'border-yellow-400 bg-yellow-50' :
@@ -199,7 +286,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         }`}>
           <p className="text-sm font-semibold text-foreground">
             {scanning ? '⏳ 处理中…' :
-             step === 'scan-container' ? '扫描待归还容器条码' :
+             step === 'scan-container' ? '扫描待归还容器条码，或待拆箱箱子条码' :
              `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}`}
           </p>
         </div>
@@ -226,7 +313,9 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
 
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还容器（{detail.containers.length}）</p>
-          {detail.containers.length === 0 && <PdaEmptyCard icon="✅" title="已全部归还" description="即将自动完成任务取消" />}
+          {detail.containers.length === 0 && detail.packages.length === 0 && (
+            <PdaEmptyCard icon="✅" title="已全部归还" description="即将自动完成任务取消" />
+          )}
           <div className="space-y-2">
             {detail.containers.map(c => (
               <div key={c.containerId} className="rounded-xl border border-border bg-card p-3 flex items-center justify-between">
@@ -239,6 +328,26 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
             ))}
           </div>
         </div>
+
+        {detail.packages.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待拆箱箱子（{detail.packages.length}）</p>
+            <p className="text-xs text-muted-foreground mb-2">这些箱子已经完成打包并打印过箱贴，需要人工拆箱后扫描箱子条码确认处理</p>
+            <div className="space-y-2">
+              {detail.packages.map(p => (
+                <div key={p.packageId} className="rounded-xl border border-border bg-card p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-mono text-xs font-semibold text-foreground">{p.barcode}</p>
+                    <span className="text-xs text-muted-foreground">{p.items.length} 种商品</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate mt-1">
+                    {p.items.map(i => `${i.productName ?? '—'}×${i.qty}`).join('、') || '（箱内无商品记录）'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

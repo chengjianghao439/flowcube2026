@@ -46,6 +46,21 @@ const createCancelReturnScan = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
+const createCancelReturnBoxScan = async (req, res, next) => {
+  try {
+    const operator = getOperatorFromRequest(req)
+    const data = await svc.createCancelReturnBoxScanLog({
+      taskId: req.body.taskId,
+      packageId: req.body.packageId,
+      barcode: req.body.barcode.trim(),
+      operatorId:   operator.operatorId,
+      operatorName: operator.operatorName,
+      requestKey: extractRequestKey(req),
+    })
+    return successResponse(res, data, data.finalized ? '拆箱确认完成，任务已取消' : '拆箱确认已记录', 201)
+  } catch (e) { next(e) }
+}
+
 const listByTask = async (req, res, next) => {
   try {
     const data = await svc.findByTask(+req.params.taskId)
@@ -93,4 +108,4 @@ const getAnomalyReport = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { create, createCheckScan, createCancelReturnScan, listByTask, logError, logUndo, getStats, getAnomalyReport }
+module.exports = { create, createCheckScan, createCancelReturnScan, createCancelReturnBoxScan, listByTask, logError, logUndo, getStats, getAnomalyReport }

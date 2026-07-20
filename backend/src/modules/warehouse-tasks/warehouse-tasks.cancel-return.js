@@ -13,7 +13,8 @@ async function listPendingCancelReturns(warehouseId) {
   const [rows] = await pool.query(
     `SELECT wt.id, wt.task_no, wt.customer_name, wt.warehouse_id, wt.warehouse_name,
             wt.status, wt.cancel_requested_at,
-            (SELECT COUNT(*) FROM inventory_containers c WHERE c.locked_by_task_id = wt.id) AS containersRemaining
+            (SELECT COUNT(*) FROM inventory_containers c WHERE c.locked_by_task_id = wt.id) AS containersRemaining,
+            (SELECT COUNT(*) FROM packages p WHERE p.warehouse_task_id = wt.id AND p.status = 2) AS packagesRemaining
        FROM warehouse_tasks wt
       WHERE wt.cancel_requested_at IS NOT NULL
         AND wt.deleted_at IS NULL
@@ -30,6 +31,7 @@ async function listPendingCancelReturns(warehouseId) {
     status: Number(r.status),
     cancelRequestedAt: r.cancel_requested_at,
     containersRemaining: Number(r.containersRemaining),
+    packagesRemaining: Number(r.packagesRemaining),
   }))
 }
 
@@ -54,6 +56,26 @@ async function getCancelReturnDetail(taskId) {
       WHERE c.locked_by_task_id = ?`,
     [taskId],
   )
+  // 只有已完成（已打印箱贴、有物理实体）的箱子需要人工扫码确认拆箱；
+  // 打包中的箱子在 cancel() 发起取消收尾时已经被自动作废，不会出现在这里。
+  const [packages] = await pool.query(
+    `SELECT id, barcode, created_at FROM packages
+      WHERE warehouse_task_id = ? AND status = 2
+      ORDER BY created_at ASC`,
+    [taskId],
+  )
+  let itemsByPackage = {}
+  if (packages.length) {
+    const [items] = await pool.query(
+      `SELECT package_id, product_name, unit, qty FROM package_items WHERE package_id IN (?)`,
+      [packages.map(p => p.id)],
+    )
+    itemsByPackage = items.reduce((acc, i) => {
+      const key = Number(i.package_id)
+      ;(acc[key] ??= []).push({ productName: i.product_name || null, unit: i.unit, qty: Number(i.qty) })
+      return acc
+    }, {})
+  }
   return {
     id: Number(taskRow.id),
     taskNo: taskRow.task_no,
@@ -77,6 +99,11 @@ async function getCancelReturnDetail(taskId) {
       level: c.level || null,
       position: c.position || null,
     })),
+    packages: packages.map(p => ({
+      packageId: Number(p.id),
+      barcode: p.barcode,
+      items: itemsByPackage[Number(p.id)] || [],
+    })),
   }
 }
 
@@ -96,8 +123,10 @@ async function finalizeCancelWithinTransaction(conn, taskId) {
   if (taskRow.sorting_bin_id) {
     await sortingBinSvc.releaseByTask(conn, taskId)
   }
+  // 复核/打包都没有真正完成，任务终态是已取消，这些进度量不该再留着，
+  // 避免之后翻看任务历史时被当成"已复核/已打包过"误读。
   await conn.query(
-    `UPDATE warehouse_task_items SET sorted_qty = 0 WHERE task_id = ?`,
+    `UPDATE warehouse_task_items SET sorted_qty = 0, checked_qty = 0 WHERE task_id = ?`,
     [taskId],
   )
   await compareAndSetStatus(conn, {
@@ -130,8 +159,37 @@ async function finalizeCancelWithinTransaction(conn, taskId) {
   }
 }
 
+/**
+ * 逆向归还是否已全部清零：容器归还 + 已完成箱子拆箱确认，两个集合都清零才真正
+ * 完成取消。必须在同一事务内、在容器/箱子扫码写入之后调用；调用方须已持有
+ * warehouse_tasks 该行的事务锁。容器扫码（scan-logs.service.js 的
+ * createCancelReturnScanLog）与箱子扫码（createCancelReturnBoxScanLog）两条
+ * 路径共用本函数，避免各写一份 finalize 触发条件。
+ */
+async function checkCancelReturnClearedAndFinalize(conn, taskId) {
+  const [[{ containersRemaining }]] = await conn.query(
+    'SELECT COUNT(*) AS containersRemaining FROM inventory_containers WHERE locked_by_task_id = ? FOR UPDATE',
+    [taskId],
+  )
+  const [[{ packagesRemaining }]] = await conn.query(
+    'SELECT COUNT(*) AS packagesRemaining FROM packages WHERE warehouse_task_id = ? AND status = 2 FOR UPDATE',
+    [taskId],
+  )
+  let finalized = false
+  if (Number(containersRemaining) === 0 && Number(packagesRemaining) === 0) {
+    await finalizeCancelWithinTransaction(conn, taskId)
+    finalized = true
+  }
+  return {
+    containersRemaining: Number(containersRemaining),
+    packagesRemaining: Number(packagesRemaining),
+    finalized,
+  }
+}
+
 module.exports = {
   listPendingCancelReturns,
   getCancelReturnDetail,
   finalizeCancelWithinTransaction,
+  checkCancelReturnClearedAndFinalize,
 }

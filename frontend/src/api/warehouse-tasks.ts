@@ -241,6 +241,7 @@ export interface PendingCancelReturnTask {
   status: number
   cancelRequestedAt: string
   containersRemaining: number
+  packagesRemaining: number
 }
 
 export const getPendingCancelReturnsApi = () =>
@@ -261,6 +262,18 @@ export interface CancelReturnContainer {
   position: string | null
 }
 
+export interface CancelReturnPackageItem {
+  productName: string | null
+  unit: string
+  qty: number
+}
+
+export interface CancelReturnPackage {
+  packageId: number
+  barcode: string
+  items: CancelReturnPackageItem[]
+}
+
 export interface CancelReturnDetail {
   id: number
   taskNo: string
@@ -270,6 +283,7 @@ export interface CancelReturnDetail {
   warehouseName: string
   customerName: string | null
   containers: CancelReturnContainer[]
+  packages: CancelReturnPackage[]
 }
 
 export const getCancelReturnDetailApi = (taskId: number) =>
@@ -279,9 +293,23 @@ export const getCancelReturnDetailApi = (taskId: number) =>
 export const submitCancelReturnScanApi = (
   taskId: number, containerId: number, barcode: string, locationId: number, requestKey?: string,
 ) =>
-  client.post<{ id: number; remaining: number; finalized: boolean }>(
+  client.post<{ id: number; remaining: number; packagesRemaining: number; finalized: boolean }>(
     '/scan-logs/cancel-return',
     { taskId, containerId, barcode, locationId },
+    {
+      headers: requestKey
+        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+        : { 'X-Client': 'pda' },
+    },
+  )
+
+/** 拆箱确认扫码：扫已完成箱子的条码，确认已拆箱处理（无需第二步选位置） */
+export const submitCancelReturnBoxScanApi = (
+  taskId: number, packageId: number, barcode: string, requestKey?: string,
+) =>
+  client.post<{ id: number; containersRemaining: number; packagesRemaining: number; finalized: boolean }>(
+    '/scan-logs/cancel-return/box',
+    { taskId, packageId, barcode },
     {
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
