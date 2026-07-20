@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import { usePurchaseList, useConfirmPurchase, useCancelPurchase, useClosePurchase, usePurchaseDetail } from '@/hooks/usePurchase'
+import { usePurchaseList, useConfirmPurchase, useWithdrawConfirmPurchase, useCancelPurchase, useClosePurchase, usePurchaseDetail } from '@/hooks/usePurchase'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
 import { mapPurchaseOrderToPrint } from '@/lib/orderPrintData'
 import { downloadExport } from '@/lib/exportDownload'
@@ -87,6 +87,7 @@ export default function PurchasePage() {
     endDate: endDate || undefined,
   })
   const confirm = useConfirmPurchase()
+  const withdrawConfirm = useWithdrawConfirmPurchase()
   const cancel = useCancelPurchase()
   const close = useClosePurchase()
   const { data: printDetail } = usePurchaseDetail(printId || 0)
@@ -221,8 +222,17 @@ export default function PurchasePage() {
                 onClick: () => setPrintId(r.id),
               },
               ...(r.status === 2 ? [{
-                label: '关闭剩余',
+                label: '撤回确认',
                 separatorBefore: true,
+                onClick: () => openConfirm(
+                  '撤回确认',
+                  '撤回后采购单将恢复为草稿状态，可重新编辑后再次提交。若已创建收货订单，需先取消收货订单后才能撤回确认。',
+                  () => withdrawConfirm.mutate(r.id, { onSettled: closeConfirm }),
+                  { confirmText: '撤回确认' },
+                ),
+                disabled: withdrawConfirm.isPending,
+              }, {
+                label: '关闭剩余',
                 onClick: () => openConfirm(
                   '关闭剩余结案',
                   '将按已入库的实收数量结算应付并完成采购单，未收部分作罢。仅在相关收货订单均已全部上架完成时可用。',
@@ -303,7 +313,7 @@ export default function PurchasePage() {
         description={confirmState.description}
         variant={confirmState.variant ?? 'default'}
         confirmText={confirmState.confirmText ?? '确认'}
-        loading={close.isPending || cancel.isPending}
+        loading={withdrawConfirm.isPending || close.isPending || cancel.isPending}
         onConfirm={confirmState.onConfirm}
         onCancel={closeConfirm}
       />

@@ -10,6 +10,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { getInboundTasksApi } from '@/api/inbound-tasks'
 import {
   INBOUND_STATUS_LABEL,
@@ -18,7 +19,7 @@ import {
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { useWorkspaceStore } from '@/store/workspaceStore'
-import { useSubmitInboundTask } from '@/hooks/useInboundTasks'
+import { useSubmitInboundTask, useCancelInbound, useVoidInboundReceipt, useCloseReceivingInbound } from '@/hooks/useInboundTasks'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -43,6 +44,30 @@ export default function InboundTasksPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [queryOpen, setQueryOpen] = useState(false)
   const submitMut = useSubmitInboundTask()
+  const cancelMut = useCancelInbound()
+  const voidReceiptMut = useVoidInboundReceipt()
+  const closeReceivingMut = useCloseReceivingInbound()
+
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean
+    title: string
+    description: string
+    confirmText?: string
+    variant?: 'default' | 'destructive'
+    onConfirm: () => void
+  }>({ open: false, title: '', description: '', onConfirm: () => {} })
+
+  function openConfirm(
+    title: string,
+    description: string,
+    onConfirm: () => void,
+    options?: { confirmText?: string; variant?: 'default' | 'destructive' },
+  ) {
+    setConfirmState({ open: true, title, description, onConfirm, confirmText: options?.confirmText, variant: options?.variant })
+  }
+  function closeConfirm() {
+    setConfirmState(s => ({ ...s, open: false }))
+  }
 
   // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
   const keyword       = readStringParam(searchParams, 'keyword')
@@ -257,6 +282,60 @@ export default function InboundTasksPage() {
             navigate(path)
           },
         })
+        if (task.status === 2) {
+          items.push({
+            label: '结束收货',
+            separatorBefore: true,
+            onClick: () => openConfirm(
+              '结束收货',
+              '供应商短装、不再继续收货时使用：立即结束收货，剩余未收数量作罢，进入待上架，可正常上架已收到的部分。此操作不可撤回。',
+              () => closeReceivingMut.mutate(task.id, {
+                onSuccess: () => { toast.success('已结束收货，进入待上架'); closeConfirm() },
+                onError: (error: unknown) => toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '结束收货失败'),
+              }),
+              { confirmText: '确定结束收货' },
+            ),
+            disabled: closeReceivingMut.isPending,
+          })
+        }
+        if (task.status === 2 || task.status === 3 || task.status === 4) {
+          items.push({
+            label: '撤回收货',
+            destructive: true,
+            separatorBefore: task.status !== 2,
+            onClick: () => openConfirm(
+              '撤回收货',
+              '整单撤回后：已扫码的库存条码将全部作废、恢复为待收货状态，可重新扫码收货。'
+              + (task.status === 4
+                ? '该收货订单已完成并自动结算过应付，撤回后会一并反冲已入库的库存、冲销已生成的应付记录，若关联采购单因此已自动完成，也会退回"已提交"状态。'
+                : '')
+              + '若容器已被后续拣货、拆分或调拨等动作动过，将无法撤回，请改用库存盘点处理差异。此操作请谨慎确认。',
+              () => voidReceiptMut.mutate(task.id, {
+                onSuccess: () => { toast.success('已撤回收货，恢复为待收货'); closeConfirm() },
+                onError: (error: unknown) => toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '撤回失败'),
+              }),
+              { confirmText: '确定撤回', variant: 'destructive' },
+            ),
+            disabled: voidReceiptMut.isPending,
+          })
+        }
+        if (task.status === 1) {
+          items.push({
+            label: '取消',
+            destructive: true,
+            separatorBefore: true,
+            onClick: () => openConfirm(
+              '取消收货订单',
+              '确定取消该收货订单？取消后需重新创建收货订单才能继续收货。',
+              () => cancelMut.mutate(task.id, {
+                onSuccess: () => { toast.success('已取消'); closeConfirm() },
+                onError: () => toast.error('取消失败'),
+              }),
+              { confirmText: '确定取消', variant: 'destructive' },
+            ),
+            disabled: cancelMut.isPending,
+          })
+        }
         return (
           <div className="flex justify-end whitespace-nowrap">
             <TableActionsMenu
@@ -325,6 +404,17 @@ export default function InboundTasksPage() {
         initial={initialQuery}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
+      />
+
+      <ConfirmDialog
+        open={confirmState.open}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant ?? 'default'}
+        confirmText={confirmState.confirmText ?? '确认'}
+        loading={cancelMut.isPending || voidReceiptMut.isPending || closeReceivingMut.isPending}
+        onConfirm={confirmState.onConfirm}
+        onCancel={closeConfirm}
       />
     </div>
   )
