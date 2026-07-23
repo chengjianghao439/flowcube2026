@@ -8,6 +8,7 @@ const ship = require('./warehouse-tasks.ship')
 const closures = require('./warehouse-tasks.helpers')
 const cancelReturn = require('./warehouse-tasks.cancel-return')
 const adjust = require('./warehouse-tasks.adjust')
+const shortage = require('./warehouse-tasks.shortage')
 
 module.exports = {
   findAll: query.findAll,
@@ -54,6 +55,11 @@ module.exports = {
   getCancelReturnDetail: cancelReturn.getCancelReturnDetail,
   finalizeCancelWithinTransaction: cancelReturn.finalizeCancelWithinTransaction,
   checkCancelReturnClearedAndFinalize: cancelReturn.checkCancelReturnClearedAndFinalize,
+
+  reportShortage: shortage.reportShortage,
+  listShortagesByTask: shortage.listByTask,
+  listPendingShortages: shortage.listPending,
+  resolveShortage: shortage.resolveShortage,
 
   listPendingAdjustments: adjust.listPendingAdjustments,
   getAdjustmentDetail: adjust.getAdjustmentDetail,

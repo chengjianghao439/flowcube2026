@@ -201,6 +201,10 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   const [submitting, setSubmitting] = useState(false)
   // 超收比例过高时要求"再点一次同一按钮"二次确认；换商品或改数量后自动失效，不能被沿用到别的提交上
   const [overReceiveArmed, setOverReceiveArmed] = useState<{ productId: number; qty: number } | null>(null)
+  // 错货防护：扫码选中的商品视为已核对（记录原始扫码值供后端兜底比对）；
+  // 手动点选的商品提交前给一次"未核对"警示（armed 二次点击放行，兼容商品无条码的场景）
+  const [scanVerified, setScanVerified] = useState<{ productId: number; barcode: string } | null>(null)
+  const [noScanArmed, setNoScanArmed] = useState<number | null>(null)
   const receiveAction = useCriticalPdaAction<{
     containers?: Array<{ containerId: number }>
     printJobIds?: number[]
@@ -250,6 +254,9 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   function selectProduct(productId: number) {
     setSelectedProductId(productId)
     resetBoxes(1)
+    // 切换商品即重置核对状态（扫码选中路径会在 handleScan 里重新置位）
+    setScanVerified(null)
+    setNoScanArmed(null)
   }
 
   function handleScan(raw: string) {
@@ -270,7 +277,8 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     }
 
     selectProduct(match.productId)
-    ok(`已选中 ${match.productName}`)
+    setScanVerified({ productId: match.productId, barcode: raw.trim() })
+    ok(`已选中 ${match.productName}（已扫码核对）`)
   }
 
   function submitReceive() {
@@ -307,6 +315,14 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       warn(`超收比例达 ${Math.round(overRatio * 100)}%（应到 ${orderedQty}，将超收至 ${activeProduct.receivedQty + totalQty}），再次点击"打印并登记"确认提交`)
       return
     }
+
+    // 错货防护：手动点选（未扫码核对）的商品，第一次提交给警示，再次点击放行
+    const scanOk = scanVerified?.productId === activeProduct.productId
+    if (!scanOk && noScanArmed !== activeProduct.productId) {
+      setNoScanArmed(activeProduct.productId)
+      warn('该商品未经扫码核对，建议扫描实物商品条码确认；确认实物无误可再次点击直接提交')
+      return
+    }
     if (!needsConfirm && totalQty > activeProduct.remainingQty) {
       warn(`超出待收数量 ${activeProduct.remainingQty}，将按超收 ${totalQty - activeProduct.remainingQty} 记录`)
     } else if (totalQty < activeProduct.remainingQty) {
@@ -321,6 +337,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           productId: activeProduct.productId,
           packages: normalizedBoxes.map(box => ({ qty: box.qty })),
           confirmOverReceive: needsConfirm || undefined,
+          scannedBarcode: scanOk ? scanVerified?.barcode : undefined,
         }, requestKey).then((res) => res!),
       { productId: activeProduct.productId, expectedReceivedQty },
     ).then((result) => {

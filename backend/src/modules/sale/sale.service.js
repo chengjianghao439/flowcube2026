@@ -25,6 +25,7 @@ const fmt = row => ({
     : null,
   warehouseTaskCancelRequestedAt: row.warehouse_task_cancel_requested_at || null,
   warehouseTaskAdjustmentRequestedAt: row.warehouse_task_adjustment_requested_at || null,
+  warehouseTaskShortageReportedAt: row.warehouse_task_shortage_reported_at || null,
   carrierId:row.carrier_id||null,
   carrier: row.carrier_name || row.carrier || null,   // 优先承运商表名称，回退文本字段
   freightType:row.freight_type||null,
@@ -47,7 +48,8 @@ const warehouseTaskProjection = `
   wt_by_id.task_no AS warehouse_task_no,
   wt_by_id.status AS warehouse_task_status,
   wt_by_id.cancel_requested_at AS warehouse_task_cancel_requested_at,
-  wt_by_id.adjustment_requested_at AS warehouse_task_adjustment_requested_at
+  wt_by_id.adjustment_requested_at AS warehouse_task_adjustment_requested_at,
+  wt_by_id.shortage_reported_at AS warehouse_task_shortage_reported_at
 `
 
 const genOrderNo = conn => generateDailyCode(conn, 'SO', 'sale_orders', 'order_no')

@@ -5,6 +5,7 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { pdaSessionOptional } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
+const { putawaySuggestionHandler } = require('./inbound-tasks.suggestion')
 
 const router = Router()
 
@@ -39,6 +40,7 @@ const receiveSchema = z.union([
     productId: z.number().int().positive('商品无效'),
     qty:       z.number().positive('本包数量必须大于 0'),
     confirmOverReceive: z.boolean().optional(),
+    scannedBarcode: z.string().trim().min(1).optional(),
   }),
   z.object({
     productId: z.number().int().positive('商品无效'),
@@ -48,6 +50,7 @@ const receiveSchema = z.union([
       }),
     ).min(1, '请至少填写一箱数量'),
     confirmOverReceive: z.boolean().optional(),
+    scannedBarcode: z.string().trim().min(1).optional(),
   }),
   z
     .object({
@@ -77,6 +80,9 @@ const receiveSchema = z.union([
 const putawaySchema = z.object({
   containerId: z.number().int().positive('请选择容器'),
   locationId:  z.number().int().positive('请选择库位'),
+  // 定向上架偏离留痕：PDA 扫到非推荐库位并确认后带上，仅记录事件不拦截
+  deviatedFromSuggestion: z.boolean().optional(),
+  suggestedLocationCode: z.string().trim().max(50).optional(),
 })
 
 const reprintSchema = z.object({
@@ -103,6 +109,7 @@ router.get('/:id',           requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), 
 router.post('/:id/submit',   requirePermission(PERMISSIONS.INBOUND_ORDER_SUBMIT), ctrl.submit)
 router.post('/:id/reprint',  requirePermission(PERMISSIONS.INBOUND_PRINT_REPRINT), vBody(reprintSchema), ctrl.reprint)
 router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaSessionOptional(), pdaOnly, vBody(receiveSchema), ctrl.receive)
+router.get('/:id/putaway-suggestion', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), putawaySuggestionHandler)
 router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaSessionOptional(), pdaOnly, vBody(putawaySchema), ctrl.putaway)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.cancel)
 router.post('/:id/void-receipt', requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.voidReceipt)

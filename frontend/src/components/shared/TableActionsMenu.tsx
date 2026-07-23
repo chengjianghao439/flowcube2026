@@ -21,7 +21,7 @@ export interface TableActionItem {
 interface TableActionsMenuProps {
   primaryLabel: string
   onPrimaryClick: () => void
-  primaryVariant?: 'default' | 'outline'
+  primaryVariant?: 'default' | 'outline' | 'destructive'
   primaryDisabled?: boolean
   items: TableActionItem[]
 }
@@ -38,7 +38,9 @@ export default function TableActionsMenu({
     'px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
     primaryVariant === 'outline'
       ? 'bg-transparent text-foreground hover:bg-muted'
-      : 'bg-primary text-primary-foreground hover:bg-primary/90',
+      : primaryVariant === 'destructive'
+        ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+        : 'bg-primary text-primary-foreground hover:bg-primary/90',
   )
 
   if (items.length === 0) {

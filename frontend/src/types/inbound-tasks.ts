@@ -156,6 +156,8 @@ export interface ReceiveParams {
     qty: number
   }>
   confirmOverReceive?: boolean
+  /** 错货防护：扫码核对通过时带上原始扫码值，后端兜底比对商品条码/编码 */
+  scannedBarcode?: string
 }
 
 export interface ReceivePackageResult {
@@ -178,6 +180,9 @@ export interface ReceivePackageResult {
 export interface PutawayParams {
   containerId: number
   locationId: number
+  /** 定向上架偏离留痕：扫到非推荐库位并确认后带上 */
+  deviatedFromSuggestion?: boolean
+  suggestedLocationCode?: string
 }
 
 export interface InboundContainerRow {

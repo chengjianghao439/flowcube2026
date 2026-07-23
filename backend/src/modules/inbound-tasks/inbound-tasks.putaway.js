@@ -67,7 +67,7 @@ async function tryFinishTask(conn, taskId) {
   await settlePurchaseOnAudit(conn, taskId)
 }
 
-async function putaway(taskId, { containerId, locationId }, operator, { requestKey, pdaWarehouseId } = {}) {
+async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion, suggestedLocationCode }, operator, { requestKey, pdaWarehouseId } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -190,13 +190,16 @@ async function putaway(taskId, { containerId, locationId }, operator, { requestK
       taskId,
       'putaway_recorded',
       '完成上架',
-      `库存条码 ${c.barcode} 已上架到货架 ${loc.code}`,
+      deviatedFromSuggestion
+        ? `库存条码 ${c.barcode} 已上架到货架 ${loc.code}（偏离推荐库位${suggestedLocationCode ? ` ${suggestedLocationCode}` : ''}）`
+        : `库存条码 ${c.barcode} 已上架到货架 ${loc.code}`,
       operator,
       {
         containerId,
         barcode: c.barcode,
         locationId,
         locationCode: loc.code,
+        ...(deviatedFromSuggestion ? { deviatedFromSuggestion: true, suggestedLocationCode: suggestedLocationCode || null } : {}),
       },
     )
 

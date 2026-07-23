@@ -408,3 +408,42 @@ export const confirmAdjustmentContainerReturnApi = (returnId: number, targetLoca
         : { 'X-Client': 'pda' },
     },
   )
+
+// ── 拣货缺货上报 ─────────────────────────────────────────────────────────────
+
+export interface TaskShortage {
+  id: number
+  taskId: number
+  taskNo: string
+  saleOrderId: number | null
+  saleOrderNo?: string | null
+  productId: number
+  productName: string
+  missingQty: number
+  reason: string | null
+  status: 1 | 2 | 3
+  statusName: string
+  reportedByName: string | null
+  resolvedByName: string | null
+  resolvedAt: string | null
+  createdAt: string
+}
+
+/** PDA 上报缺货：现场拣不出时登记缺口，任务挂起等待 ERP 处理 */
+export const reportShortageApi = (taskId: number, data: { productId: number; missingQty: number; reason?: string }, requestKey?: string) =>
+  client.post<{ shortageId: number; productName: string; missingQty: number }>(
+    `/warehouse-tasks/${taskId}/report-shortage`,
+    data,
+    {
+      headers: requestKey
+        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+        : { 'X-Client': 'pda' },
+    },
+  )
+
+export const getTaskShortagesApi = (taskId: number) =>
+  client.get<TaskShortage[]>(`/warehouse-tasks/${taskId}/shortages`)
+
+/** ERP 处理缺货上报：adjustToPicked=按实拣改单（减掉缺口量） / dismiss=驳回（线下已补货） */
+export const resolveShortageApi = (shortageId: number, action: 'adjustToPicked' | 'dismiss') =>
+  client.post<{ shortageId: number; action: string }>(`/warehouse-tasks/shortages/${shortageId}/resolve`, { action })

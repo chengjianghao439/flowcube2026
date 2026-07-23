@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { SaleOrder } from '@/types/sale'
+import ShortageResolveDialog from './ShortageResolveDialog'
 
 interface SaleRowActionsProps {
   row: SaleOrder
@@ -23,6 +25,8 @@ export function SaleRowActions({
   // 已发往仓库执行（有关联仓库任务）且没有取消/改单挂起中时，才允许修改订单——
   // 与详情页 canAdjust 的判断口径一致（sale/form/index.tsx）。
   const canAdjust = !!row.taskId && !row.warehouseTaskCancelRequestedAt && !row.warehouseTaskAdjustmentRequestedAt
+  const hasShortage = !!row.warehouseTaskShortageReportedAt
+  const [shortageOpen, setShortageOpen] = useState(false)
 
   if (row.status === 1) {
     return (
@@ -56,15 +60,19 @@ export function SaleRowActions({
 
   if (row.status === 3) {
     return (
+      <>
       <TableActionsMenu
-        primaryLabel="查看"
-        onPrimaryClick={onViewTask}
-        primaryVariant="outline"
+        primaryLabel={hasShortage ? '缺货处理' : '查看'}
+        onPrimaryClick={hasShortage ? () => setShortageOpen(true) : onViewTask}
+        primaryVariant={hasShortage ? 'destructive' : 'outline'}
         items={[
+          ...(hasShortage ? [{ label: '查看任务', onClick: onViewTask }] : []),
           ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: anyPending }] : []),
-          { label: '取消订单', onClick: () => onAsk('取消订单', '将同步取消关联仓库任务并释放锁定资源，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending, separatorBefore: canAdjust },
+          { label: '取消订单', onClick: () => onAsk('取消订单', '将同步取消关联仓库任务并释放锁定资源，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending, separatorBefore: canAdjust || hasShortage },
         ]}
       />
+      <ShortageResolveDialog open={shortageOpen} onClose={() => setShortageOpen(false)} taskId={row.taskId ?? null} taskNo={row.taskNo} />
+      </>
     )
   }
 

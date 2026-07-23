@@ -53,9 +53,9 @@ function PutawayRunner({ taskId }: { taskId: number }) {
           await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
           await qc.invalidateQueries({ queryKey: ['inbound-tasks'] })
         },
-        submitPutaway: async ({ taskId: nextTaskId, containerId, locationId }) => {
+        submitPutaway: async ({ taskId: nextTaskId, containerId, locationId, deviatedFromSuggestion, suggestedLocationCode }) => {
           const result = await putawayAction.run(
-            (requestKey) => putawayInboundApi(nextTaskId, { containerId, locationId }, requestKey).then(() => undefined),
+            (requestKey) => putawayInboundApi(nextTaskId, { containerId, locationId, deviatedFromSuggestion, suggestedLocationCode }, requestKey).then(() => undefined),
             { containerId },
           )
           if (result.kind === 'pending') {

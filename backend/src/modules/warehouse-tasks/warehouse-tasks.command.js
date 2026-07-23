@@ -177,6 +177,9 @@ async function cancel(id, options = {}) {
       throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
     }
 
+    // 任务取消时自动关闭未处理的缺货上报，避免留下永远无人处理的挂起项
+    await require('./warehouse-tasks.shortage').dismissOpenShortagesForTask(conn, id)
+
     // 解锁/清理前先查询所有被锁容器及其库位——用于判断分流路径，也用于归还指引
     const [lockedContainers] = await conn.query(
       `SELECT c.id, c.barcode, c.container_type,

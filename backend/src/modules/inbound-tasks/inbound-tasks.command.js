@@ -229,7 +229,7 @@ async function submit(taskId, operator) {
 const OVER_RECEIVE_CONFIRM_RATIO = 0.2
 
 async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } = {}) {
-  const { productId, qty, packages: rawPackages, confirmOverReceive } = payload
+  const { productId, qty, packages: rawPackages, confirmOverReceive, scannedBarcode } = payload
   const productIdN = Number(productId)
   const packages = Array.isArray(rawPackages) && rawPackages.length
     ? rawPackages
@@ -243,6 +243,24 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
   if (!Number.isFinite(productIdN) || productIdN <= 0) throw new AppError('请选择有效商品', 400)
   if (!normalizedPackages.length) throw new AppError('请至少填写一箱数量', 400)
   if (normalizedPackages.some(pkg => !Number.isFinite(pkg.qty) || pkg.qty <= 0)) throw new AppError('箱数量必须大于 0', 400)
+
+  // 错货防护：PDA 端做过商品条码核对时会带上 scannedBarcode，后端兜底再验一次
+  // （防止绕过前端直接调 API 用错误条码入账）。扫码值匹配商品条码或商品编码任一即可；
+  // 未传则不校验（商品可能未维护条码，前端有"未核对二次确认"闸门兜底）。
+  if (scannedBarcode) {
+    const [[productRow]] = await pool.query(
+      'SELECT barcode, code FROM product_items WHERE id=? AND deleted_at IS NULL',
+      [productIdN],
+    )
+    if (!productRow) throw new AppError('商品不存在', 404)
+    const scanned = String(scannedBarcode).trim().toUpperCase()
+    const candidates = [productRow.barcode, productRow.code]
+      .map(v => String(v || '').trim().toUpperCase())
+      .filter(Boolean)
+    if (candidates.length && !candidates.includes(scanned)) {
+      throw new AppError('扫描的商品条码与所选商品不符，请核对实物后重试', 400)
+    }
+  }
 
   const conn = await pool.getConnection()
   let result = {

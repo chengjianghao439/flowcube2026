@@ -68,6 +68,7 @@ export interface SaleOrder {
   warehouseTaskCancelRequestedAt?: string | null
   /** 非空表示有改单正在等待仓库确认（拆箱/归还库位），确认完成前不能推进拣货/分拣/复核/打包/出库 */
   warehouseTaskAdjustmentRequestedAt?: string | null
+  warehouseTaskShortageReportedAt?: string | null
   saleDate?: string
   totalAmount: number
   remark?: string

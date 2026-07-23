@@ -75,6 +75,8 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {
   if (taskRow.adjustment_requested_at) {
     throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
   }
+  // 缺货上报未处理时禁止拣货完成——等待 ERP 端按实拣改单或驳回
+  await require('./warehouse-tasks.shortage').assertNoOpenShortage(conn, id)
   const isPurchaseReturn = taskRow.task_type === 'purchase_return'
 
   // 采购退货：拣货完成后直接跳到待出库（跳过排序/复核/打包）
