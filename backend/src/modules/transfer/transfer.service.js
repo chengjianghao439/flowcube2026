@@ -394,7 +394,10 @@ async function forceCloseInTransit(id, operator, { reason } = {}) {
       'UPDATE inventory_containers SET status = ?, transfer_order_id = NULL WHERE transfer_order_id = ? AND status = ?',
       [CONTAINER_STATUS.VOID, id, CONTAINER_STATUS.PENDING_PUTAWAY],
     )
-    await compareAndSetStatus(conn, { table: 'transfer_orders', id, fromStatus: 3, toStatus: 4, entityName: '调拨单' })
+    await compareAndSetStatus(conn, {
+      table: 'transfer_orders', id, fromStatus: 3, toStatus: 4, entityName: '调拨单',
+      extraSet: { closed_reason: 'force_close' },
+    })
     await recordTransferEvent(conn, {
       transferOrderId: Number(id),
       orderNo: orderRow.order_no,

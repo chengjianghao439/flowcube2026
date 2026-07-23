@@ -70,6 +70,11 @@ function ProductCard({ item, onScan, scanning }: {
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-foreground truncate">{item.productName}</p>
             <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
+            {(item.articleNumber || item.spec || item.color) && (
+              <p className="text-xs text-muted-foreground truncate">
+                {[item.articleNumber, item.spec, item.color].filter(Boolean).join(' / ')}
+              </p>
+            )}
           </div>
           {done
             ? <Badge className="bg-green-100 text-green-700 border-green-200 shrink-0 ml-2">✓ 完成</Badge>

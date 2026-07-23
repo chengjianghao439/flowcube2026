@@ -19,6 +19,9 @@ export interface WarehouseTaskItem {
   productCode: string
   productName: string
   unit: string
+  articleNumber?: string | null
+  spec?: string | null
+  color?: string | null
   requiredQty: number
   pickedQty: number
 }

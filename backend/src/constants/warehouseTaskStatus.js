@@ -132,8 +132,9 @@ const WT_ON_ENTER_ACTIONS = Object.freeze({
  * ├──────────────┼──────────────────────────────────────────────────────────────┤
  * │ PENDING(1)   │ （无，startPicking 直接推进）                                 │
  * ├──────────────┼──────────────────────────────────────────────────────────────┤
- * │ PICKING(2)   │ （无前置操作，readyToShip 直接推进）                           │
- * │              │  注：picked_qty 校验由前端负责，后端不做强制验证               │
+ * │ PICKING(2)   │ 1. assertTaskPickScanClosure 后端强校验（warehouse-tasks.     │
+ * │              │    helpers.js）：picked_qty 必须等于 required_qty，且扫码流水  │
+ * │              │    合计与明细一致、锁定容器与扫码容器一致，不满足拒绝推进       │
  * ├──────────────┼──────────────────────────────────────────────────────────────┤
  * │ SORTING(3)   │ 1. 校验所有 item 的 sorted_qty >= picked_qty                  │
  * │              │    （sortTask 内部查询 warehouse_task_items）                 │
@@ -164,7 +165,7 @@ const WT_ON_ENTER_ACTIONS = Object.freeze({
  */
 const WT_ON_EXIT_ACTIONS = Object.freeze({
   [WT_STATUS.PENDING]:   [],
-  [WT_STATUS.PICKING]:   [],  // picked_qty 由前端校验
+  [WT_STATUS.PICKING]:   ['assertTaskPickScanClosure'],  // 后端强校验拣货闭合（数量+扫码流水+容器锁三重核对）
   [WT_STATUS.SORTING]:   ['validateSortedQty'],           // 不满足则中止推进
   [WT_STATUS.CHECKING]:  ['updateCheckedQty', 'validateCheckedQty'],  // 不满足则中止推进
   [WT_STATUS.PACKING]:   ['validatePackageHasItems', 'validateAllPackagesDone'],  // 不满足则中止推进

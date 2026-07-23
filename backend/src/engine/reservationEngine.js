@@ -11,7 +11,17 @@
  */
 
 const AppError = require('../utils/AppError')
+const logger = require('../utils/logger')
 const { getAvailableStockForDecision } = require('./containerEngine')
+
+/**
+ * 收敛截断留痕：reserved 的 GREATEST/LEAST 兜底是防负数扩散的正确手段，
+ * 但真的触发即意味着上游存在预占记录与 reserved 计数漂移，必须留下告警痕迹
+ * 供监控抓取，不允许静默自愈（否则漂移根因永远无人知晓）。
+ */
+function logReservedClamp(context, detail) {
+  logger.error(`[GUARD] reserved 收敛截断：${context}`, null, detail, 'StockClampGuard')
+}
 
 /**
  * 预占库存
@@ -73,7 +83,18 @@ async function releaseByRef(conn, refType, refId) {
   if (!rows.length) return   // 无有效预占，可能未曾确认过
 
   for (const r of rows) {
-    // 减少 reserved（使用 GREATEST 保证不低于 0）
+    // 减少 reserved（使用 GREATEST 保证不低于 0；截断即告警，见 logReservedClamp）
+    const [[stockRow]] = await conn.query(
+      'SELECT reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
+      [r.product_id, r.warehouse_id]
+    )
+    const curReserved = Number(stockRow?.reserved ?? 0)
+    if (curReserved < Number(r.qty)) {
+      logReservedClamp('释放预占时 reserved 小于预占记录量', {
+        refType, refId, productId: r.product_id, warehouseId: r.warehouse_id,
+        releaseQty: Number(r.qty), reserved: curReserved,
+      })
+    }
     await conn.query(
       'UPDATE inventory_stock SET reserved = GREATEST(0, reserved - ?) WHERE product_id=? AND warehouse_id=?',
       [Number(r.qty), r.product_id, r.warehouse_id]
@@ -140,6 +161,16 @@ async function partialReleaseByProduct(conn, { refType, refId, productId, wareho
 
   const released = Number(qty) - remaining
   if (released > 0) {
+    const [[stockRow]] = await conn.query(
+      'SELECT reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
+      [productId, warehouseId],
+    )
+    const curReserved = Number(stockRow?.reserved ?? 0)
+    if (curReserved < released) {
+      logReservedClamp('部分释放预占时 reserved 小于待释放量', {
+        refType, refId, productId, warehouseId, releaseQty: released, reserved: curReserved,
+      })
+    }
     await conn.query(
       'UPDATE inventory_stock SET reserved = GREATEST(0, reserved - ?) WHERE product_id=? AND warehouse_id=?',
       [released, productId, warehouseId],

@@ -13,5 +13,6 @@ router.get('/:id',           requirePermission(PERMISSIONS.STOCKCHECK_VIEW), ctr
 router.post('/',             requirePermission(PERMISSIONS.STOCKCHECK_CREATE), vBody(createSchema), ctrl.create)
 router.put('/:id/items',     requirePermission(PERMISSIONS.STOCKCHECK_UPDATE), vBody(updateSchema),  ctrl.update)
 router.post('/:id/submit',   requirePermission(PERMISSIONS.STOCKCHECK_SUBMIT), ctrl.submit)
+router.post('/:id/items/:itemId/refresh', requirePermission(PERMISSIONS.STOCKCHECK_UPDATE), ctrl.refreshItem)
 router.post('/:id/cancel',   requirePermission(PERMISSIONS.STOCKCHECK_CANCEL), ctrl.cancel)
 module.exports = router

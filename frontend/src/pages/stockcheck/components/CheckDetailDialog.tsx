@@ -5,7 +5,7 @@ import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { useCheckDetail, useUpdateCheckItems, useSubmitCheck, useCancelCheck } from '@/hooks/useStockCheck'
+import { useCheckDetail, useUpdateCheckItems, useSubmitCheck, useRefreshCheckItem, useCancelCheck } from '@/hooks/useStockCheck'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import type { CheckItem } from '@/types/stockcheck'
 
@@ -15,6 +15,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   const { data: check, isLoading } = useCheckDetail(checkId||0)
   const updateItems = useUpdateCheckItems()
   const submit = useSubmitCheck()
+  const refreshItem = useRefreshCheckItem()
   const cancel = useCancelCheck()
   const [actuals, setActuals] = useState<Record<number, string>>({})
   const [submitConfirm, setSubmitConfirm] = useState(false)
@@ -122,6 +123,14 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     }
   }
 
+  // 盘点期间该商品发生过出入库时（提交会被后端 409 拦截），刷新该行账面数并要求重盘
+  const handleRefreshItem = async (itemId: number) => {
+    if (!check || refreshItem.isPending) return
+    const data = await refreshItem.mutateAsync({ id: check.id, itemId })
+    setActuals(prev => ({ ...prev, [itemId]: '' }))
+    toast.success(`「${data.productName}」账面已刷新为 ${data.bookQty}，请重新盘点该商品`)
+  }
+
   const handleCancel = async () => {
     if(!check || cancelLocked || cancel.isPending) return
     try {
@@ -159,7 +168,8 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                 <div className="col-span-1">单位</div>
                 <div className="col-span-2">账面数量</div>
                 <div className="col-span-2">实盘数量</div>
-                <div className="col-span-2">差异</div>
+                <div className="col-span-1">差异</div>
+                <div className="col-span-1"></div>
               </div>
               {check.items?.map((item: CheckItem)=>{
                 const actualRaw = actuals[item.id]
@@ -190,8 +200,20 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                         <span className="text-sm block">{item.actualQty??'-'}</span>
                       )}
                     </div>
-                    <div className={`col-span-2 text-sm font-medium ${diff!=null&&diff>0?'text-green-600':diff!=null&&diff<0?'text-red-600':''}`}>
+                    <div className={`col-span-1 text-sm font-medium ${diff!=null&&diff>0?'text-green-600':diff!=null&&diff<0?'text-red-600':''}`}>
                       {diff!=null ? (diff>0?'+':'')+diff.toFixed(2) : '-'}
+                    </div>
+                    <div className="col-span-1">
+                      {check.status===1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground"
+                          title="盘点期间该商品发生过出入库时，刷新账面数并重盘"
+                          onClick={() => handleRefreshItem(item.id)}
+                          disabled={refreshItem.isPending}
+                        >刷新账面</Button>
+                      )}
                     </div>
                   </div>
                 )

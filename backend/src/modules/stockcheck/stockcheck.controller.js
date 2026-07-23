@@ -7,4 +7,5 @@ const create  = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);
 const update  = async(req,res,next)=>{ try{await svc.updateItems(+req.params.id,req.body.items);return successResponse(res,null,'保存成功')}catch(e){next(e)} }
 const submit  = async(req,res,next)=>{ try{await svc.submit(+req.params.id,getOperatorFromRequest(req));return successResponse(res,null,'盘点已提交，库存已同步调整')}catch(e){next(e)} }
 const cancel  = async(req,res,next)=>{ try{await svc.cancel(+req.params.id);return successResponse(res,null,'已取消')}catch(e){next(e)} }
-module.exports = { list, detail, create, update, submit, cancel }
+const refreshItem = async(req,res,next)=>{ try{const data=await svc.refreshItem(+req.params.id,+req.params.itemId);return successResponse(res,data,'账面数已刷新，请重新盘点该商品')}catch(e){next(e)} }
+module.exports = { list, detail, create, update, submit, refreshItem, cancel }

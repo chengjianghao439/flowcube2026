@@ -258,6 +258,7 @@ async function closeRemaining(id, operator) {
     await compareAndSetStatus(conn, {
       table: 'purchase_orders', id,
       fromStatus: rule.from, toStatus: rule.to, entityName: '采购单',
+      extraSet: { closed_reason: 'short_close' },
     })
     await conn.commit()
   } catch(e){ await conn.rollback(); throw e }

@@ -109,6 +109,22 @@ async function updateItems(id, items) {
   }
 }
 
+/**
+ * 读取单商品当前账面数（ACTIVE 容器合计，加行锁）。
+ * 提交盘点前用它逐行核对：盘点单创建后若该商品发生过出入库，book_qty 已过期，
+ * 按旧账面算的 diff 会把正常业务变动误记成盘盈/盘亏，必须拦截并要求重盘。
+ */
+async function getCurrentBookQty(conn, productId, warehouseId) {
+  const [[{ qty }]] = await conn.query(
+    `SELECT COALESCE(SUM(remaining_qty), 0) AS qty
+     FROM inventory_containers
+     WHERE product_id=? AND warehouse_id=? AND status=? AND deleted_at IS NULL
+     FOR UPDATE`,
+    [productId, warehouseId, CONTAINER_STATUS.ACTIVE],
+  )
+  return Number(qty)
+}
+
 // 提交盘点，批量调整库存
 async function submit(id, operator) {
   const conn = await pool.getConnection()
@@ -126,6 +142,7 @@ async function submit(id, operator) {
         productId:r.product_id,
         productName:r.product_name,
         unit:r.unit,
+        bookQty:Number(r.book_qty),
         actualQty:r.actual_qty!=null?Number(r.actual_qty):null,
         diffQty:r.diff_qty!=null?Number(r.diff_qty):null,
       })),
@@ -133,6 +150,22 @@ async function submit(id, operator) {
     const unfilled = check.items.filter(i=>i.actualQty===null)
     if(unfilled.length) throw new AppError(`还有 ${unfilled.length} 条明细未填写实盘数量`,400)
     check.items.forEach(item => { item.actualQty = assertValidActualQty(item.actualQty) })
+
+    // 先整单校验再调整：任何一行账面已漂移都不动库存，把漂移行一次性列全，
+    // 避免"调到一半才报错"给现场造成部分行已生效的错觉（事务虽会回滚，但报错要完整）。
+    const staleLines = []
+    for (const item of check.items) {
+      const currentBookQty = await getCurrentBookQty(conn, item.productId, check.warehouseId)
+      if (currentBookQty !== item.bookQty) {
+        staleLines.push(`「${item.productName}」账面 ${item.bookQty}→${currentBookQty}`)
+      }
+    }
+    if (staleLines.length) {
+      throw new AppError(
+        `以下商品在盘点期间发生过出入库，账面数已变化，请刷新账面并重盘后再提交：${staleLines.join('；')}`,
+        409,
+      )
+    }
     for (const item of check.items) {
       if (item.diffQty === 0) continue
 
@@ -184,6 +217,34 @@ async function submit(id, operator) {
   finally { conn.release() }
 }
 
+// 刷新单行账面数：盘点期间该商品发生过出入库时，把 book_qty 重置为当前账面，
+// 并清空实盘/差异（实盘数是基于旧库存状态点的实物计数，账面变了必须重数）。
+async function refreshItem(id, itemId) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, columns: 'id, warehouse_id, status', entityName: '盘点单' })
+    assertStatusAction('stockcheck', 'edit', checkRow.status)
+    const [[item]] = await conn.query(
+      'SELECT id, product_id, product_name FROM inventory_check_items WHERE id=? AND check_id=?',
+      [itemId, id],
+    )
+    if (!item) throw new AppError('盘点明细不存在', 404)
+    const currentBookQty = await getCurrentBookQty(conn, item.product_id, Number(checkRow.warehouse_id))
+    await conn.query(
+      'UPDATE inventory_check_items SET book_qty=?, actual_qty=NULL, diff_qty=NULL WHERE id=?',
+      [currentBookQty, item.id],
+    )
+    await conn.commit()
+    return { itemId: Number(item.id), productName: item.product_name, bookQty: currentBookQty }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
 async function cancel(id) {
   const conn = await pool.getConnection()
   try {
@@ -206,4 +267,4 @@ async function cancel(id) {
   }
 }
 
-module.exports = { findAll, findById, create, updateItems, submit, cancel }
+module.exports = { findAll, findById, create, updateItems, submit, refreshItem, cancel }

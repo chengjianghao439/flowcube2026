@@ -100,6 +100,7 @@ async function voidReceipt(taskId, operator) {
         audited_at: null,
         audited_by: null,
         audited_by_name: null,
+        closed_reason: null,
       },
     })
     // submitted_at 有意保留不重置：PDA 端只看 submitted_at 是否已设置就允许收货
@@ -126,6 +127,7 @@ async function voidReceipt(taskId, operator) {
           fromStatus: reopenRule.from,
           toStatus: reopenRule.to,
           entityName: '采购单',
+          extraSet: { closed_reason: null },
         })
       }
     }

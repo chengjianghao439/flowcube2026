@@ -35,6 +35,9 @@ async function findById(id) {
     productCode: r.product_code,
     productName: r.product_name,
     unit: r.unit,
+    articleNumber: r.article_number || null,
+    spec: r.spec || null,
+    color: r.color || null,
     requiredQty: Number(r.required_qty),
     pickedQty: Number(r.picked_qty),
     checkedQty: Number(r.checked_qty ?? 0),
@@ -211,6 +214,7 @@ async function getDebugSnapshot(taskId) {
 
   const [items] = await pool.query(
     `SELECT id, product_id, product_code, product_name, unit,
+            article_number, spec, color,
             required_qty, picked_qty, sorted_qty, checked_qty
      FROM warehouse_task_items WHERE task_id=? ORDER BY id`,
     [taskId],
@@ -295,6 +299,9 @@ async function getDebugSnapshot(taskId) {
         productCode: i.product_code,
         productName: i.product_name,
         unit: i.unit,
+        articleNumber: i.article_number || null,
+        spec: i.spec || null,
+        color: i.color || null,
         requiredQty: Number(i.required_qty),
         pickedQty: Number(i.picked_qty),
         sortedQty: Number(i.sorted_qty ?? 0),

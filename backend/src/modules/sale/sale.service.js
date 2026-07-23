@@ -521,7 +521,10 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
       const pid = Number(item.productId)
       newQtyByProduct.set(pid, (newQtyByProduct.get(pid) || 0) + Number(item.quantity))
       if (!productMeta.has(pid)) {
-        productMeta.set(pid, { productCode: item.productCode, productName: item.productName, unit: item.unit })
+        productMeta.set(pid, {
+          productCode: item.productCode, productName: item.productName, unit: item.unit,
+          articleNumber: item.articleNumber || null, spec: item.spec || null, color: item.color || null,
+        })
       }
     }
 
@@ -560,6 +563,9 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
         productCode: meta.productCode,
         productName: meta.productName,
         unit: meta.unit,
+        articleNumber: meta.articleNumber || null,
+        spec: meta.spec || null,
+        color: meta.color || null,
         oldRequiredQty: oldQty,
         newRequiredQty: newQty,
       })
@@ -704,6 +710,9 @@ async function ship(id, operator) {
       productCode: r.product_code,
       productName: r.product_name,
       unit: r.unit,
+      articleNumber: r.article_number || null,
+      spec: r.spec || null,
+      color: r.color || null,
       quantity: Number(r.quantity),
     }))
 

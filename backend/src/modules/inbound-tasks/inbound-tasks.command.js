@@ -637,6 +637,7 @@ async function closeReceiving(taskId, operator) {
       fromStatus: rule.from,
       toStatus: rule.to,
       entityName: '收货订单',
+      extraSet: { closed_reason: 'short_close' },
     })
     await appendInboundEvent(
       conn,

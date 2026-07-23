@@ -29,8 +29,8 @@ async function createForSaleOrder({ saleOrderId, saleOrderNo, customerId, custom
   const taskId = r.insertId
   for (const item of items) {
     await useConn.query(
-      `INSERT INTO warehouse_task_items (task_id,product_id,product_code,product_name,unit,required_qty,picked_qty) VALUES (?,?,?,?,?,?,0)`,
-      [taskId, item.productId, item.productCode, item.productName, item.unit, item.quantity]
+      `INSERT INTO warehouse_task_items (task_id,product_id,product_code,product_name,unit,article_number,spec,color,required_qty,picked_qty) VALUES (?,?,?,?,?,?,?,?,?,0)`,
+      [taskId, item.productId, item.productCode, item.productName, item.unit, item.articleNumber || null, item.spec || null, item.color || null, item.quantity]
     )
   }
   // 自动分配分拣格（无空闲格时忽略，不阻断任务创建）
@@ -105,9 +105,9 @@ async function createForPurchaseReturn({ returnId, returnNo, supplierName, wareh
   for (const item of items) {
     await conn.query(
       `INSERT INTO warehouse_task_items
-         (task_id, product_id, product_code, product_name, unit, required_qty, picked_qty)
-       VALUES (?, ?, ?, ?, ?, ?, 0)`,
-      [taskId, item.productId, item.productCode, item.productName, item.unit, item.quantity],
+         (task_id, product_id, product_code, product_name, unit, article_number, spec, color, required_qty, picked_qty)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [taskId, item.productId, item.productCode, item.productName, item.unit, item.articleNumber || null, item.spec || null, item.color || null, item.quantity],
     )
   }
   try {

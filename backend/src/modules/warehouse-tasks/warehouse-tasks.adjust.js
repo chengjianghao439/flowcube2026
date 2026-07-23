@@ -56,6 +56,7 @@ async function reducePickScanLogForContainer(conn, { taskId, itemId, containerId
 async function applyProductDeltaWithinTransaction(conn, {
   taskId, warehouseId, saleOrderId, saleOrderNo,
   productId, productCode, productName, unit,
+  articleNumber = null, spec = null, color = null,
   oldRequiredQty, newRequiredQty,
 }) {
   const delta = Number(newRequiredQty) - Number(oldRequiredQty)
@@ -80,9 +81,9 @@ async function applyProductDeltaWithinTransaction(conn, {
       )
     } else {
       await conn.query(
-        `INSERT INTO warehouse_task_items (task_id,product_id,product_code,product_name,unit,required_qty,picked_qty)
-         VALUES (?,?,?,?,?,?,0)`,
-        [taskId, productId, productCode, productName, unit, delta],
+        `INSERT INTO warehouse_task_items (task_id,product_id,product_code,product_name,unit,article_number,spec,color,required_qty,picked_qty)
+         VALUES (?,?,?,?,?,?,?,?,?,0)`,
+        [taskId, productId, productCode, productName, unit, articleNumber || null, spec || null, color || null, delta],
       )
     }
     return {

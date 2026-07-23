@@ -121,9 +121,12 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
     entityName: '收货订单',
     actions: {
       submit: {
-        from: [1, 2, 3, 4],
-        message: '已取消的收货订单不能提交到 PDA',
-        blocked: { 5: '已取消的收货订单不能提交到 PDA' },
+        from: [1, 2, 3],
+        message: '当前状态的收货订单不能提交到 PDA',
+        blocked: {
+          4: '收货订单已完成，无需再提交到 PDA',
+          5: '已取消的收货订单不能提交到 PDA',
+        },
       },
       receive: {
         from: [1, 2],

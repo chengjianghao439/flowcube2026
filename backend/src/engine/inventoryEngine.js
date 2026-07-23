@@ -26,6 +26,7 @@
  */
 
 const AppError = require('../utils/AppError')
+const logger = require('../utils/logger')
 const { markFulfilled } = require('./reservationEngine')
 const { deductFromContainers, deductFromTaskLockedContainers, syncStockFromContainers } = require('./containerEngine')
 
@@ -131,12 +132,13 @@ async function moveStock(conn, {
 
   // ── 容器出库路径（SALE_OUT + TASK_OUT）──────────────────────────────────────
   if (moveType === MOVE_TYPE.SALE_OUT || moveType === MOVE_TYPE.TASK_OUT) {
-    // 1. 读当前缓存量（before_qty 供日志使用）
+    // 1. 读当前缓存量（before_qty 供日志使用；reserved 供收敛截断探测）
     const [[stockRow]] = await conn.query(
-      'SELECT quantity FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
+      'SELECT quantity, reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
       [productId, warehouseId]
     )
     const before = stockRow ? Number(stockRow.quantity) : 0
+    const reservedBefore = stockRow ? Number(stockRow.reserved) : 0
 
     // 2. 容器扣减：任务出库且指定 lockedByTaskId 时仅扣本任务锁定容器，否则 FIFO
     const absQty = Math.abs(qty)
@@ -149,7 +151,15 @@ async function moveStock(conn, {
     // 3. 汇总容器 → 刷新 inventory_stock 缓存
     const after = await syncStockFromContainers(conn, productId, warehouseId)
 
-    // 4. 减少 reserved；标记预占为已履行
+    // 4. 减少 reserved；标记预占为已履行（截断即告警——出库量大于 reserved 说明预占计数已漂移）
+    if (reservationRefType && reservationRefId && reservedBefore < absQty) {
+      logger.error(
+        '[GUARD] reserved 收敛截断：出库释放预占时 reserved 小于出库量',
+        null,
+        { moveType, productId, warehouseId, refNo, shipQty: absQty, reserved: reservedBefore },
+        'StockClampGuard',
+      )
+    }
     await conn.query(
       'UPDATE inventory_stock SET reserved=GREATEST(0, reserved-?) WHERE product_id=? AND warehouse_id=?',
       [absQty, productId, warehouseId]
@@ -158,7 +168,16 @@ async function moveStock(conn, {
       await markFulfilled(conn, reservationRefType, reservationRefId, productId, warehouseId)
     }
 
-    // 5. 安全收敛：reserved 不得超过 on_hand
+    // 5. 安全收敛：reserved 不得超过 on_hand（同样先探测再收敛，触发即告警）
+    const reservedAfterRelease = Math.max(0, reservedBefore - absQty)
+    if (reservedAfterRelease > after) {
+      logger.error(
+        '[GUARD] reserved 收敛截断：释放后 reserved 仍大于在库量，已压到在库量',
+        null,
+        { moveType, productId, warehouseId, refNo, reserved: reservedAfterRelease, quantity: after },
+        'StockClampGuard',
+      )
+    }
     await conn.query(
       'UPDATE inventory_stock SET reserved=LEAST(reserved, quantity) WHERE product_id=? AND warehouse_id=? AND reserved > quantity',
       [productId, warehouseId]

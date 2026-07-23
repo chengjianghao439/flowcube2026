@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getCheckListApi, getCheckDetailApi, createCheckApi, updateCheckItemsApi, submitCheckApi, cancelCheckApi } from '@/api/stockcheck'
+import { getCheckListApi, getCheckDetailApi, createCheckApi, updateCheckItemsApi, submitCheckApi, refreshCheckItemApi, cancelCheckApi } from '@/api/stockcheck'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import type { CreateCheckParams } from '@/types/stockcheck'
 
@@ -22,6 +22,14 @@ export const useUpdateCheckItems = () => {
 export const useSubmitCheck = () => {
   const invalidate = useInvalidate()
   return useMutation({ mutationFn: (id: number) => submitCheckApi(id), onSuccess: () => invalidate('stockcheck_submit') })
+}
+
+export const useRefreshCheckItem = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, itemId }: { id: number; itemId: number }) => refreshCheckItemApi(id, itemId),
+    onSuccess: (_, v) => qc.invalidateQueries({ queryKey: ['stockcheck', v.id] }),
+  })
 }
 
 export const useCancelCheck = () => {
