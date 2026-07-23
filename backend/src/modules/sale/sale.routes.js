@@ -28,6 +28,7 @@ router.get('/',           requirePermission(PERMISSIONS.SALE_ORDER_VIEW), ctrl.l
 router.get('/:id',        requirePermission(PERMISSIONS.SALE_ORDER_VIEW), ctrl.detail)
 router.post('/',          requirePermission(PERMISSIONS.SALE_ORDER_CREATE), vBody(createSchema), ctrl.create)
 router.put('/:id',        requirePermission(PERMISSIONS.SALE_ORDER_UPDATE), vBody(createSchema), ctrl.update)
+router.put('/:id/adjust', requirePermission(PERMISSIONS.SALE_ORDER_UPDATE), vBody(createSchema), ctrl.adjust)
 router.post('/:id/reserve',  requirePermission(PERMISSIONS.SALE_ORDER_RESERVE), ctrl.reserve)
 router.post('/:id/release',  requirePermission(PERMISSIONS.SALE_ORDER_RELEASE), ctrl.release)
 router.post('/:id/ship',     requirePermission(PERMISSIONS.SALE_ORDER_SHIP), ctrl.ship)

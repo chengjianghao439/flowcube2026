@@ -168,7 +168,7 @@ async function main() {
 
     const claim = await http.post('/api/print-jobs/claim-client', {
       token: adminToken,
-      json: { clientId: printer.clientId, limit: 5 },
+      json: { clientId: printer.clientId, limit: 50 },
     })
     await expectJsonSuccess(log, claim, '打印任务 claim 成功')
     const claimedJob = (claim.data?.data || []).find((job) => Number(job.id) === printJobId)
@@ -210,7 +210,7 @@ async function main() {
 
     const claim2 = await http.post('/api/print-jobs/claim-client', {
       token: adminToken,
-      json: { clientId: printer.clientId, limit: 5 },
+      json: { clientId: printer.clientId, limit: 50 },
     })
     const claimedJob2 = (claim2.data?.data || []).find((job) => Number(job.id) === printJobId2)
     log.assert('第二个打印任务 claim 成功', !!claimedJob2?.id, JSON.stringify(claim2.data).slice(0, 400))

@@ -191,6 +191,14 @@ async function prepareSmokeContext() {
   const [[printer]] = await pool.query("SELECT id, code, name, client_id FROM printers WHERE code = 'SMOKE-PRN'")
   // 测试用例以 camelCase 读取 clientId（DB 列为 client_id）
   printer.clientId = printer.client_id
+  // SMOKE-PRN 是所有并发 smoke 会话共用的固定打印机（见上方注释：用固定 code 幂等
+  // upsert 换确定性）。claim-client 是按 (priority DESC, id ASC) 的 FIFO 队列，如果之前
+  // 某次运行（本会话崩溃、其它并发 worktree 会话的 mainline 测试等）留下了没被认领的
+  // 「待打印」(status=0) 残留任务，会一直堆在队首，把本次新建的任务挤到 limit 之外，
+  // 导致 claim-client 返回的列表里找不到自己刚建的任务。这里只清同一台 SMOKE-PRN
+  // 专属测试打印机下"待打印"状态的任务——不会碰到任何真实打印机，也不会打断正在
+  // 打印(status=1)或已完成(2/3)的任务。
+  await pool.query('DELETE FROM print_jobs WHERE printer_id = ? AND status = 0', [printer.id])
 
   // 4. 确保测试角色和用户
   const bcrypt = require(path.resolve(__dirname, '../../backend/node_modules/bcryptjs'))

@@ -101,4 +101,53 @@ async function markFulfilled(conn, refType, refId, productId, warehouseId) {
   )
 }
 
-module.exports = { reserve, releaseByRef, markFulfilled }
+/**
+ * 按商品部分释放预占（改单减量专用）
+ * 与 releaseByRef 的区别：releaseByRef 是整单一次性全释放；本函数只按
+ * (refType,refId,productId,warehouseId) 释放指定数量，first-fit 消耗该组合下
+ * status=1 的预占记录，不影响该单下其它商品的预占。
+ *
+ * @param {object} conn
+ * @param {object} params
+ * @param {string} params.refType
+ * @param {number} params.refId
+ * @param {number} params.productId
+ * @param {number} params.warehouseId
+ * @param {number} params.qty - 要释放的数量（正数）
+ */
+async function partialReleaseByProduct(conn, { refType, refId, productId, warehouseId, qty }) {
+  let remaining = Number(qty)
+  if (!(remaining > 0)) return
+
+  const [rows] = await conn.query(
+    `SELECT id, qty FROM stock_reservations
+     WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1
+     ORDER BY id ASC FOR UPDATE`,
+    [refType, refId, productId, warehouseId],
+  )
+
+  for (const r of rows) {
+    if (remaining <= 0) break
+    const rowQty = Number(r.qty)
+    const take = Math.min(rowQty, remaining)
+    if (take >= rowQty) {
+      await conn.query('UPDATE stock_reservations SET status=3 WHERE id=?', [r.id])
+    } else {
+      await conn.query('UPDATE stock_reservations SET qty = qty - ? WHERE id=?', [take, r.id])
+    }
+    remaining -= take
+  }
+
+  const released = Number(qty) - remaining
+  if (released > 0) {
+    await conn.query(
+      'UPDATE inventory_stock SET reserved = GREATEST(0, reserved - ?) WHERE product_id=? AND warehouse_id=?',
+      [released, productId, warehouseId],
+    )
+  }
+  if (remaining > 0) {
+    throw new AppError(`商品预占记录不足，无法释放 ${qty} 中的剩余 ${remaining}`, 409)
+  }
+}
+
+module.exports = { reserve, releaseByRef, markFulfilled, partialReleaseByProduct }

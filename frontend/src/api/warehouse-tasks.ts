@@ -316,3 +316,92 @@ export const submitCancelReturnBoxScanApi = (
         : { 'X-Client': 'pda' },
     },
   )
+
+// ── 改单确认（销售单执行期改单，减量命中已拣/已打包部分需 PDA 逐项扫码确认）──────
+
+export interface PendingAdjustmentTask {
+  id: number
+  taskNo: string
+  customerName: string | null
+  warehouseId: number
+  warehouseName: string
+  status: number
+  adjustmentRequestedAt: string
+  adjustmentId: number
+  adjustmentNo: string
+  containerReturnsRemaining: number
+  packageVoidsRemaining: number
+}
+
+export const getPendingAdjustmentsApi = () =>
+  client.get<PendingAdjustmentTask[]>('/warehouse-tasks/adjustments/pending')
+
+export interface AdjustmentPackageVoid {
+  id: number
+  packageId: number
+  barcode: string
+  otherProductsSnapshot: { productId: number; productCode: string; productName: string; unit: string; qty: number }[]
+  status: number
+}
+
+export interface AdjustmentContainerReturn {
+  id: number
+  containerId: number
+  barcode: string
+  qty: number
+  suggestedLocationCode: string | null
+  status: number
+}
+
+export interface AdjustmentItem {
+  id: number
+  productId: number
+  productCode: string
+  productName: string
+  oldRequiredQty: number
+  newRequiredQty: number
+  pendingReturnQty: number
+  pendingPickQty: number
+  status: number
+  packageVoids: AdjustmentPackageVoid[]
+  containerReturns: AdjustmentContainerReturn[]
+}
+
+export interface AdjustmentDetail {
+  id: number
+  adjustmentNo: string
+  status: number
+  saleOrderId: number
+  warehouseTaskId: number
+  taskNo: string
+  warehouseName: string
+  customerName: string | null
+  items: AdjustmentItem[]
+}
+
+export const getAdjustmentDetailApi = (adjustmentId: number) =>
+  client.get<AdjustmentDetail>(`/warehouse-tasks/adjustments/${adjustmentId}`)
+
+/** 拆箱确认：箱子在改单发起时已由系统作废，这里只是扫码确认物理已拆箱处理 */
+export const confirmAdjustmentPackageVoidApi = (voidId: number, requestKey?: string) =>
+  client.post<{ finalized: boolean }>(
+    `/warehouse-tasks/adjustments/package-voids/${voidId}/confirm`,
+    {},
+    {
+      headers: requestKey
+        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+        : { 'X-Client': 'pda' },
+    },
+  )
+
+/** 归还确认：扫容器条码 + 扫目标库位条码，确认放回、解锁容器 */
+export const confirmAdjustmentContainerReturnApi = (returnId: number, targetLocationId: number, requestKey?: string) =>
+  client.post<{ finalized: boolean }>(
+    `/warehouse-tasks/adjustments/container-returns/${returnId}/confirm`,
+    { targetLocationId },
+    {
+      headers: requestKey
+        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+        : { 'X-Client': 'pda' },
+    },
+  )

@@ -9,7 +9,7 @@
 # 内容：
 #   1. 起 MySQL 8.0 service 容器（root/root，临时库）
 #   2. 安装后端依赖、建库、跑迁移建表
-#   3. smoke:mainline + smoke:concurrency-guards（主链路 + 并发/回滚护栏）
+#   3. smoke:mainline + smoke:concurrency-guards + smoke:sale-adjustment（主链路 + 并发/回滚护栏 + 改单）
 #   4. test:integration（采购入库 → 占库 → 调拨 → 盘点 → 退货 库存一致性，
 #      使用独立测试库，避免与 smoke 数据相互污染）
 #   任一测试失败则 job 失败。
@@ -109,6 +109,9 @@ jobs:
 
       - name: 冒烟测试 — 并发与回滚护栏（幂等 / 拆分 / 仓库任务取消）
         run: npm run smoke:concurrency-guards
+
+      - name: 冒烟测试 — 销售单执行期改单（增减量 / PDA物理确认）
+        run: npm run smoke:sale-adjustment
 
       - name: 集成测试 — 库存主链路一致性（独立测试库）
         run: npm run test:integration

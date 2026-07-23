@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { getSaleListApi, getSaleDetailApi, createSaleApi, updateSaleApi, reserveSaleApi, releaseSaleApi, shipSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
+import { getSaleListApi, getSaleDetailApi, createSaleApi, updateSaleApi, adjustSaleApi, reserveSaleApi, releaseSaleApi, shipSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import { toast } from '@/lib/toast'
 import { createRequestKey } from '@/lib/requestKey'
@@ -28,6 +28,17 @@ export const useUpdateSale = () => {
   return useMutation({
     mutationFn: (data: UpdateSaleParams) => updateSaleApi(data),
     onSuccess: () => { invalidate('sale_update'); toast.success('订单已保存') },
+  })
+}
+
+export const useAdjustSale = () => {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (data: UpdateSaleParams) => adjustSaleApi(data),
+    onSuccess: (res) => {
+      invalidate('sale_adjust')
+      toast.success(res?.pending ? '改单已提交，等待仓库确认' : '修改成功')
+    },
   })
 }
 

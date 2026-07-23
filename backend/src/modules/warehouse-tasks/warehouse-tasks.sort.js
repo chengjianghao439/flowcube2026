@@ -17,11 +17,14 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code, cancel_requested_at',
+    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code, cancel_requested_at, adjustment_requested_at',
     entityName: '仓库任务',
   })
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在取消收尾中，不可继续分拣', 409)
+  }
+  if (taskRow.adjustment_requested_at) {
+    throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
   }
   const rule = assertWarehouseTaskAction('sortTask', taskRow.status)
   if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)

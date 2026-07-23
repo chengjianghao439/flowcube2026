@@ -871,6 +871,138 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   }
 }
 
+/**
+ * 从「已锁定于某任务」的单一容器拆出待归还数量（改单减量专用）
+ * 与 splitContainer 的区别：splitContainer 要求源容器必须是未锁定的 ACTIVE 容器
+ * （面向普通拆分/转入场景）；本函数专门处理已锁定于任务的容器——拆出的部分继续
+ * 锁定在同一任务下，直到 PDA 扫码确认归还库位（confirmContainerReturn）才真正解锁。
+ * 若整只容器数量都要归还则无需拆分，直接把该容器整只登记为待归还。
+ *
+ * @param {object} conn
+ * @param {object} params
+ * @param {number} params.taskId
+ * @param {number} params.containerId
+ * @param {number} params.qty
+ * @returns {{ containerId: number, barcode: string, qty: number, wholeContainer: boolean }}
+ */
+async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qty }) {
+  const [[row]] = await conn.query(
+    `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
+            locked_by_task_id, batch_no, mfg_date, exp_date, unit
+     FROM inventory_containers
+     WHERE id = ? AND deleted_at IS NULL
+     FOR UPDATE`,
+    [containerId],
+  )
+  if (!row) throw new AppError('容器不存在', 404)
+  if (Number(row.locked_by_task_id) !== Number(taskId)) {
+    throw new AppError('容器未锁定于该任务，无法拆分归还', 409)
+  }
+  const rem = Number(row.remaining_qty)
+  const q = Number(qty)
+  if (!Number.isFinite(q) || q <= 0 || q > rem) throw new AppError('拆分归还数量无效', 400)
+
+  if (q === rem) {
+    return { containerId: row.id, barcode: row.barcode, qty: rem, wholeContainer: true }
+  }
+
+  const newRem = rem - q
+  const newStatus = newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE
+  await conn.query(
+    'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
+    [newRem, newStatus, row.id],
+  )
+
+  const { containerId: newId, barcode: newBc } = await createContainer(conn, {
+    productId:       row.product_id,
+    warehouseId:     row.warehouse_id,
+    initialQty:      q,
+    unit:            row.unit,
+    batchNo:         row.batch_no,
+    mfgDate:         fmtSqlDate(row.mfg_date),
+    expDate:         fmtSqlDate(row.exp_date),
+    sourceType:      SOURCE_TYPE.CONTAINER_SPLIT,
+    sourceRefId:     row.id,
+    sourceRefType:   'sale_order_adjustment_return',
+    remark:          `改单归还拆分自 ${row.barcode}`,
+    barcodePrefix:   'B',
+    containerType:   2,
+    locationId:      row.location_id,
+    containerStatus: CONTAINER_STATUS.ACTIVE,
+  })
+  // 新容器继续锁定在原任务下，直到 PDA 确认归还库位才解锁，避免拆分瞬间"看起来"可用
+  await conn.query(
+    'UPDATE inventory_containers SET parent_id = ?, locked_by_task_id = ?, locked_at = NOW() WHERE id = ?',
+    [row.id, taskId, newId],
+  )
+
+  return { containerId: newId, barcode: newBc, qty: q, wholeContainer: false }
+}
+
+/**
+ * 在某任务锁定的、指定商品的容器集合里，按 FIFO 拆出合计 qty 的待归还容器清单
+ * （改单减量专用，调用方负责把返回的每一项写入 sale_order_adjustment_container_returns）
+ *
+ * @param {object} conn
+ * @param {object} params
+ * @param {number} params.taskId
+ * @param {number} params.productId
+ * @param {number} params.qty
+ * @returns {Array<{ containerId: number, barcode: string, qty: number, wholeContainer: boolean }>}
+ */
+async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty }) {
+  let remaining = Number(qty)
+  if (!(remaining > 0)) return []
+  const [containers] = await conn.query(
+    `SELECT id FROM inventory_containers
+     WHERE locked_by_task_id = ? AND product_id = ? AND deleted_at IS NULL AND status = ?
+     ORDER BY id ASC`,
+    [taskId, productId, CONTAINER_STATUS.ACTIVE],
+  )
+  const picks = []
+  for (const c of containers) {
+    if (remaining <= 0) break
+    const [[fresh]] = await conn.query(
+      'SELECT remaining_qty FROM inventory_containers WHERE id = ? FOR UPDATE',
+      [c.id],
+    )
+    const avail = Number(fresh.remaining_qty)
+    if (avail <= 0) continue
+    const take = Math.min(avail, remaining)
+    const split = await splitTaskLockedContainerForReturn(conn, { taskId, containerId: c.id, qty: take })
+    picks.push({ ...split, originalContainerId: Number(c.id) })
+    remaining -= take
+  }
+  if (remaining > 0) {
+    throw new AppError('任务锁定容器数量不足，无法拆出待归还数量，请核实拣货记录', 409)
+  }
+  return picks
+}
+
+/**
+ * PDA 扫码确认归还：解锁指定容器（或其拆分出的部分），写入实际归还库位
+ * （改单减量专用，由 warehouse-tasks.adjust.js 的 confirmContainerReturn 调用）
+ *
+ * @param {object} conn
+ * @param {object} params
+ * @param {number} params.containerId
+ * @param {number} [params.targetLocationId]
+ */
+async function unlockAndRelocateContainer(conn, { containerId, targetLocationId = null }) {
+  const sets = ['locked_by_task_id = NULL', 'locked_at = NULL']
+  const params = []
+  if (targetLocationId != null) {
+    sets.push('location_id = ?')
+    params.push(targetLocationId)
+  }
+  params.push(containerId)
+  const [result] = await conn.query(
+    `UPDATE inventory_containers SET ${sets.join(', ')} WHERE id = ?`,
+    params,
+  )
+  if (result.affectedRows !== 1) throw new AppError('容器不存在', 404)
+}
+
 module.exports = {
   createContainer,
   promotePendingContainerToActive,
@@ -884,6 +1016,8 @@ module.exports = {
   adjustContainerStock,
   genBarcode,
   lockContainer,
+  reserveTaskLockedContainersForReturn,
+  unlockAndRelocateContainer,
   unlockContainersByTask,
   splitContainer,
   CONTAINER_STATUS,

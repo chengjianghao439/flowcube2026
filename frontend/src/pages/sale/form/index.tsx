@@ -11,7 +11,7 @@
 
 import { useState, useCallback, useContext, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Loader2, PackageOpen, Plus, Save, Warehouse, X } from 'lucide-react'
+import { AlertTriangle, Clock, Loader2, PackageOpen, Pencil, Plus, Save, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
@@ -28,7 +28,7 @@ import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import { SectionCard }    from '@/components/shared/SectionCard'
 import { CustomerFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
-import { useCreateSale, useUpdateSale, useSaleDetail, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
+import { useCreateSale, useUpdateSale, useAdjustSale, useSaleDetail, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { useCarriersActive } from '@/hooks/useCarriers'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import { LimitedInput } from '@/components/shared/LimitedInput'
@@ -816,6 +816,148 @@ function EditView({ order, tabPath }: { order: NonNullable<ReturnType<typeof use
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// 改单视图（已占库/拣货中，仓库任务已存在——增减数量/加删商品行）
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 执行期改单：status∈{2,3} 且已发起出库（有关联仓库任务）时可用。提交后若涉及
+ * 已拣/已打包实物的归还（pending=true），后端会把任务挂起等待 PDA 扫码确认，
+ * 这里只需提示、不阻塞——具体进度请去 PDA「改单确认」查看。
+ */
+function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; tabPath: string; onDone: () => void }) {
+  const adjustMutate = useAdjustSale()
+
+  const {
+    customerId, customerName,
+    warehouseId, setWarehouseId, warehouseName, setWarehouseName,
+    remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
+    receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
+    quantityRefs, carrierOptions,
+    items, priceLoading,
+    finderOpen, setFinderOpen, setFinderItemKey,
+    customerFinderOpen, setCustomerFinderOpen,
+    customerError, setCustomerError, warehouseError, setWarehouseError,
+    invalidItemKeys, setInvalidItemKeys,
+    addItem, removeItem, updateItem,
+    handleCustomerConfirm, handleFinderConfirm,
+    total,
+  } = useSaleOrderForm(tabPath, order)
+
+  async function handleSubmit() {
+    const filledItems = validateSaleForm({
+      items, customerId, customerName, warehouseId, warehouseName, receiverPhone,
+      setCustomerError, setWarehouseError, setInvalidItemKeys,
+    })
+    if (!filledItems) return
+    try {
+      await adjustMutate.mutateAsync({
+        id: order.id,
+        customerId: +customerId, customerName,
+        warehouseId: +warehouseId, warehouseName,
+        remark: remark || undefined,
+        carrierId: carrierId ? +carrierId : null,
+        freightType: freightType ? +freightType : null,
+        receiverName: receiverName || undefined,
+        receiverPhone: receiverPhone || undefined,
+        receiverAddress: receiverAddress || undefined,
+        items: filledItems.map(({ _key, ...r }) => r),
+      })
+      onDone()
+    } catch (_) {}
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <ActionBar
+        title={`${order.orderNo} · 修改订单`}
+        rightActions={
+          <>
+            <Button variant="outline" onClick={onDone} disabled={adjustMutate.isPending}>
+              <X className="h-4 w-4 mr-1" />取消
+            </Button>
+            <Button onClick={handleSubmit} disabled={adjustMutate.isPending} className="gap-1.5">
+              {adjustMutate.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</>
+                : <><Save className="h-4 w-4" />提交改单</>}
+            </Button>
+          </>
+        }
+      />
+
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        订单已发往仓库执行，增加数量需要重新拣货；减少数量若涉及已拣/已打包的实物，需要仓库扫码确认放回库位/拆箱后才会真正生效。
+      </div>
+
+      <SaleOrderHeaderFields
+        customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
+        warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
+        warehouseError={warehouseError} setWarehouseError={setWarehouseError}
+        carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
+        freightType={freightType} setFreightType={setFreightType}
+        receiverName={receiverName} setReceiverName={setReceiverName}
+        receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
+        receiverAddress={receiverAddress} setReceiverAddress={setReceiverAddress}
+        remark={remark} setRemark={setRemark}
+      />
+
+      <SectionCard
+        title="商品明细"
+        compact
+        actions={
+          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            添加商品
+          </Button>
+        }
+      >
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
+            <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">还没有商品明细，点击上方"添加商品"开始录入</p>
+          </div>
+        ) : (
+          <SaleOrderItemsTable
+            items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
+            setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
+            updateItem={updateItem} removeItem={removeItem}
+          />
+        )}
+      </SectionCard>
+
+      {items.some(i => i.productId > 0) && (
+        <SectionCard title="金额统计">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5 text-muted-body">
+              <p>商品种数：{items.filter(i => i.productId > 0).length} 种</p>
+              <p>合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
+            </div>
+            <div>
+              <p className="mb-1 text-xs">合计金额</p>
+              <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
+            </div>
+          </div>
+        </SectionCard>
+      )}
+
+      <ProductFinder
+        open={finderOpen}
+        warehouseId={warehouseId ? +warehouseId : null}
+        onConfirm={handleFinderConfirm}
+        onClose={() => { setFinderOpen(false); setFinderItemKey(null) }}
+      />
+
+      <CustomerFinder
+        open={customerFinderOpen}
+        onClose={() => setCustomerFinderOpen(false)}
+        onConfirm={handleCustomerConfirm}
+      />
+
+      <div className="h-4" />
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // 查看视图（已有销售单详情 + 状态操作）
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -828,6 +970,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
 
   const [printOpen, setPrintOpen] = useState(false)
   const [detailTab, setDetailTab] = useState<'info'|'progress'|'scan'|'pack'|'log'>('info')
+  const [adjustMode, setAdjustMode] = useState(false)
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; confirmText: string; onConfirm: () => void
@@ -854,7 +997,14 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     return <EditView order={order} closeTab={closeTab} tabPath={tabPath} />
   }
 
+  // 已发起出库后仍要改单：切到独立的改单视图，提交/取消后回到只读详情
+  if (adjustMode) {
+    return <AdjustView order={order} tabPath={tabPath} onDone={() => setAdjustMode(false)} />
+  }
+
   const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending
+  const canAdjust = (order.status === 2 || order.status === 3) && !!order.taskId
+    && !order.warehouseTaskCancelRequestedAt && !order.warehouseTaskAdjustmentRequestedAt
 
   return (
     <div className="flex flex-col gap-3">
@@ -906,9 +1056,21 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 发起出库
               </Button>
             )}
+            {canAdjust && (
+              <Button variant="outline" disabled={isPending} onClick={() => setAdjustMode(true)}>
+                <Pencil className="h-4 w-4 mr-1" />修改订单
+              </Button>
+            )}
           </>
         }
       />
+
+      {order.warehouseTaskAdjustmentRequestedAt && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <Clock className="h-4 w-4 shrink-0" />
+          改单待仓库确认：有商品的归还/拆箱还未经 PDA 扫码确认，确认完成前该订单的拣货/分拣/复核/打包/出库都会被阻止，也暂时不能再次修改订单。
+        </div>
+      )}
 
       {/* 选项卡切换 */}
       <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">

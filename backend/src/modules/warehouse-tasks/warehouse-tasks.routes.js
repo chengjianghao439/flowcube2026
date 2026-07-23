@@ -28,6 +28,18 @@ router.get('/stats', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.st
 // GET /api/warehouse-tasks/cancel-returns/pending — PDA「取消清理」任务池（必须在 /:id 之前注册）
 router.get('/cancel-returns/pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW), ctrl.pendingCancelReturns)
 
+// GET /api/warehouse-tasks/adjustments/pending — PDA「改单确认」任务池（必须在 /:id 之前注册）
+router.get('/adjustments/pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW), ctrl.pendingAdjustments)
+
+// GET /api/warehouse-tasks/adjustments/:id — 改单确认详情
+router.get('/adjustments/:id', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW), ctrl.adjustmentDetail)
+
+// POST /api/warehouse-tasks/adjustments/package-voids/:voidId/confirm — PDA 扫码确认拆箱
+router.post('/adjustments/package-voids/:voidId/confirm', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST), pdaOnly, pdaSessionOptional(), ctrl.confirmAdjustmentPackageVoid)
+
+// POST /api/warehouse-tasks/adjustments/container-returns/:returnId/confirm — PDA 扫码确认归还库位
+router.post('/adjustments/container-returns/:returnId/confirm', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST), pdaOnly, pdaSessionOptional(), vBody(z.object({ targetLocationId: z.number().int().positive().optional().nullable() })), ctrl.confirmAdjustmentContainerReturn)
+
 // GET /api/warehouse-tasks/:id/pick-suggestions
 router.get('/:id/pick-suggestions', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), ctrl.pickSuggestions)
 

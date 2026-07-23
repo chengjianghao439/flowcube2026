@@ -339,6 +339,60 @@ async function voidPackage(packageId) {
   }
 }
 
+// ─── 作废已完成箱子（改单减量专用）───────────────────────────────────────────
+// 与 voidPackage 的区别：voidPackage 只允许作废 status=1（打包中，尚未打印箱贴）的箱子，
+// 且要求任务处于 PACKING 状态；本函数专门处理已完成（status=2，已打印箱贴）的箱子，
+// 允许任务处于拣货中~待出库任一活跃阶段（改单可能发生在打包完成之后）。
+// package_items 与 inventory_containers 无关联（装箱不影响容器库存数字，见
+// warehouse-tasks.command.js 里取消逆向归还的同一说明），作废本身不需要任何数量回滚——
+// 该商品的 packedUnits 统计口径本就是 `WHERE package.status != 3` 实时 SUM，作废后自动归零，
+// 调用方（warehouse-tasks.adjust.js）负责后续把因此腾出的数量纳入分层处理。
+async function voidCompletedPackage(conn, packageId, { operator, reason = '改单调整' } = {}) {
+  const [[pkg]] = await conn.query(
+    'SELECT id, status, warehouse_task_id, barcode FROM packages WHERE id=? FOR UPDATE',
+    [packageId],
+  )
+  if (!pkg) throw new AppError('箱子不存在', 404)
+  if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无需重复操作', 400)
+
+  const [[task]] = await conn.query(
+    'SELECT id, status FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+    [pkg.warehouse_task_id],
+  )
+  if (!task) throw new AppError('任务不存在', 404)
+
+  const [items] = await conn.query(
+    'SELECT product_id, product_code, product_name, unit, qty FROM package_items WHERE package_id=?',
+    [packageId],
+  )
+
+  await conn.query('UPDATE packages SET status=3 WHERE id=?', [packageId])
+
+  // 已完成箱子大概率已经进入打印链，参照 warehouse-tasks.command.js 取消流程里的既有处理：
+  // 未完成/未确认的打印任务作废，已完成的打印记录保留作审计，不回滚。
+  await conn.query(
+    `UPDATE print_jobs SET status = 3, error_message = ?
+     WHERE ref_type = 'package' AND ref_id = ? AND status IN (0, 1)`,
+    [reason, packageId],
+  )
+
+  return {
+    id: Number(packageId),
+    barcode: pkg.barcode,
+    warehouseTaskId: Number(pkg.warehouse_task_id),
+    status: 3,
+    statusName: '已作废',
+    items: items.map(i => ({
+      productId: Number(i.product_id),
+      productCode: i.product_code,
+      productName: i.product_name,
+      unit: i.unit,
+      qty: Number(i.qty),
+    })),
+    operator: operator ? { userId: operator.userId ?? null, realName: operator.realName ?? null } : null,
+  }
+}
+
 function packageLabelJobKey(packageId) {
   return `package_label:package:${Number(packageId)}`
 }
@@ -574,6 +628,7 @@ module.exports = {
   addItem,
   removeItem,
   voidPackage,
+  voidCompletedPackage,
   finishPackage,
   finishPackageWithPrint,
   getByBarcode,

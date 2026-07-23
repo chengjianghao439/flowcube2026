@@ -20,6 +20,10 @@ export function SaleRowActions({
   onAsk, onReserveSale, onReleaseSale, onShipSale, onCancelSale, onDeleteSale,
   onViewTask, onDetail, onPrint,
 }: SaleRowActionsProps) {
+  // 已发往仓库执行（有关联仓库任务）且没有取消/改单挂起中时，才允许修改订单——
+  // 与详情页 canAdjust 的判断口径一致（sale/form/index.tsx）。
+  const canAdjust = !!row.taskId && !row.warehouseTaskCancelRequestedAt && !row.warehouseTaskAdjustmentRequestedAt
+
   if (row.status === 1) {
     return (
       <TableActionsMenu
@@ -42,6 +46,7 @@ export function SaleRowActions({
         onPrimaryClick={() => onAsk('发起出库', '将创建仓库出库任务，由仓库人员执行拣货后完成出库，是否继续？', () => onShipSale(row.id))}
         items={[
           { label: '查看详情', onClick: onDetail },
+          ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: anyPending }] : []),
           { label: '取消占库', onClick: () => onAsk('取消占库', '将释放已预占的库存并将订单恢复为草稿状态，是否继续？', () => onReleaseSale(row.id)), separatorBefore: true, disabled: anyPending },
           { label: '取消订单', onClick: () => onAsk('取消订单', '将释放已占用库存并取消销售单，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending },
         ]}
@@ -56,7 +61,8 @@ export function SaleRowActions({
         onPrimaryClick={onViewTask}
         primaryVariant="outline"
         items={[
-          { label: '取消订单', onClick: () => onAsk('取消订单', '将同步取消关联仓库任务并释放锁定资源，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending },
+          ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: anyPending }] : []),
+          { label: '取消订单', onClick: () => onAsk('取消订单', '将同步取消关联仓库任务并释放锁定资源，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending, separatorBefore: canAdjust },
         ]}
       />
     )

@@ -7,6 +7,7 @@ const pack = require('./warehouse-tasks.pack')
 const ship = require('./warehouse-tasks.ship')
 const closures = require('./warehouse-tasks.helpers')
 const cancelReturn = require('./warehouse-tasks.cancel-return')
+const adjust = require('./warehouse-tasks.adjust')
 
 module.exports = {
   findAll: query.findAll,
@@ -53,4 +54,9 @@ module.exports = {
   getCancelReturnDetail: cancelReturn.getCancelReturnDetail,
   finalizeCancelWithinTransaction: cancelReturn.finalizeCancelWithinTransaction,
   checkCancelReturnClearedAndFinalize: cancelReturn.checkCancelReturnClearedAndFinalize,
+
+  listPendingAdjustments: adjust.listPendingAdjustments,
+  getAdjustmentDetail: adjust.getAdjustmentDetail,
+  confirmPackageVoid: adjust.confirmPackageVoid,
+  confirmContainerReturn: adjust.confirmContainerReturn,
 }

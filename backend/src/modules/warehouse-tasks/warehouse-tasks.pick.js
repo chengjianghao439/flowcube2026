@@ -66,11 +66,14 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, task_type, status, sale_order_id, cancel_requested_at',
+    columns: 'id, task_no, task_type, status, sale_order_id, cancel_requested_at, adjustment_requested_at',
     entityName: '仓库任务',
   })
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在取消收尾中，不可继续拣货', 409)
+  }
+  if (taskRow.adjustment_requested_at) {
+    throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
   }
   const isPurchaseReturn = taskRow.task_type === 'purchase_return'
 

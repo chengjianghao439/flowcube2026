@@ -30,6 +30,9 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
     entityName: '销售单',
     actions: {
       edit: { from: [1], message: '只有草稿状态的销售单可以编辑' },
+      // 执行期改单：已占库/拣货中（对应仓库任务在拣货中~待出库任一活跃阶段）均可改，
+      // 已出库后不可再改——出库已经扣减实物库存、生成应收，详见 warehouse-tasks.adjust.js。
+      adjust: { from: [2, 3], message: '只有已占库/拣货中的销售单可修改明细，已出库后不可修改' },
       reserve: { from: [1], to: 2, message: '只有草稿状态可以占用库存' },
       release: { from: [2], to: 1, message: '只有已占库的订单可以取消占库' },
       ship: { from: [2], to: 3, message: '只有已占库的销售单可以发起出库' },

@@ -5,8 +5,10 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
-const { WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
+const { WT_STATUS_NAME, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const adjustSvc = require('../warehouse-tasks/warehouse-tasks.adjust')
+const { WT_EVENT, record: recordWtEvent } = require('../warehouse-tasks/warehouse-task-events.service')
 
 const FREIGHT_TYPE = { 1:'寄付', 2:'到付', 3:'第三方付' }
 const fmt = row => ({
@@ -22,6 +24,7 @@ const fmt = row => ({
     ? (WT_STATUS_NAME[Number(row.warehouse_task_status)] || null)
     : null,
   warehouseTaskCancelRequestedAt: row.warehouse_task_cancel_requested_at || null,
+  warehouseTaskAdjustmentRequestedAt: row.warehouse_task_adjustment_requested_at || null,
   carrierId:row.carrier_id||null,
   carrier: row.carrier_name || row.carrier || null,   // 优先承运商表名称，回退文本字段
   freightType:row.freight_type||null,
@@ -43,7 +46,8 @@ const warehouseTaskProjection = `
   wt_by_id.id AS warehouse_task_id,
   wt_by_id.task_no AS warehouse_task_no,
   wt_by_id.status AS warehouse_task_status,
-  wt_by_id.cancel_requested_at AS warehouse_task_cancel_requested_at
+  wt_by_id.cancel_requested_at AS warehouse_task_cancel_requested_at,
+  wt_by_id.adjustment_requested_at AS warehouse_task_adjustment_requested_at
 `
 
 const genOrderNo = conn => generateDailyCode(conn, 'SO', 'sale_orders', 'order_no')
@@ -465,6 +469,191 @@ async function update(id, { customerId, customerName, warehouseId, warehouseName
   finally { conn.release() }
 }
 
+// 执行期改单：已占库/拣货中（对应仓库任务在活跃阶段）均可修改明细——增减数量、
+// 新增/删除商品行。按 product_id 聚合新旧明细算出净变化，逐 product 委托
+// warehouse-tasks.adjust.js 分层处理（增量直接生效补拣；减量视命中深度决定是否需要
+// PDA 物理确认）。sale_order_items 本身仍是整表删除重建（同 update() 的模式），
+// 因为这是唯一用户可见的"行"，WMS 侧只认按商品聚合后的净数量，详见方案说明。
+async function requestAdjustment(id, { items, operator, requestKey }) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'sale.adjust',
+      userId: operator?.userId ?? null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
+
+    const orderRow = await lockStatusRow(conn, {
+      table: 'sale_orders', id,
+      columns: 'id, order_no, status, task_id, task_no, warehouse_id, warehouse_name',
+      entityName: '销售单',
+    })
+    assertStatusAction('sale', 'adjust', orderRow.status)
+    if (!orderRow.task_id) throw new AppError('销售单尚未发起出库，没有关联的仓库任务', 400)
+
+    const taskRow = await lockStatusRow(conn, {
+      table: 'warehouse_tasks', id: orderRow.task_id,
+      columns: 'id, task_no, status, cancel_requested_at, adjustment_requested_at',
+      entityName: '仓库任务',
+    })
+    if (taskRow.cancel_requested_at) throw new AppError('该任务正在取消收尾中，暂不能改单', 409)
+    if (taskRow.adjustment_requested_at) throw new AppError('该任务已有改单在等待仓库确认，请先处理完成', 409)
+    if (!WT_STATUS_ACTIVE.includes(Number(taskRow.status))) {
+      throw new AppError('当前仓库任务状态不支持改单', 400)
+    }
+
+    if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
+
+    const [oldItemRows] = await conn.query('SELECT product_id, quantity FROM sale_order_items WHERE order_id=?', [id])
+    const oldQtyByProduct = new Map()
+    for (const r of oldItemRows) {
+      const pid = Number(r.product_id)
+      oldQtyByProduct.set(pid, (oldQtyByProduct.get(pid) || 0) + Number(r.quantity))
+    }
+    const newQtyByProduct = new Map()
+    const productMeta = new Map()
+    for (const item of items) {
+      const pid = Number(item.productId)
+      newQtyByProduct.set(pid, (newQtyByProduct.get(pid) || 0) + Number(item.quantity))
+      if (!productMeta.has(pid)) {
+        productMeta.set(pid, { productCode: item.productCode, productName: item.productName, unit: item.unit })
+      }
+    }
+
+    const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+    await conn.query('UPDATE sale_orders SET total_amount=? WHERE id=?', [total, id])
+    await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
+    for (const item of items) {
+      await conn.query(
+        `INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id, item.productId, item.productCode, item.productName, item.unit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.unitPrice, item.quantity*item.unitPrice, item.remark||null]
+      )
+    }
+
+    const allProductIds = new Set([...oldQtyByProduct.keys(), ...newQtyByProduct.keys()])
+    const descriptors = []
+    for (const pid of allProductIds) {
+      const oldQty = oldQtyByProduct.get(pid) || 0
+      const newQty = newQtyByProduct.get(pid) || 0
+      if (Math.abs(newQty - oldQty) < 1e-6) continue
+      let meta = productMeta.get(pid)
+      if (!meta) {
+        const [[ti]] = await conn.query(
+          'SELECT product_code, product_name, unit FROM warehouse_task_items WHERE task_id=? AND product_id=?',
+          [orderRow.task_id, pid],
+        )
+        meta = ti
+          ? { productCode: ti.product_code, productName: ti.product_name, unit: ti.unit }
+          : { productCode: '', productName: `商品#${pid}`, unit: '' }
+      }
+      const descriptor = await adjustSvc.applyProductDeltaWithinTransaction(conn, {
+        taskId: Number(orderRow.task_id),
+        warehouseId: Number(orderRow.warehouse_id),
+        saleOrderId: id,
+        saleOrderNo: orderRow.order_no,
+        productId: pid,
+        productCode: meta.productCode,
+        productName: meta.productName,
+        unit: meta.unit,
+        oldRequiredQty: oldQty,
+        newRequiredQty: newQty,
+      })
+      if (descriptor) descriptors.push(descriptor)
+    }
+
+    if (!descriptors.length) {
+      await appendSaleEvent(conn, id, 'adjusted', '修改明细', '本次修改未涉及数量变化', operator)
+      const result = { adjustmentId: null, adjustmentNo: null, pending: false }
+      await completeOperationRequest(conn, requestState, {
+        data: result, message: '修改成功', resourceType: 'sale_order', resourceId: id,
+      })
+      await conn.commit()
+      return result
+    }
+
+    await adjustSvc.finalizeTaskStatusAfterAdjustment(conn, {
+      taskId: Number(orderRow.task_id), taskNo: orderRow.task_no, descriptors,
+    })
+
+    const needsPending = descriptors.some(d => d.pendingReturnQty > 0 || d.packageVoids.length || d.containerReturns.length)
+    let adjustmentId = null
+    let adjustmentNo = null
+    if (needsPending) {
+      adjustmentNo = await generateDailyCode(conn, 'ADJ', 'sale_order_adjustments', 'adjustment_no')
+      const [adjRes] = await conn.query(
+        `INSERT INTO sale_order_adjustments (sale_order_id, warehouse_task_id, adjustment_no, status, requested_by, requested_by_name)
+         VALUES (?,?,?,1,?,?)`,
+        [id, orderRow.task_id, adjustmentNo, operator?.userId ?? null, operator?.realName ?? null],
+      )
+      adjustmentId = adjRes.insertId
+      for (const d of descriptors) {
+        const hasPending = d.pendingReturnQty > 0 || d.packageVoids.length > 0 || d.containerReturns.length > 0
+        const [itemRes] = await conn.query(
+          `INSERT INTO sale_order_adjustment_items
+             (adjustment_id, product_id, product_code, product_name, old_required_qty, new_required_qty, pending_return_qty, pending_pick_qty, status)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
+          [adjustmentId, d.productId, d.productCode, d.productName, d.oldRequiredQty, d.newRequiredQty,
+            d.pendingReturnQty, d.pendingPickQty, hasPending ? 1 : 3],
+        )
+        const itemId = itemRes.insertId
+        for (const v of d.packageVoids) {
+          await conn.query(
+            `INSERT INTO sale_order_adjustment_package_voids (adjustment_item_id, package_id, barcode, other_products_snapshot)
+             VALUES (?,?,?,?)`,
+            [itemId, v.packageId, v.barcode, JSON.stringify(v.otherProducts || [])],
+          )
+        }
+        for (const c of d.containerReturns) {
+          await conn.query(
+            `INSERT INTO sale_order_adjustment_container_returns (adjustment_item_id, source_container_id, original_container_id, qty)
+             VALUES (?,?,?,?)`,
+            [itemId, c.containerId, c.originalContainerId ?? c.containerId, c.qty],
+          )
+        }
+      }
+      await conn.query('UPDATE warehouse_tasks SET adjustment_requested_at=NOW() WHERE id=?', [orderRow.task_id])
+      try {
+        await recordWtEvent(conn, {
+          taskId: Number(orderRow.task_id), taskNo: orderRow.task_no,
+          eventType: WT_EVENT.ADJUSTMENT_REQUESTED,
+          operatorId: operator?.userId ?? null, operatorName: operator?.realName ?? null,
+          detail: { adjustmentId, adjustmentNo, saleOrderId: id, productCount: descriptors.length },
+        })
+      } catch (eventErr) {
+        // 事件写入失败不阻断主流程，仅记录降级日志（与仓库任务模块内其它事件写入保持一致口径）
+        require('../warehouse-tasks/warehouse-tasks.helpers').logSideEffectFailure(
+          '仓库任务事件写入失败：改单发起事件', eventErr, { taskId: orderRow.task_id, adjustmentId },
+        )
+      }
+    }
+
+    await appendSaleEvent(
+      conn, id, 'adjusted', '修改明细',
+      needsPending
+        ? `已提交改单 ${adjustmentNo}，等待仓库确认后生效`
+        : '已修改明细，变更已直接生效',
+      operator,
+      { adjustmentId, adjustmentNo, productCount: descriptors.length, pending: needsPending },
+    )
+
+    const result = { adjustmentId, adjustmentNo, pending: needsPending }
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: needsPending ? '改单已提交，等待仓库确认' : '修改成功',
+      resourceType: 'sale_order',
+      resourceId: id,
+    })
+    await conn.commit()
+    return result
+  } catch (e) { await conn.rollback(); throw e }
+  finally { conn.release() }
+}
+
 // ① 占用库存：仅调用 reservationEngine.reserve()，不创建仓库任务
 async function reserveStock(id, operator) {
   const conn = await pool.getConnection()
@@ -632,6 +821,7 @@ module.exports = {
   findById,
   create,
   update,
+  requestAdjustment,
   reserveStock,
   releaseStock,
   ship,

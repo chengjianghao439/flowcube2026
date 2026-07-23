@@ -189,13 +189,16 @@ const WT_ON_EXIT_ACTIONS = Object.freeze({
  *
  * 取消（→CANCELLED）可从任意进行中状态（1-6）触发。
  */
+// 改单（sale adjust）会用到的反向边：仅供 warehouse-tasks.adjust.js 的两个内部 action
+// （adjustReopenPicking / adjustReopenChecking）使用，不对应任何用户可直接调用的入口，
+// 见下方 WT_ACTION_RULES 里这两条各自的 allowed/toStatus 收窄范围。
 const WT_TRANSITIONS = Object.freeze({
   [WT_STATUS.PENDING]:  [WT_STATUS.PICKING, WT_STATUS.CANCELLED],
   [WT_STATUS.PICKING]:  [WT_STATUS.SORTING,   WT_STATUS.CANCELLED],
-  [WT_STATUS.SORTING]:  [WT_STATUS.CHECKING,  WT_STATUS.CANCELLED],
-  [WT_STATUS.CHECKING]: [WT_STATUS.PACKING,   WT_STATUS.CANCELLED],
-  [WT_STATUS.PACKING]:  [WT_STATUS.SHIPPING,  WT_STATUS.CANCELLED],
-  [WT_STATUS.SHIPPING]: [WT_STATUS.SHIPPED,   WT_STATUS.CANCELLED],
+  [WT_STATUS.SORTING]:  [WT_STATUS.CHECKING,  WT_STATUS.CANCELLED, WT_STATUS.PICKING],
+  [WT_STATUS.CHECKING]: [WT_STATUS.PACKING,   WT_STATUS.CANCELLED, WT_STATUS.PICKING],
+  [WT_STATUS.PACKING]:  [WT_STATUS.SHIPPING,  WT_STATUS.CANCELLED, WT_STATUS.PICKING, WT_STATUS.CHECKING],
+  [WT_STATUS.SHIPPING]: [WT_STATUS.SHIPPED,   WT_STATUS.CANCELLED, WT_STATUS.PICKING, WT_STATUS.CHECKING],
   [WT_STATUS.SHIPPED]:  [],
   [WT_STATUS.CANCELLED]: [],
 })
@@ -251,6 +254,19 @@ const WT_ACTION_RULES = Object.freeze({
       [WT_STATUS.SHIPPED]: '任务已完成或已取消',
       [WT_STATUS.CANCELLED]: '任务已完成或已取消',
     },
+  },
+  // 以下两条仅供 warehouse-tasks.adjust.js 内部调用，不对外暴露为用户可直接触发的 action。
+  adjustReopenPicking: {
+    // 改单增量：新增/追加的数量必然超出原本已拣数量，任务退回拣货中，让 PDA 把差额拣出来。
+    allowed: [WT_STATUS.SORTING, WT_STATUS.CHECKING, WT_STATUS.PACKING, WT_STATUS.SHIPPING],
+    toStatus: WT_STATUS.PICKING,
+    message: '内部动作：因改单需要补拣，任务退回拣货中',
+  },
+  adjustReopenChecking: {
+    // 改单减量命中已打包/已复核部分：物理退回分拣格后，任务退回待复核，让受影响商品重新走复核→打包。
+    allowed: [WT_STATUS.PACKING, WT_STATUS.SHIPPING],
+    toStatus: WT_STATUS.CHECKING,
+    message: '内部动作：因改单退回分拣格，任务退回待复核',
   },
 })
 

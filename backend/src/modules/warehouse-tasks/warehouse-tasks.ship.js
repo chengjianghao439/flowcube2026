@@ -22,11 +22,14 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, task_type, status, return_id, cancel_requested_at',
+    columns: 'id, task_no, task_type, status, return_id, cancel_requested_at, adjustment_requested_at',
     entityName: '仓库任务',
   })
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在取消收尾中，不可出库', 409)
+  }
+  if (taskRow.adjustment_requested_at) {
+    throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
   }
   const rule = assertWarehouseTaskAction('ship', taskRow.status)
   if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)

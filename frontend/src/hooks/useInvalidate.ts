@@ -97,6 +97,17 @@ const INVALIDATION_MAP = {
     ['dashboard-summary'],
   ],
 
+  /** 执行期改单：预占/仓库任务明细/容器/箱子均可能变化，pending 时还会影响改单确认池 */
+  sale_adjust: [
+    ['sale'],
+    ['warehouse-tasks'],
+    ['warehouse-tasks-stats'],
+    ['inventory-stock'],
+    ['inventory-overview'],
+    ['inventory-containers'],
+    ['warehouse-task-adjustments'],
+  ],
+
   // ── 采购 ──────────────────────────────────────────────────────────────────
 
   /** 新建草稿 */
