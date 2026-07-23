@@ -24,7 +24,7 @@ import { CategoryFinder, SupplierFinder, FinderTrigger } from '@/components/find
 import type { FinderResult } from '@/types/finder'
 
 const DEFAULT_RATES = { A: 10, B: 20, C: 30, D: 40 }
-const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', isActive: true }
+const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, shelfLifeDays: '' as string, isActive: true }
 
 function profitRate(cost: number, sale: number): number | null {
   if (sale <= 0 || !Number.isFinite(cost) || !Number.isFinite(sale)) return null
@@ -79,6 +79,8 @@ export default function ProductFormPage() {
         spec: product.spec ?? '',
         color: product.color ?? '',
         costPrice: product.costPrice != null ? String(product.costPrice) : '',
+        batchManaged: !!product.batchManaged,
+        shelfLifeDays: product.shelfLifeDays != null ? String(product.shelfLifeDays) : '',
         salePriceA: product.salePriceA != null ? String(product.salePriceA) : '',
         salePriceB: product.salePriceB != null ? String(product.salePriceB) : '',
         salePriceC: product.salePriceC != null ? String(product.salePriceC) : '',
@@ -144,6 +146,8 @@ export default function ProductFormPage() {
       spec: form.spec,
       color: form.color,
       costPrice: Number(form.costPrice),
+      batchManaged: form.batchManaged,
+      shelfLifeDays: form.shelfLifeDays !== '' ? Number(form.shelfLifeDays) : null,
       salePriceA: toPrice(form.salePriceA),
       salePriceB: toPrice(form.salePriceB),
       salePriceC: toPrice(form.salePriceC),
@@ -253,6 +257,22 @@ export default function ProductFormPage() {
             <Label>进价 *</Label>
             <Input type="number" step="0.01" min="0.01" value={form.costPrice} onChange={e => set('costPrice', e.target.value)} disabled={submitting} />
           </div>
+          <div className="space-y-1.5">
+            <Label>批次管理</Label>
+            <label className="flex h-10 items-center gap-2 text-sm">
+              <input type="checkbox" className="h-4 w-4" checked={form.batchManaged}
+                onChange={e => set('batchManaged', e.target.checked)} disabled={submitting} />
+              <span className="text-muted-foreground">收货强制录入批次/效期，出库先到期先出</span>
+            </label>
+          </div>
+          {form.batchManaged && (
+            <div className="space-y-1.5">
+              <Label>保质期天数</Label>
+              <Input type="number" min="1" max="3650" value={form.shelfLifeDays}
+                onChange={e => set('shelfLifeDays', e.target.value)} disabled={submitting}
+                placeholder="效期=生产日期+保质期，留空则收货须直接录效期" />
+            </div>
+          )}
         </div>
       </Section>
 

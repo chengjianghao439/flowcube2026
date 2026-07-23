@@ -39,6 +39,7 @@ async function stock(req, res, next) {
       page: +req.query.page||1, pageSize: +req.query.pageSize||20,
       keyword: req.query.keyword||'',
       warehouseId: req.query.warehouseId ? +req.query.warehouseId : null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result, '查询成功')
   } catch(e){next(e)}

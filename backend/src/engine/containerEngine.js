@@ -210,12 +210,13 @@ async function deductFromContainers(conn, {
 }) {
   const absQty = Math.abs(qty)
 
-  // 加行锁读取所有 ACTIVE 容器，FIFO 顺序，同时读取批次信息供调拨保留使用
+  // 加行锁读取所有 ACTIVE 容器，FEFO 优先（有效期的先到期先出，无效期回退 FIFO），
+  // 同时读取批次信息供调拨保留使用
   const [containers] = await conn.query(
     `SELECT id, barcode, remaining_qty, unit, batch_no, mfg_date, exp_date
      FROM inventory_containers
      WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL
-     ORDER BY created_at ASC, id ASC
+     ORDER BY (exp_date IS NULL) ASC, exp_date ASC, created_at ASC, id ASC
      FOR UPDATE`,
     [productId, warehouseId]
   )
@@ -287,7 +288,7 @@ async function deductFromTaskLockedContainers(conn, {
      FROM inventory_containers
      WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL
        AND locked_by_task_id = ?
-     ORDER BY created_at ASC, id ASC
+     ORDER BY (exp_date IS NULL) ASC, exp_date ASC, created_at ASC, id ASC
      FOR UPDATE`,
     [productId, warehouseId, tid],
   )

@@ -5,7 +5,7 @@ const { WT_STATUS, WT_STATUS_NAME, WT_STATUS_PICK_POOL } = require('../../consta
 const { buildPackagePrintSummary } = require('../../utils/printSummary')
 const { fmt, optionalTaskDetailQuery } = require('./warehouse-tasks.helpers')
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null, warehouseId=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, warehouseId=null, scopeWarehouseIds=null }) {
   const offset = (page - 1) * pageSize
   const conds = ['deleted_at IS NULL']
   const params = []
@@ -16,6 +16,10 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, warehouse
   }
   if (status)      { conds.push('status=?');       params.push(status) }
   if (warehouseId) { conds.push('warehouse_id=?'); params.push(warehouseId) }
+  if (Array.isArray(scopeWarehouseIds)) {
+    if (scopeWarehouseIds.length) { conds.push('warehouse_id IN (?)'); params.push(scopeWarehouseIds) }
+    else { conds.push('1=0') }
+  }
   const where = conds.join(' AND ')
 
   const [rows] = await pool.query(`SELECT * FROM warehouse_tasks WHERE ${where} ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?`, [...params, pageSize, offset])

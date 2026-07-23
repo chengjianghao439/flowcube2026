@@ -158,6 +158,10 @@ export interface ReceiveParams {
   confirmOverReceive?: boolean
   /** 错货防护：扫码核对通过时带上原始扫码值，后端兜底比对商品条码/编码 */
   scannedBarcode?: string
+  /** 批次/效期（batch_managed 商品后端强制；效期可由生产日期+保质期推算） */
+  batchNo?: string
+  mfgDate?: string
+  expDate?: string
 }
 
 export interface ReceivePackageResult {

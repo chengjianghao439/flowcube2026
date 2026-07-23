@@ -3,7 +3,7 @@ const { successResponse } = require('../../utils/response')
 const { extractRequestKey } = require('../../utils/requestKey')
 const { getOperatorFromRequest } = require('../../utils/operator')
 
-const list = async(req,res,next)=>{ try{const{page=1,pageSize=20,keyword='',status,warehouseId}=req.query;const data=await svc.findAll({page:+page,pageSize:+pageSize,keyword,status:status?+status:null,warehouseId:warehouseId?+warehouseId:null});return successResponse(res,data,'查询成功')}catch(e){next(e)} }
+const list = async(req,res,next)=>{ try{const{page=1,pageSize=20,keyword='',status,warehouseId}=req.query;const data=await svc.findAll({page:+page,pageSize:+pageSize,keyword,status:status?+status:null,warehouseId:warehouseId?+warehouseId:null,scopeWarehouseIds:req.user?.warehouseIds??null});return successResponse(res,data,'查询成功')}catch(e){next(e)} }
 const myTasks = async(req,res,next)=>{ try{return successResponse(res,await svc.findMyTasks(),'查询成功')}catch(e){next(e)} }
 const myTaskSkuSummary = async(req,res,next)=>{ try{return successResponse(res,await svc.findMyTaskSkuSummary(),'查询成功')}catch(e){next(e)} }
 const stats = async(req,res,next)=>{ try{return successResponse(res,await svc.getTaskStats(),'查询成功')}catch(e){next(e)} }

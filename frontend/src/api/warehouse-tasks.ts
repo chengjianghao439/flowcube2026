@@ -177,6 +177,8 @@ export interface PickSuggestionContainer {
   containerKind?: 'inventory' | 'plastic_box'
   locationCode: string | null
   remainingQty: number
+  batchNo?: string | null
+  expDate?: string | null
   locked: boolean
 }
 

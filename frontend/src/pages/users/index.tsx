@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useUsers, useDeleteUser } from '@/hooks/useUsers'
 import UserFormDialog from './components/UserFormDialog'
+import WarehouseScopeDialog from './components/WarehouseScopeDialog'
 import ResetPasswordDialog from './components/ResetPasswordDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
@@ -19,6 +20,7 @@ export default function UsersPage() {
   const currentUser = useAuthStore((s) => s.user)
 
   const [keyword, setKeyword] = useState('')
+  const [scopeTarget, setScopeTarget] = useState<{ id: number; name: string } | null>(null)
   const [search, setSearch] = useState('')
 
   const [formOpen, setFormOpen] = useState(false)
@@ -84,6 +86,7 @@ export default function UsersPage() {
           onPrimaryClick={() => handleEdit(row)}
           items={[
             { label: '重置密码', onClick: () => handleResetPassword(row) },
+            { label: '仓库数据权限', onClick: () => setScopeTarget({ id: row.id, name: row.realName || row.username }) },
             ...(row.id !== currentUser?.id
               ? [{ label: '删除', destructive: true, separatorBefore: true, onClick: () => handleDelete(row) }]
               : []),
@@ -150,6 +153,12 @@ export default function UsersPage() {
         confirmText="删除"
         onConfirm={() => { deleteUser(deleteTarget!.id); setDeleteTarget(null) }}
         onCancel={() => setDeleteTarget(null)}
+      />
+      <WarehouseScopeDialog
+        open={!!scopeTarget}
+        onClose={() => setScopeTarget(null)}
+        userId={scopeTarget?.id ?? null}
+        userName={scopeTarget?.name}
       />
     </div>
   )

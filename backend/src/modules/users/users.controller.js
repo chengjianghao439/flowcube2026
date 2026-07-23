@@ -69,4 +69,7 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { list, options, detail, create, update, resetPassword, remove }
+const warehouseScope = async(req,res,next)=>{ try{return successResponse(res,await usersService.getWarehouseScope(+req.params.id),'查询成功')}catch(e){next(e)} }
+const setWarehouseScope = async(req,res,next)=>{ try{return successResponse(res,await usersService.setWarehouseScope(+req.params.id,req.body.warehouseIds),'仓库数据权限已更新')}catch(e){next(e)} }
+
+module.exports = { list, options, detail, create, update, resetPassword, remove, warehouseScope, setWarehouseScope }

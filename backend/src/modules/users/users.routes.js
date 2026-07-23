@@ -43,6 +43,9 @@ router.get('/:id',           requirePermission(PERMISSIONS.USER_VIEW), usersCont
 router.post('/',             requirePermission(PERMISSIONS.USER_CREATE), validateBody(createSchema),        usersController.create)
 router.put('/:id',           requirePermission(PERMISSIONS.USER_UPDATE), validateBody(updateSchema),        usersController.update)
 router.put('/:id/password',  requirePermission(PERMISSIONS.USER_RESET_PASSWORD), validateBody(resetPasswordSchema), usersController.resetPassword)
+// 仓库数据权限：空数组=不限仓。管理入口与用户编辑同权限。
+router.get('/:id/warehouse-scope', requirePermission(PERMISSIONS.USER_VIEW), usersController.warehouseScope)
+router.put('/:id/warehouse-scope', requirePermission(PERMISSIONS.USER_UPDATE), validateBody(z.object({ warehouseIds: z.array(z.number().int().positive()).max(100) })), usersController.setWarehouseScope)
 router.delete('/:id',        requirePermission(PERMISSIONS.USER_DELETE), usersController.remove)
 
 module.exports = router

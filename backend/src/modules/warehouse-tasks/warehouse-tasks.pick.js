@@ -175,6 +175,7 @@ async function _fetchContainersForProducts(productIds, warehouseId, taskId) {
   const [containers] = await pool.query(
     `SELECT c.id AS containerId, c.barcode, c.container_type AS containerType, c.remaining_qty AS remainingQty,
             c.product_id AS productId,
+            c.batch_no AS batchNo, c.exp_date AS expDate,
             c.locked_by_task_id AS lockedByTaskId,
             loc.code AS locationCode,
             loc.zone, loc.aisle, loc.rack, loc.level, loc.position
@@ -187,6 +188,7 @@ async function _fetchContainersForProducts(productIds, warehouseId, taskId) {
        AND c.deleted_at IS NULL
        AND (c.locked_by_task_id IS NULL OR c.locked_by_task_id = ?)
      ORDER BY
+       (c.exp_date IS NULL) ASC, c.exp_date ASC,
        loc.zone ASC, loc.aisle ASC, loc.rack ASC, loc.level ASC, loc.position ASC,
        c.created_at ASC`,
     [productIds, warehouseId, taskId],
@@ -226,6 +228,8 @@ async function getPickSuggestions(taskId) {
         containerKind: Number(c.containerType) === 2 || /^B/i.test(String(c.barcode || '')) ? 'plastic_box' : 'inventory',
         locationCode: c.locationCode || null,
         remainingQty: Number(c.remainingQty),
+        batchNo:      c.batchNo || null,
+        expDate:      c.expDate || null,
         locked:       c.lockedByTaskId === taskId,
       })),
     }

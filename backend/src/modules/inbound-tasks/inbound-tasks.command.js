@@ -229,7 +229,8 @@ async function submit(taskId, operator) {
 const OVER_RECEIVE_CONFIRM_RATIO = 0.2
 
 async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } = {}) {
-  const { productId, qty, packages: rawPackages, confirmOverReceive, scannedBarcode } = payload
+  const { productId, qty, packages: rawPackages, confirmOverReceive, scannedBarcode, batchNo, mfgDate } = payload
+  let { expDate } = payload
   const productIdN = Number(productId)
   const packages = Array.isArray(rawPackages) && rawPackages.length
     ? rawPackages
@@ -244,15 +245,16 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
   if (!normalizedPackages.length) throw new AppError('请至少填写一箱数量', 400)
   if (normalizedPackages.some(pkg => !Number.isFinite(pkg.qty) || pkg.qty <= 0)) throw new AppError('箱数量必须大于 0', 400)
 
+  const [[productRow]] = await pool.query(
+    'SELECT barcode, code, batch_managed, shelf_life_days FROM product_items WHERE id=? AND deleted_at IS NULL',
+    [productIdN],
+  )
+  if (!productRow) throw new AppError('商品不存在', 404)
+
   // 错货防护：PDA 端做过商品条码核对时会带上 scannedBarcode，后端兜底再验一次
   // （防止绕过前端直接调 API 用错误条码入账）。扫码值匹配商品条码或商品编码任一即可；
   // 未传则不校验（商品可能未维护条码，前端有"未核对二次确认"闸门兜底）。
   if (scannedBarcode) {
-    const [[productRow]] = await pool.query(
-      'SELECT barcode, code FROM product_items WHERE id=? AND deleted_at IS NULL',
-      [productIdN],
-    )
-    if (!productRow) throw new AppError('商品不存在', 404)
     const scanned = String(scannedBarcode).trim().toUpperCase()
     const candidates = [productRow.barcode, productRow.code]
       .map(v => String(v || '').trim().toUpperCase())
@@ -260,6 +262,17 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
     if (candidates.length && !candidates.includes(scanned)) {
       throw new AppError('扫描的商品条码与所选商品不符，请核对实物后重试', 400)
     }
+  }
+
+  // 批次管理商品：强制录入批次；效期缺省由 生产日期 + 保质期天数 推算（迁移 121）
+  if (Number(productRow.batch_managed) === 1) {
+    if (!batchNo || !String(batchNo).trim()) throw new AppError('该商品启用了批次管理，收货必须录入批次号', 400)
+    if (!expDate && mfgDate && Number(productRow.shelf_life_days) > 0) {
+      const d = new Date(`${mfgDate}T00:00:00`)
+      d.setDate(d.getDate() + Number(productRow.shelf_life_days))
+      expDate = d.toISOString().slice(0, 10)
+    }
+    if (!expDate) throw new AppError('该商品启用了批次管理，请录入效期（或录入生产日期并在商品资料维护保质期天数）', 400)
   }
 
   const conn = await pool.getConnection()
@@ -362,6 +375,9 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
         warehouseId,
         initialQty: pkg.qty,
         unit,
+        batchNo: batchNo ? String(batchNo).trim() : null,
+        mfgDate: mfgDate || null,
+        expDate: expDate || null,
         locationId: null,
         inboundTaskId: taskId,
         containerStatus: CONTAINER_STATUS.PENDING_PUTAWAY,

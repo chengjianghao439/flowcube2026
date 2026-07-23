@@ -8,6 +8,7 @@ async function list(req, res, next) {
       page: parseInt(page) || 1,
       pageSize: parseInt(pageSize) || 20,
       keyword: keyword || '',
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result, '查询成功')
   } catch (err) { next(err) }
@@ -15,7 +16,7 @@ async function list(req, res, next) {
 
 async function listActive(req, res, next) {
   try {
-    const list = await warehousesService.findAllActive()
+    const list = await warehousesService.findAllActive(req.user?.warehouseIds ?? null)
     return successResponse(res, list, '查询成功')
   } catch (err) { next(err) }
 }

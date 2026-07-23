@@ -1,4 +1,5 @@
 const { pool } = require('../../config/db')
+const { scopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, splitContainer } = require('../../engine/containerEngine')
@@ -12,13 +13,14 @@ const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
  * - reserved 读取 inventory_stock 的 projection 字段
  * - 不应用于关键业务判定
  */
-async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', warehouseId=null }) {
+async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', warehouseId=null, scopeWarehouseIds=null }) {
   const offset = (page-1)*pageSize
   const like = `%${keyword}%`
-  const whFilter = warehouseId ? 'AND dims.warehouse_id=?' : ''
+  const scope = scopeFilter(scopeWarehouseIds, 'dims.warehouse_id')
+  const whFilter = (warehouseId ? 'AND dims.warehouse_id=?' : '') + scope.sql
   const params = warehouseId
-    ? [like, like, warehouseId, pageSize, offset]
-    : [like, like, pageSize, offset]
+    ? [like, like, warehouseId, ...scope.params, pageSize, offset]
+    : [like, like, ...scope.params, pageSize, offset]
 
   const [rows] = await pool.query(
     `SELECT COALESCE(s.id, -((dims.product_id * 1000000) + dims.warehouse_id)) AS id,
@@ -47,7 +49,7 @@ async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', war
     params,
   )
 
-  const cntParams = warehouseId ? [like, like, warehouseId] : [like, like]
+  const cntParams = warehouseId ? [like, like, warehouseId, ...scope.params] : [like, like, ...scope.params]
   const [[{total}]] = await pool.query(
     `SELECT COUNT(*) AS total
      FROM (

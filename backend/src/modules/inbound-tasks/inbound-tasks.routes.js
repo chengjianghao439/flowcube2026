@@ -35,12 +35,16 @@ const createSchema = z.union([
 ])
 
 /** 收货：兼容旧客户端单包；新版支持同商品多箱录入 { productId, packages:[{ qty }] } */
+const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式须为 YYYY-MM-DD')
 const receiveSchema = z.union([
   z.object({
     productId: z.number().int().positive('商品无效'),
     qty:       z.number().positive('本包数量必须大于 0'),
     confirmOverReceive: z.boolean().optional(),
     scannedBarcode: z.string().trim().min(1).optional(),
+    batchNo: z.string().trim().max(50).optional(),
+    mfgDate: dateStr.optional(),
+    expDate: dateStr.optional(),
   }),
   z.object({
     productId: z.number().int().positive('商品无效'),
@@ -51,6 +55,9 @@ const receiveSchema = z.union([
     ).min(1, '请至少填写一箱数量'),
     confirmOverReceive: z.boolean().optional(),
     scannedBarcode: z.string().trim().min(1).optional(),
+    batchNo: z.string().trim().max(50).optional(),
+    mfgDate: dateStr.optional(),
+    expDate: dateStr.optional(),
   }),
   z
     .object({

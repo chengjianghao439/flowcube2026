@@ -31,6 +31,8 @@ const productBase = z.object({
   salePriceC:     z.number().positive().optional(),
   salePriceD:     z.number().positive().optional(),
   remark:         z.string().max(30,'备注最多 30 个字符').optional(),
+  batchManaged:   z.boolean().optional(),
+  shelfLifeDays:  z.number().int().min(1,'保质期天数必须大于 0').max(3650).nullable().optional(),
 })
 
 const { generateMasterCode } = require('../../utils/codeGenerator')

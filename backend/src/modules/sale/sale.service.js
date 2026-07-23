@@ -1,4 +1,5 @@
 const { pool } = require('../../config/db')
+const { scopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { reserve, releaseByRef } = require('../../engine/reservationEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
@@ -229,7 +230,7 @@ function mapTimeline(rows, order) {
   return [...base, ...mapped].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, customerId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, customerId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null, scopeWarehouseIds=null }) {
   const offset=(page-1)*pageSize
   const params=[]
   const countParams=[]
@@ -289,6 +290,13 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     countCond += ' AND operator_id=?'
     params.push(operatorId)
     countParams.push(operatorId)
+  }
+  const scope = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+  if (scope.sql) {
+    cond += scope.sql
+    countCond += scopeFilter(scopeWarehouseIds, 'warehouse_id').sql
+    params.push(...scope.params)
+    countParams.push(...scope.params)
   }
   const [rows] = await pool.query(
     `SELECT so.*, ${warehouseTaskProjection}

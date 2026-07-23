@@ -137,4 +137,37 @@ async function softDelete(id, currentUserId) {
   )
 }
 
-module.exports = { findAll, listOptions, findById, create, update, resetPassword, softDelete }
+/** 用户仓库数据权限（user_warehouse_scope）：空数组=清空(不限仓) */
+async function getWarehouseScope(userId) {
+  const [rows] = await pool.query(
+    `SELECT s.warehouse_id, w.name AS warehouse_name
+     FROM user_warehouse_scope s
+     JOIN inventory_warehouses w ON w.id = s.warehouse_id AND w.deleted_at IS NULL
+     WHERE s.user_id = ?`,
+    [userId],
+  )
+  return rows.map(r => ({ warehouseId: Number(r.warehouse_id), warehouseName: r.warehouse_name }))
+}
+
+async function setWarehouseScope(userId, warehouseIds) {
+  await findById(userId)
+  const ids = [...new Set((warehouseIds || []).map(Number).filter(n => Number.isFinite(n) && n > 0))]
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await conn.query('DELETE FROM user_warehouse_scope WHERE user_id = ?', [userId])
+    for (const wid of ids) {
+      await conn.query('INSERT INTO user_warehouse_scope (user_id, warehouse_id) VALUES (?, ?)', [userId, wid])
+    }
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+  require('../../utils/warehouseScope').clearScopeCache(userId)
+  return { userId: Number(userId), warehouseIds: ids }
+}
+
+module.exports = { findAll, listOptions, findById, create, update, resetPassword, softDelete, getWarehouseScope, setWarehouseScope }

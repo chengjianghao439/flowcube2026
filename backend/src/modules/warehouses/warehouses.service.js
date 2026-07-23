@@ -1,4 +1,5 @@
 const { pool } = require('../../config/db')
+const { scopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 
@@ -47,29 +48,32 @@ async function assertWarehouseDeletable(id) {
   }
 }
 
-async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', scopeWarehouseIds = null }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
+  const scope = scopeFilter(scopeWarehouseIds, 'id')
 
   const [rows] = await pool.query(
     `SELECT * FROM inventory_warehouses
-     WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)
+     WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)${scope.sql}
      ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    [like, like, pageSize, offset],
+    [like, like, ...scope.params, pageSize, offset],
   )
 
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM inventory_warehouses
-     WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)`,
-    [like, like],
+     WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)${scope.sql}`,
+    [like, like, ...scope.params],
   )
 
   return { list: rows.map(formatRow), pagination: { page, pageSize, total } }
 }
 
-async function findAllActive() {
+async function findAllActive(scopeWarehouseIds = null) {
+  const scope = scopeFilter(scopeWarehouseIds, 'id')
   const [rows] = await pool.query(
-    'SELECT id, code, name, type FROM inventory_warehouses WHERE deleted_at IS NULL AND is_active = 1 ORDER BY name ASC',
+    `SELECT id, code, name, type FROM inventory_warehouses WHERE deleted_at IS NULL AND is_active = 1${scope.sql} ORDER BY name ASC`,
+    scope.params,
   )
   return rows.map((r) => ({ id: r.id, code: r.code, name: r.name, type: r.type }))
 }

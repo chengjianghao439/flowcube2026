@@ -205,6 +205,11 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   // 手动点选的商品提交前给一次"未核对"警示（armed 二次点击放行，兼容商品无条码的场景）
   const [scanVerified, setScanVerified] = useState<{ productId: number; barcode: string } | null>(null)
   const [noScanArmed, setNoScanArmed] = useState<number | null>(null)
+  // 批次/效期采集（选填折叠区）：批次管理商品后端强制校验，未填会明确报错引导补录
+  const [batchOpen, setBatchOpen] = useState(false)
+  const [batchNo, setBatchNo] = useState('')
+  const [mfgDate, setMfgDate] = useState('')
+  const [expDate, setExpDate] = useState('')
   const receiveAction = useCriticalPdaAction<{
     containers?: Array<{ containerId: number }>
     printJobIds?: number[]
@@ -254,9 +259,10 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   function selectProduct(productId: number) {
     setSelectedProductId(productId)
     resetBoxes(1)
-    // 切换商品即重置核对状态（扫码选中路径会在 handleScan 里重新置位）
+    // 切换商品即重置核对状态（扫码选中路径会在 handleScan 里重新置位）与批次录入
     setScanVerified(null)
     setNoScanArmed(null)
+    setBatchNo(''); setMfgDate(''); setExpDate(''); setBatchOpen(false)
   }
 
   function handleScan(raw: string) {
@@ -338,6 +344,9 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           packages: normalizedBoxes.map(box => ({ qty: box.qty })),
           confirmOverReceive: needsConfirm || undefined,
           scannedBarcode: scanOk ? scanVerified?.barcode : undefined,
+          batchNo: batchNo.trim() || undefined,
+          mfgDate: mfgDate || undefined,
+          expDate: expDate || undefined,
         }, requestKey).then((res) => res!),
       { productId: activeProduct.productId, expectedReceivedQty },
     ).then((result) => {
@@ -441,6 +450,32 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
             ))}
           </div>
         </div>
+
+        {activeProduct && (
+          <PdaCard>
+            <button type="button" className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setBatchOpen(o => !o)}>
+              {batchOpen ? '▲ 收起批次/效期' : '▼ 批次/效期（批次管理商品必填）'}
+            </button>
+            {batchOpen && (
+              <div className="mt-2 grid grid-cols-1 gap-2">
+                <input className="h-10 rounded-md border border-border bg-background px-3 text-sm" placeholder="批次号"
+                  value={batchNo} onChange={e => setBatchNo(e.target.value)} maxLength={50} />
+                <div className="flex items-center gap-2">
+                  <span className="w-16 shrink-0 text-xs text-muted-foreground">生产日期</span>
+                  <input type="date" className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                    value={mfgDate} onChange={e => setMfgDate(e.target.value)} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-16 shrink-0 text-xs text-muted-foreground">效期至</span>
+                  <input type="date" className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                    value={expDate} onChange={e => setExpDate(e.target.value)} />
+                </div>
+                <p className="text-xs text-muted-foreground">商品维护了保质期天数时，只填生产日期即可自动算效期</p>
+              </div>
+            )}
+          </PdaCard>
+        )}
 
         {activeProduct ? (
           <ReceiveEditor

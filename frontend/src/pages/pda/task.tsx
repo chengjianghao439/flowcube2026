@@ -44,6 +44,7 @@ function SuggestionRow({ c, onTap, disabled }: {
         <div className="mt-0.5 flex items-center gap-2">
           <p className="font-mono text-xs text-muted-foreground">{c.barcode}</p>
           <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${c.containerKind === 'plastic_box' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'}`}>{kindLabel}</span>
+          {c.expDate && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">效期 {String(c.expDate).slice(0, 10)}</span>}
         </div>
       </div>
       <div className="text-right">
