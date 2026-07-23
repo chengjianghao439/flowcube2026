@@ -17,7 +17,7 @@ import type { TableColumn } from '@/types'
 
 const PHONE_RE = /^1\d{10}$/
 
-const empty = { name:'', contact:'', phone:'', email:'', address:'', remark:'', isActive:true }
+const empty = { name:'', contact:'', phone:'', email:'', address:'', remark:'', paymentTermsDays:'30', isActive:true }
 
 export default function SuppliersPage() {
   const [keyword, setKeyword] = useState(''); const [search, setSearch] = useState('')
@@ -32,11 +32,11 @@ export default function SuppliersPage() {
   const set = (k:string, v:string|boolean) => setForm(f=>({...f,[k]:v}))
 
   function openCreate() { setEdit(null); setForm(empty); setOpen(true) }
-  function openEdit(s:Supplier) { setEdit(s); setForm({name:s.name,contact:s.contact??'',phone:s.phone??'',email:s.email??'',address:s.address??'',remark:s.remark??'',isActive:s.isActive}); setOpen(true) }
+  function openEdit(s:Supplier) { setEdit(s); setForm({name:s.name,contact:s.contact??'',phone:s.phone??'',email:s.email??'',address:s.address??'',remark:s.remark??'',paymentTermsDays:String(s.paymentTermsDays??30),isActive:s.isActive}); setOpen(true) }
   function handleSubmit(e:React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (form.phone && !PHONE_RE.test(form.phone)) { toast.error('请输入正确的手机号'); return }
-    const p = { name:form.name, contact:form.contact||undefined, phone:form.phone||undefined, email:form.email||undefined, address:form.address||undefined, remark:form.remark||undefined }
+    const p = { name:form.name, contact:form.contact||undefined, phone:form.phone||undefined, email:form.email||undefined, address:form.address||undefined, remark:form.remark||undefined, paymentTermsDays:Number(form.paymentTermsDays)>=0?Number(form.paymentTermsDays):30 }
     if (edit) update({ id:edit.id, data:{...p,isActive:form.isActive} }, { onSuccess:()=>setOpen(false) })
     else create(p, { onSuccess:()=>setOpen(false) })
   }
@@ -97,6 +97,7 @@ export default function SuppliersPage() {
             <div className="space-y-1"><Label>邮箱</Label><Input value={form.email} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('email',e.target.value)} disabled={isPending} placeholder="选填"/></div>
             <div className="space-y-1"><Label>地址</Label><LimitedInput maxLength={30} value={form.address} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('address',e.target.value)} disabled={isPending}/></div>
             <div className="space-y-1"><Label>备注</Label><LimitedInput maxLength={30} value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)} disabled={isPending}/></div>
+            <div className="space-y-1"><Label>应付账期（天）</Label><Input type="number" min="0" max="365" value={form.paymentTermsDays} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('paymentTermsDays',e.target.value)} disabled={isPending}/></div>
             {edit && <div className="flex items-center gap-2"><input type="checkbox" id="sp-active" checked={form.isActive} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('isActive',e.target.checked)} className="accent-primary"/><Label htmlFor="sp-active" className="cursor-pointer">启用</Label></div>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={()=>setOpen(false)} disabled={isPending}>取消</Button>

@@ -11,8 +11,9 @@ import { DatePicker } from '@/components/shared/DatePicker'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { getPaymentsApi, payApi, getEntriesApi } from '@/api/payments'
+import { getPaymentsApi, payApi, getEntriesApi, confirmPaymentApi, getSettlementDetailApi } from '@/api/payments'
 import type { PaymentRecord, PaymentEntry } from '@/api/payments'
+import { toast } from '@/lib/toast'
 import type { TableColumn } from '@/types'
 import { formatDisplayDate } from '@/lib/dateTime'
 
@@ -25,6 +26,7 @@ export default function PaymentsPage() {
   const [payOpen, setPayOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<PaymentRecord | null>(null)
   const [entriesOpen, setEntriesOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [payAmount, setPayAmount] = useState('')
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10))
   const [payMethod, setPayMethod] = useState('转账')
@@ -33,6 +35,15 @@ export default function PaymentsPage() {
   const { data, isLoading } = useQuery({ queryKey: ['payments', { type: tab, status: statusFilter }], queryFn: () => getPaymentsApi({ type: tab, pageSize: 99999, status: statusFilter || undefined }) })
   const { data: entries } = useQuery({ queryKey: ['payment-entries', selectedRecord?.id], queryFn: () => getEntriesApi(selectedRecord!.id).then(r => r || []), enabled: !!selectedRecord && entriesOpen })
   const payMut = useMutation({ mutationFn: ({ id, d }: { id: number; d: object }) => payApi(id, d), onSuccess: () => { qc.invalidateQueries({ queryKey: ['payments'] }); setPayOpen(false); setPayAmount(''); setPayRemark('') } })
+  const { data: settlement } = useQuery({
+    queryKey: ['payment-settlement', selectedRecord?.id],
+    queryFn: () => getSettlementDetailApi(selectedRecord!.id),
+    enabled: !!selectedRecord && confirmOpen && tab === 1,
+  })
+  const confirmMut = useMutation({
+    mutationFn: (id: number) => confirmPaymentApi(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payments'] }); setConfirmOpen(false); toast.success('应付结算已确认，可登记付款') },
+  })
 
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,6 +60,12 @@ export default function PaymentsPage() {
     { key: 'paidAmount', title: '已付金额', width: 100, render: (v) => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
     { key: 'balance', title: '余额', width: 100, render: (v) => <span className={`tabular-nums ${Number(v) > 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
     { key: 'status', title: '状态', width: 90, render: (v, row) => <Badge variant={ST_COLOR[v as number]}>{(row as PaymentRecord).statusName}</Badge> },
+    // 财务确认列：仅应付 tab 有意义——上架自动结算的应付须确认后才能登记付款
+    ...(tab === 1 ? [{ key: 'confirmStatus', title: '结算确认', width: 100, render: (_: unknown, row: PaymentRecord) => (
+      row.confirmStatus === 0
+        ? <Badge variant="destructive">待确认</Badge>
+        : <span className="text-xs text-muted-foreground">{row.confirmedByName ? `已确认 · ${row.confirmedByName}` : '已确认'}</span>
+    ) }] as TableColumn<PaymentRecord>[] : []),
     { key: 'dueDate', title: '到期日', width: 100, render: (v, row) => {
       const d = v ? formatDisplayDate(v) : null
       const r = row as PaymentRecord
@@ -57,7 +74,22 @@ export default function PaymentsPage() {
     }},
     { key: 'id', title: '操作', width: 120, render: (_, row) => {
       const r = row as PaymentRecord
-      return r.status !== 3 ? (
+      const needsConfirm = tab === 1 && r.confirmStatus === 0
+      if (r.status === 3) {
+        return <Button size="sm" variant="outline" onClick={() => { setSelectedRecord(r); setEntriesOpen(true) }}>流水</Button>
+      }
+      if (needsConfirm) {
+        return (
+          <TableActionsMenu
+            primaryLabel="确认结算"
+            onPrimaryClick={() => { setSelectedRecord(r); setConfirmOpen(true) }}
+            items={[
+              { label: '流水', onClick: () => { setSelectedRecord(r); setEntriesOpen(true) } },
+            ]}
+          />
+        )
+      }
+      return (
         <TableActionsMenu
           primaryLabel="登记付款"
           primaryVariant="outline"
@@ -66,8 +98,6 @@ export default function PaymentsPage() {
             { label: '流水', onClick: () => { setSelectedRecord(r); setEntriesOpen(true) } },
           ]}
         />
-      ) : (
-        <Button size="sm" variant="outline" onClick={() => { setSelectedRecord(r); setEntriesOpen(true) }}>流水</Button>
       )
     }}
   ]
@@ -142,6 +172,53 @@ export default function PaymentsPage() {
             </div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setPayOpen(false)}>取消</Button><Button type="submit" disabled={payMut.isPending}>确认登记</Button></DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 应付结算确认弹窗：并排展示结算明细（实际上架量×采购单价 + 退货冲减），财务核对后确认 */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>应付结算确认 — <span className="text-doc-code-strong">{selectedRecord?.orderNo}</span></DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            该应付由收货上架自动结算生成。请核对以下明细（实际上架量 × 采购单价）后确认；确认后才可登记付款。
+            若结算金额后续被重算改变（补收货/退货/撤回收货），会自动打回待确认。
+          </p>
+          <div className="max-h-80 overflow-y-auto border rounded-md">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-xs text-muted-foreground">
+                <tr><th className="px-2 py-1.5 text-left">收货单</th><th className="px-2 py-1.5 text-left">商品</th><th className="px-2 py-1.5 text-right">上架量</th><th className="px-2 py-1.5 text-right">采购单价</th><th className="px-2 py-1.5 text-right">金额</th></tr>
+              </thead>
+              <tbody>
+                {settlement?.lines.map((l, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="px-2 py-1.5 text-doc-code">{l.taskNo}</td>
+                    <td className="px-2 py-1.5">{l.productName}{l.articleNumber ? <span className="text-xs text-muted-foreground"> · {l.articleNumber}</span> : null}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{l.putawayQty}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">¥{l.unitPrice.toFixed(2)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">¥{l.amount.toFixed(2)}</td>
+                  </tr>
+                ))}
+                {settlement?.returns.map((r, i) => (
+                  <tr key={`ret-${i}`} className="border-t text-destructive">
+                    <td className="px-2 py-1.5 text-doc-code">{r.returnNo}</td>
+                    <td className="px-2 py-1.5">采购退货冲减</td>
+                    <td className="px-2 py-1.5" colSpan={2}></td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">¥{r.amount.toFixed(2)}</td>
+                  </tr>
+                ))}
+                {!settlement?.lines.length && !settlement?.returns.length && (
+                  <tr><td colSpan={5} className="px-2 py-4 text-center text-muted-foreground">加载中…</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-right text-sm">应付合计：<span className="font-bold tabular-nums">¥{selectedRecord ? selectedRecord.totalAmount.toFixed(2) : '0.00'}</span></p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>取消</Button>
+            <Button disabled={confirmMut.isPending} onClick={() => { if (selectedRecord) confirmMut.mutate(selectedRecord.id) }}>
+              {confirmMut.isPending ? '确认中…' : '确认结算金额'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

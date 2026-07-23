@@ -27,4 +27,10 @@ router.post('/:id/pay', requirePermission(PERMISSIONS.PAYMENT_EXECUTE), vParams(
 // 账款明细（付款记录）
 router.get('/:id/entries', requirePermission(PERMISSIONS.PAYMENT_VIEW), vParams(idParam), ctrl.entries)
 
+// 应付结算财务确认（确认后才允许登记付款；金额重算改变会自动打回待确认）
+router.post('/:id/confirm', requirePermission(PERMISSIONS.PAYMENT_CONFIRM), vParams(idParam), ctrl.confirm)
+
+// 应付结算明细对照（确认页展示：实际上架量×采购单价 + 退货冲减）
+router.get('/:id/settlement-detail', requirePermission(PERMISSIONS.PAYMENT_VIEW), vParams(idParam), ctrl.settlementDetail)
+
 module.exports = router

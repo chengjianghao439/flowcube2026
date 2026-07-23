@@ -1,4 +1,5 @@
 export interface Supplier {
+  paymentTermsDays?: number
   id: number
   code: string
   name: string

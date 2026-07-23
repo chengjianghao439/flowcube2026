@@ -23,6 +23,7 @@ const base = z.object({
   email:   z.string().email('邮箱格式不正确').max(100).optional().or(z.literal('')),
   address: z.string().max(30,'地址最多 30 个字符').optional(),
   remark:  z.string().max(30,'备注最多 30 个字符').optional(),
+  paymentTermsDays: z.number().int().min(0,'账期天数不能为负').max(365,'账期最长 365 天').optional(),
 })
 
 const { generateMasterCode } = require('../../utils/codeGenerator')

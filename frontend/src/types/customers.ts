@@ -1,4 +1,5 @@
 export interface Customer {
+  paymentTermsDays?: number
   id: number
   code: string
   name: string

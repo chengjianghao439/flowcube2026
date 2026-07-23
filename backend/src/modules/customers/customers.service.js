@@ -24,6 +24,7 @@ const fmt = r => ({
   isActive:!!r.is_active,
   priceLevel:r.price_level || 'A',
   priceLevelName:`价格${r.price_level || 'A'}`,
+  paymentTermsDays:r.payment_terms_days != null ? Number(r.payment_terms_days) : 30,
   createdAt:r.created_at,
 })
 
@@ -56,16 +57,18 @@ async function findById(id) {
   if(!rows[0]) throw new AppError('客户不存在',404)
   return fmt(rows[0])
 }
-async function create({ name,contact,phone,email,address,remark }) {
+async function create({ name,contact,phone,email,address,remark,paymentTermsDays }) {
   const normalizedName = await ensureCustomerNameUnique(name)
   const code = await generateMasterCode(pool, 'CUS', 'sale_customers')
-  const [r] = await pool.query('INSERT INTO sale_customers (code,name,contact,phone,email,address,remark,price_level) VALUES (?,?,?,?,?,?,?,?)',[code,normalizedName,contact||null,phone||null,email||null,address||null,remark||null,'A'])
+  const terms = Number.isFinite(Number(paymentTermsDays)) && Number(paymentTermsDays) >= 0 ? Number(paymentTermsDays) : 30
+  const [r] = await pool.query('INSERT INTO sale_customers (code,name,contact,phone,email,address,remark,price_level,payment_terms_days) VALUES (?,?,?,?,?,?,?,?,?)',[code,normalizedName,contact||null,phone||null,email||null,address||null,remark||null,'A',terms])
   return { id:r.insertId, code }
 }
-async function update(id,{name,contact,phone,email,address,remark,isActive}) {
+async function update(id,{name,contact,phone,email,address,remark,isActive,paymentTermsDays}) {
   await findById(id)
   const normalizedName = await ensureCustomerNameUnique(name, id)
-  await pool.query('UPDATE sale_customers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=? WHERE id=? AND deleted_at IS NULL',[normalizedName,contact||null,phone||null,email||null,address||null,remark||null,isActive?1:0,id])
+  const terms = Number.isFinite(Number(paymentTermsDays)) && Number(paymentTermsDays) >= 0 ? Number(paymentTermsDays) : 30
+  await pool.query('UPDATE sale_customers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=?,payment_terms_days=? WHERE id=? AND deleted_at IS NULL',[normalizedName,contact||null,phone||null,email||null,address||null,remark||null,isActive?1:0,terms,id])
 }
 async function softDelete(id) {
   await findById(id)

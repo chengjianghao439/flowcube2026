@@ -103,6 +103,9 @@ const PERMISSIONS = {
   PAYMENT_VIEW: 'payment.view',
   PAYMENT_CREATE: 'payment.create',
   PAYMENT_EXECUTE: 'payment.execute',
+  // 应付结算财务确认。刻意不 seed 给任何角色（超管硬编码豁免可用），
+  // 由产品在权限管理页手动开放给财务角色——与 TRANSFER_ORDER_FORCE_CLOSE 同先例。
+  PAYMENT_CONFIRM: 'payment.confirm',
 
   WAREHOUSE_TASK_VIEW: 'warehouse.task.view',
   WAREHOUSE_TASK_ASSIGN: 'warehouse.task.assign',

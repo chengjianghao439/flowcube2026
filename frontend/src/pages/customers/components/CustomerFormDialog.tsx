@@ -10,7 +10,7 @@ import type { Customer } from '@/types/customers'
 
 interface Props { open: boolean; onClose: () => void; customer?: Customer | null }
 
-const empty = { name:'', contact:'', phone:'', email:'', address:'', remark:'' }
+const empty = { name:'', contact:'', phone:'', email:'', address:'', remark:'', paymentTermsDays:'30' }
 const PHONE_RE = /^1\d{10}$/
 
 export default function CustomerFormDialog({ open, onClose, customer }: Props) {
@@ -23,7 +23,7 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   useEffect(() => {
     if (!open) return
     if (customer) {
-      setF({ name:customer.name, contact:customer.contact||'', phone:customer.phone||'', email:customer.email||'', address:customer.address||'', remark:customer.remark||'' })
+      setF({ name:customer.name, contact:customer.contact||'', phone:customer.phone||'', email:customer.email||'', address:customer.address||'', remark:customer.remark||'', paymentTermsDays:String(customer.paymentTermsDays??30) })
     } else {
       setF(empty)
     }
@@ -32,11 +32,12 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (f.phone && !PHONE_RE.test(f.phone)) { toast.error('请输入正确的手机号'); return }
+    const payload = { ...f, paymentTermsDays: Number(f.paymentTermsDays) >= 0 ? Number(f.paymentTermsDays) : 30 }
     try {
       if (isEdit && customer) {
-        await update.mutateAsync({ id:customer.id, data:{ ...f, isActive:customer.isActive } })
+        await update.mutateAsync({ id:customer.id, data:{ ...payload, isActive:customer.isActive } })
       } else {
-        await create.mutateAsync(f)
+        await create.mutateAsync(payload)
       }
       onClose()
     } catch {
@@ -82,6 +83,10 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
           <div className="space-y-1">
             <Label>备注</Label>
             <LimitedInput maxLength={30} value={f.remark} onChange={set('remark')} placeholder="备注信息" />
+          </div>
+          <div className="space-y-1">
+            <Label>应收账期（天）</Label>
+            <Input type="number" min="0" max="365" value={f.paymentTermsDays} onChange={set('paymentTermsDays')} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>取消</Button>

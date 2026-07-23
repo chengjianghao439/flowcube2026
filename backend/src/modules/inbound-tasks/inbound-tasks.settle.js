@@ -15,7 +15,11 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
   const poId = Number(purchaseOrderId)
   if (!Number.isFinite(poId) || poId <= 0) return
   const [[po]] = await conn.query(
-    'SELECT id, order_no, supplier_name FROM purchase_orders WHERE id = ?',
+    `SELECT po.id, po.order_no, po.supplier_name,
+            COALESCE(s.payment_terms_days, 30) AS payment_terms_days
+     FROM purchase_orders po
+     LEFT JOIN supply_suppliers s ON s.id = po.supplier_id
+     WHERE po.id = ?`,
     [poId],
   )
   if (!po) return
@@ -43,16 +47,21 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
     const [[existing]] = await conn.query('SELECT id FROM payment_records WHERE type = 1 AND order_id = ?', [poId])
     if (!existing) return
   }
+  // confirm_status：新结算/金额被重算改变（多批到货、退货冲减、撤回收货）时打回
+  // 待财务确认(0)，金额未变的幂等重算保持原确认状态；付款登记要求 confirm_status=1
+  // （见 payments.service.recordPayment），形成"仓库结算、财务确认、出纳付款"的分权。
+  // 账期按供应商主数据配置（payment_terms_days）。
   await conn.query(
     `INSERT INTO payment_records
-       (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, due_date)
-     VALUES (1, ?, ?, ?, ?, 0, ?, 1, DATE_ADD(NOW(), INTERVAL 30 DAY))
+       (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status, due_date)
+     VALUES (1, ?, ?, ?, ?, 0, ?, 1, 0, DATE_ADD(NOW(), INTERVAL ? DAY))
      ON DUPLICATE KEY UPDATE
+       confirm_status = CASE WHEN total_amount <> VALUES(total_amount) THEN 0 ELSE confirm_status END,
        total_amount = VALUES(total_amount),
        balance = VALUES(total_amount) - paid_amount,
        status = CASE WHEN paid_amount >= VALUES(total_amount) THEN 3
                      WHEN paid_amount > 0 THEN 2 ELSE 1 END`,
-    [poId, po.order_no, po.supplier_name, total, total],
+    [poId, po.order_no, po.supplier_name, total, total, Number(po.payment_terms_days) || 30],
   )
 }
 

@@ -101,6 +101,7 @@ export const PERMISSIONS = {
   PAYMENT_VIEW: 'payment.view',
   PAYMENT_CREATE: 'payment.create',
   PAYMENT_EXECUTE: 'payment.execute',
+  PAYMENT_CONFIRM: 'payment.confirm',
 
   WAREHOUSE_TASK_VIEW: 'warehouse.task.view',
   WAREHOUSE_TASK_ASSIGN: 'warehouse.task.assign',
@@ -238,6 +239,7 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.PAYMENT_VIEW, label: '查看账款' },
       { code: PERMISSIONS.PAYMENT_CREATE, label: '新建账款' },
       { code: PERMISSIONS.PAYMENT_EXECUTE, label: '登记收付款' },
+      { code: PERMISSIONS.PAYMENT_CONFIRM, label: '应付结算确认（财务）' },
     ],
   },
   {

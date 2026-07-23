@@ -6,5 +6,7 @@ const list = async(req,res,next)=>{ try{return successResponse(res,await svc.fin
 const create = async(req,res,next)=>{ try{const operator=getOperatorFromRequest(req);return successResponse(res,await svc.createManual(req.body,operator),'创建成功',201)}catch(e){next(e)} }
 const pay = async(req,res,next)=>{ try{const id=+req.params.id;const operator=getOperatorFromRequest(req);return successResponse(res,await svc.recordPayment(id,req.body,operator),'登记成功')}catch(e){next(e)} }
 const entries = async(req,res,next)=>{ try{return successResponse(res,await svc.findEntries(+req.params.id),'查询成功')}catch(e){next(e)} }
+const confirm = async(req,res,next)=>{ try{const operator=getOperatorFromRequest(req);return successResponse(res,await svc.confirmRecord(+req.params.id,operator),'应付结算已确认，可登记付款')}catch(e){next(e)} }
+const settlementDetail = async(req,res,next)=>{ try{return successResponse(res,await svc.settlementDetail(+req.params.id),'查询成功')}catch(e){next(e)} }
 
-module.exports = { list, create, pay, entries }
+module.exports = { list, create, pay, entries, confirm, settlementDetail }

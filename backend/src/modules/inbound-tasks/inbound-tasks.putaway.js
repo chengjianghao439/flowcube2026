@@ -146,17 +146,52 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
     const afterQty = await syncStockFromContainers(conn, c.product_id, c.warehouse_id)
     const beforeQty = afterQty - qty
 
+    // 移动加权成本：按该商品在本任务对应采购明细的采购单价，更新全局均价
+    //   avg = (在库量×旧均价 + 上架量×采购价) / (在库量 + 上架量)
+    // 在库量取全仓 ACTIVE 容器合计（上架后再减本次量）；查不到采购价（异常数据）则跳过。
+    // 退货/撤回不反冲均价——只随入库正向移动（业界通行简化），采购价同时快照进本条日志。
+    let purchasePrice = null
+    const [[priceRow]] = await conn.query(
+      `SELECT poi.unit_price
+       FROM inbound_task_items iti
+       JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
+       WHERE iti.task_id = ? AND iti.product_id = ?
+       ORDER BY iti.id LIMIT 1`,
+      [taskId, c.product_id],
+    )
+    if (priceRow && Number(priceRow.unit_price) > 0) {
+      purchasePrice = Number(priceRow.unit_price)
+      const [[{ globalQty }]] = await conn.query(
+        `SELECT COALESCE(SUM(remaining_qty), 0) AS globalQty
+         FROM inventory_containers
+         WHERE product_id = ? AND status = 1 AND deleted_at IS NULL`,
+        [c.product_id],
+      )
+      const prevQty = Math.max(0, Number(globalQty) - qty)
+      const [[prod]] = await conn.query(
+        'SELECT avg_cost, cost_price FROM product_items WHERE id = ? FOR UPDATE',
+        [c.product_id],
+      )
+      if (prod) {
+        const oldAvg = Number(prod.avg_cost ?? prod.cost_price ?? 0) || 0
+        const newAvg = prevQty > 0
+          ? (prevQty * oldAvg + qty * purchasePrice) / (prevQty + qty)
+          : purchasePrice
+        await conn.query('UPDATE product_items SET avg_cost = ? WHERE id = ?', [newAvg.toFixed(4), c.product_id])
+      }
+    }
+
     await conn.query(
       `INSERT INTO inventory_logs
          (move_type, type, product_id, warehouse_id, supplier_id,
           quantity, before_qty, after_qty, unit_price,
           ref_type, ref_id, ref_no, container_id, log_source_type, log_source_ref_id,
           remark, operator_id, operator_name)
-       VALUES (?,1,?,?,NULL,?,?,?,NULL,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,1,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         MOVE_TYPE.PURCHASE_IN,
         c.product_id, c.warehouse_id,
-        qty, beforeQty, afterQty,
+        qty, beforeQty, afterQty, purchasePrice,
         'inbound_task', taskId, c.task_no,
         containerId, SOURCE_TYPE.INBOUND_TASK, taskId,
         `入库上架 ${c.task_no} 容器#${c.barcode}`,

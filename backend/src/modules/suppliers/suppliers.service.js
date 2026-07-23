@@ -17,6 +17,7 @@ function fmt(row) {
     id: row.id, code: row.code, name: row.name,
     contact: row.contact, phone: row.phone, email: row.email,
     address: row.address, remark: row.remark,
+    paymentTermsDays: row.payment_terms_days != null ? Number(row.payment_terms_days) : 30,
     isActive: !!row.is_active, createdAt: row.created_at,
   }
 }
@@ -65,22 +66,24 @@ async function findById(id) {
   return fmt(rows[0])
 }
 
-async function create({ name, contact, phone, email, address, remark }) {
+async function create({ name, contact, phone, email, address, remark, paymentTermsDays }) {
   const normalizedName = await ensureSupplierNameUnique(name)
   const code = await generateMasterCode(pool, 'SUP', 'supply_suppliers')
+  const terms = Number.isFinite(Number(paymentTermsDays)) && Number(paymentTermsDays) >= 0 ? Number(paymentTermsDays) : 30
   const [r] = await pool.query(
-    `INSERT INTO supply_suppliers (code,name,contact,phone,email,address,remark) VALUES (?,?,?,?,?,?,?)`,
-    [code, normalizedName, contact||null, phone||null, email||null, address||null, remark||null],
+    `INSERT INTO supply_suppliers (code,name,contact,phone,email,address,remark,payment_terms_days) VALUES (?,?,?,?,?,?,?,?)`,
+    [code, normalizedName, contact||null, phone||null, email||null, address||null, remark||null, terms],
   )
   return { id: r.insertId, code }
 }
 
-async function update(id, { name, contact, phone, email, address, remark, isActive }) {
+async function update(id, { name, contact, phone, email, address, remark, isActive, paymentTermsDays }) {
   await findById(id)
   const normalizedName = await ensureSupplierNameUnique(name, id)
+  const terms = Number.isFinite(Number(paymentTermsDays)) && Number(paymentTermsDays) >= 0 ? Number(paymentTermsDays) : 30
   await pool.query(
-    `UPDATE supply_suppliers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=? WHERE id=? AND deleted_at IS NULL`,
-    [normalizedName, contact||null, phone||null, email||null, address||null, remark||null, isActive?1:0, id],
+    `UPDATE supply_suppliers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=?,payment_terms_days=? WHERE id=? AND deleted_at IS NULL`,
+    [normalizedName, contact||null, phone||null, email||null, address||null, remark||null, isActive?1:0, terms, id],
   )
 }
 
