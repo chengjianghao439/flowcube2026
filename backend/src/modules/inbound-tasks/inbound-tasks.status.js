@@ -5,9 +5,9 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 
 const RECEIPT_STATUS_LABEL = {
   draft: '草稿',
-  submitted: '已提交到PDA',
+  submitted: '已提交',
   receiving: '收货中',
-  printed_waiting_putaway: '已打印待上架',
+  printed_waiting_putaway: '待上架',
   putaway_in_progress: '上架中',
   audited: '已完成',
   exception: '异常中',

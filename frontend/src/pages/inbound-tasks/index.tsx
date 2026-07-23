@@ -78,6 +78,8 @@ export default function InboundTasksPage() {
   const productId     = Number(searchParams.get('productId') || '') || null
   const productCode   = readStringParam(searchParams, 'productCode')
   const productName   = readStringParam(searchParams, 'productName')
+  const supplierId    = Number(searchParams.get('supplierId') || '') || null
+  const supplierName  = readStringParam(searchParams, 'supplierName')
   const warehouseId   = Number(searchParams.get('warehouseId') || '') || null
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
@@ -86,7 +88,7 @@ export default function InboundTasksPage() {
   const isActiveTab = useActiveWorkspaceTab()
   // 收货现场变化频繁，标签页常驻挂载时若不轮询容易停留在打开时的陈旧进度
   const { data, isLoading } = useQuery({
-    queryKey: ['inbound-tasks', { keyword, remark, operatorId, statusFilter, productId, warehouseId, startDate, endDate }],
+    queryKey: ['inbound-tasks', { keyword, remark, operatorId, statusFilter, productId, supplierId, warehouseId, startDate, endDate }],
     queryFn: () => getInboundTasksApi({
       pageSize: 99999,
       keyword,
@@ -94,6 +96,7 @@ export default function InboundTasksPage() {
       operatorId: operatorId || undefined,
       status: statusFilter ? +statusFilter : undefined,
       productId: productId || undefined,
+      supplierId: supplierId || undefined,
       warehouseId: warehouseId || undefined,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
@@ -129,6 +132,7 @@ export default function InboundTasksPage() {
     ...(operatorId ? { operatorId: String(operatorId) } : {}),
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(productId ? { productId: String(productId) } : {}),
+    ...(supplierId ? { supplierId: String(supplierId) } : {}),
     ...(warehouseId ? { warehouseId: String(warehouseId) } : {}),
     ...(startDate ? { startDate } : {}),
     ...(endDate ? { endDate } : {}),
@@ -138,6 +142,7 @@ export default function InboundTasksPage() {
   const initialQuery: InboundTaskQueryValues = {
     keyword, remark, operatorId, operatorName, status: statusFilter,
     productId, productCode, productName,
+    supplierId, supplierName,
     warehouseId, warehouseName,
     startDate, endDate,
   }
@@ -152,6 +157,8 @@ export default function InboundTasksPage() {
       productId: v.productId || null,
       productCode: v.productCode || null,
       productName: v.productName || null,
+      supplierId: v.supplierId || null,
+      supplierName: v.supplierName || null,
       warehouseId: v.warehouseId || null,
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
@@ -164,6 +171,7 @@ export default function InboundTasksPage() {
     updateParams({
       keyword: null, remark: null, operatorId: null, operatorName: null, status: null,
       productId: null, productCode: null, productName: null,
+      supplierId: null, supplierName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
     })
@@ -171,7 +179,8 @@ export default function InboundTasksPage() {
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
-    keyword && { key: 'keyword', label: `单号/供应商：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
+    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
+    supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null }) },
     remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null }) },
     operatorId && { key: 'operator', label: `操作人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null }) },
     statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
@@ -183,21 +192,13 @@ export default function InboundTasksPage() {
     {
       key: 'taskNo',
       title: '任务单号',
-      width: 176,
-      render: v => <span className="block truncate whitespace-nowrap text-doc-code" title={String(v)}>{v as string}</span>,
-    },
-    {
-      key: 'purchaseOrderNo',
-      title: '关联采购',
-      width: 176,
-      render: v => v
-        ? <span className="block truncate whitespace-nowrap text-doc-code" title={String(v)}>{v as string}</span>
-        : <span className="whitespace-nowrap text-muted-foreground">混合采购</span>,
+      width: 160,
+      render: v => <span className="block truncate whitespace-nowrap" title={String(v)}>{v as string}</span>,
     },
     {
       key: 'supplierName',
       title: '供应商',
-      width: 240,
+      width: 140,
       render: v => {
         const text = String(v ?? '')
         return text
@@ -219,7 +220,7 @@ export default function InboundTasksPage() {
     {
       key: 'status',
       title: '状态',
-      width: 160,
+      width: 100,
       render: (_, row) => {
         const task = row as InboundTask
         const tone = task.receiptStatus?.key === 'audited'
@@ -239,7 +240,7 @@ export default function InboundTasksPage() {
     {
       key: 'operatorName',
       title: '操作人',
-      width: 120,
+      width: 90,
       render: v => {
         const text = String(v ?? '')
         return text
@@ -250,16 +251,24 @@ export default function InboundTasksPage() {
     {
       key: 'createdAt',
       title: '创建时间',
-      width: 176,
+      width: 160,
       render: v => {
         const text = formatDisplayDateTime(v)
-        return <span className="block whitespace-nowrap text-xs" title={text}>{text}</span>
+        return <span className="block whitespace-nowrap" title={text}>{text}</span>
       },
+    },
+    {
+      key: 'remark',
+      title: '备注',
+      width: 200,
+      render: v => v
+        ? <span className="line-clamp-1 text-muted-foreground" title={String(v)}>{v as string}</span>
+        : <span className="text-muted-foreground/50">—</span>,
     },
     {
       key: 'id',
       title: '操作',
-      width: 180,
+      width: 120,
       render: (_, row) => {
         const task = row as InboundTask
         const items = []
@@ -396,7 +405,8 @@ export default function InboundTasksPage() {
         data={data?.list ?? []}
         loading={isLoading}
         rowKey="id"
-        columnStorageKey="inbound-tasks:v2"
+        columnStorageKey="inbound-tasks:v4"
+        onRowDoubleClick={openDetail}
       />
 
       <InboundTaskQueryDialog

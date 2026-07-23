@@ -154,12 +154,12 @@ export default function DataTable<T extends object>({
     if (typeof window === 'undefined') return
     const key = String(col.key)
 
-    // 快照所有列当前渲染宽度 + 找到最后一列作为补偿列
+    // 快照所有列当前渲染宽度 + 找相邻列作为补偿列（只影响这一对相邻列，
+    // 不会像"固定找最后一列补偿"那样把最后一列越挤越窄，导致后面任何列都拖不动）
     const allCols = orderedColumns.length ? orderedColumns : columns
-    const lastCol = allCols[allCols.length - 1]
-    const lastKey = String(lastCol.key)
-    const isLast = key === lastKey
-    const lastMinW = isAction(lastKey, lastCol.title) ? 120 : 80
+    const colIndex = allCols.findIndex(c => String(c.key) === key)
+    const isLast = colIndex === allCols.length - 1
+    const neighborCol = isLast ? allCols[colIndex - 1] : allCols[colIndex + 1]
     const minWidth = isAction(key, col.title) ? 120 : 80
 
     const snapshot: Record<string, number> = {}
@@ -179,11 +179,9 @@ export default function DataTable<T extends object>({
     }
 
     const startX = event.clientX
-    // 如果拖拽的不是最后一列，最后一列补偿 delta；如果拖拽最后一列，前一列补偿
-    const compKey = isLast ? String(allCols[allCols.length - 2].key) : lastKey
-    const compMinW = isLast
-      ? (isAction(String(allCols[allCols.length - 2].key), allCols[allCols.length - 2].title) ? 120 : 80)
-      : lastMinW
+    // 如果拖拽的不是最后一列，用右边相邻列补偿；如果拖拽最后一列，用左边相邻列补偿
+    const compKey = String(neighborCol.key)
+    const compMinW = isAction(compKey, neighborCol.title) ? 120 : 80
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const rawTarget = Math.round(snapshot[key] + moveEvent.clientX - startX)

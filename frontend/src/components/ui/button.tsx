@@ -5,22 +5,22 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  // transition-all + active:scale 提供现代 SaaS 按钮的触感反馈
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  // 扁平化 + transition-all + active:scale：对标 Linear/飞书后台的克制质感，不靠投影堆叠层次
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        // 主操作：保留 shadow-sm 给予层次感，hover 适度加深
+        // 主操作：纯色块，不额外加投影，靠颜色本身建立层级
         default:
-          "bg-primary text-primary-foreground shadow-sm hover:bg-primary/85 active:bg-primary/95",
-        // 危险操作：配合 CSS token 已压暗，hover 再加深一点
+          "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95",
+        // 危险操作：同样扁平，hover 加深即可
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/85 active:bg-destructive/95",
-        // 次操作：border 略加强，hover 背景更明显
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/95",
+        // 次操作：保留细边框给出清晰边界，但不叠加投影；底色极淡，hover/active 逐级加深
         outline:
-          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground hover:border-border",
+          "border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/70",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/70",
         ghost:
           "hover:bg-accent hover:text-accent-foreground",
         link:

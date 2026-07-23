@@ -22,7 +22,7 @@ export function getSaleWorkflowStatus(order: SaleOrder): WorkflowStatus {
   // 逐个扫码归还完（cancelRequestedAt 非空），此时不能简单显示「已取消」，
   // 否则仓管会误以为货物已经妥善处理，实际货物可能还在拣货员手里未放回原位。
   if (order.status === 5 && order.warehouseTaskCancelRequestedAt) {
-    return status('取消中-待归还', 'danger')
+    return status('待归还', 'danger')
   }
 
   // 已取消

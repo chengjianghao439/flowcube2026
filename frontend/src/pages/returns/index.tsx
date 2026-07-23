@@ -191,7 +191,7 @@ export default function ReturnsPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<RowType>[] = [
-    { key: 'returnNo', title: '退货单号', width: 170, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'returnNo', title: '退货单号', width: 170 },
     { key: partyKey, title: partyLabel, width: 140 },
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'totalAmount', title: '金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
@@ -205,8 +205,8 @@ export default function ReturnsPage() {
     {
       key: 'remark', title: '备注', width: 200,
       render: (v) => v
-        ? <span className="line-clamp-1 text-xs text-muted-foreground" title={String(v)}>{String(v)}</span>
-        : <span className="text-xs text-muted-foreground/50">—</span>
+        ? <span className="line-clamp-1 text-muted-foreground" title={String(v)}>{String(v)}</span>
+        : <span className="text-muted-foreground/50">—</span>
     },
     { key: 'id', title: '操作', width: 140, render: (_, row) => {
       const r = row as RowType

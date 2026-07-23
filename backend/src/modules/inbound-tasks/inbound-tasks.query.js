@@ -271,14 +271,18 @@ async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_T
   }))
 }
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, productId = null, warehouseId = null, operatorId = null, startDate = null, endDate = null, remark = null }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, productId = null, warehouseId = null, operatorId = null, startDate = null, endDate = null, remark = null, supplierId = null }) {
   const offset = (page - 1) * pageSize
   const conds = ['t.deleted_at IS NULL']
   const params = []
   if (keyword) {
     const like = `%${keyword}%`
-    conds.push('(t.task_no LIKE ? OR t.supplier_name LIKE ? OR t.purchase_order_no LIKE ?)')
-    params.push(like, like, like)
+    conds.push('(t.task_no LIKE ? OR t.purchase_order_no LIKE ?)')
+    params.push(like, like)
+  }
+  if (supplierId) {
+    conds.push('EXISTS (SELECT 1 FROM inbound_task_items iti JOIN purchase_orders po ON po.id = iti.purchase_order_id WHERE iti.task_id = t.id AND po.supplier_id = ?)')
+    params.push(supplierId)
   }
   if (status) {
     const statusList = Array.isArray(status) ? status : [status]

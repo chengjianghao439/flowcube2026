@@ -143,7 +143,7 @@ async function getReconciliationExportPayload(query) {
 }
 
 async function getInboundTasksExportPayload(query) {
-  const { keyword, status, productId, warehouseId, operatorId, startDate, endDate, remark } = query
+  const { keyword, status, productId, warehouseId, operatorId, startDate, endDate, remark, supplierId } = query
   let sql = `SELECT
     t.task_no,
     t.purchase_order_no,
@@ -157,8 +157,12 @@ async function getInboundTasksExportPayload(query) {
     WHERE t.deleted_at IS NULL`
   const params = []
   if (keyword) {
-    sql += ' AND (t.task_no LIKE ? OR t.supplier_name LIKE ? OR t.purchase_order_no LIKE ?)'
-    params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
+    sql += ' AND (t.task_no LIKE ? OR t.purchase_order_no LIKE ?)'
+    params.push(`%${keyword}%`, `%${keyword}%`)
+  }
+  if (supplierId) {
+    sql += ' AND EXISTS (SELECT 1 FROM inbound_task_items iti JOIN purchase_orders po ON po.id = iti.purchase_order_id WHERE iti.task_id = t.id AND po.supplier_id = ?)'
+    params.push(+supplierId)
   }
   if (remark) { sql += ' AND t.remark LIKE ?'; params.push(`%${remark}%`) }
   if (status) { sql += ' AND t.status=?'; params.push(+status) }

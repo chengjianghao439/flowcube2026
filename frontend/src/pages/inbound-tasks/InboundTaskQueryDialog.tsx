@@ -5,7 +5,7 @@ import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ProductFinder } from '@/components/finder'
+import { ProductFinder, SupplierFinder } from '@/components/finder'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { getUserOptionsApi } from '@/api/users'
@@ -22,6 +22,8 @@ export interface InboundTaskQueryValues {
   productId: number | null
   productCode: string
   productName: string
+  supplierId: number | null
+  supplierName: string
   warehouseId: number | null
   warehouseName: string
   startDate: string
@@ -31,6 +33,7 @@ export interface InboundTaskQueryValues {
 const EMPTY: InboundTaskQueryValues = {
   keyword: '', remark: '', operatorId: null, operatorName: '', status: '',
   productId: null, productCode: '', productName: '',
+  supplierId: null, supplierName: '',
   warehouseId: null, warehouseName: '',
   startDate: '', endDate: '',
 }
@@ -70,6 +73,7 @@ function PickerField({ label, value, placeholder, onOpen, onClear }: {
 export default function InboundTaskQueryDialog({ open, initial, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<InboundTaskQueryValues>(EMPTY)
   const [productOpen, setProductOpen] = useState(false)
+  const [supplierOpen, setSupplierOpen] = useState(false)
 
   const currentUserId = useAuthStore(s => s.user?.id)
 
@@ -110,15 +114,23 @@ export default function InboundTaskQueryDialog({ open, initial, onClose, onApply
       >
         <div className="grid h-full grid-cols-2 gap-4 overflow-y-auto px-5 py-4">
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">单号 / 供应商</span>
+            <span className="text-xs font-medium text-muted-foreground">单号</span>
             <Input
-              placeholder="任务单号 / 采购单号 / 供应商..."
+              placeholder="任务单号 / 采购单号..."
               value={draft.keyword}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
               onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
               className="h-9"
             />
           </label>
+
+          <PickerField
+            label="供应商"
+            placeholder="选择供应商"
+            value={draft.supplierName ? `${draft.supplierName}` : ''}
+            onOpen={() => setSupplierOpen(true)}
+            onClear={() => setDraft(d => ({ ...d, supplierId: null, supplierName: '' }))}
+          />
 
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">状态</span>
@@ -178,8 +190,6 @@ export default function InboundTaskQueryDialog({ open, initial, onClose, onApply
             </Select>
           </label>
 
-          <div />
-
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
             <DatePicker value={draft.startDate} max={draft.endDate || undefined}
@@ -204,6 +214,11 @@ export default function InboundTaskQueryDialog({ open, initial, onClose, onApply
         </div>
       </AppDialog>
 
+      <SupplierFinder
+        open={supplierOpen}
+        onClose={() => setSupplierOpen(false)}
+        onConfirm={r => setDraft(d => ({ ...d, supplierId: r.id, supplierName: r.name }))}
+      />
       <ProductFinder
         open={productOpen}
         onClose={() => setProductOpen(false)}

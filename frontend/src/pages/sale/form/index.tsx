@@ -647,12 +647,8 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 // 编辑视图（草稿状态 status=1 可编辑）
 // ════════════════════════════════════════════════════════════════════════════
 
-function EditView({ order, tabPath }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; closeTab: () => void; tabPath: string }) {
+function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; tabPath: string; onDone: () => void }) {
   const updateMutate  = useUpdateSale()
-  const reserveMutate = useReserveSale()
-  const cancelMutate  = useCancelSale()
-  const [reserveConfirmOpen, setReserveConfirmOpen] = useState(false)
-  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
 
   const {
     customerId, customerName,
@@ -689,26 +685,20 @@ function EditView({ order, tabPath }: { order: NonNullable<ReturnType<typeof use
         receiverAddress: receiverAddress || undefined,
         items: filledItems.map(({ _key, ...r }) => r),
       })
+      onDone()
     } catch (_) {}
   }
 
   return (
     <div className="flex flex-col gap-3">
       <ActionBar
-        title={order.orderNo}
+        title={`${order.orderNo} · 编辑`}
         rightActions={
           <>
-
-            <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5"
-              onClick={() => setCancelConfirmOpen(true)}
-              disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending}>
-              <X className="h-4 w-4 mr-1" />取消订单
+            <Button variant="outline" onClick={onDone} disabled={updateMutate.isPending}>
+              取消编辑
             </Button>
-            <Button variant="outline" onClick={() => setReserveConfirmOpen(true)}
-              disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending}>
-              <Warehouse className="h-4 w-4 mr-1" />占用库存
-            </Button>
-            <Button onClick={handleSubmit} disabled={updateMutate.isPending || reserveMutate.isPending || cancelMutate.isPending} className="gap-1.5">
+            <Button onClick={handleSubmit} disabled={updateMutate.isPending} className="gap-1.5">
               {updateMutate.isPending
                 ? <><Loader2 className="h-4 w-4 animate-spin" />保存中...</>
                 : <><Save className="h-4 w-4" />保存</>}
@@ -787,27 +777,6 @@ function EditView({ order, tabPath }: { order: NonNullable<ReturnType<typeof use
         open={customerFinderOpen}
         onClose={() => setCustomerFinderOpen(false)}
         onConfirm={handleCustomerConfirm}
-      />
-
-      <ConfirmDialog
-        open={reserveConfirmOpen}
-        title="占用库存"
-        description="将预占该销售单所需库存，可用量减少。请确保已保存最新改动，是否继续？"
-        confirmText="占用库存"
-        loading={reserveMutate.isPending}
-        onConfirm={() => { setReserveConfirmOpen(false); reserveMutate.mutate(order.id) }}
-        onCancel={() => setReserveConfirmOpen(false)}
-      />
-
-      <ConfirmDialog
-        open={cancelConfirmOpen}
-        title="取消订单"
-        description="取消后订单将变为已取消状态，是否继续？"
-        variant="destructive"
-        confirmText="确认取消"
-        loading={cancelMutate.isPending}
-        onConfirm={() => { setCancelConfirmOpen(false); cancelMutate.mutate(order.id) }}
-        onCancel={() => setCancelConfirmOpen(false)}
       />
 
       <div className="h-4" />
@@ -967,10 +936,12 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const shipMutate     = useShipSale()
   const deleteMutate   = useDeleteSale()
   const cancelMutate   = useCancelSale()
+  const reserveMutate  = useReserveSale()
 
   const [printOpen, setPrintOpen] = useState(false)
   const [detailTab, setDetailTab] = useState<'info'|'progress'|'scan'|'pack'|'log'>('info')
   const [adjustMode, setAdjustMode] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; confirmText: string; onConfirm: () => void
@@ -992,9 +963,9 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     )
   }
 
-  // 草稿状态直接进入可编辑视图
-  if (order.status === 1) {
-    return <EditView order={order} closeTab={closeTab} tabPath={tabPath} />
+  // 草稿状态默认先展示只读详情，点击"编辑"再进入可编辑视图（与采购单一致）
+  if (order.status === 1 && editing) {
+    return <EditView order={order} tabPath={tabPath} onDone={() => setEditing(false)} />
   }
 
   // 已发起出库后仍要改单：切到独立的改单视图，提交/取消后回到只读详情
@@ -1002,7 +973,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     return <AdjustView order={order} tabPath={tabPath} onDone={() => setAdjustMode(false)} />
   }
 
-  const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending
+  const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending || reserveMutate.isPending
   const canAdjust = (order.status === 2 || order.status === 3) && !!order.taskId
     && !order.warehouseTaskCancelRequestedAt && !order.warehouseTaskAdjustmentRequestedAt
 
@@ -1024,15 +995,28 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <X className="h-4 w-4 mr-1" />删除订单
               </Button>
             )}
-            {(order.status === 2 || order.status === 3) && (
+            {(order.status === 1 || order.status === 2 || order.status === 3) && (
               <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5" disabled={isPending}
                 onClick={() => setConfirmState({
                   open: true, title: '取消订单',
-                  description: order.status === 3 ? '将同步取消关联仓库任务并释放锁定资源，是否继续？' : '将释放已占用库存并取消销售单，是否继续？',
+                  description: order.status === 3
+                    ? '将同步取消关联仓库任务并释放锁定资源，是否继续？'
+                    : order.status === 2
+                      ? '将释放已占用库存并取消销售单，是否继续？'
+                      : '取消后订单将变为已取消状态，是否继续？',
                   variant: 'destructive', confirmText: '确认取消',
                   onConfirm: () => { setConfirmState(s => ({ ...s, open: false })); cancelMutate.mutate(order.id) },
                 })}>
                 <X className="h-4 w-4 mr-1" />取消订单
+              </Button>
+            )}
+            {order.status === 1 && (
+              <Button variant="outline" disabled={isPending}
+                onClick={() => setConfirmState({
+                  open: true, title: '占用库存', description: '将预占该销售单所需库存，可用量减少，是否继续？', variant: 'default', confirmText: '占用库存',
+                  onConfirm: () => { setConfirmState(s => ({ ...s, open: false })); reserveMutate.mutate(order.id) },
+                })}>
+                <Warehouse className="h-4 w-4 mr-1" />占用库存
               </Button>
             )}
             {order.status === 2 && (
@@ -1059,6 +1043,11 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
             {canAdjust && (
               <Button variant="outline" disabled={isPending} onClick={() => setAdjustMode(true)}>
                 <Pencil className="h-4 w-4 mr-1" />修改订单
+              </Button>
+            )}
+            {order.status === 1 && (
+              <Button variant="outline" disabled={isPending} onClick={() => setEditing(true)}>
+                <Pencil className="h-4 w-4 mr-1" />编辑
               </Button>
             )}
           </>

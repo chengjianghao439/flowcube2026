@@ -19,7 +19,7 @@ function normalizeStatusParam(raw) {
 
 const list = async (req, res, next) => {
   try {
-    const { page = 1, pageSize = 20, keyword = '', status, productId, warehouseId, operatorId, startDate, endDate, remark } = req.query
+    const { page = 1, pageSize = 20, keyword = '', status, productId, warehouseId, operatorId, startDate, endDate, remark, supplierId } = req.query
     const data = await svc.findAll({
       page: +page, pageSize: +pageSize, keyword,
       status: normalizeStatusParam(status),
@@ -29,6 +29,7 @@ const list = async (req, res, next) => {
       startDate: startDate || null,
       endDate: endDate || null,
       remark: remark || null,
+      supplierId: supplierId ? +supplierId : null,
     })
     return successResponse(res, data)
   } catch (e) { next(e) }

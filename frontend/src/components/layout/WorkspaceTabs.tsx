@@ -19,6 +19,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import { buildWorkspaceTabRegistration } from '@/router/workspaceRouteMeta'
+import { getRouteListPath } from '@/router/routeRegistry'
 
 export function WorkspaceTabs() {
   const { tabs, removeTab, closeOthers, closeAll } = useWorkspaceStore()
@@ -79,13 +80,20 @@ export function WorkspaceTabs() {
   const handleClose = (e: React.MouseEvent, key: string) => {
     e.stopPropagation()
     const closingActive = key === activeKey
+    const closingTab = tabs.find(t => t.key === key)
     guardedAction(
       [key],
       () => {
         const newKey = removeTab(key, activeKey)
         if (closingActive) {
-          const newTab = useWorkspaceStore.getState().tabs.find(t => t.key === newKey)
-          if (newTab) navigate(newTab.path)
+          // 详情/表单类标签有明确归属的列表页，关闭后应回到那里，而非任意相邻标签
+          const listPath = closingTab ? getRouteListPath(closingTab.path) : undefined
+          if (listPath) {
+            navigate(listPath)
+          } else {
+            const newTab = useWorkspaceStore.getState().tabs.find(t => t.key === newKey)
+            if (newTab) navigate(newTab.path)
+          }
         }
         // 关闭非激活 tab 时无路径变化，不需要 navigate
       },

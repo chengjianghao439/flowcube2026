@@ -82,9 +82,9 @@ export function ActionBar({
         )}
       </div>
 
-      {/* 右侧：操作按钮 */}
+      {/* 右侧：操作按钮 —— 统一压到 sm 尺寸，详情/表单页顶栏比列表页工具栏更紧凑 */}
       {rightActions && (
-        <div className="flex items-center gap-2">{rightActions}</div>
+        <div className="flex items-center gap-2 [&>button]:h-9 [&>button]:px-3">{rightActions}</div>
       )}
     </div>
   )

@@ -31,6 +31,8 @@ export interface RoutePatternEntry {
   component: RouteComponent
   keepAlive: boolean
   tabIdentity: RouteTabIdentity
+  /** 该详情/表单路由所属的列表页路径；关闭详情标签时应回到这里，而非任意相邻标签 */
+  listPath?: string
 }
 
 export type NavChildItem = { label: string; path: string; perm: PermCode; iconKey?: string }
@@ -415,6 +417,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: ProductFormPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
+    listPath: '/products',
   },
   {
     pattern: /^\/sale\/(new|\d+)$/,
@@ -423,6 +426,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: SaleFormPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
+    listPath: '/sale',
   },
   {
     pattern: /^\/purchase\/(new|\d+)$/,
@@ -431,6 +435,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: PurchaseFormPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
+    listPath: '/purchase',
   },
   {
     pattern: /^\/transfer\/(new|\d+)$/,
@@ -439,6 +444,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: TransferFormPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
+    listPath: '/transfer',
   },
   {
     pattern: /^\/returns\/purchase\/(new|\d+)$/,
@@ -447,6 +453,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: PurchaseReturnFormPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
+    listPath: '/returns',
   },
   {
     pattern: /^\/returns\/sale\/(new|\d+)$/,
@@ -455,6 +462,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: SaleReturnFormPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
+    listPath: '/returns',
   },
   {
     pattern: /^\/inbound-tasks\/new$/,
@@ -463,6 +471,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: InboundTaskCreatePage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
+    listPath: '/inbound-tasks',
   },
   {
     pattern: /^\/inbound-tasks\/\d+$/,
@@ -471,6 +480,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: InboundTaskDetailPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
+    listPath: '/inbound-tasks',
   },
   {
     pattern: /^\/settings\/print-templates\/(new|\d+)$/,
@@ -479,6 +489,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: PrintTemplateEditorPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
+    listPath: '/settings/print-templates',
   },
 ]
 
@@ -511,6 +522,11 @@ export function resolveRouteComponent(path: string): RouteComponent | undefined 
 
 export function resolveRouteTabIdentity(path: string): RouteTabIdentity | undefined {
   return getRouteByPath(path)?.tabIdentity ?? getRoutePatternByPath(path)?.tabIdentity
+}
+
+/** 详情/表单路由所属的列表页路径；关闭该标签时应回到这里，而非任意相邻标签 */
+export function getRouteListPath(path: string): string | undefined {
+  return getRoutePatternByPath(path)?.listPath
 }
 
 export function isRegisteredErpRoute(path: string): boolean {
