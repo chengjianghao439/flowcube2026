@@ -36,6 +36,8 @@ export default function PurchasePage() {
   const { addTab } = useWorkspaceStore()
 
   const [queryOpen, setQueryOpen] = useState(false)
+  // 到货看板"逾期未到"跳转筛选：草稿/已确认且预计到货日已过
+  const [overdueOnly, setOverdueOnly] = useState(false)
   const [printId, setPrintId]     = useState<number | null>(null)
 
   function goToNew() {
@@ -83,8 +85,9 @@ export default function PurchasePage() {
     productId: productId || undefined,
     supplierId: supplierId || undefined,
     warehouseId: warehouseId || undefined,
-    startDate: startDate || undefined,
-    endDate: endDate || undefined,
+    startDate: overdueOnly ? undefined : (startDate || undefined),
+    endDate: overdueOnly ? undefined : (endDate || undefined),
+    overdueOnly: overdueOnly || undefined,
   })
   const confirm = useConfirmPurchase()
   const withdrawConfirm = useWithdrawConfirmPurchase()
@@ -184,7 +187,7 @@ export default function PurchasePage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<PurchaseOrder>[] = [
-    { key: 'orderNo', title: '采购单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'orderNo', title: '采购单号', width: 160 },
     { key: 'supplierName', title: '供应商', width: 140 },
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'totalAmount', title: '金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
@@ -197,8 +200,8 @@ export default function PurchasePage() {
     {
       key: 'remark', title: '订单备注', width: 200,
       render: (v) => v
-        ? <span className="line-clamp-1 text-xs text-muted-foreground" title={String(v)}>{String(v)}</span>
-        : <span className="text-xs text-muted-foreground/50">—</span>
+        ? <span className="line-clamp-1 text-muted-foreground" title={String(v)}>{String(v)}</span>
+        : <span className="text-muted-foreground/50">—</span>
     },
     {
       key: 'id', title: '操作', width: 120, render: (_, row) => {
@@ -276,6 +279,10 @@ export default function PurchasePage() {
               导出 Excel
             </Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button
+              variant={overdueOnly ? 'default' : 'outline'}
+              onClick={() => setOverdueOnly(v => !v)}
+            >{overdueOnly ? '✕ 仅看逾期未到' : '逾期未到'}</Button>
             <Button onClick={goToNew}>+ 新建采购单</Button>
           </>
         }

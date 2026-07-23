@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { reserve, releaseByRef } = require('../../engine/reservationEngine')
+const { getAvailableStockForDecision } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -671,6 +672,10 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
 }
 
 // ① 占用库存：仅调用 reservationEngine.reserve()，不创建仓库任务
+//
+// 先做一次全量可用量检查（不实际预占），把所有不足的商品一次性收集进错误明细——
+// 而不是像 reserve() 循环那样第一个不足就抛错、后面的商品可用量对用户完全不可见。
+// 前端可用这份明细直接展示"按可用量修改订单"的一键操作（见 requestAdjustment）。
 async function reserveStock(id, operator) {
   const conn = await pool.getConnection()
   try {
@@ -679,6 +684,33 @@ async function reserveStock(id, operator) {
     const rule = assertStatusAction('sale', 'reserve', orderRow.status)
     const [itemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
     if (!itemRows.length) throw new AppError('销售单无明细，无法占用库存', 400)
+
+    const shortages = []
+    for (const item of itemRows) {
+      const { available } = await getAvailableStockForDecision(conn, {
+        productId: item.product_id,
+        warehouseId: Number(orderRow.warehouse_id),
+        lock: false,
+      })
+      if (available < Number(item.quantity)) {
+        shortages.push({
+          productId: item.product_id,
+          productName: item.product_name,
+          required: Number(item.quantity),
+          available,
+        })
+      }
+    }
+    if (shortages.length) {
+      throw new AppError(
+        `以下商品可用库存不足，共 ${shortages.length} 项：` +
+        shortages.map(s => `${s.productName}（需 ${s.required}，可用 ${s.available}）`).join('；'),
+        400,
+        'STOCK_SHORTAGE',
+        { shortages },
+      )
+    }
+
     for (const item of itemRows) {
       await reserve(conn, {
         productId:   item.product_id,

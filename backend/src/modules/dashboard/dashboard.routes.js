@@ -8,4 +8,5 @@ router.get('/summary',    requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.su
 router.get('/low-stock',  requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.lowStock)
 router.get('/trend',      requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.trend)
 router.get('/top-stock',  requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.topStock)
+router.get('/incoming-purchases', requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.incomingPurchases)
 module.exports = router

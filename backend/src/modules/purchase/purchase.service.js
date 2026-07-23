@@ -44,7 +44,7 @@ const PO_COLUMNS = `po.id, po.order_no, po.supplier_id, po.supplier_name, po.war
 
 const genOrderNo = conn => generateDailyCode(conn, 'PO', 'purchase_orders', 'order_no')
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null, overdueOnly=false }) {
   const offset = (page - 1) * pageSize
   const params = []
   let whereExtra = ''
@@ -83,6 +83,10 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
   if (operatorId) {
     whereExtra += ' AND po.operator_id = ?'
     params.push(operatorId)
+  }
+  if (overdueOnly) {
+    // 到货看板"逾期未到"筛选：仍在草稿/已确认状态且预计到货日已过
+    whereExtra += ' AND po.status IN (1,2) AND po.expected_date IS NOT NULL AND po.expected_date < CURDATE()'
   }
   const [rows] = await pool.query(
     `SELECT ${PO_COLUMNS},

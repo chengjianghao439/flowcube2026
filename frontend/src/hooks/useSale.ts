@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { getSaleListApi, getSaleDetailApi, createSaleApi, updateSaleApi, adjustSaleApi, reserveSaleApi, releaseSaleApi, shipSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import { toast } from '@/lib/toast'
+import { ApiClientError } from '@/api/client'
 import { createRequestKey } from '@/lib/requestKey'
 import type { CreateSaleParams, UpdateSaleParams } from '@/types/sale'
 
@@ -42,11 +43,17 @@ export const useAdjustSale = () => {
   })
 }
 
+// 占库失败若为库存不足（STOCK_SHORTAGE），带结构化明细交给调用页展示"按可用量修改"；
+// 其它错误（如状态已变化）仍走全局 toast（reserveSaleApi 关了自动 toast，这里手动补）。
 export const useReserveSale = () => {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: number) => reserveSaleApi(id),
     onSuccess: () => { invalidate('sale_reserve'); toast.success('库存已占用') },
+    onError: (e: unknown) => {
+      if (e instanceof ApiClientError && e.code === 'STOCK_SHORTAGE') return
+      toast.error(e instanceof ApiClientError ? e.message : '占用库存失败')
+    },
   })
 }
 

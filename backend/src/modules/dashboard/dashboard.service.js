@@ -68,4 +68,48 @@ async function getTopStockByValue(limit = 10) {
   return rows.map(r=>({ code:r.code, name:r.name, unit:r.unit, qty:Number(r.qty), value:Number(r.value) }))
 }
 
-module.exports = { getSummary, getLowStock, getRecentTrend, getTopStockByValue }
+/**
+ * 到货看板：按采购单 expected_date 聚合"今日待到货"、"本周待到货"、"已逾期未到货"。
+ * 只统计仍有未收清明细的采购单（status IN 1,2 且非已取消/已完成），
+ * 用 total_ordered_qty - total_received_qty 判断是否还有余量（同 purchase.service 口径）。
+ */
+async function getIncomingPurchases() {
+  const [rows] = await pool.query(
+    `SELECT po.id, po.order_no, po.supplier_name, po.expected_date,
+            po.total_amount,
+            COALESCE(recv.received, 0) AS received_qty,
+            ordered.ordered AS ordered_qty
+     FROM purchase_orders po
+     JOIN (
+       SELECT order_id, SUM(quantity) AS ordered
+       FROM purchase_order_items GROUP BY order_id
+     ) ordered ON ordered.order_id = po.id
+     LEFT JOIN (
+       SELECT iti.purchase_order_id AS order_id, SUM(iti.received_qty) AS received
+       FROM inbound_task_items iti
+       JOIN inbound_tasks it ON it.id = iti.task_id
+       WHERE it.deleted_at IS NULL AND it.status <> 5
+       GROUP BY iti.purchase_order_id
+     ) recv ON recv.order_id = po.id
+     WHERE po.deleted_at IS NULL AND po.status IN (1,2)
+       AND po.expected_date IS NOT NULL
+       AND COALESCE(recv.received, 0) < ordered.ordered
+     ORDER BY po.expected_date ASC`,
+  )
+  const today = new Date().toISOString().slice(0, 10)
+  const weekLater = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const mapRow = r => ({
+    id: Number(r.id), orderNo: r.order_no, supplierName: r.supplier_name,
+    expectedDate: r.expected_date, totalAmount: Number(r.total_amount),
+  })
+  return {
+    dueToday: rows.filter(r => String(r.expected_date).slice(0, 10) === today).map(mapRow),
+    dueThisWeek: rows.filter(r => {
+      const d = String(r.expected_date).slice(0, 10)
+      return d > today && d <= weekLater
+    }).map(mapRow),
+    overdue: rows.filter(r => String(r.expected_date).slice(0, 10) < today).map(mapRow),
+  }
+}
+
+module.exports = { getSummary, getLowStock, getRecentTrend, getTopStockByValue, getIncomingPurchases }

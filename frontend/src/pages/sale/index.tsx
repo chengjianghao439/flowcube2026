@@ -8,6 +8,8 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SaleRowActions } from './components/SaleRowActions'
+import StockShortageDialog, { type StockShortageItem } from './components/StockShortageDialog'
+import { ApiClientError } from '@/api/client'
 import SaleQueryDialog, { type SaleQueryValues } from './SaleQueryDialog'
 import { useSaleList, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { getSaleDetailApi } from '@/api/sale'
@@ -78,6 +80,7 @@ export default function SalePage() {
     endDate: endDate || undefined,
   })
   const reserveMutate = useReserveSale()
+  const [shortageDialog, setShortageDialog] = useState<{ orderId: number; shortages: StockShortageItem[] } | null>(null)
   const releaseMutate = useReleaseSale()
   const ship          = useShipSale()
   const cancel        = useCancelSale()
@@ -191,7 +194,7 @@ export default function SalePage() {
 
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
-    { key: 'orderNo',      title: '销售单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'orderNo',      title: '销售单号', width: 160 },
     { key: 'customerName', title: '客户', width: 140 },
     { key: 'warehouseName',title: '仓库',     width: 140 },
     {
@@ -227,7 +230,14 @@ export default function SalePage() {
             row={r}
             anyPending={reserveMutate.isPending || releaseMutate.isPending || ship.isPending || cancel.isPending || deleteMutate.isPending}
             onAsk={(title, desc, cb) => openConfirm(title, desc, () => { closeConfirm(); cb() })}
-            onReserveSale={id => reserveMutate.mutate(id)}
+            onReserveSale={id => reserveMutate.mutate(id, {
+              onError: (e: unknown) => {
+                if (e instanceof ApiClientError && e.code === 'STOCK_SHORTAGE') {
+                  const shortages = (e.data as { shortages?: StockShortageItem[] } | null)?.shortages ?? []
+                  setShortageDialog({ orderId: id, shortages })
+                }
+              },
+            })}
             onReleaseSale={id => releaseMutate.mutate(id)}
             onShipSale={id => ship.mutate(id)}
             onCancelSale={id => cancel.mutate(id)}
@@ -303,6 +313,13 @@ export default function SalePage() {
         initial={initialQuery}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
+      />
+
+      <StockShortageDialog
+        open={!!shortageDialog}
+        onClose={() => setShortageDialog(null)}
+        orderId={shortageDialog?.orderId ?? null}
+        shortages={shortageDialog?.shortages ?? []}
       />
     </div>
   )

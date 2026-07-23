@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, ScanLine, Package, User } from 'lucide-react'
-import { useDashboardSummary, useLowStock, useTrend, useTopStock, usePdaPerformance } from '@/hooks/useDashboard'
+import { useDashboardSummary, useLowStock, useTrend, useTopStock, usePdaPerformance, useIncomingPurchases } from '@/hooks/useDashboard'
+import { formatDisplayDate } from '@/lib/dateTime'
 import { Badge } from '@/components/ui/badge'
 import DashboardVersionCard from '@/components/dashboard/DashboardVersionCard'
 
@@ -63,6 +64,7 @@ function SectionCard({ title, badge, children }: {
 export default function DashboardPage() {
   const { data: summary } = useDashboardSummary()
   const { data: lowStock } = useLowStock(10)
+  const { data: incoming } = useIncomingPurchases()
   const { data: trend } = useTrend(7)
   const { data: topStock } = useTopStock()
   const { data: pda } = usePdaPerformance()
@@ -197,6 +199,48 @@ export default function DashboardPage() {
           )}
         </SectionCard>
       </div>
+
+      {/* 到货看板：按采购单预计到货日聚合 */}
+      {incoming && (incoming.dueToday.length + incoming.dueThisWeek.length + incoming.overdue.length > 0) && (
+        <SectionCard
+          title="到货看板"
+          badge={
+            incoming.overdue.length > 0 ? (
+              <Badge variant="destructive" className="gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                {incoming.overdue.length} 逾期
+              </Badge>
+            ) : undefined
+          }
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {([
+              { key: 'overdue' as const, label: '已逾期未到货', tone: 'text-destructive' },
+              { key: 'dueToday' as const, label: '今日待到货', tone: 'text-warning' },
+              { key: 'dueThisWeek' as const, label: '本周待到货', tone: 'text-foreground' },
+            ]).map(col => (
+              <div key={col.key}>
+                <p className={`mb-2 text-xs font-medium ${col.tone}`}>{col.label}（{incoming[col.key].length}）</p>
+                {!incoming[col.key].length ? (
+                  <p className="text-xs text-muted-foreground">无</p>
+                ) : (
+                  <div className="max-h-40 space-y-1 overflow-y-auto">
+                    {incoming[col.key].map(po => (
+                      <div key={po.id} className="rounded-md border border-border px-2 py-1.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-doc-code">{po.orderNo}</span>
+                          <span className="text-muted-foreground">{formatDisplayDate(po.expectedDate)}</span>
+                        </div>
+                        <p className="text-muted-foreground truncate">{po.supplierName}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
 
       {/* PDA 操作统计 */}
       <SectionCard title="今日 PDA 作业统计">
