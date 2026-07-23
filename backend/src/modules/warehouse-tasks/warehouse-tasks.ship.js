@@ -120,25 +120,19 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
   await unlockContainersByTask(conn, id)
 
   if (!isPurchaseReturn) {
-    // COGS 成本快照：出库时点把移动加权均价（无则当前进价）固化到销售明细，
-    // 利润分析用快照口径，避免此后改进价导致历史毛利漂移（迁移 119）。
-    await conn.query(
-      `UPDATE sale_order_items soi
-       JOIN product_items p ON p.id = soi.product_id
-       SET soi.cost_snapshot = COALESCE(p.avg_cost, NULLIF(p.cost_price, 0))
-       WHERE soi.order_id = ? AND soi.cost_snapshot IS NULL`,
-      [saleOrderId],
-    )
-    // 应收：确认为已确认（闸门只针对采购自动结算的应付），账期按客户主数据配置
-    await conn.query(
-      `INSERT IGNORE INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,confirm_status,due_date)
-       SELECT 2, so.id, so.order_no, so.customer_name, ?, ?, 1,
-              DATE_ADD(NOW(), INTERVAL COALESCE(c.payment_terms_days, 30) DAY)
-       FROM sale_orders so
-       LEFT JOIN sale_customers c ON c.id = so.customer_id
-       WHERE so.id = ?`,
-      [totalAmount, totalAmount, saleOrderId],
-    )
+    // COGS 成本快照：只对本任务实发的商品固化出库时点均价（分仓/分批下各任务
+    // 独立快照，不再一次性刷全订单）。利润分析用快照口径，避免改进价导致历史毛利漂移。
+    for (const item of items) {
+      await conn.query(
+        `UPDATE sale_order_items soi
+         JOIN product_items p ON p.id = soi.product_id
+         SET soi.cost_snapshot = COALESCE(p.avg_cost, NULLIF(p.cost_price, 0))
+         WHERE soi.order_id = ? AND soi.product_id = ? AND soi.warehouse_id = ? AND soi.cost_snapshot IS NULL`,
+        [saleOrderId, item.productId, warehouseId],
+      )
+    }
+    // 应收由 syncShippedByWarehouseTaskWithinTransaction 全量重算（按 shipped_qty 汇总，
+    // 分批增量幂等，见 sale.service.recomputeSaleReceivable），此处不再单独生成。
   }
 
   try {
@@ -225,7 +219,8 @@ async function getShipContext(taskId) {
   return {
     saleOrderId: saleOrder.id,
     orderNo: saleOrder.order_no,
-    warehouseId: saleOrder.warehouse_id,
+    // 分仓：从任务自己的仓库扣库存，不再用整单头仓库
+    warehouseId: task.warehouseId,
     totalAmount: Number(saleOrder.total_amount),
     customerName: saleOrder.customer_name,
     items: wmsItems.map(i => ({
