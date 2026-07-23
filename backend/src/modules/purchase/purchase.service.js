@@ -25,6 +25,11 @@ function fmtOrder(row) {
     totalAmount: Number(row.total_amount),
     totalOrderedQty: Number(row.total_ordered_qty || 0),
     totalReceivedQty: Number(row.total_received_qty || 0),
+    // 与 closeRemaining() 的两条硬性前提保持完全一致（相关收货订单均已上架完成 + 已有实收数量），
+    // 供列表页判断是否展示"关闭剩余"入口，避免对必然失败的订单诱导点击。
+    canCloseRemaining: row.pending_inbound_count !== undefined
+      ? Number(row.pending_inbound_count) === 0 && Number(row.putaway_received_qty || 0) > 0
+      : undefined,
     remark: row.remark,
     operatorId: row.operator_id,
     operatorName: row.operator_name,
@@ -92,7 +97,19 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
          FROM inbound_task_items iti
          JOIN inbound_tasks it ON it.id = iti.task_id
          WHERE iti.purchase_order_id = po.id AND it.deleted_at IS NULL
-       ), 0) AS total_received_qty
+       ), 0) AS total_received_qty,
+       (
+         SELECT COUNT(DISTINCT it.id)
+         FROM inbound_task_items iti
+         JOIN inbound_tasks it ON it.id = iti.task_id
+         WHERE iti.purchase_order_id = po.id AND it.deleted_at IS NULL AND it.status <> 5 AND it.audit_status <> 1
+       ) AS pending_inbound_count,
+       COALESCE((
+         SELECT SUM(iti.putaway_qty)
+         FROM inbound_task_items iti
+         JOIN inbound_tasks it ON it.id = iti.task_id
+         WHERE iti.purchase_order_id = po.id AND it.deleted_at IS NULL AND it.status <> 5 AND it.audit_status = 1
+       ), 0) AS putaway_received_qty
      FROM purchase_orders po
      WHERE po.deleted_at IS NULL ${whereExtra}
      ORDER BY po.created_at DESC LIMIT ? OFFSET ?`,

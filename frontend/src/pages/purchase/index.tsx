@@ -231,11 +231,15 @@ export default function PurchasePage() {
                   { confirmText: '撤回确认' },
                 ),
                 disabled: withdrawConfirm.isPending,
-              }, {
+              }] : []),
+              // 关闭剩余只有在已经有实收数量、且相关收货订单都已上架完成时才可能成功
+              // （对应后端 closeRemaining 的两条硬性前提），条件不满足就不展示，
+              // 避免对必然失败的订单（如还没收过货）诱导点击。
+              ...(r.status === 2 && r.canCloseRemaining ? [{
                 label: '关闭剩余',
                 onClick: () => openConfirm(
                   '关闭剩余结案',
-                  '将按已入库的实收数量结算应付并完成采购单，未收部分作罢。仅在相关收货订单均已全部上架完成时可用。',
+                  '将按已入库的实收数量结算应付并完成采购单，未收部分作罢。',
                   () => close.mutate(r.id, { onSettled: closeConfirm }),
                   { confirmText: '确认结案' },
                 ),

@@ -27,6 +27,8 @@ export interface PurchaseOrder {
   totalAmount: number
   totalOrderedQty?: number
   totalReceivedQty?: number
+  /** 是否满足"关闭剩余"的前提（相关收货订单均已上架完成 + 已有实收数量）；仅列表接口返回 */
+  canCloseRemaining?: boolean
   remark?: string
   operatorId: number
   operatorName: string
