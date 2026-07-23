@@ -213,7 +213,7 @@ PDA uses `useCriticalPdaAction` for offline-resilient mutation with idempotency 
 - `main.js`: main process (window management, auto-update via `electron-updater`, local print, IPC)
 - `preload.js`: exposes safe APIs to renderer (`flowcubeDesktop.printZpl`, etc.)
 - `lib/localPrint.js`: ZPL/TSPL raw printing (Windows: PowerShell→WinSpool; Mac/Linux: `lp -o raw`)
-- `lib/updateCheck.js`: checks `/current/latest.json` on server
+- `lib/updateCheck.js`: polls `/api/app-update/latest`（后端读取顶层 `latest.json`）；下载安装包走同域 `/current/<filename>`，避免境内网络直连 GitHub
 - Builds MUST run on GitHub Actions Windows runner (NSIS 3.0.4.1). Local Mac builds may produce broken installers.
 
 ### Database
@@ -341,7 +341,7 @@ Status transitions validated by `assertStatusAction(machine, action, currentStat
 - Production server: `root@47.93.228.251`, project at `/opt/flowcube`
 - SSH alias: `flowcube-prod` (key: `~/.ssh/flowcube_deploy_ed25519`)
 - Browser deploy: push to `main` → GitHub Actions (`deploy-browser.yml`) → SSH → `git reset --hard` to commit SHA → `docker compose up -d --build backend frontend`
-- Desktop update feed: `/var/www/flowcube-downloads/current/latest.json` served by nginx
+- Desktop update feed: `/var/www/flowcube-downloads/latest.json`（顶层，唯一权威入口，由 `scripts/release-desktop.js` 写入），桌面端通过后端 `/api/app-update/latest` 读取；`current/` 目录只放当前版本安装包的固定文件名（`FlowCube-Setup.exe`/`version.txt`），供同域下载用，不含 latest.json
 - Emergency manual deploy: `ssh flowcube-prod 'cd /opt/flowcube && SKIP_RELEASE_GATE=1 bash scripts/server-update.sh'`
 
 ## Repository management
