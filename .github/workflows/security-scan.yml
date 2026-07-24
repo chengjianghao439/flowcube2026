@@ -43,6 +43,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          # 关闭 gitleaks 上传「扫描结果构件」——它撞 Actions 存储配额会让整个 job 失败，
+          # 而这个构件是冗余的：扫描本身照常跑、发现泄露仍会 fail、SARIF 仍上传到 code
+          # scanning（见下方 Upload Gitleaks SARIF，走 code scanning API 不占 artifact 配额）。
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
         # 若未配置 license，fallback 到 Docker 直接运行
 
       - name: Fallback gitleaks (Docker)

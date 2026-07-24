@@ -599,20 +599,25 @@ jobs:
           pwd
           ls -la desktop/release
 
+      # 这个 Actions 构件只是「从 run 页面下载 exe」的冗余备份——正式分发走 GitHub Release
+      # + 服务器 latest.json（前面步骤已完成）。所以 continue-on-error：即使 Actions 存储
+      # 配额满导致上传失败，也不拖垮整个发版 job（exe/latest.json 早已发布到位）。
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
+        continue-on-error: true
         with:
           name: FlowCube-Desktop-Setup
           path: desktop/release/*.exe
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
 
       # 当前 win 目标多为 NSIS 仅 .exe；只有实际生成 zip 时才上传 portable artifact。
       - name: Upload portable ZIP artifact (optional)
         if: steps.portable_zip.outputs.present == 'true'
         uses: actions/upload-artifact@v7
+        continue-on-error: true
         with:
           name: FlowCube-Desktop-Portable
           path: desktop/release/*.zip
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
