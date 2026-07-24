@@ -172,10 +172,6 @@ async function buildNotifications() {
      WHERE created_at >= NOW() - INTERVAL 24 HOUR
        AND severity IN ('danger', 'warning', 'fix_failed')`,
   )
-  const [[{ pendingShortages }]] = await pool.query(
-    `SELECT COUNT(*) AS pendingShortages FROM warehouse_task_shortages WHERE status = 1`,
-  )
-
   const items = []
   const seen = new Set()
   if (overduePayable > 0) pushNotification(items, seen, { code: 'OVERDUE_PAYABLE', category: 'finance', priority: 10, type: 'danger', icon: '🚨', text: `${overduePayable} 笔应付账款已逾期！`, path: '/payments' })
@@ -195,7 +191,6 @@ async function buildNotifications() {
   if (staleWavePicking > 0) pushNotification(items, seen, { code: 'WAVE_STALE_PICKING', category: 'operations', priority: 18, type: 'warning', icon: '🛒', text: `${staleWavePicking} 个波次拣货推进缓慢`, path: staleWavePickingTarget?.waveId ? `/picking-waves?waveId=${staleWavePickingTarget.waveId}&focus=wave-progress` : '/picking-waves' })
   if (staleWaveSorting > 0) pushNotification(items, seen, { code: 'WAVE_STALE_SORTING', category: 'operations', priority: 19, type: 'warning', icon: '📚', text: `${staleWaveSorting} 个波次待分拣超时`, path: staleWaveSortingTarget?.waveId ? `/picking-waves?waveId=${staleWaveSortingTarget.waveId}&focus=wave-progress` : '/picking-waves' })
   if (healthAnomalies > 0) pushNotification(items, seen, { code: 'SYSTEM_HEALTH_ANOMALY', category: 'system', priority: 5, type: 'warning', icon: '🩺', text: `近 24 小时发现 ${healthAnomalies} 条系统异常记录`, path: '/reports/pda-anomaly' })
-  if (pendingShortages > 0) pushNotification(items, seen, { code: 'PICK_SHORTAGE_PENDING', category: 'operations', priority: 8, type: 'danger', icon: '📉', text: `${pendingShortages} 条拣货缺货上报待处理（任务已挂起）`, path: '/sale' })
 
   items.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100))
 
@@ -220,7 +215,6 @@ async function buildNotifications() {
       staleWaveSorting,
       logisticsPrintFailures,
       healthAnomalies,
-      pendingShortages,
     },
   }
 }

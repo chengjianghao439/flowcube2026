@@ -29,10 +29,6 @@ router.get('/stats', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.st
 router.get('/cancel-returns/pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW), ctrl.pendingCancelReturns)
 
 // GET /api/warehouse-tasks/adjustments/pending — PDA「改单确认」任务池（必须在 /:id 之前注册）
-// 缺货上报：PDA 上报事实，ERP 决策（按实拣改单/驳回）。处理与销售改单同权限。
-router.get('/shortages/pending', requirePermission(PERMISSIONS.SALE_ORDER_UPDATE), ctrl.pendingShortages)
-router.post('/shortages/:shortageId/resolve', requirePermission(PERMISSIONS.SALE_ORDER_UPDATE), vBody(z.object({ action: z.enum(['adjustToPicked', 'dismiss']) })), ctrl.resolveShortage)
-
 router.get('/adjustments/pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW), ctrl.pendingAdjustments)
 
 // GET /api/warehouse-tasks/adjustments/:id — 改单确认详情
@@ -45,14 +41,6 @@ router.post('/adjustments/package-voids/:voidId/confirm', requirePermission(PERM
 router.post('/adjustments/container-returns/:returnId/confirm', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST), pdaOnly, pdaSessionOptional(), vBody(z.object({ targetLocationId: z.number().int().positive().optional().nullable() })), ctrl.confirmAdjustmentContainerReturn)
 
 // GET /api/warehouse-tasks/:id/pick-suggestions
-router.get('/:id/shortages', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.taskShortages)
-
-router.post('/:id/report-shortage', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), pdaOnly, pdaSessionOptional(), vBody(z.object({
-  productId: z.number().int().positive('商品无效'),
-  missingQty: z.number().positive('缺口数量必须大于 0'),
-  reason: z.string().trim().max(200).optional(),
-})), ctrl.reportShortage)
-
 router.get('/:id/pick-suggestions', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), ctrl.pickSuggestions)
 
 // GET /api/warehouse-tasks/:id/pick-route

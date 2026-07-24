@@ -49,7 +49,7 @@ export default function StockShortageDialog({ open, onClose, orderId, shortages 
         items: newItems,
       })
       toast.success('已按可用量调整明细，正在重新占库…')
-      await reserve.mutateAsync(orderId)
+      await reserve.mutateAsync({ id: orderId })
       onClose()
     } finally {
       setApplying(false)

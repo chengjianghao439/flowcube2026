@@ -1,14 +1,17 @@
 import { useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { getSaleListApi, getSaleDetailApi, createSaleApi, updateSaleApi, adjustSaleApi, reserveSaleApi, releaseSaleApi, shipSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
+import { getSaleListApi, getSaleDetailApi, getSaleReservePreviewApi, createSaleApi, updateSaleApi, adjustSaleApi, reserveSaleApi, releaseSaleApi, shipSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import { toast } from '@/lib/toast'
 import { ApiClientError } from '@/api/client'
 import { createRequestKey } from '@/lib/requestKey'
-import type { CreateSaleParams, UpdateSaleParams } from '@/types/sale'
+import type { CreateSaleParams, UpdateSaleParams, ReserveItemOverride } from '@/types/sale'
 
 export const useSaleList   = (params: object) => useQuery({ queryKey: ['sale', params], queryFn: () => getSaleListApi(params) })
 export const useSaleDetail = (id: number)     => useQuery({ queryKey: ['sale', id],     queryFn: () => getSaleDetailApi(id), enabled: !!id })
+// 占库分仓弹窗打开时才拉取，避免为每个草稿行都请求一次
+export const useSaleReservePreview = (id: number, enabled: boolean) =>
+  useQuery({ queryKey: ['sale-reserve-preview', id], queryFn: () => getSaleReservePreviewApi(id), enabled: enabled && !!id })
 
 export const useCreateSale = () => {
   const invalidate = useInvalidate()
@@ -48,7 +51,8 @@ export const useAdjustSale = () => {
 export const useReserveSale = () => {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (id: number) => reserveSaleApi(id),
+    // items 可选：占库弹窗逐行选好的发货仓库覆盖
+    mutationFn: ({ id, items }: { id: number; items?: ReserveItemOverride[] }) => reserveSaleApi(id, items),
     onSuccess: () => { invalidate('sale_reserve'); toast.success('库存已占用') },
     onError: (e: unknown) => {
       if (e instanceof ApiClientError && e.code === 'STOCK_SHORTAGE') return

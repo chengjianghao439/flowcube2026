@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SaleRowActions } from './components/SaleRowActions'
 import StockShortageDialog, { type StockShortageItem } from './components/StockShortageDialog'
-import { ApiClientError } from '@/api/client'
+import ReserveAllocationDialog from './components/ReserveAllocationDialog'
 import SaleQueryDialog, { type SaleQueryValues } from './SaleQueryDialog'
-import { useSaleList, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
+import { useSaleList, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { getSaleDetailApi } from '@/api/sale'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -79,8 +79,8 @@ export default function SalePage() {
     startDate: startDate || undefined,
     endDate: endDate || undefined,
   })
-  const reserveMutate = useReserveSale()
   const [shortageDialog, setShortageDialog] = useState<{ orderId: number; shortages: StockShortageItem[] } | null>(null)
+  const [reserveDialogOrderId, setReserveDialogOrderId] = useState<number | null>(null)
   const releaseMutate = useReleaseSale()
   const ship          = useShipSale()
   const cancel        = useCancelSale()
@@ -211,10 +211,31 @@ export default function SalePage() {
         return (
           <Badge
             variant="outline"
+            title={ws.detail}
             className={`text-xs font-medium ${ws.className} ${hasTask ? 'cursor-pointer hover:opacity-80' : ''}`}
             onClick={() => hasTask && navigate(`/sale/${r.id}`)}
           >
             {ws.label}
+          </Badge>
+        )
+      },
+    },
+    {
+      key: 'receivableStatus', title: '回款', width: 100,
+      render: (_, row) => {
+        const r = row as SaleOrder
+        if (r.receivableStatus == null) return <span className="text-xs text-muted-foreground">—</span>
+        const tone = r.receivableOverdue
+          ? 'border-destructive/30 bg-destructive/10 text-destructive'
+          : r.receivableStatus === 3
+            ? 'border-success/30 bg-success/10 text-success'
+            : r.receivableStatus === 2
+              ? 'border-primary/20 bg-primary/10 text-primary'
+              : 'bg-secondary text-secondary-foreground border-secondary'
+        const label = r.receivableOverdue ? `${r.receivableStatusName}·逾期` : r.receivableStatusName
+        return (
+          <Badge variant="outline" title={r.receivableDueDate ? `账期至 ${r.receivableDueDate.slice(0, 10)}` : undefined} className={`text-xs font-medium ${tone}`}>
+            {label}
           </Badge>
         )
       },
@@ -228,16 +249,9 @@ export default function SalePage() {
         return (
           <SaleRowActions
             row={r}
-            anyPending={reserveMutate.isPending || releaseMutate.isPending || ship.isPending || cancel.isPending || deleteMutate.isPending}
+            anyPending={releaseMutate.isPending || ship.isPending || cancel.isPending || deleteMutate.isPending}
             onAsk={(title, desc, cb) => openConfirm(title, desc, () => { closeConfirm(); cb() })}
-            onReserveSale={id => reserveMutate.mutate(id, {
-              onError: (e: unknown) => {
-                if (e instanceof ApiClientError && e.code === 'STOCK_SHORTAGE') {
-                  const shortages = (e.data as { shortages?: StockShortageItem[] } | null)?.shortages ?? []
-                  setShortageDialog({ orderId: id, shortages })
-                }
-              },
-            })}
+            onReserveSale={id => setReserveDialogOrderId(id)}
             onReleaseSale={id => releaseMutate.mutate(id)}
             onShipSale={id => ship.mutate({ id })}
             onCancelSale={id => cancel.mutate(id)}
@@ -320,6 +334,13 @@ export default function SalePage() {
         onClose={() => setShortageDialog(null)}
         orderId={shortageDialog?.orderId ?? null}
         shortages={shortageDialog?.shortages ?? []}
+      />
+
+      <ReserveAllocationDialog
+        open={!!reserveDialogOrderId}
+        orderId={reserveDialogOrderId}
+        onClose={() => setReserveDialogOrderId(null)}
+        onShortage={(orderId, shortages) => setShortageDialog({ orderId, shortages })}
       />
     </div>
   )

@@ -43,7 +43,6 @@ export interface SaleOrderTask {
   statusName: string | null
   cancelRequestedAt?: string | null
   adjustmentRequestedAt?: string | null
-  shortageReportedAt?: string | null
   shippedAt?: string | null
 }
 export interface SaleOrderTimelineEvent {
@@ -89,7 +88,6 @@ export interface SaleOrder {
   warehouseTaskCancelRequestedAt?: string | null
   /** 非空表示有改单正在等待仓库确认（拆箱/归还库位），确认完成前不能推进拣货/分拣/复核/打包/出库 */
   warehouseTaskAdjustmentRequestedAt?: string | null
-  warehouseTaskShortageReportedAt?: string | null
   /** 发货进度汇总（分仓/分批）：老单/未发货订单 shipped=0，isMultiWarehouse=false */
   orderedTotalQty?: number | null
   shippedTotalQty?: number | null
@@ -99,6 +97,13 @@ export interface SaleOrder {
   hasUndispatchedItems?: boolean
   /** partial_ship_close 表示部分发货后取消剩余、以实发结案 */
   closedReason?: string | null
+  /** 回款（应收）：独立于订单状态展示，月结/现结账期不同不能混进状态徽章。
+   *  为 null 表示还没生成应收记录（订单还没发过货）。 */
+  receivableStatus?: 1 | 2 | 3 | null
+  receivableStatusName?: string | null
+  receivableDueDate?: string | null
+  receivableBalance?: number | null
+  receivableOverdue?: boolean
   saleDate?: string
   totalAmount: number
   remark?: string
@@ -142,4 +147,40 @@ export interface AdjustSaleResult {
   adjustmentNo: string | null
   /** true 表示涉及已拣/已打包实物的归还，需 PDA 逐项扫码确认后才真正生效 */
   pending: boolean
+}
+
+/** 占库弹窗：某产品在某仓库的可用量 */
+export interface ReserveWarehouseOption {
+  warehouseId: number
+  warehouseName: string
+  available: number
+}
+
+/** 占库预览（GET /sale/:id/reserve-preview）：逐行商品 + 各仓可用量，供占库弹窗选仓库 */
+export interface ReservePreviewItem {
+  itemId: number
+  productId: number
+  productCode: string
+  productName: string
+  articleNumber?: string | null
+  spec?: string | null
+  color?: string | null
+  unit: string
+  quantity: number
+  currentWarehouseId: number
+  currentWarehouseName: string
+  warehouses: ReserveWarehouseOption[]
+}
+export interface ReservePreview {
+  orderId: number
+  warehouseId: number
+  warehouseName: string
+  items: ReservePreviewItem[]
+}
+
+/** POST /sale/:id/reserve 的分仓选择：逐行覆盖发货仓库 */
+export interface ReserveItemOverride {
+  id: number
+  warehouseId: number
+  warehouseName: string
 }

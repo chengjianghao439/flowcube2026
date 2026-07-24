@@ -94,6 +94,36 @@ async function getStock(params) {
   return getStockSnapshotForDisplay(params)
 }
 
+/**
+ * 指定产品在所有启用仓库的可用库存（含库存量为 0 的仓库，CROSS JOIN 保证组合齐全）。
+ * 用于「占用库存」分仓选择弹窗——按产品展示各仓可用量供用户挑选，非关键业务判定。
+ */
+async function getAvailabilityByProducts({ productIds, scopeWarehouseIds = null }) {
+  if (!productIds?.length) return []
+  const scope = scopeFilter(scopeWarehouseIds, 'w.id')
+  const [rows] = await pool.query(
+    `SELECT p.id AS product_id, w.id AS warehouse_id, w.name AS warehouse_name,
+            COALESCE(c.quantity, 0) AS quantity, COALESCE(s.reserved, 0) AS reserved
+     FROM product_items p
+     CROSS JOIN inventory_warehouses w
+     LEFT JOIN (
+       SELECT product_id, warehouse_id, SUM(remaining_qty) AS quantity
+       FROM inventory_containers
+       WHERE status = 1 AND deleted_at IS NULL
+       GROUP BY product_id, warehouse_id
+     ) c ON c.product_id = p.id AND c.warehouse_id = w.id
+     LEFT JOIN inventory_stock s ON s.product_id = p.id AND s.warehouse_id = w.id
+     WHERE p.id IN (?) AND w.deleted_at IS NULL ${scope.sql}`,
+    [productIds, ...scope.params],
+  )
+  return rows.map(r => ({
+    productId: r.product_id,
+    warehouseId: r.warehouse_id,
+    warehouseName: r.warehouse_name,
+    available: Math.max(0, Number(r.quantity) - Number(r.reserved)),
+  }))
+}
+
 // ─── 流水记录 ─────────────────────────────────────────────────────────────────
 
 async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehouseId=null }) {
@@ -868,6 +898,7 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, targetCo
 module.exports = {
   getStock,
   getStockSnapshotForDisplay,
+  getAvailabilityByProducts,
   getLogs,
   changeStock,
   getOverview,

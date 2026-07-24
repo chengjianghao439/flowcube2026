@@ -8,7 +8,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getTaskByIdApi, getPickSuggestionsApi,
-  readyToShipApi, reportShortageApi,
+  readyToShipApi,
 } from '@/api/warehouse-tasks'
 import { getContainerByBarcodeApi } from '@/api/inventory'
 import type { PickSuggestionItem, PickSuggestionContainer } from '@/api/warehouse-tasks'
@@ -55,19 +55,14 @@ function SuggestionRow({ c, onTap, disabled }: {
   )
 }
 
-function ProductCard({ item, onScan, scanning, onReportShortage }: {
+function ProductCard({ item, onScan, scanning }: {
   item: PickSuggestionItem
   onScan: (barcode: string, container: PickSuggestionContainer) => void
   scanning: boolean
-  onReportShortage: (item: PickSuggestionItem, missingQty: number) => Promise<boolean>
 }) {
   const done = item.remaining <= 0
   const pct  = item.requiredQty > 0 ? Math.min(100, Math.round(item.pickedQty / item.requiredQty * 100)) : 0
   const [open, setOpen] = useState(!done)
-  // 缺货上报：现场拣不出时展开输入缺口数量，上报后任务挂起等待 ERP 处理
-  const [shortageOpen, setShortageOpen] = useState(false)
-  const [shortageQty, setShortageQty] = useState('')
-  const [reporting, setReporting] = useState(false)
 
   return (
     <PdaCard done={done}>
@@ -96,30 +91,7 @@ function ProductCard({ item, onScan, scanning, onReportShortage }: {
           </div>
         </div>
         {!done && (
-          <div className="flex items-center justify-between">
-            <button onClick={()=>setOpen(o=>!o)} className="text-xs text-muted-foreground hover:text-foreground">{open?'▲ 收起推荐':'▼ 查看推荐库位'}</button>
-            <button onClick={()=>{ setShortageOpen(o=>!o); setShortageQty(String(item.remaining)) }}
-              className="text-xs text-red-600 hover:text-red-700">⚠ 缺货上报</button>
-          </div>
-        )}
-        {!done && shortageOpen && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-2 space-y-2">
-            <p className="text-xs text-red-700">现场拣不出该商品？填写缺口数量上报，任务将挂起等待 ERP 处理（未拣 {item.remaining} {item.unit}）</p>
-            <div className="flex items-center gap-2">
-              <Input type="number" min="1" max={item.remaining} value={shortageQty}
-                onChange={e=>setShortageQty(e.target.value)}
-                className="h-9 text-sm flex-1" placeholder="缺口数量" />
-              <Button size="sm" variant="destructive" disabled={reporting}
-                onClick={async ()=>{
-                  const q = Number(shortageQty)
-                  setReporting(true)
-                  try {
-                    const okDone = await onReportShortage(item, q)
-                    if (okDone) { setShortageOpen(false); setShortageQty('') }
-                  } finally { setReporting(false) }
-                }}>{reporting?'上报中…':'确认上报'}</Button>
-            </div>
-          </div>
+          <button onClick={()=>setOpen(o=>!o)} className="text-xs text-muted-foreground hover:text-foreground">{open?'▲ 收起推荐':'▼ 查看推荐库位'}</button>
         )}
         {open && !done && (
           item.suggestions.length===0
@@ -293,22 +265,6 @@ export default function PdaTaskPage() {
     } finally { setScanning(false); setInputVal(''); setTimeout(focusInput, 80) }
   }
 
-  // ── 缺货上报 ──────────────────────────────────────────────────────────
-  async function handleReportShortage(item: PickSuggestionItem, missingQty: number): Promise<boolean> {
-    if (!Number.isFinite(missingQty) || missingQty <= 0) { err('缺口数量必须大于 0'); return false }
-    if (missingQty > item.remaining) { err(`缺口数量不能超过未拣数量 ${item.remaining}`); return false }
-    try {
-      const data = await reportShortageApi(taskId, { productId: item.productId, missingQty })
-      ok(`已上报「${data.productName}」缺 ${data.missingQty}，任务已挂起，等待 ERP 端处理`)
-      await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
-      return true
-    } catch (e: unknown) {
-      const rawMsg = (e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '上报失败，请重试'
-      err(formatPdaErrorMessage(rawMsg, '上报失败，请重试'))
-      return false
-    }
-  }
-
   const items: PickSuggestionItem[] = sugData?.items ?? []
   const totalReq  = items.reduce((s,i) => s + i.requiredQty, 0)
   const totalPick = items.reduce((s,i) => s + i.pickedQty,   0)
@@ -368,7 +324,7 @@ export default function PdaTaskPage() {
           {isLoading && <PdaLoading className="h-32" />}
           {items.map(item => (
             <ProductCard key={item.id} item={item} scanning={scanning}
-              onScan={(b) => handleScan(b)} onReportShortage={handleReportShortage} />
+              onScan={(b) => handleScan(b)} />
           ))}
           {!isLoading && items.length===0 && task?.status!==2 && (
             <div className="py-10 text-center"><p className="text-muted-foreground text-sm">任务状态：{task?.statusName??'…'}</p></div>

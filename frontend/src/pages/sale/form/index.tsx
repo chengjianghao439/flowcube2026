@@ -26,10 +26,12 @@ import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar }      from '@/components/shared/ActionBar'
 import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import ShipSelectDialog from '@/pages/sale/components/ShipSelectDialog'
+import StockShortageDialog, { type StockShortageItem } from '@/pages/sale/components/StockShortageDialog'
+import ReserveAllocationDialog from '@/pages/sale/components/ReserveAllocationDialog'
 import { SectionCard }    from '@/components/shared/SectionCard'
 import { CustomerFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
-import { useCreateSale, useUpdateSale, useAdjustSale, useSaleDetail, useReserveSale, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
+import { useCreateSale, useUpdateSale, useAdjustSale, useSaleDetail, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { useCarriersActive } from '@/hooks/useCarriers'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import { LimitedInput } from '@/components/shared/LimitedInput'
@@ -138,9 +140,6 @@ function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
               该订单从 {tasks.length} 个仓库分别发货，已发 {order.shippedTotalQty ?? 0}/{order.orderedTotalQty ?? 0}
             </p>
           </div>
-          {order.closedReason === 'partial_ship_close' && (
-            <Badge variant="outline" className="rounded-full border-success/30 bg-success/10 text-success">部分发货结案</Badge>
-          )}
         </div>
         <div className="space-y-2">
           {tasks.map(t => (
@@ -148,7 +147,6 @@ function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
               <div className="min-w-0">
                 <span className="font-medium">{t.warehouseName || `仓库#${t.warehouseId}`}</span>
                 <span className="ml-2 text-xs text-muted-foreground">{t.taskNo}</span>
-                {t.shortageReportedAt && <span className="ml-2 text-xs text-destructive">缺货待处理</span>}
               </div>
               <Badge variant="outline" className={cn('rounded-full', wtTone(t.status))}>
                 {t.statusName || `阶段 ${t.status}`}
@@ -265,9 +263,6 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
       unitPrice: item.unitPrice, remark: item.remark ?? '', priceSource: 'default' as const, costPrice: item.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null,
     })),
   )
-  // 分仓发货开关：默认关（明细行不显示仓库列，全部继承订单头仓库=单仓订单）；
-  // 编辑一个本就多仓的订单时自动开启
-  const [multiWarehouse, setMultiWarehouse] = useState(order?.isMultiWarehouse ?? false)
   const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
   const [finderOpen,    setFinderOpen]    = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
@@ -323,10 +318,6 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
   const updateItem = (k: number, field: string, val: string | number) =>
     setItems(prev => prev.map(i => i._key === k ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource } : i))
 
-  // 行级发货仓库（分仓）：同时写 id + name
-  const updateItemWarehouse = (k: number, id: number | null, name: string | null) =>
-    setItems(prev => prev.map(i => i._key === k ? { ...i, warehouseId: id, warehouseName: name } : i))
-
   async function handleFinderConfirm(product: ProductFinderResult) {
     if (finderItemKey === null) return
     const k = finderItemKey
@@ -360,8 +351,7 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
     customerFinderOpen, setCustomerFinderOpen,
     customerError, setCustomerError, warehouseError, setWarehouseError,
     invalidItemKeys, setInvalidItemKeys,
-    isDirty, addItem, removeItem, updateItem, updateItemWarehouse,
-    multiWarehouse, setMultiWarehouse,
+    isDirty, addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
     total,
   }
@@ -462,7 +452,6 @@ function SaleOrderHeaderFields({
 function SaleOrderItemsTable({
   items, invalidItemKeys, quantityRefs, priceLoading,
   setFinderItemKey, setFinderOpen, updateItem, removeItem,
-  multiWarehouse = false, defaultWarehouseId = null, updateItemWarehouse,
 }: {
   items: DraftItem[]
   invalidItemKeys: Set<number>
@@ -472,9 +461,6 @@ function SaleOrderItemsTable({
   setFinderOpen: (v: boolean) => void
   updateItem: (k: number, field: string, val: string | number) => void
   removeItem: (k: number) => void
-  multiWarehouse?: boolean
-  defaultWarehouseId?: number | null
-  updateItemWarehouse?: (k: number, id: number | null, name: string | null) => void
 }) {
   const navigate = useNavigate()
   return (
@@ -488,7 +474,6 @@ function SaleOrderItemsTable({
             <th className="pb-2 text-left">商品</th>
             <th className="w-20 pb-2 text-left">颜色</th>
             <th className="w-16 pb-2 text-center">单位</th>
-            {multiWarehouse && <th className="w-40 pb-2 text-left">发货仓库</th>}
             <th className="w-20 pb-2 text-right">数量</th>
             <th className="w-24 pb-2 text-right">单价 (¥)</th>
             <th className="w-28 pb-2 text-right">金额</th>
@@ -516,17 +501,6 @@ function SaleOrderItemsTable({
               <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
 
               <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
-
-              {multiWarehouse && (
-                <td className="py-2.5 pr-2">
-                  <WarehouseSelect
-                    value={item.warehouseId ?? defaultWarehouseId}
-                    onChange={(id, name) => updateItemWarehouse?.(item._key, id, name)}
-                    placeholder="继承默认仓库"
-                    className="h-9 text-sm"
-                  />
-                </td>
-              )}
 
               <td className="py-2.5 pr-2">
                 <Input
@@ -584,8 +558,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     customerFinderOpen, setCustomerFinderOpen,
     customerError, setCustomerError, warehouseError, setWarehouseError,
     invalidItemKeys, setInvalidItemKeys,
-    isDirty, addItem, removeItem, updateItem, updateItemWarehouse,
-    multiWarehouse, setMultiWarehouse,
+    isDirty, addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
     total,
   } = useSaleOrderForm(tabPath)
@@ -646,17 +619,10 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         title="商品明细"
         compact
         actions={
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none cursor-pointer">
-              <input type="checkbox" className="h-3.5 w-3.5" checked={multiWarehouse}
-                onChange={e => setMultiWarehouse(e.target.checked)} />
-              分仓发货（不同商品从不同仓库发）
-            </label>
-            <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
-              <Plus className="h-4 w-4" />
-              添加商品
-            </Button>
-          </div>
+          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            添加商品
+          </Button>
         }
       >
         {items.length === 0 ? (
@@ -670,8 +636,6 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
-            multiWarehouse={multiWarehouse} updateItemWarehouse={updateItemWarehouse}
-            defaultWarehouseId={warehouseId ? +warehouseId : null}
           />
 
           {/* 金额统计：仅统计已选商品的行 */}
@@ -735,8 +699,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
     customerFinderOpen, setCustomerFinderOpen,
     customerError, setCustomerError, warehouseError, setWarehouseError,
     invalidItemKeys, setInvalidItemKeys,
-    addItem, removeItem, updateItem, updateItemWarehouse,
-    multiWarehouse, setMultiWarehouse,
+    addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
     total,
   } = useSaleOrderForm(tabPath, order)
@@ -799,17 +762,10 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
         title="商品明细"
         compact
         actions={
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none cursor-pointer">
-              <input type="checkbox" className="h-3.5 w-3.5" checked={multiWarehouse}
-                onChange={e => setMultiWarehouse(e.target.checked)} />
-              分仓发货（不同商品从不同仓库发）
-            </label>
-            <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
-              <Plus className="h-4 w-4" />
-              添加商品
-            </Button>
-          </div>
+          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            添加商品
+          </Button>
         }
       >
         {items.length === 0 ? (
@@ -822,8 +778,6 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
             items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
-            multiWarehouse={multiWarehouse} updateItemWarehouse={updateItemWarehouse}
-            defaultWarehouseId={warehouseId ? +warehouseId : null}
           />
         )}
       </SectionCard>
@@ -1020,13 +974,14 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const shipMutate     = useShipSale()
   const deleteMutate   = useDeleteSale()
   const cancelMutate   = useCancelSale()
-  const reserveMutate  = useReserveSale()
 
   const [printOpen, setPrintOpen] = useState(false)
   const [detailTab, setDetailTab] = useState<'info'|'progress'|'scan'|'pack'|'log'>('info')
   const [adjustMode, setAdjustMode] = useState(false)
   const [editing, setEditing] = useState(false)
   const [shipDialogOpen, setShipDialogOpen] = useState(false)
+  const [reserveDialogOpen, setReserveDialogOpen] = useState(false)
+  const [shortageDialog, setShortageDialog] = useState<{ orderId: number; shortages: StockShortageItem[] } | null>(null)
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; confirmText: string; onConfirm: () => void
@@ -1058,16 +1013,22 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     return <AdjustView order={order} tabPath={tabPath} onDone={() => setAdjustMode(false)} />
   }
 
-  const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending || reserveMutate.isPending
+  const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending
   // 分仓/分批：多仓订单、或已有部分发货的订单，明细已锁定（后端拒绝改单），不进改单视图
   const canAdjust = (order.status === 2 || order.status === 3) && !!order.taskId
     && !order.warehouseTaskCancelRequestedAt && !order.warehouseTaskAdjustmentRequestedAt
     && !order.isMultiWarehouse && (order.shippedTotalQty ?? 0) === 0
+  const ws = getSaleWorkflowStatus(order)
 
   return (
     <div className="flex flex-col gap-3">
       <ActionBar
         title={order.orderNo}
+        subtitle={
+          <Badge variant="outline" title={ws.detail} className={`text-xs font-medium ${ws.className}`}>
+            {ws.label}
+          </Badge>
+        }
         rightActions={
           <>
             {order.status === 5 && (
@@ -1087,7 +1048,9 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 onClick={() => setConfirmState({
                   open: true, title: '取消订单',
                   description: order.status === 3
-                    ? '将同步取消关联仓库任务并释放锁定资源，是否继续？'
+                    ? ((order.shippedTotalQty ?? 0) > 0
+                      ? '该订单已有部分商品出库：未发货的商品明细将被删除，已出库部分保留，订单直接变为已出库状态，是否继续？'
+                      : '将同步取消关联仓库任务并释放锁定资源，是否继续？')
                     : order.status === 2
                       ? '将释放已占用库存并取消销售单，是否继续？'
                       : '取消后订单将变为已取消状态，是否继续？',
@@ -1098,11 +1061,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
               </Button>
             )}
             {order.status === 1 && (
-              <Button variant="outline" disabled={isPending}
-                onClick={() => setConfirmState({
-                  open: true, title: '占用库存', description: '将预占该销售单所需库存，可用量减少，是否继续？', variant: 'default', confirmText: '占用库存',
-                  onConfirm: () => { setConfirmState(s => ({ ...s, open: false })); reserveMutate.mutate(order.id) },
-                })}>
+              <Button variant="outline" disabled={isPending} onClick={() => setReserveDialogOpen(true)}>
                 <Warehouse className="h-4 w-4 mr-1" />占用库存
               </Button>
             )}
@@ -1115,9 +1074,8 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <Warehouse className="h-4 w-4 mr-1" />取消占库
               </Button>
             )}
-            {order.status === 4 && (
-              <Button variant="outline" onClick={() => setPrintOpen(true)}>打印订单</Button>
-            )}
+            {/* 打印与订单状态无关（模板只依赖订单基础信息 + 明细），每个状态都可打印，与采购单一致 */}
+            <Button variant="outline" onClick={() => setPrintOpen(true)}>打印订单</Button>
             {order.status === 2 && (
               <Button disabled={isPending} onClick={() => setShipDialogOpen(true)}>
                 发起出库
@@ -1190,6 +1148,17 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <div><span className="text-muted-foreground">联系电话：</span><span>{order.receiverPhone || '-'}</span></div>
                 <div className="col-span-2"><span className="text-muted-foreground">收货地址：</span><span>{order.receiverAddress || '-'}</span></div>
                 <div><span className="text-muted-foreground">备注：</span><span>{order.remark || '-'}</span></div>
+                {order.receivableStatus != null && (
+                  <div>
+                    <span className="text-muted-foreground">回款：</span>
+                    <span className={order.receivableOverdue ? 'text-destructive font-medium' : order.receivableStatus === 3 ? 'text-success font-medium' : ''}>
+                      {order.receivableStatusName}{order.receivableOverdue ? '·逾期' : ''}
+                    </span>
+                    {order.receivableDueDate && (
+                      <span className="ml-1.5 text-xs text-muted-foreground">账期至 {order.receivableDueDate.slice(0, 10)}</span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </SectionCard>
@@ -1429,6 +1398,19 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         onConfirm={(itemIds) => {
           shipMutate.mutate({ id: order.id, itemIds }, { onSuccess: () => setShipDialogOpen(false) })
         }}
+      />
+
+      <ReserveAllocationDialog
+        open={reserveDialogOpen}
+        orderId={order.id}
+        onClose={() => setReserveDialogOpen(false)}
+        onShortage={(orderId, shortages) => { setReserveDialogOpen(false); setShortageDialog({ orderId, shortages }) }}
+      />
+      <StockShortageDialog
+        open={!!shortageDialog}
+        onClose={() => setShortageDialog(null)}
+        orderId={shortageDialog?.orderId ?? null}
+        shortages={shortageDialog?.shortages ?? []}
       />
     </div>
   )

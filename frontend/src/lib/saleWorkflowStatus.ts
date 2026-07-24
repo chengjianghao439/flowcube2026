@@ -15,6 +15,8 @@ export interface WorkflowStatus {
   label: string
   tone: WorkflowTone
   className: string
+  /** 补充信息（如履约中的已发/应发进度），不进状态名本身，鼠标悬停查看 */
+  detail?: string
 }
 
 export function getSaleWorkflowStatus(order: SaleOrder): WorkflowStatus {
@@ -28,22 +30,13 @@ export function getSaleWorkflowStatus(order: SaleOrder): WorkflowStatus {
   // 已取消
   if (order.status === 5) return status('已取消', 'danger')
 
-  // 部分发货后取消剩余、以实发结案（分仓/分批）
-  if (order.status === 4 && order.closedReason === 'partial_ship_close') {
-    return status('部分发货结案', 'success')
-  }
-
-  // 缺货挂起：现场拣货缺货已上报、等待 ERP 端处理（按实拣改单/驳回）
-  if (order.warehouseTaskShortageReportedAt) {
-    return status('缺货待处理', 'danger')
-  }
-
-  // 履约中（分仓/分批）：多仓订单或已有部分发货时，用「已发/应发」进度汇总展示，
-  // 而不是单个仓库任务的状态（多仓下最近任务状态不能代表整单进度）
+  // 部分发货：分仓/分批订单尚在履约、还没按订单量全发完。「部分发货」四个字是唯一
+  // 允许超出统一 3 字符规则的例外。主动关闭剩余时明细会被精简为"要求量=实发量"
+  // （见 sale.service.js 的 cancel()），订单直接落回普通"已出库"，不会停留在这个状态。
   if (order.status === 3 && (order.isMultiWarehouse || (order.shippedTotalQty ?? 0) > 0)) {
     const shipped = order.shippedTotalQty ?? 0
     const ordered = order.orderedTotalQty ?? 0
-    return status(`履约中 ${shipped}/${ordered}`, 'active')
+    return status('部分发货', 'active', `已发 ${shipped}/${ordered}`)
   }
 
   // 单仓订单：用仓库作业状态展示真实进度（原逻辑，行为不变）
@@ -65,6 +58,6 @@ export function getSaleWorkflowStatus(order: SaleOrder): WorkflowStatus {
   return status(SALE_STATUS_NAME[key] ?? `状态 ${order.status}`, tone as WorkflowTone)
 }
 
-function status(label: string, tone: WorkflowTone): WorkflowStatus {
-  return { label, tone, className: TONE_CLASS[tone] }
+function status(label: string, tone: WorkflowTone, detail?: string): WorkflowStatus {
+  return { label, tone, className: TONE_CLASS[tone], detail }
 }

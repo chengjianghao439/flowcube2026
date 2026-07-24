@@ -3,6 +3,7 @@ const { scopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { reserve, releaseByRef } = require('../../engine/reservationEngine')
 const { getAvailableStockForDecision } = require('../../engine/containerEngine')
+const { getAvailabilityByProducts } = require('../inventory/inventory.service')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -27,7 +28,6 @@ const fmt = row => ({
     : null,
   warehouseTaskCancelRequestedAt: row.warehouse_task_cancel_requested_at || null,
   warehouseTaskAdjustmentRequestedAt: row.warehouse_task_adjustment_requested_at || null,
-  warehouseTaskShortageReportedAt: row.warehouse_task_shortage_reported_at || null,
   // 发货进度（分仓/分批）：老单/未发货订单 shipped=0，isMultiWarehouse=false，展示与旧版一致
   orderedTotalQty: row.ordered_total_qty != null ? Number(row.ordered_total_qty) : null,
   shippedTotalQty: row.shipped_total_qty != null ? Number(row.shipped_total_qty) : null,
@@ -36,6 +36,14 @@ const fmt = row => ({
   // 分批：仍有未派发到仓库任务的明细行 → 履约中可「继续发货」
   hasUndispatchedItems: row.undispatched_count != null ? Number(row.undispatched_count) > 0 : false,
   closedReason: row.closed_reason || null,
+  // 回款：独立于订单状态展示（月结/现结账期不同，混进状态徽章看不清）。
+  // receivableStatus 为 null 表示还没生成应收记录（订单还没发过货）。
+  receivableStatus: row.receivable_status != null ? Number(row.receivable_status) : null,
+  receivableStatusName: row.receivable_status != null ? (RECEIVABLE_STATUS_NAME[Number(row.receivable_status)] || null) : null,
+  receivableDueDate: row.receivable_due_date || null,
+  receivableBalance: row.receivable_balance != null ? Number(row.receivable_balance) : null,
+  receivableOverdue: row.receivable_status != null && Number(row.receivable_status) !== 3
+    && row.receivable_due_date != null && new Date(row.receivable_due_date).getTime() < Date.now(),
   carrierId:row.carrier_id||null,
   carrier: row.carrier_name || row.carrier || null,   // 优先承运商表名称，回退文本字段
   freightType:row.freight_type||null,
@@ -58,8 +66,7 @@ const warehouseTaskProjection = `
   wt_by_id.task_no AS warehouse_task_no,
   wt_by_id.status AS warehouse_task_status,
   wt_by_id.cancel_requested_at AS warehouse_task_cancel_requested_at,
-  wt_by_id.adjustment_requested_at AS warehouse_task_adjustment_requested_at,
-  wt_by_id.shortage_reported_at AS warehouse_task_shortage_reported_at
+  wt_by_id.adjustment_requested_at AS warehouse_task_adjustment_requested_at
 `
 
 // 发货进度汇总（分仓/分批展示用）：一次聚合避免逐行相关子查询
@@ -77,6 +84,16 @@ const itemAggProjection = `
   soi_agg.ordered_total_qty, soi_agg.shipped_total_qty, soi_agg.warehouse_count,
   soi_agg.undispatched_count
 `
+
+// 回款信息（不改订单状态机，独立于订单状态展示）：payment_records type=2（应收）
+const paymentJoin = `
+  LEFT JOIN payment_records pr_recv ON pr_recv.type = 2 AND pr_recv.order_id = so.id
+`
+const paymentProjection = `
+  pr_recv.status AS receivable_status, pr_recv.due_date AS receivable_due_date,
+  pr_recv.balance AS receivable_balance
+`
+const RECEIVABLE_STATUS_NAME = { 1: '未付', 2: '部分付', 3: '已付清' }
 
 const genOrderNo = conn => generateDailyCode(conn, 'SO', 'sale_orders', 'order_no')
 
@@ -392,10 +409,11 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     countParams.push(...scope.params)
   }
   const [rows] = await pool.query(
-    `SELECT so.*, ${warehouseTaskProjection}, ${itemAggProjection}
+    `SELECT so.*, ${warehouseTaskProjection}, ${itemAggProjection}, ${paymentProjection}
      FROM sale_orders so
      ${latestWarehouseTaskJoin}
      ${itemAggJoin}
+     ${paymentJoin}
      WHERE so.deleted_at IS NULL ${cond}
      ORDER BY so.created_at DESC LIMIT ? OFFSET ?`,
     [...params,pageSize,offset],
@@ -406,11 +424,12 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
 
 async function findById(id) {
   const [rows] = await pool.query(
-    `SELECT so.*, c.name AS carrier_name, ${warehouseTaskProjection}, ${itemAggProjection}
+    `SELECT so.*, c.name AS carrier_name, ${warehouseTaskProjection}, ${itemAggProjection}, ${paymentProjection}
      FROM sale_orders so
      LEFT JOIN carriers c ON c.id = so.carrier_id AND c.deleted_at IS NULL
      ${latestWarehouseTaskJoin}
      ${itemAggJoin}
+     ${paymentJoin}
      WHERE so.id=? AND so.deleted_at IS NULL`,
     [id]
   )
@@ -420,7 +439,7 @@ async function findById(id) {
   // 分仓：一个订单可能有多个仓库任务，详情页返回任务列表（前端展示各仓进度）
   const [taskRows] = await pool.query(
     `SELECT id, task_no, warehouse_id, warehouse_name, status,
-            cancel_requested_at, adjustment_requested_at, shortage_reported_at, shipped_at
+            cancel_requested_at, adjustment_requested_at, shipped_at
      FROM warehouse_tasks WHERE sale_order_id = ? AND deleted_at IS NULL ORDER BY id`,
     [id],
   )
@@ -433,7 +452,6 @@ async function findById(id) {
     statusName: WT_STATUS_NAME[Number(t.status)] || null,
     cancelRequestedAt: t.cancel_requested_at || null,
     adjustmentRequestedAt: t.adjustment_requested_at || null,
-    shortageReportedAt: t.shortage_reported_at || null,
     shippedAt: t.shipped_at || null,
   }))
   const [items] = await pool.query(
@@ -681,9 +699,13 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
     const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
     await conn.query('UPDATE sale_orders SET total_amount=? WHERE id=?', [total, id])
     await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
+    // dispatched=1：本分支只在订单已有在跑的仓库任务(orderRow.task_id)时才会走到，
+    // 改的是这个已有任务的 required_qty（见 applyProductDeltaWithinTransaction），
+    // 不会新建任务——重建出来的明细行本就已被该任务覆盖，不是"待发货"状态，
+    // 否则会被 hasUndispatchedItems 误判为还没发货，出现「继续发货」入口重复建任务。
     for (const item of items) {
       await conn.query(
-        `INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark,dispatched) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)`,
         [id, item.productId, item.productCode, item.productName, item.unit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.unitPrice, item.quantity*item.unitPrice, item.remark||null]
       )
     }
@@ -810,17 +832,69 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
   finally { conn.release() }
 }
 
+// 占库前的分仓预览：按明细行的产品，列出各仓库当前可用量，供占库弹窗逐行选仓库。
+async function getReservePreview(id, scopeWarehouseIds = null) {
+  const [[orderRow]] = await pool.query(
+    'SELECT id, status, warehouse_id, warehouse_name FROM sale_orders WHERE id = ?', [id],
+  )
+  if (!orderRow) throw new AppError('销售单不存在', 404)
+  assertStatusAction('sale', 'reserve', orderRow.status)
+  const [itemRows] = await pool.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
+  if (!itemRows.length) throw new AppError('销售单无明细，无法占用库存', 400)
+
+  const productIds = [...new Set(itemRows.map(r => r.product_id))]
+  const availability = await getAvailabilityByProducts({ productIds, scopeWarehouseIds })
+  const availByProduct = new Map()
+  for (const a of availability) {
+    if (!availByProduct.has(a.productId)) availByProduct.set(a.productId, [])
+    availByProduct.get(a.productId).push({ warehouseId: a.warehouseId, warehouseName: a.warehouseName, available: a.available })
+  }
+
+  return {
+    orderId: orderRow.id,
+    warehouseId: Number(orderRow.warehouse_id),
+    warehouseName: orderRow.warehouse_name,
+    items: itemRows.map(item => ({
+      itemId: item.id,
+      productId: item.product_id,
+      productCode: item.product_code,
+      productName: item.product_name,
+      articleNumber: item.article_number || null,
+      spec: item.spec || null,
+      color: item.color || null,
+      unit: item.unit,
+      quantity: Number(item.quantity),
+      currentWarehouseId: item.warehouse_id != null ? Number(item.warehouse_id) : Number(orderRow.warehouse_id),
+      currentWarehouseName: item.warehouse_name || orderRow.warehouse_name,
+      warehouses: (availByProduct.get(item.product_id) || []).sort((a, b) => b.available - a.available),
+    })),
+  }
+}
+
 // ① 占用库存：仅调用 reservationEngine.reserve()，不创建仓库任务
 //
 // 先做一次全量可用量检查（不实际预占），把所有不足的商品一次性收集进错误明细——
 // 而不是像 reserve() 循环那样第一个不足就抛错、后面的商品可用量对用户完全不可见。
 // 前端可用这份明细直接展示"按可用量修改订单"的一键操作（见 requestAdjustment）。
-async function reserveStock(id, operator) {
+//
+// itemOverrides：占库弹窗里逐行选好的发货仓库（[{id, warehouseId, warehouseName}]），
+// 在可用量检查前先写回明细行，让 shortages 按用户选的仓库计算。
+async function reserveStock(id, operator, itemOverrides = []) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
     const rule = assertStatusAction('sale', 'reserve', orderRow.status)
+
+    if (itemOverrides.length) {
+      for (const o of itemOverrides) {
+        await conn.query(
+          'UPDATE sale_order_items SET warehouse_id = ?, warehouse_name = ? WHERE id = ? AND order_id = ?',
+          [o.warehouseId, o.warehouseName, o.id, id],
+        )
+      }
+    }
+
     const [itemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
     if (!itemRows.length) throw new AppError('销售单无明细，无法占用库存', 400)
 
@@ -1033,18 +1107,50 @@ async function cancel(id, operator) {
       // 且若活跃任务为空（如唯一任务已出库、剩余全是未派发行），上面循环根本不释放预占。
       // 这里兜底整单释放剩余 active 预占（releaseByRef 幂等，已释放的不受影响）。
       await releaseByRef(conn, 'sale_order', id)
-      // 部分已发：有货已经发出，不能整单取消，以"实发结案"——订单复用状态4（已出库），
-      // 已发部分与应收保留（应收在各任务出库时已按实发重算），剩余未发任务已在上面取消。
+      // 部分已发：有货已经发出，不能整单取消，改为按实发精简明细——未发过的行整行删除，
+      // 发了一部分的行把数量降到实发量，这样订单里剩下的每一行都是"要求数量=实发数量"，
+      // 状态就能老老实实显示"已出库"，不需要再挂一个"部分发货"的特殊标记。
+      // 原始要求数量记录进事件里，供事后追溯本单原本要发多少。
       if (shippedTasks.length > 0) {
+        const [itemRows] = await conn.query(
+          'SELECT id, product_id, product_name, quantity, shipped_qty, unit_price FROM sale_order_items WHERE order_id = ? FOR UPDATE',
+          [id],
+        )
+        const removed = []
+        const trimmed = []
+        const deleteIds = []
+        for (const item of itemRows) {
+          const shipped = Number(item.shipped_qty)
+          const qty = Number(item.quantity)
+          if (shipped <= 0) {
+            deleteIds.push(item.id)
+            removed.push({ productId: item.product_id, productName: item.product_name, quantity: qty })
+          } else if (shipped < qty) {
+            await conn.query(
+              'UPDATE sale_order_items SET quantity = ?, amount = ? WHERE id = ?',
+              [shipped, shipped * Number(item.unit_price), item.id],
+            )
+            trimmed.push({ productId: item.product_id, productName: item.product_name, fromQuantity: qty, toQuantity: shipped })
+          }
+        }
+        if (deleteIds.length) {
+          await conn.query('DELETE FROM sale_order_items WHERE id IN (?)', [deleteIds])
+        }
+        const [[{ total }]] = await conn.query(
+          'SELECT COALESCE(SUM(amount), 0) AS total FROM sale_order_items WHERE order_id = ?',
+          [id],
+        )
+        await conn.query('UPDATE sale_orders SET total_amount = ? WHERE id = ?', [total, id])
+
         await compareAndSetStatus(conn, {
           table: 'sale_orders', id,
           fromStatus: [3], toStatus: 4, entityName: '销售单',
-          extraSet: { closed_reason: 'partial_ship_close' },
         })
         await appendSaleEvent(
           conn, id, 'partial_ship_closed', '关闭剩余未发',
-          `销售单 ${orderRow.order_no} 已发部分保留，剩余未发已取消结案`,
+          `销售单 ${orderRow.order_no} 已发部分保留，未发商品已从明细中移除，按实发结案`,
           operator,
+          { removed, trimmed },
         )
         await conn.commit()
         return
@@ -1096,6 +1202,7 @@ module.exports = {
   create,
   update,
   requestAdjustment,
+  getReservePreview,
   reserveStock,
   releaseStock,
   ship,

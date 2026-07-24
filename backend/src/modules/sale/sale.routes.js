@@ -23,13 +23,21 @@ const itemSchema = z.object({
 })
 const salePhoneRule = z.string().max(11).regex(/^1\d{10}$/, '请输入正确的手机号').optional().or(z.literal(''))
 const createSchema = z.object({ customerId:z.number().int().positive('请选择客户'), customerName:z.string(), warehouseId:z.number().int().positive('请选择仓库'), warehouseName:z.string(), remark:z.string().optional(), carrierId:z.number().int().positive().optional().nullable(), carrier:z.string().optional(), freightType:z.number().int().min(1).max(3).optional().nullable(), receiverName:z.string().max(5,'收货人最多 5 个字符').optional(), receiverPhone:salePhoneRule, receiverAddress:z.string().max(30,'收货地址最多 30 个字符').optional(), items:z.array(itemSchema).min(1,'至少添加一条明细') })
+const reserveSchema = z.object({
+  items: z.array(z.object({
+    id: z.number().int().positive(),
+    warehouseId: z.number().int().positive(),
+    warehouseName: z.string(),
+  })).optional(),
+})
 router.use(authMiddleware)
 router.get('/',           requirePermission(PERMISSIONS.SALE_ORDER_VIEW), ctrl.list)
 router.get('/:id',        requirePermission(PERMISSIONS.SALE_ORDER_VIEW), ctrl.detail)
+router.get('/:id/reserve-preview', requirePermission(PERMISSIONS.SALE_ORDER_RESERVE), ctrl.reservePreview)
 router.post('/',          requirePermission(PERMISSIONS.SALE_ORDER_CREATE), vBody(createSchema), ctrl.create)
 router.put('/:id',        requirePermission(PERMISSIONS.SALE_ORDER_UPDATE), vBody(createSchema), ctrl.update)
 router.put('/:id/adjust', requirePermission(PERMISSIONS.SALE_ORDER_UPDATE), vBody(createSchema), ctrl.adjust)
-router.post('/:id/reserve',  requirePermission(PERMISSIONS.SALE_ORDER_RESERVE), ctrl.reserve)
+router.post('/:id/reserve',  requirePermission(PERMISSIONS.SALE_ORDER_RESERVE), vBody(reserveSchema), ctrl.reserve)
 router.post('/:id/release',  requirePermission(PERMISSIONS.SALE_ORDER_RELEASE), ctrl.release)
 router.post('/:id/ship',     requirePermission(PERMISSIONS.SALE_ORDER_SHIP), ctrl.ship)
 router.post('/:id/cancel',   requirePermission(PERMISSIONS.SALE_ORDER_CANCEL), ctrl.cancel)
