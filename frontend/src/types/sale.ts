@@ -14,6 +14,11 @@ export interface SaleOrderItem {
   spec?: string | null
   color?: string | null
   unit: string
+  /** 行级发货仓库（分仓）：不填则继承订单头「默认仓库」 */
+  warehouseId?: number | null
+  warehouseName?: string | null
+  /** 已发数量（分批累加）；shippedQty < quantity 表示该行还有未发部分 */
+  shippedQty?: number
   quantity: number
   unitPrice: number
   amount: number
@@ -24,6 +29,20 @@ export interface SaleOrderItem {
   costPrice?: number | null
   belowCost?: boolean
   scans?: ScanLog[]
+}
+
+/** 销售单关联的仓库任务（分仓：一个订单可能有多个） */
+export interface SaleOrderTask {
+  taskId: number
+  taskNo: string
+  warehouseId: number | null
+  warehouseName: string | null
+  status: number
+  statusName: string | null
+  cancelRequestedAt?: string | null
+  adjustmentRequestedAt?: string | null
+  shortageReportedAt?: string | null
+  shippedAt?: string | null
 }
 export interface SaleOrderTimelineEvent {
   id: number | string
@@ -69,11 +88,20 @@ export interface SaleOrder {
   /** 非空表示有改单正在等待仓库确认（拆箱/归还库位），确认完成前不能推进拣货/分拣/复核/打包/出库 */
   warehouseTaskAdjustmentRequestedAt?: string | null
   warehouseTaskShortageReportedAt?: string | null
+  /** 发货进度汇总（分仓/分批）：老单/未发货订单 shipped=0，isMultiWarehouse=false */
+  orderedTotalQty?: number | null
+  shippedTotalQty?: number | null
+  warehouseCount?: number | null
+  isMultiWarehouse?: boolean
+  /** partial_ship_close 表示部分发货后取消剩余、以实发结案 */
+  closedReason?: string | null
   saleDate?: string
   totalAmount: number
   remark?: string
   taskId?: number | null
   taskNo?: string | null
+  /** 分仓：一个订单的多个仓库任务（详情页返回，多仓时用它而非单个 taskId） */
+  tasks?: SaleOrderTask[]
   carrierId?: number | null
   carrier?: string | null
   freightType?: 1 | 2 | 3 | null

@@ -121,6 +121,44 @@ function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
   const isCancelled = current === 8
   const isPicking = current >= 2
 
+  // 分仓：一个订单有多个仓库任务时，改为逐仓列出各任务的仓库/状态（各仓进度可能不同），
+  // 而不是只展示单个任务的步骤条。单仓订单（tasks<=1）走下面的原单任务展示。
+  const tasks = order.tasks ?? []
+  if (tasks.length > 1) {
+    const wtTone = (s: number) => s === 7 ? 'border-success/30 bg-success/10 text-success'
+      : s === 8 ? 'border-destructive/30 bg-destructive/10 text-destructive'
+      : 'border-blue-200 bg-blue-50 text-blue-700'
+    return (
+      <div className="rounded-lg border border-border bg-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">分仓履约进度</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              该订单从 {tasks.length} 个仓库分别发货，已发 {order.shippedTotalQty ?? 0}/{order.orderedTotalQty ?? 0}
+            </p>
+          </div>
+          {order.closedReason === 'partial_ship_close' && (
+            <Badge variant="outline" className="rounded-full border-success/30 bg-success/10 text-success">部分发货结案</Badge>
+          )}
+        </div>
+        <div className="space-y-2">
+          {tasks.map(t => (
+            <div key={t.taskId} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm">
+              <div className="min-w-0">
+                <span className="font-medium">{t.warehouseName || `仓库#${t.warehouseId}`}</span>
+                <span className="ml-2 text-xs text-muted-foreground">{t.taskNo}</span>
+                {t.shortageReportedAt && <span className="ml-2 text-xs text-destructive">缺货待处理</span>}
+              </div>
+              <Badge variant="outline" className={cn('rounded-full', wtTone(t.status))}>
+                {t.statusName || `阶段 ${t.status}`}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   if (!order.taskNo) return null
 
   return (
@@ -222,9 +260,13 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
       _key: i, productId: item.productId, productCode: item.productCode,
       productName: item.productName, articleNumber: item.articleNumber ?? null, spec: item.spec ?? null, color: item.color ?? null,
       unit: item.unit, quantity: item.quantity,
+      warehouseId: item.warehouseId ?? null, warehouseName: item.warehouseName ?? null,
       unitPrice: item.unitPrice, remark: item.remark ?? '', priceSource: 'default' as const, costPrice: item.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null,
     })),
   )
+  // 分仓发货开关：默认关（明细行不显示仓库列，全部继承订单头仓库=单仓订单）；
+  // 编辑一个本就多仓的订单时自动开启
+  const [multiWarehouse, setMultiWarehouse] = useState(order?.isMultiWarehouse ?? false)
   const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
   const [finderOpen,    setFinderOpen]    = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
@@ -280,6 +322,10 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
   const updateItem = (k: number, field: string, val: string | number) =>
     setItems(prev => prev.map(i => i._key === k ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource } : i))
 
+  // 行级发货仓库（分仓）：同时写 id + name
+  const updateItemWarehouse = (k: number, id: number | null, name: string | null) =>
+    setItems(prev => prev.map(i => i._key === k ? { ...i, warehouseId: id, warehouseName: name } : i))
+
   async function handleFinderConfirm(product: ProductFinderResult) {
     if (finderItemKey === null) return
     const k = finderItemKey
@@ -313,7 +359,8 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
     customerFinderOpen, setCustomerFinderOpen,
     customerError, setCustomerError, warehouseError, setWarehouseError,
     invalidItemKeys, setInvalidItemKeys,
-    isDirty, addItem, removeItem, updateItem,
+    isDirty, addItem, removeItem, updateItem, updateItemWarehouse,
+    multiWarehouse, setMultiWarehouse,
     handleCustomerConfirm, handleFinderConfirm,
     total,
   }
@@ -414,6 +461,7 @@ function SaleOrderHeaderFields({
 function SaleOrderItemsTable({
   items, invalidItemKeys, quantityRefs, priceLoading,
   setFinderItemKey, setFinderOpen, updateItem, removeItem,
+  multiWarehouse = false, defaultWarehouseId = null, updateItemWarehouse,
 }: {
   items: DraftItem[]
   invalidItemKeys: Set<number>
@@ -423,6 +471,9 @@ function SaleOrderItemsTable({
   setFinderOpen: (v: boolean) => void
   updateItem: (k: number, field: string, val: string | number) => void
   removeItem: (k: number) => void
+  multiWarehouse?: boolean
+  defaultWarehouseId?: number | null
+  updateItemWarehouse?: (k: number, id: number | null, name: string | null) => void
 }) {
   const navigate = useNavigate()
   return (
@@ -436,6 +487,7 @@ function SaleOrderItemsTable({
             <th className="pb-2 text-left">商品</th>
             <th className="w-20 pb-2 text-left">颜色</th>
             <th className="w-16 pb-2 text-center">单位</th>
+            {multiWarehouse && <th className="w-40 pb-2 text-left">发货仓库</th>}
             <th className="w-20 pb-2 text-right">数量</th>
             <th className="w-24 pb-2 text-right">单价 (¥)</th>
             <th className="w-28 pb-2 text-right">金额</th>
@@ -463,6 +515,17 @@ function SaleOrderItemsTable({
               <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
 
               <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
+
+              {multiWarehouse && (
+                <td className="py-2.5 pr-2">
+                  <WarehouseSelect
+                    value={item.warehouseId ?? defaultWarehouseId}
+                    onChange={(id, name) => updateItemWarehouse?.(item._key, id, name)}
+                    placeholder="继承默认仓库"
+                    className="h-9 text-sm"
+                  />
+                </td>
+              )}
 
               <td className="py-2.5 pr-2">
                 <Input
@@ -520,7 +583,8 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     customerFinderOpen, setCustomerFinderOpen,
     customerError, setCustomerError, warehouseError, setWarehouseError,
     invalidItemKeys, setInvalidItemKeys,
-    isDirty, addItem, removeItem, updateItem,
+    isDirty, addItem, removeItem, updateItem, updateItemWarehouse,
+    multiWarehouse, setMultiWarehouse,
     handleCustomerConfirm, handleFinderConfirm,
     total,
   } = useSaleOrderForm(tabPath)
@@ -581,10 +645,17 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         title="商品明细"
         compact
         actions={
-          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            添加商品
-          </Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none cursor-pointer">
+              <input type="checkbox" className="h-3.5 w-3.5" checked={multiWarehouse}
+                onChange={e => setMultiWarehouse(e.target.checked)} />
+              分仓发货（不同商品从不同仓库发）
+            </label>
+            <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              添加商品
+            </Button>
+          </div>
         }
       >
         {items.length === 0 ? (
@@ -598,6 +669,8 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
+            multiWarehouse={multiWarehouse} updateItemWarehouse={updateItemWarehouse}
+            defaultWarehouseId={warehouseId ? +warehouseId : null}
           />
 
           {/* 金额统计：仅统计已选商品的行 */}
@@ -661,7 +734,8 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
     customerFinderOpen, setCustomerFinderOpen,
     customerError, setCustomerError, warehouseError, setWarehouseError,
     invalidItemKeys, setInvalidItemKeys,
-    addItem, removeItem, updateItem,
+    addItem, removeItem, updateItem, updateItemWarehouse,
+    multiWarehouse, setMultiWarehouse,
     handleCustomerConfirm, handleFinderConfirm,
     total,
   } = useSaleOrderForm(tabPath, order)
@@ -724,10 +798,17 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
         title="商品明细"
         compact
         actions={
-          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            添加商品
-          </Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none cursor-pointer">
+              <input type="checkbox" className="h-3.5 w-3.5" checked={multiWarehouse}
+                onChange={e => setMultiWarehouse(e.target.checked)} />
+              分仓发货（不同商品从不同仓库发）
+            </label>
+            <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              添加商品
+            </Button>
+          </div>
         }
       >
         {items.length === 0 ? (
@@ -740,6 +821,8 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
             items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
+            multiWarehouse={multiWarehouse} updateItemWarehouse={updateItemWarehouse}
+            defaultWarehouseId={warehouseId ? +warehouseId : null}
           />
         )}
       </SectionCard>
@@ -974,8 +1057,10 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   }
 
   const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending || reserveMutate.isPending
+  // 分仓/分批：多仓订单、或已有部分发货的订单，明细已锁定（后端拒绝改单），不进改单视图
   const canAdjust = (order.status === 2 || order.status === 3) && !!order.taskId
     && !order.warehouseTaskCancelRequestedAt && !order.warehouseTaskAdjustmentRequestedAt
+    && !order.isMultiWarehouse && (order.shippedTotalQty ?? 0) === 0
 
   return (
     <div className="flex flex-col gap-3">
@@ -1115,7 +1200,21 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 { key: 'productName', title: '名称', width: 180 },
                 { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
                 { key: 'unit', title: '单位', width: 70, render: v => <span className="text-center">{String(v)}</span> },
+                // 分仓订单：展示每行的发货仓库
+                ...(order.isMultiWarehouse ? [{
+                  key: 'warehouseName' as const, title: '发货仓库', width: 120,
+                  render: (v: unknown) => <span className="text-sm">{(v as string) || order.warehouseName || '-'}</span>,
+                }] : []),
                 { key: 'quantity', title: '数量', width: 90, render: v => <span className="tabular-nums">{String(v)}</span> },
+                // 进入履约后展示已发/应发进度
+                ...((order.shippedTotalQty ?? 0) > 0 || order.status >= 3 ? [{
+                  key: 'shippedQty' as const, title: '已发/应发', width: 100,
+                  render: (v: unknown, item: SaleOrderItem) => {
+                    const shipped = Number(v ?? 0)
+                    const done = shipped >= item.quantity
+                    return <span className={cn('tabular-nums', done ? 'text-success' : shipped > 0 ? 'text-primary' : 'text-muted-foreground')}>{shipped}/{item.quantity}</span>
+                  },
+                }] : []),
                 {
                   key: 'unitPrice', title: '单价', width: 130,
                   render: (v, item) => (

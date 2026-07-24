@@ -24,7 +24,9 @@ export function SaleRowActions({
 }: SaleRowActionsProps) {
   // 已发往仓库执行（有关联仓库任务）且没有取消/改单挂起中时，才允许修改订单——
   // 与详情页 canAdjust 的判断口径一致（sale/form/index.tsx）。
+  // 分仓/分批：多仓订单、或已有部分发货的订单，明细已锁定（后端拒绝改单），隐藏入口。
   const canAdjust = !!row.taskId && !row.warehouseTaskCancelRequestedAt && !row.warehouseTaskAdjustmentRequestedAt
+    && !row.isMultiWarehouse && (row.shippedTotalQty ?? 0) === 0
   const hasShortage = !!row.warehouseTaskShortageReportedAt
   const [shortageOpen, setShortageOpen] = useState(false)
 
