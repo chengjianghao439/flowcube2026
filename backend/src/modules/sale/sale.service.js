@@ -33,6 +33,8 @@ const fmt = row => ({
   shippedTotalQty: row.shipped_total_qty != null ? Number(row.shipped_total_qty) : null,
   warehouseCount: row.warehouse_count != null ? Number(row.warehouse_count) : null,
   isMultiWarehouse: row.warehouse_count != null ? Number(row.warehouse_count) > 1 : false,
+  // 分批：仍有未派发到仓库任务的明细行 → 履约中可「继续发货」
+  hasUndispatchedItems: row.undispatched_count != null ? Number(row.undispatched_count) > 0 : false,
   closedReason: row.closed_reason || null,
   carrierId:row.carrier_id||null,
   carrier: row.carrier_name || row.carrier || null,   // 优先承运商表名称，回退文本字段
@@ -66,12 +68,14 @@ const itemAggJoin = `
     SELECT order_id,
            SUM(quantity) AS ordered_total_qty,
            SUM(shipped_qty) AS shipped_total_qty,
-           COUNT(DISTINCT warehouse_id) AS warehouse_count
+           COUNT(DISTINCT warehouse_id) AS warehouse_count,
+           SUM(CASE WHEN dispatched = 0 THEN 1 ELSE 0 END) AS undispatched_count
     FROM sale_order_items GROUP BY order_id
   ) soi_agg ON soi_agg.order_id = so.id
 `
 const itemAggProjection = `
-  soi_agg.ordered_total_qty, soi_agg.shipped_total_qty, soi_agg.warehouse_count
+  soi_agg.ordered_total_qty, soi_agg.shipped_total_qty, soi_agg.warehouse_count,
+  soi_agg.undispatched_count
 `
 
 const genOrderNo = conn => generateDailyCode(conn, 'SO', 'sale_orders', 'order_no')
@@ -462,6 +466,7 @@ async function findById(id) {
     warehouseId: r.warehouse_id != null ? Number(r.warehouse_id) : null,
     warehouseName: r.warehouse_name || null,
     shippedQty: r.shipped_qty != null ? Number(r.shipped_qty) : 0,
+    dispatched: Number(r.dispatched) === 1,
     quantity:Number(r.quantity),
     unitPrice:Number(r.unit_price),
     amount:Number(r.amount),
@@ -875,21 +880,32 @@ async function reserveStock(id, operator) {
 // ② 发起出库：按明细行的发货仓库分组，每个仓库创建一个仓库任务，不扣减库存，
 // 订单进入拣货中（status=3）。单仓订单 = 只有一组 = 一个任务（与旧行为一致）。
 // sale_orders.task_id/task_no 记录"最近创建的任务"（兼容旧字段，主查询走 sale_order_id 反查）。
-async function ship(id, operator) {
+//
+// 分批发货：只对「未派发(dispatched=0)」且（传了 itemIds 时）被选中的行建任务，
+// 建完标记 dispatched=1。首次发货 status 2→3；后续继续发剩余行时订单已在 3，保持不变。
+// 不传 itemIds = 发全部未派发行（含首次一次性全发的旧行为）。
+async function ship(id, operator, { itemIds = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
-    const rule = assertStatusAction('sale', 'ship', orderRow.status)
-    // 已有关联任务即视为已发起出库，防重复（分仓一次性建多任务，重复调用无意义）
-    const [[{ n: existingTasks }]] = await conn.query(
-      'SELECT COUNT(*) AS n FROM warehouse_tasks WHERE sale_order_id = ? AND deleted_at IS NULL',
+    const curStatus = Number(orderRow.status)
+    // 允许从「已占库(2)」首次发货，或「履约中(3)」继续发剩余行；其它状态走标准报错
+    if (curStatus !== 2 && curStatus !== 3) {
+      assertStatusAction('sale', 'ship', orderRow.status)
+    }
+
+    // 取未派发行；传了 itemIds 则只发选中的那些未派发行（分批）
+    let [itemRows] = await conn.query(
+      'SELECT * FROM sale_order_items WHERE order_id = ? AND dispatched = 0 ORDER BY id',
       [id],
     )
-    if (Number(existingTasks) > 0) throw new AppError('该销售单已发起出库，请勿重复操作', 409)
-
-    const [itemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
-    if (!itemRows.length) throw new AppError('销售单无明细', 400)
+    if (!itemRows.length) throw new AppError('该销售单已无未发货明细，无需再发起出库', 400)
+    if (Array.isArray(itemIds) && itemIds.length) {
+      const wanted = new Set(itemIds.map(Number))
+      itemRows = itemRows.filter(r => wanted.has(Number(r.id)))
+      if (!itemRows.length) throw new AppError('选中的明细行均已发起出库，无可发货项', 400)
+    }
 
     // 按发货仓库分组（缺省行仓库=订单头）
     const groups = new Map()
@@ -925,25 +941,39 @@ async function ship(id, operator) {
       })
       created.push({ taskId, taskNo, warehouseName: grp.warehouseName })
     }
+    // 标记本次已派发的行
+    await conn.query(
+      'UPDATE sale_order_items SET dispatched = 1 WHERE id IN (?)',
+      [itemRows.map(r => r.id)],
+    )
+
     const last = created[created.length - 1]
-    await compareAndSetStatus(conn, {
-      table: 'sale_orders',
-      id,
-      fromStatus: rule.from,
-      toStatus: rule.to,
-      entityName: '销售单',
-      extraSet: {
-        task_id: last.taskId,
-        task_no: last.taskNo,
-      },
-    })
+    if (curStatus === 2) {
+      // 首次发货：已占库(2) → 履约中(3)
+      const rule = assertStatusAction('sale', 'ship', orderRow.status)
+      await compareAndSetStatus(conn, {
+        table: 'sale_orders', id,
+        fromStatus: rule.from, toStatus: rule.to, entityName: '销售单',
+        extraSet: { task_id: last.taskId, task_no: last.taskNo },
+      })
+    } else {
+      // 继续发剩余行：订单已在履约中(3)，只更新最近任务字段
+      await conn.query('UPDATE sale_orders SET task_id = ?, task_no = ? WHERE id = ?', [last.taskId, last.taskNo, id])
+    }
+
+    // 是否还有未派发行（用于事件描述与前端「继续发货」入口判断）
+    const [[{ remaining }]] = await conn.query(
+      'SELECT COUNT(*) AS remaining FROM sale_order_items WHERE order_id = ? AND dispatched = 0',
+      [id],
+    )
+    const partial = Number(remaining) > 0
     await appendSaleEvent(
-      conn, id, 'ship_requested', '发起出库',
-      created.length > 1
-        ? `已按 ${created.length} 个仓库分别创建出库任务`
-        : `已创建仓库任务，等待拣货`,
+      conn, id, 'ship_requested', partial ? '发起出库（部分）' : '发起出库',
+      partial
+        ? `本次对 ${itemRows.length} 条明细发起出库，还有 ${remaining} 条未发`
+        : (created.length > 1 ? `已按 ${created.length} 个仓库分别创建出库任务` : `已创建仓库任务，等待拣货`),
       operator,
-      { tasks: created },
+      { tasks: created, partial, remaining: Number(remaining) },
     )
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
@@ -999,6 +1029,10 @@ async function cancel(id, operator) {
       for (const t of activeTasks) {
         await taskSvc.cancel(t.id, { conn, syncSaleStatus: false, operator })
       }
+      // 分批：未派发行（dispatched=0，没有任务）的预占不会被 taskSvc.cancel 释放；
+      // 且若活跃任务为空（如唯一任务已出库、剩余全是未派发行），上面循环根本不释放预占。
+      // 这里兜底整单释放剩余 active 预占（releaseByRef 幂等，已释放的不受影响）。
+      await releaseByRef(conn, 'sale_order', id)
       // 部分已发：有货已经发出，不能整单取消，以"实发结案"——订单复用状态4（已出库），
       // 已发部分与应收保留（应收在各任务出库时已按实发重算），剩余未发任务已在上面取消。
       if (shippedTasks.length > 0) {

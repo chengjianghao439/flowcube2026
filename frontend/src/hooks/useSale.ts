@@ -68,7 +68,8 @@ export const useReleaseSale = () => {
 export const useShipSale = () => {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (id: number) => shipSaleApi(id),
+    // itemIds 可选：分批发货时只发选中的明细行
+    mutationFn: ({ id, itemIds }: { id: number; itemIds?: number[] }) => shipSaleApi(id, itemIds),
     onSuccess: () => { invalidate('sale_ship'); toast.success('已发起出库') },
   })
 }

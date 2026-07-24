@@ -9,7 +9,7 @@ const update = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);a
 const adjust = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);const result=await svc.requestAdjustment(+req.params.id,{...req.body,operator:op,requestKey:extractRequestKey(req)});return successResponse(res,result,result.pending?'改单已提交，等待仓库确认':'修改成功')}catch(e){next(e)} }
 const reserve = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);await svc.reserveStock(+req.params.id, op);return successResponse(res,null,'预占库存成功')}catch(e){next(e)} }
 const release = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);await svc.releaseStock(+req.params.id, op);return successResponse(res,null,'已释放预占库存，订单恢复为草稿')}catch(e){next(e)} }
-const ship    = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);await svc.ship(+req.params.id, op);return successResponse(res,null,'出库任务已创建，等待仓库操作')}catch(e){next(e)} }
+const ship    = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);const itemIds=Array.isArray(req.body?.itemIds)?req.body.itemIds:null;await svc.ship(+req.params.id, op, { itemIds });return successResponse(res,null,'出库任务已创建，等待仓库操作')}catch(e){next(e)} }
 const cancel  = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);await svc.cancel(+req.params.id, op);return successResponse(res,null,'已取消')}catch(e){next(e)} }
 const del     = async(req,res,next)=>{ try{await svc.deleteOrder(+req.params.id);return successResponse(res,null,'订单删除成功')}catch(e){next(e)} }
 module.exports = { list, detail, create, update, adjust, reserve, release, ship, cancel, del }

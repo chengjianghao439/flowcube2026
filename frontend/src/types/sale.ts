@@ -19,6 +19,8 @@ export interface SaleOrderItem {
   warehouseName?: string | null
   /** 已发数量（分批累加）；shippedQty < quantity 表示该行还有未发部分 */
   shippedQty?: number
+  /** 是否已派发到仓库任务（分批发货：false 表示还没发起出库，可在下次发货中选中） */
+  dispatched?: boolean
   quantity: number
   unitPrice: number
   amount: number
@@ -93,6 +95,8 @@ export interface SaleOrder {
   shippedTotalQty?: number | null
   warehouseCount?: number | null
   isMultiWarehouse?: boolean
+  /** 仍有未派发到仓库任务的明细行 → 履约中可「继续发货」 */
+  hasUndispatchedItems?: boolean
   /** partial_ship_close 表示部分发货后取消剩余、以实发结案 */
   closedReason?: string | null
   saleDate?: string

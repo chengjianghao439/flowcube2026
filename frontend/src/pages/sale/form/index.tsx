@@ -25,6 +25,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar }      from '@/components/shared/ActionBar'
 import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
+import ShipSelectDialog from '@/pages/sale/components/ShipSelectDialog'
 import { SectionCard }    from '@/components/shared/SectionCard'
 import { CustomerFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
@@ -1025,6 +1026,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const [detailTab, setDetailTab] = useState<'info'|'progress'|'scan'|'pack'|'log'>('info')
   const [adjustMode, setAdjustMode] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [shipDialogOpen, setShipDialogOpen] = useState(false)
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; confirmText: string; onConfirm: () => void
@@ -1117,12 +1119,14 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
               <Button variant="outline" onClick={() => setPrintOpen(true)}>打印订单</Button>
             )}
             {order.status === 2 && (
-              <Button disabled={isPending}
-                onClick={() => setConfirmState({
-                  open: true, title: '发起出库', description: '将创建仓库出库任务，由仓库人员执行拣货后完成出库，是否继续？', variant: 'default', confirmText: '发起出库',
-                  onConfirm: () => { setConfirmState(s => ({ ...s, open: false })); shipMutate.mutate(order.id) },
-                })}>
+              <Button disabled={isPending} onClick={() => setShipDialogOpen(true)}>
                 发起出库
+              </Button>
+            )}
+            {/* 分批：履约中且仍有未派发行时可继续发剩余 */}
+            {order.status === 3 && order.hasUndispatchedItems && (
+              <Button disabled={isPending} onClick={() => setShipDialogOpen(true)}>
+                继续发货
               </Button>
             )}
             {canAdjust && (
@@ -1415,6 +1419,17 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       {printOpen && (
         <PrintPreviewOverlay order={order} onClose={() => setPrintOpen(false)} />
       )}
+
+      {/* 发货选择弹窗（分批发货：可选本次发哪些行） */}
+      <ShipSelectDialog
+        open={shipDialogOpen}
+        onClose={() => setShipDialogOpen(false)}
+        order={order}
+        loading={shipMutate.isPending}
+        onConfirm={(itemIds) => {
+          shipMutate.mutate({ id: order.id, itemIds }, { onSuccess: () => setShipDialogOpen(false) })
+        }}
+      />
     </div>
   )
 }

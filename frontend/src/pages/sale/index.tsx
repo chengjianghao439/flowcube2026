@@ -239,7 +239,7 @@ export default function SalePage() {
               },
             })}
             onReleaseSale={id => releaseMutate.mutate(id)}
-            onShipSale={id => ship.mutate(id)}
+            onShipSale={id => ship.mutate({ id })}
             onCancelSale={id => cancel.mutate(id)}
             onDeleteSale={id => deleteMutate.mutate(id)}
             onViewTask={() => goToDetail(r)}
