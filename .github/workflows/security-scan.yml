@@ -24,9 +24,7 @@ permissions:
   contents: read
   security-events: write
   pull-requests: write
-  # upload-sarif 会读取本次 workflow run 的元数据来关联分析结果，私有仓库下必须显式给
-  # actions: read，否则报 "Resource not accessible by integration"（指向 workflow-runs API）
-  # —— 表现为扫描本身跑完了、SARIF 也生成了，却在上传环节把整个 job 判失败。
+  # upload-sarif 需读取本次 workflow run 的元数据来关联分析结果（私有仓库下必须显式声明）
   actions: read
 
 env:
@@ -65,8 +63,14 @@ jobs:
             --report-path=/repo/gitleaks-report.sarif \
             --verbose
 
+      # 把 SARIF 推送到 GitHub 安全面板。本仓库为私有且未启用 Code Scanning
+      # （需 GitHub Advanced Security），该 API 不可用，必然报
+      # "Code scanning is not enabled for this repository"。
+      # 扫描本身与「发现泄露即失败」不依赖这一步，结果也已写入下方 job summary，
+      # 故 continue-on-error：将来启用 Code Scanning 后本步骤会自动恢复生效。
       - name: Upload Gitleaks SARIF
         if: always()
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: gitleaks-report.sarif
