@@ -14,7 +14,7 @@ import PdaScanner from '@/components/pda/PdaScanner'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
 import PdaEmptyState, { PdaLoading } from '@/components/pda/PdaEmptyState'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
@@ -115,7 +115,7 @@ export default function PdaTransferInPage() {
         title="调入仓扫码入库"
         subtitle={`${order.orderNo} · ${order.fromWarehouseName} → ${order.toWarehouseName}`}
         onBack={() => navigate('/pda/transfer')}
-        right={<Badge className="text-xs">调入仓：{order.toWarehouseName}</Badge>}
+        right={<SoftStatusLabel label={`调入仓：${order.toWarehouseName}`} tone="info" />}
       />
       <PdaFlash flash={flash} />
 

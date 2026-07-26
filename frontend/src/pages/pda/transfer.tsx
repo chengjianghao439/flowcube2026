@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getTransferListApi } from '@/api/transfer'
 import type { TransferOrder } from '@/api/transfer'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
@@ -29,7 +29,7 @@ function TransferCard({ order, phase, onTap }: { order: TransferOrder; phase: 'o
             <p className="font-semibold text-foreground truncate">{order.fromWarehouseName} → {order.toWarehouseName}</p>
             <p className="text-sm text-muted-foreground mt-0.5">{lineCount} 种商品 · 计划 {planned}</p>
           </div>
-          <Badge variant={phase === 'out' ? 'default' : 'secondary'}>{phase === 'out' ? '待出库' : '在途'}</Badge>
+          <SoftStatusLabel label={phase === 'out' ? '待出库' : '在途'} tone={phase === 'out' ? 'active' : 'warning'} />
         </div>
         {phase === 'out'
           ? <p className="text-xs text-muted-foreground">已出库 {deducted}</p>

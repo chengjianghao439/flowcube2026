@@ -7,12 +7,14 @@ import { useQuery } from '@tanstack/react-query'
 import { getInboundTasksApi } from '@/api/inbound-tasks'
 import type { InboundTask } from '@/types/inbound-tasks'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import type { StatusTone } from '@/lib/statusTone'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
-const STATUS_VARIANT: Record<number,'default'|'secondary'|'outline'|'destructive'> = {
-  1:'outline', 2:'default', 3:'secondary', 4:'secondary', 5:'destructive'
+/** 1待收货 2收货中 3待上架 4已完成 5已取消 */
+const STATUS_TONE: Record<number, StatusTone> = {
+  1:'draft', 2:'active', 3:'active', 4:'success', 5:'danger'
 }
 
 function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
@@ -31,7 +33,7 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
             <p className="text-sm text-muted-foreground mt-0.5">{task.warehouseName} · {task.items?.length ?? 0} 种商品</p>
             <p className="text-xs text-muted-foreground">采购单：{task.purchaseOrderNo ?? '—'}</p>
           </div>
-          <Badge variant={STATUS_VARIANT[task.status] ?? 'outline'}>{task.receiptStatus?.label ?? task.statusName}</Badge>
+          <SoftStatusLabel label={task.receiptStatus?.label ?? task.statusName} tone={STATUS_TONE[task.status] ?? 'draft'} />
         </div>
         <div>
           <p className="text-xs text-muted-foreground">应到 {totalOrdered}，已收 {totalReceived}</p>

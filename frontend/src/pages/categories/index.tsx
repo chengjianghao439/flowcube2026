@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
 import { Label }   from '@/components/ui/label'
-import { Badge }   from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { activeTone } from '@/lib/statusTone'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import PageHeader  from '@/components/shared/PageHeader'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -239,9 +240,11 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
 
         <span className="flex-1 truncate text-sm font-medium">{cat.name}</span>
 
-        <Badge variant={cat.status ? 'default' : 'secondary'} className="shrink-0 text-xs">
-          {cat.status ? '启用' : '停用'}
-        </Badge>
+        <SoftStatusLabel
+          label={cat.status ? '启用' : '停用'}
+          tone={activeTone(cat.status)}
+          className="shrink-0"
+        />
 
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           {cat.level < 4 && (

@@ -18,7 +18,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -64,7 +64,7 @@ export default function SaleReturnFormPage() {
   const isNew = tabPath === '/returns/sale/new' || tabPath === ''
   const returnId = isNew ? null : Number(tabPath.split('/').pop())
 
-  function closeTab(targetPath = '/returns') {
+  function closeTab(targetPath = '/returns/sale') {
     const { removeTab } = useWorkspaceStore.getState()
     removeTab(tabPath || '/returns/sale/new')
     navigate(targetPath)
@@ -428,9 +428,9 @@ function TaskProgressCard({ task }: { task: SaleReturn['task'] }) {
           <p className="mt-0.5 text-xs text-muted-foreground">退货任务：{task.taskNo}</p>
         </div>
         {isCancelled ? (
-          <Badge variant="destructive" className="rounded-full">已取消</Badge>
+          <SoftStatusLabel label="已取消" tone="danger" />
         ) : (
-          <Badge variant="outline" className="rounded-full border-blue-200 bg-blue-50 text-blue-700">{task.statusName}</Badge>
+          <SoftStatusLabel label={task.statusName} tone={task.status === 5 ? 'success' : 'active'} />
         )}
       </div>
       {!isCancelled && (

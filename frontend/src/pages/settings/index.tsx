@@ -6,7 +6,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
@@ -70,9 +70,7 @@ export default function SettingsPage() {
         <div className="space-y-3">
           {roles?.map(r => (
             <div key={r.id} className="flex items-start gap-4">
-              <Badge variant={r.id === 1 ? 'default' : 'secondary'} className="shrink-0 mt-0.5">
-                {r.name}
-              </Badge>
+              <SoftStatusLabel label={r.name} tone={r.id === 1 ? 'active' : 'info'} className="shrink-0 mt-0.5" />
               <p className="text-sm text-muted-foreground">{r.remark || '-'}</p>
             </div>
           ))}

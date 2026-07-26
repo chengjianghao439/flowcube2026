@@ -15,10 +15,10 @@ import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
 import PdaStat, { PdaStatGrid } from '@/components/pda/PdaStat'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getPackageByBarcodeApi } from '@/api/packages'
 import { getTaskByIdApi, shipTaskApi } from '@/api/warehouse-tasks'
-import { WT_STATUS, WT_STATUS_CLASS, WT_STATUS_NAME } from '@/constants/warehouseTaskStatus'
+import { WT_STATUS, WT_STATUS_NAME, WT_STATUS_TONE } from '@/constants/warehouseTaskStatus'
 import type { PackageShipInfo } from '@/api/packages'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -140,9 +140,9 @@ export default function PdaShipPage() {
   const totalQty   = mergedItems.reduce((s, i) => s + i.qty, 0)
   const totalBoxes = info?.packages.length ?? 0
   const currentWarehouseStatusName = info ? warehouseStatusName(info) : null
-  const currentWarehouseStatusClass = info
-    ? WT_STATUS_CLASS[warehouseStatus(info) as keyof typeof WT_STATUS_CLASS] ?? 'bg-muted text-muted-foreground border-border'
-    : ''
+  const currentWarehouseStatusTone = info
+    ? WT_STATUS_TONE[String(warehouseStatus(info)) as keyof typeof WT_STATUS_TONE] ?? 'draft'
+    : 'draft'
   const currentCanShip = info ? canShip(info) : false
   // BODY_SPLIT
   return (
@@ -181,9 +181,7 @@ export default function PdaShipPage() {
               <PdaSection title="订单信息">
                 <div className="flex items-center justify-between -mt-1 mb-1">
                   <span className="text-xs text-muted-foreground">仓库任务状态</span>
-                  <Badge className={`${currentWarehouseStatusClass} text-xs`}>
-                    {currentWarehouseStatusName}
-                  </Badge>
+                  <SoftStatusLabel label={currentWarehouseStatusName ?? '—'} tone={currentWarehouseStatusTone} />
                 </div>
                 {!currentCanShip ? (
                   <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
@@ -226,7 +224,7 @@ export default function PdaShipPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm">{pkg.status === 2 ? '✅' : '📦'}</span>
                         <p className="font-mono text-sm font-semibold text-foreground">{pkg.barcode}</p>
-                        {pkg.barcode === info.barcode && <Badge className="text-xs">当前</Badge>}
+                        {pkg.barcode === info.barcode && <SoftStatusLabel label="当前" tone="active" />}
                       </div>
                       <p className="text-xs text-muted-foreground">{pkg.items.reduce((s, i) => s + i.qty, 0).toFixed(0)} 件</p>
                     </div>

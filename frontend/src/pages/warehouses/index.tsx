@@ -4,7 +4,8 @@ import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { activeTone } from '@/lib/statusTone'
 import { useWarehouses, useDeleteWarehouse } from '@/hooks/useWarehouses'
 import WarehouseFormDialog from './components/WarehouseFormDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -12,9 +13,6 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { Warehouse } from '@/types/warehouses'
 import type { TableColumn } from '@/types'
 
-const TYPE_VARIANTS: Record<number, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  1: 'default', 2: 'secondary', 3: 'destructive', 4: 'outline',
-}
 
 export default function WarehousesPage() {
   const [keyword, setKeyword] = useState('')
@@ -40,7 +38,7 @@ export default function WarehousesPage() {
     {
       key: 'typeName', title: '类型', width: 90,
       render: (_, row) => (
-        <Badge variant={TYPE_VARIANTS[row.type] ?? 'outline'}>{row.typeName}</Badge>
+        <SoftStatusLabel label={row.typeName} tone="info" />
       ),
     },
     { key: 'manager', title: '负责人', width: 100, render: (v) => (v as string) || '-' },
@@ -49,9 +47,7 @@ export default function WarehousesPage() {
     {
       key: 'isActive', title: '状态', width: 80,
       render: (_, row) => (
-        <Badge variant={row.isActive ? 'default' : 'destructive'}>
-          {row.isActive ? '启用' : '停用'}
-        </Badge>
+        <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={activeTone(row.isActive)} />
       ),
     },
     {

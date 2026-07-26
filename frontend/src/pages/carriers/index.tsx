@@ -10,7 +10,8 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { activeTone } from '@/lib/statusTone'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -78,7 +79,7 @@ export default function CarriersPage() {
     { key: 'phone',    title: '电话',
       render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'isActive', title: '状态', width: 80,
-      render: v => <Badge variant={v ? 'default' : 'outline'}>{v ? '启用' : '停用'}</Badge> },
+      render: v => <SoftStatusLabel label={v ? '启用' : '停用'} tone={activeTone(v as boolean)} /> },
     {
       key: 'id', title: '操作', width: 120,
       render: (_, row) => (

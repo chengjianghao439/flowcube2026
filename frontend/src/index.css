@@ -117,16 +117,9 @@
   .text-doc-code-strong { @apply text-sm font-semibold text-foreground; }
   .text-doc-code-muted  { @apply text-xs text-muted-foreground; }
 
-  /* 语义色工具类 */
-  .text-success  { color: hsl(var(--success)); }
-  .text-warning  { color: hsl(var(--warning)); }
-  .text-info     { color: hsl(var(--info)); }
-  .bg-success    { background-color: hsl(var(--success)); }
-  .bg-warning    { background-color: hsl(var(--warning)); }
-  .bg-info       { background-color: hsl(var(--info)); }
-  .bg-success\/10 { background-color: hsl(var(--success) / 0.1); }
-  .bg-warning\/10 { background-color: hsl(var(--warning) / 0.1); }
-  .bg-info\/10    { background-color: hsl(var(--info) / 0.1); }
+  /* 语义色（success / warning / info）已注册进 tailwind.config.js 的 theme.colors，
+     text-success、bg-warning/10、border-info/20 等全部由 Tailwind 自动生成，
+     这里不再手写——手写版本覆盖不到带透明度的修饰符，是配色不一致的历史根源。 */
 
   /* 卡片基础样式 */
   .card-base { @apply rounded-lg border border-border bg-card; }

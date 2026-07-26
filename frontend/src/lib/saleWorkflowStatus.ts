@@ -1,15 +1,9 @@
 import type { SaleOrder } from '@/types/sale'
 import { WT_STATUS_NAME } from '@/constants/warehouseTaskStatus'
 import { SALE_STATUS_NAME, SALE_STATUS_TONE } from '@/generated/status'
+import { STATUS_TONE_CLASS, type StatusTone } from '@/lib/statusTone'
 
-const TONE_CLASS = {
-  draft: 'bg-secondary text-secondary-foreground border-secondary',
-  active: 'bg-primary/10 text-primary border-primary/20',
-  success: 'bg-success/10 text-success border-success/20',
-  danger: 'bg-destructive/10 text-destructive border-destructive/20',
-} as const
-
-export type WorkflowTone = keyof typeof TONE_CLASS
+export type WorkflowTone = StatusTone
 
 export interface WorkflowStatus {
   label: string
@@ -59,5 +53,5 @@ export function getSaleWorkflowStatus(order: SaleOrder): WorkflowStatus {
 }
 
 function status(label: string, tone: WorkflowTone, detail?: string): WorkflowStatus {
-  return { label, tone, className: TONE_CLASS[tone], detail }
+  return { label, tone, className: STATUS_TONE_CLASS[tone], detail }
 }

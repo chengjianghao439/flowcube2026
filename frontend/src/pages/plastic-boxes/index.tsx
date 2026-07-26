@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { ProductFinder, FinderTrigger } from '@/components/finder'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
@@ -76,7 +76,9 @@ export default function PlasticBoxesPage() {
     { key: 'remainingQty', title: '当前数量', width: 80, render: v => <span className="font-semibold">{String(v)}</span> },
     {
       key: 'status', title: '状态', width: 80,
-      render: v => Number(v) === 1 ? <Badge variant="default">在库</Badge> : <Badge variant="secondary">空置</Badge>,
+      render: v => Number(v) === 1
+        ? <SoftStatusLabel label="在库" tone="active" />
+        : <SoftStatusLabel label="空置" tone="draft" />,
     },
     { key: 'createdAt', title: '创建时间', width: 150, render: v => formatDisplayDateTime(v) },
     {

@@ -16,7 +16,8 @@ import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
 import { Label }   from '@/components/ui/label'
-import { Badge }   from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import type { StatusTone } from '@/lib/statusTone'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
@@ -128,9 +129,7 @@ function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
   // 而不是只展示单个任务的步骤条。单仓订单（tasks<=1）走下面的原单任务展示。
   const tasks = order.tasks ?? []
   if (tasks.length > 1) {
-    const wtTone = (s: number) => s === 7 ? 'border-success/30 bg-success/10 text-success'
-      : s === 8 ? 'border-destructive/30 bg-destructive/10 text-destructive'
-      : 'border-blue-200 bg-blue-50 text-blue-700'
+    const wtTone = (s: number): StatusTone => s === 7 ? 'success' : s === 8 ? 'danger' : 'active'
     return (
       <div className="rounded-lg border border-border bg-card p-5 space-y-3">
         <div className="flex items-center justify-between gap-3">
@@ -148,9 +147,7 @@ function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
                 <span className="font-medium">{t.warehouseName || `仓库#${t.warehouseId}`}</span>
                 <span className="ml-2 text-xs text-muted-foreground">{t.taskNo}</span>
               </div>
-              <Badge variant="outline" className={cn('rounded-full', wtTone(t.status))}>
-                {t.statusName || `阶段 ${t.status}`}
-              </Badge>
+              <SoftStatusLabel label={t.statusName || `阶段 ${t.status}`} tone={wtTone(t.status)} />
             </div>
           ))}
         </div>
@@ -168,11 +165,9 @@ function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
           <p className="mt-0.5 text-xs text-muted-foreground">仓库任务：{order.taskNo}</p>
         </div>
         {isCancelled ? (
-          <Badge variant="destructive" className="rounded-full">已取消</Badge>
+          <SoftStatusLabel label="已取消" tone="danger" />
         ) : isPicking ? (
-          <Badge variant="outline" className="rounded-full border-blue-200 bg-blue-50 text-blue-700">
-            {order.warehouseTaskStatusName || `阶段 ${current}`}
-          </Badge>
+          <SoftStatusLabel label={order.warehouseTaskStatusName || `阶段 ${current}`} tone="active" />
         ) : null}
       </div>
 
@@ -1025,9 +1020,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       <ActionBar
         title={order.orderNo}
         subtitle={
-          <Badge variant="outline" title={ws.detail} className={`text-xs font-medium ${ws.className}`}>
-            {ws.label}
-          </Badge>
+          <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} />
         }
         rightActions={
           <>

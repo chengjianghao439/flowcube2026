@@ -10,6 +10,8 @@ import { getApiBase } from '@/config/api'
 import { normalizeVersion, isRemoteNewer } from '@/lib/appVersionCompare'
 import { resolveAppUpdateDownloadUrl } from '@/lib/resolveAppUpdateDownloadUrl'
 import { toast } from '@/lib/toast'
+import { cn } from '@/lib/utils'
+import { STATUS_TONE_CLASS } from '@/lib/statusTone'
 
 export default function DashboardVersionCard() {
   const qc = useQueryClient()
@@ -123,7 +125,7 @@ export default function DashboardVersionCard() {
               </Button>
             )}
             {showNewAvailable && (
-              <Badge variant="default" className="gap-1 bg-amber-600 hover:bg-amber-600/90">
+              <Badge variant="outline" className={cn('gap-1 text-xs font-medium', STATUS_TONE_CLASS.warning)}>
                 <BellRing className="h-3 w-3" />
                 有新版本可用
               </Badge>

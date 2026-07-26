@@ -14,7 +14,7 @@ import { getContainerByBarcodeApi } from '@/api/inventory'
 import type { PickSuggestionItem, PickSuggestionContainer } from '@/api/warehouse-tasks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
@@ -78,8 +78,8 @@ function ProductCard({ item, onScan, scanning }: {
             )}
           </div>
           {done
-            ? <Badge className="bg-green-100 text-green-700 border-green-200 shrink-0 ml-2">✓ 完成</Badge>
-            : <Badge variant="default" className="shrink-0 ml-2">剩余 {item.remaining} {item.unit}</Badge>}
+            ? <SoftStatusLabel label="✓ 完成" tone="success" className="shrink-0 ml-2" />
+            : <SoftStatusLabel label={`剩余 ${item.remaining} ${item.unit}`} tone="active" className="shrink-0 ml-2" />}
         </div>
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1">

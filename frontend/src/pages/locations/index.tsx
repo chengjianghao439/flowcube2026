@@ -10,7 +10,8 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { activeTone } from '@/lib/statusTone'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -21,8 +22,7 @@ import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { TableColumn } from '@/types'
 
-const STATUS_VARIANT: Record<number, 'default' | 'outline' | 'secondary'> = { 1: 'default', 2: 'outline' }
-const STATUS_LABEL:   Record<number, string> = { 1: '启用', 2: '停用' }
+const STATUS_LABEL: Record<number, string> = { 1: '启用', 2: '停用' }
 
 const EMPTY_FORM: CreateLocationParams = { warehouseId: 0, code: '', zone: '', aisle: '', rack: '', level: '', position: '', capacity: 0, status: 1, remark: '' }
 
@@ -86,7 +86,7 @@ export default function LocationsPage() {
     { key: 'rack',    title: '货架', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'capacity', title: '容量', width: 80 },
     { key: 'status', title: '状态', width: 80,
-      render: v => <Badge variant={STATUS_VARIANT[v as number]}>{STATUS_LABEL[v as number]}</Badge> },
+      render: v => <SoftStatusLabel label={STATUS_LABEL[v as number]} tone={activeTone(Number(v) === 1)} /> },
     { key: 'containerCount', title: '容器数', width: 80,
       render: v => (v as number | null) ?? 0 },
     {

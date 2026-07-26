@@ -6,7 +6,8 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import type { StatusTone } from '@/lib/statusTone'
 import { SaleRowActions } from './components/SaleRowActions'
 import StockShortageDialog, { type StockShortageItem } from './components/StockShortageDialog'
 import ReserveAllocationDialog from './components/ReserveAllocationDialog'
@@ -209,14 +210,12 @@ export default function SalePage() {
         const ws = getSaleWorkflowStatus(r)
         const hasTask = r.taskNo && r.taskId
         return (
-          <Badge
-            variant="outline"
+          <SoftStatusLabel
+            label={ws.label}
+            tone={ws.tone}
             title={ws.detail}
-            className={`text-xs font-medium ${ws.className} ${hasTask ? 'cursor-pointer hover:opacity-80' : ''}`}
-            onClick={() => hasTask && navigate(`/sale/${r.id}`)}
-          >
-            {ws.label}
-          </Badge>
+            onClick={hasTask ? () => navigate(`/sale/${r.id}`) : undefined}
+          />
         )
       },
     },
@@ -225,18 +224,20 @@ export default function SalePage() {
       render: (_, row) => {
         const r = row as SaleOrder
         if (r.receivableStatus == null) return <span className="text-xs text-muted-foreground">—</span>
-        const tone = r.receivableOverdue
-          ? 'border-destructive/30 bg-destructive/10 text-destructive'
+        const tone: StatusTone = r.receivableOverdue
+          ? 'danger'
           : r.receivableStatus === 3
-            ? 'border-success/30 bg-success/10 text-success'
+            ? 'success'
             : r.receivableStatus === 2
-              ? 'border-primary/20 bg-primary/10 text-primary'
-              : 'bg-secondary text-secondary-foreground border-secondary'
-        const label = r.receivableOverdue ? `${r.receivableStatusName}·逾期` : r.receivableStatusName
+              ? 'active'
+              : 'draft'
+        const label = r.receivableOverdue ? `${r.receivableStatusName}·逾期` : (r.receivableStatusName ?? '—')
         return (
-          <Badge variant="outline" title={r.receivableDueDate ? `账期至 ${r.receivableDueDate.slice(0, 10)}` : undefined} className={`text-xs font-medium ${tone}`}>
-            {label}
-          </Badge>
+          <SoftStatusLabel
+            label={label}
+            tone={tone}
+            title={r.receivableDueDate ? `账期至 ${r.receivableDueDate.slice(0, 10)}` : undefined}
+          />
         )
       },
     },

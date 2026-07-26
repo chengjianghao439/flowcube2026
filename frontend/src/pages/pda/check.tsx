@@ -15,9 +15,9 @@ import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getTasksApi, getTaskByIdApi, submitCheckScanApi } from '@/api/warehouse-tasks'
-import { WT_STATUS } from '@/constants/warehouseTaskStatus'
+import { WT_PRIORITY_TONE, WT_STATUS } from '@/constants/warehouseTaskStatus'
 import type { WarehouseTask, WarehouseTaskItem } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -106,7 +106,7 @@ function TaskSelectStep({
               <PdaCard key={task.id} onClick={() => onSelect(task)} className="w-full text-left space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="font-mono text-sm font-semibold text-foreground">{task.taskNo}</p>
-                  <Badge className={task.priority === 1 ? 'bg-red-100 text-red-700 border-red-200' : 'bg-orange-100 text-orange-700 border-orange-200'}>{task.priorityName}</Badge>
+                  <SoftStatusLabel label={task.priorityName} tone={WT_PRIORITY_TONE[task.priority] ?? 'draft'} />
                 </div>
                 <p className="text-sm text-foreground">{task.customerName}</p>
                 <p className="text-xs text-muted-foreground">{task.warehouseName}</p>
@@ -140,7 +140,7 @@ function CheckItemRow({ item }: { item: CheckItem }) {
           <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
         </div>
         {done
-          ? <Badge className="bg-green-100 text-green-700 border-green-200 ml-2 shrink-0">✓ 已核满</Badge>
+          ? <SoftStatusLabel label="✓ 已核满" tone="success" className="ml-2 shrink-0" />
           : null}
       </div>
 
@@ -365,7 +365,7 @@ export default function PdaCheckPage() {
         title={taskDetail?.taskNo ?? '…'}
         subtitle={taskDetail?.customerName}
         onBack={() => step === 'checking' ? setStep('select-task') : navigate('/pda')}
-        right={<Badge className="text-xs">复核中</Badge>}
+        right={<SoftStatusLabel label="复核中" tone="active" />}
         progress={{ current: totalChecked, total: totalPick || 1, label: '复核进度（对已拣）' }}
       />
 

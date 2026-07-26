@@ -4,7 +4,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { useCheckDetail, useUpdateCheckItems, useSubmitCheck, useRefreshCheckItem, useCancelCheck } from '@/hooks/useStockCheck'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import type { CheckItem } from '@/types/stockcheck'
@@ -149,7 +149,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             盘点单详情
-            {check && <Badge variant={check.status===1?'default':check.status===2?'outline':'destructive'}>{check.statusName}</Badge>}
+            {check && <SoftStatusLabel label={check.statusName} tone={check.status===1?'active':check.status===2?'success':'danger'} />}
           </DialogTitle>
         </DialogHeader>
         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中...</p>}

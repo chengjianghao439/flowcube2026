@@ -5,7 +5,8 @@ import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { activeTone } from '@/lib/statusTone'
 import { useUsers, useDeleteUser } from '@/hooks/useUsers'
 import UserFormDialog from './components/UserFormDialog'
 import WarehouseScopeDialog from './components/WarehouseScopeDialog'
@@ -59,9 +60,7 @@ export default function UsersPage() {
       title: '角色',
       width: 100,
       render: (_, row) => (
-        <Badge variant={row.roleId === 1 ? 'default' : 'secondary'}>
-          {row.roleName}
-        </Badge>
+        <SoftStatusLabel label={row.roleName} tone={row.roleId === 1 ? 'active' : 'info'} />
       ),
     },
     {
@@ -69,9 +68,7 @@ export default function UsersPage() {
       title: '状态',
       width: 80,
       render: (_, row) => (
-        <Badge variant={row.isActive ? 'default' : 'destructive'}>
-          {row.isActive ? '启用' : '禁用'}
-        </Badge>
+        <SoftStatusLabel label={row.isActive ? '启用' : '禁用'} tone={activeTone(row.isActive)} />
       ),
     },
     { key: 'createdAt', title: '创建时间', render: (v) => formatDisplayDateTime(v) },

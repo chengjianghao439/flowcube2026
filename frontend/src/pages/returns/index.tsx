@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -37,10 +37,15 @@ function toYmd(d: Date): string {
 export default function ReturnsPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
   const { addTab } = useWorkspaceStore()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const type = (readStringParam(searchParams, 'type') || 'purchase') as ReturnType
+  /**
+   * 退货类型由路由决定：/returns/purchase 与 /returns/sale 分别挂在「采购」「销售」菜单下，
+   * 各自是独立的工作区标签（筛选互不干扰）。旧地址 /returns 经 alias 落到采购退货。
+   */
+  const type: ReturnType = location.pathname.startsWith('/returns/sale') ? 'sale' : 'purchase'
   const partyLabel = type === 'purchase' ? '供应商' : '客户'
 
   const [queryOpen, setQueryOpen] = useState(false)
@@ -110,11 +115,6 @@ export default function ReturnsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  function switchType(next: ReturnType) {
-    // 供应商/客户筛选不跨类型通用，切换标签页时一并清空
-    updateParams({ type: next, partyId: null, partyName: null })
-  }
 
   function goToNew() {
     const path = `/returns/${type}/new`
@@ -238,8 +238,8 @@ export default function ReturnsPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="退货管理"
-        description="采购退货（减库存）与销售退货（加库存）"
+        title={type === 'purchase' ? '采购退货' : '销售退货'}
+        description={type === 'purchase' ? '退回供应商，出库减少库存' : '客户退回，入库增加库存'}
         actions={
           <>
             <Button variant="outline"
@@ -251,14 +251,6 @@ export default function ReturnsPage() {
           </>
         }
       />
-
-      <div className="flex gap-1 border-b">
-        {(['purchase', 'sale'] as const).map(t => (
-          <button key={t} onClick={() => switchType(t)} className={`px-4 py-2 text-sm font-medium transition-colors ${type === t ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
-            {t === 'purchase' ? '采购退货' : '销售退货'}
-          </button>
-        ))}
-      </div>
 
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">

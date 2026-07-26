@@ -9,7 +9,8 @@ import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { activeTone } from '@/lib/statusTone'
 import { getRacksApi, deleteRackApi, printRackLabelApi } from '@/api/racks'
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import DataTable from '@/components/shared/DataTable'
@@ -95,7 +96,7 @@ export default function RacksPage() {
       title: '状态',
       width: 80,
       render: (_, row) => (
-        <Badge variant={row.status === 1 ? 'default' : 'secondary'}>{row.status === 1 ? '启用' : '停用'}</Badge>
+        <SoftStatusLabel label={row.status === 1 ? '启用' : '停用'} tone={activeTone(row.status === 1)} />
       ),
     },
     {

@@ -14,7 +14,8 @@ import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
 import PdaStat, { PdaStatGrid } from '@/components/pda/PdaStat'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { WT_PRIORITY_TONE } from '@/constants/warehouseTaskStatus'
 import { getTaskByIdApi, getTasksApi, packDoneApi } from '@/api/warehouse-tasks'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { getPackagesApi, createPackageApi, addPackageItemApi, removePackageItemApi, voidPackageApi, finishPackageApi, printPackageLabelApi } from '@/api/packages'
@@ -98,7 +99,7 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
             <PdaCard key={task.id} onClick={() => onSelect(task)} className="w-full text-left space-y-1.5">
               <div className="flex items-center justify-between">
                 <p className="font-mono text-sm font-semibold text-foreground">{task.taskNo}</p>
-                <Badge className={task.priority === 1 ? 'bg-red-100 text-red-700 border-red-200' : 'bg-orange-100 text-orange-700 border-orange-200'}>{task.priorityName}</Badge>
+                <SoftStatusLabel label={task.priorityName} tone={WT_PRIORITY_TONE[task.priority] ?? 'draft'} />
               </div>
               <p className="text-sm text-foreground">{task.customerName}</p>
               <p className="text-xs text-muted-foreground">{task.warehouseName}</p>
@@ -134,9 +135,9 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {active && pkg.status === 1 && <Badge className="text-xs">装箱中</Badge>}
-          {pkg.status === 2 && <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">已完成</Badge>}
-          {pkg.status === 3 && <Badge variant="outline" className="text-xs">已作废</Badge>}
+          {active && pkg.status === 1 && <SoftStatusLabel label="装箱中" tone="active" />}
+          {pkg.status === 2 && <SoftStatusLabel label="已完成" tone="success" />}
+          {pkg.status === 3 && <SoftStatusLabel label="已作废" tone="draft" />}
           <span className="text-muted-foreground text-xs">{open ? '▲' : '▼'}</span>
         </div>
       </button>

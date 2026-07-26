@@ -7,7 +7,8 @@ import CategoryTreeSelect from '@/components/shared/CategoryTreeSelect'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { activeTone } from '@/lib/statusTone'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { useProducts, useDeleteProduct } from '@/hooks/useProducts'
@@ -106,7 +107,7 @@ export default function ProductsPage() {
     { key:'color', title:'颜色', width:80, render:v=>(v as string)||'-' },
     { key:'unit', title:'单位', width:60 },
     { key:'supplierName', title:'供应商', width:140, render:v=>(v as string)||'-' },
-    { key:'isActive', title:'状态', width:70, render:(_,r)=><Badge variant="outline" className={`text-xs font-medium ${r.isActive ? 'text-green-700 border-green-300 bg-green-50' : 'text-muted-foreground border-muted-foreground/30 bg-muted/20'}`}>{r.isActive?'启用':'停用'}</Badge> },
+    { key:'isActive', title:'状态', width:70, render:(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} /> },
     { key:'id', title:'操作', width:140, render:(_,r)=>(
       <TableActionsMenu
         primaryLabel="编辑"

@@ -27,6 +27,8 @@ import {
 } from '@/utils/printerName'
 import { formatPrinterSource } from '@/utils/displayFormatters'
 import DataTable from '@/components/shared/DataTable'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { activeTone } from '@/lib/statusTone'
 import type { TableColumn } from '@/types'
 
 /** 打印机硬件分类（与「绑定用途」独立：用途决定业务走哪台机；类型用于列表展示与无绑定时的兜底调度） */
@@ -36,11 +38,6 @@ const TYPE_LABEL: Record<number, string> = {
   3: 'A4打印机',
 }
 
-const TYPE_COLOR: Record<number, string> = {
-  1: 'bg-blue-50 text-blue-700 border-blue-200',
-  2: 'bg-purple-50 text-purple-700 border-purple-200',
-  3: 'bg-gray-50 text-gray-700 border-gray-200',
-}
 
 const BIND_TYPES = [
   { key: 'waybill', label: '电子面单', desc: '快递面单等' },
@@ -359,26 +356,26 @@ export default function PrintersPage() {
     { key: 'code', title: '编码', width: 130, render: v => <span className="text-doc-code-muted">{String(v)}</span> },
     {
       key: 'typeName', title: '类型', width: 110,
-      render: (_, p) => <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[p.type]}`}>{TYPE_LABEL[p.type]}</span>,
+      render: (_, p) => <SoftStatusLabel label={TYPE_LABEL[p.type]} tone="info" />,
     },
     {
       key: 'status', title: '状态', width: 90,
       render: (_, p) => (
-        <button onClick={() => toggleStatus.mutate(p)} className="flex items-center gap-1.5">
-          <span className={`h-2 w-2 rounded-full ${p.status === 1 ? 'bg-green-500' : 'bg-gray-400'}`} />
-          <span className={`text-xs ${p.status === 1 ? 'text-green-600' : 'text-muted-foreground'}`}>{p.status === 1 ? '在线' : '离线'}</span>
-        </button>
+        <SoftStatusLabel
+          label={p.status === 1 ? '在线' : '离线'}
+          tone={activeTone(p.status === 1)}
+          onClick={() => toggleStatus.mutate(p)}
+        />
       ),
     },
     {
       key: 'source', title: '来源', width: 110,
       render: (_, p) => (
-        <span
-          className={`rounded-full border px-2 py-0.5 text-xs ${p.source === 'client' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : p.source === 'local_desktop' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}
+        <SoftStatusLabel
+          label={formatPrinterSource(p.source) || sourceBadgeLabel(p.source)}
+          tone={p.source === 'client' ? 'success' : p.source === 'local_desktop' ? 'info' : 'draft'}
           title={p.source ? `原始来源：${p.source}` : undefined}
-        >
-          {formatPrinterSource(p.source) || sourceBadgeLabel(p.source)}
-        </span>
+        />
       ),
     },
     {

@@ -3,15 +3,13 @@ import { useQuery } from '@tanstack/react-query'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import { PdaLoading, PdaEmptyCard } from '@/components/pda/PdaEmptyState'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import type { StatusTone } from '@/lib/statusTone'
 import { getPdaReturnTasksApi, type ReturnTask } from '@/api/returns'
 
-const STATUS_COLOR: Record<number, string> = {
-  1: 'bg-yellow-100 text-yellow-800',
-  2: 'bg-blue-100 text-blue-800',
-  3: 'bg-purple-100 text-purple-800',
-  4: 'bg-orange-100 text-orange-800',
-  5: 'bg-green-100 text-green-800',
+/** return_tasks 内联状态机：1待收货 2收货中 3待质检 4待上架 5已完成 6已取消 */
+const STATUS_TONE: Record<number, StatusTone> = {
+  1: 'draft', 2: 'active', 3: 'active', 4: 'active', 5: 'success', 6: 'danger',
 }
 
 function TaskCard({ task }: { task: ReturnTask }) {
@@ -31,7 +29,7 @@ function TaskCard({ task }: { task: ReturnTask }) {
           <div className="text-sm font-mono text-muted-foreground">{task.taskNo}</div>
           <div className="font-semibold mt-1">{task.partyName || task.returnNo}</div>
         </div>
-        <Badge className={STATUS_COLOR[task.status] || ''}>{task.statusName}</Badge>
+        <SoftStatusLabel label={task.statusName} tone={STATUS_TONE[task.status] ?? 'draft'} />
       </div>
     </PdaCard>
   )

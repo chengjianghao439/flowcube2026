@@ -6,7 +6,8 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import type { StatusTone } from '@/lib/statusTone'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCheckList, useCreateCheck } from '@/hooks/useStockCheck'
@@ -16,7 +17,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { StockCheck } from '@/types/stockcheck'
 import type { TableColumn } from '@/types'
 
-const STATUS_COLOR: Record<number, 'default' | 'secondary' | 'destructive' | 'outline'> = { 1:'default', 2:'outline', 3:'destructive' }
+const STATUS_TONE: Record<number, StatusTone> = { 1:'active', 2:'success', 3:'danger' }
 
 export default function StockCheckPage() {
   const [keyword, setKeyword] = useState('')
@@ -34,7 +35,7 @@ export default function StockCheckPage() {
   const columns: TableColumn<StockCheck>[] = [
     { key:'checkNo', title:'盘点单号', width:160, render:(v)=><span className="text-doc-code">{String(v)}</span> },
     { key:'warehouseName', title:'仓库', width:140 },
-    { key:'status', title:'状态', width:90, render:(v,row)=><Badge variant={STATUS_COLOR[v as number]}>{(row as StockCheck).statusName}</Badge> },
+    { key:'status', title:'状态', width:90, render:(v,row)=><SoftStatusLabel label={(row as StockCheck).statusName} tone={STATUS_TONE[v as number] ?? 'draft'} /> },
     { key:'operatorName', title:'经办人', width:100 },
     { key:'createdAt', title:'创建时间', width:160, render:(v)=>formatDisplayDateTime(v) },
     { key:'id', title:'操作', width:100, render:(_,row)=>(

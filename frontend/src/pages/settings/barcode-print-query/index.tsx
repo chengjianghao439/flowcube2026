@@ -7,7 +7,7 @@ import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getBarcodePrintRecordsApi, reprintBarcodeRecordApi } from '@/api/print-jobs'
 import { toast } from '@/lib/toast'
@@ -36,13 +36,13 @@ const STATUS_OPTIONS = [
 ] as const
 
 function statusBadge(job: BarcodePrintRecord['latestJob']) {
-  if (!job) return <Badge variant="secondary">未生成打印任务</Badge>
-  if (job.statusKey === 'success') return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50">已打印</Badge>
-  if (job.statusKey === 'timeout') return <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50">超时待确认</Badge>
-  if (job.statusKey === 'failed') return <Badge variant="destructive">打印失败</Badge>
-  if (job.statusKey === 'cancelled') return <Badge variant="outline">已取消</Badge>
-  if (job.statusKey === 'printing') return <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50">打印中</Badge>
-  return <Badge variant="outline">待派发</Badge>
+  if (!job) return <SoftStatusLabel label="未生成打印任务" tone="draft" />
+  if (job.statusKey === 'success')   return <SoftStatusLabel label="已打印"     tone="success" />
+  if (job.statusKey === 'timeout')   return <SoftStatusLabel label="超时待确认" tone="warning" />
+  if (job.statusKey === 'failed')    return <SoftStatusLabel label="打印失败"   tone="danger" />
+  if (job.statusKey === 'cancelled') return <SoftStatusLabel label="已取消"     tone="danger" />
+  if (job.statusKey === 'printing')  return <SoftStatusLabel label="打印中"     tone="active" />
+  return <SoftStatusLabel label="待派发" tone="draft" />
 }
 
 export default function BarcodePrintQueryPage() {

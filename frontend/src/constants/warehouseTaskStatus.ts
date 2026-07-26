@@ -11,6 +11,7 @@ import {
   WT_TRANSITIONS,
   type WtStatus,
 } from '@/generated/status'
+import { STATUS_TONE_CLASS, type StatusTone } from '@/lib/statusTone'
 
 export {
   WT_ACTION_RULES,
@@ -26,16 +27,12 @@ export {
   type WtStatus,
 }
 
-const TONE_CLASS = {
-  draft: 'bg-secondary text-secondary-foreground border-secondary',
-  active: 'bg-primary/10 text-primary border-primary/20',
-  success: 'bg-success/10 text-success border-success/20',
-  danger: 'bg-destructive/10 text-destructive border-destructive/20',
-} as const
-
 export const WT_STATUS_CLASS = Object.fromEntries(
-  Object.entries(WT_STATUS_TONE).map(([status, tone]) => [Number(status), TONE_CLASS[tone]]),
+  Object.entries(WT_STATUS_TONE).map(([status, tone]) => [Number(status), STATUS_TONE_CLASS[tone]]),
 ) as Record<WtStatus, string>
+
+/** 仓库任务优先级 → 状态 tone：1紧急 2普通 3低。PDA 拣货/复核/打包共用。 */
+export const WT_PRIORITY_TONE: Record<number, StatusTone> = { 1: 'danger', 2: 'active', 3: 'draft' }
 
 export function isValidTransition(from: WtStatus, to: WtStatus): boolean {
   const allowed = WT_TRANSITIONS[String(from) as keyof typeof WT_TRANSITIONS] ?? []

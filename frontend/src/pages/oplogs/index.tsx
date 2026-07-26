@@ -4,7 +4,8 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import type { StatusTone } from '@/lib/statusTone'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getOpLogsApi, clearLogsApi } from '@/api/oplogs'
@@ -26,13 +27,12 @@ import type { OpLog } from '@/api/oplogs'
 import type { TableColumn } from '@/types'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
-const METHOD_BADGE_CLASS = 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50'
-
-const RESULT_BADGE_CLASS: Record<OperationLogStatusTone, string> = {
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50',
-  warning: 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50',
-  danger: 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-50',
-  neutral: 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-50',
+/** 日志结果 tone → 全站统一状态 tone（`@/lib/statusTone`） */
+const RESULT_TONE: Record<OperationLogStatusTone, StatusTone> = {
+  success: 'success',
+  warning: 'warning',
+  danger: 'danger',
+  neutral: 'draft',
 }
 
 function RawValue({ value }: { value: unknown }) {
@@ -68,7 +68,7 @@ export default function OpLogsPage() {
       key: 'method',
       title: '操作类型',
       width: 100,
-      render: (v) => <Badge variant="outline" className={METHOD_BADGE_CLASS}>{formatHttpMethod(v)}</Badge>,
+      render: (v) => <SoftStatusLabel label={formatHttpMethod(v)} tone="info" />,
     },
     { key: 'module', title: '业务模块', width: 110, render: (v) => formatModuleName(v) },
     {
@@ -86,7 +86,7 @@ export default function OpLogsPage() {
       width: 130,
       render: (v, row) => {
         const tone = getStatusTone(v)
-        return <Badge variant="outline" className={RESULT_BADGE_CLASS[tone]}>{formatOperationResult(row.path, v)}</Badge>
+        return <SoftStatusLabel label={formatOperationResult(row.path, v)} tone={RESULT_TONE[tone]} />
       },
     },
     { key: 'ip', title: '来源 IP', width: 130, render: v => v ? String(v) : '—' },
@@ -142,14 +142,13 @@ export default function OpLogsPage() {
             <div className="space-y-4">
               <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className={METHOD_BADGE_CLASS}>{formatHttpMethod(detail.method)}</Badge>
-                  <Badge variant="outline" className={RESULT_BADGE_CLASS[getStatusTone(detail.statusCode)]}>
-                    {formatOperationResult(detail.path, detail.statusCode)}
-                  </Badge>
+                  <SoftStatusLabel label={formatHttpMethod(detail.method)} tone="info" />
+                  <SoftStatusLabel
+                    label={formatOperationResult(detail.path, detail.statusCode)}
+                    tone={RESULT_TONE[getStatusTone(detail.statusCode)]}
+                  />
                   {isSensitivePath(detail.path) && (
-                    <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50">
-                      敏感路径探测
-                    </Badge>
+                    <SoftStatusLabel label="敏感路径探测" tone="warning" />
                   )}
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">

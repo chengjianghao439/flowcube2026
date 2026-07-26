@@ -8,7 +8,8 @@ import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import type { StatusTone } from '@/lib/statusTone'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -110,12 +111,13 @@ export default function InventoryPage() {
 
   const stats = overview?.stats
   const list = overview?.list ?? []
-  const TYPE_VARIANT: Record<number, 'default' | 'secondary' | 'outline'> = { 1: 'default', 2: 'secondary', 3: 'outline' }
+  /** 库存增减按财务直觉取色：入库=增(绿) · 出库=减(红) · 调整=中性标识 */
+  const TYPE_TONE: Record<number, StatusTone> = { 1: 'success', 2: 'danger', 3: 'info' }
   const TYPE_NAMES: Record<number, string> = { 1: '入库', 2: '出库', 3: '调整' }
 
   const logCols: TableColumn<InventoryLog>[] = [
     { key: 'createdAt', title: '时间', width: 160, render: v => formatDisplayDateTime(v) },
-    { key: 'typeName', title: '类型', width: 80, render: (_, r) => <Badge variant={TYPE_VARIANT[r.type] ?? 'outline'}>{TYPE_NAMES[r.type]}</Badge> },
+    { key: 'typeName', title: '类型', width: 80, render: (_, r) => <SoftStatusLabel label={TYPE_NAMES[r.type]} tone={TYPE_TONE[r.type] ?? 'info'} /> },
     { key: 'productName', title: '商品', width: 140 },
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'quantity', title: '数量', width: 90, render: (_, r) => <span>{r.type === 2 ? `-${r.quantity}` : r.quantity}</span> },

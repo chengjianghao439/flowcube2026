@@ -10,7 +10,8 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import type { StatusTone } from '@/lib/statusTone'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -24,8 +25,8 @@ import type { TableColumn } from '@/types'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 
-const STATUS_VARIANT: Record<number, 'default'|'secondary'|'outline'> = { 1:'outline', 2:'default' }
-const STATUS_LABEL:   Record<number, string> = { 1:'空闲', 2:'占用' }
+const STATUS_TONE:  Record<number, StatusTone> = { 1:'draft', 2:'active' }
+const STATUS_LABEL: Record<number, string>     = { 1:'空闲', 2:'占用' }
 
 // ─── 新建单个分拣格弹窗 ───────────────────────────────────────────────────────
 function CreateDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
@@ -200,7 +201,7 @@ export default function SortingBinsPage() {
       render: (v) => <span className="text-doc-code-strong">{v as string}</span> },
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'status',        title: '状态', width: 80,
-      render: (v) => <Badge variant={STATUS_VARIANT[v as number]}>{STATUS_LABEL[v as number]}</Badge> },
+      render: (v) => <SoftStatusLabel label={STATUS_LABEL[v as number]} tone={STATUS_TONE[v as number] ?? 'draft'} /> },
     { key: 'currentTaskNo', title: '当前任务',
       render: (v) => v ? <span className="text-doc-code">{v as string}</span> : <span className="text-muted-foreground">—</span> },
     { key: 'customerName',  title: '客户', width: 140,

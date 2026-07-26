@@ -13,21 +13,14 @@ import { getMyTasksApi, getMyTaskSkuSummaryApi, startPickingApi } from '@/api/wa
 import type { MyTask, PdaTaskSkuSummary } from '@/api/warehouse-tasks'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { WT_PRIORITY_TONE, WT_STATUS_TONE } from '@/constants/warehouseTaskStatus'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
 
 // ─── 常量 ─────────────────────────────────────────────────────────────────────
 
-const STATUS_VARIANT: Record<number, 'default'|'secondary'|'outline'|'destructive'> = {
-  1:'outline', 2:'default', 3:'secondary', 4:'secondary', 5:'destructive'
-}
-const PRIORITY_COLOR: Record<number, string> = {
-  1:'text-red-600 bg-red-50 border-red-200',
-  2:'text-blue-600 bg-blue-50 border-blue-200',
-  3:'text-gray-500 bg-gray-50 border-gray-200',
-}
 const PRIORITY_LABEL: Record<number, string> = { 1:'紧急', 2:'普通', 3:'低' }
 
 // ─── 订单卡片 ─────────────────────────────────────────────────────────────────
@@ -44,8 +37,11 @@ function TaskCard({ task, onStart, starting }: { task: MyTask; onStart: () => vo
             <p className="text-sm text-muted-foreground">{task.warehouseName} · {task.itemCount} 种商品</p>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-            <Badge variant={STATUS_VARIANT[task.status]}>{task.statusName}</Badge>
-            <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${PRIORITY_COLOR[task.priority]}`}>{PRIORITY_LABEL[task.priority]}</span>
+            <SoftStatusLabel
+              label={task.statusName}
+              tone={WT_STATUS_TONE[String(task.status) as keyof typeof WT_STATUS_TONE] ?? 'draft'}
+            />
+            <SoftStatusLabel label={PRIORITY_LABEL[task.priority]} tone={WT_PRIORITY_TONE[task.priority] ?? 'draft'} />
           </div>
         </div>
         <div>
@@ -82,8 +78,8 @@ function SkuCard({ sku, onTap }: { sku: PdaTaskSkuSummary; onTap: () => void }) 
             <p className="text-xs font-mono text-muted-foreground">{sku.productCode}</p>
           </div>
           {done
-            ? <Badge className="bg-green-100 text-green-700 border-green-200 shrink-0 ml-2">✓ 已拣</Badge>
-            : <Badge variant="outline" className="shrink-0 ml-2">待拣</Badge>
+            ? <SoftStatusLabel label="✓ 已拣" tone="success" className="shrink-0 ml-2" />
+            : <SoftStatusLabel label="待拣"   tone="draft"   className="shrink-0 ml-2" />
           }
         </div>
         <div className="flex items-center gap-4 text-sm">

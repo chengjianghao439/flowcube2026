@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getRoleWorkbenchApi, type WorkbenchCard } from '@/api/reports'
@@ -29,7 +30,7 @@ function PriorityBanner({
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="rounded-full border-rose-200 bg-rose-100 text-rose-700">{badge}</Badge>
+            <SoftStatusLabel label={badge} tone="danger" />
             <span className="text-xs text-muted-foreground">最优先待办</span>
           </div>
           <h2 className="mt-2 text-xl font-semibold text-foreground">{title}</h2>

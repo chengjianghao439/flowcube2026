@@ -9,7 +9,8 @@ import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { ReportPanel } from '@/components/shared/ReportPanel'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import type { StatusTone } from '@/lib/statusTone'
 import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
@@ -18,12 +19,9 @@ import type { WaveStats } from '@/api/reports'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 
-const STATUS_COLOR: Record<number, string> = {
-  1: 'bg-gray-100 text-gray-600',
-  2: 'bg-blue-100 text-blue-700',
-  3: 'bg-yellow-100 text-yellow-700',
-  4: 'bg-green-100 text-green-700',
-  5: 'bg-red-100 text-red-600',
+/** 与 pages/picking-waves 的波次状态取色保持一致 */
+const STATUS_TONE: Record<number, StatusTone> = {
+  1: 'draft', 2: 'active', 3: 'active', 4: 'success', 5: 'danger',
 }
 
 function fmtDuration(min: number | null): string {
@@ -121,7 +119,7 @@ export default function WavePerformancePage() {
     },
     {
       key: 'statusName', title: '状态', width: 100,
-      render: (_, w) => <Badge className={`${STATUS_COLOR[w.status]} text-xs border-0`}>{w.statusName}</Badge>,
+      render: (_, w) => <SoftStatusLabel label={w.statusName} tone={STATUS_TONE[w.status] ?? 'draft'} />,
     },
     { key: 'operatorName', title: '操作员', width: 110 },
     { key: 'taskCount', title: '任务数', width: 90, sortable: true },

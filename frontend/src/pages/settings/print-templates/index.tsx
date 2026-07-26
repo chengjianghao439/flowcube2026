@@ -11,7 +11,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import DataTable from '@/components/shared/DataTable'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
@@ -53,7 +53,7 @@ export default function PrintTemplatesPage() {
     { key: 'typeName',  title: '类型', width: 160,
       render: (_, row) => row.typeName || String(row.type) },
     { key: 'isDefault', title: '默认', width: 80,
-      render: v => v ? <Badge variant="default">默认</Badge> : <span className="text-muted-foreground">—</span> },
+      render: v => v ? <SoftStatusLabel label="默认" tone="active" /> : <span className="text-muted-foreground">—</span> },
     { key: 'createdAt', title: '创建时间', width: 160,
       render: v => formatDisplayDateTime(v) },
     {
