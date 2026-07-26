@@ -1,7 +1,7 @@
 {
-  "version": "0.4.31",
-  "versionCode": 29,
+  "version": "0.4.32",
+  "versionCode": 31,
   "filename": "app-release.apk",
-  "releaseNote": "本版新增 PDA 设备绑定，并把仓库之间的数据隔离补齐。系统现在不只知道「谁在操作」，还知道「用的是哪台机器、这台机器属于哪个仓」。",
-  "publishedAt": "2026-07-26T15:42:14.116Z"
+  "releaseNote": "- **供应商与客户新增「结算方式」**：分为现结与月结两种。月结可选 30 / 60 / 90 天账期，现结无账期。",
+  "publishedAt": "2026-07-26T16:39:39.288Z"
 }
