@@ -541,17 +541,17 @@ async function scenarioCancelReverseReturnPacking(log, ctx, adminToken) {
   log.assert('任务已推进到待打包(5)', Number(taskAtPacking.status) === 5, JSON.stringify(taskAtPacking))
 
   // 未完成的空箱：从未加过商品、从未打印过箱贴，取消时应被系统自动作废，不进入待处理清单
-  const openPkgResp = await ctx.http.post('/api/packages', { token: adminToken, json: { warehouseTaskId: taskId } })
+  const openPkgResp = await ctx.http.post('/api/packages', { token: adminToken, headers: ctx.pdaHeaders(), json: { warehouseTaskId: taskId } })
   const openPkgId = Number(openPkgResp.data?.data?.id)
 
   // 已完成的箱子：装满、finish（触发箱贴打印任务），取消时需要人工扫码确认拆箱
-  const sealedPkgResp = await ctx.http.post('/api/packages', { token: adminToken, json: { warehouseTaskId: taskId } })
+  const sealedPkgResp = await ctx.http.post('/api/packages', { token: adminToken, headers: ctx.pdaHeaders(), json: { warehouseTaskId: taskId } })
   const sealedPkgId = Number(sealedPkgResp.data?.data?.id)
   const sealedPkgBarcode = sealedPkgResp.data?.data?.barcode
   await ctx.http.post(`/api/packages/${sealedPkgId}/add-item`, {
-    token: adminToken, json: { productCode: ctx.product.code, qty: 1 },
+    token: adminToken, headers: ctx.pdaHeaders(), json: { productCode: ctx.product.code, qty: 1 },
   })
-  const finishResp = await ctx.http.put(`/api/packages/${sealedPkgId}/finish`, { token: adminToken })
+  const finishResp = await ctx.http.put(`/api/packages/${sealedPkgId}/finish`, { token: adminToken, headers: ctx.pdaHeaders() })
   log.assert('已完成箱子finish成功（含箱贴打印任务）', finishResp.ok, `status=${finishResp.status}`)
 
   const cancelResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
@@ -569,7 +569,7 @@ async function scenarioCancelReverseReturnPacking(log, ctx, adminToken) {
     detailPkgs.length === 1 && detailPkgs[0].packageId === sealedPkgId, JSON.stringify(detailPkgs))
 
   // 取消收尾期间，打包相关操作一律应被拒绝
-  const addItemAfterCancel = await ctx.http.post('/api/packages', { token: adminToken, json: { warehouseTaskId: taskId } })
+  const addItemAfterCancel = await ctx.http.post('/api/packages', { token: adminToken, headers: ctx.pdaHeaders(), json: { warehouseTaskId: taskId } })
   log.assert('取消收尾中禁止新建箱子', addItemAfterCancel.status === 409, `status=${addItemAfterCancel.status}`)
 
   // 容器归还（复用既有流程，未受箱子分支影响）
@@ -609,13 +609,13 @@ async function scenarioCancelReverseReturnShipping(log, ctx, adminToken) {
   const { taskId, container } = setup
   await advanceTaskToStage(ctx, adminToken, setup, 'packing')
 
-  const pkgResp = await ctx.http.post('/api/packages', { token: adminToken, json: { warehouseTaskId: taskId } })
+  const pkgResp = await ctx.http.post('/api/packages', { token: adminToken, headers: ctx.pdaHeaders(), json: { warehouseTaskId: taskId } })
   const pkgId = Number(pkgResp.data?.data?.id)
   const pkgBarcode = pkgResp.data?.data?.barcode
   await ctx.http.post(`/api/packages/${pkgId}/add-item`, {
-    token: adminToken, json: { productCode: ctx.product.code, qty: 1 },
+    token: adminToken, headers: ctx.pdaHeaders(), json: { productCode: ctx.product.code, qty: 1 },
   })
-  const finishResp = await ctx.http.put(`/api/packages/${pkgId}/finish`, { token: adminToken })
+  const finishResp = await ctx.http.put(`/api/packages/${pkgId}/finish`, { token: adminToken, headers: ctx.pdaHeaders() })
   // pack-done 要求箱贴打印任务已收口完成（assertTaskPackagePrintClosure），
   // 本机没有真机打印客户端在跑，直接用 complete-local 模拟"已打印完成"。
   const printJobId = Number(finishResp.data?.data?.printJobId)

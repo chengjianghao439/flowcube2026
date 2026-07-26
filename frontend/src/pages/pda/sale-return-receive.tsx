@@ -42,6 +42,31 @@ export default function PdaSaleReturnReceivePage() {
 
   const productList = Object.values(groupedItems)
 
+  /**
+   * 断网兜底：提交发出去了但没收到响应时，回来查这个商品的实收/质检量有没有涨到
+   * 「提交前 + 本次」的水平，据此判断上一次到底成没成，而不是让员工凭感觉决定要不要重扫。
+   *
+   * 判定刻意保守：只有**明确达到**期望值才算成功，差一点都返回 effective:false 保持待确认。
+   * 宁可让人多确认一次，也不能把「其实没成」说成成功——退货收货没有天然幂等，
+   * 重复提交会真的再生成一批容器、把货重复收进库存。
+   */
+  const resolveByQty = (field: 'totalReceived' | 'totalChecked', label: string) =>
+    async ({ record }: { record: { metadata?: Record<string, unknown> } }) => {
+      const productId = Number(record.metadata?.productId ?? 0)
+      const expected = Number(record.metadata?.expectedQty ?? NaN)
+      if (!productId || !Number.isFinite(expected)) return { effective: false as const }
+      const latest = await getReturnTaskByIdApi(taskId)
+      const rows = (latest?.items || []).filter(item => item.productId === productId)
+      if (!rows.length) return { effective: false as const }
+      const actual = rows.reduce((sum, item) => sum + Number(field === 'totalReceived' ? item.receivedQty : item.checkedQty), 0)
+      if (actual < expected) return { effective: false as const }
+      return {
+        effective: true as const,
+        data: {},
+        message: `${label}已成功，该商品累计 ${actual}。`,
+      }
+    }
+
   const receiveAction = useCriticalPdaAction({
     action: `return.receive.${taskId}`,
     label: `退货收货 ${task?.taskNo || ''}`,
@@ -50,6 +75,7 @@ export default function PdaSaleReturnReceivePage() {
       setBoxes([0])
       setStep('select')
     },
+    resolveServerState: resolveByQty('totalReceived', '退货收货'),
   })
 
   const checkAction = useCriticalPdaAction({
@@ -60,6 +86,7 @@ export default function PdaSaleReturnReceivePage() {
       setRejectedQty(0)
       setStep('select')
     },
+    resolveServerState: resolveByQty('totalChecked', '退货质检'),
   })
 
   const handleScan = useCallback((raw: string) => {
@@ -180,8 +207,14 @@ export default function PdaSaleReturnReceivePage() {
         )}
         {step === 'qty' && selectedProduct && totalQty > 0 && (
           <Button className="w-full h-12 text-lg" disabled={receiveAction.phase !== 'idle'}
-            onClick={() => receiveAction.run(requestKey =>
-              receiveReturnApi(taskId, { productId: selectedProduct.id, packages: [{ qty: totalQty }] }, requestKey).then(r => r!)
+            onClick={() => receiveAction.run(
+              requestKey =>
+                receiveReturnApi(taskId, { productId: selectedProduct.id, packages: [{ qty: totalQty }] }, requestKey).then(r => r!),
+              // 断网核实用：提交前的累计实收 + 本次，就是「成功了应该达到」的水平
+              {
+                productId: selectedProduct.id,
+                expectedQty: (productList.find(p => p.productId === selectedProduct.id)?.totalReceived ?? 0) + totalQty,
+              },
             )}
           >
             确认收货 {totalQty} {selectedProduct.unit}
@@ -189,8 +222,14 @@ export default function PdaSaleReturnReceivePage() {
         )}
         {step === 'check' && selectedProduct && (Number(boxes[0]) > 0 || rejectedQty > 0) && (
           <Button className="w-full h-12 text-lg" disabled={checkAction.phase !== 'idle'}
-            onClick={() => checkAction.run(requestKey =>
-              checkReturnApi(taskId, { productId: selectedProduct.id, passedQty: Number(boxes[0]) || 0, rejectedQty }, requestKey).then(r => r!)
+            onClick={() => checkAction.run(
+              requestKey =>
+                checkReturnApi(taskId, { productId: selectedProduct.id, passedQty: Number(boxes[0]) || 0, rejectedQty }, requestKey).then(r => r!),
+              {
+                productId: selectedProduct.id,
+                expectedQty: (productList.find(p => p.productId === selectedProduct.id)?.totalChecked ?? 0)
+                  + (Number(boxes[0]) || 0) + rejectedQty,
+              },
             )}
           >
             质检确认 合格{Number(boxes[0]) || 0}{rejectedQty > 0 ? ` 不合格${rejectedQty}` : ''} {selectedProduct.unit}

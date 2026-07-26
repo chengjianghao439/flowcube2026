@@ -28,6 +28,11 @@ export default function PdaSaleReturnPutawayPage() {
     refetchInterval: 10_000,
   })
 
+  // 这里刻意不接 resolveServerState：上架按容器执行，后端要求容器必须是待上架(4) 状态，
+  // 断网后重扫同一个容器会明确报「容器不是待上架状态」，员工当场就知道上次其实成功了。
+  // 容器状态机本身就是幂等闸门，再叠一层「查数量猜结果」的兜底只会增加误判成功的风险。
+  // 收货/质检没有这层保护（重复提交会真的重复入账），所以那两个动作在
+  // sale-return-receive.tsx 里接了兜底。
   const putawayAction = useCriticalPdaAction({
     action: `return.putaway.${taskId}`,
     label: `退货上架 ${task?.taskNo || ''}`,
