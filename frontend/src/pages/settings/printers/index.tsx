@@ -471,11 +471,11 @@ export default function PrintersPage() {
                     <SelectContent>
                       <SelectItem value="1">标签打印机（ZPL 热敏等）</SelectItem>
                       <SelectItem value="2">面单打印机</SelectItem>
-                      <SelectItem value="3">A4 / 文档打印机</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="mt-1.5 text-helper leading-relaxed">
                     此为硬件分类，与下方列表中的「绑定用途」无关。实际打印走哪台机请在添加后使用「绑定用途」指定（如产品条码、货架条码等）。
+                    打印链路统一使用 ZPL 指令，A4 / 文档打印机无法参与，故不在此列出。
                   </p>
                 </div>
                 <p className="text-helper">

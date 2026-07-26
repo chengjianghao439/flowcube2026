@@ -4,11 +4,25 @@ const { DEFAULT_INBOUND_THRESHOLDS } = require('../../utils/inboundThresholds')
 const STATUS = { PENDING: 0, PRINTING: 1, DONE: 2, FAILED: 3 }
 const MAX_RETRY = 3
 const EXPIRE_MESSAGE = 'no printer available'
+/** 领取任务的桌面客户端失联，任务被回收（区别于 TTL 到期，便于排障时分辨两种停滞原因） */
+const CLIENT_OFFLINE_MESSAGE = 'print client went offline'
 const STATUS_KEY = ['pending', 'printing', 'success', 'failed']
 
 function ttlMinutes() {
   const n = Number(process.env.PRINT_JOB_TTL_MINUTES)
   return Number.isFinite(n) && n > 0 ? n : 30
+}
+
+/** 客户端失联多久后回收其领取的打印中任务（秒）。需大于「在线」判定阈值 30s，给打印本身留出余量 */
+function clientOfflineReclaimSeconds() {
+  const n = Number(process.env.PRINT_JOB_CLIENT_OFFLINE_RECLAIM_SECONDS)
+  return Number.isFinite(n) && n > 0 ? n : 120
+}
+
+/** 两类停滞（TTL 到期 / 客户端失联回收）对用户都表现为「超时待确认」 */
+function isStalledErrorMessage(msg) {
+  const s = String(msg || '')
+  return s === EXPIRE_MESSAGE || s === CLIENT_OFFLINE_MESSAGE
 }
 
 function statusKey(n) {
@@ -68,7 +82,7 @@ function deriveInboundBarcodeStatus(row, thresholds = DEFAULT_INBOUND_THRESHOLDS
     && (rawStatus === STATUS.PENDING || rawStatus === STATUS.PRINTING)
     && row.print_updated_at
     && (Date.now() - new Date(row.print_updated_at).getTime()) >= thresholdMinutes * 60 * 1000
-  const timeoutByError = rawStatus === STATUS.FAILED && String(row.error_message || '') === EXPIRE_MESSAGE
+  const timeoutByError = rawStatus === STATUS.FAILED && isStalledErrorMessage(row.error_message)
 
   if (Number(row.inbound_task_status) === 5) return { statusKey: 'cancelled', printStateLabel: '已取消' }
   if (timeoutByAge || timeoutByError) return { statusKey: 'timeout', printStateLabel: '超时待确认' }
@@ -80,8 +94,11 @@ function deriveInboundBarcodeStatus(row, thresholds = DEFAULT_INBOUND_THRESHOLDS
 }
 
 function deriveGenericBarcodeStatus(row) {
-  const rawStatus = row.print_status != null ? Number(row.print_status) : Number(row.status)
-  if (rawStatus === STATUS.FAILED && String(row.error_message || '') === EXPIRE_MESSAGE) {
+  // 两种查询形状：LEFT JOIN 打印任务时取 print_status，行本身即 print_jobs 时取 status。
+  // 两者都为空必须落到 no_job —— 不能让 Number(null)===0 把「没有打印任务」误显示为「待派发」。
+  const source = row.print_status != null ? row.print_status : row.status
+  const rawStatus = source != null ? Number(source) : NaN
+  if (rawStatus === STATUS.FAILED && isStalledErrorMessage(row.error_message)) {
     return { statusKey: 'timeout', printStateLabel: '超时待确认' }
   }
   if (rawStatus === STATUS.DONE) return { statusKey: 'success', printStateLabel: '已打印' }
@@ -89,13 +106,6 @@ function deriveGenericBarcodeStatus(row) {
   if (rawStatus === STATUS.PRINTING) return { statusKey: 'printing', printStateLabel: '打印中' }
   if (rawStatus === STATUS.PENDING) return { statusKey: 'queued', printStateLabel: '待派发' }
   return { statusKey: 'no_job', printStateLabel: '未生成打印任务' }
-}
-
-function assertCanComplete(job) {
-  if (job.status === STATUS.DONE) return
-  if (job.status === STATUS.FAILED) {
-    throw new AppError('任务已失败，无法标记为完成', 400, 'PRINT_JOB_ALREADY_FAILED')
-  }
 }
 
 function assertCanCompleteLocalDesktop(job, ackTokenPresent) {
@@ -114,24 +124,14 @@ function assertCanCompleteLocalDesktop(job, ackTokenPresent) {
   }
 }
 
-function nextFailState(job) {
-  if (job.status === STATUS.DONE) return { done: true, retryCount: job.retryCount, status: STATUS.DONE }
-  if (job.status === STATUS.FAILED && job.retryCount >= MAX_RETRY) {
-    return { done: true, retryCount: job.retryCount, status: STATUS.FAILED }
-  }
-  const retryCount = Number(job.retryCount || 0) + 1
-  return {
-    done: false,
-    retryCount,
-    status: retryCount >= MAX_RETRY ? STATUS.FAILED : STATUS.PENDING,
-  }
-}
-
 module.exports = {
   STATUS,
   MAX_RETRY,
   EXPIRE_MESSAGE,
+  CLIENT_OFFLINE_MESSAGE,
+  isStalledErrorMessage,
   ttlMinutes,
+  clientOfflineReclaimSeconds,
   statusKey,
   printStateLabel,
   parsePriority,
@@ -140,7 +140,5 @@ module.exports = {
   normalizeBarcodeRecordStatus,
   deriveInboundBarcodeStatus,
   deriveGenericBarcodeStatus,
-  assertCanComplete,
   assertCanCompleteLocalDesktop,
-  nextFailState,
 }

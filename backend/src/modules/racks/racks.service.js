@@ -276,6 +276,7 @@ async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }
 async function enqueuePrintLabel(id, { userId = null } = {}) {
   await findById(id)
   const { enqueueRackLabelJob } = require('../print-jobs/print-jobs.service')
+  // 不传 jobUniqueKey：由打印域按「对象 + 时间窗」默认分桶去重（见 print-jobs.label-command）
   const job = await enqueueRackLabelJob({
     rackId: id,
     createdBy: userId,

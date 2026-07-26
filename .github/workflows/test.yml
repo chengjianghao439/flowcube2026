@@ -78,6 +78,9 @@ jobs:
       - name: 单元测试 — 标签几何/ZPL（纯函数，无需 DB）
         run: npm run test:label
 
+      - name: 单元测试 — 打印调度策略/任务状态（纯函数，无需 DB）
+        run: npm run test:print
+
       - name: 等待 MySQL 就绪
         run: |
           set -e

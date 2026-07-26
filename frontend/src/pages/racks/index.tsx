@@ -18,11 +18,8 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { TableColumn } from '@/types'
 import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
-import {
-  getLocalPrintEnvironmentKind,
-  isDesktopLocalPrintError,
-  tryDesktopLocalZplThenComplete,
-} from '@/lib/desktopLocalPrint'
+import { getLocalPrintEnvironmentKind } from '@/lib/desktopLocalPrint'
+import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 
 export default function RacksPage() {
   const qc = useQueryClient()
@@ -61,44 +58,16 @@ export default function RacksPage() {
 
   const printMut = useMutation({
     mutationFn: (id: number) => printRackLabelApi(id),
-    onSuccess: async (d) => {
+    onSuccess: (d) => {
       if (!d) return
-      if (d.queued) {
-        const local = await tryDesktopLocalZplThenComplete({
-          jobId: d.jobId,
-          content: d.content,
-          contentType: d.contentType,
-          printerName: d.printerName,
-        })
-        if (local === 'ok') {
-          toast.success('已打印')
-          return
-        }
-        if (isDesktopLocalPrintError(local)) {
-          toast.error(local.error)
-          return
-        }
-        if (local === 'skipped_no_desktop') {
-          toast.warning('已入队，请在桌面端完成打印')
-          return
-        }
-        if (local === 'skipped_no_payload') {
-          toast.warning('已入队，请在打印任务中处理')
-          return
-        }
-        const h = d.dispatchHint
-        if (h?.code === 'no_print_client') {
-          toast.warning('无在线打印客户端')
-        } else if (h?.code === 'queued_concurrency') {
-          toast.warning('任务排队中')
-        } else if (h?.code === 'dispatched') {
-          toast.success('已下发至打印工作站')
-        } else {
-          toast.success('已加入打印队列')
-        }
-      } else {
+      if (!d.queued) {
         toast.warning('未绑定打印机或离线')
+        return
       }
+      triggerPrintPoll()
+      const fb = printQueueFeedback(d.dispatchHint)
+      if (fb.level === 'warning') toast.warning(fb.message)
+      else toast.success(fb.message)
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '打印失败'),
   })

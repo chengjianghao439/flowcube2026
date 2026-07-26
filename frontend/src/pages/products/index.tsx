@@ -18,10 +18,7 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { toast } from '@/lib/toast'
 import { payloadClient as client } from '@/api/client'
 import { printProductLabelApi } from '@/api/products'
-import {
-  isDesktopLocalPrintError,
-  tryDesktopLocalZplThenComplete,
-} from '@/lib/desktopLocalPrint'
+import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import type { Product } from '@/types/products'
 import type { TableColumn } from '@/types'
@@ -46,6 +43,7 @@ export default function ProductsPage() {
   const [confirmProduct, setConfirmProduct] = useState<Product | null>(null)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ success: number; skip: number; errors: string[] } | null>(null)
+  const [printingIds, setPrintingIds] = useState<Set<number>>(new Set())
   const fileRef = useRef<HTMLInputElement>(null)
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
@@ -73,43 +71,27 @@ export default function ProductsPage() {
   }
 
   async function handlePrintProductLabel(p: Product) {
+    if (printingIds.has(p.id)) return
+    setPrintingIds((prev) => new Set(prev).add(p.id))
     try {
       const d = await printProductLabelApi(p.id)
       if (!d) return
       if (d.queued) {
-        const local = await tryDesktopLocalZplThenComplete({
-          jobId: d.jobId,
-          content: d.content,
-          contentType: d.contentType,
-          printerName: d.printerName,
-        })
-        if (local === 'ok') {
-          toast.success('已打印')
-          return
-        }
-        if (isDesktopLocalPrintError(local)) {
-          toast.error(local.error)
-          return
-        }
-        if (local === 'skipped_no_desktop') {
-          toast.warning('已入队，请在桌面端完成打印')
-          return
-        }
-        if (local === 'skipped_no_payload') {
-          toast.warning('已入队，请在打印任务中处理')
-          return
-        }
-        const h = d.dispatchHint
-        if (h?.message) {
-          toast.warning(h.message)
-          return
-        }
-        toast.success('已加入打印队列')
+        triggerPrintPoll()
+        const fb = printQueueFeedback(d.dispatchHint)
+        if (fb.level === 'warning') toast.warning(fb.message)
+        else toast.success(fb.message)
         return
       }
       toast.warning('未绑定打印机，未创建任务')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : '打印失败')
+    } finally {
+      setPrintingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(p.id)
+        return next
+      })
     }
   }
 
@@ -131,7 +113,7 @@ export default function ProductsPage() {
         primaryVariant="outline"
         onPrimaryClick={()=>navigate(`/products/${r.id}`)}
         items={[
-          { label:'打印标签', onClick:()=>void handlePrintProductLabel(r) },
+          { label:'打印标签', onClick:()=>void handlePrintProductLabel(r), disabled: printingIds.has(r.id) },
           { label:'删除', onClick:()=>setConfirmProduct(r), destructive:true, separatorBefore:true },
         ]}
       />

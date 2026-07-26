@@ -41,9 +41,18 @@ function bindingFallbackChain(primary) {
   return map[primary] || [primary]
 }
 
+/**
+ * 取指定用途的绑定候选。
+ *
+ * INNER JOIN printers 是必须的：绑定表无外键约束，可能残留指向已删除打印机的悬空记录；
+ * 若把它们当作候选返回，会让候选集「非空但全部不可用」，从而跳过后续 binding fallback 链，
+ * 最终兜底到全库第一台打印机 —— 表现为绑定配置整体失效、跨仓库出纸。
+ * 同理排除已停用（status<>1）的打印机，让解析继续沿 fallback 链走到真正可用的机器。
+ */
 async function fetchBindingCandidates(printType, whNum) {
   const params = [printType]
   let sql = `SELECT b.printer_id, b.warehouse_id FROM printer_bindings b
+     INNER JOIN printers p ON p.id = b.printer_id AND p.status = 1
      WHERE b.print_type = ?`
   if (whNum) {
     sql += ` AND (b.warehouse_id = 0 OR b.warehouse_id = ?)`
@@ -165,14 +174,12 @@ async function resolvePrinterForJob({ warehouseId, jobType, contentType, require
     return a - b
   })
 
-  const onlineOrdered = []
-  for (const id of uniq) {
-    const [[o]] = await pool.query(
-      `SELECT id FROM printers WHERE id = ? AND status = 1 LIMIT 1`,
-      [id],
-    )
-    if (o) onlineOrdered.push(id)
-  }
+  const [onlineRows] = await pool.query(
+    `SELECT id FROM printers WHERE status = 1 AND id IN (${uniq.map(() => '?').join(',')})`,
+    uniq,
+  )
+  const onlineSet = new Set(onlineRows.map((r) => Number(r.id)))
+  const onlineOrdered = uniq.filter((id) => onlineSet.has(id))
 
   if (!onlineOrdered.length) return { printerId: null, dispatchReason: null }
 

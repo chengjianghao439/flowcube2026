@@ -21,10 +21,7 @@ import { getPackagesApi, createPackageApi, addPackageItemApi, removePackageItemA
 import type { Package, PackagePrintJob } from '@/api/packages'
 import type { WarehouseTask } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
-import {
-  isDesktopLocalPrintError,
-  tryDesktopLocalZplThenComplete,
-} from '@/lib/desktopLocalPrint'
+import { triggerPrintPoll } from '@/lib/printQueue'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
@@ -373,38 +370,15 @@ export default function PdaPackPage() {
       )
       return result
     },
-    onSuccess: async (d) => {
+    onSuccess: (d) => {
       if (d.kind === 'pending') {
         warn('网络中断，打印结果待确认')
         return
       }
       const payload = d.data
-      if (payload.queued && payload.job && typeof payload.job === 'object') {
-        const job = payload.job as PackagePrintJob
-        const local = await tryDesktopLocalZplThenComplete({
-          jobId: job.id,
-          content: job.content,
-          contentType: job.contentType,
-          printerName: job.printerName,
-        })
-        if (local === 'ok') {
-          ok('已打印')
-          return
-        }
-        if (isDesktopLocalPrintError(local)) {
-          err(local.error)
-          return
-        }
-        if (local === 'skipped_no_desktop') {
-          err('未连接本机打印桥接，任务已入队')
-          return
-        }
-        if (local === 'skipped_no_payload') {
-          err('任务已入队，本机无法打印')
-          return
-        }
-      }
       if (payload.queued) {
+        // PDA 自身不打印，箱贴由仓库里的桌面打印客户端领取执行；此处唤醒仅在桌面端生效
+        triggerPrintPoll()
         const job = payload.job && typeof payload.job === 'object' ? payload.job as PackagePrintJob : null
         const hint = job?.dispatchHint
         if (hint && hint.clientOnline === false) warn(packageLabelTraceMessage(job), 5000)

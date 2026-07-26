@@ -1,25 +1,33 @@
 /**
- * 极序 Flow 桌面端：按任务绑定的逻辑打印机名称本机打 ZPL，并 POST complete-local 核销队列
- * 无需任何网口或 IP 配置；名称须与「从本机添加」时一致
+ * 极序 Flow 桌面端本机打印的环境探测与上报工具。
+ *
+ * 物理打印本身只由桌面轮询客户端（DesktopPrintClientBridge）执行 —— 业务页面负责入队后
+ * 调 triggerPrintPoll() 唤醒它（见 lib/printQueue）。本文件不再提供「页面直接打印」的入口，
+ * 那条并行路径曾与轮询争抢同一任务、导致同一张标签被打印两次。
  */
 import axios from 'axios'
 import { payloadClient as apiClient } from '@/api/client'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { getDesktopClientId } from '@/lib/printQueue'
 
 /**
- * 有本机打印桥接时带上，便于后端日志区分；货架 ZPL 现已在成功入队时始终返回。
+ * 打印入队请求头。
+ * - X-Flowcube-Desktop-Local-Print：标识来自桌面端，便于后端日志区分
+ * - X-Print-Client-Id：本机打印客户端标识，供后端做「在哪台电脑点的就从哪台电脑的打印机出纸」
+ *   路由。商品标签这类没有仓库归属的打印尤其依赖它，否则会被派到其它仓库的机器上。
  */
 export function desktopLocalPrintRequestHeaders(): Record<string, string> {
-  if (typeof window !== 'undefined' && typeof window.flowcubeDesktop?.printZpl === 'function') {
-    return { 'X-Flowcube-Desktop-Local-Print': '1' }
-  }
-  if (IS_ELECTRON_DESKTOP) {
-    return { 'X-Flowcube-Desktop-Local-Print': '1' }
-  }
-  return {}
+  const isDesktop =
+    (typeof window !== 'undefined' && typeof window.flowcubeDesktop?.printZpl === 'function')
+    || IS_ELECTRON_DESKTOP
+  if (!isDesktop) return {}
+  const headers: Record<string, string> = { 'X-Flowcube-Desktop-Local-Print': '1' }
+  const clientId = getDesktopClientId()
+  if (clientId) headers['X-Print-Client-Id'] = clientId
+  return headers
 }
 
-export function isDesktopLocalPrintAvailable(): boolean {
+function isDesktopLocalPrintAvailable(): boolean {
   return (
     typeof window !== 'undefined' && typeof window.flowcubeDesktop?.printZpl === 'function'
   )
@@ -36,85 +44,32 @@ export function getLocalPrintEnvironmentKind():
   return 'browser'
 }
 
-export function hasDesktopZplTargetConfigured(printerName?: string | null): boolean {
-  return Boolean(printerName != null && String(printerName).trim())
+function isConflictError(e: unknown): boolean {
+  return axios.isAxiosError(e) && e.response?.status === 409
 }
 
-/** 送 RAW 前校验 ZPL 片段，避免空内容或残缺模板导致 silent 失败 */
-export function validateZplForLocalPrint(content: string | null | undefined): string | null {
-  const s = content != null ? String(content).trim() : ''
-  if (!s) return 'ZPL 内容为空，无法本机打印'
-  if (!s.includes('^XA') || !s.includes('^XZ')) {
-    return 'ZPL 不完整（缺少 ^XA / ^XZ），无法送 RAW。请检查打印模板或联系管理员'
-  }
-  return null
-}
-
-export async function printZplOnDesktop(
-  content: string,
-  opts: { printerName: string | null | undefined },
+/**
+ * 打印终态上报（complete/fail）专用：网络卡顿时短退避重试；409（任务状态已变化）说明早前某次
+ * 尝试其实已经生效（比如请求送达了但响应在回程丢失），视为已上报成功，不再重试也不算失败。
+ */
+export async function reportPrintOutcomeWithRetry(
+  url: string,
+  data: unknown,
+  config?: { headers?: Record<string, string>; skipGlobalError?: boolean },
+  attempts = 3,
 ): Promise<void> {
-  const printerName = opts.printerName != null ? String(opts.printerName).trim() : ''
-  await window.flowcubeDesktop!.printZpl!({
-    content,
-    printerName,
-  })
-}
-
-function formatDesktopPrintCatch(e: unknown): string {
-  if (axios.isAxiosError(e)) {
-    const m = (e.response?.data as { message?: string } | undefined)?.message
-    return (m || e.message || '').trim() || '网络或接口错误'
-  }
-  if (e instanceof Error && e.message.trim()) return e.message.trim()
-  if (e && typeof e === 'object' && 'message' in e) {
-    const m = (e as { message?: unknown }).message
-    if (typeof m === 'string' && m.trim()) return m.trim()
-  }
-  const s = String(e ?? '').trim()
-  if (s && s !== '[object Object]') return s
-  return '本机 RAW 打印失败：未收到具体原因。请打开桌面端主进程控制台，或核对打印机名称与 RAW 驱动。'
-}
-
-/** skipped_no_desktop：非桌面端或未注入 flowcubeDesktop；skipped_no_payload：桌面端可用但接口未带回 zpl/jobId，未送 RAW */
-export type DesktopLocalPrintResult =
-  | 'skipped_no_desktop'
-  | 'skipped_no_payload'
-  | 'ok'
-  | { error: string }
-
-export function isDesktopLocalPrintError(
-  r: DesktopLocalPrintResult,
-): r is { error: string } {
-  return typeof r === 'object' && r !== null && 'error' in r
-}
-
-export async function tryDesktopLocalZplThenComplete(opts: {
-  jobId: number | null | undefined
-  content?: string | null
-  contentType?: string | null
-  printerName?: string | null
-}): Promise<DesktopLocalPrintResult> {
-  if (!isDesktopLocalPrintAvailable()) return 'skipped_no_desktop'
-  const { jobId, content, contentType, printerName } = opts
-  const ct = String(contentType || '').toLowerCase()
-  if (!content || ct !== 'zpl' || jobId == null || !Number.isFinite(Number(jobId))) {
-    return 'skipped_no_payload'
-  }
-  if (!hasDesktopZplTargetConfigured(printerName)) {
-    return {
-      error:
-        'ERP 中该打印机未配置本机队列名称。请在「设置 → 打印机管理」使用「从本机添加」选择标签机，并绑定「库存标签」等用途；名称必须与 Windows/系统「打印机」列表中的名称完全一致。',
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      await apiClient.post(url, data, config)
+      return
+    } catch (e) {
+      if (isConflictError(e)) return
+      lastErr = e
+      if (i < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 400 * (i + 1)))
+      }
     }
   }
-  const body = String(content).trimStart()
-  const rawErr = validateZplForLocalPrint(body)
-  if (rawErr) return { error: rawErr }
-  try {
-    await printZplOnDesktop(String(content).trim(), { printerName })
-    await apiClient.post(`/print-jobs/${Number(jobId)}/complete-local`, {})
-    return 'ok'
-  } catch (e) {
-    return { error: formatDesktopPrintCatch(e) }
-  }
+  throw lastErr
 }

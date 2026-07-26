@@ -1,5 +1,5 @@
 const AppError = require('../../utils/AppError')
-const { EXPIRE_MESSAGE } = require('../print-jobs/print-jobs.service')
+const { isStalledErrorMessage } = require('../print-jobs/print-jobs.service')
 const { DEFAULT_INBOUND_THRESHOLDS } = require('../../utils/inboundThresholds')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 
@@ -98,7 +98,7 @@ function deriveInboundPrintJobState(row, thresholds = DEFAULT_INBOUND_THRESHOLDS
     (rawStatus === 0 || rawStatus === 1)
       && !!row.updated_at
       && (Date.now() - new Date(row.updated_at).getTime()) >= Number(thresholds.printTimeoutMinutes || DEFAULT_INBOUND_THRESHOLDS.printTimeoutMinutes) * 60 * 1000
-  ) || (rawStatus === 3 && String(row.error_message || '') === EXPIRE_MESSAGE)
+  ) || (rawStatus === 3 && isStalledErrorMessage(row.error_message))
 
   const base = (statusKey, statusLabel) => ({
     key: statusKey,

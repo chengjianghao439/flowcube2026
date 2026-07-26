@@ -145,21 +145,10 @@ SKIP_GIT_SYNC_CHECK=1 npm run dist:win --prefix desktop
 
 不推荐用于正式发布。
 
-## 本机标签 RAW（TSPL）换行
+## 本机标签 RAW（ZPL）
 
-若某台 TSC/佳博在 **默认（保持模板原始换行）** 下不出纸，可仅为该电脑设置环境变量 **`FLOWCUBE_TSPL_CRLF=1`** 后重启 极序 Flow 桌面端，再试打印；多数机型不需要此项。
-
-若 **强制 CRLF** 后反而从「能印」变成「不印」，请 **去掉** 该变量或设为 `0`。
-
-## 本机 TSPL 中文编码（佳博 / TSC）
-
-**默认不在 TSPL 里插入 `CODEPAGE` 行**（佳博部分固件不认时会整单不执行，而 Windows 仍显示已打印）。**Windows 桌面端**对 TSPL 默认按 **UTF-8** 送 RAW；脚本含 **`CODEPAGE 936`**（或 **86**）或设置 **`FLOWCUBE_TSPL_BYTES=gb18030`** 时改为 **GB18030**。
-
-- 若固件 **必须** 声明代码页，请在 **打印模板 body** 中自行写 `CODEPAGE …`（并与 `FLOWCUBE_TSPL_BYTES` 一致）。
-- 脚本中含 **UTF-8** 类 `CODEPAGE` 时，桌面端自动改送 UTF-8。
-- 环境变量 **`FLOWCUBE_TSPL_BYTES=utf8`** 或 **`gb18030`** 可强制字节编码。
-- 仍含 `CODEPAGE` 且不出纸时，可试 **`FLOWCUBE_TSPL_OMIT_CODEPAGE=1`** 去掉所有 `CODEPAGE` 行。
+v0.3.94 起系统已取消 ZPL/TSPL 双指令集并行，统一使用 **ZPL**（`printers` 表历史遗留的 `tspl_*`/`label_raw_format` 字段已随迁移 088/102 清理）。桌面端 `printZpl` 会校验内容含 `^XA`…`^XZ`，非 ZPL 内容直接拒绝并报错，不再有 TSPL 分支或相关环境变量。
 
 **说明**：队列中「FlowCube **RAW**」仅表示本软件提交的假脱机作业，**不是** ZPL 协议名；该显示名属于历史保留，不影响当前极序 Flow 打印链路。
 
-**测试页能打、极序 Flow 不打**：多属 **RAW 指令/编码** 问题；可重启 **Print Spooler**、清空队列后更新后端与本机桌面端再试。
+**测试页能打、极序 Flow 不打**：多属 **RAW 指令** 问题（例如打印机固件不接受该内容或驱动未开启 RAW 直通）；可重启 **Print Spooler**、清空队列后更新后端与本机桌面端再试。

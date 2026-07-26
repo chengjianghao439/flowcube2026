@@ -158,8 +158,8 @@ async function main() {
         printerId: Number(printer.id),
         warehouseId: Number(warehouse.id),
         title: randomRef('Smoke Print'),
-        contentType: 'html',
-        content: '<html><body>smoke</body></html>',
+        contentType: 'zpl',
+        content: '^XA^FDsmoke^FS^XZ',
         jobType: 'label',
       },
     })
@@ -200,8 +200,8 @@ async function main() {
         printerId: Number(printer.id),
         warehouseId: Number(warehouse.id),
         title: randomRef('Smoke Print Retry'),
-        contentType: 'html',
-        content: '<html><body>retry</body></html>',
+        contentType: 'zpl',
+        content: '^XA^FDretry^FS^XZ',
         jobType: 'label',
       },
     })

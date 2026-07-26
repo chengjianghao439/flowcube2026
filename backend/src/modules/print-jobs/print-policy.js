@@ -3,20 +3,39 @@
  * 数值由环境变量（PRINT_EXPLORATION_*、PRINT_SCORE_* 等）与 defaultDispatchPolicy() 提供
  */
 
-const COLD_BONUS = Number(process.env.PRINT_SCORE_COLD_BONUS) || 0.12
+/**
+ * 读数值型环境变量。
+ * 不能用 `Number(env) || fallback`：显式配置的 0 会被 `||` 当成假值吞掉，
+ * 导致运维「设 0 关闭探索」实际无效且无从察觉。
+ */
+function envNumber(name, fallback) {
+  const raw = process.env[name]
+  if (raw == null || String(raw).trim() === '') return fallback
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : fallback
+}
 
-const W_ERR = Number(process.env.PRINT_SCORE_W_ERR) || 0.42
-const W_LAT = Number(process.env.PRINT_SCORE_W_LAT) || 0.33
-const W_HB = Number(process.env.PRINT_SCORE_W_HB) || 0.25
+const clamp01 = (n) => Math.min(1, Math.max(0, n))
 
-const LAT_SCORE_SCALE_MS = Number(process.env.PRINT_SCORE_LAT_SCALE_MS) || 45_000
+const COLD_BONUS = envNumber('PRINT_SCORE_COLD_BONUS', 0.12)
 
-const EXPL_MIN = Math.min(1, Math.max(0, Number(process.env.PRINT_EXPLORATION_MIN) || 0.06))
-const EXPL_MAX = Math.min(1, Math.max(0, Number(process.env.PRINT_EXPLORATION_MAX) || 0.42))
-const EXPL_BASE = Number(process.env.PRINT_EXPLORATION_BASE) || 0.12
-const EXPL_K_ERR = Number(process.env.PRINT_EXPLORATION_K_ERR) || 0.55
-const EXPL_K_LAT = Number(process.env.PRINT_EXPLORATION_K_LAT) || 0.35
-const LAT_NORM_MS = Number(process.env.PRINT_EXPLORATION_LAT_NORM_MS) || 60_000
+const W_ERR = envNumber('PRINT_SCORE_W_ERR', 0.42)
+const W_LAT = envNumber('PRINT_SCORE_W_LAT', 0.33)
+const W_HB = envNumber('PRINT_SCORE_W_HB', 0.25)
+
+const LAT_SCORE_SCALE_MS = envNumber('PRINT_SCORE_LAT_SCALE_MS', 45_000)
+
+/**
+ * 探索默认关闭（base/min = 0）：多仓库下同一用途绑多台是「物理隔离」而非负载分担，
+ * 仓库解析已把候选限定在本仓库内，此时再随机跳到另一台只会让操作员在 A 工位点、B 工位出纸。
+ * 但保留 max：设备错误率/延迟真的上来时，探索率仍会自动抬升并分流到其它机器（容错仍在）。
+ */
+const EXPL_MIN = clamp01(envNumber('PRINT_EXPLORATION_MIN', 0))
+const EXPL_MAX = clamp01(envNumber('PRINT_EXPLORATION_MAX', 0.42))
+const EXPL_BASE = envNumber('PRINT_EXPLORATION_BASE', 0)
+const EXPL_K_ERR = envNumber('PRINT_EXPLORATION_K_ERR', 0.55)
+const EXPL_K_LAT = envNumber('PRINT_EXPLORATION_K_LAT', 0.35)
+const LAT_NORM_MS = envNumber('PRINT_EXPLORATION_LAT_NORM_MS', 60_000)
 
 /** 无租户配置时使用 */
 function defaultDispatchPolicy() {

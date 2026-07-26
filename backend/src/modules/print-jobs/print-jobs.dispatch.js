@@ -3,7 +3,13 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { listJobsByIds, findById } = require('./print-jobs.query')
-const { STATUS, EXPIRE_MESSAGE, ttlMinutes } = require('./print-jobs.status')
+const {
+  STATUS,
+  EXPIRE_MESSAGE,
+  CLIENT_OFFLINE_MESSAGE,
+  ttlMinutes,
+  clientOfflineReclaimSeconds,
+} = require('./print-jobs.status')
 
 // 打印调度当前为客户端轮询模式：桌面客户端通过 claimClientJobs() 领取 PENDING 任务。
 // 本模块不提供实时推送通道，避免创建/重试路径误以为存在 push dispatch。
@@ -168,6 +174,31 @@ async function expireStaleJobs() {
   return r.affectedRows ?? 0
 }
 
+/**
+ * 回收「已被领取但客户端已失联」的打印中任务。
+ *
+ * 领取任务的桌面客户端断网 / 崩溃后，任务会一直挂在 PRINTING，原先要等满 TTL（默认 30 分钟）
+ * 才被清扫。客户端心跳（print_clients.last_seen）能更早证明它不会再回来上报，据此提前回收。
+ *
+ * 统一回收为 FAILED 而非 PENDING：客户端失联前可能已经把标签打出来了，只是核销没送达；
+ * 自动放回队列会让另一个客户端重复打印。置为失败交由人工确认后重试，与 TTL 清扫的取舍一致。
+ */
+async function reclaimJobsFromOfflineClients() {
+  const seconds = clientOfflineReclaimSeconds()
+  const [r] = await pool.query(
+    `UPDATE print_jobs j
+     INNER JOIN printers p ON p.id = j.printer_id
+     LEFT JOIN print_clients pc ON pc.client_id = p.client_id
+     SET j.status = ?, j.error_message = ?, j.ack_token = NULL
+     WHERE j.status = ?
+       AND j.dispatched_at IS NOT NULL
+       AND j.dispatched_at < DATE_SUB(NOW(), INTERVAL ? SECOND)
+       AND (pc.last_seen IS NULL OR pc.last_seen < DATE_SUB(NOW(), INTERVAL ? SECOND))`,
+    [STATUS.FAILED, CLIENT_OFFLINE_MESSAGE, STATUS.PRINTING, seconds, seconds],
+  )
+  return r.affectedRows ?? 0
+}
+
 function startPrintJobSweeper() {
   if (process.env.DISABLE_PRINT_JOB_SWEEPER === '1') return
   const raw = Number(process.env.PRINT_JOB_SWEEP_MS)
@@ -182,6 +213,24 @@ function startPrintJobSweeper() {
         'PrintJobs',
       )
     })
+    reclaimJobsFromOfflineClients()
+      .then((n) => {
+        if (n > 0) {
+          logger.warn(
+            '已回收失联打印客户端占用的打印中任务',
+            { reclaimed: n, degradation: 'print_client_offline_reclaim' },
+            'PrintJobs',
+          )
+        }
+      })
+      .catch((e) => {
+        logger.error(
+          '失联打印客户端任务回收失败，队列可能存在长期卡在打印中的任务',
+          e instanceof Error ? e : new Error(String(e)),
+          { degradation: 'print_client_reclaim_failed' },
+          'PrintJobs',
+        )
+      })
   }
   tick()
   setInterval(tick, ms)
@@ -191,5 +240,6 @@ module.exports = {
   claimClientJobs,
   getDispatchHintForJob,
   expireStaleJobs,
+  reclaimJobsFromOfflineClients,
   startPrintJobSweeper,
 }

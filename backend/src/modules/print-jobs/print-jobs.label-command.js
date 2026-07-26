@@ -31,7 +31,46 @@ async function resolveLabelPrinterId() {
   return first?.id ?? null
 }
 
-async function resolveLabelPrinter({ warehouseId, jobType, requireBinding = false, allowBindingFallback = true }) {
+/**
+ * 发起打印的那台桌面客户端名下的可用标签机。
+ *
+ * 用于「没有仓库归属」的打印（典型是商品标签：product_items 不属于任何仓库）。
+ * 这类打印若只按绑定/负载解析，多仓库部署下会被派到别的仓库的机器上 —— 操作员在 A 仓点，
+ * 纸从 B 仓出来。以发起请求的客户端为准最符合直觉，且不需要操作员做任何选择。
+ * 同一客户端接多台标签机时，优先取配置了该用途绑定的那台。
+ */
+async function resolveClientPreferredPrinterId(clientId, printType) {
+  const cid = String(clientId || '').trim()
+  if (!cid) return null
+  const [[bound]] = await pool.query(
+    `SELECT p.id
+     FROM printers p
+     INNER JOIN printer_bindings b ON b.printer_id = p.id AND b.print_type = ?
+     WHERE p.client_id = ? AND p.status = 1 AND p.type = 1
+     ORDER BY p.id ASC LIMIT 1`,
+    [printType, cid],
+  )
+  if (bound?.id) return Number(bound.id)
+  const [[any]] = await pool.query(
+    `SELECT id FROM printers
+     WHERE client_id = ? AND status = 1 AND type = 1
+     ORDER BY id ASC LIMIT 1`,
+    [cid],
+  )
+  return any?.id != null ? Number(any.id) : null
+}
+
+async function resolveLabelPrinter({
+  warehouseId,
+  jobType,
+  requireBinding = false,
+  allowBindingFallback = true,
+  preferClientId = null,
+}) {
+  if (preferClientId) {
+    const byClient = await resolveClientPreferredPrinterId(preferClientId, jobType)
+    if (byClient) return { printerId: byClient, dispatchReason: 'client_local' }
+  }
   const wh = warehouseId != null ? Number(warehouseId) : null
   const resolved = await resolvePrinterForJob({
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : undefined,
@@ -52,6 +91,23 @@ async function resolveLabelPrinter({ warehouseId, jobType, requireBinding = fals
 async function buildLabelBody({ templateType, vars, zplBuilder }) {
   const content = (await getLabelZplFromDefaultTemplate(templateType, vars)) ?? zplBuilder(vars)
   return { contentType: 'zpl', content }
+}
+
+/** 幂等兜底时间窗（秒）：同一对象在窗口内重复入队会合并为同一个打印任务 */
+function labelJobKeyBucketSeconds() {
+  const n = Number(process.env.PRINT_LABEL_DEDUP_WINDOW_SECONDS)
+  return Number.isFinite(n) && n > 0 ? n : 10
+}
+
+/**
+ * 幂等键兜底：调用方未显式指定 jobUniqueKey 时，按「引用对象 + 时间窗」自动分桶去重。
+ * 这样新增打印入口默认就能挡住连点 / 网络重试造成的重复出纸，而不必依赖各调用方自觉传 key。
+ * 需要每次都新建任务的场景（人工补打）由调用方显式传入带唯一标识的 key 覆盖本默认值。
+ */
+function defaultLabelJobKey(kind, refId) {
+  const id = Number(refId)
+  if (!kind || !Number.isFinite(id) || id <= 0) return null
+  return `${kind}:${id}:${Math.floor(Date.now() / (labelJobKeyBucketSeconds() * 1000))}`
 }
 
 async function enqueueContainerLabelJob(payload) {
@@ -89,7 +145,7 @@ async function enqueueContainerLabelJob(payload) {
     content: label.content,
     copies: 1,
     createdBy: payload.createdBy ?? null,
-    jobUniqueKey: payload.jobUniqueKey,
+    jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('container_label', containerId),
     refType: containerId ? 'inventory_container' : null,
     refId: containerId,
     refCode: data.container_code,
@@ -144,7 +200,7 @@ async function enqueueRackLabelJob(payload) {
       content: label.content,
       copies: 1,
       createdBy: payload.createdBy ?? null,
-      jobUniqueKey: payload.jobUniqueKey ?? null,
+      jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('rack_label', rackId),
     })
     const dispatchHint = await getDispatchHintForJob(job.printerCode, job.id)
     return {
@@ -230,7 +286,7 @@ async function enqueuePackageLabelJob(payload) {
     content: label.content,
     copies: 1,
     createdBy: payload.createdBy ?? null,
-    jobUniqueKey: payload.jobUniqueKey ?? null,
+    jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('package_label', packageId),
     refType: 'package',
     refId: Number(packageId),
     refCode: row.barcode,
@@ -248,8 +304,10 @@ async function enqueueProductLabelJob(payload) {
   )
   if (!row) return null
 
+  // 商品无仓库归属：优先派给发起请求的那台桌面客户端的打印机，避免跨仓库出纸
   const { printerId, dispatchReason } = await resolveLabelPrinter({
     jobType: 'product_label',
+    preferClientId: payload?.preferClientId ?? null,
   })
   if (!printerId) return null
 
@@ -277,7 +335,7 @@ async function enqueueProductLabelJob(payload) {
     content: label.content,
     copies: 1,
     createdBy: payload.createdBy ?? null,
-    jobUniqueKey: payload.jobUniqueKey ?? null,
+    jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('product_label', productId),
     refType: 'product',
     refId: Number(productId),
     refCode: row.code,

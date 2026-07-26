@@ -1,5 +1,6 @@
 const svc = require('./products.service')
 const { successResponse } = require('../../utils/response')
+const { SAFE_STATION_CLIENT_ID } = require('../print-jobs/print-jobs.middleware')
 
 // 商品选择中心
 const finder = async (req,res,next) => { try { return successResponse(res, await svc.findForFinder({ page:+req.query.page||1, pageSize:+req.query.pageSize||15, keyword:req.query.keyword||'', categoryId:req.query.categoryId?+req.query.categoryId:null, warehouseId:req.query.warehouseId?+req.query.warehouseId:null }), '查询成功') } catch(e){next(e)} }
@@ -13,8 +14,12 @@ const update     = async (req,res,next) => { try { await svc.update(+req.params.
 const remove     = async (req,res,next) => { try { await svc.softDelete(+req.params.id); return successResponse(res,null,'删除成功') } catch(e){next(e)} }
 const printLabel = async (req,res,next) => {
   try {
+    // 商品无仓库归属：带上发起请求的桌面客户端，优先从「操作员这台机器」出纸
+    const rawClientId = String(req.headers['x-print-client-id'] || '').trim()
+    const preferClientId = SAFE_STATION_CLIENT_ID.test(rawClientId) ? rawClientId : null
     const job = await svc.enqueueLabel(+req.params.id, {
       createdBy: req.user?.userId ?? req.user?.id ?? null,
+      preferClientId,
     })
     return successResponse(
       res,

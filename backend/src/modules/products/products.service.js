@@ -262,13 +262,14 @@ async function softDelete(id) {
   await pool.query('UPDATE product_items SET deleted_at=NOW() WHERE id=? AND deleted_at IS NULL',[id])
 }
 
-async function enqueueLabel(id, { createdBy = null } = {}) {
+async function enqueueLabel(id, { createdBy = null, preferClientId = null } = {}) {
   await findById(id)
   const printJobs = require('../print-jobs/print-jobs.service')
+  // 不传 jobUniqueKey：由打印域按「对象 + 时间窗」默认分桶去重（见 print-jobs.label-command）
   return printJobs.enqueueProductLabelJob({
     productId: id,
     createdBy,
-    jobUniqueKey: `product_label:${id}:${Date.now()}`,
+    preferClientId,
   })
 }
 

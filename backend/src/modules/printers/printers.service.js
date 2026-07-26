@@ -95,8 +95,10 @@ async function create({
     warehouseId != null && warehouseId !== '' && Number.isFinite(Number(warehouseId))
       ? Number(warehouseId)
       : null
+  // 兜底 'manual' 而非 null：printers.source 在历史库中为 NOT NULL DEFAULT 'manual'，
+  // 显式传 NULL 不会回落到列默认值，会直接报错 —— 桌面端「从本机添加」不传 source，正会踩到。
   const src =
-    source === 'local_desktop' || source === 'client' || source === 'manual' ? source : null
+    source === 'local_desktop' || source === 'client' || source === 'manual' ? source : 'manual'
   const clientIdVal = clientId != null ? String(clientId).trim().slice(0, 200) || null : null
   const finalCode = await allocateUniqueCodeGlobally(code)
   const [r] = await pool.query(
@@ -149,9 +151,25 @@ async function update(id, {
   return findById(id)
 }
 
+/**
+ * 删除打印机时必须一并清理其用途绑定。
+ * printer_bindings 无外键约束，残留的悬空绑定会让打印路由整体失效
+ * （候选集非空但全部不可用 → 跳过 fallback 链 → 兜底到全库第一台打印机）。
+ */
 async function remove(id) {
   await findById(id)
-  await pool.query('DELETE FROM printers WHERE id=?', [id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await conn.query('DELETE FROM printer_bindings WHERE printer_id=?', [id])
+    await conn.query('DELETE FROM printers WHERE id=?', [id])
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 async function setStatus(id, status) {

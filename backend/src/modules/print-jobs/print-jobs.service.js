@@ -4,7 +4,7 @@ const dispatch = require('./print-jobs.dispatch')
 const printDispatch = require('./print-dispatch')
 const template = require('./print-jobs.template')
 const labelCommand = require('./print-jobs.label-command')
-const { STATUS, parseListStatus, EXPIRE_MESSAGE } = require('./print-jobs.status')
+const { STATUS, parseListStatus, EXPIRE_MESSAGE, isStalledErrorMessage } = require('./print-jobs.status')
 
 dispatch.startPrintJobSweeper()
 
@@ -53,6 +53,8 @@ module.exports = {
   buildProductLabelZpl: template.buildProductLabelZpl,
   buildPackageLabelZpl: template.buildPackageLabelZpl,
   EXPIRE_MESSAGE,
+  isStalledErrorMessage,
+  reclaimJobsFromOfflineClients: dispatch.reclaimJobsFromOfflineClients,
   normalizeJobType: printDispatch.normalizeJobType,
   resolvePrinterForJob: printDispatch.resolvePrinterForJob,
 }

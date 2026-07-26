@@ -64,6 +64,15 @@ async function createRecord(exec, {
 }) {
   if (!content) throw new AppError('打印内容不能为空', 400, 'PRINT_CONTENT_REQUIRED')
   if (!title) throw new AppError('任务标题不能为空', 400, 'PRINT_TITLE_REQUIRED')
+  // 桌面客户端物理打印目前只认 ZPL RAW（含 content_type 默认值 html 在内），
+  // 其它格式一律在入队前直接拒绝，避免任务静默排队到 TTL 超时才发现根本打不通。
+  if (String(contentType || '').trim().toLowerCase() !== 'zpl') {
+    throw new AppError(
+      '打印任务队列当前仅支持 ZPL（热敏标签直连打印），不支持 html/pdf 队列打印；如需打印单据请使用页面内浏览器打印或导出功能',
+      400,
+      'PRINT_CONTENT_TYPE_UNSUPPORTED',
+    )
+  }
 
   const jobUniqueKey = jobUniqueKeyRaw != null ? String(jobUniqueKeyRaw).trim() || null : null
   if (jobUniqueKey && jobUniqueKey.length > 160) {
