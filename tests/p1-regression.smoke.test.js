@@ -565,9 +565,22 @@ async function scenarioOverReceiveDualGate(ctx, log, token) {
   )
   log.assert('被拦下时一件都没入账（事务完整回滚）', Number(beforeCount.q) === 0, `received=${beforeCount.q}`)
 
+  const badReason = await http.post(`/api/inbound-tasks/${taskId}/receive`, {
+    token, headers: pdaHeaders(),
+    json: { productId: Number(pricey.id), packages: [{ qty: 110 }], confirmOverReceive: true, overReceiveReason: 'whatever' },
+  })
+  log.assert(
+    '★P1-8 原因码只接受约定枚举，乱传直接 400（防止塞自由文本绕过追溯）',
+    badReason.status === 400,
+    `status=${badReason.status} ${JSON.stringify(badReason.data).slice(0, 120)}`,
+  )
+
   const confirmed = await http.post(`/api/inbound-tasks/${taskId}/receive`, {
     token, headers: pdaHeaders(),
-    json: { productId: Number(pricey.id), packages: [{ qty: 110 }], confirmOverReceive: true },
+    json: {
+      productId: Number(pricey.id), packages: [{ qty: 110 }],
+      confirmOverReceive: true, overReceiveReason: 'supplier_over_delivery',
+    },
   })
   log.assert('确认后可以正常收货', confirmed.ok, JSON.stringify(confirmed.data).slice(0, 200))
 
@@ -582,6 +595,11 @@ async function scenarioOverReceiveDualGate(ctx, log, token) {
     events.length === 1 && Number(payload?.overQty) === 10 && Number(payload?.overAmount) === 1000
       && payload?.confirmed === true,
     JSON.stringify(payload),
+  )
+  log.assert(
+    '★P1-8 留痕里带着现场选的超收原因码（财务据此区分「真多送」和「扫错了」）',
+    payload?.reasonCode === 'supplier_over_delivery',
+    JSON.stringify(payload?.reasonCode),
   )
 
   // 小额超收：既不到比例闸门也不到金额闸门 → 不打断现场，但同样要留痕

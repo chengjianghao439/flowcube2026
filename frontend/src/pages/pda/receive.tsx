@@ -19,6 +19,7 @@ import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
+import PdaOverReceiveDialog, { type OverReceiveReasonCode } from '@/components/pda/PdaOverReceiveDialog'
 
 interface ProductSummary {
   productId: number
@@ -199,8 +200,20 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   const [selectedProductId, setSelectedProductId] = useState<number | null>(selectableProducts[0]?.productId ?? null)
   const [boxes, setBoxes] = useState<string[]>([''])
   const [submitting, setSubmitting] = useState(false)
-  // 超收比例过高时要求"再点一次同一按钮"二次确认；换商品或改数量后自动失效，不能被沿用到别的提交上
-  const [overReceiveArmed, setOverReceiveArmed] = useState<{ productId: number; qty: number } | null>(null)
+  // 超收确认：后端闸门触发后弹独立确认框（带准确数量/金额，强制选原因码），
+  // 确认后把这里暂存的这一次提交原样重发。不再用「再点一次同一个按钮」——
+  // 员工戴着手套赶工连点两下是本能，那道闸门等于没有，而超收会随上架自动结算真的进应付。
+  const [overReceivePrompt, setOverReceivePrompt] = useState<{
+    product: ProductSummary
+    boxes: Array<{ qty: number }>
+    totalQty: number
+    scannedBarcode?: string
+    confirmDuplicate?: boolean
+    orderedQty: number
+    receivedQty: number
+    overQty: number
+    overAmount: number | null
+  } | null>(null)
   // 重复扫码防护：后端在 30 秒时间窗里发现同商品、同箱数、同总量的重复提交会返回 409
   // DUPLICATE_SCAN_CONFIRM_REQUIRED，这里进入待确认状态，再点一次带 confirmDuplicate 放行。
   // 本地无法自行判断（前端每次提交都是新的 requestKey，看不到别人/上一次的提交），必须由后端发起。
@@ -313,57 +326,62 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     }
 
     const totalQty = normalizedBoxes.reduce((sum, box) => sum + box.qty, 0)
-    const orderedQty = activeProduct.orderedQty
-    const overQty = activeProduct.receivedQty + totalQty - orderedQty
-    const overRatio = orderedQty > 0 ? overQty / orderedQty : (overQty > 0 ? Infinity : 0)
-    // 超收比例超过 20% 时要求"再点一次登记"二次确认——上架完成即自动结算应付，
-    // 没有人工审核这道闸门兜底了，扫错数量的代价从"审核时能拦下来"变成"直接进正式账"。
-    // 这里只是本地预判（省一次往返）：后端还有一道金额闸门，前端拿不到采购单价算不出来，
-    // 触发时会返回 409 OVER_RECEIVE_CONFIRM_REQUIRED，走下面 catch 里的同一套确认流程。
-    const localOverConfirm = overQty > 0 && overRatio > 0.2
-    const overArmed = overReceiveArmed?.productId === activeProduct.productId && overReceiveArmed.qty === totalQty
-    if (localOverConfirm && !overArmed) {
-      setOverReceiveArmed({ productId: activeProduct.productId, qty: totalQty })
-      warn(`超收比例达 ${Math.round(overRatio * 100)}%（应到 ${orderedQty}，将超收至 ${activeProduct.receivedQty + totalQty}），再次点击"打印并登记"确认提交`)
-      return
-    }
     const duplicateConfirmed = duplicateArmed?.productId === activeProduct.productId && duplicateArmed.qty === totalQty
-    // 本地预判通过、或用户已就任一闸门确认过，都要把确认标记带给后端
-    const needsConfirm = localOverConfirm || overArmed
 
-    // 错货防护：手动点选（未扫码核对）的商品，第一次提交给警示，再次点击放行
+    // 超收不再由前端预判：阈值（比例 OR 金额）只在后端维护一份，触发时返回
+    // 409 OVER_RECEIVE_CONFIRM_REQUIRED，带着准确的数量与金额，前端据此弹确认框。
+    // 以前前端也硬编码了一份 0.2 的比例判断，既算不出金额，又会和后端阈值悄悄漂移。
     const scanOk = scanVerified?.productId === activeProduct.productId
+    // 错货防护：手动点选（未扫码核对）的商品，第一次提交给警示，再次点击放行
     if (!scanOk && noScanArmed !== activeProduct.productId) {
       setNoScanArmed(activeProduct.productId)
       warn('该商品未经扫码核对，建议扫描实物商品条码确认；确认实物无误可再次点击直接提交')
       return
     }
-    if (!needsConfirm && totalQty > activeProduct.remainingQty) {
-      warn(`超出待收数量 ${activeProduct.remainingQty}，将按超收 ${totalQty - activeProduct.remainingQty} 记录`)
-    } else if (totalQty < activeProduct.remainingQty) {
+    if (totalQty < activeProduct.remainingQty) {
       warn(`当前只登记 ${totalQty}，提交后该商品还剩 ${activeProduct.remainingQty - totalQty}`)
     }
 
+    submitToServer({
+      product: activeProduct,
+      boxes: normalizedBoxes.map(box => ({ qty: box.qty })),
+      totalQty,
+      scannedBarcode: scanOk ? scanVerified?.barcode : undefined,
+      confirmDuplicate: duplicateConfirmed,
+    })
+  }
+
+  /** 真正发请求的那一步。超收确认走弹窗回调再次进来，此时带上 confirmOverReceive + 原因码。 */
+  function submitToServer(opts: {
+    product: ProductSummary
+    boxes: Array<{ qty: number }>
+    totalQty: number
+    scannedBarcode?: string
+    confirmDuplicate?: boolean
+    overReceiveReason?: OverReceiveReasonCode
+  }) {
+    const { product, boxes: pkgs, totalQty, scannedBarcode, confirmDuplicate, overReceiveReason } = opts
     setSubmitting(true)
-    const expectedReceivedQty = activeProduct.receivedQty + totalQty
+    const expectedReceivedQty = product.receivedQty + totalQty
     void receiveAction.run(
       (requestKey) =>
         receiveInboundApi(task.id, {
-          productId: activeProduct.productId,
-          packages: normalizedBoxes.map(box => ({ qty: box.qty })),
-          confirmOverReceive: needsConfirm || undefined,
-          confirmDuplicate: duplicateConfirmed || undefined,
-          scannedBarcode: scanOk ? scanVerified?.barcode : undefined,
+          productId: product.productId,
+          packages: pkgs,
+          confirmOverReceive: overReceiveReason ? true : undefined,
+          overReceiveReason,
+          confirmDuplicate: confirmDuplicate || undefined,
+          scannedBarcode,
           batchNo: batchNo.trim() || undefined,
           mfgDate: mfgDate || undefined,
           expDate: expDate || undefined,
         }, requestKey).then((res) => res!),
-      { productId: activeProduct.productId, expectedReceivedQty },
+      { productId: product.productId, expectedReceivedQty },
     ).then((result) => {
-      setOverReceiveArmed(null)
       setDuplicateArmed(null)
+      setOverReceivePrompt(null)
       if (result.kind === 'success') {
-        if ((activeProduct.remainingQty - totalQty) > 0) {
+        if ((product.remainingQty - totalQty) > 0) {
           resetBoxes(1)
         } else {
           setSelectedProductId(null)
@@ -377,20 +395,34 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     }).catch((error: unknown) => {
       const message = (error as { message?: string })?.message ?? '收货失败'
       const code = (error as { code?: string })?.code
-      // 服务端闸门（超收金额/比例、疑似重复扫码）：不是失败，是要人确认一次。
-      // 保留已填的箱数并进入待确认状态，用户再点一次"打印并登记"即带确认标记提交。
-      // 必须清掉 useCriticalPdaAction 的失败态，否则页面顶部会挂着红色报错，
-      // 让人以为这次收货已经出错、不敢再点。
-      if (code === 'OVER_RECEIVE_CONFIRM_REQUIRED' || code === 'DUPLICATE_SCAN_CONFIRM_REQUIRED') {
-        const armed = { productId: activeProduct.productId, qty: totalQty }
-        if (code === 'OVER_RECEIVE_CONFIRM_REQUIRED') setOverReceiveArmed(armed)
-        else setDuplicateArmed(armed)
+      const data = (error as { data?: Record<string, unknown> })?.data
+      // 服务端闸门不是失败，是要人确认一次。必须清掉 useCriticalPdaAction 的失败态，
+      // 否则页面顶部挂着红色报错，员工会以为这次收货已经出错、不敢再点。
+      if (code === 'OVER_RECEIVE_CONFIRM_REQUIRED') {
         receiveAction.clearError()
+        // 用后端返回的准确数量与金额弹确认框，强制选原因码——不再是「再点一次同一个按钮」，
+        // 那道闸门对戴手套赶工的员工形同虚设，而超收会随上架自动结算真的进应付。
+        setOverReceivePrompt({
+          product,
+          boxes: pkgs,
+          totalQty,
+          scannedBarcode,
+          confirmDuplicate,
+          orderedQty: Number(data?.orderedQty ?? product.orderedQty),
+          receivedQty: Number(data?.receivedQty ?? product.receivedQty),
+          overQty: Number(data?.overQty ?? 0),
+          overAmount: data?.overAmount != null ? Number(data.overAmount) : null,
+        })
+        return
+      }
+      if (code === 'DUPLICATE_SCAN_CONFIRM_REQUIRED') {
+        receiveAction.clearError()
+        setDuplicateArmed({ productId: product.productId, qty: totalQty })
         warn(`${message}——再次点击"打印并登记"确认提交`)
         return
       }
-      setOverReceiveArmed(null)
       setDuplicateArmed(null)
+      setOverReceivePrompt(null)
       err(message)
     }).finally(() => {
       setSubmitting(false)
@@ -532,6 +564,34 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           disabled={submitting || receiveAction.submitBlocked}
         />
       </PdaBottomBar>
+
+      {overReceivePrompt && (
+        <PdaOverReceiveDialog
+          productName={overReceivePrompt.product.productName}
+          unit={overReceivePrompt.product.unit ?? ''}
+          orderedQty={overReceivePrompt.orderedQty}
+          receivedQty={overReceivePrompt.receivedQty}
+          thisQty={overReceivePrompt.totalQty}
+          overQty={overReceivePrompt.overQty}
+          overAmount={overReceivePrompt.overAmount}
+          onCancel={() => {
+            setOverReceivePrompt(null)
+            warn('已取消本次超收登记，请核对实物数量后重新录入')
+          }}
+          onConfirm={(reason) => {
+            const pending = overReceivePrompt
+            setOverReceivePrompt(null)
+            submitToServer({
+              product: pending.product,
+              boxes: pending.boxes,
+              totalQty: pending.totalQty,
+              scannedBarcode: pending.scannedBarcode,
+              confirmDuplicate: pending.confirmDuplicate,
+              overReceiveReason: reason,
+            })
+          }}
+        />
+      )}
     </div>
   )
 }

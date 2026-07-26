@@ -240,6 +240,14 @@ const OVER_RECEIVE_CONFIRM_RATIO = 0.2
 // 重复扫码判定时间窗（秒）。见 detectDuplicateScan。
 const DUPLICATE_SCAN_WINDOW_SECONDS = 30
 
+// 超收原因码 → 中文（写进事件描述，ERP 时间线上直接可读）
+const OVER_RECEIVE_REASON_LABEL = {
+  supplier_over_delivery: '供应商多发货',
+  previous_short_makeup: '前次少收本次补发',
+  scan_mistake: '扫码/数量录错',
+  other: '其他',
+}
+
 /**
  * 评估本次收货造成的超收情况。返回 null 表示该商品不在本任务明细里（由后续逻辑报错）。
  * needsConfirm 为 true 时必须有 confirmOverReceive 才能放行；overQty>0 一律留痕（不阻断）。
@@ -331,7 +339,7 @@ async function detectDuplicateScan(conn, { taskId, productId, totalQty, packageC
 }
 
 async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, scopeWarehouseIds = null } = {}) {
-  const { productId, qty, packages: rawPackages, confirmOverReceive, confirmDuplicate, scannedBarcode, batchNo, mfgDate } = payload
+  const { productId, qty, packages: rawPackages, confirmOverReceive, confirmDuplicate, overReceiveReason, scannedBarcode, batchNo, mfgDate } = payload
   let { expDate } = payload
   const productIdN = Number(productId)
   const packages = Array.isArray(rawPackages) && rawPackages.length
@@ -563,7 +571,7 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         `${productName} 超收 ${overReceive.overQty}${overReceive.unit}`
         + `（应到 ${overReceive.orderedTotal}，本次收货后累计 ${overReceive.receivedBefore + totalQty}）`
         + (overReceive.overAmount > 0 ? `，涉及金额约 ${overReceive.overAmount} 元` : '')
-        + (confirmOverReceive ? '，已由操作员确认' : ''),
+        + (confirmOverReceive ? `，已由操作员确认${overReceiveReason ? `（原因：${OVER_RECEIVE_REASON_LABEL[overReceiveReason] || overReceiveReason}）` : ''}` : ''),
         { userId, realName: null },
         {
           productId: productIdN,
@@ -577,6 +585,8 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
           gateTriggered: overReceive.needsConfirm,
           gateReasons: overReceive.reasons,
           confirmed: Boolean(confirmOverReceive),
+          // 现场给出的超收原因（弹窗强制选择），财务日终复核时按它区分「真多送」和「扫错了」
+          reasonCode: overReceiveReason || null,
         },
       )
     }

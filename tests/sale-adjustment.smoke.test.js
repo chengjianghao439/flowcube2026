@@ -184,10 +184,10 @@ async function scenarioDecreasePendingConfirm(log, ctx, token) {
   const checkScan = await ctx.http.post('/api/scan-logs/check', { token, headers: ctx.pdaHeaders(), json: { taskId, barcode: containerRow.barcode } })
   log.assert('复核扫码成功(全量复核，自动收口进待打包)', checkScan.ok, JSON.stringify(checkScan.data))
 
-  const pkgResp = await ctx.http.post('/api/packages', { token, json: { warehouseTaskId: taskId } })
+  const pkgResp = await ctx.http.post('/api/packages', { token, headers: ctx.pdaHeaders(), json: { warehouseTaskId: taskId } })
   const packageId = Number(pkgResp.data?.data?.id)
-  await ctx.http.post(`/api/packages/${packageId}/add-item`, { token, json: { productCode: ctx.product.code, qty: 2 } })
-  const finishResp = await ctx.http.put(`/api/packages/${packageId}/finish`, { token })
+  await ctx.http.post(`/api/packages/${packageId}/add-item`, { token, headers: ctx.pdaHeaders(), json: { productCode: ctx.product.code, qty: 2 } })
+  const finishResp = await ctx.http.put(`/api/packages/${packageId}/finish`, { token, headers: ctx.pdaHeaders() })
   log.assert('装箱2件并finish成功', finishResp.ok, JSON.stringify(finishResp.data))
 
   const [taskBefore] = await dbQuery(ctx.pool, 'SELECT status FROM warehouse_tasks WHERE id=?', [taskId])

@@ -158,6 +158,8 @@ export interface ReceiveParams {
   confirmOverReceive?: boolean
   /** 重复扫码防护：后端 30 秒内发现同商品同箱型的重复提交会要求确认，确认后带上放行 */
   confirmDuplicate?: boolean
+  /** 超收原因码：确认超收时必填，写入 over_receive 事件供财务追溯 */
+  overReceiveReason?: 'supplier_over_delivery' | 'previous_short_makeup' | 'scan_mistake' | 'other'
   /** 错货防护：扫码核对通过时带上原始扫码值，后端兜底比对商品条码/编码 */
   scannedBarcode?: string
   /** 批次/效期（batch_managed 商品后端强制；效期可由生产日期+保质期推算） */
