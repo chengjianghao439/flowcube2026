@@ -4,13 +4,19 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LimitedInput } from '@/components/shared/LimitedInput'
+import { SettlementTypeField } from '@/components/shared/SettlementTypeField'
 import { useCreateCustomer, useUpdateCustomer } from '@/hooks/useCustomers'
 import { toast } from '@/lib/toast'
+import { SETTLEMENT_TYPE, type SettlementType } from '@/generated/status'
 import type { Customer } from '@/types/customers'
 
 interface Props { open: boolean; onClose: () => void; customer?: Customer | null }
 
-const empty = { name:'', contact:'', phone:'', email:'', address:'', remark:'', paymentTermsDays:'30' }
+const empty = {
+  name:'', contact:'', phone:'', email:'', address:'', remark:'',
+  settlementType: SETTLEMENT_TYPE.MONTHLY as SettlementType,
+  paymentTermsDays: 30,
+}
 const PHONE_RE = /^1\d{10}$/
 
 export default function CustomerFormDialog({ open, onClose, customer }: Props) {
@@ -23,7 +29,12 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   useEffect(() => {
     if (!open) return
     if (customer) {
-      setF({ name:customer.name, contact:customer.contact||'', phone:customer.phone||'', email:customer.email||'', address:customer.address||'', remark:customer.remark||'', paymentTermsDays:String(customer.paymentTermsDays??30) })
+      setF({
+        name:customer.name, contact:customer.contact||'', phone:customer.phone||'', email:customer.email||'',
+        address:customer.address||'', remark:customer.remark||'',
+        settlementType: customer.settlementType ?? SETTLEMENT_TYPE.MONTHLY,
+        paymentTermsDays: customer.paymentTermsDays ?? 30,
+      })
     } else {
       setF(empty)
     }
@@ -32,7 +43,7 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (f.phone && !PHONE_RE.test(f.phone)) { toast.error('请输入正确的手机号'); return }
-    const payload = { ...f, paymentTermsDays: Number(f.paymentTermsDays) >= 0 ? Number(f.paymentTermsDays) : 30 }
+    const payload = { ...f }
     try {
       if (isEdit && customer) {
         await update.mutateAsync({ id:customer.id, data:{ ...payload, isActive:customer.isActive } })
@@ -84,10 +95,13 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
             <Label>备注</Label>
             <LimitedInput maxLength={30} value={f.remark} onChange={set('remark')} placeholder="备注信息" />
           </div>
-          <div className="space-y-1">
-            <Label>应收账期（天）</Label>
-            <Input type="number" min="0" max="365" value={f.paymentTermsDays} onChange={set('paymentTermsDays')} />
-          </div>
+          <SettlementTypeField
+            side="receivable"
+            settlementType={f.settlementType}
+            paymentTermsDays={f.paymentTermsDays}
+            onChange={next => setF(p => ({ ...p, ...next }))}
+            disabled={loading}
+          />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>取消</Button>
             <Button type="submit" disabled={loading}>{loading ? '保存中...' : '保存'}</Button>

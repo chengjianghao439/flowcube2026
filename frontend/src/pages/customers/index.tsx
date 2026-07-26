@@ -5,7 +5,9 @@ import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { activeTone, type StatusTone } from '@/lib/statusTone'
+import { SETTLEMENT_TYPE, SETTLEMENT_TYPE_TONE } from '@/generated/status'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
@@ -50,8 +52,14 @@ export default function CustomersPage() {
     { key: 'contact', title: '联系人', width: 100 },
     { key: 'phone', title: '电话', width: 130 },
     { key: 'email', title: '邮箱', width: 160 },
-    { key: 'priceLevelName' as keyof Customer, title: '价格等级', width: 120, render: (_, row) => <Badge variant="outline" className="text-primary border-primary/30">价格{row.priceLevel ?? 'A'}</Badge> },
-    { key: 'isActive', title: '状态', width: 70, render:(v)=> <Badge variant={v ? 'default' : 'secondary'}>{v ? '启用' : '停用'}</Badge> },
+    { key: 'priceLevelName' as keyof Customer, title: '价格等级', width: 120, render: (_, row) => <SoftStatusLabel label={`价格${row.priceLevel ?? 'A'}`} tone="info" /> },
+    { key: 'settlementType', title: '结算方式', width: 110, render: (_, row) => (
+      <SoftStatusLabel
+        label={row.settlementType === SETTLEMENT_TYPE.MONTHLY ? `月结 ${row.paymentTermsDays} 天` : row.settlementTypeName}
+        tone={(SETTLEMENT_TYPE_TONE[String(row.settlementType) as keyof typeof SETTLEMENT_TYPE_TONE] ?? 'info') as StatusTone}
+      />
+    ) },
+    { key: 'isActive', title: '状态', width: 70, render:(v)=> <SoftStatusLabel label={v ? '启用' : '停用'} tone={activeTone(v as boolean)} /> },
     { key: 'id', title: '操作', width: 120, render:(_, row)=>(
       <TableActionsMenu
         primaryLabel="编辑"

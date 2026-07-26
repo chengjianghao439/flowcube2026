@@ -1,6 +1,7 @@
 /* eslint-disable */
 // AUTO-GENERATED FILE. Do not edit manually.
-// Source: backend/src/constants/warehouseTaskStatus.js, backend/src/constants/saleOrderStatus.js
+// Source: backend/src/constants/warehouseTaskStatus.js, backend/src/constants/saleOrderStatus.js,
+//         backend/src/constants/settlementType.js
 // Regenerate with: node scripts/generate-status-constants.js
 
 export type StatusTone = 'draft' | 'active' | 'success' | 'danger'
@@ -54,7 +55,8 @@ export const WT_STATUS_TERMINAL = [
 ] as const
 export const WT_TRANSITIONS = {
   "1": [
-    2
+    2,
+    8
   ],
   "2": [
     3,
@@ -62,24 +64,48 @@ export const WT_TRANSITIONS = {
   ],
   "3": [
     4,
-    8
+    8,
+    2
   ],
   "4": [
     5,
-    8
+    8,
+    2
   ],
   "5": [
     6,
-    8
+    8,
+    2,
+    4
   ],
   "6": [
     7,
-    8
+    8,
+    2,
+    4
   ],
   "7": [],
   "8": []
 } as const
 export const WT_ACTION_RULES = {
+  "adjustReopenChecking": {
+    "allowed": [
+      5,
+      6
+    ],
+    "message": "内部动作：因改单退回分拣格，任务退回待复核",
+    "toStatus": 4
+  },
+  "adjustReopenPicking": {
+    "allowed": [
+      3,
+      4,
+      5,
+      6
+    ],
+    "message": "内部动作：因改单需要补拣，任务退回拣货中",
+    "toStatus": 2
+  },
   "assign": {
     "allowed": [
       1,
@@ -270,6 +296,13 @@ export const SALE_STATUS_TERMINAL = [
   5
 ] as const
 export const SALE_ACTION_RULES = {
+  "adjust": {
+    "from": [
+      2,
+      3
+    ],
+    "message": "只有已占库/拣货中的销售单可修改明细，已出库后不可修改"
+  },
   "cancel": {
     "blocked": {
       "4": "已出库的订单不能取消",
@@ -348,6 +381,38 @@ export const SALE_STATUS_OPTIONS = [
   {
     "label": "已取消",
     "value": "5"
+  }
+] as const
+
+export const SETTLEMENT_TYPE = {
+  "CASH": 1,
+  "MONTHLY": 2
+} as const
+export type SettlementType = typeof SETTLEMENT_TYPE[keyof typeof SETTLEMENT_TYPE]
+export const SETTLEMENT_TYPE_NAME = {
+  "1": "现结",
+  "2": "月结"
+} as const
+export const SETTLEMENT_TYPE_TONE = {
+  "1": "warning",
+  "2": "active"
+} as const
+export const MONTHLY_TERMS_OPTIONS = [
+  30,
+  60,
+  90
+] as const
+export const IMMEDIATE_SETTLEMENT_TYPES = [
+  1
+] as const
+export const SETTLEMENT_TYPE_OPTIONS = [
+  {
+    "label": "现结",
+    "value": "1"
+  },
+  {
+    "label": "月结",
+    "value": "2"
   }
 ] as const
 

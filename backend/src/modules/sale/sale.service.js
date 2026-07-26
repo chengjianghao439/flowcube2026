@@ -8,6 +8,7 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
+const { buildDueDateSql, normalizeSettlementType } = require('../../constants/settlementType')
 const { WT_STATUS_NAME, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const adjustSvc = require('../warehouse-tasks/warehouse-tasks.adjust')
@@ -195,20 +196,30 @@ async function recomputeSaleReceivable(conn, saleOrderId) {
     if (!existing) return
   }
   const [[row]] = await conn.query(
-    `SELECT so.order_no, so.customer_name, COALESCE(c.payment_terms_days, 30) AS terms
+    `SELECT so.order_no, so.customer_name, so.created_at,
+            COALESCE(c.settlement_type, 2) AS settlement_type,
+            COALESCE(c.payment_terms_days, 30) AS terms
      FROM sale_orders so LEFT JOIN sale_customers c ON c.id = so.customer_id WHERE so.id = ?`,
     [saleOrderId],
   )
   if (!row) return
+  // 到期日按客户主数据的结算方式 + 账期天数计算：现结从销售单创建日起算，
+  // 月结从本次出库结算时刻起算（见 constants/settlementType.js 的对照表）。
+  //
+  // settlement_type 与 due_date 一样只在首次 INSERT 时写入，**不在分批发货重算时更新**：
+  // 账款是历史事实，当初按什么条件结算就是什么条件；之后把客户从现结改成月结，
+  // 不该把这批老账追溯改写成月结（迁移 136）。后续批次只重算金额。
+  const settlementSnapshot = normalizeSettlementType(row.settlement_type)
+  const due = buildDueDateSql(settlementSnapshot, row.terms, row.created_at)
   await conn.query(
-    `INSERT INTO payment_records (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status, due_date)
-     VALUES (2, ?, ?, ?, ?, 0, ?, 1, 1, DATE_ADD(NOW(), INTERVAL ? DAY))
+    `INSERT INTO payment_records (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status, settlement_type, due_date)
+     VALUES (2, ?, ?, ?, ?, 0, ?, 1, 1, ?, ${due.expr})
      ON DUPLICATE KEY UPDATE
        total_amount = VALUES(total_amount),
        balance = VALUES(total_amount) - paid_amount,
        status = CASE WHEN paid_amount >= VALUES(total_amount) THEN 3
                      WHEN paid_amount > 0 THEN 2 ELSE 1 END`,
-    [saleOrderId, row.order_no, row.customer_name, total, total, Number(row.terms) || 30],
+    [saleOrderId, row.order_no, row.customer_name, total, total, settlementSnapshot, ...due.params],
   )
 }
 

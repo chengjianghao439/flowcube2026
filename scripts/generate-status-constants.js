@@ -21,6 +21,13 @@ const {
   SALE_STATUS_TERMINAL,
 } = require(path.join(root, 'backend/src/constants/saleOrderStatus'))
 const { DOCUMENT_STATUS_RULES } = require(path.join(root, 'backend/src/constants/documentStatusRules'))
+const {
+  SETTLEMENT_TYPE,
+  SETTLEMENT_TYPE_NAME,
+  SETTLEMENT_TYPE_TONE,
+  MONTHLY_TERMS_OPTIONS,
+  IMMEDIATE_SETTLEMENT_TYPES,
+} = require(path.join(root, 'backend/src/constants/settlementType'))
 
 const outFile = path.join(root, 'frontend/src/generated/status.ts')
 
@@ -55,7 +62,8 @@ const wtKanbanColumns = [
 const lines = [
   '/* eslint-disable */',
   '// AUTO-GENERATED FILE. Do not edit manually.',
-  '// Source: backend/src/constants/warehouseTaskStatus.js, backend/src/constants/saleOrderStatus.js',
+  '// Source: backend/src/constants/warehouseTaskStatus.js, backend/src/constants/saleOrderStatus.js,',
+  '//         backend/src/constants/settlementType.js',
   '// Regenerate with: node scripts/generate-status-constants.js',
   '',
   "export type StatusTone = 'draft' | 'active' | 'success' | 'danger'",
@@ -83,6 +91,14 @@ const lines = [
   tsConst('SALE_STATUS_TERMINAL', SALE_STATUS_TERMINAL),
   tsConst('SALE_ACTION_RULES', DOCUMENT_STATUS_RULES.sale.actions),
   tsConst('SALE_STATUS_OPTIONS', [{ value: '', label: '全部状态' }, ...buildOptions(SALE_STATUS_NAME)]),
+  '',
+  tsConst('SETTLEMENT_TYPE', SETTLEMENT_TYPE),
+  'export type SettlementType = typeof SETTLEMENT_TYPE[keyof typeof SETTLEMENT_TYPE]',
+  tsConst('SETTLEMENT_TYPE_NAME', SETTLEMENT_TYPE_NAME),
+  tsConst('SETTLEMENT_TYPE_TONE', SETTLEMENT_TYPE_TONE),
+  tsConst('MONTHLY_TERMS_OPTIONS', MONTHLY_TERMS_OPTIONS),
+  tsConst('IMMEDIATE_SETTLEMENT_TYPES', IMMEDIATE_SETTLEMENT_TYPES),
+  tsConst('SETTLEMENT_TYPE_OPTIONS', buildOptions(SETTLEMENT_TYPE_NAME)),
   '',
 ]
 

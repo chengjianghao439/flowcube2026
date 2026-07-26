@@ -1,6 +1,11 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
+const {
+  SETTLEMENT_TYPE_NAME,
+  normalizeSettlementType,
+  normalizeTermsDays,
+} = require('../../constants/settlementType')
 
 async function ensureCustomerNameUnique(name, currentId = null) {
   const normalized = String(name || '').trim()
@@ -24,6 +29,8 @@ const fmt = r => ({
   isActive:!!r.is_active,
   priceLevel:r.price_level || 'A',
   priceLevelName:`价格${r.price_level || 'A'}`,
+  settlementType:normalizeSettlementType(r.settlement_type),
+  settlementTypeName:SETTLEMENT_TYPE_NAME[normalizeSettlementType(r.settlement_type)],
   paymentTermsDays:r.payment_terms_days != null ? Number(r.payment_terms_days) : 30,
   createdAt:r.created_at,
 })
@@ -57,18 +64,21 @@ async function findById(id) {
   if(!rows[0]) throw new AppError('客户不存在',404)
   return fmt(rows[0])
 }
-async function create({ name,contact,phone,email,address,remark,paymentTermsDays }) {
+async function create({ name,contact,phone,email,address,remark,settlementType,paymentTermsDays }) {
   const normalizedName = await ensureCustomerNameUnique(name)
   const code = await generateMasterCode(pool, 'CUS', 'sale_customers')
-  const terms = Number.isFinite(Number(paymentTermsDays)) && Number(paymentTermsDays) >= 0 ? Number(paymentTermsDays) : 30
-  const [r] = await pool.query('INSERT INTO sale_customers (code,name,contact,phone,email,address,remark,price_level,payment_terms_days) VALUES (?,?,?,?,?,?,?,?,?)',[code,normalizedName,contact||null,phone||null,email||null,address||null,remark||null,'A',terms])
+  // 账期只有月结才有意义，normalizeTermsDays 会把其余结算方式强制归零
+  const settle = normalizeSettlementType(settlementType)
+  const terms = normalizeTermsDays(settle, paymentTermsDays)
+  const [r] = await pool.query('INSERT INTO sale_customers (code,name,contact,phone,email,address,remark,price_level,settlement_type,payment_terms_days) VALUES (?,?,?,?,?,?,?,?,?,?)',[code,normalizedName,contact||null,phone||null,email||null,address||null,remark||null,'A',settle,terms])
   return { id:r.insertId, code }
 }
-async function update(id,{name,contact,phone,email,address,remark,isActive,paymentTermsDays}) {
+async function update(id,{name,contact,phone,email,address,remark,isActive,settlementType,paymentTermsDays}) {
   await findById(id)
   const normalizedName = await ensureCustomerNameUnique(name, id)
-  const terms = Number.isFinite(Number(paymentTermsDays)) && Number(paymentTermsDays) >= 0 ? Number(paymentTermsDays) : 30
-  await pool.query('UPDATE sale_customers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=?,payment_terms_days=? WHERE id=? AND deleted_at IS NULL',[normalizedName,contact||null,phone||null,email||null,address||null,remark||null,isActive?1:0,terms,id])
+  const settle = normalizeSettlementType(settlementType)
+  const terms = normalizeTermsDays(settle, paymentTermsDays)
+  await pool.query('UPDATE sale_customers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=?,settlement_type=?,payment_terms_days=? WHERE id=? AND deleted_at IS NULL',[normalizedName,contact||null,phone||null,email||null,address||null,remark||null,isActive?1:0,settle,terms,id])
 }
 async function softDelete(id) {
   await findById(id)

@@ -1,5 +1,6 @@
+import type { SettlementType } from '@/generated/status'
+
 export interface Supplier {
-  paymentTermsDays?: number
   id: number
   code: string
   name: string
@@ -8,9 +9,25 @@ export interface Supplier {
   email: string | null
   address: string | null
   remark: string | null
+  /** 结算方式：1现结 2月结 */
+  settlementType: SettlementType
+  settlementTypeName: string
+  /** 应付账期天数，仅月结有意义（30/60/90）；其余结算方式由服务端强制归零 */
+  paymentTermsDays: number
   isActive: boolean
   createdAt: string
 }
 export interface SupplierOption { id: number; code: string; name: string }
-export interface CreateSupplierParams { name: string; contact?: string; phone?: string; email?: string; address?: string; remark?: string }
-export interface UpdateSupplierParams { name: string; contact?: string; phone?: string; email?: string; address?: string; remark?: string; isActive: boolean }
+
+interface SupplierWritableFields {
+  name: string
+  contact?: string
+  phone?: string
+  email?: string
+  address?: string
+  remark?: string
+  settlementType?: SettlementType
+  paymentTermsDays?: number
+}
+export type CreateSupplierParams = SupplierWritableFields
+export type UpdateSupplierParams = SupplierWritableFields & { isActive: boolean }

@@ -5,7 +5,10 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { SettlementTypeField } from '@/components/shared/SettlementTypeField'
+import { activeTone, type StatusTone } from '@/lib/statusTone'
+import { SETTLEMENT_TYPE, SETTLEMENT_TYPE_TONE, type SettlementType } from '@/generated/status'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { LimitedInput } from '@/components/shared/LimitedInput'
@@ -17,7 +20,12 @@ import type { TableColumn } from '@/types'
 
 const PHONE_RE = /^1\d{10}$/
 
-const empty = { name:'', contact:'', phone:'', email:'', address:'', remark:'', paymentTermsDays:'30', isActive:true }
+const empty = {
+  name:'', contact:'', phone:'', email:'', address:'', remark:'',
+  settlementType: SETTLEMENT_TYPE.MONTHLY as SettlementType,
+  paymentTermsDays: 30,
+  isActive: true,
+}
 
 export default function SuppliersPage() {
   const [keyword, setKeyword] = useState(''); const [search, setSearch] = useState('')
@@ -32,11 +40,21 @@ export default function SuppliersPage() {
   const set = (k:string, v:string|boolean) => setForm(f=>({...f,[k]:v}))
 
   function openCreate() { setEdit(null); setForm(empty); setOpen(true) }
-  function openEdit(s:Supplier) { setEdit(s); setForm({name:s.name,contact:s.contact??'',phone:s.phone??'',email:s.email??'',address:s.address??'',remark:s.remark??'',paymentTermsDays:String(s.paymentTermsDays??30),isActive:s.isActive}); setOpen(true) }
+  function openEdit(s:Supplier) {
+    setEdit(s)
+    setForm({
+      name:s.name, contact:s.contact??'', phone:s.phone??'', email:s.email??'',
+      address:s.address??'', remark:s.remark??'',
+      settlementType: s.settlementType ?? SETTLEMENT_TYPE.MONTHLY,
+      paymentTermsDays: s.paymentTermsDays ?? 30,
+      isActive: s.isActive,
+    })
+    setOpen(true)
+  }
   function handleSubmit(e:React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (form.phone && !PHONE_RE.test(form.phone)) { toast.error('请输入正确的手机号'); return }
-    const p = { name:form.name, contact:form.contact||undefined, phone:form.phone||undefined, email:form.email||undefined, address:form.address||undefined, remark:form.remark||undefined, paymentTermsDays:Number(form.paymentTermsDays)>=0?Number(form.paymentTermsDays):30 }
+    const p = { name:form.name, contact:form.contact||undefined, phone:form.phone||undefined, email:form.email||undefined, address:form.address||undefined, remark:form.remark||undefined, settlementType:form.settlementType, paymentTermsDays:form.paymentTermsDays }
     if (edit) update({ id:edit.id, data:{...p,isActive:form.isActive} }, { onSuccess:()=>setOpen(false) })
     else create(p, { onSuccess:()=>setOpen(false) })
   }
@@ -47,7 +65,13 @@ export default function SuppliersPage() {
     { key:'contact', title:'联系人', width:100, render:v=>(v as string)||'-' },
     { key:'phone', title:'电话', width:130, render:v=>(v as string)||'-' },
     { key:'email', title:'邮箱', render:v=>(v as string)||'-' },
-    { key:'isActive', title:'状态', width:80, render:(_,r)=><Badge variant={r.isActive?'default':'destructive'}>{r.isActive?'启用':'停用'}</Badge> },
+    { key:'settlementType', title:'结算方式', width:110, render:(_,r)=>(
+      <SoftStatusLabel
+        label={r.settlementType === SETTLEMENT_TYPE.MONTHLY ? `月结 ${r.paymentTermsDays} 天` : r.settlementTypeName}
+        tone={(SETTLEMENT_TYPE_TONE[String(r.settlementType) as keyof typeof SETTLEMENT_TYPE_TONE] ?? 'info') as StatusTone}
+      />
+    ) },
+    { key:'isActive', title:'状态', width:80, render:(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} /> },
     { key:'id', title:'操作', width:140, render:(_,r)=>(
       <TableActionsMenu
         primaryLabel="编辑"
@@ -97,7 +121,13 @@ export default function SuppliersPage() {
             <div className="space-y-1"><Label>邮箱</Label><Input value={form.email} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('email',e.target.value)} disabled={isPending} placeholder="选填"/></div>
             <div className="space-y-1"><Label>地址</Label><LimitedInput maxLength={30} value={form.address} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('address',e.target.value)} disabled={isPending}/></div>
             <div className="space-y-1"><Label>备注</Label><LimitedInput maxLength={30} value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)} disabled={isPending}/></div>
-            <div className="space-y-1"><Label>应付账期（天）</Label><Input type="number" min="0" max="365" value={form.paymentTermsDays} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('paymentTermsDays',e.target.value)} disabled={isPending}/></div>
+            <SettlementTypeField
+              side="payable"
+              settlementType={form.settlementType}
+              paymentTermsDays={form.paymentTermsDays}
+              onChange={next => setForm(f => ({ ...f, ...next }))}
+              disabled={isPending}
+            />
             {edit && <div className="flex items-center gap-2"><input type="checkbox" id="sp-active" checked={form.isActive} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('isActive',e.target.checked)} className="accent-primary"/><Label htmlFor="sp-active" className="cursor-pointer">启用</Label></div>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={()=>setOpen(false)} disabled={isPending}>取消</Button>

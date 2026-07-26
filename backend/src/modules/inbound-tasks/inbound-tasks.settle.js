@@ -1,4 +1,5 @@
 const { assertStatusAction } = require('../../constants/documentStatusRules')
+const { buildDueDateSql, normalizeSettlementType } = require('../../constants/settlementType')
 const { compareAndSetStatus } = require('../../utils/statusTransition')
 
 /**
@@ -15,7 +16,8 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
   const poId = Number(purchaseOrderId)
   if (!Number.isFinite(poId) || poId <= 0) return
   const [[po]] = await conn.query(
-    `SELECT po.id, po.order_no, po.supplier_name,
+    `SELECT po.id, po.order_no, po.supplier_name, po.created_at,
+            COALESCE(s.settlement_type, 2) AS settlement_type,
             COALESCE(s.payment_terms_days, 30) AS payment_terms_days
      FROM purchase_orders po
      LEFT JOIN supply_suppliers s ON s.id = po.supplier_id
@@ -50,18 +52,25 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
   // confirm_status：新结算/金额被重算改变（多批到货、退货冲减、撤回收货）时打回
   // 待财务确认(0)，金额未变的幂等重算保持原确认状态；付款登记要求 confirm_status=1
   // （见 payments.service.recordPayment），形成"仓库结算、财务确认、出纳付款"的分权。
-  // 账期按供应商主数据配置（payment_terms_days）。
+  // 到期日按供应商主数据的结算方式 + 账期天数计算：现结从采购单创建日起算，
+  // 月结从本次结算时刻起算（见 constants/settlementType.js 的对照表）。
+  //
+  // settlement_type 与 due_date 一样只在首次 INSERT 时写入，**不在重算时更新**：
+  // 账款是历史事实，当初按什么条件结算就是什么条件；之后把供应商从现结改成月结，
+  // 不该把这批老账追溯改写成月结（迁移 136）。补收货/退货只重算金额。
+  const settlementSnapshot = normalizeSettlementType(po.settlement_type)
+  const due = buildDueDateSql(settlementSnapshot, po.payment_terms_days, po.created_at)
   await conn.query(
     `INSERT INTO payment_records
-       (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status, due_date)
-     VALUES (1, ?, ?, ?, ?, 0, ?, 1, 0, DATE_ADD(NOW(), INTERVAL ? DAY))
+       (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status, settlement_type, due_date)
+     VALUES (1, ?, ?, ?, ?, 0, ?, 1, 0, ?, ${due.expr})
      ON DUPLICATE KEY UPDATE
        confirm_status = CASE WHEN total_amount <> VALUES(total_amount) THEN 0 ELSE confirm_status END,
        total_amount = VALUES(total_amount),
        balance = VALUES(total_amount) - paid_amount,
        status = CASE WHEN paid_amount >= VALUES(total_amount) THEN 3
                      WHEN paid_amount > 0 THEN 2 ELSE 1 END`,
-    [poId, po.order_no, po.supplier_name, total, total, Number(po.payment_terms_days) || 30],
+    [poId, po.order_no, po.supplier_name, total, total, settlementSnapshot, ...due.params],
   )
 }
 
