@@ -11,7 +11,13 @@ export type RouteComponent = LazyExoticComponent<ComponentType>
 
 type RouteNavMeta =
   | { kind: 'link'; label: string; order: number; iconKey?: string }
-  | { kind: 'menu'; group: string; order: number; label?: string; iconKey?: string }
+  /**
+   * group = 顶栏一级入口（顺序见 NAV_GROUP_ORDER）
+   * section = 下拉内的二级分段标题；省略则落入该组顶部的无标题段
+   * order = 组内全局序号，同时决定段内顺序与段之间的先后（段序 = 段内最小 order）
+   *         因此同一 group 的 order 必须整体连续递增，不要按段各自从 10 重新开始
+   */
+  | { kind: 'menu'; group: string; order: number; section?: string; label?: string; iconKey?: string }
 
 export interface RouteRegistryEntry {
   path: string
@@ -37,9 +43,31 @@ export interface RoutePatternEntry {
 
 export type NavChildItem = { label: string; path: string; perm: PermCode; iconKey?: string }
 
+/** 下拉菜单内的二级分段；label 为空表示无标题段（渲染在最上方） */
+export type NavMenuSection = { label?: string; items: NavChildItem[] }
+
 export type TopNavSection =
   | { kind: 'link'; label: string; path: string; perm: PermCode; iconKey?: string }
-  | { kind: 'menu'; label: string; children: NavChildItem[] }
+  /** children 是 sections 拍平后的全量子项，供路径匹配用；渲染走 sections */
+  | { kind: 'menu'; label: string; children: NavChildItem[]; sections: NavMenuSection[] }
+
+/**
+ * 顶栏一级入口的顺序。必须显式登记：早期靠「子项 order 最小值」推导组序，
+ * 结果「仓库任务」因首项 order=20 被静默挤到最右侧，属于隐式规则的事故。
+ * 新增 group 时在这里补一行，未登记的组统一排在最后。
+ */
+const NAV_GROUP_ORDER: Record<string, number> = {
+  采购: 20,
+  销售: 30,
+  库存: 50,
+  仓储: 60,
+  财务: 70,
+  报表: 80,
+  打印: 90,
+  系统: 100,
+}
+
+const UNREGISTERED_GROUP_ORDER = 9990
 
 const pathnameIdentity: RouteTabIdentity = { kind: 'pathname' }
 
@@ -70,7 +98,8 @@ const SuppliersPage = lazy(() => import('@/pages/suppliers'))
 const ReturnsPage = lazy(() => import('@/pages/returns'))
 const PurchaseReturnFormPage = lazy(() => import('@/pages/returns/purchase/form'))
 const SaleReturnFormPage = lazy(() => import('@/pages/returns/sale/form'))
-const PaymentsPage = lazy(() => import('@/pages/payments'))
+const PayablePage = lazy(() => import('@/pages/payments/payable'))
+const ReceivablePage = lazy(() => import('@/pages/payments/receivable'))
 const UsersPage = lazy(() => import('@/pages/users'))
 const PermissionsPage = lazy(() => import('@/pages/permissions'))
 const SettingsPage = lazy(() => import('@/pages/settings'))
@@ -78,7 +107,8 @@ const BarcodePrintQueryPage = lazy(() => import('@/pages/settings/barcode-print-
 const OplogsPage = lazy(() => import('@/pages/oplogs'))
 const ReportsPage = lazy(() => import('@/pages/reports'))
 const RoleWorkbenchPage = lazy(() => import('@/pages/reports/role-workbench'))
-const ReconciliationPage = lazy(() => import('@/pages/reports/reconciliation'))
+const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
+const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
 const ApprovalsPage = lazy(() => import('@/pages/reports/approvals'))
 const WavePerformancePage = lazy(() => import('@/pages/reports/wave-performance'))
@@ -89,6 +119,7 @@ const PrintTemplateEditorPage = lazy(() => import('@/pages/settings/print-templa
 const PrintersPage = lazy(() => import('@/pages/settings/printers'))
 const PdaDevicesPage = lazy(() => import('@/pages/settings/pda-devices'))
 
+/** 数组顺序与顶栏结构保持一致，便于对照；实际排序由 nav.order 与 NAV_GROUP_ORDER 决定 */
 export const routeRegistry: RouteRegistryEntry[] = [
   {
     path: '/dashboard',
@@ -99,15 +130,8 @@ export const routeRegistry: RouteRegistryEntry[] = [
     tabIdentity: pathnameIdentity,
     nav: { kind: 'link', label: '仪表盘', order: 10 },
   },
-  {
-    path: '/suppliers',
-    title: '供应商管理',
-    permission: PERMISSIONS.SUPPLIER_VIEW,
-    component: SuppliersPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '采购', order: 10 },
-  },
+
+  // ── 采购 ──────────────────────────────────────────────
   {
     path: '/purchase',
     title: '采购订单',
@@ -115,7 +139,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: PurchasePage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '采购', order: 20 },
+    nav: { kind: 'menu', group: '采购', section: '采购作业', order: 10 },
   },
   {
     path: '/inbound-tasks',
@@ -124,7 +148,49 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: InboundTasksPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '采购', order: 30 },
+    nav: { kind: 'menu', group: '采购', section: '采购作业', order: 20 },
+  },
+  {
+    // 与 /returns/sale 共用 ReturnsPage，页面按 pathname 判定类型
+    path: '/returns/purchase',
+    title: '采购退货',
+    permission: PERMISSIONS.RETURN_ORDER_VIEW,
+    component: ReturnsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '采购', section: '采购作业', order: 30 },
+    // 旧的合并入口 /returns 重定向到采购退货
+    aliases: ['/returns'],
+  },
+  {
+    path: '/suppliers',
+    title: '供应商管理',
+    permission: PERMISSIONS.SUPPLIER_VIEW,
+    component: SuppliersPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '采购', section: '基础资料', order: 40 },
+  },
+
+  // ── 销售 ──────────────────────────────────────────────
+  {
+    path: '/sale',
+    title: '销售管理',
+    permission: PERMISSIONS.SALE_ORDER_VIEW,
+    component: SalePage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '销售', section: '销售作业', order: 10 },
+    aliases: ['/sales'],
+  },
+  {
+    path: '/returns/sale',
+    title: '销售退货',
+    permission: PERMISSIONS.RETURN_ORDER_VIEW,
+    component: ReturnsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '销售', section: '销售作业', order: 20 },
   },
   {
     path: '/customers',
@@ -133,7 +199,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: CustomersPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '销售', order: 10 },
+    nav: { kind: 'menu', group: '销售', section: '基础资料', order: 30 },
   },
   {
     path: '/carriers',
@@ -142,81 +208,10 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: CarriersPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '销售', order: 20 },
+    nav: { kind: 'menu', group: '销售', section: '基础资料', order: 40 },
   },
-  {
-    path: '/sale',
-    title: '销售管理',
-    permission: PERMISSIONS.SALE_ORDER_VIEW,
-    component: SalePage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '销售', order: 30 },
-    aliases: ['/sales'],
-  },
-  {
-    path: '/returns',
-    title: '退货管理',
-    permission: PERMISSIONS.RETURN_ORDER_VIEW,
-    component: ReturnsPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '往来', order: 10 },
-  },
-  {
-    path: '/payments',
-    title: '应付/应收',
-    permission: PERMISSIONS.PAYMENT_VIEW,
-    component: PaymentsPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '往来', order: 20 },
-  },
-  {
-    path: '/products',
-    title: '商品管理',
-    permission: PERMISSIONS.PRODUCT_VIEW,
-    component: ProductPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '库存', order: 10 },
-  },
-  {
-    path: '/categories',
-    title: '商品分类',
-    permission: PERMISSIONS.CATEGORY_VIEW,
-    component: CategoryPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '库存', order: 20 },
-  },
-  {
-    path: '/warehouses',
-    title: '仓库管理',
-    permission: PERMISSIONS.WAREHOUSE_VIEW,
-    component: WarehousePage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '库存', order: 30 },
-  },
-  {
-    path: '/locations',
-    title: '库位管理',
-    permission: PERMISSIONS.LOCATION_VIEW,
-    component: LocationsPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '库存', order: 40 },
-  },
-  {
-    path: '/racks',
-    title: '货架管理',
-    permission: PERMISSIONS.RACK_VIEW,
-    component: RacksPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '库存', order: 50 },
-  },
+
+  // ── 库存 ──────────────────────────────────────────────
   {
     path: '/inventory',
     title: '库存管理',
@@ -224,9 +219,8 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: InventoryPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '库存', order: 70 },
+    nav: { kind: 'menu', group: '库存', section: '库存查询', order: 10 },
     aliases: ['/inventory/overview'],
-
   },
   {
     path: '/plastic-boxes',
@@ -235,7 +229,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: PlasticBoxesPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '库存', order: 75 },
+    nav: { kind: 'menu', group: '库存', section: '库存查询', order: 20 },
   },
   {
     path: '/stockcheck',
@@ -244,7 +238,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: StockcheckPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '库存', order: 80 },
+    nav: { kind: 'menu', group: '库存', section: '库存作业', order: 30 },
   },
   {
     path: '/transfer',
@@ -253,8 +247,28 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: TransferPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '库存', order: 90 },
+    nav: { kind: 'menu', group: '库存', section: '库存作业', order: 40 },
   },
+  {
+    path: '/products',
+    title: '商品管理',
+    permission: PERMISSIONS.PRODUCT_VIEW,
+    component: ProductPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '库存', section: '商品资料', order: 50 },
+  },
+  {
+    path: '/categories',
+    title: '商品分类',
+    permission: PERMISSIONS.CATEGORY_VIEW,
+    component: CategoryPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '库存', section: '商品资料', order: 60 },
+  },
+
+  // ── 仓储 ──────────────────────────────────────────────
   {
     path: '/picking-waves',
     title: '波次拣货',
@@ -262,7 +276,34 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: PickingWavesPage,
     keepAlive: true,
     tabIdentity: { kind: 'query-keys', keys: ['waveId', 'focus'] },
-    nav: { kind: 'menu', group: '仓库任务', order: 20 },
+    nav: { kind: 'menu', group: '仓储', section: '现场作业', order: 10 },
+  },
+  {
+    path: '/warehouses',
+    title: '仓库管理',
+    permission: PERMISSIONS.WAREHOUSE_VIEW,
+    component: WarehousePage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '仓储', section: '仓库结构', order: 20 },
+  },
+  {
+    path: '/locations',
+    title: '库位管理',
+    permission: PERMISSIONS.LOCATION_VIEW,
+    component: LocationsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '仓储', section: '仓库结构', order: 30 },
+  },
+  {
+    path: '/racks',
+    title: '货架管理',
+    permission: PERMISSIONS.RACK_VIEW,
+    component: RacksPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '仓储', section: '仓库结构', order: 40 },
   },
   {
     path: '/sorting-bins',
@@ -271,8 +312,50 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: SortingBinsPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '仓库任务', order: 30 },
+    nav: { kind: 'menu', group: '仓储', section: '仓库结构', order: 50 },
   },
+
+  // ── 财务 ──────────────────────────────────────────────
+  {
+    path: '/payments/payable',
+    title: '应付账款',
+    permission: PERMISSIONS.PAYMENT_VIEW,
+    component: PayablePage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '往来账款', order: 10 },
+    aliases: ['/payments'],
+  },
+  {
+    path: '/payments/receivable',
+    title: '应收账款',
+    permission: PERMISSIONS.PAYMENT_VIEW,
+    component: ReceivablePage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '往来账款', order: 20 },
+  },
+  {
+    path: '/reports/reconciliation/payable',
+    title: '供应商对账',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: ReconciliationPayablePage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '对账', order: 30 },
+    aliases: ['/reports/reconciliation'],
+  },
+  {
+    path: '/reports/reconciliation/receivable',
+    title: '客户对账',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: ReconciliationReceivablePage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '对账', order: 40 },
+  },
+
+  // ── 报表 ──────────────────────────────────────────────
   {
     path: '/reports',
     title: '报表中心',
@@ -280,25 +363,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: ReportsPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '数据', order: 10 },
-  },
-  {
-    path: '/reports/role-workbench',
-    title: '岗位工作台',
-    permission: PERMISSIONS.REPORT_VIEW,
-    component: RoleWorkbenchPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '数据', order: 20 },
-  },
-  {
-    path: '/reports/reconciliation',
-    title: '对账基础版',
-    permission: PERMISSIONS.REPORT_VIEW,
-    component: ReconciliationPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '数据', order: 40 },
+    nav: { kind: 'menu', group: '报表', section: '经营分析', order: 10 },
   },
   {
     path: '/reports/profit-analysis',
@@ -307,34 +372,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: ProfitAnalysisPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '数据', order: 50 },
-  },
-  {
-    path: '/reports/approvals',
-    title: '审批与提醒',
-    permission: PERMISSIONS.REPORT_VIEW,
-    component: ApprovalsPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '数据', order: 60 },
-  },
-  {
-    path: '/reports/wave-performance',
-    title: '波次效率',
-    permission: PERMISSIONS.REPORT_VIEW,
-    component: WavePerformancePage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '数据', order: 70 },
-  },
-  {
-    path: '/reports/pda-anomaly',
-    title: 'PDA 异常分析',
-    permission: PERMISSIONS.REPORT_VIEW,
-    component: PdaAnomalyPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '数据', order: 80 },
+    nav: { kind: 'menu', group: '报表', section: '经营分析', order: 20 },
   },
   {
     path: '/reports/warehouse-ops',
@@ -343,53 +381,46 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: WarehouseOpsPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '数据', order: 90 },
+    nav: { kind: 'menu', group: '报表', section: '仓储绩效', order: 30 },
   },
   {
-    path: '/oplogs',
-    title: '操作日志',
-    permission: PERMISSIONS.AUDIT_LOG_VIEW,
-    component: OplogsPage,
+    path: '/reports/wave-performance',
+    title: '波次效率',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: WavePerformancePage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '数据', order: 100 },
+    nav: { kind: 'menu', group: '报表', section: '仓储绩效', order: 40 },
   },
   {
-    path: '/users',
-    title: '用户管理',
-    permission: PERMISSIONS.USER_VIEW,
-    component: UsersPage,
+    path: '/reports/pda-anomaly',
+    title: 'PDA 异常分析',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: PdaAnomalyPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '系统', order: 10 },
+    nav: { kind: 'menu', group: '报表', section: '仓储绩效', order: 50 },
   },
   {
-    path: '/permissions',
-    title: '权限管理',
-    permission: PERMISSIONS.ROLE_VIEW,
-    component: PermissionsPage,
+    path: '/reports/role-workbench',
+    title: '岗位工作台',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: RoleWorkbenchPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '系统', order: 20 },
+    nav: { kind: 'menu', group: '报表', section: '岗位与审批', order: 60 },
   },
   {
-    path: '/settings',
-    title: '系统设置',
-    permission: PERMISSIONS.SETTINGS_VIEW,
-    component: SettingsPage,
+    path: '/reports/approvals',
+    title: '审批与提醒',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: ApprovalsPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '系统', order: 30 },
+    nav: { kind: 'menu', group: '报表', section: '岗位与审批', order: 70 },
   },
-  {
-    path: '/settings/barcode-print-query',
-    title: '条码打印查询',
-    permission: PERMISSIONS.PRINT_JOB_VIEW,
-    component: BarcodePrintQueryPage,
-    keepAlive: true,
-    tabIdentity: { kind: 'full-url' },
-    nav: { kind: 'menu', group: '系统', order: 40 },
-  },
+
+  // ── 打印 ──────────────────────────────────────────────
   {
     path: '/settings/print-templates',
     title: '打印模板',
@@ -397,7 +428,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: PrintTemplatesPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '系统', order: 50 },
+    nav: { kind: 'menu', group: '打印', order: 10 },
   },
   {
     path: '/settings/printers',
@@ -406,7 +437,36 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: PrintersPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '系统', order: 60 },
+    nav: { kind: 'menu', group: '打印', order: 20 },
+  },
+  {
+    path: '/settings/barcode-print-query',
+    title: '条码打印查询',
+    permission: PERMISSIONS.PRINT_JOB_VIEW,
+    component: BarcodePrintQueryPage,
+    keepAlive: true,
+    tabIdentity: { kind: 'full-url' },
+    nav: { kind: 'menu', group: '打印', order: 30 },
+  },
+
+  // ── 系统 ──────────────────────────────────────────────
+  {
+    path: '/users',
+    title: '用户管理',
+    permission: PERMISSIONS.USER_VIEW,
+    component: UsersPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '系统', section: '用户与权限', order: 10 },
+  },
+  {
+    path: '/permissions',
+    title: '权限管理',
+    permission: PERMISSIONS.ROLE_VIEW,
+    component: PermissionsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '系统', section: '用户与权限', order: 20 },
   },
   {
     path: '/settings/pda-devices',
@@ -415,7 +475,25 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: PdaDevicesPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '系统', order: 70 },
+    nav: { kind: 'menu', group: '系统', section: '设备与设置', order: 30 },
+  },
+  {
+    path: '/settings',
+    title: '系统设置',
+    permission: PERMISSIONS.SETTINGS_VIEW,
+    component: SettingsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '系统', section: '设备与设置', order: 40 },
+  },
+  {
+    path: '/oplogs',
+    title: '操作日志',
+    permission: PERMISSIONS.AUDIT_LOG_VIEW,
+    component: OplogsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '系统', section: '审计', order: 50 },
   },
 ]
 
@@ -463,7 +541,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: PurchaseReturnFormPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    listPath: '/returns',
+    listPath: '/returns/purchase',
   },
   {
     pattern: /^\/returns\/sale\/(new|\d+)$/,
@@ -472,7 +550,7 @@ export const routePatterns: RoutePatternEntry[] = [
     component: SaleReturnFormPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    listPath: '/returns',
+    listPath: '/returns/sale',
   },
   {
     pattern: /^\/inbound-tasks\/new$/,
@@ -555,7 +633,8 @@ export const PATH_PERMS: Record<string, PermCode> = routeRegistry.reduce<Record<
 
 export function buildTopNavSections(): TopNavSection[] {
   const links: Array<TopNavSection & { order: number }> = []
-  const groups = new Map<string, { order: number; children: Array<NavChildItem & { order: number }> }>()
+  /** group → section 标题（'' 表示无标题段）→ 子项 */
+  const groups = new Map<string, Map<string, Array<NavChildItem & { order: number }>>>()
 
   for (const route of routeRegistry) {
     if (!route.nav) continue
@@ -571,26 +650,44 @@ export function buildTopNavSections(): TopNavSection[] {
       continue
     }
 
-    const existing = groups.get(route.nav.group) ?? { order: route.nav.order, children: [] }
-    existing.order = Math.min(existing.order, route.nav.order)
-    existing.children.push({
+    const sectionsOfGroup = groups.get(route.nav.group) ?? new Map()
+    const sectionKey = route.nav.section ?? ''
+    const items = sectionsOfGroup.get(sectionKey) ?? []
+    items.push({
       label: route.nav.label ?? route.title,
       path: route.path,
       perm: route.permission,
       iconKey: route.nav.iconKey,
       order: route.nav.order,
     })
-    groups.set(route.nav.group, existing)
+    sectionsOfGroup.set(sectionKey, items)
+    groups.set(route.nav.group, sectionsOfGroup)
   }
 
-  const menus: Array<TopNavSection & { order: number }> = Array.from(groups.entries()).map(([label, group]) => ({
-    kind: 'menu',
-    label,
-    children: group.children
-      .sort((a, b) => a.order - b.order)
-      .map(({ order: _order, ...child }) => child),
-    order: group.order,
-  }))
+  const menus: Array<TopNavSection & { order: number }> = Array.from(groups.entries()).map(
+    ([label, sectionsOfGroup]) => {
+      const sections: NavMenuSection[] = Array.from(sectionsOfGroup.entries())
+        .map(([sectionLabel, items]) => {
+          const sorted = [...items].sort((a, b) => a.order - b.order)
+          return {
+            label: sectionLabel || undefined,
+            items: sorted.map(({ order: _order, ...item }) => item),
+            // 段序取段内最小 order：同一 group 的 order 连续递增，故与书写顺序一致
+            order: sorted[0].order,
+          }
+        })
+        .sort((a, b) => a.order - b.order)
+        .map(({ order: _order, ...section }) => section)
+
+      return {
+        kind: 'menu',
+        label,
+        sections,
+        children: sections.flatMap((section) => section.items),
+        order: NAV_GROUP_ORDER[label] ?? UNREGISTERED_GROUP_ORDER,
+      }
+    }
+  )
 
   return [...links, ...menus]
     .sort((a, b) => a.order - b.order)

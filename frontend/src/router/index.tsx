@@ -165,6 +165,9 @@ export default function AppRouter() {
           {/* ── ERP 已登录路由 ── */}
           <Route element={<ErpProtectedRoute />}>
             <Route path="/sales" element={<Navigate to="/sale" replace />} />
+            {/* 应付/应收、供应商/客户对账原本各是一个页面的两个 tab，拆开后旧链接与旧工作区标签仍要能打开 */}
+            <Route path="/payments" element={<Navigate to="/payments/payable" replace />} />
+            <Route path="/reports/reconciliation" element={<Navigate to="/reports/reconciliation/payable" replace />} />
             <Route path="/*" element={<AppLayout />} />
           </Route>
 

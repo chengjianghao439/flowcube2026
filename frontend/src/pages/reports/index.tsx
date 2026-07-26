@@ -93,11 +93,19 @@ export default function ReportsPage() {
 
     const management: HubCard[] = [
       {
-        title: '对账基础版',
-        description: '默认优先展示未结清和逾期记录，适合作为客户 / 供应商对账与原单回跳的主入口。',
+        title: '供应商对账',
+        description: '按时间范围核对采购应付账单，默认优先展示未结清和逾期记录，可回跳采购单与收货单。',
         hint: '适合先核对余额、状态，再回到原始单据',
-        path: '/reports/reconciliation',
-        tabTitle: '对账基础版',
+        path: '/reports/reconciliation/payable',
+        tabTitle: '供应商对账',
+        tone: 'border-cyan-200 bg-cyan-50',
+      },
+      {
+        title: '客户对账',
+        description: '按时间范围核对销售应收账单，默认优先展示未结清和逾期记录，可回跳销售单。',
+        hint: '适合先核对余额、状态，再回到原始单据',
+        path: '/reports/reconciliation/receivable',
+        tabTitle: '客户对账',
         tone: 'border-cyan-200 bg-cyan-50',
       },
       {
@@ -184,8 +192,11 @@ export default function ReportsPage() {
             <Button variant="outline" onClick={() => openPage('/reports/role-workbench', '岗位工作台')}>
               今日待办
             </Button>
-            <Button variant="outline" onClick={() => openPage('/reports/reconciliation', '对账基础版')}>
-              对账核对
+            <Button variant="outline" onClick={() => openPage('/reports/reconciliation/payable', '供应商对账')}>
+              供应商对账
+            </Button>
+            <Button variant="outline" onClick={() => openPage('/reports/reconciliation/receivable', '客户对账')}>
+              客户对账
             </Button>
           </div>
         }

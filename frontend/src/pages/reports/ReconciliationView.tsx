@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
@@ -16,9 +16,46 @@ import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getReconciliationApi, type ReconciliationRecord } from '@/api/reports'
+import { usePaymentActions } from '@/components/shared/usePaymentActions'
+import type { PaymentRecord } from '@/api/payments'
+import { SETTLEMENT_TYPE } from '@/generated/status'
 import type { TableColumn } from '@/types'
 
-type StatementType = 1 | 2
+export type StatementType = 1 | 2
+
+/** 对账页只管月结往来方；现结走账款页，两边合起来才是全量 */
+const MONTHLY_SCOPE = String(SETTLEMENT_TYPE.MONTHLY)
+
+/**
+ * 供应商对账与客户对账读同一张 `payment_records`、走同一个接口，页面结构完全一致，
+ * 差异只有文案和跳转目标。因此只写一份实现，由 reconciliation-payable.tsx /
+ * reconciliation-receivable.tsx 传 type 渲染成两个独立页面。
+ */
+const COPY = {
+  1: {
+    title: '供应商对账',
+    description: '月结供应商的应付账单：按账期核对、登记付款、导出 Excel，可回跳采购单与收货单。现结供应商见「应付账款」。',
+    party: '供应商',
+    paidCol: '已付',
+    paidCard: '已付金额',
+    balanceCard: '待付余额',
+    payPath: '/payments/payable',
+    payTitle: '应付账款',
+    statusOptions: [['1', '未付'], ['2', '部分付'], ['3', '已付清']] as const,
+  },
+  2: {
+    title: '客户对账',
+    description: '月结客户的应收账单：按账期核对、登记收款、导出 Excel，可回跳销售单。现结客户见「应收账款」。',
+    party: '客户',
+    paidCol: '已收',
+    paidCard: '已收金额',
+    balanceCard: '待收余额',
+    payPath: '/payments/receivable',
+    payTitle: '应收账款',
+    statusOptions: [['1', '未收'], ['2', '部分收'], ['3', '已收清']] as const,
+  },
+} as const
+
 function SummaryCard({ label, value, hint, tone }: { label: string; value: number | string; hint: string; tone?: 'blue' | 'amber' | 'emerald' | 'rose' }) {
   const toneClass = tone === 'amber'
     ? 'border-amber-200 bg-amber-50'
@@ -42,10 +79,12 @@ function isOverdue(record: ReconciliationRecord) {
   return record.dueDate < new Date().toISOString().slice(0, 10)
 }
 
-export default function ReconciliationPage() {
+export default function ReconciliationView({ type }: { type: StatementType }) {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
-  const [type, setType] = useState<StatementType>(1)
+  const copy = COPY[type]
+  // 月结往来方的收付款也在这里办——账款页已按即时结算过滤，不再覆盖这批账
+  const { renderActions, dialogs } = usePaymentActions(type)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const recent30d = getRelativeDateRange(30)
@@ -64,6 +103,7 @@ export default function ReconciliationPage() {
       startDate: applied.startDate || undefined,
       endDate: applied.endDate || undefined,
       status: applied.status || undefined,
+      settlementTypes: MONTHLY_SCOPE,
     }),
   })
 
@@ -119,7 +159,7 @@ export default function ReconciliationPage() {
 
   const columns: TableColumn<ReconciliationRecord>[] = [
     { key: 'orderNo', title: '关联单号', width: 170, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'partyName', title: type === 1 ? '供应商' : '客户', width: 160 },
+    { key: 'partyName', title: copy.party, width: 160 },
     { key: 'sourceOrderNo', title: '源单号', width: 170, render: (v, row) => (
       <div className="space-y-0.5">
         <div className="text-doc-code-muted">{String(v)}</div>
@@ -127,30 +167,35 @@ export default function ReconciliationPage() {
       </div>
     )},
     { key: 'totalAmount', title: '总金额', width: 110, render: v => <span className="tabular-nums font-medium">¥{Number(v).toFixed(2)}</span> },
-    { key: 'paidAmount', title: type === 1 ? '已付' : '已收', width: 110, render: v => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
+    { key: 'paidAmount', title: copy.paidCol, width: 110, render: v => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
     { key: 'balance', title: '余额', width: 110, render: v => <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
     { key: 'status', title: '状态', width: 120, render: (v, row) => {
       const record = row as ReconciliationRecord
       const overdue = isOverdue(record)
       return (
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant={Number(v) === 3 ? 'outline' : Number(v) === 2 ? 'secondary' : 'default'}>{record.statusName}</Badge>
-          {overdue && <Badge variant="destructive" className="rounded-full px-2">逾期</Badge>}
+          <SoftStatusLabel
+            label={record.statusName}
+            tone={Number(v) === 3 ? 'success' : Number(v) === 2 ? 'active' : 'draft'}
+          />
+          {overdue && <SoftStatusLabel label="逾期" tone="danger" />}
         </div>
       )
     } },
     { key: 'dueDate', title: '到期日', width: 120, render: v => v ? String(v) : <span className="text-muted-foreground">-</span> },
     { key: 'createdAt', title: '创建时间', width: 160, render: v => formatDisplayDateTime(String(v)) },
-    { key: 'id', title: '操作', width: 120, render: (_, row) => {
+    { key: 'id', title: '操作', width: 220, render: (_, row) => {
       const r = row as ReconciliationRecord
       return (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => openPath(r.sourcePath, `原单 ${r.sourceOrderNo}`)} disabled={!r.sourcePath}>
-            查看原单
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 月结往来方的收付款只能在这里办，账款页已按即时结算过滤掉了这批账 */}
+          {renderActions(r as unknown as PaymentRecord)}
+          <Button size="sm" variant="ghost" onClick={() => openPath(r.sourcePath, `原单 ${r.sourceOrderNo}`)} disabled={!r.sourcePath}>
+            原单
           </Button>
           {r.receiptPath && (
             <Button size="sm" variant="ghost" onClick={() => openPath(r.receiptPath, `收货单 ${r.receiptTaskNo}`)}>
-              查看收货单
+              收货单
             </Button>
           )}
         </div>
@@ -161,8 +206,8 @@ export default function ReconciliationPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="对账基础版"
-        description="客户对账单与供应商对账单统一查看，支持按时间范围筛选、导出 Excel，并直接回跳原始单据。"
+        title={copy.title}
+        description={copy.description}
         actions={(
           <div className="flex flex-wrap gap-2">
             <Button
@@ -177,7 +222,9 @@ export default function ReconciliationPage() {
             >
               导出 Excel
             </Button>
-            <Button variant="outline" onClick={() => openPath('/payments', '应付/应收账款')}>打开账款中心</Button>
+            <Button variant="outline" onClick={() => openPath(copy.payPath, copy.payTitle)}>
+              打开{copy.payTitle}
+            </Button>
           </div>
         )}
       />
@@ -185,31 +232,8 @@ export default function ReconciliationPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <SummaryCard label="总单数" value={summary?.totalRecords ?? 0} hint="当前筛选范围内" tone="blue" />
         <SummaryCard label="总金额" value={`¥${(summary?.totalAmount ?? 0).toFixed(2)}`} hint="按账单总额汇总" tone="amber" />
-        <SummaryCard label="已付/已收" value={`¥${(summary?.paidAmount ?? 0).toFixed(2)}`} hint="已结清金额" tone="emerald" />
-        <SummaryCard label="待回收余额" value={`¥${(summary?.balance ?? 0).toFixed(2)}`} hint={`逾期 ${summary?.overdueCount ?? 0} 单`} tone="rose" />
-      </div>
-
-      <div className="flex gap-1 border-b border-border">
-        {([
-          { key: 1 as const, label: '供应商对账单' },
-          { key: 2 as const, label: '客户对账单' },
-        ]).map(item => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => {
-              setType(item.key)
-              setApplied({ keyword: '', startDate: recent30d.startDate, endDate: recent30d.endDate, status: '' })
-              setSearch('')
-              setStartDate(recent30d.startDate)
-              setEndDate(recent30d.endDate)
-              setStatusFilter('')
-            }}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${type === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {item.label}
-          </button>
-        ))}
+        <SummaryCard label={copy.paidCard} value={`¥${(summary?.paidAmount ?? 0).toFixed(2)}`} hint="已结清金额" tone="emerald" />
+        <SummaryCard label={copy.balanceCard} value={`¥${(summary?.balance ?? 0).toFixed(2)}`} hint={`逾期 ${summary?.overdueCount ?? 0} 单`} tone="rose" />
       </div>
 
       <FilterCard>
@@ -225,7 +249,7 @@ export default function ReconciliationPage() {
           </Button>
         </div>
         <Input
-          placeholder="搜索单号 / 往来方"
+          placeholder={`搜索单号 / ${copy.party}`}
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="h-9 w-60"
@@ -240,9 +264,9 @@ export default function ReconciliationPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">全部状态</SelectItem>
-            <SelectItem value="1">未付</SelectItem>
-            <SelectItem value="2">部分付</SelectItem>
-            <SelectItem value="3">已付清</SelectItem>
+            {copy.statusOptions.map(([value, label]) => (
+              <SelectItem key={value} value={value}>{label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Button size="sm" onClick={applyFilters}>查询</Button>
@@ -268,6 +292,8 @@ export default function ReconciliationPage() {
           emptyText="暂无对账数据"
         />
       )}
+
+      {dialogs}
     </div>
   )
 }

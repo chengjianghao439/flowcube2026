@@ -47,7 +47,8 @@ export default function ApprovalsPage() {
         actions={(
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => openPath('/reports/role-workbench', '岗位工作台')}>打开岗位工作台</Button>
-            <Button variant="outline" onClick={() => openPath('/payments', '应付/应收账款')}>打开账款中心</Button>
+            <Button variant="outline" onClick={() => openPath('/payments/payable', '应付账款')}>打开应付账款</Button>
+            <Button variant="outline" onClick={() => openPath('/payments/receivable', '应收账款')}>打开应收账款</Button>
           </div>
         )}
       />

@@ -146,8 +146,19 @@ function buildDateFilter(column, startDate, endDate) {
   }
 }
 
-function paymentStatusName(status) {
-  return { 1: '未付', 2: '部分付', 3: '已付清' }[Number(status)] || '未知'
+/**
+ * 状态文案按应付/应收分开：应付说「付」，应收说「收」。
+ * 与 payments.service.js 的 mapPaymentRecord 保持同一套口径——两处都会喂给前端展示，
+ * 不一致会让同一条记录在对账页和账款页显示不同的状态名。
+ */
+const PAYMENT_STATUS_NAME = {
+  1: { 1: '未付', 2: '部分付', 3: '已付清' },
+  2: { 1: '未收', 2: '部分收', 3: '已收清' },
+}
+
+function paymentStatusName(status, type = 1) {
+  const table = PAYMENT_STATUS_NAME[Number(type)] || PAYMENT_STATUS_NAME[1]
+  return table[Number(status)] || '未知'
 }
 
 function paymentTypeName(type) {

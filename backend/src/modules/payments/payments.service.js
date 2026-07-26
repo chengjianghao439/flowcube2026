@@ -2,6 +2,13 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { getRequestId } = require('../../utils/requestContext')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
+const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
+
+/** 状态文案按应付/应收分开：应付说「付」，应收说「收」，前端两个页面直接用不必再改写 */
+const STATUS_NAME = {
+  1: { 1: '未付', 2: '部分付', 3: '已付清' },
+  2: { 1: '未收', 2: '部分收', 3: '已收清' },
+}
 
 function mapPaymentRecord(row) {
   return {
@@ -14,7 +21,7 @@ function mapPaymentRecord(row) {
     paidAmount: Number(row.paid_amount),
     balance: Number(row.balance),
     status: row.status,
-    statusName: { 1: '未付', 2: '部分付', 3: '已付清' }[row.status],
+    statusName: (STATUS_NAME[row.type] || STATUS_NAME[1])[row.status],
     confirmStatus: row.confirm_status != null ? Number(row.confirm_status) : 1,
     confirmedByName: row.confirmed_by_name || null,
     confirmedAt: row.confirmed_at || null,
@@ -24,7 +31,20 @@ function mapPaymentRecord(row) {
   }
 }
 
-async function findAll({ page = 1, pageSize = 20, type = '', status = '' } = {}) {
+/** 把 '1,3,4' / ['1','3'] / 1 统一成合法的结算方式数组；无有效值返回 null（= 不过滤） */
+function normalizeSettlementList(input) {
+  if (input == null || input === '') return null
+  const raw = Array.isArray(input) ? input : String(input).split(',')
+  const list = raw.map(Number).filter(isValidSettlementType)
+  return list.length ? list : null
+}
+
+/**
+ * @param settlementTypes 只看这些结算方式的账款（回溯往来方主数据判定）。
+ *        账款页传即时结算三种，对账页传月结，不传则不限。
+ * @param keyword         按单号或往来方名称模糊查
+ */
+async function findAll({ page = 1, pageSize = 20, type = '', status = '', settlementTypes = null, keyword = '' } = {}) {
   const normalizedPage = Number(page) || 1
   const normalizedPageSize = Number(pageSize) || 20
   const offset = (normalizedPage - 1) * normalizedPageSize
@@ -32,25 +52,38 @@ async function findAll({ page = 1, pageSize = 20, type = '', status = '' } = {})
   const params = []
 
   if (type) {
-    conds.push('type=?')
+    conds.push('pr.type=?')
     params.push(Number(type))
   }
   if (status) {
-    conds.push('status=?')
+    conds.push('pr.status=?')
     params.push(Number(status))
+  }
+  const trimmedKeyword = String(keyword || '').trim()
+  if (trimmedKeyword) {
+    conds.push('(pr.order_no LIKE ? OR pr.party_name LIKE ?)')
+    params.push(`%${trimmedKeyword}%`, `%${trimmedKeyword}%`)
+  }
+
+  // 读账款自带的结算方式快照，不回溯往来方主数据——改客户类型不影响历史账款归属。
+  // query 传进来可能是 '1,3,4' 或数组，统一归一并丢掉非法值。
+  const scopeList = normalizeSettlementList(settlementTypes)
+  if (scopeList) {
+    conds.push(`${SETTLEMENT_SCOPE_COLUMN} IN (${scopeList.map(() => '?').join(',')})`)
+    params.push(...scopeList)
   }
 
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
   const [rows] = await pool.query(
-    `SELECT * FROM payment_records ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT pr.* FROM payment_records pr ${where} ORDER BY pr.created_at DESC LIMIT ? OFFSET ?`,
     [...params, normalizedPageSize, offset],
   )
-  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM payment_records ${where}`, params)
+  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM payment_records pr ${where}`, params)
   const [[summary]] = await pool.query(
-    `SELECT COALESCE(SUM(total_amount),0) AS totalAmount,
-            COALESCE(SUM(paid_amount),0) AS paidAmount,
-            COALESCE(SUM(balance),0) AS balance
-     FROM payment_records ${where}`,
+    `SELECT COALESCE(SUM(pr.total_amount),0) AS totalAmount,
+            COALESCE(SUM(pr.paid_amount),0) AS paidAmount,
+            COALESCE(SUM(pr.balance),0) AS balance
+     FROM payment_records pr ${where}`,
     params,
   )
 

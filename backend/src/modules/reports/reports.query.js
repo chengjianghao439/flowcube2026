@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const { buildDateFilter } = require('./reports.helpers')
+const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
 const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
 const logger = require('../../utils/logger')
 
@@ -580,11 +581,19 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
   }
 }
 
-async function fetchReconciliationRows({ type = 1, startDate = null, endDate = null, keyword = '', status = null, page = 1, pageSize = 20 } = {}) {
+async function fetchReconciliationRows({ type = 1, startDate = null, endDate = null, keyword = '', status = null, settlementTypes = null, page = 1, pageSize = 20 } = {}) {
   const typeNum = Number(type) === 2 ? 2 : 1
   const dateFilter = buildDateFilter('pr.created_at', startDate, endDate)
   const conds = ['pr.type = ?']
   const params = [typeNum]
+  // 对账页只看月结账款。读的是账款自带的结算方式快照（迁移 136），不回溯往来方主数据——
+  // 改客户类型只影响他之后新产生的账款，历史账款不搬家。
+  const scopeList = (() => {
+    if (settlementTypes == null || settlementTypes === '') return null
+    const raw = Array.isArray(settlementTypes) ? settlementTypes : String(settlementTypes).split(',')
+    const list = raw.map(Number).filter(isValidSettlementType)
+    return list.length ? list : null
+  })()
   if (status) {
     conds.push('pr.status = ?')
     params.push(Number(status))
@@ -597,6 +606,10 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
   if (dateFilter.sql) {
     conds.push(dateFilter.sql.replace(/^ AND /, '').trim())
     params.push(...dateFilter.params)
+  }
+  if (scopeList) {
+    conds.push(`${SETTLEMENT_SCOPE_COLUMN} IN (${scopeList.map(() => '?').join(',')})`)
+    params.push(...scopeList)
   }
   const where = `WHERE ${conds.join(' AND ')}`
   const pageNum = Math.max(1, Number(page) || 1)
@@ -629,11 +642,14 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
        pr.paid_amount,
        pr.balance,
        pr.status,
+       -- 对账页也能登记收付款，需要 confirm_status 判断应付是否还卡在财务确认闸门上
+       pr.confirm_status,
        pr.due_date,
        pr.remark,
        pr.created_at,
        CASE pr.type WHEN 1 THEN '供应商对账单' ELSE '客户对账单' END AS statement_name,
-       CASE pr.status WHEN 1 THEN '未付' WHEN 2 THEN '部分付' WHEN 3 THEN '已付清' ELSE '未知' END AS status_name,
+       -- status_name 不在 SQL 里拼：应付说「付」、应收说「收」，统一由
+       -- reports.helpers.js 的 paymentStatusName(status, type) 产出，避免两处文案漂移
        CASE
          WHEN pr.type = 1 AND po.id IS NOT NULL THEN po.id
          WHEN pr.type = 2 AND so.id IS NOT NULL THEN so.id

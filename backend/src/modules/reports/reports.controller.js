@@ -8,6 +8,8 @@ const parseReconciliationQuery = (q) => ({
   endDate: q.endDate || null,
   keyword: q.keyword || '',
   status: q.status || null,
+  // 对账页固定只看月结往来方；非法值会在 fetchReconciliationRows 里被丢掉
+  settlementTypes: q.settlementTypes || null,
 })
 
 const purchase = async(req,res,next)=>{ try{return successResponse(res,await svc.purchaseStats(parseQuery(req.query)),'查询成功')}catch(e){next(e)} }

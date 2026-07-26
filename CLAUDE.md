@@ -1,352 +1,446 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件是 Claude Code（claude.ai/code）在本仓库工作的**唯一权威说明书**。内容以当前代码、数据库结构与配置为准，最近一次全量核对：2026-07-26。
 
-## Project overview
+> 仓库里还有一份 `AGENTS.md`（已被 `.gitignore` 忽略），是本文件的**旧快照**（模块数、状态机、PDA 描述均已过期）。**不要把 AGENTS.md 当事实来源。**
+> `docs/01-系统技术与架构总规范.md` 是设计规范文档，与本文件冲突时以**代码**为准，其次以本文件为准。
 
-极序 Flow is an ERP/WMS system with three client surfaces: browser (React SPA), Windows desktop (Electron shell), and PDA (Android Capacitor app). Deployed via Docker Compose on Alibaba Cloud (`47.93.228.251`).
+---
+
+## 1. 项目概述
+
+极序 Flow（flowcube）是单租户 ERP/WMS 系统，三个客户端形态共用一套后端与一套前端代码：
+
+| 形态 | 载体 | 用途 |
+|------|------|------|
+| ERP 桌面端 | Electron 壳 + React SPA | 办公端：建单、审核、报表、打印机管理 |
+| PDA | Android Capacitor APK（同一份 React 代码，`/pda/*` 路由树） | 仓库现场：收货、上架、拣货、分拣、复核、打包、出库、调拨、退货 |
+| 浏览器 | 同一份前端产物由 Nginx 提供 | 应急/临时访问 |
+
+**核心设计取向**：仓库端只执行、不决策（谁拣什么、放哪里由系统给；PDA 不提供"自选/判断"入口）；所有库存与账款的事实变化都发生在后端事务里，前端只展示。
+
+---
+
+## 2. 技术栈
+
+- **后端**：Node ≥20，Express 4.21，CommonJS，`mysql2/promise` 连接池（**无 ORM，全部手写 SQL**），zod 校验，jsonwebtoken，bcryptjs，helmet，cors，express-rate-limit，multer，exceljs。
+- **前端**：React 18.3 + TypeScript 5.7 + Vite 6 + Tailwind 3.4 + Radix UI(shadcn 风格) + React Query 5 + Zustand 5 + axios + react-router-dom 6（**HashRouter**）+ recharts。
+- **桌面端**：Electron 33 + electron-builder 25（NSIS 安装包，仅 Windows x64 走 CI）。
+- **PDA**：Capacitor 8（CLI 7），Android `minSdk 22 / target 35 / compileSdk 35`，`@vitejs/plugin-legacy` 兼容 Android ≥5，构建目标 `es2015`。
+- **数据库**：MySQL 8.0，`utf8mb4_unicode_ci`，连接池 `timezone=+08:00`。
+- **部署**：Docker Compose（mysql / backend / frontend-nginx）+ GitHub Actions。
+
+---
+
+## 3. 目录地图
 
 ```
 flowcube/
-├── backend/          Express API (CommonJS, Node 20+)
-├── frontend/         React 18 + Vite + Tailwind + shadcn/ui
-├── desktop/          Electron shell (wraps frontend dist)
-├── scripts/          CI/release utilities
-├── docs/             Architecture spec, deploy guide, release notes
-├── tests/            Smoke & integration tests
-├── docker-compose.yml
-└── Dockerfile.backend / Dockerfile.frontend
+├── backend/
+│   ├── index.js                    进程入口（dotenv → testConnection → listen → scheduler）
+│   ├── scripts/                    migrate.js / bootstrap-admin.js / resync-inventory-stock.js / smoke-reports.js
+│   ├── apk/version.json            PDA 版本清单（APK 本体不入库）
+│   ├── downloads/                  ⚠️ 已废弃的旧桌面发布目录，勿使用
+│   └── src/
+│       ├── app.js                  中间件装配 + 43 个模块路由注册 + 静态目录 + 404 + errorHandler
+│       ├── scheduler.js            仅启动 operation_requests TTL 清理
+│       ├── config/                 db.js（连接池）、env.js（环境变量校验，生产缺项直接拒启动）
+│       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / permissions
+│       ├── database/               132 个 .sql 迁移 + migrate.js
+│       ├── engine/                 containerEngine / inventoryEngine / reservationEngine ← 库存唯一合法入口
+│       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger
+│       ├── modules/                43 个业务模块，统一 routes → controller → service
+│       └── utils/                  AppError / response / statusTransition / operationRequest / warehouseScope / codeGenerator …
+├── frontend/
+│   ├── src/{api,components,config,constants,flows,generated,hooks,layouts,lib,pages,router,store,types,utils}
+│   ├── android/                    Capacitor 原生工程（cap sync 生成，手改需谨慎）
+│   ├── dist/                       ⚠️ 构建产物，勿手改
+│   └── vite.config.ts              纯 Web 构建被显式禁止
+├── desktop/  main.js / preload.js / lib/{localPrint.js,updateCheck.js,print-zpl-raw.ps1}；release/ 为产物
+├── scripts/  发版、门禁、部署、备份、监控脚本
+├── tests/    smoke + 集成 + 纯函数单测（CI 门禁跑这些）
+├── docker/   nginx.conf 等
+├── deploy/   production.example.json（production*.json 已 gitignore）
+└── docs/     架构规范、部署、发布说明、release-notes
 ```
 
-## Commands
+**不要随意改动**：`frontend/dist/`、`desktop/release/`、`frontend/android/` 的生成物、`backend/downloads/`、任何 `.env`、`deploy/production*.json`。
+
+---
+
+## 4. 本地开发命令
 
 ```bash
-# Root (monorepo-level)
-npm run release:prod          # git push main → CI deploys browser + tags desktop
-npm run release:gate          # run release-gate.sh checks
-npm run generate:status       # regenerate status constants from DB
-npm run smoke:pages           # page-level smoke test against prod
-
-# Backend (cd backend)
-npm run dev                   # nodemon, auto-restart
-npm run migrate               # run database migrations explicitly
-npm run bootstrap:admin       # create initial admin user
-npm start                     # production start
-
-# Frontend (cd frontend)
-npm run dev                   # Vite dev (Electron target, port 5173)
-npm run dev:pda               # Vite dev (PDA/Capacitor target)
-npm run build                 # production build (Electron target)
-npm run build:pda             # production build (PDA target)
-npm run pda:sync              # build + cap sync android
-
-# Desktop (cd desktop)
-npm run dist                  # full Windows installer build (run from CI only)
-npm start                     # launch Electron against built frontend
+# 根目录（发版与测试）
+npm run release:prod            # push main + 打 v* tag（要求在 main 且工作区干净）
+npm run release:gate            # 服务器端发布门禁
+npm run generate:status         # 由后端常量生成 frontend/src/generated/status.ts
+npm run test:label              # 标签几何 / ZPL 纯函数单测
+npm run test:print              # 打印调度策略 / 状态纯函数单测
+npm run smoke:mainline          # 主链路冒烟（需 MySQL）
+npm run smoke:concurrency-guards
+npm run smoke:sale-adjustment
+npm run smoke:p0-regression
+npm run smoke:p1-regression
+npm run test:integration        # 库存一致性集成测试（独立测试库）
 ```
 
-## 本地"开发者模式"（浏览器预览调试）
-
-当用户说"开启/启动开发者模式""给我网址"时，指的是用 Browser 面板的 `preview_start` 工具（不是 Bash）按 `.claude/launch.json` 里的配置名启动本地开发服务器：
-
-- `backend-dev`（端口 3000）
-- `frontend-dev`（端口 5173，Electron target；`frontend-pda-dev` 是 PDA target，同端口）
-
-两个都起完后，把地址 `http://localhost:5173` 告诉用户，并用下面这个本地测试账号登录：
-
-```
-账号：admin
-密码：admin123
+```bash
+# 后端
+npm --prefix backend run dev            # nodemon
+npm --prefix backend run migrate        # 迁移（部署前必须显式执行，启动不会自动跑）
+npm --prefix backend run lint
+npm --prefix backend run bootstrap:admin
+npm --prefix backend run resync:inventory-stock   # 由容器重算 inventory_stock 缓存
 ```
 
-这是本机 MySQL（`backend/.env` 里 `DB_HOST=127.0.0.1`，真实数据库、非 mock）里已经存在的管理员测试账号，专门用于本地功能验证，不是生产账号。
-
-后端重启后 JWT 会失效，之前登录过的页面会需要重新登录；前端热更新（HMR）一般不需要重新登录。
-
-**重要**：验证完成后不要主动 `preview_stop` 停掉这两个服务——用户可能在自己的真实浏览器里也开着 `localhost:5173` 用着，把开发服务器停掉会导致用户那边"开发者模式掉了"。
-
-## Architecture
-
-### Backend: Express with strict layering
-
-Every module follows `routes → controller → service → db`. **Never cross layers.**
-
-```
-POST /api/inventory/inbound
-  → routes: JWT + Zod validation + requirePermission → ctrl.inbound
-  → controller: extract req.body → service.inbound(params) → res.json(result)
-  → service: business rules → SQL → return data
+```bash
+# 前端
+npm --prefix frontend run dev           # Electron target，端口 5173
+npm --prefix frontend run dev:pda       # PDA target，端口 5173
+npm --prefix frontend run build         # VITE_ELECTRON=1
+npm --prefix frontend run build:pda     # VITE_CAPACITOR=1
+npm --prefix frontend run lint
 ```
 
-- **routes**: register paths, attach middleware, delegate to controller. No business logic.
-- **controller**: parse params, call service, return `successResponse`/`errorResponse`. No SQL.
-- **service**: all DB operations and business logic. No HTTP objects.
-- All errors go to `next(err)`, caught by `middleware/errorHandler.js` which handles `AppError`, MySQL errors, Zod errors, and unknowns.
-- **No ORM** — raw SQL via `mysql2/promise` connection pool. Database migrations are sequential `.sql` files in `backend/src/database/`.
-- Auth: JWT (Bearer token), enforced by `middleware/auth.js`. Permissions are string codes like `"inventory.view"` defined in `backend/src/constants/permissions.js`. `requirePermission` loads role permissions on first check.
-
-#### Backend modules (43 total, registered in `backend/src/app.js`)
-
-| Module | Route | Purpose |
-|--------|-------|---------|
-| auth | `/api/auth` | Login, token refresh, password change |
-| users | `/api/users` | User CRUD |
-| roles | `/api/roles` | Role & permission management |
-| warehouses | `/api/warehouses` | Warehouse CRUD |
-| locations | `/api/locations` | Storage location CRUD |
-| racks | `/api/racks` | Rack CRUD + label printing |
-| suppliers | `/api/suppliers` | Supplier CRUD |
-| customers | `/api/customers` | Customer CRUD |
-| carriers | `/api/carriers` | Carrier CRUD |
-| products | `/api/products` | Product CRUD + label printing |
-| categories | `/api/categories` | Product category CRUD |
-| inventory | `/api/inventory` | Stock query, container ops, trace |
-| containers | `/api/containers` | Container split/move |
-| plastic-boxes | `/api/plastic-boxes` | Reusable tote/box container query (subset of `inventory_containers`, barcode prefix `B`) |
-| purchase | `/api/purchase` | Purchase orders (CRUD + confirm/cancel) |
-| inbound-tasks | `/api/inbound-tasks` | Receiving orders (receive/putaway, auto-settles on putaway completion) |
-| sale | `/api/sale` | Sales orders (CRUD + reserve/release/ship/cancel) |
-| warehouse-tasks | `/api/warehouse-tasks` | Outbound task lifecycle (pick/sort/check/pack/ship) |
-| picking-waves | `/api/picking-waves` | Multi-task pick wave management |
-| sorting-bins | `/api/sorting-bins` | PUT-wall bin management |
-| packages | `/api/packages` | Box/packaging CRUD + label printing |
-| scan-logs | `/api/scan-logs` | PDA barcode scan records |
-| stockcheck | `/api/stockcheck` | Stock counting |
-| transfer | `/api/transfer` | Inter-warehouse transfers (two-phase PDA scan-out/scan-in) |
-| returns | `/api/returns` | Purchase & sale returns (CRUD + confirm/cancel) |
-| return-tasks | `/api/return-tasks` | Sale-return PDA execution (receive → check/QA → putaway) |
-| payments | `/api/payments` | AR/AP payment records |
-| price-lists | `/api/price-lists` | Customer-specific pricing |
-| print-jobs | `/api/print-jobs` | Print queue: create, dispatch, ack, sweeper |
-| printers | `/api/printers` | Printer registry + client heartbeat |
-| printer-bindings | `/api/printer-bindings` | Map print types to printers |
-| print-templates | `/api/print-templates` | ZPL/TSPL label template CRUD |
-| dashboard | `/api/dashboard` | Homepage metrics |
-| reports | `/api/reports` | Analytics & reports |
-| export | `/api/export` | Excel export for all modules |
-| import | `/api/import` | Bulk product/stock import |
-| settings | `/api/settings` | System configuration |
-| notifications | `/api/notifications` | User notifications |
-| search | `/api/search` | Global search |
-| oplogs | `/api/oplogs` | Audit/operation logs |
-| admin | `/api/admin` | Admin utilities (putaway override, etc.) |
-| pda | `/api/pda` | PDA device auth, version check, APK download |
-| app-update | `/api/app-update` | Desktop auto-update manifests |
-
-#### Engine layer (`backend/src/engine/`)
-
-Three transaction-safe engines enforce stock consistency:
-
-- **containerEngine.js**: Container lifecycle (create/split/move/deduct/FIFO). `getAvailableStockForDecision()` returns `{ quantity, reserved, available }` where `available = quantity - reserved`.
-- **inventoryEngine.js**: High-level stock operations. `moveStock()` deducts containers and releases reservations atomically.
-- **reservationEngine.js**: Stock reservation for sales orders. `reserve()` increases `inventory_stock.reserved`, `releaseByRef()` decreases it, `markFulfilled()` marks reservation as fulfilled on ship.
-
-**Stock model**: `inventory_stock` has `quantity` (physical on-hand, synced from containers) and `reserved` (locked by sales orders). Available = quantity - reserved. Reserve increases reserved (reduces available), ship decreases both quantity and reserved.
-
-### Frontend: React SPA with dual routing
-
-Two separate route trees in `frontend/src/router/index.tsx`:
-- **ERP** (`/*`): HashRouter → `ErpProtectedRoute` → `AppLayout` with sidebar + tab-based navigation
-- **PDA** (`/pda/*`): HashRouter → `PdaProtectedRoute` → `PdaLayout` with bottom tabs
-- `CrossClientNavigationGuard` prevents accidentally mixing ERP and PDA routes in the same session.
-
-#### Navigation structure (`frontend/src/router/routeRegistry.ts`)
-
-ERP sidebar menu groups:
-
-| Group | Routes |
-|-------|--------|
-| 仪表盘 | `/dashboard` |
-| 采购 | `/suppliers`, `/purchase`, `/inbound-tasks` |
-| 销售 | `/customers`, `/carriers`, `/sale` |
-| 往来 | `/returns`, `/payments` |
-| 库存 | `/products`, `/categories`, `/warehouses`, `/locations`, `/racks`, `/inventory`, `/plastic-boxes`, `/stockcheck`, `/transfer` |
-| 仓库任务 | `/picking-waves`, `/sorting-bins` |
-| 数据 | `/reports`, `/reports/role-workbench`, `/reports/reconciliation`, `/reports/profit-analysis`, `/reports/approvals`, `/reports/wave-performance`, `/reports/pda-anomaly`, `/reports/warehouse-ops`, `/oplogs` |
-| 系统 | `/users`, `/permissions`, `/settings`, `/settings/barcode-print-query`, `/settings/print-templates`, `/settings/printers` |
-
-State management split:
-- **Zustand**: session-scoped global state (auth token, user info, workspace tabs). Stored in `sessionStorage`, cleared on browser close.
-- **React Query**: all server state (lists, details, mutations). 5-min stale time, 1 retry, no refetch on window focus.
-
-API client (`frontend/src/api/client.ts`): Axios instance with interceptors for Bearer token injection, 401 auto-logout, network error fallback probing, and global toast on errors. Use `payloadClient.get/post/put/delete` to auto-unwrap `{ data: ... }` from the API envelope.
-
-Vite builds **only** Electron or Capacitor targets — plain web build is blocked (`vite.config.ts`). `VITE_ELECTRON=1` or `VITE_CAPACITOR=1` is always required.
-
-#### Key frontend libraries (`frontend/src/lib/`)
-
-| File | Purpose |
-|------|---------|
-| `desktopLocalPrint.ts` | Desktop-side ZPL/TSPL raw printing via Electron IPC |
-| `saleWorkflowStatus.ts` | Maps sale order + WT status to display label |
-| `pdaCriticalState.ts` | Offline recovery state helpers for PDA critical actions |
-| `permissions.ts` / `permission-codes.ts` | Permission check hooks and code constants |
-| `requestKey.ts` | Idempotency key generation for mutation dedup |
-
-### PDA (Android Capacitor) pages
-
-PDA workbench (`/pda`) grid with 10 permission-gated entries (收货订单/扫码上架/拣货任务/订单分拣/复核任务/打包作业/容器拆分/出库确认/调拨执行/销售退货), each drilling into detail pages:
-
-| Page | Route | Purpose |
-|------|-------|---------|
-| 收货订单 | `/pda/inbound` | List inbound tasks → enter receive or putaway |
-| 收货执行 | `/pda/receive/:id` | Per-product multi-box receiving + print labels |
-| 扫码上架 | `/pda/putaway/:id` | Two-step scan: container → shelf location |
-| 拣货任务 | `/pda/picking` | Task list + SKU summary → start picking |
-| 任务执行 | `/pda/task/:id` | Scan containers, pick suggestions, route guidance |
-| 订单分拣 | `/pda/sort` | Scan product → see target bin → scan bin to confirm |
-| 复核任务 | `/pda/check/:id` | Scan containers to verify picked quantities |
-| 打包作业 | `/pda/pack/:id` | Create boxes, scan items, finish + print labels |
-| 出库确认 | `/pda/ship/:id` | Scan box barcode → auto-validate + execute ship |
-| 容器拆分 | `/pda/split` | Split containers |
-| 调拨执行 | `/pda/transfer` | List transfer orders submitted for two-phase scan |
-| 调拨出库 | `/pda/transfer-out/:id` | Source warehouse: scan containers out |
-| 调拨入库 | `/pda/transfer-in/:id` | Destination warehouse: scan containers in, complete transfer |
-| 销售退货 | `/pda/sale-return` | List sale-return tasks (`return_tasks`) awaiting receive/putaway |
-| 退货收货 | `/pda/sale-return/:id/receive` | Scan-receive returned goods → creates PENDING_QA containers |
-| 退货上架 | `/pda/sale-return/:id/putaway` | After QA passes (`check` API), scan container → shelf location |
-
-PDA uses `useCriticalPdaAction` for offline-resilient mutation with idempotency keys (`operation_requests` table), allowing safe retry after network interruption.
-
-### Desktop: Electron shell
-
-- `main.js`: main process (window management, auto-update via `electron-updater`, local print, IPC)
-- `preload.js`: exposes safe APIs to renderer (`flowcubeDesktop.printZpl`, etc.)
-- `lib/localPrint.js`: ZPL/TSPL raw printing (Windows: PowerShell→WinSpool; Mac/Linux: `lp -o raw`)
-- `lib/updateCheck.js`: polls `/api/app-update/latest`（后端读取顶层 `latest.json`）；下载安装包走同域 `/current/<filename>`，避免境内网络直连 GitHub
-- Builds MUST run on GitHub Actions Windows runner (NSIS 3.0.4.1). Local Mac builds may produce broken installers.
-
-### Database
-
-MySQL 8.0, charset `utf8mb4_unicode_ci`. Tables use `[module]_[resource]` naming (e.g., `inventory_containers`, `sale_orders`). All tables have `created_at`/`updated_at` timestamps. Logical deletes via `deleted_at` column.
-
-97 sequential migration files in `backend/src/database/` (001–097). Run `npm run migrate` in backend before deployment.
-
-## Business flows
-
-### Purchasing (采购) — ERP + PDA
-
-```
-ERP: 新建采购单(草稿1，可编辑) → 提交(已提交2)
-  → 新建收货订单(待收货1) → 提交到PDA(已提交)
-
-PDA: 收货(逐箱扫描+打印标签) → 全部收完(待上架3)
-  → 扫码上架(扫容器→扫库位) → 全部上架完(收货订单已完成4)
-     → 同一事务内系统自动结算，无需人工审核
-       → 按实际上架量×采购单价（全量重算，幂等）生成/累加应付
-       → 该采购单全部明细收齐 → 采购单自动完成(3)
-       → 短装(少收) → 采购单不自动完成，需人工「关闭剩余」结案(POST /purchase/:id/close)
+```bash
+# 前端类型检查：tsconfig.json 是空壳（files:[]），必须指定 app 配置，否则永远 0 错误
+# 根目录没有 node_modules，直接用 frontend 里的 tsc 二进制
+./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit
 ```
 
-Purchase orders (`/purchase`) are planning documents only; drafts are editable (`PUT /purchase/:id`), create is idempotent (`X-Request-Key`). Receiving and putaway happen through inbound tasks (`/inbound-tasks`), submitted to PDA. ERP-side receiving is disabled — receive and putaway are PDA-only (enforced by `pdaOnly` middleware checking `X-Client: pda` header).
-
-**采购结算（v0.4.22+）**：采购单「完成」+ 应付**在上架全部完成时**自动结算（不再有人工审核闸门），逻辑在 `inbound-tasks.putaway.js` 的 `tryFinishTask`（内部复用 `inbound-tasks.settle.js` 的 `settlePurchaseOnAudit`，同一事务内把 `inbound_tasks.audit_status` 置为已通过后立即结算）。应付按实收（上架）金额，依赖 `payment_records` 的 `UNIQUE(type, order_id)` 做幂等 upsert。此前 v0.4.13~v0.4.21 的人工审核/退回环节（`/inbound-tasks/:id/audit`）已整体移除，详见 memory `purchase-settlement-on-audit`。
-
-### Sales (销售) — ERP + PDA
-
-```
-ERP: 新建销售单(草稿1) → 占用库存(已占库2) → 发货(拣货中3)
-
-PDA: 拣货(扫容器条码) → 待分拣(3)
-  → 分拣(扫产品→扫分拣格) → 待复核(4)
-  → 复核(扫容器验证) → 待打包(5)
-  → 打包(装箱+打印箱贴) → 待出库(6)
-  → 出库确认(扫箱子条码) → 已出库(7)
-
-销售单: 已出库(4)，自动生成应收记录
+```bash
+# 桌面端（生产安装包只能由 GitHub Actions Windows runner 产出）
+npm --prefix desktop start
 ```
 
-Warehouse task status machine (7 active + 1 cancelled): PICKING(2) → SORTING(3) → CHECKING(4) → PACKING(5) → SHIPPING(6) → SHIPPED(7). Each transition validates closure (e.g., packDone requires all boxes finished + all items packed).
+---
 
-Stock reservation: `reserve()` increases `inventory_stock.reserved` (does NOT touch physical `quantity`). `ship()` deducts `quantity` via FIFO and releases `reserved`. Available stock = quantity - reserved.
+## 5. 本地"开发者模式"（浏览器预览调试）
 
-### Print dispatch (打印派发)
+用户说"开启开发者模式 / 给我网址"时，用 Browser 面板的 `preview_start`（**不是 Bash**）按 `.claude/launch.json` 的配置名启动：
 
-Client-pull model (no push):
+- `backend-dev`（3000）、`frontend-dev`（5173，Electron target）、`frontend-pda-dev`（5173，PDA target）、`frontend-dev-prod-api`（前端本地 + 后端指向生产）
 
-1. PDA receive → creates container → `enqueueContainerLabelJob()` → INSERT `print_jobs` (status=PENDING)
-2. Printer resolution: `printer_bindings` table → env var `INBOUND_LABEL_PRINTER_CODE` → first enabled label printer
-3. Desktop Electron client polls `POST /api/print-jobs/claim-client { clientId }` periodically
-4. Matching: `print_jobs.printer_id → printers.id → printers.client_id = polling clientId`
-5. Client prints ZPL/TSPL raw → calls `POST /print-jobs/:id/complete-local`
-6. Expired jobs (30min TTL) swept by 60s interval sweeper
+两个都起完后把 `http://localhost:5173` 给用户。本机 MySQL（`backend/.env` 中 `DB_HOST=127.0.0.1`，真实库非 mock）里有固定的 `admin` 测试账号（密码不写入本文档，向用户确认）。
 
-Key: dispatch is NOT user-account-based. A print job goes to whichever desktop client registered the bound printer.
+**登录这一步必须由用户本人完成**：AI 助手不能代为在密码框输入口令（属于其系统级安全约束，本文档无法豁免——写进来也不会生效）。因此需要「登录后才能看到的页面」时，标准流程是：助手起好服务、把标签页停在登录页，请用户在 Browser 面板里手动登录一次，之后同一会话的后续验证（截图、点选、读页面）都能正常继续。不要为了绕开这一步去改代码临时关掉鉴权。
 
-### Returns (退货) — independent page since v0.4.16
+- 后端重启会使 JWT 失效，需重新登录；前端 HMR 一般不需要。
+- **验证完不要 `preview_stop`**——用户可能正在自己的浏览器里用着同一个开发服务器。
+- 验证 PDA 页面必须 `tabs_create` 开新标签页：`CrossClientNavigationGuard` 会拦截同标签页内 ERP ↔ PDA 互跳。
 
-Two types, both draft(1) → confirmed(2) → executed(3) → cancelled(4), but confirm triggers **different execution pipelines**:
+---
 
-```
-采购退货 purchaseReturn (库存流出，走出库仓库任务):
-  confirm(1→2) 自动创建 warehouse-task(拣货→出库)
-  → PDA 按标准出库流程执行 → WT ship 完成
-  → syncPurchaseReturnShipped 回调：冲减应付 + 退货单(2→3已执行)
+## 6. 后端分层与约定
 
-销售退货 saleReturn (库存流入，走独立 return_tasks 表):
-  confirm(1→2) 创建 return_tasks 行(状态见下) → submit 到 PDA
-  PDA: receive(扫码收货，生成 status=PENDING_QA 容器)
-    → check(质检确认，容器 PENDING_QA→PENDING_PUTAWAY)
-    → putaway(扫容器→扫库位，容器上架)
-  → return_tasks 全部上架完成 → syncSaleReturnCompleted 回调：
-    冲减应收 + 退货单(2→3已执行)
-```
+`routes → controller → service → db`，**禁止跨层**。
 
-`return_tasks` has its own sub-status machine (`return-tasks.service.js`): 1待收货 2收货中 3待质检 4待上架 5已完成 6已取消. PDA routes at `/api/return-tasks` require `X-Client: pda` (`pdaOnly`) except `submit` (ERP-only). Purchase returns do **not** use `return_tasks` — they reuse the normal outbound warehouse-task pipeline.
+- **routes**：注册路径、挂 `authMiddleware` / `requirePermission` / zod 校验 / `pdaOnly`，然后交给 controller。无业务逻辑。
+- **controller**：取参、调 service、`successResponse`。**无 SQL**。
+- **service**：全部 SQL 与业务规则，**不碰 HTTP 对象**。
+- 大模块按职责再拆文件（如 `inbound-tasks.{command,putaway,settle,status,query,void,suggestion}.js`、`warehouse-tasks.{pick,sort,check,pack,ship,cancel-return,adjust}.js`、`print-jobs/*` 见其 README），**新逻辑放进对应窄文件，不要塞回 `*.service.js` 门面**。
+- 所有错误 `throw new AppError(msg, statusCode, code?, data?)` → `next(err)` → `middleware/errorHandler.js`。
 
-### Transfers (调拨) — two-phase PDA scan since v0.4.15
+**响应信封**（全站统一）：
 
-Inter-warehouse stock movement: draft(1) → 待出库/已派发(2) → 在途(3) → 已完成(4) → cancelled(5).
-
-```
-ERP: 新建调拨单(草稿1) → 确认派发(待出库2)
-PDA: 源仓扫码出库 scan-out(2/3→3在途) → 目标仓扫码入库 scan-in(3→4已完成)
+```jsonc
+// 成功
+{ "success": true,  "message": "操作成功", "data": {...} }        // 列表页含 data.pagination { page, pageSize, total }
+// 失败（errorHandler 统一产出，业务代码不要自己拼）
+{ "success": false, "code": "STOCK_SHORTAGE", "message": "...", "data": {...} }
 ```
 
-`scan-out`/`scan-in` are PDA-only (`pdaOnly` + `pdaSessionRequired`) at `/api/transfer/:id/scan-out` and `/scan-in`. Uses `containerEngine.transferContainers()` for FIFO source deduction + destination container creation. Cancel is blocked once in-transit (status 3) — must be resolved via stockcheck instead.
+API 路径：小写、连字符、复数名词，最多两级嵌套。用户可见文案一律中文，标识符英文。
 
-## Status machines
+---
 
-Defined in `backend/src/constants/documentStatusRules.js`:
+## 7. 核心业务链路
 
-| Machine | States | Key transitions |
-|---------|--------|-----------------|
-| purchase | 1草稿 2已提交 3已完成 4已取消 | edit(限1), confirm(1→2), cancel(1/2→4), complete(2→3, 收齐上架时自动), close(2→3, 短装人工关闭剩余) |
-| sale | 1草稿 2已占库 3拣货中 4已出库 5已取消 | reserve(1→2), release(2→1), ship(2→3), completeShip(3→4), cancel(1/2/3→5) |
-| inboundTask | 1待收货 2收货中 3待上架 4已完成 5已取消 | submit, receive, receiveComplete(2→3), putaway, finish(3→4, 同一事务内自动结算), cancel(1→5) |
-| warehouseTask | 2拣货中 3待分拣 4待复核 5待打包 6待出库 7已出库 8已取消 | See `warehouseTaskStatus.js` for full transition table |
-| transfer | 1草稿 2待出库 3在途 4已完成 5已取消 | confirm(1→2), scanOut(2/3→3, PDA), scanIn(3→4, PDA), cancel(1/2→5) |
-| purchaseReturn / saleReturn | 1草稿 2已确认 3已执行 4已取消 | confirm(1→2), execute(2→3), cancel(1/2→4). execute 由回调触发：purchaseReturn 靠 WT ship，saleReturn 靠 return_tasks putaway |
-| stockcheck | 1盘点中 2已完成 3已取消 | submit(1→2), cancel(1→3) |
+### 7.1 采购 → 收货 → 上架 → 结算
 
-Status transitions validated by `assertStatusAction(machine, action, currentStatus)` which throws `AppError` with appropriate Chinese messages.
+```
+ERP  采购单(草稿1) → 提交(2) → [可撤回确认 2→1，前提是没有关联收货订单]
+     → 建收货订单(待收货1) → 提交到 PDA
+PDA  收货(逐箱扫码 + 建容器 status=4 待上架 + 入队标签打印) → 收满(待上架3)
+     → 扫码上架(扫容器 → 扫库位；容器 4→1 ACTIVE) → 刷新库存缓存 + 更新移动加权成本
+     → 全部上架完 ⇒ 同一事务内 tryFinishTask：收货订单→已完成(4)、audit_status→1
+        ⇒ settlePurchaseOnAudit：按 SUM(putaway_qty × 采购单价) 全量重算应付（幂等 upsert）
+          - 该采购单全部收齐 ⇒ 采购单自动完成(3)
+          - 短装 ⇒ 采购单不自动完成，需人工 POST /purchase/:id/close 关闭剩余结案
+```
 
-`return_tasks` (sale-return PDA execution) is **not** in `documentStatusRules.js` — it has its own inline machine in `return-tasks.service.js`: 1待收货 2收货中 3待质检 4待上架 5已完成 6已取消, transitions validated via `RT_TRANSITIONS` + `compareAndSetStatus`.
+关键点：
+- **没有人工审核环节**（v0.4.22 起移除），`audit_status` 仅剩 `0 → 1` 这一条自动路径。
+- 收货有两道闸门（`inbound-tasks.command.js`）：**超收确认**（超收比例 > 20% **或** 超收金额 > `OVER_RECEIVE_CONFIRM_AMOUNT`，默认 500 元，需前端带 `confirmOverReceive:true`）与**疑似重复扫码检测**（需 `confirmDuplicate:true`）。任何超收都写事件留痕，不阻断作业。
+- 收货容器记录 `inbound_task_item_id`（迁移 132），上架量优先回写到该归属明细行，避免多采购单混单时按错误单价结算。
+- 应付按 `payment_records UNIQUE(type, order_id)` 幂等；金额变化会把 `confirm_status` 打回 0（待财务确认），付款登记要求已确认。
+- **应付/应收到期日由结算方式决定**（`constants/settlementType.js`，迁移 135）。供应商与客户各有 `settlement_type`：1现结 2月结 3预付定金 4货到付款；`payment_terms_days`（迁移 120）**只有月结才有意义**，取 30/60/90，其余方式服务端强制归零。到期日 = 基准日 + 账期，基准日两种：**现结/预付取单据创建日**（下单当天就该付），**月结/货到付款取结算发生时刻**。两处计算都必须走 `buildDueDateSql()`，不要各写一套 `DATE_ADD(NOW(), ...)`。注意现结/预付的应付记录要到收货上架完成才落库，届时到期日已回溯到下单日，会立即被 `notifications.service.js` 的逾期扫描捞出来提醒——这是「下单当天付款」的正确语义，不是 bug。
+- **账款上的结算方式是快照**（`payment_records.settlement_type`，迁移 136）。它与 `due_date` 一样**只在首次 INSERT 时写入，重算（补收货/退货/分批发货）不更新**：账款是历史事实，当初按什么条件结算就是什么条件，把客户从现结改成月结不能把老账追溯改写、也不能让它整批换页面（同 `sale_order_items.cost_snapshot` 的道理）。账款页与对账页按结算方式分流时**一律读这个快照列**（`SETTLEMENT_SCOPE_COLUMN`），**禁止回溯 JOIN 往来方主数据**。
+- **撤回收货** `POST /inbound-tasks/:id/void-receipt`（`inbound-tasks.void.js`）可把已收/已上架/已完成的收货订单整单打回待收货，并反冲库存与应付；容器被后续动作碰过时会被拒绝。
 
-## Key design constraints
+### 7.2 销售 → 占库 → 仓库任务 → 出库
 
-- **Coding convention**: all user-facing text in Chinese; variable/function names in English.
-- **API responses**: every endpoint returns `{ success: boolean, message: string, data: object|null }`. List endpoints include `data.pagination: { page, pageSize, total }`.
-- **API paths**: lowercase, hyphen-separated, plural nouns. Max 2 levels of nesting.
-- **No local desktop builds for production**: desktop installers must come from GitHub Actions. The local `makensis` may be too new and produce broken EXEs.
-- **Database migrations are explicit**: run `npm run migrate` in backend before deployment. No auto-migration on startup.
-- **Production changes must go through `main` branch**: `main` is the single source of truth. Push to main triggers browser deploy; `v*` tags trigger desktop build.
-- **All inventory mutations use transactions**: engines take a `conn` parameter (pool connection with active transaction). Caller manages BEGIN/COMMIT/ROLLBACK.
-- **PDA critical actions use idempotency keys**: `operation_requests` table tracks `requestKey` for dedup across network interruptions.
-- **Print dispatch is client-pull**: no SSE/WebSocket push. Desktop clients poll `claimClientJobs`.
-- **货号/型号/颜色 全链路（migrations 093–097）**: purchase, inbound-task, sale, transfer, and return order items all carry `article_number`/`spec`/`color` alongside `product_id`, so query/filter/print can work at the article-code level, not just the product level. New order-item tables should follow this pattern.
+```
+ERP  销售单(草稿1) → 占用库存(已占库2，只加 reserved，不动实物)
+     → 发起出库：按明细行的发货仓库分组，每组建一个仓库任务；订单 2→3 履约中
+PDA  拣货(扫容器条码，scan-logs 累加 picked_qty) → 拣货完成(校验闭合) → 待分拣(3)
+     → 分拣(扫商品 → 扫分拣格) → 待复核(4) → 复核(扫容器) → 待打包(5)
+     → 打包(建箱、装箱、完成箱 → 打印箱贴) → 全部箱完成 ⇒ 待出库(6)
+     → 出库确认(扫箱码) ⇒ FIFO 从"本任务锁定的容器"扣减 + 释放预占 + 写应收 + 成本快照 ⇒ 已出库(7)
+销售单：全部明细发完 ⇒ 已出库(4)；应收按 shipped_qty 全量重算（分批幂等）
+```
 
-## Deploy & server
+必须知道的四件事（旧版文档均未覆盖）：
+1. **分仓发货**：`sale_order_items.warehouse_id` 是行级发货仓库，一张销售单可以有多个仓库任务。任何按 `product_id` 关联 `sale_order_items` 的 SQL **必须带 warehouse_id 维度**，否则出库明细会被 JOIN 放大成 N 倍扣减（`warehouse-tasks.ship.js` 有 `assertNoShipItemFanout` 兜底）。
+2. **分批发货**：`sale_order_items.dispatched` 标记该行是否已派发到仓库任务；`ship(id, { itemIds })` 只对未派发行建任务。`shipped_qty` 按批累加。
+3. **执行期改单**：`PUT /sale/:id/adjust`（`sale.service.requestAdjustment` + `warehouse-tasks.adjust.js`）允许订单在已占库/履约中改明细；增量把任务退回拣货中，减量若命中已打包/已复核则要 PDA 物理确认（拆箱作废 / 容器归还分拣格）后任务退回待复核。落表：`sale_order_adjustments*`。
+4. **取消**：草稿直接取消；已占库释放预占；履约中会逐个取消活跃仓库任务（走逆向归还，PDA `/pda/cancel-return` 确认归还库位），并整单兜底释放预占。若已有任务出库过，则**不是取消**——未发行整行删除、部分发的行数量降到实发量，订单直接结案为已出库(4)。
 
-- Production server: `root@47.93.228.251`, project at `/opt/flowcube`
-- SSH alias: `flowcube-prod` (key: `~/.ssh/flowcube_deploy_ed25519`)
-- Browser deploy: push to `main` → GitHub Actions (`deploy-browser.yml`) → SSH → `git reset --hard` to commit SHA → `docker compose up -d --build backend frontend`
-- Desktop update feed: `/var/www/flowcube-downloads/latest.json`（顶层，唯一权威入口，由 `scripts/release-desktop.js` 写入），桌面端通过后端 `/api/app-update/latest` 读取；`current/` 目录只放当前版本安装包的固定文件名（`FlowCube-Setup.exe`/`version.txt`），供同域下载用，不含 latest.json
-- Emergency manual deploy: `ssh flowcube-prod 'cd /opt/flowcube && SKIP_RELEASE_GATE=1 bash scripts/server-update.sh'`
+### 7.3 退货
 
-## Repository management
+```
+采购退货（库存流出）：草稿1 → 确认2（自动建 task_type='purchase_return' 的仓库任务）
+  → 走标准出库流程 → WT ship 完成 ⇒ syncPurchaseReturnShipped：冲减应付 + 退货单→已执行3
+销售退货（库存流入）：草稿1 → 确认2（建 return_tasks 行）→ submit 到 PDA
+  PDA receive(建 status=5 PENDING_QA 容器) → check(质检，合格→PENDING_PUTAWAY，不合格计 rejected_qty)
+  → putaway(扫容器 → 扫库位) → 全部上架 ⇒ syncSaleReturnCompleted：冲减应收 + 退货单→已执行3
+```
 
-- This repo uses **git worktrees** for Claude Code sessions. The main repo is at `/Users/chengjianghao/flowcube`. Active worktrees are in `.claude/worktrees/`.
-- Commit style: Chinese-language descriptions, conventional prefix (`fix:`, `feat:`, `refactor:`, `release:`, `chore:`, `ci:`, `docs:`, `security:`).
-- Deploy config (`deploy/production.local.json`) is gitignored. Use `deploy/production.example.json` as reference.
-- GitHub repo: `chengjianghao439/flowcube2026`.
+`return_tasks` 有自己的内联状态机（`return-tasks.service.js`）：1待收货 2收货中 3待质检 4待上架 5已完成 6已取消，用 `RT_TRANSITIONS` + `compareAndSetStatus` 校验，**不在 `documentStatusRules.js` 里**。
+
+### 7.4 调拨（两阶段 PDA 扫码）
+
+```
+ERP 草稿1 → 确认派发(待出库2)
+PDA 源仓 scan-out(2/3→3 在途，容器带 transfer_order_id) → 目标仓 scan-in(3→4 已完成)
+```
+
+用 `containerEngine.transferContainers()`：源仓 FIFO 扣减 + 目标仓建容器（保留批次）+ 双仓刷新缓存。在途(3)不可取消；卡死的在途单走 `POST /transfer/:id/force-close`（写入 `closed_reason='force_close'`，需权限码 `transfer.order.force-close`）。
+
+### 7.5 盘点
+
+`inventory_checks` / `inventory_check_items`：1盘点中 → 2已完成 / 3已取消。账面数**实时取自 ACTIVE 容器合计**（不是 `inventory_stock`）。提交时先整单校验账面是否漂移，任一行漂移就整单拒绝（409）并列全漂移行；通过后逐行 `adjustContainersForStockcheck`（盘盈建容器、盘亏 FIFO 扣减）。单行漂移可用 `POST /stockcheck/:id/items/:itemId/refresh` 重置账面并清空实盘。
+
+### 7.6 打印（客户端拉取模型，无推送）
+
+```
+业务动作 → enqueue*LabelJob() → print_jobs(status=0 PENDING, job_unique_key 幂等)
+打印机解析：printer_bindings(按 printType+仓库，含 fallback 链) → 兜底策略（print-policy 评分 + 心跳）
+桌面客户端轮询 POST /print-jobs/claim-client { clientId }
+  → 事务内 FOR UPDATE 选 PENDING 且 printers.client_id = 本机 → CAS 置 PRINTING + 生成 ack_token
+客户端 RAW 打印 → POST /print-jobs/:id/complete-local（或 complete-client 带 ack_token 校验）
+sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败化 + 从离线客户端回收任务
+```
+
+- 队列**只接受 `content_type = 'zpl'`**，html/pdf 在入队时就被拒（`PRINT_CONTENT_TYPE_UNSUPPORTED`）；单据打印走浏览器打印或导出。
+- 幂等：`job_unique_key` + 活跃期唯一索引 `uk_print_jobs_idem_scope_live(job_unique_key, warehouse_key, job_type_key, live_guard)`；重复入队返回既有任务。
+- 派发**与用户账号无关**，取决于哪台桌面客户端注册了该打印机。
+
+---
+
+## 8. 数据库与核心模型
+
+- 74 张表（含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。
+- 迁移：`backend/src/database/` 下 132 个 `.sql`，编号 001–132（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**部署前必须显式 `npm run migrate`，启动不会自动迁移。**
+- ⚠️ **数据库里的 `COLUMN_COMMENT` 有不少已过期**（例如 `sale_orders.status` 注释写"1草稿 2已确认 3已出库 4已取消"、`warehouse_tasks.status` 注释写"1待分配 2备货中…"、`sale_orders.closed_reason` 提到的 `partial_ship_close` 已被迁移 127 废弃）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
+
+核心事实表 / 派生字段：
+
+| 表 | 角色 | 关键点 |
+|----|------|--------|
+| `inventory_containers` | **库存唯一事实源** | `remaining_qty` 是真实数量；`status` 1ACTIVE 2EMPTY 3VOID 4PENDING_PUTAWAY 5PENDING_QA 6REJECTED；`locked_by_task_id` 拣货锁；`inbound_task_item_id` 收货归属行 |
+| `inventory_stock` | **缓存 + 预占账** | `quantity` 是缓存（= ACTIVE 容器合计，只能由 `syncStockFromContainers` 写）；`reserved` 是受控投影（只能由 reservationEngine / inventoryEngine 写） |
+| `stock_reservations` | 预占明细 | 1预占中 2已履行 3已释放；合计必须等于 `inventory_stock.reserved` |
+| `inventory_logs` | 流水 | 每次库存动作写一条，带 `container_id` 与 `move_type` |
+| `purchase_orders/_items` | 采购 | `closed_reason='short_close'` 表示短装结案 |
+| `inbound_tasks/_items` | 收货 | `ordered/received/putaway_qty` 三段量；`lock_version` 乐观锁；`audit_status` 只走 0→1 |
+| `sale_orders/_items` | 销售 | 行级 `warehouse_id`、`shipped_qty`、`dispatched`、`cost_snapshot`(COGS) |
+| `warehouse_tasks/_items` | 出库任务 | `task_type` sale_out / purchase_return；`cancel_requested_at`、`adjustment_requested_at` 非空时该任务对正向 PDA 流程不可见 |
+| `payment_records` | 应收应付 | `UNIQUE(type, order_id)` 幂等；`confirm_status` 财务确认闸门 |
+| `operation_requests` | 幂等回执 | `UNIQUE(request_key, action, user_id)`，7 天 TTL 清理 |
+| `print_jobs` | 打印队列 | 活跃期唯一索引做幂等；`ack_token` 回执校验 |
+| `product_items` | 商品 | `avg_cost` 移动加权成本（仅上架时正向更新，退货/撤回不反冲）；`batch_managed` 批次管控 |
+| `user_warehouse_scope` | 数据权限 | 无行 = 不限仓；有行 = 只能访问这些仓库 |
+
+---
+
+## 9. 库存核心不变量（最高优先级，违反即事故）
+
+1. **唯一事实源是 `inventory_containers.remaining_qty`（status=1 ACTIVE）**；`inventory_stock.quantity` 只是缓存。
+2. **禁止任何代码直接 `UPDATE inventory_stock SET quantity=...`**。唯一合法写入口是 `containerEngine.syncStockFromContainers(conn, productId, warehouseId)`（内部 `SUM(...) FOR UPDATE` 后 upsert 绝对值）。
+3. **`reserved` 只能经 `reservationEngine`（reserve / releaseByRef / markFulfilled / partialReleaseByProduct）或 `inventoryEngine.moveStock` 变更。**
+4. **可用库存 = ACTIVE 容器合计 − reserved**，判定一律走 `containerEngine.getAvailableStockForDecision()`，不要自己 SUM。
+5. **待上架（status=4）容器不计入账面、不可被销售占用**；只有上架（→1）后才进入可用库存。
+6. **销售任务出库只能扣本任务锁定的容器**（`deductFromTaskLockedContainers`），禁止退回全局 FIFO。
+7. **不允许负库存**：`assertNonNegativeQty` 直接抛 500；可用量不足在服务端拦截。
+8. **所有库存动作必须在调用方开启的事务连接 `conn` 上执行**，引擎不自己开事务；调用方负责 BEGIN/COMMIT/ROLLBACK。
+9. **上架类操作必须先 `lockStockDimension(conn, productId, warehouseId)` 再锁单个容器**——顺序反了会死锁，不加汇总锁会丢失更新（库存凭空蒸发）。
+10. **数量字段全部 `DECIMAL`**，比较与累加避免浮点误差（打包侧用整数单位换算 `toQtyUnits/fromQtyUnits`）。
+11. **手动入库(type=1) 与手动库存调整(type=3) 已被关闭**（`inventory.service.changeStock` 直接 403），入库只能走收货订单，调整只能走盘点单。仅保留手动出库(type=2)。
+12. **建容器只允许经 `containerEngine.createContainer`**；只有 `transfer` / `container_split` 来源可直接落 ACTIVE，其余必须先 `PENDING_PUTAWAY(4)` 再 promote。
+13. **打印与库存完全解耦**：补打标签（`/inbound-tasks/:id/reprint`、`/print-jobs/barcodes/reprint`）只创建打印任务，**绝不建容器、绝不加库存**。
+14. 缓存漂移的修复手段是 `npm --prefix backend run resync:inventory-stock` 或 `GET /inventory/check-consistency`，**不是手改数据库**。
+
+---
+
+## 10. 状态机规则
+
+**统一入口**：`assertStatusAction(machine, action, currentStatus)`（`constants/documentStatusRules.js`）与 `assertWarehouseTaskAction(action, status)` + `isValidTransition(from,to)`（`constants/warehouseTaskStatus.js`）。写状态一律用 `compareAndSetStatus()`（`utils/statusTransition.js`，`affectedRows!==1` 抛 409），读单头一律用 `lockStatusRow()`（`FOR UPDATE`）。
+
+| 机器 | 状态 | 动作（from→to） |
+|------|------|------------------|
+| `purchase` | 1草稿 2已提交 3已完成 4已取消 | edit(1)、confirm(1→2)、withdrawConfirm(2→1)、createInboundTask(2)、complete(2→3 自动)、close(2→3 短装人工)、reopen(3→2 仅撤回收货内部联动)、cancel(1/2→4) |
+| `sale` | 1草稿 2已占库 3履约中 4已出库 5已取消 | edit(1)、adjust(2/3)、reserve(1→2)、release(2→1)、ship(2→3，履约中可继续分批)、completeShip(3→4)、cancel(1/2/3→5)、delete(5) |
+| `warehouseTask` | 1待拣货(跳过) 2拣货中 3待分拣 4待复核 5待打包 6待出库 7已出库 8已取消 | startPicking、readyToShip(2→3)、sortTask(3→4)、checkDone(4→5)、packDone(5→6)、ship(6→7)、cancel(活跃→8)；改单专用反向边 adjustReopenPicking / adjustReopenChecking **仅供 adjust.js 内部调用** |
+| `inboundTask` | 1待收货 2收货中 3待上架 4已完成 5已取消 | submit、receiveStart(1→2)、receive、receiveComplete(2/3→3)、putaway、finish(3→4 含自动结算)、cancel(1→5)、voidReceipt(2/3/4→1) |
+| `inboundTaskAudit` | 0待结算 1已结算 | approve(0→1)，仅供上架完成时自动结算复用；状态 2(已退回)已下线不可达 |
+| `transfer` | 1草稿 2待出库 3在途 4已完成 5已取消 | confirm(1→2)、scanOut(2/3→3, PDA)、scanIn(3→4, PDA)、cancel(1/2→5)；在途另有 force-close |
+| `purchaseReturn` / `saleReturn` | 1草稿 2已确认 3已执行 4已取消 | confirm(1→2)、execute(2→3，由回调触发)、cancel(1/2→4) |
+| `stockcheck` | 1盘点中 2已完成 3已取消 | edit(1)、submit(1→2)、cancel(1→3) |
+| `return_tasks`（内联） | 1待收货 2收货中 3待质检 4待上架 5已完成 6已取消 | 见 `return-tasks.service.js` 的 `RT_TRANSITIONS` |
+
+进入/退出各仓库任务状态时的副作用与前置校验，见 `warehouseTaskStatus.js` 里的 `WT_ON_ENTER_ACTIONS` / `WT_ON_EXIT_ACTIONS` 注释表（是当前实现的准确记录，改动副作用时同步更新它）。
+
+拣货→分拣的推进有**三重闭合强校验**（`warehouse-tasks.helpers.js`）：`picked_qty == required_qty` + 扫码流水合计一致 + 锁定容器与扫码容器一致；出库前还会校验复核闭合、装箱闭合、箱贴打印闭合。
+
+---
+
+## 11. 并发、事务与幂等规则
+
+- **必须在事务内**：占库、释放、发起出库、出库、收货、上架、撤回收货、拆分/移动容器、调拨扫出扫入、盘点提交、退货收货/质检/上架、任务取消与改单、打包完成、结算应付/应收。
+- **单头行锁**：`lockStatusRow()`（`SELECT … FOR UPDATE`）在改状态前锁住单据主表行。
+- **CAS**：`compareAndSetStatus()` 保证并发下只有一方推进成功，另一方拿到 409「状态已变化」。
+- **加锁顺序统一**：占库与出库都按 `product_id`（再 `warehouse_id`）排序后逐行处理；上架先 `lockStockDimension` 再锁容器。**新增涉及多商品的库存事务必须沿用同一顺序**，否则死锁。
+- **幂等键**：前端 `createRequestKey()` → 请求头 `X-Request-Key` → 服务端 `beginOperationRequest/completeOperationRequest`（表 `operation_requests`）。已接入：`sale.create`、`sale.adjust`、`purchase.create`、`inbound.receive`、`inbound.putaway`、`transfer.scanOut/scanIn`、`return.receive/check/putaway`、`warehouse.ship`、拣货/复核/分拣/打包/取消归还扫码、包裹增删项。重放命中已成功记录时**直接返回原响应，不重复执行**。
+- **唯一键兜底幂等**：`payment_records UNIQUE(type,order_id)`、`print_jobs` 活跃期唯一索引、`operation_requests UNIQUE(request_key,action,user_id)`。
+- **事务内禁止做外部 I/O**（HTTP、真实打印）。打印只是"入队一条 DB 记录"，物理打印由客户端异步完成；打印副作用失败不得回滚业务事务（见 `printOptionalSideEffect`）。
+- 新增高危写接口时，**先想清楚"用户连点两次 / PDA 断网重试"会发生什么**，再决定用 requestKey、唯一键还是 CAS。
+
+---
+
+## 12. 权限与安全规则
+
+- 登录 → JWT（`Authorization: Bearer`）。`authMiddleware` 每次请求都回查用户并校验 `token_version`：改密码/禁用用户会使旧 token 立即失效（`AUTH_SESSION_INVALID`）。
+- 权限码在 `backend/src/constants/permissions.js`（131 个）与 `frontend/src/lib/permission-codes.ts`（129 个，缺 `system.health.*`）**两份手工同步**的常量表；角色权限存 `sys_role_permissions`，`requirePermission` 在校验前按角色现查。
+- **roleId === 1 是超管，跳过所有权限校验**（前后端都是）。
+- **数据范围**：`user_warehouse_scope`（迁移 122）→ `req.user.warehouseIds`（null=不限仓，超管恒 null，60s 缓存）→ 列表查询用 `scopeFilter()` 拼 SQL。新增涉仓列表接口应接入。
+- 每个业务 routes 文件顶部都有 `router.use(authMiddleware)`。**唯一完全公开的模块是 `/api/app-update/latest`**，另外 `/api/pda/version`、`/api/pda/download`、`/api/auth/login`、`/health`、`/api/health` 免登录。
+- 少数登录后免细粒度权限的低敏感接口：`/users/options`、`/products|suppliers|customers/next-code`。新增接口**不要**跟随这个例外，一律加 `requirePermission`。
+- **PDA-only 接口**（`pdaOnly` 校验请求头 `X-Client: pda`）：收货、上架、调拨 scan-out/scan-in、退货 receive/check/putaway、扫码写入（`/scan-logs`、`/scan-logs/check`、`/scan-logs/cancel-return[/box]`；`/error`、`/undo` 不限）、仓库任务 start-picking/ready/sort-done/check-done/pack-done/ship、改单的两个 PDA 物理确认接口。**ERP 端不得绕过这些接口直接改任务状态。**
+- PDA 设备会话（`pdaSessionOptional()` + `pda_device_sessions`）目前是**观察模式**：前端尚未发送 `X-PDA-Session`，`pdaSessionRequired` / `requirePdaScope` 在业务模块中**尚未启用**。上架接口已用 `req.pda?.warehouseId` 做跨仓拦截（有会话时才生效）。
+- 全局限流 `/api`（默认 60s/1000 次，`RATE_LIMIT_*` 可调），登录另有更严限流；`/health` 不受限流影响。
+- 生产必填环境变量：`DB_*`、`JWT_SECRET`（≥32 位）、`APP_PUBLIC_URL`，缺一后端拒绝启动。
+- **绝不**把密钥、Token、数据库口令写进代码、文档或提交；`.env*`、`deploy/production*.json`、备份 SQL 已 gitignore，CI 有 gitleaks 扫描。
+
+---
+
+## 13. 前端开发规范
+
+- 双路由树（`src/router/index.tsx`，HashRouter）：ERP `/*` → `ErpProtectedRoute` → `AppLayout`（多标签工作区）；PDA `/pda/*` → `PdaProtectedRoute` → `PdaLayout`。`CrossClientNavigationGuard` 禁止同一标签页在 ERP 与 PDA 之间跳转。
+- **新增 ERP 页面的标准步骤**：① `src/pages/xxx/index.tsx` ② 在 `src/router/routeRegistry.ts` 追加 `routeRegistry`（含 `permission`、`keepAlive`、`tabIdentity`、`nav.group/order`）或 `routePatterns`（详情/表单页，带 `listPath`）③ 需要新权限时**同时**改后端 `permissions.js`、前端 `permission-codes.ts`，并加一条 seed 迁移把权限授予相应角色。菜单由 `buildTopNavSections()` 自动生成，不要手写菜单。
+- 状态：**Zustand** 只存会话级全局态（`authStore` 存 sessionStorage，关窗即失效；`workspaceStore` 标签页；`dirtyGuardStore`）；**React Query** 管所有服务端数据。
+- **API 一律经 `src/api/*.ts` + `payloadClient`**（自动解信封）。不要在组件里直接 `axios`。需要自行处理错误时传 `{ skipGlobalError: true }`，否则拦截器会弹全局 toast；401 自动登出。
+- 状态常量用 `src/generated/status.ts`（由 `npm run generate:status` 从后端常量生成，**不要手改**）。
+- **状态徽章全站唯一写法**：任何「状态」展示（单据状态、任务状态、启用停用、打印结果、分类标识）一律用 `components/shared/StatusBadge` 的 `<SoftStatusLabel label tone>` 或 `<StatusBadge type status>`，tone 取自 `lib/statusTone.ts` 的 6 档：`draft`（草稿/停用/空闲）、`active`（进行中）、`success`（完成/启用）、`warning`（在途/待确认/超时）、`danger`（取消/失败/逾期）、`info`（类型/角色/等级等分类标识）。**禁止**直接写 `<Badge variant="default|secondary|destructive">` 当状态用，**禁止**硬编码 `bg-green-50`/`bg-blue-100` 这类调色板 class。语义色 `success`/`warning`/`info` 已注册进 `tailwind.config.js` 的 theme，`bg-*/10`、`border-*/20` 才会生成——不要退回 `index.css` 手写 utility 的老路（那样 `border-success/20` 会静默失效）。
+- **禁止在前端复制后端业务规则**：可用库存、状态可否流转、金额结算等一律以接口返回为准；前端不得传"目标状态值"让后端照单执行。
+- 复用优先：`components/shared/*`（DataTable、LimitedTextarea 等）、`components/finder`、`hooks/use*`（`usePermission`、`useDirtyGuard`、`useInvalidate`…）、`lib/*`（`confirm`、`toast`、`dateTime`、`exportDownload`、`permissions`）。
+- 多标签页 keepAlive：页面会被保留，**编辑页必须在挂载/参数变化时显式重置表单**，否则会看到上一单的残留数据；离开有未保存改动的页面走 `useDirtyGuard`。
+- 桌面端判定**必须用运行时 `window.flowcubeDesktop`**，不要用构建 flag（用构建 flag 会把网页端误判成桌面端）。
+
+---
+
+## 14. PDA 开发规范
+
+- PDA 与 ERP 是**同一份前端代码**，靠 `/pda/*` 路由树与 `PdaLayout` 隔离；每个 PDA 路由用 `PdaRoutePermission` 声明所需权限（与后端权限码一致）。
+- 当前 PDA 页面：`inbound`、`receive/:id`、`putaway[/:id]`、`picking`、`task/:id`、`sort`、`check[/:id]`、`pack[/:id]`、`ship[/:id]`、`split`、`cancel-return[/:id]`（取消归还）、`adjustments[/:id]`（改单物理确认）、`transfer`、`transfer-out/:id`、`transfer-in/:id`、`sale-return`、`sale-return/:id/receive`、`sale-return/:id/putaway`。
+- **关键操作不做离线队列**（这是刻意设计，`useOfflineQueue.enqueue` 会直接抛错）：`useCriticalPdaAction` 在断网时**阻断提交**；只有"已提交但结果未知"（网络波动/超时）才记为 pending，恢复网络后先查回执，再由页面提供的 `resolveServerState` 回查真实业务状态兜底。**不要给关键动作加自动重放。**
+  - ⚠️ 回执查询打的是 `GET /api/system/request-status/:requestKey`，而**后端并未注册该路由**（见第 20 节风险 2）。目前实际生效的是各页面的 `resolveServerState` 兜底，`pages/pda/sale-return-*.tsx` 三处没提供兜底，断网确认会直接落到失败态。新增关键动作时**务必提供 `resolveServerState`**。
+- 扫码枪走键盘模式，`usePdaScanner` 统一处理：字符间隔 50ms 聚合、最短 3 位、1s 内同码去重；手动输入框需标 `data-scanner-manual="true"` 以避免被扫码缓冲吞掉。
+- 所有 PDA 写接口必须带 `X-Client: pda` 头（见 `src/api/*.ts` 里的 `withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })`）。
+- Android：`windowSoftInputMode="adjustResize|stateHidden"`、`launchMode=singleTask`、竖屏锁定；返回键在 `PdaLayout` 里通过 `@capacitor/app` 的 `backButton` 统一接管。已申请权限：INTERNET、ACCESS_NETWORK_STATE、CAMERA、VIBRATE、REQUEST_INSTALL_PACKAGES。
+- APK 的后端地址：构建期注入 `VITE_ERP_PRODUCTION_ORIGIN`，运行期可被 localStorage `API_BASE_URL` 覆盖（支持扫码写入）。
+- PDA 版本：`backend/apk/version.json`（`version` / `versionCode` / `filename` / `releaseNote`）必须与 `frontend/android/app/build.gradle` 的 `versionName` / `versionCode` **同步递增**，否则 PDA 端检测不到更新。
+
+---
+
+## 15. Electron 与打印规范
+
+- `desktop/main.js` 主进程：窗口、自动更新、本地打印、IPC；`preload.js` 用 `contextBridge` 暴露 `window.flowcubeDesktop`（**`contextIsolation: true`、`nodeIntegration: false`，不得放开**）。暴露的能力仅限：版本/打包状态、更新检查与下载、消息框、系统打印机枚举、客户端标识、`printZpl`。**不要新增通用命令执行类 IPC。**
+- 本地打印 `lib/localPrint.js`：Windows 走 PowerShell→WinSpool（`print-zpl-raw.ps1`），macOS/Linux 走 `lp -o raw`。生产实际依赖 Windows 打印链路。
+- 桌面端通过 `DesktopPrintClientBridge` 定时轮询 `claim-client` 领取打印任务，完成后回执。**回执接口受 `print.client.consume` 权限保护，`complete-client`/`fail-client` 还要校验 `ack_token`**；新增回执路径必须保持这两道校验。
+- 自动更新：`lib/updateCheck.js` 轮询后端 `/api/app-update/latest`（后端读取服务器上 `latest.json`），安装包从同域 `/current/<filename>` 下载，避免境内直连 GitHub。
+- **打印规则**（新增打印功能必须遵守）：① 打印任务只能由 `print-jobs.label-command.js` 的 `enqueue*LabelJob` / `reprint*` 创建；② 必须给 `job_unique_key`；③ 打印失败不得改变业务状态，业务成功也不得因打印失败回滚；④ 补打只创建新打印任务，**不得产生任何库存或账款副作用**；⑤ 标签尺寸/内容差异靠 `job_type` + `printer_bindings` 区分，不要硬编码打印机。
+- **生产安装包只能由 GitHub Actions Windows runner 构建**；本机 macOS 构建的 NSIS 包可能损坏。
+
+---
+
+## 16. 部署与服务器
+
+- 生产服务器 `root@47.93.228.251`，项目在 `/opt/flowcube`，SSH alias `flowcube-prod`（密钥在本机 `~/.ssh/`，不入库）。
+- **`main` 是唯一发布来源**：push main → GitHub Actions `deploy-browser.yml` → SSH 到服务器 → 精确 checkout 到该 commit → `docker compose up -d --build backend frontend`。
+- 打 `v*` tag → `build-desktop.yml`（Windows runner）构建安装包并发布 `latest.json`；`frontend/**` 变更 → `build-pda-apk.yml` 构建 APK。发版统一用 `npm run release:prod`（要求在 main 且工作区干净），或直接用 `/release-flowcube` 技能，**三端版本号必须同步递增**。
+- 数据库迁移**不会自动执行**：部署后需要跑 `npm --prefix backend run migrate`（容器内 `docker compose exec backend npm run migrate`）。
+- 桌面更新源：`/var/www/flowcube-downloads/latest.json`（顶层唯一权威入口，由 `scripts/release-desktop.js` 写入）；`current/` 只放固定文件名的当前安装包；`/downloads` 是**已废弃**的兼容别名（仅 GET/HEAD）。
+- 应急手动部署：`ssh flowcube-prod 'cd /opt/flowcube && SKIP_RELEASE_GATE=1 bash scripts/server-update.sh'`。
+- 其他运维脚本：`scripts/backup-db.sh`（每日 02:00 容器内 mysqldump，保留 14 天）、`scripts/monitor.sh`（5 分钟健康检查 + 每日心跳，钉钉告警）、`scripts/release-gate.sh`（服务器端发布门禁）。
+- CI 门禁 `test.yml`：纯函数单测 + 在临时 MySQL 上跑 migrate + `smoke:mainline` / `concurrency-guards` / `sale-adjustment` / `p0-regression` / `p1-regression` + `test:integration`。**绝不连接生产库。**
+
+---
+
+## 17. 禁止事项（硬约束）
+
+1. 禁止绕过 `assertStatusAction` / `assertWarehouseTaskAction` / `compareAndSetStatus` 直接 `UPDATE ... SET status=`。
+2. 禁止直接写 `inventory_stock.quantity`；禁止绕过三大引擎操作库存或预占。
+3. 禁止在没有事务、没有单头行锁的情况下做多表库存/账款写入。
+4. 禁止在事务里执行 HTTP 请求或真实打印。
+5. 禁止补打/重打标签时产生库存或账款副作用。
+6. 禁止在前端实现或复制后端业务规则（可用量、状态流转、结算金额），禁止由前端传入目标状态值。
+7. 禁止给 PDA 关键动作加"离线自动重放"，禁止去掉 `X-Request-Key` 幂等。
+8. 禁止在 ERP 端新增绕过 `pdaOnly` 的仓库作业接口。
+9. 禁止新增接口时省略 `requirePermission`；禁止靠前端隐藏按钮当作权限控制。
+10. 禁止未经确认删除数据库字段、旧兼容代码、迁移文件，或修改已执行过的迁移（只能新增迁移）。
+11. 禁止把密钥/口令/Token 写进代码、文档或提交；禁止覆盖生产环境配置（`.env`、`deploy/production*.json`）。
+12. 禁止在没有读完整调用链的情况下重构 `engine/`、`documentStatusRules.js`、`warehouseTaskStatus.js`。
+13. 禁止本机构建生产桌面安装包；禁止直接在服务器上改代码（只能通过 main 部署）。
+14. 未经用户明确要求，禁止 `git push`、打 tag、发版、重启生产服务、执行会删数据的 SQL。
+
+---
+
+## 18. 修改前检查清单
+
+- [ ] 这个改动属于哪一层（routes / controller / service / engine / 前端 / PDA）？是否已有窄职责文件该放进去？
+- [ ] 是否触碰库存、预占、状态、账款、打印任一项？如果是，先读对应引擎/常量文件的注释（它们记录了历史事故的根因，别推翻）。
+- [ ] 是否需要新的权限码？（后端 + 前端 + seed 迁移三处）
+- [ ] 是否涉及并发？需要 `FOR UPDATE`、CAS、`requestKey` 还是唯一键？加锁顺序是否与现有代码一致？
+- [ ] 是否需要新迁移？只能新增文件，编号取当前最大值 +1。
+- [ ] 是否是仓库现场交互？先确认没有把"决策权"交给仓库操作员。
+- [ ] 相关 smoke/集成测试（`tests/`）是否覆盖了这条链路？
+
+## 19. 修改后检查清单
+
+- [ ] `npm --prefix backend run lint` / `npm --prefix frontend run lint`
+- [ ] `./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit`（**不要用 tsconfig.json，那是空壳，永远 0 错误**）
+- [ ] 涉及后端逻辑：`npm run smoke:mainline`、`smoke:concurrency-guards`、`smoke:p0-regression`、`smoke:p1-regression`、`test:integration`（本机有真实 MySQL，可直接跑）
+- [ ] 涉及打印/标签：`npm run test:label`、`npm run test:print`
+- [ ] 涉及前端页面：用 `preview_start` 起本地服务实际点一遍（PDA 页面记得开新标签页）
+- [ ] 状态机改了：`WT_ON_ENTER/EXIT_ACTIONS` 注释表、`documentStatusRules.js` 是否同步
+- [ ] 库存改了：跑一遍 `GET /inventory/check-consistency` 或 `resync:inventory-stock` 确认缓存与容器一致
+- [ ] 权限改了：前后端权限码是否一致、seed 迁移是否补上
+- [ ] 幂等改了：模拟"连点两次 + 断网重试"验证不会重复推进
+- [ ] 三端版本号是否需要同步递增（发版时必须）
+
+---
+
+## 20. 当前已知风险与待确认事项
+
+1. **2026-07 架构审计的 P0/P1 修复刚随 v0.4.30 发布**（`23debe5` + `b17950b`，含迁移 130/131/132、`tests/p0-regression`、`tests/p1-regression`）。涉及 engine 三件套、收货/上架、销售占库与出库的锁顺序与幂等，属于"刚上线、生产验证时间还短"的区域，改动这些文件要格外谨慎并跑齐回归。
+2. **幂等回执查询接口缺失（断链）**：前端 `api/operation-requests.ts` 调用 `GET /api/system/request-status/:requestKey`，但后端 `app.js` **没有注册 `/api/system`，全仓也搜不到 `request-status`**，该请求必然 404。因此 PDA"结果待确认"的回执确认路径不可用，只剩页面自带的 `resolveServerState` 兜底（`sale-return-receive/putaway` 三个动作没有兜底）。是接口被删还是从未实现，**待确认**；修复方向是补一个只读接口暴露 `utils/operationRequest.getOperationRequestStatus()`。
+3. **PDA 设备会话形同虚设**：`pdaSessionRequired` / `requirePdaScope` 在业务模块中零使用，前端也不发 `X-PDA-Session`，因此上架的"跨仓拦截"实际不会触发。要不要收紧成强制，**待确认**。
+4. **缺货上报功能未落地**：迁移 117 建了 `warehouse_task_shortages` 表、`warehouse_tasks.shortage_reported_at` 列，但后端与前端**均无任何代码引用**。是未完成还是已回退，**待确认**——不要在不清楚的情况下删表或删列。
+5. **数据库列注释与实际语义脱节**（详见第 8 节）。清理它们需要新迁移，**待确认是否要做**。
+6. **前后端权限码手工双份**：后端多出 `system.health.view` / `system.health.autofix`，前端没有；也没有自动一致性校验，容易漏改。
+7. **`/packages/*` 打包接口没有 `pdaOnly`**：PDA 打包页在用，但 ERP 端理论上也能调用装箱/完成箱接口。是否要收紧，**待确认**。
+8. **生产库存在 schema 漂移史**（曾出现迁移未真正生效导致缺列）。改动依赖新列的逻辑时，先确认生产已跑过对应迁移。
+9. **`avg_cost` 只随入库正向移动**，退货/撤回收货不反冲——这是刻意简化，利润分析用 `sale_order_items.cost_snapshot` 口径，不要"顺手修正"。
+10. `docs/` 下部分文档（`flow-review-report.md`、`print-module-refactor-plan.md` 等）是阶段性报告，不代表当前实现。

@@ -159,6 +159,8 @@ export interface ReconciliationRecord {
   balance: number
   status: 1 | 2 | 3
   statusName: string
+  /** 0=待财务确认（仅应付会出现）。对账页登记付款前要靠它判断是否先走确认结算 */
+  confirmStatus: number
   dueDate: string | null
   remark: string | null
   statementName: string
@@ -187,7 +189,7 @@ export interface ReconciliationReport {
   pagination: { page: number; pageSize: number; total: number }
 }
 
-export const getReconciliationApi = (params: { type?: number; startDate?: string; endDate?: string; keyword?: string; status?: number | string; pageSize?: number } = {}) =>
+export const getReconciliationApi = (params: { type?: number; startDate?: string; endDate?: string; keyword?: string; status?: number | string; pageSize?: number; settlementTypes?: string } = {}) =>
   client.get<ReconciliationReport>('/reports/reconciliation', { params })
 
 export interface ProfitSaleOrderRow {
