@@ -76,11 +76,6 @@ const env = {
   // 而超收会随上架自动结算直接进应付。默认 500 元——按"错一次也就是一顿饭钱"的量级取，
   // 客单价高的仓库应调高，避免正常收货被频繁打断（审计 P1-3）。
   OVER_RECEIVE_CONFIRM_AMOUNT: readInt('OVER_RECEIVE_CONFIRM_AMOUNT', { defaultValue: 500 }),
-  // PDA 设备会话强制开关。默认 false：新版部署后 PDA 仍能用旧方式作业，
-  // 等设备在 ERP 里登记完、现场扫码绑定完、确认都在线了，再打开这个开关。
-  // 直接以 true 上线会让所有尚未绑定的 PDA 当场全部不可用——开关只是一行 env，
-  // 打开不需要重新发版，没有任何理由为了省事而冒这个险。
-  PDA_SESSION_REQUIRED: readBool('PDA_SESSION_REQUIRED', false),
 }
 
 if (IS_PROD) {

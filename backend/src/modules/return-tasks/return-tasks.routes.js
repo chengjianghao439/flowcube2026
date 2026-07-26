@@ -2,7 +2,7 @@ const { Router } = require('express')
 const ctrl = require('./return-tasks.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
-const { pdaSessionOptional } = require('../../middleware/pdaSession')
+const { pdaSessionRequired } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
 
 const router = Router()
@@ -10,7 +10,7 @@ router.use(authMiddleware)
 
 // PDA 列表
 router.get('/pda',
-  pdaSessionOptional(),
+  pdaSessionRequired(),
   requirePermission(PERMISSIONS.RETURN_ORDER_VIEW),
   ctrl.pdaList,
 )
@@ -29,7 +29,7 @@ router.post('/:id/submit',
 
 // PDA 收货
 router.post('/:id/receive',
-  pdaSessionOptional(),
+  pdaSessionRequired(),
   requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
   pdaOnly,
   ctrl.receive,
@@ -37,7 +37,7 @@ router.post('/:id/receive',
 
 // PDA 质检
 router.post('/:id/check',
-  pdaSessionOptional(),
+  pdaSessionRequired(),
   requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
   pdaOnly,
   ctrl.check,
@@ -45,7 +45,7 @@ router.post('/:id/check',
 
 // PDA 上架
 router.post('/:id/putaway',
-  pdaSessionOptional(),
+  pdaSessionRequired(),
   requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
   pdaOnly,
   ctrl.putaway,

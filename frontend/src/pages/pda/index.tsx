@@ -11,6 +11,7 @@ import type { PdaPerm } from '@/hooks/usePdaRole'
 import { PdaEmptyCard } from '@/components/pda/PdaEmptyState'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
 
 // ── 作业入口（带权限过滤）────────────────────────────────────────────────────
 const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = [
@@ -36,6 +37,12 @@ export default function PdaWorkbench() {
   const hour     = new Date().getHours()
   const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
   const { roleLabel, roleIcon, roleColor, can, permissionsMissing } = usePdaRole()
+
+  // 绑定状态在渲染时读一次即可：绑定/解绑都会离开本页再回来，回来时组件重新挂载
+  const deviceCredential = getDeviceCredential()
+  const deviceBound = !!deviceCredential
+  const deviceCode = deviceCredential?.deviceCode ?? ''
+  const sessionReady = !!getDeviceSession()
 
   const allowedOps = ALL_OPS.filter(op => can(op.perm))
 
@@ -64,6 +71,33 @@ export default function PdaWorkbench() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-4">
+        {/* 设备绑定状态。设备会话是硬性要求，未绑定的机器点任何作业都会被拒，
+            所以这块必须显眼且常驻——否则员工只会看到一堆点不动的按钮，
+            却找不到「哪里能绑定」。 */}
+        {!deviceBound ? (
+          <button
+            type="button"
+            onClick={() => navigate('/pda/bind')}
+            className="mb-4 w-full rounded-2xl border-2 border-destructive/40 bg-destructive/5 p-4 text-left active:scale-95 transition-all"
+          >
+            <div className="flex items-center gap-2 text-base font-semibold text-destructive">
+              <span className="text-xl">📱</span>本机尚未绑定设备
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              未绑定的机器无法执行任何作业。点这里扫管理员提供的绑定二维码。
+            </p>
+          </button>
+        ) : !sessionReady ? (
+          <button
+            type="button"
+            onClick={() => navigate('/pda/bind')}
+            className="mb-4 w-full rounded-2xl border border-amber-500/40 bg-amber-500/5 p-3 text-left active:scale-95 transition-all"
+          >
+            <p className="text-sm font-medium text-amber-600">设备凭证需要刷新</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">重新登录即可自动恢复；若仍不行，点这里检查绑定状态。</p>
+          </button>
+        ) : null}
+
         <div>
           <p className="text-xs text-muted-foreground mb-3">{roleIcon} {roleLabel} 可用作业（{allowedOps.length} 项）</p>
           {permissionsMissing ? (
@@ -90,6 +124,16 @@ export default function PdaWorkbench() {
                 </button>
               ))}
             </div>
+          )}
+          {/* 已绑定时入口收到底部：日常不打扰，换机/解绑时还找得到 */}
+          {deviceBound && (
+            <button
+              type="button"
+              onClick={() => navigate('/pda/bind')}
+              className="mt-4 w-full rounded-xl border border-border bg-card px-3 py-2.5 text-left text-sm text-muted-foreground active:scale-95 transition-all"
+            >
+              📱 设备绑定：{deviceCode}
+            </button>
           )}
         </div>
       </div>

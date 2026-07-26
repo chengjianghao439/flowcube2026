@@ -99,15 +99,9 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
       columns: 'id, status, lock_version, warehouse_id',
       entityName: '入库任务',
     })
-    // ⚠️ 现状（2026-07 审计）：req.pda 目前恒为 null，这道设备级拦截**从未生效过**。
-    // pdaSessionRequired/requirePdaScope 全仓零调用，前端也从不发送 X-PDA-Session——
-    // PDA 设备会话是个半成品：后端有表(pda_devices/pda_device_sessions)、有中间件、
-    // 有 POST /api/pda/sessions，但 ERP 端没有任何设备注册/发密钥/绑定仓库的界面，
-    // PDA 登录也没有创建会话这一步，整条链路缺前端和管理入口。
-    // 真正在挡跨仓误操作的是下面那行用户级 scope 断言（user_warehouse_scope）。
-    // 要让设备级也生效，需要补设备管理界面 + PDA 登录建会话 + optional→required 的
-    // 灰度切换（旧 APK 不发头，直接切会把现网 PDA 全部挡死），属于独立特性不是修 bug。
-    // PDA 设备绑定了仓库时，强制校验设备所属仓库与任务仓库一致，防止跨仓库误操作
+    // 设备级跨仓拦截：req.pda 由 pdaSessionRequired 中间件填充，PDA 必须先扫码绑定设备。
+    // 设备绑定了仓库时，这里挡住「A 仓的机器上架B 仓单据」；设备未绑仓库则不限仓，
+    // 此时仍有下面的用户级 scope 断言兜底。
     if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(taskRow.warehouse_id)) {
       throw new AppError('当前设备绑定仓库与该收货订单所属仓库不一致，无法上架', 403)
     }

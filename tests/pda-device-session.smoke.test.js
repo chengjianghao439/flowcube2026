@@ -9,8 +9,7 @@
  *   · 设备丢失 → ERP 停用即吊销全部票据，那台机器当场作业不了
  *   · 重置密钥 → 旧密钥作废、旧票据吊销，必须重新扫码绑定
  *
- * 强制开关（env.PDA_SESSION_REQUIRED）默认关闭，所以本测试默认跑「观察模式」：
- * 有票据时按票据判定，没票据时放行。强制模式的行为用 PDA_SESSION_REQUIRED=1 单独跑。
+ * 设备会话是硬性要求（没有开关）：未绑定设备的 PDA 一律作业不了。
  *
  * 运行：node tests/pda-device-session.smoke.test.js
  */
@@ -27,23 +26,6 @@ const {
 } = require('./helpers/smokeTestKit')
 
 /**
- * 后端是否处于强制模式，必须**探测服务端真实行为**而不是读本进程的环境变量——
- * env 是后端进程启动时读的，在测试进程里设 PDA_SESSION_REQUIRED 对已在运行的后端毫无影响，
- * 照着自己的 env 断言只会得到一个假失败。
- *
- * 探测方式：拿一个必然不存在的收货单 id 打 PDA 接口。中间件跑在业务逻辑之前，
- * 强制模式会在校验单据存在性之前就返回 403 PDA_SESSION_REQUIRED；观察模式则会放行到
- * 业务层，报出 404 之类的业务错误。
- */
-async function detectRequiredMode(http, token) {
-  const probe = await http.post('/api/inbound-tasks/99999999/receive', {
-    token, headers: noSessionHeaders(),
-    json: { productId: 1, packages: [{ qty: 1 }] },
-  })
-  return probe.status === 403 && probe.data?.code === 'PDA_SESSION_REQUIRED'
-}
-
-/**
  * 只带 X-Client 不带票据的头。
  * 注意 smokeTestKit 的 pdaHeaders() 本身就附了一张有效票据（初始化时用 SMOKE-PDA-01 建的），
  * 拿它来测「没有票据的机器」等于什么都没测——这里必须显式构造一个干净的头。
@@ -51,8 +33,6 @@ async function detectRequiredMode(http, token) {
 function noSessionHeaders(extra = {}) {
   return { 'X-Client': 'pda', ...extra }
 }
-
-let REQUIRED_MODE = false
 
 async function createProduct(pool, label) {
   const code = randomRef(`DEV-${label}`).slice(0, 40)
@@ -206,15 +186,11 @@ async function scenarioDisableRevokes(ctx, log, token, bound) {
     token, headers: pdaSessionHeaders(bound.sessionToken),
     json: { productId: Number(task.product.id), packages: [{ qty: 2 }] },
   })
-  if (REQUIRED_MODE) {
-    log.assert('★ 强制模式：被吊销票据的机器直接作业不了', after.status === 403, `status=${after.status}`)
-  } else {
-    log.assert(
-      '观察模式：吊销后不再享有设备身份，但不阻断作业（等设备都绑定完再开强制开关）',
-      after.ok,
-      `status=${after.status}`,
-    )
-  }
+  log.assert(
+    '★ 被吊销票据的机器立刻作业不了（丢失设备的止血闭环到此完整）',
+    after.status === 403 && after.data?.code === 'PDA_SESSION_REQUIRED',
+    `status=${after.status} code=${after.data?.code}`,
+  )
 
   const backOn = await http.put(`/api/pda-devices/${bound.device.id}/status`, { token, json: { status: 'active' } })
   log.assert('可以重新启用设备', backOn.ok, `status=${backOn.status}`)
@@ -248,7 +224,7 @@ async function scenarioResetSecret(ctx, log, token) {
 }
 
 async function scenarioNoSessionBehaviour(ctx, log, token) {
-  log.section(`未绑定设备的机器：${REQUIRED_MODE ? '强制模式应被拒' : '观察模式应放行'}`)
+  log.section('未绑定设备的机器：一律不许作业')
   const { http } = ctx
   const task = await seedInboundTask(ctx, token, ctx.warehouse)
 
@@ -256,19 +232,12 @@ async function scenarioNoSessionBehaviour(ctx, log, token) {
     token, headers: noSessionHeaders(),
     json: { productId: Number(task.product.id), packages: [{ qty: 1 }] },
   })
-  if (REQUIRED_MODE) {
-    log.assert(
-      '★ 强制模式：没有设备票据一律不许作业',
-      resp.status === 403 && resp.data?.code === 'PDA_SESSION_REQUIRED',
-      `status=${resp.status} code=${resp.data?.code}`,
-    )
-  } else {
-    log.assert(
-      '★ 观察模式：没票据照常作业（开关未打开前不能影响现网 PDA）',
-      resp.ok,
-      `status=${resp.status} ${JSON.stringify(resp.data).slice(0, 140)}`,
-    )
-  }
+  log.assert(
+    '★ 没有设备票据一律不许作业，且提示指向「去绑定」而不是含糊报错',
+    resp.status === 403 && resp.data?.code === 'PDA_SESSION_REQUIRED'
+      && /绑定/.test(String(resp.data?.message || '')),
+    `status=${resp.status} code=${resp.data?.code} msg=${resp.data?.message}`,
+  )
 }
 
 async function main() {
@@ -284,11 +253,6 @@ async function main() {
     const { token } = await login(ctx.http, 'smoke_admin', 'SmokeAdmin123!')
     if (!token) throw new Error('登录失败')
 
-    REQUIRED_MODE = await detectRequiredMode(ctx.http, token)
-    console.log(
-      `\n  后端实际模式：${REQUIRED_MODE ? '强制（PDA_SESSION_REQUIRED 已开）' : '观察（默认）'}`
-      + `${REQUIRED_MODE ? '' : '\n  提示：要覆盖强制模式的行为，请用 PDA_SESSION_REQUIRED=1 启动后端后再跑本测试'}\n`,
-    )
 
     const bound = await scenarioRegisterAndBind(ctx, log, token)
     await scenarioCrossWarehouseBlocked(ctx, log, token, bound)

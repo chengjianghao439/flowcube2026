@@ -2,7 +2,20 @@ const { pool } = require('../config/db')
 const AppError = require('../utils/AppError')
 const logger = require('../utils/logger')
 const { hashToken, normalizeScopes } = require('../modules/pda/pda.sessions.service')
-const { env } = require('../config/env')
+
+/**
+ * PDA 设备会话校验（强制）。
+ *
+ * 每台 PDA 必须先在 ERP「系统 → PDA 设备」登记、再扫码绑定，之后所有作业请求都要带
+ * 有效的 X-PDA-Session 票据。没票据、票据过期、票据被吊销、设备被停用，一律 403。
+ *
+ * 校验通过后把设备身份挂到 req.pda，业务层据此做跨仓拦截：
+ * 绑了 A 仓的机器扫 B 仓的单据会被直接拒绝（见 inbound-tasks 的 pdaWarehouseId 校验）。
+ *
+ * 历史：这里曾经有一个观察模式（无票据放行）和 env.PDA_SESSION_REQUIRED 开关，
+ * 用于让存量 PDA 平滑过渡。系统尚未投产、不存在存量设备，因此直接写死为强制，
+ * 少一个开关就少一处「以为开了其实没开」的隐患。
+ */
 
 function getRouteMeta(req) {
   return {
@@ -12,23 +25,17 @@ function getRouteMeta(req) {
   }
 }
 
-function setSessionHint(res) {
-  if (!res.headersSent) {
-    res.setHeader('X-PDA-Session-Required-Soon', 'true')
-  }
-}
-
-function logPdaSessionObservation(req, status, extra = {}) {
-  const meta = {
-    ...getRouteMeta(req),
-    hasPdaSession: !!String(req.headers['x-pda-session'] || '').trim(),
-    sessionValid: status === 'valid',
-    deviceCode: req.pda?.deviceCode ?? null,
-    ...extra,
-  }
-  const msg = 'PDA device session optional check'
-  if (status === 'valid') logger.info(msg, meta, 'PDASession')
-  else logger.warn(msg, meta, 'PDASession')
+function denySession(req, next, reason, message) {
+  logger.warn(
+    'PDA device session denied',
+    {
+      ...getRouteMeta(req),
+      hasPdaSession: !!String(req.headers['x-pda-session'] || '').trim(),
+      reason,
+    },
+    'PDASession',
+  )
+  return next(new AppError(message, 403, 'PDA_SESSION_REQUIRED'))
 }
 
 async function loadPdaSession(token) {
@@ -64,92 +71,67 @@ function buildPdaContext(row) {
   }
 }
 
-/**
- * 会话缺失/无效时的处置：观察期只记日志放行，强制期直接 403。
- * 由 env.PDA_SESSION_REQUIRED 控制，切换不需要改代码、不需要重新发版。
- */
-function denyOrPass(req, res, next, reason, message) {
-  setSessionHint(res)
-  logPdaSessionObservation(req, reason === 'missing_session' ? 'missing' : 'invalid', { reason })
-  if (env.PDA_SESSION_REQUIRED) {
-    return next(new AppError(message, 403, 'PDA_SESSION_REQUIRED'))
-  }
-  return next()
-}
-
-function pdaSessionOptional() {
+function pdaSessionRequired() {
   return async (req, res, next) => {
     const token = String(req.headers['x-pda-session'] || '').trim()
     req.pda = null
     if (!token) {
-      return denyOrPass(req, res, next, 'missing_session', '该 PDA 未绑定设备，请先在设置中扫码绑定后再作业')
+      return denySession(req, next, 'missing_session', '该 PDA 未绑定设备，请先在「设备绑定」中扫码绑定后再作业')
     }
 
+    let row
     try {
-      const row = await loadPdaSession(token)
-      if (!row) {
-        return denyOrPass(req, res, next, 'session_not_found', '设备会话无效，请重新登录以重建设备会话')
-      }
-      if (row.revoked_at) {
-        return denyOrPass(req, res, next, 'session_revoked', '该设备会话已被管理员吊销，请联系管理员')
-      }
-      if (new Date(row.expires_at).getTime() <= Date.now()) {
-        return denyOrPass(req, res, next, 'session_expired', '设备会话已过期，请重新登录以重建设备会话')
-      }
-      if (String(row.device_status) !== 'active') {
-        return denyOrPass(req, res, next, 'device_not_active', '该 PDA 设备已被停用，请联系管理员')
-      }
-
-      req.pda = buildPdaContext(row)
-      try {
-        await pool.query(
-          `UPDATE pda_device_sessions
-           SET last_seen_at = NOW()
-           WHERE id = ?`,
-          [req.pda.sessionId],
-        )
-        await pool.query('UPDATE pda_devices SET last_seen_at = NOW() WHERE id = ?', [req.pda.deviceId])
-      } catch (seenError) {
-        logger.warn(
-          'PDA device session last_seen update failed; request allowed for phase 1',
-          {
-            ...getRouteMeta(req),
-            sessionId: req.pda.sessionId,
-            deviceCode: req.pda.deviceCode,
-            error: seenError?.message || String(seenError),
-          },
-          'PDASession',
-        )
-      }
-      logPdaSessionObservation(req, 'valid')
-      return next()
+      row = await loadPdaSession(token)
     } catch (error) {
-      setSessionHint(res)
-      logger.warn(
-        'PDA device session optional check failed; request allowed for phase 1',
-        {
-          ...getRouteMeta(req),
-          hasPdaSession: true,
-          sessionValid: false,
-          error: error?.message || String(error),
-        },
+      // 查询本身失败（数据库抖动等）不能当成「票据有效」放行——设备身份是访问控制的一环，
+      // 查不到就必须拒绝，让现场重试，而不是放一个身份不明的请求进业务层
+      logger.error(
+        'PDA device session lookup failed',
+        { ...getRouteMeta(req), error: error?.message || String(error) },
         'PDASession',
       )
-      return next()
+      return next(new AppError('设备会话校验失败，请稍后重试', 503, 'PDA_SESSION_CHECK_FAILED'))
     }
+
+    if (!row) {
+      return denySession(req, next, 'session_not_found', '设备会话无效，请重新登录以重建设备会话')
+    }
+    if (row.revoked_at) {
+      return denySession(req, next, 'session_revoked', '该设备会话已被管理员吊销，请联系管理员')
+    }
+    if (new Date(row.expires_at).getTime() <= Date.now()) {
+      return denySession(req, next, 'session_expired', '设备会话已过期，请重新登录以重建设备会话')
+    }
+    if (String(row.device_status) !== 'active') {
+      return denySession(req, next, 'device_not_active', '该 PDA 设备已被停用，请联系管理员')
+    }
+
+    req.pda = buildPdaContext(row)
+    try {
+      await pool.query('UPDATE pda_device_sessions SET last_seen_at = NOW() WHERE id = ?', [req.pda.sessionId])
+      await pool.query('UPDATE pda_devices SET last_seen_at = NOW() WHERE id = ?', [req.pda.deviceId])
+    } catch (seenError) {
+      // last_seen 只是「最后在线」展示用，写失败不影响这次作业的合法性，记日志即可
+      logger.warn(
+        'PDA device last_seen update failed',
+        { ...getRouteMeta(req), sessionId: req.pda.sessionId, error: seenError?.message || String(seenError) },
+        'PDASession',
+      )
+    }
+    logger.info(
+      'PDA device session accepted',
+      { ...getRouteMeta(req), deviceCode: req.pda.deviceCode, warehouseId: req.pda.warehouseId },
+      'PDASession',
+    )
+    return next()
   }
 }
 
-function pdaSessionRequired() {
-  return async (req, res, next) => {
-    await pdaSessionOptional()(req, res, (error) => {
-      if (error) return next(error)
-      if (!req.pda) return next(new AppError('需要有效 PDA 设备会话', 403, 'PDA_SESSION_REQUIRED'))
-      return next()
-    })
-  }
-}
-
+/**
+ * 按 scope 细分设备能做哪些作业（收货 / 拣货 / 打包…）。
+ * 目前 createSession 给所有设备发全量 scope，本中间件尚未挂到任何路由上——
+ * 设备粒度的能力细分还没有实际需求，过早启用只会增加现场故障面。
+ */
 function requirePdaScope(scope) {
   return (req, _res, next) => {
     if (!req.pda) return next(new AppError('需要有效 PDA 设备会话', 403, 'PDA_SESSION_REQUIRED'))
@@ -161,7 +143,6 @@ function requirePdaScope(scope) {
 }
 
 module.exports = {
-  pdaSessionOptional,
   pdaSessionRequired,
   requirePdaScope,
 }
