@@ -1,7 +1,7 @@
 {
-  "version": "0.3.80",
-  "versionCode": 26,
+  "version": "0.4.29",
+  "versionCode": 27,
   "filename": "app-release.apk",
-  "releaseNote": "提升 PDA 拣货扫码、仓库任务状态、打印任务回执、页面白话提示和 PDA 设备会话识别稳定性；浏览器、PDA、桌面端统一到 v0.3.80。",
-  "publishedAt": "2026-05-02T17:41:40.000Z"
+  "releaseNote": "本版专项整改条码打印，修掉了一批会导致「标签重复出纸」「纸从别的机器出来」「绑定了打印机却不生效」的问题。仓库日常打标签的体验会明显更稳。",
+  "publishedAt": "2026-07-26T11:58:00.996Z"
 }

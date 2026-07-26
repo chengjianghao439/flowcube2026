@@ -139,6 +139,17 @@ jobs:
           test "$ACTUAL_NAME" = "$EXPECTED_NAME"
           test "$ACTUAL_CODE" = "$EXPECTED_CODE"
 
+          # build.gradle 与 backend/apk/version.json 必须一致：前者是 APK 内置版本，
+          # 后者是后端对 PDA 公布的版本，PDA 拿两者比对决定是否更新。此前无人校验，
+          # 导致 version.json 长期停在旧版本、APK 每次都在更新却从不被下载。
+          JSON_NAME="$(node -p "require('./backend/apk/version.json').version")"
+          JSON_CODE="$(node -p "require('./backend/apk/version.json').versionCode")"
+          echo "version.json versionName=$JSON_NAME versionCode=$JSON_CODE"
+          if [ "$JSON_NAME" != "$EXPECTED_NAME" ] || [ "$JSON_CODE" != "$EXPECTED_CODE" ]; then
+            echo "::error::backend/apk/version.json ($JSON_NAME/$JSON_CODE) 与 build.gradle ($EXPECTED_NAME/$EXPECTED_CODE) 不一致；PDA 将无法正确检测更新。请用 bump-version.sh 同步版本号。"
+            exit 1
+          fi
+
       - name: Rename APK
         run: |
           mkdir -p out
