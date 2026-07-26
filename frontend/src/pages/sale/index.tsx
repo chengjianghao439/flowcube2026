@@ -194,16 +194,16 @@ export default function SalePage() {
 
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
-    { key: 'orderNo',      title: '销售单号', width: 160 },
-    { key: 'customerName', title: '客户', width: 140 },
-    { key: 'warehouseName',title: '仓库',     width: 140 },
+    { key: 'orderNo',      title: '销售单号', width: 11.68 },
+    { key: 'customerName', title: '客户', width: 13.79 },
+    { key: 'warehouseName',title: '仓库',     width: 7.11 },
     {
-      key: 'totalAmount', title: '金额', width: 110,
+      key: 'totalAmount', title: '金额', width: 5.63,
       render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span>,
     },
-    { key: 'remark', title: '备注', width: 120, render: v => (v as string) || '-' },
+    { key: 'remark', title: '备注', width: 22.45, render: v => (v as string) || '-' },
     {
-      key: 'status', title: '状态', width: 90,
+      key: 'status', title: '状态', width: 7.11,
       render: (_, row) => {
         const r = row as SaleOrder
         const ws = getSaleWorkflowStatus(r)
@@ -221,7 +221,7 @@ export default function SalePage() {
       },
     },
     {
-      key: 'receivableStatus', title: '回款', width: 100,
+      key: 'receivableStatus', title: '回款', width: 5.63,
       render: (_, row) => {
         const r = row as SaleOrder
         if (r.receivableStatus == null) return <span className="text-xs text-muted-foreground">—</span>
@@ -240,10 +240,10 @@ export default function SalePage() {
         )
       },
     },
-    { key: 'operatorName', title: '经办人',   width: 90 },
-    { key: 'createdAt',    title: '创建时间', width: 152, render: v => formatDisplayDateTime(v) },
+    { key: 'operatorName', title: '经办人',   width: 7.11 },
+    { key: 'createdAt',    title: '创建时间', width: 11.05, render: v => formatDisplayDateTime(v) },
     {
-      key: 'id', title: '操作', width: 120,
+      key: 'id', title: '操作', width: 8.44,
       render: (_, row) => {
         const r = row as SaleOrder
         return (
@@ -304,6 +304,8 @@ export default function SalePage() {
         data={data?.list ?? []}
         loading={isLoading}
         onRowDoubleClick={goToDetail}
+        fluid
+        columnStorageKey="sale:fluid-v1"
       />
 
       {/* 二次确认弹窗 */}

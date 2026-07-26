@@ -437,7 +437,7 @@ function SaleOrderHeaderFields({
         </div>
         <div className="flex-1 space-y-1.5">
           <Label>收货地址</Label>
-          <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} className="h-10 min-h-0 py-2 pb-2" />
+          <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} className="h-10 min-h-0 py-2" singleLine />
         </div>
         <div className="flex-1 space-y-1.5">
           <Label>备注</Label>
@@ -1137,7 +1137,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           {/* 基础信息 */}
           <SectionCard title="基础信息" compact>
             <div className="space-y-2 text-sm">
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-8 gap-y-3">
+              <div className="grid grid-cols-[repeat(6,minmax(0,260px))] gap-x-8 gap-y-3">
                 <div><span className="text-muted-foreground">客户：</span><span>{order.customerName}</span></div>
                 <div><span className="text-muted-foreground">仓库：</span><span>{order.warehouseName}</span></div>
                 <div><span className="text-muted-foreground">时间：</span><span>{formatDisplayDateTime(order.createdAt)}</span></div>

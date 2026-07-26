@@ -192,13 +192,13 @@ export default function InboundTasksPage() {
     {
       key: 'taskNo',
       title: '任务单号',
-      width: 160,
+      width: 11.47,
       render: v => <span className="block truncate whitespace-nowrap" title={String(v)}>{v as string}</span>,
     },
     {
       key: 'supplierName',
       title: '供应商',
-      width: 140,
+      width: 13.23,
       render: v => {
         const text = String(v ?? '')
         return text
@@ -209,7 +209,7 @@ export default function InboundTasksPage() {
     {
       key: 'warehouseName',
       title: '仓库',
-      width: 140,
+      width: 7.95,
       render: v => {
         const text = String(v ?? '')
         return text
@@ -220,7 +220,7 @@ export default function InboundTasksPage() {
     {
       key: 'status',
       title: '状态',
-      width: 100,
+      width: 7.53,
       render: (_, row) => {
         const task = row as InboundTask
         const tone = task.receiptStatus?.key === 'audited'
@@ -240,7 +240,7 @@ export default function InboundTasksPage() {
     {
       key: 'operatorName',
       title: '操作人',
-      width: 90,
+      width: 11.05,
       render: v => {
         const text = String(v ?? '')
         return text
@@ -251,7 +251,7 @@ export default function InboundTasksPage() {
     {
       key: 'createdAt',
       title: '创建时间',
-      width: 160,
+      width: 13.37,
       render: v => {
         const text = formatDisplayDateTime(v)
         return <span className="block whitespace-nowrap" title={text}>{text}</span>
@@ -260,7 +260,7 @@ export default function InboundTasksPage() {
     {
       key: 'remark',
       title: '备注',
-      width: 200,
+      width: 26.95,
       render: v => v
         ? <span className="line-clamp-1 text-muted-foreground" title={String(v)}>{v as string}</span>
         : <span className="text-muted-foreground/50">—</span>,
@@ -268,7 +268,7 @@ export default function InboundTasksPage() {
     {
       key: 'id',
       title: '操作',
-      width: 120,
+      width: 8.45,
       render: (_, row) => {
         const task = row as InboundTask
         const items = []
@@ -405,7 +405,8 @@ export default function InboundTasksPage() {
         data={data?.list ?? []}
         loading={isLoading}
         rowKey="id"
-        columnStorageKey="inbound-tasks:v4"
+        fluid
+        columnStorageKey="inbound-tasks:v5"
         onRowDoubleClick={openDetail}
       />
 

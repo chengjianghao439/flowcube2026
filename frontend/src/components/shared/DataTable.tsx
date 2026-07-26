@@ -17,6 +17,12 @@ interface DataTableProps<T extends object> {
   sortKey?: string
   sortDirection?: 'asc' | 'desc'
   onSortChange?: (key: string) => void
+  /**
+   * 按比例缩放模式：列宽以百分比（而非固定 px）存储和渲染，表格始终占满容器宽度，
+   * 容器变宽时各列按当前比例一起放大，无需用户重新拖拽。col.width 在此模式下按
+   * 百分比（0-100）解读。默认关闭，不影响其他仍按固定 px 记忆列宽的页面。
+   */
+  fluid?: boolean
 }
 
 function isAction(key: string, title: string): boolean {
@@ -30,6 +36,7 @@ export default function DataTable<T extends object>({
   onRowDoubleClick,
   columnStorageKey,
   sortKey, sortDirection, onSortChange,
+  fluid = false,
 }: DataTableProps<T>) {
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
@@ -136,17 +143,20 @@ export default function DataTable<T extends object>({
 
   const getColumnWidth = (col: TableColumn<T>) => {
     const key = String(col.key)
-    const fallback = isAction(key, col.title) ? 180 : 160
+    const fallback = fluid
+      ? 100 / (orderedColumns.length || columns.length || 1)
+      : (isAction(key, col.title) ? 180 : 160)
     const width = columnWidths[key] ?? col.width ?? fallback
     if (typeof width === 'number' && Number.isFinite(width)) return width
-    const parsed = Number.parseInt(String(width), 10)
+    const parsed = fluid ? Number.parseFloat(String(width)) : Number.parseInt(String(width), 10)
     return Number.isFinite(parsed) ? parsed : fallback
   }
 
   const tableWidth = useMemo(() => {
+    if (fluid) return 0
     const base = orderedColumns.reduce((sum, col) => sum + getColumnWidth(col), 0)
     return base + (selectable ? 56 : 0)
-  }, [orderedColumns, selectable, columnWidths])
+  }, [orderedColumns, selectable, columnWidths, fluid])
 
   const startResize = (event: ReactMouseEvent, col: TableColumn<T>) => {
     event.preventDefault()
@@ -183,12 +193,22 @@ export default function DataTable<T extends object>({
     const compKey = String(neighborCol.key)
     const compMinW = isAction(compKey, neighborCol.title) ? 120 : 80
 
+    // fluid 模式下，拖拽过程中的像素运算不变（更符合直觉），只在写入 state/持久化前
+    // 按拖拽开始时的总宽度换算成百分比，使全部列宽始终归一化到 100%。
+    const totalSnapshotWidth = allCols.reduce((sum, c) => sum + snapshot[String(c.key)], 0)
+    const toStoredWidths = (widthsPx: Record<string, number>): Record<string, number> => {
+      if (!fluid || totalSnapshotWidth <= 0) return widthsPx
+      return Object.fromEntries(
+        Object.entries(widthsPx).map(([k, v]) => [k, (v / totalSnapshotWidth) * 100]),
+      )
+    }
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const rawTarget = Math.round(snapshot[key] + moveEvent.clientX - startX)
       const maxTarget = snapshot[key] + snapshot[compKey] - compMinW
       const newTarget = Math.max(minWidth, Math.min(maxTarget, rawTarget))
       const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - (newTarget - snapshot[key])))
-      setColumnWidths(prev => ({ ...prev, [key]: newTarget, [compKey]: newComp }))
+      setColumnWidths(prev => ({ ...prev, ...toStoredWidths({ [key]: newTarget, [compKey]: newComp }) }))
     }
 
     const handleMouseUp = (moveEvent: MouseEvent) => {
@@ -196,7 +216,7 @@ export default function DataTable<T extends object>({
       const maxTarget = snapshot[key] + snapshot[compKey] - compMinW
       const newTarget = Math.max(minWidth, Math.min(maxTarget, rawTarget))
       const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - (newTarget - snapshot[key])))
-      const nextWidths = { ...snapshot, [key]: newTarget, [compKey]: newComp }
+      const nextWidths = toStoredWidths({ ...snapshot, [key]: newTarget, [compKey]: newComp })
       persistLayout(columnOrder.length ? columnOrder : columns.map(item => String(item.key)), nextWidths)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
@@ -240,11 +260,11 @@ export default function DataTable<T extends object>({
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="table-fixed text-sm" style={{ width: Math.max(tableWidth, 0), minWidth: '100%' }}>
+        <table className="table-fixed text-sm" style={fluid ? { width: '100%' } : { width: Math.max(tableWidth, 0), minWidth: '100%' }}>
           <colgroup ref={colgroupRef}>
             {selectable && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
-              <col key={String(col.key)} style={{ width: getColumnWidth(col) }} />
+              <col key={String(col.key)} style={{ width: fluid ? `${getColumnWidth(col)}%` : getColumnWidth(col) }} />
             ))}
           </colgroup>
           <thead>
@@ -278,7 +298,7 @@ export default function DataTable<T extends object>({
                       ? 'sticky right-0 z-20 min-w-[180px] bg-muted/30 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
                       : 'cursor-move select-none'
                   }`}
-                  style={getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined}
+                  style={fluid ? { width: `${getColumnWidth(col)}%` } : (getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined)}
                 >
                   <div className="group flex items-center gap-2">
                     {col.sortable && onSortChange ? (
@@ -367,7 +387,7 @@ export default function DataTable<T extends object>({
                             ? 'sticky right-0 z-10 min-w-[180px] bg-card py-2.5 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.08)] group-hover:bg-muted/30'
                             : 'overflow-hidden py-2.5'
                         }`}
-                        style={getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined}
+                        style={fluid ? { width: `${getColumnWidth(col)}%` } : (getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined)}
                       >
                         {isAction(String(col.key), col.title)
                           ? (col.render ? (col.render(rawValue, row) as ReactNode) : textValue)
