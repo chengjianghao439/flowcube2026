@@ -1,5 +1,7 @@
 export const PERMISSIONS = {
   DASHBOARD_VIEW: 'dashboard.view',
+  SYSTEM_HEALTH_VIEW: 'system.health.view',
+  SYSTEM_HEALTH_AUTOFIX: 'system.health.autofix',
   ADMIN_PUTAWAY_EXECUTE: 'admin.putaway.execute',
   IMPORT_PRODUCT_EXECUTE: 'import.product.execute',
   IMPORT_STOCK_EXECUTE: 'import.stock.execute',
@@ -81,6 +83,7 @@ export const PERMISSIONS = {
   TRANSFER_ORDER_CONFIRM: 'transfer.order.confirm',
   TRANSFER_ORDER_EXECUTE: 'transfer.order.execute',
   TRANSFER_ORDER_CANCEL: 'transfer.order.cancel',
+  TRANSFER_ORDER_FORCE_CLOSE: 'transfer.order.force-close',
   TRANSFER_ORDER_FORCE_CLOSE: 'transfer.order.force-close',
 
   SALE_ORDER_VIEW: 'sale.order.view',
@@ -170,6 +173,8 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
     group: '平台工具',
     items: [
       { code: PERMISSIONS.ADMIN_PUTAWAY_EXECUTE, label: '管理员补录上架' },
+      { code: PERMISSIONS.SYSTEM_HEALTH_VIEW, label: '查看系统自检' },
+      { code: PERMISSIONS.SYSTEM_HEALTH_AUTOFIX, label: '执行系统自检修复' },
       { code: PERMISSIONS.IMPORT_PRODUCT_EXECUTE, label: '导入商品' },
       { code: PERMISSIONS.IMPORT_STOCK_EXECUTE, label: '导入库存初始化' },
     ],
@@ -223,6 +228,7 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.TRANSFER_ORDER_CONFIRM, label: '确认调拨' },
       { code: PERMISSIONS.TRANSFER_ORDER_EXECUTE, label: '执行调拨' },
       { code: PERMISSIONS.TRANSFER_ORDER_CANCEL, label: '取消调拨' },
+      { code: PERMISSIONS.TRANSFER_ORDER_FORCE_CLOSE, label: '在途调拨异常了结' },
       { code: PERMISSIONS.TRANSFER_ORDER_FORCE_CLOSE, label: '在途异常了结（运输损耗核销，慎用）' },
       { code: PERMISSIONS.SALE_ORDER_VIEW, label: '查看销售单' },
       { code: PERMISSIONS.SALE_ORDER_CREATE, label: '新建销售单' },

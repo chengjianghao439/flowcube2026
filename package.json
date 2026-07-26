@@ -12,6 +12,7 @@
     "deploy:keygen": "bash scripts/setup-deploy-key.sh",
     "test:label": "node tests/label-geometry.test.js && node tests/label-zpl.test.js && node tests/label-geometry-frontend.test.js",
     "test:print": "node tests/print-policy.test.js && node tests/print-status.test.js",
+    "test:permissions": "node tests/permission-codes.test.js",
     "smoke:concurrency-guards": "node tests/concurrency-guards.smoke.test.js",
     "smoke:sale-adjustment": "node tests/sale-adjustment.smoke.test.js",
   "smoke:p0-regression": "node tests/p0-regression.smoke.test.js",
