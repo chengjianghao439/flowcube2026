@@ -156,6 +156,8 @@ export interface ReceiveParams {
     qty: number
   }>
   confirmOverReceive?: boolean
+  /** 重复扫码防护：后端 30 秒内发现同商品同箱型的重复提交会要求确认，确认后带上放行 */
+  confirmDuplicate?: boolean
   /** 错货防护：扫码核对通过时带上原始扫码值，后端兜底比对商品条码/编码 */
   scannedBarcode?: string
   /** 批次/效期（batch_managed 商品后端强制；效期可由生产日期+保质期推算） */

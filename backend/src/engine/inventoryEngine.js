@@ -151,25 +151,34 @@ async function moveStock(conn, {
     // 3. 汇总容器 → 刷新 inventory_stock 缓存
     const after = await syncStockFromContainers(conn, productId, warehouseId)
 
-    // 4. 减少 reserved；标记预占为已履行（截断即告警——出库量大于 reserved 说明预占计数已漂移）
-    if (reservationRefType && reservationRefId && reservedBefore < absQty) {
-      logger.error(
-        '[GUARD] reserved 收敛截断：出库释放预占时 reserved 小于出库量',
-        null,
-        { moveType, productId, warehouseId, refNo, shipQty: absQty, reserved: reservedBefore },
-        'StockClampGuard',
+    // 4. 减少 reserved + 按本次出库量核销预占（截断即告警——出库量大于 reserved 说明预占计数已漂移）
+    //
+    // reserved 扣减必须与 markFulfilled 同处一个条件下。采购退货出库（warehouse-tasks.ship.js
+    // 对 isPurchaseReturn 显式传 reservationRefType=null）本身不携带任何预占，若在条件外无条件
+    // 扣减，会把同商品同仓下其它销售单的预占凭空释放掉：可用量虚高 → 别的订单占走同一批货 →
+    // 原订单拣货时货已不在 → 超卖。且事后 releaseByRef 的 GREATEST(0,...) 会把痕迹抹平，
+    // 根因无从追查（审计 P0-1）。无预占的出库只依赖第 5 步的全局收敛兜底。
+    const hasReservation = Boolean(reservationRefType && reservationRefId)
+    if (hasReservation) {
+      if (reservedBefore < absQty) {
+        logger.error(
+          '[GUARD] reserved 收敛截断：出库释放预占时 reserved 小于出库量',
+          null,
+          { moveType, productId, warehouseId, refNo, shipQty: absQty, reserved: reservedBefore },
+          'StockClampGuard',
+        )
+      }
+      await conn.query(
+        'UPDATE inventory_stock SET reserved=GREATEST(0, reserved-?) WHERE product_id=? AND warehouse_id=?',
+        [absQty, productId, warehouseId],
       )
-    }
-    await conn.query(
-      'UPDATE inventory_stock SET reserved=GREATEST(0, reserved-?) WHERE product_id=? AND warehouse_id=?',
-      [absQty, productId, warehouseId]
-    )
-    if (reservationRefType && reservationRefId) {
-      await markFulfilled(conn, reservationRefType, reservationRefId, productId, warehouseId)
+      await markFulfilled(conn, reservationRefType, reservationRefId, productId, warehouseId, absQty)
     }
 
     // 5. 安全收敛：reserved 不得超过 on_hand（同样先探测再收敛，触发即告警）
-    const reservedAfterRelease = Math.max(0, reservedBefore - absQty)
+    //    无预占出库（如采购退货）不改 reserved，此处以出库前的值参与判断——若它已超过出库后的
+    //    在库量，说明物理库存已不足以支撑在册预占，收敛的同时必须告警：这是超卖的直接信号。
+    const reservedAfterRelease = hasReservation ? Math.max(0, reservedBefore - absQty) : reservedBefore
     if (reservedAfterRelease > after) {
       logger.error(
         '[GUARD] reserved 收敛截断：释放后 reserved 仍大于在库量，已压到在库量',

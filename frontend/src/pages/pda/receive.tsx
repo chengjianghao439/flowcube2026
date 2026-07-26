@@ -201,6 +201,10 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   const [submitting, setSubmitting] = useState(false)
   // 超收比例过高时要求"再点一次同一按钮"二次确认；换商品或改数量后自动失效，不能被沿用到别的提交上
   const [overReceiveArmed, setOverReceiveArmed] = useState<{ productId: number; qty: number } | null>(null)
+  // 重复扫码防护：后端在 30 秒时间窗里发现同商品、同箱数、同总量的重复提交会返回 409
+  // DUPLICATE_SCAN_CONFIRM_REQUIRED，这里进入待确认状态，再点一次带 confirmDuplicate 放行。
+  // 本地无法自行判断（前端每次提交都是新的 requestKey，看不到别人/上一次的提交），必须由后端发起。
+  const [duplicateArmed, setDuplicateArmed] = useState<{ productId: number; qty: number } | null>(null)
   // 错货防护：扫码选中的商品视为已核对（记录原始扫码值供后端兜底比对）；
   // 手动点选的商品提交前给一次"未核对"警示（armed 二次点击放行，兼容商品无条码的场景）
   const [scanVerified, setScanVerified] = useState<{ productId: number; barcode: string } | null>(null)
@@ -313,14 +317,19 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     const overQty = activeProduct.receivedQty + totalQty - orderedQty
     const overRatio = orderedQty > 0 ? overQty / orderedQty : (overQty > 0 ? Infinity : 0)
     // 超收比例超过 20% 时要求"再点一次登记"二次确认——上架完成即自动结算应付，
-    // 没有人工审核这道闸门兜底了，扫错数量的代价从"审核时能拦下来"变成"直接进正式账"
-    const needsConfirm = overQty > 0 && overRatio > 0.2
-    const alreadyArmed = overReceiveArmed?.productId === activeProduct.productId && overReceiveArmed.qty === totalQty
-    if (needsConfirm && !alreadyArmed) {
+    // 没有人工审核这道闸门兜底了，扫错数量的代价从"审核时能拦下来"变成"直接进正式账"。
+    // 这里只是本地预判（省一次往返）：后端还有一道金额闸门，前端拿不到采购单价算不出来，
+    // 触发时会返回 409 OVER_RECEIVE_CONFIRM_REQUIRED，走下面 catch 里的同一套确认流程。
+    const localOverConfirm = overQty > 0 && overRatio > 0.2
+    const overArmed = overReceiveArmed?.productId === activeProduct.productId && overReceiveArmed.qty === totalQty
+    if (localOverConfirm && !overArmed) {
       setOverReceiveArmed({ productId: activeProduct.productId, qty: totalQty })
       warn(`超收比例达 ${Math.round(overRatio * 100)}%（应到 ${orderedQty}，将超收至 ${activeProduct.receivedQty + totalQty}），再次点击"打印并登记"确认提交`)
       return
     }
+    const duplicateConfirmed = duplicateArmed?.productId === activeProduct.productId && duplicateArmed.qty === totalQty
+    // 本地预判通过、或用户已就任一闸门确认过，都要把确认标记带给后端
+    const needsConfirm = localOverConfirm || overArmed
 
     // 错货防护：手动点选（未扫码核对）的商品，第一次提交给警示，再次点击放行
     const scanOk = scanVerified?.productId === activeProduct.productId
@@ -343,6 +352,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           productId: activeProduct.productId,
           packages: normalizedBoxes.map(box => ({ qty: box.qty })),
           confirmOverReceive: needsConfirm || undefined,
+          confirmDuplicate: duplicateConfirmed || undefined,
           scannedBarcode: scanOk ? scanVerified?.barcode : undefined,
           batchNo: batchNo.trim() || undefined,
           mfgDate: mfgDate || undefined,
@@ -350,6 +360,8 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
         }, requestKey).then((res) => res!),
       { productId: activeProduct.productId, expectedReceivedQty },
     ).then((result) => {
+      setOverReceiveArmed(null)
+      setDuplicateArmed(null)
       if (result.kind === 'success') {
         if ((activeProduct.remainingQty - totalQty) > 0) {
           resetBoxes(1)
@@ -364,10 +376,24 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       }
     }).catch((error: unknown) => {
       const message = (error as { message?: string })?.message ?? '收货失败'
+      const code = (error as { code?: string })?.code
+      // 服务端闸门（超收金额/比例、疑似重复扫码）：不是失败，是要人确认一次。
+      // 保留已填的箱数并进入待确认状态，用户再点一次"打印并登记"即带确认标记提交。
+      // 必须清掉 useCriticalPdaAction 的失败态，否则页面顶部会挂着红色报错，
+      // 让人以为这次收货已经出错、不敢再点。
+      if (code === 'OVER_RECEIVE_CONFIRM_REQUIRED' || code === 'DUPLICATE_SCAN_CONFIRM_REQUIRED') {
+        const armed = { productId: activeProduct.productId, qty: totalQty }
+        if (code === 'OVER_RECEIVE_CONFIRM_REQUIRED') setOverReceiveArmed(armed)
+        else setDuplicateArmed(armed)
+        receiveAction.clearError()
+        warn(`${message}——再次点击"打印并登记"确认提交`)
+        return
+      }
+      setOverReceiveArmed(null)
+      setDuplicateArmed(null)
       err(message)
     }).finally(() => {
       setSubmitting(false)
-      setOverReceiveArmed(null)
     })
   }
 

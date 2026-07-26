@@ -6,10 +6,12 @@ const {
   genTaskNo,
   appendInboundEvent,
   fmtItem,
+  parseJson,
   assertPurchaseOrdersOpen,
 } = require('./inbound-tasks.helpers')
+const { env } = require('../../config/env')
 const {
-  distributeQtyToLines,
+  distributePackagesToLines,
   ensureInboundTaskExists,
   assertTaskCanSubmit,
   assertTaskCanReceive,
@@ -224,12 +226,110 @@ async function submit(taskId, operator) {
   }
 }
 
-// 超收比例超过该阈值时，收货动作要求前端显式带 confirmOverReceive:true 二次确认才放行。
-// 审核环节下线后（v0.4.22），这是唯一挡在"扫错数量直接进正式账"前面的安全网，见 P0-3。
+// 超收确认闸门：比例 OR 绝对金额，任一超限都要求前端显式带 confirmOverReceive:true 才放行。
+// 审核环节下线后（v0.4.22），这是唯一挡在"扫错数量直接进正式账"前面的安全网。
+//
+// 为什么不能只看比例（审计 P1-3）：比例阈值对大单形同虚设——应到 10000 件时可以静默超收
+// 1999 件，上架完成即自动结算，直接多付供应商这笔钱，且单据上不留任何异常痕迹。
+// 金额闸门按「超收量 × 该商品在本任务中的最高采购单价」估算，取最高价是刻意保守：
+// 混单时宁可多问一次，也不要让贵重商品的超收从便宜那行的单价里溜过去。
 const OVER_RECEIVE_CONFIRM_RATIO = 0.2
 
+// 重复扫码判定时间窗（秒）。见 detectDuplicateScan。
+const DUPLICATE_SCAN_WINDOW_SECONDS = 30
+
+/**
+ * 评估本次收货造成的超收情况。返回 null 表示该商品不在本任务明细里（由后续逻辑报错）。
+ * needsConfirm 为 true 时必须有 confirmOverReceive 才能放行；overQty>0 一律留痕（不阻断）。
+ */
+async function evaluateOverReceive(conn, { taskId, productId, taskItems, totalQty }) {
+  const productLines = taskItems.filter(i => i.productId === productId)
+  if (!productLines.length) return null
+
+  const orderedTotal = productLines.reduce((s, i) => s + Number(i.orderedQty || 0), 0)
+  const receivedBefore = productLines.reduce((s, i) => s + Number(i.receivedQty || 0), 0)
+  const overQty = receivedBefore + totalQty - orderedTotal
+  const base = {
+    orderedTotal,
+    receivedBefore,
+    thisQty: totalQty,
+    overQty: Math.max(0, overQty),
+    overRatio: 0,
+    overAmount: 0,
+    unitPrice: null,
+    needsConfirm: false,
+    reasons: [],
+    unit: productLines[0]?.unit || '',
+  }
+  if (overQty <= 0) return base
+
+  const [[priceRow]] = await conn.query(
+    `SELECT MAX(poi.unit_price) AS maxPrice
+       FROM inbound_task_items iti
+       JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
+      WHERE iti.task_id = ? AND iti.product_id = ?`,
+    [taskId, productId],
+  )
+  const unitPrice = Number(priceRow?.maxPrice) || 0
+  const overRatio = orderedTotal > 0 ? overQty / orderedTotal : Infinity
+  const overAmount = Number((overQty * unitPrice).toFixed(2))
+  const reasons = []
+  if (overRatio > OVER_RECEIVE_CONFIRM_RATIO) reasons.push('ratio')
+  // 单价查不到（历史脏数据）时不触发金额闸门，避免把 0 元当成"没超"或误判成超限
+  if (unitPrice > 0 && overAmount > env.OVER_RECEIVE_CONFIRM_AMOUNT) reasons.push('amount')
+
+  return {
+    ...base,
+    overQty,
+    overRatio,
+    overAmount,
+    unitPrice: unitPrice > 0 ? unitPrice : null,
+    needsConfirm: reasons.length > 0,
+    reasons,
+  }
+}
+
+/**
+ * 业务级重复扫码防护（审计 P1-5）。
+ *
+ * operationRequest 的幂等键只能防住「网络重试」——同一个 requestKey 重放会返回缓存结果。
+ * 它防不住人为重复：员工把同一箱扫两次、或提交后界面卡顿再点一次（前端会生成新的
+ * requestKey），服务端此前没有任何"这箱是不是刚收过"的判断，直接重复入账，凭空多出
+ * 一个容器和一批库存。收 100 箱时重复 1 箱只造成 1% 超收，远低于比例闸门，静默通过，
+ * 且该库存有合法容器、合法条码，事后无法与真实到货区分。
+ *
+ * 判定：时间窗内该任务同一商品出现过「箱数与总量完全相同」的收货。命中即要求确认，
+ * 不直接拒绝——真实场景里连续收两批一模一样的货是完全可能的，只是需要人确认一次。
+ */
+async function detectDuplicateScan(conn, { taskId, productId, totalQty, packageCount }) {
+  const [rows] = await conn.query(
+    `SELECT payload_json, created_at,
+            TIMESTAMPDIFF(SECOND, created_at, NOW()) AS secondsAgo
+       FROM inbound_task_events
+      WHERE task_id = ? AND event_type = 'receive_recorded'
+        AND created_at > DATE_SUB(NOW(), INTERVAL ? SECOND)
+      ORDER BY id DESC
+      LIMIT 5`,
+    [taskId, DUPLICATE_SCAN_WINDOW_SECONDS],
+  )
+  for (const row of rows) {
+    const payload = parseJson(row.payload_json)
+    if (!payload) continue
+    if (Number(payload.productId) !== Number(productId)) continue
+    if (Number(payload.totalQty) !== Number(totalQty)) continue
+    if (Number(payload.packages) !== Number(packageCount)) continue
+    return {
+      secondsAgo: Math.max(0, Number(row.secondsAgo) || 0),
+      productName: payload.productName || '',
+      totalQty: Number(payload.totalQty),
+      packages: Number(payload.packages),
+    }
+  }
+  return null
+}
+
 async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } = {}) {
-  const { productId, qty, packages: rawPackages, confirmOverReceive, scannedBarcode, batchNo, mfgDate } = payload
+  const { productId, qty, packages: rawPackages, confirmOverReceive, confirmDuplicate, scannedBarcode, batchNo, mfgDate } = payload
   let { expDate } = payload
   const productIdN = Number(productId)
   const packages = Array.isArray(rawPackages) && rawPackages.length
@@ -336,24 +436,61 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
     const warehouseId = Number(taskRow.warehouse_id)
     const taskNo = taskRow.task_no
 
-    const productLines = taskItems.filter(i => i.productId === productIdN)
-    if (productLines.length && !confirmOverReceive) {
-      const orderedTotal = productLines.reduce((s, i) => s + Number(i.orderedQty || 0), 0)
-      const receivedBefore = productLines.reduce((s, i) => s + Number(i.receivedQty || 0), 0)
-      const receivedAfter = receivedBefore + totalQty
-      const overQty = receivedAfter - orderedTotal
-      const overRatio = orderedTotal > 0 ? overQty / orderedTotal : (overQty > 0 ? Infinity : 0)
-      if (overQty > 0 && overRatio > OVER_RECEIVE_CONFIRM_RATIO) {
+    // 业务级重复扫码防护（P1-5）：先于超收闸门判断——重复扫码往往同时表现为轻微超收，
+    // 提示"疑似重复扫码"比提示"超收"更贴近现场真实原因，也更容易让员工做对处置。
+    if (!confirmDuplicate) {
+      const duplicate = await detectDuplicateScan(conn, {
+        taskId,
+        productId: productIdN,
+        totalQty,
+        packageCount: normalizedPackages.length,
+      })
+      if (duplicate) {
         throw new AppError(
-          `本次收货后将超收 ${overQty}${productLines[0]?.unit || ''}（应到 ${orderedTotal}，已收 ${receivedBefore}，本次 ${totalQty}），请确认后重试`,
+          `${duplicate.secondsAgo} 秒前刚登记过完全相同的 ${duplicate.packages} 箱共 ${totalQty}，疑似重复扫码。若确实是另一批实物，请再次提交确认`,
           409,
-          'OVER_RECEIVE_CONFIRM_REQUIRED',
-          { productId: productIdN, orderedQty: orderedTotal, receivedQty: receivedBefore, thisQty: totalQty, overQty },
+          'DUPLICATE_SCAN_CONFIRM_REQUIRED',
+          {
+            productId: productIdN,
+            totalQty,
+            packages: normalizedPackages.length,
+            secondsAgo: duplicate.secondsAgo,
+          },
         )
       }
     }
 
-    const updates = distributeQtyToLines(taskItems, productIdN, totalQty)
+    const overReceive = await evaluateOverReceive(conn, {
+      taskId,
+      productId: productIdN,
+      taskItems,
+      totalQty,
+    })
+    if (overReceive?.needsConfirm && !confirmOverReceive) {
+      const amountHint = overReceive.reasons.includes('amount') && overReceive.overAmount > 0
+        ? `，涉及金额约 ${overReceive.overAmount} 元`
+        : ''
+      throw new AppError(
+        `本次收货后将超收 ${overReceive.overQty}${overReceive.unit}（应到 ${overReceive.orderedTotal}，已收 ${overReceive.receivedBefore}，本次 ${totalQty}）${amountHint}，请确认后重试`,
+        409,
+        'OVER_RECEIVE_CONFIRM_REQUIRED',
+        {
+          productId: productIdN,
+          orderedQty: overReceive.orderedTotal,
+          receivedQty: overReceive.receivedBefore,
+          thisQty: totalQty,
+          overQty: overReceive.overQty,
+          overAmount: overReceive.overAmount,
+          unitPrice: overReceive.unitPrice,
+          reasons: overReceive.reasons,
+        },
+      )
+    }
+
+    // 逐箱分配：既算出各明细行的实收增量（与历史 first-fit 顺序一致），又记录每箱的归属行，
+    // 供下面建容器时写入 inbound_task_item_id，让上架能精确回写 putaway_qty（P1-4）。
+    const { updates, assignments } = distributePackagesToLines(taskItems, productIdN, normalizedPackages)
+    const ownerByLineNo = new Map(assignments.map(a => [a.lineNo, a.itemId]))
     for (const u of updates) {
       await conn.query(
         'UPDATE inbound_task_items SET received_qty = received_qty + ? WHERE id = ?',
@@ -380,6 +517,7 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
         expDate: expDate || null,
         locationId: null,
         inboundTaskId: taskId,
+        inboundTaskItemId: ownerByLineNo.get(pkg.lineNo) ?? null,
         containerStatus: CONTAINER_STATUS.PENDING_PUTAWAY,
         sourceType: SOURCE_TYPE.INBOUND_TASK,
         sourceRefId: taskId,
@@ -408,6 +546,36 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
         packages: normalizedPackages.length,
       },
     )
+
+    // 任何超收都留痕（哪怕 1 件、哪怕没触发确认闸门），供财务日终复核——不阻断现场作业。
+    // 自动结算把"超收多少钱"直接写进应付，此前单据上没有任何可供事后追溯的异常记录，
+    // 对账时只能靠人肉比对采购单和收货单（审计 P1-3）。
+    if (overReceive && overReceive.overQty > 0) {
+      await appendInboundEvent(
+        conn,
+        taskId,
+        'over_receive',
+        '超收登记',
+        `${productName} 超收 ${overReceive.overQty}${overReceive.unit}`
+        + `（应到 ${overReceive.orderedTotal}，本次收货后累计 ${overReceive.receivedBefore + totalQty}）`
+        + (overReceive.overAmount > 0 ? `，涉及金额约 ${overReceive.overAmount} 元` : '')
+        + (confirmOverReceive ? '，已由操作员确认' : ''),
+        { userId, realName: null },
+        {
+          productId: productIdN,
+          productName,
+          orderedQty: overReceive.orderedTotal,
+          receivedBefore: overReceive.receivedBefore,
+          thisQty: totalQty,
+          overQty: overReceive.overQty,
+          overAmount: overReceive.overAmount,
+          unitPrice: overReceive.unitPrice,
+          gateTriggered: overReceive.needsConfirm,
+          gateReasons: overReceive.reasons,
+          confirmed: Boolean(confirmOverReceive),
+        },
+      )
+    }
 
     const [updatedItems] = await conn.query('SELECT * FROM inbound_task_items WHERE task_id = ?', [taskId])
     const allReceived = updatedItems.every(i => Number(i.received_qty) >= Number(i.ordered_qty))

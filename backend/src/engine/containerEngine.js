@@ -121,6 +121,10 @@ async function createContainer(conn, {
   containerType = 1,
   locationId    = null,
   inboundTaskId = null,
+  // 该容器归属的收货明细行（inbound_task_items.id）。收货时已知这箱货来自哪张采购单的
+  // 哪一行，记下来后上架才能把 putaway_qty 精确回写到对应明细，而不是再 first-fit 猜一次
+  // （审计 P1-4，见迁移 132）。非收货来源的容器留 null。
+  inboundTaskItemId = null,
   containerStatus = CONTAINER_STATUS.ACTIVE,
   putawayDeadlineAt = null,
 }) {
@@ -157,14 +161,14 @@ async function createContainer(conn, {
        (barcode, container_type, product_id, warehouse_id, location_id,
         batch_no, mfg_date, exp_date, unit,
         initial_qty, remaining_qty, status,
-        source_ref_type, source_ref_id, source_ref_no, inbound_task_id, remark,
+        source_ref_type, source_ref_id, source_ref_no, inbound_task_id, inbound_task_item_id, remark,
         source_type, source_audit_missing, putaway_flagged_overdue,
         is_legacy, putaway_deadline_at, is_overdue)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?,0)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?,0)`,
     [bc, containerType, productId, warehouseId, locationId,
      batchNo, mfgDate || null, expDate || null, unit,
      initialQty, initialQty, containerStatus,
-     detailRefType, sid, sourceRefNo, inboundTaskId, remark,
+     detailRefType, sid, sourceRefNo, inboundTaskId, inboundTaskItemId ?? null, remark,
      sourceType,
      deadline]
   )
@@ -172,9 +176,47 @@ async function createContainer(conn, {
 }
 
 /**
+ * 取「商品+仓库」维度锁 —— 上架类操作的加锁顺序基准。
+ *
+ * 任何「先改自己那一只容器、再汇总该维度全部容器刷新缓存」的流程，都必须先调用它。
+ * 否则两个并发上架的加锁顺序天然相反：A 持有自己容器的行锁去请求包含 B 的汇总范围锁，
+ * B 反之，必然成环死锁（实测 8 并发挂掉 5）。而如果为了绕开死锁干脆不给汇总加锁，
+ * 就会退化成丢失更新：两个上架员各自只汇总到自己那半边（对方的 UPDATE 尚未提交），
+ * 后写的一方直接覆盖先写的——实测 8 只各 10 件的容器上架完，缓存只剩 50（实际 80），
+ * 30 件库存凭空消失且无任何报错。两条路都不可接受，唯一正解是统一加锁顺序。
+ *
+ * 锁定范围取 status IN (ACTIVE, PENDING_PUTAWAY)：既覆盖汇总要读的在库容器，
+ * 也覆盖调用方即将转正的那只待上架容器，使后续的单容器 FOR UPDATE 变成同事务重入。
+ * 代价是同一「商品+仓库」的上架会串行化——这正是保证汇总正确所必需的，
+ * 不同商品或不同仓库之间互不影响。
+ */
+async function lockStockDimension(conn, productId, warehouseId) {
+  // 串行化点选 inventory_stock 的单行，而不是「该维度的一批容器行」。
+  // 试过后者，仍然死锁：上架会把容器的 status 由 4 改成 1，在 idx_container_hot 里
+  // 相当于从 status=4 段迁到 status=1 段，于是每个事务都在持有一段范围锁的同时
+  // 去请求另一段的插入意向锁——间隙锁彼此兼容、插入意向锁却与间隙锁冲突，照样成环。
+  // 换成单行锁后，等待方手里不持有任何容器锁，构不成环。
+  //
+  // 先做一次 no-op upsert 确保该行存在：若行不存在就直接 FOR UPDATE，
+  // 空结果集上的加锁会退化成间隙锁，两个事务锁住相邻间隙再各自插入，反而制造新死锁。
+  await conn.query(
+    `INSERT INTO inventory_stock (product_id, warehouse_id, quantity, reserved)
+     VALUES (?, ?, 0, 0)
+     ON DUPLICATE KEY UPDATE product_id = product_id`,
+    [productId, warehouseId],
+  )
+  await conn.query(
+    'SELECT quantity FROM inventory_stock WHERE product_id = ? AND warehouse_id = ? FOR UPDATE',
+    [productId, warehouseId],
+  )
+}
+
+/**
  * 待上架容器在同一事务内转为在库并刷新缓存（盘点盘盈、导入等非调拨/退货路径）
  */
 async function promotePendingContainerToActive(conn, containerId, productId, warehouseId) {
+  // 必须先取维度锁再改状态，理由见 lockStockDimension 注释
+  await lockStockDimension(conn, productId, warehouseId)
   const [r] = await conn.query(
     `UPDATE inventory_containers
      SET status = ?, is_overdue = 0, putaway_flagged_overdue = 0, putaway_deadline_at = NULL
@@ -210,12 +252,20 @@ async function deductFromContainers(conn, {
 }) {
   const absQty = Math.abs(qty)
 
-  // 加行锁读取所有 ACTIVE 容器，FEFO 优先（有效期的先到期先出，无效期回退 FIFO），
-  // 同时读取批次信息供调拨保留使用
+  // 加行锁读取可动用的 ACTIVE 容器，FEFO 优先（有效期的先到期先出，无效期回退 FIFO），
+  // 同时读取批次信息供调拨保留使用。
+  //
+  // 必须排除已被拣货任务锁定的容器（locked_by_task_id IS NOT NULL）：这些货在物理上
+  // 已经被拣出货架、放进料箱或分拣区，只能由持锁任务经 deductFromTaskLockedContainers 扣减。
+  // 调拨/盘点/手动出库等路径若从这里把它们扣走，持锁任务出库时会撞上
+  // 「本任务锁定容器可用量不足」而永久卡在待出库——货就在料箱里，系统却拒绝出库，
+  // 仓库现场无法自解（审计 P1-1）。上层的 available = quantity - reserved 挡不住这种情况：
+  // 采购退货任务同样会锁容器，却完全不产生 reserved。
   const [containers] = await conn.query(
     `SELECT id, barcode, remaining_qty, unit, batch_no, mfg_date, exp_date
      FROM inventory_containers
      WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL
+       AND locked_by_task_id IS NULL
      ORDER BY (exp_date IS NULL) ASC, exp_date ASC, created_at ASC, id ASC
      FOR UPDATE`,
     [productId, warehouseId]
@@ -223,8 +273,20 @@ async function deductFromContainers(conn, {
 
   const totalAvailable = containers.reduce((s, c) => s + Number(c.remaining_qty), 0)
   if (totalAvailable < absQty) {
+    // 被任务占用的量要单独说明，否则用户在库存页明明看到有货、这里却报库存不足，无从判断
+    const [[lockedRow]] = await conn.query(
+      `SELECT COALESCE(SUM(remaining_qty), 0) AS lockedQty
+       FROM inventory_containers
+       WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL
+         AND locked_by_task_id IS NOT NULL`,
+      [productId, warehouseId],
+    )
+    const lockedQty = Number(lockedRow?.lockedQty || 0)
     throw new AppError(
-      `商品「${productName}」容器库存不足，当前可用 ${totalAvailable}，需要 ${absQty}`,
+      `商品「${productName}」可动用容器库存不足，当前可用 ${totalAvailable}，需要 ${absQty}` +
+      (lockedQty > 0
+        ? `（另有 ${lockedQty} 正被拣货任务占用，需等该任务出库或取消后才会释放）`
+        : ''),
       400
     )
   }
@@ -347,21 +409,30 @@ async function deductFromTaskLockedContainers(conn, {
  * @returns {number} 汇总后的库存数量
  */
 async function syncStockFromContainers(conn, productId, warehouseId) {
-  // 仅汇总指定商品+仓库维度，禁止全表扫描
+  // 仅汇总指定商品+仓库维度，禁止全表扫描。
+  //
+  // 汇总本身必须持锁（FOR UPDATE），并发的 sync 才会在容器行上串行化。
+  // 原实现把 `SELECT id FROM inventory_stock ... FOR UPDATE` 放在 SUM **之后**，
+  // 那时汇总结果已经读完，锁保护不了任何东西：两个上架员同时上架同一商品的不同容器时，
+  // 各自都只汇总到自己那半边（对方的 UPDATE 尚未提交），后写的一方直接覆盖先写的，
+  // inventory_stock.quantity 就此与容器实际总和脱节——而这个字段是全系统的库存缓存。
+  // 那条语句还有第二个副作用：stock 行不存在时（某商品首次入库）FOR UPDATE 会加间隙锁，
+  // 两个事务同时首次入库相邻商品即可死锁。
+  //
+  // 改为让 SUM 持锁后，上述两个问题一并消除；配合迁移 131 的 idx_container_hot，
+  // 锁范围收敛在「该商品+仓库的在库容器」这一精确区间内，不会波及 EMPTY 历史行。
+  // 加锁顺序对所有调用方都是同一区间，不构成环，因此不会引入新的死锁。
   const [[{ total }]] = await conn.query(
     `SELECT COALESCE(SUM(remaining_qty), 0) AS total
      FROM inventory_containers
-     WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL`,
+     WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL
+     FOR UPDATE`,
     [productId, warehouseId]
   )
   const qty = Number(total)
 
-  // 行锁保护，确保并发写安全
-  await conn.query(
-    `SELECT id FROM inventory_stock
-     WHERE product_id=? AND warehouse_id=? FOR UPDATE`,
-    [productId, warehouseId]
-  )
+  // INSERT ... ON DUPLICATE KEY UPDATE 自带行锁且写入的是重算后的绝对值（非增量），
+  // 在上面的容器锁保护下已经足够，无需再对 inventory_stock 单独预加锁。
   await conn.query(
     `INSERT INTO inventory_stock (product_id, warehouse_id, quantity)
      VALUES (?,?,?)
@@ -780,7 +851,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   // 转入已有塑料盒
   if (tid) {
     const [[target]] = await conn.query(
-      `SELECT id, barcode, product_id, warehouse_id, remaining_qty, status
+      `SELECT id, barcode, product_id, warehouse_id, remaining_qty, status, locked_by_task_id
        FROM inventory_containers
        WHERE id = ? AND barcode LIKE 'B%' AND deleted_at IS NULL
        FOR UPDATE`,
@@ -789,6 +860,12 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     if (!target) throw new AppError('目标塑料盒不存在', 404)
     if (Number(target.status) !== CONTAINER_STATUS.ACTIVE && Number(target.remaining_qty) !== 0) {
       throw new AppError('目标塑料盒状态异常', 400)
+    }
+    // 目标容器同样不能处于任务锁定中——源容器上面已挡（第 774 行），目标这里原本漏了。
+    // 往被拣货任务锁定的盒子里并货，会让该任务的锁定量凭空增加，出库时按新数量多扣，
+    // 且拣货闭合校验只比对容器 ID 集合、发现不了数量变化（审计 P1-2）。
+    if (target.locked_by_task_id != null) {
+      throw new AppError('目标塑料盒已被拣货任务锁定，不可并入，请另选空盒', 409)
     }
     if (Number(target.product_id) !== Number(row.product_id)) {
       throw new AppError('目标塑料盒绑定产品不匹配', 400)
@@ -1006,6 +1083,7 @@ async function unlockAndRelocateContainer(conn, { containerId, targetLocationId 
 
 module.exports = {
   createContainer,
+  lockStockDimension,
   promotePendingContainerToActive,
   deductFromContainers,
   deductFromTaskLockedContainers,

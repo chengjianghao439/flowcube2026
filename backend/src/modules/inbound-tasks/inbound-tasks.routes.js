@@ -41,6 +41,7 @@ const receiveSchema = z.union([
     productId: z.number().int().positive('商品无效'),
     qty:       z.number().positive('本包数量必须大于 0'),
     confirmOverReceive: z.boolean().optional(),
+    confirmDuplicate: z.boolean().optional(),
     scannedBarcode: z.string().trim().min(1).optional(),
     batchNo: z.string().trim().max(50).optional(),
     mfgDate: dateStr.optional(),
@@ -54,6 +55,7 @@ const receiveSchema = z.union([
       }),
     ).min(1, '请至少填写一箱数量'),
     confirmOverReceive: z.boolean().optional(),
+    confirmDuplicate: z.boolean().optional(),
     scannedBarcode: z.string().trim().min(1).optional(),
     batchNo: z.string().trim().max(50).optional(),
     mfgDate: dateStr.optional(),
@@ -70,6 +72,7 @@ const receiveSchema = z.union([
         )
         .min(1, '请至少填写一条收货记录'),
       confirmOverReceive: z.boolean().optional(),
+      confirmDuplicate: z.boolean().optional(),
     })
     .refine(d => new Set(d.items.map(item => item.productId)).size === 1, {
       message: '同一次收货仅允许提交同一商品',
@@ -80,6 +83,7 @@ const receiveSchema = z.union([
         productId: d.items[0].productId,
         packages: d.items.map(item => ({ qty: item.qty })),
         confirmOverReceive: d.confirmOverReceive,
+        confirmDuplicate: d.confirmDuplicate,
       }
     }),
 ])

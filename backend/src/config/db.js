@@ -9,11 +9,16 @@ const pool = mysql.createPool({
   database: env.DB_NAME,
   waitForConnections: true,
   connectionLimit: env.DB_POOL_SIZE,
-  queueLimit: 0,
+  // queueLimit 有上限而非 0（无限排队）：连接池打满后无限排队会让请求一直挂着，
+  // 既没有超时也没有错误，最终演变成整站无响应。200 远高于正常并发量，
+  // 只有在真正雪崩时才会触发，此时快速失败比静默堆积更容易定位问题。
+  queueLimit: 200,
   timezone: '+08:00',
   charset: 'utf8mb4',
+  // 注意：mysql2 不支持 acquireTimeout（那是旧 mysql 库的选项），传了会被忽略并打印
+  // "Ignoring invalid configuration option" 警告。获取连接的等待由 waitForConnections
+  // + queueLimit 控制，建立连接的超时由 connectTimeout 控制。
   connectTimeout: 10000,
-  acquireTimeout: 10000,
 })
 
 /** 会话字符集与排序规则，避免极少数环境下连接未按 utf8mb4 解释中文（姓名乱码、排序异常） */

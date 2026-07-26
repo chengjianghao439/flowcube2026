@@ -66,7 +66,16 @@ const env = {
   APP_UPDATE_MANIFEST_PATH: readString('APP_UPDATE_MANIFEST_PATH', { defaultValue: '', allowEmpty: true }),
   GITHUB_OWNER: readString('GITHUB_OWNER', { defaultValue: 'chengjianghao439' }),
   GITHUB_REPO: readString('GITHUB_REPO', { defaultValue: 'flowcube2026' }),
-  DB_POOL_SIZE: readInt('DB_POOL_SIZE', { defaultValue: 10 }),
+  // 连接池默认 30：业务事务普遍偏长（一次收货要建 N 个容器 + N 条打印任务，
+  // 一次出库要逐商品扣容器 + 同步缓存 + 写日志），10 条连接在几十单并发时就会被占满，
+  // 后续请求全部排队等待，表现为「系统卡住」而非报错。生产可用 DB_POOL_SIZE 覆盖，
+  // 上调时注意不要超过 MySQL 的 max_connections（默认 151）除以实例数。
+  DB_POOL_SIZE: readInt('DB_POOL_SIZE', { defaultValue: 30 }),
+  // 超收金额闸门（元）：单次收货造成的超收金额超过它就要求二次确认，与 20% 比例闸门并列，
+  // 任一超限即触发。纯比例闸门对大单形同虚设（应到 10000 件可静默超收 1999 件），
+  // 而超收会随上架自动结算直接进应付。默认 500 元——按"错一次也就是一顿饭钱"的量级取，
+  // 客单价高的仓库应调高，避免正常收货被频繁打断（审计 P1-3）。
+  OVER_RECEIVE_CONFIRM_AMOUNT: readInt('OVER_RECEIVE_CONFIRM_AMOUNT', { defaultValue: 500 }),
 }
 
 if (IS_PROD) {

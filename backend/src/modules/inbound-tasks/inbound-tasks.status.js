@@ -216,32 +216,74 @@ function buildInboundPrintBatches(recentPrintJobs = []) {
   })
 }
 
-function distributeQtyToLines(taskItems, productId, qty) {
+/**
+ * 把本次收货的各箱数量分配到该商品的收货明细行，并给出「每一箱归属哪一行」。
+ *
+ * 分配顺序与历史实现完全一致（未收满的行按 id 升序依次填满，超收部分记在最后一行），
+ * 只是改成逐箱推进，从而能记录每箱的归属——容器带上归属后，上架时才能把 putaway_qty
+ * 精确回写到它真正所属的采购明细，而不是再猜一次（审计 P1-4）。
+ *
+ * 一箱跨两行时（前一行只差 3 件、这箱有 10 件），归属取该箱消耗最多的那一行；
+ * 上架回写会先按归属行填，填不下的部分自然退回 first-fit 兜底，总量始终守恒。
+ *
+ * @returns {{ updates: {itemId:number, add:number}[], assignments: {lineNo:number, qty:number, itemId:number}[] }}
+ */
+function distributePackagesToLines(taskItems, productId, packages) {
   const allLines = taskItems.filter(i => i.productId === productId).sort((a, b) => a.id - b.id)
   if (!allLines.length) throw new AppError('该商品不属于当前收货任务', 400)
 
-  const underfilled = allLines.filter(i => i.receivedQty < i.orderedQty)
-  let left = +qty
-  const updates = []
-  for (const line of underfilled) {
-    const cap = line.orderedQty - line.receivedQty
-    const add = Math.min(left, cap)
-    if (add > 0) {
-      updates.push({ itemId: line.id, add })
-      left -= add
+  // 剩余可填容量队列：与旧实现同序（未收满的行按 id 升序）
+  const capacity = allLines
+    .filter(i => i.receivedQty < i.orderedQty)
+    .map(line => ({ itemId: line.id, left: line.orderedQty - line.receivedQty }))
+  const lastLineId = allLines[allLines.length - 1].id
+
+  const addedByItem = new Map()
+  const assignments = []
+  let cursor = 0
+
+  for (const pkg of packages) {
+    let pkgLeft = +pkg.qty
+    // 本箱在各行的消耗量，用于决定归属（取消耗最多的一行）
+    const consumed = new Map()
+
+    while (pkgLeft > 0 && cursor < capacity.length) {
+      const slot = capacity[cursor]
+      if (slot.left <= 0) { cursor += 1; continue }
+      const take = Math.min(slot.left, pkgLeft)
+      slot.left -= take
+      pkgLeft -= take
+      consumed.set(slot.itemId, (consumed.get(slot.itemId) || 0) + take)
+      addedByItem.set(slot.itemId, (addedByItem.get(slot.itemId) || 0) + take)
+      if (slot.left <= 0) cursor += 1
     }
-    if (left <= 0) break
+
+    // 超收：供应商多发货是常见场景，不硬性拒绝。超出部分记在最后一行，
+    // received_qty > ordered_qty 会在 ERP 端自然呈现为"超收"。
+    // 收货侧的金额/比例双闸门与留痕见 inbound-tasks.command.js 的 assertOverReceiveAllowed。
+    if (pkgLeft > 0) {
+      consumed.set(lastLineId, (consumed.get(lastLineId) || 0) + pkgLeft)
+      addedByItem.set(lastLineId, (addedByItem.get(lastLineId) || 0) + pkgLeft)
+      pkgLeft = 0
+    }
+
+    let ownerItemId = lastLineId
+    let ownerQty = -1
+    for (const [itemId, qty] of consumed) {
+      if (qty > ownerQty) { ownerQty = qty; ownerItemId = itemId }
+    }
+    assignments.push({ lineNo: pkg.lineNo, qty: +pkg.qty, itemId: ownerItemId })
   }
-  // 超收：供应商多发货是常见场景，不再硬性拒绝。超出部分记在最后一行，
-  // received_qty > ordered_qty 会在 ERP 端自然呈现为"超收"。注意：上架完成即自动结算（无人工审核闸门），
-  // 超收部分会直接计入应付，没有事后拦截点，异常大额超收需要靠人工肉眼在收货/上架时留意。
-  if (left > 0) {
-    const lastLine = allLines[allLines.length - 1]
-    const existing = updates.find(u => u.itemId === lastLine.id)
-    if (existing) existing.add += left
-    else updates.push({ itemId: lastLine.id, add: left })
-  }
-  return updates
+
+  const updates = [...addedByItem.entries()]
+    .filter(([, add]) => add > 0)
+    .map(([itemId, add]) => ({ itemId, add }))
+  return { updates, assignments }
+}
+
+/** 单包版本，保持历史调用方语义不变（内部复用逐箱分配，避免两份贪心逻辑漂移）。 */
+function distributeQtyToLines(taskItems, productId, qty) {
+  return distributePackagesToLines(taskItems, productId, [{ lineNo: 1, qty }]).updates
 }
 
 async function ensureInboundTaskExists(conn, taskId) {
@@ -284,6 +326,7 @@ module.exports = {
   getInboundPrintDispatchReasonLabel,
   buildInboundPrintBatches,
   distributeQtyToLines,
+  distributePackagesToLines,
   ensureInboundTaskExists,
   assertTaskCanSubmit,
   assertTaskCanReceive,

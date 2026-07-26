@@ -35,15 +35,18 @@ async function startPicking(id) {
         entityName: '仓库任务',
       })
     }
-    // 清除孤立容器锁（防止历史数据清空或任务已终结后残留锁阻断拣货）
+    // 清除孤立容器锁（防止历史数据清空或任务已终结后残留锁阻断拣货）。
+    //
+    // 用 LEFT JOIN 而非 `NOT IN (子查询)`：后者对每次「开始拣货」都要先物化一遍全部活跃
+    // 任务 ID，再对 inventory_containers 全表扫描比对，容器表随出库量只增不减，
+    // 多个拣货员并发开工时这里会成为锁竞争热点。JOIN 形式能走 idx_container_locked 索引，
+    // 只触碰真正带锁的行，语义完全等价：锁指向的任务不存在，或已终结（已出库/已取消）。
     await conn.query(
-      `UPDATE inventory_containers
-       SET locked_by_task_id = NULL, locked_at = NULL
-       WHERE locked_by_task_id IS NOT NULL
-         AND locked_by_task_id NOT IN (
-           SELECT wt.id FROM warehouse_tasks wt
-           WHERE wt.status NOT IN (?,?)
-         )`,
+      `UPDATE inventory_containers c
+       LEFT JOIN warehouse_tasks wt ON wt.id = c.locked_by_task_id
+       SET c.locked_by_task_id = NULL, c.locked_at = NULL
+       WHERE c.locked_by_task_id IS NOT NULL
+         AND (wt.id IS NULL OR wt.status IN (?,?))`,
       [WT_STATUS.SHIPPED, WT_STATUS.CANCELLED],
     )
     await conn.commit()

@@ -105,21 +105,69 @@ async function releaseByRef(conn, refType, refId) {
 }
 
 /**
- * 标记预占为已履行（出库时由 inventoryEngine 调用）
+ * 按量核销预占（出库时由 inventoryEngine 调用）
  * 仅更新 stock_reservations 状态，reserved 字段由 inventoryEngine 在同一操作中同步减少
+ *
+ * 必须按本次实际出库量 first-fit 核销，不能把该 (单据,商品,仓库) 下所有 status=1 记录
+ * 一次性标记为已履行：分批发货（迁移 123/125）下同一组合会经历多次部分出库，整组标记会让
+ * 后续 releaseByRef 找不到 status=1 记录而静默跳过，剩余预占永久泄漏——货在货架上却永远
+ * 不可用，且没有任何自愈路径（GREATEST/LEAST 收敛都不会触发），只能人工改库。
+ *
+ * 部分履行时把已履行的量拆成一条独立的 status=2 记录，剩余量留在原记录继续预占，
+ * 保证「预占记录合计 = reserved」这个不变量在任何出库进度下都成立。
  *
  * @param {object} conn
  * @param {string} refType    - 'sale_order'
  * @param {number} refId      - 销售单 ID
  * @param {number} productId
  * @param {number} warehouseId
+ * @param {number} [qty]      - 本次实际出库量；不传则退化为整组核销（兼容旧调用，现已无此类调用）
  */
-async function markFulfilled(conn, refType, refId, productId, warehouseId) {
-  await conn.query(
-    `UPDATE stock_reservations SET status=2
-     WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1`,
-    [refType, refId, productId, warehouseId]
+async function markFulfilled(conn, refType, refId, productId, warehouseId, qty = null) {
+  if (qty == null) {
+    await conn.query(
+      `UPDATE stock_reservations SET status=2
+       WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1`,
+      [refType, refId, productId, warehouseId],
+    )
+    return
+  }
+
+  let remaining = Number(qty)
+  if (!(remaining > 0)) return
+
+  const [rows] = await conn.query(
+    `SELECT id, qty FROM stock_reservations
+     WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1
+     ORDER BY id ASC FOR UPDATE`,
+    [refType, refId, productId, warehouseId],
   )
+
+  for (const r of rows) {
+    if (remaining <= 0) break
+    const rowQty = Number(r.qty)
+    const take = Math.min(rowQty, remaining)
+    if (take >= rowQty) {
+      await conn.query('UPDATE stock_reservations SET status=2 WHERE id=?', [r.id])
+    } else {
+      await conn.query('UPDATE stock_reservations SET qty = qty - ? WHERE id=?', [take, r.id])
+      await conn.query(
+        `INSERT INTO stock_reservations (product_id, warehouse_id, qty, ref_type, ref_id, ref_no, status)
+         SELECT product_id, warehouse_id, ?, ref_type, ref_id, ref_no, 2
+         FROM stock_reservations WHERE id = ?`,
+        [take, r.id],
+      )
+    }
+    remaining -= take
+  }
+
+  // 出库量超过在册预占（预占计数已漂移，或出库走了未预占的路径）——不阻断出库，
+  // 但必须留痕，否则漂移根因无从追查（与 logReservedClamp 同口径）。
+  if (remaining > 0) {
+    logReservedClamp('核销预占时在册预占不足，超出部分未能核销', {
+      refType, refId, productId, warehouseId, fulfillQty: Number(qty), unmatched: remaining,
+    })
+  }
 }
 
 /**

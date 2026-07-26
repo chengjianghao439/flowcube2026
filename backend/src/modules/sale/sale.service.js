@@ -677,7 +677,10 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
 
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
 
-    const [oldItemRows] = await conn.query('SELECT product_id, quantity FROM sale_order_items WHERE order_id=?', [id])
+    const [oldItemRows] = await conn.query(
+      'SELECT product_id, quantity, warehouse_id, warehouse_name FROM sale_order_items WHERE order_id=?',
+      [id],
+    )
     const oldQtyByProduct = new Map()
     for (const r of oldItemRows) {
       const pid = Number(r.product_id)
@@ -703,14 +706,29 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
     // 改的是这个已有任务的 required_qty（见 applyProductDeltaWithinTransaction），
     // 不会新建任务——重建出来的明细行本就已被该任务覆盖，不是"待发货"状态，
     // 否则会被 hasUndispatchedItems 误判为还没发货，出现「继续发货」入口重复建任务。
+    // 行级发货仓库必须原样带回。自迁移 123 起 sale_order_items.warehouse_id 是
+    // shipped_qty 回写、应收重算、出库明细关联三处的唯一定位键；这条 INSERT 漏填后
+    // syncShippedByWarehouseTaskWithinTransaction 的 `AND warehouse_id=?` 永远匹配不上
+    // （NULL 比较恒不成立）→ shipped_qty 恒为 0 → 订单永远停在履约中(3)、应收恒为 0，
+    // 货发出去了却没有账（审计 P0-4）。迁移 126 修过同一条语句漏 dispatched 的问题，
+    // 但没发现它同时还漏着仓库字段。
+    // 上面的守卫已保证本订单只有一个发货仓库；占库时可能通过 itemOverrides 把行仓库改成
+    // 与订单头不同的仓库，所以优先沿用原明细行的仓库，取不到才回退订单头。
+    const keptWarehouseId = oldItemRows.find(r => r.warehouse_id != null)?.warehouse_id
+      ?? Number(orderRow.warehouse_id)
+    const keptWarehouseName = oldItemRows.find(r => r.warehouse_name != null)?.warehouse_name
+      ?? orderRow.warehouse_name
     for (const item of items) {
       await conn.query(
-        `INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark,dispatched) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)`,
-        [id, item.productId, item.productCode, item.productName, item.unit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.unitPrice, item.quantity*item.unitPrice, item.remark||null]
+        `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark,dispatched) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
+        [id, keptWarehouseId, keptWarehouseName, item.productId, item.productCode, item.productName, item.unit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.unitPrice, item.quantity*item.unitPrice, item.remark||null]
       )
     }
 
-    const allProductIds = new Set([...oldQtyByProduct.keys(), ...newQtyByProduct.keys()])
+    // 同样按 product_id 升序处理：applyProductDeltaWithinTransaction 内部会锁容器与
+    // inventory_stock，Set 的迭代顺序取决于新旧明细的录入次序，并发改单时顺序不一致同样死锁。
+    const allProductIds = [...new Set([...oldQtyByProduct.keys(), ...newQtyByProduct.keys()])]
+      .sort((a, b) => Number(a) - Number(b))
     const descriptors = []
     for (const pid of allProductIds) {
       const oldQty = oldQtyByProduct.get(pid) || 0
@@ -927,7 +945,14 @@ async function reserveStock(id, operator, itemOverrides = []) {
       )
     }
 
-    for (const item of itemRows) {
+    // 按 (product_id, warehouse_id) 排序后再逐行预占，强制所有并发事务以同一顺序获取
+    // inventory_stock 行锁。明细行的自然顺序（ORDER BY id）与商品无关，两张订单若商品
+    // 顺序相反就会互相持锁等待 → InnoDB 死锁，随机报「占库失败」。统一加锁顺序是消除
+    // 这类死锁的标准手法（审计 P1-6）。
+    const reserveOrder = [...itemRows].sort(
+      (a, b) => Number(a.product_id) - Number(b.product_id) || itemWh(a) - itemWh(b),
+    )
+    for (const item of reserveOrder) {
       await reserve(conn, {
         productId:   item.product_id,
         productName: item.product_name,

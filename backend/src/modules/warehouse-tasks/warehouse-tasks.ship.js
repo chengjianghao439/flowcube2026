@@ -68,7 +68,11 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
     }
   }
 
-  for (const item of items) {
+  // 与占库侧（sale.service.reserveStock）保持同一加锁顺序：moveStock 会对
+  // inventory_stock 行加 FOR UPDATE，多个任务并发出库时若商品顺序不一致会互相等待成死锁。
+  // 明细的自然顺序取决于建单时的录入顺序，不可依赖（审计 P1-6）。
+  const shipOrder = [...items].sort((a, b) => Number(a.productId) - Number(b.productId))
+  for (const item of shipOrder) {
     await moveStock(conn, {
       moveType: MOVE_TYPE.TASK_OUT,
       productId: item.productId,
@@ -175,6 +179,27 @@ async function ship(id, operator, saleData, { requestKey } = {}) {
   finally { conn.release() }
 }
 
+/**
+ * 出库明细的重复放大防线。
+ *
+ * getShipContext 的结果会被 shipWithinTransaction 逐条 moveStock，所以它的行数必须
+ * 严格等于 warehouse_task_items 的行数。一旦 LEFT JOIN 因关联键不唯一而放大，
+ * 同一批货会被扣减多次且全程无报错（审计 P0-5）。宁可拒绝出库，也不能静默多扣库存。
+ */
+async function assertNoShipItemFanout(taskId, joinedCount) {
+  const [[{ taskItemCount }]] = await pool.query(
+    'SELECT COUNT(*) AS taskItemCount FROM warehouse_task_items WHERE task_id = ?',
+    [taskId],
+  )
+  if (joinedCount !== Number(taskItemCount)) {
+    throw new AppError(
+      `出库明细异常：任务有 ${taskItemCount} 条商品明细，关联单据后得到 ${joinedCount} 条，` +
+      '可能存在重复商品行，已阻止出库以免重复扣减库存，请联系管理员核查',
+      409,
+    )
+  }
+}
+
 async function getShipContext(taskId) {
   const task = await findById(taskId)
 
@@ -187,6 +212,7 @@ async function getShipContext(taskId) {
       [task.returnId, taskId],
     )
     if (!wmsItems.length) throw new AppError('任务无出库明细', 400)
+    await assertNoShipItemFanout(taskId, wmsItems.length)
     return {
       saleOrderId: null,
       warehouseId: task.warehouseId,
@@ -207,14 +233,21 @@ async function getShipContext(taskId) {
   )
   if (!saleOrder) throw new AppError('关联销售单不存在', 404)
 
+  // JOIN 必须带仓库维度：sale_order_items 自迁移 123 起是「行级发货仓库」模型，同一商品
+  // 从多个仓库发货会产生多行且 product_id 相同（分仓订单的正常用法，不是脏数据）。
+  // 只按 product_id 关联时，一行 warehouse_task_items 会匹配出 N 行，下游对同一批货
+  // 调用 N 次 moveStock，库存被扣 N 倍。取本任务自己的仓库，与 syncShipped 回写
+  // shipped_qty 的定位口径保持一致（审计 P0-5）。
   const [wmsItems] = await pool.query(
     `SELECT wti.product_id, wti.product_name, wti.picked_qty, soi.unit_price
      FROM warehouse_task_items wti
-     LEFT JOIN sale_order_items soi ON soi.order_id = ? AND soi.product_id = wti.product_id
+     LEFT JOIN sale_order_items soi
+       ON soi.order_id = ? AND soi.product_id = wti.product_id AND soi.warehouse_id = ?
      WHERE wti.task_id = ?`,
-    [saleOrder.id, taskId],
+    [saleOrder.id, task.warehouseId, taskId],
   )
   if (!wmsItems.length) throw new AppError('任务无出库明细', 400)
+  await assertNoShipItemFanout(taskId, wmsItems.length)
 
   return {
     saleOrderId: saleOrder.id,

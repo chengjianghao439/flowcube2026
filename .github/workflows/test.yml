@@ -9,7 +9,12 @@
 # 内容：
 #   1. 起 MySQL 8.0 service 容器（root/root，临时库）
 #   2. 安装后端依赖、建库、跑迁移建表
-#   3. smoke:mainline + smoke:concurrency-guards + smoke:sale-adjustment（主链路 + 并发/回滚护栏 + 改单）
+#   3. smoke:mainline + smoke:concurrency-guards + smoke:sale-adjustment + smoke:p0-regression
+#      （主链路 + 并发/回滚护栏 + 改单 + P0 回归）
+#      p0-regression 锁死 2026-07 架构审计发现的五个「静默出错」缺陷：不报错、界面正常、
+#      错误直接落进库存或账款，靠人工点测发现不了，必须由测试守住。
+#      p1-regression 同源，覆盖并发一致性（锁定容器、死锁、上架丢失更新、热点索引）与
+#      收货侧防错（容器采购归属与成本计价、超收双闸门与留痕、重复扫码防重）。
 #   4. test:integration（采购入库 → 占库 → 调拨 → 盘点 → 退货 库存一致性，
 #      使用独立测试库，避免与 smoke 数据相互污染）
 #   任一测试失败则 job 失败。
@@ -115,6 +120,12 @@ jobs:
 
       - name: 冒烟测试 — 销售单执行期改单（增减量 / PDA物理确认）
         run: npm run smoke:sale-adjustment
+
+      - name: 冒烟测试 — P0 回归（预占泄漏 / 短装结案 / 改单丢仓库 / 出库放大）
+        run: npm run smoke:p0-regression
+
+      - name: 冒烟测试 — P1 回归（锁定容器避让 / 并货防护 / 并发占库无死锁）
+        run: npm run smoke:p1-regression
 
       - name: 集成测试 — 库存主链路一致性（独立测试库）
         run: npm run test:integration
