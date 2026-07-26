@@ -8,6 +8,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { settlePurchaseOnAudit } = require('./inbound-tasks.settle')
+const { assertInScope } = require('../../utils/warehouseScope')
 
 async function tryFinishTask(conn, taskId) {
   const finishRule = assertStatusAction('inboundTask', 'finish', 3)
@@ -78,7 +79,7 @@ async function tryFinishTask(conn, taskId) {
   await settlePurchaseOnAudit(conn, taskId)
 }
 
-async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion, suggestedLocationCode }, operator, { requestKey, pdaWarehouseId } = {}) {
+async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion, suggestedLocationCode }, operator, { requestKey, pdaWarehouseId, scopeWarehouseIds = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -102,6 +103,8 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
     if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(taskRow.warehouse_id)) {
       throw new AppError('当前设备绑定仓库与该收货订单所属仓库不一致，无法上架', 403)
     }
+    // 用户级仓库权限：设备会话尚未接入前端时（req.pda 恒为 null），这才是实际生效的那道闸门
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     assertTaskCanPutaway(taskRow)
     await assertPurchaseOrdersOpen(conn, taskId, '上架')
 

@@ -8,6 +8,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { recomputePurchasePayable } = require('../inbound-tasks/inbound-tasks.settle')
+const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 
 const STATUS = { 1:'草稿', 2:'已提交', 3:'已完成', 4:'已取消' }
 
@@ -44,7 +45,7 @@ const PO_COLUMNS = `po.id, po.order_no, po.supplier_id, po.supplier_name, po.war
 
 const genOrderNo = conn => generateDailyCode(conn, 'PO', 'purchase_orders', 'order_no')
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null, overdueOnly=false }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null, overdueOnly=false, scopeWarehouseIds=null }) {
   const offset = (page - 1) * pageSize
   const params = []
   let whereExtra = ''
@@ -88,6 +89,12 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     // 到货看板"逾期未到"筛选：仍在草稿/已确认状态且预计到货日已过
     whereExtra += ' AND po.status IN (1,2) AND po.expected_date IS NOT NULL AND po.expected_date < CURDATE()'
   }
+  // 仓库数据权限：列表与计数共用 whereExtra/params，加一次即两处生效
+  const scope = scopeFilter(scopeWarehouseIds, 'po.warehouse_id')
+  if (scope.sql) {
+    whereExtra += scope.sql
+    params.push(...scope.params)
+  }
   const [rows] = await pool.query(
     `SELECT ${PO_COLUMNS},
        COALESCE((
@@ -127,12 +134,15 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
   return { list: rows.map(fmtOrder), pagination: { page, pageSize, total } }
 }
 
-async function findById(id) {
+// scopeWarehouseIds 默认 null（不限仓）——内部调用方（如 createFromPoId）不传即保持原行为；
+// 只有来自 HTTP 的 controller 会把 req.user.warehouseIds 传进来，用于挡住「知道 id 就直查详情」
+async function findById(id, scopeWarehouseIds = null) {
   const [rows] = await pool.query(
     'SELECT * FROM purchase_orders WHERE id=? AND deleted_at IS NULL',
     [id],
   )
   if (!rows[0]) throw new AppError('采购单不存在', 404)
+  assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '采购单')
   const order = fmtOrder(rows[0])
   const [items] = await pool.query('SELECT * FROM purchase_order_items WHERE order_id=?',[id])
   order.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, articleNumber:r.article_number, spec:r.spec, color:r.color, quantity:Number(r.quantity), unitPrice:Number(r.unit_price), amount:Number(r.amount), remark:r.remark }))
@@ -213,11 +223,14 @@ async function create({ supplierId, supplierName, warehouseId, warehouseName, ex
   finally { conn.release() }
 }
 
-async function update(id, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items }) {
+async function update(id, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, scopeWarehouseIds = null }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status', entityName: '采购单' })
+    const row = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id', entityName: '采购单' })
+    assertInScope(scopeWarehouseIds, row.warehouse_id, '采购单')
+    // 改单同时限制目标仓：不能把单据「搬」到 scope 之外的仓库
+    assertInScope(scopeWarehouseIds, warehouseId, '采购单')
     assertStatusAction('purchase', 'edit', row.status)
     const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
     await conn.query(
@@ -238,11 +251,12 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
 }
 
 // 短装结案：把「已提交(2)」采购单手动完成（剩余未收量作罢），前提是相关收货订单已全部上架完成（audit_status 随上架完成自动置1）且确有实收入库。
-async function closeRemaining(id, operator) {
+async function closeRemaining(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, order_no, status', entityName: '采购单' })
+    const row = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, order_no, status, warehouse_id', entityName: '采购单' })
+    assertInScope(scopeWarehouseIds, row.warehouse_id, '采购单')
     const rule = assertStatusAction('purchase', 'close', row.status)
     const [[{ pending }]] = await conn.query(
       `SELECT COUNT(DISTINCT it.id) AS pending
@@ -269,11 +283,12 @@ async function closeRemaining(id, operator) {
   finally { conn.release() }
 }
 
-async function confirm(id, operator) {
+async function confirm(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status', entityName: '采购单' })
+    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id', entityName: '采购单' })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
     const rule = assertStatusAction('purchase', 'confirm', orderRow.status)
     await compareAndSetStatus(conn, {
       table: 'purchase_orders',
@@ -291,7 +306,7 @@ async function confirm(id, operator) {
   }
 }
 
-async function withdrawConfirm(id, operator) {
+async function withdrawConfirm(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -314,7 +329,8 @@ async function withdrawConfirm(id, operator) {
         409,
       )
     }
-    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status', entityName: '采购单' })
+    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id', entityName: '采购单' })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
     const rule = assertStatusAction('purchase', 'withdrawConfirm', orderRow.status)
     await compareAndSetStatus(conn, {
       table: 'purchase_orders',
@@ -332,7 +348,7 @@ async function withdrawConfirm(id, operator) {
   }
 }
 
-async function cancel(id, operator) {
+async function cancel(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -355,6 +371,7 @@ async function cancel(id, operator) {
       : [[]]
 
     const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, entityName: '采购单' })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
     const cancelRule = assertStatusAction('purchase', 'cancel', orderRow.status)
 
     // 本采购单在收货单里已产生实际收货（即便是混单场景），不能随取消动作静默消失，必须先走收货流程处理

@@ -4,6 +4,7 @@ const { CONTAINER_STATUS, syncStockFromContainers } = require('../../engine/cont
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { appendInboundEvent } = require('./inbound-tasks.helpers')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { assertInScope } = require('../../utils/warehouseScope')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { recomputePurchasePayable } = require('./inbound-tasks.settle')
 const { findById } = require('./inbound-tasks.query')
@@ -16,16 +17,17 @@ const { findById } = require('./inbound-tasks.query')
  * （说明已经被后续拣货/拆分/调拨等动作动过），整单拒绝撤回——这些容器已经不是
  * "收货这件事本身"能单方面撤销的了，须走盘点处理实际差异。
  */
-async function voidReceipt(taskId, operator) {
+async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const taskRow = await lockStatusRow(conn, {
       table: 'inbound_tasks',
       id: taskId,
-      columns: 'id, task_no, status, audit_status',
+      columns: 'id, task_no, status, audit_status, warehouse_id',
       entityName: '收货订单',
     })
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     const rule = assertStatusAction('inboundTask', 'voidReceipt', Number(taskRow.status))
 
     const [containers] = await conn.query(

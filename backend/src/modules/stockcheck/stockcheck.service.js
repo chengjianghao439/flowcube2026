@@ -5,6 +5,7 @@ const { adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS } = require
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
+const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 
 const STATUS = { 1:'进行中', 2:'已完成', 3:'已取消' }
 const fmt = r => ({ id:r.id, checkNo:r.check_no, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, status:r.status, statusName:STATUS[r.status], remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
@@ -45,19 +46,24 @@ async function listBookStocksFromActiveContainers(conn, warehouseId) {
   return rows
 }
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, scopeWarehouseIds=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
-  const cond=status?'AND status=?':''
-  const extra=status?[like,like,status,pageSize,offset]:[like,like,pageSize,offset]
-  const cntExtra=status?[like,like,status]:[like,like]
+  let cond=status?'AND status=?':''
+  const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const scopeParams = []
+  if (scope.sql) { cond += scope.sql; scopeParams.push(...scope.params) }
+  const base=status?[like,like,status,...scopeParams]:[like,like,...scopeParams]
+  const extra=[...base,pageSize,offset]
+  const cntExtra=base
   const [rows] = await pool.query(`SELECT * FROM inventory_checks WHERE deleted_at IS NULL AND (check_no LIKE ? OR warehouse_name LIKE ?) ${cond} ORDER BY created_at DESC LIMIT ? OFFSET ?`,extra)
   const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM inventory_checks WHERE deleted_at IS NULL AND (check_no LIKE ? OR warehouse_name LIKE ?) ${cond}`,cntExtra)
   return { list:rows.map(fmt), pagination:{page,pageSize,total} }
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [rows] = await pool.query('SELECT * FROM inventory_checks WHERE id=? AND deleted_at IS NULL',[id])
   if(!rows[0]) throw new AppError('盘点单不存在',404)
+  assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '盘点单')
   const check = fmt(rows[0])
   const [items] = await pool.query('SELECT * FROM inventory_check_items WHERE check_id=? ORDER BY id ASC',[id])
   check.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, bookQty:Number(r.book_qty), actualQty:r.actual_qty!=null?Number(r.actual_qty):null, diffQty:r.diff_qty!=null?Number(r.diff_qty):null }))
@@ -65,7 +71,8 @@ async function findById(id) {
 }
 
 // 新建盘点单，自动拉取该仓库所有有库存的商品为盘点明细
-async function create({ warehouseId, warehouseName, remark, operator }) {
+async function create({ warehouseId, warehouseName, remark, operator, scopeWarehouseIds = null }) {
+  assertInScope(scopeWarehouseIds, warehouseId, '盘点单')
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()

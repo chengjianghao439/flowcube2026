@@ -10,6 +10,7 @@ const {
   assertPurchaseOrdersOpen,
 } = require('./inbound-tasks.helpers')
 const { env } = require('../../config/env')
+const { assertInScope } = require('../../utils/warehouseScope')
 const {
   distributePackagesToLines,
   ensureInboundTaskExists,
@@ -187,11 +188,12 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
   }
 }
 
-async function submit(taskId, operator) {
+async function submit(taskId, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '收货订单' })
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     assertTaskCanSubmit(taskRow)
     await compareAndSetStatus(conn, {
       table: 'inbound_tasks',
@@ -328,7 +330,7 @@ async function detectDuplicateScan(conn, { taskId, productId, totalQty, packageC
   return null
 }
 
-async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } = {}) {
+async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, scopeWarehouseIds = null } = {}) {
   const { productId, qty, packages: rawPackages, confirmOverReceive, confirmDuplicate, scannedBarcode, batchNo, mfgDate } = payload
   let { expDate } = payload
   const productIdN = Number(productId)
@@ -403,6 +405,8 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId } =
     if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(taskRow.warehouse_id)) {
       throw new AppError('当前设备绑定仓库与该收货订单所属仓库不一致，无法收货', 403)
     }
+    // 用户级仓库权限：设备会话尚未接入前端时（req.pda 恒为 null），这才是实际生效的那道闸门
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     assertTaskCanReceive(taskRow)
     await assertPurchaseOrdersOpen(conn, taskId)
 
@@ -772,11 +776,12 @@ async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } 
   }
 }
 
-async function cancel(taskId) {
+async function cancel(taskId, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '收货订单' })
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     assertTaskCanCancel(taskRow)
     const [[{ n }]] = await conn.query(
       'SELECT COUNT(*) AS n FROM inventory_containers WHERE inbound_task_id = ? AND deleted_at IS NULL',
@@ -813,15 +818,16 @@ async function cancel(taskId) {
 // 状态机层面 receiveComplete 本来就允许 2→3（正常路径是收满后自动触发），这里只是补一个
 // 手动强推入口——否则短装后任务会永久卡在收货中，且连带堵死 purchase.closeRemaining（它要求
 // 关联收货订单要么已取消要么已全部上架完成，见 purchase.service.js:227-231）。
-async function closeReceiving(taskId, operator) {
+async function closeReceiving(taskId, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const taskRow = await lockStatusRow(conn, {
       table: 'inbound_tasks', id: taskId,
-      columns: 'id, task_no, status',
+      columns: 'id, task_no, status, warehouse_id',
       entityName: '收货订单',
     })
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     if (Number(taskRow.status) !== 2) {
       throw new AppError('只有"收货中"状态才能提前结束收货', 409)
     }

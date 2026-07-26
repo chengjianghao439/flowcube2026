@@ -127,6 +127,9 @@ jobs:
       - name: 冒烟测试 — P1 回归（锁定容器避让 / 并货防护 / 并发占库无死锁）
         run: npm run smoke:p1-regression
 
+      - name: 仓库级数据权限回归
+        run: npm run smoke:warehouse-scope
+
       - name: 集成测试 — 库存主链路一致性（独立测试库）
         run: npm run test:integration
         env:

@@ -4,6 +4,7 @@ const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { SOURCE_TYPE, getAvailableStockForDecision, syncStockFromContainers, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { transferScopeFilter, assertTransferInScope, assertInScope } = require('../../utils/warehouseScope')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { TRANSFER_EVENT, record: recordTransferEvent } = require('./transfer-events.service')
 const { getRequestId } = require('../../utils/requestContext')
@@ -53,7 +54,7 @@ async function assertTransferAvailability(conn, order) {
   }
 }
 
-async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null, scopeWarehouseIds=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
   const params=[like,like,like]
   let whereExtra=''
@@ -67,15 +68,19 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
   if (startDate) { whereExtra += ' AND DATE(created_at)>=?'; params.push(startDate) }
   if (endDate) { whereExtra += ' AND DATE(created_at)<=?'; params.push(endDate) }
   if (remark) { whereExtra += ' AND remark LIKE ?'; params.push(`%${remark}%`) }
+  // 调拨天然跨仓：源仓或目标仓任一在 scope 内即可见，否则发货方看不到自己发出的单子
+  const scope = transferScopeFilter(scopeWarehouseIds, 'from_warehouse_id', 'to_warehouse_id')
+  if (scope.sql) { whereExtra += scope.sql; params.push(...scope.params) }
   const where = `deleted_at IS NULL AND (order_no LIKE ? OR from_warehouse_name LIKE ? OR to_warehouse_name LIKE ?) ${whereExtra}`
   const [rows]=await pool.query(`SELECT * FROM transfer_orders WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,pageSize,offset])
   const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM transfer_orders WHERE ${where}`,params)
   return { list:rows.map(fmt), pagination:{page,pageSize,total} }
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [rows]=await pool.query('SELECT * FROM transfer_orders WHERE id=? AND deleted_at IS NULL',[id])
   if(!rows[0]) throw new AppError('调拨单不存在',404)
+  assertTransferInScope(scopeWarehouseIds, rows[0].from_warehouse_id, rows[0].to_warehouse_id)
   const order=fmt(rows[0])
   const [items]=await pool.query('SELECT * FROM transfer_order_items WHERE order_id=? ORDER BY id',[id])
   order.items=items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, articleNumber:r.article_number, spec:r.spec, color:r.color, quantity:Number(r.quantity), deductedQty:Number(r.deducted_qty||0), receivedQty:Number(r.received_qty||0), remark:r.remark }))
@@ -111,12 +116,15 @@ async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWar
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { fromWarehouseId, fromWarehouseName, toWarehouseId, toWarehouseName, remark, items, operator }) {
+async function update(id, { fromWarehouseId, fromWarehouseName, toWarehouseId, toWarehouseName, remark, items, operator, scopeWarehouseIds = null }) {
   assertDifferentWarehouses(fromWarehouseId, toWarehouseId)
   const conn=await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'transfer_orders', id, columns: 'id, status', entityName: '调拨单' })
+    const row = await lockStatusRow(conn, { table: 'transfer_orders', id, columns: 'id, status, from_warehouse_id, to_warehouse_id', entityName: '调拨单' })
+    assertTransferInScope(scopeWarehouseIds, row.from_warehouse_id, row.to_warehouse_id)
+    // 改单同样受限：改完之后源仓/目标仓至少有一端仍要在自己的 scope 内
+    assertTransferInScope(scopeWarehouseIds, fromWarehouseId, toWarehouseId)
     assertStatusAction('transfer', 'edit', row.status)
     await conn.query(`UPDATE transfer_orders SET from_warehouse_id=?, from_warehouse_name=?, to_warehouse_id=?, to_warehouse_name=?, remark=? WHERE id=?`,[fromWarehouseId,fromWarehouseName,toWarehouseId,toWarehouseName,remark||null,id])
     await conn.query('DELETE FROM transfer_order_items WHERE order_id=?', [id])
@@ -126,11 +134,12 @@ async function update(id, { fromWarehouseId, fromWarehouseName, toWarehouseId, t
   return findById(id)
 }
 
-async function confirm(id, operator = null) {
+async function confirm(id, operator = null, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
+    assertTransferInScope(scopeWarehouseIds, orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     const rule = assertStatusAction('transfer', 'confirm', orderRow.status)
     assertDifferentWarehouses(orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     const [itemRows] = await conn.query('SELECT * FROM transfer_order_items WHERE order_id=? ORDER BY id', [id])
@@ -181,7 +190,7 @@ async function confirm(id, operator = null) {
 }
 
 // 调出仓 PDA 扫码出库：整容器移到调入仓设 PENDING_PUTAWAY（在途，暂不计入调入仓），调出仓库存立即减。
-async function scanOut(id, { containerBarcode }, operator, requestKey) {
+async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -189,6 +198,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey) {
     if (requestState.replay) { await conn.rollback(); return requestState.responseData }
 
     const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
+    assertTransferInScope(scopeWarehouseIds, orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     assertStatusAction('transfer', 'scanOut', orderRow.status)
     assertDifferentWarehouses(orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     const fromWh = Number(orderRow.from_warehouse_id)
@@ -248,7 +258,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey) {
 }
 
 // 调入仓 PDA 扫码入库上架：在途容器翻 ACTIVE + 落库位，调入仓库存立即增；全部收齐则完成。
-async function scanIn(id, { containerBarcode, locationId }, operator, requestKey) {
+async function scanIn(id, { containerBarcode, locationId }, operator, requestKey, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -256,6 +266,7 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
     if (requestState.replay) { await conn.rollback(); return requestState.responseData }
 
     const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
+    assertTransferInScope(scopeWarehouseIds, orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     assertStatusAction('transfer', 'scanIn', orderRow.status)
     const toWh = Number(orderRow.to_warehouse_id)
 
@@ -328,11 +339,12 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function cancel(id, operator = null) {
+async function cancel(id, operator = null, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, columns: 'id, order_no, status', entityName: '调拨单' })
+    const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, columns: 'id, order_no, status, from_warehouse_id, to_warehouse_id', entityName: '调拨单' })
+    assertTransferInScope(scopeWarehouseIds, orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     const rule = assertStatusAction('transfer', 'cancel', orderRow.status)
     await compareAndSetStatus(conn, {
       table: 'transfer_orders',
@@ -372,14 +384,15 @@ async function cancel(id, operator = null) {
  * 可查。作废的数量不做任何库存增补——scanOut 时已从源仓扣减，货物按实际运输损耗处理，不会
  * 凭空回到源仓也不会凭空出现在目的仓。
  */
-async function forceCloseInTransit(id, operator, { reason } = {}) {
+async function forceCloseInTransit(id, operator, { reason } = {}, scopeWarehouseIds = null) {
   if (!reason || !String(reason).trim()) {
     throw new AppError('必须填写异常了结原因', 400)
   }
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, columns: 'id, order_no, status', entityName: '调拨单' })
+    const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, columns: 'id, order_no, status, from_warehouse_id, to_warehouse_id', entityName: '调拨单' })
+    assertTransferInScope(scopeWarehouseIds, orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     if (Number(orderRow.status) !== 3) {
       throw new AppError('只有"在途"状态的调拨单才能异常了结', 409)
     }

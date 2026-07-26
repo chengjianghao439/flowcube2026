@@ -7,6 +7,7 @@ const { WT_STATUS_NAME, WT_STATUS_ACTIVE } = require('../../constants/warehouseT
 const { getRequestId } = require('../../utils/requestContext')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { genNo, adjustPaymentRecordForReturn } = require('./returns.helpers')
+const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 
 const PR_STATUS = { 1:'草稿', 2:'已确认', 3:'已退货', 4:'已取消' }
 
@@ -126,7 +127,7 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items) {
   }
 }
 
-async function findAllPR({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null }) {
+async function findAllPR({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null, scopeWarehouseIds=null }) {
   const offset=(page-1)*pageSize, like=`%${keyword}%`
   const params=[like,like]
   let whereExtra=''
@@ -141,15 +142,18 @@ async function findAllPR({ page=1, pageSize=20, keyword='', status=null, product
   if (startDate) { whereExtra += ' AND DATE(created_at)>=?'; params.push(startDate) }
   if (endDate) { whereExtra += ' AND DATE(created_at)<=?'; params.push(endDate) }
   if (remark) { whereExtra += ' AND remark LIKE ?'; params.push(`%${remark}%`) }
+  const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  if (scope.sql) { whereExtra += scope.sql; params.push(...scope.params) }
   const where = `deleted_at IS NULL AND (return_no LIKE ? OR supplier_name LIKE ?) ${whereExtra}`
   const [rows]=await pool.query(`SELECT * FROM purchase_returns WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,pageSize,offset])
   const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM purchase_returns WHERE ${where}`,params)
   return { list:rows.map(fmtPR), pagination:{page,pageSize,total} }
 }
 
-async function findByIdPR(id) {
+async function findByIdPR(id, scopeWarehouseIds = null) {
   const [rows]=await pool.query('SELECT * FROM purchase_returns WHERE id=? AND deleted_at IS NULL',[id])
   if(!rows[0]) throw new AppError('退货单不存在',404)
+  assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '采购退货单')
   const ret=fmtPR(rows[0])
   const [items]=await pool.query('SELECT * FROM purchase_return_items WHERE return_id=?',[id])
   ret.items=items.map(r=>({id:r.id,sourceItemId:r.purchase_item_id||null,productId:r.product_id,productCode:r.product_code,productName:r.product_name,articleNumber:r.article_number||null,spec:r.spec||null,color:r.color||null,unit:r.unit,quantity:Number(r.quantity),unitPrice:Number(r.unit_price),amount:Number(r.amount)}))
@@ -161,7 +165,8 @@ async function findByIdPR(id) {
   return ret
 }
 
-async function createPR({ supplierId, supplierName, warehouseId, warehouseName, purchaseOrderId = null, purchaseOrderNo, remark, items, operator, requestKey }) {
+async function createPR({ supplierId, supplierName, warehouseId, warehouseName, purchaseOrderId = null, purchaseOrderNo, remark, items, operator, requestKey, scopeWarehouseIds = null }) {
+  assertInScope(scopeWarehouseIds, warehouseId, '采购退货单')
   const conn=await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -232,7 +237,7 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function confirmPR(id, operator = null) {
+async function confirmPR(id, operator = null, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -242,6 +247,7 @@ async function confirmPR(id, operator = null) {
       columns: 'id, return_no, purchase_order_id, purchase_order_no, supplier_id, supplier_name, warehouse_id, warehouse_name, status',
       entityName: '采购退货单',
     })
+    assertInScope(scopeWarehouseIds, retRow.warehouse_id, '采购退货单')
     const rule = assertStatusAction('purchaseReturn', 'confirm', retRow.status)
     await compareAndSetStatus(conn, {
       table: 'purchase_returns',
@@ -296,16 +302,17 @@ async function confirmPR(id, operator = null) {
   }
 }
 
-async function cancelPR(id, operator = null) {
+async function cancelPR(id, operator = null, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const retRow = await lockStatusRow(conn, {
       table: 'purchase_returns',
       id,
-      columns: 'id, return_no, status',
+      columns: 'id, return_no, status, warehouse_id',
       entityName: '采购退货单',
     })
+    assertInScope(scopeWarehouseIds, retRow.warehouse_id, '采购退货单')
     const rule = assertStatusAction('purchaseReturn', 'cancel', retRow.status)
     await compareAndSetStatus(conn, {
       table: 'purchase_returns',

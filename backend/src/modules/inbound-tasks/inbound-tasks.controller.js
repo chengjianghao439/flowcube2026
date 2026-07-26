@@ -30,6 +30,7 @@ const list = async (req, res, next) => {
       endDate: endDate || null,
       remark: remark || null,
       supplierId: supplierId ? +supplierId : null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, data)
   } catch (e) { next(e) }
@@ -55,13 +56,13 @@ const create = async (req, res, next) => {
 }
 
 const detail = async (req, res, next) => {
-  try { return successResponse(res, await svc.findById(+req.params.id)) } catch (e) { next(e) }
+  try { return successResponse(res, await svc.findById(+req.params.id, req.user?.warehouseIds ?? null)) } catch (e) { next(e) }
 }
 
 const submit = async (req, res, next) => {
   try {
     const operator = getOperatorFromRequest(req)
-    const data = await svc.submit(+req.params.id, operator)
+    const data = await svc.submit(+req.params.id, operator, req.user?.warehouseIds ?? null)
     return successResponse(res, data, '已提交到 PDA')
   } catch (e) { next(e) }
 }
@@ -86,6 +87,7 @@ const receive = async (req, res, next) => {
       userId: req.user?.userId ?? null,
       requestKey: extractRequestKey(req),
       pdaWarehouseId: req.pda?.warehouseId ?? null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, data, '收货成功')
   } catch (e) { next(e) }
@@ -97,6 +99,7 @@ const putaway = async (req, res, next) => {
     const data = await svc.putaway(+req.params.id, req.body, operator, {
       requestKey: extractRequestKey(req),
       pdaWarehouseId: req.pda?.warehouseId ?? null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, data, '上架成功')
   } catch (e) { next(e) }
@@ -104,7 +107,7 @@ const putaway = async (req, res, next) => {
 
 const cancel = async (req, res, next) => {
   try {
-    await svc.cancel(+req.params.id)
+    await svc.cancel(+req.params.id, req.user?.warehouseIds ?? null)
     return successResponse(res, null, '任务已取消')
   } catch (e) { next(e) }
 }
@@ -112,7 +115,7 @@ const cancel = async (req, res, next) => {
 const voidReceipt = async (req, res, next) => {
   try {
     const operator = getOperatorFromRequest(req)
-    const data = await svc.voidReceipt(+req.params.id, operator)
+    const data = await svc.voidReceipt(+req.params.id, operator, req.user?.warehouseIds ?? null)
     return successResponse(res, data, '已撤回收货，恢复为待收货')
   } catch (e) { next(e) }
 }
@@ -120,7 +123,7 @@ const voidReceipt = async (req, res, next) => {
 const closeReceiving = async (req, res, next) => {
   try {
     const operator = getOperatorFromRequest(req)
-    await svc.closeReceiving(+req.params.id, operator)
+    await svc.closeReceiving(+req.params.id, operator, req.user?.warehouseIds ?? null)
     return successResponse(res, null, '已结束收货，进入待上架')
   } catch (e) { next(e) }
 }

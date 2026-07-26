@@ -3,6 +3,7 @@ const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const {
   appendInboundEvent,
   parseJson,
@@ -271,7 +272,7 @@ async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_T
   }))
 }
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, productId = null, warehouseId = null, operatorId = null, startDate = null, endDate = null, remark = null, supplierId = null }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, productId = null, warehouseId = null, operatorId = null, startDate = null, endDate = null, remark = null, supplierId = null, scopeWarehouseIds = null }) {
   const offset = (page - 1) * pageSize
   const conds = ['t.deleted_at IS NULL']
   const params = []
@@ -300,6 +301,12 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
   if (startDate) { conds.push('DATE(t.created_at) >= ?'); params.push(startDate) }
   if (endDate) { conds.push('DATE(t.created_at) <= ?'); params.push(endDate) }
   if (remark) { conds.push('t.remark LIKE ?'); params.push(`%${remark}%`) }
+  // 仓库数据权限：列表与计数共用 conds/params
+  const scope = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
+  if (scope.sql) {
+    conds.push(scope.sql.replace(/^ AND /, ''))
+    params.push(...scope.params)
+  }
   const where = conds.join(' AND ')
 
   const [rows] = await pool.query(
@@ -319,9 +326,12 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
   }
 }
 
-async function findById(id) {
+// scopeWarehouseIds 默认 null：内部调用方（submit/void 等拿返回值）保持原行为，
+// 只有 HTTP controller 传 req.user.warehouseIds，用于挡住「知道 id 就直查详情」
+async function findById(id, scopeWarehouseIds = null) {
   const [[row]] = await pool.query('SELECT * FROM inbound_tasks WHERE id = ? AND deleted_at IS NULL', [id])
   if (!row) throw new AppError('入库任务不存在', 404)
+  assertInScope(scopeWarehouseIds, row.warehouse_id, '收货订单')
   const task = fmtTask(row)
   // 单价现查采购单明细，不落在 inbound_task_items 上——跟审核结算时 recomputePurchasePayable
   // 的取价方式保持一致，避免出现两份价格数据源
