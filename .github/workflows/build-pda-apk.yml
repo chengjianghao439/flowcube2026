@@ -145,12 +145,17 @@ jobs:
           VERSION="$(node -p "require('./backend/apk/version.json').version")"
           cp frontend/android/app/build/outputs/apk/release/app-release.apk "out/FlowCubePDA-${VERSION}.apk"
 
+      # 与桌面 build 同理：这个 Actions 构件只是「从 run 页面下载 APK」的冗余备份，
+      # PDA 实际更新走后面的「发布到服务器」步骤。若不设 continue-on-error，
+      # 存储配额满会让本步骤失败并连带跳过发布+校验，导致 APK 构建成功却没上线。
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
+        continue-on-error: true
         with:
           name: flowcube-pda-apk
           path: out/*.apk
           if-no-files-found: error
+          retention-days: 7
 
       - name: Setup SSH agent
         if: github.ref == 'refs/heads/main'

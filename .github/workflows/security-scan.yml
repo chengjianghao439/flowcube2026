@@ -24,6 +24,10 @@ permissions:
   contents: read
   security-events: write
   pull-requests: write
+  # upload-sarif 会读取本次 workflow run 的元数据来关联分析结果，私有仓库下必须显式给
+  # actions: read，否则报 "Resource not accessible by integration"（指向 workflow-runs API）
+  # —— 表现为扫描本身跑完了、SARIF 也生成了，却在上传环节把整个 job 判失败。
+  actions: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
