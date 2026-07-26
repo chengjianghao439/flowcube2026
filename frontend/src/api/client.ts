@@ -14,6 +14,11 @@ import {
 } from '@/config/api'
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
 import { formatBackendCode, formatErrorMessage } from '@/utils/displayFormatters'
+import { getDeviceSession } from '@/lib/pdaDeviceBinding'
+import { ensureDeviceSession } from './pda-session'
+
+/** 标记已为设备票据失效重试过一次，防止无限换票循环 */
+type RetriableConfig = InternalAxiosRequestConfig & { __pdaSessionRetried?: boolean }
 
 /** 独立 APK：勿走 ERP 浏览器的候选地址回退（易误连占位域名或 localhost） */
 function isNativePdaNoViteLive(): boolean {
@@ -151,6 +156,13 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    // PDA 设备票据：绑定过的机器自动带上，服务端据此识别「哪台机器、属于哪个仓」。
+    // 放在全局拦截器而不是逐个接口手加——设备身份要覆盖所有 PDA 作业请求，
+    // 漏一个接口就等于那条路径上的跨仓拦截失效（X-Client 就是逐个手加的，很容易漏）。
+    const deviceSession = getDeviceSession()
+    if (deviceSession?.token) {
+      config.headers['X-PDA-Session'] = deviceSession.token
+    }
     return config
   },
   (error) => Promise.reject(error),
@@ -171,6 +183,23 @@ apiClient.interceptors.response.use(
     ) {
       const switched = await tryErpApiFallbackAndRetry(cfg)
       if (switched) {
+        return apiClient.request(cfg)
+      }
+    }
+
+    // 设备票据失效（过期/被吊销/设备被停用）：用本机凭据自动换一张再重试一次。
+    // 只重试一次并打标记，避免密钥已被重置时陷入「换票→仍失败→再换票」的死循环。
+    if (
+      cfg
+      && status === 403
+      && error.response?.data?.code === 'PDA_SESSION_REQUIRED'
+      && !(cfg as RetriableConfig).__pdaSessionRetried
+    ) {
+      const renewed = await ensureDeviceSession()
+      if (renewed?.token) {
+        ;(cfg as RetriableConfig).__pdaSessionRetried = true
+        cfg.headers = cfg.headers ?? {}
+        ;(cfg.headers as Record<string, string>)['X-PDA-Session'] = renewed.token
         return apiClient.request(cfg)
       }
     }

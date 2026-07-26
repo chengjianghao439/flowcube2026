@@ -87,6 +87,7 @@ const WarehouseOpsPage = lazy(() => import('@/pages/reports/warehouse-ops'))
 const PrintTemplatesPage = lazy(() => import('@/pages/settings/print-templates'))
 const PrintTemplateEditorPage = lazy(() => import('@/pages/settings/print-templates/editor'))
 const PrintersPage = lazy(() => import('@/pages/settings/printers'))
+const PdaDevicesPage = lazy(() => import('@/pages/settings/pda-devices'))
 
 export const routeRegistry: RouteRegistryEntry[] = [
   {
@@ -406,6 +407,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '系统', order: 60 },
+  },
+  {
+    path: '/settings/pda-devices',
+    title: 'PDA 设备',
+    permission: PERMISSIONS.PDA_DEVICE_VIEW,
+    component: PdaDevicesPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '系统', order: 70 },
   },
 ]
 

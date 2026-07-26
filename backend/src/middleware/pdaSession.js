@@ -2,6 +2,7 @@ const { pool } = require('../config/db')
 const AppError = require('../utils/AppError')
 const logger = require('../utils/logger')
 const { hashToken, normalizeScopes } = require('../modules/pda/pda.sessions.service')
+const { env } = require('../config/env')
 
 function getRouteMeta(req) {
   return {
@@ -63,42 +64,40 @@ function buildPdaContext(row) {
   }
 }
 
+/**
+ * 会话缺失/无效时的处置：观察期只记日志放行，强制期直接 403。
+ * 由 env.PDA_SESSION_REQUIRED 控制，切换不需要改代码、不需要重新发版。
+ */
+function denyOrPass(req, res, next, reason, message) {
+  setSessionHint(res)
+  logPdaSessionObservation(req, reason === 'missing_session' ? 'missing' : 'invalid', { reason })
+  if (env.PDA_SESSION_REQUIRED) {
+    return next(new AppError(message, 403, 'PDA_SESSION_REQUIRED'))
+  }
+  return next()
+}
+
 function pdaSessionOptional() {
   return async (req, res, next) => {
     const token = String(req.headers['x-pda-session'] || '').trim()
     req.pda = null
     if (!token) {
-      setSessionHint(res)
-      logPdaSessionObservation(req, 'missing', { reason: 'missing_session' })
-      return next()
+      return denyOrPass(req, res, next, 'missing_session', '该 PDA 未绑定设备，请先在设置中扫码绑定后再作业')
     }
 
     try {
       const row = await loadPdaSession(token)
       if (!row) {
-        setSessionHint(res)
-        logPdaSessionObservation(req, 'invalid', { reason: 'session_not_found' })
-        return next()
+        return denyOrPass(req, res, next, 'session_not_found', '设备会话无效，请重新登录以重建设备会话')
       }
       if (row.revoked_at) {
-        setSessionHint(res)
-        logPdaSessionObservation(req, 'invalid', { reason: 'session_revoked', sessionId: row.session_id })
-        return next()
+        return denyOrPass(req, res, next, 'session_revoked', '该设备会话已被管理员吊销，请联系管理员')
       }
       if (new Date(row.expires_at).getTime() <= Date.now()) {
-        setSessionHint(res)
-        logPdaSessionObservation(req, 'invalid', { reason: 'session_expired', sessionId: row.session_id })
-        return next()
+        return denyOrPass(req, res, next, 'session_expired', '设备会话已过期，请重新登录以重建设备会话')
       }
       if (String(row.device_status) !== 'active') {
-        setSessionHint(res)
-        logPdaSessionObservation(req, 'invalid', {
-          reason: 'device_not_active',
-          sessionId: row.session_id,
-          deviceCode: row.device_code,
-          deviceStatus: row.device_status,
-        })
-        return next()
+        return denyOrPass(req, res, next, 'device_not_active', '该 PDA 设备已被停用，请联系管理员')
       }
 
       req.pda = buildPdaContext(row)

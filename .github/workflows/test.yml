@@ -133,6 +133,12 @@ jobs:
       - name: 仓库级数据权限回归
         run: npm run smoke:warehouse-scope
 
+      - name: PDA 设备会话回归（观察模式：现网默认行为）
+        run: npm run smoke:pda-device-session
+
+      - name: PDA 设备会话回归（强制模式：开关打开后的行为）
+        run: npm run smoke:pda-device-session-strict
+
       - name: 集成测试 — 库存主链路一致性（独立测试库）
         run: npm run test:integration
         env:

@@ -26,6 +26,7 @@ const PdaPutawayPage = lazy(() => import('@/pages/pda/putaway'))
 const PdaCheckPage   = lazy(() => import('@/pages/pda/check'))
 const PdaPackPage    = lazy(() => import('@/pages/pda/pack'))
 const PdaSplitPage   = lazy(() => import('@/pages/pda/split'))
+const PdaBindPage    = lazy(() => import('@/pages/pda/bind'))
 const PdaShipPage    = lazy(() => import('@/pages/pda/ship'))
 const PdaSortPage    = lazy(() => import('@/pages/pda/sort'))
 const PdaSaleReturnListPage = lazy(() => import('@/pages/pda/sale-return'))
@@ -142,6 +143,9 @@ export default function AppRouter() {
               <Route path="pack/:id" element={<PdaRoutePermission title="打包作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]}><PdaPackPage /></PdaRoutePermission>} />
               <Route path="pack" element={<PdaRoutePermission title="打包作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]}><PdaPackPage /></PdaRoutePermission>} />
               <Route path="split" element={<PdaRoutePermission title="容器拆分" required={[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]}><PdaSplitPage /></PdaRoutePermission>} />
+              {/* 设备绑定不挂业务权限：任何能登录 PDA 的操作员都要能绑定，
+                  否则会陷入「没绑定 → 请求被拒 → 绑不了」的死结 */}
+              <Route path="bind" element={<PdaBindPage />} />
               <Route path="ship/:id" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
               <Route path="ship" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
               <Route path="sort" element={<PdaRoutePermission title="分拣作业" required={[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT]}><PdaSortPage /></PdaRoutePermission>} />

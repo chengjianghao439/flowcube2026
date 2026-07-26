@@ -158,6 +158,8 @@ const PERMISSIONS = {
 
   PRINT_PRINTER_VIEW: 'print.printer.view',
   PRINT_PRINTER_MANAGE: 'print.printer.manage',
+  PDA_DEVICE_VIEW: 'pda.device.view',
+  PDA_DEVICE_MANAGE: 'pda.device.manage',
 
   AUDIT_LOG_VIEW: 'audit.log.view',
   AUDIT_LOG_CLEAR: 'audit.log.clear',
