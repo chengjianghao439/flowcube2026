@@ -12,6 +12,7 @@
  * P0-3 短装收货后任务卡死在待上架、应付永不生成、采购单无法结案
  * P0-4 执行期改单丢失行级发货仓库 → 应收恒为 0、订单永远停在履约中
  * P0-5 出库明细 JOIN 缺仓库维度 → 多仓同商品订单库存被扣 N 倍
+ * P0-6 幂等回执查询接口后端从未注册 → PDA 断网后无法确认「上次到底成没成」
  *
  * 运行：node tests/p0-regression.smoke.test.js
  */
@@ -403,6 +404,89 @@ async function scenarioMultiWarehouseNoFanout(ctx, log, token) {
   }
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// P0-6：幂等回执查询接口必须存在且可用
+//
+// PDA 所有关键动作提交前都会写一条 operation_requests；网络中断导致「请求发出去了
+// 但没收到响应」时，前端调这个接口回来问服务端上次到底成没成，据此决定要不要重扫。
+// 后端 getOperationRequestStatus() 一直实现着，却从未在任何路由上注册过，前端请求的
+// /api/system/request-status/:key 必然 404 —— 确认路径整条断掉，销售退货等未提供
+// resolveServerState 兜底的页面会直接落进失败态，员工据此重扫就是重复入账。
+// ───────────────────────────────────────────────────────────────────────────
+async function scenarioOperationReceiptLookup(ctx, log, token) {
+  log.section('P0-6 幂等回执查询接口（PDA 断网后确认上次提交结果）')
+  const { http, warehouse, location, supplier, pdaHeaders } = ctx
+  const product = await createTestProduct(ctx.pool, 'receipt')
+
+  const poResp = await createPurchaseOrder(http, token, { supplier, warehouse, product, quantity: 20 })
+  const poId = Number(poResp.data?.data?.id)
+  await confirmPurchaseOrder(http, token, poId)
+  const taskResp = await createInboundTaskFromPurchase(http, token, poId)
+  const taskId = Number(taskResp.data?.data?.taskId)
+  await http.post(`/api/inbound-tasks/${taskId}/submit`, { token })
+
+  const requestKey = randomRef('receipt-key')
+  const recv = await http.post(`/api/inbound-tasks/${taskId}/receive`, {
+    token,
+    headers: pdaHeaders({ 'X-Request-Key': requestKey }),
+    json: { productId: Number(product.id), packages: [{ qty: 5 }] },
+  })
+  log.assert('前置：带幂等键的收货成功', recv.ok, JSON.stringify(recv.data).slice(0, 160))
+
+  const status = await http.get(
+    `/api/system/request-status/${encodeURIComponent(requestKey)}?action=inbound.receive`,
+    { token },
+  )
+  log.assert(
+    '★P0-6 回执查询接口存在且可用（修复前后端从未注册 /api/system，前端必然 404）',
+    status.status === 200,
+    `status=${status.status} ${JSON.stringify(status.data).slice(0, 160)}`,
+  )
+  log.assert(
+    '★P0-6 回执如实返回 success，PDA 据此判定「上次其实成了，不要重扫」',
+    status.data?.data?.status === 'success',
+    JSON.stringify(status.data?.data).slice(0, 200),
+  )
+  log.assert(
+    '★P0-6 回执带回原始业务数据与单据归属，断网恢复后能还原现场提示',
+    Boolean(status.data?.data?.data) && Number(status.data?.data?.resourceId) === taskId,
+    JSON.stringify(status.data?.data).slice(0, 200),
+  )
+
+  const wrongAction = await http.get(
+    `/api/system/request-status/${encodeURIComponent(requestKey)}?action=inbound.putaway`,
+    { token },
+  )
+  log.assert(
+    'action 不匹配时不串台（按 request_key + action + user_id 三元组定位）',
+    wrongAction.data?.data?.status === 'not_found',
+    JSON.stringify(wrongAction.data?.data),
+  )
+
+  const missingAction = await http.get(
+    `/api/system/request-status/${encodeURIComponent(requestKey)}`,
+    { token },
+  )
+  log.assert(
+    '缺 action 参数返回 400 且提示为中文',
+    missingAction.status === 400 && /缺少/.test(String(missingAction.data?.message || '')),
+    `status=${missingAction.status} msg=${missingAction.data?.message}`,
+  )
+
+  const anonymous = await http.get(
+    `/api/system/request-status/${encodeURIComponent(requestKey)}?action=inbound.receive`,
+    {},
+  )
+  log.assert(
+    '未登录无法查询回执（回执含业务数据，必须带身份）',
+    anonymous.status === 401,
+    `status=${anonymous.status}`,
+  )
+
+  // 清理：这张收货单只收了一部分，留着会干扰后续「待收货任务」类查询
+  await http.post(`/api/inbound-tasks/${taskId}/cancel`, { token })
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -415,6 +499,7 @@ async function main() {
     await scenarioShortReceiveClosesOut(ctx, log, token)
     await scenarioAdjustKeepsWarehouse(ctx, log, token)
     await scenarioMultiWarehouseNoFanout(ctx, log, token)
+    await scenarioOperationReceiptLookup(ctx, log, token)
   } finally {
     await ctx.close()
   }

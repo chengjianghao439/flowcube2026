@@ -142,6 +142,7 @@ app.use('/api/sorting-bins',   require('./modules/sorting-bins/sorting-bins.rout
 app.use('/api/pda',            require('./modules/pda/pda.routes'))
 app.use('/api/printer-bindings', require('./modules/printer-bindings/printer-bindings.routes'))
 app.use('/api/app-update',     require('./modules/app-update/app-update.routes'))
+app.use('/api/system',         require('./modules/system/system.routes'))
 
 // ─── 桌面端安装包静态资源（必须在所有 /api 之后、404 之前）────────────────────────
 // express.static 对「目录 URL」无 index 时会 next()，若无下列路由会落到全局 404 →「接口不存在」
