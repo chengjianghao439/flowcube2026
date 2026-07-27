@@ -107,6 +107,22 @@ const PERMISSIONS = {
   // 由产品在权限管理页手动开放给财务角色——与 TRANSFER_ORDER_FORCE_CLOSE 同先例。
   PAYMENT_CONFIRM: 'payment.confirm',
 
+  // 资金账户。ADJUST 能直接改变账面余额（补差额流水），敏感度等同 PAYMENT_CONFIRM，
+  // 同样不 seed 给普通角色，由产品在权限管理页手动开放。
+  FINANCE_ACCOUNT_VIEW: 'finance.account.view',
+  FINANCE_ACCOUNT_CREATE: 'finance.account.create',
+  FINANCE_ACCOUNT_UPDATE: 'finance.account.update',
+  FINANCE_ACCOUNT_DELETE: 'finance.account.delete',
+  FINANCE_ACCOUNT_ADJUST: 'finance.account.adjust',
+
+  // 费用报销。APPROVE 与 PAY 是内控的两道口子，同样不 seed 给普通角色。
+  FINANCE_EXPENSE_VIEW: 'finance.expense.view',
+  FINANCE_EXPENSE_CREATE: 'finance.expense.create',
+  FINANCE_EXPENSE_UPDATE: 'finance.expense.update',
+  FINANCE_EXPENSE_APPROVE: 'finance.expense.approve',
+  FINANCE_EXPENSE_PAY: 'finance.expense.pay',
+  FINANCE_EXPENSE_CATEGORY_MANAGE: 'finance.expense.category.manage',
+
   WAREHOUSE_TASK_VIEW: 'warehouse.task.view',
   WAREHOUSE_TASK_ASSIGN: 'warehouse.task.assign',
   WAREHOUSE_TASK_PICK: 'warehouse.task.pick',

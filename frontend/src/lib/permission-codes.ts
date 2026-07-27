@@ -107,6 +107,19 @@ export const PERMISSIONS = {
   PAYMENT_EXECUTE: 'payment.execute',
   PAYMENT_CONFIRM: 'payment.confirm',
 
+  FINANCE_ACCOUNT_VIEW: 'finance.account.view',
+  FINANCE_ACCOUNT_CREATE: 'finance.account.create',
+  FINANCE_ACCOUNT_UPDATE: 'finance.account.update',
+  FINANCE_ACCOUNT_DELETE: 'finance.account.delete',
+  FINANCE_ACCOUNT_ADJUST: 'finance.account.adjust',
+
+  FINANCE_EXPENSE_VIEW: 'finance.expense.view',
+  FINANCE_EXPENSE_CREATE: 'finance.expense.create',
+  FINANCE_EXPENSE_UPDATE: 'finance.expense.update',
+  FINANCE_EXPENSE_APPROVE: 'finance.expense.approve',
+  FINANCE_EXPENSE_PAY: 'finance.expense.pay',
+  FINANCE_EXPENSE_CATEGORY_MANAGE: 'finance.expense.category.manage',
+
   WAREHOUSE_TASK_VIEW: 'warehouse.task.view',
   WAREHOUSE_TASK_ASSIGN: 'warehouse.task.assign',
   WAREHOUSE_TASK_PICK: 'warehouse.task.pick',
