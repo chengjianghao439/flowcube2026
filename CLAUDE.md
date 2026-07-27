@@ -463,5 +463,9 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 8. **生产库存在 schema 漂移史**（曾出现迁移未真正生效导致缺列；也出现过迁移文本声明了生产从没有过的列）。改动依赖新列的逻辑时，先确认生产已跑过对应迁移。2026-07-27 新增的一例同类问题：`payment_records.order_id` 实际是 `NOT NULL`，而 054 的建表文本与 091 的注释都写它可空——已由迁移 145 订正。
 9. **`avg_cost` 只随入库正向移动**，退货/撤回收货不反冲——这是刻意简化，利润分析用 `sale_order_items.cost_snapshot` 口径，不要"顺手修正"。
 10. `docs/` 下部分文档（`flow-review-report.md`、`print-module-refactor-plan.md` 等）是阶段性报告，不代表当前实现。
-11. ~~`npm run lint` 两端都是坏的~~ **已补齐**（2026-07-27，两端 ESLint 9 flat config + CI 的 `static` job，顺带把前端 `tsc` 也第一次接进 CI）。遗留两项：① 前端 18 条 `react-hooks/exhaustive-deps` 存量 warning 未清（清完应把规则改回 error）；② `backend/src/modules/app-update/app-update.service.js` 的 `compareVersions` 无调用方，已标注但没删——**要不要删待确认**。
-12. **后端两个 production 依赖有已知漏洞**（`body-parser` <1.20.6 低危、`brace-expansion` 高危，均为 express / glob 的传递依赖），`npm audit fix` 可修但会动生产依赖版本，**待确认是否在下一版一并处理**。
+11. ~~`npm run lint` 两端都是坏的~~ **已补齐**（2026-07-27，两端 ESLint 9 flat config + CI 的 `static` job，顺带把前端 `tsc` 也第一次接进 CI）。遗留一项：前端 18 条 `react-hooks/exhaustive-deps` 存量 warning 未清，清完应把规则改回 error。
+12. **后端 `exceljs` 依赖链上有一条修不掉的高危告警**（2026-07-27 调查结论，别重复折腾）：
+    - 已修：`body-parser` 1.20.5→1.20.6、顶层与 `readdir-glob` 下的 `brace-expansion`（`npm audit fix`，只动 lock 不动 package.json）。
+    - 剩下的 9 条 `npm audit --omit=dev` 告警**全部同源**：`exceljs@4.4.0`（已是最新版）固定依赖 `archiver@^5` → `glob@7` → `minimatch@3` → `brace-expansion@1.1.16`。上游没有可升的版本，`npm audit fix --force` 也无版本可换，只会破坏依赖，**不要执行**。
+    - 风险实际不可达：该 DoS 需要攻击者控制传给 `glob` 的模式串，而本项目只用 exceljs 读写文件，glob 模式全是库内部的固定路径，不接受任何用户输入。
+    - 解除条件：exceljs 发布带 `archiver@6+` 的版本，或改用别的导出库。

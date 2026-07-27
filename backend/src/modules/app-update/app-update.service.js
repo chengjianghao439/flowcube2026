@@ -10,26 +10,9 @@ const GITHUB_OWNER = env.GITHUB_OWNER
 const GITHUB_REPO = env.GITHUB_REPO
 const GITHUB_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
 
-function normalizeVersion(v) {
-  return String(v || '').trim().replace(/^v/i, '')
-}
-
-// 当前无调用方：版本比较发生在桌面端 desktop/lib/updateCheck.js，服务端只负责
-// 把 latest.json 原样吐出去。留着是因为一旦要在服务端做「低于最低版本则强制更新」
-// 就得用它，删掉等于再写一遍。**如果确认不做该功能，这段可以整体删除。**
-// eslint-disable-next-line no-unused-vars
-function compareVersions(a, b) {
-  const pa = normalizeVersion(a).split('.').map((item) => Number.parseInt(item, 10) || 0)
-  const pb = normalizeVersion(b).split('.').map((item) => Number.parseInt(item, 10) || 0)
-  const len = Math.max(pa.length, pb.length)
-  for (let i = 0; i < len; i += 1) {
-    const av = pa[i] || 0
-    const bv = pb[i] || 0
-    if (av > bv) return 1
-    if (av < bv) return -1
-  }
-  return 0
-}
+// 这里曾有 compareVersions / normalizeVersion 一对函数，均无调用方，已于 2026-07-27 删除。
+// 版本比较发生在桌面端 desktop/lib/updateCheck.js，服务端只负责把 latest.json 原样吐出去。
+// 若将来要在服务端做「低于最低版本则强制更新」，从 git 历史里取回即可。
 
 function sanitizeReleaseNotes(body) {
   if (!body || typeof body !== 'string') return ''
