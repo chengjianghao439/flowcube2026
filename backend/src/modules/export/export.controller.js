@@ -1,4 +1,4 @@
-const { exportXlsx } = require('../../utils/excelExport')
+const { exportXlsx, exportStatementXlsx } = require('../../utils/excelExport')
 const exportService = require('./export.service')
 
 async function sendExport(res, payload) {
@@ -77,6 +77,40 @@ async function exportSaleReturns(req, res, next) {
   }
 }
 
+async function exportPayments(req, res, next) {
+  try {
+    await sendExport(res, await exportService.getPaymentsExportPayload(req.query))
+  } catch (error) {
+    next(error)
+  }
+}
+
+async function exportPaymentReceipts(req, res, next) {
+  try {
+    await sendExport(res, await exportService.getPaymentReceiptsExportPayload(req.query))
+  } catch (error) {
+    next(error)
+  }
+}
+
+async function exportStatements(req, res, next) {
+  try {
+    await sendExport(res, await exportService.getStatementsExportPayload(req.query))
+  } catch (error) {
+    next(error)
+  }
+}
+
+/** 单张对账单：正式单据格式，可直接发给往来方签字确认 */
+async function exportStatementDetail(req, res, next) {
+  try {
+    const payload = await exportService.getStatementDetailExportPayload(Number(req.params.id))
+    await exportStatementXlsx(res, payload.meta, payload.items)
+  } catch (error) {
+    next(error)
+  }
+}
+
 module.exports = {
   exportPurchase,
   exportSale,
@@ -87,4 +121,8 @@ module.exports = {
   exportTransfer,
   exportPurchaseReturns,
   exportSaleReturns,
+  exportPayments,
+  exportPaymentReceipts,
+  exportStatements,
+  exportStatementDetail,
 }

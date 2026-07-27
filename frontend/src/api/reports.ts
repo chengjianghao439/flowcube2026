@@ -189,7 +189,7 @@ export interface ReconciliationReport {
   pagination: { page: number; pageSize: number; total: number }
 }
 
-export const getReconciliationApi = (params: { type?: number; startDate?: string; endDate?: string; keyword?: string; status?: number | string; pageSize?: number; settlementTypes?: string } = {}) =>
+export const getReconciliationApi = (params: { type?: number | string; startDate?: string; endDate?: string; keyword?: string; status?: number | string; pageSize?: number; settlementTypes?: string; minAmount?: string; maxAmount?: string; dueStart?: string; dueEnd?: string; orderNo?: string; partyName?: string } = {}) =>
   client.get<ReconciliationReport>('/reports/reconciliation', { params })
 
 export interface ProfitSaleOrderRow {

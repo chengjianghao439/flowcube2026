@@ -1,5 +1,9 @@
 const { pool } = require('../../config/db')
 const reportsService = require('../reports/reports.service')
+const { ymd } = require('../../utils/excelExport')
+const paymentsService = require('../payments/payments.service')
+const receiptsService = require('../payments/payment-receipts.service')
+const statementsService = require('../payments/reconciliation-statements.service')
 
 function buildDateStamp() {
   return new Date().toLocaleDateString('zh-CN').replace(/\//g, '')
@@ -377,10 +381,161 @@ async function getSaleReturnsExportPayload(query = {}) {
   })
 }
 
+// ── 账款 / 核销 / 对账单导出 ──────────────────────────────────────────────────
+
+/** 账款列表：按页面范围（现结或月结）导出，列与页面一致 */
+async function getPaymentsExportPayload(query) {
+  const data = await paymentsService.findAll({
+    type: query.type || '',
+    status: query.status || '',
+    keyword: query.keyword || '',
+    settlementTypes: query.settlementTypes || null,
+    page: 1,
+    pageSize: 10000,
+  })
+  const isPayable = Number(query.type) === 1
+  const sheetName = isPayable ? '应付账款' : '应收账款'
+  return {
+    filename: `${sheetName}_${buildDateStamp()}`,
+    sheetName,
+    columns: [
+      { header: '关联单号', key: 'orderNo', width: 22 },
+      { header: isPayable ? '供应商' : '客户', key: 'partyName', width: 20 },
+      { header: '总金额', key: 'totalAmount', width: 14 },
+      { header: isPayable ? '已付金额' : '已收金额', key: 'paidAmount', width: 14 },
+      { header: '余额', key: 'balance', width: 14 },
+      { header: '状态', key: 'statusName', width: 10 },
+      { header: '结算确认', key: 'confirmText', width: 12 },
+      { header: '到期日', key: 'dueDate', width: 14 },
+      { header: '创建时间', key: 'createdAt', width: 20 },
+      { header: '备注', key: 'remark', width: 24 },
+    ],
+    rows: data.list.map(r => ({
+      orderNo: r.orderNo,
+      partyName: r.partyName,
+      totalAmount: r.totalAmount,
+      paidAmount: r.paidAmount,
+      balance: r.balance,
+      statusName: r.statusName,
+      confirmText: isPayable ? (r.confirmStatus === 0 ? '待确认' : '已确认') : '',
+      dueDate: ymd(r.dueDate),
+      createdAt: r.createdAt,
+      remark: r.remark || '',
+    })),
+  }
+}
+
+/** 收付款单（汇款）列表 */
+async function getPaymentReceiptsExportPayload(query) {
+  const data = await receiptsService.findAll({
+    type: query.type || '',
+    status: query.status || '',
+    keyword: query.keyword || '',
+    page: 1,
+    pageSize: 10000,
+  })
+  const isPayable = Number(query.type) === 1
+  const sheetName = isPayable ? '付款单' : '收款单'
+  return {
+    filename: `${sheetName}_${buildDateStamp()}`,
+    sheetName,
+    columns: [
+      { header: '单号', key: 'receiptNo', width: 22 },
+      { header: isPayable ? '供应商' : '客户', key: 'partyName', width: 20 },
+      { header: `${isPayable ? '付款' : '收款'}金额`, key: 'amount', width: 14 },
+      { header: '已核销', key: 'settledAmount', width: 14 },
+      { header: '未核销', key: 'balance', width: 14 },
+      { header: '状态', key: 'statusName', width: 10 },
+      { header: '日期', key: 'paymentDate', width: 14 },
+      { header: '方式', key: 'method', width: 10 },
+      { header: '经办人', key: 'operatorName', width: 12 },
+      { header: '备注', key: 'remark', width: 24 },
+    ],
+    rows: data.list.map(r => ({
+      receiptNo: r.receiptNo,
+      partyName: r.partyName,
+      amount: r.amount,
+      settledAmount: r.settledAmount,
+      balance: r.balance,
+      statusName: r.statusName,
+      paymentDate: ymd(r.paymentDate),
+      method: r.method || '',
+      operatorName: r.operatorName || '',
+      remark: r.remark || '',
+    })),
+  }
+}
+
+/** 对账单列表（不含明细，明细走单张导出） */
+async function getStatementsExportPayload(query) {
+  const data = await statementsService.findAll({
+    type: query.type || '',
+    status: query.status || '',
+    keyword: query.keyword || '',
+    page: 1,
+    pageSize: 10000,
+  })
+  const isPayable = Number(query.type) === 1
+  const sheetName = isPayable ? '供应商对账单' : '客户对账单'
+  return {
+    filename: `${sheetName}汇总_${buildDateStamp()}`,
+    sheetName,
+    columns: [
+      { header: '对账单号', key: 'statementNo', width: 22 },
+      { header: isPayable ? '供应商' : '客户', key: 'partyName', width: 20 },
+      { header: '对账期间', key: 'period', width: 24 },
+      { header: '笔数', key: 'itemCount', width: 8 },
+      { header: '汇总金额', key: 'totalAmount', width: 14 },
+      { header: '已核销', key: 'settledAmount', width: 14 },
+      { header: '未核销', key: 'balance', width: 14 },
+      { header: '状态', key: 'statusName', width: 10 },
+      { header: '确认人', key: 'confirmedByName', width: 12 },
+      { header: '创建时间', key: 'createdAt', width: 20 },
+    ],
+    rows: data.list.map(r => ({
+      statementNo: r.statementNo,
+      partyName: r.partyName,
+      period: `${ymd(r.periodStart) || '—'} ~ ${ymd(r.periodEnd) || '—'}`,
+      itemCount: r.itemCount ?? 0,
+      totalAmount: r.totalAmount,
+      settledAmount: r.settledAmount,
+      balance: r.balance,
+      statusName: r.statusName,
+      confirmedByName: r.confirmedByName || '',
+      createdAt: r.createdAt,
+    })),
+  }
+}
+
+/**
+ * 单张对账单明细：正式单据格式（抬头 + 明细 + 合计 + 签章栏），可直接发给往来方核对。
+ * 返回 meta/items 交给 exportStatementXlsx 渲染，不走通用的「列+行」表格。
+ */
+async function getStatementDetailExportPayload(id) {
+  const st = await statementsService.findById(id)
+  const isPayable = Number(st.type) === 1
+  return {
+    meta: {
+      title: isPayable ? '供应商对账单' : '客户对账单',
+      partyLabel: isPayable ? '供应商' : '客户',
+      statementNo: st.statementNo,
+      partyName: st.partyName,
+      periodStart: st.periodStart,
+      periodEnd: st.periodEnd,
+      remark: st.remark || '',
+    },
+    items: st.items,
+  }
+}
+
 module.exports = {
   getPurchaseExportPayload,
   getSaleExportPayload,
   getReconciliationExportPayload,
+  getPaymentsExportPayload,
+  getPaymentReceiptsExportPayload,
+  getStatementsExportPayload,
+  getStatementDetailExportPayload,
   getInboundTasksExportPayload,
   getStockExportPayload,
   getInventoryLogsExportPayload,

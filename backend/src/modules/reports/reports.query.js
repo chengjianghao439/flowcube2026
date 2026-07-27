@@ -581,7 +581,7 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
   }
 }
 
-async function fetchReconciliationRows({ type = 1, startDate = null, endDate = null, keyword = '', status = null, settlementTypes = null, page = 1, pageSize = 20 } = {}) {
+async function fetchReconciliationRows({ type = 1, startDate = null, endDate = null, keyword = '', orderNo = '', partyName = '', status = null, settlementTypes = null, minAmount = '', maxAmount = '', dueStart = '', dueEnd = '', page = 1, pageSize = 20 } = {}) {
   const typeNum = Number(type) === 2 ? 2 : 1
   const dateFilter = buildDateFilter('pr.created_at', startDate, endDate)
   const conds = ['pr.type = ?']
@@ -603,6 +603,8 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
     const like = `%${String(keyword).trim()}%`
     params.push(like, like)
   }
+  if (orderNo && String(orderNo).trim()) { conds.push('pr.order_no LIKE ?'); params.push(`%${String(orderNo).trim()}%`) }
+  if (partyName && String(partyName).trim()) { conds.push('pr.party_name LIKE ?'); params.push(`%${String(partyName).trim()}%`) }
   if (dateFilter.sql) {
     conds.push(dateFilter.sql.replace(/^ AND /, '').trim())
     params.push(...dateFilter.params)
@@ -611,6 +613,11 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
     conds.push(`${SETTLEMENT_SCOPE_COLUMN} IN (${scopeList.map(() => '?').join(',')})`)
     params.push(...scopeList)
   }
+  if (minAmount !== '' && minAmount != null) { conds.push('pr.total_amount >= ?'); params.push(Number(minAmount)) }
+  if (maxAmount !== '' && maxAmount != null) { conds.push('pr.total_amount <= ?'); params.push(Number(maxAmount)) }
+  // 到期日筛选只对月结有意义：现结的到期日恒等于下单当天，与创建日重复
+  if (dueStart) { conds.push('pr.due_date >= ?'); params.push(dueStart) }
+  if (dueEnd)   { conds.push('pr.due_date <= ?'); params.push(dueEnd) }
   const where = `WHERE ${conds.join(' AND ')}`
   const pageNum = Math.max(1, Number(page) || 1)
   const pageSizeNum = Math.max(1, Math.min(200, Number(pageSize) || 20))

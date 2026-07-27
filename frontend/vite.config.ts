@@ -13,6 +13,24 @@ const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf-8
 import react from '@vitejs/plugin-react'
 import legacy from '@vitejs/plugin-legacy'
 
+/** dev / preview 下 /api 的代理目标；DEV_API_TARGET 可指向生产（见 .claude/launch.json）。 */
+const DEV_API_TARGET = process.env.DEV_API_TARGET || 'http://localhost:3000'
+
+/**
+ * dev server 背后是不是本地后端。
+ * 前端代码里 baseURL 恒为 '/api'（同源，由 Vite 代理转发），浏览器侧无从分辨背后连的是
+ * localhost 还是生产，所以把结论在构建期注入进去。
+ * 唯一用途：决定登录态存 localStorage 还是 sessionStorage（见 src/store/authStore.ts）。
+ */
+function isLocalDevBackend(target: string): boolean {
+  try {
+    const host = new URL(target).hostname
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+  } catch {
+    return false
+  }
+}
+
 /** 本地开发 API 代理：仅用于 Vite dev / preview 下的 /api 请求。 */
 function devProxyToBackend(target: string): ProxyOptions {
   return {
@@ -61,6 +79,8 @@ export default defineConfig(({ command }) => {
   return {
     define: {
       __APP_VERSION__: JSON.stringify(resolveInjectedAppVersion(isElectronBundle)),
+      // 构建产物恒为 false：只有本机 dev/preview 服务且后端也在本机时才为 true
+      __DEV_LOCAL_BACKEND__: JSON.stringify(command === 'serve' && isLocalDevBackend(DEV_API_TARGET)),
     },
     // Capacitor / Electron 本地文件加载时需相对资源路径
     base: isCapacitorBundle || isElectronBundle ? './' : '/',

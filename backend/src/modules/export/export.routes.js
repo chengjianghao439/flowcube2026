@@ -17,4 +17,10 @@ router.get('/transfer', requirePermission(PERMISSIONS.TRANSFER_ORDER_VIEW), cont
 router.get('/purchase-returns', requirePermission(PERMISSIONS.RETURN_ORDER_VIEW), controller.exportPurchaseReturns)
 router.get('/sale-returns', requirePermission(PERMISSIONS.RETURN_ORDER_VIEW), controller.exportSaleReturns)
 
+// 账款 / 核销 / 对账单。对账单明细是发给往来方核对的正式单据格式（带抬头与签章栏）。
+router.get('/payments', requirePermission(PERMISSIONS.PAYMENT_VIEW), controller.exportPayments)
+router.get('/payment-receipts', requirePermission(PERMISSIONS.PAYMENT_VIEW), controller.exportPaymentReceipts)
+router.get('/statements', requirePermission(PERMISSIONS.PAYMENT_VIEW), controller.exportStatements)
+router.get('/statements/:id', requirePermission(PERMISSIONS.PAYMENT_VIEW), controller.exportStatementDetail)
+
 module.exports = router

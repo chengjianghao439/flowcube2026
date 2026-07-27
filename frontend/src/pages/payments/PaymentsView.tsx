@@ -4,16 +4,18 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import { usePaymentActions } from '@/components/shared/usePaymentActions'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ReceiptPanel } from '@/components/shared/ReceiptPanel'
+import { PaymentQueryDialog, PaymentQueryBar, EMPTY_PAYMENT_QUERY, type PaymentQueryValues } from '@/components/shared/PaymentQueryDialog'
 import { getPaymentsApi } from '@/api/payments'
 import type { PaymentRecord } from '@/api/payments'
 import { IMMEDIATE_SETTLEMENT_TYPES } from '@/generated/status'
 import type { TableColumn } from '@/types'
 import { formatDisplayDate } from '@/lib/dateTime'
+import { downloadExport } from '@/lib/exportDownload'
+import { toast } from '@/lib/toast'
 
 /** 账款页只管现结；月结走对账页，两边合起来才是全量 */
 const IMMEDIATE_SCOPE = IMMEDIATE_SETTLEMENT_TYPES.join(',')
@@ -34,8 +36,6 @@ const COPY = {
     description: '现结供应商：下单当天到期，逐笔确认结算后登记付款；月结供应商见「供应商对账」',
     party: '供应商',
     amountCol: '已付金额',
-    paidCard: '已付',
-    balanceCard: '待付余额',
     payAction: '登记付款',
     payDialog: '登记付款',
     statusOptions: [['1', '未付'], ['2', '部分付'], ['3', '已付清']] as const,
@@ -45,8 +45,6 @@ const COPY = {
     description: '现结客户：下单当天到期，出库后逐笔登记收款；月结客户见「客户对账」',
     party: '客户',
     amountCol: '已收金额',
-    paidCard: '已收',
-    balanceCard: '待收余额',
     payAction: '登记收款',
     payDialog: '登记收款',
     statusOptions: [['1', '未收'], ['2', '部分收'], ['3', '已收清']] as const,
@@ -56,23 +54,35 @@ const COPY = {
 export default function PaymentsView({ type }: { type: PaymentType }) {
   const copy = COPY[type]
   const isPayable = type === 1
-  const [statusFilter, setStatusFilter] = useState('')
-  const [search, setSearch] = useState('')
-  const [keyword, setKeyword] = useState('')
+  // 按单登记 = 逐笔登记（客户只付一单）；收款核销 = 一笔汇款冲抵多单
+  const [tab, setTab] = useState<'records' | 'receipts'>('records')
+  // query 是「已生效」的完整查询条件，筛选栏与高级查询弹窗都写它，导出也复用同一份
+  const [query, setQuery] = useState<PaymentQueryValues>(EMPTY_PAYMENT_QUERY)
+  const [queryOpen, setQueryOpen] = useState(false)
   const { renderActions, dialogs } = usePaymentActions(type)
+  const queryLabels = {
+    docLabel: '关联单号',
+    partyLabel: copy.party,
+    statusText: (v: string) => copy.statusOptions.find(([val]) => val === v)?.[1] ?? v,
+    dateLabel: '创建日期',
+    amountLabel: '账款金额',
+  }
+  const exportParams = {
+    type: String(type),
+    ...(query.docNo ? { orderNo: query.docNo } : {}),
+    ...(query.partyName ? { partyName: query.partyName } : {}),
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.confirmStatus ? { confirmStatus: query.confirmStatus } : {}),
+    ...(query.startDate ? { startDate: query.startDate } : {}),
+    ...(query.endDate ? { endDate: query.endDate } : {}),
+    ...(query.minAmount ? { minAmount: query.minAmount } : {}),
+    ...(query.maxAmount ? { maxAmount: query.maxAmount } : {}),
+  }
 
   const { data, isLoading } = useQuery({
-    queryKey: ['payments', { type, status: statusFilter, keyword }],
-    queryFn: () => getPaymentsApi({
-      type,
-      pageSize: 99999,
-      status: statusFilter || undefined,
-      keyword: keyword || undefined,
-      settlementTypes: IMMEDIATE_SCOPE,
-    }),
+    queryKey: ['payments', { type, query }],
+    queryFn: () => getPaymentsApi({ ...exportParams, pageSize: 99999, settlementTypes: IMMEDIATE_SCOPE }),
   })
-
-  const summary = (data as { summary?: { totalAmount: number; paidAmount: number; balance: number } })?.summary
 
   const columns: TableColumn<PaymentRecord>[] = [
     { key: 'orderNo', title: '关联单号', width: 160, render: (v) => <span className="text-doc-code">{String(v)}</span> },
@@ -80,60 +90,88 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
     { key: 'totalAmount', title: '总金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
     { key: 'paidAmount', title: copy.amountCol, width: 100, render: (v) => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
     { key: 'balance', title: '余额', width: 100, render: (v) => <span className={`tabular-nums ${Number(v) > 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
-    { key: 'status', title: '状态', width: 90, render: (v, row) => <SoftStatusLabel label={(row as PaymentRecord).statusName} tone={ST_TONE[v as number] ?? 'draft'} /> },
+    { key: 'status', title: '状态', width: 130, render: (v, row) => {
+      const r = row as PaymentRecord
+      // 现结当天到期，逾期信息原本挂在到期日列上；那列换成创建日期后移到这里，避免丢失
+      const overdue = r.status !== 3 && r.dueDate && new Date(r.dueDate) < new Date()
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <SoftStatusLabel label={r.statusName} tone={ST_TONE[v as number] ?? 'draft'} />
+          {overdue && <SoftStatusLabel label="逾期" tone="danger" />}
+        </div>
+      )
+    }},
     // 财务确认列：仅应付有——上架自动结算的应付须确认后才能登记付款
     ...(isPayable ? [{ key: 'confirmStatus', title: '结算确认', width: 100, render: (_: unknown, row: PaymentRecord) => (
       row.confirmStatus === 0
         ? <SoftStatusLabel label="待确认" tone="warning" />
         : <span className="text-xs text-muted-foreground">{row.confirmedByName ? `已确认 · ${row.confirmedByName}` : '已确认'}</span>
     ) }] as TableColumn<PaymentRecord>[] : []),
-    { key: 'dueDate', title: '到期日', width: 100, render: (v, row) => {
-      const d = v ? formatDisplayDate(v) : null
-      const r = row as PaymentRecord
-      const overdue = d && r.status !== 3 && new Date(d) < new Date()
-      return d ? <span className={overdue ? 'font-bold text-destructive' : ''}>{d}{overdue ? ' 逾期' : ''}</span> : <span className="text-muted-foreground">-</span>
-    }},
+    // 现结只保留一个日期：到期日恒等于下单当天，与创建日期重复，展示创建日期即可
+    { key: 'createdAt', title: '创建日期', width: 110,
+      render: v => v ? formatDisplayDate(String(v)) : <span className="text-muted-foreground">-</span> },
     { key: 'id', title: '操作', width: 120, render: (_, row) => renderActions(row as PaymentRecord) }
   ]
 
   return (
     <div className="space-y-4">
-      <PageHeader title={copy.title} description={copy.description} />
-      {/* 汇总卡片 */}
-      {summary && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-lg border border-border bg-card p-4"><p className="text-sm text-muted-foreground">总金额</p><p className="tabular-nums text-2xl font-bold text-foreground">¥{summary.totalAmount.toFixed(2)}</p></div>
-          <div className="rounded-lg border border-border bg-card p-4"><p className="text-sm text-muted-foreground">{copy.paidCard}</p><p className="tabular-nums text-2xl font-bold text-success">¥{summary.paidAmount.toFixed(2)}</p></div>
-          <div className="rounded-lg border border-border bg-card p-4"><p className="text-sm text-muted-foreground">{copy.balanceCard}</p><p className="tabular-nums text-2xl font-bold text-destructive">¥{summary.balance.toFixed(2)}</p></div>
-        </div>
-      )}
-
-      <FilterCard>
-        <Input
-          placeholder={`搜索单号 / ${copy.party}`}
-          value={search}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') setKeyword(search.trim()) }}
-          className="h-9 w-60"
-        />
-        <Button size="sm" onClick={() => setKeyword(search.trim())}>查询</Button>
-        <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v) }}>
-          <SelectTrigger className="h-9 w-36">
-            <SelectValue placeholder="全部状态" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部状态</SelectItem>
-            {copy.statusOptions.map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {(statusFilter || keyword) && (
-          <Button size="sm" variant="ghost" onClick={() => { setStatusFilter(''); setSearch(''); setKeyword('') }}>重置</Button>
+      <PageHeader
+        title={copy.title}
+        description={copy.description}
+        actions={(
+          <Button
+            variant="outline"
+            onClick={() => downloadExport(
+              tab === 'receipts' ? '/export/payment-receipts' : '/export/payments',
+              { ...exportParams, ...(tab === 'records' ? { settlementTypes: IMMEDIATE_SCOPE } : {}) },
+            ).catch(e => toast.error((e as Error).message))}
+          >
+            导出 Excel
+          </Button>
         )}
+      />
+
+      <div className="flex gap-1 border-b border-border">
+        {([
+          { key: 'records' as const, label: '按单登记' },
+          { key: 'receipts' as const, label: `${isPayable ? '付款' : '收款'}核销` },
+        ]).map(item => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => setTab(item.key)}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${tab === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'receipts' && <ReceiptPanel type={type} settlementTypes={IMMEDIATE_SCOPE} />}
+
+      {tab === 'records' && (<>
+      <FilterCard>
+        <PaymentQueryBar
+          query={query}
+          onChange={setQuery}
+          onOpen={() => setQueryOpen(true)}
+          labels={queryLabels}
+        />
       </FilterCard>
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
+
+      <PaymentQueryDialog
+        open={queryOpen}
+        initial={query}
+        onClose={() => setQueryOpen(false)}
+        onApply={setQuery}
+        labels={queryLabels}
+        statusOptions={copy.statusOptions}
+        showConfirmStatus={isPayable}
+        singleDate
+      />
+      </>)}
 
       {dialogs}
     </div>

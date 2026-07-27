@@ -107,6 +107,10 @@ const BarcodePrintQueryPage = lazy(() => import('@/pages/settings/barcode-print-
 const OplogsPage = lazy(() => import('@/pages/oplogs'))
 const ReportsPage = lazy(() => import('@/pages/reports'))
 const RoleWorkbenchPage = lazy(() => import('@/pages/reports/role-workbench'))
+const FinanceDashboardPage = lazy(() => import('@/pages/finance/dashboard'))
+const FinanceAccountsPage = lazy(() => import('@/pages/finance/accounts'))
+const ExpenseClaimsPage = lazy(() => import('@/pages/finance/expenses'))
+const ExpenseCategoriesPage = lazy(() => import('@/pages/finance/expense-categories'))
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
 const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
@@ -353,6 +357,42 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '财务', section: '对账', order: 40 },
+  },
+  {
+    path: '/finance/dashboard',
+    title: '资金看板',
+    permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW,
+    component: FinanceDashboardPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '资金', order: 50 },
+  },
+  {
+    path: '/finance/accounts',
+    title: '账户管理',
+    permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW,
+    component: FinanceAccountsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '资金', order: 55 },
+  },
+  {
+    path: '/finance/expenses',
+    title: '费用报销',
+    permission: PERMISSIONS.FINANCE_EXPENSE_VIEW,
+    component: ExpenseClaimsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '费用', order: 60 },
+  },
+  {
+    path: '/finance/expense-categories',
+    title: '费用类别',
+    permission: PERMISSIONS.FINANCE_EXPENSE_VIEW,
+    component: ExpenseCategoriesPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '费用', order: 70 },
   },
 
   // ── 报表 ──────────────────────────────────────────────
