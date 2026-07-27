@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-本文件是 Claude Code（claude.ai/code）在本仓库工作的**唯一权威说明书**。内容以当前代码、数据库结构与配置为准，最近一次全量核对：2026-07-26。
+本文件是 Claude Code（claude.ai/code）在本仓库工作的**唯一权威说明书**。内容以当前代码、数据库结构与配置为准。
+
+> 最近一次核对：**2026-07-27**，方式是对着代码逐条验证「可机械验证的声明」——各类计数（模块/表/迁移/权限码/路由）、文中提到的每个 npm 脚本是否真能跑、每个路径是否存在、第 20 节的已知风险是否还成立。上一版（07-26）的问题是：讲机制的部分（库存不变量、状态机、锁顺序）准确，但**凡是需要数一下或实跑一遍的条目基本是照抄旧文本**，于是计数全线偏低、四条早已修复的风险继续挂着、两个跑不起来的 lint 命令被写进检查清单。**改本文件时，数字和"某某不存在/未启用"这类断言必须当场验证再写。**
 
 > 仓库里还有一份 `AGENTS.md`（已被 `.gitignore` 忽略），是本文件的**旧快照**（模块数、状态机、PDA 描述均已过期）。**不要把 AGENTS.md 当事实来源。**
 > `docs/01-系统技术与架构总规范.md` 是设计规范文档，与本文件冲突时以**代码**为准，其次以本文件为准。
@@ -38,18 +40,18 @@
 flowcube/
 ├── backend/
 │   ├── index.js                    进程入口（dotenv → testConnection → listen → scheduler）
-│   ├── scripts/                    migrate.js / bootstrap-admin.js / resync-inventory-stock.js / smoke-reports.js
+│   ├── scripts/                    migrate.js / bootstrap-admin.js / resync-inventory-stock.js / smoke-reports.js / smoke-pages.node.js / smoke-reconciliation-jumps.node.js
 │   ├── apk/version.json            PDA 版本清单（APK 本体不入库）
 │   ├── downloads/                  ⚠️ 已废弃的旧桌面发布目录，勿使用
 │   └── src/
-│       ├── app.js                  中间件装配 + 43 个模块路由注册 + 静态目录 + 404 + errorHandler
+│       ├── app.js                  中间件装配 + 47 条 /api 路由注册 + 静态目录 + 404 + errorHandler
 │       ├── scheduler.js            仅启动 operation_requests TTL 清理
 │       ├── config/                 db.js（连接池）、env.js（环境变量校验，生产缺项直接拒启动）
-│       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / permissions
+│       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / settlementType / permissions
 │       ├── database/               145 个 .sql 迁移 + migrate.js
 │       ├── engine/                 containerEngine / inventoryEngine / reservationEngine ← 库存唯一合法入口
 │       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger
-│       ├── modules/                43 个业务模块，统一 routes → controller → service
+│       ├── modules/                46 个业务模块，统一 routes → controller → service
 │       └── utils/                  AppError / response / statusTransition / operationRequest / warehouseScope / codeGenerator …
 ├── frontend/
 │   ├── src/{api,components,config,constants,flows,generated,hooks,layouts,lib,pages,router,store,types,utils}
@@ -82,7 +84,10 @@ npm run smoke:concurrency-guards
 npm run smoke:sale-adjustment
 npm run smoke:p0-regression
 npm run smoke:p1-regression
+npm run smoke:warehouse-scope   # 仓库级数据权限
+npm run smoke:pda-device-session # PDA 设备会话（设备未绑定即拒绝作业）
 npm run smoke:finance           # 财务：收款核销 / 对账单 / 资金账户 / 费用报销
+npm run test:permissions        # 前后端权限码一致性（两份常量表的唯一校验器）
 npm run test:integration        # 库存一致性集成测试（独立测试库）
 ```
 
@@ -90,7 +95,7 @@ npm run test:integration        # 库存一致性集成测试（独立测试库�
 # 后端
 npm --prefix backend run dev            # nodemon
 npm --prefix backend run migrate        # 迁移（后端进程启动时不会自动跑；本机改完 schema 要手动执行）
-npm --prefix backend run lint
+npm --prefix backend run lint           # ⚠️ 跑不起来：脚本写的是 eslint src/，但 backend 根本没装 eslint
 npm --prefix backend run bootstrap:admin
 npm --prefix backend run resync:inventory-stock   # 由容器重算 inventory_stock 缓存
 ```
@@ -101,8 +106,11 @@ npm --prefix frontend run dev           # Electron target，端口 5173
 npm --prefix frontend run dev:pda       # PDA target，端口 5173
 npm --prefix frontend run build         # VITE_ELECTRON=1
 npm --prefix frontend run build:pda     # VITE_CAPACITOR=1
-npm --prefix frontend run lint
+npm --prefix frontend run lint          # ⚠️ 跑不起来：脚本写的是 eslint .，但 frontend 没有任何 eslint 配置文件
 ```
+
+> **两端的 `npm run lint` 都是坏的**（后端没装 eslint，前端没有配置文件），别把它当门禁，也别在检查清单里勾它。
+> 真正能跑的静态检查只有下面的 `tsc`，CI 的 `test.yml` 也没有 lint 步骤。要恢复 lint 得先补依赖/配置，属于单独一件事。
 
 ```bash
 # 前端类型检查：tsconfig.json 是空壳（files:[]），必须指定 app 配置，否则永远 0 错误
@@ -248,7 +256,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 
 - 81 张表（含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。
 - 迁移：`backend/src/database/` 下 145 个 `.sql`，编号 001–145（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
-- ⚠️ **数据库里的 `COLUMN_COMMENT` 有不少已过期**（例如 `sale_orders.status` 注释写"1草稿 2已确认 3已出库 4已取消"、`warehouse_tasks.status` 注释写"1待分配 2备货中…"、`sale_orders.closed_reason` 提到的 `partial_ship_close` 已被迁移 127 废弃）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
+- ⚠️ **数据库里的 `COLUMN_COMMENT` 曾大面积过期，现已大部分订正但仍有残留**（2026-07-27 抽查：`sale_orders.status`、`warehouse_tasks.status` 的注释都已更新并注明"见 documentStatusRules / warehouseTaskStatus"；`sale_orders.closed_reason` 仍写着迁移 127 已废弃的 `partial_ship_close`）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
 
 核心事实表 / 派生字段：
 
@@ -302,6 +310,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 | `inboundTaskAudit` | 0待结算 1已结算 | approve(0→1)，仅供上架完成时自动结算复用；状态 2(已退回)已下线不可达 |
 | `transfer` | 1草稿 2待出库 3在途 4已完成 5已取消 | confirm(1→2)、scanOut(2/3→3, PDA)、scanIn(3→4, PDA)、cancel(1/2→5)；在途另有 force-close |
 | `purchaseReturn` / `saleReturn` | 1草稿 2已确认 3已执行 4已取消 | confirm(1→2)、execute(2→3，由回调触发)、cancel(1/2→4) |
+| `expenseClaim` | 1草稿 2待审批 3已批准 4已付款 5已驳回 6已取消 | edit(1)、submit(1→2)、withdraw(2→1 本人撤回)、approve(2→3)、reject(2→5)、pay(3→4)、cancel(1/2/5→6；已批准需先驳回，已付款不可取消) |
 | `stockcheck` | 1盘点中 2已完成 3已取消 | edit(1)、submit(1→2)、cancel(1→3) |
 | `return_tasks`（内联） | 1待收货 2收货中 3待质检 4待上架 5已完成 6已取消 | 见 `return-tasks.service.js` 的 `RT_TRANSITIONS` |
 
@@ -327,13 +336,13 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 ## 12. 权限与安全规则
 
 - 登录 → JWT（`Authorization: Bearer`）。`authMiddleware` 每次请求都回查用户并校验 `token_version`：改密码/禁用用户会使旧 token 立即失效（`AUTH_SESSION_INVALID`）。
-- 权限码在 `backend/src/constants/permissions.js`（131 个）与 `frontend/src/lib/permission-codes.ts`（129 个，缺 `system.health.*`）**两份手工同步**的常量表；角色权限存 `sys_role_permissions`，`requirePermission` 在校验前按角色现查。
+- 权限码在 `backend/src/constants/permissions.js` 与 `frontend/src/lib/permission-codes.ts` **两份手工同步**的常量表（各 144 个，当前双向一致）；改动后跑 `npm run test:permissions` 校验（它做双向 diff + 命名合规检查，已进 CI）。角色权限存 `sys_role_permissions`，`requirePermission` 在校验前按角色现查。
 - **roleId === 1 是超管，跳过所有权限校验**（前后端都是）。
 - **数据范围**：`user_warehouse_scope`（迁移 122）→ `req.user.warehouseIds`（null=不限仓，超管恒 null，60s 缓存）→ 列表查询用 `scopeFilter()` 拼 SQL。新增涉仓列表接口应接入。
 - 每个业务 routes 文件顶部都有 `router.use(authMiddleware)`。**唯一完全公开的模块是 `/api/app-update/latest`**，另外 `/api/pda/version`、`/api/pda/download`、`/api/auth/login`、`/health`、`/api/health` 免登录。
 - 少数登录后免细粒度权限的低敏感接口：`/users/options`、`/products|suppliers|customers/next-code`。新增接口**不要**跟随这个例外，一律加 `requirePermission`。
 - **PDA-only 接口**（`pdaOnly` 校验请求头 `X-Client: pda`）：收货、上架、调拨 scan-out/scan-in、退货 receive/check/putaway、扫码写入（`/scan-logs`、`/scan-logs/check`、`/scan-logs/cancel-return[/box]`；`/error`、`/undo` 不限）、仓库任务 start-picking/ready/sort-done/check-done/pack-done/ship、改单的两个 PDA 物理确认接口。**ERP 端不得绕过这些接口直接改任务状态。**
-- PDA 设备会话（`pdaSessionOptional()` + `pda_device_sessions`）目前是**观察模式**：前端尚未发送 `X-PDA-Session`，`pdaSessionRequired` / `requirePdaScope` 在业务模块中**尚未启用**。上架接口已用 `req.pda?.warehouseId` 做跨仓拦截（有会话时才生效）。
+- **PDA 设备会话已强制启用**（`pda_device_sessions` + `middleware/pdaSession`）：前端 `api/client.ts` 会带上 `X-PDA-Session`（含自动续期），`pdaSessionRequired()` 已挂在调拨 scan-out/scan-in、退货 receive/check/putaway、`/scan-logs` 写入等关键作业接口上；设备需先在 `/pda/bind` 绑定。回归由 `npm run smoke:pda-device-session` 守着（设备未绑定即拒绝作业）。上架接口另用 `req.pda?.warehouseId` 做跨仓拦截。
 - 全局限流 `/api`（默认 60s/1000 次，`RATE_LIMIT_*` 可调），登录另有更严限流；`/health` 不受限流影响。
 - 生产必填环境变量：`DB_*`、`JWT_SECRET`（≥32 位）、`APP_PUBLIC_URL`，缺一后端拒绝启动。
 - **绝不**把密钥、Token、数据库口令写进代码、文档或提交；`.env*`、`deploy/production*.json`、备份 SQL 已 gitignore，CI 有 gitleaks 扫描。
@@ -358,9 +367,9 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 ## 14. PDA 开发规范
 
 - PDA 与 ERP 是**同一份前端代码**，靠 `/pda/*` 路由树与 `PdaLayout` 隔离；每个 PDA 路由用 `PdaRoutePermission` 声明所需权限（与后端权限码一致）。
-- 当前 PDA 页面：`inbound`、`receive/:id`、`putaway[/:id]`、`picking`、`task/:id`、`sort`、`check[/:id]`、`pack[/:id]`、`ship[/:id]`、`split`、`cancel-return[/:id]`（取消归还）、`adjustments[/:id]`（改单物理确认）、`transfer`、`transfer-out/:id`、`transfer-in/:id`、`sale-return`、`sale-return/:id/receive`、`sale-return/:id/putaway`。
+- 当前 PDA 页面：`inbound`、`receive/:id`、`putaway[/:id]`、`picking`、`task/:id`、`sort`、`check[/:id]`、`pack[/:id]`、`ship[/:id]`、`split`、`cancel-return[/:id]`（取消归还）、`adjustments[/:id]`（改单物理确认）、`transfer`、`transfer-out/:id`、`transfer-in/:id`、`sale-return`、`sale-return/:id/receive`、`sale-return/:id/putaway`；另有两个不在作业流里的：`/pda/login`（挂在 `PdaProtectedRoute` 之外）与 `/pda/bind`（设备绑定，树内但不校验业务权限）。
 - **关键操作不做离线队列**（这是刻意设计，`useOfflineQueue.enqueue` 会直接抛错）：`useCriticalPdaAction` 在断网时**阻断提交**；只有"已提交但结果未知"（网络波动/超时）才记为 pending，恢复网络后先查回执，再由页面提供的 `resolveServerState` 回查真实业务状态兜底。**不要给关键动作加自动重放。**
-  - ⚠️ 回执查询打的是 `GET /api/system/request-status/:requestKey`，而**后端并未注册该路由**（见第 20 节风险 2）。目前实际生效的是各页面的 `resolveServerState` 兜底，`pages/pda/sale-return-*.tsx` 三处没提供兜底，断网确认会直接落到失败态。新增关键动作时**务必提供 `resolveServerState`**。
+  - 回执查询走 `GET /api/system/request-status/:key`（`modules/system/system.routes.js`，前端 `api/operation-requests.ts`），断网重连后先查回执确认「上次到底成没成」。**新增关键动作时仍要提供 `resolveServerState`** 作为第二道兜底——回执只覆盖走过 `beginOperationRequest` 的动作，业务真实状态还得回查。目前 PDA 各作业页（含 `sale-return-receive/putaway`）都已提供。
 - 扫码枪走键盘模式，`usePdaScanner` 统一处理：字符间隔 50ms 聚合、最短 3 位、1s 内同码去重；手动输入框需标 `data-scanner-manual="true"` 以避免被扫码缓冲吞掉。
 - 所有 PDA 写接口必须带 `X-Client: pda` 头（见 `src/api/*.ts` 里的 `withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })`）。
 - Android：`windowSoftInputMode="adjustResize|stateHidden"`、`launchMode=singleTask`、竖屏锁定；返回键在 `PdaLayout` 里通过 `@capacitor/app` 的 `backButton` 统一接管。已申请权限：INTERNET、ACCESS_NETWORK_STATE、CAMERA、VIBRATE、REQUEST_INSTALL_PACKAGES。
@@ -424,7 +433,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 
 ## 19. 修改后检查清单
 
-- [ ] `npm --prefix backend run lint` / `npm --prefix frontend run lint`
+- [ ] ~~`npm run lint`~~ 两端都跑不起来（见第 4 节），别勾这条；静态检查以下面的 `tsc` 为准
 - [ ] `./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit`（**不要用 tsconfig.json，那是空壳，永远 0 错误**）
 - [ ] 涉及后端逻辑：`npm run smoke:mainline`、`smoke:concurrency-guards`、`smoke:p0-regression`、`smoke:p1-regression`、`test:integration`（本机有真实 MySQL，可直接跑）
 - [ ] 涉及账款/资金账户/报销：`npm run smoke:finance`
@@ -440,13 +449,17 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 
 ## 20. 当前已知风险与待确认事项
 
-1. **2026-07 架构审计的 P0/P1 修复刚随 v0.4.30 发布**（`23debe5` + `b17950b`，含迁移 130/131/132、`tests/p0-regression`、`tests/p1-regression`）。涉及 engine 三件套、收货/上架、销售占库与出库的锁顺序与幂等，属于"刚上线、生产验证时间还短"的区域，改动这些文件要格外谨慎并跑齐回归。
-2. **幂等回执查询接口缺失（断链）**：前端 `api/operation-requests.ts` 调用 `GET /api/system/request-status/:requestKey`，但后端 `app.js` **没有注册 `/api/system`，全仓也搜不到 `request-status`**，该请求必然 404。因此 PDA"结果待确认"的回执确认路径不可用，只剩页面自带的 `resolveServerState` 兜底（`sale-return-receive/putaway` 三个动作没有兜底）。是接口被删还是从未实现，**待确认**；修复方向是补一个只读接口暴露 `utils/operationRequest.getOperationRequestStatus()`。
-3. **PDA 设备会话形同虚设**：`pdaSessionRequired` / `requirePdaScope` 在业务模块中零使用，前端也不发 `X-PDA-Session`，因此上架的"跨仓拦截"实际不会触发。要不要收紧成强制，**待确认**。
-4. **缺货上报功能未落地**：迁移 117 建了 `warehouse_task_shortages` 表、`warehouse_tasks.shortage_reported_at` 列，但后端与前端**均无任何代码引用**。是未完成还是已回退，**待确认**——不要在不清楚的情况下删表或删列。
-5. **数据库列注释与实际语义脱节**（详见第 8 节）。清理它们需要新迁移，**待确认是否要做**。
-6. **前后端权限码手工双份**：后端多出 `system.health.view` / `system.health.autofix`，前端没有；也没有自动一致性校验，容易漏改。
-7. **`/packages/*` 打包接口没有 `pdaOnly`**：PDA 打包页在用，但 ERP 端理论上也能调用装箱/完成箱接口。是否要收紧，**待确认**。
-8. **生产库存在 schema 漂移史**（曾出现迁移未真正生效导致缺列）。改动依赖新列的逻辑时，先确认生产已跑过对应迁移。
+> 本节 2026-07-27 逐条对代码核过一遍。原 1–7 条里有四条（回执断链、PDA 会话、缺货上报、打包 pdaOnly）在写下之后已经被实现或了结，却因为文档没跟着核而继续挂着——**这类条目不核实就当事实引用，会导致重复修一个已经修好的东西**。下次改本节，请连带核实一次。
+
+1. **v0.4.33 的四条财务链路是最新的高风险区**（资金账户、收款核销、汇总对账单、费用报销）。它们直接改钱，错法和库存一样是"静默出错"：界面正常、金额悄悄不对。已由 `npm run smoke:finance`（84 项断言）锁住关键口径，改动这四块务必跑它。
+   2026-07 架构审计的 P0/P1 修复（v0.4.30，`23debe5` + `b17950b`，迁移 130/131/132）已在生产运行数版，但 engine 三件套、收货/上架、销售占库与出库的锁顺序与幂等仍是全仓最敏感的代码，改动要跑齐 `smoke:p0-regression` / `smoke:p1-regression`。
+2. ~~幂等回执查询接口缺失~~ **已实现**：`GET /api/system/request-status/:key`（`modules/system/`）已注册，前端 `api/operation-requests.ts` 的调用路径与之匹配；PDA 各作业页（含 `sale-return-receive/putaway`）也都提供了 `resolveServerState` 第二道兜底。见第 14 节。
+3. ~~PDA 设备会话形同虚设~~ **已启用**：`pdaSessionRequired()` 已挂在调拨扫出扫入、退货 receive/check/putaway、`/scan-logs` 写入等接口上，前端 `api/client.ts` 会发 `X-PDA-Session` 并自动续期，回归由 `smoke:pda-device-session` 守着。见第 12 节。
+4. ~~缺货上报功能未落地~~ **已了结**：迁移 134 `drop_warehouse_task_shortages` 已删表与相关列，代码里也没有残留引用（`sale` 模块里的 shortage 是"缺货弹窗"，与此无关）。
+5. **数据库列注释与实际语义脱节——已大部分订正，仍有零星残留**。抽查：`sale_orders.status`、`warehouse_tasks.status` 的注释都已更新并指向常量文件；但 `sale_orders.closed_reason` 仍写着迁移 127 已废弃的 `partial_ship_close`。**状态语义一律以 `backend/src/constants/` 为准这条不变**，注释只作参考。
+6. ~~前后端权限码没有一致性校验~~ **已有校验**：`npm run test:permissions` 做双向 diff + 命名合规检查并已进 CI，当前两边各 144 个、完全一致。仍是两份手工常量表，新增权限码要改三处（后端常量、前端常量、seed 迁移）。
+7. ~~`/packages/*` 缺 `pdaOnly`~~ **已收紧**：装箱、完成箱、作废箱等写接口都已挂 `pdaOnly`。
+8. **生产库存在 schema 漂移史**（曾出现迁移未真正生效导致缺列；也出现过迁移文本声明了生产从没有过的列）。改动依赖新列的逻辑时，先确认生产已跑过对应迁移。2026-07-27 新增的一例同类问题：`payment_records.order_id` 实际是 `NOT NULL`，而 054 的建表文本与 091 的注释都写它可空——已由迁移 145 订正。
 9. **`avg_cost` 只随入库正向移动**，退货/撤回收货不反冲——这是刻意简化，利润分析用 `sale_order_items.cost_snapshot` 口径，不要"顺手修正"。
 10. `docs/` 下部分文档（`flow-review-report.md`、`print-module-refactor-plan.md` 等）是阶段性报告，不代表当前实现。
+11. **`npm run lint` 两端都是坏的**（后端没装 eslint，前端没有配置文件），CI 里也没有 lint 步骤，实际只有 `tsc -p frontend/tsconfig.app.json` 在把关后端以外的类型。要不要补齐 lint，**待确认**。
