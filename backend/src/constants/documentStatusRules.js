@@ -101,6 +101,29 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       },
     },
   },
+  expenseClaim: {
+    entityName: '费用报销单',
+    actions: {
+      edit: { from: [1], message: '只有草稿状态的报销单可以修改明细' },
+      submit: { from: [1], to: 2, message: '只有草稿状态的报销单可以提交审批' },
+      // 提交后发现填错，本人可撤回改单——比让审批人驳回一遍再改顺手
+      withdraw: { from: [2], to: 1, message: '只有待审批的报销单可以撤回' },
+      approve: {
+        from: [2], to: 3, message: '只有待审批的报销单可以审批',
+        blocked: { 1: '报销单尚未提交', 3: '该报销单已批准', 4: '该报销单已付款' },
+      },
+      reject: { from: [2], to: 5, message: '只有待审批的报销单可以驳回' },
+      pay: {
+        from: [3], to: 4, message: '只有已批准的报销单可以付款',
+        blocked: { 2: '报销单尚未审批，不能付款', 4: '该报销单已付款' },
+      },
+      cancel: {
+        from: [1, 2, 5], to: 6, message: '当前状态的报销单不能取消',
+        blocked: { 3: '已批准的报销单需先驳回再取消', 4: '已付款的报销单不能取消，如需冲销请走反向流水' },
+      },
+    },
+  },
+
   stockcheck: {
     entityName: '盘点单',
     actions: {
