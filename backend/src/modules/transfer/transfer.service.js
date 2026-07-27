@@ -4,7 +4,7 @@ const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { SOURCE_TYPE, getAvailableStockForDecision, syncStockFromContainers, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
-const { transferScopeFilter, assertTransferInScope, assertInScope } = require('../../utils/warehouseScope')
+const { transferScopeFilter, assertTransferInScope } = require('../../utils/warehouseScope')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { TRANSFER_EVENT, record: recordTransferEvent } = require('./transfer-events.service')
 const { getRequestId } = require('../../utils/requestContext')
@@ -40,7 +40,7 @@ async function assertTransferAvailability(conn, order) {
   }
 
   for (const item of merged.values()) {
-    const { quantity: onHand, reserved, available } = await getAvailableStockForDecision(conn, {
+    const { available } = await getAvailableStockForDecision(conn, {
       productId: item.productId,
       warehouseId: order.fromWarehouseId,
       lock: true,
@@ -116,7 +116,9 @@ async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWar
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { fromWarehouseId, fromWarehouseName, toWarehouseId, toWarehouseName, remark, items, operator, scopeWarehouseIds = null }) {
+// operator 由 controller 一并传入但改单这里不写操作人（调拨单没有 updated_by 列，
+// 操作留痕走 operation_logs），保留在签名里与 create/confirm 保持一致。
+async function update(id, { fromWarehouseId, fromWarehouseName, toWarehouseId, toWarehouseName, remark, items, operator: _operator, scopeWarehouseIds = null }) {
   assertDifferentWarehouses(fromWarehouseId, toWarehouseId)
   const conn=await pool.getConnection()
   try {

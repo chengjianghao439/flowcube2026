@@ -9,6 +9,11 @@ interface CategoryPathDisplayProps {
 }
 
 export default function CategoryPathDisplay({ path, fallback = null, className }: CategoryPathDisplayProps) {
+  // useState 必须在两个早返回之前调用：同一个列表里既有多级分类（走展开按钮分支）
+  // 也有未分类/单级分类（走早返回），Hook 调用顺序会随数据在行与行之间变化，
+  // React 会按顺序错位地复用上一行的 state。
+  const [expanded, setExpanded] = useState(false)
+
   const normalized = (path || fallback || '').trim()
   if (!normalized) return <span className={cn('italic text-muted-foreground', className)}>未分类</span>
 
@@ -26,7 +31,6 @@ export default function CategoryPathDisplay({ path, fallback = null, className }
     )
   }
 
-  const [expanded, setExpanded] = useState(false)
   const leaf = segments[segments.length - 1]
   const parentPath = segments.slice(0, -1).join(' / ')
 

@@ -95,7 +95,7 @@ npm run test:integration        # 库存一致性集成测试（独立测试库�
 # 后端
 npm --prefix backend run dev            # nodemon
 npm --prefix backend run migrate        # 迁移（后端进程启动时不会自动跑；本机改完 schema 要手动执行）
-npm --prefix backend run lint           # ⚠️ 跑不起来：脚本写的是 eslint src/，但 backend 根本没装 eslint
+npm --prefix backend run lint           # ESLint 9 flat config（backend/eslint.config.js），当前 0 问题
 npm --prefix backend run bootstrap:admin
 npm --prefix backend run resync:inventory-stock   # 由容器重算 inventory_stock 缓存
 ```
@@ -106,11 +106,12 @@ npm --prefix frontend run dev           # Electron target，端口 5173
 npm --prefix frontend run dev:pda       # PDA target，端口 5173
 npm --prefix frontend run build         # VITE_ELECTRON=1
 npm --prefix frontend run build:pda     # VITE_CAPACITOR=1
-npm --prefix frontend run lint          # ⚠️ 跑不起来：脚本写的是 eslint .，但 frontend 没有任何 eslint 配置文件
+npm --prefix frontend run lint          # ESLint 9 flat config（frontend/eslint.config.js），当前 0 error / 18 warning
 ```
 
-> **两端的 `npm run lint` 都是坏的**（后端没装 eslint，前端没有配置文件），别把它当门禁，也别在检查清单里勾它。
-> 真正能跑的静态检查只有下面的 `tsc`，CI 的 `test.yml` 也没有 lint 步骤。要恢复 lint 得先补依赖/配置，属于单独一件事。
+> **两端 lint 已于 2026-07-27 补齐**（此前后端没装 eslint、前端没有配置文件，两条命令都必失败），并接进 CI 的 `static` job。
+> 分工：**lint 管 tsc 管不到的**（失效的 hooks 依赖、漏删的死代码、控制字符），**类型正确性归 tsc**，风格问题两边都不管。
+> 前端剩 18 条 `react-hooks/exhaustive-deps` **warning**（存量，见 `frontend/eslint.config.js` 里的说明）——CI 只卡 error，**不要为了消掉它们去撒 `eslint-disable`**：disable 会永久静默，warning 会一直排队提醒。清完存量后应把该规则改回 error。
 
 ```bash
 # 前端类型检查：tsconfig.json 是空壳（files:[]），必须指定 app 配置，否则永远 0 错误
@@ -433,7 +434,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 
 ## 19. 修改后检查清单
 
-- [ ] ~~`npm run lint`~~ 两端都跑不起来（见第 4 节），别勾这条；静态检查以下面的 `tsc` 为准
+- [ ] `npm --prefix backend run lint` / `npm --prefix frontend run lint`（前端只看 error，warning 是存量）
 - [ ] `./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit`（**不要用 tsconfig.json，那是空壳，永远 0 错误**）
 - [ ] 涉及后端逻辑：`npm run smoke:mainline`、`smoke:concurrency-guards`、`smoke:p0-regression`、`smoke:p1-regression`、`test:integration`（本机有真实 MySQL，可直接跑）
 - [ ] 涉及账款/资金账户/报销：`npm run smoke:finance`
@@ -462,4 +463,5 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 8. **生产库存在 schema 漂移史**（曾出现迁移未真正生效导致缺列；也出现过迁移文本声明了生产从没有过的列）。改动依赖新列的逻辑时，先确认生产已跑过对应迁移。2026-07-27 新增的一例同类问题：`payment_records.order_id` 实际是 `NOT NULL`，而 054 的建表文本与 091 的注释都写它可空——已由迁移 145 订正。
 9. **`avg_cost` 只随入库正向移动**，退货/撤回收货不反冲——这是刻意简化，利润分析用 `sale_order_items.cost_snapshot` 口径，不要"顺手修正"。
 10. `docs/` 下部分文档（`flow-review-report.md`、`print-module-refactor-plan.md` 等）是阶段性报告，不代表当前实现。
-11. **`npm run lint` 两端都是坏的**（后端没装 eslint，前端没有配置文件），CI 里也没有 lint 步骤，实际只有 `tsc -p frontend/tsconfig.app.json` 在把关后端以外的类型。要不要补齐 lint，**待确认**。
+11. ~~`npm run lint` 两端都是坏的~~ **已补齐**（2026-07-27，两端 ESLint 9 flat config + CI 的 `static` job，顺带把前端 `tsc` 也第一次接进 CI）。遗留两项：① 前端 18 条 `react-hooks/exhaustive-deps` 存量 warning 未清（清完应把规则改回 error）；② `backend/src/modules/app-update/app-update.service.js` 的 `compareVersions` 无调用方，已标注但没删——**要不要删待确认**。
+12. **后端两个 production 依赖有已知漏洞**（`body-parser` <1.20.6 低危、`brace-expansion` 高危，均为 express / glob 的传递依赖），`npm audit fix` 可修但会动生产依赖版本，**待确认是否在下一版一并处理**。

@@ -7,7 +7,8 @@
 import type { FlowStep } from '@/hooks/usePdaFlow'
 
 interface Props {
-  steps: FlowStep<any>[]  // eslint-disable-line @typescript-eslint/no-explicit-any
+  // 步骤组件不关心每一步的 payload 类型，any 是刻意的
+  steps: FlowStep<any>[]
   currentId: string
 }
 

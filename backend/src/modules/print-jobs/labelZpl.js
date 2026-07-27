@@ -16,6 +16,8 @@ const MM_TO_DOT = 203 / 25.4
 function sanitizeZplValue(v) {
   return String(v ?? '')
     .replace(/\^/g, ' ')
+    // NUL 混进 ZPL 会让打印机把整条指令吞掉，清洗控制字符正是本函数的目的
+    // eslint-disable-next-line no-control-regex
     .replace(/[\r\n\x00]/g, ' ')
     .trim()
 }

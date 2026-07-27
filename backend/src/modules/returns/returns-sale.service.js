@@ -292,7 +292,7 @@ async function confirmSR(id, operator = null, scopeWarehouseIds = null) {
       warehouseId: Number(retRow.warehouse_id),
       warehouseName: retRow.warehouse_name,
       partyName: retRow.customer_name,
-      items: itemRows.map((r, i) => ({
+      items: itemRows.map((r) => ({
         returnItemId: Number(r.id),
         productId: Number(r.product_id),
         productCode: r.product_code,

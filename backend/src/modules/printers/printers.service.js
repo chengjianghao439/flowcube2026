@@ -67,7 +67,6 @@ async function allocateUniqueCodeGlobally(baseCode) {
   if (!b) throw new AppError('编码不能为空', 400)
   let candidate = b
   let n = 2
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const [[exists]] = await pool.query('SELECT id FROM printers WHERE code=? LIMIT 1', [candidate])
     if (!exists) return candidate

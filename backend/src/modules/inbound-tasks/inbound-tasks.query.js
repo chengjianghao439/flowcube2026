@@ -5,7 +5,6 @@ const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const {
-  appendInboundEvent,
   parseJson,
   fmtTask,
   fmtItem,

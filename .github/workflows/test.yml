@@ -7,6 +7,7 @@
 #   绝不连接任何生产数据库（仅使用 service 容器里的临时库）。
 #
 # 内容：
+#   0. static job：两端 ESLint + 前端 tsc（不需要 DB，与回归门禁并行）
 #   1. 起 MySQL 8.0 service 容器（root/root，临时库）
 #   2. 安装后端依赖、建库、跑迁移建表
 #   3. smoke:mainline + smoke:concurrency-guards + smoke:sale-adjustment + smoke:p0-regression
@@ -38,6 +39,38 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  static:
+    name: 静态检查（lint + 类型）
+    runs-on: ubuntu-latest
+    # 不需要 MySQL，和回归门禁并行跑，几分钟内就能给出反馈
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 安装后端依赖
+        run: npm --prefix backend ci
+
+      - name: 安装前端依赖
+        run: npm --prefix frontend ci
+
+      - name: ESLint — 后端
+        run: npm --prefix backend run lint
+
+      # 前端存量有 18 条 react-hooks/exhaustive-deps warning（见 frontend/eslint.config.js
+      # 的说明）。这里只卡 error，不设 --max-warnings，避免为了过门禁去撒 eslint-disable。
+      - name: ESLint — 前端
+        run: npm --prefix frontend run lint
+
+      # 后端是纯 JS 没有类型兜底，前端的类型检查就是这个项目唯一的类型门禁。
+      # 必须用 tsconfig.app.json：根 tsconfig.json 是 files:[] 的空壳，永远 0 错误。
+      - name: TypeScript — 前端类型检查
+        run: ./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit
+
   regression:
     name: 回归门禁（smoke + 集成）
     runs-on: ubuntu-latest

@@ -2,12 +2,8 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const printJobs = require('../print-jobs/print-jobs.service')
 
-const { WT_STATUS, WT_STATUS_NAME, isValidTransition } = require('../../constants/warehouseTaskStatus')
+const { WT_STATUS, WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
-const {
-  assertTaskCheckScanClosure,
-  assertTaskPackagingClosure,
-} = require('../warehouse-tasks/warehouse-tasks.service')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { buildPackagePrintSummary } = require('../../utils/printSummary')
 

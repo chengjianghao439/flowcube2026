@@ -29,7 +29,7 @@ export function resolveAppUpdateDownloadUrl(
   origin: string,
 ): string {
   const base = String(origin || '').replace(/\/$/, '')
-  let url = typeof payload.url === 'string' ? payload.url.trim() : ''
+  const url = typeof payload.url === 'string' ? payload.url.trim() : ''
   const fn = typeof payload.filename === 'string' ? payload.filename.trim() : ''
   if (isValidDownloadUrl(url) && isGitHubReleaseOrCdnUrl(url) && fn && base) {
     const sameOrigin = `${base}/current/${encodeURIComponent(fn)}`

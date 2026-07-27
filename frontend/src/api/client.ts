@@ -204,7 +204,7 @@ apiClient.interceptors.response.use(
       }
     }
 
-    let message =
+    const message =
       error.response?.data?.message
       ?? (status == null && (transportCode === 'ERR_NETWORK' || rawMsg === 'Network Error')
         ? isNativePdaNoViteLive()

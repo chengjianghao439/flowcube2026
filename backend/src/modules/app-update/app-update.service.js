@@ -14,6 +14,10 @@ function normalizeVersion(v) {
   return String(v || '').trim().replace(/^v/i, '')
 }
 
+// 当前无调用方：版本比较发生在桌面端 desktop/lib/updateCheck.js，服务端只负责
+// 把 latest.json 原样吐出去。留着是因为一旦要在服务端做「低于最低版本则强制更新」
+// 就得用它，删掉等于再写一遍。**如果确认不做该功能，这段可以整体删除。**
+// eslint-disable-next-line no-unused-vars
 function compareVersions(a, b) {
   const pa = normalizeVersion(a).split('.').map((item) => Number.parseInt(item, 10) || 0)
   const pb = normalizeVersion(b).split('.').map((item) => Number.parseInt(item, 10) || 0)

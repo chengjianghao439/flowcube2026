@@ -51,7 +51,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
     await assertTaskPackagePrintClosure(conn, id)
   }
 
-  const { saleOrderId, orderNo, warehouseId, totalAmount, customerName, items } = saleData
+  const { saleOrderId, warehouseId, totalAmount, items } = saleData
 
   if (!isPurchaseReturn && saleOrderId) {
     const saleRow = await lockStatusRow(conn, {

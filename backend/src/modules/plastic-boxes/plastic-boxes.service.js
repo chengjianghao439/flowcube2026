@@ -1,6 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { createContainer, syncStockFromContainers } = require('../../engine/containerEngine')
+const { createContainer } = require('../../engine/containerEngine')
 
 async function findAll({ page = 1, pageSize = 20, keyword, warehouseId, productId } = {}) {
   const conditions = ["c.deleted_at IS NULL", "c.barcode LIKE 'B%'"]
@@ -71,7 +71,9 @@ async function findMovements(id) {
   }))
 }
 
-async function create({ productId, productName, productCode, warehouseId, warehouseName, locationId, unit, remark }) {
+// warehouseName 由前端一并传来但这里不落库（容器只存 warehouse_id，名字查表取），
+// 保留在签名里是为了让接口形状与其它建单接口一致。
+async function create({ productId, productName, productCode, warehouseId, warehouseName: _warehouseName, locationId, unit, remark }) {
   if (!productId) throw new AppError('请选择产品', 400)
   if (!warehouseId) throw new AppError('请选择仓库', 400)
 
