@@ -124,9 +124,12 @@ async function createManual({ type, orderNo, partyName, totalAmount, dueDate, re
     await conn.beginTransaction()
     // 手工创建的账款由录入人负责金额，视为已确认（confirm_status=1），
     // 待确认闸门只针对采购上架自动结算的应付（见 inbound-tasks.settle.js）。
+    // order_id 必须显式写 NULL：它是 UNIQUE(type, order_id) 的一半，手工账款没有关联单据，
+    // 只有 NULL 才能容纳多条（多个 NULL 不互相冲突）。省略该列会在 STRICT 模式下直接报
+    // 「doesn't have a default value」——见迁移 145。
     const [result] = await conn.query(
-      `INSERT INTO payment_records (type,order_no,party_name,total_amount,balance,confirm_status,due_date,remark)
-       VALUES (?,?,?,?,?,1,?,?)`,
+      `INSERT INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,confirm_status,due_date,remark)
+       VALUES (?,NULL,?,?,?,?,1,?,?)`,
       [type, orderNo, partyName, totalAmount, totalAmount, dueDate || null, remark || null],
     )
     await recordPaymentEvent(conn, {
