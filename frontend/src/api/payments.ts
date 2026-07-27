@@ -10,7 +10,9 @@ export interface SettlementDetail {
   returns: Array<{ returnNo:string; amount:number }>
 }
 export const getPaymentsApi  = (p:object) => client.get<{list:PaymentRecord[];pagination:unknown;summary:PaymentSummary}>('/payments', {params:p})
-export const createPaymentApi= (d:object) => client.post<{id:number}>('/payments', d)
+// 手工建账款（POST /api/payments）没有前端封装：全站没有任何页面调用它，留着的
+// createPaymentApi 是死代码，已于 2026-07-27 删除。后端接口仍在（迁移 145 修好了它
+// 从建成起就必然 500 的 order_id 问题），要做「手工记账」入口时从这里补回封装即可。
 export const payApi          = (id:number, d:object) => client.post<unknown>(`/payments/${id}/pay`, d)
 export const getEntriesApi   = (id:number) => client.get<PaymentEntry[]>(`/payments/${id}/entries`)
 /** 财务确认应付结算金额（确认后才可登记付款） */
