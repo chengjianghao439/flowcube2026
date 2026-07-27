@@ -152,14 +152,14 @@ export default defineConfig(({ command }) => {
       port: 5173,
       host: true,
       proxy: {
-        '/api': devProxyToBackend(process.env.DEV_API_TARGET || 'http://localhost:3000'),
+        '/api': devProxyToBackend(DEV_API_TARGET),
       },
     },
     preview: {
       port: 4173,
       host: true,
       proxy: {
-        '/api': devProxyToBackend(process.env.DEV_API_TARGET || 'http://localhost:3000'),
+        '/api': devProxyToBackend(DEV_API_TARGET),
       },
     },
   }

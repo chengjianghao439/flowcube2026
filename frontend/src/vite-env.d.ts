@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 
 declare const __APP_VERSION__: string
+/** 本机 dev/preview 服务且后端也在本机；构建产物恒为 false。见 vite.config.ts */
+declare const __DEV_LOCAL_BACKEND__: boolean
 
 interface ImportMetaEnv {
   readonly VITE_ELECTRON?: string
