@@ -89,7 +89,7 @@ npm run test:integration        # 库存一致性集成测试（独立测试库�
 ```bash
 # 后端
 npm --prefix backend run dev            # nodemon
-npm --prefix backend run migrate        # 迁移（部署前必须显式执行，启动不会自动跑）
+npm --prefix backend run migrate        # 迁移（后端进程启动时不会自动跑；本机改完 schema 要手动执行）
 npm --prefix backend run lint
 npm --prefix backend run bootstrap:admin
 npm --prefix backend run resync:inventory-stock   # 由容器重算 inventory_stock 缓存
@@ -247,7 +247,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 ## 8. 数据库与核心模型
 
 - 81 张表（含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。
-- 迁移：`backend/src/database/` 下 145 个 `.sql`，编号 001–145（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**部署前必须显式 `npm run migrate`，启动不会自动迁移。**
+- 迁移：`backend/src/database/` 下 145 个 `.sql`，编号 001–145（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
 - ⚠️ **数据库里的 `COLUMN_COMMENT` 有不少已过期**（例如 `sale_orders.status` 注释写"1草稿 2已确认 3已出库 4已取消"、`warehouse_tasks.status` 注释写"1待分配 2备货中…"、`sale_orders.closed_reason` 提到的 `partial_ship_close` 已被迁移 127 废弃）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
 
 核心事实表 / 派生字段：
@@ -385,7 +385,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 - 生产服务器 `root@47.93.228.251`，项目在 `/opt/flowcube`，SSH alias `flowcube-prod`（密钥在本机 `~/.ssh/`，不入库）。
 - **`main` 是唯一发布来源**：push main → GitHub Actions `deploy-browser.yml` → SSH 到服务器 → 精确 checkout 到该 commit → `docker compose up -d --build backend frontend`。
 - 打 `v*` tag → `build-desktop.yml`（Windows runner）构建安装包并发布 `latest.json`；`frontend/**` 变更 → `build-pda-apk.yml` 构建 APK。发版统一用 `npm run release:prod`（要求在 main 且工作区干净），或直接用 `/release-flowcube` 技能，**三端版本号必须同步递增**。
-- 数据库迁移**不会自动执行**：部署后需要跑 `npm --prefix backend run migrate`（容器内 `docker compose exec backend npm run migrate`）。
+- 数据库迁移**由部署链路自动执行，不需要手动补跑**：`scripts/server-update.sh` 在 `docker compose up -d --build` 之后、健康检查之前显式跑 `docker compose exec -T backend npm run migrate`（用新镜像里的迁移文件，失败即中断部署）。「后端进程启动时不自动迁移」说的是 `backend/index.js`，别把两者混为一谈——推 main 时迁移是跟着一起上的。只有绕开该脚本手动改动服务器时才需要自己跑一次。
 - 桌面更新源：`/var/www/flowcube-downloads/latest.json`（顶层唯一权威入口，由 `scripts/release-desktop.js` 写入）；`current/` 只放固定文件名的当前安装包；`/downloads` 是**已废弃**的兼容别名（仅 GET/HEAD）。
 - 应急手动部署：`ssh flowcube-prod 'cd /opt/flowcube && SKIP_RELEASE_GATE=1 bash scripts/server-update.sh'`。
 - 其他运维脚本：`scripts/backup-db.sh`（每日 02:00 容器内 mysqldump，保留 14 天）、`scripts/monitor.sh`（5 分钟健康检查 + 每日心跳，钉钉告警）、`scripts/release-gate.sh`（服务器端发布门禁）。
