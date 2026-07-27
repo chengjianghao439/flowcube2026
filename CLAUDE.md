@@ -48,7 +48,7 @@ flowcube/
 │       ├── scheduler.js            仅启动 operation_requests TTL 清理
 │       ├── config/                 db.js（连接池）、env.js（环境变量校验，生产缺项直接拒启动）
 │       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / settlementType / permissions
-│       ├── database/               145 个 .sql 迁移 + migrate.js
+│       ├── database/               146 个 .sql 迁移 + migrate.js
 │       ├── engine/                 containerEngine / inventoryEngine / reservationEngine ← 库存唯一合法入口
 │       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger
 │       ├── modules/                46 个业务模块，统一 routes → controller → service
@@ -106,7 +106,7 @@ npm --prefix frontend run dev           # Electron target，端口 5173
 npm --prefix frontend run dev:pda       # PDA target，端口 5173
 npm --prefix frontend run build         # VITE_ELECTRON=1
 npm --prefix frontend run build:pda     # VITE_CAPACITOR=1
-npm --prefix frontend run lint          # ESLint 9 flat config（frontend/eslint.config.js），当前 0 error / 18 warning
+npm --prefix frontend run lint          # ESLint 9 flat config（frontend/eslint.config.js），当前 0 error / 5 warning
 ```
 
 > **两端 lint 已于 2026-07-27 补齐**（此前后端没装 eslint、前端没有配置文件，两条命令都必失败），并接进 CI 的 `static` job。
@@ -198,7 +198,7 @@ PDA  收货(逐箱扫码 + 建容器 status=4 待上架 + 入队标签打印) �
 
 ```
 ERP  销售单(草稿1) → 占用库存(已占库2，只加 reserved，不动实物)
-     → 发起出库：按明细行的发货仓库分组，每组建一个仓库任务；订单 2→3 履约中
+     → 发起出库：按明细行的发货仓库分组，每组建一个仓库任务；订单 2→3 拣货中
 PDA  拣货(扫容器条码，scan-logs 累加 picked_qty) → 拣货完成(校验闭合) → 待分拣(3)
      → 分拣(扫商品 → 扫分拣格) → 待复核(4) → 复核(扫容器) → 待打包(5)
      → 打包(建箱、装箱、完成箱 → 打印箱贴) → 全部箱完成 ⇒ 待出库(6)
@@ -209,8 +209,8 @@ PDA  拣货(扫容器条码，scan-logs 累加 picked_qty) → 拣货完成(校�
 必须知道的四件事（旧版文档均未覆盖）：
 1. **分仓发货**：`sale_order_items.warehouse_id` 是行级发货仓库，一张销售单可以有多个仓库任务。任何按 `product_id` 关联 `sale_order_items` 的 SQL **必须带 warehouse_id 维度**，否则出库明细会被 JOIN 放大成 N 倍扣减（`warehouse-tasks.ship.js` 有 `assertNoShipItemFanout` 兜底）。
 2. **分批发货**：`sale_order_items.dispatched` 标记该行是否已派发到仓库任务；`ship(id, { itemIds })` 只对未派发行建任务。`shipped_qty` 按批累加。
-3. **执行期改单**：`PUT /sale/:id/adjust`（`sale.service.requestAdjustment` + `warehouse-tasks.adjust.js`）允许订单在已占库/履约中改明细；增量把任务退回拣货中，减量若命中已打包/已复核则要 PDA 物理确认（拆箱作废 / 容器归还分拣格）后任务退回待复核。落表：`sale_order_adjustments*`。
-4. **取消**：草稿直接取消；已占库释放预占；履约中会逐个取消活跃仓库任务（走逆向归还，PDA `/pda/cancel-return` 确认归还库位），并整单兜底释放预占。若已有任务出库过，则**不是取消**——未发行整行删除、部分发的行数量降到实发量，订单直接结案为已出库(4)。
+3. **执行期改单**：`PUT /sale/:id/adjust`（`sale.service.requestAdjustment` + `warehouse-tasks.adjust.js`）允许订单在已占库/拣货中改明细；增量把任务退回拣货中，减量若命中已打包/已复核则要 PDA 物理确认（拆箱作废 / 容器归还分拣格）后任务退回待复核。落表：`sale_order_adjustments*`。
+4. **取消**：草稿直接取消；已占库释放预占；拣货中会逐个取消活跃仓库任务（走逆向归还，PDA `/pda/cancel-return` 确认归还库位），并整单兜底释放预占。若已有任务出库过，则**不是取消**——未发行整行删除、部分发的行数量降到实发量，订单直接结案为已出库(4)。
 
 ### 7.3 退货
 
@@ -235,7 +235,7 @@ PDA 源仓 scan-out(2/3→3 在途，容器带 transfer_order_id) → 目标仓 
 
 ### 7.5 盘点
 
-`inventory_checks` / `inventory_check_items`：1盘点中 → 2已完成 / 3已取消。账面数**实时取自 ACTIVE 容器合计**（不是 `inventory_stock`）。提交时先整单校验账面是否漂移，任一行漂移就整单拒绝（409）并列全漂移行；通过后逐行 `adjustContainersForStockcheck`（盘盈建容器、盘亏 FIFO 扣减）。单行漂移可用 `POST /stockcheck/:id/items/:itemId/refresh` 重置账面并清空实盘。
+`inventory_checks` / `inventory_check_items`：1进行中 → 2已完成 / 3已取消。账面数**实时取自 ACTIVE 容器合计**（不是 `inventory_stock`）。提交时先整单校验账面是否漂移，任一行漂移就整单拒绝（409）并列全漂移行；通过后逐行 `adjustContainersForStockcheck`（盘盈建容器、盘亏 FIFO 扣减）。单行漂移可用 `POST /stockcheck/:id/items/:itemId/refresh` 重置账面并清空实盘。
 
 ### 7.6 打印（客户端拉取模型，无推送）
 
@@ -257,7 +257,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 ## 8. 数据库与核心模型
 
 - 81 张表（含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。
-- 迁移：`backend/src/database/` 下 145 个 `.sql`，编号 001–145（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
+- 迁移：`backend/src/database/` 下 146 个 `.sql`，编号 001–146（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
 - ⚠️ **数据库里的 `COLUMN_COMMENT` 曾大面积过期，现已大部分订正但仍有残留**（2026-07-27 抽查：`sale_orders.status`、`warehouse_tasks.status` 的注释都已更新并注明"见 documentStatusRules / warehouseTaskStatus"；`sale_orders.closed_reason` 仍写着迁移 127 已废弃的 `partial_ship_close`）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
 
 核心事实表 / 派生字段：
@@ -306,14 +306,14 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 | 机器 | 状态 | 动作（from→to） |
 |------|------|------------------|
 | `purchase` | 1草稿 2已提交 3已完成 4已取消 | edit(1)、confirm(1→2)、withdrawConfirm(2→1)、createInboundTask(2)、complete(2→3 自动)、close(2→3 短装人工)、reopen(3→2 仅撤回收货内部联动)、cancel(1/2→4) |
-| `sale` | 1草稿 2已占库 3履约中 4已出库 5已取消 | edit(1)、adjust(2/3)、reserve(1→2)、release(2→1)、ship(2→3，履约中可继续分批)、completeShip(3→4)、cancel(1/2/3→5)、delete(5) |
+| `sale` | 1草稿 2已占库 3拣货中 4已出库 5已取消 | edit(1)、adjust(2/3)、reserve(1→2)、release(2→1)、ship(2→3，拣货中可继续分批)、completeShip(3→4)、cancel(1/2/3→5)、delete(5) |
 | `warehouseTask` | 1待拣货(跳过) 2拣货中 3待分拣 4待复核 5待打包 6待出库 7已出库 8已取消 | startPicking、readyToShip(2→3)、sortTask(3→4)、checkDone(4→5)、packDone(5→6)、ship(6→7)、cancel(活跃→8)；改单专用反向边 adjustReopenPicking / adjustReopenChecking **仅供 adjust.js 内部调用** |
 | `inboundTask` | 1待收货 2收货中 3待上架 4已完成 5已取消 | submit、receiveStart(1→2)、receive、receiveComplete(2/3→3)、putaway、finish(3→4 含自动结算)、cancel(1→5)、voidReceipt(2/3/4→1) |
 | `inboundTaskAudit` | 0待结算 1已结算 | approve(0→1)，仅供上架完成时自动结算复用；状态 2(已退回)已下线不可达 |
 | `transfer` | 1草稿 2待出库 3在途 4已完成 5已取消 | confirm(1→2)、scanOut(2/3→3, PDA)、scanIn(3→4, PDA)、cancel(1/2→5)；在途另有 force-close |
 | `purchaseReturn` / `saleReturn` | 1草稿 2已确认 3已执行 4已取消 | confirm(1→2)、execute(2→3，由回调触发)、cancel(1/2→4) |
 | `expenseClaim` | 1草稿 2待审批 3已批准 4已付款 5已驳回 6已取消 | edit(1)、submit(1→2)、withdraw(2→1 本人撤回)、approve(2→3)、reject(2→5)、pay(3→4)、cancel(1/2/5→6；已批准需先驳回，已付款不可取消) |
-| `stockcheck` | 1盘点中 2已完成 3已取消 | edit(1)、submit(1→2)、cancel(1→3) |
+| `stockcheck` | 1进行中 2已完成 3已取消 | edit(1)、submit(1→2)、cancel(1→3) |
 | `return_tasks`（内联） | 1待收货 2收货中 3待质检 4待上架 5已完成 6已取消 | 见 `return-tasks.service.js` 的 `RT_TRANSITIONS` |
 
 进入/退出各仓库任务状态时的副作用与前置校验，见 `warehouseTaskStatus.js` 里的 `WT_ON_ENTER_ACTIONS` / `WT_ON_EXIT_ACTIONS` 注释表（是当前实现的准确记录，改动副作用时同步更新它）。
@@ -458,7 +458,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 2. ~~幂等回执查询接口缺失~~ **已实现**：`GET /api/system/request-status/:key`（`modules/system/`）已注册，前端 `api/operation-requests.ts` 的调用路径与之匹配；PDA 各作业页（含 `sale-return-receive/putaway`）也都提供了 `resolveServerState` 第二道兜底。见第 14 节。
 3. ~~PDA 设备会话形同虚设~~ **已启用**：`pdaSessionRequired()` 已挂在调拨扫出扫入、退货 receive/check/putaway、`/scan-logs` 写入等接口上，前端 `api/client.ts` 会发 `X-PDA-Session` 并自动续期，回归由 `smoke:pda-device-session` 守着。见第 12 节。
 4. ~~缺货上报功能未落地~~ **已了结**：迁移 134 `drop_warehouse_task_shortages` 已删表与相关列，代码里也没有残留引用（`sale` 模块里的 shortage 是"缺货弹窗"，与此无关）。
-5. **数据库列注释与实际语义脱节——已大部分订正，仍有零星残留**。抽查：`sale_orders.status`、`warehouse_tasks.status` 的注释都已更新并指向常量文件；但 `sale_orders.closed_reason` 仍写着迁移 127 已废弃的 `partial_ship_close`。**状态语义一律以 `backend/src/constants/` 为准这条不变**，注释只作参考。
+5. ~~数据库列注释与实际语义脱节~~ **已系统订正**（迁移 146，2026-07-27）。方法是把 61 条状态类列注释逐条对 `constants/` 与前端 `StatusBadge` 核，改掉 5 条：`transfer_orders.status`（旧注释少一个状态且把中间态"在途"写成"已执行"，最严重）、`sale_orders.closed_reason`（`partial_ship_close` 已由 127 废弃）、`purchase_returns`/`sale_returns.status`（"已退货"→"已执行"）、`print_jobs.content_type`（实际只收 zpl）。**状态语义一律以 `backend/src/constants/` 为准这条不变**，注释只作参考。
 6. ~~前后端权限码没有一致性校验~~ **已有校验**：`npm run test:permissions` 做双向 diff + 命名合规检查并已进 CI，当前两边各 144 个、完全一致。仍是两份手工常量表，新增权限码要改三处（后端常量、前端常量、seed 迁移）。
 7. ~~`/packages/*` 缺 `pdaOnly`~~ **已收紧**：装箱、完成箱、作废箱等写接口都已挂 `pdaOnly`。
 8. **生产库存在 schema 漂移史**（曾出现迁移未真正生效导致缺列；也出现过迁移文本声明了生产从没有过的列）。改动依赖新列的逻辑时，先确认生产已跑过对应迁移。2026-07-27 新增的一例同类问题：`payment_records.order_id` 实际是 `NOT NULL`，而 054 的建表文本与 091 的注释都写它可空——已由迁移 145 订正。
