@@ -33,12 +33,10 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
 
       // keepAlive 多标签工作区下，hooks 依赖写漏会表现成「切回标签页数据不刷新」，
-      // 本该是 error。但补 lint 时仓库里已存在 13 处存量违规（DataTable、PdaLayout、
-      // pda/ship、print-templates/editor 等），逐个修要判断「补上依赖会不会变成
-      // 每次渲染都重新请求」，是单独一件事。
-      // 这里定为 warn 而不是撒 eslint-disable：disable 会永久静默，warn 会一直在
-      // lint 输出里排队。**存量清完后应改回 error。**
-      'react-hooks/exhaustive-deps': 'warn',
+      // 是这个项目真实踩过的坑。2026-07-27 清完 13 处存量后恢复为 error。
+      // 唯一一处 eslint-disable 在 pages/categories/index.tsx（表单重置刻意只认 id，
+      // 不认对象引用），那里写明了理由——新增 disable 也请照此写清楚为什么。
+      'react-hooks/exhaustive-deps': 'error',
 
       // 热更新边界：非组件导出会让整文件失去 HMR。项目里有大量「组件 + 常量」同文件的
       // 既有写法，降为 warn 而不是强行拆文件。

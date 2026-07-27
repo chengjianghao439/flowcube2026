@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Inbox } from 'lucide-react'
 import type { TableColumn } from '@/types'
 
@@ -141,7 +141,10 @@ export default function DataTable<T extends object>({
     setDraggingKey(null)
   }
 
-  const getColumnWidth = (col: TableColumn<T>) => {
+  // useCallback 不是为了性能，是为了让 tableWidth 的依赖能写全：这个函数读了
+  // columnWidths / fluid / orderedColumns / columns 四个值，原先 tableWidth 的依赖数组
+  // 手写了前三个、漏了 columns（fluid 模式下的 fallback 用 columns.length）。
+  const getColumnWidth = useCallback((col: TableColumn<T>) => {
     const key = String(col.key)
     const fallback = fluid
       ? 100 / (orderedColumns.length || columns.length || 1)
@@ -150,13 +153,13 @@ export default function DataTable<T extends object>({
     if (typeof width === 'number' && Number.isFinite(width)) return width
     const parsed = fluid ? Number.parseFloat(String(width)) : Number.parseInt(String(width), 10)
     return Number.isFinite(parsed) ? parsed : fallback
-  }
+  }, [columnWidths, fluid, orderedColumns, columns])
 
   const tableWidth = useMemo(() => {
     if (fluid) return 0
     const base = orderedColumns.reduce((sum, col) => sum + getColumnWidth(col), 0)
     return base + (selectable ? 56 : 0)
-  }, [orderedColumns, selectable, columnWidths, fluid])
+  }, [orderedColumns, selectable, fluid, getColumnWidth])
 
   const startResize = (event: ReactMouseEvent, col: TableColumn<T>) => {
     event.preventDefault()

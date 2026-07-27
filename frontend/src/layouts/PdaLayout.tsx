@@ -58,7 +58,7 @@ export default function PdaLayout() {
 
     window.addEventListener('popstate', handleBack)
     return () => window.removeEventListener('popstate', handleBack)
-  }, [location.pathname])
+  }, [location.pathname, navigate])
 
   useEffect(() => {
     const onManualCheck = () => { void checkUpdate({ manual: true }) }

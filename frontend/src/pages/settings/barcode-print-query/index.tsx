@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -89,10 +89,15 @@ export default function BarcodePrintQueryPage() {
     },
   })
 
-  function openPath(path: string, title: string) {
+  // columns 依赖它，不包 useCallback 的话 columns 每次渲染都要重建
+  const openPath = useCallback((path: string, title: string) => {
     addTab({ key: path, title, path })
     navigate(path)
-  }
+  }, [addTab, navigate])
+
+  // 解构出稳定的 mutate 与需要的状态位：直接依赖整个 reprintMut 对象会让 columns
+  // 每次渲染重建（该对象引用不稳定）
+  const { mutate: reprint, isPending: reprinting, variables: reprintingRow } = reprintMut
 
   const columns = useMemo<TableColumn<BarcodePrintRecord>[]>(() => {
     const bizTitle =
@@ -171,13 +176,13 @@ export default function BarcodePrintQueryPage() {
         title: '操作',
         width: 210,
         render: (_, row) => {
-          const isReprinting = reprintMut.isPending && reprintMut.variables?.recordId === row.recordId
+          const isReprinting = reprinting && reprintingRow?.recordId === row.recordId
           return (
             <TableActionsMenu
               primaryLabel={isReprinting ? '处理中…' : '重新打印'}
               primaryVariant="outline"
               primaryDisabled={!row.canReprint || isReprinting}
-              onPrimaryClick={() => reprintMut.mutate(row)}
+              onPrimaryClick={() => reprint(row)}
               items={[
                 ...(row.category === 'inbound' && row.inboundTaskId
                   ? [{ label: '打开收货详情', onClick: () => openPath(`/inbound-tasks/${row.inboundTaskId}?focus=print-batches`, row.bizNo || `收货订单 #${row.inboundTaskId}`) }]
@@ -191,10 +196,11 @@ export default function BarcodePrintQueryPage() {
         },
       },
     ]
-  }, [category, reprintMut.isPending, reprintMut.variables])
+  }, [category, reprinting, reprintingRow, reprint, openPath])
 
   const activeCategory = CATEGORY_OPTIONS.find(item => item.value === category)!
-  const rows = query.data?.list ?? []
+  // 必须 useMemo：`?? []` 每次渲染都是新数组引用，下面三个 context 的统计会全部重跑
+  const rows = useMemo(() => query.data?.list ?? [], [query.data])
   const inboundContext = useMemo(() => {
     if (category !== 'inbound') return null
     const taskId = initialInboundTaskId || rows.find(row => row.inboundTaskId)?.inboundTaskId

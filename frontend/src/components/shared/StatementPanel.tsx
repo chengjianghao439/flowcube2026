@@ -263,7 +263,9 @@ function CreateStatementDialog({ open, onClose, type, onCreated }: {
     enabled: open && !!applied,
   })
 
-  const list = (candidates ?? []) as StatementItem[]
+  // 必须 useMemo：`candidates ?? []` 每次渲染都是新数组引用，会让下面依赖 list 的
+  // useMemo 每次都重算（等于没缓存）
+  const list = useMemo(() => (candidates ?? []) as StatementItem[], [candidates])
   const pickedTotal = useMemo(
     () => list.filter(x => picked.has(x.recordId)).reduce((s, x) => s + x.totalAmount, 0),
     [list, picked],

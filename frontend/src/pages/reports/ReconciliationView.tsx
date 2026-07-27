@@ -94,7 +94,9 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   })
 
   const { data, isLoading, isError, error, refetch } = reconciliationQ
-  const rows = data?.list ?? []
+  // 必须 useMemo：`data?.list ?? []` 每次渲染都是新数组引用，下面 displayRows 的排序
+  // 会因此每次重跑（列表页动辄几百行）
+  const rows = useMemo(() => data?.list ?? [], [data])
   const displayRows = useMemo(() => {
     const sortedRows = [...rows].sort((a, b) => {
       const overdueDelta = Number(isOverdue(b)) - Number(isOverdue(a))

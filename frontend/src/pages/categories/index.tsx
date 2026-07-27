@@ -70,8 +70,12 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
     }
   }
 
+  // 依赖刻意写成 parentCat?.id / editCat?.id 而不是对象本身，也刻意不把 reset 列进去：
+  // 父组件每次渲染都会传新的 parentCat / editCat 对象引用，按对象依赖会让表单在用户
+  // 填写过程中被反复重置。只有「打开」「模式变了」「换了另一条分类」才该重置。
   useEffect(() => {
     if (open) reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, parentCat?.id, editCat?.id])
 
   // 弹窗打开时初始化

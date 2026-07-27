@@ -26,6 +26,33 @@ import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
 
+// 这四个是只读参数的纯函数，原先定义在组件体内，于是每次渲染都是新引用，
+// handleScan（useCallback）没法把它们写进依赖。提到模块级后既不再是依赖，
+// 也不会随渲染重建。
+function warehouseStatusName(data: PackageShipInfo) {
+  const status = data.warehouseTaskStatus ?? data.taskStatus
+  return data.warehouseTaskStatusName || data.taskStatusName || WT_STATUS_NAME[String(status) as keyof typeof WT_STATUS_NAME] || `状态 ${status}`
+}
+
+function warehouseStatus(data: PackageShipInfo) {
+  return Number(data.warehouseTaskStatus ?? data.taskStatus)
+}
+
+function canShip(data: PackageShipInfo) {
+  return warehouseStatus(data) === WT_STATUS.SHIPPING
+}
+
+function shipBlockedMessage(data: PackageShipInfo) {
+  const statusName = warehouseStatusName(data)
+  if (warehouseStatus(data) === WT_STATUS.PACKING) {
+    const openPackages = data.packages.filter(pkg => pkg.status !== 2 && pkg.status !== 3).length
+    return openPackages > 0
+      ? `当前仓库任务仍为「${statusName}」，且还有 ${openPackages} 箱未完成打包，不能出库。`
+      : `当前仓库任务仍为「${statusName}」，请先完成打包收口并进入「待出库」。`
+  }
+  return `当前仓库任务状态为「${statusName}」，不能执行出库。`
+}
+
 export default function PdaShipPage() {
   const navigate = useNavigate()
   const { flash, ok, err, warn } = usePdaFeedback()
@@ -67,30 +94,6 @@ export default function PdaShipPage() {
     onError: (e: unknown) =>
       err(formatPdaErrorMessage((e as { message?: string })?.message, '出库失败，请确认任务状态或联系管理员')),
   })
-
-  function warehouseStatusName(data: PackageShipInfo) {
-    const status = data.warehouseTaskStatus ?? data.taskStatus
-    return data.warehouseTaskStatusName || data.taskStatusName || WT_STATUS_NAME[String(status) as keyof typeof WT_STATUS_NAME] || `状态 ${status}`
-  }
-
-  function warehouseStatus(data: PackageShipInfo) {
-    return Number(data.warehouseTaskStatus ?? data.taskStatus)
-  }
-
-  function canShip(data: PackageShipInfo) {
-    return warehouseStatus(data) === WT_STATUS.SHIPPING
-  }
-
-  function shipBlockedMessage(data: PackageShipInfo) {
-    const statusName = warehouseStatusName(data)
-    if (warehouseStatus(data) === WT_STATUS.PACKING) {
-      const openPackages = data.packages.filter(pkg => pkg.status !== 2 && pkg.status !== 3).length
-      return openPackages > 0
-        ? `当前仓库任务仍为「${statusName}」，且还有 ${openPackages} 箱未完成打包，不能出库。`
-        : `当前仓库任务仍为「${statusName}」，请先完成打包收口并进入「待出库」。`
-    }
-    return `当前仓库任务状态为「${statusName}」，不能执行出库。`
-  }
 
   // 扫码后自动查询并立即出库，无需额外确认按钮
   const handleScan = useCallback(async (raw: string) => {

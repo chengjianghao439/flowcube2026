@@ -772,55 +772,59 @@ export default function PrintTemplateEditor() {
   elementsRef.current = elements
 
   /** 在改动 elements「之前」调用：压入当前快照、清空 redo 栈 */
-  function snapshot() {
+  // snapshot / clampEl / deleteElement / duplicateElement 都被下面的键盘快捷键 effect
+  // 依赖。原先是普通函数声明，每次渲染新引用，effect 只能手写等价依赖
+  // （selectedId / paper.w / paper.h）——当时是对的，但一旦这几个函数将来多捕获一个
+  // 状态，手写依赖就会悄悄失同步。包成 useCallback 后由编译器保证。
+  const snapshot = useCallback(() => {
     historyPast.current.push(elementsRef.current)
     if (historyPast.current.length > 100) historyPast.current.shift()
     historyFuture.current = []
     bumpHist(v => v + 1)
-  }
-  function undo() {
+  }, [])
+  const undo = useCallback(() => {
     if (!historyPast.current.length) return
     historyFuture.current.push(elementsRef.current)
     setElements(historyPast.current.pop()!)
     setSelectedId(null)
     bumpHist(v => v + 1)
-  }
-  function redo() {
+  }, [])
+  const redo = useCallback(() => {
     if (!historyFuture.current.length) return
     historyPast.current.push(elementsRef.current)
     setElements(historyFuture.current.pop()!)
     setSelectedId(null)
     bumpHist(v => v + 1)
-  }
+  }, [])
 
-  function clampEl(el: TemplateElement): TemplateElement {
+  const clampEl = useCallback((el: TemplateElement): TemplateElement => {
     return {
       ...el,
       x: Math.max(0, Math.min(paper.w - el.width, el.x)),
       y: Math.max(0, Math.min(paper.h - el.height, el.y)),
     }
-  }
+  }, [paper.w, paper.h])
 
   function patchElement(id: string, patch: Partial<TemplateElement>) {
     snapshot()
     setElements(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e))
   }
 
-  function deleteElement(id: string) {
+  const deleteElement = useCallback((id: string) => {
     snapshot()
     setElements(prev => prev.filter(e => e.id !== id))
     if (selectedId === id) setSelectedId(null)
-  }
+  }, [snapshot, selectedId])
 
   /** 复制选中元素，偏移 +2mm */
-  function duplicateElement(id: string) {
+  const duplicateElement = useCallback((id: string) => {
     const src = elementsRef.current.find(e => e.id === id)
     if (!src) return
     snapshot()
     const copy = clampEl({ ...src, id: makeId(), x: src.x + 2, y: src.y + 2 })
     setElements(prev => [...prev, copy])
     setSelectedId(copy.id)
-  }
+  }, [snapshot, clampEl])
 
   /** 拖动吸附：把元素边/中心吸到画布中线或其他元素边/中心，返回吸附坐标 + 参考线 */
   function computeSnap(x: number, y: number, w: number, h: number, selfId: string) {
@@ -1022,7 +1026,7 @@ export default function PrintTemplateEditor() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, paper.w, paper.h])
+  }, [selectedId, clampEl, deleteElement, duplicateElement, redo, snapshot, undo])
 
   // ── Loading state ────────────────────────────────────────────
   if (!isNew && (isLoading || !hydrated)) {

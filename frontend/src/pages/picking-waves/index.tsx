@@ -2,7 +2,7 @@
  * 波次拣货管理页
  * 路由：/picking-waves
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '@/lib/toast'
@@ -125,13 +125,14 @@ export default function PickingWavesPage() {
     onSuccess: () => { toast.success('已取消'); invalidate(); closeDetail() },
   })
 
-  function openWaveDetail(wave: PickingWave, nextFocus?: string) {
+  // 下面 columns 依赖这两个函数，不包 useCallback 的话 columns 每次渲染都要重建
+  const openWaveDetail = useCallback((wave: PickingWave, nextFocus?: string) => {
     const params = new URLSearchParams(searchParams)
     params.set('waveId', String(wave.id))
     if (nextFocus) params.set('focus', nextFocus)
     else params.delete('focus')
     setSearchParams(params)
-  }
+  }, [searchParams, setSearchParams])
 
   function closeDetail() {
     const params = new URLSearchParams(searchParams)
@@ -140,10 +141,10 @@ export default function PickingWavesPage() {
     setSearchParams(params)
   }
 
-  function openPath(path: string, title: string) {
+  const openPath = useCallback((path: string, title: string) => {
     addTab({ key: path, title, path })
     navigate(path)
-  }
+  }, [addTab, navigate])
 
   const columns = useMemo<TableColumn<PickingWave>[]>(() => [
     {
@@ -211,7 +212,7 @@ export default function PickingWavesPage() {
         />
       ),
     },
-  ], [searchParams])
+  ], [openPath, openWaveDetail])
 
   const detailCopy = getWaveClosureCopy(detail ?? null)
   const printSummary = detail?.printSummary

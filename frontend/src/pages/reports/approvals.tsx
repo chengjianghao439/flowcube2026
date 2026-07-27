@@ -31,7 +31,8 @@ export default function ApprovalsPage() {
     refetchInterval: isActiveTab ? 60_000 : false,
   })
 
-  const notificationItems = notificationsQ.data?.items ?? []
+  // 必须 useMemo：`?? []` 每次渲染都是新数组引用，下面 reminderItems 的过滤会每次重跑
+  const notificationItems = useMemo(() => notificationsQ.data?.items ?? [], [notificationsQ.data])
   const reminderItems = useMemo(() => getReminderNotifications(notificationItems), [notificationItems])
 
   function openPath(path: string, title: string) {

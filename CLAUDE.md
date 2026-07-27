@@ -111,7 +111,8 @@ npm --prefix frontend run lint          # ESLint 9 flat config（frontend/eslint
 
 > **两端 lint 已于 2026-07-27 补齐**（此前后端没装 eslint、前端没有配置文件，两条命令都必失败），并接进 CI 的 `static` job。
 > 分工：**lint 管 tsc 管不到的**（失效的 hooks 依赖、漏删的死代码、控制字符），**类型正确性归 tsc**，风格问题两边都不管。
-> 前端剩 18 条 `react-hooks/exhaustive-deps` **warning**（存量，见 `frontend/eslint.config.js` 里的说明）——CI 只卡 error，**不要为了消掉它们去撒 `eslint-disable`**：disable 会永久静默，warning 会一直排队提醒。清完存量后应把该规则改回 error。
+> `react-hooks/exhaustive-deps` 已是 **error**（13 处存量于 2026-07-27 清完）。全仓唯一一处 `eslint-disable` 在 `pages/categories/index.tsx`：表单重置刻意只认 `parentCat?.id` / `editCat?.id` 而不认对象引用，否则父组件每次渲染传新对象会在用户填写过程中清空表单。**新增 disable 请照此写清楚为什么**，不要为了让 CI 变绿而静默。
+> 剩余 5 条 warning 是 `react-refresh/only-export-components`，来自 shadcn 组件「组件 + variants 常量同文件」的固有结构，不必处理。
 
 ```bash
 # 前端类型检查：tsconfig.json 是空壳（files:[]），必须指定 app 配置，否则永远 0 错误
@@ -463,7 +464,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 8. **生产库存在 schema 漂移史**（曾出现迁移未真正生效导致缺列；也出现过迁移文本声明了生产从没有过的列）。改动依赖新列的逻辑时，先确认生产已跑过对应迁移。2026-07-27 新增的一例同类问题：`payment_records.order_id` 实际是 `NOT NULL`，而 054 的建表文本与 091 的注释都写它可空——已由迁移 145 订正。
 9. **`avg_cost` 只随入库正向移动**，退货/撤回收货不反冲——这是刻意简化，利润分析用 `sale_order_items.cost_snapshot` 口径，不要"顺手修正"。
 10. `docs/` 下部分文档（`flow-review-report.md`、`print-module-refactor-plan.md` 等）是阶段性报告，不代表当前实现。
-11. ~~`npm run lint` 两端都是坏的~~ **已补齐**（2026-07-27，两端 ESLint 9 flat config + CI 的 `static` job，顺带把前端 `tsc` 也第一次接进 CI）。遗留一项：前端 18 条 `react-hooks/exhaustive-deps` 存量 warning 未清，清完应把规则改回 error。
+11. ~~`npm run lint` 两端都是坏的~~ **已补齐并清完存量**（2026-07-27）：两端 ESLint 9 flat config + CI 的 `static` job（顺带把前端 `tsc` 第一次接进 CI），13 处 `react-hooks/exhaustive-deps` 存量已逐个修复、规则恢复为 error。修复中发现的真问题：`CategoryPathDisplay` 条件调用 `useState`（Hook 顺序会在列表行间错位）、6 处 `data ?? []` 让下游 `useMemo` 完全失效、`DataTable` 列宽依赖漏了 `columns`。
 12. **后端 `exceljs` 依赖链上有一条修不掉的高危告警**（2026-07-27 调查结论，别重复折腾）：
     - 已修：`body-parser` 1.20.5→1.20.6、顶层与 `readdir-glob` 下的 `brace-expansion`（`npm audit fix`，只动 lock 不动 package.json）。
     - 剩下的 9 条 `npm audit --omit=dev` 告警**全部同源**：`exceljs@4.4.0`（已是最新版）固定依赖 `archiver@^5` → `glob@7` → `minimatch@3` → `brace-expansion@1.1.16`。上游没有可升的版本，`npm audit fix --force` 也无版本可换，只会破坏依赖，**不要执行**。
