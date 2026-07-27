@@ -117,18 +117,31 @@ async function create(data) {
   )
   if (exists) throw new AppError(`库位编码 ${code} 已存在`, 400)
 
-  const [result] = await pool.query(
-    `INSERT INTO warehouse_locations
-       (warehouse_id, code, zone, aisle, rack, level, position, name, remark)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [warehouseId, code, zone, pad(aisle), pad(rack), pad(level), pad(position), name || '', remark || ''],
-  )
+  // 建库位与回填条码必须同一个事务：barcode 由自增 id 生成，只能先 INSERT 再 UPDATE，
+  // 中间失败会留下一条没有条码的库位——PDA 扫不到它，而且不会有任何报错提示，
+  // 要等仓库现场扫不出来才发现。
+  // （原先这里对 UPDATE 单独 try/catch 吞掉「barcode 列不存在」是为兼容旧库，
+  //   本机与生产现在都有该列，兼容分支已无必要，一并去掉。）
+  const conn = await pool.getConnection()
+  let insertId
   try {
-    await pool.query('UPDATE warehouse_locations SET barcode = ? WHERE id = ?', [makeLocationBarcode(result.insertId), result.insertId])
+    await conn.beginTransaction()
+    const [result] = await conn.query(
+      `INSERT INTO warehouse_locations
+         (warehouse_id, code, zone, aisle, rack, level, position, name, remark)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [warehouseId, code, zone, pad(aisle), pad(rack), pad(level), pad(position), name || '', remark || ''],
+    )
+    insertId = result.insertId
+    await conn.query('UPDATE warehouse_locations SET barcode = ? WHERE id = ?', [makeLocationBarcode(insertId), insertId])
+    await conn.commit()
   } catch (e) {
-    if (!(e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column ['`]?barcode/i.test(String(e.message)))) throw e
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
   }
-  return findById(result.insertId)
+  return findById(insertId)
 }
 
 async function update(id, data) {

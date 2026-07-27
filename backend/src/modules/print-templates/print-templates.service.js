@@ -88,10 +88,27 @@ async function findById(id) {
   return fmt(row)
 }
 
-/** 将某模板设为其 type 的唯一默认（同 type 其余清零） */
+/**
+ * 将某模板设为其 type 的唯一默认（同 type 其余清零）。
+ *
+ * 必须在一个事务里：这是「先全清零、再设目标」的两步操作，中间断开（连接掉线、
+ * 进程重启）会让该 type **一个默认模板都不剩**，打印时就找不到模板了。
+ * 事务同时解决并发——两人同时设默认时，后一个事务会阻塞在第一条 UPDATE 的行锁上，
+ * 等前者提交后再清零并设自己，最终仍然只有一条 is_default=1，不会双默认。
+ */
 async function applyAsTypeDefault(id, type) {
-  await pool.query('UPDATE print_templates SET is_default=0 WHERE type=?', [type])
-  await pool.query('UPDATE print_templates SET is_default=1 WHERE id=?', [id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await conn.query('UPDATE print_templates SET is_default=0 WHERE type=?', [type])
+    await conn.query('UPDATE print_templates SET is_default=1 WHERE id=?', [id])
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 async function create({ name, type, paperSize, layout, createdBy }) {

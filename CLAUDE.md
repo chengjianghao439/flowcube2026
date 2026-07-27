@@ -316,6 +316,8 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 | `stockcheck` | 1进行中 2已完成 3已取消 | edit(1)、submit(1→2)、cancel(1→3) |
 | `return_tasks`（内联） | 1待收货 2收货中 3待质检 4待上架 5已完成 6已取消 | 见 `return-tasks.service.js` 的 `RT_TRANSITIONS` |
 
+> **不在 `documentStatusRules.js` 里的状态机还有财务三张表**（2026-07-27 核实）：`payment_receipts`（1待核销 2部分核销 3已核销完）、`reconciliation_statements`（1草稿 2已确认 3已核销完）、`finance_accounts`。它们各自在 service 里用「事务 + `SELECT … FOR UPDATE` 锁单头 + 校验状态 + `UPDATE`」实现，与 `compareAndSetStatus` 等效、并发安全，只是没走统一入口。**找状态机时别只翻 `documentStatusRules`**；新增财务状态流转请沿用它们现有的加锁写法，不要退化成不加锁的裸 `UPDATE`。
+
 进入/退出各仓库任务状态时的副作用与前置校验，见 `warehouseTaskStatus.js` 里的 `WT_ON_ENTER_ACTIONS` / `WT_ON_EXIT_ACTIONS` 注释表（是当前实现的准确记录，改动副作用时同步更新它）。
 
 拣货→分拣的推进有**三重闭合强校验**（`warehouse-tasks.helpers.js`）：`picked_qty == required_qty` + 扫码流水合计一致 + 锁定容器与扫码容器一致；出库前还会校验复核闭合、装箱闭合、箱贴打印闭合。

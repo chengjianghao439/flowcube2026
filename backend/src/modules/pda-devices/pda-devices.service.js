@@ -148,8 +148,13 @@ async function revokeSessions(deviceId, _reason = null) {
 }
 
 /**
- * 停用/启用设备。停用会连带吊销所有票据——设备丢失时这是唯一的止血手段，
- * 只改 status 不吊票据的话，那台机器手里的票据还能继续用到过期（默认 30 天）。
+ * 停用/启用设备。停用会连带吊销所有票据。
+ *
+ * 注意别把吊票据当成唯一防线（这里原来的注释是这么写的，与实现不符）：
+ * `middleware/pdaSession` 的 loadPdaSession 会 JOIN pda_devices 取 status，
+ * 每次请求都校验 `device_status !== 'active'` 就拒绝，所以**设备一停用即刻失效**，
+ * 不依赖这里的吊销是否成功。吊票据是额外清理（让票据行本身也不可复用），
+ * 因此它失败不会留下安全缺口。
  */
 async function setStatus(id, status, scopeWarehouseIds = null) {
   if (!STATUS.includes(status)) throw new AppError('设备状态无效', 400)
