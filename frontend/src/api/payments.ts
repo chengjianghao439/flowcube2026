@@ -1,4 +1,5 @@
 import { payloadClient as client } from './client'
+import { withRequestKeyHeaders } from '@/lib/requestKey'
 
 export interface PaymentRecord { id:number; type:1|2; typeName:string; orderNo:string; partyName:string; totalAmount:number; paidAmount:number; balance:number; status:1|2|3; statusName:string; confirmStatus?:0|1; confirmedByName?:string|null; confirmedAt?:string|null; dueDate?:string; remark?:string; createdAt:string }
 export interface PaymentEntry { id:number; amount:number; paymentDate:string; method?:string; remark?:string; operatorName:string; createdAt:string }
@@ -15,3 +16,118 @@ export const getEntriesApi   = (id:number) => client.get<PaymentEntry[]>(`/payme
 /** 财务确认应付结算金额（确认后才可登记付款） */
 export const confirmPaymentApi = (id:number) => client.post<{id:number;confirmStatus:1}>(`/payments/${id}/confirm`)
 export const getSettlementDetailApi = (id:number) => client.get<SettlementDetail>(`/payments/${id}/settlement-detail`)
+
+// ── 收付款单与核销 ────────────────────────────────────────────────────────────
+
+/** 一笔实际汇款。settledAmount 已核销、balance 剩余可核销（>0 即为预收/预付款） */
+export interface PaymentReceipt {
+  id: number
+  receiptNo: string
+  type: 1 | 2
+  typeName: string
+  partyName: string
+  amount: number
+  settledAmount: number
+  balance: number
+  status: 1 | 2 | 3
+  statusName: string
+  paymentDate: string
+  method?: string | null
+  accountId?: number | null
+  accountName?: string | null
+  remark?: string | null
+  operatorName?: string | null
+  createdAt: string
+}
+
+/** 这笔汇款核销到了哪些账款 */
+export interface ReceiptSettlement {
+  entryId: number
+  recordId: number
+  orderNo: string
+  amount: number
+  orderTotal: number
+  orderPaid: number
+  orderBalance: number
+  orderStatus: 1 | 2 | 3
+  createdAt: string
+}
+
+/** 核销目标二选一：recordId 直接核账款（现结），statementId 核对账单（月结） */
+export type ReceiptAllocation =
+  | { recordId: number; amount: number }
+  | { statementId: number; amount: number }
+
+export const getReceiptsApi = (p: object) =>
+  client.get<{ list: PaymentReceipt[]; summary: { amount:number; settledAmount:number; balance:number }; pagination: unknown }>('/payments/receipts', { params: p })
+
+export const getReceiptDetailApi = (id: number) =>
+  client.get<PaymentReceipt & { settlements: ReceiptSettlement[] }>(`/payments/receipts/${id}`)
+
+/** 新建汇款单并同时核销；allocations 为空表示先挂账，之后再核销 */
+export const createReceiptApi = (d: {
+  type: 1 | 2; partyName: string; amount: number; paymentDate: string
+  method?: string; accountId: number; remark?: string; allocations: ReceiptAllocation[]
+}, requestKey: string) =>
+  client.post<{ id:number; receiptNo:string; settledAmount:number; balance:number }>(
+    '/payments/receipts', d, { headers: withRequestKeyHeaders(requestKey) },
+  )
+
+/** 用某张汇款单的剩余余额继续核销 */
+export const settleReceiptApi = (id: number, allocations: ReceiptAllocation[], requestKey: string) =>
+  client.post<{ id:number; receiptNo:string; settledAmount:number; balance:number }>(
+    `/payments/receipts/${id}/settle`, { allocations }, { headers: withRequestKeyHeaders(requestKey) },
+  )
+
+// ── 汇总对账单（月结）─────────────────────────────────────────────────────────
+
+export interface ReconciliationStatement {
+  id: number
+  statementNo: string
+  type: 1 | 2
+  partyName: string
+  periodStart?: string | null
+  periodEnd?: string | null
+  totalAmount: number
+  settledAmount: number
+  balance: number
+  status: 1 | 2 | 3
+  statusName: string
+  itemCount?: number
+  confirmedByName?: string | null
+  confirmedAt?: string | null
+  remark?: string | null
+  operatorName?: string | null
+  createdAt: string
+}
+
+export interface StatementItem {
+  recordId: number
+  orderNo: string
+  totalAmount: number
+  paidAmount: number
+  balance: number
+  status: 1 | 2 | 3
+  dueDate?: string | null
+  createdAt: string
+}
+
+export const getStatementsApi = (p: object) =>
+  client.get<{ list: ReconciliationStatement[]; pagination: unknown }>('/payments/statements', { params: p })
+
+/** 某往来方在期间内、尚未进过任何对账单的月结账款 */
+export const getStatementCandidatesApi = (p: { type:number; partyName:string; startDate?:string; endDate?:string }) =>
+  client.get<StatementItem[]>('/payments/statements/candidates', { params: p })
+
+export const getStatementDetailApi = (id: number) =>
+  client.get<ReconciliationStatement & { items: StatementItem[] }>(`/payments/statements/${id}`)
+
+export const createStatementApi = (d: {
+  type: 1 | 2; partyName: string; periodStart?: string; periodEnd?: string
+  recordIds: number[]; remark?: string
+}) => client.post<{ id:number; statementNo:string }>('/payments/statements', d)
+
+export const confirmStatementApi = (id: number) => client.post<unknown>(`/payments/statements/${id}/confirm`)
+export const unlockStatementApi  = (id: number) => client.post<unknown>(`/payments/statements/${id}/unlock`)
+export const removeStatementItemApi = (id: number, recordId: number) =>
+  client.delete<unknown>(`/payments/statements/${id}/items/${recordId}`)

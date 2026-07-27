@@ -15,6 +15,48 @@ const vParams = s => (req,res,next) => {
 }
 const idParam = z.object({ id: z.coerce.number().int().positive('id 必须为正整数') })
 
+// ── 收付款单与核销 ──────────────────────────────────────────────────────────
+// 注意：必须注册在 '/:id' 之类的动态路由之前，否则 /receipts 会被当成 id 吃掉。
+// 核销目标二选一：recordId（直接核账款，现结）或 statementId（核对账单，月结）
+const allocationRule = z.array(z.object({
+  recordId: z.number().int().positive().optional(),
+  statementId: z.number().int().positive().optional(),
+  amount: z.number().positive('核销金额必须大于 0'),
+}).refine(a => !!a.recordId !== !!a.statementId, '核销目标必须且只能指定账款或对账单其中之一')).default([])
+
+router.get('/receipts',      requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.receiptList)
+router.get('/receipts/:id',  requirePermission(PERMISSIONS.PAYMENT_VIEW), vParams(idParam), ctrl.receiptDetail)
+router.post('/receipts',     requirePermission(PERMISSIONS.PAYMENT_EXECUTE), vBody(z.object({
+  type: z.number().int().min(1).max(2),
+  partyName: z.string().min(1, '往来方不能为空').max(100),
+  amount: z.number().positive('汇款金额必须大于 0'),
+  paymentDate: z.string().min(1, '请选择汇款日期'),
+  method: z.string().max(50).optional(),
+  // 新单必须指定资金账户，否则账户余额永远不准；历史单的 account_id 留空不回填
+  accountId: z.number().int().positive('请选择收付款账户'),
+  remark: z.string().max(300).optional(),
+  allocations: allocationRule,
+})), ctrl.receiptCreate)
+router.post('/receipts/:id/settle', requirePermission(PERMISSIONS.PAYMENT_EXECUTE), vParams(idParam), vBody(z.object({
+  allocations: allocationRule,
+})), ctrl.receiptSettle)
+
+// ── 汇总对账单（月结）────────────────────────────────────────────────────────
+router.get('/statements',            requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.statementList)
+router.get('/statements/candidates', requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.statementCandidates)
+router.get('/statements/:id',        requirePermission(PERMISSIONS.PAYMENT_VIEW), vParams(idParam), ctrl.statementDetail)
+router.post('/statements',           requirePermission(PERMISSIONS.PAYMENT_EXECUTE), vBody(z.object({
+  type: z.number().int().min(1).max(2),
+  partyName: z.string().min(1, '往来方不能为空').max(100),
+  periodStart: z.string().optional(),
+  periodEnd: z.string().optional(),
+  recordIds: z.array(z.number().int().positive()).min(1, '请至少选择一笔账款'),
+  remark: z.string().max(300).optional(),
+})), ctrl.statementCreate)
+router.post('/statements/:id/confirm', requirePermission(PERMISSIONS.PAYMENT_CONFIRM), vParams(idParam), ctrl.statementConfirm)
+router.post('/statements/:id/unlock',  requirePermission(PERMISSIONS.PAYMENT_CONFIRM), vParams(idParam), ctrl.statementUnlock)
+router.delete('/statements/:id/items/:recordId', requirePermission(PERMISSIONS.PAYMENT_EXECUTE), ctrl.statementRemoveItem)
+
 // 列表（含合计）
 router.get('/', requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.list)
 

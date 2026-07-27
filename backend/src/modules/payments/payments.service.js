@@ -44,7 +44,12 @@ function normalizeSettlementList(input) {
  *        账款页传即时结算三种，对账页传月结，不传则不限。
  * @param keyword         按单号或往来方名称模糊查
  */
-async function findAll({ page = 1, pageSize = 20, type = '', status = '', settlementTypes = null, keyword = '' } = {}) {
+async function findAll({
+  page = 1, pageSize = 20, type = '', status = '', settlementTypes = null, keyword = '',
+  orderNo = '', partyName = '',
+  confirmStatus = '', startDate = '', endDate = '', dueStart = '', dueEnd = '',
+  minAmount = '', maxAmount = '',
+} = {}) {
   const normalizedPage = Number(page) || 1
   const normalizedPageSize = Number(pageSize) || 20
   const offset = (normalizedPage - 1) * normalizedPageSize
@@ -59,11 +64,26 @@ async function findAll({ page = 1, pageSize = 20, type = '', status = '', settle
     conds.push('pr.status=?')
     params.push(Number(status))
   }
+  // keyword 是跨两列的模糊搜索（旧调用方仍在用）；orderNo/partyName 是查询弹窗拆开后的独立条件
   const trimmedKeyword = String(keyword || '').trim()
   if (trimmedKeyword) {
     conds.push('(pr.order_no LIKE ? OR pr.party_name LIKE ?)')
     params.push(`%${trimmedKeyword}%`, `%${trimmedKeyword}%`)
   }
+  const trimmedOrderNo = String(orderNo || '').trim()
+  if (trimmedOrderNo) { conds.push('pr.order_no LIKE ?'); params.push(`%${trimmedOrderNo}%`) }
+  const trimmedParty = String(partyName || '').trim()
+  if (trimmedParty) { conds.push('pr.party_name LIKE ?'); params.push(`%${trimmedParty}%`) }
+  // 查询弹窗的高级条件：确认状态、创建日期区间、到期日区间、金额区间
+  if (confirmStatus !== '' && confirmStatus != null) {
+    conds.push('pr.confirm_status=?'); params.push(Number(confirmStatus))
+  }
+  if (startDate) { conds.push('DATE(pr.created_at)>=?'); params.push(startDate) }
+  if (endDate)   { conds.push('DATE(pr.created_at)<=?'); params.push(endDate) }
+  if (dueStart)  { conds.push('pr.due_date>=?'); params.push(dueStart) }
+  if (dueEnd)    { conds.push('pr.due_date<=?'); params.push(dueEnd) }
+  if (minAmount !== '' && minAmount != null) { conds.push('pr.total_amount>=?'); params.push(Number(minAmount)) }
+  if (maxAmount !== '' && maxAmount != null) { conds.push('pr.total_amount<=?'); params.push(Number(maxAmount)) }
 
   // 读账款自带的结算方式快照，不回溯往来方主数据——改客户类型不影响历史账款归属。
   // query 传进来可能是 '1,3,4' 或数组，统一归一并丢掉非法值。
