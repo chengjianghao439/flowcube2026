@@ -149,7 +149,9 @@ export default defineConfig(({ command }) => {
       },
     },
     server: {
-      port: 5173,
+      // 端口允许被 PORT 覆盖：Claude Code 的 Browser 面板会分配一个空闲端口并以 PORT 传入，
+      // 写死 5173 会让 vite 自行退到 5174 而面板仍指向分配端口，出现「预览页打不开」
+      port: Number(process.env.PORT) || 5173,
       host: true,
       proxy: {
         '/api': devProxyToBackend(DEV_API_TARGET),

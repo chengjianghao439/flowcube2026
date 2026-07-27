@@ -46,7 +46,7 @@ flowcube/
 │       ├── scheduler.js            仅启动 operation_requests TTL 清理
 │       ├── config/                 db.js（连接池）、env.js（环境变量校验，生产缺项直接拒启动）
 │       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / permissions
-│       ├── database/               132 个 .sql 迁移 + migrate.js
+│       ├── database/               145 个 .sql 迁移 + migrate.js
 │       ├── engine/                 containerEngine / inventoryEngine / reservationEngine ← 库存唯一合法入口
 │       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger
 │       ├── modules/                43 个业务模块，统一 routes → controller → service
@@ -82,6 +82,7 @@ npm run smoke:concurrency-guards
 npm run smoke:sale-adjustment
 npm run smoke:p0-regression
 npm run smoke:p1-regression
+npm run smoke:finance           # 财务：收款核销 / 对账单 / 资金账户 / 费用报销
 npm run test:integration        # 库存一致性集成测试（独立测试库）
 ```
 
@@ -122,13 +123,17 @@ npm --prefix desktop start
 
 - `backend-dev`（3000）、`frontend-dev`（5173，Electron target）、`frontend-pda-dev`（5173，PDA target）、`frontend-dev-prod-api`（前端本地 + 后端指向生产）
 
-两个都起完后把 `http://localhost:5173` 给用户。本机 MySQL（`backend/.env` 中 `DB_HOST=127.0.0.1`，真实库非 mock）里有固定的 `admin` 测试账号（密码不写入本文档，向用户确认）。
+起完后把 Browser 面板给出的地址（`preview_start` 返回的端口，5173 被占时会另分配）交给用户。本机 MySQL（`backend/.env` 中 `DB_HOST=127.0.0.1`，真实库非 mock）里有固定的 `admin` 测试账号（密码不写入本文档，向用户确认）。
 
-**登录这一步必须由用户本人完成**：AI 助手不能代为在密码框输入口令（属于其系统级安全约束，本文档无法豁免——写进来也不会生效）。因此需要「登录后才能看到的页面」时，标准流程是：助手起好服务、把标签页停在登录页，请用户在 Browser 面板里手动登录一次，之后同一会话的后续验证（截图、点选、读页面）都能正常继续。不要为了绕开这一步去改代码临时关掉鉴权。
+**登录这一步必须由用户本人完成**：AI 助手不能代为在密码框输入口令（属于其系统级安全约束，本文档无法豁免——写进来也不会生效）。因此需要「登录后才能看到的页面」时，标准流程是：助手起好服务、把标签页停在登录页，请用户在 Browser 面板里手动登录一次。不要为了绕开这一步去改代码临时关掉鉴权。
 
-- 后端重启会使 JWT 失效，需重新登录；前端 HMR 一般不需要。
-- **验证完不要 `preview_stop`**——用户可能正在自己的浏览器里用着同一个开发服务器。
-- 验证 PDA 页面必须 `tabs_create` 开新标签页：`CrossClientNavigationGuard` 会拦截同标签页内 ERP ↔ PDA 互跳。
+**用户只需登录一次**：本地 dev（且后端也在本机）时登录态存 `localStorage` 而非 `sessionStorage`，见 `authStore.ts` 的 `USE_PERSISTENT_DEV_SESSION`。同一端口下，新开标签页（含 PDA 验证必须新开的那个）、刷新、重启 dev server、跨会话都保持登录（JWT 有效期 7 天）。**端口变了就是另一个 origin，localStorage 不共享，要重登一次**——所以 5173 被别的会话占用而 `preview_start` 换了端口时，别指望旧登录态还在。
+
+开关由 `vite.config.ts` 的 `__DEV_LOCAL_BACKEND__` 注入，**只有 `command === 'serve'` 且代理目标是 localhost 才为 true**；生产产物与 `frontend-dev-prod-api`（连线上后端）恒为 false，走原来的 sessionStorage，并在启动时清掉 localStorage 里可能残留的会话。改这段逻辑等于动生产的鉴权存储，务必保持这条边界。
+
+- 后端重启不会使登录态失效（`JWT_SECRET` 固定在 `backend/.env`，`token_version` 只在改密码/禁用用户时变）；过期或被顶下线时前端会自动跳回登录页。
+- **验证完不要 `preview_stop`**——用户可能正在自己的浏览器里用着同一个开发服务器。端口被别的会话占用时 `preview_start` 会自动换端口（`server.port` 读 `PORT`），不要去 kill 别人的进程。
+- 验证 PDA 页面必须 `tabs_create` 开新标签页：`CrossClientNavigationGuard` 会拦截同标签页内 ERP ↔ PDA 互跳。新标签页现在会自动带上登录态。
 
 ---
 
@@ -241,8 +246,8 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 
 ## 8. 数据库与核心模型
 
-- 74 张表（含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。
-- 迁移：`backend/src/database/` 下 132 个 `.sql`，编号 001–132（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**部署前必须显式 `npm run migrate`，启动不会自动迁移。**
+- 81 张表（含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。
+- 迁移：`backend/src/database/` 下 145 个 `.sql`，编号 001–145（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**部署前必须显式 `npm run migrate`，启动不会自动迁移。**
 - ⚠️ **数据库里的 `COLUMN_COMMENT` 有不少已过期**（例如 `sale_orders.status` 注释写"1草稿 2已确认 3已出库 4已取消"、`warehouse_tasks.status` 注释写"1待分配 2备货中…"、`sale_orders.closed_reason` 提到的 `partial_ship_close` 已被迁移 127 废弃）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
 
 核心事实表 / 派生字段：
@@ -339,7 +344,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 
 - 双路由树（`src/router/index.tsx`，HashRouter）：ERP `/*` → `ErpProtectedRoute` → `AppLayout`（多标签工作区）；PDA `/pda/*` → `PdaProtectedRoute` → `PdaLayout`。`CrossClientNavigationGuard` 禁止同一标签页在 ERP 与 PDA 之间跳转。
 - **新增 ERP 页面的标准步骤**：① `src/pages/xxx/index.tsx` ② 在 `src/router/routeRegistry.ts` 追加 `routeRegistry`（含 `permission`、`keepAlive`、`tabIdentity`、`nav.group/order`）或 `routePatterns`（详情/表单页，带 `listPath`）③ 需要新权限时**同时**改后端 `permissions.js`、前端 `permission-codes.ts`，并加一条 seed 迁移把权限授予相应角色。菜单由 `buildTopNavSections()` 自动生成，不要手写菜单。
-- 状态：**Zustand** 只存会话级全局态（`authStore` 存 sessionStorage，关窗即失效；`workspaceStore` 标签页；`dirtyGuardStore`）；**React Query** 管所有服务端数据。
+- 状态：**Zustand** 只存会话级全局态（`authStore` 存 sessionStorage、关窗即失效，**本地 dev 连本机后端时例外**，见第 5 节；`workspaceStore` 标签页；`dirtyGuardStore`）；**React Query** 管所有服务端数据。
 - **API 一律经 `src/api/*.ts` + `payloadClient`**（自动解信封）。不要在组件里直接 `axios`。需要自行处理错误时传 `{ skipGlobalError: true }`，否则拦截器会弹全局 toast；401 自动登出。
 - 状态常量用 `src/generated/status.ts`（由 `npm run generate:status` 从后端常量生成，**不要手改**）。
 - **状态徽章全站唯一写法**：任何「状态」展示（单据状态、任务状态、启用停用、打印结果、分类标识）一律用 `components/shared/StatusBadge` 的 `<SoftStatusLabel label tone>` 或 `<StatusBadge type status>`，tone 取自 `lib/statusTone.ts` 的 6 档：`draft`（草稿/停用/空闲）、`active`（进行中）、`success`（完成/启用）、`warning`（在途/待确认/超时）、`danger`（取消/失败/逾期）、`info`（类型/角色/等级等分类标识）。**禁止**直接写 `<Badge variant="default|secondary|destructive">` 当状态用，**禁止**硬编码 `bg-green-50`/`bg-blue-100` 这类调色板 class。语义色 `success`/`warning`/`info` 已注册进 `tailwind.config.js` 的 theme，`bg-*/10`、`border-*/20` 才会生成——不要退回 `index.css` 手写 utility 的老路（那样 `border-success/20` 会静默失效）。
@@ -384,7 +389,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 - 桌面更新源：`/var/www/flowcube-downloads/latest.json`（顶层唯一权威入口，由 `scripts/release-desktop.js` 写入）；`current/` 只放固定文件名的当前安装包；`/downloads` 是**已废弃**的兼容别名（仅 GET/HEAD）。
 - 应急手动部署：`ssh flowcube-prod 'cd /opt/flowcube && SKIP_RELEASE_GATE=1 bash scripts/server-update.sh'`。
 - 其他运维脚本：`scripts/backup-db.sh`（每日 02:00 容器内 mysqldump，保留 14 天）、`scripts/monitor.sh`（5 分钟健康检查 + 每日心跳，钉钉告警）、`scripts/release-gate.sh`（服务器端发布门禁）。
-- CI 门禁 `test.yml`：纯函数单测 + 在临时 MySQL 上跑 migrate + `smoke:mainline` / `concurrency-guards` / `sale-adjustment` / `p0-regression` / `p1-regression` + `test:integration`。**绝不连接生产库。**
+- CI 门禁 `test.yml`：纯函数单测 + 在临时 MySQL 上跑 migrate + `smoke:mainline` / `concurrency-guards` / `sale-adjustment` / `p0-regression` / `p1-regression` / `warehouse-scope` / `pda-device-session` / `finance` + `test:integration`。**绝不连接生产库。**
 
 ---
 
@@ -422,6 +427,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 - [ ] `npm --prefix backend run lint` / `npm --prefix frontend run lint`
 - [ ] `./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit`（**不要用 tsconfig.json，那是空壳，永远 0 错误**）
 - [ ] 涉及后端逻辑：`npm run smoke:mainline`、`smoke:concurrency-guards`、`smoke:p0-regression`、`smoke:p1-regression`、`test:integration`（本机有真实 MySQL，可直接跑）
+- [ ] 涉及账款/资金账户/报销：`npm run smoke:finance`
 - [ ] 涉及打印/标签：`npm run test:label`、`npm run test:print`
 - [ ] 涉及前端页面：用 `preview_start` 起本地服务实际点一遍（PDA 页面记得开新标签页）
 - [ ] 状态机改了：`WT_ON_ENTER/EXIT_ACTIONS` 注释表、`documentStatusRules.js` 是否同步
