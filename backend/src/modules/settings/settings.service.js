@@ -12,10 +12,26 @@ async function getValue(key) {
   return row?.value ?? null
 }
 
+/**
+ * 批量保存设置项。必须在事务里：这是「一个表单一次提交」的语义，
+ * 逐条裸更新时中途失败会存下半套设置——用户看到的是保存失败，实际前几项已经生效了。
+ */
 async function updateMany(updates) {
   // updates: { key_name: new_value, ... }
-  for (const [key, value] of Object.entries(updates)) {
-    await pool.query('UPDATE sys_settings SET value=? WHERE key_name=?', [value, key])
+  const entries = Object.entries(updates || {})
+  if (!entries.length) return
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    for (const [key, value] of entries) {
+      await conn.query('UPDATE sys_settings SET value=? WHERE key_name=?', [value, key])
+    }
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
   }
 }
 

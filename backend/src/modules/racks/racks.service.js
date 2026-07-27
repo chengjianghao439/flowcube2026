@@ -83,20 +83,29 @@ async function create(data) {
   )
   if (exists) throw new AppError(`货架编码 ${code} 已存在`, 400)
 
-  const [result] = await pool.query(
-    `INSERT INTO warehouse_racks (warehouse_id, zone, code, name, max_levels, max_positions, remark)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [warehouseId, zone, code, name, maxLevels, maxPositions, remark || null],
-  )
-  const newId = result.insertId
-  const barcode = makeRackBarcode(newId)
+  // 与 locations.create 同构：barcode 由自增 id 生成，只能先 INSERT 再回填，
+  // 两步必须同事务——中间失败会留下一条没有条码的货架，PDA 扫不到它且没有任何报错，
+  // 要等仓库现场扫不出来才发现。
+  const conn = await pool.getConnection()
+  let newId
   try {
-    await pool.query('UPDATE warehouse_racks SET barcode = ? WHERE id = ?', [barcode, newId])
+    await conn.beginTransaction()
+    const [result] = await conn.query(
+      `INSERT INTO warehouse_racks (warehouse_id, zone, code, name, max_levels, max_positions, remark)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [warehouseId, zone, code, name, maxLevels, maxPositions, remark || null],
+    )
+    newId = result.insertId
+    await conn.query('UPDATE warehouse_racks SET barcode = ? WHERE id = ?', [makeRackBarcode(newId), newId])
+    await conn.commit()
   } catch (e) {
+    await conn.rollback()
     if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column ['`]?barcode/i.test(String(e.message))) {
       throw new AppError('数据库缺少货架条码字段，请先执行迁移 backend/src/database/051_warehouse_racks_barcode.sql', 503)
     }
     throw e
+  } finally {
+    conn.release()
   }
   return findById(newId)
 }
