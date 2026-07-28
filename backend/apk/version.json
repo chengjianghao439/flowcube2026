@@ -1,7 +1,7 @@
 {
-  "version": "0.4.34",
-  "versionCode": 34,
+  "version": "0.4.35",
+  "versionCode": 35,
   "filename": "app-release.apk",
-  "releaseNote": "- 销售退货后再次发货时，应收不再被算回全额（退货冲减不再被吞掉，客户不会被多计应收）",
-  "publishedAt": "2026-07-28T13:26:09.768Z"
+  "releaseNote": "- 随系统同步版本；本版为 ERP 财务模块更新，PDA 端无功能变化",
+  "publishedAt": "2026-07-28T21:34:13.247Z"
 }

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, forwardRef, useImperativeHandle } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
+import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,6 +28,15 @@ const money = (n: number) => `¥${Number(n).toFixed(2)}`
 interface Props {
   /** 1=供应商对账（应付）2=客户对账（应收） */
   type: 1 | 2
+  /** 隐藏面板自带工具条按钮，交由父级 PageHeader 渲染（与「全部账款」tab 对齐）；筛选标签仍留在面板内 */
+  hideToolbar?: boolean
+}
+
+/** 父级（PageHeader）驱动面板动作的句柄 */
+export interface StatementPanelHandle {
+  openQuery: () => void
+  openCreate: () => void
+  exportExcel: () => void
 }
 
 /**
@@ -37,7 +46,9 @@ interface Props {
  * 已确认的单可以解锁回草稿继续改，但**已核销过的不允许解锁**——服务端也会拦，
  * 否则改完明细后已收的钱对不上任何账款。
  */
-export function StatementPanel({ type }: Props) {
+export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function StatementPanel(
+  { type, hideToolbar = false }, ref,
+) {
   const qc = useQueryClient()
   const isPayable = type === 1
   const partyLabel = isPayable ? '供应商' : '客户'
@@ -80,6 +91,15 @@ export function StatementPanel({ type }: Props) {
     qc.invalidateQueries({ queryKey: ['reconciliation'] })
   }
 
+  const handleExport = () => downloadExport('/export/statements', exportParams)
+    .catch(e => toast.error((e as Error).message))
+  // 工具条按钮被父级挪进 PageHeader 后，通过 ref 触发面板内部的查询/新建/导出
+  useImperativeHandle(ref, () => ({
+    openQuery: () => setQueryOpen(true),
+    openCreate: () => setCreateOpen(true),
+    exportExcel: handleExport,
+  }))
+
   const confirmMut = useMutation({
     mutationFn: (id: number) => confirmStatementApi(id),
     onSuccess: () => { invalidate(); toast.success('对账单已确认，可导出发对方核对') },
@@ -111,47 +131,41 @@ export function StatementPanel({ type }: Props) {
     { key: 'status', title: '状态', width: 90, render: (v, row) => (
       <SoftStatusLabel label={(row as ReconciliationStatement).statusName} tone={ST_TONE[v as number] ?? 'draft'} />
     )},
-    { key: 'id', title: '操作', width: 190, render: (_, row) => {
+    { key: 'id', title: '操作', width: 130, render: (_, row) => {
       const r = row as ReconciliationStatement
-      return (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => setDetailId(r.id)}>明细</Button>
-          {r.status !== 1 && (
-            <Button size="sm" variant="outline"
-              onClick={() => downloadExport(`/export/statements/${r.id}`, {}).catch(e => toast.error((e as Error).message))}>
-              导出对账单
-            </Button>
-          )}
-          {r.status === 1 && (
-            <Button size="sm" onClick={() => confirmMut.mutate(r.id)} disabled={confirmMut.isPending}>确认</Button>
-          )}
-          {r.status === 2 && r.settledAmount === 0 && (
-            <Button size="sm" variant="ghost" onClick={() => unlockMut.mutate(r.id)} disabled={unlockMut.isPending}>
-              解锁
-            </Button>
-          )}
-        </div>
+      // 与「按单登记」tab 一致：主按钮 + 下拉次操作，随状态变化
+      const items: TableActionItem[] = [{ label: '明细', onClick: () => setDetailId(r.id) }]
+      if (r.status === 2 && r.settledAmount === 0) {
+        items.push({ label: '解锁', onClick: () => unlockMut.mutate(r.id), disabled: unlockMut.isPending })
+      }
+      // 草稿：主操作=确认；已确认/已核销：主操作=导出对账单发对方
+      return r.status === 1 ? (
+        <TableActionsMenu primaryLabel="确认" onPrimaryClick={() => confirmMut.mutate(r.id)} primaryDisabled={confirmMut.isPending} items={items} />
+      ) : (
+        <TableActionsMenu
+          primaryLabel="导出对账单"
+          primaryVariant="outline"
+          onPrimaryClick={() => downloadExport(`/export/statements/${r.id}`, {}).catch(e => toast.error((e as Error).message))}
+          items={items}
+        />
       )
     }},
   ]
 
   return (
     <div className="space-y-4">
-      <FilterCard>
-        <PaymentQueryBar
-          query={query}
-          onChange={setQuery}
-          onOpen={() => setQueryOpen(true)}
-          labels={queryLabels}
-        />
-        <div className="ml-auto flex gap-2">
-          <Button variant="outline" onClick={() => downloadExport('/export/statements', exportParams)
-            .catch(e => toast.error((e as Error).message))}>
-            导出汇总
-          </Button>
-          <Button onClick={() => setCreateOpen(true)}>新建对账单</Button>
+      {hideToolbar ? (
+        <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
+          <div className="ml-auto flex gap-2">
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button variant="outline" onClick={handleExport}>导出汇总</Button>
+            <Button onClick={() => setCreateOpen(true)}>新建对账单</Button>
+          </div>
         </div>
-      </FilterCard>
+      )}
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
 
@@ -161,6 +175,7 @@ export function StatementPanel({ type }: Props) {
         onClose={() => setQueryOpen(false)}
         onApply={setQuery}
         labels={queryLabels}
+        partyType={type}
         statusOptions={[['1','草稿'],['2','已确认'],['3','已核销']] as const}
       />
 
@@ -235,7 +250,7 @@ export function StatementPanel({ type }: Props) {
       </Dialog>
     </div>
   )
-}
+})
 
 /** 新建对账单：选往来方 + 期间 → 勾选待对账账款 */
 function CreateStatementDialog({ open, onClose, type, onCreated }: {

@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, forwardRef, useImperativeHandle } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -25,6 +25,19 @@ interface Props {
   settlementTypes: string
   /** 核销目标：现结页核账款，月结页核已确认的对账单 */
   target?: 'record' | 'statement'
+  /**
+   * 隐藏面板自带的工具条按钮（查询/导出/登记），交由父级在其 PageHeader 里渲染——
+   * 让「收款核销」tab 的按钮与「按单登记」tab 一样落在页面右上角、与标题对齐。
+   * 只影响按钮位置；筛选标签仍留在面板内。父级通过 ref 触发这三个动作。
+   */
+  hideToolbar?: boolean
+}
+
+/** 父级（PageHeader）驱动面板动作的句柄：把工具条按钮挪出去后，用它触发面板内部的查询/登记/导出 */
+export interface ReceiptPanelHandle {
+  openQuery: () => void
+  openRegister: () => void
+  exportExcel: () => void
 }
 
 /**
@@ -33,7 +46,9 @@ interface Props {
  * 四个账款/对账页面共用。汇款单本身不分现结月结（一个往来方只会是其中一类），
  * 但新建核销时可选的账款会按 settlementTypes 限定在本页范围内。
  */
-export function ReceiptPanel({ type, settlementTypes, target = 'record' }: Props) {
+export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function ReceiptPanel(
+  { type, settlementTypes, target = 'record', hideToolbar = false }, ref,
+) {
   const isPayable = type === 1
   const actionLabel = isPayable ? '付款' : '收款'
   const partyLabel = isPayable ? '供应商' : '客户'
@@ -71,6 +86,15 @@ export function ReceiptPanel({ type, settlementTypes, target = 'record' }: Props
     enabled: detailId != null,
   })
 
+  const handleExport = () => downloadExport('/export/payment-receipts', exportParams)
+    .catch(e => toast.error((e as Error).message))
+  // 工具条按钮被父级挪进 PageHeader 后，通过 ref 触发面板内部的查询/登记/导出
+  useImperativeHandle(ref, () => ({
+    openQuery: () => setQueryOpen(true),
+    openRegister: () => { setContinueTarget(null); setFormOpen(true) },
+    exportExcel: handleExport,
+  }))
+
   const columns: TableColumn<PaymentReceipt>[] = [
     { key: 'receiptNo', title: '单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'partyName', title: partyLabel, width: 160 },
@@ -85,36 +109,35 @@ export function ReceiptPanel({ type, settlementTypes, target = 'record' }: Props
     { key: 'paymentDate', title: '日期', width: 110, render: v => v ? formatDisplayDate(String(v)) : '-' },
     { key: 'method', title: '方式', width: 80, render: v => (v as string) || '-' },
     { key: 'operatorName', title: '经办人', width: 90, render: v => (v as string) || '-' },
-    { key: 'id', title: '操作', width: 150, render: (_, row) => {
+    { key: 'id', title: '操作', width: 120, render: (_, row) => {
       const r = row as PaymentReceipt
-      return (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setDetailId(r.id)}>明细</Button>
-          {r.balance > 0 && (
-            <Button size="sm" onClick={() => { setContinueTarget(r); setFormOpen(true) }}>继续核销</Button>
-          )}
-        </div>
+      // 与「按单登记」tab 一致：主按钮 + 下拉次操作（有余额→继续核销为主、明细进下拉；已核销完→只有明细）
+      return r.balance > 0 ? (
+        <TableActionsMenu
+          primaryLabel="继续核销"
+          onPrimaryClick={() => { setContinueTarget(r); setFormOpen(true) }}
+          items={[{ label: '明细', onClick: () => setDetailId(r.id) }]}
+        />
+      ) : (
+        <TableActionsMenu primaryLabel="明细" primaryVariant="outline" onPrimaryClick={() => setDetailId(r.id)} items={[]} />
       )
     }},
   ]
 
   return (
     <div className="space-y-4">
-      <FilterCard>
-        <PaymentQueryBar
-          query={query}
-          onChange={setQuery}
-          onOpen={() => setQueryOpen(true)}
-          labels={queryLabels}
-        />
-        <div className="ml-auto flex gap-2">
-          <Button variant="outline" onClick={() => downloadExport('/export/payment-receipts', exportParams)
-            .catch(e => toast.error((e as Error).message))}>
-            导出 Excel
-          </Button>
-          <Button onClick={() => { setContinueTarget(null); setFormOpen(true) }}>登记{actionLabel}</Button>
+      {hideToolbar ? (
+        <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
+          <div className="ml-auto flex gap-2">
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button variant="outline" onClick={handleExport}>导出 Excel</Button>
+            <Button onClick={() => { setContinueTarget(null); setFormOpen(true) }}>登记{actionLabel}</Button>
+          </div>
         </div>
-      </FilterCard>
+      )}
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
 
@@ -124,6 +147,7 @@ export function ReceiptPanel({ type, settlementTypes, target = 'record' }: Props
         onClose={() => setQueryOpen(false)}
         onApply={setQuery}
         labels={queryLabels}
+        partyType={type}
         statusOptions={[['1','待核销'],['2','部分核销'],['3','已核销']] as const}
       />
 
@@ -182,4 +206,4 @@ export function ReceiptPanel({ type, settlementTypes, target = 'record' }: Props
       </Dialog>
     </div>
   )
-}
+})

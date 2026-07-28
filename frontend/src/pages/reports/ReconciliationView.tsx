@@ -1,20 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
+import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDateTime } from '@/lib/dateTime'
-import { getRelativeDateRange } from '@/lib/dateRange'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getReconciliationApi, type ReconciliationRecord } from '@/api/reports'
-import { ReceiptPanel } from '@/components/shared/ReceiptPanel'
-import { StatementPanel } from '@/components/shared/StatementPanel'
+import { ReceiptPanel, type ReceiptPanelHandle } from '@/components/shared/ReceiptPanel'
+import { StatementPanel, type StatementPanelHandle } from '@/components/shared/StatementPanel'
 import { PaymentQueryDialog, PaymentQueryBar, EMPTY_PAYMENT_QUERY, type PaymentQueryValues } from '@/components/shared/PaymentQueryDialog'
 import { SETTLEMENT_TYPE } from '@/generated/status'
 import type { TableColumn } from '@/types'
@@ -62,12 +61,12 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   const copy = COPY[type]
   // 第一期：对账明细 + 收款核销。第二期会把「对账明细」换成汇总对账单。
   const [tab, setTab] = useState<'statements' | 'receipts' | 'records'>('statements')
-  const recent30d = getRelativeDateRange(30)
-  // 查询条件统一收在弹窗里；默认带近 30 天，避免一进来就拉全量历史账
-  const [query, setQuery] = useState<PaymentQueryValues>({
-    ...EMPTY_PAYMENT_QUERY, startDate: recent30d.startDate, endDate: recent30d.endDate,
-  })
+  // 查询条件统一收在弹窗里；不设默认日期，进来即全量（可在查询弹窗里自行按日期筛）
+  const [query, setQuery] = useState<PaymentQueryValues>(EMPTY_PAYMENT_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
+  // 汇总对账 / 核销 tab 的动作按钮挪到本页 PageHeader（与「全部账款」tab 对齐），通过 ref 驱动面板
+  const statementRef = useRef<StatementPanelHandle>(null)
+  const receiptRef = useRef<ReceiptPanelHandle>(null)
   const queryLabels = {
     docLabel: '关联单号',
     partyLabel: copy.party,
@@ -127,44 +126,44 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   const columns: TableColumn<ReconciliationRecord>[] = [
     { key: 'orderNo', title: '关联单号', width: 170, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'partyName', title: copy.party, width: 160 },
-    { key: 'sourceOrderNo', title: '源单号', width: 170, render: (v, row) => (
-      <div className="space-y-0.5">
-        <div className="text-doc-code-muted">{String(v)}</div>
-        {row.receiptTaskNo && <div className="text-xs text-muted-foreground">收货单 {row.receiptTaskNo}</div>}
-      </div>
-    )},
+    // 中间的源单号/收货单列已删：源单号与关联单号(采购单/销售单号)几乎总是重复，收货单又多为空；
+    // 供应商与客户对账都不再显示中间列，源单/收货单一律从操作列「原单」下拉进入。
     { key: 'totalAmount', title: '总金额', width: 110, render: v => <span className="tabular-nums font-medium">¥{Number(v).toFixed(2)}</span> },
     { key: 'paidAmount', title: copy.paidCol, width: 110, render: v => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
     { key: 'balance', title: '余额', width: 110, render: v => <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
     { key: 'status', title: '状态', width: 120, render: (v, row) => {
       const record = row as ReconciliationRecord
       const overdue = isOverdue(record)
+      // 逾期本身就表示未结清：status=1（未付/未收）且逾期时只显示「已逾期」，不再叠加「未付」；
+      // 部分付/部分收仍保留（它比逾期多一层信息）
+      const hideBase = overdue && Number(v) === 1
       return (
         <div className="flex flex-wrap items-center gap-1.5">
-          <SoftStatusLabel
-            label={record.statusName}
-            tone={Number(v) === 3 ? 'success' : Number(v) === 2 ? 'active' : 'draft'}
-          />
-          {overdue && <SoftStatusLabel label="逾期" tone="danger" />}
+          {!hideBase && (
+            <SoftStatusLabel
+              label={record.statusName}
+              tone={Number(v) === 3 ? 'success' : Number(v) === 2 ? 'active' : 'draft'}
+            />
+          )}
+          {overdue && <SoftStatusLabel label="已逾期" tone="danger" />}
         </div>
       )
     } },
     { key: 'dueDate', title: '到期日', width: 120, render: v => v ? String(v) : <span className="text-muted-foreground">-</span> },
     { key: 'createdAt', title: '创建时间', width: 160, render: v => formatDisplayDateTime(String(v)) },
-    { key: 'id', title: '操作', width: 160, render: (_, row) => {
+    { key: 'id', title: '操作', width: 120, render: (_, row) => {
       const r = row as ReconciliationRecord
+      // 与其他页面一致：主按钮 + 下拉次操作。月结不做单笔登记，这里只有单据跳转
+      const items: TableActionItem[] = []
+      if (r.receiptPath) items.push({ label: '收货单', onClick: () => openPath(r.receiptPath, `收货单 ${r.receiptTaskNo}`) })
       return (
-        <div className="flex flex-wrap items-center gap-2">
-          {/* 月结不做单笔登记：收付款一律走「汇总对账 → 收款核销」，口径统一、账目清楚 */}
-          <Button size="sm" variant="ghost" onClick={() => openPath(r.sourcePath, `原单 ${r.sourceOrderNo}`)} disabled={!r.sourcePath}>
-            原单
-          </Button>
-          {r.receiptPath && (
-            <Button size="sm" variant="ghost" onClick={() => openPath(r.receiptPath, `收货单 ${r.receiptTaskNo}`)}>
-              收货单
-            </Button>
-          )}
-        </div>
+        <TableActionsMenu
+          primaryLabel="原单"
+          primaryVariant="outline"
+          primaryDisabled={!r.sourcePath}
+          onPrimaryClick={() => openPath(r.sourcePath, `原单 ${r.sourceOrderNo}`)}
+          items={items}
+        />
       )
     } },
   ]
@@ -176,15 +175,26 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
         description={copy.description}
         actions={(
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => downloadExport('/export/reconciliation', exportParams).catch(e => toast.error((e as Error).message))}
-            >
-              导出 Excel
-            </Button>
-            <Button variant="outline" onClick={() => openPath(copy.payPath, copy.payTitle)}>
-              打开{copy.payTitle}
-            </Button>
+            {/* 每个 tab 的动作按钮都落在右上角 PageHeader，跨 tab 位置一致 */}
+            {tab === 'statements' && (<>
+              <Button variant="outline" onClick={() => statementRef.current?.openQuery()}>查询</Button>
+              <Button variant="outline" onClick={() => statementRef.current?.exportExcel()}>导出汇总</Button>
+              <Button onClick={() => statementRef.current?.openCreate()}>新建对账单</Button>
+            </>)}
+            {tab === 'receipts' && (<>
+              <Button variant="outline" onClick={() => receiptRef.current?.openQuery()}>查询</Button>
+              <Button variant="outline" onClick={() => receiptRef.current?.exportExcel()}>导出 Excel</Button>
+              <Button onClick={() => receiptRef.current?.openRegister()}>登记{type === 1 ? '付款' : '收款'}</Button>
+            </>)}
+            {tab === 'records' && (<>
+              <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+              <Button
+                variant="outline"
+                onClick={() => downloadExport('/export/reconciliation', exportParams).catch(e => toast.error((e as Error).message))}
+              >
+                导出 Excel
+              </Button>
+            </>)}
           </div>
         )}
       />
@@ -206,18 +216,11 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
         ))}
       </div>
 
-      {tab === 'statements' && <StatementPanel type={type} />}
-      {tab === 'receipts' && <ReceiptPanel type={type} settlementTypes={MONTHLY_SCOPE} target="statement" />}
+      {tab === 'statements' && <StatementPanel ref={statementRef} type={type} hideToolbar />}
+      {tab === 'receipts' && <ReceiptPanel ref={receiptRef} type={type} settlementTypes={MONTHLY_SCOPE} target="statement" hideToolbar />}
 
       {tab === 'records' && (<>
-      <FilterCard>
-        <PaymentQueryBar
-          query={query}
-          onChange={setQuery}
-          onOpen={() => setQueryOpen(true)}
-          labels={queryLabels}
-        />
-      </FilterCard>
+      <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
 
       <PaymentQueryDialog
         open={queryOpen}
@@ -225,6 +228,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
         onClose={() => setQueryOpen(false)}
         onApply={setQuery}
         labels={queryLabels}
+        partyType={type}
         statusOptions={copy.statusOptions}
         showDueDate
       />

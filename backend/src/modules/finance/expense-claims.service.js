@@ -94,11 +94,15 @@ async function create({ title, items = [], remark }, operator) {
   }
 }
 
-async function update(id, { title, items, remark }) {
+async function update(id, { title, items, remark }, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'expense_claims', id, columns: 'id, status', entityName: '费用报销单' })
+    const row = await lockStatusRow(conn, { table: 'expense_claims', id, columns: 'id, status, applicant_id', entityName: '费用报销单' })
+    // 归属校验与 withdraw/cancel 一致：仅申请人本人（或超管）可编辑，避免持 UPDATE 权限者改他人草稿
+    if (Number(operator?.roleId) !== 1 && Number(row.applicant_id) !== Number(operator?.operatorId)) {
+      throw new AppError('只能编辑本人提交的报销单', 403)
+    }
     assertStatusAction('expenseClaim', 'edit', row.status)
     await conn.query('UPDATE expense_claims SET title=?,remark=? WHERE id=?', [title || null, remark || null, id])
     if (Array.isArray(items)) {
@@ -138,7 +142,8 @@ async function transition(id, action, extraSql = null, extraParams = []) {
   }
 }
 
-async function submit(id) {
+async function submit(id, operator) {
+  await assertClaimOwner(id, operator) // 仅本人（或超管）可提交，与 withdraw/cancel 一致
   const [[row]] = await pool.query('SELECT total_amount FROM expense_claims WHERE id=? AND deleted_at IS NULL', [id])
   if (!row) throw new AppError('费用报销单不存在', 404)
   if (Number(row.total_amount) <= 0) throw new AppError('报销金额为 0，请先填写费用明细', 400)

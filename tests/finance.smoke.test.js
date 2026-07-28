@@ -34,6 +34,7 @@ const APPROVER_USER = 'smoke_finance_approver'
 const APPROVER_PW = 'SmokeFinance123!'
 
 const today = () => new Date().toISOString().slice(0, 10)
+const dateOffset = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10) }
 const money = n => Number(Number(n).toFixed(2))
 
 /** 审批人：报销的内控要求「审批人 ≠ 申请人」，因此必须有第二个账号 */
@@ -646,6 +647,73 @@ async function scenarioExpenseClaim(ctx, log, token, approverToken, accountId, a
     `applicant=${claim0.applicant_id} expected=${applicantId}`)
 }
 
+// ── 6b. 登记付款：浮点尾款结清 / 幂等去重 ─────────────────────────────────────
+
+async function scenarioRecordPayment(ctx, log, token) {
+  log.section('登记付款：浮点尾款结清 / 幂等去重')
+  const { http, pool } = ctx
+  const party = randomRef('直付客户')
+
+  // 浮点尾款：299.70 分两笔 199.80 + 99.90。JS 里 199.80+99.90=299.70000000000005，
+  // 严格 > 会把合法尾款误拒；容差修复(+1e-6)后应能结清。
+  const rec = await seedRecord(http, token, pool, { type: 2, partyName: party, amount: 299.70 })
+  const p1 = await http.post(`/api/payments/${rec}/pay`, { token, json: { amount: 199.80, paymentDate: today() } })
+  log.assert('首笔部分收款成功', p1.ok, `status=${p1.status} ${JSON.stringify(p1.data?.message || '')}`)
+  const p2 = await http.post(`/api/payments/${rec}/pay`, { token, json: { amount: 99.90, paymentDate: today() } })
+  log.assert('★ 浮点尾款 99.90 能被接受（严格 > 会误拒）', p2.ok, `status=${p2.status} ${JSON.stringify(p2.data?.message || '')}`)
+  const r0 = await getRecord(pool, rec)
+  log.assert('★ 尾款付清后 status=已收清、balance=0（不卡在部分付）',
+    Number(r0.status) === 3 && money(r0.balance) === 0, `status=${r0.status} balance=${r0.balance}`)
+
+  // 幂等：同一 X-Request-Key 连发两次，只登记一次
+  const rec2 = await seedRecord(http, token, pool, { type: 2, partyName: party, amount: 500 })
+  const key = randomRef('KEY')
+  const body = { amount: 200, paymentDate: today() }
+  const f1 = await http.post(`/api/payments/${rec2}/pay`, { token, headers: { 'X-Request-Key': key }, json: body })
+  const f2 = await http.post(`/api/payments/${rec2}/pay`, { token, headers: { 'X-Request-Key': key }, json: body })
+  log.assert('首次登记成功', f1.ok, `status=${f1.status}`)
+  log.assert('重放请求返回成功（原响应）', f2.ok, `status=${f2.status}`)
+  const r1 = await getRecord(pool, rec2)
+  log.assert('★ 幂等：连发两次只登记一次（paid=200 而非 400）',
+    money(r1.paid_amount) === 200 && money(r1.balance) === 300, `paid=${r1.paid_amount} balance=${r1.balance}`)
+  const entries = await dbQuery(pool, 'SELECT COUNT(*) AS n FROM payment_entries WHERE record_id=?', [rec2])
+  log.assert('★ 只落一条付款流水', Number(entries[0].n) === 1, `entries=${entries[0].n}`)
+}
+
+// ── 6c. 账龄分析 ──────────────────────────────────────────────────────────────
+
+async function scenarioAging(ctx, log, token) {
+  log.section('账龄分析：分桶敞口 / Top 往来方')
+  const { http } = ctx
+  const party = randomRef('账龄客户')
+
+  const before = await http.get('/api/payments/aging?topLimit=2000', { token })
+  log.assert('账龄接口可访问', before.ok, `status=${before.status}`)
+  const b0 = before.data?.data?.receivable
+  const bucketAmt = (d, key) => Number((d.buckets.find(x => x.key === key) || {}).amount || 0)
+  const total0 = Number(b0.total)
+  const d90_0 = bucketAmt(b0, 'd90p')
+  const cur_0 = bucketAmt(b0, 'current')
+
+  // 逾期 100 天 1000 元 + 未到期(+10天) 500 元
+  await http.post('/api/payments', { token, json: { type: 2, orderNo: randomRef('AR'), partyName: party, totalAmount: 1000, dueDate: dateOffset(-100) } })
+  await http.post('/api/payments', { token, json: { type: 2, orderNo: randomRef('AR'), partyName: party, totalAmount: 500, dueDate: dateOffset(10) } })
+
+  const after = await http.get('/api/payments/aging?topLimit=2000', { token })
+  const b1 = after.data?.data?.receivable
+  log.assert('★ 账龄总敞口增加 1500', money(Number(b1.total) - total0) === 1500, `Δtotal=${Number(b1.total) - total0}`)
+  log.assert('★ 逾期 90+ 桶增加 1000（100 天逾期落对桶）', money(bucketAmt(b1, 'd90p') - d90_0) === 1000, `Δd90p=${bucketAmt(b1, 'd90p') - d90_0}`)
+  log.assert('★ 未到期桶增加 500', money(bucketAmt(b1, 'current') - cur_0) === 500, `Δcurrent=${bucketAmt(b1, 'current') - cur_0}`)
+
+  const sumBuckets = b1.buckets.reduce((s, x) => s + Number(x.amount), 0)
+  log.assert('★ 分桶合计 == total（无遗漏、无重复）', money(sumBuckets) === money(Number(b1.total)), `sum=${sumBuckets} total=${b1.total}`)
+
+  const p = (b1.topParties || []).find(x => x.partyName === party)
+  log.assert('★ Top 往来方含本客户：敞口 1500 / 逾期 1000 / 最长逾期≈100 天',
+    p && money(p.amount) === 1500 && money(p.overdueAmount) === 1000 && Number(p.maxOverdueDays) >= 99,
+    JSON.stringify(p || null))
+}
+
 // ── 7. 账户一致性收尾 ─────────────────────────────────────────────────────────
 
 async function scenarioFinalConsistency(ctx, log, token) {
@@ -675,6 +743,8 @@ async function main() {
     await scenarioStatement(ctx, log, token, accountId)
     await scenarioSettlementSnapshot(ctx, log, token)
     await scenarioExpenseClaim(ctx, log, token, approverToken, accountId, Number(user?.id))
+    await scenarioRecordPayment(ctx, log, token)
+    await scenarioAging(ctx, log, token)
     await scenarioFinalConsistency(ctx, log, token)
   } finally {
     await ctx.close()

@@ -80,7 +80,9 @@ async function expandStatementAllocation(conn, statementId, amount, receipt) {
     if (left <= 1e-6) break
     const take = Math.min(left, Number(it.balance))
     if (take > 1e-6) {
-      parts.push({ recordId: Number(it.id), amount: Number(take.toFixed(2)), statementId: Number(statementId) })
+      // 精度对齐账款列 DECIMAL(14,4)：舍到 2 位会让 ¥12.3456 这类 3-4 位小数账款的分配额
+      // 大于其余额而在 applyAllocations 处被拒，或残留分厘无法结清（unit_price 可含 4 位小数）。
+      parts.push({ recordId: Number(it.id), amount: Number(take.toFixed(4)), statementId: Number(statementId) })
       left -= take
     }
   }
@@ -114,8 +116,28 @@ async function applyAllocations(conn, receipt, allocations, operator) {
       flattened.push({ recordId: Number(a.recordId), amount: Number(a.amount), statementId: null })
     }
   }
-  const touchedStatements = [...new Set(flattened.map(f => f.statementId).filter(Boolean))]
+  const explicitStatements = [...new Set(flattened.map(f => f.statementId).filter(Boolean))]
   const sorted = flattened.sort((a, b) => a.recordId - b.recordId)
+  const directRecordIds = [...new Set(sorted.map(a => a.recordId))]
+
+  // 统一加锁顺序 statement→record：显式对账单已在 expandStatementAllocation 内 FOR UPDATE 锁住；
+  // 这里把「直核账款所属、但本次未显式核销」的对账单也提前按升序锁住，使全部 statement 行都先于
+  // record 行加锁——既避免与 recordPayment(statement→record) 成环死锁，也保证结尾 refreshSettlement
+  // 聚合重算时 statement 行已锁、不会并发丢失更新。
+  const extraStatementIds = []
+  if (directRecordIds.length) {
+    const [extra] = await conn.query(
+      'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id IN (?)',
+      [directRecordIds],
+    )
+    for (const s of extra) {
+      if (!explicitStatements.includes(s.statement_id)) extraStatementIds.push(s.statement_id)
+    }
+  }
+  for (const sid of [...extraStatementIds].sort((a, b) => a - b)) {
+    await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [sid])
+  }
+  const touchedStatements = [...new Set([...explicitStatements, ...extraStatementIds])]
 
   let allocatedTotal = 0
   const applied = []
@@ -189,21 +211,9 @@ async function applyAllocations(conn, receipt, allocations, operator) {
     [newSettled, Math.max(0, newReceiptBalance), resolveReceiptStatus(Number(receipt.amount), newSettled), receipt.id],
   )
 
-  // 纵深防御：按 recordId 直核（statementId=null）的记录若也属于某对账单，同样要刷新其汇总投影，
-  // 否则对账单 settled_amount 会漏更新（touchedStatements 原本只含 statementId 非空的分配，
-  // 存疑修复 2026-07-28）。
-  const directRecordIds = [...new Set(sorted.map(a => a.recordId))]
-  if (directRecordIds.length) {
-    const [extraStmts] = await conn.query(
-      'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id IN (?)',
-      [directRecordIds],
-    )
-    for (const s of extraStmts) {
-      if (!touchedStatements.includes(s.statement_id)) touchedStatements.push(s.statement_id)
-    }
-  }
-
-  // 账款动过之后重算对账单汇总（投影，不独立累加，避免两处漂移）
+  // 账款动过之后重算对账单汇总（投影，不独立累加，避免两处漂移）。
+  // touchedStatements 含显式核销的对账单与直核账款所属的对账单，两类的 statement 行都已在
+  // 记录循环之前 FOR UPDATE 锁住，聚合重算不会与并发直付/核销相互丢失更新。
   for (const sid of touchedStatements) {
     await statementSvc.refreshSettlement(conn, sid)
   }

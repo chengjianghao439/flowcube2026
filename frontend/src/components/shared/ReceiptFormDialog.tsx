@@ -143,6 +143,10 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
       qc.invalidateQueries({ queryKey: ['payments'] })
       qc.invalidateQueries({ queryKey: ['reconciliation'] })
       qc.invalidateQueries({ queryKey: ['payment-receipts'] })
+      // 核销必经资金账户进出钱（写账户流水并重算余额），账户页/看板是 keepAlive 常驻，
+      // 不失效会看到旧余额；账龄敞口也随账款余额变化，一并刷新。
+      qc.invalidateQueries({ queryKey: ['finance-accounts'] })
+      qc.invalidateQueries({ queryKey: ['finance-dashboard'] })
       const left = Number(res?.balance ?? 0)
       toast.success(left > 0 ? `${actionLabel}登记成功，还有 ${money(left)} 未核销` : `${actionLabel}登记并核销完成`)
       onClose()

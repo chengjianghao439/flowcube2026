@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,15 +36,76 @@ const todayStr = () => {
 type DraftItem = { categoryId: string; amount: string; happenedAt: string; description: string }
 const emptyItem = (): DraftItem => ({ categoryId: '', amount: '', happenedAt: todayStr(), description: '' })
 
+interface ExpQuery { keyword: string; status: string; startDate: string; endDate: string; minAmount: string; maxAmount: string }
+const EMPTY_EXP_QUERY: ExpQuery = { keyword: '', status: '', startDate: '', endDate: '', minAmount: '', maxAmount: '' }
+const STATUS_NAME: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map(([v, l]) => [v, l]))
+
+/** 费用报销查询弹窗：关键字 + 状态 + 创建日期区间 + 金额区间（比原来平铺的一格搜索框多了日期/金额） */
+function ExpensesQueryDialog({ open, initial, onClose, onApply }: {
+  open: boolean; initial: ExpQuery; onClose: () => void; onApply: (q: ExpQuery) => void
+}) {
+  const [v, setV] = useState<ExpQuery>(initial)
+  useEffect(() => { if (open) setV(initial) }, [open, initial])
+  const set = (patch: Partial<ExpQuery>) => setV(p => ({ ...p, ...patch }))
+  return (
+    <Dialog open={open} onOpenChange={x => !x && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader><DialogTitle>查询</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>关键字</Label>
+              <Input className="h-9" placeholder="单号 / 事由 / 申请人" value={v.keyword}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => set({ keyword: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>状态</Label>
+              <Select value={v.status || '__all__'} onValueChange={x => set({ status: x === '__all__' ? '' : x })}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">全部</SelectItem>
+                  {STATUS_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>创建日期</Label>
+            <div className="flex items-center gap-2">
+              <DatePicker value={v.startDate} onChange={x => set({ startDate: x })} max={v.endDate || undefined} className="h-9 flex-1" />
+              <span className="text-muted-foreground">至</span>
+              <DatePicker value={v.endDate} onChange={x => set({ endDate: x })} min={v.startDate || undefined} className="h-9 flex-1" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>报销金额</Label>
+            <div className="flex items-center gap-2">
+              <Input type="number" min="0" step="0.01" placeholder="最小金额" className="h-9 flex-1"
+                value={v.minAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set({ minAmount: e.target.value })} />
+              <span className="text-muted-foreground">至</span>
+              <Input type="number" min="0" step="0.01" placeholder="最大金额" className="h-9 flex-1"
+                value={v.maxAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set({ maxAmount: e.target.value })} />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setV(EMPTY_EXP_QUERY)}>清空</Button>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function ExpenseClaimsPage() {
   const qc = useQueryClient()
   const { can } = usePermission()
   const canApprove = can(PERMISSIONS.FINANCE_EXPENSE_APPROVE)
   const canPay = can(PERMISSIONS.FINANCE_EXPENSE_PAY)
 
-  const [search, setSearch] = useState('')
-  const [keyword, setKeyword] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
+  const [query, setQuery] = useState<ExpQuery>(EMPTY_EXP_QUERY)
+  const [queryOpen, setQueryOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [title, setTitle] = useState('')
@@ -57,9 +118,24 @@ export default function ExpenseClaimsPage() {
   const [rejectReason, setRejectReason] = useState('')
 
   const { data, isLoading } = useQuery({
-    queryKey: ['expense-claims', { keyword, statusFilter }],
-    queryFn: () => getExpenseClaimsApi({ pageSize: 99999, keyword: keyword || undefined, status: statusFilter || undefined }),
+    queryKey: ['expense-claims', query],
+    queryFn: () => getExpenseClaimsApi({
+      pageSize: 99999,
+      keyword: query.keyword || undefined,
+      status: query.status || undefined,
+      startDate: query.startDate || undefined,
+      endDate: query.endDate || undefined,
+      minAmount: query.minAmount || undefined,
+      maxAmount: query.maxAmount || undefined,
+    }),
   })
+
+  const queryChips: QueryChip[] = []
+  const dropQ = (...ks: (keyof ExpQuery)[]) => () => setQuery(q => ks.reduce((a, k) => ({ ...a, [k]: '' }), { ...q }))
+  if (query.keyword) queryChips.push({ key: 'kw', text: `搜索：${query.keyword}`, onClear: dropQ('keyword') })
+  if (query.status) queryChips.push({ key: 'status', text: `状态：${STATUS_NAME[query.status] ?? query.status}`, onClear: dropQ('status') })
+  if (query.startDate || query.endDate) queryChips.push({ key: 'date', text: `创建日期：${query.startDate || '…'} ~ ${query.endDate || '…'}`, onClear: dropQ('startDate', 'endDate') })
+  if (query.minAmount || query.maxAmount) queryChips.push({ key: 'amt', text: `金额：${query.minAmount || '0'} ~ ${query.maxAmount || '不限'}`, onClear: dropQ('minAmount', 'maxAmount') })
   const { data: categories } = useQuery({
     queryKey: ['expense-categories', 'active'],
     queryFn: () => getExpenseCategoriesApi(true),
@@ -79,11 +155,17 @@ export default function ExpenseClaimsPage() {
     qc.invalidateQueries({ queryKey: ['expense-claims'] })
     qc.invalidateQueries({ queryKey: ['expense-claim'] })
     qc.invalidateQueries({ queryKey: ['finance-accounts'] })
+    // 报销付款从账户出账，改变看板收支与费用构成，看板缓存一并失效
+    qc.invalidateQueries({ queryKey: ['finance-dashboard'] })
   }
   const act = (fn: () => Promise<unknown>, msg: string) =>
     fn().then(() => { invalidate(); toast.success(msg) }).catch(() => {})
 
-  const totalAmount = items.reduce((s, i) => s + (Number(i.amount) || 0), 0)
+  // 只计入将被真正保存的有效明细（有类别且金额>0），与提交 payload 的过滤口径一致——
+  // 否则「填了金额但没选类别」的行会被算进合计、按钮可点，但后端只收有效行，显示与保存对不上。
+  const totalAmount = items
+    .filter(i => i.categoryId && Number(i.amount) > 0)
+    .reduce((s, i) => s + Number(i.amount), 0)
 
   const saveMut = useMutation({
     mutationFn: () => {
@@ -176,7 +258,12 @@ export default function ExpenseClaimsPage() {
       <PageHeader
         title="费用报销"
         description="登记日常经营费用，审批通过后从资金账户付款。付款会自动记入账户流水。"
-        actions={<Button onClick={openCreate}>新建报销单</Button>}
+        actions={(
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button onClick={openCreate}>新建报销单</Button>
+          </div>
+        )}
       />
 
       {summary && (
@@ -196,28 +283,11 @@ export default function ExpenseClaimsPage() {
         </div>
       )}
 
-      <FilterCard>
-        <Input
-          placeholder="搜索单号 / 事由 / 申请人"
-          value={search}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') setKeyword(search.trim()) }}
-          className="h-9 w-60"
-        />
-        <Button size="sm" onClick={() => setKeyword(search.trim())}>查询</Button>
-        <Select value={statusFilter || '__all__'} onValueChange={v => setStatusFilter(v === '__all__' ? '' : v)}>
-          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="全部状态" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部状态</SelectItem>
-            {STATUS_OPTIONS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {(keyword || statusFilter) && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter('') }}>重置</Button>
-        )}
-      </FilterCard>
+      <QueryChips chips={queryChips} onClearAll={() => setQuery(EMPTY_EXP_QUERY)} />
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
+
+      <ExpensesQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={setQuery} />
 
       {/* 新建 / 编辑 */}
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>

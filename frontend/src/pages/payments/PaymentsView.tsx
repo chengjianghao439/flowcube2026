@@ -1,13 +1,12 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import { usePaymentActions } from '@/components/shared/usePaymentActions'
-import { ReceiptPanel } from '@/components/shared/ReceiptPanel'
+import { ReceiptPanel, type ReceiptPanelHandle } from '@/components/shared/ReceiptPanel'
 import { PaymentQueryDialog, PaymentQueryBar, EMPTY_PAYMENT_QUERY, type PaymentQueryValues } from '@/components/shared/PaymentQueryDialog'
 import { getPaymentsApi } from '@/api/payments'
 import type { PaymentRecord } from '@/api/payments'
@@ -59,6 +58,8 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
   // query 是「已生效」的完整查询条件，筛选栏与高级查询弹窗都写它，导出也复用同一份
   const [query, setQuery] = useState<PaymentQueryValues>(EMPTY_PAYMENT_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
+  // 核销 tab 的动作按钮挪到本页 PageHeader（与「按单登记」tab 对齐），通过 ref 触发面板内部动作
+  const receiptRef = useRef<ReceiptPanelHandle>(null)
   const { renderActions, dialogs } = usePaymentActions(type)
   const queryLabels = {
     docLabel: '关联单号',
@@ -97,7 +98,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
       return (
         <div className="flex flex-wrap items-center gap-1.5">
           <SoftStatusLabel label={r.statusName} tone={ST_TONE[v as number] ?? 'draft'} />
-          {overdue && <SoftStatusLabel label="逾期" tone="danger" />}
+          {overdue && <SoftStatusLabel label="已逾期" tone="danger" />}
         </div>
       )
     }},
@@ -118,16 +119,27 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
       <PageHeader
         title={copy.title}
         description={copy.description}
-        actions={(
-          <Button
-            variant="outline"
-            onClick={() => downloadExport(
-              tab === 'receipts' ? '/export/payment-receipts' : '/export/payments',
-              { ...exportParams, ...(tab === 'records' ? { settlementTypes: IMMEDIATE_SCOPE } : {}) },
-            ).catch(e => toast.error((e as Error).message))}
-          >
-            导出 Excel
-          </Button>
+        actions={tab === 'records' ? (
+          // 按单登记：查询 + 导出（导出参数键为 orderNo，与本 tab 列表一致）
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button
+              variant="outline"
+              onClick={() => downloadExport(
+                '/export/payments',
+                { ...exportParams, settlementTypes: IMMEDIATE_SCOPE },
+              ).catch(e => toast.error((e as Error).message))}
+            >
+              导出 Excel
+            </Button>
+          </div>
+        ) : (
+          // 核销 tab：按钮同样落在右上角 PageHeader（与按单登记对齐），通过 ref 驱动 ReceiptPanel
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => receiptRef.current?.openQuery()}>查询</Button>
+            <Button variant="outline" onClick={() => receiptRef.current?.exportExcel()}>导出 Excel</Button>
+            <Button onClick={() => receiptRef.current?.openRegister()}>登记{isPayable ? '付款' : '收款'}</Button>
+          </div>
         )}
       />
 
@@ -147,17 +159,10 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
         ))}
       </div>
 
-      {tab === 'receipts' && <ReceiptPanel type={type} settlementTypes={IMMEDIATE_SCOPE} />}
+      {tab === 'receipts' && <ReceiptPanel ref={receiptRef} type={type} settlementTypes={IMMEDIATE_SCOPE} hideToolbar />}
 
       {tab === 'records' && (<>
-      <FilterCard>
-        <PaymentQueryBar
-          query={query}
-          onChange={setQuery}
-          onOpen={() => setQueryOpen(true)}
-          labels={queryLabels}
-        />
-      </FilterCard>
+      <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
 
@@ -167,6 +172,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
         onClose={() => setQueryOpen(false)}
         onApply={setQuery}
         labels={queryLabels}
+        partyType={type}
         statusOptions={copy.statusOptions}
         showConfirmStatus={isPayable}
         singleDate

@@ -18,8 +18,8 @@ const consistency = async(req,res,next)=>{ try{return successResponse(res,await 
 const expenseList = async(req,res,next)=>{ try{return successResponse(res,await expenseSvc.findAll(req.query),'查询成功')}catch(e){next(e)} }
 const expenseDetail = async(req,res,next)=>{ try{return successResponse(res,await expenseSvc.findById(+req.params.id),'查询成功')}catch(e){next(e)} }
 const expenseCreate = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.create(req.body,op),'报销单已创建',201)}catch(e){next(e)} }
-const expenseUpdate = async(req,res,next)=>{ try{return successResponse(res,await expenseSvc.update(+req.params.id,req.body),'保存成功')}catch(e){next(e)} }
-const expenseSubmit = async(req,res,next)=>{ try{return successResponse(res,await expenseSvc.submit(+req.params.id),'已提交审批')}catch(e){next(e)} }
+const expenseUpdate = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.update(+req.params.id,req.body,op),'保存成功')}catch(e){next(e)} }
+const expenseSubmit = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.submit(+req.params.id,op),'已提交审批')}catch(e){next(e)} }
 const expenseWithdraw = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.withdraw(+req.params.id,op),'已撤回为草稿')}catch(e){next(e)} }
 const expenseApprove = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.approve(+req.params.id,op),'已批准，可付款')}catch(e){next(e)} }
 const expenseReject = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.reject(+req.params.id,req.body,op),'已驳回')}catch(e){next(e)} }

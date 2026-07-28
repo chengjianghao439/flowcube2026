@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -32,14 +32,68 @@ const EMPTY_FORM = {
   openingBalance: '0', sortOrder: '0', remark: '', isActive: true,
 }
 
+interface AcctQuery { keyword: string; type: string; isActive: string }
+const EMPTY_ACCT_QUERY: AcctQuery = { keyword: '', type: '', isActive: '' }
+const TYPE_NAME: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map(([v, l]) => [v, l]))
+
+/** 资金账户查询弹窗：关键字 + 账户类型 + 启用状态。条件收在弹窗里，页面右上角只留「查询」入口。 */
+function AccountsQueryDialog({ open, initial, onClose, onApply }: {
+  open: boolean; initial: AcctQuery; onClose: () => void; onApply: (q: AcctQuery) => void
+}) {
+  const [v, setV] = useState<AcctQuery>(initial)
+  useEffect(() => { if (open) setV(initial) }, [open, initial])
+  return (
+    <Dialog open={open} onOpenChange={x => !x && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>查询</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>关键字</Label>
+            <Input className="h-9" placeholder="编码 / 名称 / 账号" value={v.keyword}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV(p => ({ ...p, keyword: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>账户类型</Label>
+              <Select value={v.type || '__all__'} onValueChange={x => setV(p => ({ ...p, type: x === '__all__' ? '' : x }))}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">全部</SelectItem>
+                  {TYPE_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>状态</Label>
+              <Select value={v.isActive || '__all__'} onValueChange={x => setV(p => ({ ...p, isActive: x === '__all__' ? '' : x }))}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">全部</SelectItem>
+                  <SelectItem value="1">启用</SelectItem>
+                  <SelectItem value="0">停用</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setV(EMPTY_ACCT_QUERY)}>清空</Button>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function FinanceAccountsPage() {
   const qc = useQueryClient()
   const { can } = usePermission()
   const canUpdate = can(PERMISSIONS.FINANCE_ACCOUNT_UPDATE)
   const canAdjust = can(PERMISSIONS.FINANCE_ACCOUNT_ADJUST)
 
-  const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState<AcctQuery>(EMPTY_ACCT_QUERY)
+  const [queryOpen, setQueryOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<FinanceAccount | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -50,9 +104,19 @@ export default function FinanceAccountsPage() {
   const [deleteTarget, setDeleteTarget] = useState<FinanceAccount | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['finance-accounts', { keyword }],
-    queryFn: () => getAccountsApi({ keyword: keyword || undefined }),
+    queryKey: ['finance-accounts', query],
+    queryFn: () => getAccountsApi({
+      keyword: query.keyword || undefined,
+      type: query.type || undefined,
+      isActive: query.isActive || undefined,
+    }),
   })
+
+  const queryChips: QueryChip[] = []
+  const dropQ = (k: keyof AcctQuery) => () => setQuery(q => ({ ...q, [k]: '' }))
+  if (query.keyword) queryChips.push({ key: 'kw', text: `搜索：${query.keyword}`, onClear: dropQ('keyword') })
+  if (query.type) queryChips.push({ key: 'type', text: `类型：${TYPE_NAME[query.type] ?? query.type}`, onClear: dropQ('type') })
+  if (query.isActive) queryChips.push({ key: 'act', text: `状态：${query.isActive === '1' ? '启用' : '停用'}`, onClear: dropQ('isActive') })
   const { data: transactions } = useQuery({
     queryKey: ['finance-account-transactions', txAccount?.id],
     queryFn: () => getAccountTransactionsApi({ accountId: txAccount!.id, pageSize: 200 }),
@@ -62,6 +126,8 @@ export default function FinanceAccountsPage() {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['finance-accounts'] })
     qc.invalidateQueries({ queryKey: ['finance-account-transactions'] })
+    // 账户余额变化会改变看板的余额分布与收支，看板缓存一并失效
+    qc.invalidateQueries({ queryKey: ['finance-dashboard'] })
   }
 
   const saveMut = useMutation({
@@ -148,7 +214,12 @@ export default function FinanceAccountsPage() {
       <PageHeader
         title="账户管理"
         description="管理收付款用的银行、现金等资金账户。余额由账户流水实时汇总，不可直接修改。"
-        actions={<Button onClick={openCreate}>新建账户</Button>}
+        actions={(
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button onClick={openCreate}>新建账户</Button>
+          </div>
+        )}
       />
 
       {summary && (
@@ -158,19 +229,11 @@ export default function FinanceAccountsPage() {
         </div>
       )}
 
-      <FilterCard>
-        <Input
-          placeholder="搜索编码 / 名称 / 账号"
-          value={search}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') setKeyword(search.trim()) }}
-          className="h-9 w-60"
-        />
-        <Button size="sm" onClick={() => setKeyword(search.trim())}>查询</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>}
-      </FilterCard>
+      <QueryChips chips={queryChips} onClearAll={() => setQuery(EMPTY_ACCT_QUERY)} />
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
+
+      <AccountsQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={setQuery} />
 
       {/* 新建 / 编辑 */}
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>

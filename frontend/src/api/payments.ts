@@ -13,11 +13,29 @@ export const getPaymentsApi  = (p:object) => client.get<{list:PaymentRecord[];pa
 // 手工建账款（POST /api/payments）没有前端封装：全站没有任何页面调用它，留着的
 // createPaymentApi 是死代码，已于 2026-07-27 删除。后端接口仍在（迁移 145 修好了它
 // 从建成起就必然 500 的 order_id 问题），要做「手工记账」入口时从这里补回封装即可。
-export const payApi          = (id:number, d:object) => client.post<unknown>(`/payments/${id}/pay`, d)
+// 登记付款/收款也是「改钱」，带 X-Request-Key 幂等：连点两次/断网重试不重复登记（与核销一致）
+export const payApi          = (id:number, d:object, requestKey:string) =>
+  client.post<unknown>(`/payments/${id}/pay`, d, { headers: withRequestKeyHeaders(requestKey) })
 export const getEntriesApi   = (id:number) => client.get<PaymentEntry[]>(`/payments/${id}/entries`)
 /** 财务确认应付结算金额（确认后才可登记付款） */
 export const confirmPaymentApi = (id:number) => client.post<{id:number;confirmStatus:1}>(`/payments/${id}/confirm`)
 export const getSettlementDetailApi = (id:number) => client.get<SettlementDetail>(`/payments/${id}/settlement-detail`)
+
+// ── 账龄分析 ──────────────────────────────────────────────────────────────────
+
+export interface AgingBucket { key:string; label:string; count:number; amount:number }
+export interface AgingParty { partyName:string; count:number; amount:number; overdueAmount:number; maxOverdueDays:number }
+export interface AgingSide {
+  buckets: AgingBucket[]
+  total: number; totalCount: number
+  overdueAmount: number; overdueCount: number
+  topParties: AgingParty[]
+}
+export interface AgingReport { asOf: string; receivable: AgingSide; payable: AgingSide }
+
+/** 应收/应付账龄（as-of 今天，跨结算方式汇总全量敞口） */
+export const getAgingApi = (topLimit = 8) =>
+  client.get<AgingReport>('/payments/aging', { params: { topLimit } })
 
 // ── 收付款单与核销 ────────────────────────────────────────────────────────────
 

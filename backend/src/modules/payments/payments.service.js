@@ -1,7 +1,9 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { getRequestId } = require('../../utils/requestContext')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
+const statementSvc = require('./reconciliation-statements.service')
 const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
 
 /** 状态文案按应付/应收分开：应付说「付」，应收说「收」，前端两个页面直接用不必再改写 */
@@ -160,10 +162,34 @@ async function createManual({ type, orderNo, partyName, totalAmount, dueDate, re
   }
 }
 
-async function recordPayment(id, { amount, paymentDate, method, remark }, operator) {
+async function recordPayment(id, { amount, paymentDate, method, remark }, operator, requestKey) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 幂等：直接登记付款/收款也是「改钱」，连点两次/断网重试不能重复登记（与收付款核销一致）。
+    // 缺 X-Request-Key 时 beginOperationRequest 返回 enabled:false 直接放行，不影响老客户端。
+    const reqState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'payment.record.pay',
+      userId: operator.operatorId,
+    })
+    if (reqState.replay) {
+      await conn.commit()
+      return reqState.responseData ?? { replayed: true }
+    }
+
+    // 统一加锁顺序 statement→record：先锁该账款所属对账单行（若有，升序），再锁账款行。
+    // ① 与核销路径（expandStatementAllocation 先锁 statement 再锁 record）方向一致，避免环形等待死锁；
+    // ② 结尾 refreshSettlement 依赖的 statement 行必须在聚合重算前锁住，否则并发直付会丢失更新、
+    //    把 settled_amount 算少（对照 finance-accounts.recordTransaction 先锁账户行再 refreshBalance 的正范式）。
+    const [stmtRows] = await conn.query(
+      'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id = ? ORDER BY statement_id',
+      [id],
+    )
+    for (const s of stmtRows) {
+      await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [s.statement_id])
+    }
+
     const [[record]] = await conn.query('SELECT * FROM payment_records WHERE id=? FOR UPDATE', [id])
     if (!record) throw new AppError('账款记录不存在', 404)
     if (record.status === 3) throw new AppError('该账款已付清', 400)
@@ -173,12 +199,13 @@ async function recordPayment(id, { amount, paymentDate, method, remark }, operat
     }
 
     const newPaid = Number(record.paid_amount) + amount
-    if (newPaid > Number(record.total_amount)) {
+    // 浮点容差与核销路径一致（DECIMAL→JS float 累加可能出现 100.00000001，严格 > 会误拒合法全额付款）
+    if (newPaid > Number(record.total_amount) + 1e-6) {
       throw new AppError(`付款金额超出余额 ¥${Number(record.balance).toFixed(2)}`, 400)
     }
 
-    const newBalance = Number(record.total_amount) - newPaid
-    const newStatus = newBalance <= 0 ? 3 : 2
+    const newBalance = Math.max(0, Number(record.total_amount) - newPaid)
+    const newStatus = newBalance <= 1e-6 ? 3 : 2
     await conn.query(
       'UPDATE payment_records SET paid_amount=?,balance=?,status=? WHERE id=?',
       [newPaid, newBalance, newStatus, id],
@@ -210,14 +237,17 @@ async function recordPayment(id, { amount, paymentDate, method, remark }, operat
     })
     // 纵深防御：若该账款属于某对账单，付款后同事务刷新对账单汇总投影。正常 UI 里月结账款只经
     // 对账单分配核销（必刷新），但 /payments/:id/pay 直付账款是另一条入口，不刷会让对账单
-    // settled_amount/状态漂移（存疑修复 2026-07-28）。
-    const [stmtRows] = await conn.query('SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id = ?', [id])
-    if (stmtRows.length) {
-      const statementSvc = require('./reconciliation-statements.service')
-      for (const s of stmtRows) await statementSvc.refreshSettlement(conn, s.statement_id)
+    // settled_amount/状态漂移（存疑修复 2026-07-28）。statement 行已在上面按序锁住。
+    for (const s of stmtRows) {
+      await statementSvc.refreshSettlement(conn, s.statement_id)
     }
+
+    const result = { newPaid, newBalance, status: newStatus }
+    await completeOperationRequest(conn, reqState, {
+      data: result, resourceType: 'payment_record', resourceId: Number(id),
+    })
     await conn.commit()
-    return { newPaid, newBalance, status: newStatus }
+    return result
   } catch (error) {
     await conn.rollback()
     throw error

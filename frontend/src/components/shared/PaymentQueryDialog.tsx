@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { CustomerFinder, SupplierFinder } from '@/components/finder'
+import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 
 const todayStr = () => {
@@ -54,26 +56,25 @@ interface FieldLabels {
 }
 
 /**
- * 查询入口栏：一个「查询」按钮 + 已生效条件的标签。
+ * 已生效查询条件的小标签行（账款 / 汇款单 / 对账单共用）。
  *
- * 查询条件全部收在弹窗里，页面上不再放第二套筛选控件；但条件必须在页面上看得见，
- * 否则用户看着一屏数据不知道是筛过的。每个标签可单独移除。
+ * 「查询」按钮已移到各页面右上角，这里只负责把生效条件显示成可逐个移除的小标签。
+ * 无生效条件时不渲染任何东西（面板保持干净）。
  */
-export function PaymentQueryBar({ query, onChange, onOpen, labels }: {
+export function PaymentQueryBar({ query, onChange, labels }: {
   query: PaymentQueryValues
   onChange: (next: PaymentQueryValues) => void
-  onOpen: () => void
   labels: FieldLabels
 }) {
-  const chips: Array<{ key: string; text: string; clear: () => void }> = []
+  const chips: QueryChip[] = []
   const drop = (...keys: (keyof PaymentQueryValues)[]) =>
     () => onChange(keys.reduce((acc, k) => ({ ...acc, [k]: '' }), { ...query }))
 
-  if (query.docNo) chips.push({ key: 'docNo', text: `${labels.docLabel}：${query.docNo}`, clear: drop('docNo') })
-  if (query.partyName) chips.push({ key: 'partyName', text: `${labels.partyLabel}：${query.partyName}`, clear: drop('partyName') })
-  if (query.status) chips.push({ key: 'status', text: `状态：${labels.statusText(query.status)}`, clear: drop('status') })
+  if (query.docNo) chips.push({ key: 'docNo', text: `${labels.docLabel}：${query.docNo}`, onClear: drop('docNo') })
+  if (query.partyName) chips.push({ key: 'partyName', text: `${labels.partyLabel}：${query.partyName}`, onClear: drop('partyName') })
+  if (query.status) chips.push({ key: 'status', text: `状态：${labels.statusText(query.status)}`, onClear: drop('status') })
   if (query.confirmStatus) {
-    chips.push({ key: 'confirmStatus', text: `结算确认：${query.confirmStatus === '0' ? '待确认' : '已确认'}`, clear: drop('confirmStatus') })
+    chips.push({ key: 'confirmStatus', text: `结算确认：${query.confirmStatus === '0' ? '待确认' : '已确认'}`, onClear: drop('confirmStatus') })
   }
   if (query.startDate || query.endDate) {
     const sameDay = query.startDate && query.startDate === query.endDate
@@ -82,32 +83,17 @@ export function PaymentQueryBar({ query, onChange, onOpen, labels }: {
       text: sameDay
         ? `${labels.dateLabel}：${query.startDate}`
         : `${labels.dateLabel}：${query.startDate || '…'} ~ ${query.endDate || '…'}`,
-      clear: drop('startDate', 'endDate'),
+      onClear: drop('startDate', 'endDate'),
     })
   }
   if (query.dueStart || query.dueEnd) {
-    chips.push({ key: 'due', text: `到期日：${query.dueStart || '…'} ~ ${query.dueEnd || '…'}`, clear: drop('dueStart', 'dueEnd') })
+    chips.push({ key: 'due', text: `到期日：${query.dueStart || '…'} ~ ${query.dueEnd || '…'}`, onClear: drop('dueStart', 'dueEnd') })
   }
   if (query.minAmount || query.maxAmount) {
-    chips.push({ key: 'amount', text: `${labels.amountLabel}：${query.minAmount || '0'} ~ ${query.maxAmount || '不限'}`, clear: drop('minAmount', 'maxAmount') })
+    chips.push({ key: 'amount', text: `${labels.amountLabel}：${query.minAmount || '0'} ~ ${query.maxAmount || '不限'}`, onClear: drop('minAmount', 'maxAmount') })
   }
 
-  return (
-    <>
-      <Button size="sm" variant="outline" onClick={onOpen}>查询</Button>
-      {chips.map(c => (
-        <span key={c.key} className="inline-flex items-center gap-1 rounded-sm border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-          {c.text}
-          <button type="button" onClick={c.clear} className="hover:opacity-70" aria-label={`移除 ${c.text}`}>
-            <X className="h-3 w-3" />
-          </button>
-        </span>
-      ))}
-      {chips.length > 0 && (
-        <Button size="sm" variant="ghost" onClick={() => onChange(EMPTY_PAYMENT_QUERY)}>清空</Button>
-      )}
-    </>
-  )
+  return <QueryChips chips={chips} onClearAll={() => onChange(EMPTY_PAYMENT_QUERY)} />
 }
 
 interface Props {
@@ -116,6 +102,8 @@ interface Props {
   onClose: () => void
   onApply: (values: PaymentQueryValues) => void
   labels: FieldLabels
+  /** 往来方类型：1=供应商（走 SupplierFinder）2=客户（走 CustomerFinder），与销售/采购查询弹窗一致 */
+  partyType: 1 | 2
   /** 状态下拉选项 [值, 文案] */
   statusOptions: ReadonlyArray<readonly [string, string]>
   /** 显示到期日区间（仅账款列表有意义） */
@@ -136,16 +124,18 @@ interface Props {
  * 固定高度会在底部留一大片空白。
  */
 export function PaymentQueryDialog({
-  open, initial, onClose, onApply, labels, statusOptions,
+  open, initial, onClose, onApply, labels, partyType, statusOptions,
   showDueDate = false, showConfirmStatus = false, singleDate = false,
 }: Props) {
   const [v, setV] = useState<PaymentQueryValues>(initial)
+  const [partyFinderOpen, setPartyFinderOpen] = useState(false)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
 
   const set = <K extends keyof PaymentQueryValues>(k: K, val: PaymentQueryValues[K]) =>
     setV(prev => ({ ...prev, [k]: val }))
 
   return (
+    <>
     <Dialog open={open} onOpenChange={x => !x && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader><DialogTitle>查询</DialogTitle></DialogHeader>
@@ -159,8 +149,19 @@ export function PaymentQueryDialog({
             </div>
             <div className="space-y-1">
               <Label>{labels.partyLabel}</Label>
-              <Input value={v.partyName} className="h-9" placeholder={`输入${labels.partyLabel}名称`}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('partyName', e.target.value)} />
+              {/* 从往来方档案里选，而非手打——与销售/采购查询弹窗一致，避免同名/错字导致筛不到 */}
+              <div className="flex items-center gap-1">
+                <Button type="button" variant="outline" className="h-9 flex-1 justify-start font-normal"
+                  onClick={() => setPartyFinderOpen(true)}>
+                  {v.partyName || <span className="text-muted-foreground">选择{labels.partyLabel}</span>}
+                </Button>
+                {v.partyName && (
+                  <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0"
+                    onClick={() => set('partyName', '')} aria-label={`清除${labels.partyLabel}`}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -255,5 +256,15 @@ export function PaymentQueryDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* 往来方选择器：选中后把名称写进 partyName（账款按 party_name 快照筛，不需要 id） */}
+    {partyType === 1 ? (
+      <SupplierFinder open={partyFinderOpen} onClose={() => setPartyFinderOpen(false)}
+        onConfirm={r => set('partyName', r.name)} />
+    ) : (
+      <CustomerFinder open={partyFinderOpen} onClose={() => setPartyFinderOpen(false)}
+        onConfirm={r => set('partyName', r.name)} />
+    )}
+    </>
   )
 }

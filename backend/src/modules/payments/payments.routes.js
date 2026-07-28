@@ -55,7 +55,11 @@ router.post('/statements',           requirePermission(PERMISSIONS.PAYMENT_EXECU
 })), ctrl.statementCreate)
 router.post('/statements/:id/confirm', requirePermission(PERMISSIONS.PAYMENT_CONFIRM), vParams(idParam), ctrl.statementConfirm)
 router.post('/statements/:id/unlock',  requirePermission(PERMISSIONS.PAYMENT_CONFIRM), vParams(idParam), ctrl.statementUnlock)
-router.delete('/statements/:id/items/:recordId', requirePermission(PERMISSIONS.PAYMENT_EXECUTE), ctrl.statementRemoveItem)
+router.delete('/statements/:id/items/:recordId', requirePermission(PERMISSIONS.PAYMENT_EXECUTE),
+  vParams(z.object({ id: z.coerce.number().int().positive(), recordId: z.coerce.number().int().positive() })), ctrl.statementRemoveItem)
+
+// 账龄分析（as-of 今天，应收/应付分桶敞口 + Top 往来方）。静态路径，注册在 '/:id/...' 动态路由之前
+router.get('/aging', requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.aging)
 
 // 列表（含合计）
 router.get('/', requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.list)

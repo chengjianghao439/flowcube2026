@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { payApi, getEntriesApi, confirmPaymentApi, getSettlementDetailApi } from '@/api/payments'
 import type { PaymentRecord, PaymentEntry } from '@/api/payments'
+import { createRequestKey } from '@/lib/requestKey'
 import { toast } from '@/lib/toast'
 
 /**
@@ -39,6 +40,8 @@ export function usePaymentActions(type: 1 | 2) {
   const invalidateBoth = () => {
     qc.invalidateQueries({ queryKey: ['payments'] })
     qc.invalidateQueries({ queryKey: ['reconciliation'] })
+    // 收付款会改变应收/应付余额，账龄与敞口随之变化，看板缓存一并失效
+    qc.invalidateQueries({ queryKey: ['finance-dashboard'] })
   }
 
   const { data: entries } = useQuery({
@@ -52,7 +55,7 @@ export function usePaymentActions(type: 1 | 2) {
     enabled: !!selected && confirmOpen && isPayable,
   })
   const payMut = useMutation({
-    mutationFn: ({ id, d }: { id: number; d: object }) => payApi(id, d),
+    mutationFn: ({ id, d }: { id: number; d: object }) => payApi(id, d, createRequestKey()),
     onSuccess: () => { invalidateBoth(); setPayOpen(false); setPayAmount(''); setPayRemark('') },
   })
   const confirmMut = useMutation({
