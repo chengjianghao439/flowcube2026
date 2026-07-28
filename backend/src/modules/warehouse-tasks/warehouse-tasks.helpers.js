@@ -121,6 +121,31 @@ async function assertTaskPackagingClosure(conn, taskId) {
   if (Number(cnt) === 0) {
     throw new AppError('没有已完成的装箱明细，无法进入待出库', 400)
   }
+  // 装箱总量必须逐商品等于复核量：只校验「有箱有明细」挡不住「复核 10 只装 3」就发货、
+  // 客户少收货（业务决策 2026-07-28）。用整数单位比较避免 DECIMAL 浮点误差。
+  const SCALE = 10000
+  const [packedRows] = await conn.query(
+    `SELECT pi.product_id, COALESCE(SUM(pi.qty), 0) AS packed
+     FROM package_items pi INNER JOIN packages p ON p.id = pi.package_id
+     WHERE p.warehouse_task_id = ? AND p.status = 2
+     GROUP BY pi.product_id`,
+    [taskId],
+  )
+  const packedUnits = new Map(packedRows.map(r => [Number(r.product_id), Math.round(Number(r.packed) * SCALE)]))
+  const [reqRows] = await conn.query(
+    'SELECT product_id, product_name, checked_qty FROM warehouse_task_items WHERE task_id = ?',
+    [taskId],
+  )
+  for (const r of reqRows) {
+    const need = Math.round(Number(r.checked_qty) * SCALE)
+    const got = packedUnits.get(Number(r.product_id)) || 0
+    if (got !== need) {
+      throw new AppError(
+        `「${r.product_name}」装箱数量 ${got / SCALE} 与复核数量 ${Number(r.checked_qty)} 不一致，请装齐后再进入待出库`,
+        400,
+      )
+    }
+  }
 }
 
 async function assertTaskPackagePrintClosure(conn, taskId) {

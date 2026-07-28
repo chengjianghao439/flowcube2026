@@ -55,8 +55,10 @@ async function adjustPaymentRecordForReturn(conn, {
   }
 
   const { balance, status } = calcPaymentStatus(newTotal, currentPaid)
+  // 退货冲减后把 confirm_status 打回待确认(0)：金额已变，须由财务重新复核后才能再付款/核销
+  // （与 inbound settle 的「金额变化即打回确认」口径一致，业务决策 2026-07-28）。
   await conn.query(
-    'UPDATE payment_records SET total_amount=?, balance=?, status=? WHERE id=?',
+    'UPDATE payment_records SET total_amount=?, balance=?, status=?, confirm_status=0 WHERE id=?',
     [newTotal, balance, status, record.id],
   )
   await recordPaymentEvent(conn, {

@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS } = require('../../engine/containerEngine')
+const { adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS, lockStockDimension } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -157,6 +157,15 @@ async function submit(id, operator) {
     const unfilled = check.items.filter(i=>i.actualQty===null)
     if(unfilled.length) throw new AppError(`还有 ${unfilled.length} 条明细未填写实盘数量`,400)
     check.items.forEach(item => { item.actualQty = assertValidActualQty(item.actualQty) })
+
+    // 统一加锁顺序：先按 product_id 升序对每个被盘商品取 inventory_stock 维度锁，再做账面
+    // 漂移校验(getCurrentBookQty 会 FOR UPDATE 锁容器)与调整。否则本事务是「先容器后 stock」，
+    // 与出库(moveStock)/上架(lockStockDimension)的「先 stock 后容器」相反，盘点提交与并发
+    // 出库/上架会 ABBA 死锁（见 containerEngine.lockStockDimension 注释）。
+    const lockProductIds = [...new Set(check.items.map(i => Number(i.productId)))].sort((a, b) => a - b)
+    for (const productId of lockProductIds) {
+      await lockStockDimension(conn, productId, check.warehouseId)
+    }
 
     // 先整单校验再调整：任何一行账面已漂移都不动库存，把漂移行一次性列全，
     // 避免"调到一半才报错"给现场造成部分行已生效的错觉（事务虽会回滚，但报错要完整）。

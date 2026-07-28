@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { payloadClient } from '@/api/client'
 import { parseBarcode } from '@/utils/barcode'
 import { getTransferDetailApi, scanInTransferApi, type TransferScanResult } from '@/api/transfer'
+import { getContainerByBarcodeApi } from '@/api/inventory'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
@@ -43,11 +44,24 @@ export default function PdaTransferInPage() {
       await qc.invalidateQueries({ queryKey: ['pda-transfer', transferId] })
       await qc.invalidateQueries({ queryKey: ['pda-transfers'] })
     },
+    // 断网重连的第二道兜底：回执查不到时，按扫过的容器条码回查它是否已入库上架
+    // （scanIn 成功后容器翻在库 stored 并落库位）。保守判定，查不到/异常保持待确认。
+    resolveServerState: async ({ record }) => {
+      const barcode = String(record.metadata?.barcode ?? '')
+      if (!barcode) return { effective: false as const }
+      try {
+        const c = await getContainerByBarcodeApi(barcode)
+        if (c && c.containerStatus === 'stored' && c.locationId != null) {
+          return { effective: true as const, message: `容器 ${barcode} 已入库上架，入库已成功。` }
+        }
+      } catch { /* 查不到或异常：保持待确认 */ }
+      return { effective: false as const }
+    },
   })
 
   const submitMut = useMutation({
     mutationFn: async ({ containerBarcode, locationId }: { containerBarcode: string; locationId: number }) => {
-      return scanAction.run((requestKey) => scanInTransferApi(transferId, containerBarcode, locationId, requestKey).then(r => r!))
+      return scanAction.run((requestKey) => scanInTransferApi(transferId, containerBarcode, locationId, requestKey).then(r => r!), { barcode: containerBarcode })
     },
     onSuccess: (result) => {
       setPendingContainer(null)

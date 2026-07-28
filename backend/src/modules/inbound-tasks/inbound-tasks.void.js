@@ -1,6 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { CONTAINER_STATUS, syncStockFromContainers } = require('../../engine/containerEngine')
+const { CONTAINER_STATUS, syncStockFromContainers, lockStockDimension } = require('../../engine/containerEngine')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { appendInboundEvent } = require('./inbound-tasks.helpers')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
@@ -29,6 +29,21 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
     })
     assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     const rule = assertStatusAction('inboundTask', 'voidReceipt', Number(taskRow.status))
+
+    // 统一加锁顺序：先按 (product_id, warehouse_id) 升序对涉及维度取 inventory_stock 单行锁，
+    // 再锁容器。撤回收货本质是「反向上架」（改容器状态后 syncStockFromContainers 汇总该维度
+    // 全部 ACTIVE 容器），必须与 putaway 一样先取维度锁，否则两者对同一商品+仓库 ABBA 死锁
+    // （void 持容器等汇总锁、putaway 持维度锁等容器锁）。见 containerEngine.lockStockDimension 注释。
+    const [dimRows] = await conn.query(
+      `SELECT DISTINCT product_id, warehouse_id
+       FROM inventory_containers
+       WHERE inbound_task_id = ? AND deleted_at IS NULL AND status IN (?, ?, ?)
+       ORDER BY product_id ASC, warehouse_id ASC`,
+      [taskId, CONTAINER_STATUS.ACTIVE, CONTAINER_STATUS.PENDING_PUTAWAY, CONTAINER_STATUS.EMPTY],
+    )
+    for (const d of dimRows) {
+      await lockStockDimension(conn, d.product_id, d.warehouse_id)
+    }
 
     const [containers] = await conn.query(
       `SELECT id, product_id, warehouse_id, remaining_qty, initial_qty, status, locked_by_task_id

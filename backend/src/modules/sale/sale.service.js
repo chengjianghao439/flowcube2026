@@ -98,6 +98,20 @@ const RECEIVABLE_STATUS_NAME = { 1: '未付', 2: '部分付', 3: '已付清' }
 
 const genOrderNo = conn => generateDailyCode(conn, 'SO', 'sale_orders', 'order_no')
 
+// 拒绝同一 (商品, 发货仓库) 的重复明细行：出库时 warehouse_task_items↔sale_order_items 的
+// JOIN 会因重复行放大成 N 倍，assertNoShipItemFanout 永久 409 卡死出库（扫描 low-8）。
+function assertNoDuplicateSaleItemLines(items, fallbackWarehouseId) {
+  const seen = new Set()
+  for (const it of items) {
+    const whId = it.warehouseId ? Number(it.warehouseId) : Number(fallbackWarehouseId)
+    const key = `${Number(it.productId)}:${whId}`
+    if (seen.has(key)) {
+      throw new AppError('同一商品在同一发货仓库出现了重复明细行，请合并为一行后再提交', 400)
+    }
+    seen.add(key)
+  }
+}
+
 async function appendSaleEvent(conn, saleOrderId, eventType, title, description, operator = null, payload = null) {
   await conn.query(
     `INSERT INTO sale_order_events (sale_order_id,event_type,title,description,payload_json,created_by,created_by_name)
@@ -190,7 +204,22 @@ async function recomputeSaleReceivable(conn, saleOrderId) {
     'SELECT COALESCE(SUM(shipped_qty * unit_price), 0) AS amount FROM sale_order_items WHERE order_id = ?',
     [saleOrderId],
   )
-  const total = Number(amount) || 0
+  const grossTotal = Number(amount) || 0
+  // 扣除该销售单下所有「已退货入库(3)」的销售退货金额（与采购应付 recomputePurchasePayable 对称）。
+  // 否则分批/分仓发货时，中途完成的销售退货冲减（syncSaleReturnCompleted 增量减）会被下一批
+  // 出库的全量重算覆盖回全额，客户被静默多计应收——这正是采购侧 P0-1 的销售镜像。
+  // 口径：按实际质检合格入库量（checked_qty − rejected_qty）× 退货单价，与 syncSaleReturnCompleted
+  // 严格一致（质检不合格部分不退客户，业务决策 2026-07-28）；全量覆盖不与增量叠加，故不双重扣。
+  const [[{ returnedAmount }]] = await conn.query(
+    `SELECT COALESCE(SUM((rti.checked_qty - rti.rejected_qty) * sri.unit_price), 0) AS returnedAmount
+       FROM sale_returns sr
+       JOIN return_tasks rt ON rt.return_id = sr.id AND rt.return_type = 'sale' AND rt.deleted_at IS NULL
+       JOIN return_task_items rti ON rti.task_id = rt.id
+       JOIN sale_return_items sri ON sri.id = rti.return_item_id
+      WHERE sr.sale_order_id = ? AND sr.deleted_at IS NULL AND sr.status = 3`,
+    [saleOrderId],
+  )
+  const total = Math.max(0, grossTotal - (Number(returnedAmount) || 0))
   if (total <= 0) {
     const [[existing]] = await conn.query('SELECT id FROM payment_records WHERE type = 2 AND order_id = ?', [saleOrderId])
     if (!existing) return
@@ -216,7 +245,7 @@ async function recomputeSaleReceivable(conn, saleOrderId) {
      VALUES (2, ?, ?, ?, ?, 0, ?, 1, 1, ?, ${due.expr})
      ON DUPLICATE KEY UPDATE
        total_amount = VALUES(total_amount),
-       balance = VALUES(total_amount) - paid_amount,
+       balance = GREATEST(0, VALUES(total_amount) - paid_amount),
        status = CASE WHEN paid_amount >= VALUES(total_amount) THEN 3
                      WHEN paid_amount > 0 THEN 2 ELSE 1 END`,
     [saleOrderId, row.order_no, row.customer_name, total, total, settlementSnapshot, ...due.params],
@@ -575,6 +604,7 @@ async function create({ customerId, customerName, warehouseId, warehouseName, re
     )
     if (!customerRow) throw new AppError('客户不存在', 404)
     if (!customerRow.is_active) throw new AppError('该客户已停用，无法新建销售单', 400)
+    assertNoDuplicateSaleItemLines(items, warehouseId)
     const orderNo = await genOrderNo(conn)
     const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
     const [r] = await conn.query(
@@ -612,6 +642,7 @@ async function update(id, { customerId, customerName, warehouseId, warehouseName
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, columns: 'id, status', entityName: '销售单' })
     assertStatusAction('sale', 'edit', orderRow.status)
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
+    assertNoDuplicateSaleItemLines(items, warehouseId)
     const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
     await conn.query(
       `UPDATE sale_orders SET customer_id=?,customer_name=?,warehouse_id=?,warehouse_name=?,total_amount=?,remark=?,carrier_id=?,carrier=?,freight_type=?,receiver_name=?,receiver_phone=?,receiver_address=? WHERE id=?`,

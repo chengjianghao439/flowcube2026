@@ -41,7 +41,7 @@ const SOURCE_TYPE = {
 
 const ALLOWED_SOURCE_TYPES = new Set(Object.values(SOURCE_TYPE))
 
-/** 允许 createContainer 直接落 status=ACTIVE(1) 的来源（调拨入、销售退货、同仓拆分）；其余须先 4 再 promote */
+/** 允许 createContainer 直接落 status=ACTIVE(1) 的来源（调拨入、同仓拆分）；其余（含销售退货，须先经 PENDING_QA 质检）先建 4 再 promote */
 const DIRECT_ACTIVE_SOURCE_TYPES = new Set([
   SOURCE_TYPE.TRANSFER,
   SOURCE_TYPE.CONTAINER_SPLIT,
@@ -141,7 +141,7 @@ async function createContainer(conn, {
   const st = Number(containerStatus)
   if (st === CONTAINER_STATUS.ACTIVE && !DIRECT_ACTIVE_SOURCE_TYPES.has(sourceType)) {
     throw new AppError(
-      '禁止直接创建在库(ACTIVE)容器：仅「调拨入、销售退货」允许；盘点/导入等须先待上架再入账',
+      '禁止直接创建在库(ACTIVE)容器：仅「调拨入、同仓拆分」允许；盘点/导入/销售退货等须先待上架/质检再入账',
       400,
     )
   }
@@ -447,6 +447,12 @@ async function getStockProjection(conn, {
   warehouseId,
   lock = false,
 }) {
+  if (lock) {
+    // 统一加锁顺序：先锁 inventory_stock 维度单行、再锁 ACTIVE 容器行，与 lockStockDimension/
+    // moveStock 一致。否则本函数是「先容器后 stock」，与出库(moveStock)/上架(lockStockDimension)
+    // 的「先 stock 后容器」相反，reserve/调拨/导入 与 出库/上架 并发同一商品会 ABBA 死锁。
+    await lockStockDimension(conn, productId, warehouseId)
+  }
   const containerLockSql = lock ? ' FOR UPDATE' : ''
   const [containerRows] = await conn.query(
     `SELECT remaining_qty

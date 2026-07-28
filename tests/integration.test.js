@@ -139,7 +139,7 @@ async function main() {
 
     // ── 1. 采购入库 ───────────────────────────────────────────────
     log.section('采购入库（PDA 收货 + 上架）')
-    await inboundStock(log, ctx, token, { product, warehouse, location, quantity: INBOUND_QTY })
+    const { purchaseId: mainPoId } = await inboundStock(log, ctx, token, { product, warehouse, location, quantity: INBOUND_QTY })
     let s = await stockQty(pool, product.id, warehouse.id)
     log.assert(`入库后 inventory_stock.quantity = ${INBOUND_QTY}`, s.quantity === INBOUND_QTY, `实际=${s.quantity}`)
     log.assert('入库后 reserved = 0', s.reserved === 0, `实际=${s.reserved}`)
@@ -254,6 +254,12 @@ async function main() {
 
     // ── 5. 采购退货（确认后派发 PDA 仓库任务 → 拣货扫码 → 出库）──
     log.section('采购退货（PDA 拣货→出库，库存扣减）')
+    // 决策2 前置：先把主采购单应付财务确认(confirm_status→1)，退货冲减后应被自动打回 0。
+    const [apRow] = await dbQuery(pool, 'SELECT id, confirm_status FROM payment_records WHERE type=1 AND order_id=?', [mainPoId])
+    log.assert('主采购单已生成应付', !!apRow, JSON.stringify(apRow))
+    await expectOk(log, await http.post(`/api/payments/${apRow.id}/confirm`, { token }), '财务确认应付成功')
+    const [apConfirmed] = await dbQuery(pool, 'SELECT confirm_status FROM payment_records WHERE id=?', [apRow.id])
+    log.assert('确认后应付 confirm_status=1', Number(apConfirmed.confirm_status) === 1, JSON.stringify(apConfirmed))
     const qtyBeforePR = (await stockQty(pool, product.id, warehouse.id)).quantity
     const [prSrcContainer] = await dbQuery(
       pool,
@@ -265,14 +271,17 @@ async function main() {
     await expectOk(log, prSplitResp, '拆分出采购退货用容器成功')
     const prContainerId = prSplitResp.data?.data?.newContainerId
     const prContainerBarcode = prSplitResp.data?.data?.newBarcode
+    // 关联采购单时退货明细须绑定原采购明细（sourceItemId），否则 createPR 400
+    const [poItem] = await dbQuery(pool, 'SELECT id FROM purchase_order_items WHERE order_id=? AND product_id=? LIMIT 1', [mainPoId, product.id])
 
     const prCreate = await http.post('/api/returns/purchase', {
       token,
       json: {
         supplierId: Number(supplier.id), supplierName: supplier.name,
         warehouseId: Number(warehouse.id), warehouseName: warehouse.name,
+        purchaseOrderId: mainPoId,
         remark: randomRef('integ-pr'),
-        items: [{ productId: Number(product.id), productCode: product.code, productName: product.name, unit: product.unit, quantity: PR_QTY, unitPrice: 10 }],
+        items: [{ sourceItemId: Number(poItem.id), productId: Number(product.id), productCode: product.code, productName: product.name, unit: product.unit, quantity: PR_QTY, unitPrice: 10 }],
       },
     })
     log.assert('创建采购退货单成功(201)', prCreate.status === 201 && !!prCreate.data?.data?.id, `status=${prCreate.status}`)
@@ -292,6 +301,11 @@ async function main() {
     await expectOk(log, await http.put(`/api/warehouse-tasks/${prTaskId}/ready`, { token, headers: ctx.pdaHeaders() }), '拣货收口成功（采购退货直接跳至待出库）')
     await expectOk(log, await http.put(`/api/warehouse-tasks/${prTaskId}/ship`, { token, headers: ctx.pdaHeaders() }), 'PDA 出库成功')
     log.assert(`采购退货后 quantity = ${qtyBeforePR - PR_QTY}`, (await stockQty(pool, product.id, warehouse.id)).quantity === qtyBeforePR - PR_QTY)
+    // ★ 决策2：采购退货冲减应付后，confirm_status 被打回 0（金额已变，须财务重新确认才能再付款）
+    const [apAfterPR] = await dbQuery(pool, 'SELECT confirm_status, total_amount FROM payment_records WHERE id=?', [apRow.id])
+    log.assert('★ 采购退货冲减应付后 confirm_status 打回 0（业务决策 2026-07-28）',
+      Number(apAfterPR.confirm_status) === 0 && Number(apAfterPR.total_amount) === (INBOUND_QTY - PR_QTY) * 10,
+      `confirm_status=${apAfterPR.confirm_status} total=${apAfterPR.total_amount}`)
 
     // ── 6. 销售退货（确认后派发 PDA 退货任务 → 收货→质检→上架）──
     log.section('销售退货（PDA 收货→质检→上架，库存入库）')

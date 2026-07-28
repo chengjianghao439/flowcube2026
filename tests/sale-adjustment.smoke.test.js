@@ -310,6 +310,103 @@ async function scenarioDecreaseWhileStillPicking(log, ctx, token) {
   log.assert('归还完成后任务能正常推进到待分拣(3)', readyResp.ok, JSON.stringify(readyResp.data))
 }
 
+// ── 场景：装箱闭合强校验 —— 装箱总量必须等于复核量才能进入待出库（业务决策 2026-07-28）──
+async function scenarioPackagingClosure(log, ctx, token) {
+  log.section('Scenario: 装箱闭合 — 装不满不得进入待出库')
+  const container = await seedActiveContainer(ctx.pool, { product: ctx.product, warehouse: ctx.warehouse, qty: 5, locationId: ctx.location.id })
+  const saleCreate = await createSaleOrder(ctx.http, token, { customer: ctx.customer, warehouse: ctx.warehouse, product: ctx.product, quantity: 5 })
+  const saleId = Number(saleCreate.data?.data?.id)
+  const taskId = await shipToTask(ctx.http, token, ctx.pool, saleId)
+  const [itemRow] = await dbQuery(ctx.pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
+
+  await pickWholeContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 5 })
+  await ctx.http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
+  await ctx.http.put(`/api/warehouse-tasks/${taskId}/sort-done`, { token, headers: ctx.pdaHeaders(), json: {} })
+  const [containerRow] = await dbQuery(ctx.pool, 'SELECT barcode FROM inventory_containers WHERE id=?', [container.containerId])
+  const checkScan = await ctx.http.post('/api/scan-logs/check', { token, headers: ctx.pdaHeaders(), json: { taskId, barcode: containerRow.barcode } })
+  log.assert('全量复核收口进待打包(5)', checkScan.ok, JSON.stringify(checkScan.data))
+
+  // 只装 3 件（复核 5）→ pack-done 应被装箱闭合拦下
+  const pkgResp = await ctx.http.post('/api/packages', { token, headers: ctx.pdaHeaders(), json: { warehouseTaskId: taskId } })
+  const packageId = Number(pkgResp.data?.data?.id)
+  await ctx.http.post(`/api/packages/${packageId}/add-item`, { token, headers: ctx.pdaHeaders(), json: { productCode: ctx.product.code, qty: 3 } })
+  await ctx.http.put(`/api/packages/${packageId}/finish`, { token, headers: ctx.pdaHeaders() })
+  const shortPack = await ctx.http.put(`/api/warehouse-tasks/${taskId}/pack-done`, { token, headers: ctx.pdaHeaders() })
+  log.assert('★ 装箱3件<复核5件时 pack-done 被拒(400)（装箱闭合强校验）',
+    shortPack.status === 400, `status=${shortPack.status} ${JSON.stringify(shortPack.data?.message || '')}`)
+
+  // 补装到 5 件 → pack-done 通过，进入待出库(6)
+  const pkg2 = await ctx.http.post('/api/packages', { token, headers: ctx.pdaHeaders(), json: { warehouseTaskId: taskId } })
+  const packageId2 = Number(pkg2.data?.data?.id)
+  await ctx.http.post(`/api/packages/${packageId2}/add-item`, { token, headers: ctx.pdaHeaders(), json: { productCode: ctx.product.code, qty: 2 } })
+  await ctx.http.put(`/api/packages/${packageId2}/finish`, { token, headers: ctx.pdaHeaders() })
+  const fullPack = await ctx.http.put(`/api/warehouse-tasks/${taskId}/pack-done`, { token, headers: ctx.pdaHeaders() })
+  // 装满后不应再被「装箱闭合」拦下：要么直接成功，要么卡在其后的箱贴打印闭合(409)——后者是打印
+  // 链路前置、与本用例无关（测试环境无真实打印客户端回执），关键是不再报「装箱数量不一致」。
+  log.assert('装满5件后越过装箱闭合校验（不再报装箱数量不一致）',
+    fullPack.ok || (fullPack.status === 409 && /箱贴|打印/.test(String(fullPack.data?.message || ''))),
+    `status=${fullPack.status} ${JSON.stringify(fullPack.data?.message || '')}`)
+}
+
+// ── 场景：销售退货按实际合格入库量冲减应收（业务决策 2026-07-28）——质检不合格部分不退客户 ──
+async function scenarioSaleReturnQualifiedQty(log, ctx, token) {
+  log.section('Scenario: 销售退货按合格量冲减应收（不合格不退）')
+  const { http, pool } = ctx
+  const container = await seedActiveContainer(pool, { product: ctx.product, warehouse: ctx.warehouse, qty: 10, locationId: ctx.location.id })
+  const saleCreate = await createSaleOrder(http, token, { customer: ctx.customer, warehouse: ctx.warehouse, product: ctx.product, quantity: 10 })
+  const saleId = Number(saleCreate.data?.data?.id)
+  const taskId = await shipToTask(http, token, pool, saleId)
+  const [itemRow] = await dbQuery(pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
+
+  // 完整出库链到已出库(7)
+  await pickWholeContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 10 })
+  await http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
+  await http.put(`/api/warehouse-tasks/${taskId}/sort-done`, { token, headers: ctx.pdaHeaders(), json: {} })
+  const [cRow] = await dbQuery(pool, 'SELECT barcode FROM inventory_containers WHERE id=?', [container.containerId])
+  await http.post('/api/scan-logs/check', { token, headers: ctx.pdaHeaders(), json: { taskId, barcode: cRow.barcode } })
+  const pkg = await http.post('/api/packages', { token, headers: ctx.pdaHeaders(), json: { warehouseTaskId: taskId } })
+  const pkgId = Number(pkg.data?.data?.id)
+  await http.post(`/api/packages/${pkgId}/add-item`, { token, headers: ctx.pdaHeaders(), json: { productCode: ctx.product.code, qty: 10 } })
+  await http.put(`/api/packages/${pkgId}/finish`, { token, headers: ctx.pdaHeaders() })
+  // 造数据跨过箱贴打印闭合（测试环境无真实打印客户端回执）：把该箱的箱贴打印任务标记完成(status=2)
+  await pool.query("UPDATE print_jobs SET status=2 WHERE ref_type='package' AND ref_id=?", [pkgId])
+  const packDone = await http.put(`/api/warehouse-tasks/${taskId}/pack-done`, { token, headers: ctx.pdaHeaders() })
+  log.assert('装满并跨过箱贴打印后进入待出库(6)', packDone.ok, `status=${packDone.status} ${JSON.stringify(packDone.data?.message || '')}`)
+  const shipResp = await http.put(`/api/warehouse-tasks/${taskId}/ship`, { token, headers: ctx.pdaHeaders() })
+  log.assert('出库成功进入已出库(7)', shipResp.ok, `status=${shipResp.status} ${JSON.stringify(shipResp.data?.message || '')}`)
+
+  const [ar0] = await dbQuery(pool, 'SELECT id, total_amount FROM payment_records WHERE type=2 AND order_id=?', [saleId])
+  log.assert('出库后生成应收 = 10×10 = 100', !!ar0 && Number(ar0.total_amount) === 100, JSON.stringify(ar0))
+
+  // 销售退货 4 件，质检 3 合格 / 1 不合格 → 应收只冲减合格 3 件
+  const [srItemRow] = await dbQuery(pool, 'SELECT id FROM sale_order_items WHERE order_id=? AND product_id=? LIMIT 1', [saleId, ctx.product.id])
+  const srCreate = await http.post('/api/returns/sale', {
+    token,
+    json: {
+      customerId: Number(ctx.customer.id), customerName: ctx.customer.name,
+      warehouseId: Number(ctx.warehouse.id), warehouseName: ctx.warehouse.name,
+      saleOrderId: saleId,
+      remark: randomRef('adj-sr'),
+      items: [{ sourceItemId: Number(srItemRow.id), productId: Number(ctx.product.id), productCode: ctx.product.code, productName: ctx.product.name, unit: ctx.product.unit, quantity: 4, unitPrice: 10 }],
+    },
+  })
+  log.assert('创建销售退货单成功(201)', srCreate.status === 201, `status=${srCreate.status} ${JSON.stringify(srCreate.data?.message || '')}`)
+  const srId = Number(srCreate.data?.data?.id)
+  await http.post(`/api/returns/sale/${srId}/confirm`, { token })
+  const [srTask] = await dbQuery(pool, "SELECT id FROM return_tasks WHERE return_id=? AND return_type='sale' ORDER BY id DESC LIMIT 1", [srId])
+  const srTaskId = srTask.id
+  const recv = await http.post(`/api/return-tasks/${srTaskId}/receive`, { token, headers: ctx.pdaHeaders(), json: { productId: Number(ctx.product.id), packages: [{ qty: 4 }] } })
+  const srContainerId = recv.data?.data?.containers?.[0]?.containerId
+  await http.post(`/api/return-tasks/${srTaskId}/check`, { token, headers: ctx.pdaHeaders(), json: { productId: Number(ctx.product.id), passedQty: 3, rejectedQty: 1 } })
+  await http.post(`/api/return-tasks/${srTaskId}/putaway`, { token, headers: ctx.pdaHeaders(), json: { containerId: srContainerId, locationId: Number(ctx.location.id) } })
+
+  const [ar1] = await dbQuery(pool, 'SELECT total_amount, confirm_status FROM payment_records WHERE id=?', [ar0.id])
+  log.assert('★ 销售退货只按合格量(3)冲减应收：100 − 3×10 = 70（不合格1件不退，业务决策）',
+    Number(ar1.total_amount) === 70, `total=${ar1.total_amount}`)
+  log.assert('★ 销售退货冲减应收后 confirm_status 打回 0（业务决策）',
+    Number(ar1.confirm_status) === 0, `confirm_status=${ar1.confirm_status}`)
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -323,6 +420,8 @@ async function main() {
     await scenarioDecreasePendingConfirm(log, ctx, token)
     await scenarioIncreaseWhileStillPicking(log, ctx, token)
     await scenarioDecreaseWhileStillPicking(log, ctx, token)
+    await scenarioPackagingClosure(log, ctx, token)
+    await scenarioSaleReturnQualifiedQty(log, ctx, token)
   } finally {
     const summary = log.summary()
     await ctx.close()

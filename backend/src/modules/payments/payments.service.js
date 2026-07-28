@@ -208,6 +208,14 @@ async function recordPayment(id, { amount, paymentDate, method, remark }, operat
         status: newStatus,
       },
     })
+    // 纵深防御：若该账款属于某对账单，付款后同事务刷新对账单汇总投影。正常 UI 里月结账款只经
+    // 对账单分配核销（必刷新），但 /payments/:id/pay 直付账款是另一条入口，不刷会让对账单
+    // settled_amount/状态漂移（存疑修复 2026-07-28）。
+    const [stmtRows] = await conn.query('SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id = ?', [id])
+    if (stmtRows.length) {
+      const statementSvc = require('./reconciliation-statements.service')
+      for (const s of stmtRows) await statementSvc.refreshSettlement(conn, s.statement_id)
+    }
     await conn.commit()
     return { newPaid, newBalance, status: newStatus }
   } catch (error) {

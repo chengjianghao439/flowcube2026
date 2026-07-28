@@ -130,6 +130,20 @@ async function createScanLog({
     if (qty > remainingQty) {
       throw new AppError(`扫码数量超过容器可用数量（剩余 ${remainingQty}）`, 400)
     }
+    // 累计校验：散件模式允许对同一容器分次扫码，单次校验挡不住「多次累加超过容器实存」。
+    // lockContainer 只锁定不递减 remaining_qty，真实扣减要到出库；若 picked_qty 虚高于容器
+    // 实存，出库时 deductFromTaskLockedContainers 会因本任务锁定容器不足而永久卡在待出库。
+    const [[{ scanned }]] = await conn.query(
+      `SELECT COALESCE(SUM(qty), 0) AS scanned FROM scan_logs
+       WHERE task_id = ? AND container_id = ? AND COALESCE(scan_purpose, ${SCAN_PURPOSE.PICK}) = ${SCAN_PURPOSE.PICK}`,
+      [taskId, containerId],
+    )
+    if (Number(scanned) + qty > remainingQty) {
+      throw new AppError(
+        `该容器累计拣货 ${scanned} + 本次 ${qty} 将超过容器实存 ${remainingQty}`,
+        400,
+      )
+    }
     if (
       containerRow.locked_by_task_id != null
       && Number(containerRow.locked_by_task_id) !== Number(taskId)

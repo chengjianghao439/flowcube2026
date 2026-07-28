@@ -58,8 +58,10 @@ router.put('/:id/assign', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), 
 // PUT /api/warehouse-tasks/:id/start-picking — 开始备货（1→2）
 router.put('/:id/start-picking', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), pdaOnly, pdaSessionRequired(), ctrl.startPicking)
 
-// PUT /api/warehouse-tasks/:id/items/:itemId/picked-qty — 已禁用
-router.put('/:id/items/:itemId/picked-qty', ctrl.pickedQtyDeprecated)
+// PUT /api/warehouse-tasks/:id/items/:itemId/picked-qty — 已禁用（handler 直接返回 410）
+// 仍补 requirePermission：保持「写接口一律带权限门」的全仓约定，避免日后有人复用该 handler
+// 名或改回真实写逻辑时留下一个无鉴权的破窗。
+router.put('/:id/items/:itemId/picked-qty', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), ctrl.pickedQtyDeprecated)
 
 // PUT /api/warehouse-tasks/:id/ready — 拣货完成，待分拣（2→3）
 router.put('/:id/ready', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK), pdaOnly, pdaSessionRequired(), ctrl.readyToShip)
@@ -82,8 +84,9 @@ router.put('/:id/pack-done', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK_D
 // PUT /api/warehouse-tasks/:id/ship — 执行出库（6→7）
 router.put('/:id/ship', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SHIP), pdaOnly, pdaSessionRequired(), ctrl.ship)
 
-// PUT /api/warehouse-tasks/:id/check — 已关闭手动复核
-router.put('/:id/check', ctrl.manualCheckDeprecated)
+// PUT /api/warehouse-tasks/:id/check — 已关闭手动复核（handler 直接返回 410）
+// 同 picked-qty：补 requirePermission 保持约定统一，防破窗。
+router.put('/:id/check', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CHECK), ctrl.manualCheckDeprecated)
 
 // PUT /api/warehouse-tasks/:id/cancel — 取消任务（仅 ERP 后台，PDA 不允许调用）
 router.put('/:id/cancel', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL), (req, res, next) => {

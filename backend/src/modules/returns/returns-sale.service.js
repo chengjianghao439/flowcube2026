@@ -403,10 +403,15 @@ async function syncSaleReturnCompleted(conn, returnId, { taskId, taskNo }) {
   }
   const rule = assertStatusAction('saleReturn', 'execute', retRow.status)
 
-  // 账款冲减：从应收账款中减去退货金额
+  // 账款冲减：按实际质检合格入库量（checked_qty − rejected_qty）× 退货单价冲减应收。
+  // 质检不合格部分留在 REJECTED 容器、不退客户（业务决策 2026-07-28）。口径与 sale.service
+  // 的 recomputeSaleReceivable 严格一致，避免后续出库全量重算时口径不符导致覆盖。
   const [[{ totalAmount }]] = await conn.query(
-    'SELECT COALESCE(SUM(quantity * unit_price), 0) AS totalAmount FROM sale_return_items WHERE return_id = ?',
-    [returnId],
+    `SELECT COALESCE(SUM((rti.checked_qty - rti.rejected_qty) * sri.unit_price), 0) AS totalAmount
+       FROM return_task_items rti
+       JOIN sale_return_items sri ON sri.id = rti.return_item_id
+      WHERE rti.task_id = ?`,
+    [taskId],
   )
   if (retRow.sale_order_id && totalAmount > 0) {
     await adjustPaymentRecordForReturn(conn, {

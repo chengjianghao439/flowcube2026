@@ -27,7 +27,7 @@ export const getPackagesApi = (taskId: number) =>
   client.get<Package[]>('/packages', { params: { taskId } })
 
 export const createPackageApi = (warehouseTaskId: number, remark?: string) =>
-  client.post<Package>('/packages', { warehouseTaskId, remark })
+  client.post<Package>('/packages', { warehouseTaskId, remark }, { headers: { 'X-Client': 'pda' } })
 
 export const addPackageItemApi = (
   packageId: number,
@@ -37,7 +37,7 @@ export const addPackageItemApi = (
   client.post<PackageItem>(`/packages/${packageId}/add-item`, {
     productCode,
     qty,
-  })
+  }, { headers: { 'X-Client': 'pda' } })
 
 export const removePackageItemApi = (
   packageId: number,
@@ -47,11 +47,14 @@ export const removePackageItemApi = (
   client.post<{ itemId: number; productId: number; productCode: string; productName: string; unit: string; removed: boolean; qty: number }>(
     `/packages/${packageId}/remove-item`,
     { itemId, qty },
+    { headers: { 'X-Client': 'pda' } },
   )
 
 export const voidPackageApi = (packageId: number) =>
   client.post<{ id: number; warehouseTaskId: number; status: number; statusName: string }>(
     `/packages/${packageId}/void`,
+    undefined,
+    { headers: { 'X-Client': 'pda' } },
   )
 
 export interface PackagePrintDispatchHint {
@@ -94,7 +97,7 @@ export const finishPackageApi = (packageId: number, requestKey?: string) =>
   }>(
     `/packages/${packageId}/finish`,
     undefined,
-    requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined,
+    { headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' } },
   )
 
 export const printPackageLabelApi = (packageId: number, requestKey?: string) =>

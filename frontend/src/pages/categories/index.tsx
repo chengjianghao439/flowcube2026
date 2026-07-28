@@ -27,13 +27,8 @@ import type { Category, CreateCategoryParams, UpdateCategoryParams } from '@/typ
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 
-const LEVEL_BADGE: Record<number, string> = {
-  1: 'bg-blue-100 text-blue-700',
-  2: 'bg-emerald-100 text-emerald-700',
-  3: 'bg-orange-100 text-orange-700',
-  4: 'bg-purple-100 text-purple-700',
-}
-
+// 层级标识统一走 StatusBadge 体系的 info tone（分类标识），层级由「L1~L4 + 一级~四级」文字
+// 与树形缩进表达，不再各自硬编码 bg-*-100 调色板（那样暗色主题不受控、与全站语义色脱节）。
 const LEVEL_LABEL: Record<number, string> = { 1: '一级', 2: '二级', 3: '三级', 4: '四级' }
 
 const EMPTY_FORM: CreateCategoryParams & { status?: boolean } = {
@@ -234,9 +229,7 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
             : <span className="h-3.5 w-3.5" />}
         </button>
 
-        <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold', LEVEL_BADGE[cat.level] ?? LEVEL_BADGE[4])}>
-          L{cat.level}
-        </span>
+        <SoftStatusLabel label={`L${cat.level}`} tone="info" className="shrink-0" />
 
         {cat.code && (
           <span className="shrink-0 text-doc-code-muted">{cat.code}</span>
@@ -397,9 +390,9 @@ export default function CategoriesPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         {[1, 2, 3, 4].map(l => (
           <span key={l} className="flex items-center gap-1">
-            <span className={cn('rounded px-1.5 py-0.5 font-semibold', LEVEL_BADGE[l])}>L{l}</span>
+            <SoftStatusLabel label={`L${l}`} tone="info" />
             {LEVEL_LABEL[l]}分类
-            {l === 4 && <span className="text-purple-600">（可绑定商品）</span>}
+            {l === 4 && <span className="text-info">（可绑定商品）</span>}
           </span>
         ))}
         <span className="ml-auto">默认显示一级分类，点击当前分类展开或收起下一级</span>

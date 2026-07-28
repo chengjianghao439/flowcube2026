@@ -4,9 +4,39 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { pdaSessionRequired } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
+const { z } = require('zod')
 
 const router = Router()
 router.use(authMiddleware)
+
+function vBody(schema) {
+  return (req, res, next) => {
+    const r = schema.safeParse(req.body)
+    if (!r.success) {
+      return res.status(400).json({
+        success: false,
+        message: r.error.errors.map(e => e.message).join('；'),
+        data: null,
+      })
+    }
+    req.body = r.data
+    next()
+  }
+}
+
+const zReceive = z.object({
+  productId: z.number().int().positive('productId 必填'),
+  packages: z.array(z.object({ qty: z.number().positive('数量必须大于 0') }).passthrough()).nonempty('至少一箱'),
+})
+const zCheck = z.object({
+  productId: z.number().int().positive('productId 必填'),
+  passedQty: z.number().nonnegative('合格数量不能为负'),
+  rejectedQty: z.number().nonnegative('不合格数量不能为负').optional(),
+})
+const zPutaway = z.object({
+  containerId: z.number().int().positive('containerId 必填'),
+  locationId: z.number().int().positive('locationId 必填'),
+})
 
 // PDA 列表
 router.get('/pda',
@@ -32,6 +62,7 @@ router.post('/:id/receive',
   pdaSessionRequired(),
   requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
   pdaOnly,
+  vBody(zReceive),
   ctrl.receive,
 )
 
@@ -40,6 +71,7 @@ router.post('/:id/check',
   pdaSessionRequired(),
   requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
   pdaOnly,
+  vBody(zCheck),
   ctrl.check,
 )
 
@@ -48,6 +80,7 @@ router.post('/:id/putaway',
   pdaSessionRequired(),
   requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
   pdaOnly,
+  vBody(zPutaway),
   ctrl.putaway,
 )
 

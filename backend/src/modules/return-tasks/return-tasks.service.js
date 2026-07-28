@@ -12,7 +12,7 @@ const RT_STATUS = { PENDING_RECEIVE: 1, RECEIVING: 2, PENDING_CHECK: 3, PENDING_
 const RT_STATUS_NAME = { 1: '待收货', 2: '收货中', 3: '待质检', 4: '待上架', 5: '已完成', 6: '已取消' }
 
 async function genTaskNo(conn) {
-  return generateDailyCode(conn, 'return_tasks', 'task_no', 'RT')
+  return generateDailyCode(conn, 'RT', 'return_tasks', 'task_no')
 }
 
 const RT_TRANSITIONS = {
@@ -105,7 +105,17 @@ async function submitWithinTransaction(conn, id, operator) {
 }
 
 async function submit(id, operator) {
-  await submitWithinTransaction(pool, id, operator)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await submitWithinTransaction(conn, id, operator)
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
   return findById(id)
 }
 

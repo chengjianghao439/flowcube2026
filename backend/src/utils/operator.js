@@ -11,6 +11,7 @@ function normalizeOperator(user = {}) {
     userName: displayName,
     operatorId: userId,
     operatorName: displayName,
+    roleId: user.roleId ?? user.role_id ?? null,
   }
 }
 

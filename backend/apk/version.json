@@ -1,7 +1,7 @@
 {
-  "version": "0.4.33",
-  "versionCode": 33,
+  "version": "0.4.34",
+  "versionCode": 34,
   "filename": "app-release.apk",
-  "releaseNote": "- 新增「财务 → 资金 → 账户管理」：管理银行、现金、支付宝、微信等收付款账户。",
-  "publishedAt": "2026-07-27T00:22:34.817Z"
+  "releaseNote": "- 销售退货后再次发货时，应收不再被算回全额（退货冲减不再被吞掉，客户不会被多计应收）",
+  "publishedAt": "2026-07-28T13:26:09.768Z"
 }

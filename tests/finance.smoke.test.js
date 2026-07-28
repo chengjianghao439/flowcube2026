@@ -464,6 +464,20 @@ async function scenarioStatement(ctx, log, token, accountId) {
   })
   log.assert('★ 已核销完的对账单不能再核销', overSettle.status === 400,
     `status=${overSettle.status} ${JSON.stringify(overSettle.data?.message || '')}`)
+
+  // 纵深防御：对账单成员账款若被 /payments/:id/pay 直付（绕开对账单核销这条路），对账单的
+  // settled_amount/状态也必须刷新。修复前 recordPayment 不碰对账单，会让投影停在旧值漂移（存疑③）。
+  const dpParty = randomRef('直付客户')
+  const dp1 = await seedRecord(http, token, pool, { type: 2, partyName: dpParty, amount: 500, settlementType: 2 })
+  const dpCreated = await http.post('/api/payments/statements', { token, json: { type: 2, partyName: dpParty, recordIds: [dp1] } })
+  const dpStId = Number(dpCreated.data?.data?.id)
+  await http.post(`/api/payments/statements/${dpStId}/confirm`, { token })
+  const directPay = await http.post(`/api/payments/${dp1}/pay`, { token, json: { amount: 500, paymentDate: today() } })
+  log.assert('对账单成员账款可被直付', directPay.ok, `status=${directPay.status} ${JSON.stringify(directPay.data?.message || '')}`)
+  const [dpSt] = await dbQuery(pool, 'SELECT * FROM reconciliation_statements WHERE id=?', [dpStId])
+  log.assert('★ 直付对账单成员账款后，对账单 settled_amount/状态同步刷新（纵深防御）',
+    money(dpSt.settled_amount) === 500 && money(dpSt.balance) === 0 && Number(dpSt.status) === 3,
+    `settled=${dpSt.settled_amount} balance=${dpSt.balance} status=${dpSt.status}`)
 }
 
 // ── 5. 结算方式快照 ───────────────────────────────────────────────────────────

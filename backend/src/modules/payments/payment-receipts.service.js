@@ -189,6 +189,20 @@ async function applyAllocations(conn, receipt, allocations, operator) {
     [newSettled, Math.max(0, newReceiptBalance), resolveReceiptStatus(Number(receipt.amount), newSettled), receipt.id],
   )
 
+  // 纵深防御：按 recordId 直核（statementId=null）的记录若也属于某对账单，同样要刷新其汇总投影，
+  // 否则对账单 settled_amount 会漏更新（touchedStatements 原本只含 statementId 非空的分配，
+  // 存疑修复 2026-07-28）。
+  const directRecordIds = [...new Set(sorted.map(a => a.recordId))]
+  if (directRecordIds.length) {
+    const [extraStmts] = await conn.query(
+      'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id IN (?)',
+      [directRecordIds],
+    )
+    for (const s of extraStmts) {
+      if (!touchedStatements.includes(s.statement_id)) touchedStatements.push(s.statement_id)
+    }
+  }
+
   // 账款动过之后重算对账单汇总（投影，不独立累加，避免两处漂移）
   for (const sid of touchedStatements) {
     await statementSvc.refreshSettlement(conn, sid)

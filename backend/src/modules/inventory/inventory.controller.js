@@ -52,6 +52,7 @@ async function logs(req, res, next) {
       type: req.query.type ? +req.query.type : null,
       productId: req.query.productId ? +req.query.productId : null,
       warehouseId: req.query.warehouseId ? +req.query.warehouseId : null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result, '查询成功')
   } catch(e){next(e)}
@@ -106,6 +107,7 @@ async function overview(req, res, next) {
       keyword:      req.query.keyword     || '',
       warehouseId:  req.query.warehouseId ? +req.query.warehouseId : null,
       categoryId:   req.query.categoryId  ? +req.query.categoryId  : null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result, '查询成功')
   } catch(e){next(e)}

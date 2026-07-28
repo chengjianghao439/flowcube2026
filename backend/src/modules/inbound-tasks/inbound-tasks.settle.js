@@ -67,7 +67,7 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
      ON DUPLICATE KEY UPDATE
        confirm_status = CASE WHEN total_amount <> VALUES(total_amount) THEN 0 ELSE confirm_status END,
        total_amount = VALUES(total_amount),
-       balance = VALUES(total_amount) - paid_amount,
+       balance = GREATEST(0, VALUES(total_amount) - paid_amount),
        status = CASE WHEN paid_amount >= VALUES(total_amount) THEN 3
                      WHEN paid_amount > 0 THEN 2 ELSE 1 END`,
     [poId, po.order_no, po.supplier_name, total, total, settlementSnapshot, ...due.params],

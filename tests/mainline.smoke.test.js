@@ -69,6 +69,13 @@ async function main() {
     const limitedInbound = await http.get('/api/inbound-tasks', { token: limitedToken })
     log.assert('已登录且有权限访问成功', limitedInbound.status === 200 && limitedInbound.data?.success === true, `status=${limitedInbound.status}`)
 
+    // 两个已废弃仓库任务写路由（handler 直接返回 410）现已补 requirePermission：受限用户
+    // （无 WAREHOUSE_TASK_PICK/CHECK）应被权限门拦成 403 而非直达 410，验证「写接口一律带权限门」。
+    const depPickedQty = await http.put('/api/warehouse-tasks/1/items/1/picked-qty', { token: limitedToken, json: {} })
+    log.assert('废弃路由 picked-qty 无权限被拒(403)', depPickedQty.status === 403, `status=${depPickedQty.status}`)
+    const depManualCheck = await http.put('/api/warehouse-tasks/1/check', { token: limitedToken, json: {} })
+    log.assert('废弃路由 check 无权限被拒(403)', depManualCheck.status === 403, `status=${depManualCheck.status}`)
+
     log.section('inbound mainline')
     const purchaseCreate = await createPurchaseOrder(http, adminToken, {
       supplier,

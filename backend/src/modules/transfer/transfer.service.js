@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { SOURCE_TYPE, getAvailableStockForDecision, syncStockFromContainers, CONTAINER_STATUS } = require('../../engine/containerEngine')
+const { SOURCE_TYPE, getAvailableStockForDecision, syncStockFromContainers, CONTAINER_STATUS, lockStockDimension } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { transferScopeFilter, assertTransferInScope } = require('../../utils/warehouseScope')
@@ -206,9 +206,20 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
     const fromWh = Number(orderRow.from_warehouse_id)
     const toWh = Number(orderRow.to_warehouse_id)
 
+    const barcode = String(containerBarcode || '').trim()
+    // 先无锁读出容器所属商品，用于在锁容器前先取源仓维度锁——保证 stock→容器 的统一加锁
+    // 顺序（与 putaway/出库一致），否则后面的 getAvailableStockForDecision(lock) 会先锁 stock、
+    // 而此处已先锁了容器，与并发上架/出库 ABBA 死锁。
+    const [[cPeek]] = await conn.query(
+      'SELECT product_id FROM inventory_containers WHERE barcode = ? AND deleted_at IS NULL',
+      [barcode],
+    )
+    if (!cPeek) throw new AppError('容器条码不存在', 404)
+    await lockStockDimension(conn, cPeek.product_id, fromWh)
+
     const [[c]] = await conn.query(
       'SELECT * FROM inventory_containers WHERE barcode = ? AND deleted_at IS NULL FOR UPDATE',
-      [String(containerBarcode || '').trim()],
+      [barcode],
     )
     if (!c) throw new AppError('容器条码不存在', 404)
     if (Number(c.warehouse_id) !== fromWh) throw new AppError('该容器不在本调拨单的调出仓库', 400)
@@ -223,6 +234,19 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
     if (!item) throw new AppError('该商品不在本调拨单明细内', 400)
 
     const qty = Number(c.remaining_qty)
+    // 复检源仓可用量（available = ACTIVE 容器合计 − reserved）≥ 本容器搬出量。
+    // confirm 时校验过一次，但 confirm→scanOut 之间可能新增销售占库（reserve 只加 reserved、
+    // 不锁容器），若把已被占库(未拣)的容器整箱调走，会使源仓 available 变负、reserved 无货可拣
+    // （违反库存不变量#4）。此处 c 尚未移动、仍是 ACTIVE，故 available 已包含本容器。
+    const { available } = await getAvailableStockForDecision(conn, {
+      productId: c.product_id, warehouseId: fromWh, lock: true,
+    })
+    if (available < qty) {
+      throw new AppError(
+        `该容器 ${qty} 件中有货已被销售占用，源仓当前可用仅 ${available}，无法整箱调出；请先处理占用或改调其他容器`,
+        409,
+      )
+    }
     // 整容器移动到调入仓，标记在途（PENDING_PUTAWAY 不计入调入仓可用库存）
     await conn.query(
       'UPDATE inventory_containers SET warehouse_id = ?, status = ?, location_id = NULL, transfer_order_id = ? WHERE id = ?',

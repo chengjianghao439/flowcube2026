@@ -145,7 +145,21 @@ async function submit(id) {
   return transition(id, 'submit', 'UPDATE expense_claims SET submitted_at=NOW() WHERE id=?')
 }
 
-async function withdraw(id) { return transition(id, 'withdraw', 'UPDATE expense_claims SET submitted_at=NULL WHERE id=?') }
+// 撤回/取消都只允许申请人本人（或超管）操作——withdraw 注释写明「本人撤回」，但此前 controller
+// 未传 operator、service 也未校验，任何持 FINANCE_EXPENSE_CREATE 的人都能撤/取消别人的单。
+async function assertClaimOwner(id, operator) {
+  const [[row]] = await pool.query('SELECT applicant_id FROM expense_claims WHERE id=? AND deleted_at IS NULL', [id])
+  if (!row) throw new AppError('费用报销单不存在', 404)
+  if (Number(operator?.roleId) === 1) return
+  if (Number(row.applicant_id) !== Number(operator?.operatorId)) {
+    throw new AppError('只能撤回/取消本人提交的报销单', 403)
+  }
+}
+
+async function withdraw(id, operator) {
+  await assertClaimOwner(id, operator)
+  return transition(id, 'withdraw', 'UPDATE expense_claims SET submitted_at=NULL WHERE id=?')
+}
 
 /**
  * 审批通过。**审批人不能是申请人本人**——一级审批只有这一道内控，
@@ -174,7 +188,10 @@ async function reject(id, { reason }, operator) {
     [operator.operatorId, operator.operatorName, String(reason).trim()])
 }
 
-async function cancel(id) { return transition(id, 'cancel') }
+async function cancel(id, operator) {
+  await assertClaimOwner(id, operator)
+  return transition(id, 'cancel')
+}
 
 /**
  * 付款：从指定资金账户出账，同事务写账户流水。

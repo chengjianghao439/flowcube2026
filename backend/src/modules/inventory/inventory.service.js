@@ -126,14 +126,15 @@ async function getAvailabilityByProducts({ productIds, scopeWarehouseIds = null 
 
 // ─── 流水记录 ─────────────────────────────────────────────────────────────────
 
-async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehouseId=null }) {
+async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehouseId=null, scopeWarehouseIds=null }) {
   const offset = (page-1)*pageSize
   const conditions = ['1=1']
   const params = []
   if (type) { conditions.push('l.type=?'); params.push(type) }
   if (productId) { conditions.push('l.product_id=?'); params.push(productId) }
   if (warehouseId) { conditions.push('l.warehouse_id=?'); params.push(warehouseId) }
-  const where = conditions.join(' AND ')
+  const scope = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
+  const where = conditions.join(' AND ') + scope.sql
 
   const [rows] = await pool.query(
     `SELECT l.*, p.code AS product_code, p.name AS product_name, p.unit,
@@ -143,11 +144,11 @@ async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehou
      JOIN inventory_warehouses w ON l.warehouse_id=w.id
      LEFT JOIN supply_suppliers s ON l.supplier_id=s.id
      WHERE ${where} ORDER BY l.created_at DESC LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset],
+    [...params, ...scope.params, pageSize, offset],
   )
 
   const [[{total}]] = await pool.query(
-    `SELECT COUNT(*) AS total FROM inventory_logs l WHERE ${where}`, params,
+    `SELECT COUNT(*) AS total FROM inventory_logs l WHERE ${where}`, [...params, ...scope.params],
   )
 
   const TYPE_NAMES = { 1:'入库', 2:'出库', 3:'调整' }
@@ -247,7 +248,7 @@ async function changeStock({ type, productId, warehouseId, supplierId, quantity,
 
 // ─── 库存总览（含分类路径、汇总统计、分页） ───────────────────────────────────
 
-async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, categoryId=null }) {
+async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, categoryId=null, scopeWarehouseIds=null }) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   // 1. 加载所有分类，用于路径重建和后代展开
   const [catRows] = await pool.query(
@@ -294,7 +295,9 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
     conditions.push(`p.category_id IN (${catIds.map(() => '?').join(',')})`)
     baseParams.push(...catIds)
   }
-  const where = conditions.join(' AND ')
+  const scope = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
+  const where = conditions.join(' AND ') + scope.sql
+  baseParams.push(...scope.params)
 
   // 4. 汇总统计（基于当前筛选条件，含仓库过滤）
   const [[statsRow]] = await pool.query(
