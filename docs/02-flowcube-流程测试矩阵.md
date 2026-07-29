@@ -60,7 +60,7 @@ PENDING(1) -> PICKING(2) -> SORTING(3) -> CHECKING(4) -> PACKING(5) -> SHIPPING(
 | `SHIPPED(7)` | `sale_orders.status = 4` 已出库 | 出库完成后通过销售服务主入口同步 |
 | `CANCELLED(8)` | `sale_orders.status = 5` 已取消 | 取消同步必须走销售服务主入口 |
 
-更完整同步策略见 `docs/sale-warehouse-status-sync.md`。
+更完整的状态同步逻辑以 `warehouse-tasks` / `sale` 服务代码为准。
 
 ## 旧状态污染清单
 

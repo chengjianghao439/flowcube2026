@@ -2,7 +2,7 @@
 
 本文件是 Claude Code（claude.ai/code）在本仓库工作的**唯一权威说明书**。内容以当前代码、数据库结构与配置为准。
 
-> 最近一次核对：**2026-07-27**，方式是对着代码逐条验证「可机械验证的声明」——各类计数（模块/表/迁移/权限码/路由）、文中提到的每个 npm 脚本是否真能跑、每个路径是否存在、第 20 节的已知风险是否还成立。上一版（07-26）的问题是：讲机制的部分（库存不变量、状态机、锁顺序）准确，但**凡是需要数一下或实跑一遍的条目基本是照抄旧文本**，于是计数全线偏低、四条早已修复的风险继续挂着、两个跑不起来的 lint 命令被写进检查清单。**改本文件时，数字和"某某不存在/未启用"这类断言必须当场验证再写。**
+> 最近一次核对：**2026-07-29**，对着当前代码逐条验证「可机械验证的声明」——各类计数（模块/表/迁移/权限码/路由）、文中提到的每个 npm 脚本是否真能跑、每个路径是否存在、第 20 节的已知风险是否还成立。本次修正了随 147–149 迁移产生的三处计数偏差（迁移 146→149、表 81→82、权限码 144→145），并清理了 `.claude/worktrees/` 下的遗留 worktree、`docs/` 下过期的阶段性报告与 AGENTS.md 旧快照。计数口径 = **已合并到 main**（`customer-addresses` 模块、迁移 150、表 `sale_customer_addresses` 已随 v0.4.37 合并计入，故本文迁移=150、表=83、模块=47）。历史教训（仍适用）：**凡是需要数一下或实跑一遍的条目最容易被照抄旧文本而滞后**——改本文件时，数字和"某某不存在/未启用"这类断言必须当场验证再写。
 
 > 仓库里还有一份 `AGENTS.md`（已被 `.gitignore` 忽略），是本文件的**旧快照**（模块数、状态机、PDA 描述均已过期）。**不要把 AGENTS.md 当事实来源。**
 > `docs/01-系统技术与架构总规范.md` 是设计规范文档，与本文件冲突时以**代码**为准，其次以本文件为准。
@@ -48,10 +48,10 @@ flowcube/
 │       ├── scheduler.js            仅启动 operation_requests TTL 清理
 │       ├── config/                 db.js（连接池）、env.js（环境变量校验，生产缺项直接拒启动）
 │       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / settlementType / permissions
-│       ├── database/               146 个 .sql 迁移 + migrate.js
+│       ├── database/               150 个 .sql 迁移 + migrate.js
 │       ├── engine/                 containerEngine / inventoryEngine / reservationEngine ← 库存唯一合法入口
 │       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger
-│       ├── modules/                46 个业务模块，统一 routes → controller → service
+│       ├── modules/                47 个业务模块，统一 routes → controller → service
 │       └── utils/                  AppError / response / statusTransition / operationRequest / warehouseScope / codeGenerator …
 ├── frontend/
 │   ├── src/{api,components,config,constants,flows,generated,hooks,layouts,lib,pages,router,store,types,utils}
@@ -256,8 +256,8 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 
 ## 8. 数据库与核心模型
 
-- 81 张表（含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。
-- 迁移：`backend/src/database/` 下 146 个 `.sql`，编号 001–146（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
+- 83 张表（含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。
+- 迁移：`backend/src/database/` 下 150 个 `.sql`，编号 001–150（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
 - ⚠️ **数据库里的 `COLUMN_COMMENT` 曾大面积过期，现已大部分订正但仍有残留**（2026-07-27 抽查：`sale_orders.status`、`warehouse_tasks.status` 的注释都已更新并注明"见 documentStatusRules / warehouseTaskStatus"；`sale_orders.closed_reason` 仍写着迁移 127 已废弃的 `partial_ship_close`）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
 
 核心事实表 / 派生字段：
@@ -340,7 +340,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 ## 12. 权限与安全规则
 
 - 登录 → JWT（`Authorization: Bearer`）。`authMiddleware` 每次请求都回查用户并校验 `token_version`：改密码/禁用用户会使旧 token 立即失效（`AUTH_SESSION_INVALID`）。
-- 权限码在 `backend/src/constants/permissions.js` 与 `frontend/src/lib/permission-codes.ts` **两份手工同步**的常量表（各 144 个，当前双向一致）；改动后跑 `npm run test:permissions` 校验（它做双向 diff + 命名合规检查，已进 CI）。角色权限存 `sys_role_permissions`，`requirePermission` 在校验前按角色现查。
+- 权限码在 `backend/src/constants/permissions.js` 与 `frontend/src/lib/permission-codes.ts` **两份手工同步**的常量表（各 145 个，当前双向一致）；改动后跑 `npm run test:permissions` 校验（它做双向 diff + 命名合规检查，已进 CI）。角色权限存 `sys_role_permissions`，`requirePermission` 在校验前按角色现查。
 - **roleId === 1 是超管，跳过所有权限校验**（前后端都是）。
 - **数据范围**：`user_warehouse_scope`（迁移 122）→ `req.user.warehouseIds`（null=不限仓，超管恒 null，60s 缓存）→ 列表查询用 `scopeFilter()` 拼 SQL。新增涉仓列表接口应接入。
 - 每个业务 routes 文件顶部都有 `router.use(authMiddleware)`。**唯一完全公开的模块是 `/api/app-update/latest`**，另外 `/api/pda/version`、`/api/pda/download`、`/api/auth/login`、`/health`、`/api/health` 免登录。
@@ -461,11 +461,11 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 3. ~~PDA 设备会话形同虚设~~ **已启用**：`pdaSessionRequired()` 已挂在调拨扫出扫入、退货 receive/check/putaway、`/scan-logs` 写入等接口上，前端 `api/client.ts` 会发 `X-PDA-Session` 并自动续期，回归由 `smoke:pda-device-session` 守着。见第 12 节。
 4. ~~缺货上报功能未落地~~ **已了结**：迁移 134 `drop_warehouse_task_shortages` 已删表与相关列，代码里也没有残留引用（`sale` 模块里的 shortage 是"缺货弹窗"，与此无关）。
 5. ~~数据库列注释与实际语义脱节~~ **已系统订正**（迁移 146，2026-07-27）。方法是把 61 条状态类列注释逐条对 `constants/` 与前端 `StatusBadge` 核，改掉 5 条：`transfer_orders.status`（旧注释少一个状态且把中间态"在途"写成"已执行"，最严重）、`sale_orders.closed_reason`（`partial_ship_close` 已由 127 废弃）、`purchase_returns`/`sale_returns.status`（"已退货"→"已执行"）、`print_jobs.content_type`（实际只收 zpl）。**状态语义一律以 `backend/src/constants/` 为准这条不变**，注释只作参考。
-6. ~~前后端权限码没有一致性校验~~ **已有校验**：`npm run test:permissions` 做双向 diff + 命名合规检查并已进 CI，当前两边各 144 个、完全一致。仍是两份手工常量表，新增权限码要改三处（后端常量、前端常量、seed 迁移）。
+6. ~~前后端权限码没有一致性校验~~ **已有校验**：`npm run test:permissions` 做双向 diff + 命名合规检查并已进 CI，当前两边各 145 个、完全一致。仍是两份手工常量表，新增权限码要改三处（后端常量、前端常量、seed 迁移）。
 7. ~~`/packages/*` 缺 `pdaOnly`~~ **已收紧**：装箱、完成箱、作废箱等写接口都已挂 `pdaOnly`。
 8. **生产库存在 schema 漂移史**（曾出现迁移未真正生效导致缺列；也出现过迁移文本声明了生产从没有过的列）。改动依赖新列的逻辑时，先确认生产已跑过对应迁移。2026-07-27 新增的一例同类问题：`payment_records.order_id` 实际是 `NOT NULL`，而 054 的建表文本与 091 的注释都写它可空——已由迁移 145 订正。
 9. **`avg_cost` 只随入库正向移动**，退货/撤回收货不反冲——这是刻意简化，利润分析用 `sale_order_items.cost_snapshot` 口径，不要"顺手修正"。
-10. `docs/` 下部分文档（`flow-review-report.md`、`print-module-refactor-plan.md` 等）是阶段性报告，不代表当前实现。
+10. `docs/` 下少数历史文档可能滞后于当前实现，任何冲突一律以代码为准。
 11. ~~`npm run lint` 两端都是坏的~~ **已补齐并清完存量**（2026-07-27）：两端 ESLint 9 flat config + CI 的 `static` job（顺带把前端 `tsc` 第一次接进 CI），13 处 `react-hooks/exhaustive-deps` 存量已逐个修复、规则恢复为 error。修复中发现的真问题：`CategoryPathDisplay` 条件调用 `useState`（Hook 顺序会在列表行间错位）、6 处 `data ?? []` 让下游 `useMemo` 完全失效、`DataTable` 列宽依赖漏了 `columns`。
 12. **后端 `exceljs` 依赖链上有一条修不掉的高危告警**（2026-07-27 调查结论，别重复折腾）：
     - 已修：`body-parser` 1.20.5→1.20.6、顶层与 `readdir-glob` 下的 `brace-expansion`（`npm audit fix`，只动 lock 不动 package.json）。

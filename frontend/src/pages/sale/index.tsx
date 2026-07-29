@@ -199,8 +199,8 @@ export default function SalePage() {
     { key: 'customerName', title: '客户', width: 13.79 },
     { key: 'warehouseName',title: '仓库',     width: 7.11 },
     {
-      key: 'totalAmount', title: '金额', width: 5.63,
-      render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span>,
+      key: 'totalAmount', title: '金额', width: 5.63, align: 'right',
+      render: v => <span className="font-medium tabular-nums">¥{Number(v).toFixed(2)}</span>,
     },
     { key: 'remark', title: '备注', width: 22.45, render: v => (v as string) || '-' },
     {

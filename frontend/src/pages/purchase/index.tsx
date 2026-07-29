@@ -187,24 +187,24 @@ export default function PurchasePage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<PurchaseOrder>[] = [
-    { key: 'orderNo', title: '采购单号', width: 11.98 },
-    { key: 'supplierName', title: '供应商', width: 13.31 },
-    { key: 'warehouseName', title: '仓库', width: 9.02 },
-    { key: 'totalAmount', title: '金额', width: 8.52, render: (v) => `¥${Number(v).toFixed(2)}` },
+    { key: 'orderNo', title: '采购单号', width: 12 },
+    { key: 'supplierName', title: '供应商', width: 17 },
+    { key: 'warehouseName', title: '仓库', width: 9 },
+    { key: 'totalAmount', title: '金额', width: 9, align: 'right', render: (v) => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
     {
-      key: 'status', title: '状态', width: 8.59,
+      key: 'status', title: '状态', width: 8,
       render: (v, row) => <StatusBadge type="purchase" status={v as number} aria-label={(row as PurchaseOrder).statusName} />
     },
-    { key: 'operatorName', title: '经办人', width: 10.35 },
-    { key: 'createdAt', title: '创建时间', width: 13.23, render: (v) => formatDisplayDateTime(v) },
+    { key: 'operatorName', title: '经办人', width: 11 },
+    { key: 'createdAt', title: '创建时间', width: 13, render: (v) => formatDisplayDateTime(v) },
     {
-      key: 'remark', title: '订单备注', width: 16.54,
+      key: 'remark', title: '订单备注', width: 13,
       render: (v) => v
         ? <span className="line-clamp-1 text-muted-foreground" title={String(v)}>{String(v)}</span>
         : <span className="text-muted-foreground/50">—</span>
     },
     {
-      key: 'id', title: '操作', width: 8.46, render: (_, row) => {
+      key: 'id', title: '操作', width: 8, render: (_, row) => {
         const r = row as PurchaseOrder
         return (
           <TableActionsMenu
@@ -308,7 +308,7 @@ export default function PurchasePage() {
         loading={isLoading}
         onRowDoubleClick={goToDetail}
         fluid
-        columnStorageKey="purchase:fluid-v1"
+        columnStorageKey="purchase:fluid-v2"
       />
 
       {printDetail && (

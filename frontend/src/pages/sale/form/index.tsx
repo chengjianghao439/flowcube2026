@@ -1194,10 +1194,10 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                   key: 'warehouseName' as const, title: '发货仓库', width: 120,
                   render: (v: unknown) => <span className="text-sm">{(v as string) || order.warehouseName || '-'}</span>,
                 }] : []),
-                { key: 'quantity', title: '数量', width: 90, render: v => <span className="tabular-nums">{String(v)}</span> },
+                { key: 'quantity', title: '数量', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
                 // 进入履约后展示已发/应发进度
                 ...((order.shippedTotalQty ?? 0) > 0 || order.status >= 3 ? [{
-                  key: 'shippedQty' as const, title: '已发/应发', width: 100,
+                  key: 'shippedQty' as const, title: '已发/应发', width: 100, align: 'right' as const,
                   render: (v: unknown, item: SaleOrderItem) => {
                     const shipped = Number(v ?? 0)
                     const done = shipped >= item.quantity
@@ -1205,7 +1205,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                   },
                 }] : []),
                 {
-                  key: 'unitPrice', title: '单价', width: 130,
+                  key: 'unitPrice', title: '单价', width: 130, align: 'right',
                   render: (v, item) => (
                     <div className="space-y-1">
                       <div className="tabular-nums">¥{Number(v).toFixed(2)}</div>
@@ -1218,7 +1218,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                     </div>
                   ),
                 },
-                { key: 'amount', title: '金额', width: 110, render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
+                { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
               ] satisfies TableColumn<SaleOrderItem>[]}
               data={order.items ?? []}
               rowKey="id"

@@ -194,7 +194,7 @@ export default function ReturnsPage() {
     { key: 'returnNo', title: '退货单号', width: 170 },
     { key: partyKey, title: partyLabel, width: 140 },
     { key: 'warehouseName', title: '仓库', width: 140 },
-    { key: 'totalAmount', title: '金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
+    { key: 'totalAmount', title: '金额', width: 100, align: 'right', render: (v) => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
     { key: 'status', title: '状态', width: 90, render: (v, row) => {
       const status = v as number
       const tone = status === 3 ? 'success' : status === 4 ? 'danger' : status === 1 ? 'draft' : 'active'

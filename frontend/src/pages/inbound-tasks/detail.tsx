@@ -237,25 +237,25 @@ export default function InboundTaskDetailPage() {
             { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
             { key: 'color', title: '颜色', width: 90, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
             { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'orderedQty', title: '应到', width: 90 },
+            { key: 'orderedQty', title: '应到', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
             {
-              key: 'receivedQty', title: '已收', width: 90,
+              key: 'receivedQty', title: '已收', width: 90, align: 'right',
               render: (v, r) => (
-                <span className={(v as number) > r.orderedQty ? 'font-semibold text-destructive' : undefined}>{String(v)}</span>
+                <span className={`tabular-nums ${(v as number) > r.orderedQty ? 'font-semibold text-destructive' : ''}`}>{String(v)}</span>
               ),
             },
             {
-              key: 'lineRemain', title: '剩余', width: 90,
+              key: 'lineRemain', title: '剩余', width: 90, align: 'right',
               render: (v, r) => {
                 const overQty = r.receivedQty - r.orderedQty
                 return overQty > 0
-                  ? <span className="font-semibold text-destructive">超收 {overQty}</span>
-                  : <span className="text-muted-foreground">{String(v)}</span>
+                  ? <span className="font-semibold text-destructive tabular-nums">超收 {overQty}</span>
+                  : <span className="text-muted-foreground tabular-nums">{String(v)}</span>
               },
             },
-            { key: 'putawayQty', title: '已上架', width: 90 },
-            { key: 'unitPrice', title: '单价', width: 100, render: v => <span className="text-muted-foreground">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
-            { key: 'lineAmount', title: '小记', width: 110, render: v => <span className="font-medium">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
+            { key: 'putawayQty', title: '已上架', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
+            { key: 'unitPrice', title: '单价', width: 100, align: 'right', render: v => <span className="text-muted-foreground tabular-nums">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
+            { key: 'lineAmount', title: '小记', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
           ] satisfies TableColumn<InboundTaskItem & { lineRemain: number; lineAmount: number | null }>[]}
           data={items.map(it => ({
             ...it,

@@ -308,15 +308,20 @@ export default function DataTable<T extends object>({
                       <button
                         type="button"
                         onClick={() => onSortChange(String(col.key))}
-                        className={`min-w-0 flex-1 whitespace-nowrap text-left transition-colors hover:text-foreground ${
-                          sortKey === String(col.key) ? 'text-primary' : ''
-                        }`}
+                        className={`min-w-0 flex-1 whitespace-nowrap transition-colors hover:text-foreground ${
+                          col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
+                        } ${sortKey === String(col.key) ? 'text-primary' : ''}`}
                         title={col.title}
                       >
                         {col.title} {sortKey === String(col.key) ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                       </button>
                     ) : (
-                      <span className="min-w-0 flex-1 whitespace-nowrap" title={col.title}>{col.title}</span>
+                      <span
+                        className={`min-w-0 flex-1 whitespace-nowrap ${
+                          col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''
+                        }`}
+                        title={col.title}
+                      >{col.title}</span>
                     )}
                     {!isAction(String(col.key), col.title) && (
                       <button
@@ -381,6 +386,7 @@ export default function DataTable<T extends object>({
                     {orderedColumns.map((col) => {
                       const rawValue = (row as Record<string, unknown>)[String(col.key)]
                       const textValue = String(rawValue ?? '')
+                      const alignClass = col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''
                       return (
                       <td
                         key={String(col.key)}
@@ -395,7 +401,7 @@ export default function DataTable<T extends object>({
                         {isAction(String(col.key), col.title)
                           ? (col.render ? (col.render(rawValue, row) as ReactNode) : textValue)
                           : (
-                            <div className="truncate" title={textValue}>
+                            <div className={`truncate ${alignClass}`} title={textValue}>
                               {col.render ? (col.render(rawValue, row) as ReactNode) : textValue}
                             </div>
                           )}

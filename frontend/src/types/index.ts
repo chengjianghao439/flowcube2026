@@ -57,6 +57,8 @@ export interface TableColumn<T extends object> {
   width?: number | string
   render?: (value: unknown, record: T) => React.ReactNode
   sortable?: boolean
+  /** 单元格 + 表头文字对齐，默认 left。数字/金额列用 'right' 便于纵向比对。 */
+  align?: 'left' | 'right' | 'center'
 }
 
 // ─── 通用查询参数 ───────────────────────────────────────────────────────────────

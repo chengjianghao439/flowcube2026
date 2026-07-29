@@ -49,6 +49,15 @@ interface DraftItem extends Omit<PurchaseOrderItem, 'id' | 'amount'> {
   _key: number
 }
 
+/**
+ * 明细行内「可编辑单元」的统一内联外观。
+ * 商品选择按钮 / 数量 / 单价三处共用，让"能改的格子"成为同一视觉族——
+ * 默认淡边框、hover 边框加深、focus 显主色描边 + ring；只读列则保持纯文本无边框，
+ * 这样"哪些格子能改"一眼可辨，同一行里不再是三种边框各说各话。
+ */
+const EDIT_CELL_CLASS =
+  'h-9 w-full rounded-md border border-border/70 bg-background px-3 text-sm transition-colors hover:border-border focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0'
+
 export default function PurchaseFormPage() {
   const tabPath = useContext(TabPathContext)
   const navigate = useNavigate()
@@ -360,12 +369,13 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                           requestLeave(() => navigate('/products'))
                         }}
                         className={cn(
-                          'block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          EDIT_CELL_CLASS,
+                          'flex items-center overflow-hidden text-left',
                           invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5',
                         )}
                       >
                         {item.productName
-                          ? <span className="truncate font-medium">{item.productName}</span>
+                          ? <span className="truncate font-medium text-foreground">{item.productName}</span>
                           : <span className="text-muted-foreground">点击选择商品...</span>}
                       </button>
                     </td>
@@ -381,7 +391,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         placeholder="数量"
                         value={item.quantity}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
-                        className="text-right text-sm"
+                        className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')}
                       />
                     </td>
 
@@ -393,7 +403,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         placeholder="单价"
                         value={item.unitPrice}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                        className="text-right text-sm"
+                        className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')}
                       />
                     </td>
 
@@ -630,9 +640,9 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
             { key: 'color', title: '颜色', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
             { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{String(v)}</span> },
-            { key: 'quantity', title: '数量', width: 90 },
-            { key: 'unitPrice', title: '单价', width: 110, render: v => `¥${Number(v).toFixed(2)}` },
-            { key: 'amount', title: '金额', width: 110, render: v => <span className="font-semibold">¥{Number(v).toFixed(2)}</span> },
+            { key: 'quantity', title: '数量', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
+            { key: 'unitPrice', title: '单价', width: 110, align: 'right', render: v => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
+            { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
           ] satisfies TableColumn<PurchaseOrderItem>[]}
           data={order.items ?? []}
           rowKey="id"

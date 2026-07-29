@@ -557,9 +557,9 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
             { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
             { key: 'color', title: '颜色', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
             { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{String(v)}</span> },
-            { key: 'quantity', title: '数量', width: 90 },
-            { key: 'unitPrice', title: '单价', width: 110, render: v => `¥${Number(v).toFixed(2)}` },
-            { key: 'amount', title: '金额', width: 110, render: v => <span className="font-semibold">¥{Number(v).toFixed(2)}</span> },
+            { key: 'quantity', title: '数量', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
+            { key: 'unitPrice', title: '单价', width: 110, align: 'right', render: v => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
+            { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
           ] satisfies TableColumn<ReturnItem>[]}
           data={ret.items ?? []}
           rowKey="id"
