@@ -29,6 +29,7 @@ import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import ShipSelectDialog from '@/pages/sale/components/ShipSelectDialog'
 import StockShortageDialog, { type StockShortageItem } from '@/pages/sale/components/StockShortageDialog'
 import ReserveAllocationDialog from '@/pages/sale/components/ReserveAllocationDialog'
+import AddressBookDialog from '@/pages/sale/components/AddressBookDialog'
 import { SectionCard }    from '@/components/shared/SectionCard'
 import { CustomerFinder, ProductFinder, FinderTrigger } from '@/components/finder'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
@@ -354,7 +355,7 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
 
 /** CreateView / EditView 共用的"订单信息"表单区块，字段完全一致，只是初始值和写回目标不同（由调用方通过 props 传入）。 */
 function SaleOrderHeaderFields({
-  customerName, customerError, setCustomerFinderOpen,
+  customerId, customerName, customerError, setCustomerFinderOpen,
   warehouseId, setWarehouseId, setWarehouseName, warehouseError, setWarehouseError,
   carrierId, setCarrierId, carrierOptions,
   freightType, setFreightType,
@@ -363,6 +364,7 @@ function SaleOrderHeaderFields({
   receiverAddress, setReceiverAddress,
   remark, setRemark,
 }: {
+  customerId: string
   customerName: string; customerError: boolean; setCustomerFinderOpen: (v: boolean) => void
   warehouseId: string; setWarehouseId: (v: string) => void; setWarehouseName: (v: string) => void
   warehouseError: boolean; setWarehouseError: (v: boolean) => void
@@ -374,6 +376,11 @@ function SaleOrderHeaderFields({
   remark: string; setRemark: (v: string) => void
 }) {
   const navigate = useNavigate()
+  const [addrOpen, setAddrOpen] = useState(false)
+  const openAddrBook = () => {
+    if (!customerId) { toast.warning('请先选择客户'); return }
+    setAddrOpen(true)
+  }
   return (
     <SectionCard title="订单信息" compact>
       {/* 第一行：客户/仓库/承运商/运费方式——选择类字段，按可用宽度均分，不留死区 */}
@@ -431,7 +438,10 @@ function SaleOrderHeaderFields({
           <LimitedInput maxLength={11} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="11位手机号" inputMode="numeric" />
         </div>
         <div className="flex-1 space-y-1.5">
-          <Label>收货地址</Label>
+          <div className="flex items-center justify-between">
+            <Label>收货地址</Label>
+            <button type="button" onClick={openAddrBook} className="text-xs font-medium text-primary hover:underline">地址簿</button>
+          </div>
           <LimitedTextarea maxLength={30} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} className="h-10 min-h-0 py-2" singleLine />
         </div>
         <div className="flex-1 space-y-1.5">
@@ -439,6 +449,19 @@ function SaleOrderHeaderFields({
           <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" />
         </div>
       </div>
+      {customerId && (
+        <AddressBookDialog
+          open={addrOpen}
+          onOpenChange={setAddrOpen}
+          customerId={+customerId}
+          customerName={customerName}
+          onSelect={a => {
+            setReceiverName(a.receiverName ?? '')
+            setReceiverPhone(a.receiverPhone ?? '')
+            setReceiverAddress(a.receiverAddress)
+          }}
+        />
+      )}
     </SectionCard>
   )
 }
@@ -598,7 +621,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       />
 
       <SaleOrderHeaderFields
-        customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
+        customerId={customerId} customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
         warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
         warehouseError={warehouseError} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
@@ -741,7 +764,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
       />
 
       <SaleOrderHeaderFields
-        customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
+        customerId={customerId} customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
         warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
         warehouseError={warehouseError} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
@@ -891,7 +914,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
       </div>
 
       <SaleOrderHeaderFields
-        customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
+        customerId={customerId} customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
         warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
         warehouseError={warehouseError} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}

@@ -21,6 +21,24 @@ export interface Customer {
 }
 export interface CustomerOption { id: number; code: string; name: string; priceLevel?: 'A' | 'B' | 'C' | 'D' }
 
+/** 客户常用收货地址（地址簿） */
+export interface CustomerAddress {
+  id: number
+  customerId: number
+  receiverName?: string | null
+  receiverPhone?: string | null
+  receiverAddress: string
+  isDefault: boolean
+  createdAt: string
+}
+export interface CustomerAddressWritable {
+  receiverName?: string
+  receiverPhone?: string
+  receiverAddress: string
+  isDefault?: boolean
+}
+export type CreateCustomerAddressParams = CustomerAddressWritable & { customerId: number }
+
 interface CustomerWritableFields {
   name: string
   contact?: string
