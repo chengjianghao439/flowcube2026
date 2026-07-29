@@ -3,6 +3,7 @@ const expenseSvc = require('./expense-claims.service')
 const dashboardSvc = require('./finance-dashboard.service')
 const { successResponse } = require('../../utils/response')
 const { getOperatorFromRequest } = require('../../utils/operator')
+const { PERMISSIONS } = require('../../constants/permissions')
 
 const list = async(req,res,next)=>{ try{return successResponse(res,await svc.findAll(req.query),'查询成功')}catch(e){next(e)} }
 const active = async(req,res,next)=>{ try{return successResponse(res,await svc.findActive(),'查询成功')}catch(e){next(e)} }
@@ -15,7 +16,14 @@ const transactions = async(req,res,next)=>{ try{return successResponse(res,await
 const consistency = async(req,res,next)=>{ try{return successResponse(res,await svc.checkConsistency(),'检查完成')}catch(e){next(e)} }
 
 // ── 费用报销 ──────────────────────────────────────────────────────────────────
-const expenseList = async(req,res,next)=>{ try{return successResponse(res,await expenseSvc.findAll(req.query),'查询成功')}catch(e){next(e)} }
+// 报销可见范围：无 FINANCE_EXPENSE_VIEW_ALL（超管 roleId=1 恒有）时只能看自己提交的单。
+// 强制用当前登录用户覆盖 applicantId，不信前端传值——否则普通用户传别人的 id 即可越权查看。
+const expenseList = async(req,res,next)=>{ try{
+  const op = getOperatorFromRequest(req)
+  const canViewAll = Number(req.user?.roleId) === 1 || (req.user?.permissions || []).includes(PERMISSIONS.FINANCE_EXPENSE_VIEW_ALL)
+  const query = canViewAll ? req.query : { ...req.query, applicantId: op.operatorId }
+  return successResponse(res, await expenseSvc.findAll(query), '查询成功')
+}catch(e){next(e)} }
 const expenseDetail = async(req,res,next)=>{ try{return successResponse(res,await expenseSvc.findById(+req.params.id),'查询成功')}catch(e){next(e)} }
 const expenseCreate = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.create(req.body,op),'报销单已创建',201)}catch(e){next(e)} }
 const expenseUpdate = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.update(+req.params.id,req.body,op),'保存成功')}catch(e){next(e)} }

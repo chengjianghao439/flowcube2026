@@ -1,15 +1,27 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { createContainer, syncStockFromContainers, SOURCE_TYPE, CONTAINER_STATUS } = require('../../engine/containerEngine')
+const { createContainer, syncStockFromContainers, lockStockDimension, SOURCE_TYPE, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { assertInScope } = require('../../utils/warehouseScope')
 
 const PENDING_QA = 5
 const REJECTED = CONTAINER_STATUS.REJECTED
 
 const RT_STATUS = { PENDING_RECEIVE: 1, RECEIVING: 2, PENDING_CHECK: 3, PENDING_PUTAWAY: 4, COMPLETED: 5, CANCELLED: 6 }
 const RT_STATUS_NAME = { 1: '待收货', 2: '收货中', 3: '待质检', 4: '待上架', 5: '已完成', 6: '已取消' }
+
+/**
+ * PDA 设备绑定仓库与退货任务仓库一致性校验（与收货上架 inbound putaway 同口径）：
+ * 绑定 A 仓的设备不得对 B 仓退货任务收货/质检/上架（这些都是写操作，会在别仓建容器/质检/入库）。
+ * 设备未绑仓库时 pdaWarehouseId 为 null，不限（仍有用户级权限兜底）。
+ */
+function assertPdaWarehouse(pdaWarehouseId, taskWarehouseId) {
+  if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(taskWarehouseId)) {
+    throw new AppError('当前设备绑定仓库与该退货任务所属仓库不一致，无法操作', 403)
+  }
+}
 
 async function genTaskNo(conn) {
   return generateDailyCode(conn, 'RT', 'return_tasks', 'task_no')
@@ -44,12 +56,13 @@ async function findPdaTasks(warehouseId) {
   return rows.map(fmt)
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [[row]] = await pool.query(
     'SELECT * FROM return_tasks WHERE id = ? AND deleted_at IS NULL',
     [id],
   )
   if (!row) throw new AppError('退货任务不存在', 404)
+  assertInScope(scopeWarehouseIds, row.warehouse_id, '退货任务')
   const [items] = await pool.query(
     'SELECT * FROM return_task_items WHERE task_id = ? ORDER BY id',
     [id],
@@ -91,12 +104,13 @@ async function create(conn, { returnId, returnNo, returnType, warehouseId, wareh
 }
 
 // ─── 提交到 PDA ──────────────────────────────────────────────────────
-async function submitWithinTransaction(conn, id, operator) {
+async function submitWithinTransaction(conn, id, operator, scopeWarehouseIds = null) {
   const row = await lockStatusRow(conn, {
     table: 'return_tasks', id,
-    columns: 'id, task_no, status, submitted_at',
+    columns: 'id, task_no, status, submitted_at, warehouse_id',
     entityName: '退货任务',
   })
+  assertInScope(scopeWarehouseIds, row.warehouse_id, '退货任务')
   if (row.submitted_at) throw new AppError('任务已提交，无需重复提交', 400)
   await conn.query(
     'UPDATE return_tasks SET submitted_at = NOW(), submitted_by = ?, submitted_by_name = ? WHERE id = ?',
@@ -104,11 +118,11 @@ async function submitWithinTransaction(conn, id, operator) {
   )
 }
 
-async function submit(id, operator) {
+async function submit(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    await submitWithinTransaction(conn, id, operator)
+    await submitWithinTransaction(conn, id, operator, scopeWarehouseIds)
     await conn.commit()
   } catch (e) {
     await conn.rollback()
@@ -120,7 +134,7 @@ async function submit(id, operator) {
 }
 
 // ─── PDA 收货 ────────────────────────────────────────────────────────
-async function receive(conn, taskId, { productId, packages, requestKey, userId }) {
+async function receive(conn, taskId, { productId, packages, requestKey, userId, pdaWarehouseId = null }) {
   const requestState = requestKey
     ? await beginOperationRequest(conn, { requestKey, action: 'return.receive', userId })
     : { enabled: false }
@@ -131,6 +145,7 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId }
     columns: 'id, task_no, status, warehouse_id',
     entityName: '退货任务',
   })
+  assertPdaWarehouse(pdaWarehouseId, taskRow.warehouse_id)
   if (![1, 2].includes(Number(taskRow.status))) {
     throw new AppError('当前状态不允许收货', 400)
   }
@@ -310,7 +325,7 @@ async function tryFinishReturnTaskPutaway(conn, taskId, taskNo, returnId) {
   return true
 }
 
-async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requestKey, userId }) {
+async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requestKey, userId, pdaWarehouseId = null }) {
   const requestState = requestKey
     ? await beginOperationRequest(conn, { requestKey, action: 'return.check', userId })
     : { enabled: false }
@@ -318,9 +333,13 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
 
   const taskRow = await lockStatusRow(conn, {
     table: 'return_tasks', id: taskId,
-    columns: 'id, task_no, status',
+    // return_id 必须取：整行全部不合格时，本 check() 是唯一让任务归零的动作（putaway 永不被
+    // 调用），下面 tryFinishReturnTaskPutaway 靠 taskRow.return_id 触发 syncSaleReturnCompleted。
+    // 漏取会让 return_id=undefined → 跳过退货单收口 → return_tasks 已完成而 sale_returns 永卡已确认。
+    columns: 'id, task_no, status, return_id, warehouse_id',
     entityName: '退货任务',
   })
+  assertPdaWarehouse(pdaWarehouseId, taskRow.warehouse_id)
   if (Number(taskRow.status) !== 3) {
     throw new AppError('只有待质检状态可以质检确认', 400)
   }
@@ -386,7 +405,7 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
 }
 
 // ─── PDA 上架 ────────────────────────────────────────────────────────
-async function putaway(conn, taskId, { containerId, locationId, requestKey, userId }) {
+async function putaway(conn, taskId, { containerId, locationId, requestKey, userId, pdaWarehouseId = null }) {
   const requestState = requestKey
     ? await beginOperationRequest(conn, { requestKey, action: 'return.putaway', userId })
     : { enabled: false }
@@ -394,12 +413,27 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
 
   const taskRow = await lockStatusRow(conn, {
     table: 'return_tasks', id: taskId,
-    columns: 'id, task_no, status, return_id',
+    columns: 'id, task_no, status, return_id, warehouse_id',
     entityName: '退货任务',
   })
+  assertPdaWarehouse(pdaWarehouseId, taskRow.warehouse_id)
   if (Number(taskRow.status) !== 4) {
     throw new AppError('只有待上架状态可以执行上架', 400)
   }
+
+  // 先确定容器所属「商品+仓库」维度并取维度锁，再做单容器加锁读——顺序不能反。
+  // 上架最后一步 syncStockFromContainers 会汇总该维度全部在库容器刷新缓存；若先锁住自己
+  // 这只容器再去请求汇总范围锁，就与标准上架/出库（先锁 inventory_stock 维度、后锁容器）
+  // 的顺序相反，并发上架同一商品会 ABBA 死锁（详见 containerEngine.lockStockDimension，
+  // 与 inbound-tasks.putaway.js 的处理一致）。product_id / warehouse_id 是容器不可变字段，
+  // 无锁预读安全，真正的状态/归属校验仍由下面的加锁读负责。
+  const [[cRef]] = await conn.query(
+    `SELECT product_id, warehouse_id FROM inventory_containers
+     WHERE id = ? AND source_ref_type = 'sale_return' AND source_ref_id = ?`,
+    [containerId, taskId],
+  )
+  if (!cRef) throw new AppError('容器不存在', 404)
+  await lockStockDimension(conn, cRef.product_id, cRef.warehouse_id)
 
   // 验证容器
   const [[container]] = await conn.query(
@@ -473,9 +507,12 @@ async function cancel(id, operator, options = {}) {
     if (manageConn) await conn.beginTransaction()
     const taskRow = await lockStatusRow(conn, {
       table: 'return_tasks', id,
-      columns: 'id, task_no, status',
+      columns: 'id, task_no, status, warehouse_id',
       entityName: '退货任务',
     })
+    // 数据范围：ERP 直连取消要校验任务所属仓库；cancelSR 联动取消传 {conn} 不带 scope，
+    // 因其在 returns 侧已 assertInScope，此处放行（scopeWarehouseIds 为 null 即不校验）。
+    assertInScope(options.scopeWarehouseIds ?? null, taskRow.warehouse_id, '退货任务')
     if (!isValidTransition(Number(taskRow.status), RT_STATUS.CANCELLED)) {
       throw new AppError('当前状态不允许取消', 400)
     }

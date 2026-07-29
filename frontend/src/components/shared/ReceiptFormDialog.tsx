@@ -12,6 +12,7 @@ import { getPaymentsApi, getStatementsApi, createReceiptApi, settleReceiptApi,
 import { getActiveAccountsApi } from '@/api/finance'
 import { createRequestKey } from '@/lib/requestKey'
 import { toast } from '@/lib/toast'
+import { confirmAction } from '@/lib/confirm'
 import { formatDisplayDate } from '@/lib/dateTime'
 
 interface Props {
@@ -277,7 +278,21 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button disabled={!canSubmit} onClick={() => mut.mutate()}>
+          <Button disabled={!canSubmit} onClick={() => {
+            // 应付付款(新建收付款单，从账户出账)透支前二次确认；继续核销(isContinue)不动账户、无需确认
+            const acc = (accounts || []).find(a => String(a.id) === accountId)
+            if (!isContinue && isPayableType(type) && acc && totalAmount > acc.currentBalance + 1e-6) {
+              confirmAction({
+                title: '账户余额不足',
+                description: `账户「${acc.name}」当前余额 ¥${acc.currentBalance.toFixed(2)}，本次付款 ¥${totalAmount.toFixed(2)} 将形成负余额。确认继续？`,
+                variant: 'destructive',
+                confirmText: '仍然付款',
+                onConfirm: () => mut.mutate(),
+              })
+              return
+            }
+            mut.mutate()
+          }}>
             {mut.isPending ? '提交中…' : (allocatedTotal > 0 ? `确认核销 ${money(allocatedTotal)}` : '仅登记不核销')}
           </Button>
         </DialogFooter>

@@ -4,12 +4,15 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { logSideEffectFailure } = require('./warehouse-tasks.helpers')
+const { scopeFilter } = require('../../utils/warehouseScope')
 
 /**
  * PDA「取消清理」任务池：列出所有正在取消收尾中（cancel_requested_at 非空）的任务，
  * 每条附带该任务名下仍锁定的容器数，供操作员挑选处理。
  */
-async function listPendingCancelReturns(warehouseId) {
+async function listPendingCancelReturns(warehouseId, scopeWarehouseIds = null) {
+  // 与主列表 findAll 同口径接入用户仓库数据范围：受限用户只看授权仓库的待归还任务
+  const scope = scopeFilter(scopeWarehouseIds, 'wt.warehouse_id')
   const [rows] = await pool.query(
     `SELECT wt.id, wt.task_no, wt.customer_name, wt.warehouse_id, wt.warehouse_name,
             wt.status, wt.cancel_requested_at,
@@ -18,9 +21,9 @@ async function listPendingCancelReturns(warehouseId) {
        FROM warehouse_tasks wt
       WHERE wt.cancel_requested_at IS NOT NULL
         AND wt.deleted_at IS NULL
-        ${warehouseId ? 'AND wt.warehouse_id = ?' : ''}
+        ${warehouseId ? 'AND wt.warehouse_id = ?' : ''}${scope.sql}
       ORDER BY wt.cancel_requested_at ASC`,
-    warehouseId ? [warehouseId] : [],
+    [...(warehouseId ? [warehouseId] : []), ...scope.params],
   )
   return rows.map(r => ({
     id: Number(r.id),

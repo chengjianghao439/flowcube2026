@@ -19,6 +19,22 @@ const { findById } = require('./warehouse-tasks.query')
  * 执行出库（6→7）：扣减库存 + 更新销售单状态 + 生成应收账款
  */
 async function shipWithinTransaction(conn, id, operator, saleData, { requestKey } = {}) {
+  const { saleOrderId, warehouseId, totalAmount, items } = saleData
+
+  // 加锁顺序统一为「先销售单、后仓库任务」，与 sale.cancel / requestAdjustment(SO→WT) 一致，
+  // 避免 ship(原 WT→SO) 与它们并发同一订单+任务时 ABBA 死锁（审计 P2）。这里只「加锁」拿 SO 快照，
+  // SO 的状态校验（已取消/已完成）仍放到 WT 前置校验（取消收尾中/改单中）之后，保持既有错误优先级
+  // 不变。只有销售出库有关联销售单；采购退货任务 getShipContext 返回 saleOrderId=null，不锁 SO。
+  let saleRow = null
+  if (saleOrderId) {
+    saleRow = await lockStatusRow(conn, {
+      table: 'sale_orders',
+      id: saleOrderId,
+      columns: 'id, status, order_no',
+      entityName: '销售单',
+    })
+  }
+
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
@@ -51,15 +67,9 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
     await assertTaskPackagePrintClosure(conn, id)
   }
 
-  const { saleOrderId, warehouseId, totalAmount, items } = saleData
-
-  if (!isPurchaseReturn && saleOrderId) {
-    const saleRow = await lockStatusRow(conn, {
-      table: 'sale_orders',
-      id: saleOrderId,
-      columns: 'id, status, order_no',
-      entityName: '销售单',
-    })
+  // SO 状态校验：放在任务级前置校验之后，保持「取消收尾中/改单中」优先报错的既有契约；
+  // saleRow 已在函数开头 FOR UPDATE 锁定（销售出库才有；采购退货 saleOrderId=null）。
+  if (saleRow) {
     if (Number(saleRow.status) === 5) {
       throw new AppError(`关联销售单 ${saleRow.order_no} 已取消，无法继续出库`, 400)
     }

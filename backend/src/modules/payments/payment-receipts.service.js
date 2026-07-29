@@ -106,8 +106,31 @@ function resolveReceiptStatus(amount, settled) {
  * 共存时不会形成环路（见 CLAUDE.md 第 11 节「加锁顺序统一」）。
  */
 async function applyAllocations(conn, receipt, allocations, operator) {
-  // 对账单类分配先展开成账款级分配：核销的钱最终必须落到 payment_records 上，
-  // 账款余额才是唯一事实源，对账单的 settled_amount 只是它们的汇总投影。
+  // 统一加锁顺序 statement→record，且 statement 之间也按 id 全局升序：先把本次会触及的所有对账单行
+  // （显式核销的 + 直核账款所属的）去重、升序、一次性 FOR UPDATE，再展开、再按 record id 升序锁账款。
+  // 原实现里显式对账单在 expandStatementAllocation 内按 allocations 数组顺序逐个加锁、extra 对账单
+  // 又在展开后另行升序加锁，两段合起来并非全局有序——两个请求传入的对账单顺序相反（或与 recordPayment
+  // 的 ORDER BY statement_id 交错）时会 ABBA 死锁。全局升序预锁后，expandStatementAllocation 内部的
+  // FOR UPDATE 成同事务重入，顺序由此处统一掌控；也保证结尾 refreshSettlement 聚合时 statement 已锁。
+  const explicitStatementIds = allocations.filter(a => a.statementId).map(a => Number(a.statementId))
+  const directRecordIds = [...new Set(
+    allocations.filter(a => !a.statementId && a.recordId).map(a => Number(a.recordId)),
+  )]
+  const extraStatementIds = []
+  if (directRecordIds.length) {
+    const [extra] = await conn.query(
+      'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id IN (?)',
+      [directRecordIds],
+    )
+    extra.forEach(s => extraStatementIds.push(Number(s.statement_id)))
+  }
+  const touchedStatements = [...new Set([...explicitStatementIds, ...extraStatementIds])].sort((a, b) => a - b)
+  for (const sid of touchedStatements) {
+    await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [sid])
+  }
+
+  // 展开对账单类分配成账款级分配：核销的钱最终必须落到 payment_records 上，账款余额才是唯一事实源，
+  // 对账单的 settled_amount 只是它们的汇总投影。上面已按序预锁 statement，此处展开时不再新增锁序风险。
   const flattened = []
   for (const a of allocations) {
     if (a.statementId) {
@@ -116,28 +139,7 @@ async function applyAllocations(conn, receipt, allocations, operator) {
       flattened.push({ recordId: Number(a.recordId), amount: Number(a.amount), statementId: null })
     }
   }
-  const explicitStatements = [...new Set(flattened.map(f => f.statementId).filter(Boolean))]
   const sorted = flattened.sort((a, b) => a.recordId - b.recordId)
-  const directRecordIds = [...new Set(sorted.map(a => a.recordId))]
-
-  // 统一加锁顺序 statement→record：显式对账单已在 expandStatementAllocation 内 FOR UPDATE 锁住；
-  // 这里把「直核账款所属、但本次未显式核销」的对账单也提前按升序锁住，使全部 statement 行都先于
-  // record 行加锁——既避免与 recordPayment(statement→record) 成环死锁，也保证结尾 refreshSettlement
-  // 聚合重算时 statement 行已锁、不会并发丢失更新。
-  const extraStatementIds = []
-  if (directRecordIds.length) {
-    const [extra] = await conn.query(
-      'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id IN (?)',
-      [directRecordIds],
-    )
-    for (const s of extra) {
-      if (!explicitStatements.includes(s.statement_id)) extraStatementIds.push(s.statement_id)
-    }
-  }
-  for (const sid of [...extraStatementIds].sort((a, b) => a - b)) {
-    await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [sid])
-  }
-  const touchedStatements = [...new Set([...explicitStatements, ...extraStatementIds])]
 
   let allocatedTotal = 0
   const applied = []

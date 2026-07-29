@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import { toast } from '@/lib/toast'
+import { confirmAction } from '@/lib/confirm'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -419,7 +420,21 @@ export default function ExpenseClaimsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayTarget(null)}>取消</Button>
-            <Button disabled={!payAccount || payMut.isPending} onClick={() => payMut.mutate()}>
+            <Button disabled={!payAccount || payMut.isPending} onClick={() => {
+              // 报销付款恒为账户支出，透支前二次确认（后端仍允许，属软性提示）
+              const acc = (accounts ?? []).find(a => String(a.id) === payAccount)
+              if (payTarget && acc && payTarget.totalAmount > acc.currentBalance + 1e-6) {
+                confirmAction({
+                  title: '账户余额不足',
+                  description: `账户「${acc.name}」当前余额 ${money(acc.currentBalance)}，本次付款 ${money(payTarget.totalAmount)} 将形成负余额。确认继续？`,
+                  variant: 'destructive',
+                  confirmText: '仍然付款',
+                  onConfirm: () => payMut.mutate(),
+                })
+                return
+              }
+              payMut.mutate()
+            }}>
               {payMut.isPending ? '付款中…' : '确认付款'}
             </Button>
           </DialogFooter>

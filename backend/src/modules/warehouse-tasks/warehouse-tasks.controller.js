@@ -9,7 +9,7 @@ const myTaskSkuSummary = async(req,res,next)=>{ try{return successResponse(res,a
 const stats = async(req,res,next)=>{ try{return successResponse(res,await svc.getTaskStats(),'查询成功')}catch(e){next(e)} }
 const pickSuggestions = async(req,res,next)=>{ try{return successResponse(res,await svc.getPickSuggestions(+req.params.id))}catch(e){next(e)} }
 const pickRoute = async(req,res,next)=>{ try{return successResponse(res,await svc.getPickRoute(+req.params.id))}catch(e){next(e)} }
-const pendingCancelReturns = async(req,res,next)=>{ try{const{warehouseId}=req.query;return successResponse(res,await svc.listPendingCancelReturns(warehouseId?+warehouseId:null),'查询成功')}catch(e){next(e)} }
+const pendingCancelReturns = async(req,res,next)=>{ try{const{warehouseId}=req.query;return successResponse(res,await svc.listPendingCancelReturns(warehouseId?+warehouseId:null, req.user?.warehouseIds??null),'查询成功')}catch(e){next(e)} }
 const cancelReturnDetail = async(req,res,next)=>{ try{return successResponse(res,await svc.getCancelReturnDetail(+req.params.id),'查询成功')}catch(e){next(e)} }
 const detail = async(req,res,next)=>{ try{return successResponse(res,await svc.findById(+req.params.id),'查询成功')}catch(e){next(e)} }
 const assign = async(req,res,next)=>{ try{await svc.assign(+req.params.id,req.body);return successResponse(res,null,'已分配')}catch(e){next(e)} }
@@ -25,7 +25,7 @@ const ship = async(req,res,next)=>{ try{const taskId=+req.params.id;const data=a
 const manualCheckDeprecated = (req,res)=>res.status(410).json({success:false,code:'WAREHOUSE_TASK_MANUAL_CHECK_GONE',message:'该接口已废弃，请使用 PDA 复核扫码路径 POST /api/scan-logs/check',data:null})
 const cancel = async(req,res,next)=>{ try{await svc.cancel(+req.params.id,{operator:getOperatorFromRequest(req)});return successResponse(res,null,'任务已取消')}catch(e){next(e)} }
 const updatePriority = async(req,res,next)=>{ try{await svc.updatePriority(+req.params.id,req.body.priority);return successResponse(res,null,'优先级已更新')}catch(e){next(e)} }
-const pendingAdjustments = async(req,res,next)=>{ try{const{warehouseId}=req.query;return successResponse(res,await svc.listPendingAdjustments(warehouseId?+warehouseId:null),'查询成功')}catch(e){next(e)} }
+const pendingAdjustments = async(req,res,next)=>{ try{const{warehouseId}=req.query;return successResponse(res,await svc.listPendingAdjustments(warehouseId?+warehouseId:null, req.user?.warehouseIds??null),'查询成功')}catch(e){next(e)} }
 const adjustmentDetail = async(req,res,next)=>{ try{return successResponse(res,await svc.getAdjustmentDetail(+req.params.id),'查询成功')}catch(e){next(e)} }
 const confirmAdjustmentPackageVoid = async(req,res,next)=>{ try{const result=await svc.confirmPackageVoid(+req.params.voidId,{operator:getOperatorFromRequest(req)});return successResponse(res,result,result.finalized?'改单已全部确认完成':'已确认拆箱')}catch(e){next(e)} }
 const confirmAdjustmentContainerReturn = async(req,res,next)=>{ try{const targetLocationId=req.body?.targetLocationId?+req.body.targetLocationId:null;const result=await svc.confirmContainerReturn(+req.params.returnId,{targetLocationId,operator:getOperatorFromRequest(req)});return successResponse(res,result,result.finalized?'改单已全部确认完成':'已确认归还')}catch(e){next(e)} }

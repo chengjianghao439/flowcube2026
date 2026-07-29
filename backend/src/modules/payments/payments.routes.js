@@ -68,7 +68,7 @@ router.get('/', requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.list)
 router.post('/', requirePermission(PERMISSIONS.PAYMENT_CREATE), vBody(z.object({ type:z.number().int().min(1).max(2), orderNo:z.string(), partyName:z.string(), totalAmount:z.number().positive(), dueDate:z.string().optional(), remark:z.string().optional() })), ctrl.create)
 
 // 登记付款/收款
-router.post('/:id/pay', requirePermission(PERMISSIONS.PAYMENT_EXECUTE), vParams(idParam), vBody(z.object({ amount:z.number().positive('金额必须大于0'), paymentDate:z.string(), method:z.string().optional(), remark:z.string().optional() })), ctrl.pay)
+router.post('/:id/pay', requirePermission(PERMISSIONS.PAYMENT_EXECUTE), vParams(idParam), vBody(z.object({ amount:z.number().positive('金额必须大于0'), paymentDate:z.string(), method:z.string().optional(), accountId:z.coerce.number().int().positive().optional(), remark:z.string().optional() })), ctrl.pay)
 
 // 账款明细（付款记录）
 router.get('/:id/entries', requirePermission(PERMISSIONS.PAYMENT_VIEW), vParams(idParam), ctrl.entries)

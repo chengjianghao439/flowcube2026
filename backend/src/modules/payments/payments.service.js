@@ -4,6 +4,7 @@ const { getRequestId } = require('../../utils/requestContext')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
 const statementSvc = require('./reconciliation-statements.service')
+const accountSvc = require('../finance/finance-accounts.service')
 const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
 
 /** 状态文案按应付/应收分开：应付说「付」，应收说「收」，前端两个页面直接用不必再改写 */
@@ -162,7 +163,7 @@ async function createManual({ type, orderNo, partyName, totalAmount, dueDate, re
   }
 }
 
-async function recordPayment(id, { amount, paymentDate, method, remark }, operator, requestKey) {
+async function recordPayment(id, { amount, paymentDate, method, remark, accountId }, operator, requestKey) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -176,6 +177,13 @@ async function recordPayment(id, { amount, paymentDate, method, remark }, operat
     if (reqState.replay) {
       await conn.commit()
       return reqState.responseData ?? { replayed: true }
+    }
+
+    // 若指定资金账户：先锁账户行，保持与 receipts 核销路径「账户 → 对账单 → 账款」一致的加锁
+    // 顺序，避免与并发核销(receipts.create 先 recordTransaction 锁账户、再核销锁对账单/账款)
+    // 形成 account↔record 反向环死锁。后面的 recordTransaction 对同一账户行是同事务重入。
+    if (accountId) {
+      await conn.query('SELECT id FROM finance_accounts WHERE id=? FOR UPDATE', [accountId])
     }
 
     // 统一加锁顺序 statement→record：先锁该账款所属对账单行（若有，升序），再锁账款行。
@@ -211,10 +219,26 @@ async function recordPayment(id, { amount, paymentDate, method, remark }, operat
       [newPaid, newBalance, newStatus, id],
     )
     const [entryResult] = await conn.query(
-      `INSERT INTO payment_entries (record_id,amount,payment_date,method,remark,operator_id,operator_name)
-       VALUES (?,?,?,?,?,?,?)`,
-      [id, amount, paymentDate, method || null, remark || null, operator.operatorId, operator.operatorName],
+      `INSERT INTO payment_entries (record_id,amount,payment_date,method,account_id,remark,operator_id,operator_name)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [id, amount, paymentDate, method || null, accountId || null, remark || null, operator.operatorId, operator.operatorName],
     )
+    // 资金账户流水与账款登记同事务：钱记在哪个账户上必须与业务同生共死（与 receipts 路径对称）。
+    // 应收(type=2)钱进来 → IN/RECEIPT；应付(type=1)钱出去 → OUT/PAYMENT。未选账户不传时跳过
+    // （routes 里 accountId optional，兼容旧客户端；新前端弹窗必填）。
+    if (accountId) {
+      await accountSvc.recordTransaction(conn, {
+        accountId,
+        direction: Number(record.type) === 2 ? accountSvc.DIRECTION.IN : accountSvc.DIRECTION.OUT,
+        amount,
+        bizType: Number(record.type) === 2 ? accountSvc.BIZ_TYPE.RECEIPT : accountSvc.BIZ_TYPE.PAYMENT,
+        bizId: entryResult.insertId,
+        bizNo: record.order_no,
+        partyName: record.party_name,
+        happenedAt: paymentDate,
+        remark: remark || null,
+      }, operator)
+    }
     await recordPaymentEvent(conn, {
       paymentRecordId: id,
       orderNo: record.order_no,

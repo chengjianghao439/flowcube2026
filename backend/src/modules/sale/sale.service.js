@@ -788,7 +788,11 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
       }
       const descriptor = await adjustSvc.applyProductDeltaWithinTransaction(conn, {
         taskId: Number(orderRow.task_id),
-        warehouseId: Number(orderRow.warehouse_id),
+        // 行级发货仓库可能≠订单头（占库时经 itemOverrides 改仓）。原始预占(reserveStock)、
+        // 仓库任务、收尾释放(checkAdjustmentClearedAndFinalize)都建在行仓库(keptWarehouseId)上，
+        // 改单的 reserve/partialReleaseByProduct 必须对齐同一仓库；此前误用订单头仓库会导致
+        // 增量预占泄漏到错仓、减量在错仓找不到预占记录而误拒(409)。
+        warehouseId: Number(keptWarehouseId),
         saleOrderId: id,
         saleOrderNo: orderRow.order_no,
         productId: pid,

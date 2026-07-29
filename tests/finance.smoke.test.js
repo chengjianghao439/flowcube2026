@@ -649,7 +649,7 @@ async function scenarioExpenseClaim(ctx, log, token, approverToken, accountId, a
 
 // ── 6b. 登记付款：浮点尾款结清 / 幂等去重 ─────────────────────────────────────
 
-async function scenarioRecordPayment(ctx, log, token) {
+async function scenarioRecordPayment(ctx, log, token, accountId) {
   log.section('登记付款：浮点尾款结清 / 幂等去重')
   const { http, pool } = ctx
   const party = randomRef('直付客户')
@@ -678,6 +678,24 @@ async function scenarioRecordPayment(ctx, log, token) {
     money(r1.paid_amount) === 200 && money(r1.balance) === 300, `paid=${r1.paid_amount} balance=${r1.balance}`)
   const entries = await dbQuery(pool, 'SELECT COUNT(*) AS n FROM payment_entries WHERE record_id=?', [rec2])
   log.assert('★ 只落一条付款流水', Number(entries[0].n) === 1, `entries=${entries[0].n}`)
+
+  // ★ 业务决策1(2026-07-29)：按单登记付款/收款传 accountId 时必须写资金账户流水，
+  //   否则账户余额静默少记（此前 recordPayment 只写 payment_entries、不碰 finance_account_transactions）。
+  const accBefore = money((await getAccount(pool, accountId)).current_balance)
+  const rec3 = await seedRecord(http, token, pool, { type: 1, partyName: randomRef('直付供应商'), amount: 120 })
+  const p3 = await http.post(`/api/payments/${rec3}/pay`, { token, json: { amount: 120, paymentDate: today(), accountId } })
+  log.assert('带账户的按单付款成功', p3.ok, `status=${p3.status} ${JSON.stringify(p3.data?.message || '')}`)
+  const accAfter = money((await getAccount(pool, accountId)).current_balance)
+  log.assert('★ 按单付款(应付)写了账户流水：余额减少 120',
+    money(accBefore - accAfter) === 120, `before=${accBefore} after=${accAfter}`)
+  const payTxn = await dbQuery(pool,
+    'SELECT * FROM finance_account_transactions WHERE account_id=? AND biz_type=2 ORDER BY id DESC LIMIT 1', [accountId])
+  log.assert('★ 流水为付款方向(OUT=2)、金额一致、biz_type=PAYMENT(2)',
+    payTxn.length === 1 && Number(payTxn[0].direction) === 2 && money(payTxn[0].amount) === 120,
+    JSON.stringify(payTxn[0] || null))
+  const ent3 = await dbQuery(pool, 'SELECT account_id FROM payment_entries WHERE record_id=? ORDER BY id DESC LIMIT 1', [rec3])
+  log.assert('★ payment_entries 留存了所用账户', Number(ent3[0]?.account_id) === Number(accountId),
+    `entry.account_id=${ent3[0]?.account_id} expected=${accountId}`)
 }
 
 // ── 6c. 账龄分析 ──────────────────────────────────────────────────────────────
@@ -743,7 +761,7 @@ async function main() {
     await scenarioStatement(ctx, log, token, accountId)
     await scenarioSettlementSnapshot(ctx, log, token)
     await scenarioExpenseClaim(ctx, log, token, approverToken, accountId, Number(user?.id))
-    await scenarioRecordPayment(ctx, log, token)
+    await scenarioRecordPayment(ctx, log, token, accountId)
     await scenarioAging(ctx, log, token)
     await scenarioFinalConsistency(ctx, log, token)
   } finally {

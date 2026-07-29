@@ -5,7 +5,7 @@ const { getOperatorFromRequest } = require('../../utils/operator')
 
 const pendingContainers = async (req, res, next) => {
   try {
-    const data = await svc.listAllPendingPutawayContainers()
+    const data = await svc.listAllPendingPutawayContainers(req.user?.warehouseIds ?? null)
     return successResponse(res, data)
   } catch (e) { next(e) }
 }
@@ -41,6 +41,7 @@ const purchaseItems = async (req, res, next) => {
     const data = await svc.findPurchasableItems({
       supplierId: req.query.supplierId,
       keyword: req.query.keyword || '',
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, data)
   } catch (e) { next(e) }

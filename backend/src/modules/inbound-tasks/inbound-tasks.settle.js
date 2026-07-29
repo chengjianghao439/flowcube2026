@@ -25,20 +25,32 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
     [poId],
   )
   if (!po) return
+  // 聚合必须走当前读（FOR UPDATE），不能用快照读。否则在默认 REPEATABLE READ 下会 lost-update：
+  // 同一采购单的多张收货单并发上架末箱、各自触发本函数时，事务的 read view 早在 putaway 前段
+  // （非锁定 SELECT）就已固定，此处快照 SUM 看不到并发事务刚提交的另一张收货单 audit_status=1，
+  // 只算到自己那一批 → 与下面「total_amount=VALUES() 绝对覆盖」的 upsert 叠加，后提交方把先提交
+  // 方写入的应付金额直接覆盖少算，静默少付供应商（已用两连接确定性复现：50+30 被覆盖成 30）。
+  // FOR UPDATE 让 SUM 读最新已提交并对相关行加锁串行化，与 containerEngine.syncStockFromContainers
+  // 用 SUM(...) FOR UPDATE 防库存缓存 lost-update 是同一手法。极端并发下两批同时上架可能相互等待
+  // 触发死锁，但那是 fail-safe（InnoDB 回滚一方、PDA 重试即读到正确值），远优于静默少算。
   const [[{ amount }]] = await conn.query(
     `SELECT COALESCE(SUM(iti.putaway_qty * poi.unit_price), 0) AS amount
        FROM inbound_tasks it
        JOIN inbound_task_items iti ON iti.task_id = it.id
        JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
       WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL
-        AND it.status <> 5 AND it.audit_status = 1`,
+        AND it.status <> 5 AND it.audit_status = 1
+      FOR UPDATE`,
     [poId],
   )
   const grossTotal = Number(amount) || 0
+  // 同理走当前读：退货执行(status→3)与到货结算并发时，快照读会漏看已提交的退货冲减，
+  // 使全量重算少减退货、应付偏大。FOR UPDATE 读最新已提交的退货金额。
   const [[{ returnedAmount }]] = await conn.query(
     `SELECT COALESCE(SUM(total_amount), 0) AS returnedAmount
        FROM purchase_returns
-      WHERE purchase_order_id = ? AND deleted_at IS NULL AND status = 3`,
+      WHERE purchase_order_id = ? AND deleted_at IS NULL AND status = 3
+      FOR UPDATE`,
     [poId],
   )
   const total = Math.max(0, grossTotal - (Number(returnedAmount) || 0))

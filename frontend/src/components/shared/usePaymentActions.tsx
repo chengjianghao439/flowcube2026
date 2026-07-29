@@ -9,8 +9,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { payApi, getEntriesApi, confirmPaymentApi, getSettlementDetailApi } from '@/api/payments'
 import type { PaymentRecord, PaymentEntry } from '@/api/payments'
+import { getActiveAccountsApi } from '@/api/finance'
 import { createRequestKey } from '@/lib/requestKey'
 import { toast } from '@/lib/toast'
+import { confirmAction } from '@/lib/confirm'
 
 /**
  * 账款的三个写操作（登记付款/收款、应付结算确认、查看流水）。
@@ -32,6 +34,7 @@ export function usePaymentActions(type: 1 | 2) {
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10))
   const [payMethod, setPayMethod] = useState('转账')
   const [payRemark, setPayRemark] = useState('')
+  const [payAccountId, setPayAccountId] = useState('')
 
   const actionLabel = isPayable ? '登记付款' : '登记收款'
 
@@ -42,6 +45,8 @@ export function usePaymentActions(type: 1 | 2) {
     qc.invalidateQueries({ queryKey: ['reconciliation'] })
     // 收付款会改变应收/应付余额，账龄与敞口随之变化，看板缓存一并失效
     qc.invalidateQueries({ queryKey: ['finance-dashboard'] })
+    // 按单登记现在会写资金账户流水，账户余额随之变化，账户页/下拉一并失效
+    qc.invalidateQueries({ queryKey: ['finance-accounts'] })
   }
 
   const { data: entries } = useQuery({
@@ -54,9 +59,15 @@ export function usePaymentActions(type: 1 | 2) {
     queryFn: () => getSettlementDetailApi(selected!.id),
     enabled: !!selected && confirmOpen && isPayable,
   })
+  // 收/付款账户下拉：仅在登记弹窗打开时拉取启用账户
+  const { data: activeAccounts } = useQuery({
+    queryKey: ['finance-accounts', 'active'],
+    queryFn: () => getActiveAccountsApi().then(r => r || []),
+    enabled: payOpen,
+  })
   const payMut = useMutation({
     mutationFn: ({ id, d }: { id: number; d: object }) => payApi(id, d, createRequestKey()),
-    onSuccess: () => { invalidateBoth(); setPayOpen(false); setPayAmount(''); setPayRemark('') },
+    onSuccess: () => { invalidateBoth(); setPayOpen(false); setPayAmount(''); setPayRemark(''); setPayAccountId('') },
   })
   const confirmMut = useMutation({
     mutationFn: (id: number) => confirmPaymentApi(id),
@@ -66,7 +77,21 @@ export function usePaymentActions(type: 1 | 2) {
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selected || !payAmount) return
-    await payMut.mutateAsync({ id: selected.id, d: { amount: +payAmount, paymentDate: payDate, method: payMethod, remark: payRemark || undefined } })
+    if (!payAccountId) { toast.error('请选择资金账户'); return }
+    const doPay = () => payMut.mutate({ id: selected.id, d: { amount: +payAmount, paymentDate: payDate, method: payMethod, accountId: +payAccountId, remark: payRemark || undefined } })
+    // 付款(应付)从账户支出，透支前二次确认——后端仍允许「先记账后到账」，此处只做软性提示
+    const acc = (activeAccounts || []).find(a => String(a.id) === payAccountId)
+    if (isPayable && acc && +payAmount > acc.currentBalance + 1e-6) {
+      confirmAction({
+        title: '账户余额不足',
+        description: `账户「${acc.name}」当前余额 ¥${acc.currentBalance.toFixed(2)}，本次付款 ¥${(+payAmount).toFixed(2)} 将形成负余额。确认继续？`,
+        variant: 'destructive',
+        confirmText: '仍然付款',
+        onConfirm: doPay,
+      })
+      return
+    }
+    doPay()
   }
 
   function renderActions(r: PaymentRecord) {
@@ -107,6 +132,16 @@ export function usePaymentActions(type: 1 | 2) {
           )}
           <form onSubmit={handlePay} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1 col-span-2"><Label>资金账户 *</Label>
+                <Select value={payAccountId} onValueChange={setPayAccountId}>
+                  <SelectTrigger className="h-10 w-full"><SelectValue placeholder={`选择${isPayable ? '付款' : '收款'}账户`} /></SelectTrigger>
+                  <SelectContent>
+                    {(activeAccounts || []).map(a => (
+                      <SelectItem key={a.id} value={String(a.id)}>{a.name}（¥{a.currentBalance.toFixed(2)}）</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-1"><Label>金额 *</Label><Input type="number" min="0.01" step="0.01" value={payAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPayAmount(e.target.value)} required /></div>
               <div className="space-y-1"><Label>日期 *</Label><DatePicker value={payDate} onChange={setPayDate} /></div>
               <div className="space-y-1"><Label>方式</Label>

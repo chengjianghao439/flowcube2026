@@ -357,7 +357,7 @@ async function findById(id, scopeWarehouseIds = null) {
  * forUpdate=true 时对涉及的 purchase_order_items/inbound_task_items 行加锁，
  * 使并发的建单请求相互排队，避免同一采购明细被两张收货单同时超额分配。
  */
-async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purchaseItemIds = null, forUpdate = false } = {}) {
+async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purchaseItemIds = null, forUpdate = false, scopeWarehouseIds = null } = {}) {
   const supplierIdN = Number(supplierId)
   if (!Number.isFinite(supplierIdN) || supplierIdN <= 0) throw new AppError('请选择供应商', 400)
 
@@ -371,6 +371,11 @@ async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purch
     whereExtra = ' AND (poi.product_code LIKE ? OR poi.product_name LIKE ? OR po.order_no LIKE ?)'
     params.push(like, like, like)
   }
+  // 采购候选明细列表按用户仓库数据范围过滤：scopeWarehouseIds 仅由列表读入口 findPurchasableItems
+  // 传入；建单流程(command.js)不传 → 不限仓，与「建单选仓自由」的既有设计一致。
+  const scope = scopeFilter(scopeWarehouseIds, 'po.warehouse_id')
+  whereExtra += scope.sql
+  params.push(...scope.params)
   const havingClause = Array.isArray(purchaseItemIds) && purchaseItemIds.length ? '' : 'HAVING remaining_qty > 0'
 
   const [rows] = await conn.query(
@@ -433,8 +438,8 @@ async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purch
   return rows.map(fmtPurchasableItem)
 }
 
-async function findPurchasableItems({ supplierId, keyword = '' }) {
-  return loadPurchasableCandidates(pool, { supplierId, keyword })
+async function findPurchasableItems({ supplierId, keyword = '', scopeWarehouseIds = null }) {
+  return loadPurchasableCandidates(pool, { supplierId, keyword, scopeWarehouseIds })
 }
 
 async function queryWaitingContainers(taskId) {
@@ -512,18 +517,19 @@ async function refreshPutawayOverdueMarks() {
   }
 }
 
-async function listAllPendingPutawayContainers() {
+async function listAllPendingPutawayContainers(scopeWarehouseIds = null) {
   await refreshPutawayOverdueMarks()
 
+  const scope = scopeFilter(scopeWarehouseIds, 'c.warehouse_id')
   const [rows] = await pool.query(
     `SELECT c.id, c.barcode, c.product_id, c.warehouse_id, c.remaining_qty, c.created_at,
             c.putaway_deadline_at, c.putaway_flagged_overdue, c.is_overdue, c.inbound_task_id,
             t.task_no, t.purchase_order_no, t.warehouse_name
      FROM inventory_containers c
      INNER JOIN inbound_tasks t ON t.id = c.inbound_task_id
-     WHERE c.status = ? AND c.deleted_at IS NULL AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+     WHERE c.status = ? AND c.deleted_at IS NULL AND (c.is_legacy = 0 OR c.is_legacy IS NULL)${scope.sql}
      ORDER BY c.created_at ASC`,
-    [CONTAINER_STATUS.PENDING_PUTAWAY],
+    [CONTAINER_STATUS.PENDING_PUTAWAY, ...scope.params],
   )
   return rows.map(r => ({
     id: r.id,

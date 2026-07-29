@@ -7,7 +7,7 @@ const { RT_STATUS_NAME } = require('../return-tasks/return-tasks.service')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { getRequestId } = require('../../utils/requestContext')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
-const { genNo, adjustPaymentRecordForReturn } = require('./returns.helpers')
+const { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom } = require('./returns.helpers')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 
 const SR_STATUS = { 1:'草稿', 2:'已确认', 3:'已退货入库', 4:'已取消' }
@@ -267,11 +267,22 @@ async function confirmSR(id, operator = null, scopeWarehouseIds = null) {
     const retRow = await lockStatusRow(conn, {
       table: 'sale_returns',
       id,
-      columns: 'id, return_no, customer_id, customer_name, warehouse_id, warehouse_name, status',
+      columns: 'id, return_no, customer_id, customer_name, sale_order_id, sale_order_no, total_amount, warehouse_id, warehouse_name, status',
       entityName: '销售退货单',
     })
     assertInScope(scopeWarehouseIds, retRow.warehouse_id, '销售退货单')
     const rule = assertStatusAction('saleReturn', 'confirm', retRow.status)
+    // 负余额前置拦截：客户已付/已核销金额 > 退货冲减后应收总额时，不让退货单走到执行末端
+    // （最后一箱上架）才由 adjustPaymentRecordForReturn 抛 409 回滚、卡在中间态。这里按计划
+    // 全额保守预判（实际按合格量冲减，≤计划量）；末端 FOR UPDATE 校验仍兜底。
+    if (retRow.sale_order_id) {
+      await assertReturnPaymentHeadroom(conn, {
+        recordType: 2,
+        orderId: Number(retRow.sale_order_id),
+        orderNo: retRow.sale_order_no,
+        amount: Number(retRow.total_amount || 0),
+      })
+    }
     await compareAndSetStatus(conn, {
       table: 'sale_returns',
       id,

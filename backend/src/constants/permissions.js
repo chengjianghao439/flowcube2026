@@ -122,6 +122,8 @@ const PERMISSIONS = {
   FINANCE_EXPENSE_APPROVE: 'finance.expense.approve',
   FINANCE_EXPENSE_PAY: 'finance.expense.pay',
   FINANCE_EXPENSE_CATEGORY_MANAGE: 'finance.expense.category.manage',
+  // 见全部报销：无此权限者(超管 role_id=1 走 roleId 豁免恒有)列表只能看自己提交的单。
+  FINANCE_EXPENSE_VIEW_ALL: 'finance.expense.view.all',
 
   WAREHOUSE_TASK_VIEW: 'warehouse.task.view',
   WAREHOUSE_TASK_ASSIGN: 'warehouse.task.assign',

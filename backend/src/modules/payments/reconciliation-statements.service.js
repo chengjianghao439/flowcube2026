@@ -241,13 +241,32 @@ async function findAll({
   const where = `WHERE ${conds.join(' AND ')}`
 
   const [rows] = await pool.query(
-    `SELECT s.*, (SELECT COUNT(*) FROM reconciliation_statement_items i WHERE i.statement_id = s.id) AS item_count
-       FROM reconciliation_statements s ${where}
+    `SELECT s.*, (SELECT COUNT(*) FROM reconciliation_statement_items i WHERE i.statement_id = s.id) AS item_count,
+            COALESCE(agg.real_total, 0) AS real_total, COALESCE(agg.real_paid, 0) AS real_paid
+       FROM reconciliation_statements s
+       LEFT JOIN (
+         SELECT i.statement_id,
+                SUM(r.total_amount) AS real_total,
+                SUM(r.paid_amount)  AS real_paid
+           FROM reconciliation_statement_items i
+           JOIN payment_records r ON r.id = i.record_id
+          GROUP BY i.statement_id
+       ) agg ON agg.statement_id = s.id
+       ${where}
       ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
     [...params, ps, (p - 1) * ps],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM reconciliation_statements s ${where}`, params)
-  return { list: rows.map(fmt), pagination: { page: p, pageSize: ps, total } }
+  // 列表金额改用下属账款实时汇总，与详情(findById 明细 JOIN payment_records)口径统一：退货冲减/分批
+  // 补应收会改下属账款 total_amount/paid_amount，但这些路径不触发 refreshSettlement，存储在
+  // reconciliation_statements 上的投影会过期，导致列表总额与详情对不上、导出的对账额与系统实时值不符。
+  // （minAmount/maxAmount 仍按入单时的存储额筛选，属辅助筛选，不追求与实时显示完全一致。）
+  const list = rows.map(r => {
+    const realTotal = Number(r.real_total)
+    const realPaid = Math.min(Number(r.real_paid), realTotal)
+    return fmt({ ...r, total_amount: realTotal, settled_amount: realPaid, balance: Math.max(0, realTotal - realPaid) })
+  })
+  return { list, pagination: { page: p, pageSize: ps, total } }
 }
 
 /** 详情：含明细（实时读账款当前余额，不用入单时的快照，便于看到已收多少） */

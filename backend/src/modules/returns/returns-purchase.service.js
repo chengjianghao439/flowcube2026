@@ -6,7 +6,7 @@ const { RETURN_EVENT, record: recordReturnEvent } = require('./return-events.ser
 const { WT_STATUS_NAME, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
 const { getRequestId } = require('../../utils/requestContext')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
-const { genNo, adjustPaymentRecordForReturn } = require('./returns.helpers')
+const { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom } = require('./returns.helpers')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 
 const PR_STATUS = { 1:'草稿', 2:'已确认', 3:'已退货', 4:'已取消' }
@@ -244,11 +244,21 @@ async function confirmPR(id, operator = null, scopeWarehouseIds = null) {
     const retRow = await lockStatusRow(conn, {
       table: 'purchase_returns',
       id,
-      columns: 'id, return_no, purchase_order_id, purchase_order_no, supplier_id, supplier_name, warehouse_id, warehouse_name, status',
+      columns: 'id, return_no, purchase_order_id, purchase_order_no, total_amount, supplier_id, supplier_name, warehouse_id, warehouse_name, status',
       entityName: '采购退货单',
     })
     assertInScope(scopeWarehouseIds, retRow.warehouse_id, '采购退货单')
     const rule = assertStatusAction('purchaseReturn', 'confirm', retRow.status)
+    // 负余额前置拦截：已付供应商金额 > 退货冲减后应付总额时，不让退货单走到出库末端才抛 409
+    // 回滚、卡在中间态。采购退货全额出库，预判额与末端冲减额一致；末端 FOR UPDATE 仍兜底。
+    if (retRow.purchase_order_id) {
+      await assertReturnPaymentHeadroom(conn, {
+        recordType: 1,
+        orderId: Number(retRow.purchase_order_id),
+        orderNo: retRow.purchase_order_no,
+        amount: Number(retRow.total_amount || 0),
+      })
+    }
     await compareAndSetStatus(conn, {
       table: 'purchase_returns',
       id,

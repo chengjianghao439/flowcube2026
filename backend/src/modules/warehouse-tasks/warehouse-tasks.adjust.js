@@ -6,6 +6,7 @@ const { reserveTaskLockedContainersForReturn, unlockAndRelocateContainer } = req
 const { WT_STATUS, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { logSideEffectFailure } = require('./warehouse-tasks.helpers')
+const { scopeFilter } = require('../../utils/warehouseScope')
 
 const QTY_EPS = 1e-6
 
@@ -254,7 +255,9 @@ async function finalizeTaskStatusAfterAdjustment(conn, { taskId, taskNo, descrip
  * PDA「改单确认」任务池：列出所有正在改单收尾中（adjustment_requested_at 非空）的任务，
  * 每条附带待确认拆箱/归还项数量。
  */
-async function listPendingAdjustments(warehouseId) {
+async function listPendingAdjustments(warehouseId, scopeWarehouseIds = null) {
+  // 与主列表 findAll 同口径接入用户仓库数据范围：受限用户只看授权仓库的待改单任务
+  const scope = scopeFilter(scopeWarehouseIds, 'wt.warehouse_id')
   const [rows] = await pool.query(
     `SELECT wt.id, wt.task_no, wt.customer_name, wt.warehouse_id, wt.warehouse_name,
             wt.status, wt.adjustment_requested_at,
@@ -269,9 +272,9 @@ async function listPendingAdjustments(warehouseId) {
        INNER JOIN sale_order_adjustments soa ON soa.warehouse_task_id = wt.id AND soa.status = 1
       WHERE wt.adjustment_requested_at IS NOT NULL
         AND wt.deleted_at IS NULL
-        ${warehouseId ? 'AND wt.warehouse_id = ?' : ''}
+        ${warehouseId ? 'AND wt.warehouse_id = ?' : ''}${scope.sql}
       ORDER BY wt.adjustment_requested_at ASC`,
-    warehouseId ? [warehouseId] : [],
+    [...(warehouseId ? [warehouseId] : []), ...scope.params],
   )
   return rows.map(r => ({
     id: Number(r.id),

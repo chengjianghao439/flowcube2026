@@ -84,4 +84,47 @@ async function adjustPaymentRecordForReturn(conn, {
   return { id: Number(record.id), newTotal, newBalance: balance, status }
 }
 
-module.exports = { genNo, adjustPaymentRecordForReturn }
+/**
+ * 退货确认前的负余额预判（只读，不写、不加锁）。
+ *
+ * 尽早拦截「已付/已核销金额 > 退货冲减后账款总额」的退货：否则单据要走到执行末端
+ * （销售侧最后一箱上架、采购侧出库）才由 adjustPaymentRecordForReturn 抛 409 回滚，
+ * 此前的物理动作全部作废、单据卡在中间态。这里在 confirm 阶段先按「计划全额」预判。
+ *
+ * 定位为「预判提示」而非最终闸门：
+ *  - 用非锁定读，不在 confirm 事务里长持 payment_records 锁；
+ *  - confirm 通过后若又对该账款登记了付款，末端 adjustPaymentRecordForReturn 的 FOR UPDATE
+ *    校验仍会兜底拦截（前置不能替代末端）；
+ *  - 销售退货实际按合格量冲减（≤计划量），故按计划全额预判是保守的，可能拦下「若大量质检
+ *    不合格其实不会负余额」的单——这与「前置拦截 + 末端兜底」的定位一致，文案用「预计」；
+ *  - 账款尚未生成时（如现结应付要到收货上架完成才落库）直接放行，交由末端兜底。
+ */
+async function assertReturnPaymentHeadroom(conn, { recordType, orderId = null, orderNo = null, amount }) {
+  const params = [recordType]
+  let where = 'type=?'
+  if (orderId) {
+    where += ' AND order_id=?'
+    params.push(orderId)
+  } else if (orderNo) {
+    where += ' AND order_no=?'
+    params.push(orderNo)
+  } else {
+    return
+  }
+  const [[record]] = await conn.query(
+    `SELECT total_amount, paid_amount FROM payment_records WHERE ${where} ORDER BY id DESC LIMIT 1`,
+    params,
+  )
+  if (!record) return
+  const currentTotal = Number(record.total_amount || 0)
+  const currentPaid = Number(record.paid_amount || 0)
+  const newTotal = Number((currentTotal - Number(amount || 0)).toFixed(4))
+  if (currentPaid > newTotal) {
+    throw new AppError(
+      `该账款已登记金额 ¥${currentPaid.toFixed(2)}，预计退货 ¥${Number(amount || 0).toFixed(2)} 后将形成负余额；请先处理退款/退款凭证后再确认退货`,
+      409,
+    )
+  }
+}
+
+module.exports = { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom }

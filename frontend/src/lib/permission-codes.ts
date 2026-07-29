@@ -119,6 +119,7 @@ export const PERMISSIONS = {
   FINANCE_EXPENSE_APPROVE: 'finance.expense.approve',
   FINANCE_EXPENSE_PAY: 'finance.expense.pay',
   FINANCE_EXPENSE_CATEGORY_MANAGE: 'finance.expense.category.manage',
+  FINANCE_EXPENSE_VIEW_ALL: 'finance.expense.view.all',
 
   WAREHOUSE_TASK_VIEW: 'warehouse.task.view',
   WAREHOUSE_TASK_ASSIGN: 'warehouse.task.assign',
