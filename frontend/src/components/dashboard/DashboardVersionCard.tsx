@@ -100,8 +100,8 @@ export default function DashboardVersionCard() {
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="flex h-full flex-col overflow-hidden">
+      <CardHeader className="shrink-0 pb-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -144,7 +144,7 @@ export default function DashboardVersionCard() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm">
+      <CardContent className="min-h-0 flex-1 space-y-3 overflow-y-auto text-sm">
         <div>
           <span className="text-muted-foreground">当前版本：</span>
           <span className="font-mono font-semibold text-foreground">

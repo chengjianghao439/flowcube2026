@@ -112,4 +112,26 @@ async function getIncomingPurchases() {
   }
 }
 
-module.exports = { getSummary, getLowStock, getRecentTrend, getTopStockByValue, getIncomingPurchases }
+/**
+ * 读取用户仪表盘个性化布局。缺行（从未个性化）返回 null，由前端回落到默认布局。
+ * MySQL JSON 列经 mysql2 返回时已是解析好的 JS 对象，无需再 JSON.parse。
+ */
+async function getLayout(userId) {
+  const [[row]] = await pool.query('SELECT layout FROM dashboard_layouts WHERE user_id=?', [userId])
+  return row ? row.layout : null
+}
+
+/**
+ * 保存（upsert）用户仪表盘布局。layout 已由路由层 zod 校验过结构。
+ * JSON 列写入必须 JSON.stringify，否则 mysql2 会把对象当成参数列表报错。
+ */
+async function saveLayout(userId, layout) {
+  await pool.query(
+    `INSERT INTO dashboard_layouts (user_id, layout) VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE layout=VALUES(layout), updated_at=CURRENT_TIMESTAMP`,
+    [userId, JSON.stringify(layout)]
+  )
+  return layout
+}
+
+module.exports = { getSummary, getLowStock, getRecentTrend, getTopStockByValue, getIncomingPurchases, getLayout, saveLayout }

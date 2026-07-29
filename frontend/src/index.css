@@ -125,6 +125,27 @@
   .card-base { @apply rounded-lg border border-border bg-card; }
 }
 
+/* ── 电子木鱼「功德 +1」浮字 ─────────────────────────────────────────────── */
+
+@keyframes fc-merit-float {
+  0%   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -34px) scale(1.15); }
+}
+.animate-merit-float { animation: fc-merit-float 0.7s ease-out forwards; }
+
+/* ── 下班庆祝撒花 ────────────────────────────────────────────────────────── */
+
+@keyframes fc-confetti-fall {
+  0%   { transform: translateY(-10%) rotate(0deg);   opacity: 1; }
+  100% { transform: translateY(320%) rotate(540deg); opacity: 0; }
+}
+.fc-confetti-piece { animation: fc-confetti-fall 2s ease-in forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-merit-float { animation-duration: 0.01ms; }
+  .fc-confetti-piece { display: none; }
+}
+
 /* ── AppToast 进出场动画 ─────────────────────────────────────────────────── */
 
 @keyframes fc-toast-in {

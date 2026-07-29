@@ -6,5 +6,7 @@ const lowStock = async(req,res,next)=>{ try{return successResponse(res,await svc
 const trend = async(req,res,next)=>{ try{return successResponse(res,await svc.getRecentTrend(+req.query.days||7),'查询成功')}catch(e){next(e)} }
 const topStock = async(req,res,next)=>{ try{return successResponse(res,await svc.getTopStockByValue(10),'查询成功')}catch(e){next(e)} }
 const incomingPurchases = async(req,res,next)=>{ try{return successResponse(res,await svc.getIncomingPurchases(),'查询成功')}catch(e){next(e)} }
+const layout = async(req,res,next)=>{ try{return successResponse(res,await svc.getLayout(req.user.userId),'查询成功')}catch(e){next(e)} }
+const saveLayout = async(req,res,next)=>{ try{return successResponse(res,await svc.saveLayout(req.user.userId, req.body),'保存成功')}catch(e){next(e)} }
 
-module.exports = { summary, lowStock, trend, topStock, incomingPurchases }
+module.exports = { summary, lowStock, trend, topStock, incomingPurchases, layout, saveLayout }
