@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { createContainer, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
+const serialEngine = require('../../engine/serialEngine')
 const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
 const {
   genTaskNo,
@@ -361,15 +362,17 @@ async function detectDuplicateScan(conn, { taskId, productId, totalQty, packageC
 }
 
 async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, scopeWarehouseIds = null } = {}) {
-  const { productId, qty, packages: rawPackages, confirmOverReceive, confirmDuplicate, overReceiveReason, scannedBarcode, batchNo, mfgDate } = payload
+  const { productId, qty, packages: rawPackages, serialNos: topSerialNos, confirmOverReceive, confirmDuplicate, overReceiveReason, scannedBarcode, batchNo, mfgDate } = payload
   let { expDate } = payload
   const productIdN = Number(productId)
   const packages = Array.isArray(rawPackages) && rawPackages.length
     ? rawPackages
-    : [{ qty }]
+    : [{ qty, serialNos: topSerialNos }]
   const normalizedPackages = packages.map((pkg, index) => ({
     lineNo: index + 1,
     qty: Number(pkg.qty),
+    // 序列号管控商品：每箱随包扫入的序列号（长度须等于该箱数量），非管控商品忽略此字段
+    serialNos: Array.isArray(pkg.serialNos) ? pkg.serialNos.map(s => String(s).trim()) : [],
   }))
   const totalQty = normalizedPackages.reduce((sum, pkg) => sum + pkg.qty, 0)
 
@@ -378,7 +381,7 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
   if (normalizedPackages.some(pkg => !Number.isFinite(pkg.qty) || pkg.qty <= 0)) throw new AppError('箱数量必须大于 0', 400)
 
   const [[productRow]] = await pool.query(
-    'SELECT barcode, code, batch_managed, shelf_life_days FROM product_items WHERE id=? AND deleted_at IS NULL',
+    'SELECT barcode, code, batch_managed, shelf_life_days, serial_managed FROM product_items WHERE id=? AND deleted_at IS NULL',
     [productIdN],
   )
   if (!productRow) throw new AppError('商品不存在', 404)
@@ -405,6 +408,28 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
       expDate = d.toISOString().slice(0, 10)
     }
     if (!expDate) throw new AppError('该商品启用了批次管理，请录入效期（或录入生产日期并在商品资料维护保质期天数）', 400)
+  }
+
+  // 序列号管控商品（迁移 168）：每箱随包扫入的序列号数必须等于该箱数量，且本次收货整体不得重复。
+  // 校验通过后在建容器事务内逐台登记（serialEngine.registerSerials）；非管控商品完全旁路。
+  const isSerialManaged = Number(productRow.serial_managed) === 1
+  if (isSerialManaged) {
+    for (const pkg of normalizedPackages) {
+      if (pkg.serialNos.length !== pkg.qty) {
+        throw new AppError(
+          `该商品为序列号管控，第${pkg.lineNo}箱应逐台扫 ${pkg.qty} 个序列号，实到 ${pkg.serialNos.length} 个`,
+          400, 'SERIAL_RECEIVE_COUNT_MISMATCH',
+        )
+      }
+    }
+    const seenSn = new Set()
+    for (const pkg of normalizedPackages) {
+      for (const sn of pkg.serialNos) {
+        if (!sn) throw new AppError('序列号不能为空', 400, 'SERIAL_EMPTY')
+        if (seenSn.has(sn)) throw new AppError(`本次收货存在重复序列号：${sn}`, 400, 'SERIAL_DUP_IN_BATCH')
+        seenSn.add(sn)
+      }
+    }
   }
 
   const conn = await pool.getConnection()
@@ -541,8 +566,10 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
     const productName = line?.productName || ''
     const itemCount = normalizedPackages.length
 
+    const poByItemId = new Map(itemRowsFresh.map(r => [r.id, r.purchase_order_id]))
     const containers = []
     for (const pkg of normalizedPackages) {
+      const ownerItemId = ownerByLineNo.get(pkg.lineNo) ?? null
       const { containerId, barcode } = await createContainer(conn, {
         productId: productIdN,
         warehouseId,
@@ -553,7 +580,7 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         expDate: expDate || null,
         locationId: null,
         inboundTaskId: taskId,
-        inboundTaskItemId: ownerByLineNo.get(pkg.lineNo) ?? null,
+        inboundTaskItemId: ownerItemId,
         containerStatus: CONTAINER_STATUS.PENDING_PUTAWAY,
         sourceType: SOURCE_TYPE.INBOUND_TASK,
         sourceRefId: taskId,
@@ -561,6 +588,21 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         sourceRefNo: taskNo,
         remark: `收货待上架 ${taskNo} 第${pkg.lineNo}箱`,
       })
+      // 序列号管控商品：本箱容器建好后，把随包扫入的序列号逐台登记到该容器（同一事务）。
+      // registerSerials 内部对每台做「已在库→拒重复入库、已出/已退→复用改回在库」；跨箱重复
+      // 已在上面前置去重挡住。登记后该容器 remaining_qty 天然等于其在库序列号数（核心不变量）。
+      if (isSerialManaged) {
+        await serialEngine.registerSerials(conn, {
+          productId: productIdN,
+          warehouseId,
+          containerId,
+          serialNos: pkg.serialNos,
+          inboundTaskId: taskId,
+          inboundTaskItemId: ownerItemId,
+          purchaseOrderId: poByItemId.get(ownerItemId) ?? null,
+          operatorId: userId || null,
+        })
+      }
       containers.push({
         containerId,
         containerCode: barcode,

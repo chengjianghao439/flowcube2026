@@ -24,7 +24,7 @@ import { CategoryFinder, SupplierFinder, FinderTrigger } from '@/components/find
 import type { FinderResult } from '@/types/finder'
 
 const DEFAULT_RATES = { A: 10, B: 20, C: 30, D: 40 }
-const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, qaRequired: false, shelfLifeDays: '' as string, safetyStock: '' as string, reorderPoint: '' as string, isActive: true }
+const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, qaRequired: false, shelfLifeDays: '' as string, safetyStock: '' as string, reorderPoint: '' as string, serialManaged: false, isActive: true }
 
 function profitRate(cost: number, sale: number): number | null {
   if (sale <= 0 || !Number.isFinite(cost) || !Number.isFinite(sale)) return null
@@ -80,6 +80,7 @@ export default function ProductFormPage() {
         color: product.color ?? '',
         costPrice: product.costPrice != null ? String(product.costPrice) : '',
         batchManaged: !!product.batchManaged,
+        serialManaged: !!product.serialManaged,
         qaRequired: !!product.qaRequired,
         shelfLifeDays: product.shelfLifeDays != null ? String(product.shelfLifeDays) : '',
         safetyStock: product.safetyStock != null ? String(product.safetyStock) : '',
@@ -150,6 +151,7 @@ export default function ProductFormPage() {
       color: form.color,
       costPrice: Number(form.costPrice),
       batchManaged: form.batchManaged,
+      serialManaged: form.serialManaged,
       qaRequired: form.qaRequired,
       shelfLifeDays: form.shelfLifeDays !== '' ? Number(form.shelfLifeDays) : null,
       safetyStock: form.safetyStock !== '' ? Number(form.safetyStock) : null,
@@ -277,6 +279,14 @@ export default function ProductFormPage() {
               <input type="checkbox" className="h-4 w-4" checked={form.qaRequired}
                 onChange={e => set('qaRequired', e.target.checked)} disabled={submitting} />
               <span className="text-muted-foreground">采购收货需先质检，合格才可上架（供应商可覆盖）</span>
+            </label>
+          </div>
+          <div className="space-y-1.5">
+            <Label>序列号管理</Label>
+            <label className="flex h-10 items-center gap-2 text-sm">
+              <input type="checkbox" className="h-4 w-4" checked={form.serialManaged}
+                onChange={e => set('serialManaged', e.target.checked)} disabled={submitting} />
+              <span className="text-muted-foreground">收货逐台扫序列号、出库逐台核销（建议仅对新品/零库存开启）</span>
             </label>
           </div>
           {form.batchManaged && (

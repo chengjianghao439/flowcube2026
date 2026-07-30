@@ -4,6 +4,7 @@ export interface Product {
   shelfLifeDays?: number | null
   safetyStock?: number | null
   reorderPoint?: number | null
+  serialManaged?: boolean
   id: number; code: string; name: string
   skuCode: string | null; articleNumber: string | null
   categoryId: number | null; categoryName: string | null
@@ -19,7 +20,7 @@ export interface CreateProductParams {
   unit: string; spec: string; color: string
   costPrice?: number | null; remark?: string
   batchManaged?: boolean; shelfLifeDays?: number | null; qaRequired?: boolean
-  safetyStock?: number | null; reorderPoint?: number | null
+  safetyStock?: number | null; reorderPoint?: number | null; serialManaged?: boolean
   skuCode?: string; articleNumber?: string
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
 }
@@ -28,7 +29,7 @@ export interface UpdateProductParams {
   unit: string; spec: string; color: string
   costPrice?: number | null; remark?: string; isActive: boolean
   batchManaged?: boolean; shelfLifeDays?: number | null; qaRequired?: boolean
-  safetyStock?: number | null; reorderPoint?: number | null
+  safetyStock?: number | null; reorderPoint?: number | null; serialManaged?: boolean
   articleNumber?: string
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
 }

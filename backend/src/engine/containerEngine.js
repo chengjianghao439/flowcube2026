@@ -854,6 +854,12 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   const rem = Number(row.remaining_qty)
   if (q > rem) throw new AppError('拆分数量不能超过剩余数量', 400)
 
+  // 序列号管控商品：Phase 1 未实现拆分时的序列号跟随迁移（moveSerialsOnSplit），
+  // 直接挡住，避免"新容器有数量无序列号、源容器序列号数 > 剩余数"的静默不一致。
+  // 引擎间懒加载，避免与 serialEngine 的顶层 require 顺序耦合。
+  const { assertNoSerialManaged } = require('./serialEngine')
+  await assertNoSerialManaged(conn, [row.product_id], '容器拆分')
+
   // 转入已有塑料盒
   if (tid) {
     const [[target]] = await conn.query(

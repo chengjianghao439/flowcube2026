@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { CONTAINER_STATUS, syncStockFromContainers, lockStockDimension } = require('../../engine/containerEngine')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { assertNoSerialManaged } = require('../../engine/serialEngine')
 const { appendInboundEvent } = require('./inbound-tasks.helpers')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertInScope } = require('../../utils/warehouseScope')
@@ -68,6 +69,10 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
         409,
       )
     }
+
+    // 序列号管控商品：撤回收货会把容器置 VOID、remaining_qty 归零反冲库存，
+    // Phase 1 未实现序列号同步回冲，直接挡住避免"容器归零但序列号仍在库"的不一致。
+    await assertNoSerialManaged(conn, dimRows.map(d => d.product_id), '撤回收货')
 
     for (const c of containers) {
       const wasActive = Number(c.status) === CONTAINER_STATUS.ACTIVE

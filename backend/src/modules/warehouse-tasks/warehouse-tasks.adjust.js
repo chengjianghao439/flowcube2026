@@ -3,6 +3,7 @@ const AppError = require('../../utils/AppError')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { reserve, partialReleaseByProduct } = require('../../engine/reservationEngine')
 const { reserveTaskLockedContainersForReturn, unlockAndRelocateContainer } = require('../../engine/containerEngine')
+const { assertNoSerialManaged } = require('../../engine/serialEngine')
 const { WT_STATUS, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { logSideEffectFailure } = require('./warehouse-tasks.helpers')
@@ -62,6 +63,10 @@ async function applyProductDeltaWithinTransaction(conn, {
 }) {
   const delta = Number(newRequiredQty) - Number(oldRequiredQty)
   if (Math.abs(delta) < QTY_EPS) return null
+
+  // 序列号管控商品：执行期改单会拆容器归还/作废箱子（动容器数量却不动序列号），
+  // Phase 1 未实现改单时的序列号回冲，整体挡住（增量的后续补拣、减量的拆箱归还均不支持）。
+  await assertNoSerialManaged(conn, [productId], '销售单改单')
 
   const [[existingItem]] = await conn.query(
     `SELECT id, required_qty, picked_qty, sorted_qty, checked_qty

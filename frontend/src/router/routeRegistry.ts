@@ -121,6 +121,8 @@ const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconcil
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
 const ReplenishmentPage = lazy(() => import('@/pages/reports/replenishment'))
 const InventoryAgingPage = lazy(() => import('@/pages/reports/inventory-aging'))
+const SerialLedgerPage = lazy(() => import('@/pages/serials/index'))
+const SerialTracePage = lazy(() => import('@/pages/serials/trace'))
 const ProcurementPlanPage = lazy(() => import('@/pages/reports/procurement-plan'))
 const ApprovalsPage = lazy(() => import('@/pages/reports/approvals'))
 const WavePerformancePage = lazy(() => import('@/pages/reports/wave-performance'))
@@ -260,6 +262,23 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '库存', section: '库存查询', order: 20 },
+  },
+  {
+    path: '/serials',
+    title: '序列号台账',
+    permission: PERMISSIONS.SERIAL_VIEW,
+    component: SerialLedgerPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '库存', section: '库存查询', order: 25 },
+  },
+  {
+    path: '/serials/trace',
+    title: '序列号追溯',
+    permission: PERMISSIONS.SERIAL_VIEW,
+    component: SerialTracePage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
   },
   {
     path: '/stockcheck',
