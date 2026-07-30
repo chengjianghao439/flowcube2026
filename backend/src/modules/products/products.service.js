@@ -244,7 +244,7 @@ async function findById(id) {
   return fmtProduct(rows[0])
 }
 
-async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint }) {
+async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, serialManaged }) {
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
   const code = await generateMasterCode(pool, 'P', 'product_items')
   const generatedSku = skuCode || await generateMasterCode(pool, 'SKU', 'product_items', 'sku_code')
@@ -258,15 +258,15 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   const spD = salePriceD != null ? Number(salePriceD) : auto.salePriceD
   const sp = spA // 售价默认取价格A
   const [r] = await pool.query(
-    `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days,qa_required)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0],
+    `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days,qa_required,serial_managed)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, serialManaged?1:0],
   )
   await upsertDefaultStockPolicy(r.insertId, { safetyStock, reorderPoint })
   return { id: r.insertId, code, skuCode: generatedSku, articleNumber: generatedArticle }
 }
 
-async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint }) {
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, serialManaged }) {
   await findById(id)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const rates = await loadPriceRates(pool)
@@ -277,9 +277,9 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   const spD = salePriceD != null ? Number(salePriceD) : auto.salePriceD
   const sp = spA
   await pool.query(
-    `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,qa_required=?
+    `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,qa_required=?,serial_managed=?
      WHERE id=? AND deleted_at IS NULL`,
-    [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, id],
+    [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, serialManaged?1:0, id],
   )
   await upsertDefaultStockPolicy(id, { safetyStock, reorderPoint })
 }
