@@ -24,6 +24,8 @@ const empty = {
   name:'', contact:'', phone:'', email:'', address:'', remark:'',
   settlementType: SETTLEMENT_TYPE.MONTHLY as SettlementType,
   paymentTermsDays: 30,
+  qaPolicy: 0,
+  leadTimeDays: 0,
   isActive: true,
 }
 
@@ -47,6 +49,8 @@ export default function SuppliersPage() {
       address:s.address??'', remark:s.remark??'',
       settlementType: s.settlementType ?? SETTLEMENT_TYPE.MONTHLY,
       paymentTermsDays: s.paymentTermsDays ?? 30,
+      qaPolicy: s.qaPolicy ?? 0,
+      leadTimeDays: s.leadTimeDays ?? 0,
       isActive: s.isActive,
     })
     setOpen(true)
@@ -54,7 +58,7 @@ export default function SuppliersPage() {
   function handleSubmit(e:React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (form.phone && !PHONE_RE.test(form.phone)) { toast.error('请输入正确的手机号'); return }
-    const p = { name:form.name, contact:form.contact||undefined, phone:form.phone||undefined, email:form.email||undefined, address:form.address||undefined, remark:form.remark||undefined, settlementType:form.settlementType, paymentTermsDays:form.paymentTermsDays }
+    const p = { name:form.name, contact:form.contact||undefined, phone:form.phone||undefined, email:form.email||undefined, address:form.address||undefined, remark:form.remark||undefined, settlementType:form.settlementType, paymentTermsDays:form.paymentTermsDays, qaPolicy:form.qaPolicy, leadTimeDays:form.leadTimeDays }
     if (edit) update({ id:edit.id, data:{...p,isActive:form.isActive} }, { onSuccess:()=>setOpen(false) })
     else create(p, { onSuccess:()=>setOpen(false) })
   }
@@ -128,6 +132,21 @@ export default function SuppliersPage() {
               onChange={next => setForm(f => ({ ...f, ...next }))}
               disabled={isPending}
             />
+            <div className="space-y-1">
+              <Label>来料质检策略</Label>
+              <select value={String(form.qaPolicy)} onChange={e => setForm(f => ({ ...f, qaPolicy: Number(e.target.value) }))} disabled={isPending}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50">
+                <option value="0">按商品设置（默认）</option>
+                <option value="1">强制质检（所有来料先检后入）</option>
+                <option value="2">免检（信任供应商，直接入库）</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>采购提前期（天）</Label>
+              <Input type="number" min="0" max="365" value={String(form.leadTimeDays)}
+                onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setForm(f=>({...f, leadTimeDays: Number(e.target.value) || 0}))}
+                disabled={isPending} placeholder="下单到到货天数，用于采购计划预测" />
+            </div>
             {edit && <div className="flex items-center gap-2"><input type="checkbox" id="sp-active" checked={form.isActive} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('isActive',e.target.checked)} className="accent-primary"/><Label htmlFor="sp-active" className="cursor-pointer">启用</Label></div>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={()=>setOpen(false)} disabled={isPending}>取消</Button>

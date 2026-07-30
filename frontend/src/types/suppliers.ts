@@ -14,6 +14,10 @@ export interface Supplier {
   settlementTypeName: string
   /** 应付账期天数，仅月结有意义（30/60/90）；其余结算方式由服务端强制归零 */
   paymentTermsDays: number
+  /** 采购提前期（下单到到货天数），用于采购计划预测 */
+  leadTimeDays: number
+  /** 来料质检策略：0=按商品 qa_required 1=强制质检 2=免检 */
+  qaPolicy: number
   isActive: boolean
   createdAt: string
 }
@@ -28,6 +32,8 @@ interface SupplierWritableFields {
   remark?: string
   settlementType?: SettlementType
   paymentTermsDays?: number
+  qaPolicy?: number
+  leadTimeDays?: number
 }
 export type CreateSupplierParams = SupplierWritableFields
 export type UpdateSupplierParams = SupplierWritableFields & { isActive: boolean }

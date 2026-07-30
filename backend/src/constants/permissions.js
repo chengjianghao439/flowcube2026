@@ -12,6 +12,10 @@ const PERMISSIONS = {
   PRODUCT_DELETE: 'product.delete',
   PRODUCT_PRINT_LABEL: 'product.print_label',
 
+  // 序列号管理（个体制：收货逐台登记、出库逐台核销、追溯，文档 04）。
+  SERIAL_VIEW: 'serial.view',
+  SERIAL_MANAGE: 'serial.manage',
+
   CATEGORY_VIEW: 'category.view',
   CATEGORY_CREATE: 'category.create',
   CATEGORY_UPDATE: 'category.update',
@@ -48,6 +52,12 @@ const PERMISSIONS = {
   CARRIER_UPDATE: 'carrier.update',
   CARRIER_DELETE: 'carrier.delete',
 
+  // 物流运单（电子面单：取号 / 轨迹 / 运费对账，文档 06）。
+  // freight.reconcile 直接产生对承运商的应付=钱，单列并只授予财务。
+  LOGISTICS_VIEW: 'logistics.view',
+  LOGISTICS_MANAGE: 'logistics.manage',
+  LOGISTICS_FREIGHT_RECONCILE: 'logistics.freight.reconcile',
+
   PRICE_LIST_VIEW: 'price.list.view',
   PRICE_LIST_CREATE: 'price.list.create',
   PRICE_LIST_UPDATE: 'price.list.update',
@@ -57,6 +67,12 @@ const PERMISSIONS = {
   PURCHASE_ORDER_CREATE: 'purchase.order.create',
   PURCHASE_ORDER_CONFIRM: 'purchase.order.confirm',
   PURCHASE_ORDER_CANCEL: 'purchase.order.cancel',
+
+  // 采购请购单（PR → 审批 → 转采购单）。APPROVE 是内控点，刻意不 seed（见 153 迁移）。
+  PURCHASE_REQUISITION_VIEW: 'purchase.requisition.view',
+  PURCHASE_REQUISITION_CREATE: 'purchase.requisition.create',
+  PURCHASE_REQUISITION_APPROVE: 'purchase.requisition.approve',
+  PURCHASE_REQUISITION_CONVERT: 'purchase.requisition.convert',
 
   INBOUND_ORDER_VIEW: 'inbound.order.view',
   INBOUND_ORDER_CREATE: 'inbound.order.create',
@@ -78,6 +94,10 @@ const PERMISSIONS = {
   STOCKCHECK_SUBMIT: 'stockcheck.submit',
   STOCKCHECK_CANCEL: 'stockcheck.cancel',
 
+  // 循环盘点 ABC 分类与频率规则（配置类操作独立控权）
+  STOCKCHECK_ABC_VIEW: 'stockcheck.abc.view',
+  STOCKCHECK_ABC_MANAGE: 'stockcheck.abc.manage',
+
   TRANSFER_ORDER_VIEW: 'transfer.order.view',
   TRANSFER_ORDER_CREATE: 'transfer.order.create',
   TRANSFER_ORDER_CONFIRM: 'transfer.order.confirm',
@@ -93,6 +113,11 @@ const PERMISSIONS = {
   SALE_ORDER_SHIP: 'sale.order.ship',
   SALE_ORDER_CANCEL: 'sale.order.cancel',
   SALE_ORDER_DELETE: 'sale.order.delete',
+
+  // 客户授信：view 看用信、manage 调额度(财务风控)、override 超额一次性放行(销售)。敏感，override 服务端校验。
+  SALE_CREDIT_VIEW: 'sale.credit.view',
+  SALE_CREDIT_MANAGE: 'sale.credit.manage',
+  SALE_CREDIT_OVERRIDE: 'sale.credit.override',
 
   RETURN_ORDER_VIEW: 'return.order.view',
   RETURN_ORDER_CREATE: 'return.order.create',

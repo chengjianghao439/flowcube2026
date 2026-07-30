@@ -1,6 +1,5 @@
 const { pool } = require('../../config/db')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
-const { getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
 
 function pushNotification(items, seen, item) {
   const dedupeKey = item.dedupeKey || `${item.category || 'general'}:${item.text}:${item.path}`
@@ -10,9 +9,7 @@ function pushNotification(items, seen, item) {
 }
 
 async function buildNotifications() {
-  const threshold = 10
   const inboundThresholds = await getInboundClosureThresholds()
-  const productInventoryProjectionSql = getProductInventoryProjectionSql()
   const printTimeoutMinutes = Number(inboundThresholds.printTimeoutMinutes)
   const putawayTimeoutHours = Number(inboundThresholds.putawayTimeoutHours)
 
@@ -22,11 +19,17 @@ async function buildNotifications() {
   const [[{ pendingSale }]] = await pool.query(
     `SELECT COUNT(*) AS pendingSale FROM sale_orders WHERE status IN (1,2,3) AND deleted_at IS NULL`,
   )
+  // 低于补货点的库存项数（按仓判定，补货点取 COALESCE(本仓行, warehouse_id=0 默认行, 0)，只算补货点>0 的）
+  // 口径较补货建议报表保守：只看可用<补货点、不含在途，宁可多提醒；点进报表看含在途的精确清单。
   const [[{ lowStockCount }]] = await pool.query(
-    `SELECT COUNT(*) AS lowStockCount
-     FROM ${productInventoryProjectionSql} ip
-     WHERE ip.quantity < ?`,
-    [threshold],
+    `SELECT COUNT(*) AS lowStockCount FROM (
+       SELECT s.product_id, s.warehouse_id
+       FROM inventory_stock s
+       LEFT JOIN product_stock_policies sp_wh  ON sp_wh.product_id = s.product_id AND sp_wh.warehouse_id = s.warehouse_id
+       LEFT JOIN product_stock_policies sp_def ON sp_def.product_id = s.product_id AND sp_def.warehouse_id = 0
+       WHERE COALESCE(sp_wh.reorder_point, sp_def.reorder_point, 0) > 0
+         AND GREATEST(0, s.quantity - s.reserved) < COALESCE(sp_wh.reorder_point, sp_def.reorder_point, 0)
+     ) t`,
   )
   const [[{ unpaidPayable }]] = await pool.query(
     `SELECT COUNT(*) AS unpaidPayable FROM payment_records WHERE type=1 AND status IN (1,2)`,
@@ -176,7 +179,7 @@ async function buildNotifications() {
   const seen = new Set()
   if (overduePayable > 0) pushNotification(items, seen, { code: 'OVERDUE_PAYABLE', category: 'finance', priority: 10, type: 'danger', icon: '🚨', text: `${overduePayable} 笔应付账款已逾期！`, path: '/payments/payable' })
   if (overdueReceivable > 0) pushNotification(items, seen, { code: 'OVERDUE_RECEIVABLE', category: 'finance', priority: 10, type: 'danger', icon: '🚨', text: `${overdueReceivable} 笔应收账款已逾期！`, path: '/payments/receivable' })
-  if (lowStockCount > 0) pushNotification(items, seen, { code: 'LOW_STOCK', category: 'inventory', priority: 20, type: 'warning', icon: '⚠️', text: `${lowStockCount} 种商品库存不足`, path: '/inventory' })
+  if (lowStockCount > 0) pushNotification(items, seen, { code: 'LOW_STOCK', category: 'inventory', priority: 20, type: 'warning', icon: '⚠️', text: `${lowStockCount} 项库存低于补货点`, path: '/reports/replenishment' })
   if (pendingPurchase > 0) pushNotification(items, seen, { code: 'PENDING_PURCHASE', category: 'operations', priority: 30, type: 'info', icon: '📦', text: `${pendingPurchase} 笔采购单待处理`, path: '/purchase' })
   if (pendingSale > 0) pushNotification(items, seen, { code: 'PENDING_SALE', category: 'operations', priority: 30, type: 'info', icon: '🚚', text: `${pendingSale} 笔销售单待处理`, path: '/sale' })
   if (unpaidPayable > 0) pushNotification(items, seen, { code: 'UNPAID_PAYABLE', category: 'finance', priority: 12, type: 'danger', icon: '💳', text: `${unpaidPayable} 笔应付账款未清`, path: '/payments/payable' })

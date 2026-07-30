@@ -23,6 +23,25 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
+/**
+ * 建单时求值每个商品的 qa_required 快照（文档 07）：
+ *   需质检 = 供应商强制(qa_policy=1) 或 (供应商非免检(≠2) 且 商品 qa_required=1)
+ * 返回 Map<productId, 0|1>。默认全 0（免检），收货行为不变——这一步只固化快照，不改流程。
+ */
+async function resolveQaRequiredMap(conn, supplierId, productIds) {
+  const map = new Map()
+  const ids = [...new Set(productIds.map(Number).filter(n => Number.isFinite(n) && n > 0))]
+  if (!ids.length) return map
+  const [[sup]] = await conn.query('SELECT qa_policy FROM supply_suppliers WHERE id=?', [Number(supplierId)])
+  const qaPolicy = sup ? Number(sup.qa_policy) : 0
+  if (qaPolicy === 2) { ids.forEach(id => map.set(id, 0)); return map }   // 供应商免检
+  if (qaPolicy === 1) { ids.forEach(id => map.set(id, 1)); return map }   // 供应商强制质检
+  const [rows] = await conn.query(`SELECT id, qa_required FROM product_items WHERE id IN (${ids.map(() => '?').join(',')})`, ids)
+  const prod = new Map(rows.map(r => [Number(r.id), Number(r.qa_required)]))
+  ids.forEach(id => map.set(id, prod.get(id) === 1 ? 1 : 0))
+  return map
+}
+
 async function createFromPoId(purchaseOrderId) {
   const purchaseSvc = require('../purchase/purchase.service')
   const order = await purchaseSvc.findById(purchaseOrderId)
@@ -64,11 +83,12 @@ async function createFromPoId(purchaseOrderId) {
       [taskNo, order.id, order.orderNo, order.supplierName, order.warehouseId, order.warehouseName],
     )
     const taskId = r.insertId
+    const qaMap = await resolveQaRequiredMap(conn, order.supplierId, remainingItems.map(i => i.productId))
     for (const item of remainingItems) {
       await conn.query(
-        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [taskId, order.id, order.orderNo, item.purchaseItemId, item.productId, item.productCode, item.productName, item.articleNumber || null, item.spec || null, item.color || null, item.unit, item.remainingQty],
+        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty, qa_required)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [taskId, order.id, order.orderNo, item.purchaseItemId, item.productId, item.productCode, item.productName, item.articleNumber || null, item.spec || null, item.color || null, item.unit, item.remainingQty, qaMap.get(Number(item.productId)) || 0],
       )
     }
     await appendInboundEvent(conn, taskId, 'created', '创建收货订单', `收货订单 ${taskNo} 已创建，等待提交到 PDA`, null, {
@@ -151,10 +171,11 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
     )
     const taskId = r.insertId
 
+    const qaMap = await resolveQaRequiredMap(conn, supplierIdN, taskItems.map(i => i.productId))
     for (const item of taskItems) {
       await conn.query(
-        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty, qa_required)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           taskId,
           item.purchaseOrderId,
@@ -168,6 +189,7 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
           item.color || null,
           item.unit,
           item.qty,
+          qaMap.get(Number(item.productId)) || 0,
         ],
       )
     }

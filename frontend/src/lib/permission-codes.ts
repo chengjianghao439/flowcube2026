@@ -12,6 +12,10 @@ export const PERMISSIONS = {
   PRODUCT_DELETE: 'product.delete',
   PRODUCT_PRINT_LABEL: 'product.print_label',
 
+  // 序列号管理（个体制：收货逐台登记、出库逐台核销、追溯，文档 04）。
+  SERIAL_VIEW: 'serial.view',
+  SERIAL_MANAGE: 'serial.manage',
+
   CATEGORY_VIEW: 'category.view',
   CATEGORY_CREATE: 'category.create',
   CATEGORY_UPDATE: 'category.update',
@@ -48,6 +52,12 @@ export const PERMISSIONS = {
   CARRIER_UPDATE: 'carrier.update',
   CARRIER_DELETE: 'carrier.delete',
 
+  // 物流运单（电子面单：取号 / 轨迹 / 运费对账，文档 06）。
+  // freight.reconcile 直接产生对承运商的应付=钱，单列并只授予财务。
+  LOGISTICS_VIEW: 'logistics.view',
+  LOGISTICS_MANAGE: 'logistics.manage',
+  LOGISTICS_FREIGHT_RECONCILE: 'logistics.freight.reconcile',
+
   PRICE_LIST_VIEW: 'price.list.view',
   PRICE_LIST_CREATE: 'price.list.create',
   PRICE_LIST_UPDATE: 'price.list.update',
@@ -57,6 +67,11 @@ export const PERMISSIONS = {
   PURCHASE_ORDER_CREATE: 'purchase.order.create',
   PURCHASE_ORDER_CONFIRM: 'purchase.order.confirm',
   PURCHASE_ORDER_CANCEL: 'purchase.order.cancel',
+
+  PURCHASE_REQUISITION_VIEW: 'purchase.requisition.view',
+  PURCHASE_REQUISITION_CREATE: 'purchase.requisition.create',
+  PURCHASE_REQUISITION_APPROVE: 'purchase.requisition.approve',
+  PURCHASE_REQUISITION_CONVERT: 'purchase.requisition.convert',
 
   INBOUND_ORDER_VIEW: 'inbound.order.view',
   INBOUND_ORDER_CREATE: 'inbound.order.create',
@@ -78,6 +93,9 @@ export const PERMISSIONS = {
   STOCKCHECK_SUBMIT: 'stockcheck.submit',
   STOCKCHECK_CANCEL: 'stockcheck.cancel',
 
+  STOCKCHECK_ABC_VIEW: 'stockcheck.abc.view',
+  STOCKCHECK_ABC_MANAGE: 'stockcheck.abc.manage',
+
   TRANSFER_ORDER_VIEW: 'transfer.order.view',
   TRANSFER_ORDER_CREATE: 'transfer.order.create',
   TRANSFER_ORDER_CONFIRM: 'transfer.order.confirm',
@@ -95,6 +113,10 @@ export const PERMISSIONS = {
   SALE_ORDER_SHIP: 'sale.order.ship',
   SALE_ORDER_CANCEL: 'sale.order.cancel',
   SALE_ORDER_DELETE: 'sale.order.delete',
+
+  SALE_CREDIT_VIEW: 'sale.credit.view',
+  SALE_CREDIT_MANAGE: 'sale.credit.manage',
+  SALE_CREDIT_OVERRIDE: 'sale.credit.override',
 
   RETURN_ORDER_VIEW: 'return.order.view',
   RETURN_ORDER_CREATE: 'return.order.create',
@@ -218,6 +240,10 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.PURCHASE_ORDER_CREATE, label: '新建采购单' },
       { code: PERMISSIONS.PURCHASE_ORDER_CONFIRM, label: '确认采购单' },
       { code: PERMISSIONS.PURCHASE_ORDER_CANCEL, label: '取消采购单' },
+      { code: PERMISSIONS.PURCHASE_REQUISITION_VIEW, label: '查看请购单' },
+      { code: PERMISSIONS.PURCHASE_REQUISITION_CREATE, label: '发起/编辑请购单' },
+      { code: PERMISSIONS.PURCHASE_REQUISITION_APPROVE, label: '审批请购单' },
+      { code: PERMISSIONS.PURCHASE_REQUISITION_CONVERT, label: '请购转采购单' },
       { code: PERMISSIONS.INBOUND_ORDER_VIEW, label: '查看收货单' },
       { code: PERMISSIONS.INBOUND_ORDER_CREATE, label: '新建收货单' },
       { code: PERMISSIONS.INBOUND_ORDER_SUBMIT, label: '提交收货单' },
@@ -233,11 +259,15 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.INVENTORY_ADJUST, label: '库存调整' },
       { code: PERMISSIONS.INVENTORY_CONTAINER_MOVE, label: '容器移库' },
       { code: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, label: '容器拆分' },
+      { code: PERMISSIONS.SERIAL_VIEW, label: '查看序列号台账/追溯' },
+      { code: PERMISSIONS.SERIAL_MANAGE, label: '序列号一致性对账/修复' },
       { code: PERMISSIONS.STOCKCHECK_VIEW, label: '查看盘点' },
       { code: PERMISSIONS.STOCKCHECK_CREATE, label: '新建盘点' },
       { code: PERMISSIONS.STOCKCHECK_UPDATE, label: '编辑盘点' },
       { code: PERMISSIONS.STOCKCHECK_SUBMIT, label: '提交盘点' },
       { code: PERMISSIONS.STOCKCHECK_CANCEL, label: '取消盘点' },
+      { code: PERMISSIONS.STOCKCHECK_ABC_VIEW, label: '查看ABC分类/循环盘规则' },
+      { code: PERMISSIONS.STOCKCHECK_ABC_MANAGE, label: '重算ABC/维护循环盘规则' },
       { code: PERMISSIONS.TRANSFER_ORDER_VIEW, label: '查看调拨' },
       { code: PERMISSIONS.TRANSFER_ORDER_CREATE, label: '新建调拨' },
       { code: PERMISSIONS.TRANSFER_ORDER_CONFIRM, label: '确认调拨' },
@@ -251,6 +281,9 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.SALE_ORDER_RELEASE, label: '释放预占' },
       { code: PERMISSIONS.SALE_ORDER_SHIP, label: '发起出库' },
       { code: PERMISSIONS.SALE_ORDER_CANCEL, label: '取消销售单' },
+      { code: PERMISSIONS.SALE_CREDIT_VIEW, label: '查看客户授信' },
+      { code: PERMISSIONS.SALE_CREDIT_MANAGE, label: '调整授信额度' },
+      { code: PERMISSIONS.SALE_CREDIT_OVERRIDE, label: '超额授信放行' },
       { code: PERMISSIONS.RETURN_ORDER_VIEW, label: '查看退货单' },
       { code: PERMISSIONS.RETURN_ORDER_CREATE, label: '新建退货单' },
       { code: PERMISSIONS.RETURN_ORDER_CONFIRM, label: '确认退货单' },
@@ -260,6 +293,9 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.PAYMENT_CREATE, label: '新建账款' },
       { code: PERMISSIONS.PAYMENT_EXECUTE, label: '登记收付款' },
       { code: PERMISSIONS.PAYMENT_CONFIRM, label: '应付结算确认（财务）' },
+      { code: PERMISSIONS.LOGISTICS_VIEW, label: '查看物流运单/轨迹' },
+      { code: PERMISSIONS.LOGISTICS_MANAGE, label: '运单录号/重试取号/作废' },
+      { code: PERMISSIONS.LOGISTICS_FREIGHT_RECONCILE, label: '运费对账生成应付（财务）' },
     ],
   },
   {

@@ -1,4 +1,6 @@
 const svc = require('./inventory.service')
+const aging = require('./inventory.aging')
+const procurement = require('./inventory.procurement')
 const { successResponse } = require('../../utils/response')
 const { getOperatorFromRequest } = require('../../utils/operator')
 
@@ -145,8 +147,82 @@ async function splitContainer(req, res, next) {
   } catch (e) { next(e) }
 }
 
+async function replenishment(req, res, next) {
+  try {
+    const result = await svc.getReplenishment({
+      page:        +req.query.page     || 1,
+      pageSize:    +req.query.pageSize  || 20,
+      keyword:      req.query.keyword   || '',
+      warehouseId:  req.query.warehouseId ? +req.query.warehouseId : null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    return successResponse(res, result, '查询成功')
+  } catch (e) { next(e) }
+}
+
+async function stockPolicies(req, res, next) {
+  try {
+    const productId = req.query.productId ? +req.query.productId : null
+    if (!productId) return res.status(400).json({ success: false, message: '缺少 productId', data: null })
+    const result = await svc.getStockPolicies({ productId })
+    return successResponse(res, result, '查询成功')
+  } catch (e) { next(e) }
+}
+
+async function saveStockPolicies(req, res, next) {
+  try {
+    const result = await svc.saveStockPolicies(req.body.items)
+    return successResponse(res, result, '保存成功')
+  } catch (e) { next(e) }
+}
+
+async function inventoryAging(req, res, next) {
+  try {
+    const result = await aging.getInventoryAging({
+      page: +req.query.page || 1,
+      pageSize: +req.query.pageSize || 20,
+      keyword: req.query.keyword || '',
+      warehouseId: req.query.warehouseId ? +req.query.warehouseId : null,
+      staleDays: req.query.staleDays ? +req.query.staleDays : 90,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    return successResponse(res, result, '查询成功')
+  } catch (e) { next(e) }
+}
+
+async function expiryAlerts(req, res, next) {
+  try {
+    const result = await aging.getExpiryAlerts({
+      warehouseId: req.query.warehouseId ? +req.query.warehouseId : null,
+      warnDays: req.query.warnDays ? +req.query.warnDays : 30,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    return successResponse(res, result, '查询成功')
+  } catch (e) { next(e) }
+}
+
+async function procurementPlan(req, res, next) {
+  try {
+    const result = await procurement.getProcurementPlan({
+      window: req.query.window ? +req.query.window : 30,
+      horizon: req.query.horizon ? +req.query.horizon : 30,
+      keyword: req.query.keyword || '',
+      warehouseId: req.query.warehouseId ? +req.query.warehouseId : null,
+      defaultLeadTime: req.query.defaultLeadTime ? +req.query.defaultLeadTime : 7,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    return successResponse(res, result, '查询成功')
+  } catch (e) { next(e) }
+}
+
 module.exports = {
   trace,
+  replenishment,
+  stockPolicies,
+  saveStockPolicies,
+  inventoryAging,
+  expiryAlerts,
+  procurementPlan,
   checkConsistency,
   stock,
   logs,

@@ -76,6 +76,8 @@ const SalePage = lazy(() => import('@/pages/sale'))
 const SaleFormPage = lazy(() => import('@/pages/sale/form'))
 const PurchasePage = lazy(() => import('@/pages/purchase'))
 const PurchaseFormPage = lazy(() => import('@/pages/purchase/form'))
+const RequisitionsPage = lazy(() => import('@/pages/purchase-requisitions'))
+const RequisitionFormPage = lazy(() => import('@/pages/purchase-requisitions/form'))
 const ProductPage = lazy(() => import('@/pages/products'))
 const ProductFormPage = lazy(() => import('@/pages/products/form'))
 const CategoryPage = lazy(() => import('@/pages/categories'))
@@ -94,6 +96,9 @@ const LocationsPage = lazy(() => import('@/pages/locations'))
 const RacksPage = lazy(() => import('@/pages/racks'))
 const CustomersPage = lazy(() => import('@/pages/customers'))
 const CarriersPage = lazy(() => import('@/pages/carriers'))
+const LogisticsPage = lazy(() => import('@/pages/logistics'))
+const LogisticsDetailPage = lazy(() => import('@/pages/logistics/detail'))
+const FreightReconciliationPage = lazy(() => import('@/pages/logistics/freight-reconciliation'))
 const SuppliersPage = lazy(() => import('@/pages/suppliers'))
 const ReturnsPage = lazy(() => import('@/pages/returns'))
 const PurchaseReturnFormPage = lazy(() => import('@/pages/returns/purchase/form'))
@@ -114,6 +119,9 @@ const ExpenseCategoriesPage = lazy(() => import('@/pages/finance/expense-categor
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
 const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
+const ReplenishmentPage = lazy(() => import('@/pages/reports/replenishment'))
+const InventoryAgingPage = lazy(() => import('@/pages/reports/inventory-aging'))
+const ProcurementPlanPage = lazy(() => import('@/pages/reports/procurement-plan'))
 const ApprovalsPage = lazy(() => import('@/pages/reports/approvals'))
 const WavePerformancePage = lazy(() => import('@/pages/reports/wave-performance'))
 const PdaAnomalyPage = lazy(() => import('@/pages/reports/pda-anomaly'))
@@ -144,6 +152,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '采购', section: '采购作业', order: 10 },
+  },
+  {
+    path: '/purchase-requisitions',
+    title: '采购请购',
+    permission: PERMISSIONS.PURCHASE_REQUISITION_VIEW,
+    component: RequisitionsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '采购', section: '采购作业', order: 5 },
   },
   {
     path: '/inbound-tasks',
@@ -195,6 +212,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '销售', section: '销售作业', order: 20 },
+  },
+  {
+    path: '/logistics',
+    title: '物流运单',
+    permission: PERMISSIONS.LOGISTICS_VIEW,
+    component: LogisticsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '销售', section: '销售作业', order: 25 },
   },
   {
     path: '/customers',
@@ -359,6 +385,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     nav: { kind: 'menu', group: '财务', section: '对账', order: 40 },
   },
   {
+    path: '/logistics/freight-reconciliation',
+    title: '运费对账',
+    permission: PERMISSIONS.LOGISTICS_FREIGHT_RECONCILE,
+    component: FreightReconciliationPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '对账', order: 45 },
+  },
+  {
     path: '/finance/dashboard',
     title: '资金看板',
     permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW,
@@ -413,6 +448,33 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '报表', section: '经营分析', order: 20 },
+  },
+  {
+    path: '/reports/replenishment',
+    title: '补货建议',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: ReplenishmentPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '报表', section: '经营分析', order: 25 },
+  },
+  {
+    path: '/reports/inventory-aging',
+    title: '库龄与呆滞',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: InventoryAgingPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '报表', section: '经营分析', order: 27 },
+  },
+  {
+    path: '/reports/procurement-plan',
+    title: '采购计划',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: ProcurementPlanPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '报表', section: '经营分析', order: 28 },
   },
   {
     path: '/reports/warehouse-ops',
@@ -539,6 +601,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
 
 export const routePatterns: RoutePatternEntry[] = [
   {
+    pattern: /^\/logistics\/\d+$/,
+    title: (path) => `运单 #${path.split('/').pop()}`,
+    permission: PERMISSIONS.LOGISTICS_VIEW,
+    component: LogisticsDetailPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    listPath: '/logistics',
+  },
+  {
     pattern: /^\/products\/(new|\d+)$/,
     title: (path) => path === '/products/new' ? '新增商品' : `编辑商品 #${path.split('/').pop()}`,
     permission: PERMISSIONS.PRODUCT_VIEW,
@@ -564,6 +635,15 @@ export const routePatterns: RoutePatternEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     listPath: '/purchase',
+  },
+  {
+    pattern: /^\/purchase-requisitions\/(new|\d+)$/,
+    title: (path) => path === '/purchase-requisitions/new' ? '新建请购单' : `请购单 #${path.split('/').pop()}`,
+    permission: PERMISSIONS.PURCHASE_REQUISITION_VIEW,
+    component: RequisitionFormPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    listPath: '/purchase-requisitions',
   },
   {
     pattern: /^\/transfer\/(new|\d+)$/,

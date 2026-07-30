@@ -23,6 +23,8 @@ const base = z.object({
     v => v === 0 || MONTHLY_TERMS_OPTIONS.includes(v),
     `月结账期只能是 ${MONTHLY_TERMS_OPTIONS.join(' / ')} 天`,
   ).optional(),
+  // 授信额度：null=不启用信控；>=0=启用（0=现款现货）
+  creditLimit:z.number().nonnegative('授信额度不能为负').nullable().optional(),
 })
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { successResponse } = require('../../utils/response')
@@ -36,6 +38,7 @@ router.get('/next-code', async (req, res, next) => {
 router.get('/active', requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.listActive)
 router.get('/',       requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.list)
 router.get('/:id',    requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.detail)
+router.get('/:id/credit', requirePermission(PERMISSIONS.SALE_CREDIT_VIEW), ctrl.credit)
 router.post('/',      requirePermission(PERMISSIONS.CUSTOMER_CREATE), vBody(base), ctrl.create)
 router.put('/:id',    requirePermission(PERMISSIONS.CUSTOMER_UPDATE), vBody(base.omit({ code:true }).extend({ isActive:z.boolean() })), ctrl.update)
 router.delete('/:id', requirePermission(PERMISSIONS.CUSTOMER_DELETE), ctrl.remove)

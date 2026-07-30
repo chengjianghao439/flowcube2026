@@ -14,6 +14,8 @@ export interface Customer {
   settlementTypeName: string
   /** 应收账期天数，仅月结有意义（30/60/90）；其余结算方式由服务端强制归零 */
   paymentTermsDays: number
+  /** 授信额度：null=不启用信控；>=0=启用（0=现款现货） */
+  creditLimit: number | null
   isActive: boolean
   priceLevel?: 'A' | 'B' | 'C' | 'D'
   priceLevelName?: string
@@ -48,6 +50,7 @@ interface CustomerWritableFields {
   remark?: string
   settlementType?: SettlementType
   paymentTermsDays?: number
+  creditLimit?: number | null
 }
 export type CreateCustomerParams = CustomerWritableFields
 export type UpdateCustomerParams = CustomerWritableFields & { isActive: boolean }

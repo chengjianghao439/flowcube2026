@@ -1,6 +1,9 @@
 export interface Product {
   batchManaged?: boolean
+  qaRequired?: boolean
   shelfLifeDays?: number | null
+  safetyStock?: number | null
+  reorderPoint?: number | null
   id: number; code: string; name: string
   skuCode: string | null; articleNumber: string | null
   categoryId: number | null; categoryName: string | null
@@ -15,7 +18,8 @@ export interface CreateProductParams {
   name: string; categoryId?: number | null; supplierId: number
   unit: string; spec: string; color: string
   costPrice?: number | null; remark?: string
-  batchManaged?: boolean; shelfLifeDays?: number | null
+  batchManaged?: boolean; shelfLifeDays?: number | null; qaRequired?: boolean
+  safetyStock?: number | null; reorderPoint?: number | null
   skuCode?: string; articleNumber?: string
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
 }
@@ -23,7 +27,8 @@ export interface UpdateProductParams {
   name: string; categoryId?: number | null; supplierId: number
   unit: string; spec: string; color: string
   costPrice?: number | null; remark?: string; isActive: boolean
-  batchManaged?: boolean; shelfLifeDays?: number | null
+  batchManaged?: boolean; shelfLifeDays?: number | null; qaRequired?: boolean
+  safetyStock?: number | null; reorderPoint?: number | null
   articleNumber?: string
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
 }

@@ -16,6 +16,8 @@ const empty = {
   name:'', contact:'', phone:'', email:'', address:'', remark:'',
   settlementType: SETTLEMENT_TYPE.MONTHLY as SettlementType,
   paymentTermsDays: 30,
+  creditEnabled: false,
+  creditLimit: '' as string,
 }
 const PHONE_RE = /^1\d{10}$/
 
@@ -34,6 +36,8 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
         address:customer.address||'', remark:customer.remark||'',
         settlementType: customer.settlementType ?? SETTLEMENT_TYPE.MONTHLY,
         paymentTermsDays: customer.paymentTermsDays ?? 30,
+        creditEnabled: customer.creditLimit != null,
+        creditLimit: customer.creditLimit != null ? String(customer.creditLimit) : '',
       })
     } else {
       setF(empty)
@@ -43,7 +47,8 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (f.phone && !PHONE_RE.test(f.phone)) { toast.error('请输入正确的手机号'); return }
-    const payload = { ...f }
+    const { creditEnabled, creditLimit: cl, ...rest } = f
+    const payload = { ...rest, creditLimit: creditEnabled ? (cl === '' ? 0 : Number(cl)) : null }
     try {
       if (isEdit && customer) {
         await update.mutateAsync({ id:customer.id, data:{ ...payload, isActive:customer.isActive } })
@@ -102,6 +107,22 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
             onChange={next => setF(p => ({ ...p, ...next }))}
             disabled={loading}
           />
+          <div className="space-y-2 rounded-md border border-border/60 p-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" className="h-4 w-4" checked={f.creditEnabled}
+                onChange={e => setF(p => ({ ...p, creditEnabled: e.target.checked }))} disabled={loading} />
+              启用授信信控
+            </label>
+            {f.creditEnabled ? (
+              <div className="space-y-1">
+                <Label>授信额度</Label>
+                <Input type="number" min="0" step="0.01" value={f.creditLimit} onChange={set('creditLimit')} disabled={loading}
+                  placeholder="0=现款现货（任何赊欠都拦）；占库时校验 已用+本单 ≤ 额度" />
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">未启用：该客户不做授信校验，可随意赊账下单。</p>
+            )}
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>取消</Button>
             <Button type="submit" disabled={loading}>{loading ? '保存中...' : '保存'}</Button>

@@ -6,6 +6,7 @@ const { WT_STATUS, WT_STATUS_NAME } = require('../../constants/warehouseTaskStat
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { buildPackagePrintSummary } = require('../../utils/printSummary')
+const logisticsSvc = require('../logistics/logistics.service')
 
 // ─── 查询任务下所有箱子（含明细）────────────────────────────────────────────
 async function listByTask(taskId) {
@@ -534,6 +535,11 @@ async function finishPackage(packageId, { createdBy } = {}) {
         'PACKAGE_LABEL_JOB_NOT_QUEUED',
       )
     }
+
+    // 电子面单（文档 06）：销售单已指定承运商时，在同一事务内写一条"待取号"运单记录。
+    // 纯 DB INSERT、零 HTTP（真正取号由 scheduler 异步 worker 事务外完成），
+    // uk_package 幂等；未指定承运商则返回 null 不建单，对打包主流程零影响。
+    await logisticsSvc.createPendingWaybillTx(conn, { packageId, createdBy: createdBy ?? null })
 
     await conn.commit()
     return buildFinishedPackagePrintResult(pool, packageId, result.warehouseTaskId, job)

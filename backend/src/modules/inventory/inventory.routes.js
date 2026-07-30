@@ -29,10 +29,26 @@ const adjustSchema = z.object({
   remark:      z.string().max(500).optional(),
 })
 
+const policiesSchema = z.object({
+  items: z.array(z.object({
+    productId:    z.number().int().positive('productId 无效'),
+    warehouseId:  z.number().int().min(0, 'warehouseId 无效'),   // 0=通用默认
+    safetyStock:  z.number().nonnegative().optional(),
+    reorderPoint: z.number().nonnegative().optional(),
+    targetStock:  z.number().nonnegative().nullable().optional(),
+  })).min(1, '至少提交一条补货策略'),
+})
+
 router.use(authMiddleware)
 router.get('/check-consistency',      requirePermission(PERMISSIONS.INVENTORY_TRACE_VIEW), ctrl.checkConsistency)
 router.get('/trace/:productId',       requirePermission(PERMISSIONS.INVENTORY_TRACE_VIEW), ctrl.trace)
 router.get('/overview',                requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.overview)
+router.get('/replenishment',           requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.replenishment)
+router.get('/stock-policies',          requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.stockPolicies)
+router.put('/stock-policies',          requirePermission(PERMISSIONS.INVENTORY_ADJUST), vBody(policiesSchema), ctrl.saveStockPolicies)
+router.get('/aging',                   requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.inventoryAging)
+router.get('/aging/expiry',            requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.expiryAlerts)
+router.get('/procurement-plan',        requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.procurementPlan)
 router.get('/containers',              requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.containers)
 router.get('/containers/barcode/:bc',  requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.containerByBarcode)
 router.get('/stock',                   requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.stock)

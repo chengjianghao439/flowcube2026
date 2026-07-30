@@ -78,6 +78,29 @@ const env = {
   OVER_RECEIVE_CONFIRM_AMOUNT: readInt('OVER_RECEIVE_CONFIRM_AMOUNT', { defaultValue: 500 }),
 }
 
+/**
+ * 快递面单平台凭据解析（文档 06）。
+ *
+ * 硬约束：app_id / app_key / app_secret **绝不入库明文**，只走环境变量。
+ * carriers.credential_ref 只存"用哪一组凭据"的引用名（如 kdniao_main），运行时在此映射到
+ * 对应的 env 变量组 WAYBILL_<REF大写>_APP_ID/APP_KEY/APP_SECRET/API_BASE。
+ * 返回值只在 worker（事务外）调用适配器时使用，永不落库、不入日志、不返回前端。
+ *
+ * @param {string} credentialRef - carriers.credential_ref
+ * @returns {{appId:string, appKey:string, appSecret:string, apiBase:string}|null}
+ */
+function getWaybillCredential(credentialRef) {
+  const ref = String(credentialRef || '').trim()
+  if (!ref) return null
+  const key = ref.toUpperCase().replace(/[^A-Z0-9]/g, '_')
+  const appId     = readString(`WAYBILL_${key}_APP_ID`,     { defaultValue: '', allowEmpty: true })
+  const appKey    = readString(`WAYBILL_${key}_APP_KEY`,    { defaultValue: '', allowEmpty: true })
+  const appSecret = readString(`WAYBILL_${key}_APP_SECRET`, { defaultValue: '', allowEmpty: true })
+  const apiBase   = readString(`WAYBILL_${key}_API_BASE`,   { defaultValue: '', allowEmpty: true })
+  if (!appKey && !appSecret && !appId) return null
+  return { appId, appKey, appSecret, apiBase }
+}
+
 if (IS_PROD) {
   if (!env.DB_HOST) throw new Error('生产环境必须显式设置 DB_HOST')
   if (!env.DB_USER) throw new Error('生产环境必须显式设置 DB_USER')
@@ -88,4 +111,4 @@ if (IS_PROD) {
   }
 }
 
-module.exports = { env }
+module.exports = { env, getWaybillCredential }

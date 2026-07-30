@@ -24,7 +24,7 @@ import { CategoryFinder, SupplierFinder, FinderTrigger } from '@/components/find
 import type { FinderResult } from '@/types/finder'
 
 const DEFAULT_RATES = { A: 10, B: 20, C: 30, D: 40 }
-const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, shelfLifeDays: '' as string, isActive: true }
+const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, qaRequired: false, shelfLifeDays: '' as string, safetyStock: '' as string, reorderPoint: '' as string, isActive: true }
 
 function profitRate(cost: number, sale: number): number | null {
   if (sale <= 0 || !Number.isFinite(cost) || !Number.isFinite(sale)) return null
@@ -80,7 +80,10 @@ export default function ProductFormPage() {
         color: product.color ?? '',
         costPrice: product.costPrice != null ? String(product.costPrice) : '',
         batchManaged: !!product.batchManaged,
+        qaRequired: !!product.qaRequired,
         shelfLifeDays: product.shelfLifeDays != null ? String(product.shelfLifeDays) : '',
+        safetyStock: product.safetyStock != null ? String(product.safetyStock) : '',
+        reorderPoint: product.reorderPoint != null ? String(product.reorderPoint) : '',
         salePriceA: product.salePriceA != null ? String(product.salePriceA) : '',
         salePriceB: product.salePriceB != null ? String(product.salePriceB) : '',
         salePriceC: product.salePriceC != null ? String(product.salePriceC) : '',
@@ -147,7 +150,10 @@ export default function ProductFormPage() {
       color: form.color,
       costPrice: Number(form.costPrice),
       batchManaged: form.batchManaged,
+      qaRequired: form.qaRequired,
       shelfLifeDays: form.shelfLifeDays !== '' ? Number(form.shelfLifeDays) : null,
+      safetyStock: form.safetyStock !== '' ? Number(form.safetyStock) : null,
+      reorderPoint: form.reorderPoint !== '' ? Number(form.reorderPoint) : null,
       salePriceA: toPrice(form.salePriceA),
       salePriceB: toPrice(form.salePriceB),
       salePriceC: toPrice(form.salePriceC),
@@ -265,6 +271,14 @@ export default function ProductFormPage() {
               <span className="text-muted-foreground">收货强制录入批次/效期，出库先到期先出</span>
             </label>
           </div>
+          <div className="space-y-1.5">
+            <Label>来料质检</Label>
+            <label className="flex h-10 items-center gap-2 text-sm">
+              <input type="checkbox" className="h-4 w-4" checked={form.qaRequired}
+                onChange={e => set('qaRequired', e.target.checked)} disabled={submitting} />
+              <span className="text-muted-foreground">采购收货需先质检，合格才可上架（供应商可覆盖）</span>
+            </label>
+          </div>
           {form.batchManaged && (
             <div className="space-y-1.5">
               <Label>保质期天数</Label>
@@ -301,6 +315,24 @@ export default function ProductFormPage() {
               </div>
             )
           })}
+        </div>
+      </Section>
+
+      <Section title="库存策略">
+        <p className="mb-3 text-xs text-muted-foreground">通用默认补货基准（对该商品所有仓库生效）。留空表示不启用；某仓需单独设置可在「报表 → 补货建议」页按仓覆盖。</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>安全库存</Label>
+            <Input type="number" step="0.0001" min="0" value={form.safetyStock}
+              onChange={e => set('safetyStock', e.target.value)} disabled={submitting}
+              placeholder="低于此为紧急缺货风险" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>补货点</Label>
+            <Input type="number" step="0.0001" min="0" value={form.reorderPoint}
+              onChange={e => set('reorderPoint', e.target.value)} disabled={submitting}
+              placeholder="可用+在途 低于此即出现在补货建议" />
+          </div>
         </div>
       </Section>
 

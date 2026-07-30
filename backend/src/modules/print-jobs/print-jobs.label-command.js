@@ -293,6 +293,46 @@ async function enqueuePackageLabelJob(payload) {
   })
 }
 
+/**
+ * 电子面单入队（文档 06 · 5.3）——补上"正向入队"缺口。
+ *
+ * 平台取号成功后由**异步 worker（事务外）**调用，把平台返回的面单 ZPL 原样入队走现有 print_jobs 链。
+ * 面单版式由快递平台决定，**不经本地模板**（不 buildLabelBody）。
+ * 无面单机绑定时返回 null（跳过入队，取号仍算成功，之后可用 reprintLogisticsBarcode 补打），
+ * 绝不退回 type=1 标签机（面单不能印到普通标签机上）。
+ * jobUniqueKey 默认 `waybill:<id>`，同运单重复入队幂等（活跃期唯一索引挡重复出纸）。
+ */
+async function enqueueWaybillLabelJob(payload) {
+  const waybillId = Number(payload?.waybillId)
+  const content = payload?.content
+  if (!Number.isFinite(waybillId) || waybillId <= 0 || !content) return null
+  const wh = payload.warehouseId != null ? Number(payload.warehouseId) : null
+  const resolved = await resolvePrinterForJob({
+    warehouseId: Number.isFinite(wh) && wh > 0 ? wh : undefined,
+    jobType: 'waybill',
+    contentType: 'zpl',
+    requireBinding: false,
+    allowBindingFallback: true,
+  })
+  const printerId = resolved?.printerId
+  if (!printerId) return null
+  return create({
+    printerId,
+    dispatchReason: resolved.dispatchReason || 'fallback',
+    warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
+    jobType: 'waybill',
+    title: payload.title || `面单 ${waybillId}`,
+    contentType: 'zpl',
+    content,
+    copies: 1,
+    createdBy: payload.createdBy ?? null,
+    jobUniqueKey: payload.jobUniqueKey ?? `waybill:${waybillId}`,
+    refType: 'waybill',
+    refId: waybillId,
+    refCode: payload.refCode ?? null,
+  })
+}
+
 async function enqueueProductLabelJob(payload) {
   const productId = payload?.productId
   if (!productId) return null
@@ -421,6 +461,7 @@ module.exports = {
   enqueueContainerLabelJob,
   enqueueRackLabelJob,
   enqueuePackageLabelJob,
+  enqueueWaybillLabelJob,
   enqueueProductLabelJob,
   reprintBarcodeRecord,
   resolveLabelPrinterId,

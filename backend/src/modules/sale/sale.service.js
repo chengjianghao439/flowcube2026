@@ -6,6 +6,7 @@ const { getAvailableStockForDecision } = require('../../engine/containerEngine')
 const { getAvailabilityByProducts } = require('../inventory/inventory.service')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { getCustomerCreditUsed, hasCreditOverridePermission } = require('../../utils/creditExposure')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
 const { buildDueDateSql, normalizeSettlementType } = require('../../constants/settlementType')
@@ -943,12 +944,34 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
 //
 // itemOverrides：占库弹窗里逐行选好的发货仓库（[{id, warehouseId, warehouseName}]），
 // 在可用量检查前先写回明细行，让 shortages 按用户选的仓库计算。
-async function reserveStock(id, operator, itemOverrides = []) {
+async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOverride = false } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
     const rule = assertStatusAction('sale', 'reserve', orderRow.status)
+
+    // —— 信用额度校验（在锁库存之前）。客户行 FOR UPDATE 是同客户并发占库的串行化点：
+    // 第二个占库事务会在此阻塞，直到第一单 COMMIT 落入在途敞口(B)，再读到的 used 已含第一单。
+    // 加锁顺序：客户行(sale_customers) → 订单单头(sale_orders,已锁) → 库存维度(下方 reserve)，全局一致防死锁。
+    const [[cust]] = await conn.query(
+      'SELECT id, credit_limit FROM sale_customers WHERE id = ? FOR UPDATE',
+      [orderRow.customer_id],
+    )
+    if (cust && cust.credit_limit != null) {
+      const used = await getCustomerCreditUsed(conn, orderRow.customer_id)   // 本单尚为草稿(1)，不在(A)(B)内，下面单独补本单
+      const thisOrder = Number(orderRow.total_amount) || 0
+      const limit = Number(cust.credit_limit)
+      if (used + thisOrder > limit) {
+        const overBy = Math.round((used + thisOrder - limit) * 100) / 100
+        const allowOverride = confirmCreditOverride && await hasCreditOverridePermission(conn, operator)
+        if (!allowOverride) {
+          throw new AppError('客户授信额度不足', 409, 'CREDIT_LIMIT_EXCEEDED', { creditLimit: limit, used, thisOrder, overBy })
+        }
+        await appendSaleEvent(conn, id, 'credit_override', '超额授信放行',
+          `额度 ${limit}，已用 ${used}，本单 ${thisOrder}，超出 ${overBy}，已授权放行`, operator)
+      }
+    }
 
     if (itemOverrides.length) {
       for (const o of itemOverrides) {

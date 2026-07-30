@@ -8,7 +8,7 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 
 const STATUS = { 1:'进行中', 2:'已完成', 3:'已取消' }
-const fmt = r => ({ id:r.id, checkNo:r.check_no, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, status:r.status, statusName:STATUS[r.status], remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
+const fmt = r => ({ id:r.id, checkNo:r.check_no, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, checkType:r.check_type!=null?Number(r.check_type):1, scopeType:r.scope_type||null, scopeValue:r.scope_value||null, status:r.status, statusName:STATUS[r.status], remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
 
 const genNo = conn => generateDailyCode(conn, 'SC', 'inventory_checks', 'check_no')
 
@@ -25,7 +25,8 @@ function assertValidActualQty(actualQty) {
  * - 只统计 ACTIVE 容器（与主库存事实层一致）
  * - 明确排除待上架/空容器/作废容器，避免生成第二套库存口径
  */
-async function listBookStocksFromActiveContainers(conn, warehouseId) {
+async function listBookStocksFromActiveContainers(conn, warehouseId, productIds = null) {
+  const hasFilter = Array.isArray(productIds) && productIds.length > 0
   const [rows] = await conn.query(
     `SELECT
         c.product_id,
@@ -39,9 +40,10 @@ async function listBookStocksFromActiveContainers(conn, warehouseId) {
        AND c.status = ?
        AND c.deleted_at IS NULL
        AND p.deleted_at IS NULL
+       ${hasFilter ? `AND c.product_id IN (${productIds.map(() => '?').join(',')})` : ''}
      GROUP BY c.product_id, p.code, p.name, p.unit
      HAVING COALESCE(SUM(c.remaining_qty), 0) > 0`,
-    [warehouseId, CONTAINER_STATUS.ACTIVE],
+    hasFilter ? [warehouseId, CONTAINER_STATUS.ACTIVE, ...productIds] : [warehouseId, CONTAINER_STATUS.ACTIVE],
   )
   return rows
 }
@@ -71,19 +73,22 @@ async function findById(id, scopeWarehouseIds = null) {
 }
 
 // 新建盘点单，自动拉取该仓库所有有库存的商品为盘点明细
-async function create({ warehouseId, warehouseName, remark, operator, scopeWarehouseIds = null }) {
+async function create({ warehouseId, warehouseName, remark, operator, scopeWarehouseIds = null, checkType = 1, scopeType = null, scopeValue = null, productIds = null }) {
   assertInScope(scopeWarehouseIds, warehouseId, '盘点单')
+  const type = Number(checkType) === 2 ? 2 : 1
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const checkNo = await genNo(conn)
     const [r] = await conn.query(
-      `INSERT INTO inventory_checks (check_no,warehouse_id,warehouse_name,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?)`,
-      [checkNo,warehouseId,warehouseName,remark||null,operator.userId,operator.realName]
+      `INSERT INTO inventory_checks (check_no,warehouse_id,warehouse_name,check_type,scope_type,scope_value,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?)`,
+      [checkNo,warehouseId,warehouseName, type, type === 2 ? scopeType : null, type === 2 ? scopeValue : null, remark||null,operator.userId,operator.realName]
     )
     const checkId = r.insertId
     // 盘点账面数必须与主库存事实层一致：只统计 ACTIVE 容器，不信任全容器汇总。
-    const stocks = await listBookStocksFromActiveContainers(conn, warehouseId)
+    // 循环抽盘(type=2)只拉命中范围的商品；全盘(type=1)拉全仓（productIds 传 null）。
+    const stocks = await listBookStocksFromActiveContainers(conn, warehouseId, type === 2 ? productIds : null)
+    if (type === 2 && !stocks.length) throw new AppError('该抽盘范围内没有有货商品，无需盘点', 400)
     for(const s of stocks) {
       await conn.query(`INSERT INTO inventory_check_items (check_id,product_id,product_code,product_name,unit,book_qty) VALUES (?,?,?,?,?,?)`,[checkId,s.product_id,s.product_code,s.product_name,s.unit,s.quantity])
     }
@@ -228,6 +233,15 @@ async function submit(id, operator) {
       toStatus: rule.to,
       entityName: '盘点单',
     })
+    // 循环盘覆盖游标：本单涉及商品刷新 last_counted_at（全盘/抽盘都写，统一游标）。同事务、不碰库存。
+    for (const pid of lockProductIds) {
+      await conn.query(
+        `INSERT INTO inventory_count_coverage (warehouse_id,product_id,last_counted_at,last_check_id)
+         VALUES (?,?,NOW(),?)
+         ON DUPLICATE KEY UPDATE last_counted_at=NOW(), last_check_id=VALUES(last_check_id)`,
+        [check.warehouseId, pid, id],
+      )
+    }
     await conn.commit()
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }

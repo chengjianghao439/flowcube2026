@@ -65,6 +65,32 @@ function resolveInjectedAppVersion(isElectronBundle: boolean): string {
   return pkg.version
 }
 
+/**
+ * 本地 dev 预览免登录 seed（仅 dev serve）。
+ * 当环境变量 EXPOSE_DEV_AUTH_FILE 指向一个 zustand persist 信封 JSON 时，把它注入 index.html，
+ * 让通过隧道访问的浏览器（localStorage 为空）自动带上 dev admin 会话，免去手动登录。
+ * 严格 dev-only + 默认关闭（不设该 env 就完全无效）；生产 build 不受影响。
+ * 安全：仅用于本机 dev 预览的临时展示，切勿在生产/公网长期开启。
+ */
+function devAuthSeedPlugin() {
+  const file = process.env.EXPOSE_DEV_AUTH_FILE
+  if (!file) return null
+  let envelope = ''
+  try { envelope = readFileSync(file, 'utf8').trim() } catch { return null }
+  if (!envelope) return null
+  return {
+    name: 'flowcube-dev-auth-seed',
+    apply: 'serve' as const,
+    transformIndexHtml() {
+      return [{
+        tag: 'script',
+        injectTo: 'head-prepend' as const,
+        children: `try{var k='flowcube-auth-v3';if(!localStorage.getItem(k)){localStorage.setItem(k, ${JSON.stringify(envelope)});}}catch(e){}`,
+      }]
+    },
+  }
+}
+
 export default defineConfig(({ command }) => {
   const isCapacitorBundle = process.env.VITE_CAPACITOR === '1'
   const isElectronBundle = process.env.VITE_ELECTRON === '1'
@@ -92,6 +118,7 @@ export default defineConfig(({ command }) => {
           additionalLegacyPolyfills: ['regenerator-runtime/runtime'],
           modernPolyfills: true,
         }),
+      devAuthSeedPlugin(),
     ].filter(Boolean),
     build: {
       target: isPDA ? 'es2015' : 'modules',
@@ -153,6 +180,9 @@ export default defineConfig(({ command }) => {
       // 写死 5173 会让 vite 自行退到 5174 而面板仍指向分配端口，出现「预览页打不开」
       port: Number(process.env.PORT) || 5173,
       host: true,
+      // 通过隧道(如 <port>-xxx.something.com)暴露给手机预览时需放开 Host 校验。
+      // 默认不放开；仅当 VITE_ALLOW_ALL_HOSTS=1 时允许全部 Host（仅用于本机 dev 临时展示）。
+      allowedHosts: process.env.VITE_ALLOW_ALL_HOSTS === '1' ? true : undefined,
       proxy: {
         '/api': devProxyToBackend(DEV_API_TARGET),
       },

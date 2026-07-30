@@ -16,13 +16,28 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { getCarriersApi, createCarrierApi, updateCarrierApi, deleteCarrierApi } from '@/api/carriers'
-import { CARRIER_TYPE_OPTIONS, CARRIER_TYPE_LABELS, type Carrier, type CarrierType, type CreateCarrierParams } from '@/types/carriers'
+import { CARRIER_TYPE_OPTIONS, CARRIER_TYPE_LABELS, WAYBILL_PLATFORM_OPTIONS, type Carrier, type CarrierType, type CreateCarrierParams } from '@/types/carriers'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { TableColumn } from '@/types'
 
 type FormState = CreateCarrierParams & { isActive: boolean }
-const EMPTY_FORM: FormState = { name: '', type: 'express', contact: '', phone: '', remark: '', isActive: true }
+const EMPTY_FORM: FormState = {
+  name: '', type: 'express', contact: '', phone: '', remark: '', isActive: true,
+  platformCode: '', platformCarrier: '', monthlyAccount: '', netSiteCode: '', credentialRef: '', waybillEnabled: false,
+}
+
+// 建/改承运商时提交的对接字段（密钥不在前端）
+function platformPayload(f: FormState) {
+  return {
+    platformCode: f.waybillEnabled ? f.platformCode : '',
+    platformCarrier: f.platformCarrier,
+    monthlyAccount: f.monthlyAccount,
+    netSiteCode: f.netSiteCode,
+    credentialRef: f.credentialRef,
+    waybillEnabled: f.waybillEnabled,
+  }
+}
 
 export default function CarriersPage() {
   const qc = useQueryClient()
@@ -41,13 +56,13 @@ export default function CarriersPage() {
   function invalidate() { qc.invalidateQueries({ queryKey: ['carriers'] }) }
 
   const createMut = useMutation({
-    mutationFn: () => createCarrierApi({ name: form.name, type: form.type, contact: form.contact, phone: form.phone, remark: form.remark }),
+    mutationFn: () => createCarrierApi({ name: form.name, type: form.type, contact: form.contact, phone: form.phone, remark: form.remark, ...platformPayload(form) }),
     onSuccess: () => { toast.success('承运商已创建'); invalidate(); closeDialog() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'),
   })
 
   const updateMut = useMutation({
-    mutationFn: () => updateCarrierApi(editTarget!.id, { name: form.name, type: form.type, contact: form.contact, phone: form.phone, remark: form.remark, isActive: form.isActive }),
+    mutationFn: () => updateCarrierApi(editTarget!.id, { name: form.name, type: form.type, contact: form.contact, phone: form.phone, remark: form.remark, isActive: form.isActive, ...platformPayload(form) }),
     onSuccess: () => { toast.success('已更新'); invalidate(); closeDialog() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '更新失败'),
   })
@@ -61,7 +76,11 @@ export default function CarriersPage() {
   function openCreate() { setEditTarget(null); setForm(EMPTY_FORM); setDialogOpen(true) }
   function openEdit(c: Carrier) {
     setEditTarget(c)
-    setForm({ name: c.name, type: c.type, contact: c.contact ?? '', phone: c.phone ?? '', remark: c.remark ?? '', isActive: c.isActive })
+    setForm({
+      name: c.name, type: c.type, contact: c.contact ?? '', phone: c.phone ?? '', remark: c.remark ?? '', isActive: c.isActive,
+      platformCode: c.platformCode ?? '', platformCarrier: c.platformCarrier ?? '', monthlyAccount: c.monthlyAccount ?? '',
+      netSiteCode: c.netSiteCode ?? '', credentialRef: c.credentialRef ?? '', waybillEnabled: c.waybillEnabled,
+    })
     setDialogOpen(true)
   }
   function closeDialog() { setDialogOpen(false); setEditTarget(null); setForm(EMPTY_FORM) }
@@ -124,9 +143,9 @@ export default function CarriersPage() {
       />
 
       <Dialog open={dialogOpen} onOpenChange={v => !v && closeDialog()}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editTarget ? '编辑承运商' : '新建承运商'}</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-3 py-2 max-h-[70vh] overflow-y-auto pr-1">
             <div><Label>名称</Label><Input className="mt-1" placeholder="承运商名称" value={form.name} onChange={e => set('name', e.target.value)} /></div>
             <div>
               <Label>类型</Label>
@@ -140,6 +159,42 @@ export default function CarriersPage() {
             <div><Label>联系人</Label><Input className="mt-1" placeholder="可选" value={form.contact} onChange={e => set('contact', e.target.value)} /></div>
             <div><Label>电话</Label><Input className="mt-1" placeholder="可选" value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
             <div><Label>备注</Label><Input className="mt-1" placeholder="可选" value={form.remark} onChange={e => set('remark', e.target.value)} /></div>
+
+            {/* 电子面单对接（文档 06）。密钥走服务端 env，前端只填非敏感对接项。 */}
+            <div className="border-t border-border pt-3 mt-1 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>电子面单取号</Label>
+                <Select value={form.waybillEnabled ? '1' : '0'} onValueChange={v => set('waybillEnabled', v === '1')}>
+                  <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">未开通</SelectItem>
+                    <SelectItem value="1">已开通</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.waybillEnabled && (
+                <div className="space-y-3">
+                  <div>
+                    <Label>对接平台</Label>
+                    <Select value={form.platformCode || ''} onValueChange={v => set('platformCode', v)}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="选择平台" /></SelectTrigger>
+                      <SelectContent>
+                        {WAYBILL_PLATFORM_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>快递公司编码</Label><Input className="mt-1" placeholder="如 SF / YTO / ZTO" value={form.platformCarrier} onChange={e => set('platformCarrier', e.target.value)} /></div>
+                  <div><Label>月结账号</Label><Input className="mt-1" placeholder="可选" value={form.monthlyAccount} onChange={e => set('monthlyAccount', e.target.value)} /></div>
+                  <div><Label>网点编码</Label><Input className="mt-1" placeholder="可选" value={form.netSiteCode} onChange={e => set('netSiteCode', e.target.value)} /></div>
+                  <div>
+                    <Label>凭据引用名</Label>
+                    <Input className="mt-1" placeholder="指向 env 中的密钥组，如 kdniao_main" value={form.credentialRef} onChange={e => set('credentialRef', e.target.value)} />
+                    <p className="mt-1 text-xs text-muted-foreground">密钥（app_key/secret）配置在服务端环境变量，不在此填写。</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {editTarget && (
               <div>
                 <Label>状态</Label>

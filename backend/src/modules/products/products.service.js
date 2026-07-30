@@ -20,6 +20,25 @@ async function ensureBarcodeUnique(barcode, currentId = null) {
   return normalized
 }
 
+/** upsert 商品的「通用默认」补货策略（product_stock_policies.warehouse_id=0）；都为 0/空则删除该默认行 */
+async function upsertDefaultStockPolicy(productId, { safetyStock, reorderPoint }) {
+  const safety  = safetyStock  == null || safetyStock  === '' ? null : Number(safetyStock)
+  const reorder = reorderPoint == null || reorderPoint === '' ? null : Number(reorderPoint)
+  if (safety == null && reorder == null) return   // 未提交这两个字段：不动策略
+  const s = Number.isFinite(safety)  && safety  > 0 ? safety  : 0
+  const r = Number.isFinite(reorder) && reorder > 0 ? reorder : 0
+  if (s === 0 && r === 0) {
+    await pool.query('DELETE FROM product_stock_policies WHERE product_id=? AND warehouse_id=0', [productId])
+    return
+  }
+  await pool.query(
+    `INSERT INTO product_stock_policies (product_id, warehouse_id, safety_stock, reorder_point)
+     VALUES (?, 0, ?, ?)
+     ON DUPLICATE KEY UPDATE safety_stock=VALUES(safety_stock), reorder_point=VALUES(reorder_point)`,
+    [productId, s, r],
+  )
+}
+
 async function validateProductPayload({ name, categoryId, barcode, costPrice, currentId = null }) {
   if (!String(name || '').trim()) throw new AppError('商品名称不能为空', 400)
   await ensureCategoryExists(categoryId)
@@ -146,7 +165,11 @@ function fmtProduct(row) {
     salePriceC: row.sale_price_c != null ? Number(row.sale_price_c) : null,
     salePriceD: row.sale_price_d != null ? Number(row.sale_price_d) : null,
     batchManaged: Number(row.batch_managed) === 1,
+    serialManaged: Number(row.serial_managed) === 1,
+    qaRequired: Number(row.qa_required) === 1,
     shelfLifeDays: row.shelf_life_days != null ? Number(row.shelf_life_days) : null,
+    safetyStock: row.safety_stock != null ? Number(row.safety_stock) : null,
+    reorderPoint: row.reorder_point != null ? Number(row.reorder_point) : null,
     remark: row.remark, isActive: !!row.is_active, createdAt: row.created_at,
   }
 }
@@ -209,16 +232,19 @@ async function findAllActive() {
 
 async function findById(id) {
   const [rows] = await pool.query(
-    `SELECT p.*, c.name AS category_name, s.name AS supplier_name FROM product_items p
+    `SELECT p.*, c.name AS category_name, s.name AS supplier_name,
+            sp.safety_stock, sp.reorder_point
+     FROM product_items p
      LEFT JOIN product_categories c ON p.category_id=c.id
      LEFT JOIN supply_suppliers s ON p.supplier_id=s.id
+     LEFT JOIN product_stock_policies sp ON sp.product_id=p.id AND sp.warehouse_id=0
      WHERE p.id=? AND p.deleted_at IS NULL`, [id],
   )
   if (!rows[0]) throw new AppError('商品不存在',404)
   return fmtProduct(rows[0])
 }
 
-async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays }) {
+async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint }) {
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
   const code = await generateMasterCode(pool, 'P', 'product_items')
   const generatedSku = skuCode || await generateMasterCode(pool, 'SKU', 'product_items', 'sku_code')
@@ -232,14 +258,15 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   const spD = salePriceD != null ? Number(salePriceD) : auto.salePriceD
   const sp = spA // 售价默认取价格A
   const [r] = await pool.query(
-    `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null],
+    `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days,qa_required)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0],
   )
+  await upsertDefaultStockPolicy(r.insertId, { safetyStock, reorderPoint })
   return { id: r.insertId, code, skuCode: generatedSku, articleNumber: generatedArticle }
 }
 
-async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays }) {
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint }) {
   await findById(id)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const rates = await loadPriceRates(pool)
@@ -250,10 +277,11 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   const spD = salePriceD != null ? Number(salePriceD) : auto.salePriceD
   const sp = spA
   await pool.query(
-    `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?
+    `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,qa_required=?
      WHERE id=? AND deleted_at IS NULL`,
-    [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, id],
+    [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, id],
   )
+  await upsertDefaultStockPolicy(id, { safetyStock, reorderPoint })
 }
 
 async function softDelete(id) {
