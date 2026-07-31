@@ -10,6 +10,8 @@ export interface PackageItem {
   productName: string
   unit: string
   qty: number
+  /** 序列号管控商品：PDA 出库需逐台扫序列号核销 */
+  serialManaged?: boolean
 }
 
 export interface Package {

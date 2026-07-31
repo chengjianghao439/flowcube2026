@@ -156,12 +156,18 @@ export const packDoneApi = (id: number, requestKey?: string) =>
       : { 'X-Client': 'pda' },
   })
 
-export const shipTaskApi = (id: number, requestKey?: string) =>
-  client.put(`/warehouse-tasks/${id}/ship`, {}, {
-    headers: requestKey
-      ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
-      : { 'X-Client': 'pda' },
-  })
+export const shipTaskApi = (
+  id: number,
+  requestKey?: string,
+  serialNosByProduct?: Record<number, string[]> | null,
+) =>
+  client.put(`/warehouse-tasks/${id}/ship`,
+    serialNosByProduct ? { serialNosByProduct } : {},
+    {
+      headers: requestKey
+        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+        : { 'X-Client': 'pda' },
+    })
 
 export const cancelTaskApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/cancel`)

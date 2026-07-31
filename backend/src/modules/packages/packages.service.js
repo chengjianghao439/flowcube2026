@@ -22,8 +22,9 @@ async function listByTask(taskId) {
   const ids = pkgs.map(p => p.id)
   const [items] = await pool.query(
     `SELECT pi.package_id, pi.id, pi.product_id, pi.product_code,
-            pi.product_name, pi.unit, pi.qty
+            pi.product_name, pi.unit, pi.qty, prod.serial_managed
      FROM package_items pi
+     LEFT JOIN product_items prod ON prod.id = pi.product_id
      WHERE pi.package_id IN (${ids.map(() => '?').join(',')})`,
     ids,
   )
@@ -38,6 +39,8 @@ async function listByTask(taskId) {
       productName: i.product_name,
       unit:        i.unit,
       qty:         Number(i.qty),
+      // 序列号管控开关供 PDA 出库判断该商品是否需逐台扫 SN 核销（serialEngine.dispatchSerials）
+      serialManaged: Number(i.serial_managed) === 1,
     })
   })
 

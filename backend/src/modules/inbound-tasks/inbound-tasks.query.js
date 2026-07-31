@@ -335,9 +335,10 @@ async function findById(id, scopeWarehouseIds = null) {
   // 单价现查采购单明细，不落在 inbound_task_items 上——跟审核结算时 recomputePurchasePayable
   // 的取价方式保持一致，避免出现两份价格数据源
   const [items] = await pool.query(
-    `SELECT iti.*, poi.unit_price
+    `SELECT iti.*, poi.unit_price, prod.serial_managed
      FROM inbound_task_items iti
      LEFT JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
+     LEFT JOIN product_items prod ON prod.id = iti.product_id
      WHERE iti.task_id = ?`,
     [id],
   )

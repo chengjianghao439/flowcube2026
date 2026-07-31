@@ -5,6 +5,7 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { assertInScope } = require('../../utils/warehouseScope')
+const { assertNoSerialManaged } = require('../../engine/serialEngine')
 
 const PENDING_QA = 5
 const REJECTED = CONTAINER_STATUS.REJECTED
@@ -149,6 +150,12 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId, 
   if (![1, 2].includes(Number(taskRow.status))) {
     throw new AppError('当前状态不允许收货', 400)
   }
+  // 激活前安全闸门（文档 04 Phase 2 边界）：销售退货入库尚未实现逐台序列号登记，
+  // 若放任 serial_managed 商品走这里，会建出「有量无序列号」的容器 —— 上架成 ACTIVE 后
+  // check-consistency 立即报不一致，且该容器再出库时 dispatchSerials 找不到 SN 直接卡死。
+  // 与 A 阶段逆向防护（撤回收货/改单减量/拆分/取消归还）同哲学：Phase 2 未覆盖的路径宁可
+  // 挡住报明确错误，也不放任静默不一致。采购退货出库走 ship.js 已强制扫 SN 核销，不在此列。
+  await assertNoSerialManaged(conn, [productId], '销售退货收货')
   if (Number(taskRow.status) === 1) {
     await compareAndSetStatus(conn, {
       table: 'return_tasks', id: taskId,

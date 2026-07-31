@@ -20,6 +20,7 @@
   "smoke:warehouse-scope": "node tests/warehouse-scope.smoke.test.js",
   "smoke:pda-device-session": "node tests/pda-device-session.smoke.test.js",
     "smoke:finance": "node tests/finance.smoke.test.js",
+    "smoke:serial-consistency": "node tests/serial-consistency.smoke.test.js",
     "smoke:mainline": "node tests/mainline.smoke.test.js",
     "test:integration": "node tests/integration.test.js",
     "smoke:reports": "npm --prefix backend run smoke:reports",
