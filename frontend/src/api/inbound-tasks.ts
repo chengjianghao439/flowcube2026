@@ -48,6 +48,12 @@ export const putawayInboundApi = (id: number, data: PutawayParams, requestKey?: 
       : { 'X-Client': 'pda' },
   })
 
+/** 来料质检（文档07）：仅 PDA，合格量(含让步接收)/拒收量。带 X-Client: pda */
+export const qaCheckInboundApi = (id: number, data: { productId: number; passedQty: number; rejectedQty: number; reason?: string }, requestKey?: string) =>
+  client.post<{ taskId: number; passed: number; rejected: number; qaStatus: number }>(`/inbound-tasks/${id}/check`, data, {
+    headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' },
+  })
+
 /** 管理员补录上架（ERP 禁用时），需 roleId=1 */
 export const adminPutawayInboundApi = (data: PutawayParams & { taskId: number }) =>
   client.post('/admin/putaway', data)

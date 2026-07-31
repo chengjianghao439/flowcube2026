@@ -85,6 +85,9 @@ const WarehousePage = lazy(() => import('@/pages/warehouses'))
 const InventoryPage = lazy(() => import('@/pages/inventory'))
 const PlasticBoxesPage = lazy(() => import('@/pages/plastic-boxes'))
 const StockcheckPage = lazy(() => import('@/pages/stockcheck'))
+const AbcClassPage = lazy(() => import('@/pages/stockcheck/abc'))
+const ProcurementPlanListPage = lazy(() => import('@/pages/procurement'))
+const ProcurementPlanDetailPage = lazy(() => import('@/pages/procurement/detail'))
 const TransferPage = lazy(() => import('@/pages/transfer'))
 const TransferFormPage = lazy(() => import('@/pages/transfer/form'))
 const InboundTasksPage = lazy(() => import('@/pages/inbound-tasks'))
@@ -163,6 +166,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '采购', section: '采购作业', order: 5 },
+  },
+  {
+    path: '/procurement',
+    title: '采购计划',
+    permission: PERMISSIONS.PROCUREMENT_PLAN_VIEW,
+    component: ProcurementPlanListPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '采购', section: '采购作业', order: 6 },
   },
   {
     path: '/inbound-tasks',
@@ -288,6 +300,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '库存', section: '库存作业', order: 30 },
+  },
+  {
+    path: '/stockcheck/abc',
+    title: 'ABC分类与循环盘规则',
+    permission: PERMISSIONS.STOCKCHECK_ABC_VIEW,
+    component: AbcClassPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '库存', section: '库存作业', order: 31 },
   },
   {
     path: '/transfer',
@@ -654,6 +675,15 @@ export const routePatterns: RoutePatternEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     listPath: '/purchase',
+  },
+  {
+    pattern: /^\/procurement\/\d+$/,
+    title: (path) => `采购计划 #${path.split('/').pop()}`,
+    permission: PERMISSIONS.PROCUREMENT_PLAN_VIEW,
+    component: ProcurementPlanDetailPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    listPath: '/procurement',
   },
   {
     pattern: /^\/purchase-requisitions\/(new|\d+)$/,

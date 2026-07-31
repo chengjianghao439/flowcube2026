@@ -24,6 +24,9 @@ export interface InboundTaskItem {
   orderedQty: number
   receivedQty: number
   putawayQty: number
+  qaRequired?: boolean      // 来料质检行（文档07）
+  checkedQty?: number       // 已质检量（合格+让步+拒收）
+  rejectedQty?: number      // 拒收量（不入库不结算）
   unitPrice: number | null
   /** 序列号管控商品：PDA 收货需逐台扫序列号登记（每箱 SN 数 == 箱数量） */
   serialManaged?: boolean
@@ -127,6 +130,7 @@ export interface InboundTask {
   submittedBy?: number | null
   submittedByName?: string | null
   auditStatus?: number
+  qaStatus?: number         // 0无需/无待质检 1有待质检容器 2已完成（文档07）
   auditRemark?: string | null
   auditedAt?: string | null
   auditedBy?: number | null

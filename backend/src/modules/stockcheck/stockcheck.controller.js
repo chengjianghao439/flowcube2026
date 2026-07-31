@@ -12,4 +12,6 @@ const refreshItem = async(req,res,next)=>{ try{const data=await svc.refreshItem(
 const recomputeAbc = async(req,res,next)=>{ try{return successResponse(res,await cycle.recomputeAbc({ warehouseId:+req.body.warehouseId, metricType:req.body.metricType||'sold_value', windowDays:+req.body.windowDays||90 }),'ABC 已重算')}catch(e){next(e)} }
 const listAbc = async(req,res,next)=>{ try{return successResponse(res,await cycle.listAbc({ warehouseId:req.query.warehouseId?+req.query.warehouseId:null, abcClass:req.query.abcClass||null, scopeWarehouseIds:req.user?.warehouseIds??null }),'查询成功')}catch(e){next(e)} }
 const cycleCandidates = async(req,res,next)=>{ try{return successResponse(res,await cycle.getCycleCandidates({ warehouseId:+req.query.warehouseId, scopeType:req.query.scopeType||'abc', scopeValue:req.query.scopeValue||'A' }),'查询成功')}catch(e){next(e)} }
-module.exports = { list, detail, create, update, submit, refreshItem, cancel, recomputeAbc, listAbc, cycleCandidates }
+const cycleRules = async(req,res,next)=>{ try{return successResponse(res,await cycle.getCycleRules({ warehouseId:req.query.warehouseId?+req.query.warehouseId:0 }),'查询成功')}catch(e){next(e)} }
+const saveCycleRules = async(req,res,next)=>{ try{return successResponse(res,await cycle.saveCycleRules({ warehouseId:req.body.warehouseId?+req.body.warehouseId:0, rules:req.body.rules }),'规则已保存')}catch(e){next(e)} }
+module.exports = { list, detail, create, update, submit, refreshItem, cancel, recomputeAbc, listAbc, cycleCandidates, cycleRules, saveCycleRules }

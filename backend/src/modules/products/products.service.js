@@ -20,23 +20,67 @@ async function ensureBarcodeUnique(barcode, currentId = null) {
   return normalized
 }
 
-/** upsert 商品的「通用默认」补货策略（product_stock_policies.warehouse_id=0）；都为 0/空则删除该默认行 */
-async function upsertDefaultStockPolicy(productId, { safetyStock, reorderPoint }) {
+/** upsert 商品的「通用默认」补货策略（product_stock_policies.warehouse_id=0）；都为 0/空则删除该默认行。db 可传事务连接。 */
+async function upsertDefaultStockPolicy(db, productId, { safetyStock, reorderPoint }) {
   const safety  = safetyStock  == null || safetyStock  === '' ? null : Number(safetyStock)
   const reorder = reorderPoint == null || reorderPoint === '' ? null : Number(reorderPoint)
   if (safety == null && reorder == null) return   // 未提交这两个字段：不动策略
   const s = Number.isFinite(safety)  && safety  > 0 ? safety  : 0
   const r = Number.isFinite(reorder) && reorder > 0 ? reorder : 0
   if (s === 0 && r === 0) {
-    await pool.query('DELETE FROM product_stock_policies WHERE product_id=? AND warehouse_id=0', [productId])
+    await db.query('DELETE FROM product_stock_policies WHERE product_id=? AND warehouse_id=0', [productId])
     return
   }
-  await pool.query(
+  await db.query(
     `INSERT INTO product_stock_policies (product_id, warehouse_id, safety_stock, reorder_point)
      VALUES (?, 0, ?, ?)
      ON DUPLICATE KEY UPDATE safety_stock=VALUES(safety_stock), reorder_point=VALUES(reorder_point)`,
     [productId, s, r],
   )
+}
+
+/**
+ * 校验并归一化商品计量单位（文档 03）。纯函数、不碰 DB。baseUnitName 即 product_items.unit（基本单位，率恒 1）；
+ * auxUnits 为辅助单位数组 [{unitName, conversionRate}]。返回完整单位列表（基本单位在前）供落库。
+ * 硬约束：辅助单位名非空且≠基本单位、彼此不重；换算率为 >1 的正整数（Phase 1 默认只允许整数率，见文档 §11-3）。
+ */
+function validateUnits(baseUnitName, auxUnits) {
+  const base = String(baseUnitName || '').trim()
+  if (!base) throw new AppError('基本单位不能为空', 400)
+  const out = [{ unitName: base, conversionRate: 1, isBase: 1, sortOrder: 0 }]
+  const seen = new Set([base])
+  const list = Array.isArray(auxUnits) ? auxUnits : []
+  list.forEach((u, i) => {
+    const name = String(u?.unitName || '').trim()
+    const rate = Number(u?.conversionRate)
+    if (!name) throw new AppError('辅助单位名不能为空', 400)
+    if (name === base) throw new AppError(`辅助单位「${name}」不能与基本单位同名`, 400)
+    if (seen.has(name)) throw new AppError(`辅助单位「${name}」重复`, 400)
+    if (!Number.isInteger(rate) || rate <= 1) throw new AppError(`辅助单位「${name}」的换算率必须是大于 1 的整数`, 400)
+    seen.add(name)
+    out.push({ unitName: name, conversionRate: rate, isBase: 0, sortOrder: i + 1 })
+  })
+  return out
+}
+
+/** 整仓覆盖式写入某商品的单位列表（先删后插；单位配置是可重算数据，文档单据自带 conversion_rate 快照不受影响）。db 传事务连接。 */
+async function replaceProductUnits(db, productId, normalizedUnits) {
+  await db.query('DELETE FROM product_units WHERE product_id=?', [productId])
+  for (const u of normalizedUnits) {
+    await db.query(
+      'INSERT INTO product_units (product_id, unit_name, conversion_rate, is_base, sort_order) VALUES (?,?,?,?,?)',
+      [productId, u.unitName, u.conversionRate, u.isBase, u.sortOrder],
+    )
+  }
+}
+
+/** 读某商品的单位列表（基本单位在前），供 findById 回显与前端换算 */
+async function loadProductUnits(productId) {
+  const [rows] = await pool.query(
+    'SELECT unit_name, conversion_rate, is_base FROM product_units WHERE product_id=? ORDER BY is_base DESC, sort_order ASC, id ASC',
+    [productId],
+  )
+  return rows.map(r => ({ unitName: r.unit_name, conversionRate: Number(r.conversion_rate), isBase: Number(r.is_base) === 1 }))
 }
 
 async function validateProductPayload({ name, categoryId, barcode, costPrice, currentId = null }) {
@@ -220,7 +264,20 @@ async function findAll({ page=1, pageSize=20, keyword='', categoryId=null }) {
      WHERE p.deleted_at IS NULL AND (p.code LIKE ? OR p.name LIKE ? OR p.barcode LIKE ?) ${catFilter}`,
     cntParams,
   )
-  return { list: rows.map(fmtProduct), pagination: { page, pageSize, total } }
+  const list = rows.map(fmtProduct)
+  // 批量带出计量单位（文档03 Phase1 只读展示），一次查询避免 N+1
+  if (list.length) {
+    const ids = list.map(p => p.id)
+    const [uRows] = await pool.query(
+      `SELECT product_id, unit_name, conversion_rate, is_base FROM product_units
+       WHERE product_id IN (${ids.map(() => '?').join(',')}) ORDER BY is_base DESC, sort_order ASC, id ASC`,
+      ids,
+    )
+    const byProduct = {}
+    for (const u of uRows) (byProduct[u.product_id] ||= []).push({ unitName: u.unit_name, conversionRate: Number(u.conversion_rate), isBase: Number(u.is_base) === 1 })
+    list.forEach(p => { p.units = byProduct[p.id] || [] })
+  }
+  return { list, pagination: { page, pageSize, total } }
 }
 
 async function findAllActive() {
@@ -241,11 +298,14 @@ async function findById(id) {
      WHERE p.id=? AND p.deleted_at IS NULL`, [id],
   )
   if (!rows[0]) throw new AppError('商品不存在',404)
-  return fmtProduct(rows[0])
+  const product = fmtProduct(rows[0])
+  product.units = await loadProductUnits(id)   // 计量单位列表（基本单位在前），供表单回显与前端换算展示
+  return product
 }
 
-async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, serialManaged }) {
+async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, serialManaged, units }) {
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
+  const normalizedUnits = validateUnits(unit, units)   // 纯校验，任何非法输入在建单前就抛错
   const code = await generateMasterCode(pool, 'P', 'product_items')
   const generatedSku = skuCode || await generateMasterCode(pool, 'SKU', 'product_items', 'sku_code')
   const generatedArticle = articleNumber || String(Math.floor(100000 + Math.random() * 900000))
@@ -257,18 +317,25 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   const spC = salePriceC != null ? Number(salePriceC) : auto.salePriceC
   const spD = salePriceD != null ? Number(salePriceD) : auto.salePriceD
   const sp = spA // 售价默认取价格A
-  const [r] = await pool.query(
-    `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days,qa_required,serial_managed)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, serialManaged?1:0],
-  )
-  await upsertDefaultStockPolicy(r.insertId, { safetyStock, reorderPoint })
-  return { id: r.insertId, code, skuCode: generatedSku, articleNumber: generatedArticle }
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [r] = await conn.query(
+      `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days,qa_required,serial_managed)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, serialManaged?1:0],
+    )
+    await replaceProductUnits(conn, r.insertId, normalizedUnits)
+    await upsertDefaultStockPolicy(conn, r.insertId, { safetyStock, reorderPoint })
+    await conn.commit()
+    return { id: r.insertId, code, skuCode: generatedSku, articleNumber: generatedArticle }
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, serialManaged }) {
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, serialManaged, units }) {
   await findById(id)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
+  const normalizedUnits = validateUnits(unit, units)
   const rates = await loadPriceRates(pool)
   const auto = computeTierPrices(normalizedCost, rates)
   const spA = salePriceA != null ? Number(salePriceA) : auto.salePriceA
@@ -276,12 +343,18 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   const spC = salePriceC != null ? Number(salePriceC) : auto.salePriceC
   const spD = salePriceD != null ? Number(salePriceD) : auto.salePriceD
   const sp = spA
-  await pool.query(
-    `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,qa_required=?,serial_managed=?
-     WHERE id=? AND deleted_at IS NULL`,
-    [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, serialManaged?1:0, id],
-  )
-  await upsertDefaultStockPolicy(id, { safetyStock, reorderPoint })
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await conn.query(
+      `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,qa_required=?,serial_managed=?
+       WHERE id=? AND deleted_at IS NULL`,
+      [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, serialManaged?1:0, id],
+    )
+    await replaceProductUnits(conn, id, normalizedUnits)
+    await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint })
+    await conn.commit()
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
 async function softDelete(id) {

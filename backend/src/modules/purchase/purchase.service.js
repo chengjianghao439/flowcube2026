@@ -177,6 +177,32 @@ async function findById(id, scopeWarehouseIds = null) {
   return order
 }
 
+// 事务内建单核心：供应商校验 + 建采购单草稿(status=1) + 明细。承接调用方 conn，不自管事务、不做幂等
+// （幂等由外层 create 的 operationRequest 负责）。供采购计划转采购(procurement.service.convert)在同一事务复用。
+async function createWithinTransaction(conn, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator }) {
+  // 前端选择器已过滤停用供应商，这里补一道后端校验，防止绕过前端直接调 API 建单（禁用供应商未在下单流程过滤）
+  const [[supplierRow]] = await conn.query(
+    'SELECT is_active FROM supply_suppliers WHERE id = ? AND deleted_at IS NULL',
+    [supplierId],
+  )
+  if (!supplierRow) throw new AppError('供应商不存在', 404)
+  if (!supplierRow.is_active) throw new AppError('该供应商已停用，无法新建采购单', 400)
+  const orderNo = await genOrderNo(conn)
+  const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
+  const [r] = await conn.query(
+    `INSERT INTO purchase_orders (order_no,supplier_id,supplier_name,warehouse_id,warehouse_name,expected_date,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    [orderNo,supplierId,supplierName,warehouseId,warehouseName,expectedDate||null,total,remark||null,operator.userId,operator.realName]
+  )
+  const orderId = r.insertId
+  for(const item of items) {
+    await conn.query(
+      `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [orderId,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null]
+    )
+  }
+  return { id:orderId, orderNo }
+}
+
 async function create({ supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator, requestKey }) {
   const conn = await pool.getConnection()
   try {
@@ -190,32 +216,12 @@ async function create({ supplierId, supplierName, warehouseId, warehouseName, ex
       await conn.rollback()
       return requestState.responseData
     }
-    // 前端选择器已过滤停用供应商，这里补一道后端校验，防止绕过前端直接调 API 建单（禁用供应商未在下单流程过滤）
-    const [[supplierRow]] = await conn.query(
-      'SELECT is_active FROM supply_suppliers WHERE id = ? AND deleted_at IS NULL',
-      [supplierId],
-    )
-    if (!supplierRow) throw new AppError('供应商不存在', 404)
-    if (!supplierRow.is_active) throw new AppError('该供应商已停用，无法新建采购单', 400)
-    const orderNo = await genOrderNo(conn)
-    const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
-    const [r] = await conn.query(
-      `INSERT INTO purchase_orders (order_no,supplier_id,supplier_name,warehouse_id,warehouse_name,expected_date,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [orderNo,supplierId,supplierName,warehouseId,warehouseName,expectedDate||null,total,remark||null,operator.userId,operator.realName]
-    )
-    const orderId = r.insertId
-    for(const item of items) {
-      await conn.query(
-        `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [orderId,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null]
-      )
-    }
-    const result = { id:orderId, orderNo }
+    const result = await createWithinTransaction(conn, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator })
     await completeOperationRequest(conn, requestState, {
       data: result,
       message: '创建成功',
       resourceType: 'purchase_order',
-      resourceId: orderId,
+      resourceId: result.id,
     })
     await conn.commit()
     return result
@@ -445,4 +451,4 @@ async function cancel(id, operator, scopeWarehouseIds = null) {
   }
 }
 
-module.exports = { findAll, findById, create, update, confirm, withdrawConfirm, cancel, closeRemaining }
+module.exports = { findAll, findById, create, createWithinTransaction, update, confirm, withdrawConfirm, cancel, closeRemaining }

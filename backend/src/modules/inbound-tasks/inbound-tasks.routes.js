@@ -102,6 +102,14 @@ const putawaySchema = z.object({
   suggestedLocationCode: z.string().trim().max(50).optional(),
 })
 
+// 来料质检（文档 07）：合格量(含让步接收) + 拒收量，至少一项 > 0
+const qaCheckSchema = z.object({
+  productId: z.number().int().positive('请选择商品'),
+  passedQty: z.number().nonnegative('合格量不能为负').default(0),
+  rejectedQty: z.number().nonnegative('拒收量不能为负').default(0),
+  reason: z.string().trim().max(100).optional(),
+}).refine(v => (v.passedQty + v.rejectedQty) > 0, { message: '合格量与拒收量至少一项大于 0' })
+
 const reprintSchema = z.object({
   mode: z.enum(['task', 'item', 'barcode']).default('task'),
   itemId: z.number().int().positive('收货明细无效').optional(),
@@ -128,6 +136,8 @@ router.post('/:id/reprint',  requirePermission(PERMISSIONS.INBOUND_PRINT_REPRINT
 router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaSessionRequired(), pdaOnly, vBody(receiveSchema), ctrl.receive)
 router.get('/:id/putaway-suggestion', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), putawaySuggestionHandler)
 router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaSessionRequired(), pdaOnly, vBody(putawaySchema), ctrl.putaway)
+// 来料质检（文档 07 · 方案A）：复用收货执行权限（收货员即初检员），PDA-only + 设备会话
+router.post('/:id/check', requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaSessionRequired(), pdaOnly, vBody(qaCheckSchema), ctrl.qaCheck)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.cancel)
 router.post('/:id/void-receipt', requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.voidReceipt)
 router.post('/:id/close-receiving', requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.closeReceiving)

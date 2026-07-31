@@ -171,6 +171,10 @@ export const PERMISSIONS = {
 
   REPORT_VIEW: 'report.view',
 
+  // 采购计划（文档 11 单据化）
+  PROCUREMENT_PLAN_VIEW: 'procurement.plan.view',
+  PROCUREMENT_PLAN_MANAGE: 'procurement.plan.manage',
+
   USER_VIEW: 'user.view',
   USER_CREATE: 'user.create',
   USER_UPDATE: 'user.update',
@@ -244,6 +248,8 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.PURCHASE_REQUISITION_CREATE, label: '发起/编辑请购单' },
       { code: PERMISSIONS.PURCHASE_REQUISITION_APPROVE, label: '审批请购单' },
       { code: PERMISSIONS.PURCHASE_REQUISITION_CONVERT, label: '请购转采购单' },
+      { code: PERMISSIONS.PROCUREMENT_PLAN_VIEW, label: '查看采购计划' },
+      { code: PERMISSIONS.PROCUREMENT_PLAN_MANAGE, label: '生成/编辑/转采购计划' },
       { code: PERMISSIONS.INBOUND_ORDER_VIEW, label: '查看收货单' },
       { code: PERMISSIONS.INBOUND_ORDER_CREATE, label: '新建收货单' },
       { code: PERMISSIONS.INBOUND_ORDER_SUBMIT, label: '提交收货单' },

@@ -82,6 +82,7 @@ const fmtTask = r => ({
   submittedBy: r.submitted_by != null ? Number(r.submitted_by) : null,
   submittedByName: r.submitted_by_name || null,
   auditStatus: Number(r.audit_status || 0),
+  qaStatus: Number(r.qa_status || 0),   // 0无需/无待质检 1有待质检容器 2质检已完成（文档07旁路标志）
   auditRemark: r.audit_remark || null,
   auditedAt: r.audited_at || null,
   auditedBy: r.audited_by != null ? Number(r.audited_by) : null,
@@ -107,6 +108,10 @@ const fmtItem = r => ({
   orderedQty: Number(r.ordered_qty),
   receivedQty: Number(r.received_qty),
   putawayQty: Number(r.putaway_qty),
+  // 来料质检（文档07）：qa_required 快照 + 已质检/拒收量；免检行 qaRequired=false、两量恒0
+  qaRequired: Number(r.qa_required) === 1,
+  checkedQty: Number(r.checked_qty || 0),
+  rejectedQty: Number(r.rejected_qty || 0),
   // 序列号管控开关是商品维度属性（product_items.serial_managed），联表带出供 PDA 收货判断是否逐台扫 SN；
   // 未联表的调用方（如 receive() 内部刷新明细）r.serial_managed 为 undefined → false，不影响非管控链路。
   serialManaged: Number(r.serial_managed) === 1,

@@ -2,6 +2,7 @@ const query = require('./inbound-tasks.query')
 const command = require('./inbound-tasks.command')
 const putaway = require('./inbound-tasks.putaway')
 const voidModule = require('./inbound-tasks.void')
+const qa = require('./inbound-tasks.qa')
 
 module.exports = {
   findAll: query.findAll,
@@ -20,5 +21,6 @@ module.exports = {
   cancel: command.cancel,
   closeReceiving: command.closeReceiving,
   putaway: putaway.putaway,
+  qaCheck: qa.check,
   voidReceipt: voidModule.voidReceipt,
 }

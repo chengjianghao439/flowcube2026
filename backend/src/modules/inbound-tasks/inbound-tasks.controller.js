@@ -106,6 +106,22 @@ const putaway = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
+const qaCheck = async (req, res, next) => {
+  try {
+    const data = await svc.qaCheck(+req.params.id, {
+      productId: req.body.productId,
+      passedQty: req.body.passedQty,
+      rejectedQty: req.body.rejectedQty,
+      reason: req.body.reason || null,
+      userId: req.user?.userId ?? null,
+      requestKey: extractRequestKey(req),
+      pdaWarehouseId: req.pda?.warehouseId ?? null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    return successResponse(res, data, '质检确认成功')
+  } catch (e) { next(e) }
+}
+
 const cancel = async (req, res, next) => {
   try {
     await svc.cancel(+req.params.id, req.user?.warehouseIds ?? null)
@@ -129,4 +145,4 @@ const closeReceiving = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, cancel, voidReceipt, closeReceiving }
+module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, qaCheck, cancel, voidReceipt, closeReceiving }

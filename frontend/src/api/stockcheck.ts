@@ -1,6 +1,6 @@
 import { payloadClient as client } from './client'
 import type { PaginatedData } from '@/types'
-import type { StockCheck, CreateCheckParams, AbcClassRow, CycleCandidate } from '@/types/stockcheck'
+import type { StockCheck, CreateCheckParams, AbcClassRow, CycleCandidate, CycleRulesResult } from '@/types/stockcheck'
 export const getCheckListApi   = (params: object) => client.get<PaginatedData<StockCheck>>('/stockcheck', { params })
 export const getCheckDetailApi = (id: number) => client.get<StockCheck>(`/stockcheck/${id}`)
 export const createCheckApi    = (data: CreateCheckParams) => client.post<{ id: number }>('/stockcheck', data)
@@ -16,3 +16,7 @@ export const getAbcListApi = (params: { warehouseId?: number; abcClass?: string 
   client.get<AbcClassRow[]>('/stockcheck/abc', { params })
 export const getCycleCandidatesApi = (params: { warehouseId: number; scopeType?: string; scopeValue?: string }) =>
   client.get<CycleCandidate>('/stockcheck/cycle/candidates', { params })
+export const getCycleRulesApi = (warehouseId?: number) =>
+  client.get<CycleRulesResult>('/stockcheck/cycle/rules', { params: warehouseId ? { warehouseId } : {} })
+export const saveCycleRulesApi = (data: { warehouseId?: number; rules: { abcClass: string; intervalDays: number; batchLimit: number; enabled?: boolean }[] }) =>
+  client.put<CycleRulesResult>('/stockcheck/cycle/rules', data)

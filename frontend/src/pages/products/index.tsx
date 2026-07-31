@@ -105,7 +105,10 @@ export default function ProductsPage() {
     { key:'name', title:'商品名称', width:180 },
     { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
     { key:'color', title:'颜色', width:80, render:v=>(v as string)||'-' },
-    { key:'unit', title:'单位', width:60 },
+    { key:'unit', title:'单位', width:140, render:(_,r)=>{
+      const aux=(r.units||[]).filter(u=>!u.isBase)
+      return <div className="flex flex-wrap items-center gap-1"><span>{r.unit}</span>{aux.map(u=><span key={u.unitName} className="rounded bg-muted px-1 text-xs text-muted-foreground tabular-nums">{u.unitName}×{u.conversionRate}</span>)}</div>
+    }},
     { key:'supplierName', title:'供应商', width:140, render:v=>(v as string)||'-' },
     { key:'isActive', title:'状态', width:70, render:(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} /> },
     { key:'id', title:'操作', width:140, render:(_,r)=>(

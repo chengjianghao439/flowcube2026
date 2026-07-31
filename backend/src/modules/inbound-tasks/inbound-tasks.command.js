@@ -567,9 +567,15 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
     const itemCount = normalizedPackages.length
 
     const poByItemId = new Map(itemRowsFresh.map(r => [r.id, r.purchase_order_id]))
+    // 来料质检分流（文档 07）：按明细行建单时固化的 qa_required 快照决定本箱容器落 待质检(PENDING_QA)
+    // 还是 待上架(PENDING_PUTAWAY)。免检行(qa_required=0)一字不变走原路径。收货记账/超收/重复扫码闸门/打印均不受影响。
+    const qaByItemId = new Map(itemRowsFresh.map(r => [r.id, Number(r.qa_required) === 1]))
+    let createdQaContainer = false
     const containers = []
     for (const pkg of normalizedPackages) {
       const ownerItemId = ownerByLineNo.get(pkg.lineNo) ?? null
+      const needQa = qaByItemId.get(ownerItemId) === true
+      if (needQa) createdQaContainer = true
       const { containerId, barcode } = await createContainer(conn, {
         productId: productIdN,
         warehouseId,
@@ -581,12 +587,12 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         locationId: null,
         inboundTaskId: taskId,
         inboundTaskItemId: ownerItemId,
-        containerStatus: CONTAINER_STATUS.PENDING_PUTAWAY,
+        containerStatus: needQa ? CONTAINER_STATUS.PENDING_QA : CONTAINER_STATUS.PENDING_PUTAWAY,
         sourceType: SOURCE_TYPE.INBOUND_TASK,
         sourceRefId: taskId,
         sourceRefType: 'inbound_task',
         sourceRefNo: taskNo,
-        remark: `收货待上架 ${taskNo} 第${pkg.lineNo}箱`,
+        remark: `${needQa ? '收货待质检' : '收货待上架'} ${taskNo} 第${pkg.lineNo}箱`,
       })
       // 序列号管控商品：本箱容器建好后，把随包扫入的序列号逐台登记到该容器（同一事务）。
       // registerSerials 内部对每台做「已在库→拒重复入库、已出/已退→复用改回在库」；跨箱重复
@@ -608,6 +614,11 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         containerCode: barcode,
         qty: pkg.qty,
       })
+    }
+
+    // 本次收货产生了待质检容器 → 任务头 qa_status 置 1（旁路展示/筛选标志，权威仍以容器状态为准）
+    if (createdQaContainer) {
+      await conn.query('UPDATE inbound_tasks SET qa_status = 1 WHERE id = ? AND qa_status = 0', [taskId])
     }
 
     await appendInboundEvent(

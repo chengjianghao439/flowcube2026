@@ -178,6 +178,10 @@ const PERMISSIONS = {
 
   REPORT_VIEW: 'report.view',
 
+  // 采购计划（文档 11 单据化）：生成/编辑/转采购涉写，独立控权；转采购动作复用 PURCHASE_ORDER_CREATE
+  PROCUREMENT_PLAN_VIEW: 'procurement.plan.view',
+  PROCUREMENT_PLAN_MANAGE: 'procurement.plan.manage',
+
   USER_VIEW: 'user.view',
   USER_CREATE: 'user.create',
   USER_UPDATE: 'user.update',

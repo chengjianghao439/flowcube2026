@@ -1,3 +1,6 @@
+/** 商品计量单位（文档 03）：基本单位 rate 恒 1，辅助单位 rate>1 表示 1 本单位=N 基本单位 */
+export interface ProductUnit { unitName: string; conversionRate: number; isBase: boolean }
+
 export interface Product {
   batchManaged?: boolean
   qaRequired?: boolean
@@ -5,6 +8,7 @@ export interface Product {
   safetyStock?: number | null
   reorderPoint?: number | null
   serialManaged?: boolean
+  units?: ProductUnit[]
   id: number; code: string; name: string
   skuCode: string | null; articleNumber: string | null
   categoryId: number | null; categoryName: string | null
@@ -21,6 +25,7 @@ export interface CreateProductParams {
   costPrice?: number | null; remark?: string
   batchManaged?: boolean; shelfLifeDays?: number | null; qaRequired?: boolean
   safetyStock?: number | null; reorderPoint?: number | null; serialManaged?: boolean
+  units?: { unitName: string; conversionRate: number }[]
   skuCode?: string; articleNumber?: string
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
 }
@@ -30,6 +35,7 @@ export interface UpdateProductParams {
   costPrice?: number | null; remark?: string; isActive: boolean
   batchManaged?: boolean; shelfLifeDays?: number | null; qaRequired?: boolean
   safetyStock?: number | null; reorderPoint?: number | null; serialManaged?: boolean
+  units?: { unitName: string; conversionRate: number }[]
   articleNumber?: string
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
 }

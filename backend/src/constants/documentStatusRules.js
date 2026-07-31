@@ -166,6 +166,21 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       },
     },
   },
+  procurementPlan: {
+    entityName: '采购计划',
+    actions: {
+      // 编辑明细（改建议量/供应商/忽略行）仅草稿或部分转采购态可做；已完成/已作废不可改。
+      edit: { from: [1, 2], message: '已完成或已作废的采购计划不能编辑' },
+      // 转采购：草稿或部分转采购态可继续转（分批转出）；转出后由 service 判定置 2/3。
+      convert: { from: [1, 2], message: '当前状态的采购计划不能转采购' },
+      cancel: {
+        from: [1, 2],
+        to: 4,
+        message: '当前状态的采购计划不能作废',
+        blocked: { 3: '已完成的采购计划不能作废', 4: '采购计划已作废' },
+      },
+    },
+  },
   inboundTask: {
     entityName: '收货订单',
     actions: {

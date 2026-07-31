@@ -1,9 +1,15 @@
 const { pool } = require('../../config/db')
+const AppError = require('../../utils/AppError')
 const { scopeFilter } = require('../../utils/warehouseScope')
 
 // 帕累托经典切点（服务端常量，可后续暴露配置）
 const A_THRESHOLD = 0.80
 const B_THRESHOLD = 0.95
+
+// 循环盘频率规则的行业常见起点（seed 与本兜底保持一致：A 月盘 / B 季盘 / C 年盘）
+const VALID_ABC = ['A', 'B', 'C']
+const DEFAULT_INTERVAL = { A: 30, B: 90, C: 365 }
+const DEFAULT_BATCH_LIMIT = 200
 
 /**
  * 重算某仓 ABC 分类（文档 08）。默认 sold_value：近 windowDays 天出库消耗金额=picked_qty×avg_cost，
@@ -123,4 +129,65 @@ async function getCycleCandidates({ warehouseId, scopeType, scopeValue, productI
   return { productIds: rows.map(r => Number(r.product_id)), scopeType: 'abc', scopeValue: cls }
 }
 
-module.exports = { recomputeAbc, listAbc, getCycleCandidates }
+/**
+ * 读取某仓生效的循环盘频率规则（A/B/C 各一条，本仓 override 优先于 warehouse_id=0 全局默认，
+ * 缺行按行业默认兜底）。warehouseId 省略/0 即读全局默认。纯只读配置。
+ */
+async function getCycleRules({ warehouseId = 0 }) {
+  const wid = Number(warehouseId) || 0
+  const [rows] = await pool.query(
+    `SELECT warehouse_id, abc_class, interval_days, batch_limit, enabled
+     FROM inventory_cycle_rules WHERE warehouse_id IN (?, 0)`,
+    [wid],
+  )
+  const byClass = {}
+  for (const r of rows) {
+    // 本仓 override 覆盖全局默认；同类只保留优先级更高的一条
+    if (!byClass[r.abc_class] || Number(r.warehouse_id) === wid) byClass[r.abc_class] = r
+  }
+  return {
+    warehouseId: wid,
+    rules: VALID_ABC.map(cls => {
+      const r = byClass[cls]
+      return {
+        abcClass: cls,
+        intervalDays: r ? Number(r.interval_days) : DEFAULT_INTERVAL[cls],
+        batchLimit: r ? Number(r.batch_limit) : DEFAULT_BATCH_LIMIT,
+        enabled: r ? Number(r.enabled) === 1 : true,
+        // 该行是否为本仓自身覆盖（true）还是继承自全局默认（false）——供前端标注
+        isOverride: !!(r && Number(r.warehouse_id) === wid && wid !== 0),
+      }
+    }),
+  }
+}
+
+/**
+ * upsert 循环盘频率规则。warehouseId=0 编辑全局默认，>0 为本仓 override（COALESCE 生效）。
+ * 只写配置表 inventory_cycle_rules，不碰库存/盘点执行。
+ */
+async function saveCycleRules({ warehouseId = 0, rules }) {
+  const wid = Number(warehouseId) || 0
+  if (!Array.isArray(rules) || !rules.length) throw new AppError('规则不能为空', 400)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    for (const r of rules) {
+      const cls = String(r.abcClass || '').toUpperCase()
+      if (!VALID_ABC.includes(cls)) throw new AppError(`无效 ABC 类：${r.abcClass}`, 400)
+      const interval = Number(r.intervalDays)
+      const limit = Number(r.batchLimit)
+      if (!Number.isFinite(interval) || interval <= 0) throw new AppError(`${cls} 类盘点周期必须大于 0 天`, 400)
+      if (!Number.isFinite(limit) || limit <= 0) throw new AppError(`${cls} 类单次上限必须大于 0`, 400)
+      await conn.query(
+        `INSERT INTO inventory_cycle_rules (warehouse_id, abc_class, interval_days, batch_limit, enabled)
+         VALUES (?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE interval_days=VALUES(interval_days), batch_limit=VALUES(batch_limit), enabled=VALUES(enabled)`,
+        [wid, cls, interval, limit, r.enabled === false ? 0 : 1],
+      )
+    }
+    await conn.commit()
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
+  return getCycleRules({ warehouseId: wid })
+}
+
+module.exports = { recomputeAbc, listAbc, getCycleCandidates, getCycleRules, saveCycleRules }

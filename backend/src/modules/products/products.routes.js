@@ -37,6 +37,8 @@ const productBase = z.object({
   shelfLifeDays:  z.number().int().min(1,'保质期天数必须大于 0').max(3650).nullable().optional(),
   safetyStock:    z.number().nonnegative('安全库存不能为负').nullable().optional(),
   reorderPoint:   z.number().nonnegative('补货点不能为负').nullable().optional(),
+  // 辅助计量单位（文档 03，基本单位即 unit 字段）；换算率>1整数等细校验在 service.validateUnits
+  units:          z.array(z.object({ unitName: z.string().min(1).max(20), conversionRate: z.number() })).max(10).optional(),
 })
 
 const { generateMasterCode } = require('../../utils/codeGenerator')

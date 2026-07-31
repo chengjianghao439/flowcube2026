@@ -24,7 +24,8 @@ import { CategoryFinder, SupplierFinder, FinderTrigger } from '@/components/find
 import type { FinderResult } from '@/types/finder'
 
 const DEFAULT_RATES = { A: 10, B: 20, C: 30, D: 40 }
-const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, qaRequired: false, shelfLifeDays: '' as string, safetyStock: '' as string, reorderPoint: '' as string, serialManaged: false, isActive: true }
+type AuxUnit = { unitName: string; conversionRate: string }
+const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, qaRequired: false, shelfLifeDays: '' as string, safetyStock: '' as string, reorderPoint: '' as string, serialManaged: false, isActive: true, units: [] as AuxUnit[] }
 
 function profitRate(cost: number, sale: number): number | null {
   if (sale <= 0 || !Number.isFinite(cost) || !Number.isFinite(sale)) return null
@@ -92,6 +93,7 @@ export default function ProductFormPage() {
         remark: product.remark ?? '',
         articleNumber: product.articleNumber ?? '',
         isActive: product.isActive,
+        units: (product.units ?? []).filter(u => !u.isBase).map(u => ({ unitName: u.unitName, conversionRate: String(u.conversionRate) })),
       }
     }
     return EMPTY_FORM
@@ -110,6 +112,11 @@ export default function ProductFormPage() {
   }, [product, isEdit, initialForm])
 
   const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+
+  // 辅助计量单位（文档 03）：基本单位即 form.unit（率恒 1），此处维护辅助单位列表
+  const addUnit = () => setForm(f => ({ ...f, units: [...f.units, { unitName: '', conversionRate: '' }] }))
+  const removeUnit = (i: number) => setForm(f => ({ ...f, units: f.units.filter((_, idx) => idx !== i) }))
+  const setUnit = (i: number, k: keyof AuxUnit, v: string) => setForm(f => ({ ...f, units: f.units.map((u, idx) => idx === i ? { ...u, [k]: v } : u) }))
 
   function handleCategoryConfirm(cat: { id: number; name: string }) {
     set('categoryId', cat.id)
@@ -162,6 +169,7 @@ export default function ProductFormPage() {
       salePriceD: toPrice(form.salePriceD),
       remark: form.remark || undefined,
       articleNumber: form.articleNumber || undefined,
+      units: form.units.filter(u => u.unitName.trim() !== '').map(u => ({ unitName: u.unitName.trim(), conversionRate: Number(u.conversionRate) })),
     }
     setSubmitting(true)
     try {
@@ -297,6 +305,26 @@ export default function ProductFormPage() {
                 placeholder="效期=生产日期+保质期，留空则收货须直接录效期" />
             </div>
           )}
+        </div>
+      </Section>
+
+      <Section title="计量单位">
+        <p className="mb-3 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{form.unit.trim() || '（先填基本单位）'}</span> 为基本单位——库存、收货、出库、结算一律按它记数。
+          辅助单位仅用于采购/销售<span className="text-foreground">按箱/托便捷录入与展示</span>，换算为大于 1 的正整数（如 1 箱 = 12 {form.unit.trim() || '件'}），不影响库存记账。
+        </p>
+        <div className="space-y-2">
+          {form.units.length === 0 && <p className="text-sm text-muted-foreground">未配置辅助单位（默认只按基本单位记数）。</p>}
+          {form.units.map((u, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Input value={u.unitName} onChange={e => setUnit(i, 'unitName', e.target.value)} disabled={submitting} maxLength={20} placeholder="单位名，如 箱" className="w-32" />
+              <span className="text-sm text-muted-foreground">1 {u.unitName.trim() || '箱'} =</span>
+              <Input type="number" min="2" step="1" value={u.conversionRate} onChange={e => setUnit(i, 'conversionRate', e.target.value)} disabled={submitting} placeholder="12" className="w-24 text-right tabular-nums" />
+              <span className="text-sm text-muted-foreground">{form.unit.trim() || '基本单位'}</span>
+              <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeUnit(i)} disabled={submitting}>删除</Button>
+            </div>
+          ))}
+          <Button type="button" variant="outline" size="sm" onClick={addUnit} disabled={submitting || !form.unit.trim()}>+ 增加辅助单位</Button>
         </div>
       </Section>
 
