@@ -1,7 +1,7 @@
 {
-  "version": "0.4.41",
-  "versionCode": 41,
+  "version": "0.4.42",
+  "versionCode": 42,
   "filename": "app-release.apk",
-  "releaseNote": "- **会计总账（一期）**：顶栏新增「会计」菜单，面向财务岗，把业务事实转成标准会计数据。",
-  "publishedAt": "2026-08-01T04:21:28.539Z"
+  "releaseNote": "- **会计总账（二期）**：在「会计」菜单下补齐总账、报表与发票，形成完整的会计核算闭环。",
+  "publishedAt": "2026-08-01T15:54:08.733Z"
 }

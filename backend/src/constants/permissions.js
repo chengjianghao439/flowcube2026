@@ -189,6 +189,11 @@ const PERMISSIONS = {
   ACCOUNTING_VOUCHER_VIEW: 'accounting.voucher.view',
   ACCOUNTING_VOUCHER_MANAGE: 'accounting.voucher.manage',   // 生成本期凭证 / 手工凭证 / 冲销
   ACCOUNTING_VOUCHER_EXPORT: 'accounting.voucher.export',   // 导出金蝶/用友模板
+  ACCOUNTING_LEDGER_VIEW: 'accounting.ledger.view',         // 总账/明细账/试算平衡/三大报表（Phase2）
+
+  // 发票管理（文档 10 · Phase 3）。进项/销项发票池 + 认证抵扣，敏感只授财务。
+  INVOICE_VIEW: 'invoice.view',
+  INVOICE_MANAGE: 'invoice.manage',
 
   USER_VIEW: 'user.view',
   USER_CREATE: 'user.create',

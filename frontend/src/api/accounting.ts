@@ -2,6 +2,8 @@ import { payloadClient as apiClient } from './client'
 import type {
   Account, CreateAccountParams, UpdateAccountParams,
   Voucher, GenerateStats, ReconciliationItem, CreateManualVoucherParams,
+  TrialBalance, AccountLedger, IncomeStatement, BalanceSheet, CashFlow,
+  Invoice, CreateInvoiceParams,
 } from '@/types/accounting'
 
 const BASE = '/accounting/accounts'
@@ -65,3 +67,35 @@ export const deleteVoucherApi = async (id: number) => { await apiClient.delete(`
 
 export const getReconciliationApi = async () =>
   apiClient.get<{ items: ReconciliationItem[] }>(`${VBASE}/reconciliation`)
+
+// ── 总账 / 报表（Phase 2） ──────────────────────────────────────────────
+export const getTrialBalanceApi = async (period: string) =>
+  apiClient.get<TrialBalance>(`/accounting/ledger/trial-balance?period=${period}`)
+
+export const getAccountLedgerApi = async (accountId: number, period: string) =>
+  apiClient.get<AccountLedger>(`/accounting/ledger/account/${accountId}?period=${period}`)
+
+export const getIncomeStatementApi = async (period: string) =>
+  apiClient.get<IncomeStatement>(`/accounting/reports/income?period=${period}`)
+
+export const getBalanceSheetApi = async (period: string) =>
+  apiClient.get<BalanceSheet>(`/accounting/reports/balance-sheet?period=${period}`)
+
+export const getCashFlowApi = async (period: string) =>
+  apiClient.get<CashFlow>(`/accounting/reports/cash-flow?period=${period}`)
+
+// ── 发票（Phase 3） ──────────────────────────────────────────────────
+const IBASE = '/accounting/invoices'
+export interface InvoiceQuery { invoiceType?: number; status?: number; keyword?: string; page?: number; pageSize?: number }
+
+export const getInvoicesApi = async (params: InvoiceQuery = {}) => {
+  const q = new URLSearchParams()
+  Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') q.set(k, String(v)) })
+  const qs = q.toString()
+  return apiClient.get<{ list: Invoice[]; pagination: { page: number; pageSize: number; total: number } }>(`${IBASE}${qs ? `?${qs}` : ''}`)
+}
+export const createInvoiceApi = async (d: CreateInvoiceParams) => apiClient.post<{ id: number }>(`${IBASE}`, d)
+export const updateInvoiceApi = async (id: number, d: Partial<CreateInvoiceParams>) => { await apiClient.put(`${IBASE}/${id}`, d) }
+export const changeInvoiceStatusApi = async (id: number, action: 'certify' | 'deduct' | 'redFlush') =>
+  apiClient.post<{ status: number }>(`${IBASE}/${id}/status`, { action })
+export const deleteInvoiceApi = async (id: number) => { await apiClient.delete(`${IBASE}/${id}`) }

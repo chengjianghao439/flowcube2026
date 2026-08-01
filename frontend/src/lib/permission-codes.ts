@@ -181,6 +181,9 @@ export const PERMISSIONS = {
   ACCOUNTING_VOUCHER_VIEW: 'accounting.voucher.view',
   ACCOUNTING_VOUCHER_MANAGE: 'accounting.voucher.manage',
   ACCOUNTING_VOUCHER_EXPORT: 'accounting.voucher.export',
+  ACCOUNTING_LEDGER_VIEW: 'accounting.ledger.view',
+  INVOICE_VIEW: 'invoice.view',
+  INVOICE_MANAGE: 'invoice.manage',
 
   USER_VIEW: 'user.view',
   USER_CREATE: 'user.create',
@@ -319,6 +322,9 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.ACCOUNTING_VOUCHER_VIEW, label: '查看记账凭证' },
       { code: PERMISSIONS.ACCOUNTING_VOUCHER_MANAGE, label: '生成/手工/冲销凭证' },
       { code: PERMISSIONS.ACCOUNTING_VOUCHER_EXPORT, label: '导出凭证（金蝶/用友）' },
+      { code: PERMISSIONS.ACCOUNTING_LEDGER_VIEW, label: '查看总账/试算平衡/报表' },
+      { code: PERMISSIONS.INVOICE_VIEW, label: '查看进项/销项发票' },
+      { code: PERMISSIONS.INVOICE_MANAGE, label: '录入/认证/抵扣/红冲发票' },
     ],
   },
   {

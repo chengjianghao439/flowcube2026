@@ -4,6 +4,8 @@
  */
 const svc = require('./accounting.service')
 const voucherSvc = require('./accounting.voucher.service')
+const ledgerSvc = require('./accounting.ledger.service')
+const invoiceSvc = require('./accounting.invoice.service')
 const { exportVouchers } = require('./accounting.export')
 const { successResponse } = require('../../utils/response')
 
@@ -72,8 +74,53 @@ const voucherExport = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
+// ── 总账 / 报表（Phase 2） ────────────────────────────────────────────
+const ledgerTrialBalance = async (req, res, next) => {
+  try { return successResponse(res, await ledgerSvc.getTrialBalance({ period: req.query.period }), '查询成功') } catch (e) { next(e) }
+}
+const ledgerAccount = async (req, res, next) => {
+  try { return successResponse(res, await ledgerSvc.getAccountLedger({ accountId: +req.params.accountId, period: req.query.period }), '查询成功') } catch (e) { next(e) }
+}
+const reportIncome = async (req, res, next) => {
+  try { return successResponse(res, await ledgerSvc.getIncomeStatement({ period: req.query.period }), '查询成功') } catch (e) { next(e) }
+}
+const reportBalanceSheet = async (req, res, next) => {
+  try { return successResponse(res, await ledgerSvc.getBalanceSheet({ period: req.query.period }), '查询成功') } catch (e) { next(e) }
+}
+const reportCashFlow = async (req, res, next) => {
+  try { return successResponse(res, await ledgerSvc.getCashFlow({ period: req.query.period }), '查询成功') } catch (e) { next(e) }
+}
+
+// ── 发票（Phase 3） ───────────────────────────────────────────────────
+const invoiceList = async (req, res, next) => {
+  try {
+    const { list, pagination } = await invoiceSvc.listInvoices({
+      invoiceType: req.query.invoiceType, status: req.query.status, keyword: req.query.keyword,
+      page: req.query.page, pageSize: req.query.pageSize,
+    })
+    return successResponse(res, { list, pagination }, '查询成功')
+  } catch (e) { next(e) }
+}
+const invoiceDetail = async (req, res, next) => {
+  try { return successResponse(res, await invoiceSvc.getInvoice(+req.params.id), '查询成功') } catch (e) { next(e) }
+}
+const invoiceCreate = async (req, res, next) => {
+  try { return successResponse(res, await invoiceSvc.createInvoice(req.body, req.user), '创建成功', 201) } catch (e) { next(e) }
+}
+const invoiceUpdate = async (req, res, next) => {
+  try { await invoiceSvc.updateInvoice(+req.params.id, req.body, req.user); return successResponse(res, null, '更新成功') } catch (e) { next(e) }
+}
+const invoiceStatus = async (req, res, next) => {
+  try { return successResponse(res, await invoiceSvc.changeStatus(+req.params.id, req.body.action, req.user), '操作成功') } catch (e) { next(e) }
+}
+const invoiceRemove = async (req, res, next) => {
+  try { await invoiceSvc.removeInvoice(+req.params.id, req.user); return successResponse(res, null, '删除成功') } catch (e) { next(e) }
+}
+
 module.exports = {
   accountTree, accountFlat, accountDetail, accountCreate, accountUpdate, accountRemove, accountToggle,
   voucherList, voucherDetail, voucherGenerate, voucherCreateManual, voucherRemove, voucherReverse,
   voucherReconciliation, voucherExport,
+  ledgerTrialBalance, ledgerAccount, reportIncome, reportBalanceSheet, reportCashFlow,
+  invoiceList, invoiceDetail, invoiceCreate, invoiceUpdate, invoiceStatus, invoiceRemove,
 }

@@ -243,25 +243,29 @@ async function reverseVoucher(id, userId) {
 
 // ─── 勾稽对账（凭证 vs 业务事实） ─────────────────────────────────────────────
 
-/** 资金/应付/应收三项勾稽核对，供 UI 展示与自查（对齐设计 §10）。 */
+/**
+ * 资金/应付/应收三项勾稽核对，供 UI 展示与自查（对齐设计 §10）。
+ * 不按 status 过滤：红字冲销(原凭证 status=3 + 红字 is_reversal)成对相抵为零，全量纳入才正确
+ * （只留红字会算成负的原始额）。见 accounting.ledger.service 顶注同一口径。
+ */
 async function reconciliation() {
   const [[fundV]] = await pool.query(
     `SELECT COALESCE(SUM(e.amount),0) s FROM acct_voucher_entries e
        JOIN acct_vouchers v ON v.id = e.voucher_id
-      WHERE v.source_type IN ('receipt_in','payment_out','expense_pay') AND v.status <> 3 AND e.account_code IN ('1001','1002')`)
+      WHERE v.source_type IN ('receipt_in','payment_out','expense_pay') AND e.account_code IN ('1001','1002')`)
   const [[fundT]] = await pool.query(
     `SELECT COALESCE(SUM(t.amount),0) s FROM finance_account_transactions t
        JOIN finance_accounts fa ON fa.id = t.account_id WHERE t.biz_type IN (1,2,3)`)
   const [[payableV]] = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN direction=2 THEN amount ELSE -amount END),0) s
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
-      WHERE e.account_code='2202' AND v.status<>3 AND v.source_type IN ('purchase_settle','purchase_return')`)
+      WHERE e.account_code='2202' AND v.source_type IN ('purchase_settle','purchase_return')`)
   const [[payableB]] = await pool.query(
     `SELECT COALESCE(SUM(total_amount),0) s FROM payment_records WHERE type=1 AND order_id IS NOT NULL`)
   const [[recvV]] = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN direction=1 THEN amount ELSE -amount END),0) s
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
-      WHERE e.account_code='1122' AND v.status<>3 AND v.source_type IN ('sale_revenue','sale_return')`)
+      WHERE e.account_code='1122' AND v.source_type IN ('sale_revenue','sale_return')`)
   const [[recvB]] = await pool.query(
     `SELECT COALESCE(SUM(total_amount),0) s FROM payment_records WHERE type=2 AND order_id IS NOT NULL`)
   const item = (name, voucher, business) => ({

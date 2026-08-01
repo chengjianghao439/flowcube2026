@@ -160,8 +160,13 @@ async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy) {
 
 // ─── 事件 → 凭证规格 builders（只读业务事实） ────────────────────────────────
 
-/** 事件1：采购入库结算应付。借 库存商品1405 / 贷 应付账款2202〔供应商〕，毛额=SUM(putaway×采购价) */
-async function buildPurchaseSettle(conn) {
+/**
+ * 事件1：采购入库结算应付。无发票：借 库存商品1405 / 贷 应付账款2202〔供应商〕，毛额=SUM(putaway×采购价)。
+ * 有进项发票（Phase3 价税分离，§5.3）：借 库存商品(不含税) + 借 进项税额222101(发票税额) / 贷 应付账款(毛额含税)。
+ * 应付方(2202)恒为毛额 → 与 payment_records 勾稽口径不变；税额从 1405 里拆出，库存按不含税更准。
+ * taxByPO: Map<poId, 进项税额合计>。税额 clamp 至不超过毛额，避免不含税为负。
+ */
+async function buildPurchaseSettle(conn, taxByPO) {
   const [rows] = await conn.query(`
     SELECT pr.order_id AS poId, pr.order_no, pr.created_at AS vdate,
            po.supplier_id, po.supplier_name,
@@ -176,21 +181,24 @@ async function buildPurchaseSettle(conn) {
       FROM payment_records pr
       JOIN purchase_orders po ON po.id = pr.order_id
      WHERE pr.type = 1 AND pr.order_id IS NOT NULL`)
-  return rows.filter(r => round2(r.gross) > 0).map(r => ({
-    sourceType: SOURCE_TYPES.PURCHASE_SETTLE,
-    sourceId: r.poId,
-    sourceNo: r.order_no,
-    voucherDate: r.vdate,
-    summary: `采购入库结算应付 ${r.order_no || ''}`.trim(),
-    legs: [
-      { code: '1405', direction: DIR.DEBIT, amount: r.gross, summary: '采购入库' },
-      { code: '2202', direction: DIR.CREDIT, amount: r.gross, auxType: 1, auxId: r.supplier_id || null, auxName: r.supplier_name || null, summary: '应付账款' },
-    ],
-  }))
+  return rows.filter(r => round2(r.gross) > 0).map(r => {
+    const gross = round2(r.gross)
+    const tax = Math.min(round2(taxByPO.get(Number(r.poId)) || 0), gross)
+    const noTax = round2(gross - tax)
+    const legs = [{ code: '1405', direction: DIR.DEBIT, amount: noTax, summary: '采购入库' }]
+    if (tax > 0) legs.push({ code: '222101', direction: DIR.DEBIT, amount: tax, summary: '进项税额' })
+    legs.push({ code: '2202', direction: DIR.CREDIT, amount: gross, auxType: 1, auxId: r.supplier_id || null, auxName: r.supplier_name || null, summary: '应付账款' })
+    return { sourceType: SOURCE_TYPES.PURCHASE_SETTLE, sourceId: r.poId, sourceNo: r.order_no, voucherDate: r.vdate,
+      summary: `采购入库结算应付 ${r.order_no || ''}`.trim(), legs }
+  })
 }
 
-/** 事件2：销售出库确认收入。借 应收账款1122〔客户〕 / 贷 主营业务收入6001，毛额=SUM(shipped×售价) */
-async function buildSaleRevenue(conn) {
+/**
+ * 事件2：销售出库确认收入。无发票：借 应收账款1122〔客户〕 / 贷 主营业务收入6001，毛额=SUM(shipped×售价)。
+ * 有销项发票（§5.3）：借 应收账款(毛额含税) / 贷 主营业务收入(不含税) + 贷 销项税额222102(发票税额)。
+ * 应收方(1122)恒为毛额 → 勾稽口径不变；税额从收入里拆出。taxBySO: Map<soId, 销项税额合计>（不含已红冲）。
+ */
+async function buildSaleRevenue(conn, taxBySO) {
   const [rows] = await conn.query(`
     SELECT pr.order_id AS soId, pr.order_no, pr.created_at AS vdate,
            so.customer_id, so.customer_name,
@@ -198,17 +206,18 @@ async function buildSaleRevenue(conn) {
       FROM payment_records pr
       JOIN sale_orders so ON so.id = pr.order_id
      WHERE pr.type = 2 AND pr.order_id IS NOT NULL`)
-  return rows.filter(r => round2(r.gross) > 0).map(r => ({
-    sourceType: SOURCE_TYPES.SALE_REVENUE,
-    sourceId: r.soId,
-    sourceNo: r.order_no,
-    voucherDate: r.vdate,
-    summary: `销售出库确认收入 ${r.order_no || ''}`.trim(),
-    legs: [
-      { code: '1122', direction: DIR.DEBIT, amount: r.gross, auxType: 1, auxId: r.customer_id || null, auxName: r.customer_name || null, summary: '应收账款' },
-      { code: '6001', direction: DIR.CREDIT, amount: r.gross, summary: '主营业务收入' },
-    ],
-  }))
+  return rows.filter(r => round2(r.gross) > 0).map(r => {
+    const gross = round2(r.gross)
+    const tax = Math.min(round2(taxBySO.get(Number(r.soId)) || 0), gross)
+    const noTax = round2(gross - tax)
+    const legs = [
+      { code: '1122', direction: DIR.DEBIT, amount: gross, auxType: 1, auxId: r.customer_id || null, auxName: r.customer_name || null, summary: '应收账款' },
+      { code: '6001', direction: DIR.CREDIT, amount: noTax, summary: '主营业务收入' },
+    ]
+    if (tax > 0) legs.push({ code: '222102', direction: DIR.CREDIT, amount: tax, summary: '销项税额' })
+    return { sourceType: SOURCE_TYPES.SALE_REVENUE, sourceId: r.soId, sourceNo: r.order_no, voucherDate: r.vdate,
+      summary: `销售出库确认收入 ${r.order_no || ''}`.trim(), legs }
+  })
 }
 
 /** 事件3：销售出库结转成本。借 主营业务成本6401 / 贷 库存商品1405，毛额=SUM(shipped×cost_snapshot) */
@@ -390,12 +399,38 @@ async function buildStockCheck(conn) {
  * @param {{period?: string, createdBy?: number}} opts period='YYYYMM' 只生成该期间(按 voucher_date)；省略=全部
  * @returns {{created,updated,unchanged,reversed,empty, total}}
  */
+/**
+ * 加载价税分离所需的发票税额（Phase3）。进项按 PO 合计（全部非删除发票），
+ * 销项按 SO 合计（排除已红冲 status=2）。无 fin_invoices 表（迁移未到）时返回空 Map，不影响生成。
+ */
+async function loadTaxMaps(conn) {
+  const empty = { taxByPO: new Map(), taxBySO: new Map() }
+  try {
+    const [poRows] = await conn.query(`
+      SELECT source_id AS id, COALESCE(SUM(tax_amount),0) tax FROM fin_invoices
+       WHERE invoice_type=1 AND source_type='purchase_order' AND source_id IS NOT NULL AND deleted_at IS NULL
+       GROUP BY source_id`)
+    const [soRows] = await conn.query(`
+      SELECT source_id AS id, COALESCE(SUM(tax_amount),0) tax FROM fin_invoices
+       WHERE invoice_type=2 AND source_type='sale_order' AND source_id IS NOT NULL AND status<>2 AND deleted_at IS NULL
+       GROUP BY source_id`)
+    return {
+      taxByPO: new Map(poRows.map(r => [Number(r.id), Number(r.tax)])),
+      taxBySO: new Map(soRows.map(r => [Number(r.id), Number(r.tax)])),
+    }
+  } catch (e) {
+    if (e && e.code === 'ER_NO_SUCH_TABLE') return empty
+    throw e
+  }
+}
+
 async function generateVouchers(conn, { period = null, createdBy = null } = {}) {
   const accountMap = await loadAccountMap(conn)
   const allocSeq = await makeSeqAllocator(conn)
+  const { taxByPO, taxBySO } = await loadTaxMaps(conn)
   const specs = [
-    ...await buildPurchaseSettle(conn),
-    ...await buildSaleRevenue(conn),
+    ...await buildPurchaseSettle(conn, taxByPO),
+    ...await buildSaleRevenue(conn, taxBySO),
     ...await buildSaleCogs(conn),
     ...await buildFundVouchers(conn),
     ...await buildPurchaseReturn(conn),

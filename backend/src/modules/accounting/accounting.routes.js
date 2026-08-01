@@ -87,4 +87,42 @@ vouchers.delete('/:id',         requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER
 
 router.use('/vouchers', vouchers)
 
+// ── 总账 / 报表 /api/accounting/ledger · /reports（Phase 2，均需 ledger.view）───────
+const ledger = Router()
+ledger.get('/trial-balance',      requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.ledgerTrialBalance)
+ledger.get('/account/:accountId', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.ledgerAccount)
+router.use('/ledger', ledger)
+
+const reports = Router()
+reports.get('/income',        requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.reportIncome)
+reports.get('/balance-sheet', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.reportBalanceSheet)
+reports.get('/cash-flow',     requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.reportCashFlow)
+router.use('/reports', reports)
+
+// ── 发票 /api/accounting/invoices（Phase 3）────────────────────────────
+const invoices = Router()
+const invoiceSchema = z.object({
+  invoiceType:    z.number().int().min(1).max(2),
+  invoiceCode:    z.string().max(20).optional().nullable(),
+  invoiceNo:      z.string().min(1, '发票号码必填').max(20),
+  partyName:      z.string().min(1, '对方单位必填').max(100),
+  partyTaxNo:     z.string().max(30).optional().nullable(),
+  amountNoTax:    z.number(),
+  taxRate:        z.number().min(0).max(1),
+  taxAmount:      z.number(),
+  amountWithTax:  z.number().positive('价税合计必须大于0'),
+  invoiceDate:    z.string().min(8, '开票日期必填'),
+  sourceType:     z.enum(['purchase_order', 'sale_order']).optional().nullable(),
+  sourceId:       z.number().int().positive().optional().nullable(),
+  sourceNo:       z.string().max(40).optional().nullable(),
+  remark:         z.string().max(300).optional().nullable(),
+})
+invoices.get('/',           requirePermission(PERMISSIONS.INVOICE_VIEW), ctrl.invoiceList)
+invoices.get('/:id',        requirePermission(PERMISSIONS.INVOICE_VIEW), ctrl.invoiceDetail)
+invoices.post('/',          requirePermission(PERMISSIONS.INVOICE_MANAGE), vBody(invoiceSchema), ctrl.invoiceCreate)
+invoices.put('/:id',        requirePermission(PERMISSIONS.INVOICE_MANAGE), vBody(invoiceSchema.partial()), ctrl.invoiceUpdate)
+invoices.post('/:id/status', requirePermission(PERMISSIONS.INVOICE_MANAGE), vBody(z.object({ action: z.enum(['certify', 'deduct', 'redFlush']) })), ctrl.invoiceStatus)
+invoices.delete('/:id',     requirePermission(PERMISSIONS.INVOICE_MANAGE), ctrl.invoiceRemove)
+router.use('/invoices', invoices)
+
 module.exports = router

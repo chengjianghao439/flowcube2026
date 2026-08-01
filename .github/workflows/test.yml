@@ -125,6 +125,9 @@ jobs:
       - name: 单元测试 — 前后端权限码一致性（纯静态，无需 DB）
         run: npm run test:permissions
 
+      - name: 单元测试 — 会计科目映射一致性（映射↔seed↔常量，纯静态，无需 DB）
+        run: npm run test:accounting
+
       - name: 等待 MySQL 就绪
         run: |
           set -e
@@ -174,6 +177,9 @@ jobs:
 
       - name: 冒烟测试 — 财务（收款核销 / 对账单 / 资金账户 / 费用报销）
         run: npm run smoke:finance
+
+      - name: 冒烟测试 — 会计凭证引擎（借贷平衡 / 资金勾稽 / 幂等）
+        run: npm run smoke:accounting
 
       - name: 集成测试 — 库存主链路一致性（独立测试库）
         run: npm run test:integration

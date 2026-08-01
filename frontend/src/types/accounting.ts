@@ -118,6 +118,114 @@ export interface CreateManualVoucherParams {
 
 export const VOUCHER_STATUS_LABELS: Record<number, string> = { 1: '已生成', 2: '已过账', 3: '已冲销' }
 
+// ── 总账 / 报表（Phase 2） ──────────────────────────────────────────────
+export interface TrialBalanceRow {
+  accountId: number
+  code: string
+  name: string
+  category: number
+  categoryName: string
+  balanceDir: number
+  openingDebit: number
+  openingCredit: number
+  periodDebit: number
+  periodCredit: number
+  closingDebit: number
+  closingCredit: number
+}
+export interface TrialBalance {
+  period: string
+  start: string
+  end: string
+  list: TrialBalanceRow[]
+  totals: {
+    openingDebit: number; openingCredit: number
+    periodDebit: number; periodCredit: number
+    closingDebit: number; closingCredit: number
+  }
+  balanced: { period: boolean; closing: boolean }
+}
+
+export interface LedgerEntry {
+  voucherId: number
+  voucherNo: string
+  voucherDate: string
+  summary: string | null
+  auxName: string | null
+  debit: number
+  credit: number
+  balance: number
+}
+export interface AccountLedger {
+  account: { id: number; code: string; name: string; balanceDir: number }
+  period: string
+  openingBalance: number
+  closingBalance: number
+  list: LedgerEntry[]
+}
+
+export interface ReportRow { name: string; amount: number; bold?: boolean }
+export interface IncomeStatement { period: string; rows: ReportRow[]; profit: number }
+export interface CashFlow { period: string; rows: ReportRow[]; net: number }
+export interface BalanceSheetItem { code: string; name: string; amount: number }
+export interface BalanceSheet {
+  period: string
+  asOf: string
+  assets: BalanceSheetItem[]
+  liabilities: BalanceSheetItem[]
+  equity: BalanceSheetItem[]
+  assetTotal: number
+  liabTotal: number
+  equityTotal: number
+  liabEquityTotal: number
+  balanced: boolean
+}
+
+// ── 发票（Phase 3） ──────────────────────────────────────────────────
+export interface Invoice {
+  id: number
+  invoiceType: number       // 1进项 2销项
+  invoiceTypeName: string
+  invoiceCode: string | null
+  invoiceNo: string | null
+  partyName: string
+  partyTaxNo: string | null
+  amountNoTax: number
+  taxRate: number
+  taxAmount: number
+  amountWithTax: number
+  invoiceDate: string
+  status: number
+  statusName: string
+  sourceType: string | null
+  sourceId: number | null
+  sourceNo: string | null
+  remark: string | null
+  operatorName: string | null
+  createdAt: string
+}
+export interface CreateInvoiceParams {
+  invoiceType: number
+  invoiceCode?: string | null
+  invoiceNo: string
+  partyName: string
+  partyTaxNo?: string | null
+  amountNoTax: number
+  taxRate: number
+  taxAmount: number
+  amountWithTax: number
+  invoiceDate: string
+  sourceType?: string | null
+  sourceId?: number | null
+  sourceNo?: string | null
+  remark?: string | null
+}
+// 状态标签按 invoiceType 分：进项 1待认证2已认证3已抵扣；销项 1已开具2已红冲
+export const INVOICE_STATUS_LABELS: Record<number, Record<number, string>> = {
+  1: { 1: '待认证', 2: '已认证', 3: '已抵扣' },
+  2: { 1: '已开具', 2: '已红冲' },
+}
+
 // 凭证来源类型（用于筛选下拉；展示直接用后端 sourceTypeName）
 export const VOUCHER_SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'purchase_settle', label: '采购结算' },

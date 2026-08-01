@@ -122,6 +122,9 @@ const ExpenseClaimsPage = lazy(() => import('@/pages/finance/expenses'))
 const ExpenseCategoriesPage = lazy(() => import('@/pages/finance/expense-categories'))
 const AcctAccountsPage = lazy(() => import('@/pages/accounting/accounts'))
 const AcctVouchersPage = lazy(() => import('@/pages/accounting/vouchers'))
+const AcctLedgerPage = lazy(() => import('@/pages/accounting/ledger'))
+const AcctReportsPage = lazy(() => import('@/pages/accounting/reports'))
+const AcctInvoicesPage = lazy(() => import('@/pages/accounting/invoices'))
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
 const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
@@ -491,6 +494,33 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '会计', section: '凭证', order: 20 },
+  },
+  {
+    path: '/accounting/ledger',
+    title: '总账 / 试算平衡',
+    permission: PERMISSIONS.ACCOUNTING_LEDGER_VIEW,
+    component: AcctLedgerPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '账簿报表', order: 30 },
+  },
+  {
+    path: '/accounting/reports',
+    title: '会计报表',
+    permission: PERMISSIONS.ACCOUNTING_LEDGER_VIEW,
+    component: AcctReportsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '账簿报表', order: 40 },
+  },
+  {
+    path: '/accounting/invoices',
+    title: '发票管理',
+    permission: PERMISSIONS.INVOICE_VIEW,
+    component: AcctInvoicesPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '发票税务', order: 50 },
   },
 
   // ── 报表 ──────────────────────────────────────────────
