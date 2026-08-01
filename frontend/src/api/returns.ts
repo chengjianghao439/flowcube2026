@@ -14,6 +14,7 @@ export interface SaleReturnSourceOrder { id:number; orderNo:string; customerId:n
 export interface ReturnTaskItem {
   id: number; productId: number; productCode: string; productName: string; unit: string
   expectedQty: number; receivedQty: number; checkedQty: number; rejectedQty: number; putawayQty: number
+  serialManaged?: boolean   // 文档04 Phase3：序列号商品退货收货需逐台扫SN
 }
 export interface RejectedContainer { id: number; barcode: string; qty: number; productId: number; productName: string }
 export interface ReturnTask {
@@ -49,7 +50,7 @@ export const getReturnTaskByIdApi = (id: number) =>
 export const submitReturnTaskApi = (id: number) =>
   client.post<ReturnTask>(`/return-tasks/${id}/submit`)
 
-export const receiveReturnApi = (id: number, data: { productId: number; packages: { qty: number }[] }, requestKey?: string) =>
+export const receiveReturnApi = (id: number, data: { productId: number; packages: { qty: number; serialNos?: string[] }[] }, requestKey?: string) =>
   client.post(`/return-tasks/${id}/receive`, data,
     requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) } : { headers: { 'X-Client': 'pda' } })
 

@@ -2,7 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { CONTAINER_STATUS, syncStockFromContainers, lockStockDimension } = require('../../engine/containerEngine')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { assertNoSerialManaged } = require('../../engine/serialEngine')
+const { voidSerialsForContainers } = require('../../engine/serialEngine')
 const { appendInboundEvent } = require('./inbound-tasks.helpers')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertInScope } = require('../../utils/warehouseScope')
@@ -82,10 +82,9 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
       )
     }
 
-    // 序列号管控商品：撤回收货会把容器置 VOID、remaining_qty 归零反冲库存，
-    // Phase 1 未实现序列号同步回冲，直接挡住避免"容器归零但序列号仍在库"的不一致。
-    await assertNoSerialManaged(conn, dimRows.map(d => d.product_id), '撤回收货')
-
+    // 序列号管控商品（文档04 Phase3）：撤回收货把容器整只 VOID，其上登记的在库序列号随之回冲删除
+    // （见循环后 voidSerialsForContainers）。此处已过 touched 闸门（remaining==initial），容器整只、
+    // 未被后续拆分，序列号仍干净挂在原容器，可安全整批回冲。Phase 1 曾用 assertNoSerialManaged 直接挡住。
     for (const c of containers) {
       const wasActive = Number(c.status) === CONTAINER_STATUS.ACTIVE
       let beforeQty = null
@@ -117,6 +116,10 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
         )
       }
     }
+
+    // 逆向回冲被作废容器上的在库序列号（非序列号商品为 no-op）。容器已在上面 VOID，但 product_serials
+    // 仍挂 container_id 指向它们，故在此按容器 id 定位删除（文档04 Phase3）。
+    await voidSerialsForContainers(conn, { containerIds: containers.map(c => c.id), operatorId: operator?.userId || null })
 
     await conn.query(
       'UPDATE inbound_task_items SET received_qty = 0, putaway_qty = 0, checked_qty = 0, rejected_qty = 0 WHERE task_id = ?',

@@ -6,6 +6,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
+import PdaSerialScanSheet from '@/components/pda/PdaSerialScanSheet'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -19,10 +20,11 @@ export default function PdaSaleReturnReceivePage() {
   const taskId = Number(id)
   const nav = useNavigate()
   const { flash, ok, err } = usePdaFeedback()
-  const [selectedProduct, setSelectedProduct] = useState<{ id: number; code: string; name: string; unit: string; remaining: number } | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<{ id: number; code: string; name: string; unit: string; remaining: number; serialManaged: boolean } | null>(null)
   const [boxes, setBoxes] = useState<number[]>([0])
   const [rejectedQty, setRejectedQty] = useState(0)
   const [step, setStep] = useState<'select' | 'qty' | 'check'>('select')
+  const [serialSheet, setSerialSheet] = useState<{ productName: string; totalQty: number } | null>(null)
 
   const { data: task, isLoading } = useQuery({
     queryKey: ['pda-return-task', taskId],
@@ -107,6 +109,7 @@ export default function PdaSaleReturnReceivePage() {
       name: product.productName,
       unit: product.unit,
       remaining: product.totalExpected - product.totalReceived,
+      serialManaged: !!product.serialManaged,
     })
     setBoxes([0])
     setRejectedQty(0)
@@ -123,6 +126,19 @@ export default function PdaSaleReturnReceivePage() {
 
   const totalQty = boxes.reduce((s, v) => s + (Number(v) || 0), 0)
 
+  // 提交退货收货（serialNos 仅序列号商品带上，逐台扫得）
+  function doReceive(serialNos?: string[]) {
+    if (!selectedProduct) return
+    receiveAction.run(
+      requestKey =>
+        receiveReturnApi(taskId, { productId: selectedProduct.id, packages: [{ qty: totalQty, serialNos }] }, requestKey).then(r => r!),
+      {
+        productId: selectedProduct.id,
+        expectedQty: (productList.find(p => p.productId === selectedProduct.id)?.totalReceived ?? 0) + totalQty,
+      },
+    )
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title={task.status <= 2 ? '退货收货' : '退货质检'} subtitle={task.taskNo} onBack={() => nav('/pda/sale-return')} />
@@ -132,7 +148,7 @@ export default function PdaSaleReturnReceivePage() {
         {/* 产品列表 */}
         {step === 'select' && productList.map(p => (
           <PdaCard key={p.productId} active={p.totalExpected > p.totalReceived} onClick={() => {
-            setSelectedProduct({ id: p.productId, code: p.productCode, name: p.productName, unit: p.unit, remaining: p.totalExpected - p.totalReceived })
+            setSelectedProduct({ id: p.productId, code: p.productCode, name: p.productName, unit: p.unit, remaining: p.totalExpected - p.totalReceived, serialManaged: !!p.serialManaged })
             setBoxes([0])
             setRejectedQty(0)
             setStep(task.status === 3 ? 'check' : 'qty')
@@ -206,18 +222,14 @@ export default function PdaSaleReturnReceivePage() {
           <PdaScanner onScan={handleScan} placeholder="扫描产品条码..." />
         )}
         {step === 'qty' && selectedProduct && totalQty > 0 && (
-          <Button className="w-full h-12 text-lg" disabled={receiveAction.phase !== 'idle'}
-            onClick={() => receiveAction.run(
-              requestKey =>
-                receiveReturnApi(taskId, { productId: selectedProduct.id, packages: [{ qty: totalQty }] }, requestKey).then(r => r!),
-              // 断网核实用：提交前的累计实收 + 本次，就是「成功了应该达到」的水平
-              {
-                productId: selectedProduct.id,
-                expectedQty: (productList.find(p => p.productId === selectedProduct.id)?.totalReceived ?? 0) + totalQty,
-              },
-            )}
+          <Button className="w-full h-12 text-lg" disabled={receiveAction.phase !== 'idle' || !!serialSheet}
+            onClick={() => {
+              // 序列号商品：先逐台扫回退的 SN，再提交；否则直接提交
+              if (selectedProduct.serialManaged) setSerialSheet({ productName: selectedProduct.name, totalQty })
+              else doReceive()
+            }}
           >
-            确认收货 {totalQty} {selectedProduct.unit}
+            {selectedProduct.serialManaged ? `扫序列号并收货 ${totalQty} ${selectedProduct.unit}` : `确认收货 ${totalQty} ${selectedProduct.unit}`}
           </Button>
         )}
         {step === 'check' && selectedProduct && (Number(boxes[0]) > 0 || rejectedQty > 0) && (
@@ -236,6 +248,22 @@ export default function PdaSaleReturnReceivePage() {
           </Button>
         )}
       </PdaBottomBar>
+
+      {serialSheet && selectedProduct && (
+        <PdaSerialScanSheet
+          title={`逐台扫序列号 · ${serialSheet.productName}`}
+          subtitle={`退回 ${serialSheet.totalQty} 台，逐台扫描退货序列号`}
+          groups={[{ key: '0', label: serialSheet.productName, requiredQty: serialSheet.totalQty }]}
+          submitting={receiveAction.phase !== 'idle'}
+          confirmLabel="登记退货序列号"
+          onCancel={() => setSerialSheet(null)}
+          onConfirm={(map) => {
+            const sns = map['0'] ?? []
+            setSerialSheet(null)
+            doReceive(sns)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -244,4 +272,5 @@ export default function PdaSaleReturnReceivePage() {
 interface ReturnTaskItem {
   id: number; productId: number; productCode: string; productName: string; unit: string
   expectedQty: number; receivedQty: number; checkedQty: number; rejectedQty: number; putawayQty: number
+  serialManaged?: boolean
 }

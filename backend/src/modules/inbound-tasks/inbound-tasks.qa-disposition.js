@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { CONTAINER_STATUS, lockStockDimension } = require('../../engine/containerEngine')
-const { assertNoSerialManaged } = require('../../engine/serialEngine')
+const { voidSerialsForContainers } = require('../../engine/serialEngine')
 const { lockStatusRow } = require('../../utils/statusTransition')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { appendInboundEvent } = require('./inbound-tasks.helpers')
@@ -121,9 +121,9 @@ async function createDisposition(taskId, {
     )
     if (!containers.length) throw new AppError('该收货订单没有待处置的质检拒收品', 400)
 
-    // 序列号管控商品：REJECTED void 会归零 remaining，但序列号回冲 Phase 1 未实现，
-    // 与 voidReceipt 一样先挡住，避免"容器归零但序列号仍在库"的不一致（文档 07 · Phase 2 风险项）。
-    await assertNoSerialManaged(conn, [...new Set(containers.map(c => c.product_id))], '质检拒收处置')
+    // 序列号管控商品（文档04 Phase3）：REJECTED 容器上的在库序列号在处置 void 时随之回冲删除
+    // （见下面 void 后的 voidSerialsForContainers）。QA 边界拆分已把不合格台的 SN 迁到 REJECTED 容器
+    // （inbound-tasks.qa.js moveSerialsOnSplit），故此处 REJECTED 容器账实一致、可安全回冲。
 
     // 采购单价快照（参考货值用，非入账）：收货明细行 purchase_item_id → purchase_order_items.unit_price
     const itemIds = [...new Set(containers.map(c => c.inbound_task_item_id).filter(Boolean))]
@@ -171,6 +171,8 @@ async function createDisposition(taskId, {
       `UPDATE inventory_containers SET status = ?, remaining_qty = 0, location_id = NULL WHERE id IN (${containerIds.map(() => '?').join(',')})`,
       [VOID, ...containerIds],
     )
+    // 序列号回冲：删除这些被处置容器上的在库序列号（非序列号商品 no-op）
+    await voidSerialsForContainers(conn, { containerIds, operatorId: operator?.userId || null })
 
     const dispositionNo = await generateDailyCode(conn, 'QAD', 'inbound_qa_dispositions', 'disposition_no')
     let totalAmount = 0

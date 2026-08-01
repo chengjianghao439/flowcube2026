@@ -5,7 +5,7 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { assertInScope } = require('../../utils/warehouseScope')
-const { assertNoSerialManaged } = require('../../engine/serialEngine')
+const { isSerialManaged, returnSerials, moveSerialsOnSplit, assertSerialCountMatchesContainer } = require('../../engine/serialEngine')
 
 const PENDING_QA = 5
 const REJECTED = CONTAINER_STATUS.REJECTED
@@ -65,7 +65,9 @@ async function findById(id, scopeWarehouseIds = null) {
   if (!row) throw new AppError('退货任务不存在', 404)
   assertInScope(scopeWarehouseIds, row.warehouse_id, '退货任务')
   const [items] = await pool.query(
-    'SELECT * FROM return_task_items WHERE task_id = ? ORDER BY id',
+    `SELECT rti.*, p.serial_managed
+     FROM return_task_items rti LEFT JOIN product_items p ON p.id = rti.product_id
+     WHERE rti.task_id = ? ORDER BY rti.id`,
     [id],
   )
   const [rejectedContainers] = await pool.query(
@@ -150,12 +152,21 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId, 
   if (![1, 2].includes(Number(taskRow.status))) {
     throw new AppError('当前状态不允许收货', 400)
   }
-  // 激活前安全闸门（文档 04 Phase 2 边界）：销售退货入库尚未实现逐台序列号登记，
-  // 若放任 serial_managed 商品走这里，会建出「有量无序列号」的容器 —— 上架成 ACTIVE 后
-  // check-consistency 立即报不一致，且该容器再出库时 dispatchSerials 找不到 SN 直接卡死。
-  // 与 A 阶段逆向防护（撤回收货/改单减量/拆分/取消归还）同哲学：Phase 2 未覆盖的路径宁可
-  // 挡住报明确错误，也不放任静默不一致。采购退货出库走 ship.js 已强制扫 SN 核销，不在此列。
-  await assertNoSerialManaged(conn, [productId], '销售退货收货')
+  // 序列号管控商品（文档04 Phase3）：销售退货逐台扫退回的 SN，收货时把它们从"已出库"回冲为"在库"
+  // 并绑到新建的 PENDING_QA 退货容器（见下面 returnSerials）。每箱 SN 数须与箱数量一致、全批不重复。
+  const serialManaged = await isSerialManaged(conn, productId)
+  if (serialManaged) {
+    for (const pkg of packages) {
+      const sns = Array.isArray(pkg.serialNos) ? pkg.serialNos : []
+      if (sns.length !== Number(pkg.qty)) throw new AppError(`序列号商品退货需逐台扫序列号：该箱 ${pkg.qty} 台，实际扫 ${sns.length} 台`, 400, 'SERIAL_RETURN_COUNT_MISMATCH')
+    }
+    const seen = new Set()
+    for (const pkg of packages) for (const raw of (pkg.serialNos || [])) {
+      const sn = String(raw).trim()
+      if (seen.has(sn)) throw new AppError(`本次提交存在重复序列号：${sn}`, 400, 'SERIAL_DUP_IN_BATCH')
+      seen.add(sn)
+    }
+  }
   if (Number(taskRow.status) === 1) {
     await compareAndSetStatus(conn, {
       table: 'return_tasks', id: taskId,
@@ -207,6 +218,13 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId, 
       remark: `销售退货收货 ${taskRow.task_no}`,
     })
     containers.push({ containerId: createdContainerId, barcode: newBarcode, qty: Number(pkg.qty) })
+    // 序列号回冲：把该箱扫到的 SN 从已出库改回在库、绑到这个退货容器（非序列号商品跳过）
+    if (serialManaged) {
+      await returnSerials(conn, {
+        productId, serialNos: pkg.serialNos, warehouseId: Number(taskRow.warehouse_id),
+        containerId: createdContainerId, returnRefType: 'sale_return', returnRefId: taskId, operatorId: userId,
+      })
+    }
   }
 
   // 全部收货完成 → 待质检
@@ -267,7 +285,7 @@ async function allocateQaContainers(conn, { taskId, taskNo, productId, passedQty
         'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
         [passTake, CONTAINER_STATUS.PENDING_PUTAWAY, c.id],
       )
-      await createContainer(conn, {
+      const { containerId: rejContainerId } = await createContainer(conn, {
         productId: c.product_id,
         warehouseId: c.warehouse_id,
         initialQty: rejTake,
@@ -283,6 +301,8 @@ async function allocateQaContainers(conn, { taskId, taskNo, productId, passedQty
         barcodePrefix: 'I',
         remark: `退货质检不合格，自 ${c.barcode} 拆分`,
       })
+      // 序列号商品（文档04 Phase3）：边界拆分时把 rejTake 台在库序列号迁到新 REJECTED 容器（非序列号 no-op）
+      await moveSerialsOnSplit(conn, { sourceContainerId: c.id, targetContainerId: rejContainerId, qty: rejTake, warehouseId: c.warehouse_id, operatorId: null })
     } else if (passTake > 0) {
       await conn.query(
         'UPDATE inventory_containers SET status = ? WHERE id = ?',
@@ -470,6 +490,9 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
     [locationId, containerId, taskId],
   )
   await syncStockFromContainers(conn, container.product_id, container.warehouse_id)
+  // 序列号商品（文档04 Phase3）：退货收货时 SN 已置在库并绑该容器，上架只是容器 4→1 promote，
+  // 个体账不变；断言兜底容器数量==在库SN数（非序列号商品 no-op）。
+  await assertSerialCountMatchesContainer(conn, containerId)
 
   // 分配上架数量
   const [items] = await conn.query(
@@ -576,6 +599,7 @@ function fmtItem(row) {
     checkedQty: Number(row.checked_qty),
     rejectedQty: Number(row.rejected_qty),
     putawayQty: Number(row.putaway_qty),
+    serialManaged: !!Number(row.serial_managed),   // 文档04 Phase3：PDA 退货收货据此决定是否逐台扫SN
   }
 }
 

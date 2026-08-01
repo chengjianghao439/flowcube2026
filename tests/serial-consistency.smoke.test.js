@@ -18,8 +18,8 @@
  *      被发容器 remaining_qty==在库 SN 数；未动容器保持不变量；已发 SN 转「已出库」。
  *   5. 台账/追溯/对账：GET /serials/trace 时间线含 register→putaway→ship；
  *      GET /serials/check-consistency 全程 0 不一致。
- *   6. 激活前安全闸门：销售退货入库对 serial_managed 商品被 assertNoSerialManaged 挡住
- *      （Phase 2 未覆盖销售退货 SN 登记，宁可挡住也不放任静默不一致）。
+ *   6. 销售退货 SN 回冲（文档04 Phase3）：退货收货逐台扫 SN，已出库(2)回冲为在库(1)、绑新退货容器；
+ *      未扫 SN 被 SERIAL_RETURN_COUNT_MISMATCH 挡住；退货容器账实一致；追溯含 ship→return_in。
  *
  * 运行：node tests/serial-consistency.smoke.test.js（依赖真实 MySQL，同其它 smoke）
  */
@@ -325,10 +325,11 @@ async function scenarioShip(ctx, log, token, product, sns, recv) {
     JSON.stringify(types))
 }
 
-// ── 激活前安全闸门：销售退货入库挡住 serial 商品 ─────────────────────────
-async function scenarioSaleReturnBlocked(ctx, log, token, product) {
-  log.section('激活前安全闸门：销售退货入库对 serial 商品被挡住（assertNoSerialManaged）')
+// ── 销售退货 SN 回冲（文档04 Phase3）：逐台扫SN，已出库→在库、绑退货容器 ─────────
+async function scenarioSaleReturnSerial(ctx, log, token, product, sns) {
+  log.section('§5.4 销售退货 SN 回冲：逐台扫SN，已出库转在库、绑退货容器')
   const { http, pool, warehouse, customer, pdaHeaders } = ctx
+  const pid = Number(product.id)
 
   const srCreate = await http.post('/api/returns/sale', {
     token,
@@ -336,7 +337,7 @@ async function scenarioSaleReturnBlocked(ctx, log, token, product) {
       customerId: Number(customer.id), customerName: customer.name,
       warehouseId: Number(warehouse.id), warehouseName: warehouse.name,
       remark: randomRef('serial-sr'),
-      items: [{ productId: Number(product.id), productCode: product.code, productName: product.name, unit: product.unit, quantity: 1, unitPrice: 120 }],
+      items: [{ productId: pid, productCode: product.code, productName: product.name, unit: product.unit, quantity: 1, unitPrice: 120 }],
     },
   })
   log.assert('创建销售退货单成功', srCreate.status === 201 && !!srCreate.data?.data?.id, `status=${srCreate.status}`)
@@ -346,17 +347,36 @@ async function scenarioSaleReturnBlocked(ctx, log, token, product) {
   const [srTask] = await dbQuery(pool, "SELECT id FROM return_tasks WHERE return_id=? AND return_type='sale' ORDER BY id DESC LIMIT 1", [srId])
   log.assert('已自动创建销售退货任务', !!srTask, JSON.stringify(srTask))
 
-  const recv = await http.post(`/api/return-tasks/${srTask.id}/receive`, {
-    token, headers: pdaHeaders(), json: { productId: Number(product.id), packages: [{ qty: 1 }] },
+  // 不扫 SN 收货 → 被新的「必须逐台扫」闸门挡住，且未建任何容器
+  const noSn = await http.post(`/api/return-tasks/${srTask.id}/receive`, {
+    token, headers: pdaHeaders(), json: { productId: pid, packages: [{ qty: 1 }] },
   })
   log.assert(
-    '★ serial 商品销售退货入库被挡住（SERIAL_REVERSE_UNSUPPORTED）',
-    recv.status === 400 && recv.data?.code === 'SERIAL_REVERSE_UNSUPPORTED',
-    `status=${recv.status} code=${recv.data?.code} msg=${recv.data?.message}`,
+    '★ serial 退货收货未扫 SN 被拒（SERIAL_RETURN_COUNT_MISMATCH）',
+    noSn.status === 400 && noSn.data?.code === 'SERIAL_RETURN_COUNT_MISMATCH',
+    `status=${noSn.status} code=${noSn.data?.code} msg=${noSn.data?.message}`,
   )
-  // 被挡后未建任何容器、未登记任何新序列号
-  const [{ n: containerN }] = await dbQuery(pool, "SELECT COUNT(*) AS n FROM inventory_containers WHERE source_ref_type='sale_return' AND source_ref_id=?", [srTask.id])
-  log.assert('被挡后未建任何销售退货容器', Number(containerN) === 0, `containers=${containerN}`)
+  const [{ n: cn0 }] = await dbQuery(pool, "SELECT COUNT(*) AS n FROM inventory_containers WHERE source_ref_type='sale_return' AND source_ref_id=?", [srTask.id])
+  log.assert('被拒后未建任何退货容器', Number(cn0) === 0, `containers=${cn0}`)
+
+  // 扫回之前出库的 C → 收货成功，C 从已出库(2)回冲为在库(1)、绑新退货容器（PENDING_QA）
+  const recv = await http.post(`/api/return-tasks/${srTask.id}/receive`, {
+    token, headers: pdaHeaders(), json: { productId: pid, packages: [{ qty: 1, serialNos: [sns.C] }] },
+  })
+  log.assert('★ 扫 SN(C) 退货收货成功', recv.ok, JSON.stringify(recv.data).slice(0, 200))
+  const newContainer = Number(recv.data?.data?.containers?.[0]?.containerId)
+  const [cRow] = await dbQuery(pool, 'SELECT status, container_id, return_ref_type FROM product_serials WHERE product_id=? AND serial_no=?', [pid, sns.C])
+  log.assert('★ C 从「已出库(2)」回冲为「在库(1)」、绑新退货容器、return_ref=sale_return',
+    Number(cRow.status) === 1 && Number(cRow.container_id) === newContainer && cRow.return_ref_type === 'sale_return',
+    JSON.stringify(cRow))
+  const rem = await containerRemaining(pool, newContainer)
+  const snc = await containerSerialCount(pool, newContainer)
+  log.assert('★ 退货容器 remaining(1)==在库SN数(1)（账实一致）', rem?.remaining === 1 && snc === 1, `remaining=${rem?.remaining} sn=${snc}`)
+
+  // 追溯 C 时间线现含 ship → return_in
+  const trace = await http.get(`/api/serials/trace?serialNo=${encodeURIComponent(sns.C)}`, { token })
+  const types = (trace.data?.data?.matches?.[0]?.events || []).map(e => e.eventType)
+  log.assert('★ 追溯 C 含 ship→return_in', types.includes('ship') && types.includes('return_in'), JSON.stringify(types))
 }
 
 async function main() {
@@ -378,7 +398,7 @@ async function main() {
     const recv = await scenarioReceive(ctx, log, token, product, sns)
     await scenarioPutaway(ctx, log, token, product, recv)
     await scenarioShip(ctx, log, token, product, sns, recv)
-    await scenarioSaleReturnBlocked(ctx, log, token, product)
+    await scenarioSaleReturnSerial(ctx, log, token, product, sns)
   } finally {
     const summary = log.summary()
     await ctx.close()

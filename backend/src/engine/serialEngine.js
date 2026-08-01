@@ -132,6 +132,100 @@ async function importHistoricalSerials(conn, { productId, warehouseId, container
 }
 
 /**
+ * 逆向：作废某些容器上的在库序列号（文档 04 · Phase 3）。用于撤回收货 / 质检拒收处置——
+ * 这些容器被整只 VOID（remaining_qty→0，货从没真正入库或被物理处置掉），其上登记的在库(1) SN
+ * 应随之消失。删除主行 + 其事件（这批 SN 是本次收货/处置产生的，undo 即删除，不留悬挂账）。
+ * 只对 status=1 在库 SN 生效；调用方须保证这些容器是"整只作废、未被后续拆分"（voidReceipt 的
+ * remaining==initial 闸门已保证），否则不该走这里。返回删除条数。
+ */
+async function voidSerialsForContainers(conn, { containerIds, operatorId = null } = {}) {
+  const ids = [...new Set((containerIds || []).map(Number).filter(Boolean))]
+  if (!ids.length) return 0
+  const [rows] = await conn.query(
+    `SELECT id FROM product_serials WHERE container_id IN (${ids.map(() => '?').join(',')}) AND status = ?`,
+    [...ids, SERIAL_STATUS.IN_STOCK],
+  )
+  if (!rows.length) return 0
+  const serialIds = rows.map(r => r.id)
+  // 先写一条 void 事件留痕（虽随后删主行，事件同批删，但保持"每次状态变更写事件"的一致纪律）
+  for (const sid of serialIds) {
+    await writeEvent(conn, { serialId: sid, eventType: 'void', fromStatus: SERIAL_STATUS.IN_STOCK, toStatus: null, operatorId, remark: '容器作废，序列号回冲删除' })
+  }
+  await conn.query(`DELETE FROM serial_events WHERE serial_id IN (${serialIds.map(() => '?').join(',')})`, serialIds)
+  await conn.query(`DELETE FROM product_serials WHERE id IN (${serialIds.map(() => '?').join(',')})`, serialIds)
+  return serialIds.length
+}
+
+/**
+ * 逆向：退货重新入库核销（文档 04 · 5.4）。销售退货收货时逐台扫退回的 SN：原本出库时已置
+ * status=2 已出库、container_id=NULL；退货回来把它改回 status=1 在库、绑到新建的退货容器
+ * （PENDING_QA），写 return_ref 与 'return_in' 事件。
+ *
+ * 口径说明：退回单位统一置 status=1（而非设计原稿的 3已退货中间态）——因为核心不变量
+ * assertSerialCountMatchesContainer 要求"容器 remaining_qty == 该容器 status=1 SN 数"，PENDING_QA
+ * 容器上若挂 status=3 会被断言判为不一致。是否可售由**容器状态**（PENDING_QA 不计入可用库存）
+ * 把关，不靠 SN 状态；SN 的退货语义由 serial_events('return_in') + return_ref 承载。
+ * @returns {Promise<number[]>} product_serials.id 列表
+ */
+async function returnSerials(conn, { productId, serialNos, warehouseId, containerId, returnRefType = null, returnRefId = null, operatorId = null }) {
+  const list = normalizeSerialList(serialNos)
+  const ids = []
+  for (const sn of list) {
+    const [[s]] = await conn.query(
+      'SELECT id, status FROM product_serials WHERE product_id = ? AND serial_no = ? FOR UPDATE',
+      [productId, sn],
+    )
+    if (!s) throw new AppError(`序列号未曾出库，无法作为退货入库：${sn}`, 400, 'SERIAL_RETURN_NOT_FOUND')
+    if (Number(s.status) === SERIAL_STATUS.IN_STOCK) throw new AppError(`序列号已在库，不能作为退货重复入库：${sn}`, 409, 'SERIAL_ALREADY_IN_STOCK')
+    await conn.query(
+      `UPDATE product_serials
+       SET status = ?, warehouse_id = ?, container_id = ?, return_ref_type = ?, return_ref_id = ?,
+           warehouse_task_id = NULL, sale_order_id = NULL, shipped_at = NULL
+       WHERE id = ?`,
+      [SERIAL_STATUS.IN_STOCK, warehouseId, containerId, returnRefType, returnRefId, s.id],
+    )
+    await writeEvent(conn, { serialId: s.id, eventType: 'return_in', fromStatus: s.status, toStatus: SERIAL_STATUS.IN_STOCK, containerId, warehouseId, refType: returnRefType, refId: returnRefId, operatorId })
+    ids.push(s.id)
+  }
+  return ids
+}
+
+/**
+ * 逆向/拆分：把 qty 台在库序列号从源容器迁到目标容器（文档 04 · Phase 3）。用于质检边界拆分
+ * （合格/不合格分容器）、改单减量拆箱等——容器数量在两容器间重分配时，个体账必须同步迁移，
+ * 否则源容器"多账少货"、目标容器"有货无账"，破坏不变量。
+ *
+ * 个体无天然 FIFO，这里按 id 升序任取 qty 台迁移（保持数量守恒即满足不变量；具体哪台物理上
+ * 归到不合格箱，系统不强判——操作员物理挑拣，系统只保证账实台数一致）。调用方在两容器 remaining_qty
+ * 都已改成最终值后调用，函数尾部对两容器各断言兜底。
+ */
+async function moveSerialsOnSplit(conn, { sourceContainerId, targetContainerId, qty, warehouseId = null, operatorId = null }) {
+  const need = Number(qty)
+  if (!(need > 0)) return []
+  // 非序列号商品 no-op：让 QA 拆分等调用方可无条件调用，不必自己判 serial_managed。
+  const [[src]] = await conn.query('SELECT product_id FROM inventory_containers WHERE id = ?', [sourceContainerId])
+  if (!src || !(await isSerialManaged(conn, src.product_id))) return []
+  const [rows] = await conn.query(
+    'SELECT id FROM product_serials WHERE container_id = ? AND status = ? ORDER BY id LIMIT ?',
+    [sourceContainerId, SERIAL_STATUS.IN_STOCK, need],
+  )
+  if (rows.length !== need) {
+    throw new AppError(`容器 ${sourceContainerId} 可迁移在库序列号不足：需 ${need} 台，实有 ${rows.length} 台`, 409, 'SERIAL_SPLIT_SHORTAGE')
+  }
+  const movedIds = rows.map(r => r.id)
+  await conn.query(
+    `UPDATE product_serials SET container_id = ? WHERE id IN (${movedIds.map(() => '?').join(',')})`,
+    [targetContainerId, ...movedIds],
+  )
+  for (const sid of movedIds) {
+    await writeEvent(conn, { serialId: sid, eventType: 'transfer', fromStatus: SERIAL_STATUS.IN_STOCK, toStatus: SERIAL_STATUS.IN_STOCK, containerId: targetContainerId, warehouseId, remark: `容器拆分迁移 ${sourceContainerId}→${targetContainerId}`, operatorId })
+  }
+  await assertSerialCountMatchesContainer(conn, sourceContainerId)
+  await assertSerialCountMatchesContainer(conn, targetContainerId)
+  return movedIds
+}
+
+/**
  * 上架留痕（文档 5.2）。上架不逐台扫，个体随容器整箱移动；只写事件、不改归属。
  * 在 promote 容器 4→1 的同一事务内调用。
  */
@@ -236,6 +330,9 @@ module.exports = {
   isSerialManaged,
   registerSerials,
   importHistoricalSerials,
+  voidSerialsForContainers,
+  returnSerials,
+  moveSerialsOnSplit,
   putawaySerials,
   dispatchSerials,
   assertSerialCountMatchesContainer,
