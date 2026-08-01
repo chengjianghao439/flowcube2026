@@ -14,6 +14,9 @@ export interface SaleOrderItem {
   spec?: string | null
   color?: string | null
   unit: string
+  entryUnit?: string        // 录入单位（文档03 Phase3）；缺省=基本单位 unit。quantity/unitPrice 视作该单位下的量/价
+  entryQty?: number         // 录入单位下的数量（回显用）
+  conversionRate?: number   // 1 录入单位 = N 基本单位（回显用）
   /** 行级发货仓库（分仓）：不填则继承订单头「默认仓库」 */
   warehouseId?: number | null
   warehouseName?: string | null

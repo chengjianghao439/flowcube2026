@@ -13,6 +13,8 @@ const itemSchema = z.object({
   spec:z.string().optional().nullable(),
   color:z.string().optional().nullable(),
   unit:z.string(),
+  // 录入单位（文档03 Phase3）：缺省=基本单位 unit；quantity/unitPrice 视作该录入单位下的量/价，后端折算落基本单位
+  entryUnit:z.string().max(20).optional().nullable(),
   quantity:z.number().int('销售数量必须为整数').positive('数量必须大于0'),
   unitPrice:z.number().positive('单价必须大于0'),
   remark:z.string().optional(),

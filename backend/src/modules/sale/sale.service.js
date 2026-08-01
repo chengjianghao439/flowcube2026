@@ -5,6 +5,7 @@ const { reserve, releaseByRef } = require('../../engine/reservationEngine')
 const { getAvailableStockForDecision } = require('../../engine/containerEngine')
 const { getAvailabilityByProducts } = require('../inventory/inventory.service')
 const { generateDailyCode } = require('../../utils/codeGenerator')
+const { foldEntryItems, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { getCustomerCreditUsed, hasCreditOverridePermission } = require('../../utils/creditExposure')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -529,6 +530,9 @@ async function findById(id) {
     quantity:Number(r.quantity),
     unitPrice:Number(r.unit_price),
     amount:Number(r.amount),
+    entryUnit: r.entry_unit || r.unit,
+    entryQty: r.entry_qty != null ? Number(r.entry_qty) : Number(r.quantity),
+    conversionRate: Number(r.conversion_rate),
     remark:r.remark,
     costPrice: r.cost_price != null ? Number(r.cost_price) : null,
     belowCost: r.cost_price != null ? Number(r.unit_price) < Number(r.cost_price) : false,
@@ -607,20 +611,21 @@ async function create({ customerId, customerName, warehouseId, warehouseName, re
     if (!customerRow.is_active) throw new AppError('该客户已停用，无法新建销售单', 400)
     assertNoDuplicateSaleItemLines(items, warehouseId)
     const orderNo = await genOrderNo(conn)
-    const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
+    const folded = await foldEntryItems(conn, items)   // 多单位折算成基本单位口径（后端权威）
+    const total = round2(folded.reduce((s,i)=>s+i.amount,0))
     const [r] = await conn.query(
       `INSERT INTO sale_orders (order_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_date,total_amount,remark,carrier_id,carrier,freight_type,receiver_name,receiver_phone,receiver_address,operator_id,operator_name) VALUES (?,?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?)`,
       [orderNo,customerId,customerName,warehouseId,warehouseName,total,remark||null,carrierId||null,carrier||null,freightType||null,receiverName||null,receiverPhone||null,receiverAddress||null,operator.userId,operator.realName]
     )
     const orderId = r.insertId
-    for(const item of items) {
+    for(const item of folded) {
       // 行级发货仓库：缺省继承订单头仓库（老客户端不传 warehouseId 时即单仓订单）
       const itemWhId = item.warehouseId ? Number(item.warehouseId) : Number(warehouseId)
       const itemWhName = item.warehouseName || warehouseName
-      await conn.query(`INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[orderId,itemWhId,itemWhName,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null])
+      await conn.query(`INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[orderId,itemWhId,itemWhName,item.productId,item.productCode,item.productName,item.unit,item.entryUnit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,item.amount,item.remark||null])
     }
     await appendSaleEvent(conn, orderId, 'created', '创建订单', `共 ${items.length} 条明细`, operator)
-    await buildPricingEvents(conn, orderId, items, operator)
+    await buildPricingEvents(conn, orderId, folded, operator)   // folded：单价已折成每基本单位价，与基本单位进价可比
     const result = { id:orderId, orderNo }
     await completeOperationRequest(conn, requestState, {
       data: result,
@@ -644,22 +649,23 @@ async function update(id, { customerId, customerName, warehouseId, warehouseName
     assertStatusAction('sale', 'edit', orderRow.status)
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
     assertNoDuplicateSaleItemLines(items, warehouseId)
-    const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+    const folded = await foldEntryItems(conn, items)   // 多单位折算成基本单位口径（后端权威）
+    const total = round2(folded.reduce((s, i) => s + i.amount, 0))
     await conn.query(
       `UPDATE sale_orders SET customer_id=?,customer_name=?,warehouse_id=?,warehouse_name=?,total_amount=?,remark=?,carrier_id=?,carrier=?,freight_type=?,receiver_name=?,receiver_phone=?,receiver_address=? WHERE id=?`,
       [customerId, customerName, warehouseId, warehouseName, total, remark||null, carrierId||null, carrier||null, freightType||null, receiverName||null, receiverPhone||null, receiverAddress||null, id]
     )
     await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
-    for (const item of items) {
+    for (const item of folded) {
       const itemWhId = item.warehouseId ? Number(item.warehouseId) : Number(warehouseId)
       const itemWhName = item.warehouseName || warehouseName
       await conn.query(
-        `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [id, itemWhId, itemWhName, item.productId, item.productCode, item.productName, item.unit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.unitPrice, item.quantity*item.unitPrice, item.remark||null]
+        `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id, itemWhId, itemWhName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark||null]
       )
     }
     await appendSaleEvent(conn, id, 'updated', '编辑订单', `现有 ${items.length} 条明细`, operator)
-    await buildPricingEvents(conn, id, items, operator)
+    await buildPricingEvents(conn, id, folded, operator)
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -720,6 +726,10 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
 
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
 
+    // 多单位折算成基本单位口径（后端权威）——**必须在算新旧净变化之前**：录入单位量(箱)若不先折算，
+    // 会与旧明细的基本单位量(件)错配，delta 与 WMS 增减量全错。folded 之后一律按基本单位 quantity 算。
+    const folded = await foldEntryItems(conn, items)
+
     const [oldItemRows] = await conn.query(
       'SELECT product_id, quantity, warehouse_id, warehouse_name FROM sale_order_items WHERE order_id=?',
       [id],
@@ -731,7 +741,7 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
     }
     const newQtyByProduct = new Map()
     const productMeta = new Map()
-    for (const item of items) {
+    for (const item of folded) {
       const pid = Number(item.productId)
       newQtyByProduct.set(pid, (newQtyByProduct.get(pid) || 0) + Number(item.quantity))
       if (!productMeta.has(pid)) {
@@ -742,7 +752,7 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
       }
     }
 
-    const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+    const total = round2(folded.reduce((s, i) => s + i.amount, 0))
     await conn.query('UPDATE sale_orders SET total_amount=? WHERE id=?', [total, id])
     await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
     // dispatched=1：本分支只在订单已有在跑的仓库任务(orderRow.task_id)时才会走到，
@@ -761,10 +771,10 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
       ?? Number(orderRow.warehouse_id)
     const keptWarehouseName = oldItemRows.find(r => r.warehouse_name != null)?.warehouse_name
       ?? orderRow.warehouse_name
-    for (const item of items) {
+    for (const item of folded) {
       await conn.query(
-        `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark,dispatched) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
-        [id, keptWarehouseId, keptWarehouseName, item.productId, item.productCode, item.productName, item.unit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.unitPrice, item.quantity*item.unitPrice, item.remark||null]
+        `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark,dispatched) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
+        [id, keptWarehouseId, keptWarehouseName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark||null]
       )
     }
 
