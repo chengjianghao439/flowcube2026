@@ -145,7 +145,7 @@ async function findById(id, scopeWarehouseIds = null) {
   assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '采购单')
   const order = fmtOrder(rows[0])
   const [items] = await pool.query('SELECT * FROM purchase_order_items WHERE order_id=?',[id])
-  order.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, articleNumber:r.article_number, spec:r.spec, color:r.color, quantity:Number(r.quantity), unitPrice:Number(r.unit_price), amount:Number(r.amount), remark:r.remark }))
+  order.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, articleNumber:r.article_number, spec:r.spec, color:r.color, quantity:Number(r.quantity), unitPrice:Number(r.unit_price), amount:Number(r.amount), entryUnit:r.entry_unit||r.unit, entryQty:r.entry_qty!=null?Number(r.entry_qty):Number(r.quantity), conversionRate:Number(r.conversion_rate), remark:r.remark }))
 
   const [[qty]] = await pool.query(
     `SELECT COALESCE(SUM(iti.ordered_qty),0) AS total_ordered_qty, COALESCE(SUM(iti.received_qty),0) AS total_received_qty
@@ -179,6 +179,51 @@ async function findById(id, scopeWarehouseIds = null) {
 
 // 事务内建单核心：供应商校验 + 建采购单草稿(status=1) + 明细。承接调用方 conn，不自管事务、不做幂等
 // （幂等由外层 create 的 operationRequest 负责）。供采购计划转采购(procurement.service.convert)在同一事务复用。
+// ── 多单位折算（文档03 Phase2 · 方案A）：录入口径→基本单位，权威在后端 ──────────────
+const round2 = n => Math.round((Number(n) || 0) * 100) / 100
+const round4 = n => Math.round((Number(n) || 0) * 10000) / 10000
+const round8 = n => Math.round((Number(n) || 0) * 1e8) / 1e8
+
+/** 取(商品,录入单位)的权威换算率：基本单位=1；辅助单位查 product_units；非法单位报错。前端传的率只作呈现，不采信。 */
+async function resolveConversionRate(conn, productId, entryUnit, baseUnit) {
+  // 录入单位缺省 / 等于基本单位 → 换算率恒 1（不查表，兼容按基本单位录入及内部转单路径）
+  if (!entryUnit || (baseUnit && entryUnit === baseUnit)) return 1
+  const [rows] = await conn.query('SELECT unit_name, conversion_rate FROM product_units WHERE product_id = ?', [productId])
+  if (!rows.length) {
+    if (baseUnit && entryUnit && entryUnit !== baseUnit) throw new AppError(`商品未配置多计量单位，无法按「${entryUnit}」录入`, 400, 'UNIT_NOT_CONFIGURED')
+    return 1
+  }
+  const match = rows.find(r => r.unit_name === entryUnit)
+  if (!match) throw new AppError(`「${entryUnit}」不是该商品的有效计量单位`, 400, 'UNIT_INVALID')
+  const rate = Number(match.conversion_rate)
+  if (!(rate > 0)) throw new AppError(`商品单位「${entryUnit}」换算率非法`, 400, 'UNIT_RATE_INVALID')
+  return rate
+}
+
+/**
+ * 把一条采购明细录入折算成基本单位口径（§5.1/§5.2）。约定：入参 item.quantity/item.unitPrice 一律是
+ * **录入单位**下的数量/单价（entryUnit 缺省=商品基本单位 item.unit）。折算：
+ *   quantity(基本单位) = entryQty × rate；unit_price(每基本单位,高精度) = entryUnitPrice / rate；
+ *   amount = entryQty × entryUnitPrice（金额以录入口径为权威、零截断）。
+ * 向后兼容：旧客户端不传 entryUnit → entryUnit=基本单位 → rate=1 → 基本单位量=录入量，行为完全不变。
+ * 返回补齐 quantity/unitPrice(基本单位) + amount + entry三列快照。
+ */
+async function foldEntryItem(conn, item) {
+  const entryUnit = item.entryUnit || item.unit || null
+  const rate = await resolveConversionRate(conn, item.productId, entryUnit, item.unit)
+  const entryQty = Number(item.quantity) || 0
+  const entryUnitPrice = Number(item.unitPrice) || 0
+  return {
+    ...item,
+    quantity: round4(entryQty * rate),
+    unitPrice: round8(entryUnitPrice / rate),
+    amount: round2(entryQty * entryUnitPrice),
+    entryUnit,
+    entryQty,
+    conversionRate: rate,
+  }
+}
+
 async function createWithinTransaction(conn, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator }) {
   // 前端选择器已过滤停用供应商，这里补一道后端校验，防止绕过前端直接调 API 建单（禁用供应商未在下单流程过滤）
   const [[supplierRow]] = await conn.query(
@@ -188,16 +233,18 @@ async function createWithinTransaction(conn, { supplierId, supplierName, warehou
   if (!supplierRow) throw new AppError('供应商不存在', 404)
   if (!supplierRow.is_active) throw new AppError('该供应商已停用，无法新建采购单', 400)
   const orderNo = await genOrderNo(conn)
-  const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
+  const folded = []
+  for (const item of items) folded.push(await foldEntryItem(conn, item))
+  const total = round2(folded.reduce((s,i)=>s+i.amount,0))
   const [r] = await conn.query(
     `INSERT INTO purchase_orders (order_no,supplier_id,supplier_name,warehouse_id,warehouse_name,expected_date,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?)`,
     [orderNo,supplierId,supplierName,warehouseId,warehouseName,expectedDate||null,total,remark||null,operator.userId,operator.realName]
   )
   const orderId = r.insertId
-  for(const item of items) {
+  for(const item of folded) {
     await conn.query(
-      `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [orderId,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null]
+      `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [orderId,item.productId,item.productCode,item.productName,item.unit,item.entryUnit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,item.amount,item.remark||null]
     )
   }
   return { id:orderId, orderNo }
@@ -238,16 +285,18 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
     // 改单同时限制目标仓：不能把单据「搬」到 scope 之外的仓库
     assertInScope(scopeWarehouseIds, warehouseId, '采购单')
     assertStatusAction('purchase', 'edit', row.status)
-    const total = items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
+    const folded = []
+    for (const item of items) folded.push(await foldEntryItem(conn, item))
+    const total = round2(folded.reduce((s,i)=>s+i.amount,0))
     await conn.query(
       `UPDATE purchase_orders SET supplier_id=?, supplier_name=?, warehouse_id=?, warehouse_name=?, expected_date=?, total_amount=?, remark=? WHERE id=?`,
       [supplierId,supplierName,warehouseId,warehouseName,expectedDate||null,total,remark||null,id]
     )
     await conn.query('DELETE FROM purchase_order_items WHERE order_id=?', [id])
-    for(const item of items) {
+    for(const item of folded) {
       await conn.query(
-        `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [id,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.unitPrice,item.quantity*item.unitPrice,item.remark||null]
+        `INSERT INTO purchase_order_items (order_id,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id,item.productId,item.productCode,item.productName,item.unit,item.entryUnit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,item.amount,item.remark||null]
       )
     }
     await conn.commit()

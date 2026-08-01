@@ -9,7 +9,7 @@
  * 确保 keep-alive 多标签场景下路径隔离正确。
  */
 
-import { useContext, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -41,12 +41,21 @@ import {
   useCancelPurchase,
 } from '@/hooks/usePurchase'
 import type { PurchaseOrder, PurchaseOrderItem } from '@/types/purchase'
-import type { ProductFinderResult } from '@/types/products'
+import type { ProductFinderResult, ProductUnit } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
 import { INBOUND_STATUS_LABEL, type InboundTaskStatus } from '@/types/inbound-tasks'
+import { getProductApi } from '@/api/products'
 
 interface DraftItem extends Omit<PurchaseOrderItem, 'id' | 'amount'> {
   _key: number
+  units?: ProductUnit[]   // UI-only：该商品多计量单位（供单位下拉），不发后端；后端按 product_units 折算权威
+}
+
+/** 录入单位下的数量折算成基本单位量（仅前端呈现；权威折算在后端）。 */
+function baseQtyOf(item: DraftItem): number {
+  const u = (item.units || []).find(x => x.unitName === (item.entryUnit || item.unit))
+  const rate = u ? Number(u.conversionRate) : 1
+  return Math.round((Number(item.quantity) || 0) * rate * 10000) / 10000
 }
 
 /**
@@ -95,7 +104,12 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const [items, setItems] = useState<DraftItem[]>(
     (editOrder?.items ?? []).map((it, idx) => ({
       _key: idx, productId: it.productId, productCode: it.productCode, productName: it.productName,
-      unit: it.unit, quantity: it.quantity, unitPrice: it.unitPrice, remark: it.remark ?? '',
+      unit: it.unit, entryUnit: it.entryUnit ?? it.unit, units: [],
+      // 表单的数量/单价是「录入单位」口径：数量=entryQty(箱)，单价=每录入单位价（由 amount/entryQty 精确还原，
+      // 因后端存的 unitPrice 是每基本单位价 8.33，不能直接回显到「每箱」格子）。
+      quantity: it.entryQty ?? it.quantity,
+      unitPrice: it.entryQty && it.entryQty > 0 ? Math.round((it.amount / it.entryQty) * 100) / 100 : it.unitPrice,
+      remark: it.remark ?? '',
       articleNumber: it.articleNumber ?? null, spec: it.spec ?? null, color: it.color ?? null,
     })),
   )
@@ -115,6 +129,22 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     : !!(supplierId || warehouseId || expectedDate || remark || items.length)
   useDirtyGuard(tabPath, isDirty)
 
+  // 编辑态：为每个明细行商品拉多计量单位，供单位下拉回显（新建态在 handleFinderConfirm 里拉）
+  useEffect(() => {
+    const src = editOrder?.items ?? []
+    const productIds = [...new Set(src.filter(i => i.productId > 0).map(i => i.productId))]
+    if (!productIds.length) return
+    let cancelled = false
+    Promise.all(productIds.map(pid =>
+      getProductApi(pid).then(p => [pid, p?.units ?? []] as [number, ProductUnit[]]).catch(() => [pid, [] as ProductUnit[]] as [number, ProductUnit[]]),
+    )).then(pairs => {
+      if (cancelled) return
+      const map = new Map<number, ProductUnit[]>(pairs)
+      setItems(prev => prev.map(i => (map.has(i.productId) ? { ...i, units: map.get(i.productId)! } : i)))
+    })
+    return () => { cancelled = true }
+  }, [editOrder])
+
   function requestLeave(proceed: () => void) {
     confirmDirtyLeave({
       dirtyKeys: [tabPath],
@@ -127,7 +157,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     setCounter(c => c + 1)
     setItems(p => [
       ...p,
-      { _key: key, productId: 0, productCode: '', productName: '', unit: '', quantity: 1, unitPrice: 0, remark: '', articleNumber: null, spec: null, color: null },
+      { _key: key, productId: 0, productCode: '', productName: '', unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0, remark: '', articleNumber: null, spec: null, color: null },
     ])
     setFinderItemKey(key)
     setFinderOpen(true)
@@ -155,6 +185,8 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               productCode: product.code,
               productName: product.name,
               unit: product.unit,
+              entryUnit: product.unit,   // 默认按基本单位录入；有辅助单位时可在单位下拉切换
+              units: [],
               unitPrice: product.costPrice ?? 0,
               articleNumber: product.articleNumber,
               spec: product.spec,
@@ -169,6 +201,13 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       next.delete(k)
       return next
     })
+    // 拉该商品多计量单位，供单位下拉（无辅助单位则只保留基本单位、下拉不出现）
+    getProductApi(product.id)
+      .then(full => {
+        const units = full?.units ?? []
+        setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units } : i)))
+      })
+      .catch(() => { /* 拉取失败：按基本单位录入 */ })
   }
 
   function handleSupplierConfirm(result: FinderResult) {
@@ -216,7 +255,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       warehouseName,
       expectedDate: expectedDate || undefined,
       remark: remark || undefined,
-      items: items.map(({ _key, ...rest }) => rest),
+      items: items.map(({ _key, units, ...rest }) => rest),
     }
     try {
       setSubmitLocked(true)
@@ -381,7 +420,20 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                     </td>
                     <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
 
-                    <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
+                    <td className="py-2.5 text-center">
+                      {(item.units && item.units.filter(u => !u.isBase).length > 0) ? (
+                        <select
+                          value={item.entryUnit || item.unit}
+                          onChange={e => updateItem(item._key, 'entryUnit', e.target.value)}
+                          className={cn(EDIT_CELL_CLASS, 'px-1 text-center')}
+                          title="录入单位"
+                        >
+                          {(item.units || []).map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
+                        </select>
+                      ) : (
+                        <span className="text-muted-body">{item.unit || '—'}</span>
+                      )}
+                    </td>
 
                     <td className="py-2.5 pr-2">
                       <Input
@@ -393,6 +445,9 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
                         className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')}
                       />
+                      {item.entryUnit && item.entryUnit !== item.unit && (
+                        <div className="mt-0.5 text-right text-[11px] text-muted-foreground tabular-nums">= {baseQtyOf(item)} {item.unit}</div>
+                      )}
                     </td>
 
                     <td className="py-2.5">
@@ -639,9 +694,23 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             { key: 'spec', title: '型号', width: 110, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
             { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
             { key: 'color', title: '颜色', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{String(v)}</span> },
-            { key: 'quantity', title: '数量', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
-            { key: 'unitPrice', title: '单价', width: 110, align: 'right', render: v => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
+            { key: 'unit', title: '单位', width: 70, render: (_, r) => <span className="text-muted-foreground">{(r.entryUnit && r.entryUnit !== r.unit) ? r.entryUnit : r.unit}</span> },
+            {
+              key: 'quantity', title: '数量', width: 120, align: 'right',
+              render: (v, r) => (r.entryUnit && r.entryUnit !== r.unit && r.entryQty != null)
+                ? <span className="tabular-nums">{r.entryQty} {r.entryUnit}<span className="ml-1 text-xs text-muted-foreground">（{Number(v)} {r.unit}）</span></span>
+                : <span className="tabular-nums">{String(v)}</span>,
+            },
+            {
+              key: 'unitPrice', title: '单价', width: 120, align: 'right',
+              render: (v, r) => {
+                const boxEntry = r.entryUnit && r.entryUnit !== r.unit && r.entryQty && r.entryQty > 0
+                const entryPrice = boxEntry ? r.amount / (r.entryQty as number) : Number(v)
+                return boxEntry
+                  ? <span className="tabular-nums" title={`¥${Number(v).toFixed(4)} / ${r.unit}`}>¥{entryPrice.toFixed(2)}/{r.entryUnit}</span>
+                  : <span className="tabular-nums">¥{Number(v).toFixed(2)}</span>
+              },
+            },
             { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
           ] satisfies TableColumn<PurchaseOrderItem>[]}
           data={order.items ?? []}

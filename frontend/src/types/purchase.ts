@@ -6,10 +6,13 @@ export interface PurchaseOrderItem {
   productCode: string
   productName: string
   unit: string
+  entryUnit?: string        // 录入单位（文档03 Phase2）；缺省=基本单位 unit。quantity/unitPrice 视作该单位下的量/价
   articleNumber?: string | null
   spec?: string | null
   color?: string | null
-  quantity: number
+  quantity: number          // 基本单位量（= entryQty × conversionRate，后端折算权威）
+  entryQty?: number         // 录入单位下的数量（回显用）
+  conversionRate?: number   // 1 录入单位 = N 基本单位（回显用）
   unitPrice: number
   amount: number
   remark?: string

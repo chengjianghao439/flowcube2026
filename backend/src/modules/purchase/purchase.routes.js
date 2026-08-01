@@ -10,6 +10,8 @@ const itemSchema = z.object({
   productCode:z.string().max(50,'商品编码过长'),
   productName:z.string().max(150,'商品名称过长'),
   unit:z.string().max(20,'单位过长'),
+  // 录入单位（文档03 Phase2）：缺省=基本单位 unit；quantity/unitPrice 视作该录入单位下的量/价，后端折算落基本单位
+  entryUnit:z.string().max(20,'单位过长').optional().nullable(),
   articleNumber:z.string().max(50,'货号过长').optional().nullable(),
   spec:z.string().max(100,'型号过长').optional().nullable(),
   color:z.string().max(30,'颜色过长').optional().nullable(),
