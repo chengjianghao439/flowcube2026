@@ -175,6 +175,13 @@ export const PERMISSIONS = {
   PROCUREMENT_PLAN_VIEW: 'procurement.plan.view',
   PROCUREMENT_PLAN_MANAGE: 'procurement.plan.manage',
 
+  // 会计核算（文档 10）。会计凭证/科目敏感，只授财务。
+  ACCOUNTING_ACCOUNT_VIEW: 'accounting.account.view',
+  ACCOUNTING_ACCOUNT_MANAGE: 'accounting.account.manage',
+  ACCOUNTING_VOUCHER_VIEW: 'accounting.voucher.view',
+  ACCOUNTING_VOUCHER_MANAGE: 'accounting.voucher.manage',
+  ACCOUNTING_VOUCHER_EXPORT: 'accounting.voucher.export',
+
   USER_VIEW: 'user.view',
   USER_CREATE: 'user.create',
   USER_UPDATE: 'user.update',
@@ -302,6 +309,16 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.LOGISTICS_VIEW, label: '查看物流运单/轨迹' },
       { code: PERMISSIONS.LOGISTICS_MANAGE, label: '运单录号/重试取号/作废' },
       { code: PERMISSIONS.LOGISTICS_FREIGHT_RECONCILE, label: '运费对账生成应付（财务）' },
+    ],
+  },
+  {
+    group: '会计',
+    items: [
+      { code: PERMISSIONS.ACCOUNTING_ACCOUNT_VIEW, label: '查看会计科目表' },
+      { code: PERMISSIONS.ACCOUNTING_ACCOUNT_MANAGE, label: '维护会计科目' },
+      { code: PERMISSIONS.ACCOUNTING_VOUCHER_VIEW, label: '查看记账凭证' },
+      { code: PERMISSIONS.ACCOUNTING_VOUCHER_MANAGE, label: '生成/手工/冲销凭证' },
+      { code: PERMISSIONS.ACCOUNTING_VOUCHER_EXPORT, label: '导出凭证（金蝶/用友）' },
     ],
   },
   {

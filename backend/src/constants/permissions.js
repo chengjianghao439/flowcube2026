@@ -182,6 +182,14 @@ const PERMISSIONS = {
   PROCUREMENT_PLAN_VIEW: 'procurement.plan.view',
   PROCUREMENT_PLAN_MANAGE: 'procurement.plan.manage',
 
+  // 会计核算（文档 10）。会计凭证/科目是敏感数据，只授财务，不走「登录即可」例外。
+  // account.* 管科目表（Phase0）；voucher.* 管记账凭证（Phase1）；后续 ledger.* 再单列。
+  ACCOUNTING_ACCOUNT_VIEW: 'accounting.account.view',
+  ACCOUNTING_ACCOUNT_MANAGE: 'accounting.account.manage',
+  ACCOUNTING_VOUCHER_VIEW: 'accounting.voucher.view',
+  ACCOUNTING_VOUCHER_MANAGE: 'accounting.voucher.manage',   // 生成本期凭证 / 手工凭证 / 冲销
+  ACCOUNTING_VOUCHER_EXPORT: 'accounting.voucher.export',   // 导出金蝶/用友模板
+
   USER_VIEW: 'user.view',
   USER_CREATE: 'user.create',
   USER_UPDATE: 'user.update',

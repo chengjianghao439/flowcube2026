@@ -62,6 +62,7 @@ const NAV_GROUP_ORDER: Record<string, number> = {
   库存: 50,
   仓储: 60,
   财务: 70,
+  会计: 75,
   报表: 80,
   打印: 90,
   系统: 100,
@@ -119,6 +120,8 @@ const FinanceDashboardPage = lazy(() => import('@/pages/finance/dashboard'))
 const FinanceAccountsPage = lazy(() => import('@/pages/finance/accounts'))
 const ExpenseClaimsPage = lazy(() => import('@/pages/finance/expenses'))
 const ExpenseCategoriesPage = lazy(() => import('@/pages/finance/expense-categories'))
+const AcctAccountsPage = lazy(() => import('@/pages/accounting/accounts'))
+const AcctVouchersPage = lazy(() => import('@/pages/accounting/vouchers'))
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
 const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
@@ -468,6 +471,26 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '财务', section: '费用', order: 70 },
+  },
+
+  // ── 会计 ──────────────────────────────────────────────
+  {
+    path: '/accounting/accounts',
+    title: '会计科目表',
+    permission: PERMISSIONS.ACCOUNTING_ACCOUNT_VIEW,
+    component: AcctAccountsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '科目', order: 10 },
+  },
+  {
+    path: '/accounting/vouchers',
+    title: '记账凭证',
+    permission: PERMISSIONS.ACCOUNTING_VOUCHER_VIEW,
+    component: AcctVouchersPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '凭证', order: 20 },
   },
 
   // ── 报表 ──────────────────────────────────────────────
