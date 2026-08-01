@@ -565,7 +565,79 @@ async function listAllPendingPutawayContainers(scopeWarehouseIds = null) {
   }))
 }
 
+/**
+ * 供应商来料质检合格率报表（文档07 Phase3）。只读聚合：按供应商汇总质检量/合格量/拒收量/合格率，
+ * 并带出拒收品处置去向（退供应商/报废）。口径：只统计 qa_required=1 且已质检(checked_qty>0)的收货明细行，
+ * 时间按收货订单 created_at。接仓库数据权限 scopeFilter。
+ */
+async function qaSupplierReport({ startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
+  const conds = ['iti.qa_required = 1', 'it.deleted_at IS NULL', 'iti.checked_qty > 0']
+  const params = []
+  if (startDate) { conds.push('DATE(it.created_at) >= ?'); params.push(startDate) }
+  if (endDate) { conds.push('DATE(it.created_at) <= ?'); params.push(endDate) }
+  const scope = scopeFilter(scopeWarehouseIds, 'it.warehouse_id')
+  const where = conds.join(' AND ') + scope.sql
+  const [rows] = await pool.query(
+    `SELECT COALESCE(it.supplier_name, '未知供应商') AS supplier_name,
+            COUNT(DISTINCT it.id) AS task_count,
+            COUNT(DISTINCT iti.product_id) AS product_count,
+            SUM(iti.checked_qty)  AS checked_qty,
+            SUM(iti.rejected_qty) AS rejected_qty
+     FROM inbound_task_items iti
+     JOIN inbound_tasks it ON it.id = iti.task_id
+     WHERE ${where}
+     GROUP BY COALESCE(it.supplier_name, '未知供应商')
+     ORDER BY SUM(iti.rejected_qty) DESC, SUM(iti.checked_qty) DESC`,
+    [...params, ...scope.params],
+  )
+  // 拒收处置去向（退供应商=1 / 报废=2）按供应商聚合，时间同口径（处置单 created_at）
+  const dConds = ['d.deleted_at IS NULL']
+  const dParams = []
+  if (startDate) { dConds.push('DATE(d.created_at) >= ?'); dParams.push(startDate) }
+  if (endDate) { dConds.push('DATE(d.created_at) <= ?'); dParams.push(endDate) }
+  const dScope = scopeFilter(scopeWarehouseIds, 'd.warehouse_id')
+  const [dRows] = await pool.query(
+    `SELECT COALESCE(d.supplier_name, '未知供应商') AS supplier_name,
+            SUM(CASE WHEN d.disposition_type = 1 THEN d.total_qty ELSE 0 END) AS return_qty,
+            SUM(CASE WHEN d.disposition_type = 2 THEN d.total_qty ELSE 0 END) AS scrap_qty
+     FROM inbound_qa_dispositions d
+     WHERE ${dConds.join(' AND ') + dScope.sql}
+     GROUP BY COALESCE(d.supplier_name, '未知供应商')`,
+    [...dParams, ...dScope.params],
+  )
+  const dispoMap = new Map(dRows.map(r => [r.supplier_name, r]))
+  const list = rows.map(r => {
+    const checked = Number(r.checked_qty)
+    const rejected = Number(r.rejected_qty)
+    const d = dispoMap.get(r.supplier_name)
+    return {
+      supplierName: r.supplier_name,
+      taskCount: Number(r.task_count),
+      productCount: Number(r.product_count),
+      checkedQty: checked,
+      passedQty: Math.max(0, checked - rejected),
+      rejectedQty: rejected,
+      passRate: checked > 0 ? Math.round(((checked - rejected) / checked) * 10000) / 100 : 0,   // 百分比两位小数
+      returnQty: d ? Number(d.return_qty) : 0,
+      scrapQty: d ? Number(d.scrap_qty) : 0,
+    }
+  })
+  const totals = list.reduce((a, r) => ({
+    checkedQty: a.checkedQty + r.checkedQty, passedQty: a.passedQty + r.passedQty,
+    rejectedQty: a.rejectedQty + r.rejectedQty, returnQty: a.returnQty + r.returnQty, scrapQty: a.scrapQty + r.scrapQty,
+  }), { checkedQty: 0, passedQty: 0, rejectedQty: 0, returnQty: 0, scrapQty: 0 })
+  return {
+    list,
+    summary: {
+      ...totals,
+      supplierCount: list.length,
+      passRate: totals.checkedQty > 0 ? Math.round((totals.passedQty / totals.checkedQty) * 10000) / 100 : 0,
+    },
+  }
+}
+
 module.exports = {
+  qaSupplierReport,
   buildTaskWithClosure,
   loadInboundTaskClosureSummary,
   loadInboundTimeline,

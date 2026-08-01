@@ -168,4 +168,15 @@ const qaDispositions = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, qaCheck, qaDispose, qaDispositions, cancel, voidReceipt, closeReceiving }
+const qaSupplierReport = async (req, res, next) => {
+  try {
+    const data = await svc.qaSupplierReport({
+      startDate: req.query.startDate || null,
+      endDate: req.query.endDate || null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    return successResponse(res, data)
+  } catch (e) { next(e) }
+}
+
+module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, qaCheck, qaDispose, qaDispositions, qaSupplierReport, cancel, voidReceipt, closeReceiving }

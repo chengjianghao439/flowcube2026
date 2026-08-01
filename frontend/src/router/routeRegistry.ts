@@ -130,6 +130,7 @@ const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconcil
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
 const ReplenishmentPage = lazy(() => import('@/pages/reports/replenishment'))
 const InventoryAgingPage = lazy(() => import('@/pages/reports/inventory-aging'))
+const QaQualityReportPage = lazy(() => import('@/pages/reports/qa-quality'))
 const SerialLedgerPage = lazy(() => import('@/pages/serials/index'))
 const SerialTracePage = lazy(() => import('@/pages/serials/trace'))
 const SerialImportPage = lazy(() => import('@/pages/serials/import'))
@@ -569,6 +570,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '报表', section: '经营分析', order: 27 },
+  },
+  {
+    path: '/reports/qa-quality',
+    title: '来料质检合格率',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: QaQualityReportPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '报表', section: '经营分析', order: 28 },
   },
   {
     path: '/reports/procurement-plan',

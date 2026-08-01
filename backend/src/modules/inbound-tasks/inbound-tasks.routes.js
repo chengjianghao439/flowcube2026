@@ -135,6 +135,8 @@ router.use(authMiddleware)
 
 router.get('/pending-containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.pendingContainers)
 router.get('/purchase-items', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.purchaseItems)
+// 供应商来料质检合格率报表（文档07 Phase3，只读聚合）
+router.get('/qa-supplier-report', requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.qaSupplierReport)
 router.get('/',              requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.list)
 router.post('/',             requirePermission(PERMISSIONS.INBOUND_ORDER_CREATE), vBody(createSchema), ctrl.create)
 router.get('/:id/containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.containers)
