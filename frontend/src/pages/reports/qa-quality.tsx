@@ -46,15 +46,17 @@ export default function QaQualityReportPage() {
     { key: 'taskCount', title: '质检批次', width: 90, align: 'right', render: v => <span className="tabular-nums text-muted-foreground">{fmtQty(v)}</span> },
     { key: 'checkedQty', title: '质检量', width: 90, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'passedQty', title: '合格量', width: 90, align: 'right', render: v => <span className="tabular-nums text-success">{fmtQty(v)}</span> },
+    { key: 'concessionQty', title: '让步接收', width: 90, align: 'right', render: v => Number(v) > 0 ? <span className="tabular-nums text-warning">{fmtQty(v)}</span> : <span className="text-muted-foreground">—</span> },
     { key: 'rejectedQty', title: '拒收量', width: 90, align: 'right', render: v => <span className={`tabular-nums ${Number(v) > 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>{fmtQty(v)}</span> },
-    { key: 'passRate', title: '合格率', width: 110, align: 'right', render: v => <SoftStatusLabel label={`${Number(v).toFixed(2)}%`} tone={rateTone(Number(v))} /> },
+    { key: 'passRate', title: '合格率', width: 100, align: 'right', render: v => <SoftStatusLabel label={`${Number(v).toFixed(2)}%`} tone={rateTone(Number(v))} /> },
+    { key: 'strictPassRate', title: '严格合格率', width: 110, align: 'right', render: (v, row) => Number(row.concessionQty) > 0 ? <SoftStatusLabel label={`${Number(v).toFixed(2)}%`} tone={rateTone(Number(v))} /> : <span className="text-muted-foreground">—</span> },
     { key: 'returnQty', title: '退供应商', width: 90, align: 'right', render: v => Number(v) > 0 ? <span className="tabular-nums text-warning">{fmtQty(v)}</span> : <span className="text-muted-foreground">—</span> },
     { key: 'scrapQty', title: '报废', width: 80, align: 'right', render: v => Number(v) > 0 ? <span className="tabular-nums text-destructive">{fmtQty(v)}</span> : <span className="text-muted-foreground">—</span> },
   ]
 
   return (
     <div className="space-y-4">
-      <PageHeader title="来料质检合格率" description="按供应商汇总质检量、合格量、拒收量与合格率，并展示拒收品处置去向（退供应商/报废）。仅统计已开启来料质检并完成质检的收货明细。" />
+      <PageHeader title="来料质检合格率" description="按供应商汇总质检量、合格量（含让步接收）、拒收量与合格率，并区分严格合格率（扣除让步接收）；展示拒收品处置去向（退供应商/报废）。仅统计已开启来料质检并完成质检的收货明细。" />
       <FilterCard>
         <div className="flex flex-wrap items-end gap-3">
           <div><label className="text-helper block mb-1">起始日期</label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40" /></div>
@@ -64,11 +66,13 @@ export default function QaQualityReportPage() {
       </FilterCard>
 
       {summary && summary.checkedQty > 0 && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <StatCard label="质检总量" value={fmtQty(summary.checkedQty)} />
-          <StatCard label="合格量" value={fmtQty(summary.passedQty)} tone="success" />
+          <StatCard label="合格量（含让步）" value={fmtQty(summary.passedQty)} tone="success" />
+          <StatCard label="让步接收量" value={fmtQty(summary.concessionQty)} tone={summary.concessionQty > 0 ? 'warning' : undefined} />
           <StatCard label="拒收量" value={fmtQty(summary.rejectedQty)} tone="danger" />
-          <StatCard label="整体合格率" value={`${summary.passRate.toFixed(2)}%`} tone={rateTone(summary.passRate)} />
+          <StatCard label="合格率（含让步）" value={`${summary.passRate.toFixed(2)}%`} tone={rateTone(summary.passRate)} />
+          <StatCard label="严格合格率（扣让步）" value={`${summary.strictPassRate.toFixed(2)}%`} tone={rateTone(summary.strictPassRate)} />
         </div>
       )}
 

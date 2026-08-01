@@ -51,9 +51,9 @@ export const putawayInboundApi = (id: number, data: PutawayParams, requestKey?: 
       : { 'X-Client': 'pda' },
   })
 
-/** 来料质检（文档07）：仅 PDA，合格量(含让步接收)/拒收量。带 X-Client: pda */
-export const qaCheckInboundApi = (id: number, data: { productId: number; passedQty: number; rejectedQty: number; reason?: string }, requestKey?: string) =>
-  client.post<{ taskId: number; passed: number; rejected: number; qaStatus: number }>(`/inbound-tasks/${id}/check`, data, {
+/** 来料质检（文档07）：仅 PDA。passedQty=合格量(含让步)，concessionQty=其中让步量(子集)，rejectedQty=拒收量。带 X-Client: pda */
+export const qaCheckInboundApi = (id: number, data: { productId: number; passedQty: number; rejectedQty: number; concessionQty?: number; reason?: string }, requestKey?: string) =>
+  client.post<{ taskId: number; passed: number; rejected: number; concession: number; qaStatus: number }>(`/inbound-tasks/${id}/check`, data, {
     headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' },
   })
 
@@ -77,15 +77,18 @@ export interface QaSupplierReportRow {
   taskCount: number
   productCount: number
   checkedQty: number
-  passedQty: number
+  passedQty: number         // 合格量（含让步，宽口径）
+  concessionQty: number     // 让步接收量（合格量的子集）
+  normalPassedQty: number   // 正常合格（严口径 = 合格 − 让步）
   rejectedQty: number
-  passRate: number    // 百分比，两位小数
+  passRate: number          // 宽口径合格率（含让步），百分比两位小数
+  strictPassRate: number    // 严口径合格率（扣让步）
   returnQty: number   // 拒收处置·退供应商量
   scrapQty: number    // 拒收处置·报废量
 }
 export interface QaSupplierReport {
   list: QaSupplierReportRow[]
-  summary: { checkedQty: number; passedQty: number; rejectedQty: number; returnQty: number; scrapQty: number; supplierCount: number; passRate: number }
+  summary: { checkedQty: number; passedQty: number; concessionQty: number; normalPassedQty: number; rejectedQty: number; returnQty: number; scrapQty: number; supplierCount: number; passRate: number; strictPassRate: number }
 }
 export const getQaSupplierReportApi = (params: { startDate?: string; endDate?: string }) =>
   client.get<QaSupplierReport>('/inbound-tasks/qa-supplier-report', { params })

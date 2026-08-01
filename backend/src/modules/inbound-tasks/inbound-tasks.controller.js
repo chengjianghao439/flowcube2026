@@ -112,6 +112,7 @@ const qaCheck = async (req, res, next) => {
       productId: req.body.productId,
       passedQty: req.body.passedQty,
       rejectedQty: req.body.rejectedQty,
+      concessionQty: req.body.concessionQty,
       reason: req.body.reason || null,
       userId: req.user?.userId ?? null,
       requestKey: extractRequestKey(req),

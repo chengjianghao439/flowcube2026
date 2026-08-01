@@ -51,7 +51,9 @@ function QaTaskWork({ taskId }: { taskId: number }) {
   const { flash, ok, err } = usePdaFeedback()
   const { data: task, isLoading, refetch } = useQuery({ queryKey: ['pda-inbound-qa', taskId], queryFn: () => getInboundTaskByIdApi(taskId) })
   const [selected, setSelected] = useState<InboundTaskItem | null>(null)
-  const [passed, setPassed] = useState('')
+  // 三桶：正常合格 / 让步接收 / 拒收。合格量(passedQty)=正常合格+让步；让步(concessionQty)是其子集（旁路统计）。
+  const [normalPass, setNormalPass] = useState('')
+  const [concession, setConcession] = useState('')
   const [rejected, setRejected] = useState('')
 
   // 质检行按商品聚合待质检量（received − checked）
@@ -71,20 +73,23 @@ function QaTaskWork({ taskId }: { taskId: number }) {
     action: `inbound.qa.${taskId}`,
     requestAction: 'inbound.qa.check',
     label: `来料质检 ${task?.taskNo || ''}`,
-    onConfirmed: () => { ok('质检已确认'); setSelected(null); setPassed(''); setRejected(''); refetch() },
+    onConfirmed: () => { ok('质检已确认'); setSelected(null); setNormalPass(''); setConcession(''); setRejected(''); refetch() },
   })
 
   if (isLoading) return <PdaLoading />
   if (!task) return <div className="p-8 text-center text-muted-foreground">任务不存在</div>
 
   const submit = (row: { item: InboundTaskItem; toCheck: number }) => {
-    const p = Number(passed) || 0
+    const np = Number(normalPass) || 0
+    const c = Number(concession) || 0
     const r = Number(rejected) || 0
-    if (p + r <= 0) { err('请输入合格或拒收数量'); return }
-    if (p + r > row.toCheck) { err(`质检量超过待质检 ${row.toCheck}`); return }
+    const passed = np + c   // 合格量（含让步）
+    if (np < 0 || c < 0 || r < 0) { err('数量不能为负'); return }
+    if (passed + r <= 0) { err('请输入合格或拒收数量'); return }
+    if (passed + r > row.toCheck) { err(`质检量超过待质检 ${row.toCheck}`); return }
     checkAction.run(
-      (requestKey) => qaCheckInboundApi(taskId, { productId: row.item.productId, passedQty: p, rejectedQty: r }, requestKey).then(res => res as { taskId: number }),
-      { productId: row.item.productId, expectedQty: p + r },
+      (requestKey) => qaCheckInboundApi(taskId, { productId: row.item.productId, passedQty: passed, rejectedQty: r, concessionQty: c }, requestKey).then(res => res as { taskId: number }),
+      { productId: row.item.productId, expectedQty: passed + r },
     )
   }
 
@@ -97,7 +102,7 @@ function QaTaskWork({ taskId }: { taskId: number }) {
           const isSel = selected?.productId === row.item.productId
           return (
             <PdaCard key={row.item.productId}>
-              <button className="w-full text-left" onClick={() => { setSelected(isSel ? null : row.item); setPassed(String(row.toCheck)); setRejected('0') }}>
+              <button className="w-full text-left" onClick={() => { setSelected(isSel ? null : row.item); setNormalPass(String(row.toCheck)); setConcession('0'); setRejected('0') }}>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-foreground">{row.item.productName}</p>
@@ -109,14 +114,18 @@ function QaTaskWork({ taskId }: { taskId: number }) {
               {isSel && (
                 <div className="mt-3 space-y-2 border-t border-border pt-3">
                   <div className="flex items-center gap-2">
-                    <span className="w-16 text-sm text-emerald-600">合格量</span>
-                    <Input type="number" min="0" value={passed} onChange={e => setPassed(e.target.value)} className="h-10 flex-1 text-right tabular-nums" />
+                    <span className="w-20 text-sm text-emerald-600">正常合格</span>
+                    <Input type="number" min="0" value={normalPass} onChange={e => setNormalPass(e.target.value)} className="h-10 flex-1 text-right tabular-nums" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-16 text-sm text-red-600">拒收量</span>
+                    <span className="w-20 text-sm text-amber-600">让步接收</span>
+                    <Input type="number" min="0" value={concession} onChange={e => setConcession(e.target.value)} className="h-10 flex-1 text-right tabular-nums" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-20 text-sm text-red-600">拒收量</span>
                     <Input type="number" min="0" value={rejected} onChange={e => setRejected(e.target.value)} className="h-10 flex-1 text-right tabular-nums" />
                   </div>
-                  <p className="text-xs text-muted-foreground">合格量（含让步接收）将可上架并计入应付；拒收量转不合格区，不入库不结算。</p>
+                  <p className="text-xs text-muted-foreground">正常合格与让步接收都可上架并计入应付（让步=不良但协商接收，仅作质量统计区分）；拒收量转不合格区，不入库不结算。</p>
                   <Button className="w-full" disabled={checkAction.phase === 'submitting'} onClick={() => submit(row)}>
                     {checkAction.phase === 'submitting' ? '提交中...' : '确认质检'}
                   </Button>

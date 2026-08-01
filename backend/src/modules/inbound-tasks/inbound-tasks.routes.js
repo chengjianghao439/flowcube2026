@@ -102,13 +102,15 @@ const putawaySchema = z.object({
   suggestedLocationCode: z.string().trim().max(50).optional(),
 })
 
-// 来料质检（文档 07）：合格量(含让步接收) + 拒收量，至少一项 > 0
+// 来料质检（文档 07）：合格量(含让步接收) + 拒收量，至少一项 > 0；concessionQty 是合格量的子集（旁路统计）
 const qaCheckSchema = z.object({
   productId: z.number().int().positive('请选择商品'),
   passedQty: z.number().nonnegative('合格量不能为负').default(0),
   rejectedQty: z.number().nonnegative('拒收量不能为负').default(0),
+  concessionQty: z.number().nonnegative('让步接收量不能为负').default(0),
   reason: z.string().trim().max(100).optional(),
 }).refine(v => (v.passedQty + v.rejectedQty) > 0, { message: '合格量与拒收量至少一项大于 0' })
+  .refine(v => v.concessionQty <= v.passedQty, { message: '让步接收量不能超过合格量' })
 
 // 质检拒收处置（文档 07 · Phase 2）：退供应商(1)/报废(2)，可选按商品过滤。ERP 侧后台决策。
 const qaDisposeSchema = z.object({

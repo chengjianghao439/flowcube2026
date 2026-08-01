@@ -82,16 +82,21 @@ async function allocateInboundQaContainers(conn, { taskId, taskNo, productId, pa
 
 /**
  * PDA 采购收货质检（文档 07 · 方案A）。自管事务（与 receive/putaway 同款）。
- * 三种处置：合格放行 / 让步接收（都计入 passedQty→上架→结算）/ 拒收（rejectedQty→REJECTED，不入库不结算）。
- * 只改容器状态与明细 checked/rejected 量，绝不碰 inventory_stock / avg_cost（合格量真正进缓存仍在上架时）。
+ * 三种处置：合格放行 / 让步接收 / 拒收。合格放行与让步接收都计入 passedQty→上架→结算（口径一字不改），
+ * 让步量另记入旁路 concession_qty（合格量的子集，concession≤passed，只作质量统计，文档07 §11）；
+ * 拒收（rejectedQty→REJECTED，不入库不结算）。
+ * 只改容器状态与明细 checked/rejected/concession 量，绝不碰 inventory_stock / avg_cost（合格量真正进缓存仍在上架时）。
  */
-async function check(taskId, { productId, passedQty, rejectedQty = 0, reason = null, requestKey, userId, pdaWarehouseId = null, scopeWarehouseIds = null } = {}) {
+async function check(taskId, { productId, passedQty, rejectedQty = 0, concessionQty = 0, reason = null, requestKey, userId, pdaWarehouseId = null, scopeWarehouseIds = null } = {}) {
   const productIdN = Number(productId)
   const passed = Number(passedQty) || 0
   const rejected = Number(rejectedQty) || 0
+  // 让步接收量：合格量(passed)的子集，只作质量统计（旁路 concession_qty），不改主数量流/结算（文档07 §11）。
+  const concession = Number(concessionQty) || 0
   if (!Number.isFinite(productIdN) || productIdN <= 0) throw new AppError('请选择有效商品', 400)
-  if (passed < 0 || rejected < 0) throw new AppError('质检数量不能为负', 400)
+  if (passed < 0 || rejected < 0 || concession < 0) throw new AppError('质检数量不能为负', 400)
   if (passed <= 0 && rejected <= 0) throw new AppError('质检数量必须大于 0', 400)
+  if (concession > passed) throw new AppError('让步接收量不能超过合格量', 400)
 
   const conn = await pool.getConnection()
   try {
@@ -120,18 +125,21 @@ async function check(taskId, { productId, passedQty, rejectedQty = 0, reason = n
     if (!items.length) throw new AppError('该商品无需质检或不在本任务中', 400)
     let remaining = passed + rejected
     let rejRemaining = rejected
+    let concRemaining = concession   // 让步接收量在合格(passTake=take−rejTake)部分内按 FIFO 分摊
     for (const item of items) {
       if (remaining <= 0) break
       const cap = Number(item.received_qty) - Number(item.checked_qty)
       if (cap <= 0) continue
       const take = Math.min(remaining, cap)
       const rejTake = Math.min(rejRemaining, take)
+      const concTake = Math.min(concRemaining, take - rejTake)   // 让步只落在合格量内，concession≤passed 保证全额落位
       await conn.query(
-        'UPDATE inbound_task_items SET checked_qty = checked_qty + ?, rejected_qty = rejected_qty + ? WHERE id = ?',
-        [take, rejTake, item.id],
+        'UPDATE inbound_task_items SET checked_qty = checked_qty + ?, rejected_qty = rejected_qty + ?, concession_qty = concession_qty + ? WHERE id = ?',
+        [take, rejTake, concTake, item.id],
       )
       remaining -= take
       rejRemaining -= rejTake
+      concRemaining -= concTake
     }
     if (remaining > 0) throw new AppError('质检数量超出已收货未质检数量', 409)
 
@@ -148,12 +156,12 @@ async function check(taskId, { productId, passedQty, rejectedQty = 0, reason = n
 
     await appendInboundEvent(
       conn, taskId, 'qa_checked', '来料质检',
-      `质检确认：合格${passed}、拒收${rejected}${reason ? `（原因：${reason}）` : ''}`,
+      `质检确认：合格${passed}${concession > 0 ? `（其中让步${concession}）` : ''}、拒收${rejected}${reason ? `（原因：${reason}）` : ''}`,
       { userId, realName: null },
-      { productId: productIdN, passed, rejected, reason: reason || null, allDone: doneAll },
+      { productId: productIdN, passed, rejected, concession, reason: reason || null, allDone: doneAll },
     )
 
-    const payload = { taskId, passed, rejected, qaStatus: doneAll ? 2 : 1 }
+    const payload = { taskId, passed, rejected, concession, qaStatus: doneAll ? 2 : 1 }
     if (requestState.enabled) {
       await completeOperationRequest(conn, requestState, {
         data: payload, message: `质检确认 合格${passed} 拒收${rejected}`,

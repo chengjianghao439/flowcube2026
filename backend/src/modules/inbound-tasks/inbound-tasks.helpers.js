@@ -112,6 +112,8 @@ const fmtItem = r => ({
   qaRequired: Number(r.qa_required) === 1,
   checkedQty: Number(r.checked_qty || 0),
   rejectedQty: Number(r.rejected_qty || 0),
+  // 让步接收量（合格量的子集，旁路统计；文档07 Phase3 增强）
+  concessionQty: Number(r.concession_qty || 0),
   // 序列号管控开关是商品维度属性（product_items.serial_managed），联表带出供 PDA 收货判断是否逐台扫 SN；
   // 未联表的调用方（如 receive() 内部刷新明细）r.serial_managed 为 undefined → false，不影响非管控链路。
   serialManaged: Number(r.serial_managed) === 1,

@@ -569,6 +569,10 @@ async function listAllPendingPutawayContainers(scopeWarehouseIds = null) {
  * 供应商来料质检合格率报表（文档07 Phase3）。只读聚合：按供应商汇总质检量/合格量/拒收量/合格率，
  * 并带出拒收品处置去向（退供应商/报废）。口径：只统计 qa_required=1 且已质检(checked_qty>0)的收货明细行，
  * 时间按收货订单 created_at。接仓库数据权限 scopeFilter。
+ *
+ * 让步接收（文档07 Phase3 增强）：passedQty(合格量=checked−rejected) 含让步；concessionQty 是其子集。
+ * 报表同时给两口径合格率——passRate（宽口径，含让步，向后兼容不变）与 strictPassRate（严口径，扣让步），
+ * 并单列 concessionQty / normalPassedQty（正常合格=合格−让步）供质量分析。历史行 concession=0，两口径相等。
  */
 async function qaSupplierReport({ startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
   const conds = ['iti.qa_required = 1', 'it.deleted_at IS NULL', 'iti.checked_qty > 0']
@@ -582,7 +586,8 @@ async function qaSupplierReport({ startDate = null, endDate = null, scopeWarehou
             COUNT(DISTINCT it.id) AS task_count,
             COUNT(DISTINCT iti.product_id) AS product_count,
             SUM(iti.checked_qty)  AS checked_qty,
-            SUM(iti.rejected_qty) AS rejected_qty
+            SUM(iti.rejected_qty) AS rejected_qty,
+            SUM(iti.concession_qty) AS concession_qty
      FROM inbound_task_items iti
      JOIN inbound_tasks it ON it.id = iti.task_id
      WHERE ${where}
@@ -609,29 +614,37 @@ async function qaSupplierReport({ startDate = null, endDate = null, scopeWarehou
   const list = rows.map(r => {
     const checked = Number(r.checked_qty)
     const rejected = Number(r.rejected_qty)
+    const concession = Math.min(Number(r.concession_qty || 0), Math.max(0, checked - rejected))
+    const passed = Math.max(0, checked - rejected)   // 合格量（含让步，宽口径）
+    const normalPassed = Math.max(0, passed - concession)   // 正常合格（严口径）
     const d = dispoMap.get(r.supplier_name)
     return {
       supplierName: r.supplier_name,
       taskCount: Number(r.task_count),
       productCount: Number(r.product_count),
       checkedQty: checked,
-      passedQty: Math.max(0, checked - rejected),
+      passedQty: passed,
+      concessionQty: concession,
+      normalPassedQty: normalPassed,
       rejectedQty: rejected,
-      passRate: checked > 0 ? Math.round(((checked - rejected) / checked) * 10000) / 100 : 0,   // 百分比两位小数
+      passRate: checked > 0 ? Math.round((passed / checked) * 10000) / 100 : 0,              // 宽口径（含让步），百分比两位小数
+      strictPassRate: checked > 0 ? Math.round((normalPassed / checked) * 10000) / 100 : 0,  // 严口径（扣让步）
       returnQty: d ? Number(d.return_qty) : 0,
       scrapQty: d ? Number(d.scrap_qty) : 0,
     }
   })
   const totals = list.reduce((a, r) => ({
     checkedQty: a.checkedQty + r.checkedQty, passedQty: a.passedQty + r.passedQty,
+    concessionQty: a.concessionQty + r.concessionQty, normalPassedQty: a.normalPassedQty + r.normalPassedQty,
     rejectedQty: a.rejectedQty + r.rejectedQty, returnQty: a.returnQty + r.returnQty, scrapQty: a.scrapQty + r.scrapQty,
-  }), { checkedQty: 0, passedQty: 0, rejectedQty: 0, returnQty: 0, scrapQty: 0 })
+  }), { checkedQty: 0, passedQty: 0, concessionQty: 0, normalPassedQty: 0, rejectedQty: 0, returnQty: 0, scrapQty: 0 })
   return {
     list,
     summary: {
       ...totals,
       supplierCount: list.length,
       passRate: totals.checkedQty > 0 ? Math.round((totals.passedQty / totals.checkedQty) * 10000) / 100 : 0,
+      strictPassRate: totals.checkedQty > 0 ? Math.round((totals.normalPassedQty / totals.checkedQty) * 10000) / 100 : 0,
     },
   }
 }

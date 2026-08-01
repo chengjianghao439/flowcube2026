@@ -27,6 +27,7 @@ export interface InboundTaskItem {
   qaRequired?: boolean      // 来料质检行（文档07）
   checkedQty?: number       // 已质检量（合格+让步+拒收）
   rejectedQty?: number      // 拒收量（不入库不结算）
+  concessionQty?: number    // 让步接收量（合格量的子集，旁路统计）
   unitPrice: number | null
   /** 序列号管控商品：PDA 收货需逐台扫序列号登记（每箱 SN 数 == 箱数量） */
   serialManaged?: boolean
