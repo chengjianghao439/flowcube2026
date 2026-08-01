@@ -29,6 +29,16 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
       entityName: '收货订单',
     })
     assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
+    // 拒收品若已做处置（退供应商/报废，REJECTED 容器已 VOID、货已物理离场，见
+    // inbound-tasks.qa-disposition.js），不能再整单撤回收货——撤回语义是"这批货从没收到"，
+    // 与"拒收品已处置离场"自相矛盾；且被处置的容器已不在下面的反冲查询范围内。
+    const [[{ n: disposedCount }]] = await conn.query(
+      'SELECT COUNT(*) AS n FROM inbound_qa_dispositions WHERE inbound_task_id = ? AND deleted_at IS NULL',
+      [taskId],
+    )
+    if (Number(disposedCount) > 0) {
+      throw new AppError('该收货订单的质检拒收品已做处置（退供应商/报废），无法整单撤回收货', 409)
+    }
     const rule = assertStatusAction('inboundTask', 'voidReceipt', Number(taskRow.status))
 
     // 统一加锁顺序：先按 (product_id, warehouse_id) 升序对涉及维度取 inventory_stock 单行锁，

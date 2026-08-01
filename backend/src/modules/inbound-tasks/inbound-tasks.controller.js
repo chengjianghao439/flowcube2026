@@ -145,4 +145,27 @@ const closeReceiving = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, qaCheck, cancel, voidReceipt, closeReceiving }
+const qaDispose = async (req, res, next) => {
+  try {
+    const operator = getOperatorFromRequest(req)
+    const data = await svc.qaDispose(+req.params.id, {
+      dispositionType: req.body.dispositionType,
+      productIds: req.body.productIds || null,
+      reason: req.body.reason || null,
+      remark: req.body.remark || null,
+      operator,
+      requestKey: extractRequestKey(req),
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    return successResponse(res, data, '拒收品处置成功')
+  } catch (e) { next(e) }
+}
+
+const qaDispositions = async (req, res, next) => {
+  try {
+    const data = await svc.qaDispositionsByTask(+req.params.id)
+    return successResponse(res, data)
+  } catch (e) { next(e) }
+}
+
+module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, qaCheck, qaDispose, qaDispositions, cancel, voidReceipt, closeReceiving }

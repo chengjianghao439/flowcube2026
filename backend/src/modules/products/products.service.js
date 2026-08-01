@@ -346,6 +346,19 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 序列号开关守卫（文档04 Phase2）：不允许对「有存量库存」的商品在档案里直接从关→开——历史容器无
+    // SN 记录，直接开会立刻对账不一致 + 出库 SERIAL_SHIP_COUNT_MISMATCH。有存量须走「序列号·历史导入」
+    // 原子补齐并开启；零库存商品可直接开。容器状态 1 ACTIVE / 4 待上架 / 5 待质检（见 CONTAINER_STATUS）。
+    const [[curSerial]] = await conn.query('SELECT serial_managed FROM product_items WHERE id = ?', [id])
+    if (serialManaged && curSerial && Number(curSerial.serial_managed) === 0) {
+      const [[{ stockQty }]] = await conn.query(
+        'SELECT COALESCE(SUM(remaining_qty),0) AS stockQty FROM inventory_containers WHERE product_id = ? AND status IN (1,4,5) AND deleted_at IS NULL',
+        [id],
+      )
+      if (Number(stockQty) > 0) {
+        throw new AppError('该商品有存量库存，无法在商品档案直接开启序列号管理；请到「序列号 · 历史导入」为在库货补齐序列号后再开启', 400, 'SERIAL_ENABLE_HAS_STOCK')
+      }
+    }
     await conn.query(
       `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,qa_required=?,serial_managed=?
        WHERE id=? AND deleted_at IS NULL`,

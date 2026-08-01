@@ -110,6 +110,14 @@ const qaCheckSchema = z.object({
   reason: z.string().trim().max(100).optional(),
 }).refine(v => (v.passedQty + v.rejectedQty) > 0, { message: '合格量与拒收量至少一项大于 0' })
 
+// 质检拒收处置（文档 07 · Phase 2）：退供应商(1)/报废(2)，可选按商品过滤。ERP 侧后台决策。
+const qaDisposeSchema = z.object({
+  dispositionType: z.number().int().refine(v => v === 1 || v === 2, '请选择处置方式（1退供应商 / 2报废）'),
+  productIds: z.array(z.number().int().positive()).optional(),
+  reason: z.string().trim().max(200).optional(),
+  remark: z.string().trim().max(200).optional(),
+})
+
 const reprintSchema = z.object({
   mode: z.enum(['task', 'item', 'barcode']).default('task'),
   itemId: z.number().int().positive('收货明细无效').optional(),
@@ -138,6 +146,10 @@ router.get('/:id/putaway-suggestion', requirePermission(PERMISSIONS.INBOUND_PUTA
 router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaSessionRequired(), pdaOnly, vBody(putawaySchema), ctrl.putaway)
 // 来料质检（文档 07 · 方案A）：复用收货执行权限（收货员即初检员），PDA-only + 设备会话
 router.post('/:id/check', requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaSessionRequired(), pdaOnly, vBody(qaCheckSchema), ctrl.qaCheck)
+// 拒收处置（文档 07 · Phase 2）：退供应商/报废，只消费 REJECTED 容器、零 GL。后台管理决策，
+// 非 PDA 现场作业，故 ERP 侧（不挂 pdaOnly），与 voidReceipt 一样属"管理动作而非扫码作业"。
+router.post('/:id/qa-dispose', requirePermission(PERMISSIONS.INBOUND_QA_DISPOSE), vBody(qaDisposeSchema), ctrl.qaDispose)
+router.get('/:id/qa-dispositions', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.qaDispositions)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.cancel)
 router.post('/:id/void-receipt', requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.voidReceipt)
 router.post('/:id/close-receiving', requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.closeReceiving)

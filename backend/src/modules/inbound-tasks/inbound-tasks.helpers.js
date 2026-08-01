@@ -153,7 +153,9 @@ function fmtContainer(r) {
     productName: r.product_name || null,
     qty: Number(r.remaining_qty),
     unit: r.unit || null,
-    status: r.status === CONTAINER_STATUS.PENDING_PUTAWAY ? 'waiting_putaway' : 'stored',
+    status: r.status === CONTAINER_STATUS.PENDING_PUTAWAY ? 'waiting_putaway'
+      : r.status === CONTAINER_STATUS.REJECTED ? 'rejected'
+      : 'stored',
     locationId: r.location_id || null,
     locationCode: r.location_code || null,
     createdAt: r.created_at,

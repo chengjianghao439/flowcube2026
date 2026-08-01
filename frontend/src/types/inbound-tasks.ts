@@ -210,7 +210,7 @@ export interface InboundContainerRow {
   productName: string | null
   qty: number
   unit: string | null
-  status: 'waiting_putaway' | 'stored'
+  status: 'waiting_putaway' | 'stored' | 'rejected'
   locationId: number | null
   locationCode: string | null
   createdAt: string
@@ -219,6 +219,61 @@ export interface InboundContainerRow {
 export interface InboundContainersResult {
   waiting: InboundContainerRow[]
   stored: InboundContainerRow[]
+  rejected: InboundContainerRow[]   // 质检拒收容器（REJECTED，文档07 Phase2），处置后转 VOID 即消失
+}
+
+/** 来料质检拒收处置单（文档07 Phase2）：退供应商/报废，只消费 REJECTED 容器、零 GL */
+export interface QaDispositionItem {
+  id: number
+  inboundTaskItemId: number | null
+  productId: number
+  productCode: string | null
+  productName: string
+  unit: string | null
+  quantity: number
+  unitPrice: number
+  amount: number
+  containerCount: number
+}
+
+export interface QaDisposition {
+  id: number
+  dispositionNo: string
+  inboundTaskId: number
+  inboundTaskNo: string | null
+  purchaseOrderId: number | null
+  purchaseOrderNo: string | null
+  supplierId: number | null
+  supplierName: string | null
+  warehouseId: number
+  warehouseName: string | null
+  dispositionType: 1 | 2       // 1退供应商 2报废
+  dispositionTypeName: string
+  totalQty: number
+  totalAmount: number          // 参考货值（拒收量×采购单价），非入账金额
+  containerCount: number
+  reason: string | null
+  remark: string | null
+  operatorId: number | null
+  operatorName: string | null
+  createdAt: string
+  items: QaDispositionItem[]
+}
+
+export interface QaDisposeParams {
+  dispositionType: 1 | 2
+  productIds?: number[]
+  reason?: string
+  remark?: string
+}
+
+export interface QaDisposeResult {
+  id: number
+  dispositionNo: string
+  dispositionType: 1 | 2
+  totalQty: number
+  totalAmount: number
+  containerCount: number
 }
 
 export interface CreateInboundTaskResult {

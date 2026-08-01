@@ -81,6 +81,7 @@ const PERMISSIONS = {
   INBOUND_RECEIVE_EXECUTE: 'inbound.receive.execute',
   INBOUND_PUTAWAY_EXECUTE: 'inbound.putaway.execute',
   INBOUND_PRINT_REPRINT: 'inbound.print.reprint',
+  INBOUND_QA_DISPOSE: 'inbound.qa.dispose',
 
   INVENTORY_VIEW: 'inventory.view',
   INVENTORY_ADJUST: 'inventory.adjust',

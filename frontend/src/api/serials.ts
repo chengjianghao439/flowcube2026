@@ -1,4 +1,5 @@
 import { payloadClient as apiClient } from './client'
+import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { PaginatedData, QueryParams } from '@/types'
 
 export interface SerialLedgerItem {
@@ -76,3 +77,43 @@ export const traceSerialApi = async (serialNo: string, productId?: number) =>
 
 export const checkSerialConsistencyApi = async (warehouseId?: number) =>
   apiClient.get<SerialConsistencyResult>('/serials/check-consistency', { params: warehouseId ? { warehouseId } : {} })
+
+// ── 历史序列号导入（文档04 Phase2）──
+export interface SerialImportCandidateContainer {
+  containerId: number
+  barcode: string
+  warehouseId: number
+  warehouseName: string | null
+  locationCode: string | null
+  remainingQty: number
+  snCount: number
+  locked: boolean
+}
+
+export interface SerialImportCandidates {
+  product: { id: number; code: string; name: string; unit: string; serialManaged: boolean }
+  containers: SerialImportCandidateContainer[]
+  totalQty: number
+  blockers: {
+    alreadySerialized: boolean
+    pendingContainers: number
+    lockedContainers: number
+    outOfScopeStock: number
+    noStock: boolean
+  }
+}
+
+export interface ImportSerialsResult {
+  productId: number
+  containerCount: number
+  importedCount: number
+}
+
+export const getSerialImportCandidatesApi = async (productId: number) =>
+  apiClient.get<SerialImportCandidates>('/serials/import-candidates', { params: { productId } })
+
+export const importSerialsApi = async (
+  data: { productId: number; containers: Array<{ containerId: number; serialNos: string[] }> },
+  requestKey?: string,
+) =>
+  apiClient.post<ImportSerialsResult>('/serials/import', data, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)

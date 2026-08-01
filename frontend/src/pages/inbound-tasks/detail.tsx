@@ -11,6 +11,8 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { AppDialog } from '@/components/shared/AppDialog'
+import { LimitedTextarea } from '@/components/shared/LimitedTextarea'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
   useInboundTaskDetail,
@@ -19,14 +21,19 @@ import {
   useCancelInbound,
   useVoidInboundReceipt,
   useCloseReceivingInbound,
+  useInboundQaDispositions,
+  useQaDisposeInbound,
 } from '@/hooks/useInboundTasks'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
 import { mapInboundTaskToPrint } from '@/lib/orderPrintData'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import DataTable from '@/components/shared/DataTable'
+import { cn } from '@/lib/utils'
 import type { TableColumn } from '@/types'
-import type { InboundTaskItem } from '@/types/inbound-tasks'
+import type { InboundTaskItem, InboundContainerRow, QaDisposition } from '@/types/inbound-tasks'
 
 function Section({ title, children, sectionId }: { title: string; children: React.ReactNode; sectionId?: string }) {
   return (
@@ -37,7 +44,7 @@ function Section({ title, children, sectionId }: { title: string; children: Reac
   )
 }
 
-type StatusTone = 'draft' | 'active' | 'success' | 'danger'
+type StatusTone = 'draft' | 'active' | 'success' | 'danger' | 'warning' | 'info'
 
 const PUTAWAY_TONE: Record<string, StatusTone> = {
   completed: 'success', waiting: 'active', putting_away: 'active', cancelled: 'danger', not_started: 'draft',
@@ -71,17 +78,23 @@ export default function InboundTaskDetailPage() {
   const isActiveTab = useActiveWorkspaceTab()
   // 收货现场变化频繁，标签页常驻挂载时若不轮询容易停留在打开时的陈旧进度
   const { data: task, isLoading, refetch: refetchTask } = useInboundTaskDetail(validId, { refetchInterval: isActiveTab ? 20_000 : false })
-  const { refetch: refetchContainers } = useInboundTaskContainers(validId)
+  const { data: containers, refetch: refetchContainers } = useInboundTaskContainers(validId)
+  const { data: dispositions, refetch: refetchDispositions } = useInboundQaDispositions(validId)
 
+  const { can } = usePermission()
   const submitMut = useSubmitInboundTask()
   const cancelMut = useCancelInbound()
   const voidReceiptMut = useVoidInboundReceipt()
   const closeReceivingMut = useCloseReceivingInbound()
+  const disposeMut = useQaDisposeInbound()
 
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
   const [voidConfirmOpen, setVoidConfirmOpen] = useState(false)
   const [closeReceivingConfirmOpen, setCloseReceivingConfirmOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
+  const [disposeOpen, setDisposeOpen] = useState(false)
+  const [disposeType, setDisposeType] = useState<1 | 2>(1)
+  const [disposeReason, setDisposeReason] = useState('')
 
   function closeTab() {
     const { removeTab } = useWorkspaceStore.getState()
@@ -92,6 +105,25 @@ export default function InboundTaskDetailPage() {
   async function afterMutation() {
     await refetchTask()
     await refetchContainers()
+    await refetchDispositions()
+  }
+
+  function handleDispose() {
+    if (!validId) return
+    disposeMut.mutate(
+      { id: validId, data: { dispositionType: disposeType, reason: disposeReason.trim() || undefined } },
+      {
+        onSuccess: async (res) => {
+          setDisposeOpen(false)
+          toast.success(`已处置：${disposeType === 1 ? '退供应商' : '报废'} ${res?.totalQty ?? ''} 件`)
+          await afterMutation()
+        },
+        onError: (err: unknown) => {
+          const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '处置失败'
+          toast.error(msg)
+        },
+      },
+    )
   }
 
   const items = Array.isArray(task?.items) ? task.items : []
@@ -101,6 +133,19 @@ export default function InboundTaskDetailPage() {
   const putawayStatus = task?.putawayStatus ?? null
   const auditFlowStatus = task?.auditFlowStatus ?? null
   const printStatus = task?.printStatus ?? null
+
+  // ── 来料质检（文档07 Phase2）：进度可视化 + 拒收品处置 ──
+  const qaItems = items.filter(it => it.qaRequired)
+  const rejectedContainers: InboundContainerRow[] = containers?.rejected ?? []
+  const rejectedTotalQty = rejectedContainers.reduce((s, c) => s + c.qty, 0)
+  const dispositionList: QaDisposition[] = Array.isArray(dispositions) ? dispositions : []
+  const qaStatus = task?.qaStatus ?? 0
+  const showQaSection = qaItems.length > 0 || qaStatus > 0 || rejectedContainers.length > 0 || dispositionList.length > 0
+  const canDispose = can(PERMISSIONS.INBOUND_QA_DISPOSE)
+  const qaStatusView: { label: string; tone: StatusTone } | null =
+    qaStatus === 2 ? { label: '质检完成', tone: 'success' }
+    : qaStatus === 1 ? { label: '待质检', tone: 'warning' }
+    : null
 
   const printDetail = printSummary
     ? [
@@ -279,6 +324,91 @@ export default function InboundTaskDetailPage() {
         </div>
       </Section>
 
+      {showQaSection && (
+        <Section title="来料质检" sectionId="qa">
+          <div className="flex flex-wrap items-center gap-3">
+            {qaStatusView
+              ? <SoftStatusLabel label={qaStatusView.label} tone={qaStatusView.tone} />
+              : qaItems.length === 0
+                ? <span className="text-helper">本单无质检管控商品</span>
+                : null}
+            <span className="text-helper">质检管控商品先进「待质检」，合格才可上架、拒收不入库不结算</span>
+          </div>
+
+          {qaItems.length > 0 && (
+            <DataTable
+              columns={[
+                { key: 'productCode', title: '编码', width: 110, render: v => <span className="text-doc-code-muted">{(v as string) || '—'}</span> },
+                { key: 'productName', title: '商品', width: 200, render: v => <span className="font-medium">{String(v)}</span> },
+                { key: 'receivedQty', title: '已收', width: 80, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
+                { key: 'passedQty', title: '合格', width: 80, align: 'right', render: v => <span className="tabular-nums text-success">{String(v)}</span> },
+                { key: 'rejectedShow', title: '拒收', width: 80, align: 'right', render: v => <span className={cn('tabular-nums', (v as number) > 0 && 'font-semibold text-destructive')}>{String(v)}</span> },
+                { key: 'pendingQa', title: '待质检', width: 90, align: 'right', render: v => <span className={cn('tabular-nums', (v as number) > 0 && 'font-semibold text-warning')}>{String(v)}</span> },
+              ] satisfies TableColumn<InboundTaskItem & { passedQty: number; rejectedShow: number; pendingQa: number }>[]}
+              data={qaItems.map(it => {
+                const received = it.receivedQty
+                const checked = it.checkedQty ?? 0
+                const rejected = it.rejectedQty ?? 0
+                return { ...it, passedQty: Math.max(0, checked - rejected), rejectedShow: rejected, pendingQa: Math.max(0, received - checked) }
+              })}
+              rowKey="id"
+              emptyText="无质检明细"
+            />
+          )}
+
+          {rejectedContainers.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-foreground">
+                  质检拒收品 <span className="text-destructive tabular-nums">{rejectedTotalQty}</span> 件 · {rejectedContainers.length} 个容器
+                  <span className="text-helper ml-1">（未入库、未结算，待处置）</span>
+                </p>
+                {canDispose && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                    onClick={() => { setDisposeType(1); setDisposeReason(''); setDisposeOpen(true) }}
+                  >
+                    处置拒收品
+                  </Button>
+                )}
+              </div>
+              <DataTable
+                columns={[
+                  { key: 'barcode', title: '库存条码', width: 120, render: v => <span className="text-doc-code">{String(v)}</span> },
+                  { key: 'productName', title: '商品', width: 220, render: v => <span className="font-medium">{(v as string) || '—'}</span> },
+                  { key: 'qty', title: '数量', width: 100, align: 'right', render: (v, r) => <span className="tabular-nums">{String(v)} {r.unit || ''}</span> },
+                ] satisfies TableColumn<InboundContainerRow>[]}
+                data={rejectedContainers}
+                rowKey="id"
+                emptyText="无拒收容器"
+              />
+            </div>
+          )}
+
+          {dispositionList.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">处置记录</p>
+              <DataTable
+                columns={[
+                  { key: 'dispositionNo', title: '处置单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
+                  { key: 'dispositionTypeName', title: '方式', width: 100, render: (v, r) => <SoftStatusLabel label={String(v)} tone={r.dispositionType === 2 ? 'danger' : 'warning'} /> },
+                  { key: 'totalQty', title: '数量', width: 80, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
+                  { key: 'totalAmount', title: '参考货值', width: 110, align: 'right', render: v => <span className="text-muted-foreground tabular-nums">¥{(v as number).toFixed(2)}</span> },
+                  { key: 'reason', title: '原因', width: 150, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+                  { key: 'operatorName', title: '处置人', width: 90, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+                  { key: 'createdAt', title: '时间', width: 150, render: v => <span className="text-muted-foreground">{formatDisplayDateTime(v as string)}</span> },
+                ] satisfies TableColumn<QaDisposition>[]}
+                data={dispositionList}
+                rowKey="id"
+                emptyText="无处置记录"
+              />
+            </div>
+          )}
+        </Section>
+      )}
+
       <ConfirmDialog
         open={cancelConfirmOpen}
         title="取消收货订单"
@@ -352,6 +482,82 @@ export default function InboundTaskDetailPage() {
         }}
         onCancel={() => setCloseReceivingConfirmOpen(false)}
       />
+
+      <AppDialog
+        open={disposeOpen}
+        onOpenChange={setDisposeOpen}
+        dialogId="inbound-qa-dispose"
+        title="处置质检拒收品"
+        resizable={false}
+        defaultWidth={520}
+        defaultHeight={520}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDisposeOpen(false)} disabled={disposeMut.isPending}>取消</Button>
+            <Button variant="destructive" disabled={disposeMut.isPending || rejectedContainers.length === 0} onClick={handleDispose}>
+              {disposeMut.isPending ? '处置中…' : `确认${disposeType === 1 ? '退供应商' : '报废'}`}
+            </Button>
+          </div>
+        }
+      >
+        <div className="h-full overflow-auto p-5 space-y-4">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 space-y-1">
+            <p className="text-sm font-medium text-foreground">
+              将处置 <span className="text-destructive tabular-nums">{rejectedTotalQty}</span> 件拒收品（{rejectedContainers.length} 个容器）
+            </p>
+            <p className="text-helper">
+              处置会作废这些拒收容器并留痕；因拒收品从收货起就不计库存、不进应付，此操作
+              <span className="font-medium text-foreground">不影响库存与账款、不生成凭证</span>。操作不可撤销。
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">处置方式</p>
+            <div className="grid grid-cols-2 gap-2">
+              {([[1, '退供应商', '退回供应商索赔/换货'], [2, '报废', '就地报废销毁']] as const).map(([val, label, desc]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setDisposeType(val)}
+                  className={cn(
+                    'rounded-lg border px-3 py-2.5 text-left transition-colors',
+                    disposeType === val ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted/40',
+                  )}
+                >
+                  <p className="text-sm font-medium text-foreground">{label}</p>
+                  <p className="text-helper mt-0.5">{desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">处置原因 <span className="text-helper">（选填）</span></p>
+            <LimitedTextarea
+              value={disposeReason}
+              onChange={e => setDisposeReason(e.target.value)}
+              maxLength={200}
+              rows={3}
+              placeholder="如：外观破损、色差、错版、过期…"
+            />
+          </div>
+
+          {rejectedContainers.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-foreground">拒收品明细</p>
+              <div className="rounded-lg border border-border divide-y divide-border/60">
+                {rejectedContainers.map(c => (
+                  <div key={c.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <span className="text-doc-code shrink-0">{c.barcode}</span>
+                    <span className="text-muted-foreground truncate flex-1">{c.productName || '—'}</span>
+                    <span className="tabular-nums shrink-0">{c.qty} {c.unit || ''}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </AppDialog>
 
       {printOpen && task && (
         <OrderPrintOverlay

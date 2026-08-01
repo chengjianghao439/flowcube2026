@@ -88,6 +88,50 @@ async function registerSerials(conn, { productId, warehouseId, containerId, seri
 }
 
 /**
+ * 历史序列号导入（文档 04 · Phase 2）。给开关打开前收的存量货补齐个体账，使商品可开启 serial_managed。
+ * 与 registerSerials 同款"复用或插入 status=1、绑定容器、写事件"，差别仅：来源是历史导入（无收货单，
+ * source 列留空）、事件 type='import'。**只增 product_serials + serial_events，绝不改容器 remaining_qty**
+ * （容器是库存唯一事实源，导入是给既有数量补个体账，不是入库）。
+ * 必须由 serials.service.importHistorical 在校验"逐容器 SN 数==remaining_qty、全覆盖、无 PENDING/锁定"、
+ * 并已把 serial_managed 置 1 之后，于同一事务内逐容器调用；调用方随后调 assertSerialCountMatchesContainer 兜底。
+ * @returns {Promise<number[]>} product_serials.id 列表
+ */
+async function importHistoricalSerials(conn, { productId, warehouseId, containerId, serialNos, operatorId = null }) {
+  const list = normalizeSerialList(serialNos)
+  const ids = []
+  for (const sn of list) {
+    const [[existing]] = await conn.query(
+      'SELECT id, status FROM product_serials WHERE product_id = ? AND serial_no = ? FOR UPDATE',
+      [productId, sn],
+    )
+    if (existing) {
+      if (Number(existing.status) === SERIAL_STATUS.IN_STOCK) {
+        throw new AppError(`序列号已在库，不能重复导入：${sn}`, 409, 'SERIAL_ALREADY_IN_STOCK')
+      }
+      await conn.query(
+        `UPDATE product_serials
+         SET status = ?, warehouse_id = ?, container_id = ?, inbound_task_id = NULL, inbound_task_item_id = NULL, purchase_order_id = NULL,
+             warehouse_task_id = NULL, sale_order_id = NULL, shipped_at = NULL, return_ref_type = NULL, return_ref_id = NULL
+         WHERE id = ?`,
+        [SERIAL_STATUS.IN_STOCK, warehouseId, containerId, existing.id],
+      )
+      await writeEvent(conn, { serialId: existing.id, eventType: 'import', fromStatus: existing.status, toStatus: SERIAL_STATUS.IN_STOCK, containerId, warehouseId, refType: 'serial_import', refId: null, operatorId, remark: '历史序列号导入(复用)' })
+      ids.push(existing.id)
+    } else {
+      const [r] = await conn.query(
+        `INSERT INTO product_serials
+           (product_id, serial_no, warehouse_id, container_id, status)
+         VALUES (?,?,?,?,?)`,
+        [productId, sn, warehouseId, containerId, SERIAL_STATUS.IN_STOCK],
+      )
+      await writeEvent(conn, { serialId: r.insertId, eventType: 'import', fromStatus: null, toStatus: SERIAL_STATUS.IN_STOCK, containerId, warehouseId, refType: 'serial_import', refId: null, operatorId, remark: '历史序列号导入' })
+      ids.push(r.insertId)
+    }
+  }
+  return ids
+}
+
+/**
  * 上架留痕（文档 5.2）。上架不逐台扫，个体随容器整箱移动；只写事件、不改归属。
  * 在 promote 容器 4→1 的同一事务内调用。
  */
@@ -191,6 +235,7 @@ module.exports = {
   SERIAL_STATUS,
   isSerialManaged,
   registerSerials,
+  importHistoricalSerials,
   putawaySerials,
   dispatchSerials,
   assertSerialCountMatchesContainer,

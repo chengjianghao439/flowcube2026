@@ -12,6 +12,9 @@ import type {
   InboundPurchaseCandidate,
   ReprintInboundTaskParams,
   ReprintInboundTaskResult,
+  QaDisposition,
+  QaDisposeParams,
+  QaDisposeResult,
 } from '@/types/inbound-tasks'
 
 export const getInboundTasksApi = (params: QueryParams & { status?: number | number[]; productId?: number; supplierId?: number }) =>
@@ -67,3 +70,13 @@ export const voidInboundReceiptApi = (id: number) =>
 /** 短装结案：提前结束收货（收货中→待上架），剩余未收量作罢 */
 export const closeReceivingInboundApi = (id: number) =>
   client.post(`/inbound-tasks/${id}/close-receiving`)
+
+/** 质检拒收处置历史（文档07 Phase2）：某收货订单的退供应商/报废单 */
+export const getInboundQaDispositionsApi = (id: number) =>
+  client.get<QaDisposition[]>(`/inbound-tasks/${id}/qa-dispositions`)
+
+/** 一键处置质检拒收品（退供应商/报废）：只消费 REJECTED 容器、零 GL。ERP 侧后台动作，带幂等键 */
+export const qaDisposeInboundApi = (id: number, data: QaDisposeParams, requestKey?: string) =>
+  client.post<QaDisposeResult>(`/inbound-tasks/${id}/qa-dispose`, data, requestKey
+    ? { headers: withRequestKeyHeaders(requestKey) }
+    : undefined)

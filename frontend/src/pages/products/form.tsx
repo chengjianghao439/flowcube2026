@@ -294,7 +294,7 @@ export default function ProductFormPage() {
             <label className="flex h-10 items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4" checked={form.serialManaged}
                 onChange={e => set('serialManaged', e.target.checked)} disabled={submitting} />
-              <span className="text-muted-foreground">收货逐台扫序列号、出库逐台核销（建议仅对新品/零库存开启）</span>
+              <span className="text-muted-foreground">收货逐台扫序列号、出库逐台核销。零库存商品可在此直接开启；有存量库存的请用「序列号 · 历史导入」补齐后开启（此处会被拦截）</span>
             </label>
           </div>
           {form.batchManaged && (

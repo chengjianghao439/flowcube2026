@@ -132,6 +132,7 @@ const ReplenishmentPage = lazy(() => import('@/pages/reports/replenishment'))
 const InventoryAgingPage = lazy(() => import('@/pages/reports/inventory-aging'))
 const SerialLedgerPage = lazy(() => import('@/pages/serials/index'))
 const SerialTracePage = lazy(() => import('@/pages/serials/trace'))
+const SerialImportPage = lazy(() => import('@/pages/serials/import'))
 const ProcurementPlanPage = lazy(() => import('@/pages/reports/procurement-plan'))
 const ApprovalsPage = lazy(() => import('@/pages/reports/approvals'))
 const WavePerformancePage = lazy(() => import('@/pages/reports/wave-performance'))
@@ -297,6 +298,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: SerialTracePage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
+  },
+  {
+    path: '/serials/import',
+    title: '序列号历史导入',
+    permission: PERMISSIONS.SERIAL_MANAGE,
+    component: SerialImportPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '库存', section: '库存查询', order: 26 },
   },
   {
     path: '/stockcheck',

@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { getSerialsApi, checkSerialConsistencyApi, type SerialLedgerItem, type SerialConsistencyMismatch } from '@/api/serials'
 import type { TableColumn } from '@/types'
 import type { StatusTone } from '@/lib/statusTone'
@@ -18,6 +20,7 @@ const STATUS_TONE: Record<number, StatusTone> = { 1: 'success', 2: 'draft', 3: '
 
 export default function SerialLedgerPage() {
   const navigate = useNavigate()
+  const { can } = usePermission()
   const [warehouseId, setWarehouseId] = useState<number | null>(null)
   const [status, setStatus] = useState<string>('all')
   const [search, setSearch] = useState('')
@@ -68,7 +71,12 @@ export default function SerialLedgerPage() {
       <PageHeader
         title="序列号台账"
         description="序列号是容器下挂的个体账（数量以容器为准）。台账查每台的当前状态与归属；一致性对账守护「容器数量 == 在库序列号数」不变量。"
-        actions={<Button onClick={() => { ledgerQ.refetch(); consistencyQ.refetch() }}>刷新</Button>}
+        actions={
+          <div className="flex gap-2">
+            {can(PERMISSIONS.SERIAL_MANAGE) && <Button variant="outline" onClick={() => navigate('/serials/import')}>历史导入</Button>}
+            <Button onClick={() => { ledgerQ.refetch(); consistencyQ.refetch() }}>刷新</Button>
+          </div>
+        }
       />
 
       <div className="flex gap-1 border-b border-border">
@@ -120,7 +128,10 @@ export default function SerialLedgerPage() {
             </div>
           </FilterCard>
           <p className="text-xs text-muted-foreground">
-            说明：给已有库存的商品新开启「序列号管理」时，历史库存容器尚无序列号，会在这里列为不一致——这是正常现象，需通过 Phase 2 的历史序列号导入补齐，或仅对新品 / 零库存商品开启。
+            说明：给已有库存的商品开启「序列号管理」时，历史库存容器尚无序列号，会在这里列为不一致。
+            {can(PERMISSIONS.SERIAL_MANAGE)
+              ? <> 请用 <button type="button" className="text-primary underline underline-offset-2" onClick={() => navigate('/serials/import')}>序列号历史导入</button> 为在库货补齐序列号（补齐后自动一致），或仅对新品 / 零库存商品开启。</>
+              : <> 需由具备序列号管理权限者用「历史导入」补齐，或仅对新品 / 零库存商品开启。</>}
           </p>
           <DataTable columns={consCols} data={cons?.mismatches ?? []} loading={consistencyQ.isLoading} rowKey="containerId" emptyText="未发现不一致，容器数量与在库序列号数完全吻合 ✓" />
         </>
