@@ -28,6 +28,8 @@ export interface InboundTaskItem {
   checkedQty?: number       // 已质检量（合格+让步+拒收）
   rejectedQty?: number      // 拒收量（不入库不结算）
   concessionQty?: number    // 让步接收量（合格量的子集，旁路统计）
+  boxUnit?: string | null    // 主辅助单位名（如"箱"），供 PDA 收货按箱快捷录入（文档03 Phase4b）
+  boxRate?: number | null    // 1 辅助单位 = N 基本单位（率由系统给定，现场不可改）
   unitPrice: number | null
   /** 序列号管控商品：PDA 收货需逐台扫序列号登记（每箱 SN 数 == 箱数量） */
   serialManaged?: boolean
