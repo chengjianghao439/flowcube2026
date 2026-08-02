@@ -3,7 +3,7 @@ const AppError = require('../../utils/AppError')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { reserve, partialReleaseByProduct } = require('../../engine/reservationEngine')
 const { reserveTaskLockedContainersForReturn, unlockAndRelocateContainer } = require('../../engine/containerEngine')
-const { assertNoSerialManaged } = require('../../engine/serialEngine')
+const { isSerialManaged } = require('../../engine/serialEngine')
 const { WT_STATUS, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { logSideEffectFailure } = require('./warehouse-tasks.helpers')
@@ -64,9 +64,10 @@ async function applyProductDeltaWithinTransaction(conn, {
   const delta = Number(newRequiredQty) - Number(oldRequiredQty)
   if (Math.abs(delta) < QTY_EPS) return null
 
-  // 序列号管控商品：执行期改单会拆容器归还/作废箱子（动容器数量却不动序列号），
-  // Phase 1 未实现改单时的序列号回冲，整体挡住（增量的后续补拣、减量的拆箱归还均不支持）。
-  await assertNoSerialManaged(conn, [productId], '销售单改单')
+  // 序列号管控商品（文档04 Phase3b）：增量（reserve + 补拣，SN 在 ship 时才逐台扫核销）与
+  // 「未拣减量」（只下调 required/释放预占，不动容器、不动 SN）都安全，放行；只有「已拣货物理归还」
+  // （下方第②层 reserveTaskLockedContainersForReturn 会拆锁定容器、动容器数量）需 SN 回冲——
+  // 而拆分发生在改单请求(ERP，无扫码)时点、无法安全指定要归还的具体台，故那条路径单独挡（见下）。
 
   const [[existingItem]] = await conn.query(
     `SELECT id, required_qty, picked_qty, sorted_qty, checked_qty
@@ -131,6 +132,13 @@ async function applyProductDeltaWithinTransaction(conn, {
       needsReopenPicking: false, needsReopenChecking: false,
       itemStatus: 3,
     }
+  }
+
+  // 序列号商品：到这里意味着要减掉「已拣货」的量 → 需物理归还（拆锁定容器 + SN 回冲）。拆分在
+  // 改单请求（ERP，无扫码）时点发生，无法让现场逐台扫「要归还的具体台」，任取会让台账与物理脱节
+  // （将来出库扫码报 SERIAL_CONTAINER_MISMATCH）。故序列号商品的已拣货减量暂不支持，引导走取消重下。
+  if (await isSerialManaged(conn, productId)) {
+    throw new AppError('序列号管控商品已拣货后不支持改单减量（需物理归还逐台核对），请取消该单后按新数量重新下单', 400, 'SERIAL_ADJUST_REDUCE_UNSUPPORTED')
   }
 
   // 第③层：若「已拣未打包」的余量不够吸收剩余 reduceQty，先作废足够的已完成箱子腾出容量

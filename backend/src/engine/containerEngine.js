@@ -619,6 +619,17 @@ async function adjustContainersForStockcheck(conn, {
   )
   const before = stockRow ? Number(stockRow.qty) : 0
 
+  // 序列号管控商品（文档04 Phase3b · C）：盘点差异会「盘盈建容器(无SN)」或「盘亏扣容器(不删SN)」，
+  // 都破坏「容器 remaining == 在库SN台数」不变量；且哪几台盈/亏需现场逐台核对（扫每台SN比对），
+  // 盘盈的新 SN 来源也需业务口径。故序列号商品的盘点差异暂不走自动盘盈盘亏——挡住以防静默不一致
+  // （旧行为是不挡→静默破不变量），完整 SN 级盘点作后续专项。
+  if (Math.abs(Number(diffQty)) > 1e-9) {
+    const { isSerialManaged } = require('./serialEngine')
+    if (await isSerialManaged(conn, productId)) {
+      throw new AppError(`序列号管控商品「${productName}」盘点差异需逐台核对处理，暂不支持自动盘盈盘亏`, 400, 'SERIAL_STOCKCHECK_UNSUPPORTED')
+    }
+  }
+
   let createdContainerId = null
   let primaryDeductContainerId = null
 
