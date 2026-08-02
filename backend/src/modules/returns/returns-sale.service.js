@@ -9,6 +9,7 @@ const { getRequestId } = require('../../utils/requestContext')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom } = require('./returns.helpers')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { foldEntryItems } = require('../../utils/unitConversion')  // 多单位折算（文档03 Phase4a，退货按箱）
 
 const SR_STATUS = { 1:'草稿', 2:'已确认', 3:'已退货入库', 4:'已取消' }
 
@@ -156,7 +157,7 @@ async function findByIdSR(id, scopeWarehouseIds = null) {
   assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '销售退货单')
   const ret=fmtSR(rows[0])
   const [items]=await pool.query('SELECT * FROM sale_return_items WHERE return_id=?',[id])
-  ret.items=items.map(r=>({id:r.id,sourceItemId:r.sale_item_id||null,productId:r.product_id,productCode:r.product_code,productName:r.product_name,articleNumber:r.article_number||null,spec:r.spec||null,color:r.color||null,unit:r.unit,quantity:Number(r.quantity),unitPrice:Number(r.unit_price),amount:Number(r.amount)}))
+  ret.items=items.map(r=>({id:r.id,sourceItemId:r.sale_item_id||null,productId:r.product_id,productCode:r.product_code,productName:r.product_name,articleNumber:r.article_number||null,spec:r.spec||null,color:r.color||null,unit:r.unit,entryUnit:r.entry_unit||r.unit,quantity:Number(r.quantity),entryQty:r.entry_qty!=null?Number(r.entry_qty):Number(r.quantity),conversionRate:Number(r.conversion_rate),unitPrice:Number(r.unit_price),amount:Number(r.amount)}))
   const [[task]]=await pool.query(
     "SELECT id, task_no, status FROM return_tasks WHERE return_id=? AND return_type='sale' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1",
     [id],
@@ -227,11 +228,15 @@ async function createSR({ customerId, customerName, warehouseId, warehouseName, 
         throw new AppError('销售退货仓库必须与原销售单一致', 400)
       }
     }
-    await validateSaleReturnItems(conn, resolvedSaleOrderId, items)
+    // 多单位折算（文档03 Phase4a）：入参 quantity/unitPrice 恒为录入单位口径，折算成基本单位后
+    // 再校验/落库。有源退货前端锁死数量/单价（entryUnit=基本单位→rate 1，等价旧行为）；
+    // validateSaleReturnItems 用 folded（quantity 已是基本单位）比对剩余可退量、并强制覆盖 unitPrice 为源单价。
+    const folded = await foldEntryItems(conn, items)
+    await validateSaleReturnItems(conn, resolvedSaleOrderId, folded)
     const returnNo=await genNo(conn,'SR','sale_returns','return_no')
-    const total=items.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
+    const total=folded.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
     const [r]=await conn.query(`INSERT INTO sale_returns (return_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_order_id,sale_order_no,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[returnNo,customerId,customerName,warehouseId,warehouseName,resolvedSaleOrderId,saleOrderNo||null,total,remark||null,operator.userId,operator.realName])
-    for(const item of items) await conn.query(`INSERT INTO sale_return_items (return_id,sale_item_id,product_id,product_code,product_name,article_number,spec,color,unit,quantity,unit_price,amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.articleNumber||null,item.spec||null,item.color||null,item.unit,item.quantity,item.unitPrice,item.quantity*item.unitPrice])
+    for(const item of folded) await conn.query(`INSERT INTO sale_return_items (return_id,sale_item_id,product_id,product_code,product_name,article_number,spec,color,unit,entry_unit,quantity,entry_qty,conversion_rate,unit_price,amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.articleNumber||null,item.spec||null,item.color||null,item.unit,item.entryUnit,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,item.quantity*item.unitPrice])
     await recordReturnEvent(conn, {
       returnType: 'sale',
       returnId: r.insertId,

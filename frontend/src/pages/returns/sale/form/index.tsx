@@ -39,7 +39,8 @@ import type { SaleReturn, SaleReturnSourceOrder, ReturnItem } from '@/api/return
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import type { FinderResult } from '@/types/finder'
-import type { ProductFinderResult } from '@/types/products'
+import type { ProductFinderResult, ProductUnit } from '@/types/products'
+import { getProductApi } from '@/api/products'
 
 interface DraftItem {
   _key: number
@@ -51,6 +52,8 @@ interface DraftItem {
   spec?: string | null
   color?: string | null
   unit: string
+  entryUnit?: string        // 录入单位（多单位，文档03 Phase4a；无源手工退货可按箱录入）
+  units?: ProductUnit[]     // UI-only：该商品多计量单位（供单位下拉），提交前 strip，不发后端
   quantity: number
   unitPrice: number
   originalQty?: number
@@ -109,7 +112,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
   function addItem() {
     const key = counter
     setCounter(c => c + 1)
-    setItems(p => [...p, { _key: key, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', quantity: 1, unitPrice: 0 }])
+    setItems(p => [...p, { _key: key, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0 }])
     setFinderItemKey(key)
     setFinderOpen(true)
   }
@@ -126,9 +129,13 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
     if (finderItemKey === null) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, unitPrice: product.salePrice ?? 0 }
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, units: [], unitPrice: product.salePrice ?? 0 }
       : i,
     ))
+    // 拉多计量单位供单位下拉（无辅助单位则下拉不出现、按基本单位录入）
+    getProductApi(product.id)
+      .then(full => { const units = full?.units ?? []; setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units } : i))) })
+      .catch(() => { /* 拉取失败：按基本单位录入 */ })
     setInvalidItemKeys(prev => {
       if (!prev.has(k)) return prev
       const next = new Set(prev)
@@ -202,7 +209,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         saleOrderId: boundSource ? boundSource.id : undefined,
         saleOrderNo: orderNo || undefined,
         remark: remark.trim() || undefined,
-        items: items.map(({ _key, originalQty, returnedQty, remainingQty, ...r }) => r),
+        items: items.map(({ _key, originalQty, returnedQty, remainingQty, units, ...r }) => r),
       }, requestKeyRef.current)
       requestKeyRef.current = createRequestKey('sale-return')
       await qc.invalidateQueries({ queryKey: ['returns'] })
@@ -341,7 +348,17 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                         </button>
                       </td>
                       <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
-                      <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
+                      <td className="py-2.5 text-center text-muted-body">
+                        {(!boundSource && item.units && item.units.filter(u => !u.isBase).length > 0) ? (
+                          <select
+                            value={item.entryUnit || item.unit}
+                            onChange={e => updateItem(item._key, 'entryUnit', e.target.value)}
+                            className="h-8 rounded-md border border-border bg-background px-1 text-sm"
+                          >
+                            {(item.units || []).map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
+                          </select>
+                        ) : ((item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : (item.unit || '—'))}
+                      </td>
                       <td className="py-2.5 pr-2">
                         <Input
                           type="number" min="0.01" step="0.01" placeholder="数量"
@@ -350,6 +367,10 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
                           className="text-right text-sm"
                         />
+                        {item.entryUnit && item.entryUnit !== item.unit && (() => {
+                          const rate = Number((item.units || []).find(u => u.unitName === item.entryUnit)?.conversionRate ?? 1)
+                          return <p className="mt-1 text-right text-xs text-muted-foreground">= {(item.quantity * rate).toLocaleString()} {item.unit}</p>
+                        })()}
                       </td>
                       <td className="py-2.5">
                         <Input
@@ -563,9 +584,13 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
             { key: 'spec', title: '型号', width: 110, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
             { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
             { key: 'color', title: '颜色', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{String(v)}</span> },
-            { key: 'quantity', title: '数量', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
-            { key: 'unitPrice', title: '单价', width: 110, align: 'right', render: v => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
+            { key: 'unit', title: '单位', width: 70, render: (_, item) => <span className="text-muted-foreground">{(item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : item.unit}</span> },
+            { key: 'quantity', title: '数量', width: 120, align: 'right', render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty != null)
+              ? <span className="tabular-nums">{item.entryQty} {item.entryUnit}<span className="ml-1 text-xs text-muted-foreground">（{Number(v)} {item.unit}）</span></span>
+              : <span className="tabular-nums">{String(v)}</span> },
+            { key: 'unitPrice', title: '单价', width: 120, align: 'right', render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty && item.entryQty > 0)
+              ? <span className="tabular-nums" title={`¥${Number(v).toFixed(4)} / ${item.unit}`}>¥{(item.amount / item.entryQty).toFixed(2)}/{item.entryUnit}</span>
+              : <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
             { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
           ] satisfies TableColumn<ReturnItem>[]}
           data={ret.items ?? []}

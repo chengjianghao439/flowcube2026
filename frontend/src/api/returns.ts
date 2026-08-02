@@ -2,7 +2,7 @@ import { payloadClient as client } from './client'
 import type { PaginatedData } from '@/types'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 
-export interface ReturnItem { id:number; sourceItemId?:number|null; productId:number; productCode:string; productName:string; articleNumber?:string|null; spec?:string|null; color?:string|null; unit:string; quantity:number; unitPrice:number; amount:number }
+export interface ReturnItem { id:number; sourceItemId?:number|null; productId:number; productCode:string; productName:string; articleNumber?:string|null; spec?:string|null; color?:string|null; unit:string; entryUnit?:string; quantity:number; entryQty?:number; conversionRate?:number; unitPrice:number; amount:number }
 export interface ReturnLinkedTask { id:number; taskNo:string; status:number; statusName:string; rejectedQty?:number; rejectedContainers?:RejectedContainer[] }
 export interface PurchaseReturn { id:number; returnNo:string; supplierId:number; supplierName:string; warehouseId:number; warehouseName:string; purchaseOrderId?:number|null; purchaseOrderNo?:string; status:1|2|3|4; statusName:string; totalAmount:number; remark?:string; operatorName:string; createdAt:string; items?:ReturnItem[]; task?:ReturnLinkedTask|null }
 export interface SaleReturn { id:number; returnNo:string; customerId:number; customerName:string; warehouseId:number; warehouseName:string; saleOrderId?:number|null; saleOrderNo?:string; status:1|2|3|4; statusName:string; totalAmount:number; remark?:string; operatorName:string; createdAt:string; items?:ReturnItem[]; task?:ReturnLinkedTask|null }
