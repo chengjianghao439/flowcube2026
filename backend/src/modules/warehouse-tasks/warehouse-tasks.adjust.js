@@ -2,7 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { reserve, partialReleaseByProduct } = require('../../engine/reservationEngine')
-const { reserveTaskLockedContainersForReturn, unlockAndRelocateContainer } = require('../../engine/containerEngine')
+const { reserveTaskLockedContainersForReturn, splitTaskLockedContainerForReturn, unlockAndRelocateContainer } = require('../../engine/containerEngine')
 const { isSerialManaged } = require('../../engine/serialEngine')
 const { WT_STATUS, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
@@ -64,10 +64,11 @@ async function applyProductDeltaWithinTransaction(conn, {
   const delta = Number(newRequiredQty) - Number(oldRequiredQty)
   if (Math.abs(delta) < QTY_EPS) return null
 
-  // 序列号管控商品（文档04 Phase3b）：增量（reserve + 补拣，SN 在 ship 时才逐台扫核销）与
-  // 「未拣减量」（只下调 required/释放预占，不动容器、不动 SN）都安全，放行；只有「已拣货物理归还」
-  // （下方第②层 reserveTaskLockedContainersForReturn 会拆锁定容器、动容器数量）需 SN 回冲——
-  // 而拆分发生在改单请求(ERP，无扫码)时点、无法安全指定要归还的具体台，故那条路径单独挡（见下）。
+  // 序列号管控商品（文档04 Phase3b·B-full）：增量（reserve + 补拣，SN 在 ship 时才逐台扫核销）与
+  // 「未拣减量」（只下调 required/释放预占，不动容器、不动 SN）都安全，放行。「已拣货物理归还」
+  // （下方第②层 reserveTaskLockedContainersForReturn 会拆锁定容器）需按名单迁移 SN——而改单请求发生
+  // 在 ERP 端、无扫码，无法确定要归还哪几台，故对序列号商品走 defer=true：请求时只登记归还意图、
+  // 容器保持完整，真正的拆分 + SN 迁移推迟到 PDA confirmContainerReturn 扫到具体台时执行（见下）。
 
   const [[existingItem]] = await conn.query(
     `SELECT id, required_qty, picked_qty, sorted_qty, checked_qty
@@ -134,12 +135,10 @@ async function applyProductDeltaWithinTransaction(conn, {
     }
   }
 
-  // 序列号商品：到这里意味着要减掉「已拣货」的量 → 需物理归还（拆锁定容器 + SN 回冲）。拆分在
-  // 改单请求（ERP，无扫码）时点发生，无法让现场逐台扫「要归还的具体台」，任取会让台账与物理脱节
-  // （将来出库扫码报 SERIAL_CONTAINER_MISMATCH）。故序列号商品的已拣货减量暂不支持，引导走取消重下。
-  if (await isSerialManaged(conn, productId)) {
-    throw new AppError('序列号管控商品已拣货后不支持改单减量（需物理归还逐台核对），请取消该单后按新数量重新下单', 400, 'SERIAL_ADJUST_REDUCE_UNSUPPORTED')
-  }
+  // 序列号商品：到这里意味着要减掉「已拣货」的量 → 需物理归还（拆锁定容器 + 按名单迁移 SN）。改单请求
+  // 时点（ERP，无扫码）无法确定要归还哪几台，故对序列号商品 defer=true——请求时只登记归还意图、容器保持
+  // 完整，拆分与 SN 迁移推迟到 PDA confirmContainerReturn 扫到具体台时执行（见 confirmContainerReturn）。
+  const serialManaged = await isSerialManaged(conn, productId)
 
   // 第③层：若「已拣未打包」的余量不够吸收剩余 reduceQty，先作废足够的已完成箱子腾出容量
   const [[{ packedUnits }]] = await conn.query(
@@ -191,7 +190,7 @@ async function applyProductDeltaWithinTransaction(conn, {
   // 第②层：物理归还库位——从任务锁定的容器里按 FIFO 拆出 reduceQty，
   // 登记待确认队列，PDA 扫码确认目标库位后才真正解锁+释放预占。
   const containerReturns = reduceQty > QTY_EPS
-    ? await reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty: reduceQty })
+    ? await reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty: reduceQty, defer: serialManaged })
     : []
 
   // required_qty 立即下调到新目标（防止继续朝旧目标复核/打包）；checked_qty 清零——
@@ -329,13 +328,36 @@ async function getAdjustmentDetail(adjustmentId) {
     )
     ;[returns] = await pool.query(
       `SELECT r.*, c.barcode AS container_barcode, c.remaining_qty AS container_remaining_qty,
+              c.product_id AS container_product_id, pr.serial_managed AS serial_managed,
               loc.code AS suggested_location_code
          FROM sale_order_adjustment_container_returns r
          LEFT JOIN inventory_containers c ON c.id = r.source_container_id
+         LEFT JOIN product_items pr ON pr.id = c.product_id
          LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
         WHERE r.adjustment_item_id IN (?) ORDER BY r.id ASC`,
       [itemIds],
     )
+  }
+
+  // 序列号商品部分归还（defer 拆分，B-full）：PDA 需逐台扫「要归还的具体台」再让后端拆分。这里把
+  // 待归还容器上、在库(1) 的序列号清单一并带回，供 PDA 现场扫码时客户端预校验（镜像 /pda/split 的 serials）。
+  // 只有 serial_managed 且部分归还（qty < 容器 remaining）的项才需要；整只归还（qty===remaining）序列号
+  // 随容器整体走、无需逐台扫。
+  const serialsByContainer = new Map()
+  const serialReturnContainerIds = [...new Set(returns
+    .filter(r => Number(r.serial_managed) === 1 && Number(r.status) === 1 && Number(r.qty) < Number(r.container_remaining_qty))
+    .map(r => Number(r.source_container_id)))]
+  if (serialReturnContainerIds.length) {
+    const [snRows] = await pool.query(
+      `SELECT container_id, serial_no FROM product_serials
+        WHERE container_id IN (?) AND status = 1 ORDER BY serial_no ASC`,
+      [serialReturnContainerIds],
+    )
+    for (const s of snRows) {
+      const cid = Number(s.container_id)
+      if (!serialsByContainer.has(cid)) serialsByContainer.set(cid, [])
+      serialsByContainer.get(cid).push(s.serial_no)
+    }
   }
 
   return {
@@ -366,14 +388,24 @@ async function getAdjustmentDetail(adjustmentId) {
           : [],
         status: Number(v.status),
       })),
-      containerReturns: returns.filter(r => Number(r.adjustment_item_id) === Number(i.id)).map(r => ({
-        id: Number(r.id),
-        containerId: Number(r.source_container_id),
-        barcode: r.container_barcode,
-        qty: Number(r.qty),
-        suggestedLocationCode: r.suggested_location_code || null,
-        status: Number(r.status),
-      })),
+      containerReturns: returns.filter(r => Number(r.adjustment_item_id) === Number(i.id)).map(r => {
+        const serialManaged = Number(r.serial_managed) === 1
+        const containerRemainingQty = r.container_remaining_qty != null ? Number(r.container_remaining_qty) : null
+        // 需逐台扫 = 序列号商品 且 部分归还（qty < 容器剩余）。整只归还随容器整体走、无需逐台扫。
+        const needsSerialScan = serialManaged && containerRemainingQty != null && Number(r.qty) < containerRemainingQty && Number(r.status) === 1
+        return {
+          id: Number(r.id),
+          containerId: Number(r.source_container_id),
+          barcode: r.container_barcode,
+          qty: Number(r.qty),
+          suggestedLocationCode: r.suggested_location_code || null,
+          status: Number(r.status),
+          serialManaged,
+          containerRemainingQty,
+          needsSerialScan,
+          serials: needsSerialScan ? (serialsByContainer.get(Number(r.source_container_id)) || []) : [],
+        }
+      }),
     })),
   }
 }
@@ -412,8 +444,13 @@ async function confirmPackageVoid(voidId, { operator } = {}) {
  * 仓库侧不能有决策权，只能执行——与取消逆向归还（scan-logs.service.js 的
  * createCancelReturnScanLog）同一口径，必须扫回容器当前登记的库位（即拆分时继承
  * 自原容器的库位），不允许操作员自选目标库位，否则账面库位和实物摆放位置会脱节。
+ *
+ * 序列号商品部分归还（文档04 Phase3b·B-full）：改单请求时用 defer 只登记了归还意图、没拆容器；
+ * 到这里 PDA 已逐台扫到「要归还的具体台」(serialNos)，此刻才真正拆分锁定容器（按名单迁移 SN 到新容器）
+ * 并把新容器解锁归还，源容器保留剩余台继续锁定于任务。整只归还（qty===容器剩余）序列号随容器整体走、
+ * 无需拆分、无需逐台扫。非序列号商品：请求时已拆好，这里直接解锁归还，行为不变。
  */
-async function confirmContainerReturn(returnId, { targetLocationId = null, operator } = {}) {
+async function confirmContainerReturn(returnId, { targetLocationId = null, serialNos = null, operator } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -425,10 +462,11 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
     if (Number(ret.status) !== 1) throw new AppError('该归还项已确认，无需重复操作', 400)
 
     const [[container]] = await conn.query(
-      'SELECT id, barcode, location_id FROM inventory_containers WHERE id=? FOR UPDATE',
+      'SELECT id, barcode, location_id, product_id, remaining_qty, locked_by_task_id FROM inventory_containers WHERE id=? FOR UPDATE',
       [ret.source_container_id],
     )
     if (!container) throw new AppError('容器不存在', 404)
+    // 归还库位强校验：必须扫回容器当前登记的原库位（拆分出的新容器继承同一库位，故先按源容器校验再拆分）。
     if (container.location_id == null || Number(targetLocationId) !== Number(container.location_id)) {
       const [[originalLoc]] = container.location_id
         ? await conn.query('SELECT code FROM warehouse_locations WHERE id=?', [container.location_id])
@@ -439,15 +477,37 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
       )
     }
 
+    // 序列号商品的「部分延迟归还」：此刻才拆分。整只归还 / 非序列号商品走原路径（直接解锁源容器）。
+    const isSerial = await isSerialManaged(conn, container.product_id)
+    const needsSplitNow = isSerial && Number(ret.qty) < Number(container.remaining_qty)
+    let returnedContainerId = Number(ret.source_container_id)
+    if (needsSplitNow) {
+      const cleaned = [...new Set((serialNos || []).map(s => String(s ?? '').trim()).filter(Boolean))]
+      if (cleaned.length !== Number(ret.qty)) {
+        throw new AppError(`序列号商品归还须逐台扫描要归还的序列号（应扫 ${Number(ret.qty)} 台，实扫 ${cleaned.length} 台）`, 400, 'SERIAL_RETURN_SCAN_COUNT_MISMATCH')
+      }
+      // 拆出扫到的 qty 台到新容器（moveSerialsOnSplit 校验这些 SN 都在源容器且在库、数量匹配，
+      // 并对两容器断言 remaining==在库SN数），新容器随后解锁归还，源容器保留剩余台继续锁定。
+      const split = await splitTaskLockedContainerForReturn(conn, {
+        taskId: Number(container.locked_by_task_id),
+        containerId: Number(ret.source_container_id),
+        qty: Number(ret.qty),
+        serialNos: cleaned,
+      })
+      returnedContainerId = Number(split.containerId)
+    }
+
     await unlockAndRelocateContainer(conn, {
-      containerId: Number(ret.source_container_id),
+      containerId: returnedContainerId,
       targetLocationId,
     })
+    // 部分拆分后归还的是新容器：把 source_container_id 校准到实际归还的容器，语义与非序列号部分归还
+    // （source=拆出的新容器）保持一致；original_container_id 不动，仍指向源容器供下调拣货扫码用。
     await conn.query(
       `UPDATE sale_order_adjustment_container_returns
-       SET status=2, target_location_id=?, confirmed_by=?, confirmed_by_name=?, confirmed_at=NOW()
+       SET status=2, source_container_id=?, target_location_id=?, confirmed_by=?, confirmed_by_name=?, confirmed_at=NOW()
        WHERE id=?`,
-      [targetLocationId, operator?.userId ?? null, operator?.realName ?? null, returnId],
+      [returnedContainerId, targetLocationId, operator?.userId ?? null, operator?.realName ?? null, returnId],
     )
     const [[row]] = await conn.query(
       `SELECT i.adjustment_id FROM sale_order_adjustment_container_returns r

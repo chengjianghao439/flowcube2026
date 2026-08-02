@@ -38,7 +38,7 @@ router.get('/adjustments/:id', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJU
 router.post('/adjustments/package-voids/:voidId/confirm', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST), pdaOnly, pdaSessionRequired(), ctrl.confirmAdjustmentPackageVoid)
 
 // POST /api/warehouse-tasks/adjustments/container-returns/:returnId/confirm — PDA 扫码确认归还库位
-router.post('/adjustments/container-returns/:returnId/confirm', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST), pdaOnly, pdaSessionRequired(), vBody(z.object({ targetLocationId: z.number().int().positive().optional().nullable() })), ctrl.confirmAdjustmentContainerReturn)
+router.post('/adjustments/container-returns/:returnId/confirm', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST), pdaOnly, pdaSessionRequired(), vBody(z.object({ targetLocationId: z.number().int().positive().optional().nullable(), serialNos: z.array(z.string()).optional() })), ctrl.confirmAdjustmentContainerReturn)
 
 // GET /api/warehouse-tasks/:id/pick-suggestions
 router.get('/:id/pick-suggestions', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), ctrl.pickSuggestions)

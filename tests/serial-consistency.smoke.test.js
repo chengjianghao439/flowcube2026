@@ -379,6 +379,214 @@ async function scenarioSaleReturnSerial(ctx, log, token, product, sns) {
   log.assert('★ 追溯 C 含 ship→return_in', types.includes('ship') && types.includes('return_in'), JSON.stringify(types))
 }
 
+// ── B-full 复用助手：真实收货+上架得到序列号 ACTIVE 容器；建单→占库→出库→逐容器拣货 ────
+async function receiveAndPutaway(ctx, token, product, packages) {
+  const { http, warehouse, location, pdaHeaders, supplier } = ctx
+  const totalQty = packages.reduce((s, p) => s + p.qty, 0)
+  const poCreate = await createPurchaseOrder(http, token, { supplier, warehouse, product, quantity: totalQty })
+  const poId = Number(poCreate.data?.data?.id)
+  await confirmPurchaseOrder(http, token, poId)
+  const inbound = await createInboundTaskFromPurchase(http, token, poId)
+  const taskId = Number(inbound.data?.data?.taskId)
+  await http.post(`/api/inbound-tasks/${taskId}/submit`, { token })
+  const containers = []
+  for (const p of packages) {
+    const r = await http.post(`/api/inbound-tasks/${taskId}/receive`, {
+      token, headers: pdaHeaders(), json: { productId: Number(product.id), packages: [{ qty: p.qty, serialNos: p.serialNos }] },
+    })
+    if (!r.ok) throw new Error(`receive failed: ${JSON.stringify(r.data)}`)
+    const cid = Number(r.data?.data?.containers?.[0]?.containerId)
+    const barcode = r.data?.data?.containers?.[0]?.containerCode
+    const put = await http.post(`/api/inbound-tasks/${taskId}/putaway`, {
+      token, headers: pdaHeaders(), json: { containerId: cid, locationId: Number(location.id) },
+    })
+    if (!put.ok) throw new Error(`putaway failed: ${JSON.stringify(put.data)}`)
+    containers.push({ containerId: cid, barcode, qty: p.qty })
+  }
+  return containers
+}
+
+async function createSaleReserveShipPick(ctx, token, product, quantity, containers) {
+  const { http, pool, warehouse, customer, pdaHeaders } = ctx
+  const pid = Number(product.id)
+  const saleCreate = await http.post('/api/sale', {
+    token,
+    json: {
+      customerId: Number(customer.id), customerName: customer.name,
+      warehouseId: Number(warehouse.id), warehouseName: warehouse.name,
+      remark: randomRef('adj-sale'),
+      items: [{ productId: pid, productCode: product.code, productName: product.name, unit: product.unit, quantity, unitPrice: 120 }],
+    },
+  })
+  const saleId = Number(saleCreate.data?.data?.id)
+  await http.post(`/api/sale/${saleId}/reserve`, { token })
+  await http.post(`/api/sale/${saleId}/ship`, { token })
+  const [saleRow] = await dbQuery(pool, 'SELECT task_id FROM sale_orders WHERE id=?', [saleId])
+  const taskId = Number(saleRow.task_id)
+  const [itemRow] = await dbQuery(pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
+  for (const c of containers) {
+    const pick = await http.post('/api/scan-logs', {
+      token, headers: pdaHeaders(),
+      json: { taskId, itemId: itemRow.id, containerId: c.containerId, barcode: c.barcode, productId: pid, qty: c.qty, scanMode: '整件' },
+    })
+    if (!pick.ok) throw new Error(`pick failed: ${JSON.stringify(pick.data)}`)
+  }
+  return { saleId, taskId, itemId: Number(itemRow.id) }
+}
+
+// 整表替换明细提交改单（沿用现有客户/仓库）
+async function adjustSaleTo(ctx, token, saleId, product, newQty) {
+  const detail = await ctx.http.get(`/api/sale/${saleId}`, { token })
+  const order = detail.data.data
+  return ctx.http.put(`/api/sale/${saleId}/adjust`, {
+    token,
+    json: {
+      customerId: order.customerId, customerName: order.customerName,
+      warehouseId: order.warehouseId, warehouseName: order.warehouseName,
+      remark: order.remark || '',
+      items: [{ productId: Number(product.id), productCode: product.code, productName: product.name, unit: product.unit, quantity: newQty, unitPrice: 120 }],
+    },
+  })
+}
+
+// 把单容器单台的任务走完出库（复核→打包→箱贴核销→出库，出库逐台扫 SN）
+async function finishAndShipSingle(ctx, token, taskId, product, containerBarcode, shipSn) {
+  const { http, pdaHeaders } = ctx
+  await http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: pdaHeaders() })
+  await http.put(`/api/warehouse-tasks/${taskId}/sort-done`, { token, headers: pdaHeaders(), json: {} })
+  await http.post('/api/scan-logs/check', { token, headers: pdaHeaders(), json: { taskId, barcode: containerBarcode } })
+  const pkg = await http.post('/api/packages', { token, headers: pdaHeaders(), json: { warehouseTaskId: taskId } })
+  const pkgId = Number(pkg.data?.data?.id)
+  await http.post(`/api/packages/${pkgId}/add-item`, { token, headers: pdaHeaders(), json: { productCode: product.code, qty: 1 } })
+  const finish = await http.put(`/api/packages/${pkgId}/finish`, { token, headers: pdaHeaders() })
+  const printJobId = Number(finish.data?.data?.printJobId)
+  await http.post(`/api/print-jobs/${printJobId}/complete-local`, { token, json: {} })
+  await http.put(`/api/warehouse-tasks/${taskId}/pack-done`, { token, headers: pdaHeaders() })
+  return http.put(`/api/warehouse-tasks/${taskId}/ship`, { token, headers: pdaHeaders(), json: { serialNosByProduct: { [Number(product.id)]: [shipSn] } } })
+}
+
+// ── B-full ①：已拣货序列号「部分」减量 → defer 拆分 + PDA 逐台扫 SN 归还 ──────────
+async function scenarioSerialReduceAdjustPartial(ctx, log, token) {
+  log.section('B-full ① 序列号已拣减量·部分归还：请求时不拆容器，PDA 逐台扫 SN 才拆分归还')
+  const { http, pool, warehouse } = ctx
+  const product = await createSerialProduct(pool, 'adjP')
+  const suffix = randomRef('SP').slice(-8)
+  const sns = { D: `SPD-${suffix}`, E: `SPE-${suffix}`, F: `SPF-${suffix}` }
+  const pid = Number(product.id)
+
+  const [cont] = await receiveAndPutaway(ctx, token, product, [{ qty: 3, serialNos: [sns.D, sns.E, sns.F] }])
+  const { saleId, taskId, itemId } = await createSaleReserveShipPick(ctx, token, product, 3, [cont])
+
+  // 改单 3→1：减 2 全部命中已拣 → B-full 放行、需物理确认（此前被 SERIAL_ADJUST_REDUCE_UNSUPPORTED 挡死）
+  const adjResp = await adjustSaleTo(ctx, token, saleId, product, 1)
+  log.assert('★ 序列号已拣减量不再被拒、需物理确认(pending=true)',
+    adjResp.ok && adjResp.data?.data?.pending === true, JSON.stringify(adjResp.data).slice(0, 200))
+  const adjustmentId = Number(adjResp.data?.data?.adjustmentId)
+
+  // 改单请求时点：容器未被拆（remaining 仍 3、3 台在库），核心不变量成立
+  log.assert('★ 请求时未拆容器：源容器 remaining=3 且挂 3 台在库SN（延迟拆分）',
+    (await containerRemaining(pool, cont.containerId))?.remaining === 3 && (await containerSerialCount(pool, cont.containerId)) === 3)
+
+  // 详情：待归还项 needsSerialScan=true、qty=2、带容器在库SN清单(3)
+  const detail = await http.get(`/api/warehouse-tasks/adjustments/${adjustmentId}`, { token })
+  const ret = detail.data?.data?.items?.[0]?.containerReturns?.[0]
+  log.assert('★ 待归还项 needsSerialScan=true、qty=2、返回容器在库SN清单(3台)',
+    ret?.needsSerialScan === true && Number(ret?.qty) === 2 && ret?.serials?.length === 3, JSON.stringify(ret))
+  const returnId = ret.id
+  const [cRow] = await dbQuery(pool, 'SELECT location_id FROM inventory_containers WHERE id=?', [cont.containerId])
+  const locId = Number(cRow.location_id)
+  const confirm = (json) => http.post(`/api/warehouse-tasks/adjustments/container-returns/${returnId}/confirm`, { token, headers: ctx.pdaHeaders(), json })
+
+  // 闸门：不扫 SN / 扫台数不符 / 扫不在容器的台 → 全部被拒，且失败事务回滚（容器仍完整未拆）
+  const noSn = await confirm({ targetLocationId: locId })
+  log.assert('★ 未扫SN归还被拒(SERIAL_RETURN_SCAN_COUNT_MISMATCH)',
+    noSn.status === 400 && noSn.data?.code === 'SERIAL_RETURN_SCAN_COUNT_MISMATCH', `status=${noSn.status} code=${noSn.data?.code}`)
+  const wrongCount = await confirm({ targetLocationId: locId, serialNos: [sns.D] })
+  log.assert('★ 扫SN台数不符被拒', wrongCount.status === 400 && wrongCount.data?.code === 'SERIAL_RETURN_SCAN_COUNT_MISMATCH', `status=${wrongCount.status}`)
+  const notInCont = await confirm({ targetLocationId: locId, serialNos: [sns.D, `NOPE-${suffix}`] })
+  log.assert('★ 扫不在容器的SN被拒(SERIAL_SPLIT_NOT_IN_CONTAINER)',
+    notInCont.status === 409 && notInCont.data?.code === 'SERIAL_SPLIT_NOT_IN_CONTAINER', `status=${notInCont.status} code=${notInCont.data?.code}`)
+  log.assert('★ 多次被拒后源容器仍完整(remaining=3、3台在库)——失败事务完整回滚',
+    (await containerRemaining(pool, cont.containerId))?.remaining === 3 && (await containerSerialCount(pool, cont.containerId)) === 3)
+
+  // 正确扫 [D,E] + 原库位 → 成功 finalize
+  const ok1 = await confirm({ targetLocationId: locId, serialNos: [sns.D, sns.E] })
+  log.assert('★ 扫[D,E]+原库位归还成功且finalize=true', ok1.ok && ok1.data?.data?.finalized === true, JSON.stringify(ok1.data).slice(0, 200))
+
+  // 拆分后：源容器 remaining=1(F)；新容器 remaining=2(D,E) 已解锁至原库位；两容器不变量
+  log.assert('★ 拆分后源容器 remaining=1==在库SN数1',
+    (await containerRemaining(pool, cont.containerId))?.remaining === 1 && (await containerSerialCount(pool, cont.containerId)) === 1)
+  const [newC] = await dbQuery(pool, "SELECT id, remaining_qty, location_id, locked_by_task_id FROM inventory_containers WHERE parent_id=? AND source_ref_type='sale_order_adjustment_return'", [cont.containerId])
+  log.assert('★ 新容器 remaining=2==在库SN数2、已解锁、在原库位',
+    newC && Number(newC.remaining_qty) === 2 && (await containerSerialCount(pool, newC.id)) === 2 && newC.locked_by_task_id === null && Number(newC.location_id) === locId, JSON.stringify(newC))
+  const snRows = await dbQuery(pool, 'SELECT serial_no, container_id, status FROM product_serials WHERE product_id=? ORDER BY serial_no', [pid])
+  log.assert('★ D/E 挂新容器、F 留源容器，均在库(1)',
+    snRows.length === 3 && snRows.every(r => Number(r.status) === 1)
+      && Number(snRows.find(r => r.serial_no === sns.D).container_id) === Number(newC.id)
+      && Number(snRows.find(r => r.serial_no === sns.E).container_id) === Number(newC.id)
+      && Number(snRows.find(r => r.serial_no === sns.F).container_id) === cont.containerId, JSON.stringify(snRows))
+
+  const [itemFinal] = await dbQuery(pool, 'SELECT required_qty, picked_qty FROM warehouse_task_items WHERE id=?', [itemId])
+  log.assert('picked_qty/required 已降到1', Number(itemFinal.picked_qty) === 1 && Number(itemFinal.required_qty) === 1, JSON.stringify(itemFinal))
+  const [resv] = await dbQuery(pool, "SELECT COALESCE(SUM(qty),0) AS t FROM stock_reservations WHERE ref_type='sale_order' AND ref_id=? AND status=1", [saleId])
+  log.assert('预占已释放到1', Number(resv.t) === 1, JSON.stringify(resv))
+  await assertPerContainerInvariant(pool, log, pid, warehouse.id, 'B-full部分归还后')
+  const cc = await http.get(`/api/serials/check-consistency?warehouseId=${warehouse.id}`, { token })
+  log.assert('★ 部分归还后对账仍0不一致', cc.data?.data?.consistent === true && Number(cc.data?.data?.mismatchCount) === 0, JSON.stringify(cc.data?.data).slice(0, 300))
+
+  // 端到端收尾：归还后剩余 1 台(F) 必须能完整走完出库（证明拆分后剩余锁定容器可正常核销）
+  const shipResp = await finishAndShipSingle(ctx, token, taskId, product, cont.barcode, sns.F)
+  log.assert('★ 归还后剩余1台(F) 完整走完出库', shipResp.ok, `status=${shipResp.status} ${JSON.stringify(shipResp.data?.message || shipResp.data?.code || '')}`)
+  const [fRow] = await dbQuery(pool, 'SELECT status, container_id FROM product_serials WHERE product_id=? AND serial_no=?', [pid, sns.F])
+  log.assert('★ F 已出库(2)、脱离容器；D/E 仍在库(2台)', Number(fRow.status) === 2 && fRow.container_id === null && (await inStockSerialCount(pool, pid)) === 2, JSON.stringify(fRow))
+  const cc2 = await http.get(`/api/serials/check-consistency?warehouseId=${warehouse.id}`, { token })
+  log.assert('★ 剩余台出库后对账仍0不一致', cc2.data?.data?.consistent === true && Number(cc2.data?.data?.mismatchCount) === 0, JSON.stringify(cc2.data?.data).slice(0, 300))
+}
+
+// ── B-full ②：已拣货序列号「整只」减量 → 无需逐台扫，直接解锁整容器归还 ──────────
+async function scenarioSerialReduceAdjustWhole(ctx, log, token) {
+  log.section('B-full ② 序列号已拣减量·整只归还：命中整容器时无需逐台扫SN')
+  const { http, pool, warehouse } = ctx
+  const product = await createSerialProduct(pool, 'adjW')
+  const suffix = randomRef('SW').slice(-8)
+  const sns = { D: `SWD-${suffix}`, E: `SWE-${suffix}`, F: `SWF-${suffix}` }
+  const pid = Number(product.id)
+
+  // 两容器：c1=[D,E]（先收，id 较小 → FIFO 先归还）、c2=[F]
+  const [c1, c2] = await receiveAndPutaway(ctx, token, product, [{ qty: 2, serialNos: [sns.D, sns.E] }, { qty: 1, serialNos: [sns.F] }])
+  const { saleId, taskId } = await createSaleReserveShipPick(ctx, token, product, 3, [c1, c2])
+
+  // 改单 3→1：减 2 恰好吃掉整只 c1 → 整只归还，无需逐台扫
+  const adjResp = await adjustSaleTo(ctx, token, saleId, product, 1)
+  log.assert('整只归还场景改单 pending=true', adjResp.ok && adjResp.data?.data?.pending === true, JSON.stringify(adjResp.data).slice(0, 200))
+  const adjustmentId = Number(adjResp.data?.data?.adjustmentId)
+  const detail = await http.get(`/api/warehouse-tasks/adjustments/${adjustmentId}`, { token })
+  const ret = detail.data?.data?.items?.[0]?.containerReturns?.[0]
+  log.assert('★ 整只归还项 needsSerialScan=false、qty=2、containerId=c1',
+    ret?.needsSerialScan === false && Number(ret?.qty) === 2 && Number(ret?.containerId) === c1.containerId, JSON.stringify(ret))
+
+  const [c1Row] = await dbQuery(pool, 'SELECT location_id FROM inventory_containers WHERE id=?', [c1.containerId])
+  const locId = Number(c1Row.location_id)
+  // 不带 serialNos，扫原库位即可归还整只容器
+  const ok1 = await http.post(`/api/warehouse-tasks/adjustments/container-returns/${ret.id}/confirm`, {
+    token, headers: ctx.pdaHeaders(), json: { targetLocationId: locId },
+  })
+  log.assert('★ 整只归还无需扫SN、扫原库位成功且finalize=true', ok1.ok && ok1.data?.data?.finalized === true, JSON.stringify(ok1.data).slice(0, 200))
+
+  // c1(D,E) 已解锁（D/E 仍挂 c1、在库）；c2(F) 仍锁定于任务；两容器不变量
+  const [c1After] = await dbQuery(pool, 'SELECT remaining_qty, locked_by_task_id FROM inventory_containers WHERE id=?', [c1.containerId])
+  log.assert('★ c1 已解锁、remaining=2==在库SN数2（D/E 随容器整体归还）',
+    Number(c1After.remaining_qty) === 2 && c1After.locked_by_task_id === null && (await containerSerialCount(pool, c1.containerId)) === 2, JSON.stringify(c1After))
+  const [c2After] = await dbQuery(pool, 'SELECT locked_by_task_id FROM inventory_containers WHERE id=?', [c2.containerId])
+  log.assert('★ c2(F) 仍锁定于任务、remaining=1==在库SN数1',
+    Number(c2After.locked_by_task_id) === taskId && (await containerRemaining(pool, c2.containerId))?.remaining === 1 && (await containerSerialCount(pool, c2.containerId)) === 1, JSON.stringify(c2After))
+  const snRows = await dbQuery(pool, 'SELECT serial_no, status FROM product_serials WHERE product_id=?', [pid])
+  log.assert('★ D/E/F 全部仍在库(1)', snRows.length === 3 && snRows.every(r => Number(r.status) === 1), JSON.stringify(snRows))
+  await assertPerContainerInvariant(pool, log, pid, warehouse.id, 'B-full整只归还后')
+  const cc = await http.get(`/api/serials/check-consistency?warehouseId=${warehouse.id}`, { token })
+  log.assert('★ 整只归还后对账仍0不一致', cc.data?.data?.consistent === true && Number(cc.data?.data?.mismatchCount) === 0, JSON.stringify(cc.data?.data).slice(0, 300))
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -399,6 +607,8 @@ async function main() {
     await scenarioPutaway(ctx, log, token, product, recv)
     await scenarioShip(ctx, log, token, product, sns, recv)
     await scenarioSaleReturnSerial(ctx, log, token, product, sns)
+    await scenarioSerialReduceAdjustPartial(ctx, log, token)
+    await scenarioSerialReduceAdjustWhole(ctx, log, token)
   } finally {
     const summary = log.summary()
     await ctx.close()

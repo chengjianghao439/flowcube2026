@@ -992,14 +992,20 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
  * 锁定在同一任务下，直到 PDA 扫码确认归还库位（confirmContainerReturn）才真正解锁。
  * 若整只容器数量都要归还则无需拆分，直接把该容器整只登记为待归还。
  *
+ * 序列号商品（文档04 Phase3b·B-full）：部分拆分时必须把「PDA 现场扫到的要归还的具体台」的 SN
+ * 从源容器迁到新容器（传 serialNos，由 moveSerialsOnSplit 按名单迁移 + 两容器断言兜底），否则
+ * 源容器"多账少货"、新容器"有货无账"，破坏核心不变量。整只归还（q===rem）序列号随容器整体走、
+ * 无需拆分。非序列号商品不传 serialNos 即可（moveSerialsOnSplit 为 no-op）。
+ *
  * @param {object} conn
  * @param {object} params
  * @param {number} params.taskId
  * @param {number} params.containerId
  * @param {number} params.qty
+ * @param {string[]|null} [params.serialNos] 序列号商品部分拆分时，现场扫到的要归还的具体 SN（数量须===qty）
  * @returns {{ containerId: number, barcode: string, qty: number, wholeContainer: boolean }}
  */
-async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qty }) {
+async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qty, serialNos = null }) {
   const [[row]] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
             locked_by_task_id, batch_no, mfg_date, exp_date, unit
@@ -1050,6 +1056,13 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
     [row.id, taskId, newId],
   )
 
+  // 序列号商品：把扫到的 q 台从源容器迁到新容器（两容器 remaining 都已改成最终值，moveSerialsOnSplit
+  // 迁移后逐容器断言 remaining==在库SN数）。非序列号 no-op。引擎间懒加载避免顶层 require 顺序耦合。
+  if (Array.isArray(serialNos) && serialNos.length) {
+    const { moveSerialsOnSplit } = require('./serialEngine')
+    await moveSerialsOnSplit(conn, { sourceContainerId: row.id, targetContainerId: newId, qty: q, serialNos, warehouseId: row.warehouse_id })
+  }
+
   return { containerId: newId, barcode: newBc, qty: q, wholeContainer: false }
 }
 
@@ -1057,14 +1070,21 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
  * 在某任务锁定的、指定商品的容器集合里，按 FIFO 拆出合计 qty 的待归还容器清单
  * （改单减量专用，调用方负责把返回的每一项写入 sale_order_adjustment_container_returns）
  *
+ * defer=true（序列号商品，文档04 Phase3b·B-full）：**不在改单请求时拆分**——因为拆分要按名单迁移
+ * 序列号，而改单请求发生在 ERP 端、无扫码，无法确定要归还哪几台。此刻只按 FIFO 登记「从哪个锁定
+ * 容器归还多少台」的意图，容器保持完整（remaining/序列号都不动，核心不变量成立）；真正的拆分 + SN 迁移
+ * 推迟到 PDA confirmContainerReturn 扫到具体台时执行。返回的 containerId===originalContainerId===原锁定容器，
+ * wholeContainer 标记该归还是否吃掉整只容器（整只归还时确认阶段无需再拆、无需逐台扫）。
+ *
  * @param {object} conn
  * @param {object} params
  * @param {number} params.taskId
  * @param {number} params.productId
  * @param {number} params.qty
- * @returns {Array<{ containerId: number, barcode: string, qty: number, wholeContainer: boolean }>}
+ * @param {boolean} [params.defer] 序列号商品：只登记归还意图、不拆分（拆分推迟到 PDA 扫码归还时）
+ * @returns {Array<{ containerId: number, barcode: string, qty: number, wholeContainer: boolean, originalContainerId: number }>}
  */
-async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty }) {
+async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty, defer = false }) {
   let remaining = Number(qty)
   if (!(remaining > 0)) return []
   const [containers] = await conn.query(
@@ -1077,14 +1097,19 @@ async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, q
   for (const c of containers) {
     if (remaining <= 0) break
     const [[fresh]] = await conn.query(
-      'SELECT remaining_qty FROM inventory_containers WHERE id = ? FOR UPDATE',
+      'SELECT barcode, remaining_qty FROM inventory_containers WHERE id = ? FOR UPDATE',
       [c.id],
     )
     const avail = Number(fresh.remaining_qty)
     if (avail <= 0) continue
     const take = Math.min(avail, remaining)
-    const split = await splitTaskLockedContainerForReturn(conn, { taskId, containerId: c.id, qty: take })
-    picks.push({ ...split, originalContainerId: Number(c.id) })
+    if (defer) {
+      // 序列号商品：只登记意图，容器保持完整、序列号不动（拆分与 SN 迁移推迟到 PDA 扫码归还时）
+      picks.push({ containerId: Number(c.id), barcode: fresh.barcode, qty: take, wholeContainer: take === avail, originalContainerId: Number(c.id) })
+    } else {
+      const split = await splitTaskLockedContainerForReturn(conn, { taskId, containerId: c.id, qty: take })
+      picks.push({ ...split, originalContainerId: Number(c.id) })
+    }
     remaining -= take
   }
   if (remaining > 0) {
@@ -1132,6 +1157,7 @@ module.exports = {
   genBarcode,
   lockContainer,
   reserveTaskLockedContainersForReturn,
+  splitTaskLockedContainerForReturn,
   unlockAndRelocateContainer,
   unlockContainersByTask,
   splitContainer,

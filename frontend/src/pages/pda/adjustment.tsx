@@ -68,7 +68,8 @@ function AdjustmentListPage() {
 }
 
 // ── 详情：逐箱拆箱确认 + 逐容器扫码归还 ────────────────────────────────────────
-type Step = 'scan' | 'scan-location'
+// 序列号商品部分归还（文档04 Phase3b·B-full）：扫到容器后先逐台扫「要归还的具体台」，扫满再扫库位。
+type Step = 'scan' | 'scan-serials' | 'scan-location'
 
 function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
   const navigate = useNavigate()
@@ -77,6 +78,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
   const [target, setTarget] = useState<AdjustmentContainerReturn | null>(null)
   const [voidTarget, setVoidTarget] = useState<AdjustmentPackageVoid | null>(null)
   const [scanning, setScanning] = useState(false)
+  const [scannedSerials, setScannedSerials] = useState<string[]>([])
   const { flash, ok, err, warn } = usePdaFeedback()
 
   const { data: detail, isLoading, refetch } = useQuery({
@@ -165,18 +167,47 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
     const found = pendingReturns.find(r => r.barcode.toUpperCase() === code.toUpperCase())
     if (!found) { err('该容器不属于本次改单的待归还清单，请确认条码'); return }
     setTarget(found)
-    setStep('scan-location')
+    // 序列号商品部分归还：先逐台扫「要归还的具体台」，扫满再扫库位；整只归还/非序列号直接扫库位
+    if (found.needsSerialScan) {
+      setScannedSerials([])
+      setStep('scan-serials')
+    } else {
+      setStep('scan-location')
+    }
+  }
+
+  function handleSerialScan(raw: string) {
+    const sn = raw.trim()
+    if (!sn || !target) return
+    if (!target.serials.includes(sn)) { err(`序列号 ${sn} 不在该容器，请扫要归还的台`); return }
+    if (scannedSerials.includes(sn)) { err(`序列号 ${sn} 已扫`); return }
+    if (scannedSerials.length >= target.qty) { err(`已扫满 ${target.qty} 台`); return }
+    const next = [...scannedSerials, sn]
+    setScannedSerials(next)
+    if (next.length >= target.qty) {
+      ok(`已扫满 ${target.qty} 台，请扫原库位放回`)
+      setStep('scan-location')
+    } else {
+      ok(`已扫 ${sn}（${next.length}/${target.qty}）`)
+    }
   }
 
   async function handleLocationScan(raw: string) {
     const code = raw.trim()
     if (!code || !target) return
     if (returnAction.submitBlocked) { err(returnAction.blockedReason || '当前不可提交'); return }
+    // 序列号商品部分归还：必须已扫满要归还的台数，否则不放行（后端也会再校验一次）
+    if (target.needsSerialScan && scannedSerials.length !== target.qty) {
+      err(`请先逐台扫满 ${target.qty} 台要归还的序列号（已扫 ${scannedSerials.length}）`)
+      setStep('scan-serials')
+      return
+    }
     setScanning(true)
     try {
       const loc = await apiClient.get<LocationInfo>(`/locations/code/${encodeURIComponent(code)}`)
+      const serialNos = target.needsSerialScan ? scannedSerials : undefined
       const submitted = await returnAction.run(
-        (requestKey) => confirmAdjustmentContainerReturnApi(target.id, loc.id, requestKey),
+        (requestKey) => confirmAdjustmentContainerReturnApi(target.id, loc.id, serialNos, requestKey),
         { returnId: target.id },
       )
       if (submitted.kind === 'pending') {
@@ -197,12 +228,14 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
       setScanning(false)
       setStep('scan')
       setTarget(null)
+      setScannedSerials([])
     }
   }
 
   usePdaScanner({
     onScan: (code) => {
       if (scanning) return
+      if (step === 'scan-serials') { handleSerialScan(code); return }
       if (step === 'scan-location') { void handleLocationScan(code); return }
       handleScan(code)
     },
@@ -268,14 +301,42 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
 
         <div className={`rounded-2xl border-2 px-4 py-3 text-center transition-all ${
           scanning ? 'border-yellow-400 bg-yellow-50' :
-          step === 'scan' ? 'border-primary/30 bg-primary/5' : 'border-green-400/30 bg-green-50'
+          step === 'scan' ? 'border-primary/30 bg-primary/5' :
+          step === 'scan-serials' ? 'border-primary/30 bg-primary/5' : 'border-green-400/30 bg-green-50'
         }`}>
           <p className="text-sm font-semibold text-foreground">
             {scanning ? '⏳ 处理中…' :
              step === 'scan' ? '扫描待拆箱的箱子条码，或待归还的容器条码' :
+             step === 'scan-serials' ? `逐台扫描要归还的序列号：${scannedSerials.length}/${target?.qty ?? 0}` :
              `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}`}
           </p>
         </div>
+
+        {target && step === 'scan-serials' && (
+          <PdaCard>
+            <div className="space-y-2 text-sm">
+              <p className="text-xs text-muted-foreground">序列号商品部分归还：逐台扫描「要放回货架的那几台」，扫满后再扫原库位</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div><p className="text-xs text-muted-foreground">容器</p><p className="font-mono font-semibold truncate">{target.barcode}</p></div>
+                <div><p className="text-xs text-muted-foreground">要归还</p><p className="font-bold text-primary">{scannedSerials.length} / {target.qty} 台</p></div>
+              </div>
+              <div className="space-y-1">
+                {scannedSerials.length === 0 && <p className="text-xs text-muted-foreground">尚未扫描（扫码枪对准要放回的那台）</p>}
+                {scannedSerials.map(sn => (
+                  <div key={sn} className="flex items-center justify-between rounded-md bg-background px-2 py-1">
+                    <span className="font-mono text-sm">{sn}</span>
+                    <button type="button" className="text-xs text-destructive"
+                      onClick={() => setScannedSerials(prev => prev.filter(x => x !== sn))}
+                    >移除</button>
+                  </div>
+                ))}
+              </div>
+              <button className="text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => { setStep('scan'); setTarget(null); setScannedSerials([]) }}
+              >← 取消，重新扫描</button>
+            </div>
+          </PdaCard>
+        )}
 
         {target && step === 'scan-location' && (
           <PdaCard>
@@ -290,7 +351,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
                 <div><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{target.qty}</p></div>
               </div>
               <button className="text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => { setStep('scan'); setTarget(null) }}
+                onClick={() => { setStep('scan'); setTarget(null); setScannedSerials([]) }}
               >← 取消，重新扫描</button>
             </div>
           </PdaCard>
