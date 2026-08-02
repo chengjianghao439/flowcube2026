@@ -25,6 +25,8 @@ export const getContainerByBarcodeApi = async (barcode: string) =>
     containerKind?: 'inventory' | 'plastic_box'
     containerStatus?: 'waiting_putaway' | 'stored'
     inboundTaskId?: number | null
+    serialManaged?: boolean          // 序列号商品：拆分须逐台扫 SN（文档04 Phase3b）
+    serials?: string[] | null        // 该容器在库序列号清单（供扫码校验）
   }>(`/inventory/containers/barcode/${encodeURIComponent(barcode)}`)
 
 export const assignContainerLocationApi = async (containerId: number, locationId: number) =>
@@ -46,7 +48,7 @@ export interface SplitContainerResult {
 
 export const splitContainerApi = async (
   containerId: number,
-  body: { qty: number; remark?: string; printLabel?: boolean },
+  body: { qty: number; remark?: string; printLabel?: boolean; targetContainerId?: number; serialNos?: string[] },
 ) =>
   apiClient.post<SplitContainerResult>(`/inventory/containers/${containerId}/split`, body)
 

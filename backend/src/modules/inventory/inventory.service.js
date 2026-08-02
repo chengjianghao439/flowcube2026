@@ -762,7 +762,7 @@ async function getContainerByBarcode(barcode) {
     `SELECT c.id, c.barcode, c.container_type, c.product_id, c.warehouse_id, c.location_id,
             c.remaining_qty, c.unit, c.status, c.inbound_task_id,
             c.source_type, c.source_ref_id, c.is_legacy,
-            p.code AS product_code, p.name AS product_name,
+            p.code AS product_code, p.name AS product_name, p.serial_managed,
             w.name AS warehouse_name,
             loc.code AS location_code
      FROM inventory_containers c
@@ -773,7 +773,19 @@ async function getContainerByBarcode(barcode) {
     [barcode],
   )
   if (!row) throw new AppError('容器不存在或已失效', 404)
+  // 序列号商品（文档04 Phase3b）：带出该容器在库序列号，供 PDA 拆分逐台扫码指定「要拆出的具体台」
+  const serialManaged = Number(row.serial_managed) === 1
+  let serials = null
+  if (serialManaged) {
+    const [srows] = await pool.query(
+      'SELECT serial_no FROM product_serials WHERE container_id = ? AND status = 1 ORDER BY id',
+      [row.id],
+    )
+    serials = srows.map(r => r.serial_no)
+  }
   return {
+    serialManaged,
+    serials,
     containerId:   row.id,
     barcode:       row.barcode,
     productId:     row.product_id,
@@ -848,13 +860,13 @@ async function assignContainerLocation(containerId, locationId) {
 /**
  * 同仓容器拆分（散件）：单容器扣减并生成新塑料盒条码（B），可选打印新标签
  */
-async function splitContainerOp(containerId, { qty, remark, printLabel, targetContainerId, userId }) {
+async function splitContainerOp(containerId, { qty, remark, printLabel, targetContainerId, serialNos = null, userId }) {
   const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
   const conn = await pool.getConnection()
   let result
   try {
     await conn.beginTransaction()
-    result = await splitContainer(conn, { containerId, qty, remark, targetContainerId })
+    result = await splitContainer(conn, { containerId, qty, remark, targetContainerId, serialNos })
     result.printJobId = null
     result.printJobIds = []
 

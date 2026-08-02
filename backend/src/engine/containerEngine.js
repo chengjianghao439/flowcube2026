@@ -829,7 +829,7 @@ function fmtSqlDate(d) {
  * @param {{ containerId: number, qty: number, remark?: string|null }} params
  * @returns {Promise<{ sourceContainerId: number, sourceBarcode: string, sourceRemainingAfter: number, newContainerId: number, newBarcode: string, newContainerKind: 'plastic_box', productId: number, warehouseId: number }>}
  */
-async function splitContainer(conn, { containerId, qty, remark = null, targetContainerId = null }) {
+async function splitContainer(conn, { containerId, qty, remark = null, targetContainerId = null, serialNos = null }) {
   const cid = Number(containerId)
   const q = Number(qty)
   const tid = targetContainerId != null ? Number(targetContainerId) : null
@@ -854,11 +854,14 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   const rem = Number(row.remaining_qty)
   if (q > rem) throw new AppError('拆分数量不能超过剩余数量', 400)
 
-  // 序列号管控商品：Phase 1 未实现拆分时的序列号跟随迁移（moveSerialsOnSplit），
-  // 直接挡住，避免"新容器有数量无序列号、源容器序列号数 > 剩余数"的静默不一致。
-  // 引擎间懒加载，避免与 serialEngine 的顶层 require 顺序耦合。
-  const { assertNoSerialManaged } = require('./serialEngine')
-  await assertNoSerialManaged(conn, [row.product_id], '容器拆分')
+  // 序列号管控商品（文档04 Phase3b）：拆分须由现场逐台扫「要拆出的具体台」的 SN，迁移由
+  // moveSerialsOnSplit 按名单执行（不能任取，否则台账与物理不符，将来该台出库扫码报 CONTAINER_MISMATCH）。
+  // 未传 serialNos（或数量不符）则拒绝、提示扫码。引擎间懒加载避免顶层 require 顺序耦合。
+  const { isSerialManaged: isSerialMgd, moveSerialsOnSplit } = require('./serialEngine')
+  const serialProduct = await isSerialMgd(conn, row.product_id)
+  if (serialProduct && (!Array.isArray(serialNos) || serialNos.length !== q)) {
+    throw new AppError('序列号商品拆分须逐台扫描要拆出的序列号（数量须与拆分数量一致）', 400, 'SERIAL_SPLIT_NEEDS_SCAN')
+  }
 
   // 转入已有塑料盒
   if (tid) {
@@ -898,6 +901,11 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
       'UPDATE inventory_containers SET remaining_qty = ?, status = 1 WHERE id = ?',
       [targetNewQty, tid],
     )
+
+    // 序列号商品：把扫到的 q 台从源容器迁到目标塑料盒（非序列号 no-op；已在上面校验数量）
+    if (serialProduct) {
+      await moveSerialsOnSplit(conn, { sourceContainerId: cid, targetContainerId: tid, qty: q, serialNos, warehouseId: row.warehouse_id })
+    }
 
     await syncStockFromContainers(conn, row.product_id, row.warehouse_id)
 
@@ -946,6 +954,11 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     'UPDATE inventory_containers SET parent_id = ? WHERE id = ?',
     [cid, newId],
   )
+
+  // 序列号商品：把扫到的 q 台从源容器迁到新塑料盒（非序列号 no-op；已在上面校验数量）
+  if (serialProduct) {
+    await moveSerialsOnSplit(conn, { sourceContainerId: cid, targetContainerId: newId, qty: q, serialNos, warehouseId: row.warehouse_id })
+  }
 
   await syncStockFromContainers(conn, row.product_id, row.warehouse_id)
 

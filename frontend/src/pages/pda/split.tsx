@@ -17,7 +17,7 @@ import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 export default function PdaSplitPage() {
   const navigate = useNavigate()
   const { flash, ok, err } = usePdaFeedback()
-  const [step, setStep] = useState<'scan' | 'qty'>('scan')
+  const [step, setStep] = useState<'scan' | 'qty' | 'serials'>('scan')
   const [containerId, setContainerId] = useState<number | null>(null)
   const [barcode, setBarcode] = useState<string | null>(null)
   const [productHint, setProductHint] = useState<string>('')
@@ -25,6 +25,10 @@ export default function PdaSplitPage() {
   const [remaining, setRemaining] = useState<number>(0)
   const [qtyStr, setQtyStr] = useState('1')
   const [printLabel, setPrintLabel] = useState(false)
+  // 序列号商品（文档04 Phase3b）：拆分须逐台扫「要拆出的具体台」的 SN
+  const [serialManaged, setSerialManaged] = useState(false)
+  const [containerSerials, setContainerSerials] = useState<string[]>([])
+  const [scannedSerials, setScannedSerials] = useState<string[]>([])
 
   const loadMut = useMutation({
     mutationFn: async (bc: string) => {
@@ -42,6 +46,9 @@ export default function PdaSplitPage() {
       setProductHint(`${d.productName}（${d.productCode}）`)
       setRemaining(d.remainingQty)
       setQtyStr('1')
+      setSerialManaged(!!d.serialManaged)
+      setContainerSerials(d.serials ?? [])
+      setScannedSerials([])
       setStep('qty')
       ok(`已识别 ${d.barcode}`)
     },
@@ -54,7 +61,7 @@ export default function PdaSplitPage() {
       if (!containerId) throw new Error('no container')
       const q = Number(qtyStr)
       if (!Number.isFinite(q) || q <= 0) throw new Error('数量无效')
-      return splitContainerApi(containerId, { qty: q, printLabel })
+      return splitContainerApi(containerId, { qty: q, printLabel, ...(serialManaged ? { serialNos: scannedSerials } : {}) })
     },
     onSuccess: (res) => {
       ok(`拆分成功：新塑料盒条码 ${res.newBarcode}`)
@@ -65,6 +72,9 @@ export default function PdaSplitPage() {
       setProductHint('')
       setRemaining(0)
       setQtyStr('1')
+      setSerialManaged(false)
+      setContainerSerials([])
+      setScannedSerials([])
     },
     onError: (e: unknown) =>
       err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '拆分失败'),
@@ -89,8 +99,26 @@ export default function PdaSplitPage() {
       err('数量须小于剩余数量')
       return
     }
+    // 序列号商品：进入逐台扫码步骤，扫满 q 台再提交（要拆出的具体台由现场扫码指定）
+    if (serialManaged) {
+      if (!Number.isInteger(q)) { err('序列号商品拆分数量须为整数'); return }
+      setScannedSerials([])
+      setStep('serials')
+      return
+    }
     splitMut.mutate()
   }
+
+  const handleScanSerial = useCallback((raw: string) => {
+    const sn = raw.trim()
+    if (!sn) return
+    const q = Number(qtyStr)
+    if (!containerSerials.includes(sn)) { err(`序列号 ${sn} 不在该容器`); return }
+    if (scannedSerials.includes(sn)) { err(`序列号 ${sn} 已扫`); return }
+    if (scannedSerials.length >= q) { err(`已扫满 ${q} 台`); return }
+    setScannedSerials(prev => [...prev, sn])
+    ok(`已扫 ${sn}（${scannedSerials.length + 1}/${q}）`)
+  }, [containerSerials, scannedSerials, qtyStr, err, ok])
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -109,6 +137,7 @@ export default function PdaSplitPage() {
             <p className="text-sm text-foreground">{productHint}</p>
             <p className="text-xs text-muted-foreground">来源类型：<span className="font-semibold text-foreground">{sourceKind === 'plastic_box' ? '塑料盒条码' : '库存条码'}</span></p>
             <p className="text-xs text-muted-foreground">剩余可拆：<span className="font-semibold text-foreground">{remaining}</span></p>
+            {serialManaged && <p className="text-xs text-primary">序列号商品：确认数量后需逐台扫描「要拆出的具体序列号」</p>}
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">拆分数量</label>
               <Input
@@ -135,6 +164,28 @@ export default function PdaSplitPage() {
                 重新扫码
               </Button>
               <Button className="flex-1" onClick={onSubmitQty} disabled={splitMut.isPending}>
+                {splitMut.isPending ? '提交中…' : (serialManaged ? '下一步：扫序列号' : '确认拆分')}
+              </Button>
+            </div>
+          </div>
+        )}
+        {step === 'serials' && containerId && (
+          <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+            <p className="font-mono text-lg font-bold text-foreground">{barcode}</p>
+            <p className="text-sm text-foreground">{productHint}</p>
+            <p className="text-sm">逐台扫描要拆出的序列号：<b className="tabular-nums text-primary">{scannedSerials.length}</b> / {Number(qtyStr)}</p>
+            <div className="space-y-1">
+              {scannedSerials.length === 0 && <p className="text-xs text-muted-foreground">尚未扫描（扫码枪对准要拆出的那台）</p>}
+              {scannedSerials.map(sn => (
+                <div key={sn} className="flex items-center justify-between rounded-md bg-background px-2 py-1 text-sm">
+                  <span className="font-mono">{sn}</span>
+                  <button type="button" className="text-xs text-destructive" onClick={() => setScannedSerials(prev => prev.filter(x => x !== sn))}>移除</button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setStep('qty'); setScannedSerials([]) }}>返回</Button>
+              <Button className="flex-1" onClick={() => splitMut.mutate()} disabled={splitMut.isPending || scannedSerials.length !== Number(qtyStr)}>
                 {splitMut.isPending ? '提交中…' : '确认拆分'}
               </Button>
             </div>
@@ -143,6 +194,9 @@ export default function PdaSplitPage() {
       </div>
 
       <PdaBottomBar>
+        {step === 'serials' && (
+          <PdaScanner onScan={handleScanSerial} placeholder="扫描要拆出的序列号" disabled={splitMut.isPending} />
+        )}
         {step === 'scan' && (
           <PdaScanner onScan={handleScan} placeholder="扫描库存条码" disabled={loadMut.isPending} />
         )}

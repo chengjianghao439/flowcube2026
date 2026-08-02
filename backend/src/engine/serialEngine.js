@@ -195,22 +195,44 @@ async function returnSerials(conn, { productId, serialNos, warehouseId, containe
  * （合格/不合格分容器）、改单减量拆箱等——容器数量在两容器间重分配时，个体账必须同步迁移，
  * 否则源容器"多账少货"、目标容器"有货无账"，破坏不变量。
  *
- * 个体无天然 FIFO，这里按 id 升序任取 qty 台迁移（保持数量守恒即满足不变量；具体哪台物理上
- * 归到不合格箱，系统不强判——操作员物理挑拣，系统只保证账实台数一致）。调用方在两容器 remaining_qty
- * 都已改成最终值后调用，函数尾部对两容器各断言兜底。
+ * 两种选台方式（文档04 Phase3b）：
+ *  ① 传 serialNos（拣货/打包拆分、改单减量拆箱等**要继续流转、将来按 SN 核销**的场景）：迁移现场
+ *     **扫到的具体台**，必须都在源容器且在库、数量匹配，否则拒——台账与物理严格一致。
+ *  ② 不传（QA 边界拆分：合格/不合格分容器）：按 id 升序**任取** qty 台。QA 拒收品不追到具体台、
+ *     只需账实台数守恒即可（操作员物理挑拣，系统不强判哪台归不合格箱）。
+ * 调用方在两容器 remaining_qty 都已改成最终值后调用，函数尾部对两容器各断言兜底。
  */
-async function moveSerialsOnSplit(conn, { sourceContainerId, targetContainerId, qty, warehouseId = null, operatorId = null }) {
+async function moveSerialsOnSplit(conn, { sourceContainerId, targetContainerId, qty, serialNos = null, warehouseId = null, operatorId = null }) {
   const need = Number(qty)
   if (!(need > 0)) return []
   // 非序列号商品 no-op：让 QA 拆分等调用方可无条件调用，不必自己判 serial_managed。
   const [[src]] = await conn.query('SELECT product_id FROM inventory_containers WHERE id = ?', [sourceContainerId])
   if (!src || !(await isSerialManaged(conn, src.product_id))) return []
-  const [rows] = await conn.query(
-    'SELECT id FROM product_serials WHERE container_id = ? AND status = ? ORDER BY id LIMIT ?',
-    [sourceContainerId, SERIAL_STATUS.IN_STOCK, need],
-  )
-  if (rows.length !== need) {
-    throw new AppError(`容器 ${sourceContainerId} 可迁移在库序列号不足：需 ${need} 台，实有 ${rows.length} 台`, 409, 'SERIAL_SPLIT_SHORTAGE')
+  let rows
+  if (Array.isArray(serialNos) && serialNos.length) {
+    // ① 指定台：迁移现场扫到的具体 SN（去重后校验都在源容器且在库、数量匹配）
+    const cleaned = [...new Set(serialNos.map(s => String(s).trim()).filter(Boolean))]
+    if (cleaned.length !== need) {
+      throw new AppError(`扫描序列号数量(${cleaned.length})与拆分数量(${need})不一致`, 400, 'SERIAL_SPLIT_COUNT_MISMATCH')
+    }
+    const [found] = await conn.query(
+      `SELECT id FROM product_serials WHERE container_id = ? AND status = ? AND serial_no IN (${cleaned.map(() => '?').join(',')}) FOR UPDATE`,
+      [sourceContainerId, SERIAL_STATUS.IN_STOCK, ...cleaned],
+    )
+    if (found.length !== need) {
+      throw new AppError(`部分序列号不在容器 ${sourceContainerId} 或不在库，无法拆出`, 409, 'SERIAL_SPLIT_NOT_IN_CONTAINER')
+    }
+    rows = found
+  } else {
+    // ② 任取（QA 边界拆分）
+    const [any] = await conn.query(
+      'SELECT id FROM product_serials WHERE container_id = ? AND status = ? ORDER BY id LIMIT ?',
+      [sourceContainerId, SERIAL_STATUS.IN_STOCK, need],
+    )
+    if (any.length !== need) {
+      throw new AppError(`容器 ${sourceContainerId} 可迁移在库序列号不足：需 ${need} 台，实有 ${any.length} 台`, 409, 'SERIAL_SPLIT_SHORTAGE')
+    }
+    rows = any
   }
   const movedIds = rows.map(r => r.id)
   await conn.query(
