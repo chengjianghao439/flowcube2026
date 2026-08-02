@@ -17,6 +17,7 @@ import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
 const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = [
   { icon: '📥', label: '收货订单', path: '/pda/inbound',  perm: PERMISSIONS.INBOUND_ORDER_VIEW },
   { icon: '🔬', label: '来料质检', path: '/pda/inbound-qa', perm: PERMISSIONS.INBOUND_RECEIVE_EXECUTE },
+  { icon: '🗑️', label: '拒收处置', path: '/pda/qa-dispose', perm: PERMISSIONS.INBOUND_QA_DISPOSE },
   { icon: '📤', label: '扫码上架', path: '/pda/putaway',  perm: PERMISSIONS.INBOUND_PUTAWAY_EXECUTE },
   { icon: '🗂️', label: '拣货任务', path: '/pda/picking',  perm: PERMISSIONS.WAREHOUSE_TASK_PICK },
   { icon: '🔀', label: '订单分拣', path: '/pda/sort',      perm: PERMISSIONS.SORTING_BIN_MANAGE },

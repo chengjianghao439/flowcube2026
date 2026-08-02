@@ -17,6 +17,14 @@ function vBody(schema) {
   }
 }
 
+function vParams(schema) {
+  return (req, res, next) => {
+    const r = schema.safeParse(req.params)
+    if (!r.success) return res.status(400).json({ success: false, message: r.error.errors.map(e => e.message).join('；'), data: null })
+    req.params = r.data; next()
+  }
+}
+
 const createSchema = z.union([
   z.object({
     poId: z.number().int().positive('请选择采购单'),
@@ -120,6 +128,10 @@ const qaDisposeSchema = z.object({
   remark: z.string().trim().max(200).optional(),
 })
 
+// 拒收处置 PDA 物理扫出（文档 07 · Phase 3）：扫一个 REJECTED 容器码确认出场
+const disposeScanSchema = z.object({ barcode: z.string().trim().min(1, '请扫描容器条码') })
+const dispositionIdParam = z.object({ dispositionId: z.coerce.number().int().positive('处置单 id 必须为正整数') })
+
 const reprintSchema = z.object({
   mode: z.enum(['task', 'item', 'barcode']).default('task'),
   itemId: z.number().int().positive('收货明细无效').optional(),
@@ -139,6 +151,11 @@ router.get('/pending-containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VI
 router.get('/purchase-items', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.purchaseItems)
 // 供应商来料质检合格率报表（文档07 Phase3，只读聚合）
 router.get('/qa-supplier-report', requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.qaSupplierReport)
+// 拒收处置 PDA 物理扫出（文档07 Phase3）：待扫出列表 / 扫出详情（只读）/ 扫一个容器码确认出场（PDA-only+设备会话）
+// 注意：静态 /qa-dispositions/* 必须注册在 /:id 动态路由之前，否则被 /:id 吞掉
+router.get('/qa-dispositions/pending', requirePermission(PERMISSIONS.INBOUND_QA_DISPOSE), ctrl.qaDisposePending)
+router.get('/qa-dispositions/:dispositionId/scan-detail', requirePermission(PERMISSIONS.INBOUND_QA_DISPOSE), vParams(dispositionIdParam), ctrl.qaDisposeScanDetail)
+router.post('/qa-dispositions/:dispositionId/scan-out', requirePermission(PERMISSIONS.INBOUND_QA_DISPOSE), pdaSessionRequired(), pdaOnly, vParams(dispositionIdParam), vBody(disposeScanSchema), ctrl.qaDisposeScanOut)
 router.get('/',              requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.list)
 router.post('/',             requirePermission(PERMISSIONS.INBOUND_ORDER_CREATE), vBody(createSchema), ctrl.create)
 router.get('/:id/containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.containers)

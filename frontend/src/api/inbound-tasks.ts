@@ -15,6 +15,8 @@ import type {
   QaDisposition,
   QaDisposeParams,
   QaDisposeResult,
+  QaDispositionScanDetail,
+  QaDisposeScanResult,
 } from '@/types/inbound-tasks'
 
 export const getInboundTasksApi = (params: QueryParams & { status?: number | number[]; productId?: number; supplierId?: number }) =>
@@ -97,8 +99,23 @@ export const getQaSupplierReportApi = (params: { startDate?: string; endDate?: s
 export const getInboundQaDispositionsApi = (id: number) =>
   client.get<QaDisposition[]>(`/inbound-tasks/${id}/qa-dispositions`)
 
-/** 一键处置质检拒收品（退供应商/报废）：只消费 REJECTED 容器、零 GL。ERP 侧后台动作，带幂等键 */
+/** 处置质检拒收品（退供应商/报废）：ERP 决策创建处置单(待扫出)，只消费 REJECTED 容器、零 GL，带幂等键 */
 export const qaDisposeInboundApi = (id: number, data: QaDisposeParams, requestKey?: string) =>
   client.post<QaDisposeResult>(`/inbound-tasks/${id}/qa-dispose`, data, requestKey
     ? { headers: withRequestKeyHeaders(requestKey) }
     : undefined)
+
+// ── 拒收处置 PDA 物理扫出（文档07 Phase3）──
+/** PDA 待扫出处置单列表（status=1） */
+export const getQaDisposePendingApi = () =>
+  client.get<QaDisposition[]>('/inbound-tasks/qa-dispositions/pending')
+
+/** 单个处置单的待扫/已扫容器清单 */
+export const getQaDisposeScanDetailApi = (dispositionId: number) =>
+  client.get<QaDispositionScanDetail>(`/inbound-tasks/qa-dispositions/${dispositionId}/scan-detail`)
+
+/** PDA 扫一个 REJECTED 容器码物理确认出场（PDA-only，带 X-Client:pda + 幂等键） */
+export const qaDisposeScanOutApi = (dispositionId: number, barcode: string, requestKey?: string) =>
+  client.post<QaDisposeScanResult>(`/inbound-tasks/qa-dispositions/${dispositionId}/scan-out`, { barcode }, {
+    headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' },
+  })

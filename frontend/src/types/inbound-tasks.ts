@@ -250,6 +250,10 @@ export interface QaDisposition {
   warehouseName: string | null
   dispositionType: 1 | 2       // 1退供应商 2报废
   dispositionTypeName: string
+  status: 1 | 2                 // 1待扫出（PDA 物理出场确认中） 2已完成
+  statusName: string
+  scannedCount: number | null  // 已扫出容器数
+  pendingCount: number | null  // 待扫出容器数
   totalQty: number
   totalAmount: number          // 参考货值（拒收量×采购单价），非入账金额
   containerCount: number
@@ -259,6 +263,29 @@ export interface QaDisposition {
   operatorName: string | null
   createdAt: string
   items: QaDispositionItem[]
+}
+
+// PDA 拒收处置扫出：单个处置单的待扫/已扫容器清单（文档07 Phase3）
+export interface QaDispositionScanContainer {
+  id: number
+  containerId: number
+  barcode: string
+  qty: number
+  productId: number
+  productName: string | null
+  productCode: string | null
+  scanned: boolean
+  scannedAt: string | null
+}
+export interface QaDispositionScanDetail extends QaDisposition {
+  containers: QaDispositionScanContainer[]
+}
+export interface QaDisposeScanResult {
+  dispositionId: number
+  containerId: number
+  barcode: string
+  pending: number
+  done: boolean
 }
 
 export interface QaDisposeParams {
@@ -272,6 +299,7 @@ export interface QaDisposeResult {
   id: number
   dispositionNo: string
   dispositionType: 1 | 2
+  status: 1 | 2                // 新建恒为 1 待扫出
   totalQty: number
   totalAmount: number
   containerCount: number

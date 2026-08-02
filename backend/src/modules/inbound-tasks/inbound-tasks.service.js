@@ -26,5 +26,8 @@ module.exports = {
   qaCheck: qa.check,
   qaDispose: qaDisposition.createDisposition,
   qaDispositionsByTask: qaDisposition.listByTask,
+  qaDisposePending: qaDisposition.listPendingScanOut,
+  qaDisposeScanDetail: qaDisposition.getScanDetail,
+  qaDisposeScanOut: qaDisposition.scanOut,
   voidReceipt: voidModule.voidReceipt,
 }

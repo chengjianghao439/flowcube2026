@@ -24,6 +24,7 @@ const PdaInboundPage = lazy(() => import('@/pages/pda/inbound'))
 const PdaReceivePage = lazy(() => import('@/pages/pda/receive'))
 const PdaPutawayPage = lazy(() => import('@/pages/pda/putaway'))
 const PdaInboundQaPage = lazy(() => import('@/pages/pda/inbound-qa'))
+const PdaQaDisposePage = lazy(() => import('@/pages/pda/qa-dispose'))
 const PdaCheckPage   = lazy(() => import('@/pages/pda/check'))
 const PdaPackPage    = lazy(() => import('@/pages/pda/pack'))
 const PdaSplitPage   = lazy(() => import('@/pages/pda/split'))
@@ -139,6 +140,8 @@ export default function AppRouter() {
               <Route path="putaway" element={<PdaRoutePermission title="扫码上架" required={[PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.INBOUND_PUTAWAY_EXECUTE]}><PdaPutawayPage /></PdaRoutePermission>} />
               <Route path="inbound-qa/:id" element={<PdaRoutePermission title="来料质检" required={[PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.INBOUND_RECEIVE_EXECUTE]}><PdaInboundQaPage /></PdaRoutePermission>} />
               <Route path="inbound-qa" element={<PdaRoutePermission title="来料质检" required={[PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.INBOUND_RECEIVE_EXECUTE]}><PdaInboundQaPage /></PdaRoutePermission>} />
+              <Route path="qa-dispose/:id" element={<PdaRoutePermission title="拒收处置扫出" required={[PERMISSIONS.INBOUND_QA_DISPOSE]}><PdaQaDisposePage /></PdaRoutePermission>} />
+              <Route path="qa-dispose" element={<PdaRoutePermission title="拒收处置扫出" required={[PERMISSIONS.INBOUND_QA_DISPOSE]}><PdaQaDisposePage /></PdaRoutePermission>} />
               <Route path="picking" element={<PdaRoutePermission title="拣货任务" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PICK]}><PdaPickingPage /></PdaRoutePermission>} />
               <Route path="task/:id" element={<PdaRoutePermission title="扫码拣货" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PICK]}><PdaTaskPage /></PdaRoutePermission>} />
               <Route path="check/:id" element={<PdaRoutePermission title="复核作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_CHECK]}><PdaCheckPage /></PdaRoutePermission>} />

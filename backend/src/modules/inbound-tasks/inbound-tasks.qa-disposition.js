@@ -5,13 +5,14 @@ const { voidSerialsForContainers } = require('../../engine/serialEngine')
 const { lockStatusRow } = require('../../utils/statusTransition')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { appendInboundEvent } = require('./inbound-tasks.helpers')
-const { assertInScope } = require('../../utils/warehouseScope')
+const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 
 const REJECTED = CONTAINER_STATUS.REJECTED   // 6 质检不合格
 const VOID = CONTAINER_STATUS.VOID           // 3 作废
 
 const DISPOSITION_TYPE_NAME = { 1: '退供应商', 2: '报废' }
+const DISPOSITION_STATUS_NAME = { 1: '待扫出', 2: '已完成' }   // Phase3：1=待PDA物理扫出确认 2=已完成
 
 const round4 = n => Math.round((Number(n) || 0) * 10000) / 10000
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100
@@ -29,6 +30,10 @@ const fmtDisposition = (r, items = []) => ({
   warehouseName: r.warehouse_name || null,
   dispositionType: r.disposition_type,
   dispositionTypeName: DISPOSITION_TYPE_NAME[r.disposition_type] || '未知',
+  status: r.status != null ? Number(r.status) : 2,
+  statusName: DISPOSITION_STATUS_NAME[r.status != null ? Number(r.status) : 2] || '未知',
+  scannedCount: r.scanned_count != null ? Number(r.scanned_count) : null,
+  pendingCount: r.pending_count != null ? Number(r.pending_count) : null,
   totalQty: Number(r.total_qty),
   totalAmount: Number(r.total_amount),
   containerCount: r.container_count,
@@ -111,11 +116,12 @@ async function createDisposition(taskId, {
     let contFilter = ''
     if (filterProductIds) { contFilter = ` AND c.product_id IN (${filterProductIds.map(() => '?').join(',')})`; contParams.push(...filterProductIds) }
     const [containers] = await conn.query(
-      `SELECT c.id, c.product_id, c.warehouse_id, c.remaining_qty, c.inbound_task_item_id, c.unit,
+      `SELECT c.id, c.product_id, c.warehouse_id, c.remaining_qty, c.inbound_task_item_id, c.unit, c.barcode,
               p.code AS product_code, p.name AS product_name
        FROM inventory_containers c
        LEFT JOIN product_items p ON p.id = c.product_id
        WHERE c.inbound_task_id = ? AND c.status = ? AND c.deleted_at IS NULL${contFilter}
+         AND NOT EXISTS (SELECT 1 FROM inbound_qa_disposition_containers dc WHERE dc.container_id = c.id)
        ORDER BY c.product_id ASC, c.id ASC FOR UPDATE`,
       contParams,
     )
@@ -164,15 +170,11 @@ async function createDisposition(taskId, {
       totalQty = round4(totalQty + qty)
     }
 
-    // 消费 REJECTED 容器：6→VOID，remaining 归零、脱离库位。非 ACTIVE 不进 inventory_stock，
-    // 无需 syncStockFromContainers（与 void.js 非 ACTIVE 分支一致，缓存不受影响）。
+    // Phase3 严格化：**不立即 void**。容器保持 REJECTED，登记到处置单待扫出清单
+    // （下方 INSERT inbound_qa_disposition_containers），等仓库在 PDA 逐个扫码物理确认出场时才
+    // void(6→VOID) + 序列号回冲（见 scanOut）。处置决策(ERP) 与物理出场(PDA 扫码) 分离，守
+    // 「仓库端只执行不决策」；容器已被本处置单认领（uk_dispo_container 唯一约束 + 上面 NOT EXISTS）不会重复处置。
     const containerIds = containers.map(c => c.id)
-    await conn.query(
-      `UPDATE inventory_containers SET status = ?, remaining_qty = 0, location_id = NULL WHERE id IN (${containerIds.map(() => '?').join(',')})`,
-      [VOID, ...containerIds],
-    )
-    // 序列号回冲：删除这些被处置容器上的在库序列号（非序列号商品 no-op）
-    await voidSerialsForContainers(conn, { containerIds, operatorId: operator?.userId || null })
 
     const dispositionNo = await generateDailyCode(conn, 'QAD', 'inbound_qa_dispositions', 'disposition_no')
     let totalAmount = 0
@@ -186,9 +188,9 @@ async function createDisposition(taskId, {
     const [ins] = await conn.query(
       `INSERT INTO inbound_qa_dispositions
         (disposition_no, inbound_task_id, inbound_task_no, purchase_order_id, purchase_order_no,
-         supplier_id, supplier_name, warehouse_id, warehouse_name, disposition_type,
+         supplier_id, supplier_name, warehouse_id, warehouse_name, disposition_type, status,
          total_qty, total_amount, container_count, reason, remark, operator_id, operator_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
       [
         dispositionNo, taskId, taskRow.task_no, taskRow.purchase_order_id || null, taskRow.purchase_order_no || null,
         supplierId, taskRow.supplier_name || null, taskRow.warehouse_id, taskRow.warehouse_name || null, typeN,
@@ -205,15 +207,23 @@ async function createDisposition(taskId, {
         [dispositionId, ...line],
       )
     }
+    // 待扫出容器清单：每个 REJECTED 容器一行（barcode/qty 快照），scanned_at 留空待 PDA 扫出
+    for (const c of containers) {
+      await conn.query(
+        `INSERT INTO inbound_qa_disposition_containers (disposition_id, container_id, product_id, barcode, qty)
+         VALUES (?, ?, ?, ?, ?)`,
+        [dispositionId, c.id, c.product_id, c.barcode, Number(c.remaining_qty) || 0],
+      )
+    }
 
     await appendInboundEvent(
       conn, taskId, 'qa_disposed', '质检拒收处置',
-      `拒收品处置：${DISPOSITION_TYPE_NAME[typeN]} ${totalQty} 件（处置单 ${dispositionNo}）${reason ? `，原因：${reason}` : ''}`,
+      `拒收品处置：${DISPOSITION_TYPE_NAME[typeN]} ${totalQty} 件（处置单 ${dispositionNo}）待仓库 PDA 扫出确认${reason ? `，原因：${reason}` : ''}`,
       operator || { userId: null, realName: null },
-      { dispositionId, dispositionNo, dispositionType: typeN, totalQty, totalAmount, containerIds },
+      { dispositionId, dispositionNo, dispositionType: typeN, status: 1, totalQty, totalAmount, containerIds },
     )
 
-    const payload = { id: dispositionId, dispositionNo, dispositionType: typeN, totalQty, totalAmount, containerCount: containerIds.length }
+    const payload = { id: dispositionId, dispositionNo, dispositionType: typeN, status: 1, totalQty, totalAmount, containerCount: containerIds.length }
     if (requestState.enabled) {
       await completeOperationRequest(conn, requestState, {
         data: payload, message: `拒收处置 ${DISPOSITION_TYPE_NAME[typeN]} ${totalQty} 件`,
@@ -225,10 +235,14 @@ async function createDisposition(taskId, {
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-/** 某收货订单的拒收处置历史（供 ERP 收货详情展示）。 */
+const SCAN_PROGRESS_SUBQ = `
+  (SELECT COUNT(*) FROM inbound_qa_disposition_containers dc WHERE dc.disposition_id = d.id AND dc.scanned_at IS NOT NULL) AS scanned_count,
+  (SELECT COUNT(*) FROM inbound_qa_disposition_containers dc WHERE dc.disposition_id = d.id AND dc.scanned_at IS NULL) AS pending_count`
+
+/** 某收货订单的拒收处置历史（供 ERP 收货详情展示，带扫出进度）。 */
 async function listByTask(taskId) {
   const [rows] = await pool.query(
-    'SELECT * FROM inbound_qa_dispositions WHERE inbound_task_id = ? AND deleted_at IS NULL ORDER BY id DESC',
+    `SELECT d.*,${SCAN_PROGRESS_SUBQ} FROM inbound_qa_dispositions d WHERE d.inbound_task_id = ? AND d.deleted_at IS NULL ORDER BY d.id DESC`,
     [taskId],
   )
   if (!rows.length) return []
@@ -245,4 +259,105 @@ async function listByTask(taskId) {
   return rows.map(r => fmtDisposition(r, itemsByDispo.get(r.id) || []))
 }
 
-module.exports = { createDisposition, listByTask }
+/** PDA 待扫出处置单列表（status=1，接仓库数据权限）。 */
+async function listPendingScanOut({ scopeWarehouseIds = null } = {}) {
+  const scope = scopeFilter(scopeWarehouseIds, 'd.warehouse_id')
+  const [rows] = await pool.query(
+    `SELECT d.*,${SCAN_PROGRESS_SUBQ} FROM inbound_qa_dispositions d
+     WHERE d.status = 1 AND d.deleted_at IS NULL${scope.sql}
+     ORDER BY d.id ASC`,
+    scope.params,
+  )
+  return rows.map(r => fmtDisposition(r, []))
+}
+
+/** 单个处置单的待扫出/已扫出容器清单（PDA 作业页 + ERP 进度）。 */
+async function getScanDetail(dispositionId, scopeWarehouseIds = null) {
+  const [[d]] = await pool.query(
+    `SELECT d.*,${SCAN_PROGRESS_SUBQ} FROM inbound_qa_dispositions d WHERE d.id = ? AND d.deleted_at IS NULL`,
+    [dispositionId],
+  )
+  if (!d) throw new AppError('拒收处置单不存在', 404)
+  assertInScope(scopeWarehouseIds, d.warehouse_id, '拒收处置单')
+  const [containers] = await pool.query(
+    `SELECT dc.id, dc.container_id, dc.barcode, dc.qty, dc.scanned_at, dc.product_id,
+            p.name AS product_name, p.code AS product_code
+     FROM inbound_qa_disposition_containers dc
+     LEFT JOIN product_items p ON p.id = dc.product_id
+     WHERE dc.disposition_id = ? ORDER BY dc.scanned_at IS NOT NULL, dc.id ASC`,
+    [dispositionId],
+  )
+  return {
+    ...fmtDisposition(d, []),
+    containers: containers.map(c => ({
+      id: c.id, containerId: c.container_id, barcode: c.barcode, qty: Number(c.qty),
+      productId: c.product_id, productName: c.product_name, productCode: c.product_code,
+      scanned: !!c.scanned_at, scannedAt: c.scanned_at,
+    })),
+  }
+}
+
+/**
+ * PDA 拒收处置物理扫出：仓库扫一个 REJECTED 容器码，物理确认出场 → void(6→VOID) + 序列号回冲。
+ * 全部容器扫完 → 处置单 status=2 已完成。守「仓库端只执行不决策」（只扫系统列出的容器，不自选）。
+ * 自管事务；requestKey 幂等（断网重扫不重复 void）；加锁顺序：处置单头 → 待扫容器行 → 库存维度 → 容器。
+ */
+async function scanOut(dispositionId, { barcode, requestKey, operator = null, pdaWarehouseId = null, scopeWarehouseIds = null } = {}) {
+  const bc = String(barcode || '').trim()
+  if (!bc) throw new AppError('请扫描容器条码', 400)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, { requestKey, action: 'inbound.qa.dispose.scan', userId: operator?.userId || null })
+    if (requestState.replay) { await conn.rollback(); return requestState.responseData }
+
+    const d = await lockStatusRow(conn, {
+      table: 'inbound_qa_dispositions', id: dispositionId,
+      columns: 'id, disposition_no, inbound_task_id, warehouse_id, status',
+      entityName: '拒收处置单',
+    })
+    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(d.warehouse_id)) {
+      throw new AppError('当前设备绑定仓库与处置单仓库不一致，无法扫出', 403)
+    }
+    assertInScope(scopeWarehouseIds, d.warehouse_id, '拒收处置单')
+    if (Number(d.status) !== 1) throw new AppError('该处置单已完成扫出', 409)
+
+    const [[dc]] = await conn.query(
+      'SELECT id, container_id, scanned_at FROM inbound_qa_disposition_containers WHERE disposition_id = ? AND barcode = ? FOR UPDATE',
+      [dispositionId, bc],
+    )
+    if (!dc) throw new AppError(`条码 ${bc} 不在本处置单待扫清单中`, 400, 'DISPOSE_SCAN_NOT_IN_LIST')
+    if (dc.scanned_at) throw new AppError(`容器 ${bc} 已扫出，请勿重复`, 409, 'DISPOSE_SCAN_DUPLICATE')
+
+    const [[c]] = await conn.query('SELECT id, product_id, warehouse_id, status FROM inventory_containers WHERE id = ? FOR UPDATE', [dc.container_id])
+    if (!c || Number(c.status) !== REJECTED) throw new AppError('该容器状态异常，非待处置拒收品', 409)
+    await lockStockDimension(conn, c.product_id, c.warehouse_id)
+    // 物理出场：6→VOID，脱离库位、remaining 归零（非 ACTIVE 不进缓存，无需 syncStock）
+    await conn.query('UPDATE inventory_containers SET status = ?, remaining_qty = 0, location_id = NULL WHERE id = ?', [VOID, c.id])
+    await voidSerialsForContainers(conn, { containerIds: [c.id], operatorId: operator?.userId || null })
+    await conn.query('UPDATE inbound_qa_disposition_containers SET scanned_at = NOW(), scanned_by = ? WHERE id = ?', [operator?.userId || null, dc.id])
+
+    const [[{ pending }]] = await conn.query(
+      'SELECT COUNT(*) AS pending FROM inbound_qa_disposition_containers WHERE disposition_id = ? AND scanned_at IS NULL',
+      [dispositionId],
+    )
+    const done = Number(pending) === 0
+    if (done) {
+      await conn.query('UPDATE inbound_qa_dispositions SET status = 2 WHERE id = ?', [dispositionId])
+      await appendInboundEvent(
+        conn, d.inbound_task_id, 'qa_dispose_scanned', '拒收处置扫出完成',
+        `处置单 ${d.disposition_no} 全部拒收品已 PDA 扫出确认物理出场`,
+        operator || { userId: null, realName: null }, { dispositionId, allDone: true },
+      )
+    }
+
+    const payload = { dispositionId, containerId: c.id, barcode: bc, pending: Number(pending), done }
+    if (requestState.enabled) {
+      await completeOperationRequest(conn, requestState, { data: payload, message: `扫出 ${bc}`, resourceType: 'inbound_qa_disposition', resourceId: dispositionId })
+    }
+    await conn.commit()
+    return payload
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
+}
+
+module.exports = { createDisposition, listByTask, listPendingScanOut, getScanDetail, scanOut }

@@ -115,7 +115,7 @@ export default function InboundTaskDetailPage() {
       {
         onSuccess: async (res) => {
           setDisposeOpen(false)
-          toast.success(`已处置：${disposeType === 1 ? '退供应商' : '报废'} ${res?.totalQty ?? ''} 件`)
+          toast.success(`已生成处置单：${disposeType === 1 ? '退供应商' : '报废'} ${res?.totalQty ?? ''} 件，待仓库 PDA 扫出确认`)
           await afterMutation()
         },
         onError: (err: unknown) => {
@@ -394,6 +394,9 @@ export default function InboundTaskDetailPage() {
                 columns={[
                   { key: 'dispositionNo', title: '处置单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
                   { key: 'dispositionTypeName', title: '方式', width: 100, render: (v, r) => <SoftStatusLabel label={String(v)} tone={r.dispositionType === 2 ? 'danger' : 'warning'} /> },
+                  { key: 'status', title: '扫出状态', width: 140, render: (_, r) => r.status === 2
+                    ? <SoftStatusLabel label="已完成" tone="success" />
+                    : <span className="inline-flex items-center gap-1"><SoftStatusLabel label="待扫出" tone="warning" /><span className="text-xs text-muted-foreground tabular-nums">{r.scannedCount ?? 0}/{(r.scannedCount ?? 0) + (r.pendingCount ?? 0)}</span></span> },
                   { key: 'totalQty', title: '数量', width: 80, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
                   { key: 'totalAmount', title: '参考货值', width: 110, align: 'right', render: v => <span className="text-muted-foreground tabular-nums">¥{(v as number).toFixed(2)}</span> },
                   { key: 'reason', title: '原因', width: 150, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
@@ -506,8 +509,8 @@ export default function InboundTaskDetailPage() {
               将处置 <span className="text-destructive tabular-nums">{rejectedTotalQty}</span> 件拒收品（{rejectedContainers.length} 个容器）
             </p>
             <p className="text-helper">
-              处置会作废这些拒收容器并留痕；因拒收品从收货起就不计库存、不进应付，此操作
-              <span className="font-medium text-foreground">不影响库存与账款、不生成凭证</span>。操作不可撤销。
+              生成处置单后，需仓库在 PDA「拒收处置」扫码逐个确认容器物理出场才最终作废；因拒收品从收货起就不计库存、不进应付，此操作
+              <span className="font-medium text-foreground">不影响库存与账款、不生成凭证</span>。
             </p>
           </div>
 

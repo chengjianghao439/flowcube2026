@@ -169,6 +169,34 @@ const qaDispositions = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
+// 拒收处置 PDA 物理扫出（文档07 Phase3）
+const qaDisposePending = async (req, res, next) => {
+  try {
+    const data = await svc.qaDisposePending({ scopeWarehouseIds: req.user?.warehouseIds ?? null })
+    return successResponse(res, data, '查询成功')
+  } catch (e) { next(e) }
+}
+
+const qaDisposeScanDetail = async (req, res, next) => {
+  try {
+    const data = await svc.qaDisposeScanDetail(+req.params.dispositionId, req.user?.warehouseIds ?? null)
+    return successResponse(res, data, '查询成功')
+  } catch (e) { next(e) }
+}
+
+const qaDisposeScanOut = async (req, res, next) => {
+  try {
+    const data = await svc.qaDisposeScanOut(+req.params.dispositionId, {
+      barcode: req.body.barcode,
+      requestKey: extractRequestKey(req),
+      operator: getOperatorFromRequest(req),
+      pdaWarehouseId: req.pda?.warehouseId ?? null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    return successResponse(res, data, '扫出成功')
+  } catch (e) { next(e) }
+}
+
 const qaSupplierReport = async (req, res, next) => {
   try {
     const data = await svc.qaSupplierReport({
@@ -180,4 +208,4 @@ const qaSupplierReport = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, qaCheck, qaDispose, qaDispositions, qaSupplierReport, cancel, voidReceipt, closeReceiving }
+module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, qaCheck, qaDispose, qaDispositions, qaDisposePending, qaDisposeScanDetail, qaDisposeScanOut, qaSupplierReport, cancel, voidReceipt, closeReceiving }
