@@ -229,7 +229,13 @@ async function main() {
     const qtyBeforeCheck = (await stockQty(pool, product.id, warehouse.id)).quantity
     const checkCreate = await http.post('/api/stockcheck', {
       token,
-      json: { warehouseId: Number(warehouse.id), warehouseName: warehouse.name, remark: randomRef('integ-check') },
+      // 循环抽盘只圈定本用例商品：全盘会把共享仓库里其它商品（含别的用例遗留的序列号管控商品）
+      // 一并拉进单里，而序列号商品的实盘数只能由 PDA 逐台扫码派生、不接受手填（C-full），
+      // 全盘写法会因此被守卫拦下。抽盘让本用例自足、不受同库其它数据影响。
+      json: {
+        warehouseId: Number(warehouse.id), warehouseName: warehouse.name, remark: randomRef('integ-check'),
+        checkType: 2, scopeType: 'manual', scopeValue: 'integration', productIds: [Number(product.id)],
+      },
     })
     log.assert('创建盘点单成功(201)', checkCreate.status === 201 && !!checkCreate.data?.data?.id, `status=${checkCreate.status}`)
     const checkId = Number(checkCreate.data?.data?.id)

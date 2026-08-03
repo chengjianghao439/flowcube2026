@@ -18,7 +18,8 @@
       "name": "frontend-pda-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev:pda"],
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
     },
     {
       "name": "frontend-dev-prod-api",

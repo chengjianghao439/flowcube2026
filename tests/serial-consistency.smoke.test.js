@@ -587,6 +587,174 @@ async function scenarioSerialReduceAdjustWhole(ctx, log, token) {
   log.assert('★ 整只归还后对账仍0不一致', cc.data?.data?.consistent === true && Number(cc.data?.data?.mismatchCount) === 0, JSON.stringify(cc.data?.data).slice(0, 300))
 }
 
+// ── C-full ①：序列号级盘点 —— 盘亏必须扣「丢失台所在的那只容器」，不能走 FIFO ──────
+// 这是 C-full 最关键的正确性点：造两只容器（c1 先建=FIFO 首选，c2 后建），只让 c2 里的台"丢失"。
+// 若实现退回 FIFO，会去扣 c1 → c1「数量少了、序列号还挂着」+ c2「数量对、台却已标丢失」，双双破不变量。
+async function scenarioSerialStocktakeLoss(ctx, log, token) {
+  log.section('C-full ① 序列号级盘点·盘亏：精确扣丢失台所在容器（不走 FIFO）')
+  const { http, pool, warehouse, location } = ctx
+  const product = await createSerialProduct(pool, 'ckL')
+  const suffix = randomRef('CL').slice(-8)
+  const sns = { A: `CLA-${suffix}`, B: `CLB-${suffix}`, C: `CLC-${suffix}` }
+  const pid = Number(product.id)
+
+  // c1=[A,B] 先建（FIFO 首选），c2=[C] 后建
+  const [c1, c2] = await receiveAndPutaway(ctx, token, product, [{ qty: 2, serialNos: [sns.A, sns.B] }, { qty: 1, serialNos: [sns.C] }])
+
+  const create = await http.post('/api/stockcheck', {
+    token, json: { warehouseId: Number(warehouse.id), warehouseName: warehouse.name, remark: randomRef('sc-serial'),
+      checkType: 2, scopeType: 'manual', scopeValue: 'smoke', productIds: [pid] },
+  })
+  log.assert('创建盘点单成功', create.status === 201, JSON.stringify(create.data).slice(0, 200))
+  const checkId = Number(create.data?.data?.id)
+  const [itemRow] = await dbQuery(pool, 'SELECT id, book_qty FROM inventory_check_items WHERE check_id=? AND product_id=?', [checkId, pid])
+  log.assert('盘点明细账面=3台', !!itemRow && Number(itemRow.book_qty) === 3, JSON.stringify(itemRow))
+
+  // 手填实盘数必须被拒（序列号商品只能扫码派生）
+  const manual = await http.put(`/api/stockcheck/${checkId}/items`, { token, json: { items: [{ id: Number(itemRow.id), actualQty: 2 }] } })
+  log.assert('★ 序列号商品手填实盘数被拒(SERIAL_ACTUAL_QTY_MANUAL_FORBIDDEN)',
+    manual.status === 400 && manual.data?.code === 'SERIAL_ACTUAL_QTY_MANUAL_FORBIDDEN', `status=${manual.status} code=${manual.data?.code}`)
+
+  const scan = (serialNos) => http.post(`/api/stockcheck/${checkId}/items/${itemRow.id}/serials`, { token, headers: ctx.pdaHeaders(), json: { serialNos } })
+
+  // PDA 任务池能看到该单
+  const pending = await http.get('/api/stockcheck/serial/pending', { token })
+  log.assert('PDA 盘点任务池能查到该单', (pending.data?.data || []).some(t => Number(t.id) === checkId), JSON.stringify(pending.data?.data).slice(0, 200))
+
+  // 现场只扫到 A、B —— C 丢了（C 在 c2 里，FIFO 首选却是 c1）
+  const s1 = await scan([sns.A, sns.B])
+  log.assert('★ 扫到2台，实盘数派生=2、差异=-1', s1.ok && s1.data?.data?.scannedCount === 2 && s1.data?.data?.diffQty === -1, JSON.stringify(s1.data).slice(0, 200))
+
+  // 详情预览：盘亏应精确指出是 C
+  const detail = await http.get(`/api/stockcheck/${checkId}`, { token })
+  const dItem = (detail.data?.data?.items || []).find(i => Number(i.productId) === pid)
+  log.assert('★ 详情预览盘亏=[C]、盘盈=[]', dItem?.missingSerials?.length === 1 && dItem.missingSerials[0] === sns.C && dItem.surplusSerials?.length === 0, JSON.stringify(dItem).slice(0, 300))
+
+  const submit = await http.post(`/api/stockcheck/${checkId}/submit`, { token })
+  log.assert('盘点提交成功', submit.ok, JSON.stringify(submit.data).slice(0, 200))
+
+  // ★核心：扣的是 c2（C 所在容器），c1 分毫未动
+  const c1After = await containerRemaining(pool, c1.containerId)
+  const c2After = await containerRemaining(pool, c2.containerId)
+  log.assert('★★ 盘亏精确扣 c2（C所在容器）remaining 1→0，未误扣 FIFO 首选的 c1',
+    c1After?.remaining === 2 && c2After?.remaining === 0, `c1=${JSON.stringify(c1After)} c2=${JSON.stringify(c2After)}`)
+  log.assert('★ c1 仍 remaining=2==在库SN数2（A/B 未受影响）',
+    (await containerSerialCount(pool, c1.containerId)) === 2 && c1After?.remaining === 2)
+  log.assert('★ c2 remaining=0==在库SN数0', (await containerSerialCount(pool, c2.containerId)) === 0)
+
+  const [cRow] = await dbQuery(pool, 'SELECT status, container_id FROM product_serials WHERE product_id=? AND serial_no=?', [pid, sns.C])
+  log.assert('★ C 已标记盘亏丢失(status=4)、脱离容器、行仍保留可追溯',
+    Number(cRow.status) === 4 && cRow.container_id === null, JSON.stringify(cRow))
+  const [[{ n: lossEvents }]] = [await dbQuery(pool, `SELECT COUNT(*) AS n FROM serial_events se JOIN product_serials ps ON ps.id=se.serial_id WHERE ps.product_id=? AND se.event_type='stockcheck_loss'`, [pid])]
+  log.assert('★ 写了 stockcheck_loss 事件(1条)', Number(lossEvents) === 1, `events=${lossEvents}`)
+
+  log.assert('全局在库SN数=2（A/B）', (await inStockSerialCount(pool, pid)) === 2)
+  log.assert('★ ACTIVE容器合计(2)==在库SN数(2)', (await activeContainerSum(pool, pid, warehouse.id)) === 2)
+  await assertPerContainerInvariant(pool, log, pid, warehouse.id, 'C-full盘亏后')
+  const cc = await http.get(`/api/serials/check-consistency?warehouseId=${warehouse.id}`, { token })
+  log.assert('★ 盘亏后对账0不一致', cc.data?.data?.consistent === true && Number(cc.data?.data?.mismatchCount) === 0, JSON.stringify(cc.data?.data).slice(0, 300))
+  return { product, sns, c1, location }
+}
+
+// ── C-full ②：盘盈 + 净差为0的"换台"（丢A补X）—— 数量看不出变化，台账必须更正 ────────
+async function scenarioSerialStocktakeSurplusAndSwap(ctx, log, token) {
+  log.section('C-full ② 序列号级盘点·盘盈 + 净差0换台（丢1台补1台）')
+  const { http, pool, warehouse } = ctx
+  const product = await createSerialProduct(pool, 'ckS')
+  const suffix = randomRef('CS').slice(-8)
+  const sns = { A: `CSA-${suffix}`, B: `CSB-${suffix}`, X: `CSX-${suffix}` }
+  const pid = Number(product.id)
+
+  const [c1] = await receiveAndPutaway(ctx, token, product, [{ qty: 2, serialNos: [sns.A, sns.B] }])
+
+  const create = await http.post('/api/stockcheck', {
+    token, json: { warehouseId: Number(warehouse.id), warehouseName: warehouse.name, remark: randomRef('sc-swap'),
+      checkType: 2, scopeType: 'manual', scopeValue: 'smoke', productIds: [pid] },
+  })
+  const checkId = Number(create.data?.data?.id)
+  const [itemRow] = await dbQuery(pool, 'SELECT id FROM inventory_check_items WHERE check_id=? AND product_id=?', [checkId, pid])
+  const scan = (serialNos) => http.post(`/api/stockcheck/${checkId}/items/${itemRow.id}/serials`, { token, headers: ctx.pdaHeaders(), json: { serialNos } })
+
+  // 现场扫到 A 和一台系统不知道的 X —— B 丢了。台数 2==2，净差 0，但换了台！
+  const s1 = await scan([sns.A, sns.X])
+  log.assert('扫到2台(A,X)：实盘=2、净差=0', s1.ok && s1.data?.data?.scannedCount === 2 && s1.data?.data?.diffQty === 0, JSON.stringify(s1.data).slice(0, 200))
+
+  const detail = await http.get(`/api/stockcheck/${checkId}`, { token })
+  const dItem = (detail.data?.data?.items || []).find(i => Number(i.productId) === pid)
+  log.assert('★ 详情预览：盘亏=[B]、盘盈=[X]（净差0也要看得见）',
+    dItem?.missingSerials?.[0] === sns.B && dItem?.surplusSerials?.[0] === sns.X, JSON.stringify(dItem).slice(0, 300))
+
+  const submit = await http.post(`/api/stockcheck/${checkId}/submit`, { token })
+  log.assert('★ 净差为0的换台仍被提交处理（未因 diff===0 跳过）', submit.ok, JSON.stringify(submit.data).slice(0, 200))
+
+  const [bRow] = await dbQuery(pool, 'SELECT status, container_id FROM product_serials WHERE product_id=? AND serial_no=?', [pid, sns.B])
+  log.assert('★ B 已标记丢失(4)、脱离容器', Number(bRow.status) === 4 && bRow.container_id === null, JSON.stringify(bRow))
+  const [xRow] = await dbQuery(pool, 'SELECT status, container_id FROM product_serials WHERE product_id=? AND serial_no=?', [pid, sns.X])
+  log.assert('★ X 已登记为在库(1)、绑到盘盈新容器', Number(xRow.status) === 1 && xRow.container_id != null && Number(xRow.container_id) !== c1.containerId, JSON.stringify(xRow))
+  log.assert('★ 原容器 c1 remaining=1==在库SN数1（B被扣、A还在）',
+    (await containerRemaining(pool, c1.containerId))?.remaining === 1 && (await containerSerialCount(pool, c1.containerId)) === 1)
+  log.assert('★ 盘盈容器 remaining=1==在库SN数1',
+    (await containerRemaining(pool, Number(xRow.container_id)))?.remaining === 1 && (await containerSerialCount(pool, Number(xRow.container_id))) === 1)
+
+  log.assert('全局在库SN数仍=2（A/X）', (await inStockSerialCount(pool, pid)) === 2)
+  log.assert('★ ACTIVE容器合计(2)==在库SN数(2)', (await activeContainerSum(pool, pid, warehouse.id)) === 2)
+  await assertPerContainerInvariant(pool, log, pid, warehouse.id, 'C-full换台后')
+  const cc = await http.get(`/api/serials/check-consistency?warehouseId=${warehouse.id}`, { token })
+  log.assert('★ 换台后对账0不一致', cc.data?.data?.consistent === true && Number(cc.data?.data?.mismatchCount) === 0, JSON.stringify(cc.data?.data).slice(0, 300))
+
+  // 盘盈登记的 X 必须能正常出库（证明盘盈台是"真在库"、不是挂账）
+  const { taskId } = await createSaleReserveShipPick(ctx, token, product, 1, [{ containerId: Number(xRow.container_id), barcode: (await dbQuery(pool, 'SELECT barcode FROM inventory_containers WHERE id=?', [Number(xRow.container_id)]))[0].barcode, qty: 1 }])
+  const [xc] = await dbQuery(pool, 'SELECT barcode FROM inventory_containers WHERE id=?', [Number(xRow.container_id)])
+  const shipResp = await finishAndShipSingle(ctx, token, taskId, product, xc.barcode, sns.X)
+  log.assert('★ 盘盈登记的 X 能完整走完出库（真在库，非挂账）', shipResp.ok, `status=${shipResp.status} ${JSON.stringify(shipResp.data?.message || shipResp.data?.code || '')}`)
+}
+
+// ── C-full ③：闸门 —— 扫到已被别处认领为在库的 SN 必须早失败 ────────────────────
+async function scenarioSerialStocktakeGuards(ctx, log, token) {
+  log.section('C-full ③ 闸门：扫到已在库(别的容器/仓)的 SN 被拒 + 本批重复扫被拒')
+  const { http, pool, warehouse } = ctx
+  const product = await createSerialProduct(pool, 'ckG')
+  const suffix = randomRef('CG').slice(-8)
+  const sns = { A: `CGA-${suffix}`, B: `CGB-${suffix}` }
+  const pid = Number(product.id)
+  // 两只容器各一台；盘点单只针对该商品，A/B 都在账面内
+  const [, c2] = await receiveAndPutaway(ctx, token, product, [{ qty: 1, serialNos: [sns.A] }, { qty: 1, serialNos: [sns.B] }])
+
+  const create = await http.post('/api/stockcheck', {
+    token, json: { warehouseId: Number(warehouse.id), warehouseName: warehouse.name, remark: randomRef('sc-guard'),
+      checkType: 2, scopeType: 'manual', scopeValue: 'smoke', productIds: [pid] },
+  })
+  const checkId = Number(create.data?.data?.id)
+  const [itemRow] = await dbQuery(pool, 'SELECT id FROM inventory_check_items WHERE check_id=? AND product_id=?', [checkId, pid])
+  const scan = (serialNos) => http.post(`/api/stockcheck/${checkId}/items/${itemRow.id}/serials`, { token, headers: ctx.pdaHeaders(), json: { serialNos } })
+
+  const dup = await scan([sns.A, sns.A])
+  log.assert('★ 本批重复扫同一台被拒(SERIAL_DUP_IN_BATCH)', dup.status === 400 && dup.data?.code === 'SERIAL_DUP_IN_BATCH', `status=${dup.status} code=${dup.data?.code}`)
+
+  // 把 c2 的容器挪成 PENDING_QA（模拟"该台已被别处账面认领"），它就不在本仓 ACTIVE 账面集里了，
+  // 再扫到它 → 属于盘盈候选，但它 status=1 已在库 → 必须早失败，而不是留到提交时才炸
+  await pool.query('UPDATE inventory_containers SET status=5 WHERE id=?', [c2.containerId])
+  const claimed = await scan([sns.A, sns.B])
+  log.assert('★ 扫到已被别处认领为在库的台被拒(SERIAL_ALREADY_IN_STOCK)',
+    claimed.status === 409 && claimed.data?.code === 'SERIAL_ALREADY_IN_STOCK', `status=${claimed.status} code=${claimed.data?.code}`)
+  const [{ n: savedCnt }] = await dbQuery(pool, 'SELECT COUNT(*) AS n FROM inventory_check_item_serials WHERE check_item_id=?', [itemRow.id])
+  log.assert('★ 被拒时一台都没落库（事务完整回滚）', Number(savedCnt) === 0, `saved=${savedCnt}`)
+  await pool.query('UPDATE inventory_containers SET status=1 WHERE id=?', [c2.containerId])
+
+  // 扫码整行替换语义：连扫两次，结果以最后一次为准、不累加（天然幂等）
+  await scan([sns.A])
+  const again = await scan([sns.A, sns.B])
+  log.assert('★ 重复提交扫码集为整行替换、不累加（幂等）', again.ok && again.data?.data?.scannedCount === 2, JSON.stringify(again.data).slice(0, 200))
+  const [{ n: finalCnt }] = await dbQuery(pool, 'SELECT COUNT(*) AS n FROM inventory_check_item_serials WHERE check_item_id=?', [itemRow.id])
+  log.assert('落库扫码记录=2条（非3条）', Number(finalCnt) === 2, `rows=${finalCnt}`)
+
+  // 刷新账面应清空已扫台（账面变了，之前那轮不可信）
+  const refresh = await http.post(`/api/stockcheck/${checkId}/items/${itemRow.id}/refresh`, { token })
+  log.assert('刷新账面成功', refresh.ok, JSON.stringify(refresh.data).slice(0, 150))
+  const [{ n: afterRefresh }] = await dbQuery(pool, 'SELECT COUNT(*) AS n FROM inventory_check_item_serials WHERE check_item_id=?', [itemRow.id])
+  log.assert('★ 刷新账面后已扫台被清空（必须重扫）', Number(afterRefresh) === 0, `rows=${afterRefresh}`)
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -609,6 +777,9 @@ async function main() {
     await scenarioSaleReturnSerial(ctx, log, token, product, sns)
     await scenarioSerialReduceAdjustPartial(ctx, log, token)
     await scenarioSerialReduceAdjustWhole(ctx, log, token)
+    await scenarioSerialStocktakeLoss(ctx, log, token)
+    await scenarioSerialStocktakeSurplusAndSwap(ctx, log, token)
+    await scenarioSerialStocktakeGuards(ctx, log, token)
   } finally {
     const summary = log.summary()
     await ctx.close()

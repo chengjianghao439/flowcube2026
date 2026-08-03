@@ -15,7 +15,7 @@
  */
 const AppError = require('../utils/AppError')
 
-const SERIAL_STATUS = { IN_STOCK: 1, SHIPPED: 2, RETURNED: 3 }
+const SERIAL_STATUS = { IN_STOCK: 1, SHIPPED: 2, RETURNED: 3, LOST: 4 }
 
 /** 清洗 + 本批内查重：去空白、拒空、拒本批重复 */
 function normalizeSerialList(serialNos) {
@@ -314,6 +314,101 @@ async function dispatchSerials(conn, { productId, serialNos, allowedContainerIds
 }
 
 /**
+ * 盘点（文档 04 · Phase3b·C-full）：读某商品在某仓「账面在库集」——挂在 ACTIVE 容器上、status=1 的全部台。
+ * 这是盘点比对的 book 集；与盘点账面量口径一致（只认 ACTIVE 容器，见 stockcheck.service 的
+ * listBookStocksFromActiveContainers）。加 FOR UPDATE 与账面量校验同处一个事务、防并发漂移。
+ * @returns {Promise<Array<{id:number, serialNo:string, containerId:number}>>}
+ */
+async function getBookSerialsForStocktake(conn, { productId, warehouseId, forUpdate = false }) {
+  const [rows] = await conn.query(
+    `SELECT ps.id, ps.serial_no, ps.container_id
+       FROM product_serials ps
+       JOIN inventory_containers c ON c.id = ps.container_id
+      WHERE ps.product_id = ? AND ps.status = ?
+        AND c.warehouse_id = ? AND c.status = 1 AND c.deleted_at IS NULL
+      ORDER BY ps.serial_no ASC${forUpdate ? ' FOR UPDATE' : ''}`,
+    [productId, SERIAL_STATUS.IN_STOCK, warehouseId],
+  )
+  return rows.map(r => ({ id: Number(r.id), serialNo: r.serial_no, containerId: Number(r.container_id) }))
+}
+
+/**
+ * 盘点盘亏（文档 04 · Phase3b·C-full）：把「账面在库但现场没扫到」的台标记为丢失。
+ * status→4 丢失、container_id 置空、写 'stockcheck_loss' 事件。**不删行**——丢失是真实历史事实，
+ * 需留档可追溯（与 voidSerialsForContainers 的"货从没入过库、undo 即删除"语义不同）。
+ * 调用方（containerEngine.adjustContainersForStockcheck）必须在同一事务里把这些台所在容器
+ * 各自扣减对应台数，否则不变量破裂；本函数只动个体账。
+ * @returns {Promise<number>} 标记台数
+ */
+async function markSerialsLostForStocktake(conn, { serialIds, warehouseId = null, checkId = null, checkNo = null, operatorId = null }) {
+  const ids = [...new Set((serialIds || []).map(Number).filter(Boolean))]
+  if (!ids.length) return 0
+  await conn.query(
+    `UPDATE product_serials SET status = ?, container_id = NULL WHERE id IN (${ids.map(() => '?').join(',')})`,
+    [SERIAL_STATUS.LOST, ...ids],
+  )
+  for (const sid of ids) {
+    await writeEvent(conn, {
+      serialId: sid, eventType: 'stockcheck_loss',
+      fromStatus: SERIAL_STATUS.IN_STOCK, toStatus: SERIAL_STATUS.LOST,
+      warehouseId, refType: 'stockcheck', refId: checkId, operatorId,
+      remark: `盘点盘亏丢失${checkNo ? ` ${checkNo}` : ''}`,
+    })
+  }
+  return ids.length
+}
+
+/**
+ * 盘点盘盈（文档 04 · Phase3b·C-full）：把「现场扫到但账面没有」的台登记为在库、绑到盘盈新容器。
+ * 与 registerSerials 同款"复用或插入"：该 SN 历史上存在过（已出库/已退/曾丢失）则复用该行改回在库
+ * （实物又出现了，正是盘盈的常见成因：漏登记出库、错发后退回、之前误判丢失）；从未存在则新建。
+ * 若该 SN 当前已是在库(1)，说明它已被别处账面认领（别的容器/别的仓/待质检容器），不能重复登记 → 拒。
+ * @returns {Promise<number[]>} product_serials.id 列表
+ */
+async function registerStocktakeSurplusSerials(conn, { productId, warehouseId, containerId, serialNos, checkId = null, checkNo = null, operatorId = null }) {
+  const list = normalizeSerialList(serialNos)
+  const ids = []
+  for (const sn of list) {
+    const [[existing]] = await conn.query(
+      'SELECT id, status FROM product_serials WHERE product_id = ? AND serial_no = ? FOR UPDATE',
+      [productId, sn],
+    )
+    if (existing && Number(existing.status) === SERIAL_STATUS.IN_STOCK) {
+      throw new AppError(`序列号 ${sn} 已在库（已挂在其它容器上），不能作为盘盈重复登记`, 409, 'SERIAL_ALREADY_IN_STOCK')
+    }
+    if (existing) {
+      await conn.query(
+        `UPDATE product_serials
+         SET status = ?, warehouse_id = ?, container_id = ?,
+             warehouse_task_id = NULL, sale_order_id = NULL, shipped_at = NULL, return_ref_type = NULL, return_ref_id = NULL
+         WHERE id = ?`,
+        [SERIAL_STATUS.IN_STOCK, warehouseId, containerId, existing.id],
+      )
+      await writeEvent(conn, {
+        serialId: existing.id, eventType: 'stockcheck_surplus',
+        fromStatus: existing.status, toStatus: SERIAL_STATUS.IN_STOCK,
+        containerId, warehouseId, refType: 'stockcheck', refId: checkId, operatorId,
+        remark: `盘点盘盈复用${checkNo ? ` ${checkNo}` : ''}`,
+      })
+      ids.push(existing.id)
+    } else {
+      const [r] = await conn.query(
+        `INSERT INTO product_serials (product_id, serial_no, warehouse_id, container_id, status) VALUES (?,?,?,?,?)`,
+        [productId, sn, warehouseId, containerId, SERIAL_STATUS.IN_STOCK],
+      )
+      await writeEvent(conn, {
+        serialId: r.insertId, eventType: 'stockcheck_surplus',
+        fromStatus: null, toStatus: SERIAL_STATUS.IN_STOCK,
+        containerId, warehouseId, refType: 'stockcheck', refId: checkId, operatorId,
+        remark: `盘点盘盈登记${checkNo ? ` ${checkNo}` : ''}`,
+      })
+      ids.push(r.insertId)
+    }
+  }
+  return ids
+}
+
+/**
  * 核心不变量断言：某容器 remaining_qty == 该容器在库序列号行数（仅对 serial_managed 商品）。
  * 在收货/出库等改动后于事务尾部调用兜底。
  */
@@ -357,6 +452,9 @@ module.exports = {
   moveSerialsOnSplit,
   putawaySerials,
   dispatchSerials,
+  getBookSerialsForStocktake,
+  markSerialsLostForStocktake,
+  registerStocktakeSurplusSerials,
   assertSerialCountMatchesContainer,
   assertNoSerialManaged,
   normalizeSerialList,

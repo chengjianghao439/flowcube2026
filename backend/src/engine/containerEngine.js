@@ -579,12 +579,93 @@ async function transferContainers(conn, {
 }
 
 /**
+ * 序列号商品的盘点调整（文档04 Phase3b·C-full）。与通用路径的本质差别：
+ *
+ *   **盘亏必须扣「丢失台各自所在的那些容器」，绝不能走 FIFO。**
+ *   FIFO 会去扣「最早的容器」，而丢的台可能挂在别的容器上——扣完那只容器就变成
+ *   「数量少了、挂的序列号还在」，被扣容器与丢失台所在容器双双破坏
+ *   「remaining_qty == 在库SN台数」不变量。所以这里按 containerId 分组精确扣减。
+ *
+ * 盘盈则建一只新容器承载「现场扫到但账面没有」的台，登记这些 SN 挂上去（台数天然相等）。
+ * 两侧都在末尾对每只受影响容器 assertSerialCountMatchesContainer 兜底。
+ * 由 adjustContainersForStockcheck 在识别出序列号商品且调用方给了 serialPlan 时委托调用；
+ * 缓存刷新（syncStockFromContainers）由调用方统一收口，本函数不重复刷。
+ *
+ * @param {object} params.serialPlan { missing:[{id,serialNo,containerId}], surplus:[serialNo] }
+ */
+async function adjustSerialContainersForStockcheck(conn, {
+  productId, productName = '该商品', warehouseId, unit = null, serialPlan,
+  sourceRefType = 'stockcheck', sourceRefId = null, sourceRefNo = null, remark = null,
+}) {
+  const { markSerialsLostForStocktake, registerStocktakeSurplusSerials, assertSerialCountMatchesContainer } = require('./serialEngine')
+  const missing = Array.isArray(serialPlan?.missing) ? serialPlan.missing : []
+  const surplus = Array.isArray(serialPlan?.surplus) ? serialPlan.surplus : []
+  const touched = new Set()
+  let createdContainerId = null
+  let primaryDeductContainerId = null
+
+  // ── 盘亏：按容器分组精确扣减（容器 id 升序，与全仓其它库存事务的加锁顺序一致，防死锁）──
+  const byContainer = new Map()
+  for (const m of missing) {
+    const cid = Number(m.containerId)
+    if (!byContainer.has(cid)) byContainer.set(cid, [])
+    byContainer.get(cid).push(m)
+  }
+  for (const cid of [...byContainer.keys()].sort((a, b) => a - b)) {
+    const lost = byContainer.get(cid)
+    const [[row]] = await conn.query(
+      'SELECT id, remaining_qty FROM inventory_containers WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      [cid],
+    )
+    if (!row) throw new AppError(`盘亏序列号所在容器 ${cid} 不存在`, 409, 'SERIAL_STOCKCHECK_CONTAINER_GONE')
+    const newRem = Number(row.remaining_qty) - lost.length
+    assertNonNegativeQty(newRem, `容器 ${cid} 盘亏扣减后`)
+    await conn.query(
+      'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
+      [newRem, newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE, cid],
+    )
+    touched.add(cid)
+    if (primaryDeductContainerId == null) primaryDeductContainerId = cid
+  }
+  if (missing.length) {
+    await markSerialsLostForStocktake(conn, {
+      serialIds: missing.map(m => m.id), warehouseId,
+      checkId: sourceRefId, checkNo: sourceRefNo,
+    })
+  }
+
+  // ── 盘盈：建一只新容器承载扫到但账面没有的台 ──
+  if (surplus.length) {
+    const r = await createContainer(conn, {
+      productId, warehouseId, initialQty: surplus.length, unit,
+      sourceType: SOURCE_TYPE.STOCKCHECK, sourceRefId, sourceRefType, sourceRefNo,
+      remark: remark || `盘点盘盈 ${sourceRefNo ?? ''}`,
+      containerStatus: CONTAINER_STATUS.PENDING_PUTAWAY,
+    })
+    await promotePendingContainerToActive(conn, r.containerId, productId, warehouseId)
+    await registerStocktakeSurplusSerials(conn, {
+      productId, warehouseId, containerId: r.containerId, serialNos: surplus,
+      checkId: sourceRefId, checkNo: sourceRefNo,
+    })
+    createdContainerId = r.containerId
+    touched.add(Number(r.containerId))
+  }
+
+  // 逐容器不变量兜底（类比 assertNonNegativeQty）：数量与在库SN台数必须一致
+  for (const cid of touched) {
+    await assertSerialCountMatchesContainer(conn, cid)
+  }
+  return { createdContainerId, primaryDeductContainerId, lostCount: missing.length, surplusCount: surplus.length, productName }
+}
+
+/**
  * 盘点容器调整
  *
  * 盘点不再直接修改 inventory_stock，而是通过容器增减实现：
  *   diffQty > 0  → 创建新容器（盘点正差异，增加库存）
  *   diffQty < 0  → FIFO 扣减容器（盘点负差异，减少库存）
  *   diffQty = 0  → 无操作
+ *   序列号商品   → 走 adjustSerialContainersForStockcheck（逐台落到具体容器，见其注释）
  *
  * 调整后强制 syncStockFromContainers 确保缓存与容器总和一致。
  *
@@ -611,6 +692,7 @@ async function adjustContainersForStockcheck(conn, {
   sourceRefId   = null,
   sourceRefNo   = null,
   remark        = null,
+  serialPlan    = null,   // 序列号商品专用：{ missing:[{id,serialNo,containerId}], surplus:[serialNo] }
 }) {
   // 读取当前 inventory_stock 缓存值（用于日志 before_qty）
   const [[stockRow]] = await conn.query(
@@ -619,14 +701,25 @@ async function adjustContainersForStockcheck(conn, {
   )
   const before = stockRow ? Number(stockRow.qty) : 0
 
-  // 序列号管控商品（文档04 Phase3b · C）：盘点差异会「盘盈建容器(无SN)」或「盘亏扣容器(不删SN)」，
-  // 都破坏「容器 remaining == 在库SN台数」不变量；且哪几台盈/亏需现场逐台核对（扫每台SN比对），
-  // 盘盈的新 SN 来源也需业务口径。故序列号商品的盘点差异暂不走自动盘盈盘亏——挡住以防静默不一致
-  // （旧行为是不挡→静默破不变量），完整 SN 级盘点作后续专项。
-  if (Math.abs(Number(diffQty)) > 1e-9) {
+  // 序列号管控商品（文档04 Phase3b·C-full）：盘点差异必须逐台落到具体的台与容器上——
+  // 通用路径的「盘盈建容器(无SN)」「盘亏 FIFO 扣容器(不删SN)」都会破坏「容器 remaining == 在库SN台数」。
+  // 调用方（stockcheck.service.submit）须传 serialPlan（由 PDA 现场扫码集与账面在库集比对得出），
+  // 走下方 adjustSerialContainersForStockcheck。未传 = 该路径尚未接入逐台核对 → 挡住，绝不静默不一致。
+  // 注意判定条件不能只看 diffQty≠0：序列号盘点存在「净差为 0 的换台」——丢了 A、又扫到账面没有的 X，
+  // 台数一样、数量维度毫无变化，但台账必须更正（否则 A 还挂在库、X 不在账上，两边都错）。
+  // 故只要调用方给了 serialPlan（服务层仅在确有盘亏/盘盈台时才给）就必须处理。
+  if (Math.abs(Number(diffQty)) > 1e-9 || serialPlan) {
     const { isSerialManaged } = require('./serialEngine')
     if (await isSerialManaged(conn, productId)) {
-      throw new AppError(`序列号管控商品「${productName}」盘点差异需逐台核对处理，暂不支持自动盘盈盘亏`, 400, 'SERIAL_STOCKCHECK_UNSUPPORTED')
+      if (!serialPlan) {
+        throw new AppError(`序列号管控商品「${productName}」盘点差异需逐台核对处理（请用 PDA 逐台扫描在架序列号）`, 400, 'SERIAL_STOCKCHECK_UNSUPPORTED')
+      }
+      const r = await adjustSerialContainersForStockcheck(conn, {
+        productId, productName, warehouseId, unit, serialPlan,
+        sourceRefType, sourceRefId, sourceRefNo, remark,
+      })
+      const after = await syncStockFromContainers(conn, productId, warehouseId)
+      return { before, after, createdContainerId: r.createdContainerId, primaryDeductContainerId: r.primaryDeductContainerId }
     }
   }
 

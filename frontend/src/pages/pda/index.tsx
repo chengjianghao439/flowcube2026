@@ -29,6 +29,7 @@ const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = 
   { icon: '↩️', label: '销售退货', path: '/pda/sale-return', perm: PERMISSIONS.RETURN_ORDER_VIEW },
   { icon: '🧯', label: '取消清理', path: '/pda/cancel-return', perm: PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW },
   { icon: '✏️', label: '改单确认', path: '/pda/adjustments', perm: PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW },
+  { icon: '🔢', label: '序列号盘点', path: '/pda/stockcheck', perm: PERMISSIONS.STOCKCHECK_VIEW },
 ]
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────
