@@ -493,6 +493,8 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, seria
         containerId: Number(ret.source_container_id),
         qty: Number(ret.qty),
         serialNos: cleaned,
+        operatorId: operator?.userId ?? null,
+        operatorName: operator?.realName ?? null,
       })
       returnedContainerId = Number(split.containerId)
     }

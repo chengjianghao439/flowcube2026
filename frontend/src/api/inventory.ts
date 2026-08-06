@@ -24,6 +24,8 @@ export const getContainerByBarcodeApi = async (barcode: string) =>
     remainingQty: number; unit: string
     containerKind?: 'inventory' | 'plastic_box'
     containerStatus?: 'waiting_putaway' | 'stored'
+    lockedByTaskId?: number | null   // 非空=已被拣货任务锁定，不可拆分（拆分须在拣货前完成）
+    lockedByTaskNo?: string | null
     inboundTaskId?: number | null
     serialManaged?: boolean          // 序列号商品：拆分须逐台扫 SN（文档04 Phase3b）
     serials?: string[] | null        // 该容器在库序列号清单（供扫码校验）

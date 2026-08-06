@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { createContainer } = require('../../engine/containerEngine')
+const { MOVE_TYPE_LABEL } = require('../../engine/inventoryEngine')
 
 async function findAll({ page = 1, pageSize = 20, keyword, warehouseId, productId } = {}) {
   const conditions = ["c.deleted_at IS NULL", "c.barcode LIKE 'B%'"]
@@ -54,18 +55,24 @@ async function findById(id) {
 }
 
 async function findMovements(id) {
+  // inventory_logs 的数量列是 quantity（qty 列不存在——本接口此前一直 500，从未成功过）
   const [rows] = await pool.query(
-    `SELECT il.qty, il.move_type, il.created_at, il.remark, pi.name AS product_name
+    `SELECT il.quantity, il.move_type, il.type, il.created_at, il.remark,
+            il.operator_name, il.ref_no, pi.name AS product_name
      FROM inventory_logs il
      LEFT JOIN product_items pi ON pi.id = il.product_id
      WHERE il.container_id = ?
-     ORDER BY il.created_at DESC LIMIT 100`,
+     ORDER BY il.created_at DESC, il.id DESC LIMIT 100`,
     [id],
   )
   return rows.map(r => ({
-    qty: Number(r.qty),
-    moveType: r.move_type,
+    qty: Number(r.quantity),
+    type: Number(r.type),
+    moveType: r.move_type != null ? Number(r.move_type) : null,
+    moveTypeName: (r.move_type != null && MOVE_TYPE_LABEL[r.move_type]) || null,
     remark: r.remark,
+    refNo: r.ref_no || null,
+    operatorName: r.operator_name || null,
     productName: r.product_name,
     createdAt: r.created_at,
   }))

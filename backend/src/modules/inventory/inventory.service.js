@@ -762,13 +762,16 @@ async function getContainerByBarcode(barcode) {
     `SELECT c.id, c.barcode, c.container_type, c.product_id, c.warehouse_id, c.location_id,
             c.remaining_qty, c.unit, c.status, c.inbound_task_id,
             c.source_type, c.source_ref_id, c.is_legacy,
+            c.locked_by_task_id,
             p.code AS product_code, p.name AS product_name, p.serial_managed,
             w.name AS warehouse_name,
-            loc.code AS location_code
+            loc.code AS location_code,
+            lt.task_no AS locked_task_no
      FROM inventory_containers c
      LEFT JOIN product_items p ON p.id = c.product_id
      LEFT JOIN inventory_warehouses w ON w.id = c.warehouse_id
      LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
+     LEFT JOIN warehouse_tasks lt ON lt.id = c.locked_by_task_id
      WHERE c.barcode = ? AND c.deleted_at IS NULL AND c.status IN (1, 4)`,
     [barcode],
   )
@@ -799,6 +802,10 @@ async function getContainerByBarcode(barcode) {
     unit:          row.unit,
     containerKind: Number(row.container_type) === 2 || /^B/i.test(String(row.barcode || '')) ? 'plastic_box' : 'inventory',
     containerStatus: Number(row.status) === 4 ? 'waiting_putaway' : 'stored',
+    // 拣货锁定信息：供 PDA 拆分页在「扫码那一刻」就拦下已锁定容器（拆分须在拣货前完成，
+    // 走到提交才被 splitContainer 409 拒绝已经太晚——拣货扫码没有撤销路径）。
+    lockedByTaskId: row.locked_by_task_id != null ? Number(row.locked_by_task_id) : null,
+    lockedByTaskNo: row.locked_task_no || null,
     inboundTaskId: row.inbound_task_id || null,
     sourceType:    row.source_type || null,
     sourceRefId:   row.source_ref_id != null ? Number(row.source_ref_id) : null,
@@ -860,13 +867,16 @@ async function assignContainerLocation(containerId, locationId) {
 /**
  * 同仓容器拆分（散件）：单容器扣减并生成新塑料盒条码（B），可选打印新标签
  */
-async function splitContainerOp(containerId, { qty, remark, printLabel, targetContainerId, serialNos = null, userId }) {
+async function splitContainerOp(containerId, { qty, remark, printLabel, targetContainerId, serialNos = null, userId, userName = null }) {
   const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
   const conn = await pool.getConnection()
   let result
   try {
     await conn.beginTransaction()
-    result = await splitContainer(conn, { containerId, qty, remark, targetContainerId, serialNos })
+    result = await splitContainer(conn, {
+      containerId, qty, remark, targetContainerId, serialNos,
+      operatorId: userId ?? null, operatorName: userName,
+    })
     result.printJobId = null
     result.printJobIds = []
 

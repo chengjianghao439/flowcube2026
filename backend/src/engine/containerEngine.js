@@ -133,13 +133,22 @@ async function createContainer(conn, {
   if (!sourceType || typeof sourceType !== 'string' || !ALLOWED_SOURCE_TYPES.has(sourceType)) {
     throw new AppError(`容器 sourceType 无效或未传：${sourceType}`, 400)
   }
+  // 空壳容器（initialQty=0）：散件库位上的空塑料盒，建出来只是个绑定了商品的空盒子，等着后续
+  // 由拆分并货装东西进去。它**不产生任何库存**，所以下面两条为"防止凭空产生库存"而设的校验对它
+  // 不适用，否则空盒根本建不出来——事实上 plastic-boxes.create 此前就一直卡在这里，从未成功过
+  // （开发库里 initial_qty=0 的盒子为 0 个即是证据）。
+  //   · sourceRefId：空盒不来自任何单据，没有可追的来源；等它装了货，货的来源由拆分流水记录。
+  //   · DIRECT_ACTIVE 白名单：该限制是防止绕过收货/质检凭空入账，而数量 0 入不了账；装货唯一入口
+  //     仍是受控的 splitContainer 并货路径。
+  const isEmptyShell = Number(initialQty) === 0
+
   const sid = Number(sourceRefId)
-  if (!Number.isFinite(sid) || sid <= 0) {
+  if (!isEmptyShell && (!Number.isFinite(sid) || sid <= 0)) {
     throw new AppError('容器必须提供有效的 sourceRefId（正整数单据ID）', 400)
   }
 
   const st = Number(containerStatus)
-  if (st === CONTAINER_STATUS.ACTIVE && !DIRECT_ACTIVE_SOURCE_TYPES.has(sourceType)) {
+  if (st === CONTAINER_STATUS.ACTIVE && !DIRECT_ACTIVE_SOURCE_TYPES.has(sourceType) && !isEmptyShell) {
     throw new AppError(
       '禁止直接创建在库(ACTIVE)容器：仅「调拨入、同仓拆分」允许；盘点/导入/销售退货等须先待上架/质检再入账',
       400,
@@ -168,7 +177,7 @@ async function createContainer(conn, {
     [bc, containerType, productId, warehouseId, locationId,
      batchNo, mfgDate || null, expDate || null, unit,
      initialQty, initialQty, containerStatus,
-     detailRefType, sid, sourceRefNo, inboundTaskId, inboundTaskItemId ?? null, remark,
+     detailRefType, Number.isFinite(sid) && sid > 0 ? sid : null, sourceRefNo, inboundTaskId, inboundTaskItemId ?? null, remark,
      sourceType,
      deadline]
   )
@@ -922,8 +931,65 @@ async function unlockContainersByTask(conn, taskId) {
 
 function fmtSqlDate(d) {
   if (!d) return null
-  if (d instanceof Date) return d.toISOString().slice(0, 10)
+  // Date 对象直接透传给驱动：连接池 timezone=+08:00 会把本地午夜序列化为当天的
+  // 'YYYY-MM-DD HH:mm:ss'，写进 DATE 列日期不错位（调拨建容器一直走这条路）。
+  // 此前 toISOString().slice(0,10) 先转 UTC，+08 下日期回退一天，拆分继承效期全错。
+  if (d instanceof Date) return d
   return String(d).slice(0, 10)
+}
+
+/**
+ * 容器拆分/并货留痕：源容器与目标容器各写一条流水，两边的容器流水页都能看到这次转移。
+ *
+ * 在此之前拆分与并货完全不写 inventory_logs，货从哪个容器进的塑料盒只能靠 parent_id 单向
+ * 推断，而并货路径连 parent_id 都不更新——追溯到容器这一层就断了。
+ *
+ * 语义：库存总量不变（货只是换了容器），所以 type=3（调整）、before_qty === after_qty。
+ * 全站按 type 统计出入库的地方只看 type=1/2，不会被这些记录污染。
+ *
+ * @param {object} conn 调用方事务连接
+ * @param {object} p
+ * @param {number} p.productId
+ * @param {number} p.warehouseId
+ * @param {number} p.qty              本次转移数量（正数）
+ * @param {number} p.stockQty         转移后该商品在该仓的库存（拆分前后相同）
+ * @param {number} p.sourceContainerId
+ * @param {string} p.sourceBarcode
+ * @param {number} p.targetContainerId
+ * @param {string} p.targetBarcode
+ * @param {number|null} [p.operatorId]
+ * @param {string|null} [p.operatorName]
+ */
+async function logContainerSplit(conn, {
+  productId, warehouseId, qty, stockQty,
+  sourceContainerId, sourceBarcode, targetContainerId, targetBarcode,
+  operatorId = null, operatorName = null,
+}) {
+  // 懒加载避免与 inventoryEngine 顶层互相 require（它已 require 本模块）
+  const { MOVE_TYPE } = require('./inventoryEngine')
+  const rows = [
+    [sourceContainerId, `拆出 ${qty} 到 ${targetBarcode}`],
+    [targetContainerId, `自 ${sourceBarcode} 拆入 ${qty}`],
+  ]
+  for (const [containerId, remark] of rows) {
+    await conn.query(
+      `INSERT INTO inventory_logs
+         (move_type, type, product_id, warehouse_id,
+          quantity, before_qty, after_qty,
+          ref_type, ref_id,
+          container_id, log_source_type, log_source_ref_id,
+          remark, operator_id, operator_name)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [MOVE_TYPE.CONTAINER_SPLIT, 3, productId, warehouseId,
+        qty, stockQty, stockQty,
+        'container_split', sourceContainerId,
+        containerId, SOURCE_TYPE.CONTAINER_SPLIT, sourceContainerId,
+        remark,
+        // operator_id / operator_name 都是 NOT NULL：所有真实调用路径都带得出操作人，
+        // 兜底只是为了不让"流水缺操作人"这种小事回滚掉整个拆分事务
+        operatorId ?? 0, operatorName ?? '系统'],
+    )
+  }
 }
 
 /**
@@ -933,7 +999,7 @@ function fmtSqlDate(d) {
  * @param {{ containerId: number, qty: number, remark?: string|null }} params
  * @returns {Promise<{ sourceContainerId: number, sourceBarcode: string, sourceRemainingAfter: number, newContainerId: number, newBarcode: string, newContainerKind: 'plastic_box', productId: number, warehouseId: number }>}
  */
-async function splitContainer(conn, { containerId, qty, remark = null, targetContainerId = null, serialNos = null }) {
+async function splitContainer(conn, { containerId, qty, remark = null, targetContainerId = null, serialNos = null, operatorId = null, operatorName = null }) {
   const cid = Number(containerId)
   const q = Number(qty)
   const tid = targetContainerId != null ? Number(targetContainerId) : null
@@ -952,8 +1018,22 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   if (Number(row.status) !== CONTAINER_STATUS.ACTIVE) {
     throw new AppError('源容器须为在库(ACTIVE)状态', 400)
   }
+  // 已被拣货锁定的容器不可拆分：拆分必须发生在拣货之前（业务规则，2026-08-04 确认）。
+  // 报错要说清「错在哪 + 正确顺序」——拣货扫码没有撤销路径（/scan-logs/undo 只写审计日志，
+  // 不减 picked_qty 也不解锁），走到这一步已无法回头，只能取消整个任务，所以提示必须能让
+  // 现场立刻明白下次该怎么做，而不是只丢一句「已被锁定」。
   if (row.locked_by_task_id != null) {
-    throw new AppError('容器已被任务锁定，不可拆分', 409)
+    const [[lockTask]] = await conn.query(
+      'SELECT task_no FROM warehouse_tasks WHERE id = ?',
+      [row.locked_by_task_id],
+    )
+    const taskLabel = lockTask?.task_no ? `拣货任务 ${lockTask.task_no} ` : `拣货任务 #${row.locked_by_task_id} `
+    throw new AppError(
+      `该容器已被${taskLabel}锁定，不可拆分。拆分必须在拣货之前完成：`
+      + `拆出的货若要放回货架单独存放，请先拆分建塑料盒、再拣货；`
+      + `若塑料盒只是拣货搬运用（货要送出仓库），无需拆分，直接扫本容器条码填数量即可`,
+      409,
+    )
   }
   const rem = Number(row.remaining_qty)
   if (q > rem) throw new AppError('拆分数量不能超过剩余数量', 400)
@@ -970,7 +1050,8 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   // 转入已有塑料盒
   if (tid) {
     const [[target]] = await conn.query(
-      `SELECT id, barcode, product_id, warehouse_id, remaining_qty, status, locked_by_task_id
+      `SELECT id, barcode, product_id, warehouse_id, remaining_qty, status, locked_by_task_id,
+              batch_no, mfg_date, exp_date
        FROM inventory_containers
        WHERE id = ? AND barcode LIKE 'B%' AND deleted_at IS NULL
        FOR UPDATE`,
@@ -993,6 +1074,21 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
       throw new AppError('目标塑料盒与源容器不在同一仓库，不可合并', 400)
     }
 
+    // 批次一致性：此前并货只校验商品与仓库，不看批次，于是不同批次的货可以并进同一个盒，
+    // 而盒上只留着最早那批的 batch_no/exp_date——对 batch_managed 商品会直接让 FEFO 出错
+    // （按盒上那个假效期排序），且盘点/追溯都看不出盒里混了几批。
+    //   空盒（remaining_qty=0）并入 → 继承源容器批次，这是它获得批次的正常途径；
+    //   有货且批次不同 → 拒绝，让现场另选盒（NULL 与 NULL 视为一致，非批次商品不受影响）。
+    const targetEmpty = Number(target.remaining_qty) === 0
+    const sameBatch = String(target.batch_no ?? '') === String(row.batch_no ?? '')
+    if (!targetEmpty && !sameBatch) {
+      throw new AppError(
+        `目标塑料盒里已有批次「${target.batch_no || '无批次'}」的货，与本次拆出的批次「${row.batch_no || '无批次'}」不一致，不可并入，请另选空盒`,
+        409,
+        'CONTAINER_BATCH_MISMATCH',
+      )
+    }
+
     const newRem = rem - q
     const newStatus = newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE
     await conn.query(
@@ -1001,17 +1097,31 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     )
 
     const targetNewQty = Number(target.remaining_qty) + q
-    await conn.query(
-      'UPDATE inventory_containers SET remaining_qty = ?, status = 1 WHERE id = ?',
-      [targetNewQty, tid],
-    )
+    if (targetEmpty) {
+      // 空盒继承源批次与效期，否则盒子会带着上一批货留下的旧批次继续用
+      await conn.query(
+        'UPDATE inventory_containers SET remaining_qty = ?, status = 1, batch_no = ?, mfg_date = ?, exp_date = ? WHERE id = ?',
+        [targetNewQty, row.batch_no, fmtSqlDate(row.mfg_date), fmtSqlDate(row.exp_date), tid],
+      )
+    } else {
+      await conn.query(
+        'UPDATE inventory_containers SET remaining_qty = ?, status = 1 WHERE id = ?',
+        [targetNewQty, tid],
+      )
+    }
 
     // 序列号商品：把扫到的 q 台从源容器迁到目标塑料盒（非序列号 no-op；已在上面校验数量）
     if (serialProduct) {
       await moveSerialsOnSplit(conn, { sourceContainerId: cid, targetContainerId: tid, qty: q, serialNos, warehouseId: row.warehouse_id })
     }
 
-    await syncStockFromContainers(conn, row.product_id, row.warehouse_id)
+    const stockAfterMerge = await syncStockFromContainers(conn, row.product_id, row.warehouse_id)
+    await logContainerSplit(conn, {
+      productId: row.product_id, warehouseId: row.warehouse_id, qty: q, stockQty: stockAfterMerge,
+      sourceContainerId: cid, sourceBarcode: row.barcode,
+      targetContainerId: tid, targetBarcode: target.barcode,
+      operatorId, operatorName,
+    })
 
     return {
       sourceContainerId:   cid,
@@ -1064,7 +1174,13 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     await moveSerialsOnSplit(conn, { sourceContainerId: cid, targetContainerId: newId, qty: q, serialNos, warehouseId: row.warehouse_id })
   }
 
-  await syncStockFromContainers(conn, row.product_id, row.warehouse_id)
+  const stockAfterSplit = await syncStockFromContainers(conn, row.product_id, row.warehouse_id)
+  await logContainerSplit(conn, {
+    productId: row.product_id, warehouseId: row.warehouse_id, qty: q, stockQty: stockAfterSplit,
+    sourceContainerId: cid, sourceBarcode: row.barcode,
+    targetContainerId: newId, targetBarcode: newBc,
+    operatorId, operatorName,
+  })
 
   return {
     sourceContainerId:   cid,
@@ -1098,7 +1214,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
  * @param {string[]|null} [params.serialNos] 序列号商品部分拆分时，现场扫到的要归还的具体 SN（数量须===qty）
  * @returns {{ containerId: number, barcode: string, qty: number, wholeContainer: boolean }}
  */
-async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qty, serialNos = null }) {
+async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qty, serialNos = null, operatorId = null, operatorName = null }) {
   const [[row]] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
             locked_by_task_id, batch_no, mfg_date, exp_date, unit
@@ -1155,6 +1271,20 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
     const { moveSerialsOnSplit } = require('./serialEngine')
     await moveSerialsOnSplit(conn, { sourceContainerId: row.id, targetContainerId: newId, qty: q, serialNos, warehouseId: row.warehouse_id })
   }
+
+  // 改单归还拆分同样留痕。这里不调 syncStockFromContainers——两个容器的 remaining 之和不变，
+  // 缓存本就无需刷新（原实现也没刷），所以直接读当前缓存值作为流水快照。
+  const [[stockRow]] = await conn.query(
+    'SELECT quantity FROM inventory_stock WHERE product_id = ? AND warehouse_id = ?',
+    [row.product_id, row.warehouse_id],
+  )
+  await logContainerSplit(conn, {
+    productId: row.product_id, warehouseId: row.warehouse_id, qty: q,
+    stockQty: stockRow ? Number(stockRow.quantity) : 0,
+    sourceContainerId: row.id, sourceBarcode: row.barcode,
+    targetContainerId: newId, targetBarcode: newBc,
+    operatorId, operatorName,
+  })
 
   return { containerId: newId, barcode: newBc, qty: q, wholeContainer: false }
 }

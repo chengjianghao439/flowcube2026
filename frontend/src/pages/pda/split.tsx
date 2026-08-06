@@ -40,6 +40,16 @@ export default function PdaSplitPage() {
         err('待上架容器不能拆分')
         return
       }
+      // 拆分必须在拣货之前完成：容器一旦被拣货扫码锁定就拆不了（后端 splitContainer 409），
+      // 而拣货扫码没有撤销路径，只能取消整个任务。所以在扫码这一刻就拦下并说清正确做法，
+      // 不要让现场输完数量、扫完序列号才被拒。
+      if (d.lockedByTaskId) {
+        err(
+          `该容器已被拣货任务 ${d.lockedByTaskNo ?? `#${d.lockedByTaskId}`} 锁定，不可拆分。`
+          + `拆分须在拣货前完成；若塑料盒只是搬运用，无需拆分，直接扫本容器条码拣货即可`,
+        )
+        return
+      }
       setContainerId(d.containerId)
       setBarcode(d.barcode)
       setSourceKind(d.containerKind === 'plastic_box' ? 'plastic_box' : 'inventory')

@@ -143,6 +143,7 @@ async function splitContainer(req, res, next) {
       targetContainerId: targetContainerId != null ? Number(targetContainerId) : null,
       serialNos: Array.isArray(serialNos) ? serialNos : null,
       userId:     req.user.userId,
+      userName:   req.user.realName || req.user.username || null,
     })
     return successResponse(res, result, '拆分成功')
   } catch (e) { next(e) }

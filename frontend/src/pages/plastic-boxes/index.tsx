@@ -45,12 +45,28 @@ function deletePlasticBoxApi(id: number) {
   return payloadClient.delete(`/plastic-boxes/${id}`)
 }
 
+interface PlasticBoxMovement {
+  qty: number
+  type: number
+  moveType: number | null
+  moveTypeName: string | null
+  remark: string | null
+  refNo: string | null
+  operatorName: string | null
+  productName: string | null
+  createdAt: string
+}
+function getPlasticBoxMovementsApi(id: number) {
+  return payloadClient.get<PlasticBoxMovement[]>(`/plastic-boxes/${id}/movements`)
+}
+
 export default function PlasticBoxesPage() {
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<PlasticBox | null>(null)
+  const [detailTarget, setDetailTarget] = useState<PlasticBox | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['plastic-boxes', keyword],
@@ -87,7 +103,7 @@ export default function PlasticBoxesPage() {
         <TableActionsMenu
           primaryLabel="详情"
           primaryVariant="outline"
-          onPrimaryClick={() => {}}
+          onPrimaryClick={() => setDetailTarget(row)}
           items={[
             ...(row.remainingQty === 0 ? [{
               label: '删除',
@@ -129,6 +145,8 @@ export default function PlasticBoxesPage() {
         loading={createMut.isPending}
       />
 
+      <DetailDialog box={detailTarget} onClose={() => setDetailTarget(null)} />
+
       <ConfirmDialog
         open={!!deleteTarget}
         title="删除塑料盒"
@@ -139,6 +157,63 @@ export default function PlasticBoxesPage() {
         onCancel={() => setDeleteTarget(null)}
       />
     </div>
+  )
+}
+
+function DetailDialog({ box, onClose }: { box: PlasticBox | null; onClose: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['plastic-box-movements', box?.id],
+    queryFn: () => getPlasticBoxMovementsApi(box!.id),
+    enabled: !!box,
+  })
+  const TYPE_NAMES: Record<number, string> = { 1: '入库', 2: '出库', 3: '调整' }
+  const TYPE_TONE: Record<number, 'success' | 'danger' | 'info'> = { 1: 'success', 2: 'danger', 3: 'info' }
+
+  return (
+    <Dialog open={!!box} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>塑料盒流水 · {box?.barcode}</DialogTitle>
+        </DialogHeader>
+        <div className="text-sm text-muted-foreground">
+          {box?.productName ? `绑定产品：${box.productName} (${box.productCode})` : '未绑定产品'}
+          {box?.warehouseName ? ` · ${box.warehouseName}` : ''}
+          {` · 当前数量 ${box?.remainingQty ?? 0}`}
+        </div>
+        <div className="max-h-[420px] overflow-y-auto">
+          {isLoading ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">加载中...</div>
+          ) : !data?.length ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">暂无流水</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="py-2 pr-3 font-medium">时间</th>
+                  <th className="py-2 pr-3 font-medium">类型</th>
+                  <th className="py-2 pr-3 font-medium text-right">数量</th>
+                  <th className="py-2 pr-3 font-medium">备注</th>
+                  <th className="py-2 font-medium">操作人</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((m, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="py-2 pr-3 whitespace-nowrap">{formatDisplayDateTime(m.createdAt)}</td>
+                    <td className="py-2 pr-3">
+                      <SoftStatusLabel label={m.moveTypeName ?? TYPE_NAMES[m.type] ?? `类型${m.type}`} tone={TYPE_TONE[m.type] ?? 'info'} />
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{m.qty}</td>
+                    <td className="py-2 pr-3 text-muted-foreground">{m.remark ?? '—'}</td>
+                    <td className="py-2">{m.operatorName ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

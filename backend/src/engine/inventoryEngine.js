@@ -45,6 +45,11 @@ const MOVE_TYPE = {
   MANUAL_IN:    9,   // → inventory.service（容器引擎）
   MANUAL_OUT:   10,  // → inventory.service（容器引擎）
   RECEIPT_VOID: 11,  // → inbound-tasks.void.js（撤回收货，容器引擎）
+  // 容器拆分/并货：库存总量不变，只是货在容器之间转移，所以写 type=3（调整）而非 1/2。
+  // 全站按 type 统计的地方（dashboard:49、reports.query:124/806、inventory.aging:73）都只看
+  // type=1/2，不会被这类记录污染；而按 container_id 查流水的地方（塑料盒详情、库存流水页）
+  // 正需要它们——在此之前拆分与并货完全没有留痕，追溯到容器这一层就断了。
+  CONTAINER_SPLIT: 12, // → containerEngine.splitContainer
 }
 
 const MOVE_TYPE_LABEL = {
@@ -52,6 +57,7 @@ const MOVE_TYPE_LABEL = {
   4:  '调拨出',       5:  '调拨入',       6:  '采购退货出库',
   7:  '销售退货入库', 8:  '仓库任务出库',
   9:  '手动入库',     10: '手动出库',     11: '入库撤回',
+  12: '容器拆分',
 }
 
 /**
