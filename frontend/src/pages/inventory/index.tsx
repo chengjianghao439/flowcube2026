@@ -230,7 +230,7 @@ export default function InventoryPage() {
                         <td className="px-4 py-3 text-left text-xs text-muted-foreground">{formatDisplayDateTime(row.updatedAt)}</td>
                         <td className="px-4 py-3 text-left">
                           <Button size="sm" variant={drawerItem?.id === row.id && drawerOpen ? 'secondary' : 'ghost'}
-                            className="h-7 px-2 text-xs" onClick={() => { setDrawerItem(row); setDrawerOpen(true) }}>查看容器</Button>
+                            className="h-7 px-2 text-xs" onClick={() => { setDrawerItem(row); setDrawerOpen(true) }}>查看条码</Button>
                         </td>
                       </tr>
                     ))

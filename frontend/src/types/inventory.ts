@@ -69,6 +69,8 @@ export interface InventoryContainer {
   batchNo:       string | null
   initialQty:    number
   remainingQty:  number
+  /** 一件一码的个体条码（库存容器且入库数量就是 1），不可拆分/并货 */
+  individual?:   boolean
   sourceRefType: string | null
   sourceRefNo:   string | null
   mfgDate:       string | null

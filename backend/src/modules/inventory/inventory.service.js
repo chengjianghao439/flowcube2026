@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
-const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { MOVE_TYPE, MOVE_TYPE_LABEL } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, splitContainer } = require('../../engine/containerEngine')
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 
@@ -395,7 +395,7 @@ async function getContainers({ productId, warehouseId, includeLegacy = false }) 
   const [rows] = await pool.query(
     `SELECT
        c.id, c.barcode, c.batch_no,
-       c.initial_qty, c.remaining_qty,
+       c.container_type, c.initial_qty, c.remaining_qty,
        c.source_type, c.source_ref_id,
        c.source_ref_type, c.source_ref_no,
        c.is_legacy,
@@ -417,6 +417,8 @@ async function getContainers({ productId, warehouseId, includeLegacy = false }) 
     batchNo:      r.batch_no      || null,
     initialQty:   Number(r.initial_qty),
     remainingQty: Number(r.remaining_qty),
+    // 一件一码的个体容器（设计文档 13 §2.1）：库存容器且入库数量就是 1，条码即这件货的唯一身份
+    individual:   Number(r.container_type) === 1 && Number(r.initial_qty) === 1,
     sourceType:   r.source_type || null,
     sourceRefId:  r.source_ref_id != null ? Number(r.source_ref_id) : null,
     sourceRefType: r.source_ref_type || null,
@@ -429,6 +431,37 @@ async function getContainers({ productId, warehouseId, includeLegacy = false }) 
     warehouseName: r.warehouse_name,
     locationCode: r.location_code  || null,
     createdAt:    r.created_at,
+  }))
+}
+
+/**
+ * 单容器流水（只读）：容器从建到今的全部库存动作，按时间倒序。
+ * 库存条码（I…）与塑料盒（B…）通用——个体容器的追溯能力（原序列号追溯页，设计文档 13）
+ * 就由这条时间线承接。
+ */
+async function getContainerLogs(containerId) {
+  const cid = Number(containerId)
+  if (!Number.isFinite(cid) || cid <= 0) throw new AppError('无效容器 ID', 400)
+  const [rows] = await pool.query(
+    `SELECT il.quantity, il.move_type, il.type, il.created_at, il.remark,
+            il.operator_name, il.ref_type, il.ref_no, pi.name AS product_name
+     FROM inventory_logs il
+     LEFT JOIN product_items pi ON pi.id = il.product_id
+     WHERE il.container_id = ?
+     ORDER BY il.created_at DESC, il.id DESC LIMIT 200`,
+    [cid],
+  )
+  return rows.map(r => ({
+    qty: Number(r.quantity),
+    type: Number(r.type),
+    moveType: r.move_type != null ? Number(r.move_type) : null,
+    moveTypeName: (r.move_type != null && MOVE_TYPE_LABEL[r.move_type]) || null,
+    remark: r.remark,
+    refType: r.ref_type || null,
+    refNo: r.ref_no || null,
+    operatorName: r.operator_name || null,
+    productName: r.product_name,
+    createdAt: r.created_at,
   }))
 }
 
@@ -1095,6 +1128,7 @@ module.exports = {
   changeStock,
   getOverview,
   getContainers,
+  getContainerLogs,
   traceByProductId,
   checkStockConsistency,
   resolveSourceDocument,

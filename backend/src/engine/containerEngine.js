@@ -939,6 +939,25 @@ function fmtSqlDate(d) {
 }
 
 /**
+ * 个体容器判定（设计文档 13 §2.1）：只有「库存容器（container_type=1）且入库时数量就是 1」
+ * 的容器才是一件一码的个体——它的条码就是这件货的唯一身份，出库后记录留档（EMPTY）就是
+ * 这件货的完整履历。
+ *
+ * 两个条件缺一不可：
+ *  - 限定 container_type=1：塑料盒（type=2）是常驻复用的，同一个 B 码今天装 3 件出空明天
+ *    装 5 件，不能当个体身份；拆分生成的塑料盒 initial_qty 等于拆分数量，拆出 1 件时会是 1，
+ *    只看数量会把它们误判成个体。
+ *  - 用 initial_qty 而非 remaining_qty：出库后 remaining 归 0，但记录不删，判定必须看入库时
+ *    的数量。
+ *
+ * @param {object} c 容器行（至少含 container_type 与 initial_qty）
+ * @returns {boolean}
+ */
+function isIndividualContainer(c) {
+  return Number(c.container_type) === 1 && Number(c.initial_qty) === 1
+}
+
+/**
  * 容器拆分/并货留痕：源容器与目标容器各写一条流水，两边的容器流水页都能看到这次转移。
  *
  * 在此之前拆分与并货完全不写 inventory_logs，货从哪个容器进的塑料盒只能靠 parent_id 单向
@@ -1008,7 +1027,8 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
 
   const [[row]] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
-            locked_by_task_id, batch_no, mfg_date, exp_date, unit
+            locked_by_task_id, batch_no, mfg_date, exp_date, unit,
+            container_type, initial_qty
      FROM inventory_containers
      WHERE id = ? AND deleted_at IS NULL
      FOR UPDATE`,
@@ -1017,6 +1037,17 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   if (!row) throw new AppError('容器不存在', 404)
   if (Number(row.status) !== CONTAINER_STATUS.ACTIVE) {
     throw new AppError('源容器须为在库(ACTIVE)状态', 400)
+  }
+  // 个体容器（一件一码）不可拆分也不可并入塑料盒（设计文档 13 §2.2）：它的条码就是这件货的
+  // 唯一身份，一旦并入盒中（盒里混着若干件、盒码只标识盒子）或整件迁入新 B 盒，身份即丢失。
+  // 个体数量为 1，正常本就走不到拆分；这里只是把边界钉死。
+  if (isIndividualContainer(row)) {
+    throw new AppError(
+      `条码 ${row.barcode} 是单件库存条码（一件一码），不可拆分或并入塑料盒——该条码就是这件货的唯一身份。`
+      + `如需移动它，请整件扫本条码操作`,
+      400,
+      'INDIVIDUAL_CONTAINER_NO_SPLIT',
+    )
   }
   // 已被拣货锁定的容器不可拆分：拆分必须发生在拣货之前（业务规则，2026-08-04 确认）。
   // 报错要说清「错在哪 + 正确顺序」——拣货扫码没有撤销路径（/scan-logs/undo 只写审计日志，
@@ -1384,6 +1415,7 @@ module.exports = {
   unlockAndRelocateContainer,
   unlockContainersByTask,
   splitContainer,
+  isIndividualContainer,
   CONTAINER_STATUS,
   SOURCE_TYPE,
   DIRECT_ACTIVE_SOURCE_TYPES,

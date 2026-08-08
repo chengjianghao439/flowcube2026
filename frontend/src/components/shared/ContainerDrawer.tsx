@@ -1,15 +1,19 @@
 /**
- * ContainerDrawer — 容器可视化侧滑面板
+ * ContainerDrawer — 库存条码可视化侧滑面板
  *
- * 从库存总览行点击「查看容器」触发，右侧弹出 520px 面板。
- * 仅展示数据，不允许修改容器。
+ * 从库存总览行点击「查看条码」触发，右侧弹出 520px 面板。
+ * 仅展示数据，不允许修改容器。点击单条条码可展开其流转时间线（追溯）。
  */
 
-import { Loader2, Package2, Box } from 'lucide-react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Loader2, Package2, Box, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { useInventoryContainers } from '@/hooks/useInventory'
+import { getContainerLogsApi } from '@/api/inventory'
 import type { InventoryOverviewItem } from '@/types/inventory'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 
@@ -24,6 +28,11 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
     item?.productId ?? null,
     item?.warehouseId ?? null,
   )
+  const [onlyIndividual, setOnlyIndividual] = useState(false)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+
+  const visible = (containers ?? []).filter(c => !onlyIndividual || c.individual)
+  const individualCount = (containers ?? []).filter(c => c.individual).length
 
   return (
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
@@ -64,16 +73,28 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
           )}
         </SheetHeader>
 
-        {/* ── 容器列表 ─────────────────────────────────────────────────── */}
+        {/* ── 条码列表 ─────────────────────────────────────────────────── */}
         <div className="flex min-h-0 flex-1 flex-col">
           {/* 列表标题栏 */}
           <div className="flex items-center justify-between border-b bg-muted/20 px-6 py-2.5">
-            <p className="text-xs font-semibold text-muted-foreground">
-              ACTIVE 容器
-            </p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs font-semibold text-muted-foreground">
+                在库条码
+              </p>
+              {individualCount > 0 && (
+                <button
+                  onClick={() => setOnlyIndividual(v => !v)}
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
+                    onlyIndividual ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  仅看单件（{individualCount}）
+                </button>
+              )}
+            </div>
             {!isLoading && containers && (
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                {containers.length} 个
+                {visible.length} 个
               </span>
             )}
           </div>
@@ -83,14 +104,14 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
               <div className="flex h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />加载中...
               </div>
-            ) : !containers || containers.length === 0 ? (
+            ) : visible.length === 0 ? (
               <div className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
                 <Package2 className="h-8 w-8 opacity-30" />
-                <p className="text-sm">暂无活跃容器</p>
+                <p className="text-sm">{onlyIndividual ? '无单件条码' : '暂无在库条码'}</p>
               </div>
             ) : (
               <div className="divide-y divide-border/60">
-                {containers.map((c, idx) => (
+                {visible.map((c, idx) => (
                   <div key={c.id} className="px-6 py-4 transition-colors hover:bg-muted/20">
                     {/* 第一行：条码 + 序号徽标 + 剩余量 */}
                     <div className="mb-2 flex items-start justify-between gap-3">
@@ -98,7 +119,16 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
                           {idx + 1}
                         </span>
-                        <span className="font-mono text-xs text-foreground">{c.barcode}</span>
+                        <button
+                          className="flex items-center gap-1 font-mono text-xs text-foreground hover:text-primary"
+                          title="查看流转时间线"
+                          onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
+                        >
+                          {c.barcode}
+                          {expandedId === c.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        </button>
+                        {c.individual && <SoftStatusLabel label="单件" tone="info" />}
+                        {/^B/i.test(c.barcode) && <SoftStatusLabel label="塑料盒" tone="draft" />}
                       </div>
                       {/* 剩余量 / 初始量 进度 */}
                       <div className="text-right">
@@ -144,6 +174,9 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
                         <Field label="备注" value={c.remark} className="col-span-2" />
                       )}
                     </dl>
+
+                    {/* 流转时间线（点击条码展开） */}
+                    {expandedId === c.id && <ContainerTimeline containerId={c.id} />}
                   </div>
                 ))}
               </div>
@@ -156,6 +189,50 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
 }
 
 // ─── 辅助组件 ─────────────────────────────────────────────────────────────────
+
+const LOG_TYPE_NAMES: Record<number, string> = { 1: '入库', 2: '出库', 3: '调整' }
+
+/** 单条条码的流转时间线（追溯）：该容器从建到今的全部库存动作 */
+function ContainerTimeline({ containerId }: { containerId: number }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['container-logs', containerId],
+    queryFn: () => getContainerLogsApi(containerId),
+    staleTime: 30000,
+  })
+  if (isLoading) {
+    return (
+      <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />加载流转记录...
+      </div>
+    )
+  }
+  if (!data?.length) {
+    return <div className="mt-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">暂无流转记录</div>
+  }
+  return (
+    <div className="mt-3 border-t border-border/60 pt-3">
+      <p className="mb-2 text-xs font-semibold text-muted-foreground">流转时间线</p>
+      <ol className="relative space-y-2.5 border-l border-border pl-4">
+        {data.map((log, i) => (
+          <li key={i} className="relative text-xs">
+            <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-primary/60" />
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="text-muted-foreground">{formatDisplayDateTime(log.createdAt)}</span>
+              <SoftStatusLabel label={log.moveTypeName ?? LOG_TYPE_NAMES[log.type] ?? `类型${log.type}`} tone="info" />
+              <span className="tabular-nums">{log.type === 2 ? `-${log.qty}` : log.qty}</span>
+              {log.refNo && <span className="font-mono text-muted-foreground">{log.refNo}</span>}
+            </div>
+            {(log.remark || log.operatorName) && (
+              <p className="mt-0.5 text-muted-foreground">
+                {log.remark}{log.remark && log.operatorName ? ' · ' : ''}{log.operatorName ?? ''}
+              </p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
 
 function StockMini({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
   return (

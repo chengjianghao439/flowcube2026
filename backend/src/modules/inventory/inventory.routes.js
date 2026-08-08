@@ -51,6 +51,7 @@ router.get('/aging/expiry',            requirePermission(PERMISSIONS.REPORT_VIEW
 router.get('/procurement-plan',        requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.procurementPlan)
 router.get('/containers',              requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.containers)
 router.get('/containers/barcode/:bc',  requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.containerByBarcode)
+router.get('/containers/:id/logs',     requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.containerLogs)
 router.get('/stock',                   requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.stock)
 router.get('/logs',                    requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.logs)
 router.post('/inbound',     requirePermission(PERMISSIONS.INVENTORY_ADJUST), vBody(changeSchema), ctrl.inbound)

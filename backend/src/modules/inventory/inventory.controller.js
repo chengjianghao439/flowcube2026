@@ -101,6 +101,12 @@ async function containers(req, res, next) {
   } catch(e){next(e)}
 }
 
+async function containerLogs(req, res, next) {
+  try {
+    return successResponse(res, await svc.getContainerLogs(+req.params.id), '查询成功')
+  } catch(e){next(e)}
+}
+
 async function overview(req, res, next) {
   try {
     const result = await svc.getOverview({
@@ -233,6 +239,7 @@ module.exports = {
   adjust,
   overview,
   containers,
+  containerLogs,
   containerByBarcode,
   assignContainerLocation,
   splitContainer,

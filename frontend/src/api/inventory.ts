@@ -16,6 +16,23 @@ export const getInventoryContainersApi = async (productId: number, warehouseId: 
     params: { productId, ...(warehouseId ? { warehouseId } : {}) },
   })
 
+export interface ContainerLogItem {
+  qty: number
+  type: number
+  moveType: number | null
+  moveTypeName: string | null
+  remark: string | null
+  refType: string | null
+  refNo: string | null
+  operatorName: string | null
+  productName: string | null
+  createdAt: string
+}
+
+/** 单容器流水（库存条码/塑料盒通用），个体条码的追溯时间线 */
+export const getContainerLogsApi = async (containerId: number) =>
+  apiClient.get<ContainerLogItem[]>(`/inventory/containers/${containerId}/logs`)
+
 export const getContainerByBarcodeApi = async (barcode: string) =>
   apiClient.get<{
     containerId: number; barcode: string; productId: number; productCode: string
