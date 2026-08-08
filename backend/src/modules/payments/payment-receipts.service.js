@@ -6,6 +6,7 @@ const { beginOperationRequest, completeOperationRequest } = require('../../utils
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
 const statementSvc = require('./reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
+const { normalizePagination } = require('../../utils/pagination')
 
 /**
  * 收付款单（汇款）与核销。
@@ -345,8 +346,7 @@ async function findAll({
   receiptNo = '', partyName = '',
   startDate = '', endDate = '', minAmount = '', maxAmount = '',
 } = {}) {
-  const p = Number(page) || 1
-  const ps = Number(pageSize) || 20
+  const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   // 列名一律带 r. 前缀：主查询要 JOIN 账户表取名称，不加前缀会有歧义
   const conds = ['r.deleted_at IS NULL']
   const params = []
@@ -370,7 +370,7 @@ async function findAll({
        LEFT JOIN finance_accounts a ON a.id = r.account_id
        ${where}
       ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
-    [...params, ps, (p - 1) * ps],
+    [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM payment_receipts r ${where}`, params)
   const [[summary]] = await pool.query(

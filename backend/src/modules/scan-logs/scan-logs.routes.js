@@ -5,16 +5,9 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { pdaSessionRequired } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
-
-function vBody(schema) {
-  return (req, res, next) => {
-    const r = schema.safeParse(req.body)
-    if (!r.success) return res.status(400).json({ success: false, message: r.error.errors.map(e => e.message).join('；'), data: null })
-    req.body = r.data; next()
-  }
-}
 
 const createSchema = z.object({
   taskId:       z.number().int().positive(),
@@ -62,17 +55,17 @@ const cancelReturnBoxScanSchema = z.object({
 })
 
 // 扫码记录（仅 PDA）
-router.post('/',             requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionRequired(), vBody(createSchema), ctrl.create)
-router.post('/check',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionRequired(), vBody(checkScanSchema), ctrl.createCheckScan)
-router.post('/cancel-return', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN), pdaOnly, pdaSessionRequired(), vBody(cancelReturnScanSchema), ctrl.createCancelReturnScan)
-router.post('/cancel-return/box', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN), pdaOnly, pdaSessionRequired(), vBody(cancelReturnBoxScanSchema), ctrl.createCancelReturnBoxScan)
+router.post('/',             requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionRequired(), validateBody(createSchema), ctrl.create)
+router.post('/check',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), pdaOnly, pdaSessionRequired(), validateBody(checkScanSchema), ctrl.createCheckScan)
+router.post('/cancel-return', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN), pdaOnly, pdaSessionRequired(), validateBody(cancelReturnScanSchema), ctrl.createCancelReturnScan)
+router.post('/cancel-return/box', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN), pdaOnly, pdaSessionRequired(), validateBody(cancelReturnBoxScanSchema), ctrl.createCancelReturnBoxScan)
 router.get('/task/:taskId',  requirePermission(PERMISSIONS.SCAN_LOG_VIEW), ctrl.listByTask)
 
 // 错误日志
-router.post('/error',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), vBody(errorSchema),  ctrl.logError)
+router.post('/error',        requirePermission(PERMISSIONS.SCAN_LOG_CREATE), validateBody(errorSchema),  ctrl.logError)
 
 // 撤销日志
-router.post('/undo',         requirePermission(PERMISSIONS.SCAN_LOG_CREATE), vBody(undoSchema),   ctrl.logUndo)
+router.post('/undo',         requirePermission(PERMISSIONS.SCAN_LOG_CREATE), validateBody(undoSchema),   ctrl.logUndo)
 
 // 统计（仓库管理员 / 主管）
 router.get('/stats',         requirePermission(PERMISSIONS.SCAN_LOG_VIEW), ctrl.getStats)

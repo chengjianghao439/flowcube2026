@@ -4,15 +4,9 @@ const ctrl = require('./products.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { pool } = require('../../config/db')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
-function vBody(schema) {
-  return (req,res,next) => {
-    const r = schema.safeParse(req.body)
-    if (!r.success) return res.status(400).json({ success:false, message:r.error.errors.map(e=>e.message).join('；'), data:null })
-    req.body = r.data; next()
-  }
-}
 
 const productBase = z.object({
   code:           z.string().min(1,'编码不能为空').max(50).optional(),
@@ -54,8 +48,8 @@ router.get('/active', requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.listActi
 router.get('/',       requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.list)
 router.post('/:id/print-label', requirePermission(PERMISSIONS.PRODUCT_PRINT_LABEL), ctrl.printLabel)
 router.get('/:id',    requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.detail)
-router.post('/',      requirePermission(PERMISSIONS.PRODUCT_CREATE), vBody(productBase), ctrl.create)
-router.put('/:id',    requirePermission(PERMISSIONS.PRODUCT_UPDATE), vBody(productBase.extend({ isActive: z.boolean() })), ctrl.update)
+router.post('/',      requirePermission(PERMISSIONS.PRODUCT_CREATE), validateBody(productBase), ctrl.create)
+router.put('/:id',    requirePermission(PERMISSIONS.PRODUCT_UPDATE), validateBody(productBase.extend({ isActive: z.boolean() })), ctrl.update)
 router.delete('/:id', requirePermission(PERMISSIONS.PRODUCT_DELETE), ctrl.remove)
 
 module.exports = router

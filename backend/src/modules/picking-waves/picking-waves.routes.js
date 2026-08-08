@@ -3,21 +3,14 @@ const { z } = require('zod')
 const ctrl = require('./picking-waves.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
 router.use(authMiddleware)
 
-function vBody(schema) {
-  return (req, res, next) => {
-    const r = schema.safeParse(req.body)
-    if (!r.success) return res.status(400).json({ success: false, message: r.error.errors.map(e => e.message).join('；'), data: null })
-    req.body = r.data; next()
-  }
-}
-
 router.get('/', requirePermission(PERMISSIONS.PICKING_WAVE_VIEW), ctrl.list)
 
-router.post('/', requirePermission(PERMISSIONS.PICKING_WAVE_MANAGE), vBody(z.object({
+router.post('/', requirePermission(PERMISSIONS.PICKING_WAVE_MANAGE), validateBody(z.object({
   taskIds:  z.array(z.number().int().positive()).min(2, '至少选择 2 个任务'),
   priority: z.number().int().min(1).max(3).default(2),
   remark:   z.string().max(200).optional(),

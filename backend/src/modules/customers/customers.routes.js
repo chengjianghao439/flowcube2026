@@ -5,9 +5,9 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { SETTLEMENT_TYPE, MONTHLY_TERMS_OPTIONS } = require('../../constants/settlementType')
 const { pool } = require('../../config/db')
+const { validateBody } = require('../../utils/route')
 const router = Router()
 const VALID_SETTLEMENT_TYPES = Object.values(SETTLEMENT_TYPE)
-const vBody = schema => (req,res,next) => { const r=schema.safeParse(req.body); if(!r.success) return res.status(400).json({success:false,message:r.error.errors.map(e=>e.message).join('；'),data:null}); req.body=r.data; next() }
 const phoneRule = z.string().max(11).regex(/^1\d{10}$/, '请输入正确的手机号').optional().or(z.literal(''))
 const base = z.object({
   code:z.string().min(1).max(30),
@@ -39,7 +39,7 @@ router.get('/active', requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.listAct
 router.get('/',       requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.list)
 router.get('/:id',    requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.detail)
 router.get('/:id/credit', requirePermission(PERMISSIONS.SALE_CREDIT_VIEW), ctrl.credit)
-router.post('/',      requirePermission(PERMISSIONS.CUSTOMER_CREATE), vBody(base), ctrl.create)
-router.put('/:id',    requirePermission(PERMISSIONS.CUSTOMER_UPDATE), vBody(base.omit({ code:true }).extend({ isActive:z.boolean() })), ctrl.update)
+router.post('/',      requirePermission(PERMISSIONS.CUSTOMER_CREATE), validateBody(base), ctrl.create)
+router.put('/:id',    requirePermission(PERMISSIONS.CUSTOMER_UPDATE), validateBody(base.omit({ code:true }).extend({ isActive:z.boolean() })), ctrl.update)
 router.delete('/:id', requirePermission(PERMISSIONS.CUSTOMER_DELETE), ctrl.remove)
 module.exports = router

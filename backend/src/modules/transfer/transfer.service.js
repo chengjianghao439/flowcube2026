@@ -9,6 +9,7 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { TRANSFER_EVENT, record: recordTransferEvent } = require('./transfer-events.service')
 const { getRequestId } = require('../../utils/requestContext')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { normalizePagination } = require('../../utils/pagination')
 const STATUS = { 1:'草稿', 2:'待出库', 3:'在途', 4:'已完成', 5:'已取消' }
 
 const fmt = r => ({ id:r.id, orderNo:r.order_no, fromWarehouseId:r.from_warehouse_id, fromWarehouseName:r.from_warehouse_name, toWarehouseId:r.to_warehouse_id, toWarehouseName:r.to_warehouse_name, status:r.status, statusName:STATUS[r.status], remark:r.remark, submittedAt:r.submitted_at, submittedByName:r.submitted_by_name, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
@@ -55,7 +56,7 @@ async function assertTransferAvailability(conn, order) {
 }
 
 async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null, scopeWarehouseIds=null }) {
-  const offset=(page-1)*pageSize, like=`%${keyword}%`
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize }), like=`%${keyword}%`
   const params=[like,like,like]
   let whereExtra=''
   if (status) { whereExtra += ' AND status=?'; params.push(status) }
@@ -72,9 +73,9 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
   const scope = transferScopeFilter(scopeWarehouseIds, 'from_warehouse_id', 'to_warehouse_id')
   if (scope.sql) { whereExtra += scope.sql; params.push(...scope.params) }
   const where = `deleted_at IS NULL AND (order_no LIKE ? OR from_warehouse_name LIKE ? OR to_warehouse_name LIKE ?) ${whereExtra}`
-  const [rows]=await pool.query(`SELECT * FROM transfer_orders WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,pageSize,offset])
+  const [rows]=await pool.query(`SELECT * FROM transfer_orders WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
   const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM transfer_orders WHERE ${where}`,params)
-  return { list:rows.map(fmt), pagination:{page,pageSize,total} }
+  return { list:rows.map(fmt), pagination:{page,pageSize:ps,total} }
 }
 
 async function findById(id, scopeWarehouseIds = null) {

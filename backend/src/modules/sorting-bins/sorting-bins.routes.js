@@ -7,17 +7,10 @@ const { z } = require('zod')
 const ctrl = require('./sorting-bins.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
 router.use(authMiddleware)
-
-function vBody(schema) {
-  return (req, res, next) => {
-    const r = schema.safeParse(req.body)
-    if (!r.success) return res.status(400).json({ success: false, message: r.error.errors.map(e => e.message).join('；'), data: null })
-    req.body = r.data; next()
-  }
-}
 
 // GET /api/sorting-bins/scan?code=xxx
 router.get('/scan', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), ctrl.scan)
@@ -31,7 +24,7 @@ router.get('/warehouse/:warehouseId', requirePermission(PERMISSIONS.SORTING_BIN_
 // POST /api/sorting-bins
 router.post('/',
   requirePermission(PERMISSIONS.SORTING_BIN_MANAGE),
-  vBody(z.object({
+  validateBody(z.object({
     code:        z.string().min(1).max(20),
     warehouseId: z.number().int().positive(),
     remark:      z.string().max(200).optional(),
@@ -42,7 +35,7 @@ router.post('/',
 // POST /api/sorting-bins/batch
 router.post('/batch',
   requirePermission(PERMISSIONS.SORTING_BIN_MANAGE),
-  vBody(z.object({
+  validateBody(z.object({
     warehouseId: z.number().int().positive(),
     prefix:      z.string().min(1).max(5),
     from:        z.number().int().min(1),
@@ -54,7 +47,7 @@ router.post('/batch',
 // PATCH /api/sorting-bins/:id
 router.patch('/:id',
   requirePermission(PERMISSIONS.SORTING_BIN_MANAGE),
-  vBody(z.object({
+  validateBody(z.object({
     remark:   z.string().max(200).optional(),
     capacity: z.number().int().positive().nullable().optional(),
   })),

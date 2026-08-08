@@ -5,20 +5,9 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { pdaOnly } = require('../../middleware/pdaOnly')
 const { pdaSessionRequired } = require('../../middleware/pdaSession')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
-
-function vBody(schema) {
-  return (req, res, next) => {
-    const r = schema.safeParse(req.body)
-    if (!r.success) return res.status(400).json({
-      success: false,
-      message: r.error.errors.map(e => e.message).join('；'),
-      data: null,
-    })
-    req.body = r.data; next()
-  }
-}
 
 router.use(authMiddleware)
 
@@ -38,7 +27,7 @@ router.post('/',
   pdaOnly,
   pdaSessionRequired(),
   requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK),
-  vBody(z.object({
+  validateBody(z.object({
     warehouseTaskId: z.number().int().positive('warehouseTaskId 必填'),
     remark:          z.string().max(200).optional(),
   })),
@@ -50,7 +39,7 @@ router.post('/:id/add-item',
   pdaOnly,
   pdaSessionRequired(),
   requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK),
-  vBody(z.object({
+  validateBody(z.object({
     productCode: z.string().min(1, '商品条码必填'),
     qty:         z.number().positive('数量必须大于 0'),
   })),
@@ -62,7 +51,7 @@ router.post('/:id/remove-item',
   pdaOnly,
   pdaSessionRequired(),
   requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK),
-  vBody(z.object({
+  validateBody(z.object({
     itemId: z.number().int().positive('itemId 必填'),
     qty:    z.number().positive('数量必须大于 0').optional(),
   })),

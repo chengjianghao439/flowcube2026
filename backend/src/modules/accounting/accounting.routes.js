@@ -9,22 +9,10 @@ const { z }      = require('zod')
 const ctrl       = require('./accounting.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
 router.use(authMiddleware)
-
-function vBody(schema) {
-  return (req, res, next) => {
-    const r = schema.safeParse(req.body)
-    if (!r.success) return res.status(400).json({
-      success: false,
-      message: r.error.errors.map(e => e.message).join('；'),
-      data: null,
-    })
-    req.body = r.data
-    next()
-  }
-}
 
 // ── 科目表 /api/accounting/accounts ─────────────────────────────────────
 const accounts = Router()
@@ -52,10 +40,10 @@ const updateAccountSchema = z.object({
 accounts.get('/tree',  requirePermission(PERMISSIONS.ACCOUNTING_ACCOUNT_VIEW), ctrl.accountTree)
 accounts.get('/flat',  requirePermission(PERMISSIONS.ACCOUNTING_ACCOUNT_VIEW), ctrl.accountFlat)
 accounts.get('/:id',   requirePermission(PERMISSIONS.ACCOUNTING_ACCOUNT_VIEW), ctrl.accountDetail)
-accounts.post('/',            requirePermission(PERMISSIONS.ACCOUNTING_ACCOUNT_MANAGE), vBody(createAccountSchema), ctrl.accountCreate)
-accounts.put('/:id',          requirePermission(PERMISSIONS.ACCOUNTING_ACCOUNT_MANAGE), vBody(updateAccountSchema), ctrl.accountUpdate)
+accounts.post('/',            requirePermission(PERMISSIONS.ACCOUNTING_ACCOUNT_MANAGE), validateBody(createAccountSchema), ctrl.accountCreate)
+accounts.put('/:id',          requirePermission(PERMISSIONS.ACCOUNTING_ACCOUNT_MANAGE), validateBody(updateAccountSchema), ctrl.accountUpdate)
 accounts.delete('/:id',       requirePermission(PERMISSIONS.ACCOUNTING_ACCOUNT_MANAGE), ctrl.accountRemove)
-accounts.patch('/:id/status', requirePermission(PERMISSIONS.ACCOUNTING_ACCOUNT_MANAGE), vBody(z.object({ isActive: z.boolean() })), ctrl.accountToggle)
+accounts.patch('/:id/status', requirePermission(PERMISSIONS.ACCOUNTING_ACCOUNT_MANAGE), validateBody(z.object({ isActive: z.boolean() })), ctrl.accountToggle)
 
 router.use('/accounts', accounts)
 
@@ -80,8 +68,8 @@ vouchers.get('/',               requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER
 vouchers.get('/reconciliation', requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER_VIEW), ctrl.voucherReconciliation)
 vouchers.get('/export',         requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER_EXPORT), ctrl.voucherExport)
 vouchers.get('/:id',            requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER_VIEW), ctrl.voucherDetail)
-vouchers.post('/generate',      requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER_MANAGE), vBody(z.object({ period: z.string().max(6).optional().nullable() })), ctrl.voucherGenerate)
-vouchers.post('/',              requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER_MANAGE), vBody(manualVoucherSchema), ctrl.voucherCreateManual)
+vouchers.post('/generate',      requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER_MANAGE), validateBody(z.object({ period: z.string().max(6).optional().nullable() })), ctrl.voucherGenerate)
+vouchers.post('/',              requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER_MANAGE), validateBody(manualVoucherSchema), ctrl.voucherCreateManual)
 vouchers.post('/:id/reverse',   requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER_MANAGE), ctrl.voucherReverse)
 vouchers.delete('/:id',         requirePermission(PERMISSIONS.ACCOUNTING_VOUCHER_MANAGE), ctrl.voucherRemove)
 
@@ -119,9 +107,9 @@ const invoiceSchema = z.object({
 })
 invoices.get('/',           requirePermission(PERMISSIONS.INVOICE_VIEW), ctrl.invoiceList)
 invoices.get('/:id',        requirePermission(PERMISSIONS.INVOICE_VIEW), ctrl.invoiceDetail)
-invoices.post('/',          requirePermission(PERMISSIONS.INVOICE_MANAGE), vBody(invoiceSchema), ctrl.invoiceCreate)
-invoices.put('/:id',        requirePermission(PERMISSIONS.INVOICE_MANAGE), vBody(invoiceSchema.partial()), ctrl.invoiceUpdate)
-invoices.post('/:id/status', requirePermission(PERMISSIONS.INVOICE_MANAGE), vBody(z.object({ action: z.enum(['certify', 'deduct', 'redFlush']) })), ctrl.invoiceStatus)
+invoices.post('/',          requirePermission(PERMISSIONS.INVOICE_MANAGE), validateBody(invoiceSchema), ctrl.invoiceCreate)
+invoices.put('/:id',        requirePermission(PERMISSIONS.INVOICE_MANAGE), validateBody(invoiceSchema.partial()), ctrl.invoiceUpdate)
+invoices.post('/:id/status', requirePermission(PERMISSIONS.INVOICE_MANAGE), validateBody(z.object({ action: z.enum(['certify', 'deduct', 'redFlush']) })), ctrl.invoiceStatus)
 invoices.delete('/:id',     requirePermission(PERMISSIONS.INVOICE_MANAGE), ctrl.invoiceRemove)
 router.use('/invoices', invoices)
 

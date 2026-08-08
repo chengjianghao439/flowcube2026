@@ -4,6 +4,7 @@ const AppError = require('../../utils/AppError')
 const { MOVE_TYPE, MOVE_TYPE_LABEL } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, splitContainer } = require('../../engine/containerEngine')
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
+const { normalizePagination } = require('../../utils/pagination')
 
 // ─── 库存查询 ─────────────────────────────────────────────────────────────────
 
@@ -14,13 +15,13 @@ const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
  * - 不应用于关键业务判定
  */
 async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', warehouseId=null, scopeWarehouseIds=null }) {
-  const offset = (page-1)*pageSize
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const scope = scopeFilter(scopeWarehouseIds, 'dims.warehouse_id')
   const whFilter = (warehouseId ? 'AND dims.warehouse_id=?' : '') + scope.sql
   const params = warehouseId
-    ? [like, like, warehouseId, ...scope.params, pageSize, offset]
-    : [like, like, ...scope.params, pageSize, offset]
+    ? [like, like, warehouseId, ...scope.params, ps, offset]
+    : [like, like, ...scope.params, ps, offset]
 
   const [rows] = await pool.query(
     `SELECT COALESCE(s.id, -((dims.product_id * 1000000) + dims.warehouse_id)) AS id,
@@ -86,7 +87,7 @@ async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', war
         warehouseId: r.warehouse_id, warehouseName: r.warehouse_name,
       }
     }),
-    pagination: { page, pageSize, total },
+    pagination: { page, pageSize: ps, total },
   }
 }
 
@@ -127,7 +128,7 @@ async function getAvailabilityByProducts({ productIds, scopeWarehouseIds = null 
 // ─── 流水记录 ─────────────────────────────────────────────────────────────────
 
 async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehouseId=null, scopeWarehouseIds=null }) {
-  const offset = (page-1)*pageSize
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conditions = ['1=1']
   const params = []
   if (type) { conditions.push('l.type=?'); params.push(type) }
@@ -144,7 +145,7 @@ async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehou
      JOIN inventory_warehouses w ON l.warehouse_id=w.id
      LEFT JOIN supply_suppliers s ON l.supplier_id=s.id
      WHERE ${where} ORDER BY l.created_at DESC LIMIT ? OFFSET ?`,
-    [...params, ...scope.params, pageSize, offset],
+    [...params, ...scope.params, ps, offset],
   )
 
   const [[{total}]] = await pool.query(
@@ -166,7 +167,7 @@ async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehou
       logSourceRefId: r.log_source_ref_id != null ? Number(r.log_source_ref_id) : null,
       createdAt: r.created_at,
     })),
-    pagination: { page, pageSize, total },
+    pagination: { page, pageSize: ps, total },
   }
 }
 
@@ -313,7 +314,7 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
   )
 
   // 5. 分页列表
-  const offset = (page - 1) * pageSize
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const [rows] = await pool.query(
     `SELECT
        -((ip.product_id * 1000000) + ip.warehouse_id) AS id,
@@ -328,7 +329,7 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
      WHERE ${where}
      ORDER BY p.name ASC, w.name ASC
      LIMIT ? OFFSET ?`,
-    [...baseParams, pageSize, offset],
+    [...baseParams, ps, offset],
   )
 
   // 6. 总条数
@@ -369,7 +370,7 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
         updatedAt:    r.updated_at,
       }
     }),
-    pagination: { page, pageSize, total },
+    pagination: { page, pageSize: ps, total },
   }
 }
 
@@ -999,7 +1000,7 @@ async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehou
     LEFT JOIN ${inTransitSql} pt ON pt.warehouse_id = ip.warehouse_id AND pt.product_id = ip.product_id
     WHERE ${where}`
 
-  const offset = (page - 1) * pageSize
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const [rows] = await pool.query(
     `SELECT p.id AS product_id, p.code AS product_code, p.name AS product_name, p.unit,
             w.id AS warehouse_id, w.name AS warehouse_name,
@@ -1013,7 +1014,7 @@ async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehou
      ${joins}
      ORDER BY suggest_qty DESC, p.name ASC
      LIMIT ? OFFSET ?`,
-    [...baseParams, pageSize, offset],
+    [...baseParams, ps, offset],
   )
 
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total ${joins}`, baseParams)
@@ -1036,7 +1037,7 @@ async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehou
       targetStock: Number(r.target_stock),
       suggestQty: Number(r.suggest_qty),
     })),
-    pagination: { page, pageSize, total },
+    pagination: { page, pageSize: ps, total },
   }
 }
 

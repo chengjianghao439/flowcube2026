@@ -5,24 +5,10 @@ const { PERMISSIONS } = require('../../constants/permissions')
 const { pdaSessionRequired } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
 const { z } = require('zod')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
 router.use(authMiddleware)
-
-function vBody(schema) {
-  return (req, res, next) => {
-    const r = schema.safeParse(req.body)
-    if (!r.success) {
-      return res.status(400).json({
-        success: false,
-        message: r.error.errors.map(e => e.message).join('；'),
-        data: null,
-      })
-    }
-    req.body = r.data
-    next()
-  }
-}
 
 const zReceive = z.object({
   productId: z.number().int().positive('productId 必填'),
@@ -64,7 +50,7 @@ router.post('/:id/receive',
   pdaSessionRequired(),
   requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
   pdaOnly,
-  vBody(zReceive),
+  validateBody(zReceive),
   ctrl.receive,
 )
 
@@ -73,7 +59,7 @@ router.post('/:id/check',
   pdaSessionRequired(),
   requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
   pdaOnly,
-  vBody(zCheck),
+  validateBody(zCheck),
   ctrl.check,
 )
 
@@ -82,7 +68,7 @@ router.post('/:id/putaway',
   pdaSessionRequired(),
   requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
   pdaOnly,
-  vBody(zPutaway),
+  validateBody(zPutaway),
   ctrl.putaway,
 )
 

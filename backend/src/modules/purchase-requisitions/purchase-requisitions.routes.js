@@ -3,15 +3,9 @@ const { z } = require('zod')
 const ctrl = require('./purchase-requisitions.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
-function vBody(schema) {
-  return (req, res, next) => {
-    const r = schema.safeParse(req.body)
-    if (!r.success) return res.status(400).json({ success: false, message: r.error.errors.map(e => e.message).join('；'), data: null })
-    req.body = r.data; next()
-  }
-}
 
 const itemSchema = z.object({
   productId: z.number().int().positive('请选择商品'),
@@ -49,13 +43,13 @@ const convertSchema = z.object({
 router.use(authMiddleware)
 router.get('/',              requirePermission(PERMISSIONS.PURCHASE_REQUISITION_VIEW),    ctrl.list)
 router.get('/:id',           requirePermission(PERMISSIONS.PURCHASE_REQUISITION_VIEW),    ctrl.detail)
-router.post('/',             requirePermission(PERMISSIONS.PURCHASE_REQUISITION_CREATE),  vBody(createSchema), ctrl.create)
-router.put('/:id',           requirePermission(PERMISSIONS.PURCHASE_REQUISITION_CREATE),  vBody(updateSchema), ctrl.update)
+router.post('/',             requirePermission(PERMISSIONS.PURCHASE_REQUISITION_CREATE),  validateBody(createSchema), ctrl.create)
+router.put('/:id',           requirePermission(PERMISSIONS.PURCHASE_REQUISITION_CREATE),  validateBody(updateSchema), ctrl.update)
 router.post('/:id/submit',   requirePermission(PERMISSIONS.PURCHASE_REQUISITION_CREATE),  ctrl.submit)
 router.post('/:id/withdraw', requirePermission(PERMISSIONS.PURCHASE_REQUISITION_CREATE),  ctrl.withdraw)
 router.post('/:id/cancel',   requirePermission(PERMISSIONS.PURCHASE_REQUISITION_CREATE),  ctrl.cancel)
 router.post('/:id/approve',  requirePermission(PERMISSIONS.PURCHASE_REQUISITION_APPROVE), ctrl.approve)
-router.post('/:id/reject',   requirePermission(PERMISSIONS.PURCHASE_REQUISITION_APPROVE), vBody(rejectSchema), ctrl.reject)
-router.post('/:id/convert',  requirePermission(PERMISSIONS.PURCHASE_REQUISITION_CONVERT), vBody(convertSchema), ctrl.convert)
+router.post('/:id/reject',   requirePermission(PERMISSIONS.PURCHASE_REQUISITION_APPROVE), validateBody(rejectSchema), ctrl.reject)
+router.post('/:id/convert',  requirePermission(PERMISSIONS.PURCHASE_REQUISITION_CONVERT), validateBody(convertSchema), ctrl.convert)
 
 module.exports = router

@@ -6,6 +6,7 @@ const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.
 const statementSvc = require('./reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
 const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
+const { normalizePagination } = require('../../utils/pagination')
 
 /** 状态文案按应付/应收分开：应付说「付」，应收说「收」，前端两个页面直接用不必再改写 */
 const STATUS_NAME = {
@@ -53,9 +54,7 @@ async function findAll({
   confirmStatus = '', startDate = '', endDate = '', dueStart = '', dueEnd = '',
   minAmount = '', maxAmount = '',
 } = {}) {
-  const normalizedPage = Number(page) || 1
-  const normalizedPageSize = Number(pageSize) || 20
-  const offset = (normalizedPage - 1) * normalizedPageSize
+  const { page: normalizedPage, pageSize: normalizedPageSize, offset } = normalizePagination({ page, pageSize })
   const conds = []
   const params = []
 

@@ -3,15 +3,11 @@ const { z } = require('zod')
 const ctrl = require('./finance.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
 router.use(authMiddleware)
 
-const vBody = s => (req,res,next) => {
-  const r = s.safeParse(req.body)
-  if (!r.success) return res.status(400).json({ success:false, message:r.error.errors.map(e=>e.message).join('；'), data:null })
-  req.body = r.data; next()
-}
 const vParams = s => (req,res,next) => {
   const r = s.safeParse(req.params)
   if (!r.success) return res.status(400).json({ success:false, message:r.error.errors.map(e=>e.message).join('；'), data:null })
@@ -39,13 +35,13 @@ router.get('/accounts',              requirePermission(PERMISSIONS.FINANCE_ACCOU
 router.get('/accounts/:id',          requirePermission(PERMISSIONS.FINANCE_ACCOUNT_VIEW), vParams(idParam), ctrl.detail)
 router.get('/accounts/:id/transactions', requirePermission(PERMISSIONS.FINANCE_ACCOUNT_VIEW), vParams(idParam), ctrl.transactions)
 
-router.post('/accounts',      requirePermission(PERMISSIONS.FINANCE_ACCOUNT_CREATE), vBody(accountBody), ctrl.create)
+router.post('/accounts',      requirePermission(PERMISSIONS.FINANCE_ACCOUNT_CREATE), validateBody(accountBody), ctrl.create)
 router.put('/accounts/:id',   requirePermission(PERMISSIONS.FINANCE_ACCOUNT_UPDATE), vParams(idParam),
-  vBody(accountBody.extend({ isActive: z.boolean(), openingBalance: z.number().optional() })), ctrl.update)
+  validateBody(accountBody.extend({ isActive: z.boolean(), openingBalance: z.number().optional() })), ctrl.update)
 router.delete('/accounts/:id', requirePermission(PERMISSIONS.FINANCE_ACCOUNT_DELETE), vParams(idParam), ctrl.remove)
 
 // 余额调整单独授权：它能直接改变账面资金，属于高敏动作
-router.post('/accounts/:id/adjust', requirePermission(PERMISSIONS.FINANCE_ACCOUNT_ADJUST), vParams(idParam), vBody(z.object({
+router.post('/accounts/:id/adjust', requirePermission(PERMISSIONS.FINANCE_ACCOUNT_ADJUST), vParams(idParam), validateBody(z.object({
   targetBalance: z.number('请填写调整后的账户余额'),
   happenedAt: z.string().optional(),
   remark: z.string().max(300).optional().or(z.literal('')),
@@ -62,12 +58,12 @@ const itemRule = z.array(z.object({
 
 // 静态路径先注册，避免被 '/:id' 吃掉
 router.get('/expense-categories', requirePermission(PERMISSIONS.FINANCE_EXPENSE_VIEW), ctrl.categoryList)
-router.post('/expense-categories', requirePermission(PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE), vBody(z.object({
+router.post('/expense-categories', requirePermission(PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE), validateBody(z.object({
   name: z.string().min(1, '类别名称不能为空').max(50),
   sortOrder: z.number().int().optional(),
   remark: z.string().max(200).optional().or(z.literal('')),
 })), ctrl.categoryCreate)
-router.put('/expense-categories/:id', requirePermission(PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE), vParams(idParam), vBody(z.object({
+router.put('/expense-categories/:id', requirePermission(PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE), vParams(idParam), validateBody(z.object({
   name: z.string().min(1, '类别名称不能为空').max(50),
   isActive: z.boolean(),
   sortOrder: z.number().int().optional(),
@@ -77,12 +73,12 @@ router.delete('/expense-categories/:id', requirePermission(PERMISSIONS.FINANCE_E
 
 router.get('/expense-claims',      requirePermission(PERMISSIONS.FINANCE_EXPENSE_VIEW), ctrl.expenseList)
 router.get('/expense-claims/:id',  requirePermission(PERMISSIONS.FINANCE_EXPENSE_VIEW), vParams(idParam), ctrl.expenseDetail)
-router.post('/expense-claims',     requirePermission(PERMISSIONS.FINANCE_EXPENSE_CREATE), vBody(z.object({
+router.post('/expense-claims',     requirePermission(PERMISSIONS.FINANCE_EXPENSE_CREATE), validateBody(z.object({
   title: z.string().max(100).optional().or(z.literal('')),
   items: itemRule,
   remark: z.string().max(300).optional().or(z.literal('')),
 })), ctrl.expenseCreate)
-router.put('/expense-claims/:id',  requirePermission(PERMISSIONS.FINANCE_EXPENSE_UPDATE), vParams(idParam), vBody(z.object({
+router.put('/expense-claims/:id',  requirePermission(PERMISSIONS.FINANCE_EXPENSE_UPDATE), vParams(idParam), validateBody(z.object({
   title: z.string().max(100).optional().or(z.literal('')),
   items: itemRule.optional(),
   remark: z.string().max(300).optional().or(z.literal('')),
@@ -93,10 +89,10 @@ router.post('/expense-claims/:id/withdraw', requirePermission(PERMISSIONS.FINANC
 router.post('/expense-claims/:id/cancel',   requirePermission(PERMISSIONS.FINANCE_EXPENSE_CREATE), vParams(idParam), ctrl.expenseCancel)
 // 审批与付款是内控的两道口子，各自独立授权
 router.post('/expense-claims/:id/approve',  requirePermission(PERMISSIONS.FINANCE_EXPENSE_APPROVE), vParams(idParam), ctrl.expenseApprove)
-router.post('/expense-claims/:id/reject',   requirePermission(PERMISSIONS.FINANCE_EXPENSE_APPROVE), vParams(idParam), vBody(z.object({
+router.post('/expense-claims/:id/reject',   requirePermission(PERMISSIONS.FINANCE_EXPENSE_APPROVE), vParams(idParam), validateBody(z.object({
   reason: z.string().min(1, '请填写驳回原因').max(300),
 })), ctrl.expenseReject)
-router.post('/expense-claims/:id/pay',      requirePermission(PERMISSIONS.FINANCE_EXPENSE_PAY), vParams(idParam), vBody(z.object({
+router.post('/expense-claims/:id/pay',      requirePermission(PERMISSIONS.FINANCE_EXPENSE_PAY), vParams(idParam), validateBody(z.object({
   accountId: z.number().int().positive('请选择付款账户'),
   happenedAt: z.string().optional(),
   remark: z.string().max(300).optional().or(z.literal('')),

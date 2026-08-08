@@ -6,6 +6,7 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { normalizePagination } = require('../../utils/pagination')
 
 const STATUS = { 1:'进行中', 2:'已完成', 3:'已取消' }
 const fmt = r => ({ id:r.id, checkNo:r.check_no, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, checkType:r.check_type!=null?Number(r.check_type):1, scopeType:r.scope_type||null, scopeValue:r.scope_value||null, status:r.status, statusName:STATUS[r.status], remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
@@ -49,17 +50,17 @@ async function listBookStocksFromActiveContainers(conn, warehouseId, productIds 
 }
 
 async function findAll({ page=1, pageSize=20, keyword='', status=null, scopeWarehouseIds=null }) {
-  const offset=(page-1)*pageSize, like=`%${keyword}%`
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize }), like=`%${keyword}%`
   let cond=status?'AND status=?':''
   const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   const scopeParams = []
   if (scope.sql) { cond += scope.sql; scopeParams.push(...scope.params) }
   const base=status?[like,like,status,...scopeParams]:[like,like,...scopeParams]
-  const extra=[...base,pageSize,offset]
+  const extra=[...base,ps,offset]
   const cntExtra=base
   const [rows] = await pool.query(`SELECT * FROM inventory_checks WHERE deleted_at IS NULL AND (check_no LIKE ? OR warehouse_name LIKE ?) ${cond} ORDER BY created_at DESC LIMIT ? OFFSET ?`,extra)
   const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM inventory_checks WHERE deleted_at IS NULL AND (check_no LIKE ? OR warehouse_name LIKE ?) ${cond}`,cntExtra)
-  return { list:rows.map(fmt), pagination:{page,pageSize,total} }
+  return { list:rows.map(fmt), pagination:{page,pageSize:ps,total} }
 }
 
 async function findById(id, scopeWarehouseIds = null) {

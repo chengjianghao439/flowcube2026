@@ -3,9 +3,9 @@ const { z } = require('zod')
 const ctrl = require('./procurement.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
-const vBody = schema => (req, res, next) => { const r = schema.safeParse(req.body); if (!r.success) return res.status(400).json({ success: false, message: r.error.errors.map(e => e.message).join('；'), data: null }); req.body = r.data; next() }
 
 const generateSchema = z.object({
   window: z.number().int().positive().max(365).optional(),
@@ -27,11 +27,11 @@ const convertSchema = z.object({
 
 router.use(authMiddleware)
 router.get('/plans', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_VIEW), ctrl.list)
-router.post('/plans', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), vBody(generateSchema), ctrl.generate)
+router.post('/plans', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), validateBody(generateSchema), ctrl.generate)
 router.get('/plans/:id', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_VIEW), ctrl.detail)
-router.put('/plans/:id/items/:itemId', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), vBody(updateItemSchema), ctrl.updateItem)
+router.put('/plans/:id/items/:itemId', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), validateBody(updateItemSchema), ctrl.updateItem)
 // 转采购最终产出采购单草稿，复用采购创建权限
-router.post('/plans/:id/convert', requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), vBody(convertSchema), ctrl.convert)
+router.post('/plans/:id/convert', requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), validateBody(convertSchema), ctrl.convert)
 router.post('/plans/:id/cancel', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), ctrl.cancel)
 
 module.exports = router

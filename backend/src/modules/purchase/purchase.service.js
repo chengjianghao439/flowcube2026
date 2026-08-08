@@ -10,6 +10,7 @@ const { beginOperationRequest, completeOperationRequest } = require('../../utils
 const { recomputePurchasePayable } = require('../inbound-tasks/inbound-tasks.settle')
 const { foldEntryItem, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { normalizePagination } = require('../../utils/pagination')
 
 const STATUS = { 1:'草稿', 2:'已提交', 3:'已完成', 4:'已取消' }
 
@@ -47,7 +48,7 @@ const PO_COLUMNS = `po.id, po.order_no, po.supplier_id, po.supplier_name, po.war
 const genOrderNo = conn => generateDailyCode(conn, 'PO', 'purchase_orders', 'order_no')
 
 async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null, overdueOnly=false, scopeWarehouseIds=null }) {
-  const offset = (page - 1) * pageSize
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const params = []
   let whereExtra = ''
   if (keyword) {
@@ -125,14 +126,14 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
      FROM purchase_orders po
      WHERE po.deleted_at IS NULL ${whereExtra}
      ORDER BY po.created_at DESC LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset],
+    [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM purchase_orders po
      WHERE po.deleted_at IS NULL ${whereExtra}`,
     params,
   )
-  return { list: rows.map(fmtOrder), pagination: { page, pageSize, total } }
+  return { list: rows.map(fmtOrder), pagination: { page, pageSize: ps, total } }
 }
 
 // scopeWarehouseIds 默认 null（不限仓）——内部调用方（如 createFromPoId）不传即保持原行为；

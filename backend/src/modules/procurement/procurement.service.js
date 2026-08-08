@@ -7,6 +7,7 @@ const { beginOperationRequest, completeOperationRequest } = require('../../utils
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { getProcurementPlan } = require('../inventory/inventory.procurement')
 const purchaseService = require('../purchase/purchase.service')
+const { normalizePagination } = require('../../utils/pagination')
 
 const PLAN_STATUS = { DRAFT: 1, PARTIAL: 2, DONE: 3, VOID: 4 }
 const PLAN_STATUS_NAME = { 1: '草稿', 2: '部分转采购', 3: '已完成', 4: '已作废' }
@@ -93,13 +94,13 @@ async function listPlans({ page = 1, pageSize = 20, keyword = '', status = null,
     params.push(...scope.params)
   }
   const where = conds.join(' AND ')
-  const offset = (Number(page) - 1) * Number(pageSize)
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const [rows] = await pool.query(
     `SELECT * FROM procurement_plans pp WHERE ${where} ORDER BY pp.id DESC LIMIT ? OFFSET ?`,
-    [...params, Number(pageSize), offset],
+    [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM procurement_plans pp WHERE ${where}`, params)
-  return { list: rows.map(fmtPlan), pagination: { page: Number(page), pageSize: Number(pageSize), total: Number(total) } }
+  return { list: rows.map(fmtPlan), pagination: { page: Number(page), pageSize: ps, total: Number(total) } }
 }
 
 async function getPlan(id, scopeWarehouseIds = null) {

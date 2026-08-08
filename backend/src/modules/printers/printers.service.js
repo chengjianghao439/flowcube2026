@@ -175,4 +175,104 @@ async function setStatus(id, status) {
   await pool.query('UPDATE printers SET status=? WHERE id=?', [status, id])
 }
 
-module.exports = { findAll, findById, create, update, remove, setStatus }
+// ─── 桌面客户端心跳 / 在线状态（审计 4.9：从 controller 下沉，消除直写 SQL） ─────────
+
+/** 客户端心跳：upsert print_clients + 认领同名打印机 + 返回该客户端拥有的在线打印机 */
+async function heartbeatClient({ clientId, hostname, printerNames, ip }) {
+  const id = String(clientId || '').trim().slice(0, 200)
+  const host = String(hostname || '').trim().slice(0, 200)
+  const names = [...new Set(
+    (printerNames || [])
+      .map((p) => String(p || '').trim())
+      .filter(Boolean)
+      .map((p) => p.slice(0, 100)),
+  )]
+
+  await pool.query(
+    `INSERT INTO print_clients (client_id, hostname, ip_address, last_seen, status)
+     VALUES (?, ?, ?, NOW(), 1)
+     ON DUPLICATE KEY UPDATE
+       hostname=VALUES(hostname),
+       ip_address=VALUES(ip_address),
+       last_seen=NOW(),
+       status=1`,
+    [id, host, ip || null],
+  )
+
+  if (names.length) {
+    const placeholders = names.map(() => '?').join(',')
+    await pool.query(
+      `UPDATE printers
+       SET client_id = ?, source = CASE WHEN source IS NULL OR source = '' THEN 'local_desktop' ELSE source END
+       WHERE name IN (${placeholders})
+         AND (client_id IS NULL OR client_id = ?)`,
+      [id, ...names, id],
+    )
+  }
+
+  const [ownedPrinters] = await pool.query(
+    `SELECT id, name, code
+     FROM printers
+     WHERE client_id = ? AND status = 1
+     ORDER BY id ASC`,
+    [id],
+  )
+  return { clientId: id, hostname: host, printers: ownedPrinters }
+}
+
+/** 把 30 秒无心跳的客户端标为离线（供在线客户端列表 / 心跳判定使用） */
+async function markOfflineClients() {
+  await pool.query(
+    `UPDATE print_clients
+     SET status=0
+     WHERE status=1 AND last_seen < DATE_SUB(NOW(), INTERVAL 30 SECOND)`,
+  )
+}
+
+/** 在线客户端列表（status=1 或 30 秒内有心跳），带各自在线的打印机 */
+async function listOnlineClients() {
+  await markOfflineClients()
+  const [clients] = await pool.query(
+    `SELECT client_id, hostname, alias_name, ip_address, last_seen
+     FROM print_clients
+     WHERE status=1 OR last_seen >= DATE_SUB(NOW(), INTERVAL 30 SECOND)
+     ORDER BY last_seen DESC`,
+  )
+  const data = []
+  for (const c of clients) {
+    const [printers] = await pool.query(
+      'SELECT name, code FROM printers WHERE client_id=? AND status=1 ORDER BY id ASC',
+      [c.client_id],
+    )
+    data.push({
+      clientId: c.client_id,
+      hostname: c.hostname,
+      aliasName: c.alias_name,
+      displayName: c.alias_name || c.hostname,
+      printers,
+      registeredAt: c.last_seen,
+      lastSeen: new Date(c.last_seen).getTime(),
+    })
+  }
+  return data
+}
+
+/** 所有客户端（含离线，完整历史） */
+async function listAllClients() {
+  await markOfflineClients()
+  const [rows] = await pool.query('SELECT * FROM print_clients ORDER BY last_seen DESC')
+  return rows
+}
+
+/** 给客户端设置显示别名 */
+async function updateClientAlias(clientId, aliasName) {
+  const [r] = await pool.query(
+    'UPDATE print_clients SET alias_name=? WHERE client_id=?',
+    [aliasName || null, clientId],
+  )
+  if (r.affectedRows === 0) return null
+  const [[row]] = await pool.query('SELECT * FROM print_clients WHERE client_id=?', [clientId])
+  return row
+}
+
+module.exports = { findAll, findById, create, update, remove, setStatus, heartbeatClient, markOfflineClients, listOnlineClients, listAllClients, updateClientAlias }

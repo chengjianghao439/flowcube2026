@@ -3,8 +3,8 @@ const { z } = require('zod')
 const ctrl = require('./purchase.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validateBody } = require('../../utils/route')
 const router = Router()
-const vBody = schema => (req,res,next) => { const r=schema.safeParse(req.body); if(!r.success) return res.status(400).json({success:false,message:r.error.errors.map(e=>e.message).join('；'),data:null}); req.body=r.data; next() }
 const itemSchema = z.object({
   productId:z.number().int().positive(),
   productCode:z.string().max(50,'商品编码过长'),
@@ -23,8 +23,8 @@ const createSchema = z.object({ supplierId:z.number().int().positive('请选择�
 router.use(authMiddleware)
 router.get('/',             requirePermission(PERMISSIONS.PURCHASE_ORDER_VIEW), ctrl.list)
 router.get('/:id',          requirePermission(PERMISSIONS.PURCHASE_ORDER_VIEW), ctrl.detail)
-router.post('/',            requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), vBody(createSchema), ctrl.create)
-router.put('/:id',          requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), vBody(createSchema), ctrl.update)
+router.post('/',            requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), validateBody(createSchema), ctrl.create)
+router.put('/:id',          requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), validateBody(createSchema), ctrl.update)
 router.post('/:id/confirm', requirePermission(PERMISSIONS.PURCHASE_ORDER_CONFIRM), ctrl.confirm)
 router.post('/:id/withdraw-confirm', requirePermission(PERMISSIONS.PURCHASE_ORDER_CONFIRM), ctrl.withdrawConfirm)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.PURCHASE_ORDER_CANCEL), ctrl.cancel)

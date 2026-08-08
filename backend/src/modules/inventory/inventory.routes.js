@@ -3,15 +3,9 @@ const { z } = require('zod')
 const ctrl = require('./inventory.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validateBody } = require('../../utils/route')
 
 const router = Router()
-function vBody(schema) {
-  return (req,res,next) => {
-    const r = schema.safeParse(req.body)
-    if (!r.success) return res.status(400).json({ success:false, message:r.error.errors.map(e=>e.message).join('；'), data:null })
-    req.body = r.data; next()
-  }
-}
 
 const changeSchema = z.object({
   productId:   z.number().int().positive('请选择商品'),
@@ -45,7 +39,7 @@ router.get('/trace/:productId',       requirePermission(PERMISSIONS.INVENTORY_TR
 router.get('/overview',                requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.overview)
 router.get('/replenishment',           requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.replenishment)
 router.get('/stock-policies',          requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.stockPolicies)
-router.put('/stock-policies',          requirePermission(PERMISSIONS.INVENTORY_ADJUST), vBody(policiesSchema), ctrl.saveStockPolicies)
+router.put('/stock-policies',          requirePermission(PERMISSIONS.INVENTORY_ADJUST), validateBody(policiesSchema), ctrl.saveStockPolicies)
 router.get('/aging',                   requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.inventoryAging)
 router.get('/aging/expiry',            requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.expiryAlerts)
 router.get('/procurement-plan',        requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.procurementPlan)
@@ -54,17 +48,17 @@ router.get('/containers/barcode/:bc',  requirePermission(PERMISSIONS.INVENTORY_V
 router.get('/containers/:id/logs',     requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.containerLogs)
 router.get('/stock',                   requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.stock)
 router.get('/logs',                    requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.logs)
-router.post('/inbound',     requirePermission(PERMISSIONS.INVENTORY_ADJUST), vBody(changeSchema), ctrl.inbound)
-router.post('/outbound',    requirePermission(PERMISSIONS.INVENTORY_ADJUST), vBody(changeSchema), ctrl.outbound)
-router.post('/adjust',      requirePermission(PERMISSIONS.INVENTORY_ADJUST), vBody(adjustSchema), ctrl.adjust)
+router.post('/inbound',     requirePermission(PERMISSIONS.INVENTORY_ADJUST), validateBody(changeSchema), ctrl.inbound)
+router.post('/outbound',    requirePermission(PERMISSIONS.INVENTORY_ADJUST), validateBody(changeSchema), ctrl.outbound)
+router.post('/adjust',      requirePermission(PERMISSIONS.INVENTORY_ADJUST), validateBody(adjustSchema), ctrl.adjust)
 router.put('/containers/:containerId/location',
   requirePermission(PERMISSIONS.INVENTORY_CONTAINER_MOVE),
-  vBody(z.object({ locationId: z.number().int().positive('locationId 必须为正整数') })),
+  validateBody(z.object({ locationId: z.number().int().positive('locationId 必须为正整数') })),
   ctrl.assignContainerLocation
 )
 router.post('/containers/:id/split',
   requirePermission(PERMISSIONS.INVENTORY_CONTAINER_SPLIT),
-  vBody(z.object({
+  validateBody(z.object({
     qty: z.number().positive('拆分数量须大于 0'),
     remark: z.string().max(500).optional(),
     printLabel: z.boolean().optional(),

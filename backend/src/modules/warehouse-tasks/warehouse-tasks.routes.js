@@ -11,10 +11,6 @@ const AppError = require('../../utils/AppError')
 const router = Router()
 router.use(authMiddleware)
 
-function vBody(schema) {
-  return validateBody(schema)
-}
-
 // GET /api/warehouse-tasks — 列表
 router.get('/', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.list)
 
@@ -38,7 +34,7 @@ router.get('/adjustments/:id', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJU
 router.post('/adjustments/package-voids/:voidId/confirm', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST), pdaOnly, pdaSessionRequired(), ctrl.confirmAdjustmentPackageVoid)
 
 // POST /api/warehouse-tasks/adjustments/container-returns/:returnId/confirm — PDA 扫码确认归还库位
-router.post('/adjustments/container-returns/:returnId/confirm', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST), pdaOnly, pdaSessionRequired(), vBody(z.object({ targetLocationId: z.number().int().positive().optional().nullable() })), ctrl.confirmAdjustmentContainerReturn)
+router.post('/adjustments/container-returns/:returnId/confirm', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST), pdaOnly, pdaSessionRequired(), validateBody(z.object({ targetLocationId: z.number().int().positive().optional().nullable() })), ctrl.confirmAdjustmentContainerReturn)
 
 // GET /api/warehouse-tasks/:id/pick-suggestions
 router.get('/:id/pick-suggestions', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), ctrl.pickSuggestions)
@@ -53,7 +49,7 @@ router.get('/:id/cancel-return-detail', requirePermission(PERMISSIONS.WAREHOUSE_
 router.get('/:id', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.detail)
 
 // PUT /api/warehouse-tasks/:id/assign — 分配操作员
-router.put('/:id/assign', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), vBody(z.object({ userId: z.number().int().positive(), userName: z.string().min(1) })), ctrl.assign)
+router.put('/:id/assign', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), validateBody(z.object({ userId: z.number().int().positive(), userName: z.string().min(1) })), ctrl.assign)
 
 // PUT /api/warehouse-tasks/:id/start-picking — 开始备货（1→2）
 router.put('/:id/start-picking', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), pdaOnly, pdaSessionRequired(), ctrl.startPicking)
@@ -98,6 +94,6 @@ router.put('/:id/cancel', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL), 
 }, ctrl.cancel)
 
 // PUT /api/warehouse-tasks/:id/priority — 修改优先级
-router.put('/:id/priority', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PRIORITY), vBody(z.object({ priority: z.number().int().min(1).max(3) })), ctrl.updatePriority)
+router.put('/:id/priority', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PRIORITY), validateBody(z.object({ priority: z.number().int().min(1).max(3) })), ctrl.updatePriority)
 
 module.exports = router

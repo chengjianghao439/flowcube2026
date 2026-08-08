@@ -10,6 +10,7 @@ const { beginOperationRequest, completeOperationRequest } = require('../../utils
 const { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom } = require('./returns.helpers')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { foldEntryItems } = require('../../utils/unitConversion')  // 多单位折算（文档03 Phase4a，退货按箱）
+const { normalizePagination } = require('../../utils/pagination')
 
 const SR_STATUS = { 1:'草稿', 2:'已确认', 3:'已退货入库', 4:'已取消' }
 
@@ -129,7 +130,7 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
 }
 
 async function findAllSR({ page=1, pageSize=20, keyword='', status=null, productId=null, customerId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null, scopeWarehouseIds=null }) {
-  const offset=(page-1)*pageSize, like=`%${keyword}%`
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize }), like=`%${keyword}%`
   const params=[like,like]
   let whereExtra=''
   if (status) { whereExtra += ' AND status=?'; params.push(status) }
@@ -146,9 +147,9 @@ async function findAllSR({ page=1, pageSize=20, keyword='', status=null, product
   const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   if (scope.sql) { whereExtra += scope.sql; params.push(...scope.params) }
   const where = `deleted_at IS NULL AND (return_no LIKE ? OR customer_name LIKE ?) ${whereExtra}`
-  const [rows]=await pool.query(`SELECT * FROM sale_returns WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,pageSize,offset])
+  const [rows]=await pool.query(`SELECT * FROM sale_returns WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
   const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM sale_returns WHERE ${where}`,params)
-  return { list:rows.map(fmtSR), pagination:{page,pageSize,total} }
+  return { list:rows.map(fmtSR), pagination:{page,pageSize:ps,total} }
 }
 
 async function findByIdSR(id, scopeWarehouseIds = null) {

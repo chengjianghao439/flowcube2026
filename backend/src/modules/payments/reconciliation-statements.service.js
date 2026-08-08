@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { SETTLEMENT_TYPE } = require('../../constants/settlementType')
+const { normalizePagination } = require('../../utils/pagination')
 
 /**
  * 汇总对账单：把某往来方一段期间内的月结账款汇总成一张单，确认锁定后发对方核对，
@@ -222,8 +223,7 @@ async function findAll({
   statementNo = '', partyName = '',
   startDate = '', endDate = '', minAmount = '', maxAmount = '',
 } = {}) {
-  const p = Number(page) || 1
-  const ps = Number(pageSize) || 20
+  const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['s.deleted_at IS NULL']
   const params = []
   if (type) { conds.push('s.type=?'); params.push(Number(type)) }
@@ -254,7 +254,7 @@ async function findAll({
        ) agg ON agg.statement_id = s.id
        ${where}
       ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
-    [...params, ps, (p - 1) * ps],
+    [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM reconciliation_statements s ${where}`, params)
   // 列表金额改用下属账款实时汇总，与详情(findById 明细 JOIN payment_records)口径统一：退货冲减/分批

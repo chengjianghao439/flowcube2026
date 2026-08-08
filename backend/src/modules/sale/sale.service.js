@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { normalizePagination } = require('../../utils/pagination')
 const AppError = require('../../utils/AppError')
 const { reserve, releaseByRef } = require('../../engine/reservationEngine')
 const { getAvailableStockForDecision } = require('../../engine/containerEngine')
@@ -383,7 +384,7 @@ function mapTimeline(rows, order) {
 }
 
 async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, customerId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null, scopeWarehouseIds=null }) {
-  const offset=(page-1)*pageSize
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const params=[]
   const countParams=[]
   let cond=''
@@ -458,10 +459,10 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
      ${paymentJoin}
      WHERE so.deleted_at IS NULL ${cond}
      ORDER BY so.created_at DESC LIMIT ? OFFSET ?`,
-    [...params,pageSize,offset],
+    [...params, ps, offset],
   )
   const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_orders WHERE deleted_at IS NULL ${countCond}`,countParams)
-  return { list:rows.map(fmt), pagination:{page,pageSize,total} }
+  return { list:rows.map(fmt), pagination:{page, pageSize: ps, total} }
 }
 
 async function findById(id, scopeWarehouseIds = null) {

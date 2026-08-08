@@ -1,10 +1,11 @@
 const { pool } = require('../../config/db')
+const { normalizePagination } = require('../../utils/pagination')
 
 const findAll = async ({ page, pageSize, keyword, module: mod }) => {
-  const offset = (page - 1) * pageSize
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const modCond = mod ? 'AND module=?' : ''
-  const params = mod ? [like, like, mod, pageSize, offset] : [like, like, pageSize, offset]
+  const params = mod ? [like, like, mod, ps, offset] : [like, like, ps, offset]
   const cntParams = mod ? [like, like, mod] : [like, like]
   const [rows] = await pool.query(
     `SELECT id,user_id,user_name,method,path,module,request_body,status_code,ip,created_at
@@ -18,7 +19,7 @@ const findAll = async ({ page, pageSize, keyword, module: mod }) => {
     path: r.path, module: r.module, requestBody: r.request_body,
     statusCode: r.status_code, ip: r.ip, createdAt: r.created_at
   }))
-  return { list, pagination: { page, pageSize, total } }
+  return { list, pagination: { page, pageSize: ps, total } }
 }
 
 const clearOld = async () => {

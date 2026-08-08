@@ -5,6 +5,7 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { normalizePagination } = require('../../utils/pagination')
 
 /**
  * 采购请购单（PR → 一级审批 → 转生成采购单）。
@@ -302,8 +303,7 @@ async function convert(id, { lines, requestKey }, operator) {
 }
 
 async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', warehouseId = '', applicantId = '' } = {}, scopeWarehouseIds = null) {
-  const p = Number(page) || 1
-  const ps = Number(pageSize) || 20
+  const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['r.deleted_at IS NULL']
   const params = []
   if (status) { conds.push('r.status=?'); params.push(Number(status)) }
@@ -319,7 +319,7 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', war
     `SELECT r.*, (SELECT COUNT(*) FROM purchase_requisition_items i WHERE i.requisition_id=r.id) AS item_count
        FROM purchase_requisitions r ${where}
       ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
-    [...allParams, ps, (p - 1) * ps],
+    [...allParams, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM purchase_requisitions r ${where}`, allParams)
   return { list: rows.map(fmtRequisition), pagination: { page: p, pageSize: ps, total } }

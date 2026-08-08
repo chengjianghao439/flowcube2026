@@ -9,6 +9,7 @@ const {
 } = require('../warehouse-tasks/warehouse-tasks.service')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { buildPackagePrintSummary } = require('../../utils/printSummary')
+const { normalizePagination } = require('../../utils/pagination')
 
 /**
  * 按各任务明细汇总刷新波次行的 picked_qty（只读任务表，禁止反向写任务）
@@ -94,7 +95,7 @@ async function casWaveStatus(conn, { id, fromStatus, toStatus, extraSet = '', ex
 // ── 列表查询 ──────────────────────────────────────────────────────────────────
 
 async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, warehouseId = null }) {
-  const offset = (page - 1) * pageSize
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const conds = ['w.wave_no LIKE ?']
   const params = [like]
@@ -109,7 +110,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, w
      WHERE ${where}
      ORDER BY w.priority ASC, w.created_at DESC
      LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset],
+    [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM picking_waves w WHERE ${where}`, params,
@@ -128,7 +129,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, w
     list.push(wave)
   }
 
-  return { list, pagination: { page, pageSize, total } }
+  return { list, pagination: { page, pageSize: ps, total } }
 }
 
 // ── 详情 ──────────────────────────────────────────────────────────────────────

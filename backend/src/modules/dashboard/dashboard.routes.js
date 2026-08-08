@@ -3,14 +3,10 @@ const { z } = require('zod')
 const ctrl = require('./dashboard.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validateBody } = require('../../utils/route')
 const router = Router()
 router.use(authMiddleware)
 
-const vBody = s => (req,res,next) => {
-  const r = s.safeParse(req.body)
-  if (!r.success) return res.status(400).json({ success:false, message:r.error.errors.map(e=>e.message).join('；'), data:null })
-  req.body = r.data; next()
-}
 // 布局只做结构浅校验：id/显隐/宽度合法即可，具体 widget 语义由前端注册表负责。
 // 数组上限 80 兜底防垃圾写入（注册表实际远小于此）。
 const layoutSchema = z.object({
@@ -27,5 +23,5 @@ router.get('/trend',      requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.tr
 router.get('/top-stock',  requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.topStock)
 router.get('/incoming-purchases', requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.incomingPurchases)
 router.get('/layout',     requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.layout)
-router.put('/layout',     requirePermission(PERMISSIONS.DASHBOARD_VIEW), vBody(layoutSchema), ctrl.saveLayout)
+router.put('/layout',     requirePermission(PERMISSIONS.DASHBOARD_VIEW), validateBody(layoutSchema), ctrl.saveLayout)
 module.exports = router
