@@ -1,7 +1,7 @@
 {
-  "version": "0.4.62",
-  "versionCode": 62,
+  "version": "0.4.63",
+  "versionCode": 63,
   "filename": "app-release.apk",
-  "releaseNote": "- 收敛重复/下线功能，首页与报表更清爽：",
-  "publishedAt": "2026-08-08T19:51:29.374Z"
+  "releaseNote": "- **安全加固**：",
+  "publishedAt": "2026-08-08T20:28:42.157Z"
 }
