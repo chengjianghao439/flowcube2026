@@ -117,9 +117,6 @@ const fmtItem = r => ({
   // 多单位（文档03 Phase4b）：主辅助单位 + 率，供 PDA 收货按箱快捷录入；未配辅助单位为 null
   boxUnit: r.box_unit || null,
   boxRate: r.box_rate != null ? Number(r.box_rate) : null,
-  // 序列号管控开关是商品维度属性（product_items.serial_managed），联表带出供 PDA 收货判断是否逐台扫 SN；
-  // 未联表的调用方（如 receive() 内部刷新明细）r.serial_managed 为 undefined → false，不影响非管控链路。
-  serialManaged: Number(r.serial_managed) === 1,
   // 价格不落在 inbound_task_items 上，只在联表查询里现查（跟结算时 recomputePurchasePayable
   // 的取价方式一致，避免出现"页面显示的价格"和"实际结算价格"两个数据源）；
   // 没联表查询的调用方（如 receive() 里刷新明细）这里就是 null，不当成 0 处理。

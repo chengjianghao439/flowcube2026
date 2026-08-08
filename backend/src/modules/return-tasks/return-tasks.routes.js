@@ -26,10 +26,8 @@ function vBody(schema) {
 
 const zReceive = z.object({
   productId: z.number().int().positive('productId 必填'),
-  // serialNos：序列号商品退货逐台扫（文档04 Phase3），每箱 SN 数须与 qty 一致（服务端校验）
   packages: z.array(z.object({
     qty: z.number().positive('数量必须大于 0'),
-    serialNos: z.array(z.string().trim().min(1)).optional(),
   }).passthrough()).nonempty('至少一箱'),
 })
 const zCheck = z.object({

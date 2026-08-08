@@ -1,7 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { CONTAINER_STATUS, lockStockDimension } = require('../../engine/containerEngine')
-const { voidSerialsForContainers } = require('../../engine/serialEngine')
 const { lockStatusRow } = require('../../utils/statusTransition')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { appendInboundEvent } = require('./inbound-tasks.helpers')
@@ -126,10 +125,6 @@ async function createDisposition(taskId, {
       contParams,
     )
     if (!containers.length) throw new AppError('该收货订单没有待处置的质检拒收品', 400)
-
-    // 序列号管控商品（文档04 Phase3）：REJECTED 容器上的在库序列号在处置 void 时随之回冲删除
-    // （见下面 void 后的 voidSerialsForContainers）。QA 边界拆分已把不合格台的 SN 迁到 REJECTED 容器
-    // （inbound-tasks.qa.js moveSerialsOnSplit），故此处 REJECTED 容器账实一致、可安全回冲。
 
     // 采购单价快照（参考货值用，非入账）：收货明细行 purchase_item_id → purchase_order_items.unit_price
     const itemIds = [...new Set(containers.map(c => c.inbound_task_item_id).filter(Boolean))]
@@ -334,7 +329,6 @@ async function scanOut(dispositionId, { barcode, requestKey, operator = null, pd
     await lockStockDimension(conn, c.product_id, c.warehouse_id)
     // 物理出场：6→VOID，脱离库位、remaining 归零（非 ACTIVE 不进缓存，无需 syncStock）
     await conn.query('UPDATE inventory_containers SET status = ?, remaining_qty = 0, location_id = NULL WHERE id = ?', [VOID, c.id])
-    await voidSerialsForContainers(conn, { containerIds: [c.id], operatorId: operator?.userId || null })
     await conn.query('UPDATE inbound_qa_disposition_containers SET scanned_at = NOW(), scanned_by = ? WHERE id = ?', [operator?.userId || null, dc.id])
 
     const [[{ pending }]] = await conn.query(

@@ -209,7 +209,6 @@ function fmtProduct(row) {
     salePriceC: row.sale_price_c != null ? Number(row.sale_price_c) : null,
     salePriceD: row.sale_price_d != null ? Number(row.sale_price_d) : null,
     batchManaged: Number(row.batch_managed) === 1,
-    serialManaged: Number(row.serial_managed) === 1,
     qaRequired: Number(row.qa_required) === 1,
     shelfLifeDays: row.shelf_life_days != null ? Number(row.shelf_life_days) : null,
     safetyStock: row.safety_stock != null ? Number(row.safety_stock) : null,
@@ -303,7 +302,7 @@ async function findById(id) {
   return product
 }
 
-async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, serialManaged, units }) {
+async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, units }) {
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
   const normalizedUnits = validateUnits(unit, units)   // 纯校验，任何非法输入在建单前就抛错
   const code = await generateMasterCode(pool, 'P', 'product_items')
@@ -321,9 +320,9 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   try {
     await conn.beginTransaction()
     const [r] = await conn.query(
-      `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days,qa_required,serial_managed)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, serialManaged?1:0],
+      `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days,qa_required)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0],
     )
     await replaceProductUnits(conn, r.insertId, normalizedUnits)
     await upsertDefaultStockPolicy(conn, r.insertId, { safetyStock, reorderPoint })
@@ -332,7 +331,7 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, serialManaged, units }) {
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, units }) {
   await findById(id)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const normalizedUnits = validateUnits(unit, units)
@@ -346,23 +345,10 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    // 序列号开关守卫（文档04 Phase2）：不允许对「有存量库存」的商品在档案里直接从关→开——历史容器无
-    // SN 记录，直接开会立刻对账不一致 + 出库 SERIAL_SHIP_COUNT_MISMATCH。有存量须走「序列号·历史导入」
-    // 原子补齐并开启；零库存商品可直接开。容器状态 1 ACTIVE / 4 待上架 / 5 待质检（见 CONTAINER_STATUS）。
-    const [[curSerial]] = await conn.query('SELECT serial_managed FROM product_items WHERE id = ?', [id])
-    if (serialManaged && curSerial && Number(curSerial.serial_managed) === 0) {
-      const [[{ stockQty }]] = await conn.query(
-        'SELECT COALESCE(SUM(remaining_qty),0) AS stockQty FROM inventory_containers WHERE product_id = ? AND status IN (1,4,5) AND deleted_at IS NULL',
-        [id],
-      )
-      if (Number(stockQty) > 0) {
-        throw new AppError('该商品有存量库存，无法在商品档案直接开启序列号管理；请到「序列号 · 历史导入」为在库货补齐序列号后再开启', 400, 'SERIAL_ENABLE_HAS_STOCK')
-      }
-    }
     await conn.query(
-      `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,qa_required=?,serial_managed=?
+      `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,qa_required=?
        WHERE id=? AND deleted_at IS NULL`,
-      [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, serialManaged?1:0, id],
+      [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, id],
     )
     await replaceProductUnits(conn, id, normalizedUnits)
     await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint })

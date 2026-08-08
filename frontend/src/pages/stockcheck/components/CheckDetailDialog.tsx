@@ -42,9 +42,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
 
   const hasUnsavedChanges = useMemo(() => {
     if (!check?.items?.length || check.status !== 1) return false
-    // 序列号行没有输入框（实盘数由 PDA 扫码派生），不参与"未保存改动"判断
     return check.items.some(item => {
-      if (item.serialManaged) return false
       const current = actuals[item.id] ?? ''
       const original = item.actualQty != null ? String(item.actualQty) : ''
       return current !== original
@@ -55,8 +53,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     if (!check?.items?.length) return { ok: true as const, items: [] as { id: number; actualQty: number }[] }
     const firstFieldError = Object.values(fieldErrors).find(Boolean)
     if (firstFieldError) return { ok: false as const, items: [] as { id: number; actualQty: number }[], message: firstFieldError }
-    // 序列号行不进保存载荷：其实盘数只能由 PDA 逐台扫码写入，后端会拒绝手填
-    const items = check.items.filter(i => !i.serialManaged).map(i => ({ id: i.id, actualQty: parseActualQty(actuals[i.id] ?? '') }))
+    const items = check.items.map(i => ({ id: i.id, actualQty: parseActualQty(actuals[i.id] ?? '') }))
     const invalid = items.find(i => Number.isNaN(i.actualQty) || i.actualQty < 0)
     if (invalid) {
       return { ok: false as const, items, message: '实盘数量必须为大于或等于 0 的数字' }
@@ -101,9 +98,8 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       toast.warning(validation.message || '实盘数量必须大于或等于 0')
       return
     }
-    // 整单都是序列号商品时没有可手填的行（实盘数全部来自 PDA 扫码），没什么可保存
     if (!validation.items.length) {
-      toast.warning('本单均为序列号管控商品，实盘数由 PDA 逐台扫码写入，无需在此保存')
+      toast.warning('没有可保存的行')
       return
     }
     try {
@@ -183,10 +179,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                 const actualRaw = actuals[item.id]
                 const actual = actualRaw!==''&&actualRaw!==undefined ? parseFloat(actualRaw) : null
                 const hasError = !!fieldErrors[item.id]
-                // 序列号行的差异以后端派生的 diffQty 为准（实盘数来自扫码，不来自输入框）
-                const diff = item.serialManaged
-                  ? (item.diffQty ?? null)
-                  : (actual!=null && !hasError ? actual - item.bookQty : null)
+                const diff = actual!=null && !hasError ? actual - item.bookQty : null
                 return (
                   <div key={item.id} className="grid grid-cols-12 gap-2 items-center py-1 border-b last:border-0">
                     <div className="col-span-2 text-sm">{item.productCode}</div>
@@ -194,21 +187,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                     <div className="col-span-1 text-sm text-muted-foreground">{item.unit}</div>
                     <div className="col-span-2 text-sm">{item.bookQty}</div>
                     <div className="col-span-2">
-                      {/* 序列号商品：实盘数由 PDA 逐台扫码派生，不可手填（后端同样拒绝手填） */}
-                      {item.serialManaged ? (
-                        <div className="space-y-0.5">
-                          <span className="text-sm block">
-                            {item.actualQty!=null ? `${item.actualQty}（扫码）` : <span className="text-muted-foreground">待 PDA 扫码</span>}
-                          </span>
-                          {(item.missingSerials?.length || item.surplusSerials?.length) ? (
-                            <p className="text-xs text-muted-foreground">
-                              {item.missingSerials?.length ? <span className="text-red-600">盘亏 {item.missingSerials.length} 台</span> : null}
-                              {item.missingSerials?.length && item.surplusSerials?.length ? ' · ' : null}
-                              {item.surplusSerials?.length ? <span className="text-green-600">盘盈 {item.surplusSerials.length} 台</span> : null}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : check.status===1 ? (
+                      {check.status===1 ? (
                         <div className="space-y-1">
                           <Input
                             type="number"

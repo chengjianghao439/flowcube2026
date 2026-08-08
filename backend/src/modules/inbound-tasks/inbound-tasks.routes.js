@@ -50,7 +50,6 @@ const receiveSchema = z.union([
   z.object({
     productId: z.number().int().positive('商品无效'),
     qty:       z.number().positive('本包数量必须大于 0'),
-    serialNos: z.array(z.string().trim().min(1)).optional(),
     confirmOverReceive: z.boolean().optional(),
     confirmDuplicate: z.boolean().optional(),
     overReceiveReason: overReceiveReason.optional(),
@@ -64,8 +63,7 @@ const receiveSchema = z.union([
     packages: z.array(
       z.object({
         qty: z.number().positive('箱数量必须大于 0'),
-        serialNos: z.array(z.string().trim().min(1)).optional(),
-      }),
+          }),
     ).min(1, '请至少填写一箱数量'),
     confirmOverReceive: z.boolean().optional(),
     confirmDuplicate: z.boolean().optional(),

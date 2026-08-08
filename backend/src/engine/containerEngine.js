@@ -569,8 +569,8 @@ async function transferContainers(conn, {
       initialQty:    d.taken,
       unit:          d.unit,
       batchNo:       d.batchNo,
-      mfgDate:       d.mfgDate ? (d.mfgDate instanceof Date ? d.mfgDate.toISOString().slice(0,10) : d.mfgDate) : null,
-      expDate:       d.expDate ? (d.expDate instanceof Date ? d.expDate.toISOString().slice(0,10) : d.expDate) : null,
+      mfgDate:       fmtSqlDate(d.mfgDate),
+      expDate:       fmtSqlDate(d.expDate),
       sourceType:    SOURCE_TYPE.TRANSFER,
       sourceRefId,
       sourceRefType,
@@ -588,93 +588,12 @@ async function transferContainers(conn, {
 }
 
 /**
- * 序列号商品的盘点调整（文档04 Phase3b·C-full）。与通用路径的本质差别：
- *
- *   **盘亏必须扣「丢失台各自所在的那些容器」，绝不能走 FIFO。**
- *   FIFO 会去扣「最早的容器」，而丢的台可能挂在别的容器上——扣完那只容器就变成
- *   「数量少了、挂的序列号还在」，被扣容器与丢失台所在容器双双破坏
- *   「remaining_qty == 在库SN台数」不变量。所以这里按 containerId 分组精确扣减。
- *
- * 盘盈则建一只新容器承载「现场扫到但账面没有」的台，登记这些 SN 挂上去（台数天然相等）。
- * 两侧都在末尾对每只受影响容器 assertSerialCountMatchesContainer 兜底。
- * 由 adjustContainersForStockcheck 在识别出序列号商品且调用方给了 serialPlan 时委托调用；
- * 缓存刷新（syncStockFromContainers）由调用方统一收口，本函数不重复刷。
- *
- * @param {object} params.serialPlan { missing:[{id,serialNo,containerId}], surplus:[serialNo] }
- */
-async function adjustSerialContainersForStockcheck(conn, {
-  productId, productName = '该商品', warehouseId, unit = null, serialPlan,
-  sourceRefType = 'stockcheck', sourceRefId = null, sourceRefNo = null, remark = null,
-}) {
-  const { markSerialsLostForStocktake, registerStocktakeSurplusSerials, assertSerialCountMatchesContainer } = require('./serialEngine')
-  const missing = Array.isArray(serialPlan?.missing) ? serialPlan.missing : []
-  const surplus = Array.isArray(serialPlan?.surplus) ? serialPlan.surplus : []
-  const touched = new Set()
-  let createdContainerId = null
-  let primaryDeductContainerId = null
-
-  // ── 盘亏：按容器分组精确扣减（容器 id 升序，与全仓其它库存事务的加锁顺序一致，防死锁）──
-  const byContainer = new Map()
-  for (const m of missing) {
-    const cid = Number(m.containerId)
-    if (!byContainer.has(cid)) byContainer.set(cid, [])
-    byContainer.get(cid).push(m)
-  }
-  for (const cid of [...byContainer.keys()].sort((a, b) => a - b)) {
-    const lost = byContainer.get(cid)
-    const [[row]] = await conn.query(
-      'SELECT id, remaining_qty FROM inventory_containers WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-      [cid],
-    )
-    if (!row) throw new AppError(`盘亏序列号所在容器 ${cid} 不存在`, 409, 'SERIAL_STOCKCHECK_CONTAINER_GONE')
-    const newRem = Number(row.remaining_qty) - lost.length
-    assertNonNegativeQty(newRem, `容器 ${cid} 盘亏扣减后`)
-    await conn.query(
-      'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
-      [newRem, newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE, cid],
-    )
-    touched.add(cid)
-    if (primaryDeductContainerId == null) primaryDeductContainerId = cid
-  }
-  if (missing.length) {
-    await markSerialsLostForStocktake(conn, {
-      serialIds: missing.map(m => m.id), warehouseId,
-      checkId: sourceRefId, checkNo: sourceRefNo,
-    })
-  }
-
-  // ── 盘盈：建一只新容器承载扫到但账面没有的台 ──
-  if (surplus.length) {
-    const r = await createContainer(conn, {
-      productId, warehouseId, initialQty: surplus.length, unit,
-      sourceType: SOURCE_TYPE.STOCKCHECK, sourceRefId, sourceRefType, sourceRefNo,
-      remark: remark || `盘点盘盈 ${sourceRefNo ?? ''}`,
-      containerStatus: CONTAINER_STATUS.PENDING_PUTAWAY,
-    })
-    await promotePendingContainerToActive(conn, r.containerId, productId, warehouseId)
-    await registerStocktakeSurplusSerials(conn, {
-      productId, warehouseId, containerId: r.containerId, serialNos: surplus,
-      checkId: sourceRefId, checkNo: sourceRefNo,
-    })
-    createdContainerId = r.containerId
-    touched.add(Number(r.containerId))
-  }
-
-  // 逐容器不变量兜底（类比 assertNonNegativeQty）：数量与在库SN台数必须一致
-  for (const cid of touched) {
-    await assertSerialCountMatchesContainer(conn, cid)
-  }
-  return { createdContainerId, primaryDeductContainerId, lostCount: missing.length, surplusCount: surplus.length, productName }
-}
-
-/**
  * 盘点容器调整
  *
  * 盘点不再直接修改 inventory_stock，而是通过容器增减实现：
  *   diffQty > 0  → 创建新容器（盘点正差异，增加库存）
  *   diffQty < 0  → FIFO 扣减容器（盘点负差异，减少库存）
  *   diffQty = 0  → 无操作
- *   序列号商品   → 走 adjustSerialContainersForStockcheck（逐台落到具体容器，见其注释）
  *
  * 调整后强制 syncStockFromContainers 确保缓存与容器总和一致。
  *
@@ -701,7 +620,6 @@ async function adjustContainersForStockcheck(conn, {
   sourceRefId   = null,
   sourceRefNo   = null,
   remark        = null,
-  serialPlan    = null,   // 序列号商品专用：{ missing:[{id,serialNo,containerId}], surplus:[serialNo] }
 }) {
   // 读取当前 inventory_stock 缓存值（用于日志 before_qty）
   const [[stockRow]] = await conn.query(
@@ -709,28 +627,6 @@ async function adjustContainersForStockcheck(conn, {
     [productId, warehouseId]
   )
   const before = stockRow ? Number(stockRow.qty) : 0
-
-  // 序列号管控商品（文档04 Phase3b·C-full）：盘点差异必须逐台落到具体的台与容器上——
-  // 通用路径的「盘盈建容器(无SN)」「盘亏 FIFO 扣容器(不删SN)」都会破坏「容器 remaining == 在库SN台数」。
-  // 调用方（stockcheck.service.submit）须传 serialPlan（由 PDA 现场扫码集与账面在库集比对得出），
-  // 走下方 adjustSerialContainersForStockcheck。未传 = 该路径尚未接入逐台核对 → 挡住，绝不静默不一致。
-  // 注意判定条件不能只看 diffQty≠0：序列号盘点存在「净差为 0 的换台」——丢了 A、又扫到账面没有的 X，
-  // 台数一样、数量维度毫无变化，但台账必须更正（否则 A 还挂在库、X 不在账上，两边都错）。
-  // 故只要调用方给了 serialPlan（服务层仅在确有盘亏/盘盈台时才给）就必须处理。
-  if (Math.abs(Number(diffQty)) > 1e-9 || serialPlan) {
-    const { isSerialManaged } = require('./serialEngine')
-    if (await isSerialManaged(conn, productId)) {
-      if (!serialPlan) {
-        throw new AppError(`序列号管控商品「${productName}」盘点差异需逐台核对处理（请用 PDA 逐台扫描在架序列号）`, 400, 'SERIAL_STOCKCHECK_UNSUPPORTED')
-      }
-      const r = await adjustSerialContainersForStockcheck(conn, {
-        productId, productName, warehouseId, unit, serialPlan,
-        sourceRefType, sourceRefId, sourceRefNo, remark,
-      })
-      const after = await syncStockFromContainers(conn, productId, warehouseId)
-      return { before, after, createdContainerId: r.createdContainerId, primaryDeductContainerId: r.primaryDeductContainerId }
-    }
-  }
 
   let createdContainerId = null
   let primaryDeductContainerId = null
@@ -1018,7 +914,7 @@ async function logContainerSplit(conn, {
  * @param {{ containerId: number, qty: number, remark?: string|null }} params
  * @returns {Promise<{ sourceContainerId: number, sourceBarcode: string, sourceRemainingAfter: number, newContainerId: number, newBarcode: string, newContainerKind: 'plastic_box', productId: number, warehouseId: number }>}
  */
-async function splitContainer(conn, { containerId, qty, remark = null, targetContainerId = null, serialNos = null, operatorId = null, operatorName = null }) {
+async function splitContainer(conn, { containerId, qty, remark = null, targetContainerId = null, operatorId = null, operatorName = null }) {
   const cid = Number(containerId)
   const q = Number(qty)
   const tid = targetContainerId != null ? Number(targetContainerId) : null
@@ -1068,15 +964,6 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   }
   const rem = Number(row.remaining_qty)
   if (q > rem) throw new AppError('拆分数量不能超过剩余数量', 400)
-
-  // 序列号管控商品（文档04 Phase3b）：拆分须由现场逐台扫「要拆出的具体台」的 SN，迁移由
-  // moveSerialsOnSplit 按名单执行（不能任取，否则台账与物理不符，将来该台出库扫码报 CONTAINER_MISMATCH）。
-  // 未传 serialNos（或数量不符）则拒绝、提示扫码。引擎间懒加载避免顶层 require 顺序耦合。
-  const { isSerialManaged: isSerialMgd, moveSerialsOnSplit } = require('./serialEngine')
-  const serialProduct = await isSerialMgd(conn, row.product_id)
-  if (serialProduct && (!Array.isArray(serialNos) || serialNos.length !== q)) {
-    throw new AppError('序列号商品拆分须逐台扫描要拆出的序列号（数量须与拆分数量一致）', 400, 'SERIAL_SPLIT_NEEDS_SCAN')
-  }
 
   // 转入已有塑料盒
   if (tid) {
@@ -1141,11 +1028,6 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
       )
     }
 
-    // 序列号商品：把扫到的 q 台从源容器迁到目标塑料盒（非序列号 no-op；已在上面校验数量）
-    if (serialProduct) {
-      await moveSerialsOnSplit(conn, { sourceContainerId: cid, targetContainerId: tid, qty: q, serialNos, warehouseId: row.warehouse_id })
-    }
-
     const stockAfterMerge = await syncStockFromContainers(conn, row.product_id, row.warehouse_id)
     await logContainerSplit(conn, {
       productId: row.product_id, warehouseId: row.warehouse_id, qty: q, stockQty: stockAfterMerge,
@@ -1200,11 +1082,6 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     [cid, newId],
   )
 
-  // 序列号商品：把扫到的 q 台从源容器迁到新塑料盒（非序列号 no-op；已在上面校验数量）
-  if (serialProduct) {
-    await moveSerialsOnSplit(conn, { sourceContainerId: cid, targetContainerId: newId, qty: q, serialNos, warehouseId: row.warehouse_id })
-  }
-
   const stockAfterSplit = await syncStockFromContainers(conn, row.product_id, row.warehouse_id)
   await logContainerSplit(conn, {
     productId: row.product_id, warehouseId: row.warehouse_id, qty: q, stockQty: stockAfterSplit,
@@ -1232,20 +1109,14 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
  * 锁定在同一任务下，直到 PDA 扫码确认归还库位（confirmContainerReturn）才真正解锁。
  * 若整只容器数量都要归还则无需拆分，直接把该容器整只登记为待归还。
  *
- * 序列号商品（文档04 Phase3b·B-full）：部分拆分时必须把「PDA 现场扫到的要归还的具体台」的 SN
- * 从源容器迁到新容器（传 serialNos，由 moveSerialsOnSplit 按名单迁移 + 两容器断言兜底），否则
- * 源容器"多账少货"、新容器"有货无账"，破坏核心不变量。整只归还（q===rem）序列号随容器整体走、
- * 无需拆分。非序列号商品不传 serialNos 即可（moveSerialsOnSplit 为 no-op）。
- *
  * @param {object} conn
  * @param {object} params
  * @param {number} params.taskId
  * @param {number} params.containerId
  * @param {number} params.qty
- * @param {string[]|null} [params.serialNos] 序列号商品部分拆分时，现场扫到的要归还的具体 SN（数量须===qty）
  * @returns {{ containerId: number, barcode: string, qty: number, wholeContainer: boolean }}
  */
-async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qty, serialNos = null, operatorId = null, operatorName = null }) {
+async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qty, operatorId = null, operatorName = null }) {
   const [[row]] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
             locked_by_task_id, batch_no, mfg_date, exp_date, unit
@@ -1296,13 +1167,6 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
     [row.id, taskId, newId],
   )
 
-  // 序列号商品：把扫到的 q 台从源容器迁到新容器（两容器 remaining 都已改成最终值，moveSerialsOnSplit
-  // 迁移后逐容器断言 remaining==在库SN数）。非序列号 no-op。引擎间懒加载避免顶层 require 顺序耦合。
-  if (Array.isArray(serialNos) && serialNos.length) {
-    const { moveSerialsOnSplit } = require('./serialEngine')
-    await moveSerialsOnSplit(conn, { sourceContainerId: row.id, targetContainerId: newId, qty: q, serialNos, warehouseId: row.warehouse_id })
-  }
-
   // 改单归还拆分同样留痕。这里不调 syncStockFromContainers——两个容器的 remaining 之和不变，
   // 缓存本就无需刷新（原实现也没刷），所以直接读当前缓存值作为流水快照。
   const [[stockRow]] = await conn.query(
@@ -1335,10 +1199,9 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
  * @param {number} params.taskId
  * @param {number} params.productId
  * @param {number} params.qty
- * @param {boolean} [params.defer] 序列号商品：只登记归还意图、不拆分（拆分推迟到 PDA 扫码归还时）
  * @returns {Array<{ containerId: number, barcode: string, qty: number, wholeContainer: boolean, originalContainerId: number }>}
  */
-async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty, defer = false }) {
+async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty }) {
   let remaining = Number(qty)
   if (!(remaining > 0)) return []
   const [containers] = await conn.query(
@@ -1357,13 +1220,8 @@ async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, q
     const avail = Number(fresh.remaining_qty)
     if (avail <= 0) continue
     const take = Math.min(avail, remaining)
-    if (defer) {
-      // 序列号商品：只登记意图，容器保持完整、序列号不动（拆分与 SN 迁移推迟到 PDA 扫码归还时）
-      picks.push({ containerId: Number(c.id), barcode: fresh.barcode, qty: take, wholeContainer: take === avail, originalContainerId: Number(c.id) })
-    } else {
-      const split = await splitTaskLockedContainerForReturn(conn, { taskId, containerId: c.id, qty: take })
-      picks.push({ ...split, originalContainerId: Number(c.id) })
-    }
+    const split = await splitTaskLockedContainerForReturn(conn, { taskId, containerId: c.id, qty: take })
+    picks.push({ ...split, originalContainerId: Number(c.id) })
     remaining -= take
   }
   if (remaining > 0) {

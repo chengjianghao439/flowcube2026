@@ -1,7 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { createContainer, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
-const { moveSerialsOnSplit } = require('../../engine/serialEngine')
 const { lockStatusRow } = require('../../utils/statusTransition')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { appendInboundEvent } = require('./inbound-tasks.helpers')
@@ -48,7 +47,7 @@ async function allocateInboundQaContainers(conn, { taskId, taskNo, productId, pa
         'UPDATE inventory_containers SET remaining_qty = ?, initial_qty = ?, status = ? WHERE id = ?',
         [passTake, passTake, PENDING_PUTAWAY, c.id],
       )
-      const { containerId: rejContainerId } = await createContainer(conn, {
+      await createContainer(conn, {
         productId: c.product_id,
         warehouseId: c.warehouse_id,
         initialQty: rejTake,
@@ -66,9 +65,6 @@ async function allocateInboundQaContainers(conn, { taskId, taskNo, productId, pa
         barcodePrefix: 'I',
         remark: `来料质检不合格，自 ${c.barcode} 拆分`,
       })
-      // 序列号商品（文档04 Phase3）：边界拆分时把 rejTake 台在库序列号从原容器迁到新 REJECTED 容器，
-      // 否则原容器"少货多账"、REJECTED"有货无账"破坏不变量（非序列号商品为 no-op）。
-      await moveSerialsOnSplit(conn, { sourceContainerId: c.id, targetContainerId: rejContainerId, qty: rejTake, warehouseId: c.warehouse_id })
     } else if (passTake > 0) {
       await conn.query('UPDATE inventory_containers SET status = ? WHERE id = ?', [PENDING_PUTAWAY, c.id])
     } else if (rejTake > 0) {

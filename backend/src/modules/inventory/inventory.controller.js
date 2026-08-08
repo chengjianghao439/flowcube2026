@@ -141,13 +141,12 @@ async function assignContainerLocation(req, res, next) {
 async function splitContainer(req, res, next) {
   try {
     const id = +req.params.id
-    const { qty, remark, printLabel, targetContainerId, serialNos } = req.body
+    const { qty, remark, printLabel, targetContainerId } = req.body
     const result = await svc.splitContainerOp(id, {
       qty,
       remark,
       printLabel: !!printLabel,
       targetContainerId: targetContainerId != null ? Number(targetContainerId) : null,
-      serialNos: Array.isArray(serialNos) ? serialNos : null,
       userId:     req.user.userId,
       userName:   req.user.realName || req.user.username || null,
     })

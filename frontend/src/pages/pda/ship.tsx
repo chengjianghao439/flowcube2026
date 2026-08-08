@@ -23,7 +23,6 @@ import type { PackageShipInfo } from '@/api/packages'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
-import PdaSerialScanSheet, { type SerialScanGroup } from '@/components/pda/PdaSerialScanSheet'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
 
@@ -54,27 +53,12 @@ function shipBlockedMessage(data: PackageShipInfo) {
   return `当前仓库任务状态为「${statusName}」，不能执行出库。`
 }
 
-// 聚合本任务待发商品里的序列号管控商品：每个商品需逐台扫其出库总量个 SN 才能核销出库
-// （serialEngine.dispatchSerials 会按数量强校验，未扫齐后端直接拒绝）。
-function collectSerialGroups(data: PackageShipInfo): SerialScanGroup[] {
-  const map: Record<number, { productName: string; qty: number }> = {}
-  data.packages.forEach(pkg => pkg.items.forEach(item => {
-    if (!item.serialManaged) return
-    if (map[item.productId]) map[item.productId].qty += item.qty
-    else map[item.productId] = { productName: item.productName, qty: item.qty }
-  }))
-  return Object.entries(map).map(([pid, v]) => ({ key: String(pid), label: v.productName, requiredQty: v.qty }))
-}
-
 export default function PdaShipPage() {
   const navigate = useNavigate()
   const { flash, ok, err, warn } = usePdaFeedback()
   const [info, setInfo]       = useState<PackageShipInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [done, setDone]       = useState(false)
-  // 序列号采集面板：扫箱后若本任务含 serial_managed 商品，先弹此面板逐台扫要发出的 SN，
-  // 集齐后连同 serialNosByProduct 一起提交出库；全是非管控商品则沿用「扫箱即自动出库」。
-  const [serialSheet, setSerialSheet] = useState<{ taskId: number; groups: SerialScanGroup[] } | null>(null)
   const shipAction = useCriticalPdaAction<{ taskId: number }>({
     action: `warehouse.ship.confirm`,
     requestAction: 'warehouse.ship',
@@ -95,9 +79,9 @@ export default function PdaShipPage() {
   })
 
   const shipMut = useMutation({
-    mutationFn: async ({ taskId, serialNosByProduct }: { taskId: number; serialNosByProduct?: Record<number, string[]> | null }) => {
+    mutationFn: async ({ taskId }: { taskId: number }) => {
       const result = await shipAction.run((requestKey) =>
-        shipTaskApi(taskId, requestKey, serialNosByProduct).then((res) => res as { taskId: number }),
+        shipTaskApi(taskId, requestKey).then((res) => res as { taskId: number }),
         { taskId },
       )
       return result
@@ -111,7 +95,7 @@ export default function PdaShipPage() {
       err(formatPdaErrorMessage((e as { message?: string })?.message, '出库失败，请确认任务状态或联系管理员')),
   })
 
-  // 扫码后自动查询；非序列号任务立即出库，序列号任务先弹面板逐台扫 SN 再出库
+  // 扫码后自动查询；可出库即自动出库
   const handleScan = useCallback(async (raw: string) => {
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'box') { err('扫描物流条码'); return }
@@ -124,12 +108,6 @@ export default function PdaShipPage() {
       setInfo(data)
       if (!canShip(data)) {
         err(shipBlockedMessage(data))
-        return
-      }
-      // 序列号管控商品：出库前须逐台扫 SN 核销，弹采集面板集齐后再出库；否则直接自动出库
-      const serialGroups = collectSerialGroups(data)
-      if (serialGroups.length > 0) {
-        setSerialSheet({ taskId: data.warehouseTaskId, groups: serialGroups })
         return
       }
       shipMut.mutate({ taskId: data.warehouseTaskId })
@@ -267,27 +245,10 @@ export default function PdaShipPage() {
             <span className="text-sm font-bold text-foreground">{totalBoxes} 箱</span>
           </PdaCard>
         ) : null}
-        <PdaScanner onScan={handleScan} placeholder="扫描物流条码" disabled={loading || shipMut.isPending || shipAction.submitBlocked || !!serialSheet} />
+        <PdaScanner onScan={handleScan} placeholder="扫描物流条码" disabled={loading || shipMut.isPending || shipAction.submitBlocked} />
         {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">出库中…</span></div>}
       </PdaBottomBar>
 
-      {serialSheet && (
-        <PdaSerialScanSheet
-          title="逐台扫序列号出库"
-          subtitle={info ? `${info.taskNo} · ${info.customerName}` : undefined}
-          groups={serialSheet.groups}
-          submitting={shipMut.isPending || shipAction.submitBlocked}
-          confirmLabel="确认出库"
-          onCancel={() => setSerialSheet(null)}
-          onConfirm={(map) => {
-            const pending = serialSheet
-            setSerialSheet(null)
-            const serialNosByProduct: Record<number, string[]> = {}
-            for (const g of pending.groups) serialNosByProduct[Number(g.key)] = map[g.key] ?? []
-            shipMut.mutate({ taskId: pending.taskId, serialNosByProduct })
-          }}
-        />
-      )}
     </div>
   )
 }

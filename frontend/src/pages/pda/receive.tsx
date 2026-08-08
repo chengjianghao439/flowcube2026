@@ -1,7 +1,7 @@
 /**
  * PDA 收货 — 支持按产品逐箱录入并批量打印库存条码
  */
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getInboundTaskByIdApi, receiveInboundApi } from '@/api/inbound-tasks'
@@ -20,7 +20,6 @@ import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import PdaOverReceiveDialog, { type OverReceiveReasonCode } from '@/components/pda/PdaOverReceiveDialog'
-import PdaSerialScanSheet from '@/components/pda/PdaSerialScanSheet'
 
 interface ProductSummary {
   productId: number
@@ -31,8 +30,6 @@ interface ProductSummary {
   receivedQty: number
   remainingQty: number
   purchaseRefs: string[]
-  /** 序列号管控：收货需逐台扫序列号（每箱 SN 数 == 箱数量） */
-  serialManaged: boolean
   /** 多单位（文档03 Phase4b）：主辅助单位名 + 率，配了才有值。按箱快捷录入用，率由系统给定不可改 */
   boxUnit: string | null
   boxRate: number | null
@@ -65,7 +62,6 @@ function groupProducts(task: InboundTask): ProductSummary[] {
       receivedQty: item.receivedQty,
       remainingQty: Math.max(0, item.orderedQty - item.receivedQty),
       purchaseRefs: [purchaseRef],
-      serialManaged: !!item.serialManaged,
       boxUnit: item.boxUnit ?? null,
       boxRate: item.boxRate ?? null,
     })
@@ -236,23 +232,11 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     totalQty: number
     scannedBarcode?: string
     confirmDuplicate?: boolean
-    serialNosByBox?: string[][]
     orderedQty: number
     receivedQty: number
     overQty: number
     overAmount: number | null
   } | null>(null)
-  // 序列号采集面板：serial_managed 商品箱数量校验通过后弹此面板逐台扫 SN（每箱 SN 数==箱数量），
-  // 扫满后切片成每箱 serialNos 再提交。lastSerialRef 暂存最近一次采集结果，供超收/重复扫码
-  // 后端闸门触发时的重试复用——重试不该让员工把序列号重扫一遍。
-  const [serialSheet, setSerialSheet] = useState<{
-    product: ProductSummary
-    boxes: Array<{ qty: number }>
-    totalQty: number
-    scannedBarcode?: string
-    confirmDuplicate?: boolean
-  } | null>(null)
-  const lastSerialRef = useRef<{ productId: number; byBox: string[][] } | null>(null)
   // 重复扫码防护：后端在 30 秒时间窗里发现同商品、同箱数、同总量的重复提交会返回 409
   // DUPLICATE_SCAN_CONFIRM_REQUIRED，这里进入待确认状态，再点一次带 confirmDuplicate 放行。
   // 本地无法自行判断（前端每次提交都是新的 requestKey，看不到别人/上一次的提交），必须由后端发起。
@@ -382,36 +366,12 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       warn(`当前只登记 ${totalQty}，提交后该商品还剩 ${activeProduct.remainingQty - totalQty}`)
     }
 
-    // 序列号管控商品：箱数量校验通过后先弹面板逐台扫 SN（每箱 SN 数==箱数量），扫满才提交。
-    // 已扫过（lastSerialRef 命中相同商品+箱型）直接复用——超收/重复扫码后端闸门触发时会二次
-    // 进来，不该让员工把序列号重扫一遍。非管控商品完全旁路，行为不变。
-    const cachedSerials = (() => {
-      if (!activeProduct.serialManaged) return undefined
-      const cached = lastSerialRef.current
-      if (!cached || cached.productId !== activeProduct.productId) return undefined
-      const boxQtys = normalizedBoxes.map(box => box.qty)
-      if (cached.byBox.length !== boxQtys.length) return undefined
-      if (!cached.byBox.every((sns, i) => sns.length === boxQtys[i])) return undefined
-      return cached.byBox
-    })()
-    if (activeProduct.serialManaged && !cachedSerials) {
-      setSerialSheet({
-        product: activeProduct,
-        boxes: normalizedBoxes.map(box => ({ qty: box.qty })),
-        totalQty,
-        scannedBarcode: scanOk ? scanVerified?.barcode : undefined,
-        confirmDuplicate: duplicateConfirmed,
-      })
-      return
-    }
-
     submitToServer({
       product: activeProduct,
       boxes: normalizedBoxes.map(box => ({ qty: box.qty })),
       totalQty,
       scannedBarcode: scanOk ? scanVerified?.barcode : undefined,
       confirmDuplicate: duplicateConfirmed,
-      serialNosByBox: cachedSerials,
     })
   }
 
@@ -423,19 +383,15 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     scannedBarcode?: string
     confirmDuplicate?: boolean
     overReceiveReason?: OverReceiveReasonCode
-    /** 序列号管控商品：每箱逐台扫入的序列号（下标与 boxes 对齐，长度==该箱 qty）；非管控商品省略 */
-    serialNosByBox?: string[][]
   }) {
-    const { product, boxes: pkgs, totalQty, scannedBarcode, confirmDuplicate, overReceiveReason, serialNosByBox } = opts
+    const { product, boxes: pkgs, totalQty, scannedBarcode, confirmDuplicate, overReceiveReason } = opts
     setSubmitting(true)
     const expectedReceivedQty = product.receivedQty + totalQty
     void receiveAction.run(
       (requestKey) =>
         receiveInboundApi(task.id, {
           productId: product.productId,
-          packages: pkgs.map((box, i) => (
-            serialNosByBox ? { qty: box.qty, serialNos: serialNosByBox[i] ?? [] } : { qty: box.qty }
-          )),
+          packages: pkgs.map((box) => ({ qty: box.qty })),
           confirmOverReceive: overReceiveReason ? true : undefined,
           overReceiveReason,
           confirmDuplicate: confirmDuplicate || undefined,
@@ -449,8 +405,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       setDuplicateArmed(null)
       setOverReceivePrompt(null)
       if (result.kind === 'success') {
-        // 收货成功，丢弃序列号采集缓存
-        lastSerialRef.current = null
         if ((product.remainingQty - totalQty) > 0) {
           resetBoxes(1, boxFill(product))   // 继续收同商品：预填箱规（文档03 Phase4b）
         } else {
@@ -478,7 +432,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           totalQty,
           scannedBarcode,
           confirmDuplicate,
-          serialNosByBox,
           orderedQty: Number(data?.orderedQty ?? product.orderedQty),
           receivedQty: Number(data?.receivedQty ?? product.receivedQty),
           overQty: Number(data?.overQty ?? 0),
@@ -632,7 +585,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
         <PdaScanner
           onScan={handleScan}
           placeholder="扫描产品条码"
-          disabled={submitting || receiveAction.submitBlocked || !!serialSheet}
+          disabled={submitting || receiveAction.submitBlocked}
         />
       </PdaBottomBar>
 
@@ -658,34 +611,12 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
               totalQty: pending.totalQty,
               scannedBarcode: pending.scannedBarcode,
               confirmDuplicate: pending.confirmDuplicate,
-              serialNosByBox: pending.serialNosByBox,
               overReceiveReason: reason,
             })
           }}
         />
       )}
 
-      {serialSheet && (
-        <PdaSerialScanSheet
-          title={`逐台扫序列号 · ${serialSheet.product.productName}`}
-          subtitle={`共 ${serialSheet.totalQty} 台，按箱逐台扫描`}
-          groups={serialSheet.boxes.map((box, i) => ({
-            key: String(i),
-            label: `箱 ${i + 1}`,
-            requiredQty: box.qty,
-          }))}
-          submitting={submitting || receiveAction.submitBlocked}
-          confirmLabel="登记并打印"
-          onCancel={() => setSerialSheet(null)}
-          onConfirm={(map) => {
-            const pending = serialSheet
-            setSerialSheet(null)
-            const byBox = pending.boxes.map((_, i) => map[String(i)] ?? [])
-            lastSerialRef.current = { productId: pending.product.productId, byBox }
-            submitToServer({ ...pending, serialNosByBox: byBox })
-          }}
-        />
-      )}
     </div>
   )
 }

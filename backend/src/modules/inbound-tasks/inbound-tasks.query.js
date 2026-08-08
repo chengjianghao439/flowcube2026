@@ -337,11 +337,10 @@ async function findById(id, scopeWarehouseIds = null) {
   // 多单位（文档03 Phase4b）：带出该商品的主辅助单位 + 换算率，供 PDA 收货「按箱快捷录入」
   // （率由系统给定、现场不可改；配了辅助单位才有值，否则 null 走原逐件录入）。取 sort_order 最靠前的辅助单位。
   const [items] = await pool.query(
-    `SELECT iti.*, poi.unit_price, prod.serial_managed,
+    `SELECT iti.*, poi.unit_price,
             pu.unit_name AS box_unit, pu.conversion_rate AS box_rate
      FROM inbound_task_items iti
      LEFT JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
-     LEFT JOIN product_items prod ON prod.id = iti.product_id
      LEFT JOIN product_units pu ON pu.id = (
        SELECT pu2.id FROM product_units pu2
        WHERE pu2.product_id = iti.product_id AND pu2.is_base = 0 AND pu2.is_active = 1

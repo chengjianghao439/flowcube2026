@@ -31,8 +31,6 @@ export interface InboundTaskItem {
   boxUnit?: string | null    // 主辅助单位名（如"箱"），供 PDA 收货按箱快捷录入（文档03 Phase4b）
   boxRate?: number | null    // 1 辅助单位 = N 基本单位（率由系统给定，现场不可改）
   unitPrice: number | null
-  /** 序列号管控商品：PDA 收货需逐台扫序列号登记（每箱 SN 数 == 箱数量） */
-  serialManaged?: boolean
 }
 
 export interface InboundStatusView {
@@ -163,8 +161,6 @@ export interface ReceiveParams {
   qty?: number
   packages?: Array<{
     qty: number
-    /** 序列号管控商品：该箱逐台扫入的序列号，长度须等于该箱 qty；非管控商品省略 */
-    serialNos?: string[]
   }>
   confirmOverReceive?: boolean
   /** 重复扫码防护：后端 30 秒内发现同商品同箱型的重复提交会要求确认，确认后带上放行 */

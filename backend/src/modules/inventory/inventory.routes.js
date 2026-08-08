@@ -69,8 +69,6 @@ router.post('/containers/:id/split',
     remark: z.string().max(500).optional(),
     printLabel: z.boolean().optional(),
     targetContainerId: z.number().int().positive().optional(),
-    // 序列号商品拆分：现场逐台扫「要拆出的具体台」序列号（文档04 Phase3b）
-    serialNos: z.array(z.string().trim().min(1)).optional(),
   })),
   ctrl.splitContainer,
 )

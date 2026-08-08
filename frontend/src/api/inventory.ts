@@ -43,9 +43,8 @@ export const getContainerByBarcodeApi = async (barcode: string) =>
     containerStatus?: 'waiting_putaway' | 'stored'
     lockedByTaskId?: number | null   // 非空=已被拣货任务锁定，不可拆分（拆分须在拣货前完成）
     lockedByTaskNo?: string | null
+    individual?: boolean             // 单件库存条码（一件一码）：不可拆分/并货
     inboundTaskId?: number | null
-    serialManaged?: boolean          // 序列号商品：拆分须逐台扫 SN（文档04 Phase3b）
-    serials?: string[] | null        // 该容器在库序列号清单（供扫码校验）
   }>(`/inventory/containers/barcode/${encodeURIComponent(barcode)}`)
 
 export const assignContainerLocationApi = async (containerId: number, locationId: number) =>
@@ -67,7 +66,7 @@ export interface SplitContainerResult {
 
 export const splitContainerApi = async (
   containerId: number,
-  body: { qty: number; remark?: string; printLabel?: boolean; targetContainerId?: number; serialNos?: string[] },
+  body: { qty: number; remark?: string; printLabel?: boolean; targetContainerId?: number },
 ) =>
   apiClient.post<SplitContainerResult>(`/inventory/containers/${containerId}/split`, body)
 

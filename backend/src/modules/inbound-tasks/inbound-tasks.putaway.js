@@ -2,7 +2,6 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { syncStockFromContainers, lockStockDimension, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const serialEngine = require('../../engine/serialEngine')
 const { appendInboundEvent, assertPurchaseOrdersOpen } = require('./inbound-tasks.helpers')
 const { assertTaskCanPutaway } = require('./inbound-tasks.status')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
@@ -179,16 +178,6 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
        WHERE id = ?`,
       [locationId, CONTAINER_STATUS.ACTIVE, containerId],
     )
-
-    // 序列号管控商品：上架留痕（文档 04 §5.2）。个体随容器整箱移动，不改归属、不改状态，
-    // 只为挂在本容器上的在库 SN 逐台写一条 putaway 事件，补全追溯时间线 register→putaway→ship。
-    // 非管控商品该容器无 SN，内部查询 0 行、自然空转。承接置 ACTIVE 的同一事务。
-    await serialEngine.putawaySerials(conn, {
-      containerId,
-      warehouseId: c.warehouse_id,
-      refId: taskId,
-      operatorId: operator?.userId ?? null,
-    })
 
     const qty = Number(c.remaining_qty)
     const afterQty = await syncStockFromContainers(conn, c.product_id, c.warehouse_id)

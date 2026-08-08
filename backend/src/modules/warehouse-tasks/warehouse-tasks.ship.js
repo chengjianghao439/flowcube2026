@@ -2,7 +2,6 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { moveStock, MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { unlockContainersByTask } = require('../../engine/containerEngine')
-const serialEngine = require('../../engine/serialEngine')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
@@ -19,7 +18,7 @@ const { findById } = require('./warehouse-tasks.query')
 /**
  * 执行出库（6→7）：扣减库存 + 更新销售单状态 + 生成应收账款
  */
-async function shipWithinTransaction(conn, id, operator, saleData, { requestKey, serialNosByProduct = null } = {}) {
+async function shipWithinTransaction(conn, id, operator, saleData, { requestKey } = {}) {
   const { saleOrderId, warehouseId, totalAmount, items } = saleData
 
   // 加锁顺序统一为「先销售单、后仓库任务」，与 sale.cancel / requestAdjustment(SO→WT) 一致，
@@ -102,33 +101,6 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
     })
   }
 
-  // 序列号管控商品：逐台核销本次扫入的序列号。承接上面 moveStock 扣减的同一事务，且必须在
-  // unlockContainersByTask(下方) 之前——此时容器仍 locked_by_task_id=本任务、remaining_qty 已扣减
-  // 到目标值，dispatchSerials 能按锁定关系定位 allowedContainerIds 并逐容器断言 remaining_qty==在库SN数。
-  // serial_managed 商品即使未传 SN 也会因数量不匹配抛 SERIAL_SHIP_COUNT_MISMATCH（强制出库必扫 SN，
-  // 杜绝"扣了容器却不核销序列号"的静默不一致）；非管控商品直接旁路。
-  for (const item of shipOrder) {
-    if (!(await serialEngine.isSerialManaged(conn, item.productId))) continue
-    const sns = (serialNosByProduct
-      && (serialNosByProduct[item.productId] || serialNosByProduct[String(item.productId)])) || []
-    const [lockedConts] = await conn.query(
-      'SELECT id FROM inventory_containers WHERE locked_by_task_id = ? AND product_id = ? AND deleted_at IS NULL',
-      [id, item.productId],
-    )
-    await serialEngine.dispatchSerials(conn, {
-      productId: item.productId,
-      serialNos: sns,
-      allowedContainerIds: lockedConts.map(c => c.id),
-      expectedQty: item.quantity,
-      warehouseId,
-      warehouseTaskId: Number(id),
-      saleOrderId: isPurchaseReturn ? null : saleOrderId,
-      returnRefType: isPurchaseReturn ? 'purchase_return' : null,
-      returnRefId: isPurchaseReturn ? Number(taskRow.return_id) : null,
-      operatorId: operator.userId,
-    })
-  }
-
   if (!isPurchaseReturn && saleOrderId) {
     const saleSvc = require('../sale/sale.service')
     await saleSvc.syncShippedByWarehouseTaskWithinTransaction(conn, saleOrderId, {
@@ -206,11 +178,11 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   return payload
 }
 
-async function ship(id, operator, saleData, { requestKey, serialNosByProduct = null } = {}) {
+async function ship(id, operator, saleData, { requestKey } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const payload = await shipWithinTransaction(conn, id, operator, saleData, { requestKey, serialNosByProduct })
+    const payload = await shipWithinTransaction(conn, id, operator, saleData, { requestKey })
     await conn.commit()
     return payload
   } catch (e) { await conn.rollback(); throw e }

@@ -159,10 +159,9 @@ export const packDoneApi = (id: number, requestKey?: string) =>
 export const shipTaskApi = (
   id: number,
   requestKey?: string,
-  serialNosByProduct?: Record<number, string[]> | null,
 ) =>
   client.put(`/warehouse-tasks/${id}/ship`,
-    serialNosByProduct ? { serialNosByProduct } : {},
+    {},
     {
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
@@ -362,14 +361,8 @@ export interface AdjustmentContainerReturn {
   qty: number
   suggestedLocationCode: string | null
   status: number
-  /** 序列号商品（文档04 Phase3b·B-full） */
-  serialManaged: boolean
-  /** 待归还容器当前剩余台数（源容器；用于判断部分/整只归还） */
+  /** 待归还容器当前剩余量（源容器；用于判断部分/整只归还） */
   containerRemainingQty: number | null
-  /** 需逐台扫「要归还的具体台」再由后端拆分（=序列号商品且部分归还） */
-  needsSerialScan: boolean
-  /** 待归还容器上在库的序列号清单，供 PDA 现场扫码客户端预校验（仅 needsSerialScan 时非空） */
-  serials: string[]
 }
 
 export interface AdjustmentItem {
@@ -415,12 +408,11 @@ export const confirmAdjustmentPackageVoidApi = (voidId: number, requestKey?: str
 
 /**
  * 归还确认：扫容器条码 + 扫目标库位条码，确认放回、解锁容器。
- * 序列号商品部分归还（B-full）：另需带上现场逐台扫到的「要归还的具体台」serialNos（后端据此拆分迁移 SN）。
  */
-export const confirmAdjustmentContainerReturnApi = (returnId: number, targetLocationId: number, serialNos?: string[], requestKey?: string) =>
+export const confirmAdjustmentContainerReturnApi = (returnId: number, targetLocationId: number, requestKey?: string) =>
   client.post<{ finalized: boolean }>(
     `/warehouse-tasks/adjustments/container-returns/${returnId}/confirm`,
-    serialNos && serialNos.length ? { targetLocationId, serialNos } : { targetLocationId },
+    { targetLocationId },
     {
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
