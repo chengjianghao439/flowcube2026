@@ -84,7 +84,7 @@ export default function ReportsPage() {
       {
         title: '岗位工作台',
         description: '按仓库、销售客服、管理角色聚合今日最该先处理的待办，适合作为日常进入系统后的第一站。',
-        hint: '优先看今日处理顺序和最优先待办',
+        hint: '优先处理今日待办和最紧急事项',
         path: '/reports/role-workbench',
         tabTitle: '岗位工作台',
         tone: 'border-emerald-200 bg-emerald-50',
@@ -94,7 +94,7 @@ export default function ReportsPage() {
     const management: HubCard[] = [
       {
         title: '供应商对账',
-        description: '按时间范围核对采购应付账单，默认优先展示未结清和逾期记录，可回跳采购单与收货单。',
+        description: '按时间范围核对采购应付账单，未结清和逾期记录会优先展示，可从对账单直接打开采购单与收货单。',
         hint: '适合先核对余额、状态，再回到原始单据',
         path: '/reports/reconciliation/payable',
         tabTitle: '供应商对账',
@@ -102,7 +102,7 @@ export default function ReportsPage() {
       },
       {
         title: '客户对账',
-        description: '按时间范围核对销售应收账单，默认优先展示未结清和逾期记录，可回跳销售单。',
+        description: '按时间范围核对销售应收账单，未结清和逾期记录会优先展示，可从对账单直接打开销售单。',
         hint: '适合先核对余额、状态，再回到原始单据',
         path: '/reports/reconciliation/receivable',
         tabTitle: '客户对账',
@@ -110,43 +110,35 @@ export default function ReportsPage() {
       },
       {
         title: '利润 / 库存分析',
-        description: '保留轻 BI 方式查看销售毛利、商品毛利、库存金额与滞销库存，并继续支持下钻原始业务。',
+        description: '用轻量化方式查看销售毛利、商品毛利、库存金额与滞销库存，可从结果直接打开原始单据。',
         hint: '默认按最近时间范围打开',
         path: '/reports/profit-analysis',
         tabTitle: '利润 / 库存分析',
         tone: 'border-violet-200 bg-violet-50',
-      },
-      {
-        title: '审批与提醒',
-        description: '聚合财务与系统级提醒，减少与岗位工作台重复，适合管理角色快速扫一轮风险事项。',
-        hint: '顶部优先项只保留财务 / 系统提醒',
-        path: '/reports/approvals',
-        tabTitle: '审批与提醒',
-        tone: 'border-slate-200 bg-slate-50',
       },
     ]
 
     const performance: HubCard[] = [
       {
         title: '仓库运营看板',
-        description: '查看当日出入库、扫码和作业瓶颈，是三张作业绩效页里最适合先开的全局视角。',
-        hint: '适合先看当日风险，再下钻任务',
+        description: '查看当日出入库、扫码量和作业瓶颈，是作业绩效页里最适合先打开的全局视角。',
+        hint: '适合先看当日风险，再查看任务明细',
         path: '/reports/warehouse-ops',
         tabTitle: '仓库运营看板',
         tone: 'border-blue-200 bg-blue-50',
       },
       {
         title: '波次效率报表',
-        description: '查看波次完成率、耗时与作业效率，优先用于判断拣货与分拣推进卡点。',
-        hint: '重点回跳波次详情和仓库任务',
+        description: '查看波次完成率、耗时与作业效率，用于判断拣货和分拣卡在哪里。',
+        hint: '重点查看波次详情和仓库任务',
         path: '/reports/wave-performance',
         tabTitle: '波次效率报表',
         tone: 'border-indigo-200 bg-indigo-50',
       },
       {
         title: 'PDA 异常分析',
-        description: '追踪扫码错误、撤销与异常条码，适合作为现场扫码问题和培训复盘入口。',
-        hint: '重点回跳异常工作台和条码记录',
+        description: '追踪扫码错误、撤销操作与异常条码，适合作为现场扫码问题排查和培训复盘的入口。',
+        hint: '重点查看异常工作台和条码记录',
         path: '/reports/pda-anomaly',
         tabTitle: 'PDA 异常分析',
         tone: 'border-rose-200 bg-rose-50',
@@ -186,7 +178,7 @@ export default function ReportsPage() {
     <div className="space-y-5">
       <PageHeader
         title="报表中心"
-        description="按蓝图顺序收口主闭环入口、管理增强入口和作业绩效入口，先处理待办，再看核对与分析。"
+        description="集中进入待办处理、往来对账、利润分析与作业绩效报表；先处理待办，再看核对与分析。"
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => openPage('/reports/role-workbench', '岗位工作台')}>
@@ -204,8 +196,8 @@ export default function ReportsPage() {
 
       <section className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="space-y-1">
-          <h2 className="text-card-title">主闭环入口</h2>
-          <p className="text-muted-body">先处理今天必须推进的业务闭环，再进入核对、分析和绩效页面。</p>
+          <h2 className="text-card-title">每日待办</h2>
+          <p className="text-muted-body">先处理今天必须推进的事项，再进入核对、分析和绩效页面。</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {hubGroups.primaryFlow.map(card => (
@@ -216,8 +208,8 @@ export default function ReportsPage() {
 
       <section className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="space-y-1">
-          <h2 className="text-card-title">管理增强入口</h2>
-          <p className="text-muted-body">Phase 2 先把对账、利润 / 库存分析、审批提醒做成日常可依赖的管理闭环。</p>
+          <h2 className="text-card-title">对账与分析</h2>
+          <p className="text-muted-body">对账、利润 / 库存分析是日常核对与管理依赖的常用入口。</p>
         </div>
         <div className="grid gap-4 xl:grid-cols-3">
           {hubGroups.management.map(card => (
@@ -228,8 +220,8 @@ export default function ReportsPage() {
 
       <section className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="space-y-1">
-          <h2 className="text-card-title">作业绩效入口</h2>
-          <p className="text-muted-body">三张作业绩效页保持统一筛选、统一空态和统一回跳，建议先看全局，再看波次和 PDA 细项。</p>
+          <h2 className="text-card-title">作业绩效</h2>
+          <p className="text-muted-body">三张作业绩效页保持统一的筛选和空态展示，建议先看全局，再看波次和 PDA 细项。</p>
         </div>
         <div className="grid gap-4 xl:grid-cols-3">
           {hubGroups.performance.map(card => (

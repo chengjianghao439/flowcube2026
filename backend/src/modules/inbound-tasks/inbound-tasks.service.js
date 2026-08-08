@@ -8,7 +8,6 @@ const qaDisposition = require('./inbound-tasks.qa-disposition')
 module.exports = {
   findAll: query.findAll,
   findById: query.findById,
-  qaSupplierReport: query.qaSupplierReport,
   findPurchasableItems: query.findPurchasableItems,
   listContainers: query.listContainers,
   listWaitingContainers: query.listWaitingContainers,

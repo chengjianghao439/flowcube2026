@@ -144,7 +144,7 @@ export default function PdaTaskPage() {
   const readyAction = useCriticalPdaAction<{ taskId: number }>({
     action: `warehouse.ready.${taskId}`,
     requestAction: 'warehouse.ready-to-ship',
-    label: `拣货任务 ${taskId} 收口`,
+    label: `完成拣货任务 ${taskId}`,
     onConfirmed: async () => {
       setFinished('completed')
       await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
@@ -153,7 +153,7 @@ export default function PdaTaskPage() {
     resolveServerState: async () => {
       const latest = await getTaskByIdApi(taskId)
       if (taskReachedStatus(latest, WT_STATUS.SORTING)) {
-        return { effective: true, data: { taskId }, message: stateConfirmedMessage(`拣货任务 ${taskId} 收口`, latest.statusName) }
+        return { effective: true, data: { taskId }, message: stateConfirmedMessage(`完成拣货任务 ${taskId}`, latest.statusName) }
       }
       return { effective: false }
     },
@@ -253,7 +253,7 @@ export default function PdaTaskPage() {
             readyToShipApi(taskId, requestKey).then(() => ({ taskId })),
           )
           if (readyResult.kind === 'pending') {
-            warn('网络中断，任务收口结果待确认。请先确认是否已进入待分拣。')
+            warn('网络中断，完成拣货的结果待确认。请先确认是否已进入待分拣。')
             return
           }
         }

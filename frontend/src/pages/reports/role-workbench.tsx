@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
@@ -7,8 +8,20 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getRoleWorkbenchApi, type WorkbenchCard } from '@/api/reports'
+import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
+import { getNotificationCategoryLabel, getReminderNotifications } from '@/lib/notifications'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+
+function getReminderTone(item: NotificationItem) {
+  if (item.type === 'danger') {
+    return 'border-rose-200 bg-rose-50 text-rose-700'
+  }
+  if (item.type === 'warning') {
+    return 'border-amber-200 bg-amber-50 text-amber-700'
+  }
+  return 'border-blue-200 bg-blue-50 text-blue-700'
+}
 
 function PriorityBanner({
   title,
@@ -93,6 +106,50 @@ function SectionList({ cards, onOpen }: { cards: WorkbenchCard[]; onOpen: (path:
   )
 }
 
+/** 财务与系统级提醒（原独立「审批与提醒」页的内容，并入工作台底部） */
+function ReminderBlock({ items, onOpen }: { items: NotificationItem[]; onOpen: (path: string, title: string) => void }) {
+  return (
+    <section className="rounded-lg border border-border bg-card p-5 space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-card-title">财务与系统提醒</h2>
+          <p className="text-muted-body">财务与系统级事项汇总，业务待办见上方岗位分组。</p>
+        </div>
+        <Badge variant="outline">{items.length} 项</Badge>
+      </div>
+      <div className="space-y-2">
+        {items.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border py-12 text-center text-muted-foreground">
+            暂无待提醒事项
+          </div>
+        ) : (
+          items.map((item, index) => (
+            <button
+              key={`${item.path}-${index}`}
+              type="button"
+              onClick={() => onOpen(item.path, item.text)}
+              className={`w-full rounded-lg border px-4 py-3 text-left transition-colors hover:opacity-90 ${getReminderTone(item)}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="mt-0.5 shrink-0 text-base">{item.icon}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{item.text}</p>
+                    <p className="mt-1 text-xs opacity-80">{getNotificationCategoryLabel(item.category)}提醒</p>
+                  </div>
+                </div>
+                <Badge variant="outline" className="shrink-0 border-current/20 bg-white/70">
+                  P{item.priority ?? 9}
+                </Badge>
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+    </section>
+  )
+}
+
 export default function RoleWorkbenchPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
@@ -104,6 +161,17 @@ export default function RoleWorkbenchPage() {
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 60_000 : false,
   })
+
+  const notificationsQ = useQuery({
+    queryKey: ['notifications-page'],
+    queryFn: () => getNotificationsApi(),
+    enabled: isActiveTab,
+    refetchInterval: isActiveTab ? 60_000 : false,
+  })
+
+  // 必须 useMemo：`?? []` 每次渲染都是新数组引用，下面 reminderItems 的过滤会每次重跑
+  const notificationItems = useMemo(() => notificationsQ.data?.items ?? [], [notificationsQ.data])
+  const reminderItems = useMemo(() => getReminderNotifications(notificationItems), [notificationItems])
 
   const { data, isLoading, isError, error, refetch } = workbenchQ
   const topAlert = data?.topAlert
@@ -118,7 +186,7 @@ export default function RoleWorkbenchPage() {
     <div className="space-y-6">
       <PageHeader
         title="岗位工作台"
-        description="按岗位分组展示待办事项，优先处理最优先待办。"
+        description="按岗位分组展示待办事项，优先处理最紧急的事项；财务与系统级提醒统一在页面底部汇总。"
         actions={<Button onClick={() => refetch()}>立即刷新</Button>}
       />
 
@@ -167,6 +235,8 @@ export default function RoleWorkbenchPage() {
           暂无待办事项
         </div>
       )}
+
+      <ReminderBlock items={reminderItems} onOpen={openPath} />
     </div>
   )
 }

@@ -73,28 +73,6 @@ export const voidInboundReceiptApi = (id: number) =>
 export const closeReceivingInboundApi = (id: number) =>
   client.post(`/inbound-tasks/${id}/close-receiving`)
 
-// ── 供应商来料质检合格率报表（文档07 Phase3，只读）──
-export interface QaSupplierReportRow {
-  supplierName: string
-  taskCount: number
-  productCount: number
-  checkedQty: number
-  passedQty: number         // 合格量（含让步，宽口径）
-  concessionQty: number     // 让步接收量（合格量的子集）
-  normalPassedQty: number   // 正常合格（严口径 = 合格 − 让步）
-  rejectedQty: number
-  passRate: number          // 宽口径合格率（含让步），百分比两位小数
-  strictPassRate: number    // 严口径合格率（扣让步）
-  returnQty: number   // 拒收处置·退供应商量
-  scrapQty: number    // 拒收处置·报废量
-}
-export interface QaSupplierReport {
-  list: QaSupplierReportRow[]
-  summary: { checkedQty: number; passedQty: number; concessionQty: number; normalPassedQty: number; rejectedQty: number; returnQty: number; scrapQty: number; supplierCount: number; passRate: number; strictPassRate: number }
-}
-export const getQaSupplierReportApi = (params: { startDate?: string; endDate?: string }) =>
-  client.get<QaSupplierReport>('/inbound-tasks/qa-supplier-report', { params })
-
 /** 质检拒收处置历史（文档07 Phase2）：某收货订单的退供应商/报废单 */
 export const getInboundQaDispositionsApi = (id: number) =>
   client.get<QaDisposition[]>(`/inbound-tasks/${id}/qa-dispositions`)

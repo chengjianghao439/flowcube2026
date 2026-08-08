@@ -265,14 +265,14 @@ export default function PdaPackPage() {
   const finalizeAction = useCriticalPdaAction<{ taskId: number }>({
     action: `warehouse.pack-done.${taskId || 'none'}`,
     requestAction: 'warehouse.pack-done',
-    label: '打包收口',
+    label: '完成打包',
     onConfirmed: async () => {
       setAllDone(true)
     },
     resolveServerState: async () => {
       const latest = await getTaskByIdApi(taskId)
       if (taskReachedStatus(latest, WT_STATUS.SHIPPING)) {
-        return { effective: true, data: { taskId }, message: stateConfirmedMessage('打包收口', latest.statusName) }
+        return { effective: true, data: { taskId }, message: stateConfirmedMessage('完成打包', latest.statusName) }
       }
       return { effective: false }
     },
@@ -415,7 +415,7 @@ export default function PdaPackPage() {
   const finalizeMut = useMutation({
     mutationFn: async () => {
       if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
-      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能收口')
+      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能完成打包')
       const result = await finalizeAction.run((requestKey) =>
         packDoneApi(taskId, requestKey).then((res) => res as { taskId: number }),
         { taskId },
@@ -424,10 +424,10 @@ export default function PdaPackPage() {
     },
     onSuccess: (result) => {
       if (result.kind === 'pending') {
-        warn('网络中断，打包收口结果待确认。请先确认是否已进入待出库。')
+        warn('网络中断，完成打包的结果待确认。请先确认是否已进入待出库。')
       }
     },
-    onError: (e: unknown) => err((e as { message?: string })?.message ?? '打包收口失败'),
+    onError: (e: unknown) => err((e as { message?: string })?.message ?? '完成打包失败'),
   })
 
   const handleScan = useCallback((raw: string) => {
@@ -538,7 +538,7 @@ export default function PdaPackPage() {
               finishAction.blockedReason
               || printAction.blockedReason
               || finalizeAction.blockedReason
-              || (onlineBlocked ? '网络已断开，打包、打印和待出库收口都已阻断。' : null)
+              || (onlineBlocked ? '网络已断开，打包、打印和完成待出库都已阻断。' : null)
             }
             pendingRecord={finishAction.pendingRecord ?? printAction.pendingRecord ?? finalizeAction.pendingRecord}
             confirming={finishAction.confirming || printAction.confirming || finalizeAction.confirming}
@@ -604,7 +604,7 @@ export default function PdaPackPage() {
               onClick={() => finalizeMut.mutate()}
               disabled={finalizeMut.isPending || finalizeAction.submitBlocked}
             >
-              {finalizeMut.isPending ? '收口中…' : '完成打包并进入待出库'}
+              {finalizeMut.isPending ? '处理中…' : '完成打包并进入待出库'}
             </Button>
           ) : null}
         </div>

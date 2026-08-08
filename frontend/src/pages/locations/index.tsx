@@ -26,6 +26,18 @@ const STATUS_LABEL: Record<number, string> = { 1: '启用', 2: '停用' }
 
 const EMPTY_FORM: CreateLocationParams = { warehouseId: 0, code: '', zone: '', aisle: '', rack: '', level: '', position: '', capacity: 0, status: 1, remark: '' }
 
+/**
+ * 根据库区/巷道/货架/层/位自动生成库位编码
+ * 规则：zone + aisle.padStart(2,'0') + '-' + rack.padStart(2,'0') + '-' + level.padStart(2,'0') + position.padStart(2,'0')
+ * 例：A + 01 + - + 01 + - + 01 + 01  →  A01-01-0101
+ * 任意字段为空时返回空字符串
+ */
+function buildCode(zone: string, aisle: string, rack: string, level: string, position: string): string {
+  if (!zone.trim() || !aisle.trim() || !rack.trim() || !level.trim() || !position.trim()) return ''
+  const pad = (v: string) => v.trim().padStart(2, '0')
+  return `${zone.trim()}${pad(aisle)}-${pad(rack)}-${pad(level)}${pad(position)}`
+}
+
 export default function LocationsPage() {
   const qc = useQueryClient()
   const [keyword, setKeyword]         = useState('')
@@ -74,7 +86,20 @@ export default function LocationsPage() {
   }
   function closeDialog() { setDialogOpen(false); setEditTarget(null); setForm(EMPTY_FORM) }
 
-  const set = (k: keyof CreateLocationParams, v: string | number) => setForm(f => ({ ...f, [k]: v }))
+  /**
+   * 分段字段（区/巷/架/层/位）变化时自动重建编码。
+   * 仅当五段齐全（buildCode 返回非空）才覆盖 code：编辑存量手写编码的库位时，
+   * 若分段不完整，保留原编码而不是被清空——避免把历史库位编码洗掉。
+   */
+  const SEGMENT_KEYS = new Set<keyof CreateLocationParams>(['zone', 'aisle', 'rack', 'level', 'position'])
+  const set = (k: keyof CreateLocationParams, v: string | number) => setForm(f => {
+    const next = { ...f, [k]: v }
+    if (SEGMENT_KEYS.has(k)) {
+      const code = buildCode(String(next.zone ?? ''), String(next.aisle ?? ''), String(next.rack ?? ''), String(next.level ?? ''), String(next.position ?? ''))
+      if (code) next.code = code
+    }
+    return next
+  })
 
   const columns: TableColumn<Location>[] = [
     { key: 'code',          title: '库位编号', width: 120,
@@ -156,12 +181,16 @@ export default function LocationsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>库位编号</Label><Input className="mt-1" placeholder="如 A01-01" value={form.code} onChange={e => set('code', e.target.value)} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>区域</Label><Input className="mt-1" placeholder="可选" value={form.zone} onChange={e => set('zone', e.target.value)} /></div>
-              <div><Label>通道</Label><Input className="mt-1" placeholder="可选" value={form.aisle} onChange={e => set('aisle', e.target.value)} /></div>
-              <div><Label>货架</Label><Input className="mt-1" placeholder="可选" value={form.rack} onChange={e => set('rack', e.target.value)} /></div>
-              <div><Label>层</Label><Input className="mt-1" placeholder="可选" value={form.level} onChange={e => set('level', e.target.value)} /></div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>库区</Label><Input className="mt-1" placeholder="如 A" value={form.zone ?? ''} onChange={e => set('zone', e.target.value)} /></div>
+              <div><Label>巷道</Label><Input className="mt-1" placeholder="如 01" value={form.aisle ?? ''} onChange={e => set('aisle', e.target.value)} /></div>
+              <div><Label>货架</Label><Input className="mt-1" placeholder="如 01" value={form.rack ?? ''} onChange={e => set('rack', e.target.value)} /></div>
+              <div><Label>层</Label><Input className="mt-1" placeholder="如 01" value={form.level ?? ''} onChange={e => set('level', e.target.value)} /></div>
+              <div><Label>位</Label><Input className="mt-1" placeholder="如 01" value={form.position ?? ''} onChange={e => set('position', e.target.value)} /></div>
+              <div>
+                <Label>库位编码</Label>
+                <Input className="mt-1 bg-muted/50 font-mono" placeholder="自动生成" value={form.code} readOnly />
+              </div>
             </div>
             <div><Label>容量</Label><Input className="mt-1" type="number" min={0} value={form.capacity} onChange={e => set('capacity', +e.target.value)} /></div>
             {editTarget && (

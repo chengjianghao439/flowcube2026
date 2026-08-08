@@ -131,9 +131,6 @@ const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconcil
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
 const ReplenishmentPage = lazy(() => import('@/pages/reports/replenishment'))
 const InventoryAgingPage = lazy(() => import('@/pages/reports/inventory-aging'))
-const QaQualityReportPage = lazy(() => import('@/pages/reports/qa-quality'))
-const ProcurementPlanPage = lazy(() => import('@/pages/reports/procurement-plan'))
-const ApprovalsPage = lazy(() => import('@/pages/reports/approvals'))
 const WavePerformancePage = lazy(() => import('@/pages/reports/wave-performance'))
 const PdaAnomalyPage = lazy(() => import('@/pages/reports/pda-anomaly'))
 const WarehouseOpsPage = lazy(() => import('@/pages/reports/warehouse-ops'))
@@ -553,24 +550,6 @@ export const routeRegistry: RouteRegistryEntry[] = [
     nav: { kind: 'menu', group: '报表', section: '经营分析', order: 27 },
   },
   {
-    path: '/reports/qa-quality',
-    title: '来料质检合格率',
-    permission: PERMISSIONS.REPORT_VIEW,
-    component: QaQualityReportPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '报表', section: '经营分析', order: 28 },
-  },
-  {
-    path: '/reports/procurement-plan',
-    title: '采购计划',
-    permission: PERMISSIONS.REPORT_VIEW,
-    component: ProcurementPlanPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '报表', section: '经营分析', order: 28 },
-  },
-  {
     path: '/reports/warehouse-ops',
     title: '仓库运营看板',
     permission: PERMISSIONS.REPORT_VIEW,
@@ -605,15 +584,6 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '报表', section: '岗位与审批', order: 60 },
-  },
-  {
-    path: '/reports/approvals',
-    title: '审批与提醒',
-    permission: PERMISSIONS.REPORT_VIEW,
-    component: ApprovalsPage,
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '报表', section: '岗位与审批', order: 70 },
   },
 
   // ── 打印 ──────────────────────────────────────────────

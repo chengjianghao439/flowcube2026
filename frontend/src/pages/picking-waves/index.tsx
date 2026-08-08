@@ -29,20 +29,20 @@ function getWaveClosureCopy(wave: PickingWave | null) {
   if (!wave) {
     return {
       stageLabel: '待选择波次',
-      description: '从列表打开波次详情后，可继续查看拣货、分拣与打印闭环。',
+      description: '从列表打开波次详情后，可继续查看拣货、分拣进度和箱贴打印情况。',
       nextAction: '先打开具体波次',
     }
   }
 
   const printSummary = wave.printSummary
   if (wave.status === 5) {
-    return { stageLabel: '已取消', description: '该波次已取消，当前不再进入出库闭环。', nextAction: '如需恢复，请重新建波次' }
+    return { stageLabel: '已取消', description: '该波次已取消，不再进行出库打印。', nextAction: '如需恢复，请重新建波次' }
   }
   if ((printSummary?.failedCount ?? 0) > 0 || (printSummary?.timeoutCount ?? 0) > 0) {
     return {
       stageLabel: '待补打',
       description: '出库箱贴存在失败或超时任务，建议先补打，再继续拣货 / 分拣 / 出库。',
-      nextAction: '优先收口出库打印异常',
+      nextAction: '优先处理出库打印异常',
     }
   }
   if (wave.status === 1) {
@@ -206,7 +206,7 @@ export default function PickingWavesPage() {
           onPrimaryClick={() => openWaveDetail(row)}
           primaryVariant="outline"
           items={[
-            { label: '查看打印闭环', onClick: () => openWaveDetail(row, 'print-closure') },
+            { label: '查看打印进度', onClick: () => openWaveDetail(row, 'print-closure') },
             { label: '打开出库补打', onClick: () => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(row.waveNo)}`, '条码打印查询') },
           ]}
         />
@@ -222,7 +222,7 @@ export default function PickingWavesPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="波次拣货" description="管理波次拣货、分拣推进与出库打印异常的统一处理链。" />
+      <PageHeader title="波次拣货" description="管理波次拣货、分拣推进，以及出库箱贴打印异常的处理。" />
 
       <FilterCard>
         <div className="flex flex-wrap items-end gap-3">
@@ -309,8 +309,8 @@ export default function PickingWavesPage() {
             <section ref={printClosureRef} className="space-y-4 rounded-lg border border-border bg-card p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-card-title">出库打印闭环</h3>
-                  <p className="text-muted-body">这里统一承接箱贴条码补打、打印超时确认和波次推进卡点。</p>
+                  <h3 className="text-card-title">出库箱贴打印</h3>
+                  <p className="text-muted-body">在这里统一处理箱贴补打、打印超时确认，以及波次推进卡住的位置。</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>

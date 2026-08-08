@@ -73,7 +73,7 @@ export default function LedgerPage() {
 
   return (
     <div>
-      <PageHeader title="总账 / 试算平衡" description="科目期初、本期发生、期末余额一览；借贷发生额与期末余额应各自平衡" />
+      <PageHeader title="总账 / 试算平衡" description="查看科目期初、本期发生与期末余额；借贷发生额和期末余额应各自平衡" />
 
       <div className="mb-3 flex items-center gap-2">
         <span className="text-sm text-muted-foreground">会计期间</span>
