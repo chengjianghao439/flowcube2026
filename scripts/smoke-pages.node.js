@@ -206,7 +206,7 @@ async function main() {
   await openAndCheck('/reports/warehouse-ops', '仓库运营看板')
   await openAndCheck('/reports/pda-anomaly', 'PDA 异常分析')
   await openAndCheck('/reports/inventory-aging', '库龄与呆滞')
-  await openAndCheck('/warehouse-tasks', '仓库任务')
+  await openAndCheck('/warehouses', '仓库管理')
   await openAndCheck('/picking-waves?waveId=1&focus=print-closure', '波次拣货')
   await openAndCheck('/inbound-tasks/new', '新建收货订单')
   await openAndCheck('/inbound-tasks/1', '收货订单')
