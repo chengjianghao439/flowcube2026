@@ -63,12 +63,6 @@ async function applyProductDeltaWithinTransaction(conn, {
   const delta = Number(newRequiredQty) - Number(oldRequiredQty)
   if (Math.abs(delta) < QTY_EPS) return null
 
-  // 序列号管控商品（文档04 Phase3b·B-full）：增量（reserve + 补拣，SN 在 ship 时才逐台扫核销）与
-  // 「未拣减量」（只下调 required/释放预占，不动容器、不动 SN）都安全，放行。「已拣货物理归还」
-  // （下方第②层 reserveTaskLockedContainersForReturn 会拆锁定容器）需按名单迁移 SN——而改单请求发生
-  // 在 ERP 端、无扫码，无法确定要归还哪几台，故对序列号商品走 defer=true：请求时只登记归还意图、
-  // 容器保持完整，真正的拆分 + SN 迁移推迟到 PDA confirmContainerReturn 扫到具体台时执行（见下）。
-
   const [[existingItem]] = await conn.query(
     `SELECT id, required_qty, picked_qty, sorted_qty, checked_qty
      FROM warehouse_task_items WHERE task_id=? AND product_id=? FOR UPDATE`,
@@ -440,8 +434,8 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
       containerId: returnedContainerId,
       targetLocationId,
     })
-    // 部分拆分后归还的是新容器：把 source_container_id 校准到实际归还的容器，语义与非序列号部分归还
-    // （source=拆出的新容器）保持一致；original_container_id 不动，仍指向源容器供下调拣货扫码用。
+    // 部分拆分后归还的是新容器：把 source_container_id 校准到实际归还的容器；
+    // original_container_id 不动，仍指向源容器供下调拣货扫码用。
     await conn.query(
       `UPDATE sale_order_adjustment_container_returns
        SET status=2, source_container_id=?, target_location_id=?, confirmed_by=?, confirmed_by_name=?, confirmed_at=NOW()

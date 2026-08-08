@@ -14,5 +14,4 @@ const listAbc = async(req,res,next)=>{ try{return successResponse(res,await cycl
 const cycleCandidates = async(req,res,next)=>{ try{return successResponse(res,await cycle.getCycleCandidates({ warehouseId:+req.query.warehouseId, scopeType:req.query.scopeType||'abc', scopeValue:req.query.scopeValue||'A' }),'查询成功')}catch(e){next(e)} }
 const cycleRules = async(req,res,next)=>{ try{return successResponse(res,await cycle.getCycleRules({ warehouseId:req.query.warehouseId?+req.query.warehouseId:0 }),'查询成功')}catch(e){next(e)} }
 const saveCycleRules = async(req,res,next)=>{ try{return successResponse(res,await cycle.saveCycleRules({ warehouseId:req.body.warehouseId?+req.body.warehouseId:0, rules:req.body.rules }),'规则已保存')}catch(e){next(e)} }
-// ── 序列号级盘点（文档04 Phase3b·C-full）：PDA 逐台扫在架序列号 ──
 module.exports = { list, detail, create, update, submit, refreshItem, cancel, recomputeAbc, listAbc, cycleCandidates, cycleRules, saveCycleRules }

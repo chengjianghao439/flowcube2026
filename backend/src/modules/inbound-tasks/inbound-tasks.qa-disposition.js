@@ -167,7 +167,7 @@ async function createDisposition(taskId, {
 
     // Phase3 严格化：**不立即 void**。容器保持 REJECTED，登记到处置单待扫出清单
     // （下方 INSERT inbound_qa_disposition_containers），等仓库在 PDA 逐个扫码物理确认出场时才
-    // void(6→VOID) + 序列号回冲（见 scanOut）。处置决策(ERP) 与物理出场(PDA 扫码) 分离，守
+    // void(6→VOID)。处置决策(ERP) 与物理出场(PDA 扫码) 分离，守
     // 「仓库端只执行不决策」；容器已被本处置单认领（uk_dispo_container 唯一约束 + 上面 NOT EXISTS）不会重复处置。
     const containerIds = containers.map(c => c.id)
 
@@ -293,7 +293,7 @@ async function getScanDetail(dispositionId, scopeWarehouseIds = null) {
 }
 
 /**
- * PDA 拒收处置物理扫出：仓库扫一个 REJECTED 容器码，物理确认出场 → void(6→VOID) + 序列号回冲。
+ * PDA 拒收处置物理扫出：仓库扫一个 REJECTED 容器码，物理确认出场 → void(6→VOID)。
  * 全部容器扫完 → 处置单 status=2 已完成。守「仓库端只执行不决策」（只扫系统列出的容器，不自选）。
  * 自管事务；requestKey 幂等（断网重扫不重复 void）；加锁顺序：处置单头 → 待扫容器行 → 库存维度 → 容器。
  */

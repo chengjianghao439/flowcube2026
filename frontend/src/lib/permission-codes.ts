@@ -12,10 +12,6 @@ export const PERMISSIONS = {
   PRODUCT_DELETE: 'product.delete',
   PRODUCT_PRINT_LABEL: 'product.print_label',
 
-  // 序列号管理（个体制：收货逐台登记、出库逐台核销、追溯，文档 04）。
-  SERIAL_VIEW: 'serial.view',
-  SERIAL_MANAGE: 'serial.manage',
-
   CATEGORY_VIEW: 'category.view',
   CATEGORY_CREATE: 'category.create',
   CATEGORY_UPDATE: 'category.update',
@@ -274,10 +270,8 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
     items: [
       { code: PERMISSIONS.INVENTORY_VIEW, label: '查看库存' },
       { code: PERMISSIONS.INVENTORY_ADJUST, label: '库存调整' },
-      { code: PERMISSIONS.INVENTORY_CONTAINER_MOVE, label: '容器移库' },
-      { code: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, label: '容器拆分' },
-      { code: PERMISSIONS.SERIAL_VIEW, label: '查看序列号台账/追溯' },
-      { code: PERMISSIONS.SERIAL_MANAGE, label: '序列号一致性对账/修复' },
+      { code: PERMISSIONS.INVENTORY_CONTAINER_MOVE, label: '库存条码移库' },
+      { code: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, label: '库存条码拆分' },
       { code: PERMISSIONS.STOCKCHECK_VIEW, label: '查看盘点' },
       { code: PERMISSIONS.STOCKCHECK_CREATE, label: '新建盘点' },
       { code: PERMISSIONS.STOCKCHECK_UPDATE, label: '编辑盘点' },

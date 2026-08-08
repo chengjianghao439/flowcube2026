@@ -1188,11 +1188,7 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
  * 在某任务锁定的、指定商品的容器集合里，按 FIFO 拆出合计 qty 的待归还容器清单
  * （改单减量专用，调用方负责把返回的每一项写入 sale_order_adjustment_container_returns）
  *
- * defer=true（序列号商品，文档04 Phase3b·B-full）：**不在改单请求时拆分**——因为拆分要按名单迁移
- * 序列号，而改单请求发生在 ERP 端、无扫码，无法确定要归还哪几台。此刻只按 FIFO 登记「从哪个锁定
- * 容器归还多少台」的意图，容器保持完整（remaining/序列号都不动，核心不变量成立）；真正的拆分 + SN 迁移
- * 推迟到 PDA confirmContainerReturn 扫到具体台时执行。返回的 containerId===originalContainerId===原锁定容器，
- * wholeContainer 标记该归还是否吃掉整只容器（整只归还时确认阶段无需再拆、无需逐台扫）。
+ * wholeContainer 标记该归还是否吃掉整只容器（整只归还时确认阶段无需再拆）。
  *
  * @param {object} conn
  * @param {object} params
