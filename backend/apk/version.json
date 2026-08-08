@@ -1,7 +1,7 @@
 {
-  "version": "0.4.61",
-  "versionCode": 61,
+  "version": "0.4.62",
+  "versionCode": 62,
   "filename": "app-release.apk",
-  "releaseNote": "- **会计期间与期末结转（本系统为正式账）**：新增「会计期间」页，按月管理结账",
-  "publishedAt": "2026-08-08T18:23:17.029Z"
+  "releaseNote": "- 收敛重复/下线功能，首页与报表更清爽：",
+  "publishedAt": "2026-08-08T19:51:29.374Z"
 }
