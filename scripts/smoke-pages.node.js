@@ -199,7 +199,7 @@ async function main() {
   ensureBrowser()
   await login()
   await openAndCheck('/reports/role-workbench', '岗位工作台')
-  await openAndCheck('/reports/reconciliation', '对账基础版')
+  await openAndCheck('/reports/reconciliation', '供应商对账')
   await openAndCheck('/reports/profit-analysis', '利润 / 库存分析')
   await openAndCheck('/procurement', '采购计划')
   await openAndCheck('/reports/wave-performance', '波次效率报表')
