@@ -46,9 +46,6 @@ export const getPdaReturnTasksApi = () =>
 export const getReturnTaskByIdApi = (id: number) =>
   client.get<ReturnTask>(`/return-tasks/${id}`)
 
-export const submitReturnTaskApi = (id: number) =>
-  client.post<ReturnTask>(`/return-tasks/${id}/submit`)
-
 export const receiveReturnApi = (id: number, data: { productId: number; packages: { qty: number }[] }, requestKey?: string) =>
   client.post(`/return-tasks/${id}/receive`, data,
     requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) } : { headers: { 'X-Client': 'pda' } })

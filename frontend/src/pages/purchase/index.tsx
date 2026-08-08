@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -66,6 +67,7 @@ export default function PurchasePage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
+  const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean
@@ -76,8 +78,10 @@ export default function PurchasePage() {
     onConfirm: () => void
   }>({ open: false, title: '', description: '', onConfirm: () => {} })
 
+  const PAGE_SIZE = 20
   const { data, isLoading } = usePurchaseList({
-    pageSize: 99999,
+    page,
+    pageSize: PAGE_SIZE,
     keyword,
     remark: remark || undefined,
     operatorId: operatorId || undefined,
@@ -89,6 +93,8 @@ export default function PurchasePage() {
     endDate: overdueOnly ? undefined : (endDate || undefined),
     overdueOnly: overdueOnly || undefined,
   })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const confirm = useConfirmPurchase()
   const withdrawConfirm = useWithdrawConfirmPurchase()
   const cancel = useCancelPurchase()
@@ -160,6 +166,7 @@ export default function PurchasePage() {
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      page: 1, // 筛选变化回到第一页
     })
     setQueryOpen(false)
   }
@@ -171,18 +178,19 @@ export default function PurchasePage() {
       supplierId: null, supplierName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
+      page: 1,
     })
   }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
-    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
-    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null }) },
-    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null }) },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
-    supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null }) },
-    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
-    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null }) },
+    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
+    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
+    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
+    supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null, page: 1 }) },
+    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
+    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
     // 日期筛选按需求不在主页展示，仅在查询弹窗中呈现
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
@@ -310,6 +318,10 @@ export default function PurchasePage() {
         fluid
         columnStorageKey="purchase:fluid-v2"
       />
+
+      {/* 分页 */}
+      <Pagination page={page} totalPages={totalPages} total={total} unit="单"
+        onPageChange={(p) => updateParams({ page: p })} />
 
       {printDetail && (
         <OrderPrintOverlay

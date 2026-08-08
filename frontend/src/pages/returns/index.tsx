@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -70,16 +71,19 @@ export default function ReturnsPage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
+  const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
   const apiList   = type === 'purchase' ? getPurchaseReturnsApi : getSaleReturnsApi
   const confirmFn = type === 'purchase' ? confirmPurchaseReturnApi : confirmSaleReturnApi
   const cancelFn  = type === 'purchase' ? cancelPurchaseReturnApi : cancelSaleReturnApi
   const partyParamKey = type === 'purchase' ? 'supplierId' : 'customerId'
 
+  const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
-    queryKey: ['returns', type, { keyword, remark, operatorId, statusFilter, productId, partyId, warehouseId, startDate, endDate }],
+    queryKey: ['returns', type, { keyword, remark, operatorId, statusFilter, productId, partyId, warehouseId, startDate, endDate, page }],
     queryFn: () => apiList({
-      pageSize: 99999,
+      page,
+      pageSize: PAGE_SIZE,
       keyword,
       remark: remark || undefined,
       operatorId: operatorId || undefined,
@@ -91,6 +95,8 @@ export default function ReturnsPage() {
       endDate: endDate || undefined,
     }).then(r => r!),
   })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const inv = () => qc.invalidateQueries({ queryKey: ['returns', type] })
   const partyKey = type === 'purchase' ? 'supplierName' : 'customerName'
 
@@ -165,6 +171,7 @@ export default function ReturnsPage() {
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      page: 1, // 筛选变化回到第一页
     })
     setQueryOpen(false)
   }
@@ -176,18 +183,19 @@ export default function ReturnsPage() {
       partyId: null, partyName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
+      page: 1,
     })
   }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
-    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
-    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null }) },
-    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null }) },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
-    partyId && { key: 'party', label: `${partyLabel}：${partyName || partyId}`, onRemove: () => updateParams({ partyId: null, partyName: null }) },
-    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
-    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null }) },
+    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
+    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
+    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
+    partyId && { key: 'party', label: `${partyLabel}：${partyName || partyId}`, onRemove: () => updateParams({ partyId: null, partyName: null, page: 1 }) },
+    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
+    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<RowType>[] = [
@@ -267,6 +275,10 @@ export default function ReturnsPage() {
       )}
 
       <DataTable columns={columns} data={(data?.list || []) as RowType[]} loading={isLoading} onRowDoubleClick={goToDetail} />
+
+      {/* 分页 */}
+      <Pagination page={page} totalPages={totalPages} total={total} unit="单"
+        onPageChange={(p) => updateParams({ page: p })} />
 
       <ConfirmDialog
         open={confirmState.open}

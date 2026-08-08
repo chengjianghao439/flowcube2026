@@ -74,10 +74,6 @@ export class ApiClientError<T = unknown> extends Error {
   }
 }
 
-export function isApiClientError(error: unknown): error is ApiClientError {
-  return error instanceof ApiClientError
-}
-
 function formatPrintQuotaToast(message: string, p: PrintQuotaErrorPayload) {
   const parts: string[] = [message]
   if (typeof p.hint === 'string' && p.hint) parts.push(p.hint)
@@ -255,10 +251,6 @@ apiClient.interceptors.response.use(
 )
 
 type PayloadOf<T> = T extends ApiResponse<infer P> ? P : T
-
-export function unwrapEnvelope<T>(response: AxiosResponse<T>): T {
-  return response.data
-}
 
 export function unwrapPayload<T>(response: AxiosResponse<T>): PayloadOf<T> {
   const body = response.data as T

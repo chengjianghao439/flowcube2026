@@ -17,11 +17,6 @@ export async function getRacksActiveApi(warehouseId?: number): Promise<Rack[]> {
   return res
 }
 
-export async function getRackByIdApi(id: number): Promise<Rack> {
-  const res = await apiClient.get<Rack>(`/racks/${id}`)
-  return res
-}
-
 export async function createRackApi(data: CreateRackParams): Promise<Rack> {
   const res = await apiClient.post<Rack>('/racks', data)
   return res

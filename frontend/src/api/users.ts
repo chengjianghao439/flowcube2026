@@ -19,11 +19,6 @@ export async function getUserOptionsApi(): Promise<UserOption[]> {
   return res
 }
 
-export async function getUserApi(id: number): Promise<SysUser> {
-  const res = await apiClient.get<SysUser>(`/users/${id}`)
-  return res
-}
-
 export async function createUserApi(data: CreateUserParams): Promise<{ id: number }> {
   const res = await apiClient.post<{ id: number }>('/users', data)
   return res

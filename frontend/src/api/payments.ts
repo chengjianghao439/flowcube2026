@@ -1,5 +1,6 @@
 import { payloadClient as client } from './client'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
+import type { Pagination } from '@/types'
 
 export interface PaymentRecord { id:number; type:1|2; typeName:string; orderNo:string; partyName:string; totalAmount:number; paidAmount:number; balance:number; status:1|2|3; statusName:string; confirmStatus?:0|1; confirmedByName?:string|null; confirmedAt?:string|null; dueDate?:string; remark?:string; createdAt:string }
 export interface PaymentEntry { id:number; amount:number; paymentDate:string; method?:string; remark?:string; operatorName:string; createdAt:string }
@@ -9,7 +10,7 @@ export interface SettlementDetail {
   lines: Array<{ taskNo:string; productName:string; articleNumber?:string|null; putawayQty:number; unitPrice:number; amount:number }>
   returns: Array<{ returnNo:string; amount:number }>
 }
-export const getPaymentsApi  = (p:object) => client.get<{list:PaymentRecord[];pagination:unknown;summary:PaymentSummary}>('/payments', {params:p})
+export const getPaymentsApi  = (p:object) => client.get<{list:PaymentRecord[];pagination:Pagination;summary:PaymentSummary}>('/payments', {params:p})
 // 手工建账款（POST /api/payments）没有前端封装：全站没有任何页面调用它，留着的
 // createPaymentApi 是死代码，已于 2026-07-27 删除。后端接口仍在（迁移 145 修好了它
 // 从建成起就必然 500 的 order_id 问题），要做「手工记账」入口时从这里补回封装即可。

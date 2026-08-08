@@ -1,13 +1,11 @@
 import { payloadClient as client } from './client'
 import type { PaginatedData } from '@/types'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
-import { WT_STATUS_NAME, WT_STATUS_CLASS, type WtStatus } from '@/constants/warehouseTaskStatus'
+import { type WtStatus } from '@/constants/warehouseTaskStatus'
 
 export type TaskStatus = WtStatus
 export type TaskPriority = 1 | 2 | 3
 
-export const TASK_STATUS_LABEL = WT_STATUS_NAME
-export const TASK_STATUS_COLOR = WT_STATUS_CLASS
 export const PRIORITY_LABEL: Record<TaskPriority, string> = { 1: '紧急', 2: '普通', 3: '低' }
 export const PRIORITY_COLOR: Record<TaskPriority, string> = {
   1: 'bg-red-100 text-red-700', 2: 'bg-blue-50 text-blue-600', 3: 'bg-gray-50 text-gray-500',
@@ -94,24 +92,11 @@ export interface PdaTaskSkuSummary {
   taskIds: number[]
 }
 
-export interface WarehouseTaskStats {
-  picking: number
-  sorting: number
-  checking: number
-  packing: number
-  shipping: number
-  done: number
-  urgent: number
-}
-
 export const getMyTasksApi = () =>
   client.get<MyTask[]>('/warehouse-tasks/my')
 
 export const getMyTaskSkuSummaryApi = () =>
   client.get<PdaTaskSkuSummary[]>('/warehouse-tasks/my-sku-summary')
-
-export const getTaskStatsApi = () =>
-  client.get<WarehouseTaskStats>('/warehouse-tasks/stats')
 
 export type TaskListParams = {
   page?: number; pageSize?: number; keyword?: string; status?: number; warehouseId?: number
@@ -122,9 +107,6 @@ export const getTasksApi = (params: TaskListParams) =>
 
 export const getTaskByIdApi = (id: number) =>
   client.get<WarehouseTask>(`/warehouse-tasks/${id}`)
-
-export const assignTaskApi = (id: number, userId: number, userName: string) =>
-  client.put(`/warehouse-tasks/${id}/assign`, { userId, userName })
 
 export const startPickingApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/start-picking`, {}, { headers: { 'X-Client': 'pda' } })
@@ -141,12 +123,6 @@ export const sortDoneApi = (id: number, items?: { itemId: number; sortedQty: num
     headers: requestKey
       ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
       : { 'X-Client': 'pda' },
-  })
-
-export const checkDoneApi = (id: number) =>
-  client.put(`/warehouse-tasks/${id}/check-done`, {}, {
-    headers: { 'X-Client': 'pda' },
-    skipGlobalError: true,
   })
 
 export const packDoneApi = (id: number, requestKey?: string) =>
@@ -167,12 +143,6 @@ export const shipTaskApi = (
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
         : { 'X-Client': 'pda' },
     })
-
-export const cancelTaskApi = (id: number) =>
-  client.put(`/warehouse-tasks/${id}/cancel`)
-
-export const updateTaskPriorityApi = (id: number, priority: number) =>
-  client.put(`/warehouse-tasks/${id}/priority`, { priority })
 
 // ── 推荐拣货容器 ─────────────────────────────────────────────────────────────
 
@@ -200,31 +170,6 @@ export interface PickSuggestionsData {
 
 export const getPickSuggestionsApi = (taskId: number) =>
   client.get<PickSuggestionsData>(`/warehouse-tasks/${taskId}/pick-suggestions`)
-
-// ── 拣货路线 ─────────────────────────────────────────────────────────────────
-
-export interface PickRouteStep {
-  step: number
-  itemId: number
-  productName: string
-  productCode: string
-  unit: string
-  containerId: number
-  barcode: string
-  locationCode: string | null
-  qty: number
-  locked: boolean
-}
-
-export interface PickRouteData {
-  taskId: number
-  taskNo: string
-  totalSteps: number
-  route: PickRouteStep[]
-}
-
-export const getPickRouteApi = (taskId: number) =>
-  client.get<PickRouteData>(`/warehouse-tasks/${taskId}/pick-route`)
 
 // ── 复核（须扫描容器，禁止手填明细）──────────────────────────────────────────
 

@@ -59,10 +59,6 @@ export const qaCheckInboundApi = (id: number, data: { productId: number; passedQ
     headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' },
   })
 
-/** 管理员补录上架（ERP 禁用时），需 roleId=1 */
-export const adminPutawayInboundApi = (data: PutawayParams & { taskId: number }) =>
-  client.post('/admin/putaway', data)
-
 export const cancelInboundApi = (id: number) =>
   client.post(`/inbound-tasks/${id}/cancel`)
 

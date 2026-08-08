@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -63,13 +64,16 @@ export default function SalePage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
+  const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
   const [queryOpen, setQueryOpen] = useState(false)
   const [confirmState, setConfirmState] = useState<ConfirmState>(EMPTY_CONFIRM)
   const [printOrder,   setPrintOrder]   = useState<SaleOrder | null>(null)
 
+  const PAGE_SIZE = 20
   const { data, isLoading } = useSaleList({
-    pageSize: 99999,
+    page,
+    pageSize: PAGE_SIZE,
     keyword,
     remark: remark || undefined,
     operatorId: operatorId || undefined,
@@ -80,6 +84,8 @@ export default function SalePage() {
     startDate: startDate || undefined,
     endDate: endDate || undefined,
   })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const [shortageDialog, setShortageDialog] = useState<{ orderId: number; shortages: StockShortageItem[] } | null>(null)
   const [reserveDialogOrderId, setReserveDialogOrderId] = useState<number | null>(null)
   const releaseMutate = useReleaseSale()
@@ -167,6 +173,7 @@ export default function SalePage() {
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      page: 1, // 筛选变化回到第一页
     })
     setQueryOpen(false)
   }
@@ -178,18 +185,19 @@ export default function SalePage() {
       customerId: null, customerName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
+      page: 1,
     })
   }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
-    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
-    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null }) },
-    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null }) },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
-    customerId && { key: 'customer', label: `客户：${customerName || customerId}`, onRemove: () => updateParams({ customerId: null, customerName: null }) },
-    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
-    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null }) },
+    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
+    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
+    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
+    customerId && { key: 'customer', label: `客户：${customerName || customerId}`, onRemove: () => updateParams({ customerId: null, customerName: null, page: 1 }) },
+    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
+    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
     // 日期筛选按需求不在主页展示，仅在查询弹窗中呈现
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
@@ -308,6 +316,10 @@ export default function SalePage() {
         fluid
         columnStorageKey="sale:fluid-v1"
       />
+
+      {/* 分页 */}
+      <Pagination page={page} totalPages={totalPages} total={total} unit="单"
+        onPageChange={(p) => updateParams({ page: p })} />
 
       {/* 二次确认弹窗 */}
       <ConfirmDialog

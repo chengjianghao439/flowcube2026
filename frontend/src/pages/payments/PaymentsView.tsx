@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
@@ -58,9 +59,11 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
   // query 是「已生效」的完整查询条件，筛选栏与高级查询弹窗都写它，导出也复用同一份
   const [query, setQuery] = useState<PaymentQueryValues>(EMPTY_PAYMENT_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
+  const [page, setPage] = useState(1)
   // 核销 tab 的动作按钮挪到本页 PageHeader（与「按单登记」tab 对齐），通过 ref 触发面板内部动作
   const receiptRef = useRef<ReceiptPanelHandle>(null)
   const { renderActions, dialogs } = usePaymentActions(type)
+  const PAGE_SIZE = 20
   const queryLabels = {
     docLabel: '关联单号',
     partyLabel: copy.party,
@@ -81,9 +84,14 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ['payments', { type, query }],
-    queryFn: () => getPaymentsApi({ ...exportParams, pageSize: 99999, settlementTypes: IMMEDIATE_SCOPE }),
+    queryKey: ['payments', { type, query, page }],
+    queryFn: () => getPaymentsApi({ ...exportParams, page, pageSize: PAGE_SIZE, settlementTypes: IMMEDIATE_SCOPE }),
   })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  /** 筛选/搜索变化一律回到第一页 */
+  const applyQuery = (q: PaymentQueryValues) => { setQuery(q); setPage(1) }
 
   const columns: TableColumn<PaymentRecord>[] = [
     { key: 'orderNo', title: '关联单号', width: 160, render: (v) => <span className="text-doc-code">{String(v)}</span> },
@@ -162,15 +170,19 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
       {tab === 'receipts' && <ReceiptPanel ref={receiptRef} type={type} settlementTypes={IMMEDIATE_SCOPE} hideToolbar />}
 
       {tab === 'records' && (<>
-      <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
+      <PaymentQueryBar query={query} onChange={(q) => { setQuery(q); setPage(1) }} labels={queryLabels} />
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
+
+      {/* 分页 */}
+      <Pagination page={page} totalPages={totalPages} total={total} unit="笔"
+        onPageChange={setPage} />
 
       <PaymentQueryDialog
         open={queryOpen}
         initial={query}
         onClose={() => setQueryOpen(false)}
-        onApply={setQuery}
+        onApply={applyQuery}
         labels={queryLabels}
         partyType={type}
         statusOptions={copy.statusOptions}

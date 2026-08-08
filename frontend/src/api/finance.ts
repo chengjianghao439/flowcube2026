@@ -1,4 +1,5 @@
 import { payloadClient as client } from './client'
+import type { Pagination } from '@/types'
 
 /** 资金账户。currentBalance 是流水投影，服务端重算，前端只读 */
 export interface FinanceAccount {
@@ -44,8 +45,6 @@ export const getAccountsApi = (p: object = {}) =>
 /** 收付款弹窗的账户下拉：只返回启用的 */
 export const getActiveAccountsApi = () => client.get<FinanceAccount[]>('/finance/accounts/active')
 
-export const getAccountApi = (id: number) => client.get<FinanceAccount>(`/finance/accounts/${id}`)
-
 export const createAccountApi = (d: object) => client.post<{ id:number; code:string }>('/finance/accounts', d)
 export const updateAccountApi = (id: number, d: object) => client.put<unknown>(`/finance/accounts/${id}`, d)
 export const deleteAccountApi = (id: number) => client.delete<unknown>(`/finance/accounts/${id}`)
@@ -57,10 +56,6 @@ export const adjustAccountApi = (id: number, d: { targetBalance: number; happene
 export const getAccountTransactionsApi = (p: { accountId?: number; bizType?: string; direction?: string; startDate?: string; endDate?: string; pageSize?: number }) =>
   client.get<{ list: AccountTransaction[]; summary: { inAmount:number; outAmount:number }; pagination: unknown }>(
     '/finance/accounts/transactions', { params: p })
-
-export const checkAccountConsistencyApi = () =>
-  client.get<{ checked:number; mismatchCount:number; mismatches: Array<{ id:number; code:string; name:string; recorded:number; expected:number }> }>(
-    '/finance/accounts/consistency')
 
 // ── 费用报销 ──────────────────────────────────────────────────────────────────
 
@@ -116,7 +111,7 @@ export const deleteExpenseCategoryApi = (id: number) =>
   client.delete<unknown>(`/finance/expense-categories/${id}`)
 
 export const getExpenseClaimsApi = (p: object) =>
-  client.get<{ list: ExpenseClaim[]; summary: { totalAmount:number; pendingAmount:number; paidAmount:number }; pagination: unknown }>(
+  client.get<{ list: ExpenseClaim[]; summary: { totalAmount:number; pendingAmount:number; paidAmount:number }; pagination: Pagination }>(
     '/finance/expense-claims', { params: p })
 export const getExpenseClaimApi = (id: number) =>
   client.get<ExpenseClaim & { items: ExpenseClaimItem[] }>(`/finance/expense-claims/${id}`)

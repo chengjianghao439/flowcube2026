@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -55,10 +56,14 @@ export default function OpLogsPage() {
   const [search, setSearch] = useState('')
   const [keyword, setKeyword] = useState('')
   const [module, setModule] = useState('')
+  const [page, setPage] = useState(1)
   const [clearConfirm, setClearConfirm] = useState(false)
   const [detail, setDetail] = useState<OpLog | null>(null)
 
-  const { data, isLoading } = useQuery({ queryKey: ['oplogs', { keyword, module }], queryFn: () => getOpLogsApi({ pageSize: 99999, keyword, module }) })
+  const PAGE_SIZE = 20
+  const { data, isLoading } = useQuery({ queryKey: ['oplogs', { keyword, module, page }], queryFn: () => getOpLogsApi({ page, pageSize: PAGE_SIZE, keyword, module }) })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const clear = useMutation({ mutationFn: clearLogsApi, onSuccess: () => qc.invalidateQueries({ queryKey: ['oplogs'] }) })
 
   const columns: TableColumn<OpLog>[] = [
@@ -109,8 +114,8 @@ export default function OpLogsPage() {
       } />
       <div className="flex gap-2 flex-wrap">
         <Input placeholder="搜索用户/路径..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} className="w-56"
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search) } }} />
-        <Select value={module || '__all__'} onValueChange={v => { setModule(v === '__all__' ? '' : v) }}>
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }} />
+        <Select value={module || '__all__'} onValueChange={v => { setModule(v === '__all__' ? '' : v); setPage(1) }}>
           <SelectTrigger className="h-10 w-40">
             <SelectValue placeholder="全部模块" />
           </SelectTrigger>
@@ -121,9 +126,13 @@ export default function OpLogsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
+        <Button variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
       </div>
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
+
+      {/* 分页 */}
+      <Pagination page={page} totalPages={totalPages} total={total} unit="条"
+        onPageChange={setPage} />
       <ConfirmDialog
         open={clearConfirm}
         title="清理旧日志"

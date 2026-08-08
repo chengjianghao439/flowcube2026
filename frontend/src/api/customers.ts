@@ -6,6 +6,3 @@ export const getCustomersActiveApi = () => client.get<CustomerOption[]>('/custom
 export const createCustomerApi = (data: CreateCustomerParams) => client.post<{ id: number }>('/customers', data)
 export const updateCustomerApi = (id: number, data: UpdateCustomerParams) => client.put<null>(`/customers/${id}`, data)
 export const deleteCustomerApi = (id: number) => client.delete<null>(`/customers/${id}`)
-
-export interface CustomerCredit { creditLimit: number | null; used: number; available: number | null; usageRate: number | null }
-export const getCustomerCreditApi = (id: number) => client.get<CustomerCredit>(`/customers/${id}/credit`)

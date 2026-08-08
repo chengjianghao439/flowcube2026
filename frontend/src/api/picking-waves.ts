@@ -9,14 +9,6 @@ export const WAVE_STATUS_LABEL: Record<WaveStatus, string> = {
   1: '待拣货', 2: '拣货中', 3: '待分拣', 4: '已完成', 5: '已取消',
 }
 
-export const WAVE_STATUS_COLOR: Record<WaveStatus, string> = {
-  1: 'bg-gray-100 text-gray-600',
-  2: 'bg-blue-100 text-blue-700',
-  3: 'bg-orange-100 text-orange-700',
-  4: 'bg-green-100 text-green-700',
-  5: 'bg-red-100 text-red-600',
-}
-
 export interface WaveTask {
   taskId: number
   taskNo: string
@@ -40,9 +32,6 @@ export type WavePriority = 1 | 2 | 3
 
 export const WAVE_PRIORITY_LABEL: Record<WavePriority, string> = {
   1: '紧急', 2: '普通', 3: '低',
-}
-export const WAVE_PRIORITY_COLOR: Record<WavePriority, string> = {
-  1: 'text-red-600', 2: 'text-gray-600', 3: 'text-gray-400',
 }
 
 /** 波次内可扫码的仓库任务明细行（按任务顺序分配拣货量） */
@@ -97,9 +86,6 @@ export const getWavesApi = (params?: Record<string, string | number>) =>
 
 export const getWaveByIdApi = (id: number) =>
   client.get<PickingWave>(`/picking-waves/${id}`)
-
-export const createWaveApi = (taskIds: number[], priority?: number, remark?: string) =>
-  client.post<{ waveId: number; waveNo: string }>('/picking-waves', { taskIds, priority: priority ?? 2, remark })
 
 export const startWaveApi = (id: number) =>
   client.post<null>(`/picking-waves/${id}/start`)

@@ -5,6 +5,7 @@ import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -79,6 +80,10 @@ export default function InventoryPage() {
   const rawLogType = Number(searchParams.get('logType') || '')
   const logType = Number.isInteger(rawLogType) && rawLogType > 0 ? rawLogType : null
 
+  // 分页参数：总览与流水各用各的（/inventory/overview 与 /inventory/logs 各归各的接口）
+  const page     = Math.max(1, Number(searchParams.get('page') || '1') || 1)
+  const logPage  = Math.max(1, Number(searchParams.get('logPage') || '1') || 1)
+
   // 容器侧滑
   const [drawerItem, setDrawerItem] = useState<InventoryOverviewItem | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -88,10 +93,15 @@ export default function InventoryPage() {
   const [form, setForm] = useState(emptyOp)
   const [productFinderOpen,  setProductFinderOpen]  = useState(false)
 
+  const PAGE_SIZE = 20
   const { data: overview, isLoading: overviewLoading } = useInventoryOverview({
-    pageSize: 99999, keyword, warehouseId, categoryId,
+    page, pageSize: PAGE_SIZE, keyword, warehouseId, categoryId,
   })
-  const { data: logs, isLoading: logLoading } = useLogs({ pageSize: 99999, type: logType })
+  const { data: logs, isLoading: logLoading } = useLogs({ page: logPage, pageSize: PAGE_SIZE, type: logType })
+  const overviewTotal = overview?.pagination?.total ?? 0
+  const overviewTotalPages = Math.max(1, Math.ceil(overviewTotal / PAGE_SIZE))
+  const logsTotal = logs?.pagination?.total ?? 0
+  const logsTotalPages = Math.max(1, Math.ceil(logsTotal / PAGE_SIZE))
   const { data: warehouses } = useWarehousesActive()
   const { mutate: outbound, isPending } = useOutbound()
   const setF = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -168,15 +178,15 @@ export default function InventoryPage() {
               <div className="flex items-center gap-2">
                 <Input placeholder="商品编码 / 名称..." value={search}
                   onChange={e => setSearch(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && updateParams({ keyword: search })}
+                  onKeyDown={e => e.key === 'Enter' && updateParams({ keyword: search, page: 1 })}
                   className="w-52" />
-                <Button variant="outline" onClick={() => updateParams({ keyword: search })}>搜索</Button>
+                <Button variant="outline" onClick={() => updateParams({ keyword: search, page: 1 })}>搜索</Button>
               </div>
               <div className="h-5 w-px bg-border" />
-              <CategoryTreeSelect value={categoryId} onChange={v => updateParams({ categoryId: v })}
+              <CategoryTreeSelect value={categoryId} onChange={v => updateParams({ categoryId: v, page: 1 })}
                 emptyLabel="全部分类" leafOnly className="h-10 w-48" />
               <Select value={warehouseId == null ? '__all__' : String(warehouseId)}
-                onValueChange={v => updateParams({ warehouseId: v === '__all__' ? null : +v })}>
+                onValueChange={v => updateParams({ warehouseId: v === '__all__' ? null : +v, page: 1 })}>
                 <SelectTrigger className="h-10 w-44"><SelectValue placeholder="全部仓库" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">全部仓库</SelectItem>
@@ -185,7 +195,7 @@ export default function InventoryPage() {
               </Select>
               {(keyword || warehouseId || categoryId) && (
                 <Button variant="ghost" size="sm" className="text-muted-foreground"
-                  onClick={() => { setSearch(''); updateParams({ keyword: null, warehouseId: null, categoryId: null }) }}>重置</Button>
+                  onClick={() => { setSearch(''); updateParams({ keyword: null, warehouseId: null, categoryId: null, page: 1 }) }}>重置</Button>
               )}
             </div>
           </FilterCard>
@@ -240,6 +250,10 @@ export default function InventoryPage() {
             </div>
           </div>
 
+          {/* 分页 */}
+          <Pagination page={page} totalPages={overviewTotalPages} total={overviewTotal} unit="条"
+            onPageChange={(p) => updateParams({ page: p })} />
+
           <ContainerDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} item={drawerItem} />
         </>
       )}
@@ -248,7 +262,7 @@ export default function InventoryPage() {
         <>
           <FilterCard>
             <Select value={logType == null ? '__all__' : String(logType)}
-              onValueChange={v => updateParams({ logType: v === '__all__' ? null : +v })}>
+              onValueChange={v => updateParams({ logType: v === '__all__' ? null : +v, logPage: 1 })}>
               <SelectTrigger className="h-9 w-36"><SelectValue placeholder="全部类型" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">全部类型</SelectItem>
@@ -259,6 +273,10 @@ export default function InventoryPage() {
             </Select>
           </FilterCard>
           <DataTable columns={logCols} data={logs?.list ?? []} loading={logLoading} rowKey="id" />
+
+          {/* 分页 */}
+          <Pagination page={logPage} totalPages={logsTotalPages} total={logsTotal} unit="条"
+            onPageChange={(p) => updateParams({ logPage: p })} />
         </>
       )}
 

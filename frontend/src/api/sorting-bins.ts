@@ -36,9 +36,6 @@ export const scanProductForSortApi = (code: string) =>
 export const getSortingBinsApi = (params?: { keyword?: string; status?: number }) =>
   client.get<SortingBin[]>('/sorting-bins', { params })
 
-export const getSortingBinsByWarehouseApi = (warehouseId: number) =>
-  client.get<SortingBin[]>(`/sorting-bins/warehouse/${warehouseId}`)
-
 export const createSortingBinApi = (data: { code: string; warehouseId: number; remark?: string }) =>
   client.post<{ id: number; code: string }>('/sorting-bins', data)
 

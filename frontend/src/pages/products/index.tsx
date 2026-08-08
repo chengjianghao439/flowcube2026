@@ -2,6 +2,7 @@ import { useState, useRef, useMemo, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { FilterCard } from '@/components/shared/FilterCard'
 import CategoryTreeSelect from '@/components/shared/CategoryTreeSelect'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
@@ -39,6 +40,7 @@ export default function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const keyword = readStringParam(searchParams, 'keyword')
   const catFilter = readNullableIntParam(searchParams, 'categoryId')
+  const page = Math.max(1, Number(searchParams.get('page') || '1') || 1)
   const [search, setSearch] = useState(keyword)
   const [importOpen, setImportOpen] = useState(false)
   const [confirmProduct, setConfirmProduct] = useState<Product | null>(null)
@@ -59,7 +61,10 @@ export default function ProductsPage() {
     } finally { setImporting(false); e.target.value = '' }
   }
 
-  const { data, isLoading } = useProducts({ pageSize:99999, keyword, categoryId:catFilter })
+  const PAGE_SIZE = 20
+  const { data, isLoading } = useProducts({ page, pageSize: PAGE_SIZE, keyword, categoryId: catFilter })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const { data: categoryTree = [] } = useCategoryTree()
   const { mutate: del } = useDeleteProduct()
 
@@ -136,23 +141,25 @@ export default function ProductsPage() {
       } />
 
       <FilterCard>
-        <Input placeholder="搜索编码/名称/条码" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&updateParams({ keyword: search })} className="h-9 w-60" />
+        <Input placeholder="搜索编码/名称/条码" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&updateParams({ keyword: search, page: 1 })} className="h-9 w-60" />
         <CategoryTreeSelect
           value={catFilter}
           onChange={(v) => {
-            updateParams({ categoryId: v })
+            updateParams({ categoryId: v, page: 1 })
           }}
           emptyLabel="全部分类"
           leafOnly
           className="w-48"
         />
-        <Button size="sm" variant="outline" onClick={()=>updateParams({ keyword: search })}>搜索</Button>
+        <Button size="sm" variant="outline" onClick={()=>updateParams({ keyword: search, page: 1 })}>搜索</Button>
         {(keyword || catFilter) && <Button size="sm" variant="ghost" onClick={()=>{
           setSearch('')
-          updateParams({ keyword: null, categoryId: null })
+          updateParams({ keyword: null, categoryId: null, page: 1 })
         }}>重置</Button>}
       </FilterCard>
       <DataTable columns={cols} data={data?.list??[]} loading={isLoading} rowKey="id" />
+      <Pagination page={page} totalPages={totalPages} total={total} unit="件"
+        onPageChange={(p) => updateParams({ page: p })} />
 
       {/* 批量导入弹窗 */}
       <Dialog open={importOpen} onOpenChange={v=>{ setImportOpen(v); if(!v) setImportResult(null) }}>

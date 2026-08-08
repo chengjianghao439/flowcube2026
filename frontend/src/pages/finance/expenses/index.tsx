@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { Button } from '@/components/ui/button'
@@ -107,6 +108,7 @@ export default function ExpenseClaimsPage() {
 
   const [query, setQuery] = useState<ExpQuery>(EMPTY_EXP_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
+  const [page, setPage] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [title, setTitle] = useState('')
@@ -118,10 +120,12 @@ export default function ExpenseClaimsPage() {
   const [rejectTarget, setRejectTarget] = useState<ExpenseClaim | null>(null)
   const [rejectReason, setRejectReason] = useState('')
 
+  const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
-    queryKey: ['expense-claims', query],
+    queryKey: ['expense-claims', query, page],
     queryFn: () => getExpenseClaimsApi({
-      pageSize: 99999,
+      page,
+      pageSize: PAGE_SIZE,
       keyword: query.keyword || undefined,
       status: query.status || undefined,
       startDate: query.startDate || undefined,
@@ -130,9 +134,11 @@ export default function ExpenseClaimsPage() {
       maxAmount: query.maxAmount || undefined,
     }),
   })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const queryChips: QueryChip[] = []
-  const dropQ = (...ks: (keyof ExpQuery)[]) => () => setQuery(q => ks.reduce((a, k) => ({ ...a, [k]: '' }), { ...q }))
+  const dropQ = (...ks: (keyof ExpQuery)[]) => () => { setQuery(q => ks.reduce((a, k) => ({ ...a, [k]: '' }), { ...q })); setPage(1) }
   if (query.keyword) queryChips.push({ key: 'kw', text: `搜索：${query.keyword}`, onClear: dropQ('keyword') })
   if (query.status) queryChips.push({ key: 'status', text: `状态：${STATUS_NAME[query.status] ?? query.status}`, onClear: dropQ('status') })
   if (query.startDate || query.endDate) queryChips.push({ key: 'date', text: `创建日期：${query.startDate || '…'} ~ ${query.endDate || '…'}`, onClear: dropQ('startDate', 'endDate') })
@@ -284,11 +290,15 @@ export default function ExpenseClaimsPage() {
         </div>
       )}
 
-      <QueryChips chips={queryChips} onClearAll={() => setQuery(EMPTY_EXP_QUERY)} />
+      <QueryChips chips={queryChips} onClearAll={() => { setQuery(EMPTY_EXP_QUERY); setPage(1) }} />
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
 
-      <ExpensesQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={setQuery} />
+      {/* 分页 */}
+      <Pagination page={page} totalPages={totalPages} total={total} unit="张"
+        onPageChange={setPage} />
+
+      <ExpensesQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={(q) => { setQuery(q); setPage(1) }} />
 
       {/* 新建 / 编辑 */}
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>

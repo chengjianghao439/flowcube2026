@@ -9,16 +9,6 @@ export async function getLocationsApi(
   return res
 }
 
-export async function getLocationByIdApi(id: number): Promise<Location> {
-  const res = await apiClient.get<Location>(`/locations/${id}`)
-  return res
-}
-
-export async function getLocationsByWarehouseApi(warehouseId: number): Promise<Location[]> {
-  const res = await apiClient.get<Location[]>(`/locations/by-warehouse/${warehouseId}`)
-  return res
-}
-
 export async function createLocationApi(data: CreateLocationParams): Promise<{ id: number }> {
   const res = await apiClient.post<{ id: number }>('/locations', data)
   return res

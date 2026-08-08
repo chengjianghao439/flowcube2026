@@ -17,6 +17,7 @@ import {
   type InboundTask,
 } from '@/types/inbound-tasks'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import type { TableColumn } from '@/types'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useSubmitInboundTask, useCancelInbound, useVoidInboundReceipt, useCloseReceivingInbound } from '@/hooks/useInboundTasks'
@@ -84,13 +85,16 @@ export default function InboundTasksPage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
+  const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
   const isActiveTab = useActiveWorkspaceTab()
+  const PAGE_SIZE = 20
   // 收货现场变化频繁，标签页常驻挂载时若不轮询容易停留在打开时的陈旧进度
   const { data, isLoading } = useQuery({
-    queryKey: ['inbound-tasks', { keyword, remark, operatorId, statusFilter, productId, supplierId, warehouseId, startDate, endDate }],
+    queryKey: ['inbound-tasks', { keyword, remark, operatorId, statusFilter, productId, supplierId, warehouseId, startDate, endDate, page }],
     queryFn: () => getInboundTasksApi({
-      pageSize: 99999,
+      page,
+      pageSize: PAGE_SIZE,
       keyword,
       remark: remark || undefined,
       operatorId: operatorId || undefined,
@@ -103,6 +107,8 @@ export default function InboundTasksPage() {
     }),
     refetchInterval: isActiveTab ? 20_000 : false,
   })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
     setSearchParams(upsertSearchParams(searchParams, updates))
@@ -163,6 +169,7 @@ export default function InboundTasksPage() {
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      page: 1, // 筛选变化回到第一页
     })
     setQueryOpen(false)
   }
@@ -174,18 +181,19 @@ export default function InboundTasksPage() {
       supplierId: null, supplierName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
+      page: 1,
     })
   }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
-    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
-    supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null }) },
-    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null }) },
-    operatorId && { key: 'operator', label: `操作人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null }) },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
-    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
-    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null }) },
+    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
+    supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null, page: 1 }) },
+    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
+    operatorId && { key: 'operator', label: `操作人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
+    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
+    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<InboundTask>[] = [
@@ -409,6 +417,10 @@ export default function InboundTasksPage() {
         columnStorageKey="inbound-tasks:v5"
         onRowDoubleClick={openDetail}
       />
+
+      {/* 分页 */}
+      <Pagination page={page} totalPages={totalPages} total={total} unit="单"
+        onPageChange={(p) => updateParams({ page: p })} />
 
       <InboundTaskQueryDialog
         open={queryOpen}

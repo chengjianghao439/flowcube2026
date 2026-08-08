@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -60,11 +61,14 @@ export default function TransferPage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
+  const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
+  const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
-    queryKey: ['transfer', { keyword, remark, operatorId, statusFilter, productId, warehouseId, startDate, endDate }],
+    queryKey: ['transfer', { keyword, remark, operatorId, statusFilter, productId, warehouseId, startDate, endDate, page }],
     queryFn: () => getTransferListApi({
-      pageSize: 99999,
+      page,
+      pageSize: PAGE_SIZE,
       keyword,
       remark: remark || undefined,
       operatorId: operatorId || undefined,
@@ -75,6 +79,8 @@ export default function TransferPage() {
       endDate: endDate || undefined,
     }).then(r => r!),
   })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const mut = (fn: () => Promise<unknown>, id?: number) => {
     if (id) setPendingId(id)
@@ -142,6 +148,7 @@ export default function TransferPage() {
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      page: 1, // 筛选变化回到第一页
     })
     setQueryOpen(false)
   }
@@ -152,17 +159,18 @@ export default function TransferPage() {
       productId: null, productCode: null, productName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
+      page: 1,
     })
   }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
-    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
-    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null }) },
-    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null }) },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
-    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
-    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null }) },
+    keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
+    remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
+    operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
+    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
+    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<TransferOrder>[] = [
@@ -243,6 +251,10 @@ export default function TransferPage() {
       )}
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} onRowDoubleClick={goToDetail} />
+
+      {/* 分页 */}
+      <Pagination page={page} totalPages={totalPages} total={total} unit="单"
+        onPageChange={(p) => updateParams({ page: p })} />
 
       <ConfirmDialog
         open={confirmState.open}
