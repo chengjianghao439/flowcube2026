@@ -24,6 +24,8 @@ const SOURCE_TYPES = {
   PURCHASE_RETURN: 'purchase_return', // 采购退货出库
   SALE_RETURN:     'sale_return',     // 销售退货入库
   STOCK_CHECK:     'stock_check',     // 盘盈/盘亏
+  PERIOD_CLOSE:    'period_close',    // 期末损益结转（source_id = 期间 YYYYMM 数字）
+  PERIOD_CLOSE_Y:  'period_close_year', // 年末本年利润转利润分配（source_id = 年份 YYYY 数字）
   MANUAL:          'manual',          // 手工凭证
 }
 
@@ -41,6 +43,8 @@ const PRESET_ACCOUNTS = [
   { code: '1405',   name: '库存商品',       category: 1, dir: DIR.DEBIT,  aux: 0, parentCode: null },
   { code: '1901',   name: '待处理财产损溢', category: 1, dir: DIR.DEBIT,  aux: 0, parentCode: null },
   { code: '2202',   name: '应付账款',       category: 2, dir: DIR.CREDIT, aux: 1, parentCode: null },
+  { code: '4103',   name: '本年利润',       category: 3, dir: DIR.CREDIT, aux: 0, parentCode: null },
+  { code: '4104',   name: '利润分配',       category: 3, dir: DIR.CREDIT, aux: 0, parentCode: null },
   { code: '2221',   name: '应交税费',       category: 2, dir: DIR.CREDIT, aux: 0, parentCode: null },
   { code: '222101', name: '进项税额',       category: 2, dir: DIR.DEBIT,  aux: 0, parentCode: '2221' },
   { code: '222102', name: '销项税额',       category: 2, dir: DIR.CREDIT, aux: 0, parentCode: '2221' },

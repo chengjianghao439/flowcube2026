@@ -396,8 +396,8 @@ async function buildStockCheck(conn) {
 /**
  * 全量生成/重算凭证。在调用方开启的事务连接上执行（引擎不自开事务）。
  * @param {*} conn 事务连接
- * @param {{period?: string, createdBy?: number}} opts period='YYYYMM' 只生成该期间(按 voucher_date)；省略=全部
- * @returns {{created,updated,unchanged,reversed,empty, total}}
+ * @param {{period?: string, createdBy?: number, closedPeriods?: Set<string>}} opts period='YYYYMM' 只生成该期间(按 voucher_date)；省略=全部。closedPeriods=已结账期间集合，命中跳过（账面已锁定）。
+ * @returns {{created,updated,unchanged,reversed,empty,skippedClosed,total}}
  */
 /**
  * 加载价税分离所需的发票税额（Phase3）。进项按 PO 合计（全部非删除发票），
@@ -424,7 +424,7 @@ async function loadTaxMaps(conn) {
   }
 }
 
-async function generateVouchers(conn, { period = null, createdBy = null } = {}) {
+async function generateVouchers(conn, { period = null, createdBy = null, closedPeriods = null } = {}) {
   const accountMap = await loadAccountMap(conn)
   const allocSeq = await makeSeqAllocator(conn)
   const { taxByPO, taxBySO } = await loadTaxMaps(conn)
@@ -437,12 +437,13 @@ async function generateVouchers(conn, { period = null, createdBy = null } = {}) 
     ...await buildSaleReturn(conn),
     ...await buildStockCheck(conn),
   ]
-  const stats = { created: 0, updated: 0, unchanged: 0, reversed: 0, empty: 0, total: 0 }
+  const stats = { created: 0, updated: 0, unchanged: 0, reversed: 0, empty: 0, skippedClosed: 0, total: 0 }
   for (const spec of specs) {
     let dateStr
     try { dateStr = toDateStr(spec.voucherDate) } catch { continue }
     if (period && periodOf(dateStr) !== period) continue
     stats.total += 1
+    if (closedPeriods && closedPeriods.has(periodOf(dateStr))) { stats.skippedClosed += 1; continue }
     const res = await upsertVoucher(conn, spec, accountMap, allocSeq, createdBy)
     if (res.created) stats.created += 1
     else if (res.updated) stats.updated += 1
@@ -456,9 +457,12 @@ async function generateVouchers(conn, { period = null, createdBy = null } = {}) 
 
 module.exports = {
   generateVouchers,
-  // 导出内部件供测试与对账复用
+  // 导出内部件供测试、对账与期末结转复用
   loadAccountMap,
   assertBalanced,
   round2,
   toDateStr,
+  upsertVoucher,
+  hashSpec,
+  makeSeqAllocator,
 }

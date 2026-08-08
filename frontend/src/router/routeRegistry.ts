@@ -125,6 +125,7 @@ const AcctVouchersPage = lazy(() => import('@/pages/accounting/vouchers'))
 const AcctLedgerPage = lazy(() => import('@/pages/accounting/ledger'))
 const AcctReportsPage = lazy(() => import('@/pages/accounting/reports'))
 const AcctInvoicesPage = lazy(() => import('@/pages/accounting/invoices'))
+const AcctPeriodsPage = lazy(() => import('@/pages/accounting/periods'))
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
 const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
@@ -503,6 +504,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '会计', section: '发票税务', order: 50 },
+  },
+  {
+    path: '/accounting/periods',
+    title: '会计期间 / 期末结转',
+    permission: PERMISSIONS.ACCOUNTING_LEDGER_VIEW,
+    component: AcctPeriodsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '结账', order: 60 },
   },
 
   // ── 报表 ──────────────────────────────────────────────

@@ -6,6 +6,7 @@ const svc = require('./accounting.service')
 const voucherSvc = require('./accounting.voucher.service')
 const ledgerSvc = require('./accounting.ledger.service')
 const invoiceSvc = require('./accounting.invoice.service')
+const periodSvc = require('./accounting.period.service')
 const { exportVouchers } = require('./accounting.export')
 const { successResponse } = require('../../utils/response')
 
@@ -117,10 +118,25 @@ const invoiceRemove = async (req, res, next) => {
   try { await invoiceSvc.removeInvoice(+req.params.id, req.user); return successResponse(res, null, '删除成功') } catch (e) { next(e) }
 }
 
+// ── 期末结转 / 期间锁定 ───────────────────────────────────────────────
+const periodList = async (req, res, next) => {
+  try { return successResponse(res, await periodSvc.listPeriods(), '查询成功') } catch (e) { next(e) }
+}
+const periodGenerateClosing = async (req, res, next) => {
+  try { return successResponse(res, await periodSvc.generateClosingVouchers(req.body?.period, req.user?.userId), '结转凭证已生成') } catch (e) { next(e) }
+}
+const periodClose = async (req, res, next) => {
+  try { return successResponse(res, await periodSvc.closePeriod(req.body?.period, req.user), '已结账') } catch (e) { next(e) }
+}
+const periodReopen = async (req, res, next) => {
+  try { return successResponse(res, await periodSvc.reopenPeriod(req.body?.period, req.user), '已反结账') } catch (e) { next(e) }
+}
+
 module.exports = {
   accountTree, accountFlat, accountDetail, accountCreate, accountUpdate, accountRemove, accountToggle,
   voucherList, voucherDetail, voucherGenerate, voucherCreateManual, voucherRemove, voucherReverse,
   voucherReconciliation, voucherExport,
   ledgerTrialBalance, ledgerAccount, reportIncome, reportBalanceSheet, reportCashFlow,
   invoiceList, invoiceDetail, invoiceCreate, invoiceUpdate, invoiceStatus, invoiceRemove,
+  periodList, periodGenerateClosing, periodClose, periodReopen,
 }

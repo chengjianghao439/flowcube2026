@@ -42,9 +42,19 @@ check('ACCOUNT_MAPPING 引用的每个科目 code 都存在于 PRESET_ACCOUNTS',
 })
 
 // ── 2. seed 与常量的科目集合一致 ─────────────────────────────────────────────
-check('177 seed 落库的科目 code 集合与 PRESET_ACCOUNTS 完全一致', () => {
-  const seedPath = path.resolve(__dirname, '../backend/src/database/177_seed_acct_accounts.sql')
-  const sql = fs.readFileSync(seedPath, 'utf8')
+// 预置科目分布在 177（Phase0 基础科目）与 194（Phase增强 结转科目 4103/4104）两个 seed 迁移；
+// 新增预置科目须两处都改（常量 voucherSource.js + 某个 seed），本测试防它们漂移。
+function seedSqlPaths() {
+  return [
+    path.resolve(__dirname, '../backend/src/database/177_seed_acct_accounts.sql'),
+    path.resolve(__dirname, '../backend/src/database/194_accounting_period_close.sql'),
+  ]
+}
+function readAllSeeds() {
+  return seedSqlPaths().map(p => fs.readFileSync(p, 'utf8')).join('\n')
+}
+check('177/194 seed 落库的科目 code 集合与 PRESET_ACCOUNTS 完全一致', () => {
+  const sql = readAllSeeds()
   // 科目 code 是纯数字字面量（4~6 位），科目名是中文——按此区分，提取 seed 中所有 code
   const seedCodes = new Set([...sql.matchAll(/'([0-9]{3,6})'/g)].map(m => m[1]))
   const presetCodes = new Set(PRESET_ACCOUNTS.map(a => a.code))
@@ -55,8 +65,7 @@ check('177 seed 落库的科目 code 集合与 PRESET_ACCOUNTS 完全一致', ()
 })
 
 check('每个预置科目名称在 seed 中出现（防改名漂移）', () => {
-  const seedPath = path.resolve(__dirname, '../backend/src/database/177_seed_acct_accounts.sql')
-  const sql = fs.readFileSync(seedPath, 'utf8')
+  const sql = readAllSeeds()
   const missing = PRESET_ACCOUNTS.filter(a => !sql.includes(`'${a.name}'`)).map(a => `${a.code} ${a.name}`)
   assert.deepStrictEqual(missing, [], `seed 缺少科目名: ${missing.join('; ')}`)
 })

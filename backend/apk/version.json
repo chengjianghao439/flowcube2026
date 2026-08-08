@@ -1,7 +1,7 @@
 {
-  "version": "0.4.60",
-  "versionCode": 60,
+  "version": "0.4.61",
+  "versionCode": 61,
   "filename": "app-release.apk",
-  "releaseNote": "- **PDA 扫码盘点**：盘点可以在 PDA 上扫库存条码完成——",
-  "publishedAt": "2026-08-08T17:48:19.859Z"
+  "releaseNote": "- **会计期间与期末结转（本系统为正式账）**：新增「会计期间」页，按月管理结账",
+  "publishedAt": "2026-08-08T18:23:17.029Z"
 }

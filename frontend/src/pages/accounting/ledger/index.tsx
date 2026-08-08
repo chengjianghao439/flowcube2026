@@ -112,10 +112,11 @@ export default function LedgerPage() {
             ) : list.length === 0 ? (
               <tr><td colSpan={8} className="py-16 text-center text-sm text-muted-foreground"><Scale className="mx-auto mb-2 h-8 w-8 opacity-30" />该期间暂无发生额，先在「记账凭证」生成本期凭证</td></tr>
             ) : list.map(r => (
-              <tr key={r.accountId} className="group border-b border-border/40 hover:bg-primary/5">
+              <tr key={r.accountId} className={`group border-b border-border/40 hover:bg-primary/5 ${r.isLeaf ? '' : 'bg-muted/15'}`}>
                 <td className="px-3 py-2">
                   <button className="flex items-center gap-1.5 text-left hover:text-primary" onClick={() => setDetail(r)} title="查看明细账">
-                    <span className="font-mono text-doc-code-muted">{r.code}</span> {r.name}
+                    <span className="font-mono text-doc-code-muted">{r.code}</span>
+                    <span className={r.isLeaf ? '' : 'font-semibold'}>{r.name}</span>
                     <FileText className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-60" />
                   </button>
                 </td>

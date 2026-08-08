@@ -35,6 +35,8 @@ const CATEGORY_NAME = { 1: '资产', 2: '负债', 3: '权益', 4: '成本', 5: '
 
 /**
  * 试算平衡 / 科目余额表：每个有活动或有余额的科目，期初/本期发生/期末。
+ * 含**父级汇总行**（is_leaf=0 的汇总科目 = 其全部后代末级科目之和，缩进展示）——
+ * 会计对表以「1122 应收账款」这种一级科目合计为准，只列末级会对不上。
  * @param {{period:string}} 会计期间 YYYYMM
  */
 async function getTrialBalance({ period }) {
@@ -53,30 +55,68 @@ async function getTrialBalance({ period }) {
     ORDER BY a.code ASC`,
     [start, start, start, end, start, end])
 
+  // 全部科目（含汇总科目），用于把末级发生额上卷到父级
+  const [allAccounts] = await pool.query(
+    'SELECT id, code, name, category, balance_dir, parent_id, level, is_leaf FROM acct_accounts WHERE deleted_at IS NULL',
+  )
+  const childrenOf = new Map()
+  for (const a of allAccounts) {
+    const pid = a.parent_id != null ? Number(a.parent_id) : null
+    if (pid == null) continue
+    if (!childrenOf.has(pid)) childrenOf.set(pid, [])
+    childrenOf.get(pid).push(Number(a.id))
+  }
+
+  // 末级科目的四段金额（原始值，未拆方向列）
+  const rawById = new Map(rows.map(r => [Number(r.id), {
+    preD: round2(r.preDebit), preC: round2(r.preCredit),
+    pD: round2(r.periodDebit), pC: round2(r.periodCredit),
+  }]))
+  // 自底向上累加（先排序保证子级先于父级处理）
+  const aggById = new Map()
+  const byLevelDesc = [...allAccounts].sort((a, b) => (b.level || 1) - (a.level || 1))
+  for (const a of byLevelDesc) {
+    const id = Number(a.id)
+    const own = rawById.get(id) || { preD: 0, preC: 0, pD: 0, pC: 0 }
+    const agg = { ...own }
+    for (const cid of childrenOf.get(id) || []) {
+      const child = aggById.get(cid)
+      if (!child) continue
+      agg.preD += child.preD; agg.preC += child.preC; agg.pD += child.pD; agg.pC += child.pC
+    }
+    aggById.set(id, agg)
+  }
+
   const totals = { openingDebit: 0, openingCredit: 0, periodDebit: 0, periodCredit: 0, closingDebit: 0, closingCredit: 0 }
-  const list = rows.map(r => {
-    const dir = r.balance_dir
-    const preD = round2(r.preDebit), preC = round2(r.preCredit)
-    const pD = round2(r.periodDebit), pC = round2(r.periodCredit)
-    // 期初/期末余额（带方向的净额，放到科目正常方向列；负数表示异常余额）
-    const openNet = dir === 1 ? preD - preC : preC - preD
-    const closeNet = dir === 1 ? (preD + pD) - (preC + pC) : (preC + pC) - (preD + pD)
+  const list = []
+  // 按编码排序输出（父级编码天然排在子级前：2221 < 222101），父子相邻
+  const ordered = [...allAccounts].sort((a, b) => String(a.code).localeCompare(String(b.code)))
+  for (const a of ordered) {
+    const agg = aggById.get(Number(a.id))
+    if (!agg) continue
+    const isLeaf = Number(a.is_leaf) === 1
+    const dir = a.balance_dir
+    const openNet = dir === 1 ? agg.preD - agg.preC : agg.preC - agg.preD
+    const closeNet = dir === 1 ? (agg.preD + agg.pD) - (agg.preC + agg.pC) : (agg.preC + agg.pC) - (agg.preD + agg.pD)
     const openingDebit = dir === 1 ? Math.max(openNet, 0) : Math.max(-openNet, 0)
     const openingCredit = dir === 2 ? Math.max(openNet, 0) : Math.max(-openNet, 0)
     const closingDebit = dir === 1 ? Math.max(closeNet, 0) : Math.max(-closeNet, 0)
     const closingCredit = dir === 2 ? Math.max(closeNet, 0) : Math.max(-closeNet, 0)
-    totals.openingDebit += openingDebit; totals.openingCredit += openingCredit
-    totals.periodDebit += pD; totals.periodCredit += pC
-    totals.closingDebit += closingDebit; totals.closingCredit += closingCredit
-    return {
-      accountId: r.id, code: r.code, name: r.name, category: r.category, categoryName: CATEGORY_NAME[r.category],
-      balanceDir: dir,
-      openingDebit: round2(openingDebit), openingCredit: round2(openingCredit),
-      periodDebit: pD, periodCredit: pC,
-      closingDebit: round2(closingDebit), closingCredit: round2(closingCredit),
+    // 只展示有期初/发生/期末的科目（父级任一代非零即非零，已被上卷）
+    if (!(openingDebit || openingCredit || agg.pD || agg.pC || closingDebit || closingCredit)) continue
+    if (isLeaf) {
+      totals.openingDebit += openingDebit; totals.openingCredit += openingCredit
+      totals.periodDebit += agg.pD; totals.periodCredit += agg.pC
+      totals.closingDebit += closingDebit; totals.closingCredit += closingCredit
     }
-  }).filter(r => // 只展示有期初/发生/期末的科目
-    r.openingDebit || r.openingCredit || r.periodDebit || r.periodCredit || r.closingDebit || r.closingCredit)
+    list.push({
+      accountId: Number(a.id), code: a.code, name: a.name, category: a.category, categoryName: CATEGORY_NAME[a.category],
+      balanceDir: dir, level: Number(a.level) || 1, isLeaf,
+      openingDebit: round2(openingDebit), openingCredit: round2(openingCredit),
+      periodDebit: round2(agg.pD), periodCredit: round2(agg.pC),
+      closingDebit: round2(closingDebit), closingCredit: round2(closingCredit),
+    })
+  }
 
   Object.keys(totals).forEach(k => { totals[k] = round2(totals[k]) })
   return {
@@ -90,38 +130,67 @@ async function getTrialBalance({ period }) {
 
 // ── 明细账 ────────────────────────────────────────────────────────────────────
 
-/** 某科目在期间内的明细账（逐笔 + 逐笔余额），含期初余额。 */
+/** 某科目在期间内的明细账（逐笔 + 逐笔余额），含期初余额。汇总科目含其全部末级后代的分录。 */
 async function getAccountLedger({ accountId, period }) {
   const { start, end } = periodRange(period)
-  const [[acct]] = await pool.query('SELECT id, code, name, balance_dir FROM acct_accounts WHERE id=? AND deleted_at IS NULL', [Number(accountId)])
+  const [[acct]] = await pool.query('SELECT id, code, name, balance_dir, is_leaf FROM acct_accounts WHERE id=? AND deleted_at IS NULL', [Number(accountId)])
   if (!acct) throw new AppError('科目不存在', 404)
   const dir = acct.balance_dir
+
+  // 汇总科目：收集全部末级后代，明细按「后代替换 IN」取数（余额方向沿父级）
+  let accountIds = [Number(accountId)]
+  if (Number(acct.is_leaf) !== 1) {
+    const [all] = await pool.query('SELECT id, parent_id, is_leaf FROM acct_accounts WHERE deleted_at IS NULL')
+    const childrenOf = new Map()
+    for (const a of all) {
+      if (a.parent_id == null) continue
+      const pid = Number(a.parent_id)
+      if (!childrenOf.has(pid)) childrenOf.set(pid, [])
+      childrenOf.get(pid).push(Number(a.id))
+    }
+    const leaves = []
+    const stack = [Number(accountId)]
+    while (stack.length) {
+      const cur = stack.pop()
+      for (const cid of childrenOf.get(cur) || []) stack.push(cid)
+      if (!childrenOf.has(cur)) leaves.push(cur)
+    }
+    // 当前节点本身非叶时不入列；leaves 收集的是末端节点
+    accountIds = leaves.filter(id => {
+      const meta = all.find(a => Number(a.id) === id)
+      return meta && Number(meta.is_leaf) === 1
+    })
+    if (!accountIds.length) throw new AppError('该汇总科目下没有末级科目', 400)
+  }
+  const placeholders = accountIds.map(() => '?').join(',')
 
   const [[pre]] = await pool.query(`
     SELECT COALESCE(SUM(CASE WHEN e.direction=1 THEN e.amount END),0) d,
            COALESCE(SUM(CASE WHEN e.direction=2 THEN e.amount END),0) c
       FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
-     WHERE e.account_id=? AND v.voucher_date < ?`, [Number(accountId), start])
+     WHERE e.account_id IN (${placeholders}) AND v.voucher_date < ?`, [...accountIds, start])
   let running = dir === 1 ? round2(pre.d - pre.c) : round2(pre.c - pre.d)
   const openingBalance = running
 
   const [entries] = await pool.query(`
-    SELECT v.voucher_no, v.voucher_date, e.direction, e.amount, e.summary, e.aux_name, e.line_no, v.id AS voucher_id
+    SELECT v.voucher_no, v.voucher_date, e.direction, e.amount, e.summary, e.aux_name, e.line_no, v.id AS voucher_id,
+           e.account_code, e.account_name
       FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
-     WHERE e.account_id=? AND v.voucher_date BETWEEN ? AND ?
-     ORDER BY v.voucher_date ASC, v.id ASC, e.line_no ASC`, [Number(accountId), start, end])
+     WHERE e.account_id IN (${placeholders}) AND v.voucher_date BETWEEN ? AND ?
+     ORDER BY v.voucher_date ASC, v.id ASC, e.line_no ASC`, [...accountIds, start, end])
 
   const list = entries.map(e => {
     const amt = round2(e.amount)
     running = round2(running + (dir === 1 ? (e.direction === 1 ? amt : -amt) : (e.direction === 2 ? amt : -amt)))
     return {
       voucherId: e.voucher_id, voucherNo: e.voucher_no, voucherDate: e.voucher_date,
+      accountCode: e.account_code, accountName: e.account_name,
       summary: e.summary, auxName: e.aux_name,
       debit: e.direction === 1 ? amt : 0, credit: e.direction === 2 ? amt : 0,
       balance: running,
     }
   })
-  return { account: { id: acct.id, code: acct.code, name: acct.name, balanceDir: dir }, period, start, end, openingBalance, closingBalance: running, list }
+  return { account: { id: acct.id, code: acct.code, name: acct.name, balanceDir: dir, isLeaf: Number(acct.is_leaf) === 1 }, period, start, end, openingBalance, closingBalance: running, list }
 }
 
 // ── 报表取数（简版） ──────────────────────────────────────────────────────────

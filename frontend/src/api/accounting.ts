@@ -3,7 +3,7 @@ import type {
   Account, CreateAccountParams, UpdateAccountParams,
   Voucher, GenerateStats, ReconciliationItem, CreateManualVoucherParams,
   TrialBalance, AccountLedger, IncomeStatement, BalanceSheet, CashFlow,
-  Invoice, CreateInvoiceParams,
+  Invoice, CreateInvoiceParams, AccountingPeriod,
 } from '@/types/accounting'
 
 const BASE = '/accounting/accounts'
@@ -64,6 +64,13 @@ export const reverseVoucherApi = async (id: number) =>
   apiClient.post<{ id: number; voucherNo: string }>(`${VBASE}/${id}/reverse`, {})
 
 export const deleteVoucherApi = async (id: number) => { await apiClient.delete(`${VBASE}/${id}`) }
+
+// ── 会计期间 / 期末结转 ──────────────────────────────────────────────────
+export const getPeriodsApi = async () => apiClient.get<AccountingPeriod[]>('/accounting/periods')
+export const generateClosingVouchersApi = async (period: string) =>
+  apiClient.post<{ period: string; results: Array<{ kind: string; created?: boolean; updated?: boolean }> }>('/accounting/periods/generate-closing', { period })
+export const closePeriodApi = async (period: string) => apiClient.post<{ period: string }>('/accounting/periods/close', { period })
+export const reopenPeriodApi = async (period: string) => apiClient.post<{ period: string }>('/accounting/periods/reopen', { period })
 
 export const getReconciliationApi = async () =>
   apiClient.get<{ items: ReconciliationItem[] }>(`${VBASE}/reconciliation`)

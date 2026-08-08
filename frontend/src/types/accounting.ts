@@ -126,6 +126,8 @@ export interface TrialBalanceRow {
   category: number
   categoryName: string
   balanceDir: number
+  level: number
+  isLeaf: boolean
   openingDebit: number
   openingCredit: number
   periodDebit: number
@@ -226,6 +228,20 @@ export const INVOICE_STATUS_LABELS: Record<number, Record<number, string>> = {
   2: { 1: '已开具', 2: '已红冲' },
 }
 
+// ── 会计期间 / 期末结转（增强②） ────────────────────────────────────────────
+export interface AccountingPeriod {
+  period: string
+  closed: boolean
+  closedByName: string | null
+  closedAt: string | null
+  closingStatus: 'current' | 'stale' | 'missing' | 'not_required'
+  yearClosingStatus: 'current' | 'stale' | 'missing' | 'not_required' | null
+}
+
+export const CLOSING_STATUS_LABELS: Record<string, string> = {
+  current: '结转已最新', stale: '结转需更新', missing: '未生成结转', not_required: '无需结转',
+}
+
 // 凭证来源类型（用于筛选下拉；展示直接用后端 sourceTypeName）
 export const VOUCHER_SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'purchase_settle', label: '采购结算' },
@@ -237,5 +253,7 @@ export const VOUCHER_SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'purchase_return', label: '采购退货' },
   { value: 'sale_return', label: '销售退货' },
   { value: 'stock_check', label: '盘点盈亏' },
+  { value: 'period_close', label: '期末损益结转' },
+  { value: 'period_close_year', label: '年度利润结转' },
   { value: 'manual', label: '手工凭证' },
 ]

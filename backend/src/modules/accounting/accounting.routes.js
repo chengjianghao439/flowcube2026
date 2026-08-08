@@ -125,4 +125,12 @@ invoices.post('/:id/status', requirePermission(PERMISSIONS.INVOICE_MANAGE), vBod
 invoices.delete('/:id',     requirePermission(PERMISSIONS.INVOICE_MANAGE), ctrl.invoiceRemove)
 router.use('/invoices', invoices)
 
+// ── 期末结转 / 期间锁定 /api/accounting/periods ────────────────────────
+const periods = Router()
+periods.get('/',                    requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW),   ctrl.periodList)
+periods.post('/generate-closing',   requirePermission(PERMISSIONS.ACCOUNTING_PERIOD_MANAGE), ctrl.periodGenerateClosing)
+periods.post('/close',              requirePermission(PERMISSIONS.ACCOUNTING_PERIOD_MANAGE), ctrl.periodClose)
+periods.post('/reopen',             requirePermission(PERMISSIONS.ACCOUNTING_PERIOD_MANAGE), ctrl.periodReopen)
+router.use('/periods', periods)
+
 module.exports = router
