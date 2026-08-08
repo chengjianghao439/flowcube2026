@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const { adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS, lockStockDimension } = require('../../engine/containerEngine')
+const { adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS, lockStockDimension, syncStockFromContainers } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -68,9 +68,175 @@ async function findById(id, scopeWarehouseIds = null) {
   assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '盘点单')
   const check = fmt(rows[0])
   const [items] = await pool.query(
-    'SELECT * FROM inventory_check_items WHERE check_id=? ORDER BY id ASC', [id])
-  check.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, bookQty:Number(r.book_qty), actualQty:r.actual_qty!=null?Number(r.actual_qty):null, diffQty:r.diff_qty!=null?Number(r.diff_qty):null }))
+    `SELECT ici.*,
+            (SELECT COUNT(*) FROM inventory_check_item_containers s WHERE s.check_item_id = ici.id) AS scanned_container_count
+       FROM inventory_check_items ici WHERE ici.check_id=? ORDER BY ici.id ASC`, [id])
+  check.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, bookQty:Number(r.book_qty), actualQty:r.actual_qty!=null?Number(r.actual_qty):null, diffQty:r.diff_qty!=null?Number(r.diff_qty):null,
+    // PDA 扫码盘点（文档13 §4.3）：有扫码记录的行实盘数由扫码集派生，ERP 手填锁定
+    scanDriven: Number(r.scanned_container_count) > 0,
+    scannedContainerCount: Number(r.scanned_container_count),
+  }))
   return check
+}
+
+/** PDA 扫码盘点任务池：进行中的盘点单 + 各行填写进度（受仓库数据范围约束） */
+async function listPendingScanChecks(scopeWarehouseIds = null) {
+  const scope = scopeFilter(scopeWarehouseIds, 'ic.warehouse_id')
+  const [rows] = await pool.query(
+    `SELECT ic.id, ic.check_no, ic.warehouse_id, ic.warehouse_name, ic.created_at,
+            COUNT(ici.id) AS itemCount,
+            SUM(CASE WHEN ici.actual_qty IS NULL THEN 1 ELSE 0 END) AS pendingCount
+       FROM inventory_checks ic
+       JOIN inventory_check_items ici ON ici.check_id = ic.id
+      WHERE ic.status = 1 AND ic.deleted_at IS NULL${scope.sql}
+      GROUP BY ic.id, ic.check_no, ic.warehouse_id, ic.warehouse_name, ic.created_at
+      ORDER BY ic.created_at ASC`,
+    scope.params,
+  )
+  return rows.map(r => ({
+    id: Number(r.id), checkNo: r.check_no,
+    warehouseId: Number(r.warehouse_id), warehouseName: r.warehouse_name,
+    createdAt: r.created_at,
+    itemCount: Number(r.itemCount), pendingCount: Number(r.pendingCount),
+  }))
+}
+
+/** PDA 扫码盘点作业页：该单明细行 + 各行账面容器数 / 已扫容器数 / 已扫明细（供断点续扫回显） */
+async function getScanItems(id, scopeWarehouseIds = null) {
+  const [[check]] = await pool.query('SELECT id, check_no, warehouse_id, warehouse_name, status FROM inventory_checks WHERE id=? AND deleted_at IS NULL', [id])
+  if (!check) throw new AppError('盘点单不存在', 404)
+  assertInScope(scopeWarehouseIds, check.warehouse_id, '盘点单')
+  const [items] = await pool.query(
+    `SELECT ici.id, ici.product_id, ici.product_code, ici.product_name, ici.unit, ici.book_qty, ici.actual_qty,
+            (SELECT COUNT(*) FROM inventory_containers c
+              WHERE c.product_id = ici.product_id AND c.warehouse_id = ? AND c.status = 1 AND c.deleted_at IS NULL) AS book_container_count,
+            (SELECT COUNT(*) FROM inventory_check_item_containers s WHERE s.check_item_id = ici.id) AS scanned_container_count
+       FROM inventory_check_items ici
+      WHERE ici.check_id = ? ORDER BY ici.id ASC`,
+    [check.warehouse_id, id],
+  )
+  const itemIds = items.map(i => i.id)
+  const scansByItem = new Map()
+  if (itemIds.length) {
+    const [scanRows] = await pool.query(
+      `SELECT s.check_item_id, s.container_id, s.barcode, s.counted_qty,
+              (c.container_type = 1 AND c.initial_qty = 1) AS individual
+         FROM inventory_check_item_containers s
+         LEFT JOIN inventory_containers c ON c.id = s.container_id
+        WHERE s.check_item_id IN (?) ORDER BY s.id ASC`,
+      [itemIds],
+    )
+    for (const r of scanRows) {
+      const k = Number(r.check_item_id)
+      if (!scansByItem.has(k)) scansByItem.set(k, [])
+      scansByItem.get(k).push({ containerId: Number(r.container_id), barcode: r.barcode, countedQty: Number(r.counted_qty), individual: Number(r.individual) === 1 })
+    }
+  }
+  return {
+    id: Number(check.id), checkNo: check.check_no,
+    warehouseId: Number(check.warehouse_id), warehouseName: check.warehouse_name, status: Number(check.status),
+    items: items.map(r => ({
+      id: Number(r.id), productId: Number(r.product_id), productCode: r.product_code, productName: r.product_name,
+      unit: r.unit, bookQty: Number(r.book_qty),
+      actualQty: r.actual_qty != null ? Number(r.actual_qty) : null,
+      bookContainerCount: Number(r.book_container_count),
+      scannedContainerCount: Number(r.scanned_container_count),
+      scans: scansByItem.get(Number(r.id)) || [],
+    })),
+  }
+}
+
+/**
+ * 保存某明细行的现场扫码容器集（PDA 扫完一次性提交，**整行替换语义**——天然幂等，断网重扫直接覆盖）。
+ * 实盘数 = 各容器实盘数之和（派生，非手填）。
+ *
+ * 校验（宁可当场拒，不让现场扫完整仓才发现）：
+ *  - 条码必须是「本行商品 × 本仓 × 在库(ACTIVE)」的容器，否则是别处的货/已失效的码，拒收让现场核实；
+ *  - 个体容器（一件一码）实盘恒为 1，不接受填数；
+ *  - 数量容器实盘须 ≥0 且不得多于账面剩余——盘盈不是仓库现场能决策的事，走 ERP 手工调整；
+ *  - 同一条码本批重复 → 拒。
+ */
+async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehouseIds = null) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const checkRow = await lockStatusRow(conn, { table:'inventory_checks', id, columns:'id, warehouse_id, status', entityName:'盘点单' })
+    assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
+    assertStatusAction('stockcheck', 'edit', checkRow.status)
+
+    const [[item]] = await conn.query(
+      'SELECT id, product_id, product_name, book_qty FROM inventory_check_items WHERE id=? AND check_id=? FOR UPDATE',
+      [itemId, id],
+    )
+    if (!item) throw new AppError('盘点明细不存在', 404)
+
+    const list = Array.isArray(scans) ? scans : []
+    const seen = new Set()
+    const normalized = []
+    for (const raw of list) {
+      const bc = String(raw?.barcode ?? '').trim()
+      if (!bc) throw new AppError('存在空条码，请重新扫描', 400)
+      if (seen.has(bc.toUpperCase())) throw new AppError(`条码 ${bc} 本批重复扫描`, 400, 'SCAN_DUP_IN_BATCH')
+      seen.add(bc.toUpperCase())
+      normalized.push({ barcode: bc, countedQty: raw?.countedQty })
+    }
+
+    const containerByBarcode = new Map()
+    if (normalized.length) {
+      const [rows] = await conn.query(
+        `SELECT id, barcode, remaining_qty, container_type, initial_qty
+           FROM inventory_containers
+          WHERE barcode IN (${normalized.map(() => '?').join(',')}) AND deleted_at IS NULL`,
+        normalized.map(n => n.barcode),
+      )
+      for (const c of rows) containerByBarcode.set(String(c.barcode).toUpperCase(), c)
+    }
+
+    const rows = []
+    for (const n of normalized) {
+      const c = containerByBarcode.get(n.barcode.toUpperCase())
+      if (!c) throw new AppError(`条码 ${n.barcode} 不存在或已失效，请核实实物`, 400, 'SCAN_CONTAINER_INVALID')
+      const [[full]] = await conn.query(
+        'SELECT product_id, warehouse_id, status FROM inventory_containers WHERE id = ?',
+        [c.id],
+      )
+      if (Number(full.product_id) !== Number(item.product_id)) {
+        throw new AppError(`条码 ${n.barcode} 不是商品「${item.product_name}」的库存条码，请核实实物归属`, 400, 'SCAN_PRODUCT_MISMATCH')
+      }
+      if (Number(full.warehouse_id) !== Number(checkRow.warehouse_id) || Number(full.status) !== CONTAINER_STATUS.ACTIVE) {
+        throw new AppError(`条码 ${n.barcode} 不是本仓在库条码（可能在其他仓库或已出库），请核实`, 400, 'SCAN_CONTAINER_NOT_IN_STOCK')
+      }
+      const individual = Number(c.container_type) === 1 && Number(c.initial_qty) === 1
+      let counted
+      if (individual) {
+        counted = 1   // 个体扫到即计 1，不接受填数
+      } else {
+        counted = Number(n.countedQty)
+        if (!Number.isFinite(counted) || counted < 0) throw new AppError(`条码 ${n.barcode} 请填写该容器实盘数量`, 400, 'SCAN_COUNT_REQUIRED')
+        if (counted > Number(c.remaining_qty) + 1e-9) {
+          throw new AppError(`条码 ${n.barcode} 实盘 ${counted} 多于账面 ${Number(c.remaining_qty)}，请核实是否扫错；盘盈请走 ERP 手工调整`, 409, 'SCAN_OVER_COUNT')
+        }
+      }
+      rows.push({ containerId: Number(c.id), barcode: n.barcode, countedQty: counted })
+    }
+
+    await conn.query('DELETE FROM inventory_check_item_containers WHERE check_item_id=?', [itemId])
+    for (const r of rows) {
+      await conn.query(
+        'INSERT INTO inventory_check_item_containers (check_item_id, container_id, barcode, counted_qty, scanned_by, scanned_by_name) VALUES (?,?,?,?,?,?)',
+        [itemId, r.containerId, r.barcode, r.countedQty, operator?.userId ?? null, operator?.realName ?? null],
+      )
+    }
+    // 实盘数 = 各容器实盘之和（派生）；一个都没扫 = 0（全行盘亏），与序列号盘点同语义
+    const actualQty = rows.reduce((sum, r) => sum + r.countedQty, 0)
+    await conn.query(
+      'UPDATE inventory_check_items SET actual_qty=?, diff_qty=? WHERE id=?',
+      [actualQty, actualQty - Number(item.book_qty), itemId],
+    )
+    await conn.commit()
+    return { itemId: Number(itemId), scannedContainers: rows.length, actualQty, bookQty: Number(item.book_qty), diffQty: actualQty - Number(item.book_qty) }
+  } catch (e) { await conn.rollback(); throw e }
+  finally { conn.release() }
 }
 
 // 新建盘点单，自动拉取该仓库所有有库存的商品为盘点明细
@@ -107,8 +273,16 @@ async function updateItems(id, items) {
     const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, columns: 'id, status', entityName: '盘点单' })
     assertStatusAction('stockcheck', 'edit', checkRow.status)
     const [itemRows] = await conn.query('SELECT * FROM inventory_check_items WHERE check_id=? ORDER BY id ASC', [id])
+    const [scanRows] = await conn.query(
+      `SELECT DISTINCT check_item_id FROM inventory_check_item_containers
+        WHERE check_item_id IN (SELECT id FROM inventory_check_items WHERE check_id=?)`, [id])
+    const scanDrivenIds = new Set(scanRows.map(r => Number(r.check_item_id)))
     for(const item of items) {
       const row = itemRows.find(i => Number(i.id) === Number(item.id))
+      // 该行已由 PDA 扫码盘点：实盘数以扫码集为准，手填会与之打架（文档13 §4.3）
+      if (row && scanDrivenIds.has(Number(row.id))) {
+        throw new AppError(`商品「${row.product_name}」已由 PDA 扫码盘点，实盘数以扫码为准，不能手工填写`, 400, 'SCAN_DRIVEN_ITEM')
+      }
       const actualQty = assertValidActualQty(item.actualQty)
       const bookQty = Number(row?.book_qty || 0)
       const diff = actualQty - bookQty
@@ -191,6 +365,68 @@ async function submit(id, operator) {
       )
     }
     for (const item of check.items) {
+      // PDA 扫码盘点行（文档13 §4.3）：按容器精确对账——账面 ACTIVE 而现场没扫到的容器即盘亏
+      // （精确扣这些容器，不走 FIFO：FIFO 会扣最早的容器，与"丢的是哪几只"对不上）；扫到但实盘
+      // 少于账面剩余的按差额扣；实盘多于账面剩余在扫码时已拒，这里是漂移兜底（重扫后提交）。
+      const [scanRows] = await conn.query(
+        'SELECT container_id, barcode, counted_qty FROM inventory_check_item_containers WHERE check_item_id=? ORDER BY id ASC',
+        [item.id],
+      )
+      if (scanRows.length) {
+        const scannedMap = new Map(scanRows.map(r => [Number(r.container_id), Number(r.counted_qty)]))
+        const scannedTotal = scanRows.reduce((sum, r) => sum + Number(r.counted_qty), 0)
+        if (Math.abs(scannedTotal - item.actualQty) > 1e-9) {
+          throw new AppError(`商品「${item.productName}」的实盘数(${item.actualQty})与扫码集合计(${scannedTotal})不一致，请重新扫描后提交`, 409, 'SCAN_COUNT_MISMATCH')
+        }
+        const [bookContainers] = await conn.query(
+          `SELECT id, barcode, remaining_qty FROM inventory_containers
+            WHERE product_id=? AND warehouse_id=? AND status=? AND deleted_at IS NULL
+            ORDER BY id ASC FOR UPDATE`,
+          [item.productId, check.warehouseId, CONTAINER_STATUS.ACTIVE],
+        )
+        const losses = []
+        for (const bc of bookContainers) {
+          const counted = scannedMap.get(Number(bc.id)) ?? 0   // 没扫到 = 这只不在现场 = 全亏
+          const remaining = Number(bc.remaining_qty)
+          if (counted > remaining + 1e-9) {
+            throw new AppError(`条码 ${bc.barcode} 实盘 ${counted} 多于账面 ${remaining}（盘点期间可能发生过移动），请刷新该行重扫`, 409, 'SCAN_OVER_COUNT')
+          }
+          if (remaining - counted > 1e-9) losses.push({ id: Number(bc.id), barcode: bc.barcode, lose: remaining - counted, left: counted })
+        }
+        if (!losses.length) continue
+
+        const before = item.bookQty
+        for (const loss of losses) {
+          await conn.query(
+            'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
+            [loss.left, loss.left === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE, loss.id],
+          )
+        }
+        const after = await syncStockFromContainers(conn, item.productId, check.warehouseId)
+        // 每只亏损容器一条流水：容器时间线能精确看到「这只少了多少」，而不是只有一行商品级总数
+        for (const loss of losses) {
+          await conn.query(
+            `INSERT INTO inventory_logs
+               (move_type, type, product_id, warehouse_id,
+                quantity, before_qty, after_qty,
+                ref_type, ref_id, ref_no,
+                container_id, log_source_type, log_source_ref_id,
+                remark, operator_id, operator_name)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [
+              MOVE_TYPE.STOCKCHECK, 2,
+              item.productId, check.warehouseId,
+              loss.lose, before, after,
+              'stockcheck', check.id, check.checkNo,
+              loss.id, SOURCE_TYPE.STOCKCHECK, check.id,
+              `盘点盘亏 ${check.checkNo}：条码 ${loss.barcode} 账面少 ${loss.lose}${loss.left === 0 ? '（未扫到，整只计亏）' : ''}`,
+              operator.userId, operator.realName,
+            ],
+          )
+        }
+        continue
+      }
+
       if (item.diffQty === 0) continue
 
       // 容器路径：盘盈创建新容器，盘亏 FIFO 扣减容器，同步刷新缓存
@@ -268,6 +504,8 @@ async function refreshItem(id, itemId) {
       'UPDATE inventory_check_items SET book_qty=?, actual_qty=NULL, diff_qty=NULL WHERE id=?',
       [currentBookQty, item.id],
     )
+    // 账面变了说明期间有出入库，之前扫的那一轮已不可信，必须重扫
+    await conn.query('DELETE FROM inventory_check_item_containers WHERE check_item_id=?', [item.id])
     await conn.commit()
     return { itemId: Number(item.id), productName: item.product_name, bookQty: currentBookQty }
   } catch (e) {
@@ -300,4 +538,4 @@ async function cancel(id) {
   }
 }
 
-module.exports = { findAll, findById, create, updateItems, submit, refreshItem, cancel }
+module.exports = { findAll, findById, create, updateItems, submit, refreshItem, cancel, listPendingScanChecks, getScanItems, saveItemContainerScans }

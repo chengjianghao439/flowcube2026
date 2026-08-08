@@ -7,6 +7,9 @@ export interface CheckItem {
   bookQty: number
   actualQty: number | null
   diffQty: number | null
+  /** PDA 扫码盘点行：实盘数由扫码集派生，ERP 手填锁定 */
+  scanDriven?: boolean
+  scannedContainerCount?: number
 }
 
 export interface StockCheck {
@@ -42,3 +45,45 @@ export interface CycleRule {
   isOverride: boolean   // 该行是本仓覆盖(true)还是继承全局默认(false)
 }
 export interface CycleRulesResult { warehouseId: number; rules: CycleRule[] }
+
+/** PDA 扫码盘点（文档13 §4.3）：任务池行 */
+export interface PendingScanCheck {
+  id: number
+  checkNo: string
+  warehouseId: number
+  warehouseName: string
+  createdAt: string
+  itemCount: number
+  pendingCount: number
+}
+
+/** 某行已扫的一个容器 */
+export interface ScanEntry {
+  containerId: number
+  barcode: string
+  countedQty: number
+  /** 单件库存条码（一件一码）：扫到即计 1，无数量录入 */
+  individual: boolean
+}
+
+/** PDA 扫码盘点作业页：某盘点单的明细行 */
+export interface ScanCheckItem {
+  id: number
+  productId: number
+  productCode: string
+  productName: string
+  unit: string
+  bookQty: number
+  actualQty: number | null
+  bookContainerCount: number
+  scannedContainerCount: number
+  scans: ScanEntry[]
+}
+export interface ScanCheckDetail {
+  id: number
+  checkNo: string
+  warehouseId: number
+  warehouseName: string
+  status: number
+  items: ScanCheckItem[]
+}

@@ -14,4 +14,7 @@ const listAbc = async(req,res,next)=>{ try{return successResponse(res,await cycl
 const cycleCandidates = async(req,res,next)=>{ try{return successResponse(res,await cycle.getCycleCandidates({ warehouseId:+req.query.warehouseId, scopeType:req.query.scopeType||'abc', scopeValue:req.query.scopeValue||'A' }),'查询成功')}catch(e){next(e)} }
 const cycleRules = async(req,res,next)=>{ try{return successResponse(res,await cycle.getCycleRules({ warehouseId:req.query.warehouseId?+req.query.warehouseId:0 }),'查询成功')}catch(e){next(e)} }
 const saveCycleRules = async(req,res,next)=>{ try{return successResponse(res,await cycle.saveCycleRules({ warehouseId:req.body.warehouseId?+req.body.warehouseId:0, rules:req.body.rules }),'规则已保存')}catch(e){next(e)} }
-module.exports = { list, detail, create, update, submit, refreshItem, cancel, recomputeAbc, listAbc, cycleCandidates, cycleRules, saveCycleRules }
+const pendingScanChecks = async(req,res,next)=>{ try{return successResponse(res,await svc.listPendingScanChecks(req.user?.warehouseIds??null),'查询成功')}catch(e){next(e)} }
+const scanItems = async(req,res,next)=>{ try{return successResponse(res,await svc.getScanItems(+req.params.id,req.user?.warehouseIds??null),'查询成功')}catch(e){next(e)} }
+const saveItemScans = async(req,res,next)=>{ try{const data=await svc.saveItemContainerScans(+req.params.id,+req.params.itemId,req.body.scans,getOperatorFromRequest(req),req.user?.warehouseIds??null);return successResponse(res,data,`已记录 ${data.scannedContainers} 个条码`)}catch(e){next(e)} }
+module.exports = { list, detail, create, update, submit, refreshItem, cancel, recomputeAbc, listAbc, cycleCandidates, cycleRules, saveCycleRules, pendingScanChecks, scanItems, saveItemScans }

@@ -1,7 +1,7 @@
 {
-  "version": "0.4.59",
-  "versionCode": 59,
+  "version": "0.4.60",
+  "versionCode": 60,
   "filename": "app-release.apk",
-  "releaseNote": "- 序列号体系正式下线：菜单中的「序列号台账 / 序列号追溯 / 序列号历史导入」三个页面移除，其能力已由库存页条码面板承接（点任一条码可展开流转时间线，看全链路追溯）",
-  "publishedAt": "2026-08-08T17:20:01.417Z"
+  "releaseNote": "- **PDA 扫码盘点**：盘点可以在 PDA 上扫库存条码完成——",
+  "publishedAt": "2026-08-08T17:48:19.859Z"
 }

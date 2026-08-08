@@ -43,6 +43,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   const hasUnsavedChanges = useMemo(() => {
     if (!check?.items?.length || check.status !== 1) return false
     return check.items.some(item => {
+      if (item.scanDriven) return false
       const current = actuals[item.id] ?? ''
       const original = item.actualQty != null ? String(item.actualQty) : ''
       return current !== original
@@ -53,7 +54,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     if (!check?.items?.length) return { ok: true as const, items: [] as { id: number; actualQty: number }[] }
     const firstFieldError = Object.values(fieldErrors).find(Boolean)
     if (firstFieldError) return { ok: false as const, items: [] as { id: number; actualQty: number }[], message: firstFieldError }
-    const items = check.items.map(i => ({ id: i.id, actualQty: parseActualQty(actuals[i.id] ?? '') }))
+    const items = check.items.filter(i => !i.scanDriven).map(i => ({ id: i.id, actualQty: parseActualQty(actuals[i.id] ?? '') }))
     const invalid = items.find(i => Number.isNaN(i.actualQty) || i.actualQty < 0)
     if (invalid) {
       return { ok: false as const, items, message: '实盘数量必须为大于或等于 0 的数字' }
@@ -179,7 +180,9 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                 const actualRaw = actuals[item.id]
                 const actual = actualRaw!==''&&actualRaw!==undefined ? parseFloat(actualRaw) : null
                 const hasError = !!fieldErrors[item.id]
-                const diff = actual!=null && !hasError ? actual - item.bookQty : null
+                const diff = item.scanDriven
+                  ? (item.diffQty ?? null)
+                  : (actual!=null && !hasError ? actual - item.bookQty : null)
                 return (
                   <div key={item.id} className="grid grid-cols-12 gap-2 items-center py-1 border-b last:border-0">
                     <div className="col-span-2 text-sm">{item.productCode}</div>
@@ -187,7 +190,14 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                     <div className="col-span-1 text-sm text-muted-foreground">{item.unit}</div>
                     <div className="col-span-2 text-sm">{item.bookQty}</div>
                     <div className="col-span-2">
-                      {check.status===1 ? (
+                      {item.scanDriven ? (
+                        <div className="space-y-0.5">
+                          <span className="text-sm block">
+                            {item.actualQty!=null ? `${item.actualQty}（扫码）` : <span className="text-muted-foreground">待 PDA 扫码</span>}
+                          </span>
+                          <p className="text-xs text-muted-foreground">PDA 扫码盘点 · 已扫 {item.scannedContainerCount ?? 0} 个条码</p>
+                        </div>
+                      ) : check.status===1 ? (
                         <div className="space-y-1">
                           <Input
                             type="number"

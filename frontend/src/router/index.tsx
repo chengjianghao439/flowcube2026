@@ -27,6 +27,7 @@ const PdaInboundQaPage = lazy(() => import('@/pages/pda/inbound-qa'))
 const PdaQaDisposePage = lazy(() => import('@/pages/pda/qa-dispose'))
 const PdaCheckPage   = lazy(() => import('@/pages/pda/check'))
 const PdaPackPage    = lazy(() => import('@/pages/pda/pack'))
+const PdaStockcheckPage = lazy(() => import('@/pages/pda/stockcheck'))
 const PdaSplitPage   = lazy(() => import('@/pages/pda/split'))
 const PdaBindPage    = lazy(() => import('@/pages/pda/bind'))
 const PdaShipPage    = lazy(() => import('@/pages/pda/ship'))
@@ -148,7 +149,9 @@ export default function AppRouter() {
               <Route path="check" element={<PdaRoutePermission title="复核作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_CHECK]}><PdaCheckPage /></PdaRoutePermission>} />
               <Route path="pack/:id" element={<PdaRoutePermission title="打包作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]}><PdaPackPage /></PdaRoutePermission>} />
               <Route path="pack" element={<PdaRoutePermission title="打包作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]}><PdaPackPage /></PdaRoutePermission>} />
-              <Route path="split" element={<PdaRoutePermission title="容器拆分" required={[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]}><PdaSplitPage /></PdaRoutePermission>} />
+              <Route path="split" element={<PdaRoutePermission title="塑料盒拆分" required={[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]}><PdaSplitPage /></PdaRoutePermission>} />
+              <Route path="stockcheck/:id" element={<PdaRoutePermission title="扫码盘点" required={[PERMISSIONS.STOCKCHECK_VIEW]}><PdaStockcheckPage /></PdaRoutePermission>} />
+              <Route path="stockcheck" element={<PdaRoutePermission title="扫码盘点" required={[PERMISSIONS.STOCKCHECK_VIEW]}><PdaStockcheckPage /></PdaRoutePermission>} />
               {/* 设备绑定不挂业务权限：任何能登录 PDA 的操作员都要能绑定，
                   否则会陷入「没绑定 → 请求被拒 → 绑不了」的死结 */}
               <Route path="bind" element={<PdaBindPage />} />
