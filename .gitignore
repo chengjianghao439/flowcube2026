@@ -68,6 +68,8 @@ deploy/*.local.json
 security-scan-report*
 .superpowers/
 .claude/worktrees/
+# Claude Code 本地个人配置（不进库，各机器各留一份）
+.claude/settings.local.json
 
 # AI agent 本地说明文件（暂不入库）
 AGENTS.md

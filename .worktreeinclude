@@ -1,0 +1,3 @@
+# 复制被 gitignore 的本地配置文件到新 worktree（gitignore 语法，仅匹配且被忽略的文件）
+# 后端 .env：含 JWT_SECRET / DB_* 等，新 worktree 缺它后端会拒启动
+backend/.env
