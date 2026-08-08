@@ -1,7 +1,7 @@
 /**
  * 会计凭证导出（文档 10 · Phase 1）。复用 exceljs。
- * 可扩展模板层：format='generic' 通用记账凭证（清晰、通用可读，可再另存导入）；
- *   format='kingdee' 金蝶 KIS 风格列。用友/其它格式后续在此追加，不写死一家（设计 §11）。
+ * 模板层：format='generic' 通用记账凭证（清晰、通用可读，可再另存导入）；
+ *   format='kingdee' 金蝶 KIS 风格列。当前仅这两档（用户 2026-08-09 决定不接用友）。
  * 只导出未冲销(status<>3)的凭证；红字冲销凭证(is_reversal=1, status=1)会被正常导出。
  */
 const ExcelJS = require('exceljs')

@@ -332,7 +332,7 @@ export default function VouchersPage() {
     <div>
       <PageHeader
         title="记账凭证"
-        description="由业务事实自动生成的借贷凭证，可导出对接金蝶/用友"
+        description="由业务事实自动生成的借贷凭证，可导出通用记账凭证或金蝶 KIS 格式"
         actions={
           <div className="flex items-center gap-2">
             {canManage && <Button variant="outline" onClick={() => setGenOpen(true)}><RefreshCw className="mr-1.5 h-4 w-4" />生成本期凭证</Button>}

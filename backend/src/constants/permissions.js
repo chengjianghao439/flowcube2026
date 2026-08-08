@@ -185,7 +185,7 @@ const PERMISSIONS = {
   ACCOUNTING_ACCOUNT_MANAGE: 'accounting.account.manage',
   ACCOUNTING_VOUCHER_VIEW: 'accounting.voucher.view',
   ACCOUNTING_VOUCHER_MANAGE: 'accounting.voucher.manage',   // 生成本期凭证 / 手工凭证 / 冲销
-  ACCOUNTING_VOUCHER_EXPORT: 'accounting.voucher.export',   // 导出金蝶/用友模板
+  ACCOUNTING_VOUCHER_EXPORT: 'accounting.voucher.export',   // 导出记账凭证（通用 / 金蝶 KIS）
   ACCOUNTING_PERIOD_MANAGE: 'accounting.period.manage',     // 期末结转生成 / 结账 / 反结账
   ACCOUNTING_LEDGER_VIEW: 'accounting.ledger.view',         // 总账/明细账/试算平衡/三大报表（Phase2）
 

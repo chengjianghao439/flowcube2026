@@ -317,7 +317,7 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.ACCOUNTING_ACCOUNT_MANAGE, label: '维护会计科目' },
       { code: PERMISSIONS.ACCOUNTING_VOUCHER_VIEW, label: '查看记账凭证' },
       { code: PERMISSIONS.ACCOUNTING_VOUCHER_MANAGE, label: '生成/手工/冲销凭证' },
-      { code: PERMISSIONS.ACCOUNTING_VOUCHER_EXPORT, label: '导出凭证（金蝶/用友）' },
+      { code: PERMISSIONS.ACCOUNTING_VOUCHER_EXPORT, label: '导出凭证（通用 / 金蝶）' },
       { code: PERMISSIONS.ACCOUNTING_LEDGER_VIEW, label: '查看总账/试算平衡/报表' },
       { code: PERMISSIONS.ACCOUNTING_PERIOD_MANAGE, label: '期末结转/结账/反结账' },
       { code: PERMISSIONS.INVOICE_VIEW, label: '查看进项/销项发票' },
