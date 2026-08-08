@@ -48,7 +48,7 @@ function shipBlockedMessage(data: PackageShipInfo) {
     const openPackages = data.packages.filter(pkg => pkg.status !== 2 && pkg.status !== 3).length
     return openPackages > 0
       ? `当前仓库任务仍为「${statusName}」，且还有 ${openPackages} 箱未完成打包，不能出库。`
-      : `当前仓库任务仍为「${statusName}」，请先完成打包收口并进入「待出库」。`
+      : `当前仓库任务仍为「${statusName}」，请先完成打包并进入「待出库」。`
   }
   return `当前仓库任务状态为「${statusName}」，不能执行出库。`
 }

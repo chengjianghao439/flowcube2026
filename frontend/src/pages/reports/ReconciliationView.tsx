@@ -31,7 +31,7 @@ const MONTHLY_SCOPE = String(SETTLEMENT_TYPE.MONTHLY)
 const COPY = {
   1: {
     title: '供应商对账',
-    description: '月结供应商的应付账单：按账期核对、登记付款、导出 Excel，可回跳采购单与收货单。现结供应商见「应付账款」。',
+    description: '月结供应商的应付账单：按账期核对、登记付款、导出 Excel，可从对账单直接打开采购单与收货单。现结供应商见「应付账款」。',
     party: '供应商',
     paidCol: '已付',
     payPath: '/payments/payable',
@@ -40,7 +40,7 @@ const COPY = {
   },
   2: {
     title: '客户对账',
-    description: '月结客户的应收账单：按账期核对、登记收款、导出 Excel，可回跳销售单。现结客户见「应收账款」。',
+    description: '月结客户的应收账单：按账期核对、登记收款、导出 Excel，可从对账单直接打开销售单。现结客户见「应收账款」。',
     party: '客户',
     paidCol: '已收',
     payPath: '/payments/receivable',

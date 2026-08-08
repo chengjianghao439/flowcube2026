@@ -1046,7 +1046,7 @@ export default function PrintTemplateEditor() {
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden px-4 pb-4 pt-2">
       <PageHeader
         title={isNew ? '新建打印模板' : `编辑打印模板 #${id}`}
-        description="拖拽字段到画布编排版式；热敏标签与单据均使用毫米坐标；标签打印统一使用 ZPL 指令集。工具栏「画布」可缩放以便编辑。"
+        description="把字段拖到画布上编排版式；热敏标签和单据都用毫米坐标；标签打印统一走 ZPL 指令集。工具栏里的「画布」可以缩放，方便看清细节。"
         actions={undefined}
       />
 
