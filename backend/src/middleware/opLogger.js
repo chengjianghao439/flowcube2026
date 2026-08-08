@@ -1,17 +1,28 @@
 const { pool } = require('../config/db')
 const logger = require('../utils/logger')
 
+// 精确键匹配集合：PDA 设备密钥/会话令牌、幂等键等均不得明文落库。
+// 除精确匹配外，sanitizeBody 还会把键名做 snake_case → camelCase 归一化后再次比对，
+// 防止漏网（如 device_secret 是 deviceSecret 的 snake_case 变体）。
 const SENSITIVE_FIELDS = new Set([
   'password', 'newPassword', 'oldPassword', 'confirmPassword', 'currentPassword',
   'token', 'secret', 'apiKey', 'accessToken', 'refreshToken',
+  'deviceSecret', 'sessionToken', 'idempotencyKey',
 ])
+
+function isSensitiveKey(k) {
+  if (SENSITIVE_FIELDS.has(k)) return true
+  // snake_case / kebab-case → camelCase 归一化后再次比对（device_secret → deviceSecret、idempotency-key → idempotencyKey）
+  const normalized = k.replace(/[_-]([a-z])/g, (_, c) => c.toUpperCase())
+  return SENSITIVE_FIELDS.has(normalized)
+}
 
 function sanitizeBody(body) {
   if (!body || typeof body !== 'object') return body
   if (Array.isArray(body)) return body.map(sanitizeBody)
   const out = {}
   for (const [k, v] of Object.entries(body)) {
-    out[k] = SENSITIVE_FIELDS.has(k) ? '***' : (typeof v === 'object' && v !== null ? sanitizeBody(v) : v)
+    out[k] = isSensitiveKey(k) ? '***' : (typeof v === 'object' && v !== null ? sanitizeBody(v) : v)
   }
   return out
 }
@@ -73,3 +84,6 @@ function opLogger(req, res, next) {
 }
 
 module.exports = opLogger
+module.exports.sanitizeBody = sanitizeBody
+module.exports.isSensitiveKey = isSensitiveKey
+module.exports.SENSITIVE_FIELDS = SENSITIVE_FIELDS

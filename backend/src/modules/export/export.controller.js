@@ -7,7 +7,7 @@ async function sendExport(res, payload) {
 
 async function exportPurchase(req, res, next) {
   try {
-    await sendExport(res, await exportService.getPurchaseExportPayload(req.query))
+    await sendExport(res, await exportService.getPurchaseExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null }))
   } catch (error) {
     next(error)
   }
@@ -15,7 +15,7 @@ async function exportPurchase(req, res, next) {
 
 async function exportSale(req, res, next) {
   try {
-    await sendExport(res, await exportService.getSaleExportPayload(req.query))
+    await sendExport(res, await exportService.getSaleExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null }))
   } catch (error) {
     next(error)
   }
@@ -23,7 +23,7 @@ async function exportSale(req, res, next) {
 
 async function exportReconciliation(req, res, next) {
   try {
-    await sendExport(res, await exportService.getReconciliationExportPayload(req.query))
+    await sendExport(res, await exportService.getReconciliationExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null }))
   } catch (error) {
     next(error)
   }
@@ -31,7 +31,7 @@ async function exportReconciliation(req, res, next) {
 
 async function exportInboundTasks(req, res, next) {
   try {
-    await sendExport(res, await exportService.getInboundTasksExportPayload(req.query))
+    await sendExport(res, await exportService.getInboundTasksExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null }))
   } catch (error) {
     next(error)
   }
@@ -39,7 +39,7 @@ async function exportInboundTasks(req, res, next) {
 
 async function exportStock(req, res, next) {
   try {
-    await sendExport(res, await exportService.getStockExportPayload())
+    await sendExport(res, await exportService.getStockExportPayload(req.user?.warehouseIds ?? null))
   } catch (error) {
     next(error)
   }
@@ -47,7 +47,7 @@ async function exportStock(req, res, next) {
 
 async function exportInventoryLogs(req, res, next) {
   try {
-    await sendExport(res, await exportService.getInventoryLogsExportPayload(req.query))
+    await sendExport(res, await exportService.getInventoryLogsExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null }))
   } catch (error) {
     next(error)
   }
@@ -55,7 +55,7 @@ async function exportInventoryLogs(req, res, next) {
 
 async function exportTransfer(req, res, next) {
   try {
-    await sendExport(res, await exportService.getTransferExportPayload(req.query))
+    await sendExport(res, await exportService.getTransferExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null }))
   } catch (error) {
     next(error)
   }
@@ -63,7 +63,7 @@ async function exportTransfer(req, res, next) {
 
 async function exportPurchaseReturns(req, res, next) {
   try {
-    await sendExport(res, await exportService.getPurchaseReturnsExportPayload(req.query))
+    await sendExport(res, await exportService.getPurchaseReturnsExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null }))
   } catch (error) {
     next(error)
   }
@@ -71,7 +71,7 @@ async function exportPurchaseReturns(req, res, next) {
 
 async function exportSaleReturns(req, res, next) {
   try {
-    await sendExport(res, await exportService.getSaleReturnsExportPayload(req.query))
+    await sendExport(res, await exportService.getSaleReturnsExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null }))
   } catch (error) {
     next(error)
   }

@@ -17,6 +17,7 @@ export interface CreateUserParams {
 
 export interface UpdateUserParams {
   realName: string
-  roleId: number
+  /** 省略 = 保持原角色（编辑超管账号时不传，后端 schema 只放行 2-5） */
+  roleId?: number
   isActive: boolean
 }

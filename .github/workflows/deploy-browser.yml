@@ -87,6 +87,9 @@ jobs:
 
       - name: Deploy backend and frontend on server
         shell: bash
+        env:
+          SMOKE_USERNAME: ${{ secrets.SMOKE_USERNAME }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
         run: |
           set -euo pipefail
           ssh -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" <<EOF
@@ -98,7 +101,9 @@ jobs:
           fi
           git fetch origin main
           git reset --hard "${{ github.sha }}"
-          SKIP_GIT_PULL=1 SKIP_RELEASE_GATE=1 bash scripts/server-update.sh
+          # 发布门禁（release-gate）随部署执行：页面烟雾 + 对账回跳。凭据由 GitHub Secrets 注入，
+          # 服务器不再 SKIP_RELEASE_GATE=1——坏版本（渲染错误/路由失效）会在部署时被当场拦下。
+          SKIP_GIT_PULL=1 SMOKE_USERNAME="$SMOKE_USERNAME" SMOKE_PASSWORD="$SMOKE_PASSWORD" bash scripts/server-update.sh
           EOF
 
       - name: Verify server repo moved to current commit

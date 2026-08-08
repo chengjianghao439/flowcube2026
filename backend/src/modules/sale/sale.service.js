@@ -1,5 +1,5 @@
 const { pool } = require('../../config/db')
-const { scopeFilter } = require('../../utils/warehouseScope')
+const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { reserve, releaseByRef } = require('../../engine/reservationEngine')
 const { getAvailableStockForDecision } = require('../../engine/containerEngine')
@@ -464,7 +464,7 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
   return { list:rows.map(fmt), pagination:{page,pageSize,total} }
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [rows] = await pool.query(
     `SELECT so.*, c.name AS carrier_name, ${warehouseTaskProjection}, ${itemAggProjection}, ${paymentProjection}
      FROM sale_orders so
@@ -476,6 +476,7 @@ async function findById(id) {
     [id]
   )
   if(!rows[0]) throw new AppError('销售单不存在',404)
+  assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '销售单')
   const order = fmt(rows[0])
 
   // 分仓：一个订单可能有多个仓库任务，详情页返回任务列表（前端展示各仓进度）
@@ -641,11 +642,14 @@ async function create({ customerId, customerName, warehouseId, warehouseName, re
 
 // 编辑草稿：仅在 status=1（草稿）时允许，整体替换明细行
 async function update(id, { customerId, customerName, warehouseId, warehouseName, remark,
-  carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator }) {
+  carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, columns: 'id, status', entityName: '销售单' })
+    const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, columns: 'id, status, warehouse_id', entityName: '销售单' })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    // 改单可变更发货仓库：目标仓库也要在 scope 内
+    assertInScope(scopeWarehouseIds, warehouseId, '销售单')
     assertStatusAction('sale', 'edit', orderRow.status)
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
     assertNoDuplicateSaleItemLines(items, warehouseId)
@@ -676,7 +680,7 @@ async function update(id, { customerId, customerName, warehouseId, warehouseName
 // warehouse-tasks.adjust.js 分层处理（增量直接生效补拣；减量视命中深度决定是否需要
 // PDA 物理确认）。sale_order_items 本身仍是整表删除重建（同 update() 的模式），
 // 因为这是唯一用户可见的"行"，WMS 侧只认按商品聚合后的净数量，详见方案说明。
-async function requestAdjustment(id, { items, operator, requestKey }) {
+async function requestAdjustment(id, { items, operator, requestKey, scopeWarehouseIds = null }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -695,6 +699,7 @@ async function requestAdjustment(id, { items, operator, requestKey }) {
       columns: 'id, order_no, status, task_id, task_no, warehouse_id, warehouse_name',
       entityName: '销售单',
     })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     assertStatusAction('sale', 'adjust', orderRow.status)
     // 分仓/分批锁定边界：多仓订单、或已有任一行发过货的订单，明细一律锁定，不走执行期改单
     // （执行期改单只作用于"单任务"场景，见 warehouse-tasks.adjust.js）。单仓且零出库订单
@@ -954,11 +959,12 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
 //
 // itemOverrides：占库弹窗里逐行选好的发货仓库（[{id, warehouseId, warehouseName}]），
 // 在可用量检查前先写回明细行，让 shortages 按用户选的仓库计算。
-async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOverride = false } = {}) {
+async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOverride = false, scopeWarehouseIds = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     const rule = assertStatusAction('sale', 'reserve', orderRow.status)
 
     // —— 信用额度校验（在锁库存之前）。客户行 FOR UPDATE 是同客户并发占库的串行化点：
@@ -1062,11 +1068,12 @@ async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOve
 // 分批发货：只对「未派发(dispatched=0)」且（传了 itemIds 时）被选中的行建任务，
 // 建完标记 dispatched=1。首次发货 status 2→3；后续继续发剩余行时订单已在 3，保持不变。
 // 不传 itemIds = 发全部未派发行（含首次一次性全发的旧行为）。
-async function ship(id, operator, { itemIds = null } = {}) {
+async function ship(id, operator, { itemIds = null, scopeWarehouseIds = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     const curStatus = Number(orderRow.status)
     // 允许从「已占库(2)」首次发货，或「履约中(3)」继续发剩余行；其它状态走标准报错
     if (curStatus !== 2 && curStatus !== 3) {
@@ -1159,11 +1166,12 @@ async function ship(id, operator, { itemIds = null } = {}) {
 }
 
 // 取消占库：RESERVED(2) → DRAFT(1)，释放预占
-async function releaseStock(id, operator) {
+async function releaseStock(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     const rule = assertStatusAction('sale', 'release', orderRow.status)
     await releaseByRef(conn, 'sale_order', id)
     await compareAndSetStatus(conn, {
@@ -1180,11 +1188,12 @@ async function releaseStock(id, operator) {
 }
 
 // 取消订单：仅 DRAFT(1) → CANCELLED(5)
-async function cancel(id, operator) {
+async function cancel(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     const rule = assertStatusAction('sale', 'cancel', orderRow.status)
 
     if (Number(orderRow.status) === 2) {
@@ -1279,16 +1288,17 @@ async function cancel(id, operator) {
 }
 
 // 删除订单：仅 CANCELLED(5) 可删
-async function deleteOrder(id) {
+async function deleteOrder(id, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     // 在事务内读取并锁定订单行，防止并发状态变更
     const [[order]] = await conn.query(
-      'SELECT id, status, order_no FROM sale_orders WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, order_no, warehouse_id FROM sale_orders WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [id],
     )
     if (!order) throw new AppError('订单不存在', 404)
+    assertInScope(scopeWarehouseIds, order.warehouse_id, '销售单')
     assertStatusAction('sale', 'delete', order.status)
     await conn.query('UPDATE sale_orders SET deleted_at=NOW() WHERE id=?', [id])
     await conn.commit()

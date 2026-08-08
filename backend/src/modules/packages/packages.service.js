@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const printJobs = require('../print-jobs/print-jobs.service')
+const { assertInScope } = require('../../utils/warehouseScope')
 
 const { WT_STATUS, WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
@@ -53,15 +54,16 @@ async function listByTask(taskId) {
 }
 
 // ─── 创建新物流条码（L + 6位 ID）───────────────────────────────────────────────
-async function createPackage(taskId, remark = null) {
+async function createPackage(taskId, remark = null, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const [[task]] = await conn.query(
-      'SELECT id, status, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
     if (!task) throw new AppError('任务不存在', 404)
+    assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
     if (task.cancel_requested_at) {
       throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
     }
@@ -120,7 +122,7 @@ function throwOverpacked({ taskId, product, requestedUnits, packedUnits, limitUn
 }
 
 // ─── 向箱子添加商品 ───────────────────────────────────────────────────────────
-async function addItem(packageId, { productCode, qty }) {
+async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null) {
   const qtyUnits = toQtyUnits(qty)
   if (!Number.isFinite(qtyUnits) || qtyUnits <= 0) throw new AppError('数量必须大于 0', 400)
 
@@ -137,10 +139,11 @@ async function addItem(packageId, { productCode, qty }) {
     if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无法继续添加商品', 400)
 
     const [[task]] = await conn.query(
-      'SELECT id, status, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [pkg.warehouse_task_id],
     )
     if (!task) throw new AppError('任务不存在', 404)
+    assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
     if (task.cancel_requested_at) {
       throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
     }
@@ -237,7 +240,7 @@ async function addItem(packageId, { productCode, qty }) {
 }
 
 // ─── 从箱子移出商品（扫错/多扫纠正）────────────────────────────────────────────
-async function removeItem(packageId, { itemId, qty }) {
+async function removeItem(packageId, { itemId, qty }, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -250,10 +253,11 @@ async function removeItem(packageId, { itemId, qty }) {
     if (Number(pkg.status) !== 1) throw new AppError('该箱已完成或已作废，无法移除商品', 400)
 
     const [[task]] = await conn.query(
-      'SELECT id, status, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [pkg.warehouse_task_id],
     )
     if (!task) throw new AppError('任务不存在', 404)
+    assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
     if (task.cancel_requested_at) {
       throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
     }
@@ -299,7 +303,7 @@ async function removeItem(packageId, { itemId, qty }) {
 }
 
 // ─── 作废单箱（整箱装错重来，不影响任务下其它箱子）────────────────────────────────
-async function voidPackage(packageId) {
+async function voidPackage(packageId, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -313,10 +317,11 @@ async function voidPackage(packageId) {
     if (Number(pkg.status) === 2) throw new AppError('该箱已完成，无法作废', 400)
 
     const [[task]] = await conn.query(
-      'SELECT id, status, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [pkg.warehouse_task_id],
     )
     if (!task) throw new AppError('任务不存在', 404)
+    assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
     if (task.cancel_requested_at) {
       throw new AppError('该任务正在取消收尾中，请通过「取消清理」流程处理该箱子', 409)
     }
@@ -493,7 +498,7 @@ async function markPackageFinishedWithinTransaction(conn, packageId) {
   }
 }
 
-async function finishPackage(packageId, { createdBy } = {}) {
+async function finishPackage(packageId, { createdBy, scopeWarehouseIds = null } = {}) {
   const [[pkg]] = await pool.query(
     `SELECT p.id, p.barcode, p.status, p.warehouse_task_id, wt.warehouse_id
      FROM packages p
@@ -502,6 +507,7 @@ async function finishPackage(packageId, { createdBy } = {}) {
     [packageId],
   )
   if (!pkg) throw new AppError('箱子不存在', 404)
+  assertInScope(scopeWarehouseIds, pkg.warehouse_id, '仓库任务')
 
   if (Number(pkg.status) === 2) {
     const existingJob = await findActivePackageLabelJob(pool, packageId)

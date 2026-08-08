@@ -18,11 +18,13 @@ CREATE TABLE IF NOT EXISTS `sys_users` (
   UNIQUE KEY `uk_sys_users_username_active` (`username`, `active_unique_guard`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统用户表';
 
--- 初始管理员账号默认禁用，需通过 `backend/scripts/bootstrap-admin.js` 显式设置密码后再启用
+-- 初始管理员账号：password 只放占位符 '!'（bcrypt 永不匹配任何明文），
+-- 真实口令由 backend/scripts/bootstrap-admin.js 写入（口令不入迁移文件）。
+-- is_active=0 确保未初始化前该账号不可登录（双重保险：占位哈希 + 禁用）。
 INSERT INTO `sys_users` (`username`, `password`, `real_name`, `role_id`, `role_name`, `is_active`)
 VALUES (
   'admin',
-  '$2a$10$xxWx1WU1/mY7E.xrzJQMheHwhI58DQWvu4oj0v71V0k4VRJUWtjTi',
+  '!',
   '系统管理员',
   1,
   '管理员',

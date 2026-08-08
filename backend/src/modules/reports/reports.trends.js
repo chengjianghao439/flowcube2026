@@ -1,7 +1,7 @@
 const { fetchWavePerformanceRows } = require('./reports.query')
 
-async function wavePerformance({ startDate = null, endDate = null } = {}) {
-  const { summary, rows } = await fetchWavePerformanceRows({ startDate, endDate })
+async function wavePerformance({ startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
+  const { summary, rows } = await fetchWavePerformanceRows({ startDate, endDate, scopeWarehouseIds })
   const STATUS_NAMES = { 1: '待拣货', 2: '拣货中', 3: '待分拣', 4: '已完成', 5: '已取消' }
 
   const waves = rows.map(r => {

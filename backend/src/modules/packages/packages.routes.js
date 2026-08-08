@@ -4,6 +4,7 @@ const ctrl       = require('./packages.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { pdaOnly } = require('../../middleware/pdaOnly')
+const { pdaSessionRequired } = require('../../middleware/pdaSession')
 
 const router = Router()
 
@@ -35,6 +36,7 @@ router.get('/barcode/:barcode', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIE
 // POST /api/packages                 — 创建箱子
 router.post('/',
   pdaOnly,
+  pdaSessionRequired(),
   requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK),
   vBody(z.object({
     warehouseTaskId: z.number().int().positive('warehouseTaskId 必填'),
@@ -46,6 +48,7 @@ router.post('/',
 // POST /api/packages/:id/add-item    — 向箱子添加商品
 router.post('/:id/add-item',
   pdaOnly,
+  pdaSessionRequired(),
   requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK),
   vBody(z.object({
     productCode: z.string().min(1, '商品条码必填'),
@@ -57,6 +60,7 @@ router.post('/:id/add-item',
 // POST /api/packages/:id/remove-item — 从箱子移出商品
 router.post('/:id/remove-item',
   pdaOnly,
+  pdaSessionRequired(),
   requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK),
   vBody(z.object({
     itemId: z.number().int().positive('itemId 必填'),
@@ -66,10 +70,10 @@ router.post('/:id/remove-item',
 )
 
 // POST /api/packages/:id/void        — 作废单箱
-router.post('/:id/void', pdaOnly, requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK), ctrl.voidPackage)
+router.post('/:id/void', pdaOnly, pdaSessionRequired(), requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK), ctrl.voidPackage)
 
 // PUT  /api/packages/:id/finish      — 完成打包
-router.put('/:id/finish', pdaOnly, requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK), ctrl.finish)
+router.put('/:id/finish', pdaOnly, pdaSessionRequired(), requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK), ctrl.finish)
 
 // POST /api/packages/:id/print-label — 补打箱贴
 router.post('/:id/print-label', requirePermission(PERMISSIONS.PRINT_JOB_REPRINT), ctrl.printLabel)

@@ -4,6 +4,7 @@ const { ymd } = require('../../utils/excelExport')
 const paymentsService = require('../payments/payments.service')
 const receiptsService = require('../payments/payment-receipts.service')
 const statementsService = require('../payments/reconciliation-statements.service')
+const { scopeFilter, transferScopeFilter } = require('../../utils/warehouseScope')
 
 function buildDateStamp() {
   return new Date().toLocaleDateString('zh-CN').replace(/\//g, '')
@@ -19,12 +20,15 @@ function buildExportPayload({ filenamePrefix, sheetName, columns, rows }) {
 }
 
 async function getPurchaseExportPayload(query) {
-  const { startDate, endDate, status, productId, keyword, supplierId, warehouseId, remark, operator } = query
+  const { startDate, endDate, status, productId, keyword, supplierId, warehouseId, remark, operator, scopeWarehouseIds } = query
   let sql = `SELECT o.order_no,o.supplier_name,o.warehouse_name,
     CASE o.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已收货' WHEN 4 THEN '已取消' END AS status_name,
     o.total_amount,o.expected_date,o.operator_name,DATE_FORMAT(o.created_at,'%Y-%m-%d %H:%i') AS created_at,o.remark
     FROM purchase_orders o WHERE o.deleted_at IS NULL`
   const params = []
+  const sc = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
+  sql += sc.sql
+  params.push(...sc.params)
   if (keyword) {
     sql += ' AND o.order_no LIKE ?'
     params.push(`%${keyword}%`)
@@ -61,12 +65,15 @@ async function getPurchaseExportPayload(query) {
 }
 
 async function getSaleExportPayload(query) {
-  const { startDate, endDate, status, productId, keyword, customerId, warehouseId, remark } = query
+  const { startDate, endDate, status, productId, keyword, customerId, warehouseId, remark, scopeWarehouseIds } = query
   let sql = `SELECT o.order_no,o.customer_name,o.warehouse_name,
     CASE o.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已出库' WHEN 4 THEN '已取消' END AS status_name,
     o.total_amount,o.sale_date,o.operator_name,DATE_FORMAT(o.created_at,'%Y-%m-%d %H:%i') AS created_at,o.remark
     FROM sale_orders o WHERE o.deleted_at IS NULL`
   const params = []
+  const sc = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
+  sql += sc.sql
+  params.push(...sc.params)
   if (keyword) {
     sql += ' AND o.order_no LIKE ?'
     params.push(`%${keyword}%`)
@@ -147,7 +154,7 @@ async function getReconciliationExportPayload(query) {
 }
 
 async function getInboundTasksExportPayload(query) {
-  const { keyword, status, productId, warehouseId, operatorId, startDate, endDate, remark, supplierId } = query
+  const { keyword, status, productId, warehouseId, operatorId, startDate, endDate, remark, supplierId, scopeWarehouseIds } = query
   let sql = `SELECT
     t.task_no,
     t.purchase_order_no,
@@ -160,6 +167,9 @@ async function getInboundTasksExportPayload(query) {
     FROM inbound_tasks t
     WHERE t.deleted_at IS NULL`
   const params = []
+  const sc = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
+  sql += sc.sql
+  params.push(...sc.params)
   if (keyword) {
     sql += ' AND (t.task_no LIKE ? OR t.purchase_order_no LIKE ?)'
     params.push(`%${keyword}%`, `%${keyword}%`)
@@ -197,7 +207,8 @@ async function getInboundTasksExportPayload(query) {
   })
 }
 
-async function getStockExportPayload() {
+async function getStockExportPayload(scopeWarehouseIds = null) {
+  const sc = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
   const [rows] = await pool.query(
     `SELECT p.code,p.name,c.name AS category_name,p.unit,w.name AS warehouse_name,
       s.quantity,COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0) AS cost_price,ROUND(s.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0),4) AS value
@@ -205,8 +216,9 @@ async function getStockExportPayload() {
      JOIN product_items p ON s.product_id=p.id
      JOIN inventory_warehouses w ON s.warehouse_id=w.id
      LEFT JOIN product_categories c ON p.category_id=c.id
-     WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL
+     WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL${sc.sql}
      ORDER BY w.name,p.code`,
+    sc.params,
   )
   return buildExportPayload({
     filenamePrefix: '当前库存',
@@ -226,7 +238,7 @@ async function getStockExportPayload() {
 }
 
 async function getInventoryLogsExportPayload(query) {
-  const { startDate, endDate } = query
+  const { startDate, endDate, scopeWarehouseIds } = query
   let sql = `SELECT DATE_FORMAT(l.created_at,'%Y-%m-%d %H:%i') AS time,
     CASE l.type WHEN 1 THEN '入库' WHEN 2 THEN '出库' WHEN 3 THEN '盘点调整' ELSE '其他' END AS type_name,
     p.code AS product_code,p.name AS product_name,w.name AS warehouse_name,
@@ -236,6 +248,9 @@ async function getInventoryLogsExportPayload(query) {
     JOIN inventory_warehouses w ON l.warehouse_id=w.id
     WHERE 1=1`
   const params = []
+  const sc = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
+  sql += sc.sql
+  params.push(...sc.params)
   if (startDate) { sql += ' AND DATE(l.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(l.created_at)<=?'; params.push(endDate) }
   sql += ' ORDER BY l.created_at DESC LIMIT 10000'
@@ -261,12 +276,15 @@ async function getInventoryLogsExportPayload(query) {
 }
 
 async function getTransferExportPayload(query = {}) {
-  const { keyword, status, productId, warehouseId, operatorId, startDate, endDate, remark } = query
+  const { keyword, status, productId, warehouseId, operatorId, startDate, endDate, remark, scopeWarehouseIds } = query
   let sql = `SELECT o.order_no,o.from_warehouse_name,o.to_warehouse_name,
       CASE o.status WHEN 1 THEN '草稿' WHEN 2 THEN '待出库' WHEN 3 THEN '在途' WHEN 4 THEN '已完成' WHEN 5 THEN '已取消' END AS status_name,
       o.remark,o.operator_name,DATE_FORMAT(o.created_at,'%Y-%m-%d %H:%i') AS created_at
      FROM transfer_orders o WHERE o.deleted_at IS NULL`
   const params = []
+  const sc = transferScopeFilter(scopeWarehouseIds, 'o.from_warehouse_id', 'o.to_warehouse_id')
+  sql += sc.sql
+  params.push(...sc.params)
   if (keyword) {
     sql += ' AND (o.order_no LIKE ? OR o.from_warehouse_name LIKE ? OR o.to_warehouse_name LIKE ?)'
     params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
@@ -300,12 +318,15 @@ async function getTransferExportPayload(query = {}) {
 }
 
 async function getPurchaseReturnsExportPayload(query = {}) {
-  const { keyword, status, productId, supplierId, warehouseId, operatorId, startDate, endDate, remark } = query
+  const { keyword, status, productId, supplierId, warehouseId, operatorId, startDate, endDate, remark, scopeWarehouseIds } = query
   let sql = `SELECT r.return_no,r.supplier_name,r.warehouse_name,r.purchase_order_no,
       CASE r.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已退货' WHEN 4 THEN '已取消' END AS status_name,
       r.total_amount,r.operator_name,DATE_FORMAT(r.created_at,'%Y-%m-%d %H:%i') AS created_at,r.remark
      FROM purchase_returns r WHERE r.deleted_at IS NULL`
   const params = []
+  const sc = scopeFilter(scopeWarehouseIds, 'r.warehouse_id')
+  sql += sc.sql
+  params.push(...sc.params)
   if (keyword) {
     sql += ' AND (r.return_no LIKE ? OR r.supplier_name LIKE ? OR r.purchase_order_no LIKE ?)'
     params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
@@ -341,12 +362,15 @@ async function getPurchaseReturnsExportPayload(query = {}) {
 }
 
 async function getSaleReturnsExportPayload(query = {}) {
-  const { keyword, status, productId, customerId, warehouseId, operatorId, startDate, endDate, remark } = query
+  const { keyword, status, productId, customerId, warehouseId, operatorId, startDate, endDate, remark, scopeWarehouseIds } = query
   let sql = `SELECT r.return_no,r.customer_name,r.warehouse_name,r.sale_order_no,
       CASE r.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已退货入库' WHEN 4 THEN '已取消' END AS status_name,
       r.total_amount,r.operator_name,DATE_FORMAT(r.created_at,'%Y-%m-%d %H:%i') AS created_at,r.remark
      FROM sale_returns r WHERE r.deleted_at IS NULL`
   const params = []
+  const sc = scopeFilter(scopeWarehouseIds, 'r.warehouse_id')
+  sql += sc.sql
+  params.push(...sc.params)
   if (keyword) {
     sql += ' AND (r.return_no LIKE ? OR r.customer_name LIKE ? OR r.sale_order_no LIKE ?)'
     params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)

@@ -21,7 +21,7 @@ async function list(req, res, next) {
 async function create(req, res, next) {
   try {
     const { warehouseTaskId, remark } = req.body
-    const result = await svc.createPackage(warehouseTaskId, remark)
+    const result = await svc.createPackage(warehouseTaskId, remark, req.user?.warehouseIds ?? null)
     return successResponse(res, result, '箱子已创建')
   } catch (e) { next(e) }
 }
@@ -30,7 +30,7 @@ async function addItem(req, res, next) {
   try {
     const packageId = +req.params.id
     const { productCode, qty } = req.body
-    const result = await svc.addItem(packageId, { productCode, qty })
+    const result = await svc.addItem(packageId, { productCode, qty }, req.user?.warehouseIds ?? null)
     return successResponse(res, result, '商品已加入箱子')
   } catch (e) { next(e) }
 }
@@ -39,7 +39,7 @@ async function removeItem(req, res, next) {
   try {
     const packageId = +req.params.id
     const { itemId, qty } = req.body
-    const result = await svc.removeItem(packageId, { itemId, qty })
+    const result = await svc.removeItem(packageId, { itemId, qty }, req.user?.warehouseIds ?? null)
     return successResponse(res, result, result.removed ? '商品已移出箱子' : '数量已调整')
   } catch (e) { next(e) }
 }
@@ -47,7 +47,7 @@ async function removeItem(req, res, next) {
 async function voidPackage(req, res, next) {
   try {
     const packageId = +req.params.id
-    const result = await svc.voidPackage(packageId)
+    const result = await svc.voidPackage(packageId, req.user?.warehouseIds ?? null)
     return successResponse(res, result, '箱子已作废')
   } catch (e) { next(e) }
 }
@@ -67,6 +67,7 @@ async function finish(req, res, next) {
     }
     const result = await svc.finishPackage(id, {
       createdBy: req.user.userId,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     await completeOperationRequest(pool, requestState, {
       data: result,

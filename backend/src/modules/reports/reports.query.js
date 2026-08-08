@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const { buildDateFilter } = require('./reports.helpers')
 const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
 const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
+const { scopeFilter } = require('../../utils/warehouseScope')
 const logger = require('../../utils/logger')
 
 async function fetchOne(sql, params = []) {
@@ -32,11 +33,12 @@ async function fetchOptional(metricName, promise, fallback) {
   }
 }
 
-async function fetchPurchaseStatsRows({ startDate, endDate }) {
+async function fetchPurchaseStatsRows({ startDate, endDate, scopeWarehouseIds = null }) {
   const dateCond = startDate && endDate
     ? 'AND DATE(o.created_at) BETWEEN ? AND ?'
     : startDate ? 'AND DATE(o.created_at) >= ?' : endDate ? 'AND DATE(o.created_at) <= ?' : ''
   const dateParams = [startDate, endDate].filter(Boolean)
+  const wh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
 
   const byMonth = await fetchMany(
     `SELECT DATE_FORMAT(o.created_at,'%Y-%m') AS month,
@@ -44,9 +46,9 @@ async function fetchPurchaseStatsRows({ startDate, endDate }) {
             SUM(o.total_amount) AS total_amount,
             SUM(CASE WHEN o.status=3 THEN o.total_amount ELSE 0 END) AS received_amount
      FROM purchase_orders o
-     WHERE o.deleted_at IS NULL AND o.status != 4 ${dateCond}
+     WHERE o.deleted_at IS NULL AND o.status != 4 ${dateCond}${wh.sql}
      GROUP BY month ORDER BY month ASC`,
-    dateParams,
+    [...dateParams, ...wh.params],
   )
 
   const bySupplier = await fetchMany(
@@ -55,28 +57,29 @@ async function fetchPurchaseStatsRows({ startDate, endDate }) {
             SUM(o.total_amount) AS total_amount,
             SUM(CASE WHEN o.status=3 THEN o.total_amount ELSE 0 END) AS received_amount
      FROM purchase_orders o
-     WHERE o.deleted_at IS NULL AND o.status != 4 ${dateCond}
+     WHERE o.deleted_at IS NULL AND o.status != 4 ${dateCond}${wh.sql}
      GROUP BY o.supplier_id, o.supplier_name ORDER BY total_amount DESC LIMIT 20`,
-    dateParams,
+    [...dateParams, ...wh.params],
   )
 
   const byProduct = await fetchMany(
     `SELECT i.product_name, SUM(i.quantity) AS total_qty, SUM(i.amount) AS total_amount
      FROM purchase_order_items i
      JOIN purchase_orders o ON i.order_id = o.id
-     WHERE o.deleted_at IS NULL AND o.status = 3 ${dateCond.replace(/o\.created_at/g, 'o.created_at')}
+     WHERE o.deleted_at IS NULL AND o.status = 3 ${dateCond}${wh.sql}
      GROUP BY i.product_id, i.product_name ORDER BY total_amount DESC LIMIT 20`,
-    dateParams,
+    [...dateParams, ...wh.params],
   )
 
   return { byMonth, bySupplier, byProduct }
 }
 
-async function fetchSaleStatsRows({ startDate, endDate }) {
+async function fetchSaleStatsRows({ startDate, endDate, scopeWarehouseIds = null }) {
   const dateCond = startDate && endDate
     ? 'AND DATE(o.created_at) BETWEEN ? AND ?'
     : startDate ? 'AND DATE(o.created_at) >= ?' : endDate ? 'AND DATE(o.created_at) <= ?' : ''
   const dateParams = [startDate, endDate].filter(Boolean)
+  const wh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
 
   const byMonth = await fetchMany(
     `SELECT DATE_FORMAT(o.created_at,'%Y-%m') AS month,
@@ -84,9 +87,9 @@ async function fetchSaleStatsRows({ startDate, endDate }) {
             SUM(o.total_amount) AS total_amount,
             SUM(CASE WHEN o.status=4 THEN o.total_amount ELSE 0 END) AS shipped_amount
      FROM sale_orders o
-     WHERE o.deleted_at IS NULL AND o.status != 5 ${dateCond}
+     WHERE o.deleted_at IS NULL AND o.status != 5 ${dateCond}${wh.sql}
      GROUP BY month ORDER BY month ASC`,
-    dateParams,
+    [...dateParams, ...wh.params],
   )
 
   const byCustomer = await fetchMany(
@@ -94,30 +97,32 @@ async function fetchSaleStatsRows({ startDate, endDate }) {
             COUNT(*) AS order_count,
             SUM(o.total_amount) AS total_amount
      FROM sale_orders o
-     WHERE o.deleted_at IS NULL AND o.status != 5 ${dateCond}
+     WHERE o.deleted_at IS NULL AND o.status != 5 ${dateCond}${wh.sql}
      GROUP BY o.customer_id, o.customer_name ORDER BY total_amount DESC LIMIT 20`,
-    dateParams,
+    [...dateParams, ...wh.params],
   )
 
   const byProduct = await fetchMany(
     `SELECT i.product_name, SUM(i.quantity) AS total_qty, SUM(i.amount) AS total_amount
      FROM sale_order_items i
      JOIN sale_orders o ON i.order_id = o.id
-     WHERE o.deleted_at IS NULL AND o.status = 4 ${dateCond}
+     WHERE o.deleted_at IS NULL AND o.status = 4 ${dateCond}${wh.sql}
      GROUP BY i.product_id, i.product_name ORDER BY total_amount DESC LIMIT 20`,
-    dateParams,
+    [...dateParams, ...wh.params],
   )
 
   return { byMonth, byCustomer, byProduct }
 }
 
-async function fetchInventoryStatsRows({ startDate, endDate }) {
+async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds = null }) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   const productInventoryProjectionSql = getProductInventoryProjectionSql()
   const dateCond = startDate && endDate
     ? 'AND DATE(l.created_at) BETWEEN ? AND ?'
     : startDate ? 'AND DATE(l.created_at) >= ?' : endDate ? 'AND DATE(l.created_at) <= ?' : ''
   const dateParams = [startDate, endDate].filter(Boolean)
+  const lWh = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
+  const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
 
   const turnover = await fetchMany(
     `SELECT p.code, p.name, p.unit,
@@ -130,10 +135,10 @@ async function fetchInventoryStatsRows({ startDate, endDate }) {
        SELECT ip.product_id, ip.quantity AS total_qty
        FROM ${productInventoryProjectionSql} ip
      ) s ON s.product_id = l.product_id
-     WHERE p.deleted_at IS NULL ${dateCond}
+     WHERE p.deleted_at IS NULL ${dateCond}${lWh.sql}
      GROUP BY l.product_id, p.code, p.name, p.unit, s.total_qty
      ORDER BY outbound_qty DESC LIMIT 30`,
-    dateParams,
+    [...dateParams, ...lWh.params],
   )
 
   const byWarehouse = await fetchMany(
@@ -143,54 +148,65 @@ async function fetchInventoryStatsRows({ startDate, endDate }) {
      FROM ${inventoryDisplayProjectionSql} ip
      JOIN inventory_warehouses w ON ip.warehouse_id = w.id
      JOIN product_items p ON ip.product_id = p.id
-     WHERE w.deleted_at IS NULL AND p.deleted_at IS NULL
+     WHERE w.deleted_at IS NULL AND p.deleted_at IS NULL${ipWh.sql}
      GROUP BY ip.warehouse_id, w.name ORDER BY total_value DESC`,
+    ipWh.params,
   )
 
   return { turnover, byWarehouse }
 }
 
-async function fetchPdaPerformanceRows() {
+async function fetchPdaPerformanceRows(scopeWarehouseIds = null) {
   const today = new Date().toISOString().slice(0, 10)
+  // scan_logs 通过 task_id → warehouse_tasks 关联仓库；带 scope 时按任务仓库过滤
+  const join = scopeWarehouseIds && Array.isArray(scopeWarehouseIds)
+    ? `INNER JOIN warehouse_tasks wt ON wt.id = sl.task_id AND wt.warehouse_id IN (${scopeWarehouseIds.map(() => '?').join(',')})`
+    : ''
+  const scopeParams = scopeWarehouseIds && Array.isArray(scopeWarehouseIds) ? scopeWarehouseIds : []
   const todaySummary = await fetchOne(
     `SELECT COUNT(*) AS scan_count, COALESCE(SUM(qty), 0) AS pick_qty
-     FROM scan_logs
-     WHERE DATE(scanned_at) = ?`,
-    [today],
+     FROM scan_logs sl
+     ${join}
+     WHERE DATE(sl.scanned_at) = ?`,
+    [...scopeParams, today],
   )
   const byOperator = await fetchMany(
     `SELECT
-       operator_id,
-       operator_name,
+       sl.operator_id,
+       sl.operator_name,
        COUNT(*) AS scan_count,
-       COALESCE(SUM(qty), 0) AS pick_qty,
-       MIN(scanned_at) AS first_scan,
-       MAX(scanned_at) AS last_scan
-     FROM scan_logs
-     WHERE DATE(scanned_at) = ?
-       AND operator_id IS NOT NULL
-     GROUP BY operator_id, operator_name
+       COALESCE(SUM(sl.qty), 0) AS pick_qty,
+       MIN(sl.scanned_at) AS first_scan,
+       MAX(sl.scanned_at) AS last_scan
+     FROM scan_logs sl
+     ${join}
+     WHERE DATE(sl.scanned_at) = ?
+       AND sl.operator_id IS NOT NULL
+     GROUP BY sl.operator_id, sl.operator_name
      ORDER BY scan_count DESC`,
-    [today],
+    [...scopeParams, today],
   )
   const daily = await fetchMany(
     `SELECT
-       DATE(scanned_at) AS date,
+       DATE(sl.scanned_at) AS date,
        COUNT(*) AS scan_count,
-       COALESCE(SUM(qty), 0) AS pick_qty
-     FROM scan_logs
-     WHERE scanned_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-     GROUP BY DATE(scanned_at)
+       COALESCE(SUM(sl.qty), 0) AS pick_qty
+     FROM scan_logs sl
+     ${join}
+     WHERE sl.scanned_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+     GROUP BY DATE(sl.scanned_at)
      ORDER BY date ASC`,
+    scopeParams,
   )
   return { today, todaySummary, byOperator, daily }
 }
 
-async function fetchWavePerformanceRows({ startDate = null, endDate = null } = {}) {
+async function fetchWavePerformanceRows({ startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
   const dateCond = startDate && endDate
     ? 'AND DATE(pw.created_at) BETWEEN ? AND ?'
     : startDate ? 'AND DATE(pw.created_at) >= ?' : endDate ? 'AND DATE(pw.created_at) <= ?' : ''
   const dateParams = [startDate, endDate].filter(Boolean)
+  const wh = scopeFilter(scopeWarehouseIds, 'pw.warehouse_id')
 
   const summary = await fetchOne(
     `SELECT
@@ -212,7 +228,8 @@ async function fetchWavePerformanceRows({ startDate = null, endDate = null } = {
        GROUP BY wave_id
      ) skus ON skus.wave_id = pw.id
      WHERE pw.status != 5
-       AND pw.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`,
+       AND pw.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)${wh.sql}`,
+    wh.params,
   )
 
   const rows = await fetchMany(
@@ -234,39 +251,49 @@ async function fetchWavePerformanceRows({ startDate = null, endDate = null } = {
      FROM picking_waves pw
      LEFT JOIN picking_wave_items pwi ON pwi.wave_id = pw.id
      LEFT JOIN picking_wave_routes pwr ON pwr.wave_id = pw.id
-     WHERE pw.status != 5 ${dateCond}
+     WHERE pw.status != 5 ${dateCond}${wh.sql}
      GROUP BY pw.id, pw.wave_no, pw.status, pw.task_count,
               pw.operator_name, pw.created_at, pw.updated_at
      ORDER BY pw.created_at DESC
      LIMIT 100`,
-    dateParams,
+    [...dateParams, ...wh.params],
   )
 
   return { summary, rows }
 }
 
-async function fetchWarehouseOpsRows() {
+async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
   const today = new Date().toISOString().slice(0, 10)
+  // scope：warehouse_tasks / inbound_tasks 自带 warehouse_id；scan_logs 经 task_id 关联。
+  const wtWh = scopeFilter(scopeWarehouseIds, 'wt.warehouse_id')
+  const itWh = scopeFilter(scopeWarehouseIds, 'it.warehouse_id')
+  const slJoin = scopeWarehouseIds && Array.isArray(scopeWarehouseIds)
+    ? `INNER JOIN warehouse_tasks wt ON wt.id = sl.task_id AND wt.warehouse_id IN (${scopeWarehouseIds.map(() => '?').join(',')})`
+    : ''
+  const slParams = scopeWarehouseIds && Array.isArray(scopeWarehouseIds) ? scopeWarehouseIds : []
   const todayShipped = await fetchOptional('warehouseOps.todayShipped', fetchOne(
     `SELECT COUNT(*) AS shipped_count
-     FROM warehouse_tasks
-     WHERE status = 5 AND DATE(updated_at) = ?`,
-    [today],
+     FROM warehouse_tasks wt
+     WHERE wt.status = 5 AND DATE(wt.updated_at) = ?${wtWh.sql}`,
+    [...wtWh.params, today],
   ), { shipped_count: 0 })
   const todayPicking = await fetchOptional('warehouseOps.todayPicking', fetchOne(
     `SELECT COUNT(*) AS picking_count
-     FROM warehouse_tasks WHERE status IN (2,3,4)`,
+     FROM warehouse_tasks wt WHERE wt.status IN (2,3,4)${wtWh.sql}`,
+    wtWh.params,
   ), { picking_count: 0 })
   const todayInbound = await fetchOptional('warehouseOps.todayInbound', fetchOne(
     `SELECT COUNT(*) AS inbound_count
-     FROM inbound_tasks
-     WHERE status = 3 AND DATE(updated_at) = ?`,
-    [today],
+     FROM inbound_tasks it
+     WHERE it.status = 3 AND DATE(it.updated_at) = ?${itWh.sql}`,
+    [...itWh.params, today],
   ), { inbound_count: 0 })
   const scanSummary = await fetchOptional('warehouseOps.scanSummary', fetchOne(
     `SELECT COUNT(*) AS scan_count, COALESCE(SUM(qty),0) AS pick_qty
-     FROM scan_logs WHERE DATE(scanned_at) = ?`,
-    [today],
+     FROM scan_logs sl
+     ${slJoin}
+     WHERE DATE(sl.scanned_at) = ?`,
+    [...slParams, today],
   ), { scan_count: 0, pick_qty: 0 })
   const errSummary = await fetchOptional('warehouseOps.errSummary', fetchOne(
     `SELECT COUNT(*) AS error_count
@@ -287,10 +314,11 @@ async function fetchWarehouseOpsRows() {
        MIN(sl.scanned_at) AS firstScan,
        MAX(sl.scanned_at) AS lastScan
      FROM scan_logs sl
+     ${slJoin}
      WHERE DATE(sl.scanned_at) = ? AND sl.operator_id IS NOT NULL
      GROUP BY sl.operator_id, sl.operator_name
      ORDER BY scanCount DESC LIMIT 20`,
-    [today],
+    [...slParams, today],
   ), [])
   const errByOp = await fetchOptional('warehouseOps.errByOp', fetchMany(
     `SELECT operator_id AS operatorId, COUNT(*) AS errCount
@@ -300,16 +328,18 @@ async function fetchWarehouseOpsRows() {
   ), [])
   const flowRows = await fetchOptional('warehouseOps.flowRows', fetchMany(
     `SELECT status, COUNT(*) AS cnt
-     FROM warehouse_tasks
-     WHERE status IN (1,2,3,4,5)
+     FROM warehouse_tasks wt
+     WHERE wt.status IN (1,2,3,4,5)${wtWh.sql}
      GROUP BY status`,
+    wtWh.params,
   ), [])
   const hourlyRows = await fetchOptional('warehouseOps.hourlyRows', fetchMany(
-    `SELECT HOUR(scanned_at) AS hr, COUNT(*) AS cnt
-     FROM scan_logs
-     WHERE DATE(scanned_at) = ?
-     GROUP BY HOUR(scanned_at) ORDER BY hr ASC`,
-    [today],
+    `SELECT HOUR(sl.scanned_at) AS hr, COUNT(*) AS cnt
+     FROM scan_logs sl
+     ${slJoin}
+     WHERE DATE(sl.scanned_at) = ?
+     GROUP BY HOUR(sl.scanned_at) ORDER BY hr ASC`,
+    [...slParams, today],
   ), [])
   const recentErrors = await fetchOptional('warehouseOps.recentErrors', fetchMany(
     `SELECT id, task_id AS taskId, barcode, reason, operator_name AS operatorName, created_at AS createdAt
@@ -332,13 +362,20 @@ async function fetchWarehouseOpsRows() {
   }
 }
 
-async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
+async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWarehouseIds = null }) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
+  const tWh = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
+  const oWh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
+  const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
+  // print_failure / waiting_putaway 经容器关联收货任务，用任务仓库过滤
+  const cWh = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
+  const sWh = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
   return {
     pendingReceiveCount: await fetchOne(
       `SELECT COUNT(*) AS count
-       FROM inbound_tasks
-       WHERE deleted_at IS NULL AND status IN (1, 2)`,
+       FROM inbound_tasks t
+       WHERE t.deleted_at IS NULL AND t.status IN (1, 2)${tWh.sql}`,
+      tWh.params,
     ),
     pendingReceiveRows: await fetchMany(
       `SELECT t.id,
@@ -349,16 +386,19 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
               CONCAT('创建于 ', DATE_FORMAT(t.created_at, '%m-%d %H:%i')) AS hint,
               t.created_at AS createdAt
        FROM inbound_tasks t
-       WHERE t.deleted_at IS NULL AND t.status IN (1, 2)
+       WHERE t.deleted_at IS NULL AND t.status IN (1, 2)${tWh.sql}
        ORDER BY t.created_at ASC
        LIMIT 5`,
+      tWh.params,
     ),
     waitingPutawayCount: await fetchOne(
       `SELECT COUNT(*) AS count
-       FROM inventory_containers
-       WHERE deleted_at IS NULL
-         AND status = 0
-         AND inbound_task_id IS NOT NULL`,
+       FROM inventory_containers c
+       LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
+       WHERE c.deleted_at IS NULL
+         AND c.status = 0
+         AND c.inbound_task_id IS NOT NULL${cWh.sql}`,
+      cWh.params,
     ),
     waitingPutawayRows: await fetchMany(
       `SELECT c.id,
@@ -375,21 +415,23 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
        LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
        WHERE c.deleted_at IS NULL
          AND c.status = 0
-         AND c.inbound_task_id IS NOT NULL
+         AND c.inbound_task_id IS NOT NULL${cWh.sql}
        ORDER BY COALESCE(c.putaway_deadline_at, c.created_at) ASC
        LIMIT 5`,
+      cWh.params,
     ),
     printFailureCount: await fetchOne(
       `SELECT COUNT(*) AS count
        FROM print_jobs j
        INNER JOIN inventory_containers c ON c.id = j.ref_id AND j.ref_type = 'inventory_container'
+       INNER JOIN inbound_tasks t ON t.id = c.inbound_task_id
        WHERE c.inbound_task_id IS NOT NULL
          AND (
            (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
            OR (j.status IN (0, 1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
            OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
-         )`,
-      [Number(thresholds.printTimeoutMinutes)],
+         )${cWh.sql}`,
+      [Number(thresholds.printTimeoutMinutes), ...cWh.params],
     ),
     printFailureRows: await fetchMany(
       `SELECT c.inbound_task_id AS id,
@@ -411,15 +453,16 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
            (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
            OR (j.status IN (0, 1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
            OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
-         )
+         )${cWh.sql}
        ORDER BY j.updated_at DESC
        LIMIT 5`,
-      [Number(thresholds.printTimeoutMinutes)],
+      [Number(thresholds.printTimeoutMinutes), ...cWh.params],
     ),
     pendingShipCount: await fetchOne(
       `SELECT COUNT(*) AS count
-       FROM sale_orders
-       WHERE deleted_at IS NULL AND status IN (2, 3)`,
+       FROM sale_orders o
+       WHERE o.deleted_at IS NULL AND o.status IN (2, 3)${oWh.sql}`,
+      oWh.params,
     ),
     pendingShipRows: await fetchMany(
       `SELECT o.id,
@@ -430,9 +473,10 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
               CONCAT('创建于 ', DATE_FORMAT(o.created_at, '%m-%d %H:%i')) AS hint,
               o.created_at AS createdAt
        FROM sale_orders o
-       WHERE o.deleted_at IS NULL AND o.status IN (2, 3)
+       WHERE o.deleted_at IS NULL AND o.status IN (2, 3)${oWh.sql}
        ORDER BY o.created_at ASC
        LIMIT 5`,
+      oWh.params,
     ),
     saleAnomalyCount: await fetchOne(
       `SELECT COUNT(DISTINCT related_id) AS count
@@ -471,7 +515,8 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
          AND o.status != 5
          AND p.cost_price IS NOT NULL
          AND p.cost_price > 0
-         AND soi.unit_price < p.cost_price`,
+         AND soi.unit_price < p.cost_price${oWh.sql}`,
+      oWh.params,
     ),
     belowCostRows: await fetchMany(
       `SELECT o.id,
@@ -488,26 +533,28 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
          AND o.status != 5
          AND p.cost_price IS NOT NULL
          AND p.cost_price > 0
-         AND soi.unit_price < p.cost_price
+         AND soi.unit_price < p.cost_price${oWh.sql}
        GROUP BY o.id, o.order_no, o.customer_name, o.created_at
        ORDER BY SUM((p.cost_price - soi.unit_price) * soi.quantity) DESC
        LIMIT 5`,
+      oWh.params,
     ),
     inventoryAnomalyCount: await fetchOne(
       `SELECT COUNT(*) AS count
        FROM (
          SELECT CONCAT('neg_on_hand-', ((ip.product_id * 1000000) + ip.warehouse_id)) AS issue_key
          FROM ${inventoryDisplayProjectionSql} ip
-         WHERE ip.quantity < 0
+         WHERE ip.quantity < 0${ipWh.sql}
          UNION ALL
          SELECT CONCAT('neg_reserved-', s.id)
          FROM inventory_stock s
-         WHERE s.reserved < 0
+         WHERE s.reserved < 0${sWh.sql}
          UNION ALL
          SELECT CONCAT('reserved_exceeds-', ((ip.product_id * 1000000) + ip.warehouse_id))
          FROM ${inventoryDisplayProjectionSql} ip
-         WHERE ip.quantity < ip.reserved
+         WHERE ip.quantity < ip.reserved${ipWh.sql}
        ) x`,
+      [...ipWh.params, ...sWh.params, ...ipWh.params],
     ),
     inventoryAnomalyRows: await fetchMany(
       `SELECT * FROM (
@@ -521,7 +568,7 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
                 1 AS sort_rank
          FROM ${inventoryDisplayProjectionSql} ip
          INNER JOIN product_items p ON p.id = ip.product_id
-         WHERE ip.quantity < 0
+         WHERE ip.quantity < 0${ipWh.sql}
          UNION ALL
          SELECT s.id,
                 p.name AS title,
@@ -533,7 +580,7 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
                 2 AS sort_rank
          FROM inventory_stock s
          INNER JOIN product_items p ON p.id = s.product_id
-         WHERE s.reserved < 0
+         WHERE s.reserved < 0${sWh.sql}
          UNION ALL
          SELECT ((ip.product_id * 1000000) + ip.warehouse_id) AS id,
                 p.name AS title,
@@ -545,10 +592,11 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours }) {
                 3 AS sort_rank
          FROM ${inventoryDisplayProjectionSql} ip
          INNER JOIN product_items p ON p.id = ip.product_id
-         WHERE ip.quantity < ip.reserved
+         WHERE ip.quantity < ip.reserved${ipWh.sql}
        ) t
        ORDER BY sort_rank ASC, createdAt DESC
        LIMIT 5`,
+      [...ipWh.params, ...sWh.params, ...ipWh.params],
     ),
     highRiskCount: await fetchOne(
       `SELECT COUNT(*) AS count
@@ -706,11 +754,14 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
   return { typeNum, pageNum, pageSizeNum, summaryRow, countRow, rows }
 }
 
-async function fetchProfitAnalysisRows({ startDate = null, endDate = null } = {}) {
+async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   const productInventoryProjectionSql = getProductInventoryProjectionSql()
   const saleDate = buildDateFilter('so.created_at', startDate, endDate)
-  const saleWhere = `WHERE so.deleted_at IS NULL AND so.status = 4${saleDate.sql}`
+  const soWh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+  const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
+  const saleWhere = `WHERE so.deleted_at IS NULL AND so.status = 4${saleDate.sql}${soWh.sql}`
+  const saleParams = [...saleDate.params, ...soWh.params]
 
   const summaryRow = await fetchOne(
     `SELECT
@@ -720,7 +771,7 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null } = {}
      INNER JOIN sale_order_items soi ON soi.order_id = so.id
      INNER JOIN product_items p ON p.id = soi.product_id
      ${saleWhere}`,
-    saleDate.params,
+    saleParams,
   )
 
   const saleRows = await fetchMany(
@@ -739,7 +790,7 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null } = {}
      GROUP BY so.id, so.order_no, so.customer_name, so.warehouse_name, so.total_amount
      ORDER BY gross_profit DESC, so.created_at DESC
      LIMIT 20`,
-    saleDate.params,
+    saleParams,
   )
 
   const productRows = await fetchMany(
@@ -759,7 +810,7 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null } = {}
      GROUP BY p.id, p.code, p.name, p.unit
      ORDER BY gross_profit DESC, revenue_amount DESC
      LIMIT 20`,
-    saleDate.params,
+    saleParams,
   )
 
   const stockRows = await fetchMany(
@@ -774,10 +825,11 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null } = {}
      FROM ${inventoryDisplayProjectionSql} ip
      INNER JOIN product_items p ON p.id = ip.product_id
      INNER JOIN inventory_warehouses w ON w.id = ip.warehouse_id
-     WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL
+     WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL${ipWh.sql}
      GROUP BY p.id, p.code, p.name, p.unit, w.name
      ORDER BY total_value DESC
      LIMIT 30`,
+    ipWh.params,
   )
 
   const slowRows = await fetchMany(

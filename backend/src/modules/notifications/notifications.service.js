@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+const { scopeFilter } = require('../../utils/warehouseScope')
 
 function pushNotification(items, seen, item) {
   const dedupeKey = item.dedupeKey || `${item.category || 'general'}:${item.text}:${item.path}`
@@ -8,16 +9,28 @@ function pushNotification(items, seen, item) {
   items.push({ ...item, dedupeKey })
 }
 
-async function buildNotifications() {
+/**
+ * 站内通知：按当前用户仓库 scope 过滤「仓库相关」的计数（采购/销售/库存/调拨/收货/打印）。
+ * 账款、系统健康等无仓库维度的全局项不受影响。
+ */
+async function buildNotifications(scopeWarehouseIds = null) {
   const inboundThresholds = await getInboundClosureThresholds()
   const printTimeoutMinutes = Number(inboundThresholds.printTimeoutMinutes)
   const putawayTimeoutHours = Number(inboundThresholds.putawayTimeoutHours)
 
+  const poSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const soSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const stSc = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
+  const trSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const inSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+
   const [[{ pendingPurchase }]] = await pool.query(
-    `SELECT COUNT(*) AS pendingPurchase FROM purchase_orders WHERE status IN (1,2) AND deleted_at IS NULL`,
+    `SELECT COUNT(*) AS pendingPurchase FROM purchase_orders WHERE status IN (1,2) AND deleted_at IS NULL${poSc.sql}`,
+    poSc.params,
   )
   const [[{ pendingSale }]] = await pool.query(
-    `SELECT COUNT(*) AS pendingSale FROM sale_orders WHERE status IN (1,2,3) AND deleted_at IS NULL`,
+    `SELECT COUNT(*) AS pendingSale FROM sale_orders WHERE status IN (1,2,3) AND deleted_at IS NULL${soSc.sql}`,
+    soSc.params,
   )
   // 低于补货点的库存项数（按仓判定，补货点取 COALESCE(本仓行, warehouse_id=0 默认行, 0)，只算补货点>0 的）
   // 口径较补货建议报表保守：只看可用<补货点、不含在途，宁可多提醒；点进报表看含在途的精确清单。
@@ -28,8 +41,9 @@ async function buildNotifications() {
        LEFT JOIN product_stock_policies sp_wh  ON sp_wh.product_id = s.product_id AND sp_wh.warehouse_id = s.warehouse_id
        LEFT JOIN product_stock_policies sp_def ON sp_def.product_id = s.product_id AND sp_def.warehouse_id = 0
        WHERE COALESCE(sp_wh.reorder_point, sp_def.reorder_point, 0) > 0
-         AND GREATEST(0, s.quantity - s.reserved) < COALESCE(sp_wh.reorder_point, sp_def.reorder_point, 0)
+         AND GREATEST(0, s.quantity - s.reserved) < COALESCE(sp_wh.reorder_point, sp_def.reorder_point, 0)${stSc.sql}
      ) t`,
+    stSc.params,
   )
   const [[{ unpaidPayable }]] = await pool.query(
     `SELECT COUNT(*) AS unpaidPayable FROM payment_records WHERE type=1 AND status IN (1,2)`,
@@ -38,7 +52,8 @@ async function buildNotifications() {
     `SELECT COUNT(*) AS unpaidReceivable FROM payment_records WHERE type=2 AND status IN (1,2)`,
   )
   const [[{ pendingTransfer }]] = await pool.query(
-    `SELECT COUNT(*) AS pendingTransfer FROM transfer_orders WHERE status IN (1,2) AND deleted_at IS NULL`,
+    `SELECT COUNT(*) AS pendingTransfer FROM transfer_orders WHERE status IN (1,2) AND deleted_at IS NULL${trSc.sql}`,
+    trSc.params,
   )
   const [[{ overduePayable }]] = await pool.query(
     `SELECT COUNT(*) AS overduePayable FROM payment_records WHERE type=1 AND status IN (1,2) AND due_date IS NOT NULL AND due_date < CURDATE()`,
@@ -47,7 +62,8 @@ async function buildNotifications() {
     `SELECT COUNT(*) AS overdueReceivable FROM payment_records WHERE type=2 AND status IN (1,2) AND due_date IS NOT NULL AND due_date < CURDATE()`,
   )
   const [[{ pendingInbound }]] = await pool.query(
-    `SELECT COUNT(*) AS pendingInbound FROM inbound_tasks WHERE status IN (1,2,3) AND deleted_at IS NULL`,
+    `SELECT COUNT(*) AS pendingInbound FROM inbound_tasks WHERE status IN (1,2,3) AND deleted_at IS NULL${inSc.sql}`,
+    inSc.params,
   )
   const [[{ failedPrintJobs }]] = await pool.query(
     `SELECT COUNT(*) AS failedPrintJobs FROM print_jobs WHERE status = 3`,

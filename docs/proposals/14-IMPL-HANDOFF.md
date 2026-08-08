@@ -5,9 +5,37 @@
 
 ## 停靠点（当前状态）
 
-- **main 已含本次审计与收敛改动**（合并提交 `f8e069d`），但 **`main` 领先 `origin/main` 5 个提交，尚未 push**——`4aba208`（.worktreeinclude）+ 会话内的 `158292c`（收敛功能）/`70bf14e`（文案润色）/`f21a244`（修复计划）+ `f8e069d`（合并）。
-- **主仓库工作区有未提交改动**：`docs/proposals/HANDOFF.md`（另一会话的 WIP，**不要碰**）。
-- **系统尚未正式投入使用**：本机是开发版，GitHub/服务器有正式版但没真实业务数据。这是修复成本最低的窗口期——结构类修复（索引/迁移/清数据）无需数据保全预案，行为变更无中断风险。
+- **P0 修复已全部完成**（2026-08-09，会话 2）：3.1 数据权限、3.2 opLogger 敏感字段、3.3 packages 双闸、3.4 禁提权、3.5 结转/盘点测试、3.6 CI 门禁、3.7 日志清理、3.8 迁移去哈希。全量回归通过（mainline 49 / p0 41 / p1 44 / concurrency 83 / finance 103 / integration 96 / warehouse-scope 34 / pda-device-session 28 / sale-adjustment 57 / accounting-period 14 / print-purge 4 / oplog 11 / test:permissions 169）。
+- **已随 v0.4.62 发布**（本会话先发的 v0.4.62 是收敛+文案，后补 P0 修复）。
+- **P0 完成后待办**：3.6 的 release-gate 服务器端启用需 GitHub secrets（`SMOKE_USERNAME`/`SMOKE_PASSWORD`）+ 服务器 smoke 账号，见下方「遗留」。
+- 系统尚未正式投入使用。
+
+## P0 修复明细（本会话完成）
+
+### 已改代码
+1. **3.2 opLogger 敏感字段**（H1）：`opLogger.js` 的 `SENSITIVE_FIELDS` 追加 `deviceSecret/sessionToken/idempotencyKey` + 键名 snake_case/kebab-case → camelCase 归一化匹配（`device_secret`、`session_token`、`idempotency-key` 全灭）。新增 `tests/oplogger.test.js`（11 项）+ `test:oplog`。
+2. **3.3 packages 双闸**（H4）：`packages.routes.js` 5 处写接口（create/add-item/remove-item/void/finish）补挂 `pdaSessionRequired()`；controller 传 `req.user.warehouseIds`；service 各函数补 `assertInScope`（按 warehouse_tasks.warehouse_id）。扩展 `pda-device-session` 测试：无票据调 5 个写接口全 403 + 伪造票据也 403。
+3. **3.4 禁 roleId=1 提权**（M1）：`users.service` 新增 `assertCanAssignRole`（非超管不能把 roleId 改成 1）；controller 传 operator；`users.routes` schema 只放行 2-5（update 时 roleId 可省略=保持原角色，编辑超管不传）；前端 `UserFormDialog` 编辑超管时禁用管理员选项 + 不传 roleId。扩展 `warehouse-scope` 测试：受限用户改 roleId=1 → 400，普通角色修改仍放行。
+4. **3.8 001 迁移去哈希**：`001_create_sys_users.sql` 的 admin 密码从硬编码 bcrypt 哈希改为占位符 `'!'`（bcrypt 永不匹配）+ is_active=0，由 `bootstrap-admin.js` 完整建号。临时库验证：001 建表 + bootstrap 覆盖链路通过。
+5. **3.1 数据权限补全**（H2+H3，最大改动）：
+   - `sale.service`：findById/update/requestAdjustment/ship/cancel/deleteOrder/reserveStock/releaseStock 全加 `assertInScope` + `scopeWarehouseIds` 参数；controller 传 `req.user.warehouseIds`。
+   - `export`：8 个有仓库维度的导出（采购/销售/收货/库存/流水/调拨/采购退货/销售退货）加 scopeFilter；账款/对账/收付款 4 类导出因 `payment_records` 无仓库列保持全局视图（符合「账款不回溯 JOIN 主数据」约束）。
+   - `dashboard`：getSummary/getLowStock/getRecentTrend/getTopStockByValue/getIncomingPurchases 加 scope。
+   - `notifications`：采购/销售/库存/调拨/收货 5 类计数加 scope。
+   - `reports`：8 个报表函数加 scope（purchase/sale/inventory/profit-analysis 按单据仓库；pda-performance/warehouse-ops 经 scan_logs→warehouse_tasks JOIN；wave-performance 按波次仓库；role-workbench 各卡片按对应单据仓库）。
+   - 扩展 `warehouse-scope` 测试：受限用户调别人仓销售单详情/占库/出库/取消全 403，自己仓正常。
+6. **3.5 结转/盘点补测试**：新增 `tests/accounting-period.smoke.test.js`（14 项）锁死结转借贷平衡、幂等、期间锁定、反结账、结账前置、扫码盘点个体/数量容器、无 PDA 会话拒绝。注意：periodSvc 自开事务，测试用「落库后清理」而非事务 rollback。
+7. **3.6 CI 去 SKIP_RELEASE_GATE**：`deploy-browser.yml` 去掉 `SKIP_RELEASE_GATE=1`，改为注入 `SMOKE_USERNAME/SMOKE_PASSWORD` secrets（release-gate 需要）；`test.yml` 新增 `browser-smoke` job（独立 MySQL + 前端 build + preview，跑 smoke-pages + reconciliation-jumps）。
+8. **3.7 日志清理**：`scheduler.js` 挂 oplogs.clearOld（6h/30天）+ scan_logs（6h/180天）+ inventory_logs（6h/180天）清理 worker；`print-jobs.dispatch.js` 加 `purgeFinishedJobs`（默认 30 天保留窗口，sweeper 里调用）。新增 `tests/print-jobs-purge.test.js`（4 项）+ `test:print-purge`。
+9. **smoke-pages 修复**：脚本里 `/reports/approvals`、`/reports/exception-workbench`、`/price-lists` 三个已删除页面被替换为现存页面（`/procurement`、`/reports/inventory-aging`）。——这正说明 `SKIP_RELEASE_GATE=1` 掩盖了坏版本：页面烟雾从没在服务器跑过，删页面没同步删脚本。
+
+### 遗留（P0 完成后待办）
+- **3.6 服务器端 release-gate 真正启用**：本会话只改了 CI 与脚本。要让服务器部署时真正跑 release-gate，需要：
+  1. 在服务器建一个 smoke 账号（或复用 admin，但不应明文暴露凭据），推荐建独立 `smoke_gate` 账号。
+  2. 配置 GitHub secrets `SMOKE_USERNAME`/`SMOKE_PASSWORD`。
+  3. 在此之前，若服务器缺凭据，release-gate 会 exit 1 导致部署失败——**需要用户决策**（见记忆/会话记录）。
+- **`browser-smoke` CI job 未实测**：test.yml 的新 job 逻辑已写好但未在真实 CI 跑过（本地无法跑 GitHub Actions）。push 后需盯一次该 job 是否绿。
+- P1/P2 未动（前端真分页、备份演练、死代码清理等）。
 
 ## 背景
 

@@ -45,8 +45,8 @@ async function inventoryStats(params) {
   }
 }
 
-async function pdaPerformance() {
-  const { todaySummary, byOperator, daily } = await fetchPdaPerformanceRows()
+async function pdaPerformance(scopeWarehouseIds = null) {
+  const { todaySummary, byOperator, daily } = await fetchPdaPerformanceRows(scopeWarehouseIds)
   const operators = byOperator.map(r => {
     const first = r.first_scan ? new Date(r.first_scan) : null
     const last = r.last_scan ? new Date(r.last_scan) : null
@@ -77,7 +77,7 @@ async function pdaPerformance() {
   }
 }
 
-async function warehouseOps() {
+async function warehouseOps(scopeWarehouseIds = null) {
   const {
     todayShipped,
     todayPicking,
@@ -90,7 +90,7 @@ async function warehouseOps() {
     flowRows,
     hourlyRows,
     recentErrors,
-  } = await fetchWarehouseOpsRows()
+  } = await fetchWarehouseOpsRows(scopeWarehouseIds)
 
   const totalScans = Number(scanSummary.scan_count)
   const totalErrors = Number(errSummary.error_count)
@@ -152,10 +152,10 @@ async function warehouseOps() {
   }
 }
 
-async function roleWorkbench() {
+async function roleWorkbench(scopeWarehouseIds = null) {
   const thresholds = await getInboundClosureThresholds()
   const highRiskWindowHours = 24
-  const rows = await fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours })
+  const rows = await fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWarehouseIds })
 
   const sections = [
     {

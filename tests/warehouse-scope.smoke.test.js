@@ -298,6 +298,121 @@ async function scenarioUnscopedUserUnaffected(ctx, log, adminToken, others) {
   log.assert('管理员仍能看到全部仓库的采购单', list.ok && (list.data?.data?.list || []).length > 0, `status=${list.status}`)
 }
 
+/**
+ * 销售模块 scope（审计 H2 的核心：此前 11 个 sale 接口只有 list 过滤，详情/改单/占库/出库全裸奔）。
+ * 受限仓用户调别人仓销售单的详情、改单、占库、出库必须被拒。
+ */
+async function scenarioSaleScope(ctx, log, adminToken, scopedToken, mine, others) {
+  log.section('销售单：详情拦截 + 写操作拦截')
+  const { http, pool, customer } = ctx
+  const product = await createProduct(pool, 'sale')
+
+  // 管理员在「别人的仓」造一张销售单（scoped 用户无权访问）
+  const other = await http.post('/api/sale', {
+    token: adminToken,
+    json: {
+      customerId: customer.id, customerName: customer.name,
+      warehouseId: others.id, warehouseName: others.name,
+      items: [{
+        productId: product.id, productCode: product.code, productName: product.name,
+        unit: product.unit, quantity: 1, unitPrice: 10,
+      }],
+    },
+  })
+  log.assert('管理员造销售单成功', other.ok, `status=${other.status}`)
+  const otherSaleId = Number(other.data?.data?.id)
+
+  // 详情被拒
+  const detail = await http.get(`/api/sale/${otherSaleId}`, { token: scopedToken })
+  log.assert(
+    '★ 别人仓销售单详情被拒（修复前详情接口完全不过滤）',
+    detail.status === 403,
+    `status=${detail.status} code=${detail.data?.code}`,
+  )
+
+  // 占库被拒
+  const reserve = await http.post(`/api/sale/${otherSaleId}/reserve`, { token: scopedToken, json: {} })
+  log.assert(
+    '★ 别人仓销售单占库被拒',
+    reserve.status === 403,
+    `status=${reserve.status} code=${reserve.data?.code}`,
+  )
+
+  // 出库发起被拒
+  const ship = await http.post(`/api/sale/${otherSaleId}/ship`, { token: scopedToken, json: {} })
+  log.assert(
+    '★ 别人仓销售单发起出库被拒',
+    ship.status === 403,
+    `status=${ship.status} code=${ship.data?.code}`,
+  )
+
+  // 取消被拒
+  const cancel = await http.post(`/api/sale/${otherSaleId}/cancel`, { token: scopedToken, json: {} })
+  log.assert(
+    '★ 别人仓销售单取消被拒',
+    cancel.status === 403,
+    `status=${cancel.status} code=${cancel.data?.code}`,
+  )
+
+  // 自己仓的销售单详情正常（隔离不能把人挡在门外）
+  const mineSale = await http.post('/api/sale', {
+    token: adminToken,
+    json: {
+      customerId: customer.id, customerName: customer.name,
+      warehouseId: mine.id, warehouseName: mine.name,
+      items: [{
+        productId: product.id, productCode: product.code, productName: product.name,
+        unit: product.unit, quantity: 1, unitPrice: 10,
+      }],
+    },
+  })
+  const mineSaleId = Number(mineSale.data?.data?.id)
+  const mineDetail = await http.get(`/api/sale/${mineSaleId}`, { token: scopedToken })
+  log.assert('自己仓的销售单详情正常', mineDetail.ok, `status=${mineDetail.status}`)
+}
+
+/**
+ * 权限提权路径：scoped 用户被授了全部权限点（含 user.update），但它不是超管。
+ * 修复前它可以经 PUT /api/users/:id 把任意账号 roleId 改成 1 从而变身超管——
+ * 这就是审计 M1。现在要求：改 roleId=1 被 schema 层拦截（400，超管也不放行）。
+ */
+async function scenarioPrivilegeEscalationBlocked(ctx, log, adminToken, scopedToken) {  log.section('提权路径：非超管不能把账号改成超管（M1）')
+  const { http, pool } = ctx
+
+  // 造一个普通目标账号，scoped 用户试图把它抬成超管
+  const [r] = await pool.query(
+    "INSERT INTO sys_users (username, password, real_name, role_id, role_name, is_active) VALUES (?, '!', '提权目标', 4, '销售员', 1)",
+    [`esc_${randomRef('tg').slice(0, 20)}`],
+  )
+  const targetId = Number(r.insertId)
+
+  // 尝试直接改 roleId=1（HTTP 层：schema 拒绝）
+  const attempt = await http.put(`/api/users/${targetId}`, {
+    token: scopedToken,
+    json: { realName: '提权目标', roleId: 1, isActive: true },
+  })
+  log.assert(
+    '★ 非超管改 roleId=1 被拒（schema 层 400，修复前会成功写入）',
+    attempt.status === 400,
+    `status=${attempt.status} body=${JSON.stringify(attempt.data).slice(0, 120)}`,
+  )
+
+  const [check] = await dbQuery(ctx.pool, 'SELECT role_id FROM sys_users WHERE id=?', [targetId])
+  log.assert('★ 目标账号角色未被改动（仍是 4）', Number(check.role_id) === 4, `role_id=${check.role_id}`)
+
+  // 正常改 roleId=4 → 5 应该放行（证明不是把所有角色修改都禁了）
+  const ok = await http.put(`/api/users/${targetId}`, {
+    token: scopedToken,
+    json: { realName: '提权目标', roleId: 5, isActive: true },
+  })
+  log.assert('非超管把普通角色改到另一普通角色仍然放行', ok.ok, `status=${ok.status} ${JSON.stringify(ok.data).slice(0, 120)}`)
+  const [check2] = await dbQuery(ctx.pool, 'SELECT role_id FROM sys_users WHERE id=?', [targetId])
+  log.assert('目标账号角色已改为 5', Number(check2.role_id) === 5, `role_id=${check2.role_id}`)
+
+  // 清理目标账号
+  await pool.query('UPDATE sys_users SET deleted_at = NOW() WHERE id=?', [targetId])
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -317,6 +432,8 @@ async function main() {
     await scenarioTransferScope(ctx, log, adminToken, scopedToken, mine, others)
     await scenarioStockcheckAndReturnsScope(ctx, log, adminToken, scopedToken, mine, others)
     await scenarioUnscopedUserUnaffected(ctx, log, adminToken, others)
+    await scenarioSaleScope(ctx, log, adminToken, scopedToken, mine, others)
+    await scenarioPrivilegeEscalationBlocked(ctx, log, adminToken, scopedToken)
   } finally {
     await ctx.close()
   }

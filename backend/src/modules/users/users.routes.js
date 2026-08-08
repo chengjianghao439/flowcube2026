@@ -18,16 +18,21 @@ function validateBody(schema) {
   }
 }
 
+// roleId 只允许 2-5：1 是超管，必须由 bootstrap-admin.js 建号或直接操作数据库，
+// 不在 API 层放行（service 层另有 assertCanAssignRole 纵深防御）。更新时可省略
+// （不传 = 保持原角色，编辑既有超管账号时前端不传 roleId 以避免无意义 400）。
+const NON_ADMIN_ROLE = z.number().int().min(2).max(5)
+
 const createSchema = z.object({
   username: z.string().min(2, '账号至少 2 个字符').max(50),
   password: z.string().min(6, '密码至少 6 位').max(100),
   realName: z.string().min(1, '姓名不能为空').max(50),
-  roleId: z.number().int().min(1).max(5),
+  roleId: NON_ADMIN_ROLE,
 })
 
 const updateSchema = z.object({
   realName: z.string().min(1, '姓名不能为空').max(50),
-  roleId: z.number().int().min(1).max(5),
+  roleId: NON_ADMIN_ROLE.optional(),
   isActive: z.boolean(),
 })
 

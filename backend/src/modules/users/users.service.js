@@ -2,6 +2,15 @@ const bcrypt = require('bcryptjs')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 
+// roleId=1 是超管，跳过全部权限校验（前后端都是）。允许创建/改到超管的唯一入口是
+// 调用方自己就是超管——否则任何一个有 user.create / user.update 权限的普通角色
+// 都能把自己的账号（或同伙的）提到超管，等于绕开整个权限体系。
+function assertCanAssignRole(operator, targetRoleId) {
+  if (Number(targetRoleId) !== 1) return
+  if (Number(operator?.roleId) === 1) return
+  throw new AppError('只有超级管理员可以授予或变更为超级管理员角色', 403, 'ROLE_ASSIGN_DENIED')
+}
+
 async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
@@ -87,7 +96,8 @@ async function resolveRoleName(roleId) {
   return ROLE_NAMES[roleId] ?? '普通用户'
 }
 
-async function create({ username, password, realName, roleId }) {
+async function create({ username, password, realName, roleId }, operator = null) {
+  assertCanAssignRole(operator, roleId)
   const [exists] = await pool.query(
     'SELECT id FROM sys_users WHERE username = ? AND deleted_at IS NULL',
     [username],
@@ -105,14 +115,17 @@ async function create({ username, password, realName, roleId }) {
   return { id: result.insertId }
 }
 
-async function update(id, { realName, roleId, isActive }) {
+async function update(id, { realName, roleId, isActive }, operator = null) {
+  assertCanAssignRole(operator, roleId)
   const user = await findById(id)
+  // roleId 可省略（编辑超管账号时不传）；省略则保持原角色不动
+  const finalRoleId = roleId !== undefined ? roleId : user.roleId
   const roleName = roleId !== undefined ? await resolveRoleName(roleId) : user.roleName
 
   await pool.query(
     `UPDATE sys_users SET real_name = ?, role_id = ?, role_name = ?, is_active = ?
      WHERE id = ? AND deleted_at IS NULL`,
-    [realName, roleId, roleName, isActive ? 1 : 0, id],
+    [realName, finalRoleId, roleName, isActive ? 1 : 0, id],
   )
 }
 

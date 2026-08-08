@@ -1,23 +1,37 @@
 const { pool } = require('../../config/db')
 const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
+const { scopeFilter } = require('../../utils/warehouseScope')
 
-async function getSummary() {
+async function getSummary(scopeWarehouseIds = null) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   const productInventoryProjectionSql = getProductInventoryProjectionSql()
+  const wh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
   const [[{ totalSkus }]] = await pool.query(
     `SELECT COUNT(*) AS totalSkus
      FROM ${productInventoryProjectionSql} ip
      WHERE ip.quantity > 0`
   )
-  const [[{ totalQty }]] = await pool.query(`SELECT COALESCE(SUM(ip.quantity),0) AS totalQty FROM ${inventoryDisplayProjectionSql} ip`)
+  const [[{ totalQty }]] = await pool.query(
+    `SELECT COALESCE(SUM(ip.quantity),0) AS totalQty FROM ${inventoryDisplayProjectionSql} ip WHERE 1=1${wh.sql}`,
+    wh.params,
+  )
   const [[{ totalValue }]] = await pool.query(
     `SELECT COALESCE(SUM(ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)),0) AS totalValue
      FROM ${inventoryDisplayProjectionSql} ip
      JOIN product_items p ON ip.product_id=p.id
-     WHERE p.deleted_at IS NULL`
+     WHERE p.deleted_at IS NULL${wh.sql}`,
+    wh.params,
   )
-  const [[{ purchaseOrders }]] = await pool.query("SELECT COUNT(*) AS purchaseOrders FROM purchase_orders WHERE deleted_at IS NULL AND status IN (1,2)")
-  const [[{ saleOrders }]] = await pool.query("SELECT COUNT(*) AS saleOrders FROM sale_orders WHERE deleted_at IS NULL AND status IN (1,2,3)")
+  const poScope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const soScope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const [[{ purchaseOrders }]] = await pool.query(
+    `SELECT COUNT(*) AS purchaseOrders FROM purchase_orders WHERE deleted_at IS NULL AND status IN (1,2)${poScope.sql}`,
+    poScope.params,
+  )
+  const [[{ saleOrders }]] = await pool.query(
+    `SELECT COUNT(*) AS saleOrders FROM sale_orders WHERE deleted_at IS NULL AND status IN (1,2,3)${soScope.sql}`,
+    soScope.params,
+  )
   return {
     totalSkus: Number(totalSkus),
     totalQty: Number(totalQty),
@@ -27,43 +41,49 @@ async function getSummary() {
   }
 }
 
-async function getLowStock(threshold = 10) {
+async function getLowStock(threshold = 10, scopeWarehouseIds = null) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
+  const sc = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
   const [rows] = await pool.query(
     `SELECT p.id, p.code, p.name, p.unit, w.name AS warehouse_name, ip.quantity
      FROM ${inventoryDisplayProjectionSql} ip
      JOIN product_items p ON ip.product_id=p.id
      JOIN inventory_warehouses w ON ip.warehouse_id=w.id
-     WHERE ip.quantity <= ? AND p.deleted_at IS NULL AND w.deleted_at IS NULL
+     WHERE ip.quantity <= ? AND p.deleted_at IS NULL AND w.deleted_at IS NULL${sc.sql}
      ORDER BY ip.quantity ASC LIMIT 20`,
-    [threshold]
+    [threshold, ...sc.params]
   )
   return rows.map(r=>({ id:r.id, code:r.code, name:r.name, unit:r.unit, warehouseName:r.warehouse_name, quantity:Number(r.quantity) }))
 }
 
-async function getRecentTrend(days = 7) {
+async function getRecentTrend(days = 7, scopeWarehouseIds = null) {
+  const sc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   const [rows] = await pool.query(
     `SELECT DATE(created_at) AS date,
             SUM(CASE WHEN type=1 THEN quantity ELSE 0 END) AS inbound,
             SUM(CASE WHEN type=2 THEN quantity ELSE 0 END) AS outbound
      FROM inventory_logs
-     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+     WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)${sc.sql}
      GROUP BY DATE(created_at)
      ORDER BY date ASC`,
-    [days]
+    [days, ...sc.params]
   )
   return rows.map(r=>({ date:r.date, inbound:Number(r.inbound), outbound:Number(r.outbound) }))
 }
 
-async function getTopStockByValue(limit = 10) {
-  const productInventoryProjectionSql = getProductInventoryProjectionSql()
+async function getTopStockByValue(limit = 10, scopeWarehouseIds = null) {
+  const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
+  const sc = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
   const [rows] = await pool.query(
-    `SELECT p.code, p.name, p.unit, ip.quantity AS qty, ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0) AS value
-     FROM ${productInventoryProjectionSql} ip
+    `SELECT ip.product_id AS product_id, p.code, p.name, p.unit,
+            SUM(ip.quantity) AS qty,
+            SUM(ip.quantity) * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0) AS value
+     FROM ${inventoryDisplayProjectionSql} ip
      JOIN product_items p ON ip.product_id=p.id
-     WHERE p.deleted_at IS NULL
+     WHERE p.deleted_at IS NULL${sc.sql}
+     GROUP BY ip.product_id, p.code, p.name, p.unit, p.cost_price, p.sale_price
      ORDER BY value DESC LIMIT ?`,
-    [limit]
+    [...sc.params, limit]
   )
   return rows.map(r=>({ code:r.code, name:r.name, unit:r.unit, qty:Number(r.qty), value:Number(r.value) }))
 }
@@ -73,7 +93,8 @@ async function getTopStockByValue(limit = 10) {
  * 只统计仍有未收清明细的采购单（status IN 1,2 且非已取消/已完成），
  * 用 total_ordered_qty - total_received_qty 判断是否还有余量（同 purchase.service 口径）。
  */
-async function getIncomingPurchases() {
+async function getIncomingPurchases(scopeWarehouseIds = null) {
+  const sc = scopeFilter(scopeWarehouseIds, 'po.warehouse_id')
   const [rows] = await pool.query(
     `SELECT po.id, po.order_no, po.supplier_name, po.expected_date,
             po.total_amount,
@@ -93,8 +114,9 @@ async function getIncomingPurchases() {
      ) recv ON recv.order_id = po.id
      WHERE po.deleted_at IS NULL AND po.status IN (1,2)
        AND po.expected_date IS NOT NULL
-       AND COALESCE(recv.received, 0) < ordered.ordered
+       AND COALESCE(recv.received, 0) < ordered.ordered${sc.sql}
      ORDER BY po.expected_date ASC`,
+    sc.params,
   )
   const today = new Date().toISOString().slice(0, 10)
   const weekLater = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)

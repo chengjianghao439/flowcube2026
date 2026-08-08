@@ -185,3 +185,121 @@ jobs:
         run: npm run test:integration
         env:
           DB_NAME: flowcube_integration_test
+
+  browser-smoke:
+    name: 页面烟雾（Playwright）
+    runs-on: ubuntu-latest
+    needs: [regression]
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: flowcube_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: flowcube_test
+      JWT_SECRET: flowcube_ci_test_jwt_secret_0123456789_abcdef
+      PORT: "3000"
+      CORS_ORIGIN: http://localhost:5173
+      APP_UPDATE_DOWNLOADS_DIR: /tmp/flowcube-downloads
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: 安装后端依赖
+        run: npm --prefix backend ci
+
+      - name: 安装前端依赖
+        run: npm --prefix frontend ci
+
+      - name: 等待 MySQL 就绪并建库
+        run: |
+          set -e
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -proot --silent 2>/dev/null; then
+              echo "MySQL ready"; break
+            fi
+            echo "waiting for mysql... ($i)"; sleep 2
+          done
+          mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS flowcube_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+      - name: 数据库迁移
+        run: npm --prefix backend run migrate
+
+      # 页面烟雾登录需要 smoke_admin（超管，role 1）。空库无此账号，
+      # 直接插一条（bcrypt 哈希同 smokeTestKit 一致），等价于 prepareSmokeContext 的建号。
+      - name: 建页面烟雾测试账号
+        run: |
+          node -e "
+          const bcrypt = require('./backend/node_modules/bcryptjs');
+          const mysql = require('./backend/node_modules/mysql2/promise');
+          (async () => {
+            const conn = await mysql.createConnection({ host:'127.0.0.1', port:3306, user:'root', password:'root', database:'flowcube_test' });
+            const hash = bcrypt.hashSync('SmokeAdmin123!', 10);
+            await conn.query(\"INSERT INTO sys_users (username, password, real_name, role_id, role_name, is_active) VALUES ('smoke_admin', ?, 'Smoke管理员', 1, '管理员', 1) ON DUPLICATE KEY UPDATE password=VALUES(password)\", [hash]);
+            // 页面烟雾涉及仓库任务等页面，保证有基础数据：一个仓库、一个商品容器
+            await conn.query(\"INSERT INTO inventory_warehouses (name, code) VALUES ('Smoke仓库', 'SMOKE-WH') ON DUPLICATE KEY UPDATE name=VALUES(name)\");
+            await conn.query(\"INSERT INTO product_items (code, name, unit, sale_price_a) VALUES ('SMOKE-P001', 'Smoke商品', '个', 10) ON DUPLICATE KEY UPDATE name=VALUES(name)\");
+            await conn.end();
+          })().catch(e => { console.error(e.message); process.exit(1); });
+          "
+
+      # 前端构建产物由 preview 提供；/api 由 vite preview 的代理转发到 127.0.0.1:3000
+      - name: 构建前端
+        run: npm --prefix frontend run build
+
+      - name: 启动后端 + 前端 preview
+        run: |
+          set -euo pipefail
+          cd backend && (node index.js > /tmp/backend.log 2>&1 &) && cd ..
+          cd frontend && (npx vite preview --port 5173 > /tmp/frontend.log 2>&1 &) && cd ..
+          # 等待两端就绪
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1 \
+               && curl -fsS http://127.0.0.1:5173/ >/dev/null 2>&1; then
+              echo "backend + frontend ready"; exit 0
+            fi
+            echo "waiting for servers... ($i)"; sleep 2
+          done
+          echo "servers did not become ready" >&2
+          tail -50 /tmp/backend.log >&2 || true
+          tail -50 /tmp/frontend.log >&2 || true
+          exit 1
+
+      - name: 页面烟雾（Playwright）
+        run: |
+          set -euo pipefail
+          SMOKE_BASE_URL="http://127.0.0.1:5173" \
+          PAGE_SMOKE_BASE_URL="http://127.0.0.1:5173" \
+          SMOKE_USERNAME="smoke_admin" \
+          SMOKE_PASSWORD="SmokeAdmin123!" \
+          PLAYWRIGHT_BROWSER_NAME=chromium \
+          node scripts/smoke-pages.node.js
+          SMOKE_BASE_URL="http://127.0.0.1:5173" \
+          PAGE_SMOKE_BASE_URL="http://127.0.0.1:5173" \
+          SMOKE_USERNAME="smoke_admin" \
+          SMOKE_PASSWORD="SmokeAdmin123!" \
+          PLAYWRIGHT_BROWSER_NAME=chromium \
+          node scripts/smoke-reconciliation-jumps.node.js

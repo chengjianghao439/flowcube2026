@@ -12,13 +12,16 @@ import {
 import { useCreateUser, useUpdateUser } from '@/hooks/useUsers'
 import type { SysUser } from '@/types/users'
 
+// 角色 1（管理员/超管）不能经此表单创建或改派：后端 users.routes schema 只放行 2-5，
+// service 层还有 assertCanAssignRole 纵深防御。编辑已有超管时 roleId=1 但禁用选项，
+// 避免提交一个必然 400 的表单，同时让用户看到该账号确实是超管。
 const ROLES = [
-  { value: 1, label: '管理员' },
   { value: 2, label: '仓库管理员' },
   { value: 3, label: '采购员' },
   { value: 4, label: '销售员' },
   { value: 5, label: '只读用户' },
 ]
+const isSuperAdmin = (roleId: number | undefined) => roleId === 1
 
 interface UserFormDialogProps {
   open: boolean
@@ -58,8 +61,12 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (isEdit && editUser) {
+      // 编辑超管账号时不传 roleId（后端保持原角色）——超管不可经此表单改派
+      const payload = isSuperAdmin(editUser.roleId)
+        ? { realName, isActive }
+        : { realName, roleId, isActive }
       updateUser(
-        { id: editUser.id, data: { realName, roleId, isActive } },
+        { id: editUser.id, data: payload },
         { onSuccess: onClose },
       )
     } else {
@@ -115,6 +122,19 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
           <div className="space-y-2">
             <Label>角色</Label>
             <div className="flex gap-4">
+              {isSuperAdmin(roleId) && (
+                <label className="flex items-center gap-2 cursor-not-allowed opacity-60">
+                  <input
+                    type="radio"
+                    name="roleId"
+                    value={1}
+                    checked={true}
+                    disabled
+                    className="accent-primary"
+                  />
+                  <span className="text-sm">管理员（系统内置）</span>
+                </label>
+              )}
               {ROLES.map((r) => (
                 <label key={r.value} className="flex items-center gap-2 cursor-pointer">
                   <input

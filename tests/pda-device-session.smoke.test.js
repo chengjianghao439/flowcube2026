@@ -240,6 +240,49 @@ async function scenarioNoSessionBehaviour(ctx, log, token) {
   )
 }
 
+async function scenarioPackagesRequireSession(ctx, log, token) {
+  log.section('打包写接口：同样要求设备票据（防伪造 X-Client 头绕过）')
+  const { http } = ctx
+
+  // 五个写接口分别探测。只要 pdaSessionRequired 挂在 controller 之前，
+  // 无票据请求一律 403，不需要真的建箱子（id 任意也不会走到业务层）。
+  const probes = [
+    ['POST', '/api/packages', { warehouseTaskId: 1 }],
+    ['POST', '/api/packages/1/add-item', { productCode: 'X', qty: 1 }],
+    ['POST', '/api/packages/1/remove-item', { itemId: 1 }],
+    ['POST', '/api/packages/1/void', null],
+    ['PUT', '/api/packages/1/finish', null],
+  ]
+
+  for (const [method, path, json] of probes) {
+    const resp = await http[method.toLowerCase()](path, {
+      token,
+      headers: noSessionHeaders(),
+      json: json ?? undefined,
+    })
+    log.assert(
+      `★ 无票据 ${method} ${path} 被拒（此前只靠可伪造的 X-Client 头）`,
+      resp.status === 403 && resp.data?.code === 'PDA_SESSION_REQUIRED',
+      `status=${resp.status} code=${resp.data?.code} msg=${String(resp.data?.message).slice(0, 60)}`,
+    )
+  }
+
+  // 有票据时则允许通过会话校验（权限检查在会话之后；smoke_admin 是超管能过权限）
+  const task = await seedInboundTask(ctx, token, ctx.warehouse)
+  // 建一个处于待打包状态的任务才能真正创建箱子，这里只验证「票据能过会话闸门」
+  // 而不关心业务结果——因此用一个不存在的任务 id，应得到业务层 404 而非 403。
+  const withTicket = await http.post('/api/packages', {
+    token,
+    headers: noSessionHeaders({ 'X-PDA-Session': 'definitely-not-a-real-token' }),
+    json: { warehouseTaskId: 999999 },
+  })
+  log.assert(
+    '★ 伪造票据也过不了会话校验（不是随便一个字符串都算数）',
+    withTicket.status === 403 && withTicket.data?.code === 'PDA_SESSION_REQUIRED',
+    `status=${withTicket.status} code=${withTicket.data?.code}`,
+  )
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -259,6 +302,7 @@ async function main() {
     await scenarioDisableRevokes(ctx, log, token, bound)
     await scenarioResetSecret(ctx, log, token)
     await scenarioNoSessionBehaviour(ctx, log, token)
+    await scenarioPackagesRequireSession(ctx, log, token)
   } finally {
     await ctx.close()
   }

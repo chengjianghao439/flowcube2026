@@ -35,7 +35,7 @@ async function detail(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    const result = await usersService.create(req.body)
+    const result = await usersService.create(req.body, req.user)
     return successResponse(res, result, '创建成功', 201)
   } catch (err) {
     next(err)
@@ -44,7 +44,7 @@ async function create(req, res, next) {
 
 async function update(req, res, next) {
   try {
-    await usersService.update(parseInt(req.params.id), req.body)
+    await usersService.update(parseInt(req.params.id), req.body, req.user)
     return successResponse(res, null, '更新成功')
   } catch (err) {
     next(err)

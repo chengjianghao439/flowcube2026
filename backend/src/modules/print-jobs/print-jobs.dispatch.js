@@ -231,9 +231,37 @@ function startPrintJobSweeper() {
           'PrintJobs',
         )
       })
+    purgeFinishedJobs()
+      .then((n) => {
+        if (n > 0) {
+          logger.info('已清理历史打印任务', { purged: n, degradation: 'print_job_retention_purge' }, 'PrintJobs')
+        }
+      })
+      .catch((e) => {
+        logger.error(
+          '历史打印任务清理失败（保留窗口内正常，不阻断调度）',
+          e instanceof Error ? e : new Error(String(e)),
+          { degradation: 'print_job_purge_failed' },
+          'PrintJobs',
+        )
+      })
   }
   tick()
   setInterval(tick, ms)
+}
+
+// 已完成/失败的历史打印任务，超过保留窗口（默认 30 天）后物理删除，防 print_jobs 无界增长。
+// 幂等窗口（job_unique_key 活跃期唯一索引）只对未完成/近期任务有意义，过期任务删除不破坏幂等。
+async function purgeFinishedJobs() {
+  const raw = Number(process.env.PRINT_JOB_RETENTION_DAYS)
+  const days = Number.isFinite(raw) && raw > 0 ? raw : 30
+  const [r] = await pool.query(
+    `DELETE FROM print_jobs
+     WHERE status IN (?, ?)
+       AND updated_at < DATE_SUB(NOW(), INTERVAL ? DAY)`,
+    [STATUS.DONE, STATUS.FAILED, days],
+  )
+  return r.affectedRows ?? 0
 }
 
 module.exports = {
@@ -241,5 +269,6 @@ module.exports = {
   getDispatchHintForJob,
   expireStaleJobs,
   reclaimJobsFromOfflineClients,
+  purgeFinishedJobs,
   startPrintJobSweeper,
 }
