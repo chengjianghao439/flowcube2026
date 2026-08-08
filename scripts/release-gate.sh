@@ -44,7 +44,13 @@ cleanup_docker_space() {
 }
 
 echo "==> 检查旧桌面下载目录是否被误用..."
-node scripts/check-deprecated-downloads.js
+# 服务器宿主机不装 node（运行时都在容器里），本检查需要宿主机 git 仓库上下文。
+# 若无 node 则降级跳过——这是装饰性检查（防废弃目录被误用），不是核心门禁。
+if command -v node >/dev/null 2>&1; then
+  node scripts/check-deprecated-downloads.js
+else
+  echo "  宿主机无 node，跳过废弃下载目录检查（服务器部署从 git reset，目录不会被误写）"
+fi
 
 echo "==> 运行报表烟雾检查..."
 docker compose exec -T backend npm run smoke:reports
