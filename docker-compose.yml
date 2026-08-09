@@ -13,6 +13,8 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./backend/src/database:/docker-entrypoint-initdb.d
+      # 慢查询日志与连接数配置（P2-14）：只读挂载，不覆盖默认配置目录
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/slowlog.cnf:ro
     ports:
       - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
     healthcheck:
