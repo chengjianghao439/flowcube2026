@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Clock, Loader2, PackageOpen, Pencil, Plus, Save, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
+import { Input }   from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -28,6 +29,7 @@ import { SectionCard }    from '@/components/shared/SectionCard'
 import { CustomerFinder, ProductFinder } from '@/components/finder'
 import { useCreateSale, useUpdateSale, useAdjustSale, useSaleDetail, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { useCarriersActive } from '@/hooks/useCarriers'
+import { toast } from '@/lib/toast'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
@@ -87,6 +89,7 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
   const [receiverName,    setReceiverName]    = useState(order?.receiverName ?? '')
   const [receiverPhone,   setReceiverPhone]   = useState(order?.receiverPhone ?? '')
   const [receiverAddress, setReceiverAddress] = useState(order?.receiverAddress ?? '')
+  const [discountAmount,  setDiscountAmount]  = useState(order?.discountAmount ? String(order.discountAmount) : '')
   const counterRef    = useRef((order?.items ?? []).length)
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
   const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
@@ -131,10 +134,10 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
   // 编辑态初始值本就非空，"是否非空"不能代表"是否改过"，改成和进入编辑时的快照比较；
   // 新建态没有快照可比，沿用"任意字段非空即算改过"。
   const editSnapshotRef = useRef(order
-    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, freightType, receiverName, receiverPhone, receiverAddress, items })
+    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, freightType, receiverName, receiverPhone, receiverAddress, discountAmount, items })
     : null)
   const isDirty = order
-    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, freightType, receiverName, receiverPhone, receiverAddress, items }) !== editSnapshotRef.current
+    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, freightType, receiverName, receiverPhone, receiverAddress, discountAmount, items }) !== editSnapshotRef.current
     : !!(customerId || warehouseId || remark || carrierId || receiverName || items.length)
   useDirtyGuard(tabPath, isDirty)
 
@@ -200,12 +203,15 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
   }
 
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const discount = Math.max(0, Number(discountAmount) || 0)
+  const discountedTotal = Math.max(0, total - discount)
 
   return {
     customerId, setCustomerId, customerName, setCustomerName,
     warehouseId, setWarehouseId, warehouseName, setWarehouseName,
     remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
+    discountAmount, setDiscountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
     items, priceLoading,
     finderOpen, setFinderOpen, finderItemKey, setFinderItemKey,
@@ -214,7 +220,6 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
     invalidItemKeys, setInvalidItemKeys,
     isDirty, addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
-    total,
   }
 }
 
@@ -229,6 +234,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     warehouseId, setWarehouseId, warehouseName, setWarehouseName,
     remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
+    discountAmount, setDiscountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
     items, priceLoading,
     finderOpen, setFinderOpen, setFinderItemKey,
@@ -237,7 +243,6 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     invalidItemKeys, setInvalidItemKeys,
     isDirty, addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
-    total,
   } = useSaleOrderForm(tabPath)
 
   async function handleSubmit() {
@@ -246,11 +251,16 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       setCustomerError, setWarehouseError, setInvalidItemKeys,
     })
     if (!filledItems) return
+    if (discount > total) {
+      toast.warning('折扣不能超过合计金额')
+      return
+    }
     try {
       await createMutate.mutateAsync({
         customerId: +customerId, customerName,
         warehouseId: +warehouseId, warehouseName,
         remark: remark || undefined,
+        discountAmount: Number(discountAmount) || 0,
         carrierId: carrierId ? +carrierId : null,
         freightType: freightType ? +freightType : null,
         receiverName: receiverName || undefined,
@@ -327,9 +337,27 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
                   </p>
                 )}
               </div>
-              <div className="text-right">
-                <p className="text-helper">合计金额</p>
-                <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
+              <div className="space-y-2 text-right">
+                <div>
+                  <p className="text-helper">合计金额</p>
+                  <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <label className="text-xs text-muted-body">折扣</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={discountAmount}
+                    onChange={(e) => setDiscountAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="h-8 w-28 text-right text-sm"
+                  />
+                </div>
+                <div>
+                  <p className="text-helper">折后金额</p>
+                  <p className="text-2xl font-semibold text-foreground">¥{discountedTotal.toFixed(2)}</p>
+                </div>
               </div>
             </div>
           )}
@@ -370,6 +398,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
     warehouseId, setWarehouseId, warehouseName, setWarehouseName,
     remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
+    discountAmount, setDiscountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
     items, priceLoading,
     finderOpen, setFinderOpen, setFinderItemKey,
@@ -378,7 +407,6 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
     invalidItemKeys, setInvalidItemKeys,
     addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
-    total,
   } = useSaleOrderForm(tabPath, order)
 
   async function handleSubmit() {
@@ -387,12 +415,17 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
       setCustomerError, setWarehouseError, setInvalidItemKeys,
     })
     if (!filledItems) return
+    if (discount > total) {
+      toast.warning('折扣不能超过合计金额')
+      return
+    }
     try {
       await updateMutate.mutateAsync({
         id: order.id,
         customerId: +customerId, customerName,
         warehouseId: +warehouseId, warehouseName,
         remark: remark || undefined,
+        discountAmount: Number(discountAmount) || 0,
         carrierId: carrierId ? +carrierId : null,
         freightType: freightType ? +freightType : null,
         receiverName: receiverName || undefined,
@@ -473,9 +506,27 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
                 </p>
               )}
             </div>
-            <div>
-              <p className="mb-1 text-xs">合计金额</p>
-              <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
+            <div className="space-y-2 text-right">
+              <div>
+                <p className="mb-1 text-xs">合计金额</p>
+                <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <label className="text-xs text-muted-body">折扣</label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={discountAmount}
+                  onChange={(e) => setDiscountAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="h-8 w-28 text-right text-sm"
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-xs">折后金额</p>
+                <p className="text-3xl font-bold text-foreground">¥{discountedTotal.toFixed(2)}</p>
+              </div>
             </div>
           </div>
         </SectionCard>
@@ -516,6 +567,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
     warehouseId, setWarehouseId, warehouseName, setWarehouseName,
     remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
+    discountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
     items, priceLoading,
     finderOpen, setFinderOpen, setFinderItemKey,
@@ -524,7 +576,6 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
     invalidItemKeys, setInvalidItemKeys,
     addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
-    total,
   } = useSaleOrderForm(tabPath, order)
 
   async function handleSubmit() {
@@ -539,6 +590,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
         customerId: +customerId, customerName,
         warehouseId: +warehouseId, warehouseName,
         remark: remark || undefined,
+        discountAmount: Number(discountAmount) || 0,
         carrierId: carrierId ? +carrierId : null,
         freightType: freightType ? +freightType : null,
         receiverName: receiverName || undefined,
@@ -615,9 +667,19 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
               <p>商品种数：{items.filter(i => i.productId > 0).length} 种</p>
               <p>合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
             </div>
-            <div>
-              <p className="mb-1 text-xs">合计金额</p>
-              <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
+            <div className="space-y-2 text-right">
+              <div>
+                <p className="mb-1 text-xs">合计金额</p>
+                <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="mb-1 text-xs">折扣</p>
+                <p className="text-3xl font-bold text-foreground">-¥{discount.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="mb-1 text-xs">折后金额</p>
+                <p className="text-3xl font-bold text-foreground">¥{discountedTotal.toFixed(2)}</p>
+              </div>
             </div>
           </div>
         </SectionCard>
@@ -898,7 +960,21 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           <SectionCard title="金额统计">
             <div className="flex items-center justify-between">
               <p className="text-sm">共 {order.items?.length ?? 0} 种商品</p>
-              <div><p className="mb-1 text-xs">合计金额</p><p className="text-3xl font-bold">¥{Number(order.totalAmount).toFixed(2)}</p></div>
+              <div className="space-y-2 text-right">
+                <div><p className="mb-1 text-xs">合计金额</p><p className="text-3xl font-bold">¥{Number(order.totalAmount).toFixed(2)}</p></div>
+                {Number(order.discountAmount ?? 0) > 0 && (
+                  <>
+                    <div>
+                      <p className="mb-1 text-xs">折扣</p>
+                      <p className="text-3xl font-bold">-¥{Number(order.discountAmount).toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs">折后金额</p>
+                      <p className="text-3xl font-bold">¥{Math.max(0, Number(order.totalAmount) - Number(order.discountAmount ?? 0)).toFixed(2)}</p>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </SectionCard>
         </>
