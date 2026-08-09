@@ -191,6 +191,9 @@ jobs:
       - name: 冒烟测试 — 开票量校验（防多开票，累计开票≤应收/应付基准）
         run: npm run smoke:invoice-quota
 
+      - name: 冒烟测试 — 已收款退货退款（红冲已收+账户出账+退货守卫联动）
+        run: npm run smoke:refund-orders
+
       - name: 冒烟测试 — 会计凭证引擎（借贷平衡 / 资金勾稽 / 幂等）
         run: npm run smoke:accounting
 

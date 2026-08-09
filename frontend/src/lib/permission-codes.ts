@@ -146,6 +146,10 @@ export const PERMISSIONS = {
   FINANCE_EXPENSE_CATEGORY_MANAGE: 'finance.expense.category.manage',
   FINANCE_EXPENSE_VIEW_ALL: 'finance.expense.view.all',
 
+  REFUND_ORDER_VIEW: 'refund.order.view',
+  REFUND_ORDER_CREATE: 'refund.order.create',
+  REFUND_ORDER_EXECUTE: 'refund.order.execute',
+
   WAREHOUSE_TASK_VIEW: 'warehouse.task.view',
   WAREHOUSE_TASK_ASSIGN: 'warehouse.task.assign',
   WAREHOUSE_TASK_PICK: 'warehouse.task.pick',
@@ -333,6 +337,9 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.ACCOUNTING_PERIOD_MANAGE, label: '期末结转/结账/反结账' },
       { code: PERMISSIONS.INVOICE_VIEW, label: '查看进项/销项发票' },
       { code: PERMISSIONS.INVOICE_MANAGE, label: '录入/认证/抵扣/红冲发票' },
+      { code: PERMISSIONS.REFUND_ORDER_VIEW, label: '查看退款单' },
+      { code: PERMISSIONS.REFUND_ORDER_CREATE, label: '新建/确认/取消退款单' },
+      { code: PERMISSIONS.REFUND_ORDER_EXECUTE, label: '执行退款（资金账户出账）' },
     ],
   },
   {

@@ -126,6 +126,7 @@ const AcctVouchersPage = lazy(() => import('@/pages/accounting/vouchers'))
 const AcctLedgerPage = lazy(() => import('@/pages/accounting/ledger'))
 const AcctReportsPage = lazy(() => import('@/pages/accounting/reports'))
 const AcctInvoicesPage = lazy(() => import('@/pages/accounting/invoices'))
+const RefundsPage = lazy(() => import('@/pages/refunds'))
 const AcctPeriodsPage = lazy(() => import('@/pages/accounting/periods'))
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
 const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
@@ -512,6 +513,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '会计', section: '发票税务', order: 50 },
+  },
+  {
+    path: '/refunds',
+    title: '退货退款单',
+    permission: PERMISSIONS.REFUND_ORDER_VIEW,
+    component: RefundsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '发票税务', order: 60 },
   },
   {
     path: '/accounting/periods',

@@ -156,6 +156,11 @@ const PERMISSIONS = {
   // 见全部报销：无此权限者(超管 role_id=1 走 roleId 豁免恒有)列表只能看自己提交的单。
   FINANCE_EXPENSE_VIEW_ALL: 'finance.expense.view.all',
 
+  // 已收款退货退款单（P2-6）。EXECUTE 直接动资金账户出账，敏感度等同 FINANCE_EXPENSE_PAY。
+  REFUND_ORDER_VIEW: 'refund.order.view',
+  REFUND_ORDER_CREATE: 'refund.order.create',
+  REFUND_ORDER_EXECUTE: 'refund.order.execute',
+
   WAREHOUSE_TASK_VIEW: 'warehouse.task.view',
   WAREHOUSE_TASK_ASSIGN: 'warehouse.task.assign',
   WAREHOUSE_TASK_PICK: 'warehouse.task.pick',

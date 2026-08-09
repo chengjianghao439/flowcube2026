@@ -17,8 +17,8 @@ const ACCOUNT_TYPE = { BANK: 1, CASH: 2, ALIPAY: 3, WECHAT: 4, OTHER: 5 }
 const ACCOUNT_TYPE_NAME = { 1: '银行账户', 2: '现金', 3: '支付宝', 4: '微信', 5: '其他' }
 
 const DIRECTION = { IN: 1, OUT: 2 }
-const BIZ_TYPE = { RECEIPT: 1, PAYMENT: 2, EXPENSE: 3, ADJUST: 4 }
-const BIZ_TYPE_NAME = { 1: '收款', 2: '付款', 3: '费用报销', 4: '余额调整' }
+const BIZ_TYPE = { RECEIPT: 1, PAYMENT: 2, EXPENSE: 3, ADJUST: 4, REFUND: 5 }
+const BIZ_TYPE_NAME = { 1: '收款', 2: '付款', 3: '费用报销', 4: '余额调整', 5: '退货退款' }
 
 function fmtAccount(row) {
   return {

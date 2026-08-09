@@ -136,6 +136,24 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
     },
   },
 
+  // 已收款退货退款单（P2-6）：草稿 → 确认 → 执行退款。范式照 expenseClaim，但没有审批环节
+  // （退款金额 ≤ 已收金额由执行时校验，确认即视为财务认可）。
+  refundOrder: {
+    entityName: '退款单',
+    actions: {
+      edit: { from: [1], message: '只有草稿状态的退款单可以修改' },
+      submit: { from: [1], to: 2, message: '只有草稿状态的退款单可以确认' },
+      execute: {
+        from: [2], to: 3, message: '只有已确认的退款单可以执行退款',
+        blocked: { 1: '退款单尚未确认', 3: '退款单已完成', 4: '退款单已取消' },
+      },
+      cancel: {
+        from: [1, 2], to: 4, message: '当前状态的退款单不能取消',
+        blocked: { 3: '已完成退款的退款单不能取消' },
+      },
+    },
+  },
+
   // 采购请购单：一线/采购发起需求 → 一级审批 → 转生成采购单。审批范式照 expenseClaim。
   // convert 不改单头状态（部分转单仍停在已批准3），全部明细转完才由 complete 推到终态 6。
   purchaseRequisition: {
