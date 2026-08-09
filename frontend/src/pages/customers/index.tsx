@@ -35,7 +35,7 @@ export default function CustomersPage() {
   const del = useDeleteCustomer()
   const [confirmTarget, setConfirmTarget] = useState<Customer | null>(null)
   const bindMut = useMutation({
-    mutationFn: () => bindCustomerApi(bindCustomer!.id, selectedPriceLevel),
+    mutationFn: () => bindCustomerApi(bindCustomer!.id, selectedPriceLevel, { skipGlobalError: true }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['customers'] }); setBindOpen(false); setBindCustomer(null); toast.success('价格等级已绑定') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '绑定失败'),
   })

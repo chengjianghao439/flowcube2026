@@ -65,17 +65,17 @@ export default function LogisticsPage() {
   function invalidate() { qc.invalidateQueries({ queryKey: ['waybills'] }) }
 
   const trackMut = useMutation({
-    mutationFn: () => setWaybillTrackingApi(trackTarget!.id, trackingInput.trim()),
+    mutationFn: () => setWaybillTrackingApi(trackTarget!.id, trackingInput.trim(), { skipGlobalError: true }),
     onSuccess: () => { toast.success('已录入快递单号'); invalidate(); setTrackTarget(null); setTrackingInput('') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '录入失败'),
   })
   const retryMut = useMutation({
-    mutationFn: (id: number) => retryWaybillApi(id),
+    mutationFn: (id: number) => retryWaybillApi(id, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已重新提交取号'); invalidate() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
   })
   const voidMut = useMutation({
-    mutationFn: (id: number) => voidWaybillApi(id),
+    mutationFn: (id: number) => voidWaybillApi(id, undefined, { skipGlobalError: true }),
     onSuccess: () => { toast.success('运单已作废'); invalidate() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
   })

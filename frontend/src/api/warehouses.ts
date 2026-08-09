@@ -21,6 +21,6 @@ export async function updateWarehouseApi(id: number, data: UpdateWarehouseParams
   await apiClient.put(`/warehouses/${id}`, data)
 }
 
-export async function deleteWarehouseApi(id: number): Promise<void> {
-  await apiClient.delete(`/warehouses/${id}`)
+export async function deleteWarehouseApi(id: number, config?: Parameters<typeof apiClient.delete>[1]): Promise<void> {
+  await apiClient.delete(`/warehouses/${id}`, config)
 }

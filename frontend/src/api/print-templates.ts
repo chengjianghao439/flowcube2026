@@ -6,4 +6,4 @@ export const getPrintTemplateListApi   = (params?: { type?: number }) => client.
 export const getPrintTemplateDetailApi = (id: number)                  => client.get<PrintTemplate>(`/print-templates/${id}`)
 export const createPrintTemplateApi    = (data: CreateTemplateParams)  => client.post<{ id: number }>('/print-templates', data)
 export const updatePrintTemplateApi    = ({ id, ...data }: UpdateTemplateParams) => client.put<null>(`/print-templates/${id}`, data)
-export const deletePrintTemplateApi    = (id: number)                  => client.delete<null>(`/print-templates/${id}`)
+export const deletePrintTemplateApi    = (id: number, config?: Parameters<typeof client.delete>[1]) => client.delete<null>(`/print-templates/${id}`, config)

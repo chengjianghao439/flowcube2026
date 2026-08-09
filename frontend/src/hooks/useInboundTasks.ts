@@ -57,7 +57,7 @@ export function useInboundPurchaseCandidates(supplierId: number | null, keyword:
 export function useCreateInboundTask() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (data: CreateInboundTaskParams) => createInboundTaskApi(data),
+    mutationFn: (data: CreateInboundTaskParams) => createInboundTaskApi(data, { skipGlobalError: true }),
     onSettled: () => invalidate('inbound_create'),
   })
 }
@@ -76,7 +76,7 @@ export function useReceiveInbound() {
 export function useSubmitInboundTask() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (id: number) => submitInboundTaskApi(id),
+    mutationFn: (id: number) => submitInboundTaskApi(id, { skipGlobalError: true }),
     onSuccess: () => invalidate('inbound_submit'),
   })
 }
@@ -92,7 +92,7 @@ export function useReprintInboundTask() {
 export function useCancelInbound() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (id: number) => cancelInboundApi(id),
+    mutationFn: (id: number) => cancelInboundApi(id, { skipGlobalError: true }),
     onSuccess: () => invalidate('inbound_cancel'),
   })
 }
@@ -100,7 +100,7 @@ export function useCancelInbound() {
 export function useVoidInboundReceipt() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (id: number) => voidInboundReceiptApi(id),
+    mutationFn: (id: number) => voidInboundReceiptApi(id, { skipGlobalError: true }),
     onSuccess: () => invalidate('inbound_void_receipt'),
   })
 }
@@ -108,7 +108,7 @@ export function useVoidInboundReceipt() {
 export function useCloseReceivingInbound() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (id: number) => closeReceivingInboundApi(id),
+    mutationFn: (id: number) => closeReceivingInboundApi(id, { skipGlobalError: true }),
     onSuccess: () => invalidate('inbound_close_receiving'),
   })
 }
@@ -127,7 +127,7 @@ export function useQaDisposeInbound() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: QaDisposeParams }) =>
-      qaDisposeInboundApi(id, data, createRequestKey('inbound_qa_dispose')),
+      qaDisposeInboundApi(id, data, createRequestKey('inbound_qa_dispose'), { skipGlobalError: true }),
     onSuccess: () => invalidate('inbound_qa_dispose'),
   })
 }

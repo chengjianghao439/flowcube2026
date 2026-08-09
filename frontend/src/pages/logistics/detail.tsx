@@ -63,17 +63,17 @@ export default function LogisticsDetailPage() {
   }
 
   const trackMut = useMutation({
-    mutationFn: () => setWaybillTrackingApi(waybillId, trackingInput.trim()),
+    mutationFn: () => setWaybillTrackingApi(waybillId, trackingInput.trim(), { skipGlobalError: true }),
     onSuccess: () => { toast.success('已录入快递单号'); invalidate(); setTrackOpen(false); setTrackingInput('') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '录入失败'),
   })
   const retryMut = useMutation({
-    mutationFn: () => retryWaybillApi(waybillId),
+    mutationFn: () => retryWaybillApi(waybillId, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已重新提交取号'); invalidate() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
   })
   const voidMut = useMutation({
-    mutationFn: () => voidWaybillApi(waybillId),
+    mutationFn: () => voidWaybillApi(waybillId, undefined, { skipGlobalError: true }),
     onSuccess: () => { toast.success('运单已作废'); invalidate() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
   })

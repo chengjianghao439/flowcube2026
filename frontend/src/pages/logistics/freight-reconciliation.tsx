@@ -58,13 +58,13 @@ export default function FreightReconciliationPage() {
       trackingNo: billForm.trackingNo.trim(),
       actualFreight: Number(billForm.actualFreight),
       billPeriod: billForm.billPeriod || undefined,
-    }),
+    }, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已录入运费账单'); invalidate(); setBillDialog(false) },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '录入失败'),
   })
 
   const generateMut = useMutation({
-    mutationFn: () => generateFreightSettlementApi(Number(carrierId), period),
+    mutationFn: () => generateFreightSettlementApi(Number(carrierId), period, { skipGlobalError: true }),
     onSuccess: (s: FreightSettlement) => { toast.success(`已生成应付：${Number(s.totalFreight).toFixed(2)} 元`); invalidate() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '生成失败'),
   })

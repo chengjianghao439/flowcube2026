@@ -7,7 +7,7 @@ export const useCustomersActive = () => useQuery({ queryKey: ['customers-active'
 export const useCreateCustomer = () => {
   const qc=useQueryClient()
   return useMutation({
-    mutationFn:(data:CreateCustomerParams)=>createCustomerApi(data),
+    mutationFn:(data:CreateCustomerParams)=>createCustomerApi(data, { skipGlobalError: true }),
     onSuccess:()=>{ qc.invalidateQueries({queryKey:['customers']}); toast.success('客户已创建') },
     onError:(e:unknown)=>toast.error(e instanceof Error ? e.message : '创建失败'),
   })
@@ -15,7 +15,7 @@ export const useCreateCustomer = () => {
 export const useUpdateCustomer = () => {
   const qc=useQueryClient()
   return useMutation({
-    mutationFn:({id,data}:{id:number;data:UpdateCustomerParams})=>updateCustomerApi(id,data),
+    mutationFn:({id,data}:{id:number;data:UpdateCustomerParams})=>updateCustomerApi(id,data, { skipGlobalError: true }),
     onSuccess:()=>{ qc.invalidateQueries({queryKey:['customers']}); toast.success('客户已更新') },
     onError:(e:unknown)=>toast.error(e instanceof Error ? e.message : '更新失败'),
   })
@@ -23,7 +23,7 @@ export const useUpdateCustomer = () => {
 export const useDeleteCustomer = () => {
   const qc=useQueryClient()
   return useMutation({
-    mutationFn:(id:number)=>deleteCustomerApi(id),
+    mutationFn:(id:number)=>deleteCustomerApi(id, { skipGlobalError: true }),
     onSuccess:()=>{ qc.invalidateQueries({queryKey:['customers']}); toast.success('客户已删除') },
     onError:(e:unknown)=>toast.error(e instanceof Error ? e.message : '删除失败'),
   })

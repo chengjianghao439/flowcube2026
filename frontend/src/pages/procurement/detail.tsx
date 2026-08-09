@@ -37,17 +37,17 @@ export default function ProcurementPlanDetailPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['procurement-plan', planId] })
   const updateItem = useMutation({
-    mutationFn: ({ itemId, patch }: { itemId: number; patch: { adjustedQty?: number; supplierId?: number | null; ignore?: boolean } }) => updatePlanItemApi(planId, itemId, patch),
+    mutationFn: ({ itemId, patch }: { itemId: number; patch: { adjustedQty?: number; supplierId?: number | null; ignore?: boolean } }) => updatePlanItemApi(planId, itemId, patch, { skipGlobalError: true }),
     onSuccess: () => invalidate(),
     onError: (e: unknown) => toast.error((e as { message?: string })?.message || '保存失败'),
   })
   const convert = useMutation({
-    mutationFn: (ids: number[]) => convertPlanApi(planId, ids),
+    mutationFn: (ids: number[]) => convertPlanApi(planId, ids, { skipGlobalError: true }),
     onSuccess: (r) => { toast.success(`已生成 ${r!.createdOrders.length} 张采购单草稿`); setSelected(new Set()); invalidate(); qc.invalidateQueries({ queryKey: ['procurement-plans'] }) },
     onError: (e: unknown) => toast.error((e as { message?: string })?.message || '转采购失败'),
   })
   const cancelPlan = useMutation({
-    mutationFn: () => cancelPlanApi(planId),
+    mutationFn: () => cancelPlanApi(planId, { skipGlobalError: true }),
     onSuccess: () => { toast.success('计划已作废'); invalidate(); qc.invalidateQueries({ queryKey: ['procurement-plans'] }) },
     onError: (e: unknown) => toast.error((e as { message?: string })?.message || '作废失败'),
   })

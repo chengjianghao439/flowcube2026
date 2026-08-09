@@ -24,13 +24,13 @@ export const saveCheckItemScansApi = (id: number, itemId: number, scans: { barco
   )
 
 // 循环盘点 ABC / 候选（文档 08）
-export const recomputeAbcApi = (data: { warehouseId: number; metricType?: string; windowDays?: number }) =>
-  client.post<{ warehouseId: number; metricType: string; windowDays: number; classified: number; totalMetric: number }>('/stockcheck/abc/recompute', data)
+export const recomputeAbcApi = (data: { warehouseId: number; metricType?: string; windowDays?: number }, config?: Parameters<typeof client.post>[2]) =>
+  client.post<{ warehouseId: number; metricType: string; windowDays: number; classified: number; totalMetric: number }>('/stockcheck/abc/recompute', data, config)
 export const getAbcListApi = (params: { warehouseId?: number; abcClass?: string }) =>
   client.get<AbcClassRow[]>('/stockcheck/abc', { params })
 export const getCycleCandidatesApi = (params: { warehouseId: number; scopeType?: string; scopeValue?: string }) =>
   client.get<CycleCandidate>('/stockcheck/cycle/candidates', { params })
 export const getCycleRulesApi = (warehouseId?: number) =>
   client.get<CycleRulesResult>('/stockcheck/cycle/rules', { params: warehouseId ? { warehouseId } : {} })
-export const saveCycleRulesApi = (data: { warehouseId?: number; rules: { abcClass: string; intervalDays: number; batchLimit: number; enabled?: boolean }[] }) =>
-  client.put<CycleRulesResult>('/stockcheck/cycle/rules', data)
+export const saveCycleRulesApi = (data: { warehouseId?: number; rules: { abcClass: string; intervalDays: number; batchLimit: number; enabled?: boolean }[] }, config?: Parameters<typeof client.put>[2]) =>
+  client.put<CycleRulesResult>('/stockcheck/cycle/rules', data, config)

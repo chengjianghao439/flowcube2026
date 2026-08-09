@@ -32,7 +32,7 @@ export default function PrintTemplatesPage() {
   function invalidate() { qc.invalidateQueries({ queryKey: ['print-templates'] }) }
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => deletePrintTemplateApi(id),
+    mutationFn: (id: number) => deletePrintTemplateApi(id, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已删除'); invalidate() },
     onError: () => toast.error('删除失败'),
   })

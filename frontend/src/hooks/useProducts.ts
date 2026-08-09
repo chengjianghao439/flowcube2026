@@ -15,7 +15,7 @@ export function useUpdateProduct() { const qc=useQueryClient(); return useMutati
 export function useDeleteProduct() {
   const qc=useQueryClient()
   return useMutation({
-    mutationFn:deleteProductApi,
+    mutationFn:(id:number)=>deleteProductApi(id, { skipGlobalError: true }),
     onSuccess:()=>qc.invalidateQueries({queryKey:[K]}),
     onError:(e:unknown)=>toast.error(e instanceof Error ? e.message : '删除失败'),
   })

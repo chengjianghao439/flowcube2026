@@ -25,14 +25,14 @@ export const getInboundTasksApi = (params: QueryParams & { status?: number | num
 export const getInboundPurchaseCandidatesApi = (params: { supplierId: number; keyword?: string }) =>
   client.get<InboundPurchaseCandidate[]>('/inbound-tasks/purchase-items', { params })
 
-export const createInboundTaskApi = (data: CreateInboundTaskParams) =>
-  client.post<CreateInboundTaskResult>('/inbound-tasks', data)
+export const createInboundTaskApi = (data: CreateInboundTaskParams, config?: Parameters<typeof client.post>[2]) =>
+  client.post<CreateInboundTaskResult>('/inbound-tasks', data, config)
 
 export const getInboundTaskByIdApi = (id: number) =>
   client.get<InboundTask>(`/inbound-tasks/${id}`)
 
-export const submitInboundTaskApi = (id: number) =>
-  client.post<InboundTask>(`/inbound-tasks/${id}/submit`)
+export const submitInboundTaskApi = (id: number, config?: Parameters<typeof client.post>[2]) =>
+  client.post<InboundTask>(`/inbound-tasks/${id}/submit`, {}, config)
 
 export const reprintInboundTaskApi = (id: number, data: ReprintInboundTaskParams) =>
   client.post<ReprintInboundTaskResult>(`/inbound-tasks/${id}/reprint`, data)
@@ -59,25 +59,26 @@ export const qaCheckInboundApi = (id: number, data: { productId: number; passedQ
     headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' },
   })
 
-export const cancelInboundApi = (id: number) =>
-  client.post(`/inbound-tasks/${id}/cancel`)
+export const cancelInboundApi = (id: number, config?: Parameters<typeof client.post>[2]) =>
+  client.post(`/inbound-tasks/${id}/cancel`, {}, config)
 
-export const voidInboundReceiptApi = (id: number) =>
-  client.post<InboundTask>(`/inbound-tasks/${id}/void-receipt`)
+export const voidInboundReceiptApi = (id: number, config?: Parameters<typeof client.post>[2]) =>
+  client.post<InboundTask>(`/inbound-tasks/${id}/void-receipt`, {}, config)
 
 /** 短装结案：提前结束收货（收货中→待上架），剩余未收量作罢 */
-export const closeReceivingInboundApi = (id: number) =>
-  client.post(`/inbound-tasks/${id}/close-receiving`)
+export const closeReceivingInboundApi = (id: number, config?: Parameters<typeof client.post>[2]) =>
+  client.post(`/inbound-tasks/${id}/close-receiving`, {}, config)
 
 /** 质检拒收处置历史（文档07 Phase2）：某收货订单的退供应商/报废单 */
 export const getInboundQaDispositionsApi = (id: number) =>
   client.get<QaDisposition[]>(`/inbound-tasks/${id}/qa-dispositions`)
 
 /** 处置质检拒收品（退供应商/报废）：ERP 决策创建处置单(待扫出)，只消费 REJECTED 容器、零 GL，带幂等键 */
-export const qaDisposeInboundApi = (id: number, data: QaDisposeParams, requestKey?: string) =>
-  client.post<QaDisposeResult>(`/inbound-tasks/${id}/qa-dispose`, data, requestKey
-    ? { headers: withRequestKeyHeaders(requestKey) }
-    : undefined)
+export const qaDisposeInboundApi = (id: number, data: QaDisposeParams, requestKey?: string, config?: Parameters<typeof client.post>[2]) =>
+  client.post<QaDisposeResult>(`/inbound-tasks/${id}/qa-dispose`, data, {
+    ...(requestKey ? { headers: withRequestKeyHeaders(requestKey) } : {}),
+    ...config,
+  })
 
 // ── 拒收处置 PDA 物理扫出（文档07 Phase3）──
 /** PDA 待扫出处置单列表（status=1） */

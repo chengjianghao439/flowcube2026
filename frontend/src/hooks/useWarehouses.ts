@@ -47,7 +47,7 @@ export function useUpdateWarehouse() {
 export function useDeleteWarehouse() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => deleteWarehouseApi(id),
+    mutationFn: (id: number) => deleteWarehouseApi(id, { skipGlobalError: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: [QUERY_KEY] }),
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '删除失败'),
   })

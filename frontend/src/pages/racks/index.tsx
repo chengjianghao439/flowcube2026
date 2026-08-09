@@ -47,7 +47,7 @@ export default function RacksPage() {
   })
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => deleteRackApi(id),
+    mutationFn: (id: number) => deleteRackApi(id, { skipGlobalError: true }),
     onSuccess: () => {
       toast.success('已删除')
       setDeleteTarget(null)

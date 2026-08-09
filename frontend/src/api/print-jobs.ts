@@ -16,11 +16,11 @@ export const getBarcodePrintRecordsApi = (params: {
 export const reprintBarcodeRecordApi = (data: {
   category: BarcodePrintCategory
   recordId: number
-}) =>
+}, config?: Parameters<typeof client.post>[2]) =>
   client.post<{
     id: number
     printStateLabel: string
     printerCode: string | null
     printerName: string | null
     statusKey: string
-  }>('/print-jobs/barcodes/reprint', data)
+  }>('/print-jobs/barcodes/reprint', data, config)

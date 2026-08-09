@@ -35,7 +35,7 @@ export default function AccountingPeriodsPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['accounting-periods'] })
 
   const genMut = useMutation({
-    mutationFn: generateClosingVouchersApi,
+    mutationFn: (period: string) => generateClosingVouchersApi(period, { skipGlobalError: true }),
     onSuccess: (res) => {
       const detail = res.results.map(r => `${r.kind}${r.created ? ' 已生成' : r.updated ? ' 已更新' : ''}`).join('；') || '本期无损益，无需结转'
       toast.success(`结转完成：${detail}`)
@@ -46,13 +46,13 @@ export default function AccountingPeriodsPage() {
   })
 
   const closeMut = useMutation({
-    mutationFn: closePeriodApi,
+    mutationFn: (period: string) => closePeriodApi(period, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已结账'); setClosing(null); invalidate() },
     onError: (e) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '结账失败'),
   })
 
   const reopenMut = useMutation({
-    mutationFn: reopenPeriodApi,
+    mutationFn: (period: string) => reopenPeriodApi(period, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已反结账'); invalidate() },
     onError: (e) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '反结账失败'),
   })

@@ -23,7 +23,7 @@ export const useCustomerAddresses = (customerId: number | null, enabled = true) 
 export const useCreateCustomerAddress = (customerId: number) => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: CreateCustomerAddressParams) => createCustomerAddressApi(data),
+    mutationFn: (data: CreateCustomerAddressParams) => createCustomerAddressApi(data, { skipGlobalError: true }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: key(customerId) }); toast.success('已保存为常用地址') },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '保存失败'),
   })
@@ -32,7 +32,7 @@ export const useCreateCustomerAddress = (customerId: number) => {
 export const useUpdateCustomerAddress = (customerId: number) => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: CustomerAddressWritable }) => updateCustomerAddressApi(id, data),
+    mutationFn: ({ id, data }: { id: number; data: CustomerAddressWritable }) => updateCustomerAddressApi(id, data, { skipGlobalError: true }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: key(customerId) }); toast.success('地址已更新') },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '更新失败'),
   })
@@ -41,7 +41,7 @@ export const useUpdateCustomerAddress = (customerId: number) => {
 export const useSetDefaultCustomerAddress = (customerId: number) => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => setDefaultCustomerAddressApi(id),
+    mutationFn: (id: number) => setDefaultCustomerAddressApi(id, { skipGlobalError: true }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: key(customerId) }); toast.success('已设为默认') },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '设置失败'),
   })
@@ -50,7 +50,7 @@ export const useSetDefaultCustomerAddress = (customerId: number) => {
 export const useDeleteCustomerAddress = (customerId: number) => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => deleteCustomerAddressApi(id),
+    mutationFn: (id: number) => deleteCustomerAddressApi(id, { skipGlobalError: true }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: key(customerId) }); toast.success('地址已删除') },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '删除失败'),
   })

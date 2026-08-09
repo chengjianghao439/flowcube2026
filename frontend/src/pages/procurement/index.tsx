@@ -42,7 +42,7 @@ export default function ProcurementPlanListPage() {
   })
 
   const generate = useMutation({
-    mutationFn: () => generatePlanApi({ window: win, horizon, warehouseId: whId === '0' ? null : Number(whId), name: name.trim() || null }),
+    mutationFn: () => generatePlanApi({ window: win, horizon, warehouseId: whId === '0' ? null : Number(whId), name: name.trim() || null }, { skipGlobalError: true }),
     onSuccess: (r) => {
       toast.success(`已生成采购计划 ${r!.code}（${r!.itemCount} 行）`)
       setGenOpen(false); setName('')

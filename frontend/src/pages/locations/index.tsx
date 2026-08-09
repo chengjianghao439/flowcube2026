@@ -61,19 +61,19 @@ export default function LocationsPage() {
   function invalidate() { qc.invalidateQueries({ queryKey: ['locations'] }) }
 
   const createMut = useMutation({
-    mutationFn: () => createLocationApi(form),
+    mutationFn: () => createLocationApi(form, { skipGlobalError: true }),
     onSuccess: () => { toast.success('库位已创建'); invalidate(); closeDialog() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'),
   })
 
   const updateMut = useMutation({
-    mutationFn: () => updateLocationApi(editTarget!.id, form),
+    mutationFn: () => updateLocationApi(editTarget!.id, form, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已更新'); invalidate(); closeDialog() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '更新失败'),
   })
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => deleteLocationApi(id),
+    mutationFn: (id: number) => deleteLocationApi(id, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已删除'); invalidate() },
     onError: (e: unknown) => toast.error((e as Error).message || '删除失败'),
   })

@@ -67,10 +67,10 @@ export const deleteVoucherApi = async (id: number) => { await apiClient.delete(`
 
 // ── 会计期间 / 期末结转 ──────────────────────────────────────────────────
 export const getPeriodsApi = async () => apiClient.get<AccountingPeriod[]>('/accounting/periods')
-export const generateClosingVouchersApi = async (period: string) =>
-  apiClient.post<{ period: string; results: Array<{ kind: string; created?: boolean; updated?: boolean }> }>('/accounting/periods/generate-closing', { period })
-export const closePeriodApi = async (period: string) => apiClient.post<{ period: string }>('/accounting/periods/close', { period })
-export const reopenPeriodApi = async (period: string) => apiClient.post<{ period: string }>('/accounting/periods/reopen', { period })
+export const generateClosingVouchersApi = async (period: string, config?: Parameters<typeof apiClient.post>[2]) =>
+  apiClient.post<{ period: string; results: Array<{ kind: string; created?: boolean; updated?: boolean }> }>('/accounting/periods/generate-closing', { period }, config)
+export const closePeriodApi = async (period: string, config?: Parameters<typeof apiClient.post>[2]) => apiClient.post<{ period: string }>('/accounting/periods/close', { period }, config)
+export const reopenPeriodApi = async (period: string, config?: Parameters<typeof apiClient.post>[2]) => apiClient.post<{ period: string }>('/accounting/periods/reopen', { period }, config)
 
 export const getReconciliationApi = async () =>
   apiClient.get<{ items: ReconciliationItem[] }>(`${VBASE}/reconciliation`)

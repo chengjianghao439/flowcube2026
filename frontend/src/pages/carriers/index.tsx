@@ -56,19 +56,19 @@ export default function CarriersPage() {
   function invalidate() { qc.invalidateQueries({ queryKey: ['carriers'] }) }
 
   const createMut = useMutation({
-    mutationFn: () => createCarrierApi({ name: form.name, type: form.type, contact: form.contact, phone: form.phone, remark: form.remark, ...platformPayload(form) }),
+    mutationFn: () => createCarrierApi({ name: form.name, type: form.type, contact: form.contact, phone: form.phone, remark: form.remark, ...platformPayload(form) }, { skipGlobalError: true }),
     onSuccess: () => { toast.success('承运商已创建'); invalidate(); closeDialog() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'),
   })
 
   const updateMut = useMutation({
-    mutationFn: () => updateCarrierApi(editTarget!.id, { name: form.name, type: form.type, contact: form.contact, phone: form.phone, remark: form.remark, isActive: form.isActive, ...platformPayload(form) }),
+    mutationFn: () => updateCarrierApi(editTarget!.id, { name: form.name, type: form.type, contact: form.contact, phone: form.phone, remark: form.remark, isActive: form.isActive, ...platformPayload(form) }, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已更新'); invalidate(); closeDialog() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '更新失败'),
   })
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => deleteCarrierApi(id),
+    mutationFn: (id: number) => deleteCarrierApi(id, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已删除'); invalidate() },
     onError: () => toast.error('删除失败'),
   })

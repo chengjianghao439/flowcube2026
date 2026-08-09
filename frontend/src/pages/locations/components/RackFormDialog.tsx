@@ -40,7 +40,7 @@ export default function RackFormDialog({ open, onClose, editItem }: Props) {
         rackCode:    form.code,
         scanRaw:     scanRaw.trim(),
         excludeRackId: editItem?.id,
-      }),
+      }, { skipGlobalError: true }),
     onSuccess: (res) => {
       if (res.kind === 'binding' || res.kind === 'warn') toast.warning(res.message)
       else if (res.kind === 'invalid') toast.error(res.message)

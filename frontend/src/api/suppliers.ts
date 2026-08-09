@@ -6,4 +6,4 @@ export const getSuppliersApi   = async (p: QueryParams) => apiClient.get<Paginat
 export const getSuppliersActiveApi = async () => apiClient.get<SupplierOption[]>('/suppliers/active')
 export const createSupplierApi = async (d: CreateSupplierParams) => apiClient.post<{id:number}>('/suppliers', d)
 export const updateSupplierApi = async (id: number, d: UpdateSupplierParams) => { await apiClient.put(`/suppliers/${id}`, d) }
-export const deleteSupplierApi = async (id: number) => { await apiClient.delete(`/suppliers/${id}`) }
+export const deleteSupplierApi = async (id: number, config?: Parameters<typeof apiClient.delete>[1]) => { await apiClient.delete(`/suppliers/${id}`, config) }

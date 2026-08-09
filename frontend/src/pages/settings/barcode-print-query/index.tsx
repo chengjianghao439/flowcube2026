@@ -78,7 +78,7 @@ export default function BarcodePrintQueryPage() {
     mutationFn: (row: BarcodePrintRecord) => reprintBarcodeRecordApi({
       category: row.category,
       recordId: row.recordId,
-    }),
+    }, { skipGlobalError: true }),
     onSuccess: () => {
       toast.success('已重新加入打印队列')
       qc.invalidateQueries({ queryKey: ['barcode-print-records'] })

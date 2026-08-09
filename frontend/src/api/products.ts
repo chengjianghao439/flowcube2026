@@ -11,7 +11,7 @@ export const getProductsApi       = async (p: QueryParams) => apiClient.get<Pagi
 export const getProductsActiveApi = async () => apiClient.get<ProductOption[]>('/products/active')
 export const createProductApi     = async (d: CreateProductParams) => apiClient.post<{id:number}>('/products', d)
 export const updateProductApi     = async (id:number, d: UpdateProductParams) => { await apiClient.put(`/products/${id}`, d) }
-export const deleteProductApi     = async (id:number) => { await apiClient.delete(`/products/${id}`) }
+export const deleteProductApi     = async (id:number, config?: Parameters<typeof apiClient.delete>[1]) => { await apiClient.delete(`/products/${id}`, config) }
 export const printProductLabelApi = async (id: number) =>
   apiClient.post<{
     queued: boolean

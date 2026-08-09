@@ -27,8 +27,8 @@ export async function updateRackApi(id: number, data: UpdateRackParams): Promise
   return res
 }
 
-export async function deleteRackApi(id: number): Promise<void> {
-  await apiClient.delete(`/racks/${id}`)
+export async function deleteRackApi(id: number, config?: Parameters<typeof apiClient.delete>[1]): Promise<void> {
+  await apiClient.delete(`/racks/${id}`, config)
 }
 
 export type PrintDispatchHint = {
@@ -75,7 +75,7 @@ export async function scanRackHintApi(body: {
   rackCode: string
   scanRaw: string
   excludeRackId?: number
-}): Promise<RackScanHintResult> {
-  const res = await apiClient.post<RackScanHintResult>('/racks/scan-hint', body)
+}, config?: Parameters<typeof apiClient.post>[2]): Promise<RackScanHintResult> {
+  const res = await apiClient.post<RackScanHintResult>('/racks/scan-hint', body, config)
   return res
 }

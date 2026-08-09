@@ -38,7 +38,7 @@ export default function AbcClassPage() {
     enabled: tab === 'abc' && warehouseId > 0,
   })
   const recompute = useMutation({
-    mutationFn: () => recomputeAbcApi({ warehouseId, metricType, windowDays }),
+    mutationFn: () => recomputeAbcApi({ warehouseId, metricType, windowDays }, { skipGlobalError: true }),
     onSuccess: (r) => { toast.success(`已重算 ${r!.classified} 个商品的 ABC 分类`); qc.invalidateQueries({ queryKey: ['abc-classes', warehouseId] }) },
     onError: () => toast.error('重算失败'),
   })
@@ -53,7 +53,7 @@ export default function AbcClassPage() {
   // 切仓/切数据时重置草稿（keepAlive 页面必须显式重置，避免残留上一仓的编辑）
   useEffect(() => { if (rulesQ.data?.rules) setDraft(rulesQ.data.rules.map(r => ({ ...r }))) }, [rulesQ.data])
   const saveRules = useMutation({
-    mutationFn: () => saveCycleRulesApi({ warehouseId, rules: draft.map(r => ({ abcClass: r.abcClass, intervalDays: r.intervalDays, batchLimit: r.batchLimit, enabled: r.enabled })) }),
+    mutationFn: () => saveCycleRulesApi({ warehouseId, rules: draft.map(r => ({ abcClass: r.abcClass, intervalDays: r.intervalDays, batchLimit: r.batchLimit, enabled: r.enabled })) }, { skipGlobalError: true }),
     onSuccess: () => { toast.success('循环盘规则已保存'); qc.invalidateQueries({ queryKey: ['cycle-rules', warehouseId] }) },
     onError: (e: unknown) => toast.error((e as { message?: string })?.message || '保存失败'),
   })

@@ -38,11 +38,11 @@ interface PlasticBox {
 function getPlasticBoxesApi(params?: Record<string, string | number>) {
   return payloadClient.get<{ list: PlasticBox[]; pagination: { page: number; pageSize: number; total: number } }>('/plastic-boxes', { params })
 }
-function createPlasticBoxApi(data: Record<string, unknown>) {
-  return payloadClient.post<{ id: number; barcode: string }>('/plastic-boxes', data)
+function createPlasticBoxApi(data: Record<string, unknown>, config?: Parameters<typeof payloadClient.post>[2]) {
+  return payloadClient.post<{ id: number; barcode: string }>('/plastic-boxes', data, config)
 }
-function deletePlasticBoxApi(id: number) {
-  return payloadClient.delete(`/plastic-boxes/${id}`)
+function deletePlasticBoxApi(id: number, config?: Parameters<typeof payloadClient.delete>[1]) {
+  return payloadClient.delete(`/plastic-boxes/${id}`, config)
 }
 
 interface PlasticBoxMovement {
@@ -74,13 +74,13 @@ export default function PlasticBoxesPage() {
   })
 
   const createMut = useMutation({
-    mutationFn: createPlasticBoxApi,
+    mutationFn: (data: Record<string, unknown>) => createPlasticBoxApi(data, { skipGlobalError: true }),
     onSuccess: (res) => { toast.success(`塑料盒 ${res.barcode} 已创建`); qc.invalidateQueries({ queryKey: ['plastic-boxes'] }); setCreateOpen(false) },
     onError: (e) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'),
   })
 
   const deleteMut = useMutation({
-    mutationFn: deletePlasticBoxApi,
+    mutationFn: (id: number) => deletePlasticBoxApi(id, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已删除'); qc.invalidateQueries({ queryKey: ['plastic-boxes'] }); setDeleteTarget(null) },
     onError: (e) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败'),
   })

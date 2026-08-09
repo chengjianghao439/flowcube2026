@@ -217,7 +217,7 @@ export default function PrintersPage() {
 
   const addPrinter = useMutation({
     mutationFn: async (payload: { name: string; code: string; type: number; description: string | null }) => {
-      await apiClient.post('/printers', { ...payload, source: 'local_desktop' })
+      await apiClient.post('/printers', { ...payload, source: 'local_desktop' }, { skipGlobalError: true })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['printers'] })
@@ -229,7 +229,7 @@ export default function PrintersPage() {
   })
 
   const del = useMutation({
-    mutationFn: (id: number) => apiClient.delete(`/printers/${id}`),
+    mutationFn: (id: number) => apiClient.delete(`/printers/${id}`, { skipGlobalError: true }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['printers'] })
       toast.success('已删除')
@@ -244,7 +244,7 @@ export default function PrintersPage() {
 
   const bindMutation = useMutation({
     mutationFn: ({ type, printer }: { type: BindType; printer: Printer }) =>
-      apiClient.put(`/printer-bindings/${type}`, { printerId: printer.id }),
+      apiClient.put(`/printer-bindings/${type}`, { printerId: printer.id }, { skipGlobalError: true }),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['printer-bindings'] })
       toast.success(`已绑定 ${vars.printer.code} → ${BIND_TYPES.find(t => t.key === vars.type)?.label}`)
@@ -253,7 +253,7 @@ export default function PrintersPage() {
   })
 
   const unbindMutation = useMutation({
-    mutationFn: (type: BindType) => apiClient.delete(`/printer-bindings/${encodeURIComponent(type)}`),
+    mutationFn: (type: BindType) => apiClient.delete(`/printer-bindings/${encodeURIComponent(type)}`, { skipGlobalError: true }),
     onSuccess: (_, type) => {
       qc.invalidateQueries({ queryKey: ['printer-bindings'] })
       toast.success(`已解除「${BIND_TYPES.find(t => t.key === type)?.label}」绑定`)
@@ -275,7 +275,7 @@ export default function PrintersPage() {
 
   const aliasMutation = useMutation({
     mutationFn: ({ clientId, aliasName }: { clientId: string; aliasName: string }) =>
-      apiClient.put(`/printers/clients/${clientId}/alias`, { aliasName }),
+      apiClient.put(`/printers/clients/${clientId}/alias`, { aliasName }, { skipGlobalError: true }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['printers'] })
       toast.success('设备名称已更新')
