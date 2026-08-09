@@ -11,6 +11,7 @@ const { recomputePurchasePayable } = require('../inbound-tasks/inbound-tasks.set
 const { foldEntryItem, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
+const { getPriceReferenceWarnings } = require('../../utils/priceReference')
 
 const STATUS = { 1:'草稿', 2:'已提交', 3:'已完成', 4:'已取消', 5:'待审批' }
 
@@ -228,6 +229,9 @@ async function create({ supplierId, supplierName, warehouseId, warehouseName, ex
       return requestState.responseData
     }
     const result = await createWithinTransaction(conn, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator })
+    // 采购价格参考（P2-3）：建单后给出最近成交价偏差预警（纯提示不阻断）
+    const priceWarnings = await getPriceReferenceWarnings(items)
+    if (priceWarnings.length) result.priceWarnings = priceWarnings
     await completeOperationRequest(conn, requestState, {
       data: result,
       message: '创建成功',
@@ -266,7 +270,11 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
     await conn.commit()
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
-  return findById(id)
+  const saved = await findById(id)
+  // 采购价格参考（P2-3）：改单后给出最近成交价偏差预警（纯提示不阻断）
+  const priceWarnings = await getPriceReferenceWarnings(items)
+  if (priceWarnings.length) saved.priceWarnings = priceWarnings
+  return saved
 }
 
 // 短装结案：把「已提交(2)」采购单手动完成（剩余未收量作罢），前提是相关收货订单已全部上架完成（audit_status 随上架完成自动置1）且确有实收入库。
