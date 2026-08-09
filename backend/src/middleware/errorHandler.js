@@ -77,7 +77,6 @@ function errorHandler(err, req, res, next) {
   const sentryDsn = String(process.env.SENTRY_DSN || '').trim()
   if (sentryDsn) {
     try {
-      // eslint-disable-next-line global-require
       const Sentry = require('@sentry/node')
       Sentry.withScope((scope) => {
         scope.setTag('path', path)
