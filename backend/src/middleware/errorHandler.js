@@ -73,6 +73,22 @@ function errorHandler(err, req, res, next) {
 
   // ── 未知错误（记录完整堆栈）──────────────────────────────────────────────
   logger.error(`[Unhandled] ${err.message || '未知错误'}`, err, { path, userId, refNo, requestId }, 'ERR')
+  // 错误追踪（P2-12）：配置 SENTRY_DSN 后把未知错误上报 Sentry（动态 require，未配则零依赖）
+  const sentryDsn = String(process.env.SENTRY_DSN || '').trim()
+  if (sentryDsn) {
+    try {
+      // eslint-disable-next-line global-require
+      const Sentry = require('@sentry/node')
+      Sentry.withScope((scope) => {
+        scope.setTag('path', path)
+        scope.setUser({ id: String(userId) })
+        scope.setExtra('requestId', requestId)
+        Sentry.captureException(err)
+      })
+    } catch (e) {
+      logger.warn('Sentry 上报失败（未安装 @sentry/node？）', { err: e?.message }, 'SENTRY')
+    }
+  }
   const expose = ['1', 'true', 'yes'].includes(String(process.env.APP_EXPOSE_ERRORS || '').toLowerCase())
   const message =
     expose && err.message

@@ -13,6 +13,21 @@ const IS_DEV = process.env.NODE_ENV !== 'production'
 const SLOW_MS = parseInt(process.env.SLOW_API_MS || '800', 10)
 const { getRequestContext } = require('./requestContext')
 
+// ── 日志集中检索（P2-12）：配置 LOKI_URL 时把 warn/error 级日志异步推送到 Grafana Loki ──
+// fire-and-forget：推送失败只记一条 console.error，绝不阻塞/影响业务。未配置则完全无副作用。
+const LOKI_URL = String(process.env.LOKI_URL || '').trim()
+const LOKI_LABELS = { app: 'flowcube-backend', env: process.env.NODE_ENV || 'development' }
+function pushToLoki(level, msg, meta) {
+  if (!LOKI_URL) return
+  const line = JSON.stringify({ level, msg, meta: meta || {}, requestId: (getRequestContext() || {}).requestId || null })
+  const body = JSON.stringify({ streams: [{ stream: LOKI_LABELS, values: [[String(Date.now() * 1000000), line]] }] })
+  fetch(LOKI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(2000) })
+    .catch((e) => console.error('[logger] loki push failed:', e?.message || String(e)))
+}
+function emit(level, msg, meta, module_) {
+  if (level === 'warn' || level === 'error') pushToLoki(level, `[${module_}] ${msg}`, meta)
+}
+
 function timestamp() {
   return new Date().toISOString().replace('T', ' ').slice(0, 23)
 }
@@ -48,6 +63,7 @@ const logger = {
    * @param {string} [module_]
    */
   warn(msg, meta = {}, module_ = '') {
+    emit('warn', msg, meta, module_)
     console.warn(fmt('WARN ', module_, msg, meta))
   },
 
@@ -59,6 +75,7 @@ const logger = {
    * @param {string} [module_]
    */
   error(msg, err = null, meta = {}, module_ = '') {
+    emit('error', msg, { ...(err instanceof Error ? { err: err.message } : {}), ...(meta || {}) }, module_)
     const base = fmt('ERROR', module_, msg, meta)
     if (err instanceof Error) {
       const stack = IS_DEV ? `\n${err.stack}` : ` (${err.message})`
