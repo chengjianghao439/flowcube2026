@@ -260,6 +260,23 @@ export interface ProfitAnalysisReport {
 export const getProfitAnalysisApi = (params: { startDate?: string; endDate?: string } = {}) =>
   client.get<ProfitAnalysisReport>(`/reports/profit-analysis?${q(params)}`)
 
+// 经营 KPI 仪表盘（P2-10）
+export interface KpiMetric {
+  key: string
+  label: string
+  current: number
+  previous: number
+  /** 环比变化率（%），上期为 0 时为 null */
+  changePct: number | null
+}
+export interface KpiReport {
+  period: string
+  prevPeriod: string
+  metrics: KpiMetric[]
+}
+export const getKpiApi = (params: { period?: string; offset?: number } = {}) =>
+  client.get<KpiReport>(`/reports/kpi?${q(params)}`)
+
 export interface WaveStats {
   id: number
   waveNo: string

@@ -869,6 +869,91 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
   return { summaryRow, saleRows, productRows, stockRows, slowRows }
 }
 
+/**
+ * 经营 KPI 聚合（P2-10）：GMV / 毛利 / 回款 / 订单数 / 平均客单 + 上一周期对比。
+ * period 形如 '2026-08'（月度）；offsetPeriods 为对比偏移（-1 = 上月）。
+ * 复用 profitAnalysis 的毛利口径（cost_snapshot 优先），保证两个报表数字一致。
+ */
+async function fetchKpiRows({ period = null, offsetPeriods = -1, scopeWarehouseIds = null } = {}) {
+  const now = new Date()
+  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const [y, m] = p.split('-').map(Number)
+  const offset = Number(offsetPeriods) || -1
+  const monthsAgo = (n) => {
+    const d = new Date(Date.UTC(y, m - 1 + n, 1))
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+  }
+  const cur = `${p}-01`
+  const curEnd = `${p}-31`
+  const prev = monthsAgo(offset)
+  const prevEnd = `${prev}-31`
+  const soWh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+
+  // 当期 + 上期 GMV/毛利/订单数（销售单已出库口径，sale_date 按期间）
+  const curSale = await fetchOne(
+    `SELECT
+       COALESCE(SUM(so.total_amount), 0) AS gmv,
+       COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost,
+       COUNT(DISTINCT so.id) AS orderCount
+     FROM sale_orders so
+     INNER JOIN sale_order_items soi ON soi.order_id = so.id
+     INNER JOIN product_items p ON p.id = soi.product_id
+     WHERE so.deleted_at IS NULL AND so.status = 4 AND so.sale_date BETWEEN ? AND ?${soWh.sql}`,
+    [...soWh.params, cur, curEnd],
+  )
+  const prevSale = await fetchOne(
+    `SELECT
+       COALESCE(SUM(so.total_amount), 0) AS gmv,
+       COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost,
+       COUNT(DISTINCT so.id) AS orderCount
+     FROM sale_orders so
+     INNER JOIN sale_order_items soi ON soi.order_id = so.id
+     INNER JOIN product_items p ON p.id = soi.product_id
+     WHERE so.deleted_at IS NULL AND so.status = 4 AND so.sale_date BETWEEN ? AND ?${soWh.sql}`,
+    [...soWh.params, `${prev}-01`, prevEnd],
+  )
+
+  // 回款（当期已收款到账金额：payment_records type=2 的 paid_amount 按期间）
+  // payment_records 无 created_at 期间维度？有 created_at；按 created_at 期间统计回款
+  const curReceipt = await fetchOne(
+    `SELECT COALESCE(SUM(pe.amount), 0) AS received
+     FROM payment_entries pe
+     INNER JOIN payment_records pr ON pr.id = pe.record_id AND pr.type = 2
+     WHERE pe.payment_date BETWEEN ? AND ?`,
+    [cur, curEnd],
+  )
+  const prevReceipt = await fetchOne(
+    `SELECT COALESCE(SUM(pe.amount), 0) AS received
+     FROM payment_entries pe
+     INNER JOIN payment_records pr ON pr.id = pe.record_id AND pr.type = 2
+     WHERE pe.payment_date BETWEEN ? AND ?`,
+    [`${prev}-01`, prevEnd],
+  )
+
+  return {
+    period: p,
+    prevPeriod: prev,
+    current: {
+      gmv: Math.round(Number(curSale.gmv || 0) * 100) / 100,
+      grossProfit: Math.round((Number(curSale.gmv || 0) - Number(curSale.cost || 0)) * 100) / 100,
+      orderCount: Number(curSale.orderCount || 0),
+      received: Math.round(Number(curReceipt.received || 0) * 100) / 100,
+      avgOrderValue: Number(curSale.orderCount || 0) > 0
+        ? Math.round((Number(curSale.gmv || 0) / Number(curSale.orderCount)) * 100) / 100
+        : 0,
+    },
+    previous: {
+      gmv: Math.round(Number(prevSale.gmv || 0) * 100) / 100,
+      grossProfit: Math.round((Number(prevSale.gmv || 0) - Number(prevSale.cost || 0)) * 100) / 100,
+      orderCount: Number(prevSale.orderCount || 0),
+      received: Math.round(Number(prevReceipt.received || 0) * 100) / 100,
+      avgOrderValue: Number(prevSale.orderCount || 0) > 0
+        ? Math.round((Number(prevSale.gmv || 0) / Number(prevSale.orderCount)) * 100) / 100
+        : 0,
+    },
+  }
+}
+
 module.exports = {
   fetchOne,
   fetchMany,
@@ -881,4 +966,5 @@ module.exports = {
   fetchRoleWorkbenchRows,
   fetchReconciliationRows,
   fetchProfitAnalysisRows,
+  fetchKpiRows,
 }

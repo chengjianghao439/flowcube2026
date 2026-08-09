@@ -14,5 +14,6 @@ router.get('/warehouse-ops',   requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.
 router.get('/role-workbench',  requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.roleWorkbench)
 router.get('/reconciliation',  requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.reconciliation)
 router.get('/profit-analysis', requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.profitAnalysis)
+router.get('/kpi',             requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.kpi)
 
 module.exports = router

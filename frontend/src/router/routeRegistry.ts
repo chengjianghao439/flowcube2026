@@ -129,6 +129,7 @@ const AcctPeriodsPage = lazy(() => import('@/pages/accounting/periods'))
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
 const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
+const KpiPage = lazy(() => import('@/pages/reports/kpi'))
 const ReplenishmentPage = lazy(() => import('@/pages/reports/replenishment'))
 const InventoryAgingPage = lazy(() => import('@/pages/reports/inventory-aging'))
 const WavePerformancePage = lazy(() => import('@/pages/reports/wave-performance'))
@@ -530,6 +531,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '报表', section: '经营分析', order: 20 },
+  },
+  {
+    path: '/reports/kpi',
+    title: '经营 KPI',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: KpiPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '报表', section: '经营分析', order: 15 },
   },
   {
     path: '/reports/replenishment',

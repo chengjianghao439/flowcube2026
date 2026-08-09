@@ -17,6 +17,7 @@ const {
   fetchRoleWorkbenchRows,
   fetchReconciliationRows,
   fetchProfitAnalysisRows,
+  fetchKpiRows,
 } = require('./reports.query')
 
 async function purchaseStats(params) {
@@ -393,6 +394,29 @@ async function profitAnalysis(params = {}) {
   }
 }
 
+/** 经营 KPI 仪表盘（P2-10）：GMV/毛利/回款/订单数/客单 + 上期对比 */
+async function kpiMetrics(params = {}) {
+  const { period, prevPeriod, current, previous } = await fetchKpiRows(params)
+  // 环比变化率（%）：上期为 0 时返回 null（无法计算）
+  const pct = (cur, prev) => {
+    const c = Number(cur) || 0
+    const p = Number(prev) || 0
+    if (p === 0) return c === 0 ? 0 : null
+    return Math.round(((c - p) / p) * 1000) / 10
+  }
+  return {
+    period,
+    prevPeriod,
+    metrics: [
+      { key: 'gmv', label: 'GMV', current: current.gmv, previous: previous.gmv, changePct: pct(current.gmv, previous.gmv) },
+      { key: 'grossProfit', label: '毛利', current: current.grossProfit, previous: previous.grossProfit, changePct: pct(current.grossProfit, previous.grossProfit) },
+      { key: 'orderCount', label: '订单数', current: current.orderCount, previous: previous.orderCount, changePct: pct(current.orderCount, previous.orderCount) },
+      { key: 'received', label: '回款', current: current.received, previous: previous.received, changePct: pct(current.received, previous.received) },
+      { key: 'avgOrderValue', label: '平均客单', current: current.avgOrderValue, previous: previous.avgOrderValue, changePct: pct(current.avgOrderValue, previous.avgOrderValue) },
+    ],
+  }
+}
+
 module.exports = {
   purchaseStats,
   saleStats,
@@ -402,4 +426,5 @@ module.exports = {
   roleWorkbench,
   reconciliationReport,
   profitAnalysis,
+  kpiMetrics,
 }

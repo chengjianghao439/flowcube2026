@@ -11,4 +11,5 @@ module.exports = {
   roleWorkbench: metrics.roleWorkbench,
   reconciliationReport: metrics.reconciliationReport,
   profitAnalysis: metrics.profitAnalysis,
+  kpiMetrics: metrics.kpiMetrics,
 }
