@@ -28,6 +28,7 @@
     "smoke:mainline": "node tests/mainline.smoke.test.js",
     "test:integration": "node tests/integration.test.js",
     "smoke:reports": "npm --prefix backend run smoke:reports",
+ "smoke:reports-values": "node tests/reports-values.smoke.test.js",
     "smoke:pages": "bash scripts/smoke-pages.sh",
     "smoke:reconciliation": "bash scripts/smoke-reconciliation-jumps.sh"
   }

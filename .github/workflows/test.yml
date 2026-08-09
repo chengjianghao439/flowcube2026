@@ -188,6 +188,9 @@ jobs:
       - name: 冒烟测试 — 会计凭证引擎（借贷平衡 / 资金勾稽 / 幂等）
         run: npm run smoke:accounting
 
+      - name: 冒烟测试 — 报表数值正确性（与底层表核对，审计 4.6）
+        run: npm run smoke:reports-values
+
       - name: 集成测试 — 库存主链路一致性（独立测试库）
         run: npm run test:integration
         env:
