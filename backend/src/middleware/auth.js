@@ -19,7 +19,15 @@ async function authMiddleware(req, res, next) {
 
   const token = authHeader.slice(7)
   try {
-    const payload = jwt.verify(token, env.JWT_SECRET)
+    // 密钥轮换（P2-15）：优先用新密钥校验；失败时若配置了旧密钥（JWT_SECRET_PREVIOUS）则兜底，
+    // 保证轮换过渡期旧 token 仍有效、用户不被迫重登。只有新旧都失败才判无效。
+    let payload
+    try {
+      payload = jwt.verify(token, env.JWT_SECRET)
+    } catch (firstErr) {
+      if (!env.JWT_SECRET_PREVIOUS) throw firstErr
+      payload = jwt.verify(token, env.JWT_SECRET_PREVIOUS)
+    }
     const user = await getCurrentAuthUser(payload.userId)
     const currentTokenVersion = Number(user.token_version || 0)
     const tokenVersion = Number(payload.tokenVersion)
