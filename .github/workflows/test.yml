@@ -191,6 +191,9 @@ jobs:
       - name: 冒烟测试 — 报表数值正确性（与底层表核对，审计 4.6）
         run: npm run smoke:reports-values
 
+      - name: 冒烟测试 — 出库信用复查（审计 4.8）
+        run: npm run smoke:credit-outbound
+
       - name: 集成测试 — 库存主链路一致性（独立测试库）
         run: npm run test:integration
         env:
