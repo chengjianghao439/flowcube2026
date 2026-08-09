@@ -188,6 +188,9 @@ jobs:
       - name: 冒烟测试 — 呆滞库存处置（建议→审批→处置，容器扣减+报废台账）
         run: npm run smoke:disposal
 
+      - name: 冒烟测试 — 开票量校验（防多开票，累计开票≤应收/应付基准）
+        run: npm run smoke:invoice-quota
+
       - name: 冒烟测试 — 会计凭证引擎（借贷平衡 / 资金勾稽 / 幂等）
         run: npm run smoke:accounting
 

@@ -10,6 +10,19 @@ const logger = require('../../utils/logger')
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
+// 发票日期序列化：DB 读出的 Date 对象 → 'YYYY-MM-DD'（String(Date) 会得到 'Sun Aug 09 2026...'，
+// 直接 slice 出非法日期）；前端传的字符串原样返回
+const fmtDate = (d) => {
+  if (!d) return null
+  if (d instanceof Date) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  return String(d).slice(0, 10)
+}
+
 // 进项:1待认证 2已认证 3已抵扣；销项:1已开具 2已红冲
 const STATUS_NAME = {
   1: { 1: '待认证', 2: '已认证', 3: '已抵扣' },
@@ -69,6 +82,68 @@ async function getInvoice(id) {
   return fmt(row)
 }
 
+/**
+ * 开票量校验（P2-5 防多开票）：发票关联业务单（sourceNo）时，累计已开票价税合计
+ * 不得超过该单的应收/应付基准（payment_records.total_amount——出库/收货后按实发/实收
+ * 量重算的权威口径，而非订单原始总额）。
+ *
+ * 只对「能反查到单据、且该单已产生账款基准」的发票做硬校验；查不到单据或该单尚无
+ * 账款基准（未结算/未出库，属「先开票后发货」的合法场景）不拦截，保留发票池弱关联的
+ * 灵活性。已红冲（销项 status=2）的发票是冲销，不计入已开票合计。
+ *
+ * @param {object} d        - 本次录入/编辑的发票载荷
+ * @param {number} d.invoiceType - 1进项 2销项
+ * @param {number} d.amountWithTax - 本次价税合计
+ * @param {string} [d.sourceNo]    - 关联单号（弱关联，可空）
+ * @param {number} [excludeId]     - 编辑时排除自身，避免自算
+ * @returns {Promise<{base: number, issued: number, sourceId: number|null}|null>}
+ */
+async function assertInvoiceQuota(d, excludeId = null) {
+  const sourceNo = String(d.sourceNo ?? '').trim()
+  if (!sourceNo) return null
+  const type = Number(d.invoiceType)
+  const table = type === 2 ? 'sale_orders' : 'purchase_orders'
+  const recType = type === 2 ? 2 : 1
+
+  // 1. 按单号反查单据 id（弱关联只存单号字符串，这里补查）
+  const [[order]] = await pool.query(
+    `SELECT id FROM ${table} WHERE order_no = ? AND deleted_at IS NULL`,
+    [sourceNo],
+  )
+  if (!order) return null   // 查不到单据：不校验（可能是期初/无单发票）
+
+  // 2. 该单的权威应收/应付基准（payment_records 是出库/收货后重算的唯一事实源；此表无 deleted_at）
+  const [[pr]] = await pool.query(
+    'SELECT total_amount FROM payment_records WHERE type = ? AND order_id = ? LIMIT 1',
+    [recType, order.id],
+  )
+  const base = pr ? Number(pr.total_amount) : 0
+  if (!(base > 0)) return null   // 该单尚无账款基准：不拦截（先开票后发货）
+
+  // 3. 已开票合计（销项剔除红冲 status=2；编辑时排除自身；进项剔除删除）。
+  //    同时按 source_id 与 source_no 匹配：旧数据可能只有 source_no 没 source_id。
+  const excludeSql = excludeId ? 'AND id <> ?' : ''
+  const params = excludeId ? [type, order.id, sourceNo, excludeId] : [type, order.id, sourceNo]
+  const [[{ issuedSum }]] = await pool.query(
+    `SELECT COALESCE(SUM(amount_with_tax), 0) AS issuedSum
+       FROM fin_invoices
+      WHERE invoice_type = ? AND deleted_at IS NULL
+        AND (source_id = ? OR source_no = ?)
+        AND (invoice_type = 1 OR status <> 2)
+        ${excludeSql}`,
+    params,
+  )
+  const issued = Number(issuedSum)
+  const incoming = round2(Number(d.amountWithTax))
+  if (round2(issued + incoming) > round2(base)) {
+    throw new AppError(
+      `该单累计已开票 ${issued.toFixed(2)} + 本次 ${incoming.toFixed(2)} 超过${type === 2 ? '应收' : '应付'}基准 ${base.toFixed(2)}，请核对是否多开票`,
+      400, 'INVOICE_OVER_QUOTA',
+    )
+  }
+  return { base, issued, sourceId: order.id }
+}
+
 function validatePayload(d) {
   const type = Number(d.invoiceType)
   if (type !== 1 && type !== 2) throw new AppError('发票类型非法（1进项 2销项）', 400)
@@ -87,6 +162,8 @@ function validatePayload(d) {
 
 async function createInvoice(d, operator) {
   const v = validatePayload(d)
+  // P2-5 防多开票：关联单据时校验累计开票量不超过应收/应付基准
+  const quota = await assertInvoiceQuota({ ...d, invoiceType: v.type, amountWithTax: v.withTax })
   try {
     const [r] = await pool.query(
       `INSERT INTO fin_invoices
@@ -95,8 +172,8 @@ async function createInvoice(d, operator) {
           source_type, source_id, source_no, remark, operator_id, operator_name)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
       [v.type, d.invoiceCode || null, v.no, v.party, d.partyTaxNo || null,
-       v.noTax, round2(d.taxRate), v.tax, v.withTax, String(d.invoiceDate).slice(0, 10),
-       d.sourceType || null, d.sourceId || null, d.sourceNo || null, d.remark || null,
+       v.noTax, round2(d.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate),
+       d.sourceType || (quota ? 'invoice_order' : null), quota ? quota.sourceId : (d.sourceId || null), d.sourceNo || null, d.remark || null,
        operator?.userId || null, operator?.username || null])
     logger.info('accounting', `录入${v.type === 1 ? '进项' : '销项'}发票 ${v.no} 价税${v.withTax}`, { id: r.insertId, operatorId: operator?.userId })
     return { id: r.insertId }
@@ -110,6 +187,12 @@ async function updateInvoice(id, d, operator) {
   const cur = await getInvoice(id)
   if (cur.status !== 1) throw new AppError('仅待认证/已开具状态的发票可编辑', 400, 'INVOICE_LOCKED')
   const v = validatePayload({ ...cur, ...d })
+  // P2-5：编辑时排除自身，防止「改大本次开票金额被自己挡住」
+  const quota = await assertInvoiceQuota(
+    { ...cur, ...d, invoiceType: v.type, amountWithTax: v.withTax, sourceNo: d.sourceNo ?? cur.sourceNo },
+    id,
+  )
+  const sourceId = quota ? quota.sourceId : (d.sourceId ?? cur.sourceId)
   try {
     await pool.query(
       `UPDATE fin_invoices SET invoice_code=?, invoice_no=?, party_name=?, party_tax_no=?,
@@ -117,8 +200,8 @@ async function updateInvoice(id, d, operator) {
          source_type=?, source_id=?, source_no=?, remark=?
        WHERE id=? AND deleted_at IS NULL`,
       [d.invoiceCode ?? cur.invoiceCode, v.no, v.party, d.partyTaxNo ?? cur.partyTaxNo,
-       v.noTax, round2(d.taxRate ?? cur.taxRate), v.tax, v.withTax, String(d.invoiceDate || cur.invoiceDate).slice(0, 10),
-       d.sourceType ?? cur.sourceType, d.sourceId ?? cur.sourceId, d.sourceNo ?? cur.sourceNo, d.remark ?? cur.remark, Number(id)])
+       v.noTax, round2(d.taxRate ?? cur.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate ?? cur.invoiceDate),
+       d.sourceType ?? cur.sourceType, sourceId, d.sourceNo ?? cur.sourceNo, d.remark ?? cur.remark, Number(id)])
     logger.info('accounting', `更新发票 [id=${id}]`, { operatorId: operator?.userId })
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') throw new AppError('发票代码+号码与已有发票重复', 400, 'INVOICE_DUP')
@@ -144,4 +227,4 @@ async function removeInvoice(id, operator) {
   logger.info('accounting', `删除发票 ${cur.invoiceNo}`, { operatorId: operator?.userId })
 }
 
-module.exports = { listInvoices, getInvoice, createInvoice, updateInvoice, changeStatus, removeInvoice }
+module.exports = { listInvoices, getInvoice, createInvoice, updateInvoice, changeStatus, removeInvoice, assertInvoiceQuota }

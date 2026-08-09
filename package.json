@@ -25,6 +25,7 @@
   "smoke:warehouse-scope": "node tests/warehouse-scope.smoke.test.js",
   "smoke:pda-device-session": "node tests/pda-device-session.smoke.test.js",
     "smoke:finance": "node tests/finance.smoke.test.js",
+    "smoke:invoice-quota": "node tests/invoice-quota.smoke.test.js",
     "smoke:disposal": "node tests/disposal.smoke.test.js",
     "smoke:mainline": "node tests/mainline.smoke.test.js",
     "test:integration": "node tests/integration.test.js",
