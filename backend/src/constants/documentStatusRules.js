@@ -178,6 +178,28 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       },
     },
   },
+  inventoryDisposal: {
+    entityName: '呆滞库存处置单',
+    actions: {
+      edit: { from: [1], message: '只有草稿状态的处置单可以修改明细' },
+      submit: { from: [1], to: 2, message: '只有草稿状态的处置单可以提交审批' },
+      approve: {
+        from: [2], to: 3, message: '只有待审批的处置单可以审批通过',
+        blocked: { 1: '处置单尚未提交', 3: '处置单已批准', 4: '处置单已处置', 5: '处置单已驳回', 6: '处置单已取消' },
+      },
+      reject: { from: [2], to: 5, message: '只有待审批的处置单可以驳回' },
+      dispose: {
+        from: [3], to: 4, message: '只有已批准的处置单可以执行处置',
+        blocked: { 1: '处置单尚未提交', 2: '处置单尚在审批中', 4: '处置单已处置', 5: '处置单已驳回', 6: '处置单已取消' },
+      },
+      cancel: {
+        from: [1, 2],
+        to: 6,
+        message: '当前状态的处置单不能取消',
+        blocked: { 3: '已批准的处置单不能取消，请先处置或驳回', 4: '处置单已处置', 5: '处置单已驳回' },
+      },
+    },
+  },
   procurementPlan: {
     entityName: '采购计划',
     actions: {

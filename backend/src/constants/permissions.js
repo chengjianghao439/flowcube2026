@@ -88,6 +88,12 @@ const PERMISSIONS = {
   INVENTORY_CONTAINER_SPLIT: 'inventory.container.split',
   INVENTORY_TRACE_VIEW: 'inventory.trace.view',
 
+  // 呆滞库存处置（P2-9）：建议 → 审批 → 处置。审批是内控点，不自动 seed（同采购审批）。
+  INVENTORY_DISPOSAL_VIEW: 'inventory.disposal.view',
+  INVENTORY_DISPOSAL_CREATE: 'inventory.disposal.create',
+  INVENTORY_DISPOSAL_APPROVE: 'inventory.disposal.approve',
+  INVENTORY_DISPOSAL_EXECUTE: 'inventory.disposal.execute',
+
   STOCKCHECK_VIEW: 'stockcheck.view',
   STOCKCHECK_CREATE: 'stockcheck.create',
   STOCKCHECK_UPDATE: 'stockcheck.update',

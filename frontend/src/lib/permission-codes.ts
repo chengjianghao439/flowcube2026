@@ -85,6 +85,11 @@ export const PERMISSIONS = {
   INVENTORY_CONTAINER_SPLIT: 'inventory.container.split',
   INVENTORY_TRACE_VIEW: 'inventory.trace.view',
 
+  INVENTORY_DISPOSAL_VIEW: 'inventory.disposal.view',
+  INVENTORY_DISPOSAL_CREATE: 'inventory.disposal.create',
+  INVENTORY_DISPOSAL_APPROVE: 'inventory.disposal.approve',
+  INVENTORY_DISPOSAL_EXECUTE: 'inventory.disposal.execute',
+
   STOCKCHECK_VIEW: 'stockcheck.view',
   STOCKCHECK_CREATE: 'stockcheck.create',
   STOCKCHECK_UPDATE: 'stockcheck.update',
@@ -275,6 +280,10 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.INVENTORY_ADJUST, label: '库存调整' },
       { code: PERMISSIONS.INVENTORY_CONTAINER_MOVE, label: '库存条码移库' },
       { code: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, label: '库存条码拆分' },
+      { code: PERMISSIONS.INVENTORY_DISPOSAL_VIEW, label: '查看呆滞处置单' },
+      { code: PERMISSIONS.INVENTORY_DISPOSAL_CREATE, label: '新建呆滞处置单' },
+      { code: PERMISSIONS.INVENTORY_DISPOSAL_APPROVE, label: '审批呆滞处置单' },
+      { code: PERMISSIONS.INVENTORY_DISPOSAL_EXECUTE, label: '执行呆滞处置' },
       { code: PERMISSIONS.STOCKCHECK_VIEW, label: '查看盘点' },
       { code: PERMISSIONS.STOCKCHECK_CREATE, label: '新建盘点' },
       { code: PERMISSIONS.STOCKCHECK_UPDATE, label: '编辑盘点' },
