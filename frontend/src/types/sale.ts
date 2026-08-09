@@ -109,6 +109,8 @@ export interface SaleOrder {
   receivableOverdue?: boolean
   saleDate?: string
   totalAmount: number
+  /** 整单折扣金额（P2-4），应收 = 原值 − 折扣 */
+  discountAmount?: number
   remark?: string
   taskId?: number | null
   taskNo?: string | null
@@ -134,6 +136,8 @@ export interface CreateSaleParams {
   warehouseId: number
   warehouseName: string
   remark?: string
+  /** 整单折扣金额（P2-4） */
+  discountAmount?: number
   carrierId?: number | null
   carrier?: string
   freightType?: number | null
