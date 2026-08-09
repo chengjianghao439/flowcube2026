@@ -7,7 +7,9 @@ export const getPurchaseDetailApi = (id: number) => client.get<PurchaseOrder>(`/
 export const createPurchaseApi = (data: CreatePurchaseParams, requestKey?: string) =>
   client.post<{ id: number; orderNo: string }>('/purchase', data, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
 export const updatePurchaseApi = (id: number, data: CreatePurchaseParams) => client.put<PurchaseOrder>(`/purchase/${id}`, data)
-export const confirmPurchaseApi = (id: number) => client.post<null>(`/purchase/${id}/confirm`)
+export const confirmPurchaseApi = (id: number) => client.post<{ needApproval: boolean }>(`/purchase/${id}/confirm`)
 export const withdrawConfirmPurchaseApi = (id: number) => client.post<null>(`/purchase/${id}/withdraw-confirm`)
+export const approvePurchaseApi = (id: number) => client.post<null>(`/purchase/${id}/approve`)
+export const rejectPurchaseApi = (id: number, reason: string) => client.post<null>(`/purchase/${id}/reject`, { reason })
 export const cancelPurchaseApi  = (id: number) => client.post<null>(`/purchase/${id}/cancel`)
 export const closePurchaseApi   = (id: number) => client.post<null>(`/purchase/${id}/close`)

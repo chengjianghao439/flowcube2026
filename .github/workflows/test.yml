@@ -194,6 +194,9 @@ jobs:
       - name: 冒烟测试 — 出库信用复查（审计 4.8）
         run: npm run smoke:credit-outbound
 
+      - name: 冒烟测试 — 采购审批环节（审计 4.7）
+        run: npm run smoke:purchase-approval
+
       - name: 集成测试 — 库存主链路一致性（独立测试库）
         run: npm run test:integration
         env:

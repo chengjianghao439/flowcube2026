@@ -27,6 +27,9 @@ router.post('/',            requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE)
 router.put('/:id',          requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), validateBody(createSchema), ctrl.update)
 router.post('/:id/confirm', requirePermission(PERMISSIONS.PURCHASE_ORDER_CONFIRM), ctrl.confirm)
 router.post('/:id/withdraw-confirm', requirePermission(PERMISSIONS.PURCHASE_ORDER_CONFIRM), ctrl.withdrawConfirm)
+// 采购审批（审计 4.7）：审批是内控点，需 purchase.order.approve 权限（默认只有超管有）
+router.post('/:id/approve', requirePermission(PERMISSIONS.PURCHASE_ORDER_APPROVE), ctrl.approve)
+router.post('/:id/reject', requirePermission(PERMISSIONS.PURCHASE_ORDER_APPROVE), ctrl.reject)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.PURCHASE_ORDER_CANCEL), ctrl.cancel)
 router.post('/:id/close',   requirePermission(PERMISSIONS.PURCHASE_ORDER_CONFIRM), ctrl.close)
 module.exports = router

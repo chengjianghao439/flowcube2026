@@ -63,6 +63,7 @@ export const PERMISSIONS = {
   PURCHASE_ORDER_CREATE: 'purchase.order.create',
   PURCHASE_ORDER_CONFIRM: 'purchase.order.confirm',
   PURCHASE_ORDER_CANCEL: 'purchase.order.cancel',
+  PURCHASE_ORDER_APPROVE: 'purchase.order.approve',
 
   PURCHASE_REQUISITION_VIEW: 'purchase.requisition.view',
   PURCHASE_REQUISITION_CREATE: 'purchase.requisition.create',
@@ -252,6 +253,7 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.PURCHASE_ORDER_CREATE, label: '新建采购单' },
       { code: PERMISSIONS.PURCHASE_ORDER_CONFIRM, label: '确认采购单' },
       { code: PERMISSIONS.PURCHASE_ORDER_CANCEL, label: '取消采购单' },
+      { code: PERMISSIONS.PURCHASE_ORDER_APPROVE, label: '审批采购单' },
       { code: PERMISSIONS.PURCHASE_REQUISITION_VIEW, label: '查看请购单' },
       { code: PERMISSIONS.PURCHASE_REQUISITION_CREATE, label: '发起/编辑请购单' },
       { code: PERMISSIONS.PURCHASE_REQUISITION_APPROVE, label: '审批请购单' },

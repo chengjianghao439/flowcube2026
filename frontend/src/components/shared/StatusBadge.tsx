@@ -29,6 +29,7 @@ const DOC_TONE: Record<Exclude<OrderType, 'sale' | 'task'>, Record<number, [stri
     2: ['已提交', 'active'],
     3: ['已完成', 'success'],
     4: ['已取消', 'danger'],
+    5: ['待审批', 'warning'],
   },
   transfer: {
     1: ['草稿', 'draft'],

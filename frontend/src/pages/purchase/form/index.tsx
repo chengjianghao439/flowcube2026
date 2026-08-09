@@ -13,6 +13,7 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DatePicker } from '@/components/shared/DatePicker'
@@ -38,8 +39,12 @@ import {
   usePurchaseDetail,
   useConfirmPurchase,
   useWithdrawConfirmPurchase,
+  useApprovePurchase,
+  useRejectPurchase,
   useCancelPurchase,
 } from '@/hooks/usePurchase'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import type { PurchaseOrder, PurchaseOrderItem } from '@/types/purchase'
 import type { ProductFinderResult, ProductUnit } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
@@ -525,7 +530,11 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
   const { data: order, isLoading } = usePurchaseDetail(purchaseId, { refetchInterval: isActiveTab ? 20_000 : false })
   const confirmMutate = useConfirmPurchase()
   const withdrawConfirmMutate = useWithdrawConfirmPurchase()
+  const approveMutate = useApprovePurchase()
+  const rejectMutate = useRejectPurchase()
   const cancelMutate  = useCancelPurchase()
+  const { can } = usePermission()
+  const canApprove = can(PERMISSIONS.PURCHASE_ORDER_APPROVE)
   const [editing, setEditing] = useState(false)
 
   const [confirmState, setConfirmState] = useState<{
@@ -536,6 +545,10 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
     confirmText?: string
     onConfirm: () => void
   }>({ open: false, title: '', description: '', variant: 'default', onConfirm: () => {} })
+
+  // 审批驳回弹窗（审计 4.7）
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
 
   function ask(
     title: string, description: string,
@@ -568,8 +581,8 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
 
   const canConfirm = order.status === 1
   const hasActiveInboundTask = (order.inboundTasks ?? []).some(t => t.status !== 5)
-  const canWithdrawConfirm = order.status === 2 && !hasActiveInboundTask
-  const canCancel  = order.status === 1 || order.status === 2
+  const canWithdrawConfirm = (order.status === 2 || order.status === 5) && !hasActiveInboundTask
+  const canCancel  = order.status === 1 || order.status === 2 || order.status === 5
   const isPending  = confirmMutate.isPending || withdrawConfirmMutate.isPending || cancelMutate.isPending
 
   return (
@@ -601,6 +614,22 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
                 }, '撤回确认')}>
                 撤回确认
               </Button>
+            )}
+            {/* 待审批单：审批通过/驳回（审计 4.7） */}
+            {order.status === 5 && canApprove && (
+              <>
+                <Button variant="outline" disabled={isPending}
+                  onClick={() => ask('审批通过', '通过后该采购单可创建收货订单。', 'default', () => {
+                    setConfirmState(s => ({ ...s, open: false }))
+                    approveMutate.mutate(order.id)
+                  }, '通过')}>
+                  审批通过
+                </Button>
+                <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={isPending}
+                  onClick={() => setRejectOpen(true)}>
+                  驳回
+                </Button>
+              </>
             )}
             {canConfirm && (
               <Button variant="outline" disabled={isPending}
@@ -744,6 +773,35 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
         onConfirm={confirmState.onConfirm}
         onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
       />
+
+      {/* 审批驳回弹窗（审计 4.7） */}
+      <Dialog open={rejectOpen} onOpenChange={(v) => !v && setRejectOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>驳回采购单 {order.orderNo}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Label>驳回原因 *</Label>
+            <Input
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              maxLength={300}
+              placeholder="请填写驳回原因"
+            />
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setRejectOpen(false)}>取消</Button>
+            <Button
+              variant="destructive"
+              disabled={rejectMutate.isPending || !rejectReason.trim()}
+              onClick={() => rejectMutate.mutate(
+                { id: order.id, reason: rejectReason.trim() },
+                { onSettled: () => { setRejectOpen(false); setRejectReason('') } },
+              )}
+            >
+              {rejectMutate.isPending ? '驳回中...' : '确认驳回'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

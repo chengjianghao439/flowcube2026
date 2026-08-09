@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { getPurchaseListApi, getPurchaseDetailApi, createPurchaseApi, updatePurchaseApi, confirmPurchaseApi, withdrawConfirmPurchaseApi, cancelPurchaseApi, closePurchaseApi } from '@/api/purchase'
+import { getPurchaseListApi, getPurchaseDetailApi, createPurchaseApi, updatePurchaseApi, confirmPurchaseApi, withdrawConfirmPurchaseApi, approvePurchaseApi, rejectPurchaseApi, cancelPurchaseApi, closePurchaseApi } from '@/api/purchase'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import { createRequestKey } from '@/lib/requestKey'
 import type { CreatePurchaseParams } from '@/types/purchase'
@@ -43,6 +43,23 @@ export const useWithdrawConfirmPurchase = () => {
   return useMutation({
     mutationFn: (id: number) => withdrawConfirmPurchaseApi(id),
     onSuccess: () => invalidate('purchase_withdraw_confirm'),
+  })
+}
+
+// 采购审批（审计 4.7）：待审批单审批通过/驳回
+export const useApprovePurchase = () => {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: number) => approvePurchaseApi(id),
+    onSuccess: () => invalidate('purchase_approve'),
+  })
+}
+
+export const useRejectPurchase = () => {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) => rejectPurchaseApi(id, reason),
+    onSuccess: () => invalidate('purchase_reject'),
   })
 }
 

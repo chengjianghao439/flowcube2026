@@ -30,6 +30,7 @@
     "smoke:reports": "npm --prefix backend run smoke:reports",
  "smoke:reports-values": "node tests/reports-values.smoke.test.js",
  "smoke:credit-outbound": "node tests/credit-outbound.smoke.test.js",
+ "smoke:purchase-approval": "node tests/purchase-approval.smoke.test.js",
     "smoke:pages": "bash scripts/smoke-pages.sh",
     "smoke:reconciliation": "bash scripts/smoke-reconciliation-jumps.sh"
   }

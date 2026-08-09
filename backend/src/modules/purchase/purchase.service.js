@@ -12,7 +12,7 @@ const { foldEntryItem, round2 } = require('../../utils/unitConversion')  // 多�
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
 
-const STATUS = { 1:'草稿', 2:'已提交', 3:'已完成', 4:'已取消' }
+const STATUS = { 1:'草稿', 2:'已提交', 3:'已完成', 4:'已取消', 5:'待审批' }
 
 function fmtOrder(row) {
   return {
@@ -36,6 +36,12 @@ function fmtOrder(row) {
     remark: row.remark,
     operatorId: row.operator_id,
     operatorName: row.operator_name,
+    // 审计 4.7 审批字段
+    needApproval: Number(row.need_approval || 0) === 1,
+    approvedById: row.approved_by != null ? Number(row.approved_by) : null,
+    approvedByName: row.approved_by_name || null,
+    approvedAt: row.approved_at || null,
+    rejectReason: row.reject_reason || null,
     createdAt: row.created_at,
   }
 }
@@ -43,7 +49,8 @@ function fmtOrder(row) {
 /** 显式列清单（勿用 po.*，避免返回无关字段） */
 const PO_COLUMNS = `po.id, po.order_no, po.supplier_id, po.supplier_name, po.warehouse_id, po.warehouse_name,
   po.status, po.expected_date, po.total_amount, po.remark, po.operator_id, po.operator_name,
-  po.created_at, po.updated_at, po.deleted_at`
+  po.created_at, po.updated_at, po.deleted_at, po.need_approval, po.approved_by, po.approved_by_name,
+  po.approved_at, po.reject_reason`
 
 const genOrderNo = conn => generateDailyCode(conn, 'PO', 'purchase_orders', 'order_no')
 
@@ -299,23 +306,42 @@ async function confirm(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id', entityName: '采购单' })
+    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id, total_amount, operator_id', entityName: '采购单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
     const rule = assertStatusAction('purchase', 'confirm', orderRow.status)
+    // 审计 4.7：提交时按审批阈值计算是否需审批。超阈值单 → 状态 5 待审批
+    // （审批通过后才回 2 可建收货）；未超阈值 → 原流程直接进 2。
+    const threshold = await getApprovalThreshold()
+    const needApproval = threshold > 0 && Number(orderRow.total_amount) > threshold
+    const toStatus = needApproval ? 5 : rule.to
+    await conn.query(
+      'UPDATE purchase_orders SET need_approval=?, approved_by=NULL, approved_by_name=NULL, approved_at=NULL, reject_reason=NULL WHERE id=?',
+      [needApproval ? 1 : 0, id],
+    )
     await compareAndSetStatus(conn, {
       table: 'purchase_orders',
       id,
       fromStatus: rule.from,
-      toStatus: rule.to,
+      toStatus,
       entityName: '采购单',
     })
     await conn.commit()
+    return { needApproval, status: toStatus, approved: !needApproval }
   } catch (e) {
     await conn.rollback()
     throw e
   } finally {
     conn.release()
   }
+}
+
+/** 读取采购审批阈值（sys_settings.purchase_approval_threshold，元；0 表示不启用） */
+async function getApprovalThreshold() {
+  const [[row]] = await pool.query(
+    "SELECT value FROM sys_settings WHERE key_name='purchase_approval_threshold' LIMIT 1",
+  )
+  const n = Number(row?.value)
+  return Number.isFinite(n) && n > 0 ? n : 0
 }
 
 async function withdrawConfirm(id, operator, scopeWarehouseIds = null) {
@@ -352,6 +378,74 @@ async function withdrawConfirm(id, operator, scopeWarehouseIds = null) {
       entityName: '采购单',
     })
     await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
+/**
+ * 采购审批通过（审计 4.7）：待审批(5) → 已提交(2)，可建收货订单。
+ * 审批人不能是制单人（一级审批唯一内控，同请购单/报销单）；需 purchase.order.approve 权限。
+ */
+async function approve(id, operator, scopeWarehouseIds = null) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id, operator_id, order_no', entityName: '采购单' })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
+    const rule = assertStatusAction('purchase', 'approve', orderRow.status)
+    if (Number(orderRow.operator_id) === Number(operator?.userId)) {
+      throw new AppError('不能审批自己提交的采购单，请由他人审批', 403)
+    }
+    await conn.query(
+      'UPDATE purchase_orders SET approved_by=?, approved_by_name=?, approved_at=NOW(), reject_reason=NULL WHERE id=?',
+      [operator?.userId ?? null, operator?.realName ?? null, id],
+    )
+    await compareAndSetStatus(conn, {
+      table: 'purchase_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '采购单',
+    })
+    await conn.commit()
+    return { id: Number(id), orderNo: orderRow.order_no, status: 2 }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
+/** 采购审批驳回（审计 4.7）：待审批(5) → 草稿(1)，可改后可重新提交。驳回人不能是制单人。 */
+async function reject(id, { reason }, operator, scopeWarehouseIds = null) {
+  if (!String(reason || '').trim()) throw new AppError('请填写驳回原因', 400)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id, operator_id, order_no', entityName: '采购单' })
+    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
+    const rule = assertStatusAction('purchase', 'reject', orderRow.status)
+    if (Number(orderRow.operator_id) === Number(operator?.userId)) {
+      throw new AppError('不能驳回自己提交的采购单', 403)
+    }
+    await conn.query(
+      'UPDATE purchase_orders SET approved_by=?, approved_by_name=?, approved_at=NOW(), reject_reason=? WHERE id=?',
+      [operator?.userId ?? null, operator?.realName ?? null, String(reason).trim(), id],
+    )
+    await compareAndSetStatus(conn, {
+      table: 'purchase_orders',
+      id,
+      fromStatus: rule.from,
+      toStatus: rule.to,
+      entityName: '采购单',
+    })
+    await conn.commit()
+    return { id: Number(id), orderNo: orderRow.order_no, status: 1 }
   } catch (e) {
     await conn.rollback()
     throw e
@@ -457,4 +551,4 @@ async function cancel(id, operator, scopeWarehouseIds = null) {
   }
 }
 
-module.exports = { findAll, findById, create, createWithinTransaction, update, confirm, withdrawConfirm, cancel, closeRemaining }
+module.exports = { findAll, findById, create, createWithinTransaction, update, confirm, withdrawConfirm, approve, reject, cancel, closeRemaining }

@@ -24,7 +24,7 @@ export interface PurchaseOrder {
   supplierName: string
   warehouseId: number
   warehouseName: string
-  status: 1 | 2 | 3 | 4
+  status: 1 | 2 | 3 | 4 | 5
   statusName: string
   expectedDate?: string
   totalAmount: number
@@ -32,6 +32,12 @@ export interface PurchaseOrder {
   totalReceivedQty?: number
   /** 是否满足"关闭剩余"的前提（相关收货订单均已上架完成 + 已有实收数量）；仅列表接口返回 */
   canCloseRemaining?: boolean
+  /** 审计 4.7：是否需审批（金额超阈值），待审批单 status=5 */
+  needApproval?: boolean
+  approvedById?: number | null
+  approvedByName?: string | null
+  approvedAt?: string | null
+  rejectReason?: string | null
   remark?: string
   operatorId: number
   operatorName: string

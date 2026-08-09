@@ -5,13 +5,25 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
     entityName: '采购单',
     actions: {
       edit: { from: [1], message: '只有草稿状态的采购单可以编辑' },
+      // confirm 的目标状态由 service 按审批阈值动态决定：未超阈值 → 2 已提交（原流程不变）；
+      // 超阈值（need_approval=1）→ 5 待审批，审批通过后才回到 2 可建收货（审计 4.7）。
       confirm: { from: [1], to: 2, message: '只有草稿状态的采购单可以提交' },
       // 撤回确认仅用于"确认早了"这种还没进入收货流程的场景；一旦有收货订单（哪怕未收货）
       // 就必须先处理/取消收货订单，不能让收货订单指向一张倒回草稿态的采购单。
-      withdrawConfirm: { from: [2], to: 1, message: '只有已确认的采购单可以撤回确认' },
+      withdrawConfirm: { from: [2, 5], to: 1, message: '只有已确认/待审批的采购单可以撤回' },
+      // 审批通过：待审批(5) → 已提交(2)，审批人不能是制单人（同请购单/报销单内控）。
+      // 审批是内控点，需 purchase.order.approve 权限；审批人不自动 seed，由管理员授予。
+      approve: {
+        from: [5], to: 2, message: '只有待审批的采购单可以审批通过',
+        blocked: { 1: '采购单尚未提交', 2: '该采购单已确认，无需审批', 3: '采购单已完成', 4: '采购单已取消' },
+      },
+      reject: {
+        from: [5], to: 1, message: '只有待审批的采购单可以驳回',
+        blocked: { 1: '采购单尚未提交', 2: '该采购单已确认', 3: '采购单已完成', 4: '采购单已取消' },
+      },
       createInboundTask: { from: [2], message: '只有已确认的采购单可创建入库任务' },
       cancel: {
-        from: [1, 2],
+        from: [1, 2, 5],
         to: 4,
         message: '当前状态的采购单不能取消',
         blocked: {

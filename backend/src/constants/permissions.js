@@ -63,6 +63,9 @@ const PERMISSIONS = {
   PURCHASE_ORDER_CREATE: 'purchase.order.create',
   PURCHASE_ORDER_CONFIRM: 'purchase.order.confirm',
   PURCHASE_ORDER_CANCEL: 'purchase.order.cancel',
+  // 采购审批（审计 4.7）：金额超阈值单提交后需审批通过才能建收货。
+  // 内控点，刻意不 seed 给角色（同 PURCHASE_REQUISITION_APPROVE），由管理员按需授予。
+  PURCHASE_ORDER_APPROVE: 'purchase.order.approve',
 
   // 采购请购单（PR → 审批 → 转采购单）。APPROVE 是内控点，刻意不 seed（见 153 迁移）。
   PURCHASE_REQUISITION_VIEW: 'purchase.requisition.view',

@@ -7,8 +7,13 @@ import Pagination from '@/components/shared/Pagination'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import { usePurchaseList, useConfirmPurchase, useWithdrawConfirmPurchase, useCancelPurchase, useClosePurchase, usePurchaseDetail } from '@/hooks/usePurchase'
+import { usePurchaseList, useConfirmPurchase, useWithdrawConfirmPurchase, useApprovePurchase, useRejectPurchase, useCancelPurchase, useClosePurchase, usePurchaseDetail } from '@/hooks/usePurchase'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
 import { mapPurchaseOrderToPrint } from '@/lib/orderPrintData'
 import { downloadExport } from '@/lib/exportDownload'
@@ -20,7 +25,7 @@ import PurchaseQueryDialog, { type PurchaseQueryValues } from './PurchaseQueryDi
 import type { PurchaseOrder } from '@/types/purchase'
 import type { TableColumn } from '@/types'
 
-const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '已提交', '3': '已完成', '4': '已取消' }
+const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '已提交', '3': '已完成', '4': '已取消', '5': '待审批' }
 
 /** 首次打开采购页时默认筛选的天数窗口（最近一周） */
 const DEFAULT_RANGE_DAYS = 7
@@ -78,6 +83,10 @@ export default function PurchasePage() {
     onConfirm: () => void
   }>({ open: false, title: '', description: '', onConfirm: () => {} })
 
+  // 驳回弹窗（审计 4.7）：审批人驳回待审批采购单，需填写原因
+  const [rejectTarget, setRejectTarget] = useState<PurchaseOrder | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+
   const PAGE_SIZE = 20
   const { data, isLoading } = usePurchaseList({
     page,
@@ -97,8 +106,12 @@ export default function PurchasePage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const confirm = useConfirmPurchase()
   const withdrawConfirm = useWithdrawConfirmPurchase()
+  const approve = useApprovePurchase()
+  const reject = useRejectPurchase()
   const cancel = useCancelPurchase()
   const close = useClosePurchase()
+  const { can } = usePermission()
+  const canApprove = can(PERMISSIONS.PURCHASE_ORDER_APPROVE)
   const { data: printDetail } = usePurchaseDetail(printId || 0)
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
@@ -232,7 +245,7 @@ export default function PurchasePage() {
                 label: '打印',
                 onClick: () => setPrintId(r.id),
               },
-              ...(r.status === 2 ? [{
+              ...(r.status === 2 || r.status === 5 ? [{
                 label: '撤回确认',
                 separatorBefore: true,
                 onClick: () => openConfirm(
@@ -242,6 +255,22 @@ export default function PurchasePage() {
                   { confirmText: '撤回确认' },
                 ),
                 disabled: withdrawConfirm.isPending,
+              }] : []),
+              // 待审批(5)单：审批通过/驳回（审计 4.7），需 purchase.order.approve 权限
+              ...(r.status === 5 && canApprove ? [{
+                label: '审批通过',
+                onClick: () => openConfirm(
+                  '审批通过',
+                  '通过后该采购单可创建收货订单。',
+                  () => approve.mutate(r.id, { onSettled: closeConfirm }),
+                  { confirmText: '通过' },
+                ),
+                disabled: approve.isPending,
+              }, {
+                label: '驳回',
+                destructive: true,
+                onClick: () => setRejectTarget(r),
+                disabled: reject.isPending,
               }] : []),
               // 关闭剩余只有在已经有实收数量、且相关收货订单都已上架完成时才可能成功
               // （对应后端 closeRemaining 的两条硬性前提），条件不满足就不展示，
@@ -349,6 +378,35 @@ export default function PurchasePage() {
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />
+
+      {/* 驳回弹窗（审计 4.7）：审批人驳回待审批采购单 */}
+      <Dialog open={!!rejectTarget} onOpenChange={(v) => !v && setRejectTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>驳回采购单 {rejectTarget?.orderNo}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Label>驳回原因 *</Label>
+            <Input
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              maxLength={300}
+              placeholder="请填写驳回原因"
+            />
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setRejectTarget(null)}>取消</Button>
+            <Button
+              variant="destructive"
+              disabled={reject.isPending || !rejectReason.trim()}
+              onClick={() => rejectTarget && reject.mutate(
+                { id: rejectTarget.id, reason: rejectReason.trim() },
+                { onSettled: () => { setRejectTarget(null); setRejectReason('') } },
+              )}
+            >
+              {reject.isPending ? '驳回中...' : '确认驳回'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
