@@ -45,12 +45,22 @@ if [ -n "$latest" ]; then
   btime=$(date -r "$latest" '+%m-%d %H:%M' 2>/dev/null || echo '?')
   bcount=$(ls "$BACKUP_DIR"/flowcube_*.sql.gz 2>/dev/null | wc -l | tr -d ' ')
   backup="最新 ${btime}（${bsize}），共 ${bcount} 份"
+  # 审计 4.5：校验今日是否生成了备份（备份是 02:00 cron，日报 09:00 跑，
+  # 若今日还没有新备份文件说明昨晚备份失败，必须告警而非静默）
+  today=$(date '+%Y%m%d')
+  if ls "$BACKUP_DIR"/flowcube_"$today"_*.sql.gz >/dev/null 2>&1; then
+    backup="$backup，今日✓"
+  else
+    backup="⚠ $backup，但今日无备份 —— 昨晚备份可能失败！"
+    backup_failed=1
+  fi
 else
   backup="⚠ 未找到备份文件"
+  backup_failed=1
 fi
 
-# 整体健康判定（用于标题图标）
-if [ "$up" = "$total" ] && [ "$code" = "200" ]; then icon="✅"; else icon="⚠️"; fi
+# 整体健康判定（用于标题图标）：备份失败也算异常
+if [ "$up" = "$total" ] && [ "$code" = "200" ] && [ -z "${backup_failed:-}" ]; then icon="✅"; else icon="⚠️"; fi
 
 now=$(date '+%Y-%m-%d %H:%M')
 MSG="FlowCube 每日巡检报告 ${icon} (${now})\n容器: ${up}/${total} 运行中${cstat}\n后端: ${health}\n磁盘: ${disk}\n备份: ${backup}\n\n收到本条即说明系统与监控均正常运行；若某天未收到，请检查服务器与监控任务。"

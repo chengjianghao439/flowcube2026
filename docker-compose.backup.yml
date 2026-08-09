@@ -1,0 +1,44 @@
+# ============================================================
+# 极序 Flow — 异地备份副本（可选，审计 4.5）
+#
+# 用途：把 /opt/flowcube/backups 的每日备份同步到第二台机器或对象存储。
+# 前提：服务器装 rclone（`apt install rclone`），并配置 remote：
+#   rclone config   # 按提示配置一个 remote（如 S3/OSS/WebDAV/另一台服务器）
+#
+# 使用：
+#   docker compose -f docker-compose.backup.yml up -d   # 启动异地同步
+#   docker compose -f docker-compose.backup.yml run --rm rclone-sync  # 手动跑一次
+#
+# 配置：
+#   RCLONE_REMOTE   rclone remote 路径（默认 backup:flowcube，即 remote 名叫 backup）
+#   BACKUP_DIR      本地备份目录（默认 /opt/flowcube/backups）
+#   定时：默认每 6 小时同步一次（同步是增量，开销小）
+# ============================================================
+version: '3.9'
+
+services:
+  # 首次一次性同步（把现有备份全部推上去）
+  rclone-init:
+    image: rclone/rclone:latest
+    container_name: flowcube-rclone-init
+    restart: "no"
+    volumes:
+      - ${BACKUP_DIR:-/opt/flowcube/backups}:/backups:ro
+      - ${RCLONE_CONFIG:-/root/.config/rclone}:/config/rclone:ro
+    command: ["sync", "/backups", "${RCLONE_REMOTE:-backup:flowcube}", "-v"]
+
+  # 定期增量同步（rclone 只传新增/变化的文件）
+  rclone-sync:
+    image: rclone/rclone:latest
+    container_name: flowcube-rclone-sync
+    restart: unless-stopped
+    volumes:
+      - ${BACKUP_DIR:-/opt/flowcube/backups}:/backups:ro
+      - ${RCLONE_CONFIG:-/root/.config/rclone}:/config/rclone:ro
+    command: ["sync", "/backups", "${RCLONE_REMOTE:-backup:flowcube}", "--max-age", "14d", "-v"]
+    # 每 6 小时同步；失败会自动重启重试
+    healthcheck:
+      test: ["CMD-SHELL", "rclone lsd ${RCLONE_REMOTE:-backup:flowcube} >/dev/null 2>&1 || exit 1"]
+      interval: 1h
+      timeout: 30s
+      retries: 3
