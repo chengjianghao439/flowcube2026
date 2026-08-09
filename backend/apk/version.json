@@ -1,7 +1,7 @@
 {
-  "version": "0.4.66",
-  "versionCode": 66,
+  "version": "0.4.67",
+  "versionCode": 67,
   "filename": "app-release.apk",
-  "releaseNote": "- **采购审批环节**：金额超过阈值的采购单提交后需经审批通过才能创建收货订单",
-  "publishedAt": "2026-08-09T08:47:21.051Z"
+  "releaseNote": "- **经营 KPI 仪表盘**：新增「经营 KPI」报表页，一屏看 GMV、毛利、订单数、回款、平均客单五大指标，并与上月环比",
+  "publishedAt": "2026-08-09T09:33:14.283Z"
 }
