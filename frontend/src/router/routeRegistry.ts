@@ -87,6 +87,7 @@ const InventoryPage = lazy(() => import('@/pages/inventory'))
 const PlasticBoxesPage = lazy(() => import('@/pages/plastic-boxes'))
 const StockcheckPage = lazy(() => import('@/pages/stockcheck'))
 const AbcClassPage = lazy(() => import('@/pages/stockcheck/abc'))
+const DisposalPage = lazy(() => import('@/pages/disposal'))
 const ProcurementPlanListPage = lazy(() => import('@/pages/procurement'))
 const ProcurementPlanDetailPage = lazy(() => import('@/pages/procurement/detail'))
 const TransferPage = lazy(() => import('@/pages/transfer'))
@@ -296,6 +297,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '库存', section: '库存作业', order: 31 },
+  },
+  {
+    path: '/disposals',
+    title: '呆滞库存处置',
+    permission: PERMISSIONS.INVENTORY_DISPOSAL_VIEW,
+    component: DisposalPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '库存', section: '库存作业', order: 32 },
   },
   {
     path: '/transfer',

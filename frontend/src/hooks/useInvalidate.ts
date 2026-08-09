@@ -267,6 +267,29 @@ const INVALIDATION_MAP = {
     ['dashboard-summary'],
   ],
 
+  // ── 呆滞库存处置（P2-9）──────────────────────────────────────────────────
+
+  /** 创建/取消处置单：仅影响处置单列表 */
+  disposals_action: [
+    ['disposals'],
+  ],
+
+  /** 建议圈选（新建页面）：呆滞商品列表 */
+  disposal_suggestion: [
+    ['disposal-suggestions'],
+  ],
+
+  /** 执行处置：FIFO 扣容器，库存全维度刷新（处置后建议列表也应刷新——该商品已不呆滞） */
+  disposal_execute: [
+    ['disposals'],
+    ['disposal-suggestions'],
+    ['inventory-stock'],
+    ['inventory-logs'],
+    ['inventory-overview'],
+    ['inventory-containers'],
+    ['dashboard-summary'],
+  ],
+
   // ── 波次拣货 ──────────────────────────────────────────────────────────────
 
   /** 创建波次 */
