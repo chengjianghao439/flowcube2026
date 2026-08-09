@@ -1,7 +1,7 @@
 {
-  "version": "0.4.68",
-  "versionCode": 68,
+  "version": "0.4.69",
+  "versionCode": 69,
   "filename": "app-release.apk",
-  "releaseNote": "呆滞库存处置单/销售折扣/采购价格管控",
-  "publishedAt": "2026-08-09T10:57:29.835Z"
+  "releaseNote": "- **退货退款单**：已收款的销售单发生退货时，新增「退款单」把多收的钱退还给客户（从资金账户出账并冲减已收金额）。此前已收款的退货会被系统拦截，现在退款完成后即可正常退货",
+  "publishedAt": "2026-08-09T11:29:42.471Z"
 }
