@@ -37,6 +37,7 @@ const SOURCE_TYPE = {
   MANUAL:           'manual',
   LEGACY:           'legacy',
   CONTAINER_SPLIT:  'container_split',
+  DISPOSAL:         'disposal',
 }
 
 const ALLOWED_SOURCE_TYPES = new Set(Object.values(SOURCE_TYPE))

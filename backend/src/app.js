@@ -114,6 +114,7 @@ app.use('/api/purchase-requisitions', require('./modules/purchase-requisitions/p
 app.use('/api/procurement', require('./modules/procurement/procurement.routes'))
 app.use('/api/sale',       require('./modules/sale/sale.routes'))
 app.use('/api/stockcheck', require('./modules/stockcheck/stockcheck.routes'))
+app.use('/api/disposals',  require('./modules/disposal/disposal.routes'))
 app.use('/api/dashboard',  require('./modules/dashboard/dashboard.routes'))
 app.use('/api/settings',   require('./modules/settings/settings.routes'))
 app.use('/api/roles',      require('./modules/roles/roles.routes'))

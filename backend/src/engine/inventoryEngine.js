@@ -15,6 +15,7 @@
  *   SALE_RET      → return-tasks.service（PDA收货建容器+质检+上架）        createContainer/syncStockFromContainers
  *   MANUAL_IN     → inventory.service.changeStock()   adjustContainerStock
  *   MANUAL_OUT    → inventory.service.changeStock()   adjustContainerStock
+ *   DISPOSAL      → disposal.service.dispose()        adjustContainerStock
  *
  * moveStock() 只负责 SALE_OUT + TASK_OUT 两条容器出库路径。
  * 所有其他类型调用 moveStock() 时将抛出 500 错误（防止误调用）。
@@ -50,6 +51,7 @@ const MOVE_TYPE = {
   // type=1/2，不会被这类记录污染；而按 container_id 查流水的地方（塑料盒详情、库存流水页）
   // 正需要它们——在此之前拆分与并货完全没有留痕，追溯到容器这一层就断了。
   CONTAINER_SPLIT: 12, // → containerEngine.splitContainer
+  DISPOSAL:        13, // → disposal.service.dispose()（呆滞处置出库，adjustContainerStock）
 }
 
 const MOVE_TYPE_LABEL = {
@@ -57,7 +59,7 @@ const MOVE_TYPE_LABEL = {
   4:  '调拨出',       5:  '调拨入',       6:  '采购退货出库',
   7:  '销售退货入库', 8:  '仓库任务出库',
   9:  '手动入库',     10: '手动出库',     11: '入库撤回',
-  12: '容器拆分',
+  12: '容器拆分',  13: '呆滞处置出库',
 }
 
 /**
