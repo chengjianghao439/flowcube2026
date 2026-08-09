@@ -71,6 +71,10 @@ jobs:
       - name: TypeScript — 前端类型检查
         run: ./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit
 
+      # 前端单元测试（vitest，审计 4.3 起步）：纯逻辑，无需 DB
+      - name: 前端单元测试 — vitest
+        run: npm --prefix frontend run test:unit
+
   regression:
     name: 回归门禁（smoke + 集成）
     runs-on: ubuntu-latest

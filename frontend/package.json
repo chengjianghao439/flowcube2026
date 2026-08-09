@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "build:pda": "cross-env VITE_CAPACITOR=1 vite build",
     "pda:sync": "npm run build:pda && npx cap sync android",
-    "pda:open": "npx cap open android"
+    "pda:open": "npx cap open android",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",
@@ -67,6 +68,7 @@
     "terser": "^5.37.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.2",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vitest": "^3.2.7"
   }
 }
