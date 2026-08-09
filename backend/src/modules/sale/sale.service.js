@@ -24,6 +24,7 @@ const fmt = row => ({
   warehouseId:row.warehouse_id, warehouseName:row.warehouse_name,
   status:row.status, statusName:SALE_STATUS_NAME[row.status],
   saleDate:row.sale_date, totalAmount:Number(row.total_amount), remark:row.remark,
+  discountAmount: Number(row.discount_amount || 0),
   taskId:row.warehouse_task_id||row.task_id||null,
   taskNo:row.warehouse_task_no||row.task_no||null,
   warehouseTaskStatus: row.warehouse_task_status != null ? Number(row.warehouse_task_status) : null,
@@ -208,6 +209,29 @@ async function recomputeSaleReceivable(conn, saleOrderId) {
     [saleOrderId],
   )
   const grossTotal = Number(amount) || 0
+  // 整单折扣（P2-4）：按发货比例分摊折扣到已发部分。总折扣 × (已发原值 / 订单原值)，
+  // 分批发货时只扣已发那部分的折扣，未发部分留到后续批次。
+  const [[{ orderTotal, discount, orderQty, shippedQty }]] = await conn.query(
+    `SELECT COALESCE(so.total_amount, 0) AS orderTotal,
+            COALESCE(so.discount_amount, 0) AS discount,
+            COALESCE(SUM(soi.quantity), 0) AS orderQty,
+            COALESCE(SUM(soi.shipped_qty), 0) AS shippedQty
+     FROM sale_orders so
+     LEFT JOIN sale_order_items soi ON soi.order_id = so.id
+     WHERE so.id = ?`,
+    [saleOrderId],
+  )
+  const discountApplied = (() => {
+    const d = Number(discount) || 0
+    if (d <= 0) return 0
+    // 有明细行时按「已发数量 / 订单数量」比例分摊；无明细或全零时按订单金额比例
+    const shipped = Number(shippedQty) || 0
+    const ordered = Number(orderQty) || 0
+    if (ordered > 0) return Math.round((d * shipped / ordered) * 10000) / 10000
+    const ot = Number(orderTotal) || 0
+    if (ot > 0) return Math.round((d * grossTotal / ot) * 10000) / 10000
+    return 0
+  })()
   // 扣除该销售单下所有「已退货入库(3)」的销售退货金额（与采购应付 recomputePurchasePayable 对称）。
   // 否则分批/分仓发货时，中途完成的销售退货冲减（syncSaleReturnCompleted 增量减）会被下一批
   // 出库的全量重算覆盖回全额，客户被静默多计应收——这正是采购侧 P0-1 的销售镜像。
@@ -222,7 +246,7 @@ async function recomputeSaleReceivable(conn, saleOrderId) {
       WHERE sr.sale_order_id = ? AND sr.deleted_at IS NULL AND sr.status = 3`,
     [saleOrderId],
   )
-  const total = Math.max(0, grossTotal - (Number(returnedAmount) || 0))
+  const total = Math.max(0, grossTotal - (Number(returnedAmount) || 0) - discountApplied)
   if (total <= 0) {
     const [[existing]] = await conn.query('SELECT id FROM payment_records WHERE type = 2 AND order_id = ?', [saleOrderId])
     if (!existing) return
@@ -591,7 +615,7 @@ async function findById(id, scopeWarehouseIds = null) {
 }
 
 async function create({ customerId, customerName, warehouseId, warehouseName, remark,
-  carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator, requestKey }) {
+  carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator, requestKey, discountAmount }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -615,9 +639,10 @@ async function create({ customerId, customerName, warehouseId, warehouseName, re
     const orderNo = await genOrderNo(conn)
     const folded = await foldEntryItems(conn, items)   // 多单位折算成基本单位口径（后端权威）
     const total = round2(folded.reduce((s,i)=>s+i.amount,0))
+    const discount = Math.max(0, Number(discountAmount) || 0)
     const [r] = await conn.query(
-      `INSERT INTO sale_orders (order_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_date,total_amount,remark,carrier_id,carrier,freight_type,receiver_name,receiver_phone,receiver_address,operator_id,operator_name) VALUES (?,?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?)`,
-      [orderNo,customerId,customerName,warehouseId,warehouseName,total,remark||null,carrierId||null,carrier||null,freightType||null,receiverName||null,receiverPhone||null,receiverAddress||null,operator.userId,operator.realName]
+      `INSERT INTO sale_orders (order_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_date,total_amount,discount_amount,remark,carrier_id,carrier,freight_type,receiver_name,receiver_phone,receiver_address,operator_id,operator_name) VALUES (?,?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?)`,
+      [orderNo,customerId,customerName,warehouseId,warehouseName,total,discount,remark||null,carrierId||null,carrier||null,freightType||null,receiverName||null,receiverPhone||null,receiverAddress||null,operator.userId,operator.realName]
     )
     const orderId = r.insertId
     for(const item of folded) {
@@ -643,7 +668,7 @@ async function create({ customerId, customerName, warehouseId, warehouseName, re
 
 // 编辑草稿：仅在 status=1（草稿）时允许，整体替换明细行
 async function update(id, { customerId, customerName, warehouseId, warehouseName, remark,
-  carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null }) {
+  carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null, discountAmount }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -656,9 +681,10 @@ async function update(id, { customerId, customerName, warehouseId, warehouseName
     assertNoDuplicateSaleItemLines(items, warehouseId)
     const folded = await foldEntryItems(conn, items)   // 多单位折算成基本单位口径（后端权威）
     const total = round2(folded.reduce((s, i) => s + i.amount, 0))
+    const discount = Math.max(0, Number(discountAmount) || 0)
     await conn.query(
-      `UPDATE sale_orders SET customer_id=?,customer_name=?,warehouse_id=?,warehouse_name=?,total_amount=?,remark=?,carrier_id=?,carrier=?,freight_type=?,receiver_name=?,receiver_phone=?,receiver_address=? WHERE id=?`,
-      [customerId, customerName, warehouseId, warehouseName, total, remark||null, carrierId||null, carrier||null, freightType||null, receiverName||null, receiverPhone||null, receiverAddress||null, id]
+      `UPDATE sale_orders SET customer_id=?,customer_name=?,warehouse_id=?,warehouse_name=?,total_amount=?,discount_amount=?,remark=?,carrier_id=?,carrier=?,freight_type=?,receiver_name=?,receiver_phone=?,receiver_address=? WHERE id=?`,
+      [customerId, customerName, warehouseId, warehouseName, total, discount, remark||null, carrierId||null, carrier||null, freightType||null, receiverName||null, receiverPhone||null, receiverAddress||null, id]
     )
     await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
     for (const item of folded) {
