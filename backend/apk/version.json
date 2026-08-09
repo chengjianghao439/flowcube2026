@@ -1,7 +1,7 @@
 {
-  "version": "0.4.65",
-  "versionCode": 65,
+  "version": "0.4.66",
+  "versionCode": 66,
   "filename": "app-release.apk",
-  "releaseNote": "- **重复提示治理**：修复多页面操作失败时弹出两次错误提示的问题（操作日志、入库、打印、客户/供应商等 30 多处）",
-  "publishedAt": "2026-08-09T08:17:57.512Z"
+  "releaseNote": "- **采购审批环节**：金额超过阈值的采购单提交后需经审批通过才能创建收货订单",
+  "publishedAt": "2026-08-09T08:47:21.051Z"
 }
