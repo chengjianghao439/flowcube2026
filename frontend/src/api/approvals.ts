@@ -1,9 +1,11 @@
 import { payloadClient as apiClient } from './client'
 import type { PaginatedData } from '@/types'
-import type { ApprovalFlow, ApprovalFlowStep, PendingApproval } from '@/types/approval'
+import type { ApprovalFlow, ApprovalFlowStep, ApprovalInstance, PendingApproval } from '@/types/approval'
 
 export const listApprovalFlowsApi = (bizType = '') =>
   apiClient.get<ApprovalFlow[]>('/approvals/flows', { params: bizType ? { bizType } : {} })
+
+export const getApprovalFlowApi = (id: number) => apiClient.get<ApprovalFlow>(`/approvals/flows/${id}`)
 
 export const createApprovalFlowApi = (d: {
   bizType: string
@@ -28,3 +30,6 @@ export const deleteApprovalFlowApi = (id: number) => apiClient.delete<null>(`/ap
 
 export const listPendingApprovalsApi = (p: { page?: number; pageSize?: number } = {}) =>
   apiClient.get<PaginatedData<PendingApproval>>('/approvals/pending', { params: p })
+
+export const getBizApprovalApi = (bizType: string, bizId: number) =>
+  apiClient.get<ApprovalInstance | null>(`/approvals/biz/${bizType}/${bizId}`)

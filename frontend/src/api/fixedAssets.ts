@@ -56,6 +56,7 @@ export interface DeprResult {
 
 export const listFixedAssetsApi = (params: Record<string, unknown>) =>
   client.get<PaginatedData<FixedAsset>>('/fixed-assets', { params })
+export const getFixedAssetApi = (id: number) => client.get<FixedAsset>(`/fixed-assets/${id}`)
 export const createFixedAssetApi = (data: CreateFixedAssetParams) => client.post<{ id: number; assetNo: string }>('/fixed-assets', data)
 export const runDepreciationApi = (period?: string) => client.post<DeprResult>('/fixed-assets/depreciation/run', period ? { period } : {})
 export const disposeFixedAssetApi = (id: number, data: { disposeType: number; disposeDate: string; income?: number; expense?: number }) =>

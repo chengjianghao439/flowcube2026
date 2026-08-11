@@ -24,6 +24,10 @@ function coldEntry() {
   }
 }
 
+function isCold(h) {
+  return (h.sample_count ?? 0) < COLD_START_MAX_SAMPLES
+}
+
 async function recordPrintSuccess(printerId, latencyMs) {
   const pid = Number(printerId)
   if (!Number.isFinite(pid) || pid <= 0) return
@@ -129,5 +133,6 @@ module.exports = {
   recordPrintFailure,
   getHealthMap,
   coldEntry,
+  isCold,
   COLD_START_MAX_SAMPLES,
 }

@@ -1,5 +1,15 @@
+const { successResponse } = require('./response')
+
 function asyncRoute(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
+}
+
+function successRoute(handler, message = 'ok', statusCode = 200) {
+  return asyncRoute(async (req, res) => {
+    const result = await handler(req, res)
+    const resolvedMessage = typeof message === 'function' ? message(result, req) : message
+    return successResponse(res, result, resolvedMessage, statusCode)
+  })
 }
 
 function validateBody(schema) {
@@ -37,6 +47,7 @@ function validateQuery(schema) {
 
 module.exports = {
   asyncRoute,
+  successRoute,
   validateBody,
   validateParams,
   validateQuery,

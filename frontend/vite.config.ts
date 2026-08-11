@@ -153,6 +153,7 @@ export default defineConfig(({ command }) => {
 
             if (
               id.includes('/qrcode.react/') ||
+              id.includes('/react-barcode/') ||
               id.includes('/jsbarcode/')
             ) {
               return 'vendor-barcode'

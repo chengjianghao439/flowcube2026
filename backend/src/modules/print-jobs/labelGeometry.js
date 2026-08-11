@@ -38,6 +38,9 @@
 /** pt → mm（1pt = 1/72 inch）。旧模板 fontSize(pt) 迁移用 */
 const PT_TO_MM = 25.4 / 72
 
+/** v2 仅支持这三种元素；divider/table 属单据画布模板，标签真机不画，normalize 阶段剔除 */
+const LABEL_ELEMENT_TYPES = ['text', 'title', 'barcode']
+
 function num(v, fallback = 0) {
   const n = Number(v)
   return Number.isFinite(n) ? n : fallback
@@ -173,6 +176,7 @@ function resolveLayout(rawLayout, data, paperSize) {
 
 module.exports = {
   PT_TO_MM,
+  LABEL_ELEMENT_TYPES,
   normalizeElement,
   normalizeLabelLayout,
   resolveLayout,

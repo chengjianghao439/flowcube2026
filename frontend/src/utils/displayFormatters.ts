@@ -14,6 +14,48 @@ const BACKEND_CODE_LABELS: Record<string, string> = {
   NETWORK_ERROR: '网络连接失败，请检查网络后重试',
 }
 
+const EXCEPTION_TYPE_LABELS: Record<string, string> = {
+  ORPHANED_RESERVATION: '孤立预占异常',
+  INBOUND_PRINT_FAILED: '入库打印失败',
+  OUTBOUND_PRINT_FAILED: '出库打印失败',
+  CONFIRMED_SALE_NO_RESERVATION: '销售单预占缺失',
+  HIGH_PRIORITY_TASK_DELAY: '高优先级任务延误',
+  SHIPPED_TASK_UNSYNCED_SALE: '出库未同步销售单',
+  ORPHANED_SORTING_BIN: '孤立分拣格异常',
+  ORPHANED_CONTAINER_LOCK: '库存容器锁定异常',
+  LONG_PENDING_RESERVATION: '长期未处理预占',
+  RESERVED_EXCEEDS_ON_HAND: '预占超过在库',
+  NEGATIVE_ON_HAND: '库存数量异常',
+  INBOUND_PUTAWAY_TIMEOUT: '入库上架超时',
+  WAVE_STALE_PICKING: '波次拣货停滞',
+  WAVE_STALE_SORTING: '波次分拣停滞',
+}
+
+const DATABASE_TABLE_LABELS: Record<string, string> = {
+  warehouse_tasks: '仓库任务',
+  inventory_containers: '库存容器',
+  stock_reservations: '库存预占记录',
+  print_jobs: '打印任务',
+  inbound_tasks: '入库任务',
+  picking_waves: '波次拣货',
+  sorting_bins: '分拣格',
+  packages: '包裹',
+  scan_logs: '扫码记录',
+  users: '用户',
+  roles: '角色权限',
+  warehouses: '仓库',
+  products: '商品',
+  sales: '销售单',
+  purchase_orders: '采购单',
+}
+
+const PRINT_REASON_LABELS: Record<string, string> = {
+  default: '默认打印任务',
+  reprint: '补打任务',
+  auto: '系统自动打印',
+  manual: '手动打印',
+}
+
 const PRINT_STATUS_LABELS: Record<string, string> = {
   no_job: '尚未生成打印任务',
   queued: '打印任务已生成，等待打印客户端领取',
@@ -63,6 +105,18 @@ export function formatBackendCode(code: unknown, fallback = '操作失败，请�
   return fallback
 }
 
+export function formatExceptionType(code: unknown): string {
+  const raw = asTrimmedString(code)
+  if (!raw) return '未知异常类型'
+  return EXCEPTION_TYPE_LABELS[raw] ?? '未知异常类型'
+}
+
+export function formatDatabaseTableName(tableName: unknown): string {
+  const raw = asTrimmedString(tableName)
+  if (!raw) return '未知数据'
+  return DATABASE_TABLE_LABELS[raw] ?? '业务数据'
+}
+
 export function formatPrintStatus(statusKey?: PrintStatusKey | null, stateLabel?: string | null, errorMessage?: string | null): string {
   const key = asTrimmedString(statusKey)
   if (key && PRINT_STATUS_LABELS[key]) return PRINT_STATUS_LABELS[key]
@@ -70,6 +124,11 @@ export function formatPrintStatus(statusKey?: PrintStatusKey | null, stateLabel?
   if (rawLabel && hasChinese(rawLabel) && !looksLikeTechnicalValue(rawLabel)) return rawLabel
   if (asTrimmedString(errorMessage)) return '打印失败，可尝试补打'
   return '打印状态未知'
+}
+
+export function formatPrintReason(reason?: string | null): string {
+  const raw = asTrimmedString(reason) || 'default'
+  return PRINT_REASON_LABELS[raw] ?? '打印任务'
 }
 
 export function formatPdaErrorMessage(message: unknown, fallback = '扫码失败，请检查条码或任务状态'): string {
@@ -91,6 +150,11 @@ export function formatErrorMessage(messageOrCode: unknown, fallback = '操作失
   if (codeLabel) return codeLabel
   if (hasChinese(raw) && !looksLikeTechnicalValue(raw)) return raw
   return fallback
+}
+
+export function formatTechnicalValue(value: unknown, fallback = '未提供'): string {
+  const raw = asTrimmedString(value)
+  return raw || fallback
 }
 
 export function formatPrinterSource(source?: string | null): string {

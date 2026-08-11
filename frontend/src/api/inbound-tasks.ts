@@ -10,6 +10,8 @@ import type {
   CreateInboundTaskResult,
   CreateInboundTaskParams,
   InboundPurchaseCandidate,
+  ReprintInboundTaskParams,
+  ReprintInboundTaskResult,
   QaDisposition,
   QaDisposeParams,
   QaDisposeResult,
@@ -31,6 +33,9 @@ export const getInboundTaskByIdApi = (id: number) =>
 
 export const submitInboundTaskApi = (id: number, config?: Parameters<typeof client.post>[2]) =>
   client.post<InboundTask>(`/inbound-tasks/${id}/submit`, {}, config)
+
+export const reprintInboundTaskApi = (id: number, data: ReprintInboundTaskParams) =>
+  client.post<ReprintInboundTaskResult>(`/inbound-tasks/${id}/reprint`, data)
 
 export const getInboundTaskContainersApi = (id: number) =>
   client.get<InboundContainersResult>(`/inbound-tasks/${id}/containers`)

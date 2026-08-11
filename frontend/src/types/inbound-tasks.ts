@@ -318,6 +318,20 @@ export interface CreateInboundTaskParams {
   }>
 }
 
+export interface ReprintInboundTaskParams {
+  mode?: 'task' | 'item' | 'barcode'
+  itemId?: number
+  barcode?: string
+}
+
+export interface ReprintInboundTaskResult {
+  taskId: number
+  mode: 'task' | 'item' | 'barcode'
+  count: number
+  jobIds: number[]
+  barcodes: string[]
+}
+
 export interface InboundPurchaseCandidate {
   purchaseItemId: number
   purchaseOrderId: number

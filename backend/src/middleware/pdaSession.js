@@ -127,6 +127,22 @@ function pdaSessionRequired() {
   }
 }
 
+/**
+ * 按 scope 细分设备能做哪些作业（收货 / 拣货 / 打包…）。
+ * 目前 createSession 给所有设备发全量 scope，本中间件尚未挂到任何路由上——
+ * 设备粒度的能力细分还没有实际需求，过早启用只会增加现场故障面。
+ */
+function requirePdaScope(scope) {
+  return (req, _res, next) => {
+    if (!req.pda) return next(new AppError('需要有效 PDA 设备会话', 403, 'PDA_SESSION_REQUIRED'))
+    if (!req.pda.scopes.includes(scope)) {
+      return next(new AppError('PDA 设备会话缺少操作范围', 403, 'PDA_SCOPE_DENIED', { scope }))
+    }
+    next()
+  }
+}
+
 module.exports = {
   pdaSessionRequired,
+  requirePdaScope,
 }

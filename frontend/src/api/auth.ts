@@ -15,3 +15,8 @@ export async function loginApi(params: LoginParams): Promise<LoginResult> {
   const res = await apiClient.post<LoginResult>('/auth/login', params)
   return res
 }
+
+export async function getMeApi(): Promise<User> {
+  const res = await apiClient.get<User>('/auth/me')
+  return res
+}

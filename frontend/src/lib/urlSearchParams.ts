@@ -2,6 +2,11 @@ export function readStringParam(params: URLSearchParams, key: string, fallback =
   return params.get(key)?.trim() ?? fallback
 }
 
+export function readPositiveIntParam(params: URLSearchParams, key: string, fallback = 1): number {
+  const value = Number(params.get(key) || '')
+  return Number.isInteger(value) && value > 0 ? value : fallback
+}
+
 export function readNullableIntParam(params: URLSearchParams, key: string): number | null {
   const value = Number(params.get(key) || '')
   return Number.isInteger(value) && value > 0 ? value : null

@@ -5,6 +5,7 @@ import {
   updateApprovalFlowApi,
   deleteApprovalFlowApi,
   listPendingApprovalsApi,
+  getBizApprovalApi,
 } from '@/api/approvals'
 import type { ApprovalFlowStep } from '@/types/approval'
 
@@ -56,5 +57,14 @@ export function usePendingApprovals(page: number, pageSize = 20) {
   return useQuery({
     queryKey: [PENDING_KEY, page, pageSize],
     queryFn: () => listPendingApprovalsApi({ page, pageSize }),
+  })
+}
+
+/** 某业务单据的审批进度 */
+export function useBizApproval(bizType: string | null, bizId: number | null) {
+  return useQuery({
+    queryKey: ['biz-approval', bizType, bizId],
+    queryFn: () => (bizType && bizId ? getBizApprovalApi(bizType, bizId) : Promise.resolve(null)),
+    enabled: !!bizType && !!bizId,
   })
 }

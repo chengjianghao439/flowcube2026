@@ -33,6 +33,33 @@ export function getReminderNotifications(items: NotificationEntry[]) {
   return normalizeNotifications(items).filter(item => item.category === 'finance' || item.category === 'system')
 }
 
+const INBOUND_EXCEPTION_CODES = new Set([
+  'INBOUND_PRINT_FAILED',
+  'INBOUND_PUTAWAY_TIMEOUT',
+])
+
+const OUTBOUND_EXCEPTION_CODES = new Set([
+  'OUTBOUND_PRINT_FAILED',
+  'WAVE_STALE_PICKING',
+  'WAVE_STALE_SORTING',
+])
+
+const LOGISTICS_EXCEPTION_CODES = new Set([
+  'LOGISTICS_PRINT_FAILED',
+])
+
+export function getInboundExceptionNotifications(items: NotificationEntry[]) {
+  return normalizeNotifications(items).filter(item => item.code && INBOUND_EXCEPTION_CODES.has(item.code))
+}
+
+export function getOutboundExceptionNotifications(items: NotificationEntry[]) {
+  return normalizeNotifications(items).filter(item => item.code && OUTBOUND_EXCEPTION_CODES.has(item.code))
+}
+
+export function getLogisticsExceptionNotifications(items: NotificationEntry[]) {
+  return normalizeNotifications(items).filter(item => item.code && LOGISTICS_EXCEPTION_CODES.has(item.code))
+}
+
 export function getNotificationCategoryLabel(category?: NotificationCategory) {
   switch (category) {
     case 'finance':

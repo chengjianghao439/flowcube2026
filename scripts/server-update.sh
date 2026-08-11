@@ -5,20 +5,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-# 部署互斥锁（2026-08-11 并发踩踏事故修复）：同一台服务器同一时刻只允许一个部署进程。
-# 场景：CI Deploy + 手动部署同时跑，多个 `docker compose up --build` 并发互相抢容器，
-# 谁也无法完成重建。flock 让后来的进程等待（最长 DEPLOY_LOCK_TIMEOUT 秒），前一个完成才继续。
-LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/flowcube-deploy.lock}"
-LOCK_TIMEOUT="${DEPLOY_LOCK_TIMEOUT:-1800}"   # 默认等 30 分钟（构建镜像通常 5-10 分钟）
-exec 9>"$LOCK_FILE"
-if ! flock -w "$LOCK_TIMEOUT" 9; then
-  echo "!! 上一个部署仍在进行（$LOCK_FILE），等待超过 ${LOCK_TIMEOUT}s 仍未获得锁，放弃本次部署"
-  echo "!! 若确认无部署在跑，可删除锁文件后重试：rm -f $LOCK_FILE"
-  exit 1
-fi
-echo "==> 获得部署锁，开始部署（PID $$）"
-trap 'echo "==> 部署结束，释放锁"; flock -u 9' EXIT
-
 wait_for_health() {
   local attempts=30
   local delay=2

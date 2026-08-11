@@ -25,4 +25,8 @@ function getAdapter(platformCode) {
   return REGISTRY[code] || null
 }
 
-module.exports = { getAdapter }
+function listPlatforms() {
+  return Object.keys(REGISTRY)
+}
+
+module.exports = { getAdapter, listPlatforms }

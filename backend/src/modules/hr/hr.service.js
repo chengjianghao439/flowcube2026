@@ -17,6 +17,8 @@ const { normalizePagination } = require('../../utils/pagination')
  * 一张工资单(期)一个 source_id=hr_payrolls.id，幂等重算覆盖。
  */
 
+const PAYROLL_STATUS = { DRAFT: 1, CALCULATED: 2, PAID: 3 }
+
 // ── 员工 ──────────────────────────────────────────────────────────────
 
 async function listEmployees({ page = 1, pageSize = 20, keyword = '', companyId = 1 } = {}) {
@@ -245,5 +247,5 @@ async function payPayroll(id, { paidDate }, operator, companyId = 1) {
 }
 
 module.exports = {
-  listEmployees, createEmployee, listPayrolls, createPayroll, calculatePayroll, payPayroll,
+  PAYROLL_STATUS, listEmployees, createEmployee, listPayrolls, createPayroll, calculatePayroll, payPayroll,
 }

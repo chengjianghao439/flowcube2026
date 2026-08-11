@@ -189,6 +189,29 @@ async function softDelete(id) {
  * @param {string} params.position   - 位，如 "03" 或 "3"
  * @returns {number} location_id
  */
+async function findOrCreateByRackLevel(conn, { warehouseId, rackCode, level, position }) {
+  if (!warehouseId || !rackCode || !level || !position) {
+    throw new AppError('库位参数不完整（需要 warehouseId/rackCode/level/position）', 400)
+  }
+  const pad = v => String(v).padStart(2, '0')
+  const code = `${rackCode}-${pad(level)}-${pad(position)}`
+
+  // 先查找已存在的库位
+  const [[existing]] = await conn.query(
+    'SELECT id FROM warehouse_locations WHERE warehouse_id = ? AND code = ? AND deleted_at IS NULL',
+    [warehouseId, code],
+  )
+  if (existing) return existing.id
+
+  // 不存在则自动创建
+  const [result] = await conn.query(
+    `INSERT INTO warehouse_locations (warehouse_id, code, zone, rack, level, position, capacity, status)
+     VALUES (?, ?, '', ?, ?, ?, 0, 1)`,
+    [warehouseId, code, rackCode, pad(level), pad(position)],
+  )
+  return result.insertId
+}
+
 async function findByCode(code) {
   let rows
   try {
@@ -222,4 +245,5 @@ module.exports = {
   update,
   softDelete,
   generateCode,
+  findOrCreateByRackLevel,
 }
