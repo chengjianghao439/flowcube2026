@@ -29,6 +29,10 @@ export default function GlobalSearch() {
   const navigate = useNavigate()
   const timer = useRef<ReturnType<typeof setTimeout>>()
 
+  // 平台化快捷键提示：macOS 显示 ⌘K，Windows/Linux 显示 Ctrl+K
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+  const shortcutHint = isMac ? '⌘K' : 'Ctrl+K'
+
   // 快捷键 Cmd+K / Ctrl+K
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -58,6 +62,16 @@ export default function GlobalSearch() {
     setQuery(''); setResults([])
   }
 
+  // 回车跳转第一个结果；阻止点击时被 blur 抢先收起（mousedown 时记录，避免 150ms 竞争）
+  const suppressBlur = useRef(false)
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && results.length > 0) {
+      e.preventDefault()
+      go(results[0])
+    }
+  }
+  const onMouseDownResult = () => { suppressBlur.current = true }
+
   const showDropdown = focused && (query.trim().length > 0)
 
   return (
@@ -71,8 +85,9 @@ export default function GlobalSearch() {
           value={query}
           onChange={e => search(e.target.value)}
           onFocus={() => setFocused(true)}
-          onBlur={() => setTimeout(() => setFocused(false), 150)}
-          placeholder="搜索... ⌘K"
+          onBlur={() => { if (!suppressBlur.current) setTimeout(() => setFocused(false), 150); suppressBlur.current = false }}
+          onKeyDown={onKeyDown}
+          placeholder={`搜索... ${shortcutHint}`}
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground min-w-0"
         />
         {loading && <span className="text-xs text-muted-foreground shrink-0">...</span>}
@@ -96,7 +111,7 @@ export default function GlobalSearch() {
                       <Icon className="size-3.5" /> {group[0].typeLabel}
                     </div>
                     {group.map(r => (
-                      <button key={r.id} onClick={() => go(r)}
+                      <button key={r.id} onClick={() => go(r)} onMouseDown={onMouseDownResult}
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors text-left">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{r.title}</p>
