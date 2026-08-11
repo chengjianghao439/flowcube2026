@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# 并发保护（2026-08-11 生产事故修复）：main 连续 push 触发多个 Deploy 在服务器并发
+# 跑 docker compose up --build 互相抢容器。concurrency 让同一时间只跑最新一次。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -92,7 +98,8 @@ jobs:
           SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
         run: |
           set -euo pipefail
-          ssh -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" <<EOF
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o ConnectTimeout=20 \
+            -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" <<EOF
           set -euo pipefail
           cd "${{ steps.deploy_config.outputs.server_app_path }}"
           if git diff --name-only --diff-filter=U | grep -q .; then
@@ -110,7 +117,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          REMOTE_SHA=$(ssh -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" "cd '${{ steps.deploy_config.outputs.server_app_path }}' && git rev-parse HEAD")
+          REMOTE_SHA=$(ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" "cd '${{ steps.deploy_config.outputs.server_app_path }}' && git rev-parse HEAD")
           test "$REMOTE_SHA" = "$GITHUB_SHA"
 
       - name: Verify backend health

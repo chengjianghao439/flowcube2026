@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+# 并发保护（2026-08-11 生产事故修复）：多次 push 触发的 PDA 构建会互相覆盖 /tmp 产物。
+concurrency:
+  group: build-pda
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
