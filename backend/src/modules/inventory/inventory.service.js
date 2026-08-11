@@ -467,60 +467,6 @@ async function getContainerLogs(containerId) {
 }
 
 /**
- * 根据容器来源解析关联单据（只读）
- */
-async function resolveSourceDocument(sourceType, sourceRefId) {
-  const rid = Number(sourceRefId)
-  if (!Number.isFinite(rid) || rid <= 0) return null
-
-  try {
-    if (sourceType === 'inbound_task') {
-      const [[row]] = await pool.query(
-        'SELECT id, task_no, status, purchase_order_no, warehouse_name FROM inbound_tasks WHERE id=? AND deleted_at IS NULL',
-        [rid],
-      )
-      return row ? { kind: 'inbound_task', id: row.id, no: row.task_no, status: row.status, purchaseOrderNo: row.purchase_order_no, warehouseName: row.warehouse_name } : null
-    }
-    if (sourceType === 'stockcheck') {
-      const [[row]] = await pool.query(
-        'SELECT id, check_no, status, warehouse_name FROM inventory_checks WHERE id=? AND deleted_at IS NULL',
-        [rid],
-      )
-      return row ? { kind: 'stockcheck', id: row.id, no: row.check_no, status: row.status, warehouseName: row.warehouse_name } : null
-    }
-    if (sourceType === 'transfer') {
-      const [[row]] = await pool.query(
-        'SELECT id, order_no, status, from_warehouse_name, to_warehouse_name FROM transfer_orders WHERE id=? AND deleted_at IS NULL',
-        [rid],
-      )
-      return row ? { kind: 'transfer', id: row.id, no: row.order_no, status: row.status, fromWarehouseName: row.from_warehouse_name, toWarehouseName: row.to_warehouse_name } : null
-    }
-    if (sourceType === 'import') {
-      const [[row]] = await pool.query(
-        'SELECT id, file_name, row_count, created_at FROM inventory_import_batches WHERE id=?',
-        [rid],
-      )
-      return row ? { kind: 'import', id: row.id, fileName: row.file_name, rowCount: row.row_count, createdAt: row.created_at } : null
-    }
-    if (sourceType === 'return') {
-      const [[sr]] = await pool.query('SELECT id, return_no, status FROM sale_returns WHERE id=? AND deleted_at IS NULL', [rid])
-      if (sr) return { kind: 'sale_return', id: sr.id, no: sr.return_no, status: sr.status }
-      const [[pr]] = await pool.query('SELECT id, return_no, status FROM purchase_returns WHERE id=? AND deleted_at IS NULL', [rid])
-      if (pr) return { kind: 'purchase_return', id: pr.id, no: pr.return_no, status: pr.status }
-      return null
-    }
-    if (sourceType === 'manual') {
-      const [[u]] = await pool.query('SELECT id, username, real_name FROM sys_users WHERE id=?', [rid])
-      return u ? { kind: 'manual', operatorUserId: u.id, username: u.username, realName: u.real_name } : null
-    }
-  } catch (e) {
-    if (e.code === 'ER_NO_SUCH_TABLE') return null
-    throw e
-  }
-  return null
-}
-
-/**
  * 批量解析容器来源文档（避免 N+1 查询）
  */
 async function resolveSourceDocumentsBatch(items) {
@@ -1139,7 +1085,6 @@ module.exports = {
   getContainerLogs,
   traceByProductId,
   checkStockConsistency,
-  resolveSourceDocument,
   resolveSourceDocumentsBatch,
   getContainerByBarcode,
   assignContainerLocation,

@@ -557,8 +557,6 @@ async function finishPackage(packageId, { createdBy, scopeWarehouseIds = null } 
   }
 }
 
-const finishPackageWithPrint = finishPackage
-
 // ─── 按条码查询箱子（含任务信息 + 所有箱的明细）────────────────────────────────
 async function getByBarcode(barcode) {
   const inboundThresholds = await getInboundClosureThresholds()
@@ -638,7 +636,6 @@ module.exports = {
   voidPackage,
   voidCompletedPackage,
   finishPackage,
-  finishPackageWithPrint,
   getByBarcode,
   cancelByTaskId,
 }

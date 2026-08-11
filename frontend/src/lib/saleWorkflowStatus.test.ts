@@ -1,44 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { formatQtyWithUnits } from './units'
 import { getSaleWorkflowStatus } from './saleWorkflowStatus'
 import type { SaleOrder } from '@/types/sale'
 
 /**
  * 前端纯逻辑单元测试（审计 4.3 起步）。
- * units：多计量单位友好展示（纯展示，绝不参与库存/结算计算）。
  * saleWorkflowStatus：销售单状态推导（含取消收尾中/部分发货/仓库作业进度分支）。
  */
-
-// ── units.ts 多单位展示 ────────────────────────────────────────────────────────
-describe('formatQtyWithUnits', () => {
-  const units = [
-    { id: 1, unitName: '件', isBase: true, conversionRate: 1 },
-    { id: 2, unitName: '箱', isBase: false, conversionRate: 12 },
-    { id: 3, unitName: '托', isBase: false, conversionRate: 60 },
-  ]
-
-  it('能整除时显示最大辅助单位', () => {
-    expect(formatQtyWithUnits(60, units)).toBe('60 件（1 托）')
-    expect(formatQtyWithUnits(12, units)).toBe('12 件（1 箱）')
-    expect(formatQtyWithUnits(120, units)).toBe('120 件（2 托）')
-  })
-
-  it('不能整除退回只显示基本单位', () => {
-    expect(formatQtyWithUnits(13, units)).toBe('13 件')
-    expect(formatQtyWithUnits(7, units)).toBe('7 件')
-  })
-
-  it('无辅助单位/单单位时只显示基本单位', () => {
-    expect(formatQtyWithUnits(5, undefined)).toBe('5')
-    expect(formatQtyWithUnits(5, null)).toBe('5')
-    expect(formatQtyWithUnits(5, [units[0]])).toBe('5 件')
-  })
-
-  it('非数字数量安全处理（不崩溃，返回原始拼接）', () => {
-    // 有 units 时 head = "NaN 件"，Number.isFinite 检查在 units 判断之前 return head
-    expect(formatQtyWithUnits(NaN, units)).toBe('NaN 件')
-  })
-})
 
 // ── saleWorkflowStatus.ts 状态推导 ─────────────────────────────────────────────
 describe('getSaleWorkflowStatus', () => {

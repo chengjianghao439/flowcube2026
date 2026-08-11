@@ -281,11 +281,6 @@ function distributePackagesToLines(taskItems, productId, packages) {
   return { updates, assignments }
 }
 
-/** 单包版本，保持历史调用方语义不变（内部复用逐箱分配，避免两份贪心逻辑漂移）。 */
-function distributeQtyToLines(taskItems, productId, qty) {
-  return distributePackagesToLines(taskItems, productId, [{ lineNo: 1, qty }]).updates
-}
-
 async function ensureInboundTaskExists(conn, taskId) {
   const [[taskRow]] = await conn.query(
     `SELECT id, task_no, status, audit_status, updated_at
@@ -325,7 +320,6 @@ module.exports = {
   deriveInboundPrintJobState,
   getInboundPrintDispatchReasonLabel,
   buildInboundPrintBatches,
-  distributeQtyToLines,
   distributePackagesToLines,
   ensureInboundTaskExists,
   assertTaskCanSubmit,

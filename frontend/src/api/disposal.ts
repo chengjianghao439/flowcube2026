@@ -19,9 +19,6 @@ export const getDisposalDetailApi = (id: number) =>
 export const createDisposalApi = (data: CreateDisposalParams) =>
   client.post<{ id: number; disposalNo: string }>('/disposals', data)
 
-export const updateDisposalApi = (id: number, data: CreateDisposalParams) =>
-  client.put<{ id: number }>(`/disposals/${id}`, data)
-
 export const submitDisposalApi = (id: number) =>
   client.post<null>(`/disposals/${id}/submit`)
 

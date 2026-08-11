@@ -7,8 +7,6 @@ import {
   createInboundTaskApi,
   getInboundPurchaseCandidatesApi,
   submitInboundTaskApi,
-  reprintInboundTaskApi,
-  receiveInboundApi,
   cancelInboundApi,
   voidInboundReceiptApi,
   closeReceivingInboundApi,
@@ -16,7 +14,7 @@ import {
   qaDisposeInboundApi,
 } from '@/api/inbound-tasks'
 import type { QueryParams } from '@/types'
-import type { CreateInboundTaskParams, ReceiveParams, ReceivePackageResult, ReprintInboundTaskParams, QaDisposeParams } from '@/types/inbound-tasks'
+import type { CreateInboundTaskParams, QaDisposeParams } from '@/types/inbound-tasks'
 import { createRequestKey } from '@/lib/requestKey'
 
 const QUERY_KEY = 'inbound-tasks'
@@ -62,30 +60,11 @@ export function useCreateInboundTask() {
   })
 }
 
-export function useReceiveInbound() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: ReceiveParams }) => {
-      const res = await receiveInboundApi(id, data)
-      return res as ReceivePackageResult
-    },
-    onSuccess: () => invalidate('inbound_receive'),
-  })
-}
-
 export function useSubmitInboundTask() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: number) => submitInboundTaskApi(id, { skipGlobalError: true }),
     onSuccess: () => invalidate('inbound_submit'),
-  })
-}
-
-export function useReprintInboundTask() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: ReprintInboundTaskParams }) => reprintInboundTaskApi(id, data),
-    onSuccess: () => invalidate('inbound_receive'),
   })
 }
 

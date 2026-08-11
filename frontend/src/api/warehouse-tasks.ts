@@ -6,11 +6,6 @@ import { type WtStatus } from '@/constants/warehouseTaskStatus'
 export type TaskStatus = WtStatus
 export type TaskPriority = 1 | 2 | 3
 
-export const PRIORITY_LABEL: Record<TaskPriority, string> = { 1: '紧急', 2: '普通', 3: '低' }
-export const PRIORITY_COLOR: Record<TaskPriority, string> = {
-  1: 'bg-red-100 text-red-700', 2: 'bg-blue-50 text-blue-600', 3: 'bg-gray-50 text-gray-500',
-}
-
 export interface WarehouseTaskItem {
   id: number
   productId: number

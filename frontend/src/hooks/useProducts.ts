@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getProductApi, getProductsApi, getProductsActiveApi, createProductApi, updateProductApi, deleteProductApi, getProductsForFinderApi } from '@/api/products'
+import { getProductApi, getProductsApi, createProductApi, updateProductApi, deleteProductApi, getProductsForFinderApi } from '@/api/products'
 import type { QueryParams } from '@/types'
 import type { CreateProductParams, UpdateProductParams, ProductFinderParams } from '@/types/products'
 import { toast } from '@/lib/toast'
@@ -7,7 +7,6 @@ import { toast } from '@/lib/toast'
 const K = 'products'
 export const useProduct         = (id: number) => useQuery({ queryKey:[K,id], queryFn:()=>getProductApi(id), enabled:!!id })
 export const useProducts        = (p: QueryParams) => useQuery({ queryKey:[K,p], queryFn:()=>getProductsApi(p) })
-export const useProductsActive  = () => useQuery({ queryKey:[K,'active'], queryFn:getProductsActiveApi, staleTime:600000 })
 export const useProductFinder   = (p: ProductFinderParams, enabled=true) =>
   useQuery({ queryKey:[K,'finder',p], queryFn:()=>getProductsForFinderApi(p), enabled, placeholderData:(prev) => prev })
 export function useCreateProduct() { const qc=useQueryClient(); return useMutation({ mutationFn:(d:CreateProductParams)=>createProductApi(d), onSuccess:()=>qc.invalidateQueries({queryKey:[K]}) }) }

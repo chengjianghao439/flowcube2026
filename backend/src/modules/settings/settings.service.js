@@ -7,11 +7,6 @@ async function getAll() {
   return { list: rows, map }
 }
 
-async function getValue(key) {
-  const [[row]] = await pool.query('SELECT value FROM sys_settings WHERE key_name=?', [key])
-  return row?.value ?? null
-}
-
 /**
  * 批量保存设置项。必须在事务里：这是「一个表单一次提交」的语义，
  * 逐条裸更新时中途失败会存下半套设置——用户看到的是保存失败，实际前几项已经生效了。
@@ -35,4 +30,4 @@ async function updateMany(updates) {
   }
 }
 
-module.exports = { getAll, getValue, updateMany }
+module.exports = { getAll, updateMany }
