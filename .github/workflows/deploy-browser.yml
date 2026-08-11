@@ -12,7 +12,7 @@ permissions:
 # 并发保护（2026-08-11 生产事故修复）：main 连续 push 触发多个 Deploy 在服务器并发
 # 跑 docker compose up --build 互相抢容器。concurrency 让同一时间只跑最新一次。
 concurrency:
-  group: deploy-production
+  group: deploy-production-v2
   cancel-in-progress: true
 
 env:
