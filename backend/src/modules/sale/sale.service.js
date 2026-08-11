@@ -9,6 +9,7 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { foldEntryItems, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { getCustomerCreditUsed, hasCreditOverridePermission } = require('../../utils/creditExposure')
+const creditOverrideSvc = require('../credit-overrides/credit-overrides.service')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
 const { buildDueDateSql, normalizeSettlementType } = require('../../constants/settlementType')
@@ -1007,12 +1008,20 @@ async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOve
       const limit = Number(cust.credit_limit)
       if (used + thisOrder > limit) {
         const overBy = Math.round((used + thisOrder - limit) * 100) / 100
-        const allowOverride = confirmCreditOverride && await hasCreditOverridePermission(conn, operator)
+        // 放行通道（任一即可）：
+        //   ① 本单已有「已批准」的超额放行申请单（文档 05 Phase 2，走过多级审批）→ 自动放行
+        //   ② 带 confirmCreditOverride + 有 sale.credit.override 权限 → 一次性授权放行（紧急场景）
+        const approvedOverrideId = await creditOverrideSvc.hasApprovedOverride(id)
+        const allowOverride = approvedOverrideId != null || (confirmCreditOverride && await hasCreditOverridePermission(conn, operator))
         if (!allowOverride) {
           throw new AppError('客户授信额度不足', 409, 'CREDIT_LIMIT_EXCEEDED', { creditLimit: limit, used, thisOrder, overBy })
         }
+        const via = approvedOverrideId != null
+          ? `已批准放行申请单 CO#${approvedOverrideId} 自动放行`
+          : '一次性授权放行'
         await appendSaleEvent(conn, id, 'credit_override', '超额授信放行',
-          `额度 ${limit}，已用 ${used}，本单 ${thisOrder}，超出 ${overBy}，已授权放行`, operator)
+          `额度 ${limit}，已用 ${used}，本单 ${thisOrder}，超出 ${overBy}，${via}`, operator,
+          { creditLimit: limit, used, thisOrder, overBy, via: approvedOverrideId != null ? 'approved_override' : 'manual_override', approvedOverrideId })
       }
     }
 

@@ -14,6 +14,7 @@ const approvalEngine = require('../../engine/approvalEngine')
 
 const BIZ_TYPES = [
   { value: 'purchase_requisition', label: '采购请购单' },
+  { value: 'sale_credit_override', label: '超额放行申请' },
   { value: 'expense_claim', label: '费用报销' },
   { value: 'purchase_order', label: '采购单' },
   { value: 'inventory_disposal', label: '呆滞处置单' },

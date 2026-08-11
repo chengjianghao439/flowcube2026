@@ -130,6 +130,7 @@ const AcctLedgerPage = lazy(() => import('@/pages/accounting/ledger'))
 const AcctReportsPage = lazy(() => import('@/pages/accounting/reports'))
 const AcctInvoicesPage = lazy(() => import('@/pages/accounting/invoices'))
 const RefundsPage = lazy(() => import('@/pages/refunds'))
+const CreditOverridesPage = lazy(() => import('@/pages/credit-overrides'))
 const AcctPeriodsPage = lazy(() => import('@/pages/accounting/periods'))
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
 const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
@@ -235,6 +236,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '销售', section: '销售作业', order: 20 },
+  },
+  {
+    path: '/credit-overrides',
+    title: '超额放行申请',
+    permission: PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW,
+    component: CreditOverridesPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '销售', section: '销售作业', order: 25 },
   },
   {
     path: '/logistics',

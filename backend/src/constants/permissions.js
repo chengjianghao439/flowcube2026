@@ -124,6 +124,10 @@ const PERMISSIONS = {
   SALE_CREDIT_VIEW: 'sale.credit.view',
   SALE_CREDIT_MANAGE: 'sale.credit.manage',
   SALE_CREDIT_OVERRIDE: 'sale.credit.override',
+  // 超额放行申请单（文档 05 Phase 2）：销售员发起「申请—审批」两步，审批通过后占库自动放行。
+  // apply/view 是销售员自助链路（seed 给销售角色 3）；审批走多级审批流引擎，不依赖这些权限码。
+  SALE_CREDIT_OVERRIDE_APPLY: 'sale.credit.override.apply',
+  SALE_CREDIT_OVERRIDE_VIEW: 'sale.credit.override.view',
 
   RETURN_ORDER_VIEW: 'return.order.view',
   RETURN_ORDER_CREATE: 'return.order.create',

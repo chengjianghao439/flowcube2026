@@ -233,6 +233,24 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       },
     },
   },
+  // 超额放行审批单（文档 05 Phase 2）：销售员发起 → 多级审批 → 审批通过后占库自动放行。
+  // 2待审批/3已批准由 approvalEngine 实例驱动（实例通过→3，驳回→4）；1/5 是纯单据态。
+  creditOverride: {
+    entityName: '超额放行申请单',
+    actions: {
+      edit: { from: [1], message: '只有草稿状态的放行申请可以修改' },
+      submit: { from: [1], to: 2, message: '只有草稿状态的放行申请可以提交审批' },
+      approve: {
+        from: [2], to: 3, message: '只有待审批的放行申请可以审批通过',
+        blocked: { 1: '放行申请尚未提交', 3: '该放行申请已批准', 4: '该放行申请已驳回', 5: '该放行申请已取消' },
+      },
+      reject: { from: [2], to: 4, message: '只有待审批的放行申请可以驳回' },
+      cancel: {
+        from: [1, 2, 4], to: 5, message: '当前状态的放行申请不能取消',
+        blocked: { 3: '已批准的放行申请不能取消（已生效放行）', 5: '该放行申请已取消' },
+      },
+    },
+  },
   inboundTask: {
     entityName: '收货订单',
     actions: {
