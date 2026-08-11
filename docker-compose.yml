@@ -104,7 +104,9 @@ services:
       - "127.0.0.1:3101:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      # 密码非必填（observability profile 默认不启用；起 profile 前请务必设置强密码）——
+      # 用默认值避免阻断主部署链路（docker compose 对所有服务做变量插值，必填会卡死 compose up）
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-flowcube-admin-change-me}
     volumes:
       - grafana_data:/var/lib/grafana
 
