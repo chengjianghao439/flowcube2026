@@ -1,8 +1,22 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, ChevronRight } from 'lucide-react'
 import { getNotificationsApi } from '@/api/notifications'
-import { getNotificationCategoryLabel, normalizeNotifications } from '@/lib/notifications'
+import { getNotificationCategoryLabel, normalizeNotifications, type NotificationEntry } from '@/lib/notifications'
+
+/** 按 type 映射 lucide 图标（后端 icon 字段是 emoji，前端统一改用图标） */
+const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  danger: AlertTriangle,
+  warning: AlertCircle,
+  info: Info,
+}
+/** 语义色：danger 红 / warning 琥珀 / info 蓝 */
+const TYPE_STYLE: Record<string, { icon: string; badge: string; border: string }> = {
+  danger:  { icon: 'text-red-600', badge: 'bg-red-50 text-red-700 border-red-200', border: 'hover:bg-red-50/50' },
+  warning: { icon: 'text-amber-600', badge: 'bg-amber-50 text-amber-700 border-amber-200', border: 'hover:bg-amber-50/50' },
+  info:    { icon: 'text-blue-600', badge: 'bg-blue-50 text-blue-700 border-blue-200', border: 'hover:bg-blue-50/50' },
+}
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
@@ -16,11 +30,33 @@ export default function NotificationBell() {
 
   const items = normalizeNotifications(data?.items ?? [])
   const total = items.length
+  // 按优先级分组：危险（type=danger）优先展示，其次 warning，最后 info
+  const sorted = [...items].sort((a, b) => {
+    const rank = { danger: 0, warning: 1, info: 2 } as Record<string, number>
+    return (rank[a.type] ?? 3) - (rank[b.type] ?? 3)
+  })
 
-  const colorMap: Record<string, string> = {
-    warning: 'text-amber-600 bg-amber-50 border-amber-200',
-    danger:  'text-red-600 bg-red-50 border-red-200',
-    info:    'text-blue-600 bg-blue-50 border-blue-200',
+  const renderItem = (item: NotificationEntry) => {
+    const Icon = TYPE_ICON[item.type] || Info
+    const style = TYPE_STYLE[item.type] || TYPE_STYLE.info
+    return (
+      <button
+        key={item.dedupeKey}
+        onClick={() => { setOpen(false); navigate(item.path) }}
+        className={`w-full text-left px-4 py-3 transition-colors flex items-start gap-3 hover:opacity-90 ${style.border}`}
+      >
+        <Icon className={`size-4 shrink-0 mt-0.5 ${style.icon}`} />
+        <span className="min-w-0 flex-1">
+          <span className="text-sm font-medium text-foreground leading-snug block">{item.text}</span>
+          {item.category && (
+            <span className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] leading-none ${style.badge}`}>
+              {getNotificationCategoryLabel(item.category)}
+            </span>
+          )}
+        </span>
+        <ChevronRight className="size-3.5 text-muted-foreground/50 shrink-0 mt-1" />
+      </button>
+    )
   }
 
   return (
@@ -30,11 +66,9 @@ export default function NotificationBell() {
         className="relative p-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
         title="通知中心"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-        </svg>
+        <Bell className="size-[18px]" />
         {total > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-0.5 font-bold">
+          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1 font-bold">
             {total > 99 ? '99+' : total}
           </span>
         )}
@@ -42,46 +76,38 @@ export default function NotificationBell() {
 
       {open && (
         <>
-          {/* 遮罩 */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          {/* 下拉面板 */}
-          <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <h3 className="font-semibold text-sm">通知中心</h3>
-              {total > 0 && <span className="text-xs text-muted-foreground">{total} 条待处理</span>}
+          <div className="absolute right-0 top-full mt-2 w-[22rem] bg-white rounded-xl shadow-lg border z-50 overflow-hidden">
+            {/* 头部 */}
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
+              <div className="flex items-center gap-2">
+                <Bell className="size-4 text-muted-foreground" />
+                <h3 className="font-semibold text-sm">通知中心</h3>
+              </div>
+              {total > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-red-600">{total}</span> 条待处理
+                </span>
+              )}
             </div>
 
-            {items.length === 0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                <p className="text-2xl mb-2">✓</p>
-                <p>暂无待处理事项</p>
+            {/* 内容 */}
+            {sorted.length === 0 ? (
+              <div className="py-12 text-center">
+                <CheckCircle2 className="mx-auto size-8 text-emerald-500 mb-2" />
+                <p className="text-sm font-medium text-foreground">暂无待处理事项</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">有新的逾期、库存或待办时这里会提醒你</p>
               </div>
             ) : (
-              <div className="divide-y max-h-80 overflow-y-auto">
-                {items.map((item, i) => (
-                  <button
-                    key={i}
-                    onClick={() => { setOpen(false); navigate(item.path) }}
-                    className={`w-full text-left px-4 py-3 hover:opacity-80 transition-opacity flex items-start gap-3 ${colorMap[item.type] || 'text-foreground bg-background'}`}
-                  >
-                    <span className="text-base shrink-0 mt-0.5">{item.icon}</span>
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{item.text}</span>
-                        {item.category && (
-                          <span className="rounded-full border border-current/20 px-2 py-0.5 text-[10px] leading-none opacity-80">
-                            {getNotificationCategoryLabel(item.category)}
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                  </button>
-                ))}
+              <div className="divide-y divide-border/60 max-h-[24rem] overflow-y-auto">
+                {sorted.map(renderItem)}
               </div>
             )}
 
-            <div className="px-4 py-2 border-t text-center">
-              <span className="text-xs text-muted-foreground">每分钟自动刷新</span>
+            {/* 尾部 */}
+            <div className="flex items-center justify-center gap-1.5 px-4 py-2 border-t text-xs text-muted-foreground">
+              <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
+              每分钟自动刷新
             </div>
           </div>
         </>
