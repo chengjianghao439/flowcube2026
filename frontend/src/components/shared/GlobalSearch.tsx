@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, Factory, User, ShoppingCart, Truck } from 'lucide-react'
+import { Package, Factory, User, ShoppingCart, Truck, ClipboardList, ArrowLeftRight, Undo2, Inbox, Receipt, Archive, Banknote, ShieldCheck, ListChecks, FileText } from 'lucide-react'
 import { payloadClient as client } from '@/api/client'
 
 interface SearchResult { id: number; type: string; typeLabel: string; title: string; subtitle: string; path: string }
@@ -11,6 +11,17 @@ const TYPE_ICON: Record<string, React.ComponentType<{className?: string}>> = {
   customer: User,
   purchase: ShoppingCart,
   sale: Truck,
+  requisition: ClipboardList,
+  transfer: ArrowLeftRight,
+  purchaseReturn: Undo2,
+  saleReturn: Undo2,
+  inbound: Inbox,
+  expense: Receipt,
+  disposal: Archive,
+  refund: Banknote,
+  creditOverride: ShieldCheck,
+  stockcheck: ListChecks,
+  invoice: FileText,
 }
 const TYPE_COLOR: Record<string, string> = {
   product:'text-blue-600 bg-blue-50',
@@ -18,7 +29,20 @@ const TYPE_COLOR: Record<string, string> = {
   customer:'text-green-600 bg-green-50',
   purchase:'text-orange-600 bg-orange-50',
   sale:'text-red-600 bg-red-50',
+  requisition:'text-cyan-600 bg-cyan-50',
+  transfer:'text-indigo-600 bg-indigo-50',
+  purchaseReturn:'text-amber-600 bg-amber-50',
+  saleReturn:'text-rose-600 bg-rose-50',
+  inbound:'text-teal-600 bg-teal-50',
+  expense:'text-emerald-600 bg-emerald-50',
+  disposal:'text-stone-600 bg-stone-50',
+  refund:'text-fuchsia-600 bg-fuchsia-50',
+  creditOverride:'text-sky-600 bg-sky-50',
+  stockcheck:'text-lime-600 bg-lime-50',
+  invoice:'text-violet-600 bg-violet-50',
 }
+// 分组展示顺序（与后端 ENTITIES 一致）
+const TYPE_ORDER = ['product','supplier','customer','purchase','sale','requisition','transfer','purchaseReturn','saleReturn','inbound','expense','disposal','refund','creditOverride','stockcheck','invoice']
 
 export default function GlobalSearch() {
   const [query, setQuery] = useState('')
@@ -101,13 +125,13 @@ export default function GlobalSearch() {
           {results.length > 0 && (
             <div>
               {/* 按类型分组显示 */}
-              {['product','supplier','customer','purchase','sale'].map(type => {
+              {TYPE_ORDER.map(type => {
                 const group = results.filter(r => r.type === type)
                 if (!group.length) return null
-                const Icon = TYPE_ICON[type]
+                const Icon = TYPE_ICON[type] || FileText
                 return (
                   <div key={type}>
-                    <div className={`px-3 py-1 text-xs font-semibold ${TYPE_COLOR[type]} border-b flex items-center gap-1`}>
+                    <div className={`px-3 py-1 text-xs font-semibold ${TYPE_COLOR[type] || 'text-muted-foreground bg-muted/40'} border-b flex items-center gap-1`}>
                       <Icon className="size-3.5" /> {group[0].typeLabel}
                     </div>
                     {group.map(r => (
