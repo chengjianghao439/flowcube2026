@@ -1,7 +1,7 @@
 {
-  "version": "0.4.71",
-  "versionCode": 71,
+  "version": "0.4.72",
+  "versionCode": 72,
   "filename": "app-release.apk",
-  "releaseNote": "- **超额放行申请**：客户授信不足时可发起申请走审批流，审批通过后占库自动放行",
-  "publishedAt": "2026-08-11T11:16:15.722Z"
+  "releaseNote": "- **客户授信预警**：仪表盘新增授信预警卡片，占库超限前提前提示",
+  "publishedAt": "2026-08-11T11:59:59.682Z"
 }
