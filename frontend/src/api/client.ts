@@ -2,6 +2,7 @@ import axios from 'axios'
 import type { AxiosError, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { Capacitor } from '@capacitor/core'
 import { useAuthStore } from '@/store/authStore'
+import { useCompanyStore } from '@/store/companyStore'
 import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
 import type { ApiErrorResponse, ApiResponse } from '@/types'
@@ -158,6 +159,12 @@ apiClient.interceptors.request.use(
     const deviceSession = getDeviceSession()
     if (deviceSession?.token) {
       config.headers['X-PDA-Session'] = deviceSession.token
+    }
+    // 会计账套（文档10 多账套）：当前账套 id 注入头，后端 companyScope 中间件解析。
+    // 只对会计相关接口有意义；非会计接口忽略该头。
+    const companyId = useCompanyStore.getState().companyId
+    if (companyId !== 1) {
+      config.headers['X-Company-Id'] = String(companyId)
     }
     return config
   },

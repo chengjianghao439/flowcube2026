@@ -132,6 +132,27 @@ const periodReopen = async (req, res, next) => {
   try { return successResponse(res, await periodSvc.reopenPeriod(req.body?.period, req.user), '已反结账') } catch (e) { next(e) }
 }
 
+// ── 账套管理（文档10 多账套） ──────────────────────────────────────────
+const companiesSvc = require('./companies.service')
+const companyList = async (req, res, next) => {
+  try { return successResponse(res, await companiesSvc.listCompanies({ page: +req.query.page || 1, pageSize: +req.query.pageSize || 20, keyword: req.query.keyword || '' }), '查询成功') } catch (e) { next(e) }
+}
+const companyCreate = async (req, res, next) => {
+  try { return successResponse(res, await companiesSvc.createCompany(req.body), '账套已创建并复制科目', 201) } catch (e) { next(e) }
+}
+const companyUpdate = async (req, res, next) => {
+  try { return successResponse(res, await companiesSvc.updateCompany(+req.params.id, req.body), '已更新') } catch (e) { next(e) }
+}
+
+// ── 合并报表（文档10 多账套合并） ──────────────────────────────────────
+const consolidationSvc = require('./consolidation.service')
+const consolidationBalanceSheet = async (req, res, next) => {
+  try { return successResponse(res, await consolidationSvc.getConsolidatedBalanceSheet({ groupId: +req.query.groupId || +req.query.companyId || 1, period: req.query.period }), '查询成功') } catch (e) { next(e) }
+}
+const consolidationIncome = async (req, res, next) => {
+  try { return successResponse(res, await consolidationSvc.getConsolidatedIncomeStatement({ groupId: +req.query.groupId || +req.query.companyId || 1, period: req.query.period }), '查询成功') } catch (e) { next(e) }
+}
+
 module.exports = {
   accountTree, accountFlat, accountDetail, accountCreate, accountUpdate, accountRemove, accountToggle,
   voucherList, voucherDetail, voucherGenerate, voucherCreateManual, voucherRemove, voucherReverse,
@@ -139,4 +160,6 @@ module.exports = {
   ledgerTrialBalance, ledgerAccount, reportIncome, reportBalanceSheet, reportCashFlow,
   invoiceList, invoiceDetail, invoiceCreate, invoiceUpdate, invoiceStatus, invoiceRemove,
   periodList, periodGenerateClosing, periodClose, periodReopen,
+  companyList, companyCreate, companyUpdate,
+  consolidationBalanceSheet, consolidationIncome,
 }

@@ -1,10 +1,56 @@
 import { payloadClient as apiClient } from './client'
+import type { PaginatedData } from '@/types'
 import type {
   Account, CreateAccountParams, UpdateAccountParams,
   Voucher, GenerateStats, ReconciliationItem, CreateManualVoucherParams,
   TrialBalance, AccountLedger, IncomeStatement, BalanceSheet, CashFlow,
   Invoice, CreateInvoiceParams, AccountingPeriod,
 } from '@/types/accounting'
+
+// ── 账套 / 合并报表（文档10 多账套） ──────────────────────────────────
+export interface AcctCompany {
+  id: number
+  code: string
+  name: string
+  taxNo: string | null
+  parentId: number | null
+  isGroup: boolean
+  currency: string
+  startPeriod: string | null
+  isActive: boolean
+  remark: string | null
+}
+export interface ConsolidatedBalanceSheet {
+  period: string
+  asOf: string
+  groupId: number
+  companies: Array<{ id: number; code: string; name: string }>
+  assets: Array<{ code: string; name: string; amount: number }>
+  liabilities: Array<{ code: string; name: string; amount: number }>
+  equity: Array<{ code: string; name: string; amount: number }>
+  assetTotal: number
+  liabTotal: number
+  equityTotal: number
+  liabEquityTotal: number
+  balanced: boolean
+}
+export interface ConsolidatedIncome {
+  period: string
+  groupId: number
+  companies: Array<{ id: number; code: string; name: string }>
+  revenue: Array<{ code: string; name: string; amount: number }>
+  expenses: Array<{ code: string; name: string; amount: number }>
+  revenueTotal: number
+  expenseTotal: number
+  netProfit: number
+}
+export const listCompaniesApi = (params?: object) => apiClient.get<PaginatedData<AcctCompany>>('/accounting/companies', { params })
+export const createCompanyApi = (data: { code: string; name: string; isGroup?: boolean; parentId?: number | null }) =>
+  apiClient.post<{ id: number; code: string }>('/accounting/companies', data)
+export const getConsolidatedBalanceSheetApi = (groupId: number, period: string) =>
+  apiClient.get<ConsolidatedBalanceSheet>('/accounting/consolidation/balance-sheet', { params: { groupId, period } })
+export const getConsolidatedIncomeApi = (groupId: number, period: string) =>
+  apiClient.get<ConsolidatedIncome>('/accounting/consolidation/income', { params: { groupId, period } })
 
 const BASE = '/accounting/accounts'
 

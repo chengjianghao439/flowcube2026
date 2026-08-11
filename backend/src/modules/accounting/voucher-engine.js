@@ -46,8 +46,11 @@ const periodOf = (dateStr) => dateStr.slice(0, 4) + dateStr.slice(5, 7)
 
 // ─── 科目解析 ────────────────────────────────────────────────────────────────
 
-async function loadAccountMap(conn) {
-  const [rows] = await conn.query('SELECT id, code, name FROM acct_accounts WHERE deleted_at IS NULL')
+async function loadAccountMap(conn, companyId = 1) {
+  const [rows] = await conn.query(
+    'SELECT id, code, name FROM acct_accounts WHERE company_id = ? AND deleted_at IS NULL',
+    [Number(companyId) || 1],
+  )
   const map = new Map()
   for (const r of rows) map.set(r.code, { id: r.id, name: r.name })
   return map
@@ -78,14 +81,15 @@ function hashSpec(voucherDate, legs) {
 
 // ─── 凭证号序列分配（按期间 记-YYYYMM-序号） ─────────────────────────────────
 
-async function makeSeqAllocator(conn) {
+async function makeSeqAllocator(conn, companyId = 1) {
+  const cid = Number(companyId) || 1
   const cache = new Map()
   return async (period) => {
     if (!cache.has(period)) {
       const [[row]] = await conn.query(
         `SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(voucher_no,'-',-1) AS UNSIGNED)), 0) AS mx
-           FROM acct_vouchers WHERE period = ?`,
-        [period],
+           FROM acct_vouchers WHERE period = ? AND company_id = ?`,
+        [period, cid],
       )
       cache.set(period, Number(row.mx) || 0)
     }
@@ -112,7 +116,8 @@ async function insertEntries(conn, voucherId, legs, accountMap) {
   }
 }
 
-async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy) {
+async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, companyId = 1) {
+  const cid = Number(companyId) || 1
   const legs = spec.legs
     .map(l => ({ ...l, amount: round2(l.amount) }))
     .filter(l => l.amount > 0)
@@ -124,8 +129,8 @@ async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy) {
   const hash = hashSpec(voucherDate, legs)
 
   const [[existing]] = await conn.query(
-    'SELECT id, voucher_no, source_hash, status FROM acct_vouchers WHERE source_type = ? AND source_id = ?',
-    [spec.sourceType, spec.sourceId],
+    'SELECT id, voucher_no, source_hash, status FROM acct_vouchers WHERE company_id = ? AND source_type = ? AND source_id = ?',
+    [cid, spec.sourceType, spec.sourceId],
   )
 
   if (existing) {
@@ -148,10 +153,10 @@ async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy) {
   const voucherNo = `记-${period}-${String(seq).padStart(4, '0')}`
   const [r] = await conn.query(
     `INSERT INTO acct_vouchers
-       (voucher_no, voucher_date, period, source_type, source_id, source_no, summary,
+       (company_id, voucher_no, voucher_date, period, source_type, source_id, source_no, summary,
         total_debit, total_credit, status, source_hash, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    [voucherNo, voucherDate, period, spec.sourceType, spec.sourceId, spec.sourceNo || null,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+    [cid, voucherNo, voucherDate, period, spec.sourceType, spec.sourceId, spec.sourceNo || null,
      spec.summary || null, debit, credit, hash, createdBy || null],
   )
   await insertEntries(conn, r.insertId, legs, accountMap)

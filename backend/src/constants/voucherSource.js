@@ -27,6 +27,10 @@ const SOURCE_TYPES = {
   PERIOD_CLOSE:    'period_close',    // 期末损益结转（source_id = 期间 YYYYMM 数字）
   PERIOD_CLOSE_Y:  'period_close_year', // 年末本年利润转利润分配（source_id = 年份 YYYY 数字）
   MANUAL:          'manual',          // 手工凭证
+  // 固定资产（文档10 完整会计准则）
+  ASSET_ACQUIRE:   'asset_acquire',   // 固定资产购入入账（source_id = fixed_assets.id）
+  ASSET_DEPRECIATION: 'asset_depreciation', // 折旧计提（source_id = fixed_asset_depr.id，台账行本身 UNIQUE(asset_id,period) 幂等）
+  ASSET_DISPOSAL:  'asset_disposal',  // 固定资产处置/报废（source_id = fixed_asset_disposals.id）
 }
 
 const SOURCE_TYPE_VALUES = Object.values(SOURCE_TYPES)

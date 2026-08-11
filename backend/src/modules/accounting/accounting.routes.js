@@ -113,6 +113,24 @@ invoices.post('/:id/status', requirePermission(PERMISSIONS.INVOICE_MANAGE), vali
 invoices.delete('/:id',     requirePermission(PERMISSIONS.INVOICE_MANAGE), ctrl.invoiceRemove)
 router.use('/invoices', invoices)
 
+// ── 账套管理 /api/accounting/companies ────────────────────────────────
+const companies = Router()
+companies.get('/',          requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.companyList)
+companies.post('/',         requirePermission(PERMISSIONS.ACCOUNTING_PERIOD_MANAGE), validateBody(z.object({
+  code: z.string().min(1).max(20), name: z.string().min(1).max(100),
+  taxNo: z.string().max(30).optional().nullable(), parentId: z.number().int().positive().optional().nullable(),
+  isGroup: z.boolean().optional(), startPeriod: z.string().regex(/^\d{6}$/).optional().nullable(),
+  remark: z.string().max(300).optional().nullable(),
+})), ctrl.companyCreate)
+companies.put('/:id',       requirePermission(PERMISSIONS.ACCOUNTING_PERIOD_MANAGE), ctrl.companyUpdate)
+router.use('/companies', companies)
+
+// ── 合并报表 /api/accounting/consolidation ────────────────────────────
+const consolidation = Router()
+consolidation.get('/balance-sheet', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.consolidationBalanceSheet)
+consolidation.get('/income',        requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.consolidationIncome)
+router.use('/consolidation', consolidation)
+
 // ── 期末结转 / 期间锁定 /api/accounting/periods ────────────────────────
 const periods = Router()
 periods.get('/',                    requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW),   ctrl.periodList)

@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import * as Sentry from '@sentry/react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -12,11 +13,19 @@ interface State {
   errorInfo: ErrorInfo | null
 }
 
+/** Sentry DSN（VITE_SENTRY_DSN 配置时启用）；未配置则退回 Loki 上报 */
+const SENTRY_DSN = (import.meta.env.VITE_SENTRY_DSN as string | undefined) || ''
+const SENTRY_ENABLED = SENTRY_DSN.length > 0
+
 /**
  * GlobalErrorBoundary — 全局渲染错误捕获
  *
  * 捕获子组件树中的任何 render 错误，显示友好的错误恢复页面。
  * 不处理：异步错误、事件处理器错误（这些由 unhandledrejection 捕获）
+ *
+ * 错误上报（P2-12 错误追踪）：
+ *   ① 配置 VITE_SENTRY_DSN → 走 Sentry（聚合/堆栈/版本对照/告警）
+ *   ② 未配置 → 退回后端 /api/system/error-report → logger.error → Loki
  */
 export class GlobalErrorBoundary extends Component<Props, State> {
   state: State = {
@@ -33,7 +42,18 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     this.setState({ errorInfo: info })
     // 记录到 console
     console.error('[GlobalErrorBoundary] 捕获到渲染错误:', error, info)
-    // 上报到后端（P2-12 错误追踪）：fire-and-forget，经后端 logger.error 进 Loki（若已配置 LOKI_URL）。
+
+    // ① 配置了 Sentry DSN → 走 Sentry（错误追踪主通道）
+    if (SENTRY_ENABLED) {
+      Sentry.withScope((scope) => {
+        scope.setTag('component_error', 'true')
+        scope.setContext('react', { componentStack: info.componentStack })
+        Sentry.captureException(error)
+      })
+      return
+    }
+
+    // ② 未配置 Sentry → 退回后端上报（P2-12）：fire-and-forget，经后端 logger.error 进 Loki（若已配置 LOKI_URL）。
     // 绝不因上报失败影响页面恢复。
     try {
       const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || ''

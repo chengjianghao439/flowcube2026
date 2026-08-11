@@ -131,6 +131,7 @@ app.use('/api/return-tasks', require('./modules/return-tasks/return-tasks.routes
 app.use('/api/payments',   require('./modules/payments/payments.routes'))
 app.use('/api/finance',    require('./modules/finance/finance.routes'))
 app.use('/api/accounting', require('./modules/accounting/accounting.routes'))
+app.use('/api/fixed-assets', require('./modules/fixed-assets/fixed-assets.routes'))
 app.use('/api/oplogs',         require('./modules/oplogs/oplogs.routes'))
 app.use('/api/notifications',  require('./modules/notifications/notifications.routes'))
 app.use('/api/search',         require('./modules/search/search.routes'))

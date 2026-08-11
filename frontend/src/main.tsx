@@ -78,6 +78,27 @@ void (async () => {
 
   await boot()
 
+  // 错误追踪初始化（P2-12）：配置 VITE_SENTRY_DSN 时启用 Sentry；否则 GlobalErrorBoundary 退回 Loki 上报
+  const sentryDsn = (import.meta.env.VITE_SENTRY_DSN as string | undefined) || ''
+  if (sentryDsn) {
+    const Sentry = await import('@sentry/react')
+    Sentry.init({
+      dsn: sentryDsn,
+      environment: import.meta.env.PROD ? 'production' : 'development',
+      release: (import.meta.env.VITE_APP_VERSION as string | undefined) || undefined,
+      integrations: [
+        Sentry.browserTracingIntegration(),
+        Sentry.replayIntegration(),
+      ],
+      tracesSampleRate: 0.1,
+      // 不上报用户输入（避免敏感数据进 Sentry）
+      beforeSend: (event) => {
+        if (event.request?.data) event.request.data = undefined
+        return event
+      },
+    })
+  }
+
   createRoot(rootEl).render(
     <StrictMode>
       <GlobalErrorBoundary>

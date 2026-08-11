@@ -132,6 +132,8 @@ const AcctInvoicesPage = lazy(() => import('@/pages/accounting/invoices'))
 const RefundsPage = lazy(() => import('@/pages/refunds'))
 const CreditOverridesPage = lazy(() => import('@/pages/credit-overrides'))
 const AcctPeriodsPage = lazy(() => import('@/pages/accounting/periods'))
+const AcctConsolidationPage = lazy(() => import('@/pages/accounting/consolidation'))
+const FixedAssetsPage = lazy(() => import('@/pages/fixed-assets'))
 const AvgCostReconciliationPage = lazy(() => import('@/pages/reports/avg-cost-reconciliation'))
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
 const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
@@ -545,6 +547,24 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '会计', section: '结账', order: 60 },
+  },
+  {
+    path: '/accounting/fixed-assets',
+    title: '固定资产',
+    permission: PERMISSIONS.ACCOUNTING_LEDGER_VIEW,
+    component: FixedAssetsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '固定资产', order: 70 },
+  },
+  {
+    path: '/accounting/consolidation',
+    title: '合并报表 / 账套',
+    permission: PERMISSIONS.ACCOUNTING_LEDGER_VIEW,
+    component: AcctConsolidationPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '合并报表', order: 80 },
   },
 
   // ── 报表 ──────────────────────────────────────────────
