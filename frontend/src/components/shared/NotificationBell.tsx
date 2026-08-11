@@ -11,11 +11,11 @@ const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   warning: AlertCircle,
   info: Info,
 }
-/** 语义色：danger 红 / warning 琥珀 / info 蓝 */
-const TYPE_STYLE: Record<string, { icon: string; badge: string; border: string }> = {
-  danger:  { icon: 'text-red-600', badge: 'bg-red-50 text-red-700 border-red-200', border: 'hover:bg-red-50/50' },
-  warning: { icon: 'text-amber-600', badge: 'bg-amber-50 text-amber-700 border-amber-200', border: 'hover:bg-amber-50/50' },
-  info:    { icon: 'text-blue-600', badge: 'bg-blue-50 text-blue-700 border-blue-200', border: 'hover:bg-blue-50/50' },
+/** 语义色：danger 红 / warning 琥珀 / info 蓝 —— 常态浅色底填充 + 同色边框 */
+const TYPE_STYLE: Record<string, { icon: string; badge: string; row: string }> = {
+  danger:  { icon: 'text-red-600', badge: 'bg-red-50 text-red-700 border-red-200', row: 'bg-red-50/60 border-l-2 border-red-400 hover:bg-red-50' },
+  warning: { icon: 'text-amber-600', badge: 'bg-amber-50 text-amber-700 border-amber-200', row: 'bg-amber-50/60 border-l-2 border-amber-400 hover:bg-amber-50' },
+  info:    { icon: 'text-blue-600', badge: 'bg-blue-50 text-blue-700 border-blue-200', row: 'bg-blue-50/60 border-l-2 border-blue-400 hover:bg-blue-50' },
 }
 
 export default function NotificationBell() {
@@ -43,7 +43,7 @@ export default function NotificationBell() {
       <button
         key={item.dedupeKey}
         onClick={() => { setOpen(false); navigate(item.path) }}
-        className={`w-full text-left px-4 py-3 transition-colors flex items-start gap-3 hover:opacity-90 ${style.border}`}
+        className={`w-full text-left px-4 py-3 transition-colors flex items-start gap-3 ${style.row}`}
       >
         <Icon className={`size-4 shrink-0 mt-0.5 ${style.icon}`} />
         <span className="min-w-0 flex-1">
@@ -99,7 +99,7 @@ export default function NotificationBell() {
                 <p className="mt-0.5 text-xs text-muted-foreground">有新的逾期、库存或待办时这里会提醒你</p>
               </div>
             ) : (
-              <div className="divide-y divide-border/60 max-h-[24rem] overflow-y-auto">
+              <div className="max-h-[24rem] overflow-y-auto">
                 {sorted.map(renderItem)}
               </div>
             )}
