@@ -1,6 +1,6 @@
-import { LogOut } from "lucide-react";
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { LogOut, KeyRound, UserCircle2, Building2, Warehouse, ShieldCheck, ChevronDown, Loader2 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -11,10 +11,23 @@ import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
 
+interface MyInfo {
+  id: number
+  username: string
+  realName: string
+  roleId: number
+  roleName: string
+  isActive: boolean
+  departmentId: number | null
+  departmentName: string | null
+}
+interface WarehouseScope { warehouseId: number; warehouseName: string }
+
 export default function UserMenu() {
   const { user } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
   const [pwdOpen, setPwdOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
   const [oldPwd, setOldPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
@@ -29,6 +42,19 @@ export default function UserMenu() {
     },
   })
 
+  // 我的信息（当前用户 id 从 authStore 拿；仓库权限调 /users/:id/warehouse-scope）
+  const myId = user?.id ?? 0
+  const { data: myInfo } = useQuery({
+    queryKey: ['my-info', myId],
+    queryFn: () => client.get<MyInfo>(`/users/${myId}`).then(r => r ?? null),
+    enabled: infoOpen && myId > 0,
+  })
+  const { data: myWarehouses, isLoading: whLoading } = useQuery({
+    queryKey: ['my-warehouses', myId],
+    queryFn: () => client.get<WarehouseScope[]>(`/users/${myId}/warehouse-scope`).then(r => r ?? []),
+    enabled: infoOpen && myId > 0,
+  })
+
   const handlePwdSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (newPwd !== confirmPwd) { toast.warning('两次输入的新密码不一致'); return }
@@ -36,6 +62,7 @@ export default function UserMenu() {
   }
 
   const initials = (user?.realName || user?.username || 'U').slice(0, 2).toUpperCase()
+  const isUnrestricted = myWarehouses?.length === 0 // 空 = 不限仓
 
   return (
     <div className="relative">
@@ -47,22 +74,39 @@ export default function UserMenu() {
           <p className="text-xs font-medium leading-tight">{user?.realName || user?.username}</p>
           <p className="text-[10px] text-muted-foreground">{user?.roleName || '管理员'}</p>
         </div>
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground">
-          <path d="M6 9l6 6 6-6"/>
-        </svg>
+        <ChevronDown className="size-3 text-muted-foreground" />
       </button>
 
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
-            <div className="px-4 py-3 border-b">
-              <p className="text-sm font-medium">{user?.realName || user?.username}</p>
-              <p className="text-xs text-muted-foreground">{user?.roleName}</p>
+          <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
+            {/* 登录信息卡片 */}
+            <div className="px-4 py-3 border-b bg-muted/30">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold shrink-0">
+                  {initials}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{user?.realName || user?.username}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">@{user?.username}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{user?.roleName}</p>
+                </div>
+              </div>
             </div>
+
             <div className="py-1">
-              <button onClick={() => { setMenuOpen(false); setPwdOpen(true) }} className="w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors flex items-center gap-2">
-                <span>🔑</span> 修改密码
+              <button
+                onClick={() => { setMenuOpen(false); setInfoOpen(true) }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors flex items-center gap-2"
+              >
+                <UserCircle2 className="size-4 text-muted-foreground" /> 我的信息
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); setPwdOpen(true) }}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors flex items-center gap-2"
+              >
+                <KeyRound className="size-4 text-muted-foreground" /> 修改密码
               </button>
               <div className="border-t my-1" />
               <button
@@ -96,6 +140,45 @@ export default function UserMenu() {
           </div>
         </>
       )}
+
+      {/* 我的信息弹窗 */}
+      <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>我的信息</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="rounded-lg border border-border">
+              <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs font-semibold text-muted-foreground">账号信息</div>
+              <dl className="divide-y divide-border/60 text-sm">
+                <div className="flex justify-between px-4 py-2"><dt className="text-muted-foreground">姓名</dt><dd className="font-medium">{myInfo?.realName || user?.realName || '—'}</dd></div>
+                <div className="flex justify-between px-4 py-2"><dt className="text-muted-foreground">登录账号</dt><dd className="font-medium">{myInfo?.username || user?.username || '—'}</dd></div>
+                <div className="flex justify-between px-4 py-2"><dt className="text-muted-foreground">角色</dt><dd className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-muted-foreground" />{myInfo?.roleName || user?.roleName || '—'}</dd></div>
+                <div className="flex justify-between px-4 py-2"><dt className="text-muted-foreground">部门</dt><dd className="flex items-center gap-1.5"><Building2 className="size-3.5 text-muted-foreground" />{myInfo?.departmentName || '—'}</dd></div>
+              </dl>
+            </div>
+            <div className="rounded-lg border border-border">
+              <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <Warehouse className="size-3.5" /> 我的仓库权限
+              </div>
+              <div className="px-4 py-2 text-sm">
+                {whLoading ? (
+                  <div className="flex items-center gap-2 text-muted-foreground py-1"><Loader2 className="size-3.5 animate-spin" /> 加载中...</div>
+                ) : isUnrestricted ? (
+                  <p className="text-emerald-600 font-medium">不限仓库（可访问全部仓库）</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {myWarehouses?.map(w => (
+                      <span key={w.warehouseId} className="rounded-md bg-muted px-2 py-0.5 text-xs">{w.warehouseName}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInfoOpen(false)}>关闭</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 浏览器端退出确认（桌面端走原生 messageBox） */}
       <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
