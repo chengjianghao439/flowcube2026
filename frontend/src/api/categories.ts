@@ -4,9 +4,7 @@ import type { Category, CreateCategoryParams, UpdateCategoryParams } from '@/typ
 
 const BASE = '/categories'
 
-export const getCategoryTreeApi   = async () => apiClient.get<Category[]>(`${BASE}/tree`)
-export const getCategoryFlatApi   = async () => apiClient.get<Category[]>(`${BASE}/flat`)
-export const getCategoryLeavesApi = async () => apiClient.get<Category[]>(`${BASE}/leaves`)
+export const getCategoryTreeApi = async () => apiClient.get<Category[]>(`${BASE}/tree`)
 
 export const createCategoryApi = async (d: CreateCategoryParams) =>
   apiClient.post<{ id: number }>(`${BASE}`, d)

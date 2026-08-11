@@ -1,15 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  getCategoryTreeApi, getCategoryFlatApi, getCategoryLeavesApi,
+  getCategoryTreeApi,
   createCategoryApi, updateCategoryApi, deleteCategoryApi, toggleCategoryStatusApi,
 } from '@/api/categories'
 import type { CreateCategoryParams, UpdateCategoryParams } from '@/types/categories'
 
 const QK = 'categories'
 
-export const useCategoryTree   = () => useQuery({ queryKey: [QK, 'tree'],   queryFn: getCategoryTreeApi,   staleTime: 60000 })
-export const useCategoryFlat   = () => useQuery({ queryKey: [QK, 'flat'],   queryFn: getCategoryFlatApi,   staleTime: 60000 })
-export const useCategoryLeaves = () => useQuery({ queryKey: [QK, 'leaves'], queryFn: getCategoryLeavesApi, staleTime: 60000 })
+export const useCategoryTree = () => useQuery({ queryKey: [QK, 'tree'], queryFn: getCategoryTreeApi, staleTime: 60000 })
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: [QK] })

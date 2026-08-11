@@ -189,13 +189,6 @@ function startCleanupSweeper({ intervalMs = 6 * 60 * 60 * 1000, ttlDays = 7 } = 
   void cleanupExpiredRequests({ ttlDays })
 }
 
-function stopCleanupSweeper() {
-  if (cleanupTimer) {
-    clearInterval(cleanupTimer)
-    cleanupTimer = null
-  }
-}
-
 module.exports = {
   STATUS,
   beginOperationRequest,
@@ -204,5 +197,4 @@ module.exports = {
   getOperationRequestStatus,
   cleanupExpiredRequests,
   startCleanupSweeper,
-  stopCleanupSweeper,
 }

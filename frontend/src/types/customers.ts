@@ -21,7 +21,6 @@ export interface Customer {
   priceLevelName?: string
   createdAt: string
 }
-export interface CustomerOption { id: number; code: string; name: string; priceLevel?: 'A' | 'B' | 'C' | 'D' }
 
 /** 客户常用收货地址（地址簿） */
 export interface CustomerAddress {

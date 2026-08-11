@@ -33,8 +33,3 @@ export const WT_STATUS_CLASS = Object.fromEntries(
 
 /** 仓库任务优先级 → 状态 tone：1紧急 2普通 3低。PDA 拣货/复核/打包共用。 */
 export const WT_PRIORITY_TONE: Record<number, StatusTone> = { 1: 'danger', 2: 'active', 3: 'draft' }
-
-export function isValidTransition(from: WtStatus, to: WtStatus): boolean {
-  const allowed = WT_TRANSITIONS[String(from) as keyof typeof WT_TRANSITIONS] ?? []
-  return (allowed as readonly number[]).includes(to)
-}

@@ -17,7 +17,6 @@ export interface Product {
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
   remark: string | null; isActive: boolean; createdAt: string
 }
-export interface ProductOption { id: number; code: string; name: string; unit: string; spec: string | null }
 export interface CreateProductParams {
   name: string; categoryId?: number | null; supplierId: number
   unit: string; spec: string; color: string

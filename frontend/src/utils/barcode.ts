@@ -64,10 +64,3 @@ export function parseBarcode(raw: string): ParsedBarcode {
 
   return { raw: s, type: 'unknown', label: '未知条码' }
 }
-
-/** 生成物流条码（L + 8 位时间戳片段 + 2 位随机数） */
-export function generateBoxBarcode(): string {
-  const ts  = Date.now().toString().slice(-8)
-  const rnd = Math.floor(Math.random() * 100).toString().padStart(2, '0')
-  return `L${ts}${rnd}`
-}
