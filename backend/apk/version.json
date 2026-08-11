@@ -1,7 +1,7 @@
 {
-  "version": "0.4.72",
-  "versionCode": 72,
+  "version": "0.4.73",
+  "versionCode": 73,
   "filename": "app-release.apk",
-  "releaseNote": "- **客户授信预警**：仪表盘新增授信预警卡片，占库超限前提前提示",
-  "publishedAt": "2026-08-11T11:59:59.682Z"
+  "releaseNote": "- **固定资产/多账套/工资个税/报税数据**：会计模块新增固定资产折旧、合并报表、工资社保个税、报税数据",
+  "publishedAt": "2026-08-11T13:39:04.009Z"
 }
