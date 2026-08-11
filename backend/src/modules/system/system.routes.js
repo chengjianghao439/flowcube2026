@@ -32,5 +32,7 @@ router.use(authMiddleware)
 // 不挂 requirePermission：查的是调用者自己的提交结果，且底层按 user_id 限定；
 // 若要求业务权限，反而会让权限被调整过的操作员无法确认自己刚才那次操作。
 router.get('/request-status/:key', vQuery(requestStatusQuery), ctrl.requestStatus)
+// POST /api/system/error-report — 前端 GlobalErrorBoundary 上报渲染错误（进 Loki 检索）
+router.post('/error-report', ctrl.reportError)
 
 module.exports = router

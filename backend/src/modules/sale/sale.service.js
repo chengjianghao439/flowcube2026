@@ -943,7 +943,7 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
 // 占库前的分仓预览：按明细行的产品，列出各仓库当前可用量，供占库弹窗逐行选仓库。
 async function getReservePreview(id, scopeWarehouseIds = null) {
   const [[orderRow]] = await pool.query(
-    'SELECT id, status, warehouse_id, warehouse_name FROM sale_orders WHERE id = ?', [id],
+    'SELECT id, status, warehouse_id, warehouse_name, customer_id, total_amount FROM sale_orders WHERE id = ?', [id],
   )
   if (!orderRow) throw new AppError('销售单不存在', 404)
   assertStatusAction('sale', 'reserve', orderRow.status)
@@ -956,6 +956,30 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
   for (const a of availability) {
     if (!availByProduct.has(a.productId)) availByProduct.set(a.productId, [])
     availByProduct.get(a.productId).push({ warehouseId: a.warehouseId, warehouseName: a.warehouseName, available: a.available })
+  }
+
+  // 信用预检（文档05：预检是提示不是判定——真正的拦截仍在 reserve 事务内做）。
+  // 这里用非事务 pool 查未锁快照，口径与 creditExposure.getCustomerCreditUsed 相同：
+  // 未清应收(A) + 在途敞口(B)，不含本单（本单尚草稿未占用信用）。
+  let credit = null
+  if (orderRow.customer_id) {
+    const [[cust]] = await pool.query(
+      'SELECT id, credit_limit FROM sale_customers WHERE id=? AND deleted_at IS NULL',
+      [orderRow.customer_id],
+    )
+    if (cust && cust.credit_limit != null) {
+      const limit = Number(cust.credit_limit)
+      const thisOrder = Number(orderRow.total_amount) || 0
+      const used = await getCustomerCreditUsed(pool, orderRow.customer_id)
+      credit = {
+        customerId: Number(orderRow.customer_id),
+        creditLimit: limit,
+        used,
+        thisOrder,
+        willExceed: used + thisOrder > limit,
+        overAmount: Math.max(0, Math.round((used + thisOrder - limit) * 100) / 100),
+      }
+    }
   }
 
   return {
@@ -976,6 +1000,7 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
       currentWarehouseName: item.warehouse_name || orderRow.warehouse_name,
       warehouses: (availByProduct.get(item.product_id) || []).sort((a, b) => b.available - a.available),
     })),
+    credit,
   }
 }
 

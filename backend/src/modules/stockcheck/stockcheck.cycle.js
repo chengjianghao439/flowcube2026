@@ -190,4 +190,99 @@ async function saveCycleRules({ warehouseId = 0, rules }) {
   return getCycleRules({ warehouseId: wid })
 }
 
-module.exports = { recomputeAbc, listAbc, getCycleCandidates, getCycleRules, saveCycleRules }
+/**
+ * 自动循环盘排程（文档08 Phase2）：每日由 scheduler 调用。
+ * 对每个启用循环盘规则的仓库：① 重算 ABC 分类 ② 逐 ABC 级查到期未盘候选 ③ 自动生成抽盘单。
+ * 幂等：只对「有到期未盘商品」的级别建单；同一天重复执行因 coverage 未刷新仍会重复建单——
+ * 由调用方（scheduler）保证每天只跑一次；极端情况即使重复，也只是多一张待盘单，不破坏库存。
+ * 全自动任务用系统操作人（userId=1 超管语义，绕过权限），盘点单仍走正常提交流程。
+ */
+async function runAutoCycleScheduling() {
+  // 收集启用循环盘规则且当前有在库容器的仓库（有货才值得排程，避免空仓空跑）
+  const [warehouses] = await pool.query(
+    `SELECT DISTINCT w.id, w.name
+     FROM inventory_warehouses w
+     WHERE w.deleted_at IS NULL AND w.is_active=1
+       AND EXISTS (SELECT 1 FROM inventory_containers c WHERE c.warehouse_id=w.id AND c.status=1 AND c.deleted_at IS NULL)
+       AND EXISTS (SELECT 1 FROM inventory_cycle_rules r WHERE r.warehouse_id IN (0, w.id) AND r.enabled=1)`,
+  )
+  const results = { warehouses: warehouses.length, created: [], skipped: [] }
+  const operator = { userId: 1, realName: '系统自动排程', roleId: 1, warehouseIds: null }
+
+  for (const wh of warehouses) {
+    const wid = Number(wh.id)
+    // ① 重算 ABC（自动任务默认按出库金额口径）
+    await recomputeAbc({ warehouseId: wid })
+    // ② 逐级查候选并建单
+    for (const cls of VALID_ABC) {
+      const { rules } = await getCycleRules({ warehouseId: wid })
+      const rule = rules.find(r => r.abcClass === cls)
+      if (!rule?.enabled) continue
+      const cand = await getCycleCandidates({ warehouseId: wid, scopeType: 'abc', scopeValue: cls })
+      if (!cand.productIds.length) { results.skipped.push(`${wh.name}-${cls}(无到期)`); continue }
+      try {
+        const stockcheckSvc = require('./stockcheck.service')
+        const r = await stockcheckSvc.create({
+          warehouseId: wid,
+          warehouseName: wh.name,
+          remark: `系统自动循环抽盘 ${cls} 类（周期 ${rule.intervalDays} 天）`,
+          operator,
+          scopeWarehouseIds: null,
+          checkType: 2,
+          scopeType: 'abc',
+          scopeValue: cls,
+          productIds: cand.productIds,
+        })
+        results.created.push({ warehouse: wh.name, abcClass: cls, checkNo: r.checkNo, items: cand.productIds.length })
+      } catch (e) {
+        // 范围无有货商品/已存在进行中盘点等：记录跳过
+        results.skipped.push(`${wh.name}-${cls}(${e.message || '建单失败'})`)
+      }
+    }
+  }
+  return results
+}
+
+/**
+ * 盘点覆盖率看板（文档08 Phase2）：各仓各 ABC 类的应盘/到期未盘/覆盖率。
+ * 应盘商品 = 该仓有 ACTIVE 容器且有 ABC 分类的商品；到期 = 从未盘 或 last_counted_at 距今超周期。
+ * 覆盖率 = 1 - 到期未盘/应盘。供前端循环盘页/盘点页展示，纯只读。
+ */
+async function getCoverage({ warehouseId = null, scopeWarehouseIds = null } = {}) {
+  const scoped = scopeFilter(scopeWarehouseIds, 'w.id')
+  const conds = ['w.deleted_at IS NULL', 'w.is_active=1', 'EXISTS (SELECT 1 FROM inventory_containers c WHERE c.warehouse_id=w.id AND c.status=1 AND c.deleted_at IS NULL)']
+  const params = []
+  if (warehouseId) { conds.push('w.id=?'); params.push(Number(warehouseId)) }
+  const whConds = conds.join(' AND ') + scoped.sql
+
+  const [rows] = await pool.query(
+    `SELECT w.id AS warehouse_id, w.name AS warehouse_name,
+            a.abc_class,
+            COUNT(DISTINCT a.product_id) AS total_items,
+            SUM(CASE WHEN cov.last_counted_at IS NULL OR cov.last_counted_at < DATE_SUB(NOW(), INTERVAL COALESCE(r.interval_days, CASE a.abc_class WHEN 'A' THEN 30 WHEN 'B' THEN 90 ELSE 365 END) DAY)
+                 THEN 1 ELSE 0 END) AS due_items
+     FROM inventory_warehouses w
+     JOIN product_abc_classes a ON a.warehouse_id=w.id
+     LEFT JOIN inventory_count_coverage cov ON cov.warehouse_id=w.id AND cov.product_id=a.product_id
+     LEFT JOIN inventory_cycle_rules r ON r.warehouse_id IN (0, w.id) AND r.abc_class=a.abc_class AND r.enabled=1
+     WHERE ${whConds}
+     GROUP BY w.id, w.name, a.abc_class
+     ORDER BY w.name ASC, a.abc_class ASC`,
+    [...params, ...scoped.params],
+  )
+  return rows.map(r => {
+    const total = Number(r.total_items)
+    const due = Number(r.due_items)
+    return {
+      rowKey: `${r.warehouse_id}-${r.abc_class}`,
+      warehouseId: Number(r.warehouse_id),
+      warehouseName: r.warehouse_name,
+      abcClass: r.abc_class,
+      totalItems: total,
+      dueItems: due,
+      coverageRate: total > 0 ? Math.round(((total - due) / total) * 1000) / 10 : 100,
+    }
+  })
+}
+
+module.exports = { recomputeAbc, listAbc, getCycleCandidates, getCycleRules, saveCycleRules, runAutoCycleScheduling, getCoverage }

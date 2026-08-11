@@ -63,6 +63,15 @@ if docker inspect "$MYSQL_CONTAINER" >/dev/null 2>&1; then
     if [ "${slow_total:-0}" -ge "$SLOW_QUERY_WARN" ]; then
       problems="${problems}慢查询日志累积 ${slow_total} 条（阈值${SLOW_QUERY_WARN}）；"
     fi
+    # 连接数告警（P2-14）：Threads_connected 接近 max_connections 说明连接池打满。
+    # 默认阈值 150（生产 max_connections 通常 300+），超限即告警。
+    MAX_CONN_WARN="${MAX_CONN_WARN:-150}"
+    threads=$(docker exec "$MYSQL_CONTAINER" mysql -N -e \
+      'SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME="Threads_connected"' 2>/dev/null | tr -d ' ')
+    threads=${threads:-0}
+    if [ "${threads:-0}" -ge "$MAX_CONN_WARN" ]; then
+      problems="${problems}MySQL 活跃连接 ${threads}（阈值${MAX_CONN_WARN}）；"
+    fi
   fi
 fi
 

@@ -31,8 +31,23 @@ export class GlobalErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     this.setState({ errorInfo: info })
-    // 记录到 console（生产环境可接入 Sentry 等）
+    // 记录到 console
     console.error('[GlobalErrorBoundary] 捕获到渲染错误:', error, info)
+    // 上报到后端（P2-12 错误追踪）：fire-and-forget，经后端 logger.error 进 Loki（若已配置 LOKI_URL）。
+    // 绝不因上报失败影响页面恢复。
+    try {
+      const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || ''
+      void fetch(`${apiBase}/api/system/error-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: error?.message || 'unknown',
+          stack: error?.stack || '',
+          componentStack: info?.componentStack || '',
+          url: window.location.href,
+        }),
+      }).catch(() => { /* 忽略上报失败 */ })
+    } catch { /* 忽略 */ }
   }
 
   handleReload = () => {

@@ -67,6 +67,22 @@ function startScheduler() {
     startWorker('waybill-track', runTrackWaybills, num('LOGISTICS_TRACK_INTERVAL_MS', 60 * 1000))
     logger.info('[scheduler] 物流取号/轨迹 worker 已启动', {}, 'Scheduler')
   }
+
+  // 循环盘点自动排程（文档08 Phase2）：每天跑一次，重算 ABC + 自动生成到期抽盘单。
+  // 用「当天是否已跑」去重：进程启动后首个整点检查，若当天没跑过则立即跑一次（覆盖深夜启动场景），
+  // 之后每小时检查一次直到当天跑过。可调 STOCKCHECK_CYCLE_INTERVAL_MS 控制检查频率。
+  const { runAutoCycleScheduling } = require('./modules/stockcheck/stockcheck.cycle')
+  let lastCycleDate = ''
+  startWorker('stockcheck-cycle', async () => {
+    // 本地日期（+08:00 部署）做「每天一次」判断，避免 UTC 跨日错位
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    if (lastCycleDate === today) return
+    const r = await runAutoCycleScheduling()
+    lastCycleDate = today
+    logger.info(`[scheduler] 循环盘自动排程完成：${r.warehouses} 仓，生成 ${r.created.length} 张抽盘单${r.skipped.length ? `，跳过 ${r.skipped.length} 项` : ''}`, { created: r.created }, 'Scheduler')
+  }, num('STOCKCHECK_CYCLE_INTERVAL_MS', 60 * 60 * 1000))
+  logger.info('[scheduler] 循环盘自动排程 worker 已启动（每日一次，可 STOCKCHECK_CYCLE_INTERVAL_MS 调检查频率）', {}, 'Scheduler')
 }
 
 module.exports = { startScheduler }

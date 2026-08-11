@@ -33,6 +33,7 @@ export default function ProcurementPlanListPage() {
   const [genOpen, setGenOpen] = useState(false)
   const [win, setWin] = useState(30)
   const [horizon, setHorizon] = useState(30)
+  const [method, setMethod] = useState<'sma' | 'wma'>('sma')
   const [whId, setWhId] = useState('0')
   const [name, setName] = useState('')
 
@@ -42,7 +43,7 @@ export default function ProcurementPlanListPage() {
   })
 
   const generate = useMutation({
-    mutationFn: () => generatePlanApi({ window: win, horizon, warehouseId: whId === '0' ? null : Number(whId), name: name.trim() || null }, { skipGlobalError: true }),
+    mutationFn: () => generatePlanApi({ window: win, horizon, warehouseId: whId === '0' ? null : Number(whId), name: name.trim() || null, forecastMethod: method }, { skipGlobalError: true }),
     onSuccess: (r) => {
       toast.success(`已生成采购计划 ${r!.code}（${r!.itemCount} 行）`)
       setGenOpen(false); setName('')
@@ -93,6 +94,17 @@ export default function ProcurementPlanListPage() {
                 <Input type="number" value={horizon} onChange={(e) => setHorizon(Number(e.target.value) || 30)} className="h-10 text-right tabular-nums" />
                 <p className="text-xs text-muted-foreground">这批货要撑多久</p>
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label>预测方法</Label>
+              <Select value={method} onValueChange={(v) => setMethod(v as 'sma' | 'wma')}>
+                <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sma">简单移动平均（SMA）</SelectItem>
+                  <SelectItem value="wma">加权移动平均（WMA，近期权重更高）</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">WMA 对近期出库趋势更敏感，适合销量波动大的商品</p>
             </div>
             <div className="space-y-1">
               <Label>仓库范围</Label>

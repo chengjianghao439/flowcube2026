@@ -10,7 +10,7 @@ async function generate(req, res, next) {
     const data = await svc.generatePlan({
       window: req.body.window, horizon: req.body.horizon,
       warehouseId: req.body.warehouseId ? Number(req.body.warehouseId) : null,
-      name: req.body.name || null, defaultLeadTime: req.body.defaultLeadTime, remark: req.body.remark || null,
+      name: req.body.name || null, defaultLeadTime: req.body.defaultLeadTime, forecastMethod: req.body.forecastMethod || 'sma', remark: req.body.remark || null,
       operator: getOperatorFromRequest(req), requestKey: rk(req), scopeWarehouseIds: scope(req),
     })
     return successResponse(res, data, '采购计划已生成', 201)

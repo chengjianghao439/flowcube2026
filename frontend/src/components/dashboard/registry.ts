@@ -52,6 +52,7 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'kpi-receivable',      title: '应收敞口',        description: '未收回应收账款合计',        icon: HandCoins,     category: 'kpi', permission: PERMISSIONS.PAYMENT_VIEW,         defaultW: 1, size: 'sm', Component: Kpi.KpiReceivable },
   { id: 'kpi-payable',         title: '应付敞口',        description: '待支付应付账款合计',        icon: CreditCard,    category: 'kpi', permission: PERMISSIONS.PAYMENT_VIEW,         defaultW: 1, size: 'sm', Component: Kpi.KpiPayable },
   { id: 'kpi-account-balance', title: '账户余额合计',    description: '启用资金账户余额合计',      icon: Landmark,      category: 'kpi', permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW, defaultW: 1, size: 'sm', Component: Kpi.KpiAccountBalance },
+  { id: 'kpi-credit-warning',  title: '授信预警',         description: '客户授信超限/高危占用',       icon: Gauge,         category: 'kpi', permission: PERMISSIONS.SALE_CREDIT_VIEW,    defaultW: 1, size: 'sm', Component: Kpi.KpiCreditWarning },
 
   // —— 图表分析（lg）——
   { id: 'chart-io-trend',       title: '出入库趋势',      description: '近 7 天出入库数量走势',     icon: Activity,      category: 'chart', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 2, size: 'lg', Component: Chart.ChartIoTrend },
@@ -104,6 +105,7 @@ const DEFAULT_VISIBLE_ORDER = [
   'list-low-stock', 'board-incoming',
   'list-pda-perf', 'system-version',
   'fun-wooden-fish', 'fun-offwork', 'fun-holiday',
+  'kpi-credit-warning',
 ]
 
 export function buildDefaultLayout(): DashboardLayout {

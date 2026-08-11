@@ -12,4 +12,5 @@ module.exports = {
   reconciliationReport: metrics.reconciliationReport,
   profitAnalysis: metrics.profitAnalysis,
   kpiMetrics: metrics.kpiMetrics,
+  avgCostReconciliation: metrics.avgCostReconciliation,
 }

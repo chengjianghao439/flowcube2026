@@ -18,9 +18,12 @@ interface Props {
 
 type Selection = Record<number, { warehouseId: number; warehouseName: string }>
 
+const money = (n: number) => `¥${Number(n).toFixed(2)}`
+
 /**
  * 占用库存弹窗：逐个商品选择发货仓库，每选一个仓库即时看到该仓可用量。
  * 取代原先新建订单时的"分仓发货"开关——仓库分配挪到占库这一步，此时才有真实可用量可看。
+ * 附信用预检提示（文档05）：预检是提示不是判定，真正的超限拦截仍在后端占库事务内。
  */
 export default function ReserveAllocationDialog({ open, orderId, onClose, onShortage }: Props) {
   const { data: preview, isLoading } = useSaleReservePreview(orderId ?? 0, open)
@@ -40,6 +43,8 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
   const availableFor = (itemId: number, warehouseId: number) =>
     items.find(i => i.itemId === itemId)?.warehouses.find(w => w.warehouseId === warehouseId)?.available ?? 0
   const shortItemIds = items.filter(i => availableFor(i.itemId, selection[i.itemId]?.warehouseId ?? i.currentWarehouseId) < i.quantity)
+
+  const credit = preview?.credit ?? null
 
   function handleConfirm() {
     if (!orderId) return
@@ -67,6 +72,17 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
         <p className="text-sm text-muted-foreground">
           为每个商品选择发货仓库，可用量会实时显示；不同商品可以选不同仓库（分仓发货）。
         </p>
+
+        {credit?.willExceed && (
+          <p className="flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-warning">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              客户授信将超额：额度 {money(credit.creditLimit)}，已用 {money(credit.used)}，本单 {money(credit.thisOrder)}，超出约 {money(credit.overAmount)}。
+              占库时若无放行权限将被拦截，可先发起{' '}
+              <a href="#/credit-overrides" className="underline underline-offset-2">超额放行申请</a>。
+            </span>
+          </p>
+        )}
 
         {isLoading && (
           <div className="flex h-32 items-center justify-center text-muted-foreground">

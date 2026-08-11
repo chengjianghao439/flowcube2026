@@ -36,6 +36,7 @@
  "smoke:purchase-approval": "node tests/purchase-approval.smoke.test.js",
     "smoke:approval-flow": "node tests/approval-flow.smoke.test.js",
     "smoke:credit-override": "node tests/credit-override.smoke.test.js",
+    "check:schema": "node backend/scripts/schema-reconcile.js",
     "smoke:pages": "bash scripts/smoke-pages.sh",
     "smoke:reconciliation": "bash scripts/smoke-reconciliation-jumps.sh"
   }

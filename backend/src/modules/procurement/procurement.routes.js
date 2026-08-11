@@ -13,6 +13,7 @@ const generateSchema = z.object({
   warehouseId: z.number().int().positive().optional().nullable(),
   name: z.string().max(128).optional().nullable(),
   defaultLeadTime: z.number().int().min(0).max(365).optional(),
+  forecastMethod: z.enum(['sma', 'wma']).optional(),
   remark: z.string().max(500).optional().nullable(),
 })
 const updateItemSchema = z.object({

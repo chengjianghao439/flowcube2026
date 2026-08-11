@@ -135,6 +135,9 @@ jobs:
       - name: 迁移文件编号校验（历史重复/缺号 warn；新增撞号编号会失败，审计 4.10）
         run: npm --prefix backend run migrate -- --check-gaps
 
+      - name: Schema 对账（已执行迁移声明的表 vs 实际库，文档12）
+        run: npm run check:schema
+
       - name: 等待 MySQL 就绪
         run: |
           set -e

@@ -62,6 +62,8 @@ const env = {
   CORS_ALLOW_NULL_ORIGIN: readBool('CORS_ALLOW_NULL_ORIGIN', !IS_PROD),
   TRUST_PROXY: readBool('TRUST_PROXY', false),
   APP_PUBLIC_URL: readString('APP_PUBLIC_URL', { defaultValue: '', allowEmpty: true }).replace(/\/$/, ''),
+  // 日志集中检索（P2-12）：配置后 warn/error 级日志异步推送 Grafana Loki；未配置则完全无副作用
+  LOKI_URL: readString('LOKI_URL', { defaultValue: '', allowEmpty: true }),
   APP_UPDATE_USE_GITHUB_DIRECT_URL: readBool('APP_UPDATE_USE_GITHUB_DIRECT_URL', false),
   APP_UPDATE_DOWNLOADS_DIR: readString('APP_UPDATE_DOWNLOADS_DIR', {
     defaultValue: '/var/www/flowcube-downloads',

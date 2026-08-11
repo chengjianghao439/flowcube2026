@@ -417,6 +417,64 @@ async function kpiMetrics(params = {}) {
   }
 }
 
+/**
+ * avg_cost 对账报表（文档12）：容器口径 vs 缓存口径的数量/价值漂移检查。
+ * 容器口径 = ACTIVE 容器 remaining_qty 合计 × avg_cost（唯一事实源）；
+ * 缓存口径 = inventory_stock.quantity × avg_cost（只应由 syncStockFromContainers 写）。
+ * 数量或价值有差异即视为缓存漂移（违反 CLAUDE.md 不变量 1/2），提示走 resync 修复。
+ * 纯只读，不写库。
+ */
+async function avgCostReconciliation({ scopeWarehouseIds = null } = {}) {
+  const { pool } = require('../../config/db')
+  const { scopeFilter } = require('../../utils/warehouseScope')
+  const sc = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
+  const [rows] = await pool.query(
+    `SELECT s.product_id, s.warehouse_id,
+            p.code AS product_code, p.name AS product_name, p.unit,
+            COALESCE(NULLIF(p.avg_cost,0), NULLIF(p.cost_price,0), 0) AS unit_cost,
+            s.quantity AS cache_qty,
+            COALESCE(cont.container_qty, 0) AS container_qty,
+            s.quantity * COALESCE(NULLIF(p.avg_cost,0), NULLIF(p.cost_price,0), 0) AS cache_value,
+            COALESCE(cont.container_qty,0) * COALESCE(NULLIF(p.avg_cost,0), NULLIF(p.cost_price,0), 0) AS container_value
+     FROM inventory_stock s
+     JOIN product_items p ON p.id = s.product_id AND p.deleted_at IS NULL
+     LEFT JOIN (
+        SELECT c.product_id, c.warehouse_id, SUM(c.remaining_qty) AS container_qty
+        FROM inventory_containers c
+        WHERE c.status=1 AND c.deleted_at IS NULL
+        GROUP BY c.product_id, c.warehouse_id
+     ) cont ON cont.product_id=s.product_id AND cont.warehouse_id=s.warehouse_id
+     WHERE 1=1${sc.sql}
+     ORDER BY ABS(s.quantity - COALESCE(cont.container_qty,0)) DESC, p.name ASC
+     LIMIT 200`,
+    sc.params,
+  )
+  const list = rows.map(r => {
+    const cacheQty = Number(r.cache_qty)
+    const containerQty = Number(r.container_qty)
+    const unitCost = Number(r.unit_cost)
+    return {
+      rowKey: `${r.product_id}-${r.warehouse_id}`,
+      productId: Number(r.product_id),
+      productCode: r.product_code,
+      productName: r.product_name,
+      unit: r.unit,
+      warehouseId: Number(r.warehouse_id),
+      unitCost,
+      cacheQty,
+      containerQty,
+      diffQty: Math.round((cacheQty - containerQty) * 1000) / 1000,
+      cacheValue: Math.round(cacheQty * unitCost * 100) / 100,
+      containerValue: Math.round(containerQty * unitCost * 100) / 100,
+      diffValue: Math.round((cacheQty - containerQty) * unitCost * 100) / 100,
+      drifted: Math.abs(cacheQty - containerQty) > 0.0001,
+    }
+  })
+  const driftedCount = list.filter(r => r.drifted).length
+  const totalDiffValue = Math.round(list.reduce((s, r) => s + r.diffValue, 0) * 100) / 100
+  return { ok: driftedCount === 0, driftedCount, totalDiffValue, totalRows: list.length, list }
+}
+
 module.exports = {
   purchaseStats,
   saleStats,
@@ -427,4 +485,5 @@ module.exports = {
   reconciliationReport,
   profitAnalysis,
   kpiMetrics,
+  avgCostReconciliation,
 }

@@ -48,6 +48,8 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-0}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
       APP_UPDATE_DOWNLOADS_DIR: /var/www/flowcube-downloads
+      # 日志集中检索（P2-12）：起 observability profile 后填 loki 服务地址即可接入
+      LOKI_URL: ${LOKI_URL:-}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
@@ -70,5 +72,43 @@ services:
       # nginx 只暴露 canonical downloads root，下游路径为 /latest.json、/versions/、/current/。
       - ${FLOWCUBE_DOWNLOADS_DIR:-/var/www/flowcube-downloads}:/usr/share/nginx/downloads:ro
 
+  # 日志集中检索（P2-12）：Grafana Loki + 可选 grafana。用 observability profile 隔离——
+  # 默认 docker compose up 不会起它们（不影响现有部署）；需要时显式：
+  #   docker compose --profile observability up -d
+  # 然后给 backend 配 LOKI_URL（见 backend/.env 的 LOKI_URL），warn/error 日志即自动推送。
+  loki:
+    image: grafana/loki:3.2.1
+    container_name: flowcube-loki
+    restart: unless-stopped
+    profiles: ["observability"]
+    ports:
+      - "127.0.0.1:3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: flowcube-grafana
+    restart: unless-stopped
+    profiles: ["observability"]
+    depends_on:
+      loki:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3101:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+    volumes:
+      - grafana_data:/var/lib/grafana
+
 volumes:
   mysql_data:
+  loki_data:
+  grafana_data:

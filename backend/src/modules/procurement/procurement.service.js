@@ -44,11 +44,11 @@ function fmtItem(r) {
  * 生成采购计划（文档 11 单据化）。复用 MVP 只读计算 getProcurementPlan 得出建议行，整批快照落库为单据。
  * 计算阶段纯只读（不碰库存/在途/占库），落库只写 procurement_plans / _items。X-Request-Key 幂等防连点生成两批。
  */
-async function generatePlan({ window = 30, horizon = 30, warehouseId = null, name = null, defaultLeadTime = 7, remark = null, operator, requestKey, scopeWarehouseIds = null }) {
+async function generatePlan({ window = 30, horizon = 30, warehouseId = null, name = null, defaultLeadTime = 7, forecastMethod = 'sma', remark = null, operator, requestKey, scopeWarehouseIds = null }) {
   // 目标仓若指定，须在数据权限内
   if (warehouseId) assertInScope(scopeWarehouseIds, warehouseId, '仓库')
   // 只读计算（在事务外做，避免长事务）
-  const { list, params } = await getProcurementPlan({ window, horizon, warehouseId, defaultLeadTime, scopeWarehouseIds })
+  const { list, params } = await getProcurementPlan({ window, horizon, warehouseId, defaultLeadTime, scopeWarehouseIds, forecastMethod })
   if (!list.length) throw new AppError('按当前参数没有需要采购的商品（近期无出库或供给已充足）', 400)
 
   const conn = await pool.getConnection()
@@ -61,7 +61,7 @@ async function generatePlan({ window = 30, horizon = 30, warehouseId = null, nam
     const [r] = await conn.query(
       `INSERT INTO procurement_plans (code, name, horizon_days, forecast_method, forecast_window, default_lead_time, status, item_count, operator_id, operator_name, remark)
        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      [code, name || null, params.horizon, 'sma', params.window, params.defaultLeadTime, PLAN_STATUS.DRAFT, list.length, operator.userId, operator.realName || null, remark || null],
+      [code, name || null, params.horizon, params.forecastMethod, params.window, params.defaultLeadTime, PLAN_STATUS.DRAFT, list.length, operator.userId, operator.realName || null, remark || null],
     )
     const planId = r.insertId
     for (const it of list) {
@@ -72,6 +72,12 @@ async function generatePlan({ window = 30, horizon = 30, warehouseId = null, nam
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [planId, it.productId, it.warehouseId, it.productCode, it.productName, it.unit, it.warehouseName, it.supplierId, it.supplierName,
           it.adu, it.forecastDemand, it.safetyStock, it.available, it.inTransit, it.leadTimeDays, it.suggestedQty, it.suggestedQty, it.expectedArrival, ITEM_STATUS.PENDING],
+      )
+      // 需求预测明细快照（文档11 Phase3）：每次生成落一份，供未来准确度评估（actual_sold 后回填）
+      await conn.query(
+        `INSERT INTO demand_forecasts (plan_id, warehouse_id, product_id, forecast_method, window_days, horizon_days, adu, forecast_demand)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [planId, it.warehouseId, it.productId, params.forecastMethod, params.window, params.horizon, it.adu, it.forecastDemand],
       )
     }
     const result = { id: planId, code, itemCount: list.length }

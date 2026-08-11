@@ -33,20 +33,23 @@ function addDays(days) {
   return d.toISOString().slice(0, 10)
 }
 
-async function getProcurementPlan({ window = 30, horizon = 30, keyword = '', warehouseId = null, defaultLeadTime = 7, scopeWarehouseIds = null }) {
+async function getProcurementPlan({ window = 30, horizon = 30, keyword = '', warehouseId = null, defaultLeadTime = 7, scopeWarehouseIds = null, forecastMethod = 'sma' }) {
   const N = Math.max(1, Number(window) || 30)
   const P = Math.max(1, Number(horizon) || 30)
   const defLead = Math.max(0, Number(defaultLeadTime) || 0)
+  const method = String(forecastMethod || 'sma').toLowerCase() === 'wma' ? 'wma' : 'sma'
+  // WMA 把窗口均分两段：近半程权重 2、远半程权重 1（近因加权）
+  const halfN = Math.max(1, Math.round(N / 2))
 
   const conds = ['p.deleted_at IS NULL', 'p.is_active = 1']
-  const params = [N]   // sold 子查询的 INTERVAL ? DAY
+  const params = [N, N]   // sold 子查询的两个 INTERVAL：全窗口 + 近半程
   if (keyword) { conds.push('(p.code LIKE ? OR p.name LIKE ?)'); params.push(`%${keyword}%`, `%${keyword}%`) }
   if (warehouseId) { conds.push('sold.warehouse_id = ?'); params.push(warehouseId) }
   const scope = scopeFilter(scopeWarehouseIds, 'sold.warehouse_id')
   const where = conds.join(' AND ') + scope.sql
 
   const [rows] = await pool.query(
-    `SELECT sold.product_id, sold.warehouse_id, sold.total_sold,
+    `SELECT sold.product_id, sold.warehouse_id, sold.total_sold, sold.recent_sold,
             p.code AS product_code, p.name AS product_name, p.unit,
             w.name AS warehouse_name,
             GREATEST(0, COALESCE(ip.quantity, 0) - COALESCE(ip.reserved, 0)) AS available,
@@ -54,7 +57,8 @@ async function getProcurementPlan({ window = 30, horizon = 30, keyword = '', war
             COALESCE(sp_wh.safety_stock, sp_def.safety_stock, 0)             AS safety_stock,
             sup.id AS supplier_id, sup.name AS supplier_name,
             COALESCE(sup.lead_time_days, 0)                                  AS supplier_lead_time
-     FROM (SELECT wt.warehouse_id, wti.product_id, SUM(wti.picked_qty) AS total_sold
+     FROM (SELECT wt.warehouse_id, wti.product_id, SUM(wti.picked_qty) AS total_sold,
+                  COALESCE(SUM(CASE WHEN wt.shipped_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY) THEN wti.picked_qty ELSE 0 END), 0) AS recent_sold
            FROM warehouse_tasks wt
            JOIN warehouse_task_items wti ON wti.task_id = wt.id
            WHERE wt.task_type = 'sale_out' AND wt.status = 7
@@ -74,7 +78,11 @@ async function getProcurementPlan({ window = 30, horizon = 30, keyword = '', war
 
   const list = []
   for (const r of rows) {
-    const adu = Number(r.total_sold) / N
+    // ADU 口径：sma = 全窗口均值；wma = (近半程×2 + 远半程×1) / (半程天×3)，
+    // 近半程权重更高反映近期趋势（文档11 Phase2）。
+    const adu = method === 'wma'
+      ? (Number(r.recent_sold) * 2 + (Number(r.total_sold) - Number(r.recent_sold)) * 1) / (halfN * 3)
+      : Number(r.total_sold) / N
     const leadTime = Number(r.supplier_lead_time) > 0 ? Number(r.supplier_lead_time) : defLead
     const available = Number(r.available)
     const inTransit = Number(r.in_transit)
@@ -104,7 +112,7 @@ async function getProcurementPlan({ window = 30, horizon = 30, keyword = '', war
   }
   list.sort((a, b) => b.suggestedQty - a.suggestedQty)
 
-  return { list, params: { window: N, horizon: P, defaultLeadTime: defLead } }
+  return { list, params: { window: N, horizon: P, defaultLeadTime: defLead, forecastMethod: method } }
 }
 
 module.exports = { getProcurementPlan }

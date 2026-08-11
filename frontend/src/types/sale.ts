@@ -183,6 +183,15 @@ export interface ReservePreview {
   warehouseId: number
   warehouseName: string
   items: ReservePreviewItem[]
+  /** 信用预检（文档05，提示非判定；客户未设额度时为 null） */
+  credit?: {
+    customerId: number
+    creditLimit: number
+    used: number
+    thisOrder: number
+    willExceed: boolean
+    overAmount: number
+  } | null
 }
 
 /** POST /sale/:id/reserve 的分仓选择：逐行覆盖发货仓库 */

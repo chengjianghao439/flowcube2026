@@ -998,6 +998,11 @@ async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehou
     LEFT JOIN product_stock_policies sp_wh  ON sp_wh.product_id = ip.product_id AND sp_wh.warehouse_id = ip.warehouse_id
     LEFT JOIN product_stock_policies sp_def ON sp_def.product_id = ip.product_id AND sp_def.warehouse_id = 0
     LEFT JOIN ${inTransitSql} pt ON pt.warehouse_id = ip.warehouse_id AND pt.product_id = ip.product_id
+    LEFT JOIN supply_suppliers sup ON sup.id = p.supplier_id AND sup.deleted_at IS NULL
+    LEFT JOIN (SELECT wti.product_id, wt.warehouse_id, SUM(wti.picked_qty) AS sold_90d
+               FROM warehouse_tasks wt JOIN warehouse_task_items wti ON wti.task_id=wt.id
+               WHERE wt.task_type='sale_out' AND wt.status=7 AND wt.shipped_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+               GROUP BY wti.product_id, wt.warehouse_id) sold ON sold.product_id=ip.product_id AND sold.warehouse_id=ip.warehouse_id
     WHERE ${where}`
 
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
@@ -1010,7 +1015,9 @@ async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehou
             ${reorderExpr}   AS reorder_point,
             ${safetyExpr}    AS safety_stock,
             ${targetExpr}    AS target_stock,
-            GREATEST(0, ${targetExpr} - ${availableExpr} - ${inTransitExpr}) AS suggest_qty
+            GREATEST(0, ${targetExpr} - ${availableExpr} - ${inTransitExpr}) AS suggest_qty,
+            COALESCE(sup.lead_time_days, 7) AS lead_time_days,
+            COALESCE(sold.sold_90d, 0) AS sold_90d
      ${joins}
      ORDER BY suggest_qty DESC, p.name ASC
      LIMIT ? OFFSET ?`,
@@ -1020,23 +1027,33 @@ async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehou
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total ${joins}`, baseParams)
 
   return {
-    list: rows.map(r => ({
-      id: `${r.product_id}-${r.warehouse_id}`,
-      productId: r.product_id,
-      productCode: r.product_code,
-      productName: r.product_name,
-      unit: r.unit,
-      warehouseId: r.warehouse_id,
-      warehouseName: r.warehouse_name,
-      onHand: Number(r.quantity),
-      reserved: Number(r.reserved),
-      available: Number(r.available),
-      inTransit: Number(r.in_transit),
-      safetyStock: Number(r.safety_stock),
-      reorderPoint: Number(r.reorder_point),
-      targetStock: Number(r.target_stock),
-      suggestQty: Number(r.suggest_qty),
-    })),
+    list: rows.map(r => {
+      // 建议补货点（文档01 Phase2）：日均销量 × 提前期 + 安全库存。90 天窗口 ADU。
+      // 是「建议值」供参考，不覆盖手工设置的 reorder_point（reorder_point 仍是权威判定）。
+      const adu = Number(r.sold_90d) / 90
+      const leadTime = Number(r.lead_time_days) > 0 ? Number(r.lead_time_days) : 7
+      const suggestReorder = Math.max(0, Math.round((adu * leadTime + Number(r.safety_stock)) * 100) / 100)
+      return {
+        id: `${r.product_id}-${r.warehouse_id}`,
+        productId: r.product_id,
+        productCode: r.product_code,
+        productName: r.product_name,
+        unit: r.unit,
+        warehouseId: r.warehouse_id,
+        warehouseName: r.warehouse_name,
+        onHand: Number(r.quantity),
+        reserved: Number(r.reserved),
+        available: Number(r.available),
+        inTransit: Number(r.in_transit),
+        safetyStock: Number(r.safety_stock),
+        reorderPoint: Number(r.reorder_point),
+        targetStock: Number(r.target_stock),
+        suggestQty: Number(r.suggest_qty),
+        adu: Math.round(adu * 100) / 100,
+        leadTimeDays: leadTime,
+        suggestReorderPoint: suggestReorder,
+      }
+    }),
     pagination: { page, pageSize: ps, total },
   }
 }

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { getReplenishmentApi, type ReplenishmentItem } from '@/api/inventory'
+import { getReplenishmentApi, saveStockPoliciesApi, type ReplenishmentItem } from '@/api/inventory'
 import { createRequisitionApi } from '@/api/purchase-requisitions'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -28,6 +28,16 @@ export default function ReplenishmentPage() {
   const qc = useQueryClient()
   const { can } = usePermission()
   const canCreateRequisition = can(PERMISSIONS.PURCHASE_REQUISITION_CREATE)
+  const canAdjustInventory = can(PERMISSIONS.INVENTORY_ADJUST)
+
+  // 采纳「建议补货点」：把该行的建议补货点写回补货策略（仅更新 reorder_point，不覆盖 safety/target）
+  const { mutate: adoptReorder } = useMutation({
+    mutationFn: ({ row }: { row: ReplenishmentItem }) => saveStockPoliciesApi([
+      { productId: row.productId, warehouseId: row.warehouseId, reorderPoint: Math.ceil(row.suggestReorderPoint) },
+    ]),
+    onSuccess: () => { toast.success('已采纳建议补货点'); qc.invalidateQueries({ queryKey: ['replenishment'] }) },
+    onError: (e: Error) => toast.error(e.message),
+  })
 
   const [warehouseId, setWarehouseId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
@@ -77,9 +87,29 @@ export default function ReplenishmentPage() {
         : <span className="tabular-nums text-muted-foreground">—</span> },
     { key: 'safetyStock', title: '安全库存', width: 100, align: 'right', render: v => <span className="tabular-nums text-muted-foreground">{fmtQty(v)}</span> },
     { key: 'reorderPoint', title: '补货点', width: 90, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
+    {
+      key: 'suggestReorderPoint',
+      title: '建议补货点',
+      width: 130,
+      align: 'right',
+      render: (_, r) => (
+        <span className={`tabular-nums ${r.suggestReorderPoint > r.reorderPoint ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+          {fmtQty(r.suggestReorderPoint)}
+          <span className="ml-1 text-xs font-normal text-muted-foreground">(ADU {fmtQty(r.adu)}×{r.leadTimeDays}天)</span>
+        </span>
+      ),
+    },
     { key: 'suggestQty', title: '建议采购量', width: 120, align: 'right', render: (v, r) => (
         <span className="tabular-nums font-semibold text-primary">{fmtQty(v)}<span className="ml-1 text-xs font-normal text-muted-foreground">{r.unit}</span></span>
       ) },
+    {
+      key: 'id',
+      title: '操作',
+      width: 110,
+      render: (_, r) => canAdjustInventory && Math.round(r.suggestReorderPoint) !== Math.round(r.reorderPoint) ? (
+        <Button size="sm" variant="outline" onClick={() => adoptReorder({ row: r })}>采纳补货点</Button>
+      ) : <span className="text-xs text-muted-foreground">—</span>,
+    },
   ]
 
   function apply() { setApplied({ keyword: search, warehouseId }) }

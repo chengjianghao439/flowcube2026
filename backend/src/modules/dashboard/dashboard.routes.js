@@ -22,6 +22,7 @@ router.get('/low-stock',  requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.lo
 router.get('/trend',      requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.trend)
 router.get('/top-stock',  requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.topStock)
 router.get('/incoming-purchases', requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.incomingPurchases)
+router.get('/credit-warning',     requirePermission(PERMISSIONS.SALE_CREDIT_VIEW), ctrl.creditWarning)
 router.get('/layout',     requirePermission(PERMISSIONS.DASHBOARD_VIEW), ctrl.layout)
 router.put('/layout',     requirePermission(PERMISSIONS.DASHBOARD_VIEW), validateBody(layoutSchema), ctrl.saveLayout)
 module.exports = router

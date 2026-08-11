@@ -156,4 +156,55 @@ async function saveLayout(userId, layout) {
   return layout
 }
 
-module.exports = { getSummary, getLowStock, getRecentTrend, getTopStockByValue, getIncomingPurchases, getLayout, saveLayout }
+/**
+ * 授信预警（文档05 Phase2）：统计超限客户与占用率，供 dashboard 看板磁贴。
+ * 口径与 creditExposure 一致：已用 = 未清应收(A) + 在途敞口(B)；占用率 = used/credit_limit。
+ * 超限客户 = 占用率 > 1；高风险 = 占用率 >= 0.9。
+ */
+async function getCreditWarning() {
+  // 在途敞口子查询：已占库(2)/拣货中(3)订单的 (订单总额 − 已生成应收总额)
+  const [rows] = await pool.query(
+    `SELECT c.id, c.name, c.credit_limit,
+            COALESCE(a.used_receivable, 0) + COALESCE(b.open_exposure, 0) AS used
+     FROM sale_customers c
+     LEFT JOIN (
+        SELECT so.customer_id, SUM(pr.balance) AS used_receivable
+        FROM payment_records pr JOIN sale_orders so ON so.id=pr.order_id
+        WHERE pr.type=2 AND pr.status IN (1,2)
+        GROUP BY so.customer_id
+     ) a ON a.customer_id = c.id
+     LEFT JOIN (
+        SELECT so.customer_id, SUM(GREATEST(0, so.total_amount - COALESCE(pr.total_amount,0))) AS open_exposure
+        FROM sale_orders so
+        LEFT JOIN payment_records pr ON pr.type=2 AND pr.order_id=so.id
+        WHERE so.status IN (2,3) AND so.deleted_at IS NULL
+        GROUP BY so.customer_id
+     ) b ON b.customer_id = c.id
+     WHERE c.deleted_at IS NULL AND c.credit_limit IS NOT NULL AND c.credit_limit > 0
+     HAVING used > 0`,
+  )
+  const list = rows.map(r => {
+    const limit = Number(r.credit_limit)
+    const used = Math.round(Number(r.used) * 10000) / 10000
+    return {
+      customerId: Number(r.id),
+      customerName: r.name,
+      creditLimit: limit,
+      used,
+      usageRate: Math.round((used / limit) * 10000) / 10000,
+      over: used > limit,
+    }
+  }).sort((a, b) => b.usageRate - a.usageRate)
+
+  const overCount = list.filter(x => x.over).length
+  const highRiskCount = list.filter(x => !x.over && x.usageRate >= 0.9).length
+  const top = list.slice(0, 5).map(x => ({ ...x, usageRatePct: Math.round(x.usageRate * 100) }))
+  return {
+    totalCustomers: list.length,
+    overCount,
+    highRiskCount,
+    top,
+  }
+}
+
+module.exports = { getSummary, getLowStock, getRecentTrend, getTopStockByValue, getIncomingPurchases, getLayout, saveLayout, getCreditWarning }

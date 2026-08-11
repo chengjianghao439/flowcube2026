@@ -48,5 +48,6 @@ export interface GeneratePlanParams {
   warehouseId?: number | null
   name?: string | null
   defaultLeadTime?: number
+  forecastMethod?: 'sma' | 'wma'
   remark?: string | null
 }

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getDashboardSummaryApi, getLowStockApi, getTrendApi, getTopStockApi,
-  getIncomingPurchasesApi, getDashboardLayoutApi, saveDashboardLayoutApi,
+  getIncomingPurchasesApi, getCreditWarningApi, getDashboardLayoutApi, saveDashboardLayoutApi,
 } from '@/api/dashboard'
 import {
   getPdaPerformanceApi, getWarehouseOpsApi, getRoleWorkbenchApi,
@@ -31,6 +31,7 @@ export const useIncomingPurchases = () => useQuery({ queryKey:['incoming-purchas
 export const useWarehouseOps    = () => useQuery({ queryKey:['dash-warehouse-ops'], queryFn:()=>getWarehouseOpsApi().then(r=>r!), refetchInterval:60000 })
 export const useFinanceDashboard = () => useQuery({ queryKey:['dash-finance',RANGE_180], queryFn:()=>getFinanceDashboardApi(RANGE_180).then(r=>r!), staleTime:300000 })
 export const useAging           = () => useQuery({ queryKey:['dash-aging'], queryFn:()=>getAgingApi(8).then(r=>r!), staleTime:300000 })
+export const useCreditWarning    = () => useQuery({ queryKey:['dash-credit-warning'], queryFn:()=>getCreditWarningApi().then(r=>r!), staleTime:300000 })
 export const useRoleWorkbench   = () => useQuery({ queryKey:['dash-workbench'], queryFn:()=>getRoleWorkbenchApi().then(r=>r!), refetchInterval:60000 })
 export const useSaleStats       = () => useQuery({ queryKey:['dash-sale-stats',RANGE_180], queryFn:()=>getSaleStatsApi(RANGE_180).then(r=>r!), staleTime:300000 })
 export const usePurchaseStats   = () => useQuery({ queryKey:['dash-purchase-stats',RANGE_180], queryFn:()=>getPurchaseStatsApi(RANGE_180).then(r=>r!), staleTime:300000 })

@@ -46,6 +46,17 @@ export interface CycleRule {
 }
 export interface CycleRulesResult { warehouseId: number; rules: CycleRule[] }
 
+/** 盘点覆盖率（文档08）：各仓各 ABC 类的应盘/到期未盘/覆盖率 */
+export interface CoverageRow {
+  rowKey: string
+  warehouseId: number
+  warehouseName: string
+  abcClass: string
+  totalItems: number
+  dueItems: number
+  coverageRate: number
+}
+
 /** PDA 扫码盘点（文档13 §4.3）：任务池行 */
 export interface PendingScanCheck {
   id: number

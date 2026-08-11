@@ -35,6 +35,7 @@ router.post('/abc/recompute',   requirePermission(PERMISSIONS.STOCKCHECK_ABC_MAN
 router.get('/cycle/candidates', requirePermission(PERMISSIONS.STOCKCHECK_ABC_VIEW), ctrl.cycleCandidates)
 router.get('/cycle/rules',      requirePermission(PERMISSIONS.STOCKCHECK_ABC_VIEW), ctrl.cycleRules)
 router.put('/cycle/rules',      requirePermission(PERMISSIONS.STOCKCHECK_ABC_MANAGE), validateBody(cycleRulesSchema), ctrl.saveCycleRules)
+router.get('/cycle/coverage',   requirePermission(PERMISSIONS.STOCKCHECK_ABC_VIEW), ctrl.coverage)
 router.get('/:id',           requirePermission(PERMISSIONS.STOCKCHECK_VIEW), ctrl.detail)
 router.post('/',             requirePermission(PERMISSIONS.STOCKCHECK_CREATE), validateBody(createSchema), ctrl.create)
 router.put('/:id/items',     requirePermission(PERMISSIONS.STOCKCHECK_UPDATE), validateBody(updateSchema),  ctrl.update)

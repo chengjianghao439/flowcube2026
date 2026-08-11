@@ -1,5 +1,6 @@
 const { successResponse } = require('../../utils/response')
 const { getOperationRequestStatus } = require('../../utils/operationRequest')
+const logger = require('../../utils/logger')
 
 /**
  * 查询一次关键操作的提交回执。
@@ -22,4 +23,20 @@ const requestStatus = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { requestStatus }
+/**
+ * 前端错误上报（P2-12 错误追踪）：GlobalErrorBoundary 捕获 render 错误时调用。
+ * 用 logger.error 记录 → 配置了 LOKI_URL 时自动进 Loki（与后端错误同一检索源）。
+ * 只记一条 warn 级日志，绝不抛错影响响应。
+ */
+const reportError = async (req, res, next) => {
+  try {
+    const { message, stack, componentStack, url } = req.body || {}
+    logger.error('[frontend-error] ' + String(message || '未知前端错误'),
+      { url, stack: String(stack || '').slice(0, 2000), componentStack: String(componentStack || '').slice(0, 2000) },
+      { module: 'frontend' },
+    )
+    return successResponse(res, null, '已记录')
+  } catch (e) { next(e) }
+}
+
+module.exports = { requestStatus, reportError }

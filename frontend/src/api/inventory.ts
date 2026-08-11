@@ -82,10 +82,17 @@ export interface ReplenishmentItem {
   reorderPoint: number
   targetStock: number
   suggestQty: number
+  adu: number
+  leadTimeDays: number
+  suggestReorderPoint: number
 }
 
 export const getReplenishmentApi = async (p: { page?: number; pageSize?: number; keyword?: string; warehouseId?: number | null }) =>
   apiClient.get<PaginatedData<ReplenishmentItem>>('/inventory/replenishment', { params: p })
+
+/** 保存补货策略（warehouseId=0 表示通用默认）；采纳「建议补货点」时调用 */
+export const saveStockPoliciesApi = async (items: Array<{ productId: number; warehouseId: number; safetyStock?: number; reorderPoint?: number; targetStock?: number | null }>) =>
+  apiClient.put<{ saved: number; deleted: number }>('/inventory/stock-policies', { items })
 
 // ─── 库龄与呆滞报表（文档 09）──────────────────────────────────────────────────
 

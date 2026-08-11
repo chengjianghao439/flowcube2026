@@ -12,8 +12,8 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { getAbcListApi, recomputeAbcApi, getCycleRulesApi, saveCycleRulesApi } from '@/api/stockcheck'
-import type { AbcClassRow, CycleRule } from '@/types/stockcheck'
+import { getAbcListApi, recomputeAbcApi, getCycleRulesApi, saveCycleRulesApi, getCoverageApi } from '@/api/stockcheck'
+import type { AbcClassRow, CycleRule, CoverageRow } from '@/types/stockcheck'
 import type { StatusTone } from '@/lib/statusTone'
 import type { TableColumn } from '@/types'
 
@@ -25,7 +25,7 @@ export default function AbcClassPage() {
   const canManage = can(PERMISSIONS.STOCKCHECK_ABC_MANAGE)
   const { data: warehouses } = useWarehousesActive()
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'abc' | 'rules'>('abc')
+  const [tab, setTab] = useState<'abc' | 'rules' | 'coverage'>('abc')
   // 0 = 全局默认（仅规则页有意义）；>0 = 具体仓库
   const [warehouseId, setWarehouseId] = useState(0)
   const [metricType, setMetricType] = useState('sold_value')
@@ -60,6 +60,37 @@ export default function AbcClassPage() {
   const patchDraft = (cls: string, patch: Partial<CycleRule>) =>
     setDraft(prev => prev.map(r => r.abcClass === cls ? { ...r, ...patch } : r))
 
+  // ── 盘点覆盖率看板（文档08）──
+  const coverageQ = useQuery({
+    queryKey: ['cycle-coverage'],
+    queryFn: () => getCoverageApi({}),
+    enabled: tab === 'coverage',
+  })
+  const coverageRows = (coverageQ.data ?? []).filter(r => warehouseId <= 0 || r.warehouseId === warehouseId)
+
+  const coverageColumns: TableColumn<CoverageRow>[] = [
+    { key: 'warehouseName', title: '仓库', width: 150 },
+    { key: 'abcClass', title: 'ABC 类别', width: 120, render: (_, r) => <SoftStatusLabel label={`${r.abcClass} 类`} tone={ABC_TONE[r.abcClass] ?? 'info'} /> },
+    { key: 'totalItems', title: '应盘商品', width: 100, align: 'right', render: (v) => <span className="tabular-nums">{Number(v)}</span> },
+    { key: 'dueItems', title: '到期未盘', width: 100, align: 'right', render: (_, r) => <span className={`tabular-nums ${r.dueItems > 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>{r.dueItems}</span> },
+    {
+      key: 'coverageRate',
+      title: '覆盖率',
+      width: 160,
+      render: (_, r) => {
+        const tone = r.coverageRate >= 80 ? 'success' : (r.coverageRate >= 50 ? 'warning' : 'danger')
+        return (
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-28 overflow-hidden rounded-full bg-muted">
+              <div className={`h-full rounded-full bg-${tone}`} style={{ width: `${Math.min(100, r.coverageRate)}%` }} />
+            </div>
+            <span className={`tabular-nums text-sm ${tone === 'success' ? 'text-emerald-600' : tone === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>{r.coverageRate}%</span>
+          </div>
+        )
+      },
+    },
+  ]
+
   const abcColumns: TableColumn<AbcClassRow>[] = [
     { key: 'abcClass', title: '类别', width: 130, render: (_, r) => <SoftStatusLabel label={`${r.abcClass} 类 · ${ABC_HINT[r.abcClass]}`} tone={ABC_TONE[r.abcClass] ?? 'info'} /> },
     { key: 'productName', title: '商品', render: (_, r) => <div><div>{r.productName}</div><div className="text-xs text-muted-foreground text-doc-code">{r.productCode}</div></div> },
@@ -86,6 +117,7 @@ export default function AbcClassPage() {
       <div className="flex gap-2">
         <Button variant={tab === 'abc' ? 'default' : 'outline'} size="sm" onClick={() => setTab('abc')}>ABC 分类结果</Button>
         <Button variant={tab === 'rules' ? 'default' : 'outline'} size="sm" onClick={() => setTab('rules')}>循环盘规则</Button>
+        <Button variant={tab === 'coverage' ? 'default' : 'outline'} size="sm" onClick={() => setTab('coverage')}>盘点覆盖率</Button>
       </div>
 
       {tab === 'abc' ? (
@@ -113,7 +145,7 @@ export default function AbcClassPage() {
             ? <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">请先选择一个仓库查看其 ABC 分类（ABC 按仓分类）</div>
             : <DataTable columns={abcColumns} data={abcQ.data ?? []} loading={abcQ.isLoading} />}
         </>
-      ) : (
+      ) : tab === 'rules' ? (
         <div className="space-y-4">
           <FilterCard>
             {warehouseSelect}
@@ -158,6 +190,14 @@ export default function AbcClassPage() {
               {saveRules.isPending ? '保存中...' : '保存规则'}
             </Button>
           </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <FilterCard>
+            {warehouseSelect}
+            <span className="text-sm text-muted-foreground">按「距上次盘点的天数超过该 ABC 类的周期」判定到期；覆盖率 = 已按期盘 / 应盘。</span>
+          </FilterCard>
+          <DataTable columns={coverageColumns} data={coverageRows} loading={coverageQ.isLoading} rowKey="rowKey" emptyText="暂无盘点覆盖数据（先运行一次 ABC 重算）" />
         </div>
       )}
     </div>

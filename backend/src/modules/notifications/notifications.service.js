@@ -57,6 +57,23 @@ async function buildNotifications(scopeWarehouseIds = null) {
        AND c.exp_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)${cSc.sql}`,
     [EXPIRY_WINDOW_DAYS, ...cSc.params],
   )
+  // 呆滞库存预警（文档09 Phase2）：某商品×仓仍有在库，且最后一次出库距今 > staleDays 天。
+  // 口径与 inventory.aging 一致（last_outbound 取 inventory_logs type=2 出库方向的最近一次），
+  // 无出库记录视为从未动销（也判呆滞）。提醒去呆滞报表确认处置。
+  const STALE_DAYS = Number(process.env.STALE_WARNING_DAYS || 90)
+  const [[{ staleCount }]] = await pool.query(
+    `SELECT COUNT(*) AS staleCount FROM (
+       SELECT c.product_id, c.warehouse_id
+       FROM inventory_containers c
+       LEFT JOIN (SELECT product_id, warehouse_id, MAX(created_at) AS last_out
+                  FROM inventory_logs WHERE type=2 GROUP BY product_id, warehouse_id) lo
+              ON lo.product_id=c.product_id AND lo.warehouse_id=c.warehouse_id
+       WHERE c.status=1 AND c.remaining_qty>0 AND c.deleted_at IS NULL${cSc.sql}
+       GROUP BY c.product_id, c.warehouse_id
+       HAVING MAX(lo.last_out) IS NULL OR DATEDIFF(NOW(), MAX(lo.last_out)) > ?
+     ) t`,
+    [...cSc.params, STALE_DAYS],
+  )
   const [[{ unpaidPayable }]] = await pool.query(
     `SELECT COUNT(*) AS unpaidPayable FROM payment_records WHERE type=1 AND status IN (1,2)`,
   )
@@ -209,6 +226,7 @@ async function buildNotifications(scopeWarehouseIds = null) {
   if (overdueReceivable > 0) pushNotification(items, seen, { code: 'OVERDUE_RECEIVABLE', category: 'finance', priority: 10, type: 'danger', icon: '🚨', text: `${overdueReceivable} 笔应收账款已逾期！`, path: '/payments/receivable' })
   if (lowStockCount > 0) pushNotification(items, seen, { code: 'LOW_STOCK', category: 'inventory', priority: 20, type: 'warning', icon: '⚠️', text: `${lowStockCount} 项库存低于补货点`, path: '/reports/replenishment' })
   if (expiringCount > 0) pushNotification(items, seen, { code: 'EXPIRING_STOCK', category: 'inventory', priority: 18, type: 'warning', icon: '⏳', text: `${expiringCount} 个批次库存 ${EXPIRY_WINDOW_DAYS} 天内到期，请尽快处理`, path: '/inventory?tab=containers' })
+  if (staleCount > 0) pushNotification(items, seen, { code: 'STALE_STOCK', category: 'inventory', priority: 17, type: 'warning', icon: '🏚️', text: `${staleCount} 项库存已 ${STALE_DAYS} 天未动销（呆滞），建议处置`, path: '/reports/inventory-aging' })
   if (pendingPurchase > 0) pushNotification(items, seen, { code: 'PENDING_PURCHASE', category: 'operations', priority: 30, type: 'info', icon: '📦', text: `${pendingPurchase} 笔采购单待处理`, path: '/purchase' })
   if (pendingSale > 0) pushNotification(items, seen, { code: 'PENDING_SALE', category: 'operations', priority: 30, type: 'info', icon: '🚚', text: `${pendingSale} 笔销售单待处理`, path: '/sale' })
   if (unpaidPayable > 0) pushNotification(items, seen, { code: 'UNPAID_PAYABLE', category: 'finance', priority: 12, type: 'danger', icon: '💳', text: `${unpaidPayable} 笔应付账款未清`, path: '/payments/payable' })
@@ -240,6 +258,7 @@ async function buildNotifications(scopeWarehouseIds = null) {
       overdueReceivable,
       pendingInbound,
       expiringCount,
+      staleCount,
       failedPrintJobs,
       inboundPrintFailures,
       overdueInboundPutaway,

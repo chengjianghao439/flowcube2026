@@ -132,6 +132,7 @@ const AcctInvoicesPage = lazy(() => import('@/pages/accounting/invoices'))
 const RefundsPage = lazy(() => import('@/pages/refunds'))
 const CreditOverridesPage = lazy(() => import('@/pages/credit-overrides'))
 const AcctPeriodsPage = lazy(() => import('@/pages/accounting/periods'))
+const AvgCostReconciliationPage = lazy(() => import('@/pages/reports/avg-cost-reconciliation'))
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
 const ReconciliationReceivablePage = lazy(() => import('@/pages/reports/reconciliation-receivable'))
 const ProfitAnalysisPage = lazy(() => import('@/pages/reports/profit-analysis'))
@@ -564,6 +565,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '报表', section: '经营分析', order: 20 },
+  },
+  {
+    path: '/reports/avg-cost-reconciliation',
+    title: '成本对账',
+    permission: PERMISSIONS.REPORT_VIEW,
+    component: AvgCostReconciliationPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '报表', section: '库存分析', order: 30 },
   },
   {
     path: '/reports/kpi',
