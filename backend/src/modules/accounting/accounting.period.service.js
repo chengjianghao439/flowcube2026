@@ -149,6 +149,19 @@ async function closingStatus(conn, period) {
   return { pl, year }
 }
 
+/** 结转快照写入（文档10 功能3）：把结转凭证各分录落 acct_closing_details，供追溯。 */
+async function writeClosingDetails(conn, companyId, period, closingType, voucherId, legs) {
+  for (const l of legs) {
+    const amount = engine.round2(l.amount)
+    if (amount <= 0) continue
+    await conn.query(
+      `INSERT INTO acct_closing_details (company_id, period, closing_type, closing_voucher_id, source_account_code, source_account_name, amount, direction)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [Number(companyId) || 1, period, closingType, voucherId, l.code, l.summary || l.code, amount, l.direction],
+    )
+  }
+}
+
 /** 生成/重生成某期间的结转凭证（12 月连带年结凭证）。期间已结账则拒。 */
 async function generateClosingVouchers(period, userId) {
   const p = assertPeriodFormat(period)
@@ -163,12 +176,20 @@ async function generateClosingVouchers(period, userId) {
     if (plSpec) {
       const r = await engine.upsertVoucher(conn, plSpec, accountMap, allocSeq, userId)
       results.push({ kind: '损益结转', ...r })
+      if (r.id) {
+        await conn.query('DELETE FROM acct_closing_details WHERE company_id=1 AND period=? AND closing_type=?', [p, 'pl_month'])
+        await writeClosingDetails(conn, 1, p, 'pl_month', r.id, plSpec.legs)
+      }
     }
     if (p.slice(4, 6) === '12') {
       const ySpec = await buildYearClosingSpec(conn, p)
       if (ySpec) {
         const r = await engine.upsertVoucher(conn, ySpec, accountMap, allocSeq, userId)
         results.push({ kind: '年终结转', ...r })
+        if (r.id) {
+          await conn.query('DELETE FROM acct_closing_details WHERE company_id=1 AND period=? AND closing_type=?', [p, 'year'])
+          await writeClosingDetails(conn, 1, p, 'year', r.id, ySpec.legs)
+        }
       }
     }
     const status = await closingStatus(conn, p)

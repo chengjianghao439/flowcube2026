@@ -31,6 +31,11 @@ const SOURCE_TYPES = {
   ASSET_ACQUIRE:   'asset_acquire',   // 固定资产购入入账（source_id = fixed_assets.id）
   ASSET_DEPRECIATION: 'asset_depreciation', // 折旧计提（source_id = fixed_asset_depr.id，台账行本身 UNIQUE(asset_id,period) 幂等）
   ASSET_DISPOSAL:  'asset_disposal',  // 固定资产处置/报废（source_id = fixed_asset_disposals.id）
+  // 工资社保个税（文档10 完整会计准则 · 功能4）
+  SALARY_ACCRUAL:  'salary_accrual',  // 工资计提（source_id = hr_payrolls.id）
+  SOCIAL_COMPANY:  'social_company',  // 单位社保公积金计提（source_id = hr_payrolls.id）
+  SOCIAL_PERSONAL: 'social_personal', // 代扣个人社保公积金（source_id = hr_payrolls.id）
+  SALARY_PAYMENT:  'salary_payment',  // 工资发放（source_id = hr_payrolls.id）
 }
 
 const SOURCE_TYPE_VALUES = Object.values(SOURCE_TYPES)
