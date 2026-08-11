@@ -213,6 +213,16 @@ const PERMISSIONS = {
   USER_RESET_PASSWORD: 'user.reset_password',
   USER_DELETE: 'user.delete',
 
+  // 部门组织 + 多级审批流引擎（P2-7）。部门 CRUD 与审批流配置都是系统级管理能力，
+  // 不 seed 给普通角色（同 purchase.requisition.approve 内控先例），由管理员手动授。
+  DEPARTMENT_VIEW: 'department.view',
+  DEPARTMENT_CREATE: 'department.create',
+  DEPARTMENT_UPDATE: 'department.update',
+  DEPARTMENT_DELETE: 'department.delete',
+  APPROVAL_FLOW_MANAGE: 'approval.flow.manage',
+  // 待办列表例外：审批待办是每人自己的任务，seed 给全部角色（见 202 迁移）。
+  APPROVAL_TASK_VIEW: 'approval.task.view',
+
   ROLE_VIEW: 'role.view',
   ROLE_ASSIGN: 'role.assign',
 

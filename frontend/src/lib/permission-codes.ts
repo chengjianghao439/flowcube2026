@@ -199,6 +199,14 @@ export const PERMISSIONS = {
   USER_RESET_PASSWORD: 'user.reset_password',
   USER_DELETE: 'user.delete',
 
+  // 部门组织 + 多级审批流引擎（P2-7）
+  DEPARTMENT_VIEW: 'department.view',
+  DEPARTMENT_CREATE: 'department.create',
+  DEPARTMENT_UPDATE: 'department.update',
+  DEPARTMENT_DELETE: 'department.delete',
+  APPROVAL_FLOW_MANAGE: 'approval.flow.manage',
+  APPROVAL_TASK_VIEW: 'approval.task.view',
+
   ROLE_VIEW: 'role.view',
   ROLE_ASSIGN: 'role.assign',
 
@@ -381,6 +389,12 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.USER_RESET_PASSWORD, label: '重置密码' },
       { code: PERMISSIONS.ROLE_VIEW, label: '查看角色权限' },
       { code: PERMISSIONS.ROLE_ASSIGN, label: '配置角色权限' },
+      { code: PERMISSIONS.DEPARTMENT_VIEW, label: '查看部门' },
+      { code: PERMISSIONS.DEPARTMENT_CREATE, label: '新建部门' },
+      { code: PERMISSIONS.DEPARTMENT_UPDATE, label: '编辑部门' },
+      { code: PERMISSIONS.DEPARTMENT_DELETE, label: '删除部门' },
+      { code: PERMISSIONS.APPROVAL_FLOW_MANAGE, label: '管理审批流配置' },
+      { code: PERMISSIONS.APPROVAL_TASK_VIEW, label: '查看待我审批' },
       { code: PERMISSIONS.SETTINGS_VIEW, label: '查看系统设置' },
       { code: PERMISSIONS.SETTINGS_UPDATE, label: '修改系统设置' },
       { code: PERMISSIONS.AUDIT_LOG_VIEW, label: '查看操作日志' },

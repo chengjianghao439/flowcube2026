@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { useCreateUser, useUpdateUser } from '@/hooks/useUsers'
+import { useDepartmentOptions } from '@/hooks/useDepartments'
 import type { SysUser } from '@/types/users'
 
 // 角色 1（管理员/超管）不能经此表单创建或改派：后端 users.routes schema 只放行 2-5，
@@ -36,10 +37,12 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
   const [password, setPassword] = useState('')
   const [realName, setRealName] = useState('')
   const [roleId, setRoleId] = useState(2)
+  const [departmentId, setDepartmentId] = useState<number | null>(null)
   const [isActive, setIsActive] = useState(true)
 
   const { mutate: createUser, isPending: creating, error: createError } = useCreateUser()
   const { mutate: updateUser, isPending: updating, error: updateError } = useUpdateUser()
+  const { data: departments } = useDepartmentOptions()
 
   const isPending = creating || updating
   const error = createError || updateError
@@ -48,12 +51,14 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
     if (editUser) {
       setRealName(editUser.realName)
       setRoleId(editUser.roleId)
+      setDepartmentId(editUser.departmentId ?? null)
       setIsActive(editUser.isActive)
     } else {
       setUsername('')
       setPassword('')
       setRealName('')
       setRoleId(2)
+      setDepartmentId(null)
       setIsActive(true)
     }
   }, [editUser, open])
@@ -63,14 +68,14 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
     if (isEdit && editUser) {
       // 编辑超管账号时不传 roleId（后端保持原角色）——超管不可经此表单改派
       const payload = isSuperAdmin(editUser.roleId)
-        ? { realName, isActive }
-        : { realName, roleId, isActive }
+        ? { realName, isActive, departmentId }
+        : { realName, roleId, isActive, departmentId }
       updateUser(
         { id: editUser.id, data: payload },
         { onSuccess: onClose },
       )
     } else {
-      createUser({ username, password, realName, roleId }, { onSuccess: onClose })
+      createUser({ username, password, realName, roleId, departmentId }, { onSuccess: onClose })
     }
   }
 
@@ -150,6 +155,23 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
                 </label>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="form-department">部门</Label>
+            <select
+              id="form-department"
+              value={departmentId ?? ''}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                setDepartmentId(e.target.value ? Number(e.target.value) : null)}
+              disabled={isPending}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">未分配</option>
+              {(departments ?? []).map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
           </div>
 
           {isEdit && (

@@ -20,6 +20,7 @@ import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import {
   getRequisitionApi, createRequisitionApi, updateRequisitionApi, submitRequisitionApi,
@@ -46,6 +47,49 @@ function Section({ title, children, actions }: { title: string; children: React.
         {actions}
       </div>
       {children}
+    </div>
+  )
+}
+
+/** 多级审批流进度时间线（引擎实例快照展示；无实例时后端不返回 approval，前端不渲染） */
+function ApprovalProgress({ approval }: { approval: NonNullable<import('@/types/purchase-requisition').PurchaseRequisition['approval']> }) {
+  const INSTANCE = {
+    1: { label: '审批中', tone: 'warning' as const },
+    2: { label: '已通过', tone: 'success' as const },
+    3: { label: '已驳回', tone: 'danger' as const },
+    4: { label: '已撤销', tone: 'draft' as const },
+  }
+  const TASK = {
+    1: { label: '待审批', tone: 'warning' as const },
+    2: { label: '已通过', tone: 'success' as const },
+    3: { label: '已驳回', tone: 'danger' as const },
+  }
+  const meta = INSTANCE[approval.status as keyof typeof INSTANCE] ?? { label: '未知', tone: 'draft' as const }
+
+  return (
+    <div className="card-base p-5">
+      <div className="mb-3 flex items-center justify-between border-b border-border/50 pb-2">
+        <h3 className="text-section-title">审批进度</h3>
+        <SoftStatusLabel label={meta.label} tone={meta.tone} />
+      </div>
+      <div className="space-y-2">
+        {(approval.tasks ?? []).map((t) => {
+          const tm = TASK[t.status as keyof typeof TASK] ?? { label: '未知', tone: 'draft' as const }
+          const isCurrent = approval.status === 1 && t.status === 1 && t.stepOrder === approval.currentStep
+          return (
+            <div key={t.stepOrder} className={`flex items-center gap-3 rounded-md border px-3 py-2 ${isCurrent ? 'border-warning/40 bg-warning/5' : 'border-border/50'}`}>
+              <span className="text-sm font-medium">第 {t.stepOrder} 级</span>
+              <SoftStatusLabel label={tm.label} tone={tm.tone} />
+              <span className="text-sm text-muted-foreground">
+                {t.approverName ? `审批人 ${t.approverName}` : '待处理'}
+                {t.comment ? ` · ${t.comment}` : ''}
+              </span>
+              {t.actionAt && <span className="ml-auto text-xs text-muted-foreground">{formatDisplayDateTime(t.actionAt)}</span>}
+              {isCurrent && <span className="ml-auto text-xs text-warning">当前</span>}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -241,6 +285,10 @@ export default function RequisitionFormPage() {
 
       {detail?.status === 4 && detail.rejectReason && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">驳回原因：{detail.rejectReason}</div>
+      )}
+
+      {detail?.approval && (
+        <ApprovalProgress approval={detail.approval} />
       )}
 
       <Section title="基本信息">

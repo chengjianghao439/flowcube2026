@@ -111,6 +111,9 @@ const SaleReturnFormPage = lazy(() => import('@/pages/returns/sale/form'))
 const PayablePage = lazy(() => import('@/pages/payments/payable'))
 const ReceivablePage = lazy(() => import('@/pages/payments/receivable'))
 const UsersPage = lazy(() => import('@/pages/users'))
+const DepartmentsPage = lazy(() => import('@/pages/departments'))
+const ApprovalFlowsPage = lazy(() => import('@/pages/approvals/flows'))
+const ApprovalPendingPage = lazy(() => import('@/pages/approvals/pending'))
 const PermissionsPage = lazy(() => import('@/pages/permissions'))
 const SettingsPage = lazy(() => import('@/pages/settings'))
 const BarcodePrintQueryPage = lazy(() => import('@/pages/settings/barcode-print-query'))
@@ -646,6 +649,33 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
 
   // ── 系统 ──────────────────────────────────────────────
+  {
+    path: '/approvals/pending',
+    title: '待我审批',
+    permission: PERMISSIONS.APPROVAL_TASK_VIEW,
+    component: ApprovalPendingPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '系统', section: '审批中心', order: 5 },
+  },
+  {
+    path: '/approvals/flows',
+    title: '审批流配置',
+    permission: PERMISSIONS.APPROVAL_FLOW_MANAGE,
+    component: ApprovalFlowsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '系统', section: '审批中心', order: 15 },
+  },
+  {
+    path: '/departments',
+    title: '部门管理',
+    permission: PERMISSIONS.DEPARTMENT_VIEW,
+    component: DepartmentsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '系统', section: '用户与权限', order: 5 },
+  },
   {
     path: '/users',
     title: '用户管理',

@@ -6,12 +6,14 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
+const approvalEngine = require('../../engine/approvalEngine')
 
 /**
- * 采购请购单（PR → 一级审批 → 转生成采购单）。
+ * 采购请购单（PR → 审批 → 转生成采购单）。
  *
- * 审批范式完全复用费用报销 expenseClaim（transition 骨架、审批人≠申请人内控、明细整替、单号日流水）。
- * 纯需求单据：不碰库存、不进 payment_records；实际供应商与价格在转单(convert)时定。
+ * 审批范式：有匹配多级审批流时走 engine/approvalEngine（可配置节点序列、金额分级）；
+ * 无匹配流程时退回单级审批（transition 骨架，照 expenseClaim）。纯需求单据：不碰库存、不进
+ * payment_records；实际供应商与价格在转单(convert)时定。
  * 状态：1草稿 2待审批 3已批准 4已驳回 5已取消 6已转采购；一律走 assertStatusAction + compareAndSetStatus。
  */
 
@@ -133,22 +135,6 @@ async function update(id, { title, warehouseId, expectedDate, items, remark }, o
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-/** 状态推进公共骨架：锁行 → 校验动作合法 → CAS 改状态 → 附加写入（照 expenseClaim.transition） */
-async function transition(id, action, extraSql = null, extraParams = []) {
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-    const row = await lockStatusRow(conn, {
-      table: 'purchase_requisitions', id, columns: 'id, requisition_no, status, applicant_id', entityName: '请购单',
-    })
-    const rule = assertStatusAction('purchaseRequisition', action, row.status)
-    await compareAndSetStatus(conn, { table: 'purchase_requisitions', id, fromStatus: rule.from, toStatus: rule.to, entityName: '请购单' })
-    if (extraSql) await conn.query(extraSql, [...extraParams, id])
-    await conn.commit()
-    return { id: Number(id), status: rule.to, requisitionNo: row.requisition_no }
-  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
-}
-
 async function assertOwner(id, operator) {
   const [[row]] = await pool.query('SELECT applicant_id FROM purchase_requisitions WHERE id=? AND deleted_at IS NULL', [id])
   if (!row) throw new AppError('请购单不存在', 404)
@@ -156,42 +142,150 @@ async function assertOwner(id, operator) {
   if (Number(row.applicant_id) !== Number(operator?.operatorId)) throw new AppError('只能操作本人提交的请购单', 403)
 }
 
+/**
+ * 提交审批：草稿 → 待审批。
+ * 若配置了匹配金额区间的多级审批流 → 同事务建审批实例（请购保持待审批2，后续 approve/reject 走引擎）；
+ * 无匹配流程 → 原单级审批（行为不变）。
+ */
 async function submit(id, operator) {
   await assertOwner(id, operator)
-  const [[row]] = await pool.query('SELECT estimated_amount, (SELECT COUNT(*) FROM purchase_requisition_items WHERE requisition_id=?) AS n FROM purchase_requisitions WHERE id=? AND deleted_at IS NULL', [id, id])
-  if (!row) throw new AppError('请购单不存在', 404)
-  if (Number(row.n) === 0) throw new AppError('请购单无明细，请先填写请购商品', 400)
-  return transition(id, 'submit', 'UPDATE purchase_requisitions SET submitted_at=NOW() WHERE id=?')
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const row = await lockStatusRow(conn, {
+      table: 'purchase_requisitions', id,
+      columns: 'id, requisition_no, status, applicant_id, applicant_name, estimated_amount, warehouse_id',
+      entityName: '请购单',
+    })
+    assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
+    const [[{ n }]] = await conn.query('SELECT COUNT(*) AS n FROM purchase_requisition_items WHERE requisition_id=?', [id])
+    if (Number(n) === 0) throw new AppError('请购单无明细，请先填写请购商品', 400)
+    const rule = assertStatusAction('purchaseRequisition', 'submit', row.status)
+    await compareAndSetStatus(conn, { table: 'purchase_requisitions', id, fromStatus: rule.from, toStatus: rule.to, entityName: '请购单' })
+    await conn.query('UPDATE purchase_requisitions SET submitted_at=NOW() WHERE id=?', [id])
+
+    const inst = await approvalEngine.startApproval(conn, {
+      bizType: 'purchase_requisition',
+      bizId: id,
+      amount: Number(row.estimated_amount),
+      applicantId: Number(row.applicant_id),
+      applicantName: row.applicant_name,
+    })
+    await conn.commit()
+    return { id: Number(id), status: rule.to, requisitionNo: row.requisition_no, multiLevel: !!inst, instanceId: inst?.instanceId ?? null, flowName: inst?.flowName ?? null, totalSteps: inst?.totalSteps ?? null }
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
 async function withdraw(id, operator) {
   await assertOwner(id, operator)
-  return transition(id, 'withdraw', 'UPDATE purchase_requisitions SET submitted_at=NULL WHERE id=?')
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const row = await lockStatusRow(conn, {
+      table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id', entityName: '请购单',
+    })
+    assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
+    // 有活跃审批实例 → 撤销实例（同事务）
+    const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'purchase_requisition', bizId: id })
+    if (active) await approvalEngine.cancelInstance(conn, { instanceId: active.instance.id, operator })
+    const rule = assertStatusAction('purchaseRequisition', 'withdraw', row.status)
+    await compareAndSetStatus(conn, { table: 'purchase_requisitions', id, fromStatus: rule.from, toStatus: rule.to, entityName: '请购单' })
+    await conn.query('UPDATE purchase_requisitions SET submitted_at=NULL WHERE id=?', [id])
+    await conn.commit()
+    return { id: Number(id), status: rule.to, requisitionNo: row.requisition_no }
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
 async function cancel(id, operator) {
   await assertOwner(id, operator)
-  return transition(id, 'cancel')
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const row = await lockStatusRow(conn, {
+      table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id', entityName: '请购单',
+    })
+    assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
+    const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'purchase_requisition', bizId: id })
+    if (active) await approvalEngine.cancelInstance(conn, { instanceId: active.instance.id, operator })
+    const rule = assertStatusAction('purchaseRequisition', 'cancel', row.status)
+    await compareAndSetStatus(conn, { table: 'purchase_requisitions', id, fromStatus: rule.from, toStatus: rule.to, entityName: '请购单' })
+    await conn.commit()
+    return { id: Number(id), status: rule.to, requisitionNo: row.requisition_no }
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-/** 审批通过。审批人不能是申请人本人（一级审批唯一内控，照 expenseClaim.approve）。 */
+/**
+ * 审批通过。
+ * 多级路径：有活跃审批实例 → approveStep 推进当前节点；实例最终通过时才把请购 2→3 已批准；
+ *          实例仍在审批中 → 请购保持待审批2（下一级审批继续调本接口推进）。
+ * 单级路径：无实例 → 原逻辑直接 2→3。
+ * 两种路径都校验「审批人不能是申请人本人」（引擎内另有节点审批人硬校验）。
+ */
 async function approve(id, operator) {
-  const [[row]] = await pool.query('SELECT applicant_id FROM purchase_requisitions WHERE id=? AND deleted_at IS NULL', [id])
-  if (!row) throw new AppError('请购单不存在', 404)
-  if (Number(row.applicant_id) === Number(operator.operatorId)) throw new AppError('不能审批自己提交的请购单，请由他人审批', 403)
-  return transition(id, 'approve',
-    'UPDATE purchase_requisitions SET approved_by=?,approved_by_name=?,approved_at=NOW(),reject_reason=NULL WHERE id=?',
-    [operator.operatorId, operator.operatorName])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const row = await lockStatusRow(conn, {
+      table: 'purchase_requisitions', id,
+      columns: 'id, status, applicant_id, warehouse_id, estimated_amount', entityName: '请购单',
+    })
+    assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
+    if (Number(row.applicant_id) === Number(operator.operatorId)) {
+      throw new AppError('不能审批自己提交的请购单，请由他人审批', 403)
+    }
+    const rule = assertStatusAction('purchaseRequisition', 'approve', row.status)
+
+    const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'purchase_requisition', bizId: id })
+    if (active) {
+      // 多级路径：推进当前节点
+      const r = await approvalEngine.approveStep(conn, { instanceId: active.instance.id, operator, comment: null })
+      // 实例最终通过 → 请购 2→3；仍在审批中 → 请购保持 2
+      if (Number(r.status) === approvalEngine.INSTANCE_STATUS.APPROVED) {
+        await compareAndSetStatus(conn, { table: 'purchase_requisitions', id, fromStatus: rule.from, toStatus: rule.to, entityName: '请购单' })
+        await conn.query(
+          'UPDATE purchase_requisitions SET approved_by=?,approved_by_name=?,approved_at=NOW(),reject_reason=NULL WHERE id=?',
+          [operator.operatorId, operator.operatorName, id],
+        )
+      }
+      await conn.commit()
+      return { id: Number(id), status: Number(r.status) === approvalEngine.INSTANCE_STATUS.APPROVED ? rule.to : row.status, requisitionNo: row.requisition_no, multiLevel: true, approvalStatus: r.status, currentStep: r.currentStep, totalSteps: r.totalSteps }
+    }
+
+    // 单级路径（原逻辑）
+    await compareAndSetStatus(conn, { table: 'purchase_requisitions', id, fromStatus: rule.from, toStatus: rule.to, entityName: '请购单' })
+    await conn.query(
+      'UPDATE purchase_requisitions SET approved_by=?,approved_by_name=?,approved_at=NOW(),reject_reason=NULL WHERE id=?',
+      [operator.operatorId, operator.operatorName, id],
+    )
+    await conn.commit()
+    return { id: Number(id), status: rule.to, requisitionNo: row.requisition_no, multiLevel: false }
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
 async function reject(id, { reason }, operator) {
-  const [[row]] = await pool.query('SELECT applicant_id FROM purchase_requisitions WHERE id=? AND deleted_at IS NULL', [id])
-  if (!row) throw new AppError('请购单不存在', 404)
-  if (Number(row.applicant_id) === Number(operator.operatorId)) throw new AppError('不能驳回自己提交的请购单', 403)
-  if (!String(reason || '').trim()) throw new AppError('请填写驳回原因', 400)
-  return transition(id, 'reject',
-    'UPDATE purchase_requisitions SET approved_by=?,approved_by_name=?,approved_at=NOW(),reject_reason=? WHERE id=?',
-    [operator.operatorId, operator.operatorName, String(reason).trim()])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const row = await lockStatusRow(conn, {
+      table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id', entityName: '请购单',
+    })
+    assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
+    if (Number(row.applicant_id) === Number(operator.operatorId)) throw new AppError('不能驳回自己提交的请购单', 403)
+    if (!String(reason || '').trim()) throw new AppError('请填写驳回原因', 400)
+    const rule = assertStatusAction('purchaseRequisition', 'reject', row.status)
+
+    const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'purchase_requisition', bizId: id })
+    if (active) {
+      await approvalEngine.rejectStep(conn, { instanceId: active.instance.id, operator, comment: reason })
+    }
+    await compareAndSetStatus(conn, { table: 'purchase_requisitions', id, fromStatus: rule.from, toStatus: rule.to, entityName: '请购单' })
+    await conn.query(
+      'UPDATE purchase_requisitions SET approved_by=?,approved_by_name=?,approved_at=NOW(),reject_reason=? WHERE id=?',
+      [operator.operatorId, operator.operatorName, String(reason).trim(), id],
+    )
+    await conn.commit()
+    return { id: Number(id), status: rule.to, requisitionNo: row.requisition_no, multiLevel: !!active }
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
 /**
@@ -330,6 +424,35 @@ async function findById(id, scopeWarehouseIds = null) {
   if (!row) throw new AppError('请购单不存在', 404)
   assertInScope(scopeWarehouseIds, row.warehouse_id, '请购单')
   const [items] = await pool.query('SELECT * FROM purchase_requisition_items WHERE requisition_id=? ORDER BY id ASC', [id])
+
+  // 审批进度（多级审批流实例；无则 null，前端走单级展示）
+  const conn = await pool.getConnection()
+  let approval = null
+  try {
+    const got = await approvalEngine.getLatestInstanceByBiz(conn, { bizType: 'purchase_requisition', bizId: id })
+    if (got) {
+      const { instance, tasks } = got
+      approval = {
+        instanceId: Number(instance.id),
+        status: Number(instance.status),
+        applicantId: Number(instance.applicant_id),
+        applicantName: instance.applicant_name,
+        amount: Number(instance.amount),
+        currentStep: Number(instance.current_step),
+        rejectReason: instance.reject_reason,
+        finishedAt: instance.finished_at,
+        createdAt: instance.created_at,
+        tasks: tasks.map(t => ({
+          stepOrder: Number(t.step_order),
+          status: Number(t.status),
+          approverName: t.approver_name,
+          comment: t.comment,
+          actionAt: t.action_at,
+        })),
+      }
+    }
+  } finally { conn.release() }
+
   return {
     ...fmtRequisition(row),
     items: items.map(i => ({
@@ -346,6 +469,7 @@ async function findById(id, scopeWarehouseIds = null) {
       convertedQty: Number(i.converted_qty),
       remark: i.remark,
     })),
+    approval,
   }
 }
 

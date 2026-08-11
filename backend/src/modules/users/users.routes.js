@@ -28,12 +28,14 @@ const createSchema = z.object({
   password: z.string().min(6, '密码至少 6 位').max(100),
   realName: z.string().min(1, '姓名不能为空').max(50),
   roleId: NON_ADMIN_ROLE,
+  departmentId: z.number().int().positive().nullable().optional(),
 })
 
 const updateSchema = z.object({
   realName: z.string().min(1, '姓名不能为空').max(50),
   roleId: NON_ADMIN_ROLE.optional(),
   isActive: z.boolean(),
+  departmentId: z.number().int().positive().nullable().optional(),
 })
 
 const resetPasswordSchema = z.object({

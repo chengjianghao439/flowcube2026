@@ -101,6 +101,8 @@ app.use('/api', apiLimiter)
 
 app.use('/api/auth',       require('./modules/auth/auth.routes'))
 app.use('/api/users',      require('./modules/users/users.routes'))
+app.use('/api/departments', require('./modules/departments/departments.routes'))
+app.use('/api/approvals',   require('./modules/approvals/approvals.routes'))
 app.use('/api/warehouses', require('./modules/warehouses/warehouses.routes'))
 app.use('/api/suppliers',  require('./modules/suppliers/suppliers.routes'))
 app.use('/api/products',   require('./modules/products/products.routes'))

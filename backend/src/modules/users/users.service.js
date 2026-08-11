@@ -16,11 +16,13 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
   const like = `%${keyword}%`
 
   const [rows] = await pool.query(
-    `SELECT id, username, real_name, role_id, role_name, is_active, created_at
-     FROM sys_users
-     WHERE deleted_at IS NULL
-       AND (username LIKE ? OR real_name LIKE ?)
-     ORDER BY created_at DESC
+    `SELECT u.id, u.username, u.real_name, u.role_id, u.role_name, u.is_active,
+            u.department_id, d.name AS department_name, u.created_at
+     FROM sys_users u
+     LEFT JOIN sys_departments d ON d.id = u.department_id AND d.deleted_at IS NULL
+     WHERE u.deleted_at IS NULL
+       AND (u.username LIKE ? OR u.real_name LIKE ?)
+     ORDER BY u.created_at DESC
      LIMIT ? OFFSET ?`,
     [like, like, pageSize, offset],
   )
@@ -39,6 +41,8 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
       roleId: u.role_id,
       roleName: u.role_name,
       isActive: !!u.is_active,
+      departmentId: u.department_id != null ? Number(u.department_id) : null,
+      departmentName: u.department_name || null,
       createdAt: u.created_at,
     })),
     pagination: { page, pageSize, total },
@@ -59,8 +63,11 @@ async function listOptions(currentUserId = null) {
 
 async function findById(id) {
   const [rows] = await pool.query(
-    `SELECT id, username, real_name, role_id, role_name, is_active
-     FROM sys_users WHERE id = ? AND deleted_at IS NULL`,
+    `SELECT u.id, u.username, u.real_name, u.role_id, u.role_name, u.is_active,
+            u.department_id, d.name AS department_name
+     FROM sys_users u
+     LEFT JOIN sys_departments d ON d.id = u.department_id AND d.deleted_at IS NULL
+     WHERE u.id = ? AND u.deleted_at IS NULL`,
     [id],
   )
   const user = rows[0]
@@ -72,6 +79,8 @@ async function findById(id) {
     roleId: user.role_id,
     roleName: user.role_name,
     isActive: !!user.is_active,
+    departmentId: user.department_id != null ? Number(user.department_id) : null,
+    departmentName: user.department_name || null,
   }
 }
 
@@ -96,7 +105,7 @@ async function resolveRoleName(roleId) {
   return ROLE_NAMES[roleId] ?? '普通用户'
 }
 
-async function create({ username, password, realName, roleId }, operator = null) {
+async function create({ username, password, realName, roleId, departmentId = null }, operator = null) {
   assertCanAssignRole(operator, roleId)
   const [exists] = await pool.query(
     'SELECT id FROM sys_users WHERE username = ? AND deleted_at IS NULL',
@@ -106,27 +115,35 @@ async function create({ username, password, realName, roleId }, operator = null)
 
   const roleName = await resolveRoleName(roleId)
   const hashed = await bcrypt.hash(password, 10)
+  if (departmentId) await assertDepartmentExists(departmentId)
 
   const [result] = await pool.query(
-    `INSERT INTO sys_users (username, password, real_name, role_id, role_name)
-     VALUES (?, ?, ?, ?, ?)`,
-    [username, hashed, realName, roleId, roleName],
+    `INSERT INTO sys_users (username, password, real_name, role_id, role_name, department_id)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [username, hashed, realName, roleId, roleName, departmentId || null],
   )
   return { id: result.insertId }
 }
 
-async function update(id, { realName, roleId, isActive }, operator = null) {
+async function update(id, { realName, roleId, isActive, departmentId }, operator = null) {
   assertCanAssignRole(operator, roleId)
   const user = await findById(id)
   // roleId 可省略（编辑超管账号时不传）；省略则保持原角色不动
   const finalRoleId = roleId !== undefined ? roleId : user.roleId
   const roleName = roleId !== undefined ? await resolveRoleName(roleId) : user.roleName
+  const finalDeptId = departmentId !== undefined ? departmentId : (user.departmentId ?? null)
+  if (finalDeptId) await assertDepartmentExists(finalDeptId)
 
   await pool.query(
-    `UPDATE sys_users SET real_name = ?, role_id = ?, role_name = ?, is_active = ?
+    `UPDATE sys_users SET real_name = ?, role_id = ?, role_name = ?, is_active = ?, department_id = ?
      WHERE id = ? AND deleted_at IS NULL`,
-    [realName, finalRoleId, roleName, isActive ? 1 : 0, id],
+    [realName, finalRoleId, roleName, isActive ? 1 : 0, finalDeptId || null, id],
   )
+}
+
+async function assertDepartmentExists(departmentId) {
+  const [[d]] = await pool.query('SELECT id FROM sys_departments WHERE id=? AND deleted_at IS NULL', [Number(departmentId)])
+  if (!d) throw new AppError('部门不存在', 400)
 }
 
 async function resetPassword(id, newPassword) {

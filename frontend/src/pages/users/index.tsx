@@ -64,6 +64,12 @@ export default function UsersPage() {
       ),
     },
     {
+      key: 'departmentName',
+      title: '部门',
+      width: 120,
+      render: (v) => (v ? String(v) : <span className="text-muted-foreground">—</span>),
+    },
+    {
       key: 'isActive',
       title: '状态',
       width: 80,

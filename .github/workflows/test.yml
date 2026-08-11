@@ -206,6 +206,9 @@ jobs:
       - name: 冒烟测试 — 采购审批环节（审计 4.7）
         run: npm run smoke:purchase-approval
 
+      - name: 冒烟测试 — 多级审批流引擎（部门+审批流配置，P2-7）
+        run: npm run smoke:approval-flow
+
       - name: 集成测试 — 库存主链路一致性（独立测试库）
         run: npm run test:integration
         env:
