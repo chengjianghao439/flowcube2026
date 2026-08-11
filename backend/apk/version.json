@@ -1,7 +1,7 @@
 {
-  "version": "0.4.70",
-  "versionCode": 70,
+  "version": "0.4.71",
+  "versionCode": 71,
   "filename": "app-release.apk",
-  "releaseNote": "- **部门管理**：可在系统设置中维护组织部门树与部门负责人，用户可归属到部门",
-  "publishedAt": "2026-08-11T10:23:50.473Z"
+  "releaseNote": "- **超额放行申请**：客户授信不足时可发起申请走审批流，审批通过后占库自动放行",
+  "publishedAt": "2026-08-11T11:16:15.722Z"
 }
