@@ -131,6 +131,15 @@ consolidation.get('/balance-sheet', requirePermission(PERMISSIONS.ACCOUNTING_LED
 consolidation.get('/income',        requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.consolidationIncome)
 router.use('/consolidation', consolidation)
 
+// ── 替代报税数据 /api/accounting/tax ──────────────────────────────────
+const tax = Router()
+tax.get('/vat',                requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.taxVat)
+tax.get('/income',             requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.taxIncome)
+tax.get('/adjustments',        requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), ctrl.taxAdjustmentList)
+tax.post('/adjustments',       requirePermission(PERMISSIONS.ACCOUNTING_PERIOD_MANAGE), ctrl.taxAdjustmentUpsert)
+tax.delete('/adjustments/:id', requirePermission(PERMISSIONS.ACCOUNTING_PERIOD_MANAGE), ctrl.taxAdjustmentRemove)
+router.use('/tax', tax)
+
 // ── 期末结转 / 期间锁定 /api/accounting/periods ────────────────────────
 const periods = Router()
 periods.get('/',                    requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW),   ctrl.periodList)

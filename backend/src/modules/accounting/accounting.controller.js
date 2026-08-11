@@ -153,6 +153,24 @@ const consolidationIncome = async (req, res, next) => {
   try { return successResponse(res, await consolidationSvc.getConsolidatedIncomeStatement({ groupId: +req.query.groupId || +req.query.companyId || 1, period: req.query.period }), '查询成功') } catch (e) { next(e) }
 }
 
+// ── 替代报税数据（文档10 功能5） ──────────────────────────────────────
+const taxSvc = require('./accounting.tax.service')
+const taxVat = async (req, res, next) => {
+  try { return successResponse(res, await taxSvc.getVatReport({ companyId: +req.query.companyId || 1, period: req.query.period }), '查询成功') } catch (e) { next(e) }
+}
+const taxIncome = async (req, res, next) => {
+  try { return successResponse(res, await taxSvc.getIncomeTaxReport({ companyId: +req.query.companyId || 1, period: req.query.period, taxRate: req.query.taxRate ? +req.query.taxRate : undefined }), '查询成功') } catch (e) { next(e) }
+}
+const taxAdjustmentList = async (req, res, next) => {
+  try { return successResponse(res, await taxSvc.listAdjustments({ companyId: +req.query.companyId || 1, period: req.query.period || '', taxType: req.query.taxType || '' }), '查询成功') } catch (e) { next(e) }
+}
+const taxAdjustmentUpsert = async (req, res, next) => {
+  try { return successResponse(res, await taxSvc.upsertAdjustment({ ...req.body, companyId: +req.body.companyId || 1 }, req.user?.userId), '已保存') } catch (e) { next(e) }
+}
+const taxAdjustmentRemove = async (req, res, next) => {
+  try { return successResponse(res, await taxSvc.removeAdjustment(+req.params.id, +req.query.companyId || 1), '已删除') } catch (e) { next(e) }
+}
+
 module.exports = {
   accountTree, accountFlat, accountDetail, accountCreate, accountUpdate, accountRemove, accountToggle,
   voucherList, voucherDetail, voucherGenerate, voucherCreateManual, voucherRemove, voucherReverse,
@@ -162,4 +180,5 @@ module.exports = {
   periodList, periodGenerateClosing, periodClose, periodReopen,
   companyList, companyCreate, companyUpdate,
   consolidationBalanceSheet, consolidationIncome,
+  taxVat, taxIncome, taxAdjustmentList, taxAdjustmentUpsert, taxAdjustmentRemove,
 }

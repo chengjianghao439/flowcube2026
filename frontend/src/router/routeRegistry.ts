@@ -133,6 +133,7 @@ const RefundsPage = lazy(() => import('@/pages/refunds'))
 const CreditOverridesPage = lazy(() => import('@/pages/credit-overrides'))
 const AcctPeriodsPage = lazy(() => import('@/pages/accounting/periods'))
 const AcctConsolidationPage = lazy(() => import('@/pages/accounting/consolidation'))
+const AcctTaxPage = lazy(() => import('@/pages/accounting/tax'))
 const FixedAssetsPage = lazy(() => import('@/pages/fixed-assets'))
 const AvgCostReconciliationPage = lazy(() => import('@/pages/reports/avg-cost-reconciliation'))
 const ReconciliationPayablePage = lazy(() => import('@/pages/reports/reconciliation-payable'))
@@ -565,6 +566,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '会计', section: '合并报表', order: 80 },
+  },
+  {
+    path: '/accounting/tax',
+    title: '报税数据',
+    permission: PERMISSIONS.ACCOUNTING_LEDGER_VIEW,
+    component: AcctTaxPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '发票税务', order: 90 },
   },
 
   // ── 报表 ──────────────────────────────────────────────

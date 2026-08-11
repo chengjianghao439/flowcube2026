@@ -132,6 +132,9 @@ jobs:
       - name: 单元测试 — 会计科目映射一致性（映射↔seed↔常量，纯静态，无需 DB）
         run: npm run test:accounting
 
+      - name: 单元测试 — 个税累计预扣法（纯函数，无需 DB）
+        run: npm run test:hr-tax
+
       - name: 迁移文件编号校验（历史重复/缺号 warn；新增撞号编号会失败，审计 4.10）
         run: npm --prefix backend run migrate -- --check-gaps
 
