@@ -4,7 +4,6 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
-import type { StatusTone } from '@/lib/statusTone'
 import { useDisposalList } from '@/hooks/useDisposal'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { usePermission } from '@/hooks/usePermission'
@@ -15,18 +14,7 @@ import type { TableColumn } from '@/types'
 import DisposalDetailDialog from './components/DisposalDetailDialog'
 import CreateDisposalDialog from './components/CreateDisposalDialog'
 import DisposalQueryDialog, { type DisposalQueryValues } from './DisposalQueryDialog'
-
-const STATUS_TONE: Record<number, StatusTone> = {
-  1: 'draft',   // 草稿
-  2: 'active',  // 待审批
-  3: 'warning', // 已批准（待处置）
-  4: 'success', // 已处置
-  5: 'danger',  // 已驳回
-  6: 'danger',  // 已取消
-}
-const STATUS_LABEL: Record<number, string> = {
-  1: '草稿', 2: '待审批', 3: '已批准', 4: '已处置', 5: '已驳回', 6: '已取消',
-}
+import { DISPOSAL_STATUS_TONE, DISPOSAL_STATUS_LABEL } from './constants'
 
 export default function DisposalPage() {
   const [keyword, setKeyword] = useState('')
@@ -77,7 +65,7 @@ export default function DisposalPage() {
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABEL[Number(statusFilter)] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
+    statusFilter && { key: 'status', label: `状态：${DISPOSAL_STATUS_LABEL[Number(statusFilter)] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
     warehouseFilter && { key: 'warehouse', label: `仓库：${whName || warehouseFilter}`, onRemove: () => { setWarehouseFilter(null); setWarehouseName('') } },
     startDate && { key: 'startDate', label: `创建起始：${startDate}`, onRemove: () => setStartDate('') },
     endDate && { key: 'endDate', label: `创建截止：${endDate}`, onRemove: () => setEndDate('') },
@@ -88,7 +76,7 @@ export default function DisposalPage() {
     { key: 'warehouseName', title: '仓库', width: 120 },
     {
       key: 'status', title: '状态', width: 100,
-      render: (v, row) => <SoftStatusLabel label={(row as DisposalOrder).statusName} tone={STATUS_TONE[v as number] ?? 'draft'} />,
+      render: (v, row) => <SoftStatusLabel label={(row as DisposalOrder).statusName} tone={DISPOSAL_STATUS_TONE[v as number] ?? 'draft'} />,
     },
     {
       key: 'totalValue', title: '处置价值', width: 120,

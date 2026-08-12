@@ -4,8 +4,6 @@
  * 添加打印机：仅在极序 Flow 桌面端从本机系统已安装列表中选择（与系统「打印机」设置一致）。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { payloadClient as apiClient } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -30,6 +28,18 @@ import DataTable from '@/components/shared/DataTable'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import type { TableColumn } from '@/types'
+import {
+  usePrinters,
+  useCreatePrinter,
+  useDeletePrinter,
+  useTogglePrinterStatus,
+  useUpdatePrinterClientAlias,
+  type Printer,
+} from '@/hooks/usePrinters'
+import {
+  usePrinterBindings, useBindPrinter, useUnbindPrinter,
+  type BindingMap,
+} from '@/hooks/usePrinterBindings'
 
 /** 打印机硬件分类（与「绑定用途」独立：用途决定业务走哪台机；类型用于列表展示与无绑定时的兜底调度） */
 const TYPE_LABEL: Record<number, string> = {
@@ -49,29 +59,6 @@ const BIND_TYPES = [
 ] as const
 
 type BindType = (typeof BIND_TYPES)[number]['key']
-
-interface Printer {
-  id: number
-  name: string
-  code: string
-  type: number
-  typeName: string
-  description: string
-  status: number
-  warehouseId?: number | null
-  source?: string
-  clientId?: string
-  clientAliasName?: string | null
-  clientHostname?: string | null
-  clientDisplayName?: string | null
-  createdAt: string
-}
-
-type BindingMap = Record<string, { print_type: string; printer_code: string; printer_name: string }>
-type PrinterBindingsPayload = {
-  defaultBindings: BindingMap
-  routes: Array<Record<string, unknown>>
-}
 
 interface BindDialogProps {
   printer: Printer
@@ -141,7 +128,6 @@ function sourceBadgeLabel(source?: string) {
 }
 
 export default function PrintersPage() {
-  const qc = useQueryClient()
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [systemList, setSystemList] = useState<SystemPrinterRow[]>([])
   const [listLoading, setListLoading] = useState(false)
@@ -155,10 +141,7 @@ export default function PrintersPage() {
   const canUseSystemPrinters =
     IS_ELECTRON_DESKTOP && typeof window.flowcubeDesktop?.getSystemPrinters === 'function'
 
-  const { data: printers = [], isLoading } = useQuery<Printer[]>({
-    queryKey: ['printers'],
-    queryFn: () => apiClient.get<Printer[]>('/printers'),
-  })
+  const { data: printers = [], isLoading } = usePrinters()
 
   const existingCodes = useMemo(() => new Set(printers.map(p => p.code)), [printers])
   /** 与 RAW 打印侧规范化一致，避免「已添加」与系统枚举因 Unicode 不一致漏判 */
@@ -167,13 +150,7 @@ export default function PrintersPage() {
     [printers],
   )
 
-  const { data: bindings = {} } = useQuery<BindingMap>({
-    queryKey: ['printer-bindings'],
-    queryFn: async () => {
-      const payload = await apiClient.get<PrinterBindingsPayload>('/printer-bindings')
-      return payload?.defaultBindings ?? {}
-    },
-  })
+  const { data: bindings = {} } = usePrinterBindings()
 
   const loadSystemPrinters = useCallback(async () => {
     if (!canUseSystemPrinters) {
@@ -215,51 +192,14 @@ export default function PrintersPage() {
     }
   }, [showAddDialog, canUseSystemPrinters, loadSystemPrinters])
 
-  const addPrinter = useMutation({
-    mutationFn: async (payload: { name: string; code: string; type: number; description: string | null }) => {
-      await apiClient.post('/printers', { ...payload, source: 'local_desktop' }, { skipGlobalError: true })
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['printers'] })
-      toast.success('已添加')
-      setShowAddDialog(false)
-      setSelectedName('')
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.message || '添加失败'),
-  })
+  const addPrinter = useCreatePrinter()
 
-  const del = useMutation({
-    mutationFn: (id: number) => apiClient.delete(`/printers/${id}`, { skipGlobalError: true }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['printers'] })
-      toast.success('已删除')
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.message || '删除失败'),
-  })
+  const del = useDeletePrinter()
 
-  const toggleStatus = useMutation({
-    mutationFn: (p: Printer) => apiClient.put(`/printers/${p.id}`, { ...p, status: p.status === 1 ? 0 : 1 }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['printers'] }),
-  })
+  const toggleStatus = useTogglePrinterStatus()
 
-  const bindMutation = useMutation({
-    mutationFn: ({ type, printer }: { type: BindType; printer: Printer }) =>
-      apiClient.put(`/printer-bindings/${type}`, { printerId: printer.id }, { skipGlobalError: true }),
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ['printer-bindings'] })
-      toast.success(`已绑定 ${vars.printer.code} → ${BIND_TYPES.find(t => t.key === vars.type)?.label}`)
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.message || '绑定失败'),
-  })
-
-  const unbindMutation = useMutation({
-    mutationFn: (type: BindType) => apiClient.delete(`/printer-bindings/${encodeURIComponent(type)}`, { skipGlobalError: true }),
-    onSuccess: (_, type) => {
-      qc.invalidateQueries({ queryKey: ['printer-bindings'] })
-      toast.success(`已解除「${BIND_TYPES.find(t => t.key === type)?.label}」绑定`)
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.message || '解除绑定失败'),
-  })
+  const bindMutation = useBindPrinter()
+  const unbindMutation = useUnbindPrinter()
 
   const bindBusy = bindMutation.isPending || unbindMutation.isPending
 
@@ -267,21 +207,19 @@ export default function PrintersPage() {
     const row = bindings[type]
     const isBoundHere = row?.printer_code === printer.code
     if (isBoundHere) {
-      unbindMutation.mutate(type)
+      unbindMutation.mutate(type, {
+        onSuccess: () => toast.success(`已解除「${BIND_TYPES.find(t => t.key === type)?.label}」绑定`),
+        onError: (e: any) => toast.error(e?.response?.data?.message || '解除绑定失败'),
+      })
     } else {
-      bindMutation.mutate({ type, printer })
+      bindMutation.mutate({ type, printerId: printer.id }, {
+        onSuccess: () => toast.success(`已绑定 ${printer.code} → ${BIND_TYPES.find(t => t.key === type)?.label}`),
+        onError: (e: any) => toast.error(e?.response?.data?.message || '绑定失败'),
+      })
     }
   }
 
-  const aliasMutation = useMutation({
-    mutationFn: ({ clientId, aliasName }: { clientId: string; aliasName: string }) =>
-      apiClient.put(`/printers/clients/${clientId}/alias`, { aliasName }, { skipGlobalError: true }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['printers'] })
-      toast.success('设备名称已更新')
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.message || '更新设备名称失败'),
-  })
+  const aliasMutation = useUpdatePrinterClientAlias()
 
   function getBoundLabels(code: string): string {
     return BIND_TYPES.filter(t => bindings[t.key]?.printer_code === code).map(t => t.label).join(' / ')
@@ -294,7 +232,10 @@ export default function PrintersPage() {
   function saveAlias(p: Printer) {
     if (!p.clientId) return
     const aliasName = (aliasDraft[p.clientId] ?? p.clientAliasName ?? '').trim()
-    aliasMutation.mutate({ clientId: p.clientId, aliasName })
+    aliasMutation.mutate({ clientId: p.clientId, aliasName }, {
+      onSuccess: () => toast.success('设备名称已更新'),
+      onError: (e: any) => toast.error(e?.response?.data?.message || '更新设备名称失败'),
+    })
   }
 
   async function confirmAddFromSystem() {
@@ -325,7 +266,14 @@ export default function PrintersPage() {
       type: addType,
       description,
       clientId: clientInfo?.clientId ?? null,
-    } as { name: string; code: string; type: number; description: string | null; clientId?: string | null })
+    } as { name: string; code: string; type: number; description: string | null; clientId?: string | null }, {
+      onSuccess: () => {
+        toast.success('已添加')
+        setShowAddDialog(false)
+        setSelectedName('')
+      },
+      onError: (e: any) => toast.error(e?.response?.data?.message || '添加失败'),
+    })
   }
 
   function openAddDialog() {
@@ -525,7 +473,10 @@ export default function PrintersPage() {
         loading={del.isPending}
         onConfirm={() => {
           if (!deleteTarget) return
-          del.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) })
+          del.mutate(deleteTarget.id, {
+            onSuccess: () => { toast.success('已删除'); setDeleteTarget(null) },
+            onError: (e: any) => toast.error(e?.response?.data?.message || '删除失败'),
+          })
         }}
         onCancel={() => setDeleteTarget(null)}
       />

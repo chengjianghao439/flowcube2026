@@ -16,9 +16,16 @@ async function loadPlatformPolyfills(): Promise<void> {
 
 // ── Capacitor PDA：API 基址（bundled）、ZPL 打印桥、路由入口 ─────────────────
 async function boot(): Promise<void> {
-  if (Capacitor.isNativePlatform()) {
+  // PDA 判据：真机（Capacitor 原生 WebView）或 dev:pda / build:pda（VITE_CAPACITOR=1）。
+  // 仅靠 Capacitor.isNativePlatform() 会漏掉浏览器里的 dev:pda——Vite 在浏览器跑时
+  // 该函数返回 false，导致启动停在 ERP 首页（#/）而不是 #/pda，也就是「点启动 PDA 打开的是系统前端」。
+  const isPdaBuild = IS_CAPACITOR_PDA
+  const isNative = Capacitor.isNativePlatform()
+  if (isNative) {
     applyPdaApiBaseFromStorage()
     installPdaGlobals()
+  }
+  if (isPdaBuild || isNative) {
     const inHash = (window.location.hash.replace(/^#/, '').split('?')[0] || '/').trim()
     if (!inHash.startsWith('/pda')) {
       const prefix = window.location.href.split('#')[0]

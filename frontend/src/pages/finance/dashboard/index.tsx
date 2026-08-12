@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart,
 } from 'recharts'
+import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowUpDown } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,7 @@ import { getFinanceDashboardApi } from '@/api/finance'
 import { getAgingApi } from '@/api/payments'
 import type { AgingSide } from '@/api/payments'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
+import { StatTile } from '@/components/dashboard/StatTile'
 
 const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const wan = (n: number) => Math.abs(n) >= 10000 ? `${(n / 10000).toFixed(n >= 1e6 ? 0 : 1)}万` : String(Math.round(n))
@@ -42,29 +44,6 @@ const PIE_COLORS = [
 // 账龄桶的短标签（X 轴用）与严重度配色
 const BUCKET_SHORT: Record<string, string> = {
   current: '未到期', d1_30: '1–30', d31_60: '31–60', d61_90: '61–90', d90p: '90天+',
-}
-
-function StatCard({ label, value, hint, tone, sub }: {
-  label: string; value: string; hint?: string
-  tone?: 'default' | 'success' | 'danger' | 'warning'
-  sub?: React.ReactNode
-}) {
-  const valueClass =
-    tone === 'success' ? 'text-success' :
-    tone === 'danger' ? 'text-destructive' :
-    tone === 'warning' ? 'text-warning' : 'text-foreground'
-  const accent =
-    tone === 'success' ? 'before:bg-success' :
-    tone === 'danger' ? 'before:bg-destructive' :
-    tone === 'warning' ? 'before:bg-warning' : 'before:bg-primary'
-  return (
-    <div className={`card-base relative overflow-hidden p-4 pl-5 before:absolute before:inset-y-0 before:left-0 before:w-1 ${accent}`}>
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className={`mt-1 truncate tabular-nums text-2xl font-bold ${valueClass}`} title={value}>{value}</p>
-      {sub}
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  )
 }
 
 /** 占比条：费用构成用，不引图表库，用宽度表达构成 */
@@ -225,10 +204,11 @@ export default function FinanceDashboardPage() {
         <>
           {/* 顶部 KPI */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="账户余额合计" value={money(data.summary.totalBalance)} hint={`${data.summary.accountCount} 个启用账户`} />
-            <StatCard label="区间收入" value={money(data.summary.inAmount)} tone="success" hint="收款 + 余额调整入账" />
-            <StatCard label="区间支出" value={money(data.summary.outAmount)} tone="danger" hint="付款 + 费用报销" />
-            <StatCard
+            <StatTile icon={Wallet} label="账户余额合计" value={money(data.summary.totalBalance)} hint={`${data.summary.accountCount} 个启用账户`} />
+            <StatTile icon={ArrowDownLeft} label="区间收入" value={money(data.summary.inAmount)} tone="success" hint="收款 + 余额调整入账" />
+            <StatTile icon={ArrowUpRight} label="区间支出" value={money(data.summary.outAmount)} tone="danger" hint="付款 + 费用报销" />
+            <StatTile
+              icon={ArrowUpDown}
               label="区间净现金流"
               value={money(data.summary.netAmount)}
               tone={data.summary.netAmount >= 0 ? 'success' : 'danger'}

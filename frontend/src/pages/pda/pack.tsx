@@ -25,6 +25,7 @@ import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { triggerPrintPoll } from '@/lib/printQueue'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
+import { PdaTaskState } from '@/components/pda/PdaTaskState'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 
 function readPositiveId(value: string | undefined | null): number {
@@ -38,45 +39,6 @@ function packageLabelTraceMessage(job?: PackagePrintJob | null): string {
   if (clientOnline) return '箱贴已加入打印队列'
   if (hint?.code === 'client_not_bound') return '箱贴已入队，打印机未绑定客户端'
   return '箱贴已入队，打印客户端离线'
-}
-
-function PdaTaskState({
-  title,
-  description,
-  actionText,
-  onAction,
-  secondaryText,
-  onSecondary,
-}: {
-  title: string
-  description: string
-  actionText: string
-  onAction: () => void
-  secondaryText?: string
-  onSecondary?: () => void
-}) {
-  return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <PdaHeader title={title} onBack={onAction} />
-      <div className="flex-1 px-4 py-10">
-        <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
-          <p className="mb-4 text-5xl">⚠️</p>
-          <h2 className="text-lg font-bold text-foreground">{title}</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
-          <div className="mt-6 flex gap-3">
-            {secondaryText && onSecondary ? (
-              <Button variant="outline" className="flex-1" onClick={onSecondary}>
-                {secondaryText}
-              </Button>
-            ) : null}
-            <Button className="flex-1" onClick={onAction}>
-              {actionText}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) {

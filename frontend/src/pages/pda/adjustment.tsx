@@ -8,13 +8,13 @@
  */
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import {
-  getPendingAdjustmentsApi, getAdjustmentDetailApi,
+  getAdjustmentDetailApi,
   confirmAdjustmentPackageVoidApi, confirmAdjustmentContainerReturnApi,
   type AdjustmentPackageVoid, type AdjustmentContainerReturn,
 } from '@/api/warehouse-tasks'
-import { payloadClient as apiClient } from '@/api/client'
+import { getLocationByCodeApi } from '@/api/locations'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
@@ -22,20 +22,15 @@ import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
 import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import { usePdaPendingAdjustments, usePdaAdjustmentDetail } from '@/hooks/usePdaAdjustment'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
 import { parseBarcode } from '@/utils/barcode'
 
-interface LocationInfo { id: number; code: string }
-
 // ── 列表：待处理的改单确认任务池 ──────────────────────────────────────────────
 function AdjustmentListPage() {
   const navigate = useNavigate()
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['pda-adjustments-pending'],
-    queryFn: () => getPendingAdjustmentsApi().then(r => r ?? []),
-    refetchInterval: 15_000,
-  })
+  const { data, isLoading, refetch } = usePdaPendingAdjustments()
   const tasks = data ?? []
 
   return (
@@ -79,11 +74,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
   const [scanning, setScanning] = useState(false)
   const { flash, ok, err, warn } = usePdaFeedback()
 
-  const { data: detail, isLoading, refetch } = useQuery({
-    queryKey: ['pda-adjustment-detail', adjustmentId],
-    queryFn: () => getAdjustmentDetailApi(adjustmentId),
-    enabled: adjustmentId > 0,
-  })
+  const { data: detail, isLoading, refetch } = usePdaAdjustmentDetail(adjustmentId)
 
   const pendingReturns = (detail?.items ?? []).flatMap(i => i.containerReturns.filter(r => r.status === 1))
   const pendingVoids = (detail?.items ?? []).flatMap(i => i.packageVoids.filter(v => v.status === 1))
@@ -174,7 +165,8 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
     if (returnAction.submitBlocked) { err(returnAction.blockedReason || '当前不可提交'); return }
     setScanning(true)
     try {
-      const loc = await apiClient.get<LocationInfo>(`/locations/code/${encodeURIComponent(code)}`)
+      const loc = await getLocationByCodeApi(code)
+      if (!loc) { err('库位不存在'); return }
       const submitted = await returnAction.run(
         (requestKey) => confirmAdjustmentContainerReturnApi(target.id, loc.id, requestKey),
         { returnId: target.id },

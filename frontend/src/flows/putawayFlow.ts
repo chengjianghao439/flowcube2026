@@ -9,12 +9,9 @@
 import type { FlowDef } from '@/hooks/usePdaFlow'
 import { parseBarcode } from '@/utils/barcode'
 import { payloadClient as apiClient } from '@/api/client'
+import { getLocationByCodeApi } from '@/api/locations'
 import { getContainerByBarcodeApi } from '@/api/inventory'
 import { putawayInboundApi } from '@/api/inbound-tasks'
-interface LocationInfo {
-  id: number
-  code: string
-}
 
 interface PutawaySuggestion {
   strategy: 'same_product' | 'empty_location'
@@ -110,7 +107,8 @@ export function makePutawayFlow(
           const parsed = parseBarcode(trimmed)
           if (parsed.type !== 'location') return { ok: false, message: '扫描货架条码' }
           if (!ctx.containerId) return { ok: false, message: '扫描库存条码' }
-          const loc = await apiClient.get<LocationInfo>(`/locations/code/${encodeURIComponent(trimmed)}`)
+          const loc = await getLocationByCodeApi(trimmed)
+          if (!loc) return { ok: false, message: '库位不存在' }
 
           // 偏离推荐库位：同一库位需连扫两次确认（第一次提示，第二次放行并留痕）
           const suggestions = ctx.suggestedLocations ?? null

@@ -21,3 +21,9 @@ export async function updateLocationApi(id: number, data: UpdateLocationParams, 
 export async function deleteLocationApi(id: number, config?: Parameters<typeof apiClient.delete>[1]): Promise<void> {
   await apiClient.delete(`/locations/${id}`, config)
 }
+
+/** 按库位条码查库位（PDA 扫码库位确认用），查不到返回 null */
+export async function getLocationByCodeApi(code: string, config?: Parameters<typeof apiClient.get>[1]): Promise<{ id: number; code: string } | null> {
+  const res = await apiClient.get<{ id: number; code: string }>(`/locations/code/${encodeURIComponent(code)}`, config)
+  return res ?? null
+}

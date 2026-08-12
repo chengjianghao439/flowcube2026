@@ -1,34 +1,32 @@
 import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getRolesApi } from '@/api/settings'
 import { toast } from '@/lib/toast'
-import { payloadClient as client } from '@/api/client'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { usePermission } from '@/hooks/usePermission'
+import { useRoles, useRolePermissions, useSaveRolePermissions } from '@/hooks/usePermissions'
 import { PERMISSIONS, PERMISSION_GROUPS } from '@/lib/permission-codes'
 
 export default function PermissionsPage() {
   const { can } = usePermission()
   const isAdmin = can(PERMISSIONS.ROLE_ASSIGN)
-  const qc = useQueryClient()
   const [selectedRole, setSelectedRole] = useState<number>(2)
   const [perms, setPerms] = useState<Set<string>>(new Set())
 
-  const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r || []) })
-  const { data: rolePerms, isLoading } = useQuery({ queryKey: ['role-perms', selectedRole], queryFn: () => client.get<string[]>(`/roles/${selectedRole}/permissions`).then(r => r || []), enabled: !!selectedRole })
+  const { data: roles } = useRoles()
+  const { data: rolePerms, isLoading } = useRolePermissions(selectedRole)
 
   useEffect(() => { if (rolePerms) setPerms(new Set(rolePerms)) }, [rolePerms])
 
-  const save = useMutation({
-    mutationFn: () => client.put(`/roles/${selectedRole}/permissions`, { permissions: Array.from(perms) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['role-perms'] }); toast.success('权限已更新，用户下次登录生效') }
-  })
+  const save = useSaveRolePermissions()
 
   const toggle = (code: string) => {
     if (!isAdmin) return
     setPerms(p => { const n = new Set(p); if (n.has(code)) n.delete(code); else n.add(code); return n })
   }
+
+  const handleSave = () => save.mutate({ roleId: selectedRole, permissions: Array.from(perms) }, {
+    onSuccess: () => toast.success('权限已更新，用户下次登录生效'),
+  })
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -64,7 +62,7 @@ export default function PermissionsPage() {
           {isAdmin && (
             <div className="pt-2 border-t flex items-center justify-between">
               <p className="text-xs text-muted-foreground">已选 {perms.size} 项权限</p>
-              <Button onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? '保存中...' : '保存权限配置'}</Button>
+              <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中...' : '保存权限配置'}</Button>
             </div>
           )}
           {!isAdmin && <p className="text-sm text-muted-foreground pt-2 border-t">仅管理员可修改权限</p>}

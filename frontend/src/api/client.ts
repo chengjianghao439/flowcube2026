@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { AxiosError, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { Capacitor } from '@capacitor/core'
+import { IS_CAPACITOR_PDA } from '@/lib/platform'
 import { useAuthStore } from '@/store/authStore'
 import { useCompanyStore } from '@/store/companyStore'
 import { toast } from '@/lib/toast'
@@ -121,7 +122,10 @@ function originFromAxiosConfig(config: InternalAxiosRequestConfig): string | nul
 async function tryErpApiFallbackAndRetry(config: InternalAxiosRequestConfig): Promise<boolean> {
   if (config._erpApiFallbackTried) return false
   config._erpApiFallbackTried = true
-  if (isNativePdaNoViteLive()) return false
+  // PDA 场景（真机 APK 或 dev:pda / build:pda 的 Vite live）不走 ERP 候选地址回退：
+  // PDA 的 API 基址由 pdaRuntime 统一管理（真机用 resolveHealthyPdaApiOrigin，Vite live 走相对 /api 代理），
+  // 让 ERP fallback 改 baseURL 会把心跳/请求引到外部地址（生产/localhost:3000），脱离 Vite 代理后本机不可达 → 断网。
+  if (IS_CAPACITOR_PDA) return false
   if (hasUserConfiguredApiOrigin()) return false
 
   const failedOrigin = originFromAxiosConfig(config)

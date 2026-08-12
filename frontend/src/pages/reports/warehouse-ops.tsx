@@ -4,34 +4,18 @@
  *
  * 一屏看清仓库全貌：今日核心指标、人员效率、流程瓶颈、每小时趋势、最新错误
  */
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Layers, BarChart3, AlertTriangle, Truck, PackageOpen, Undo2 } from 'lucide-react'
 import { getWarehouseOpsApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { ReportPanel } from '@/components/shared/ReportPanel'
+import { StatTile } from '@/components/dashboard/StatTile'
 import { Button } from '@/components/ui/button'
 import { useWorkspaceStore } from '@/store/workspaceStore'
-import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { OpsOperator, FlowBottleneck } from '@/api/reports'
-
-// ── 数字卡片 ────────────────────────────────────────────────────────────────
-function KpiCard({ icon, label, value, sub, danger }: {
-  icon: React.ReactNode; label: string; value: string | number; sub?: string; danger?: boolean
-}) {
-  return (
-    <div className={`rounded-lg border p-4 ${danger ? 'border-red-200 bg-red-50' : 'border-border bg-card'}`}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-xl">{icon}</span>
-        <p className="text-helper">{label}</p>
-      </div>
-      <p className={`text-3xl font-bold ${danger ? 'text-red-600' : 'text-foreground'}`}>{value}</p>
-      {sub && <p className="text-helper mt-0.5">{sub}</p>}
-    </div>
-  )
-}
 
 // ── 每小时趋势图 ────────────────────────────────────────────────────────────
 function HourlyChart({ data }: { data: { hour: string; count: number }[] }) {
@@ -84,12 +68,10 @@ function FlowBar({ items }: { items: FlowBottleneck[] }) {
 export default function WarehouseOpsPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
-  const isActiveTab = useActiveWorkspaceTab()
-  const warehouseOpsQ = useQuery({
+  const warehouseOpsQ = usePollingReport({
     queryKey: ['warehouse-ops'],
     queryFn:  () => getWarehouseOpsApi(),
-    enabled: isActiveTab,
-    refetchInterval: isActiveTab ? 60_000 : false,   // 每分钟自动刷新
+    intervalMs: 60_000,   // 每分钟自动刷新
   })
 
   const { data, isLoading, isError, error, dataUpdatedAt, refetch } = warehouseOpsQ
@@ -141,12 +123,12 @@ export default function WarehouseOpsPage() {
 
         {/* 今日核心指标 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard icon={<Truck className="size-5" />} label="今日出库单数" value={s?.shippedToday ?? 0} sub="已完成出库" />
-          <KpiCard icon={<Layers className="size-5" />} label="正在拣货" value={s?.pickingNow ?? 0} sub="进行中任务" />
-          <KpiCard icon={<PackageOpen className="size-5" />} label="今日入库" value={s?.inboundToday ?? 0} sub="已完成收货" />
-          <KpiCard icon={<BarChart3 className="size-5" />} label="今日扫码" value={s?.scanCount ?? 0} sub={`拣货 ${s?.pickQty ?? 0} 件`} />
-          <KpiCard icon={<AlertTriangle className="size-5" />} label="扫码错误" value={s?.errorCount ?? 0} sub={`错误率 ${s?.errorRate}`} danger={(s?.errorCount ?? 0) > 0} />
-          <KpiCard icon={<Undo2 className="size-5" />} label="撤销次数" value={s?.undoCount ?? 0} sub="今日" danger={(s?.undoCount ?? 0) > 5} />
+          <StatTile icon={Truck} label="今日出库单数" value={s?.shippedToday ?? 0} hint="已完成出库" tone="success" />
+          <StatTile icon={Layers} label="正在拣货" value={s?.pickingNow ?? 0} hint="进行中任务" />
+          <StatTile icon={PackageOpen} label="今日入库" value={s?.inboundToday ?? 0} hint="已完成收货" />
+          <StatTile icon={BarChart3} label="今日扫码" value={s?.scanCount ?? 0} hint={`拣货 ${s?.pickQty ?? 0} 件`} />
+          <StatTile icon={AlertTriangle} label="扫码错误" value={s?.errorCount ?? 0} hint={`错误率 ${s?.errorRate}`} accent={(s?.errorCount ?? 0) > 0} />
+          <StatTile icon={Undo2} label="撤销次数" value={s?.undoCount ?? 0} hint="今日" accent={(s?.undoCount ?? 0) > 5} />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
-import { payloadClient as client } from '@/api/client'
 import { getWarehousesApi } from '@/api/warehouses'
+import { useUserWarehouseScope, useSaveUserWarehouseScope } from '@/hooks/useUserWarehouseScope'
 
 interface Props { open: boolean; onClose: () => void; userId: number | null; userName?: string }
 
@@ -13,7 +13,6 @@ interface Props { open: boolean; onClose: () => void; userId: number | null; use
  * 仓库下拉、库存/销售/仓库任务列表只显示 scope 内仓库的数据。
  */
 export default function WarehouseScopeDialog({ open, onClose, userId, userName }: Props) {
-  const qc = useQueryClient()
   const [selected, setSelected] = useState<Set<number>>(new Set())
 
   const { data: warehouses } = useQuery({
@@ -21,23 +20,12 @@ export default function WarehouseScopeDialog({ open, onClose, userId, userName }
     queryFn: () => getWarehousesApi({ page: 1, pageSize: 999 }),
     enabled: open,
   })
-  const { data: scope, isLoading } = useQuery({
-    queryKey: ['user-warehouse-scope', userId],
-    queryFn: () => client.get<Array<{ warehouseId: number; warehouseName: string }>>(`/users/${userId}/warehouse-scope`),
-    enabled: open && !!userId,
-  })
+  const { data: scope, isLoading } = useUserWarehouseScope(userId, open)
   useEffect(() => {
     if (scope) setSelected(new Set(scope.map(s => s.warehouseId)))
   }, [scope])
 
-  const save = useMutation({
-    mutationFn: () => client.put(`/users/${userId}/warehouse-scope`, { warehouseIds: [...selected] }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['user-warehouse-scope', userId] })
-      toast.success(selected.size ? '仓库数据权限已更新（限定仓库生效）' : '已清空限定，该用户不限仓')
-      onClose()
-    },
-  })
+  const save = useSaveUserWarehouseScope(userId)
 
   const list = warehouses?.list ?? []
 
@@ -67,7 +55,12 @@ export default function WarehouseScopeDialog({ open, onClose, userId, userName }
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button disabled={save.isPending} onClick={() => save.mutate()}>{save.isPending ? '保存中…' : '保存'}</Button>
+          <Button disabled={save.isPending} onClick={() => save.mutate([...selected], {
+            onSuccess: () => {
+              toast.success(selected.size ? '仓库数据权限已更新（限定仓库生效）' : '已清空限定，该用户不限仓')
+              onClose()
+            },
+          })}>{save.isPending ? '保存中…' : '保存'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

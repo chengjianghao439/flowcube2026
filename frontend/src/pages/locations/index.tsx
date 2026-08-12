@@ -3,25 +3,20 @@
  * 路由：/locations
  */
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
-import { toast } from '@/lib/toast'
-import PageHeader from '@/components/shared/PageHeader'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { getLocationsApi, createLocationApi, updateLocationApi, deleteLocationApi } from '@/api/locations'
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import { LOCATION_STATUS_OPTIONS, type Location, type CreateLocationParams } from '@/types/locations'
-import DataTable from '@/components/shared/DataTable'
-import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { Button } from '@/components/ui/button'
 import LocationQueryDialog, { type LocationQueryValues } from './LocationQueryDialog'
 import type { TableColumn } from '@/types'
+import BaseCrudPage from '@/components/shared/BaseCrudPage'
 
 const STATUS_LABEL: Record<number, string> = { 1: '启用', 2: '停用' }
 
@@ -40,60 +35,26 @@ function buildCode(zone: string, aisle: string, rack: string, level: string, pos
 }
 
 export default function LocationsPage() {
-  const qc = useQueryClient()
   const [keyword, setKeyword]         = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [zoneFilter, setZoneFilter]     = useState('')
   const [queryOpen, setQueryOpen]     = useState(false)
-  const [dialogOpen, setDialogOpen]   = useState(false)
-  const [editTarget, setEditTarget]   = useState<Location | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Location | null>(null)
   const [form, setForm]               = useState<CreateLocationParams>(EMPTY_FORM)
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['locations', keyword, warehouseFilter, statusFilter, zoneFilter],
-    queryFn: () => getLocationsApi({
-      keyword,
-      warehouseId: warehouseFilter ?? undefined,
-      status: statusFilter || undefined,
-      zone: zoneFilter || undefined,
-      pageSize: 99999,
-    }),
-  })
 
   const { data: whData } = useQuery({
     queryKey: ['warehouses-simple'],
     queryFn: () => getWarehousesActiveApi().then(r => r ?? []),
   })
 
-  function invalidate() { qc.invalidateQueries({ queryKey: ['locations'] }) }
-
-  const createMut = useMutation({
-    mutationFn: () => createLocationApi(form, { skipGlobalError: true }),
-    onSuccess: () => { toast.success('库位已创建'); invalidate(); closeDialog() },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '创建失败'),
-  })
-
-  const updateMut = useMutation({
-    mutationFn: () => updateLocationApi(editTarget!.id, form, { skipGlobalError: true }),
-    onSuccess: () => { toast.success('已更新'); invalidate(); closeDialog() },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '更新失败'),
-  })
-
-  const deleteMut = useMutation({
-    mutationFn: (id: number) => deleteLocationApi(id, { skipGlobalError: true }),
-    onSuccess: () => { toast.success('已删除'); invalidate() },
-    onError: (e: unknown) => toast.error((e as Error).message || '删除失败'),
-  })
-
-  function openCreate() { setEditTarget(null); setForm(EMPTY_FORM); setDialogOpen(true) }
-  function openEdit(loc: Location) {
-    setEditTarget(loc)
-    setForm({ warehouseId: loc.warehouseId, code: loc.code, zone: loc.zone ?? '', aisle: loc.aisle ?? '', rack: loc.rack ?? '', level: loc.level ?? '', position: loc.position ?? '', capacity: loc.capacity, status: loc.status, remark: loc.remark ?? '' })
-    setDialogOpen(true)
+  // 打开弹窗时回填表单（新建=默认值，编辑=行数据）
+  function handleOpen(editing: Location | null) {
+    if (editing) {
+      setForm({ warehouseId: editing.warehouseId, code: editing.code, zone: editing.zone ?? '', aisle: editing.aisle ?? '', rack: editing.rack ?? '', level: editing.level ?? '', position: editing.position ?? '', capacity: editing.capacity, status: editing.status, remark: editing.remark ?? '' })
+    } else {
+      setForm(EMPTY_FORM)
+    }
   }
-  function closeDialog() { setDialogOpen(false); setEditTarget(null); setForm(EMPTY_FORM) }
 
   /**
    * 分段字段（区/巷/架/层/位）变化时自动重建编码。
@@ -144,62 +105,52 @@ export default function LocationsPage() {
       render: v => <SoftStatusLabel label={STATUS_LABEL[v as number]} tone={activeTone(Number(v) === 1)} /> },
     { key: 'containerCount', title: '容器数', width: 80,
       render: v => (v as number | null) ?? 0 },
-    {
-      key: 'id', title: '操作', width: 120,
-      render: (_, row) => (
-        <TableActionsMenu
-          primaryLabel="编辑"
-          primaryVariant="outline"
-          onPrimaryClick={() => openEdit(row)}
-          items={[
-            { label: '删除', destructive: true, onClick: () => setDeleteTarget(row) },
-          ]}
-        />
-      ),
-    },
   ]
 
   return (
-    <div className="space-y-5">
-      <PageHeader
+    <>
+      <BaseCrudPage<Location>
         title="库位管理"
         description="管理仓库内的存储库位"
-        actions={
-          <>
-            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            <Button onClick={openCreate}>+ 新建库位</Button>
-          </>
-        }
-      />
-
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-              {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-        </div>
-      )}
-
-      <DataTable
         columns={columns}
-        data={data?.list ?? []}
-        loading={isLoading}
-        rowKey="id"
-      />
-
-      <Dialog open={dialogOpen} onOpenChange={v => !v && closeDialog()}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editTarget ? '编辑库位' : '新建库位'}</DialogTitle></DialogHeader>
+        queryKey={['locations', keyword, warehouseFilter, statusFilter, zoneFilter]}
+        listQuery={() => getLocationsApi({
+          keyword,
+          warehouseId: warehouseFilter ?? undefined,
+          status: statusFilter || undefined,
+          zone: zoneFilter || undefined,
+          pageSize: 99999,
+        })}
+        deleteApi={(id) => deleteLocationApi(id, { skipGlobalError: true })}
+        deleteMessage="仅未被库存容器引用的库位允许删除；若仍在使用，请改为编辑后停用。"
+        createLabel="+ 新建库位"
+        saveSuccessMessage={(editing) => editing ? '库位已保存' : '库位已创建'}
+        formWidthClass="max-w-md"
+        onOpen={handleOpen}
+        canSubmit={() => !!form.warehouseId && !!form.code}
+        headerActions={
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+        }
+        renderToolbar={
+          chips.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {chips.map(c => (
+                <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                  {c.label}
+                  <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+            </div>
+          ) : null
+        }
+        renderForm={(editing) => (
           <div className="space-y-3 py-2">
             <div>
               <Label>仓库</Label>
-              <Select value={String(form.warehouseId || '')} onValueChange={v => set('warehouseId', +v)} disabled={!!editTarget}>
+              <Select value={String(form.warehouseId || '')} onValueChange={v => set('warehouseId', +v)} disabled={!!editing}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="选择仓库" /></SelectTrigger>
                 <SelectContent>
                   {(whData ?? []).map((w: { id: number; name: string }) => (
@@ -220,10 +171,10 @@ export default function LocationsPage() {
               </div>
             </div>
             <div><Label>容量</Label><Input className="mt-1" type="number" min={0} value={form.capacity} onChange={e => set('capacity', +e.target.value)} /></div>
-            {editTarget && (
+            {editing && (
               <div>
                 <Label>状态</Label>
-                <Select value={String(form.status ?? editTarget.status ?? 1)} onValueChange={v => set('status' as keyof CreateLocationParams, +v)}>
+                <Select value={String(form.status ?? editing.status ?? 1)} onValueChange={v => set('status' as keyof CreateLocationParams, +v)}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="选择状态" /></SelectTrigger>
                   <SelectContent>
                     {LOCATION_STATUS_OPTIONS.map((option) => (
@@ -235,34 +186,19 @@ export default function LocationsPage() {
             )}
             <div><Label>备注</Label><Input className="mt-1" placeholder="可选" value={form.remark} onChange={e => set('remark', e.target.value)} /></div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>取消</Button>
-            <Button
-              disabled={!form.warehouseId || !form.code || createMut.isPending || updateMut.isPending}
-              onClick={() => editTarget ? updateMut.mutate() : createMut.mutate()}
-            >
-              {editTarget ? '保存' : '创建'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        title="删除库位"
-        description={`确认删除库位 ${deleteTarget?.code}？仅未被库存容器引用的库位允许删除；若仍在使用，请改为编辑后停用。`}
-        variant="destructive"
-        confirmText="确认删除"
-        onConfirm={() => { deleteMut.mutate(deleteTarget!.id); setDeleteTarget(null) }}
-        onCancel={() => setDeleteTarget(null)}
+        )}
+        submitForm={(editing) => {
+          return editing
+            ? updateLocationApi(editing.id, form, { skipGlobalError: true })
+            : createLocationApi(form, { skipGlobalError: true })
+        }}
       />
-
       <LocationQueryDialog
         open={queryOpen}
         initial={initialQuery}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />
-    </div>
+    </>
   )
 }

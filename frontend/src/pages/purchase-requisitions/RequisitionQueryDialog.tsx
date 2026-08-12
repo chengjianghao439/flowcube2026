@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
-import { getUserOptionsApi } from '@/api/users'
-import { useAuthStore } from '@/store/authStore'
+import OperatorSelectField from '@/components/shared/OperatorSelectField'
 
 /** 请购查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface RequisitionQueryValues {
@@ -37,15 +35,6 @@ interface Props {
 
 export default function RequisitionQueryDialog({ open, initial, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<RequisitionQueryValues>(EMPTY)
-
-  const currentUserId = useAuthStore(s => s.user?.id)
-
-  const { data: userOptions } = useQuery({
-    queryKey: ['user-options'],
-    queryFn: getUserOptionsApi,
-    staleTime: 1000 * 60 * 5,
-    enabled: open,
-  })
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -117,27 +106,14 @@ export default function RequisitionQueryDialog({ open, initial, onClose, onApply
 
           <label className="flex flex-col gap-1 col-span-2">
             <span className="text-xs font-medium text-muted-foreground">申请人</span>
-            <Select
-              value={draft.applicantId ? String(draft.applicantId) : '__all__'}
-              onValueChange={v => {
-                if (v === '__all__') { setDraft(d => ({ ...d, applicantId: null, applicantName: '' })); return }
-                const id = Number(v)
-                const name = userOptions?.find(u => u.id === id)?.realName || ''
-                setDraft(d => ({ ...d, applicantId: id, applicantName: name }))
-              }}
-            >
-              <SelectTrigger className="h-9"><SelectValue placeholder="全部申请人" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">全部申请人</SelectItem>
-                {userOptions?.map(u => (
-                  <SelectItem key={u.id} value={String(u.id)}>
-                    {u.realName}
-                    {u.id === currentUserId ? '（我）' : ''}
-                    {!u.isActive ? '（已禁用）' : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <OperatorSelectField
+              value={draft.applicantId}
+              onChange={id => set('applicantId', id)}
+              onChangeName={name => set('applicantName', name)}
+              enabled={open}
+              placeholder="全部申请人"
+              className="h-9"
+            />
           </label>
 
           <label className="flex flex-col gap-1">

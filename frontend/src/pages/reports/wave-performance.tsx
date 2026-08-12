@@ -3,7 +3,7 @@
  * 路由：/reports/wave-performance
  */
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { Layers, CheckCircle2, Clock4, Boxes, PackageOpen } from 'lucide-react'
 import { getWavePerformanceApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -13,11 +13,12 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
-import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { WaveStats } from '@/api/reports'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
+import { StatTile } from '@/components/dashboard/StatTile'
 
 /** 与 pages/picking-waves 的波次状态取色保持一致 */
 const STATUS_TONE: Record<number, StatusTone> = {
@@ -28,20 +29,6 @@ function fmtDuration(min: number | null): string {
   if (min == null) return '—'
   if (min < 60) return `${min} 分钟`
   return `${Math.floor(min / 60)}h ${min % 60}m`
-}
-
-function SummaryCard({ label, value, sub, accent = false }: {
-  label: string; value: string | number; sub?: string; accent?: boolean
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-5">
-      <p className="text-table-head">{label}</p>
-      <p className={`mt-2 text-3xl font-bold ${
-        accent ? 'text-primary' : 'text-foreground'
-      }`}>{value}</p>
-      {sub && <p className="mt-1 text-helper">{sub}</p>}
-    </div>
-  )
 }
 
 function EfficiencyBar({ value, max }: { value: number; max: number }) {
@@ -59,7 +46,6 @@ function EfficiencyBar({ value, max }: { value: number; max: number }) {
 }
 
 export default function WavePerformancePage() {
-  const isActiveTab = useActiveWorkspaceTab()
   const recent7d = getRelativeDateRange(7)
   const recent30d = getRelativeDateRange(30)
   const monthRange = getMonthDateRange()
@@ -69,11 +55,10 @@ export default function WavePerformancePage() {
   const [sortField, setSortField] = useState<string>('createdAt')
   const [sortAsc, setSortAsc]     = useState(false)
 
-  const wavePerformanceQ = useQuery({
+  const wavePerformanceQ = usePollingReport({
     queryKey: ['wave-performance', applied],
     queryFn:  () => getWavePerformanceApi(applied),
-    enabled: isActiveTab,
-    refetchInterval: isActiveTab ? 60_000 : false,
+    intervalMs: 60_000,
   })
 
   const { data, isLoading, isError, error, dataUpdatedAt, refetch } = wavePerformanceQ
@@ -183,32 +168,22 @@ export default function WavePerformancePage() {
 
       {/* 汇总卡片 */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <SummaryCard
-          label="总波次数"
-          value={data?.summary.totalWaves ?? '-'}
-          sub="近 30 天"
-        />
-        <SummaryCard
+        <StatTile icon={Layers} label="总波次数" value={data?.summary.totalWaves ?? '-'} hint="近 30 天" />
+        <StatTile
+          icon={CheckCircle2}
           label="已完成波次"
           value={data?.summary.completedWaves ?? '-'}
-          sub={data ? `完成率 ${data.summary.totalWaves > 0 ? Math.round(data.summary.completedWaves / data.summary.totalWaves * 100) : 0}%` : undefined}
-          accent
+          hint={data ? `完成率 ${data.summary.totalWaves > 0 ? Math.round(data.summary.completedWaves / data.summary.totalWaves * 100) : 0}%` : undefined}
+          tone="success"
         />
-        <SummaryCard
+        <StatTile
+          icon={Clock4}
           label="平均拣货时长"
           value={data?.summary.avgDurationMinutes != null ? fmtDuration(Math.round(data.summary.avgDurationMinutes)) : '—'}
-          sub="波次平均完成时间"
+          hint="波次平均完成时间"
         />
-        <SummaryCard
-          label="平均 SKU 数"
-          value={data?.summary.avgSkuCount ?? '—'}
-          sub="每波次平均种类"
-        />
-        <SummaryCard
-          label="累计拣货量"
-          value={data?.summary.totalPickedQty.toFixed(0) ?? '-'}
-          sub="件"
-        />
+        <StatTile icon={Boxes} label="平均 SKU 数" value={data?.summary.avgSkuCount ?? '—'} hint="每波次平均种类" />
+        <StatTile icon={PackageOpen} label="累计拣货量" value={data?.summary.totalPickedQty.toFixed(0) ?? '-'} hint="件" />
       </div>
 
       {/* 波次明细表 */}

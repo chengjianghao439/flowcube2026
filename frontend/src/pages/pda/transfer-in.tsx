@@ -4,10 +4,10 @@
  */
 import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { payloadClient } from '@/api/client'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
-import { getTransferDetailApi, scanInTransferApi, type TransferScanResult } from '@/api/transfer'
+import { scanInTransferApi, type TransferScanResult } from '@/api/transfer'
+import { getLocationByCodeApi } from '@/api/locations'
 import { getContainerByBarcodeApi } from '@/api/inventory'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
@@ -18,6 +18,7 @@ import PdaEmptyState, { PdaLoading } from '@/components/pda/PdaEmptyState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import { usePdaTransferInDetail } from '@/hooks/usePdaTransferIn'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 
 export default function PdaTransferInPage() {
@@ -30,11 +31,7 @@ export default function PdaTransferInPage() {
   // 两步扫码：先扫容器，再扫库位
   const [pendingContainer, setPendingContainer] = useState<string | null>(null)
 
-  const { data: order, isLoading } = useQuery({
-    queryKey: ['pda-transfer', transferId],
-    queryFn: () => getTransferDetailApi(transferId),
-    enabled: transferId > 0,
-  })
+  const { data: order, isLoading } = usePdaTransferInDetail(transferId)
 
   const scanAction = useCriticalPdaAction<TransferScanResult>({
     action: `transfer.scanIn.${transferId}`,
@@ -88,7 +85,7 @@ export default function PdaTransferInPage() {
     // 第二步：扫库位
     if (parsed.type !== 'location') { err('请扫描目标库位条码'); return }
     try {
-      const loc = await payloadClient.get<{ id: number }>(`/locations/code/${encodeURIComponent(b)}`)
+      const loc = await getLocationByCodeApi(b)
       if (!loc?.id) { err('库位不存在'); return }
       submitMut.mutate({ containerBarcode: pendingContainer, locationId: loc.id })
     } catch (e) {

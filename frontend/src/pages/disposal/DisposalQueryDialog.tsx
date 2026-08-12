@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
+import { DISPOSAL_STATUS_OPTIONS } from './constants'
 
 /** 呆滞库存处置查询弹窗对外的筛选值 */
 export interface DisposalQueryValues {
@@ -29,14 +30,7 @@ interface Props {
   onApply: (values: DisposalQueryValues) => void
 }
 
-const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '1', label: '草稿' },
-  { value: '2', label: '待审批' },
-  { value: '3', label: '已批准' },
-  { value: '4', label: '已处置' },
-  { value: '5', label: '已驳回' },
-  { value: '6', label: '已取消' },
-]
+const STATUS_OPTIONS: Array<{ value: string; label: string }> = DISPOSAL_STATUS_OPTIONS
 
 export default function DisposalQueryDialog({ open, initial, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<DisposalQueryValues>(EMPTY)

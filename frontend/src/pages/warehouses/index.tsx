@@ -1,35 +1,44 @@
 import { useState } from 'react'
-import PageHeader from '@/components/shared/PageHeader'
-import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
-import { useWarehouses, useDeleteWarehouse } from '@/hooks/useWarehouses'
-import WarehouseFormDialog from './components/WarehouseFormDialog'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import type { Warehouse } from '@/types/warehouses'
+import { getWarehousesApi, createWarehouseApi, updateWarehouseApi, deleteWarehouseApi } from '@/api/warehouses'
+import { FilterCard } from '@/components/shared/FilterCard'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { WAREHOUSE_TYPES, type Warehouse } from '@/types/warehouses'
 import type { TableColumn } from '@/types'
+import BaseCrudPage from '@/components/shared/BaseCrudPage'
 
+const defaultForm = {
+  name: '', type: 1,
+  manager: '', phone: '', address: '', remark: '', isActive: true,
+}
 
 export default function WarehousesPage() {
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
-  const [formOpen, setFormOpen] = useState(false)
-  const [editItem, setEditItem] = useState<Warehouse | null>(null)
-  const [confirmTarget, setConfirmTarget] = useState<Warehouse | null>(null)
+  const [form, setForm] = useState(defaultForm)
 
-  const { data, isLoading } = useWarehouses({ pageSize: 99999, keyword })
-  const { mutate: deleteWarehouse } = useDeleteWarehouse()
+  function set(field: string, value: string | number | boolean) {
+    setForm((f) => ({ ...f, [field]: value }))
+  }
 
-  function handleSearch() { setKeyword(search) }
-
-  function handleEdit(item: Warehouse) { setEditItem(item); setFormOpen(true) }
-
-  function handleDelete(item: Warehouse) {
-    setConfirmTarget(item)
+  // 打开弹窗时回填表单（新建=默认值，编辑=行数据）
+  function handleOpen(editing: Warehouse | null) {
+    if (editing) {
+      setForm({
+        name: editing.name,
+        type: editing.type,
+        manager: editing.manager ?? '',
+        phone: editing.phone ?? '',
+        address: editing.address ?? '',
+        remark: editing.remark ?? '',
+        isActive: editing.isActive,
+      })
+    } else {
+      setForm(defaultForm)
+    }
   }
 
   const columns: TableColumn<Warehouse>[] = [
@@ -50,56 +59,115 @@ export default function WarehousesPage() {
         <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={activeTone(row.isActive)} />
       ),
     },
-    {
-      key: 'id', title: '操作', width: 120,
-      render: (_, row) => (
-        <TableActionsMenu
-          primaryLabel="编辑"
-          primaryVariant="outline"
-          onPrimaryClick={() => handleEdit(row)}
-          items={[
-            { label: '删除', destructive: true, onClick: () => handleDelete(row) },
-          ]}
-        />
-      ),
-    },
   ]
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="仓库管理"
-        description="管理仓库档案信息"
-        actions={
-          <Button onClick={() => { setEditItem(null); setFormOpen(true) }}>新增仓库</Button>
+    <BaseCrudPage<Warehouse>
+      title="仓库管理"
+      description="管理仓库档案信息"
+      columns={columns}
+      queryKey={['warehouses', { pageSize: 99999, keyword }]}
+      listQuery={() => getWarehousesApi({ pageSize: 99999, keyword })}
+      deleteApi={(id) => deleteWarehouseApi(id, { skipGlobalError: true })}
+      deleteMessage="仅未被库位、库存、任务或业务单据引用的仓库允许删除；若已被引用，请改为编辑后停用。"
+      createLabel="新增仓库"
+      saveSuccessMessage={(editing) => editing ? '仓库已保存' : '仓库已创建'}
+      formWidthClass="sm:max-w-lg"
+      canSubmit={() => !!form.name}
+      onOpen={handleOpen}
+      renderToolbar={
+        <FilterCard>
+          <Input placeholder="搜索编码或名称" value={search}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+            onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && setKeyword(search)}
+            className="h-9 w-60" />
+          <Button size="sm" variant="outline" onClick={() => setKeyword(search)}>搜索</Button>
+          {keyword && (
+            <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>
+          )}
+        </FilterCard>
+      }
+      renderForm={(editing) => {
+        const isEdit = !!editing
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              {isEdit && (
+                <div className="space-y-2">
+                  <Label>仓库编码</Label>
+                  <Input value={editing.code} disabled className="bg-muted/50 font-mono text-sm" />
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>仓库名称 *</Label>
+                <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('name', e.target.value)}
+                  placeholder="仓库名称" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>仓库类型 *</Label>
+              <div className="flex flex-wrap gap-4">
+                {WAREHOUSE_TYPES.map((t) => (
+                  <label key={t.value} className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="type" value={t.value}
+                      checked={form.type === t.value}
+                      onChange={() => set('type', t.value)}
+                      className="accent-primary" />
+                    <span className="text-sm">{t.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>负责人</Label>
+                <Input value={form.manager} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('manager', e.target.value)}
+                  placeholder="负责人姓名" />
+              </div>
+              <div className="space-y-2">
+                <Label>联系电话</Label>
+                <Input value={form.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('phone', e.target.value)}
+                  placeholder="联系电话" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>仓库地址</Label>
+              <Input value={form.address} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('address', e.target.value)}
+                placeholder="详细地址" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>备注</Label>
+              <Input value={form.remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('remark', e.target.value)}
+                placeholder="备注信息" />
+            </div>
+
+            {isEdit && (
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="wh-active" checked={form.isActive}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('isActive', e.target.checked)}
+                  className="accent-primary" />
+                <Label htmlFor="wh-active" className="cursor-pointer">启用仓库</Label>
+              </div>
+            )}
+          </div>
+        )
+      }}
+      submitForm={(editing) => {
+        const payload = {
+          name: form.name, type: form.type,
+          manager: form.manager || undefined,
+          phone: form.phone || undefined,
+          address: form.address || undefined,
+          remark: form.remark || undefined,
         }
-      />
-
-      <FilterCard>
-        <Input placeholder="搜索编码或名称" value={search}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && handleSearch()}
-          className="h-9 w-60" />
-        <Button size="sm" variant="outline" onClick={handleSearch}>搜索</Button>
-        {keyword && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>
-        )}
-      </FilterCard>
-
-      <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id" />
-
-      <WarehouseFormDialog open={formOpen}
-        onClose={() => { setFormOpen(false); setEditItem(null) }}
-        editItem={editItem} />
-      <ConfirmDialog
-        open={!!confirmTarget}
-        title="确认删除"
-        description={`确定删除仓库「${confirmTarget?.name}」吗？仅未被库位、库存、任务或业务单据引用的仓库允许删除；若已被引用，请改为编辑后停用。`}
-        variant="destructive"
-        confirmText="删除"
-        onConfirm={() => { deleteWarehouse(confirmTarget!.id); setConfirmTarget(null) }}
-        onCancel={() => setConfirmTarget(null)}
-      />
-    </div>
+        return editing
+          ? updateWarehouseApi(editing.id, { ...payload, isActive: form.isActive })
+          : createWarehouseApi(payload)
+      }}
+    />
   )
 }

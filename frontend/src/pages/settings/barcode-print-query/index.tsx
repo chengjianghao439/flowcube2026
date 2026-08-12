@@ -16,23 +16,13 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { formatPrintStatus } from '@/utils/displayFormatters'
 import BarcodePrintQueryDialog, { type BarcodePrintQueryValues } from './BarcodePrintQueryDialog'
+import { BARCODE_PRINT_STATUS_OPTIONS } from './constants'
 
 const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint: string }> = [
   { value: 'inbound', label: '入库条码', hint: '库存条码、塑料盒条码的打印状态与补打' },
   { value: 'outbound', label: '出库条码', hint: '出库箱贴 / L 条码的打印状态与补打' },
   { value: 'logistics', label: '物流条码', hint: '物流标签与面单打印状态；可处理残缺补打' },
 ]
-
-const STATUS_OPTIONS = [
-  { value: '__all__', label: '全部状态' },
-  { value: 'no_job', label: '未生成任务' },
-  { value: 'queued', label: '待派发' },
-  { value: 'printing', label: '打印中' },
-  { value: 'success', label: '已打印' },
-  { value: 'failed', label: '打印失败' },
-  { value: 'timeout', label: '超时待确认' },
-  { value: 'cancelled', label: '已取消' },
-] as const
 
 function statusBadge(job: BarcodePrintRecord['latestJob']) {
   if (!job) return <SoftStatusLabel label="未生成打印任务" tone="draft" />
@@ -85,7 +75,7 @@ export default function BarcodePrintQueryPage() {
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
-    status !== '__all__' && { key: 'status', label: `状态：${STATUS_OPTIONS.find(s => s.value === status)?.label ?? status}`, onRemove: () => setStatus('__all__') },
+    status !== '__all__' && { key: 'status', label: `状态：${BARCODE_PRINT_STATUS_OPTIONS.find(s => s.value === status)?.label ?? status}`, onRemove: () => setStatus('__all__') },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const reprintMut = useMutation({

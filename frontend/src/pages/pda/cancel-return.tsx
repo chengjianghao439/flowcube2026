@@ -7,13 +7,14 @@
  */
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import {
-  getPendingCancelReturnsApi, getCancelReturnDetailApi, submitCancelReturnScanApi,
+  getCancelReturnDetailApi,
+  submitCancelReturnScanApi,
   submitCancelReturnBoxScanApi,
   type CancelReturnContainer, type CancelReturnPackage,
 } from '@/api/warehouse-tasks'
-import { payloadClient as apiClient } from '@/api/client'
+import { getLocationByCodeApi } from '@/api/locations'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
@@ -21,20 +22,15 @@ import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
 import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import { usePdaPendingCancelReturns, usePdaCancelReturnDetail } from '@/hooks/usePdaCancelReturn'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
 import { parseBarcode } from '@/utils/barcode'
 
-interface LocationInfo { id: number; code: string }
-
 // ── 列表：待处理的取消收尾任务池 ──────────────────────────────────────────────
 function CancelReturnListPage() {
   const navigate = useNavigate()
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['pda-cancel-returns-pending'],
-    queryFn: () => getPendingCancelReturnsApi().then(r => r ?? []),
-    refetchInterval: 15_000,
-  })
+  const { data, isLoading, refetch } = usePdaPendingCancelReturns()
   const tasks = data ?? []
 
   return (
@@ -78,11 +74,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   const [scanning, setScanning] = useState(false)
   const { flash, ok, err, warn } = usePdaFeedback()
 
-  const { data: detail, isLoading, refetch } = useQuery({
-    queryKey: ['pda-cancel-return-detail', taskId],
-    queryFn: () => getCancelReturnDetailApi(taskId),
-    enabled: taskId > 0,
-  })
+  const { data: detail, isLoading, refetch } = usePdaCancelReturnDetail(taskId)
 
   const returnAction = useCriticalPdaAction<{ id: number; remaining: number; finalized: boolean }>({
     action: `warehouse.cancel-return.${taskId}`,
@@ -184,7 +176,8 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
     if (returnAction.submitBlocked) { err(returnAction.blockedReason || '当前不可提交'); return }
     setScanning(true)
     try {
-      const loc = await apiClient.get<LocationInfo>(`/locations/code/${encodeURIComponent(code)}`)
+      const loc = await getLocationByCodeApi(code)
+      if (!loc) { err('库位不存在'); return }
       const submitted = await returnAction.run(
         (requestKey) => submitCancelReturnScanApi(taskId, target.containerId, target.barcode, loc.id, requestKey),
         { containerId: target.containerId },

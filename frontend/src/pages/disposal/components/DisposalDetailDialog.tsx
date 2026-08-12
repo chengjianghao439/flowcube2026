@@ -12,12 +12,11 @@ import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { DISPOSE_TYPE_LABELS, DISPOSE_TYPE_TONES } from '@/types/disposal'
+import { DISPOSAL_STATUS_TONE } from '../constants'
 
 interface Props { open: boolean; onClose: () => void; id: number | null }
 
-const STATUS_TONE: Record<number, StatusTone> = {
-  1: 'draft', 2: 'active', 3: 'warning', 4: 'success', 5: 'danger', 6: 'danger',
-}
+const STATUS_TONE: Record<number, StatusTone> = DISPOSAL_STATUS_TONE
 
 export default function DisposalDetailDialog({ open, onClose, id }: Props) {
   const { data: disposal, isLoading } = useDisposalDetail(id || 0)

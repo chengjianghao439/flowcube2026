@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/shared/DatePicker'
+import { CREDIT_OVERRIDE_STATUS_OPTIONS } from './constants'
 
 /** 超额放行查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface CreditOverrideQueryValues {
@@ -16,8 +17,6 @@ export interface CreditOverrideQueryValues {
 const EMPTY: CreditOverrideQueryValues = {
   keyword: '', status: '', startDate: '', endDate: '',
 }
-
-const STATUS_OPTIONS = [['1', '草稿'], ['2', '待审批'], ['3', '已批准'], ['4', '已驳回'], ['5', '已取消']] as const
 
 interface Props {
   open: boolean
@@ -74,7 +73,7 @@ export default function CreditOverrideQueryDialog({ open, initial, onClose, onAp
             <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部状态</SelectItem>
-              {STATUS_OPTIONS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+              {CREDIT_OVERRIDE_STATUS_OPTIONS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
             </SelectContent>
           </Select>
         </label>

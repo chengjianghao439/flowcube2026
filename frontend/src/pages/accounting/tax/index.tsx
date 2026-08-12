@@ -1,23 +1,24 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useCompanyStore } from '@/store/companyStore'
-import { payloadClient } from '@/api/client'
 import { toast } from '@/lib/toast'
+import {
+  useTaxVat,
+  useTaxIncome,
+  useTaxAdjustments,
+  useCreateTaxAdjustment,
+  useDeleteTaxAdjustment,
+  type TaxAdjustment,
+} from '@/hooks/useTax'
 import type { TableColumn } from '@/types'
-
-interface VatReport { period: string; salesTaxAmount: number; inputTaxAmount: number; netPayable: number; taxDue: number; adjustments: Array<{ item: string; amount: number }> }
-interface IncomeTaxReport { period: string; revenue: number; expense: number; profitTotal: number; taxableIncome: number; taxRate: number; taxDue: number; adjustments: Array<{ item: string; amount: number }> }
-interface TaxAdjustment { id: number; period: string; taxType: number; adjustItem: string; amount: number; remark: string | null }
 
 const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export default function TaxFilingPage() {
   const { companyId } = useCompanyStore()
-  const qc = useQueryClient()
   const [period, setPeriod] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -26,31 +27,13 @@ export default function TaxFilingPage() {
   const [adjItem, setAdjItem] = useState('')
   const [adjAmount, setAdjAmount] = useState('')
 
-  const { data: vat } = useQuery({
-    queryKey: ['tax-vat', companyId, period],
-    queryFn: () => payloadClient.get<VatReport>('/accounting/tax/vat', { params: { companyId, period } }).then(r => r ?? null),
-    enabled: !!period,
-  })
-  const { data: income } = useQuery({
-    queryKey: ['tax-income', companyId, period],
-    queryFn: () => payloadClient.get<IncomeTaxReport>('/accounting/tax/income', { params: { companyId, period } }).then(r => r ?? null),
-    enabled: !!period,
-  })
-  const { data: adjustments } = useQuery({
-    queryKey: ['tax-adjustments', companyId, period, tab],
-    queryFn: () => payloadClient.get<TaxAdjustment[]>('/accounting/tax/adjustments', { params: { companyId, period, taxType: tab === 'vat' ? 1 : 2 } }).then(r => r ?? []),
-    enabled: !!period,
-  })
+  const taxType = tab === 'vat' ? 1 : 2
+  const { data: vat } = useTaxVat(companyId, period, !!period)
+  const { data: income } = useTaxIncome(companyId, period, !!period)
+  const { data: adjustments } = useTaxAdjustments(companyId, period, taxType, !!period)
 
-  const { mutate: addAdj, isPending } = useMutation({
-    mutationFn: () => payloadClient.post('/accounting/tax/adjustments', { companyId, period, taxType: tab === 'vat' ? 1 : 2, adjustItem: adjItem, amount: Number(adjAmount) }),
-    onSuccess: () => { toast.success('调整项已保存'); setAdjItem(''); setAdjAmount(''); qc.invalidateQueries({ queryKey: ['tax-adjustments', companyId, period, tab] }); qc.invalidateQueries({ queryKey: ['tax-vat', companyId, period] }); qc.invalidateQueries({ queryKey: ['tax-income', companyId, period] }) },
-    onError: (e: Error) => toast.error(e.message),
-  })
-  const { mutate: removeAdj } = useMutation({
-    mutationFn: (id: number) => payloadClient.delete(`/accounting/tax/adjustments/${id}`, { params: { companyId } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-adjustments', companyId, period, tab] }),
-  })
+  const { mutate: addAdj, isPending } = useCreateTaxAdjustment(companyId, period, tab)
+  const { mutate: removeAdj } = useDeleteTaxAdjustment(companyId, period, tab)
 
   const adjColumns: TableColumn<TaxAdjustment>[] = [
     { key: 'period', title: '期间', width: 100, render: v => <span className="text-doc-code">{String(v)}</span> },
@@ -94,7 +77,10 @@ export default function TaxFilingPage() {
               <div className="flex gap-2 p-3">
                 <Input placeholder="调整项，如：视同销售" value={adjItem} onChange={e => setAdjItem(e.target.value)} className="h-9" />
                 <Input placeholder="金额" type="number" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} className="h-9 w-28 text-right" />
-                <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={() => addAdj(undefined)}>添加</Button>
+                <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={() => addAdj({ adjustItem: adjItem, amount: Number(adjAmount) }, {
+                  onSuccess: () => { toast.success('调整项已保存'); setAdjItem(''); setAdjAmount('') },
+                  onError: (e: Error) => toast.error(e.message),
+                })}>添加</Button>
               </div>
             </div>
             <DataTable columns={adjColumns} data={adjustments ?? []} rowKey="id" emptyText="无调整项" />
@@ -120,7 +106,10 @@ export default function TaxFilingPage() {
               <div className="flex gap-2 p-3">
                 <Input placeholder="调整项，如：业务招待费调增" value={adjItem} onChange={e => setAdjItem(e.target.value)} className="h-9" />
                 <Input placeholder="金额" type="number" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} className="h-9 w-28 text-right" />
-                <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={() => addAdj(undefined)}>添加</Button>
+                <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={() => addAdj({ adjustItem: adjItem, amount: Number(adjAmount) }, {
+                  onSuccess: () => { toast.success('调整项已保存'); setAdjItem(''); setAdjAmount('') },
+                  onError: (e: Error) => toast.error(e.message),
+                })}>添加</Button>
               </div>
             </div>
             <DataTable columns={adjColumns} data={adjustments ?? []} rowKey="id" emptyText="无调整项" />

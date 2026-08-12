@@ -16,17 +16,11 @@ export interface WaybillQueryValues {
   endDate: string
 }
 
+import { WAYBILL_STATUS_OPTIONS } from './constants'
+
 const EMPTY: WaybillQueryValues = {
   keyword: '', status: '', carrierId: null, startDate: '', endDate: '',
 }
-
-const STATUS_OPTIONS = [
-  { value: '1', label: '待取号' },
-  { value: '2', label: '取号中' },
-  { value: '3', label: '已取号' },
-  { value: '4', label: '取号失败' },
-  { value: '5', label: '已作废' },
-]
 
 interface Props {
   open: boolean
@@ -89,7 +83,7 @@ export default function WaybillQueryDialog({ open, initial, onClose, onApply }: 
             <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部状态</SelectItem>
-              {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              {WAYBILL_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </label>

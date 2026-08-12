@@ -3,17 +3,7 @@ import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
-const STATUS_OPTIONS = [
-  { value: '__all__', label: '全部状态' },
-  { value: 'no_job', label: '未生成任务' },
-  { value: 'queued', label: '待派发' },
-  { value: 'printing', label: '打印中' },
-  { value: 'success', label: '已打印' },
-  { value: 'failed', label: '打印失败' },
-  { value: 'timeout', label: '超时待确认' },
-  { value: 'cancelled', label: '已取消' },
-] as const
+import { BARCODE_PRINT_STATUS_OPTIONS } from './constants'
 
 /** 条码打印查询弹窗对外的筛选值（类别固定走页面上方的卡片，不进弹窗） */
 export interface BarcodePrintQueryValues {
@@ -79,7 +69,7 @@ export default function BarcodePrintQueryDialog({ open, initial, onClose, onAppl
           <Select value={draft.status} onValueChange={v => set('status', v)}>
             <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
             <SelectContent>
-              {STATUS_OPTIONS.map(item => (
+              {BARCODE_PRINT_STATUS_OPTIONS.map(item => (
                 <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
               ))}
             </SelectContent>

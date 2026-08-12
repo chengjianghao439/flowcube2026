@@ -1,44 +1,16 @@
-import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { payloadClient } from '@/api/client'
+import { useAvgCostReconciliation, type AvgCostRow } from '@/hooks/useAvgCostReconciliation'
 import type { TableColumn } from '@/types'
-
-interface AvgCostRow {
-  rowKey: string
-  productId: number
-  productCode: string
-  productName: string
-  unit: string
-  warehouseId: number
-  unitCost: number
-  cacheQty: number
-  containerQty: number
-  diffQty: number
-  cacheValue: number
-  containerValue: number
-  diffValue: number
-  drifted: boolean
-}
-interface AvgCostResult {
-  ok: boolean
-  driftedCount: number
-  totalDiffValue: number
-  totalRows: number
-  list: AvgCostRow[]
-}
 
 const money = (n: number) => `¥${Number(n).toFixed(2)}`
 const fmtQty = (v: unknown) => Number(v).toLocaleString()
 
 export default function AvgCostReconciliationPage() {
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['avg-cost-reconciliation'],
-    queryFn: () => payloadClient.get<AvgCostResult>('/reports/avg-cost-reconciliation').then(r => r ?? null),
-  })
+  const { data, isLoading, isError, error, refetch } = useAvgCostReconciliation()
 
   const columns: TableColumn<AvgCostRow>[] = [
     { key: 'productCode', title: '商品编码', width: 130, render: v => <span className="text-doc-code">{String(v)}</span> },

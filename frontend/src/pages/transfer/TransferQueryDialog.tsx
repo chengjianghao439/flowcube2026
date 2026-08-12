@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { AppDialog } from '@/components/shared/AppDialog'
+import OperatorSelectField from '@/components/shared/OperatorSelectField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -8,8 +8,6 @@ import { ProductFinder } from '@/components/finder'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { QueryPickerField } from '@/components/shared/QueryPickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
-import { getUserOptionsApi } from '@/api/users'
-import { useAuthStore } from '@/store/authStore'
 
 /** 调拨查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface TransferQueryValues {
@@ -45,14 +43,7 @@ export default function TransferQueryDialog({ open, initial, onClose, onApply }:
   const [draft, setDraft] = useState<TransferQueryValues>(EMPTY)
   const [productOpen, setProductOpen] = useState(false)
 
-  const currentUserId = useAuthStore(s => s.user?.id)
 
-  const { data: userOptions } = useQuery({
-    queryKey: ['user-options'],
-    queryFn: getUserOptionsApi,
-    staleTime: 1000 * 60 * 5,
-    enabled: open,
-  })
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -131,27 +122,14 @@ export default function TransferQueryDialog({ open, initial, onClose, onApply }:
 
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">经办人</span>
-            <Select
-              value={draft.operatorId ? String(draft.operatorId) : '__all__'}
-              onValueChange={v => {
-                if (v === '__all__') { setDraft(d => ({ ...d, operatorId: null, operatorName: '' })); return }
-                const id = Number(v)
-                const name = userOptions?.find(u => u.id === id)?.realName || ''
-                setDraft(d => ({ ...d, operatorId: id, operatorName: name }))
-              }}
-            >
-              <SelectTrigger className="h-9"><SelectValue placeholder="全部经办人" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">全部经办人</SelectItem>
-                {userOptions?.map(u => (
-                  <SelectItem key={u.id} value={String(u.id)}>
-                    {u.realName}
-                    {u.id === currentUserId ? '（我）' : ''}
-                    {!u.isActive ? '（已禁用）' : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <OperatorSelectField
+              value={draft.operatorId}
+              onChange={id => set('operatorId', id)}
+              onChangeName={name => set('operatorName', name)}
+              enabled={open}
+              placeholder="全部经办人"
+              className="h-9"
+            />
           </label>
 
           <div />

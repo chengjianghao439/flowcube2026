@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
+import { SORTING_BIN_STATUS_OPTIONS } from './constants'
 
 /** 分拣格查询弹窗对外的筛选值 */
 export interface SortingBinQueryValues {
@@ -72,8 +73,9 @@ export default function SortingBinQueryDialog({ open, initial, onClose, onApply 
             <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部状态</SelectItem>
-              <SelectItem value="1">空闲</SelectItem>
-              <SelectItem value="2">占用</SelectItem>
+              {SORTING_BIN_STATUS_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </label>

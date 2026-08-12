@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Wallet, BarChart3 } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { StatTile } from '@/components/dashboard/StatTile'
 import { getKpiApi, type KpiMetric } from '@/api/reports'
 
 /**
@@ -26,20 +28,16 @@ function monthOptions(): string[] {
 
 function MetricCard({ metric, isMoney }: { metric: KpiMetric; isMoney: boolean }) {
   const pct = metric.changePct
-  const pctLabel = pct === null ? '—' : `${pct > 0 ? '+' : ''}${pct}%`
-  const pctTone = pct === null ? 'text-muted-foreground'
-    : pct >= 0 ? 'text-emerald-600' : 'text-rose-600'
-  // 毛利/回款正增长是好事；其余指标同向
+  const pctLabel = pct === null ? undefined : `${pct > 0 ? '+' : ''}${pct}%`
   const value = isMoney ? fmtMoney(metric.current) : fmtCount(metric.current)
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{metric.label}</p>
-        <span className={`text-xs font-medium ${pctTone}`}>{pctLabel}</span>
-      </div>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{value}</p>
-      <p className="mt-1 text-xs text-muted-foreground">上期 {isMoney ? fmtMoney(metric.previous) : fmtCount(metric.previous)}</p>
-    </div>
+    <StatTile
+      label={metric.label}
+      value={value}
+      icon={isMoney ? Wallet : BarChart3}
+      trendValue={pctLabel}
+      hint={`上期 ${isMoney ? fmtMoney(metric.previous) : fmtCount(metric.previous)}`}
+    />
   )
 }
 

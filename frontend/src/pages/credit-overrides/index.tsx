@@ -22,11 +22,11 @@ import { confirmAction } from '@/lib/confirm'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import CreditOverrideQueryDialog, { type CreditOverrideQueryValues } from './CreditOverrideQueryDialog'
+import { CREDIT_OVERRIDE_STATUS_LABEL } from './constants'
 import type { CreditOverride } from '@/types/credit-override'
 import type { TableColumn } from '@/types'
 
 const money = (n: number | null | undefined) => `¥${Number(n ?? 0).toFixed(2)}`
-const STATUS_OPTIONS = [['1', '草稿'], ['2', '待审批'], ['3', '已批准'], ['4', '已驳回'], ['5', '已取消']] as const
 
 /** 发起申请弹窗：按销售单号/客户搜索草稿销售单，选中后发起 */
 function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -167,7 +167,7 @@ export default function CreditOverridesPage() {
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
-    status && { key: 'status', label: `状态：${STATUS_OPTIONS.find(([v]) => v === status)?.[1] ?? status}`, onRemove: () => updateParams({ status: null }) },
+    status && { key: 'status', label: `状态：${CREDIT_OVERRIDE_STATUS_LABEL[status] ?? status}`, onRemove: () => updateParams({ status: null }) },
     startDate && { key: 'startDate', label: `创建日期从：${startDate}`, onRemove: () => updateParams({ startDate: null }) },
     endDate && { key: 'endDate', label: `创建日期至：${endDate}`, onRemove: () => updateParams({ endDate: null }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]

@@ -3,26 +3,17 @@
  * 路由：/reports/pda-anomaly（挂入现有报表中心）
  */
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { AlertTriangle, Undo2, ScanLine, Percent } from 'lucide-react'
 import { getPdaAnomalyApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { ReportPanel } from '@/components/shared/ReportPanel'
+import { StatTile } from '@/components/dashboard/StatTile'
 import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
-import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
-
-function StatCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
-  return (
-    <div className={`rounded-lg border p-4 ${accent ? 'border-red-200 bg-red-50' : 'border-border bg-card'}`}>
-      <p className="text-helper">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${accent ? 'text-red-600' : 'text-foreground'}`}>{value}</p>
-      {sub && <p className="text-helper mt-0.5">{sub}</p>}
-    </div>
-  )
-}
 
 function BarRow({ label, value, max, color = 'bg-red-400' }: { label: string; value: number; max: number; color?: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0
@@ -55,7 +46,6 @@ function MiniChart({ data }: { data: { date: string; errorCount: number }[] }) {
 }
 
 export default function PdaAnomalyPage() {
-  const isActiveTab = useActiveWorkspaceTab()
   const recent7d = getRelativeDateRange(7)
   const recent30d = getRelativeDateRange(30)
   const monthRange = getMonthDateRange()
@@ -66,11 +56,10 @@ export default function PdaAnomalyPage() {
     endDate: recent7d.endDate,
   })
 
-  const pdaAnomalyQ = useQuery({
+  const pdaAnomalyQ = usePollingReport({
     queryKey: ['pda-anomaly', applied],
     queryFn: () => getPdaAnomalyApi(applied),
-    enabled: isActiveTab,
-    refetchInterval: isActiveTab ? 60_000 : false,
+    intervalMs: 60_000,
   })
 
   const { data, isLoading, isError, error, dataUpdatedAt, refetch } = pdaAnomalyQ
@@ -136,10 +125,10 @@ export default function PdaAnomalyPage() {
 
         {/* 汇总 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="总扫码次数" value={s?.totalScans ?? 0} />
-          <StatCard label="错误次数"   value={s?.totalErrors ?? 0} accent={(s?.totalErrors ?? 0) > 0} />
-          <StatCard label="撤销次数"   value={s?.totalUndos ?? 0} accent={(s?.totalUndos ?? 0) > 0} />
-          <StatCard label="错误率"     value={s?.errorRate ?? '0%'} accent={parseFloat(s?.errorRate ?? '0') > 5} sub="错误次数 / 总扫码" />
+          <StatTile icon={ScanLine} label="总扫码次数" value={s?.totalScans ?? 0} />
+          <StatTile icon={AlertTriangle} label="错误次数" value={s?.totalErrors ?? 0} accent={(s?.totalErrors ?? 0) > 0} />
+          <StatTile icon={Undo2} label="撤销次数" value={s?.totalUndos ?? 0} accent={(s?.totalUndos ?? 0) > 0} />
+          <StatTile icon={Percent} label="错误率" value={s?.errorRate ?? '0%'} accent={parseFloat(s?.errorRate ?? '0') > 5} hint="错误次数 / 总扫码" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

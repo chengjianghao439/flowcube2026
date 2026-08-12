@@ -24,15 +24,7 @@ import { getWaybillsApi, setWaybillTrackingApi, retryWaybillApi, voidWaybillApi 
 import type { LogisticsWaybill } from '@/types/logistics'
 import type { TableColumn } from '@/types'
 import WaybillQueryDialog, { type WaybillQueryValues } from './WaybillQueryDialog'
-
-const STATUS_OPTIONS = [
-  { value: 'all', label: '全部状态' },
-  { value: '1', label: '待取号' },
-  { value: '2', label: '取号中' },
-  { value: '3', label: '已取号' },
-  { value: '4', label: '取号失败' },
-  { value: '5', label: '已作废' },
-]
+import { WAYBILL_STATUS_OPTIONS } from './constants'
 
 function fmtMoney(v: number | null): string {
   return v == null ? '—' : Number(v).toFixed(2)
@@ -96,7 +88,7 @@ export default function LogisticsPage() {
 
   const chips = [
     applied.keyword && { key: 'keyword', label: `关键字：${applied.keyword}`, onRemove: () => setApplied({ ...applied, keyword: '' }) },
-    applied.status !== 'all' && { key: 'status', label: `状态：${STATUS_OPTIONS.find(o => o.value === applied.status)?.label ?? applied.status}`, onRemove: () => setApplied({ ...applied, status: 'all' }) },
+    applied.status !== 'all' && { key: 'status', label: `状态：${WAYBILL_STATUS_OPTIONS.find(o => o.value === applied.status)?.label ?? applied.status}`, onRemove: () => setApplied({ ...applied, status: 'all' }) },
     applied.carrierId && { key: 'carrier', label: `承运商：${applied.carrierId}`, onRemove: () => setApplied({ ...applied, carrierId: null }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
