@@ -94,13 +94,15 @@ async function casWaveStatus(conn, { id, fromStatus, toStatus, extraSet = '', ex
 
 // ── 列表查询 ──────────────────────────────────────────────────────────────────
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, warehouseId = null }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, warehouseId = null, startDate = '', endDate = '' }) {
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const conds = ['w.wave_no LIKE ?']
   const params = [like]
   if (status)      { conds.push('w.status = ?');       params.push(status) }
   if (warehouseId) { conds.push('w.warehouse_id = ?'); params.push(warehouseId) }
+  if (startDate)   { conds.push('w.created_at >= ?');  params.push(`${startDate} 00:00:00`) }
+  if (endDate)     { conds.push('w.created_at <= ?');  params.push(`${endDate} 23:59:59`) }
   const where = conds.join(' AND ')
 
   const [rows] = await pool.query(

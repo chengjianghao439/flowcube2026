@@ -3,12 +3,14 @@ const { successResponse } = require('../../utils/response')
 
 async function list(req, res, next) {
   try {
-    const { page, pageSize, keyword, warehouseId } = req.query
+    const { page, pageSize, keyword, warehouseId, status, zone } = req.query
     const result = await locationsService.findAll({
       page: parseInt(page) || 1,
       pageSize: parseInt(pageSize) || 20,
       keyword: keyword || '',
       warehouseId: warehouseId ? parseInt(warehouseId) : null,
+      status: status || '',
+      zone: zone || '',
     })
     return successResponse(res, result, '查询成功')
   } catch (err) { next(err) }

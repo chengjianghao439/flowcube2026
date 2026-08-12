@@ -60,7 +60,7 @@ const SELECT_FROM = `
   LEFT JOIN inventory_warehouses wh ON wh.id = w.warehouse_id`
 
 // ─── 列表（接仓库数据权限）────────────────────────────────────────────────────
-async function listWaybills({ page = 1, pageSize = 20, keyword = '', status = null, warehouseIds = null } = {}) {
+async function listWaybills({ page = 1, pageSize = 20, keyword = '', status = null, warehouseIds = null, startDate = '', endDate = '', carrierId = null } = {}) {
   const where = ['1=1']
   const params = []
   if (keyword) {
@@ -71,6 +71,18 @@ async function listWaybills({ page = 1, pageSize = 20, keyword = '', status = nu
   if (status != null && status !== '') {
     where.push('w.status = ?')
     params.push(Number(status))
+  }
+  if (startDate) {
+    where.push('w.created_at >= ?')
+    params.push(`${startDate} 00:00:00`)
+  }
+  if (endDate) {
+    where.push('w.created_at <= ?')
+    params.push(`${endDate} 23:59:59`)
+  }
+  if (carrierId) {
+    where.push('w.carrier_id = ?')
+    params.push(Number(carrierId))
   }
   const scope = scopeFilter(warehouseIds, 'w.warehouse_id')
   const whereSql = `WHERE ${where.join(' AND ')}${scope.sql}`

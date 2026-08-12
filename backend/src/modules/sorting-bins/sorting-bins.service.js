@@ -110,7 +110,7 @@ async function findAll(warehouseId) {
 /**
  * 查询所有仓库的分拣格（管理页）
  */
-async function findAllWarehouses({ keyword = '', status = null } = {}) {
+async function findAllWarehouses({ keyword = '', status = null, warehouseId = null } = {}) {
   const conds = ['1=1']
   const params = []
   if (keyword) {
@@ -119,6 +119,7 @@ async function findAllWarehouses({ keyword = '', status = null } = {}) {
     params.push(like, like, like, like)
   }
   if (status) { conds.push('sb.status = ?'); params.push(+status) }
+  if (warehouseId) { conds.push('sb.warehouse_id = ?'); params.push(+warehouseId) }
 
   const [rows] = await pool.query(
     `SELECT sb.*,

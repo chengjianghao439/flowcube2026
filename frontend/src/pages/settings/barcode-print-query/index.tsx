@@ -1,14 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
-import { FilterCard } from '@/components/shared/FilterCard'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getBarcodePrintRecordsApi, reprintBarcodeRecordApi } from '@/api/print-jobs'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -17,6 +15,7 @@ import type { BarcodePrintCategory, BarcodePrintRecord } from '@/types/print-job
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { formatPrintStatus } from '@/utils/displayFormatters'
+import BarcodePrintQueryDialog, { type BarcodePrintQueryValues } from './BarcodePrintQueryDialog'
 
 const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint: string }> = [
   { value: 'inbound', label: '入库条码', hint: '库存条码、塑料盒条码的打印状态与补打' },
@@ -55,9 +54,9 @@ export default function BarcodePrintQueryPage() {
   const initialInboundTaskItemId = Number(searchParams.get('inboundTaskItemId') || 0) || undefined
   const initialKeyword = searchParams.get('keyword') || ''
   const [category, setCategory] = useState<BarcodePrintCategory>(initialCategory)
-  const [search, setSearch] = useState(initialKeyword)
   const [keyword, setKeyword] = useState(initialKeyword)
   const [status, setStatus] = useState('__all__')
+  const [queryOpen, setQueryOpen] = useState(false)
   const isActiveTab = useActiveWorkspaceTab()
 
   const query = useQuery({
@@ -73,6 +72,21 @@ export default function BarcodePrintQueryPage() {
     enabled: isActiveTab,
     refetchInterval: isActiveTab ? 3000 : false,
   })
+
+  // ── 查询弹窗筛选值 ──
+  const initialQuery: BarcodePrintQueryValues = { keyword, status }
+  function applyQuery(v: BarcodePrintQueryValues) {
+    setKeyword(v.keyword)
+    setStatus(v.status)
+    setQueryOpen(false)
+  }
+  function clearAll() { setKeyword(''); setStatus('__all__') }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
+    status !== '__all__' && { key: 'status', label: `状态：${STATUS_OPTIONS.find(s => s.value === status)?.label ?? status}`, onRemove: () => setStatus('__all__') },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const reprintMut = useMutation({
     mutationFn: (row: BarcodePrintRecord) => reprintBarcodeRecordApi({
@@ -198,8 +212,6 @@ export default function BarcodePrintQueryPage() {
     ]
   }, [category, reprinting, reprintingRow, reprint, openPath])
 
-  const activeCategory = CATEGORY_OPTIONS.find(item => item.value === category)!
-  // 必须 useMemo：`?? []` 每次渲染都是新数组引用，下面三个 context 的统计会全部重跑
   const rows = useMemo(() => query.data?.list ?? [], [query.data])
   const inboundContext = useMemo(() => {
     if (category !== 'inbound') return null
@@ -245,6 +257,7 @@ export default function BarcodePrintQueryPage() {
       <PageHeader
         title="条码打印查询"
         description="查询入库条码、出库条码、物流条码的打印状态，支持失败追踪与丢失补打。"
+        actions={<Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>}
       />
 
       {inboundContext && (
@@ -375,55 +388,26 @@ export default function BarcodePrintQueryPage() {
         ))}
       </div>
 
-      <FilterCard>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1">
-            <Input
-              placeholder={`搜索${activeCategory.label} / 单号 / 关键字`}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  setKeyword(search.trim())
-                }
-              }}
-            />
-          </div>
-          <Select
-            value={status}
-            onValueChange={value => {
-              setStatus(value)
-            }}
-          >
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="全部状态" />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map(item => (
-                <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => { setKeyword(search.trim()) }}>搜索</Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSearch('')
-              setKeyword('')
-              setStatus('__all__')
-            }}
-          >
-            重置
-          </Button>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          {(initialInboundTaskId || initialInboundTaskItemId) && category === 'inbound' && (
+            <span className="ml-auto text-helper">
+              当前按收货订单筛选
+              {initialInboundTaskId ? ` #${initialInboundTaskId}` : ''}
+              {initialInboundTaskItemId ? ` / 明细 #${initialInboundTaskItemId}` : ''}
+            </span>
+          )}
         </div>
-        {(initialInboundTaskId || initialInboundTaskItemId) && category === 'inbound' && (
-          <div className="mt-3 text-helper">
-            当前按收货订单筛选
-            {initialInboundTaskId ? ` #${initialInboundTaskId}` : ''}
-            {initialInboundTaskItemId ? ` / 明细 #${initialInboundTaskItemId}` : ''}
-          </div>
-        )}
-      </FilterCard>
+      )}
 
       <DataTable
         columns={columns}
@@ -433,6 +417,13 @@ export default function BarcodePrintQueryPage() {
       />
 
       {<div className="px-1 text-helper">状态每 3 秒自动刷新</div>}
+
+      <BarcodePrintQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
     </div>
   )
 }

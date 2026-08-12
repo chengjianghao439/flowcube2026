@@ -12,6 +12,8 @@ const list = async (req, res, next) => {
       status: req.query.status || '',
       keyword: req.query.keyword || '',
       saleOrderId: req.query.saleOrderId || '',
+      startDate: req.query.startDate || '',
+      endDate: req.query.endDate || '',
     }), '查询成功')
   } catch (e) { next(e) }
 }

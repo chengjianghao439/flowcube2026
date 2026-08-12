@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X } from 'lucide-react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SupplierFinder, ProductFinder } from '@/components/finder'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
+import { QueryPickerField } from '@/components/shared/QueryPickerField'
 import { getUserOptionsApi } from '@/api/users'
 import { useAuthStore } from '@/store/authStore'
 
@@ -42,31 +42,6 @@ interface Props {
   initial: PurchaseQueryValues
   onClose: () => void
   onApply: (values: PurchaseQueryValues) => void
-}
-
-/** 一行「弹窗选择器」：显示已选项 + 清除，点击打开对应 Finder */
-function PickerField({ label, value, placeholder, onOpen, onClear }: {
-  label: string
-  value: string
-  placeholder: string
-  onOpen: () => void
-  onClear: () => void
-}) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-1">
-        <Button type="button" variant="outline" className="h-9 flex-1 justify-start font-normal" onClick={onOpen}>
-          {value || <span className="text-muted-foreground">{placeholder}</span>}
-        </Button>
-        {value ? (
-          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onClear} aria-label={`清除${label}`}>
-            <X className="h-4 w-4" />
-          </Button>
-        ) : null}
-      </div>
-    </label>
-  )
 }
 
 export default function PurchaseQueryDialog({ open, initial, onClose, onApply }: Props) {
@@ -137,7 +112,7 @@ export default function PurchaseQueryDialog({ open, initial, onClose, onApply }:
             </Select>
           </label>
 
-          <PickerField
+          <QueryPickerField
             label="供应商"
             placeholder="选择供应商"
             value={draft.supplierName ? `${draft.supplierName}` : ''}
@@ -157,7 +132,7 @@ export default function PurchaseQueryDialog({ open, initial, onClose, onApply }:
             />
           </label>
 
-          <PickerField
+          <QueryPickerField
             label="产品"
             placeholder="选择产品"
             value={draft.productName ? `${draft.productName}${draft.productCode ? ` (${draft.productCode})` : ''}` : ''}

@@ -44,7 +44,7 @@ async function assertLocationDeletable(id) {
   }
 }
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null, status = '', zone = '' }) {
   const offset = (page - 1) * pageSize
   const like = `%${keyword}%`
 
@@ -54,6 +54,14 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
   if (warehouseId) {
     conditions.push('wl.warehouse_id = ?')
     params.push(warehouseId)
+  }
+  if (status) {
+    conditions.push('wl.status = ?')
+    params.push(Number(status))
+  }
+  if (zone) {
+    conditions.push('wl.zone LIKE ?')
+    params.push(`%${zone}%`)
   }
 
   const where = conditions.join(' AND ')

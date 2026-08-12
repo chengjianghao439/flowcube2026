@@ -132,13 +132,16 @@ async function getSuggestions({ page = 1, pageSize = 50, keyword = '', warehouse
   return { list, pagination: { page, pageSize: ps, total }, staleDays: Number(staleDays) }
 }
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, scopeWarehouseIds = null }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, warehouseId = null, startDate = '', endDate = '', scopeWarehouseIds = null }) {
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   const conds = ['deleted_at IS NULL']
   const params = []
   if (status) { conds.push('status = ?'); params.push(status) }
+  if (warehouseId) { conds.push('warehouse_id = ?'); params.push(warehouseId) }
+  if (startDate) { conds.push('created_at >= ?'); params.push(`${startDate} 00:00:00`) }
+  if (endDate) { conds.push('created_at <= ?'); params.push(`${endDate} 23:59:59`) }
   conds.push('(disposal_no LIKE ? OR warehouse_name LIKE ?)')
   params.push(like, like)
   if (scope.sql) { conds.push(scope.sql.replace(/^ AND\s*/, '')); params.push(...scope.params) }

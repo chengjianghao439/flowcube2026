@@ -4,11 +4,13 @@ const { getOperatorFromRequest } = require('../../utils/operator')
 
 exports.list = async (req, res, next) => {
   try {
-    const { page = 1, pageSize = 20, keyword = '', status, warehouseId } = req.query
+    const { page = 1, pageSize = 20, keyword = '', status, warehouseId, startDate, endDate } = req.query
     const data = await svc.findAll({
       page: +page, pageSize: +pageSize, keyword,
       status: status ? +status : null,
       warehouseId: warehouseId ? +warehouseId : null,
+      startDate: startDate || '',
+      endDate: endDate || '',
     })
     return successResponse(res, data, '查询成功')
   } catch (e) { next(e) }

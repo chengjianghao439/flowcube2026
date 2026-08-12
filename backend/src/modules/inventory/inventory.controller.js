@@ -161,6 +161,7 @@ async function replenishment(req, res, next) {
       pageSize:    +req.query.pageSize  || 20,
       keyword:      req.query.keyword   || '',
       warehouseId:  req.query.warehouseId ? +req.query.warehouseId : null,
+      categoryId:   req.query.categoryId  ? +req.query.categoryId  : null,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result, '查询成功')

@@ -1,20 +1,21 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getReplenishmentApi, saveStockPoliciesApi, type ReplenishmentItem } from '@/api/inventory'
 import { createRequisitionApi } from '@/api/purchase-requisitions'
 import { usePermission } from '@/hooks/usePermission'
+import { useCategoryTree } from '@/hooks/useCategories'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { toast } from '@/lib/toast'
+import ReplenishmentQueryDialog, { type ReplenishmentQueryValues } from './ReplenishmentQueryDialog'
 import type { TableColumn } from '@/types'
+import type { Category } from '@/types/categories'
 
 /** 数量展示：整数带千分位，小数保留两位 */
 function fmtQty(v: unknown): string {
@@ -39,11 +40,15 @@ export default function ReplenishmentPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
+  const [queryOpen, setQueryOpen] = useState(false)
+  // 筛选草稿（查询弹窗）与生效值分离：改草稿不触发请求，点「查询」才生效
+  const [keyword, setKeyword] = useState('')
   const [warehouseId, setWarehouseId] = useState<number | null>(null)
-  const [search, setSearch] = useState('')
-  const [applied, setApplied] = useState<{ keyword: string; warehouseId: number | null }>({ keyword: '', warehouseId: null })
+  const [categoryId, setCategoryId] = useState<number | null>(null)
+  const [applied, setApplied] = useState<{ keyword: string; warehouseId: number | null; categoryId: number | null }>({ keyword: '', warehouseId: null, categoryId: null })
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const { data: categoryTree = [] } = useCategoryTree()
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['replenishment', applied],
@@ -52,6 +57,7 @@ export default function ReplenishmentPage() {
       pageSize: 500,
       keyword: applied.keyword || undefined,
       warehouseId: applied.warehouseId ?? undefined,
+      categoryId: applied.categoryId ?? undefined,
     }),
   })
 
@@ -112,8 +118,41 @@ export default function ReplenishmentPage() {
     },
   ]
 
-  function apply() { setApplied({ keyword: search, warehouseId }) }
-  function reset() { setSearch(''); setWarehouseId(null); setApplied({ keyword: '', warehouseId: null }); setSelected(new Set()) }
+  // 查询弹窗初始值
+  const initialQuery: ReplenishmentQueryValues = {
+    keyword, warehouseId, warehouseName: '', categoryId,
+  }
+  function applyQuery(v: ReplenishmentQueryValues) {
+    setKeyword(v.keyword)
+    setWarehouseId(v.warehouseId)
+    setCategoryId(v.categoryId)
+    setApplied({ keyword: v.keyword, warehouseId: v.warehouseId, categoryId: v.categoryId })
+    setSelected(new Set())
+    setQueryOpen(false)
+  }
+  function reset() {
+    setKeyword(''); setWarehouseId(null); setCategoryId(null)
+    setApplied({ keyword: '', warehouseId: null, categoryId: null })
+    setSelected(new Set())
+  }
+
+  function findCatName(nodes: Category[], id: number): string | null {
+    for (const n of nodes) {
+      if (n.id === id) return n.name
+      if (n.children?.length) {
+        const found = findCatName(n.children, id)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    applied.keyword && { key: 'keyword', label: `关键字：${applied.keyword}`, onRemove: () => { setKeyword(''); setApplied(a => ({ ...a, keyword: '' })) } },
+    applied.warehouseId && { key: 'warehouse', label: `仓库：${applied.warehouseId}`, onRemove: () => { setWarehouseId(null); setApplied(a => ({ ...a, warehouseId: null })) } },
+    applied.categoryId && { key: 'category', label: `分类：${findCatName(categoryTree, applied.categoryId) ?? applied.categoryId}`, onRemove: () => { setCategoryId(null); setApplied(a => ({ ...a, categoryId: null })) } },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   function openConfirm() {
     if (selectedRows.length === 0) return toast.warning('请先勾选要补货的商品')
@@ -147,6 +186,7 @@ export default function ReplenishmentPage() {
         description="按仓列出「可用 + 在途已低于补货点」的商品，并给出建议采购量（= 目标库存 − 可用 − 在途采购）。补货基准可在商品档案设通用默认，或在此按仓覆盖。"
         actions={
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canCreateRequisition && (
               <Button onClick={openConfirm} disabled={creating || selected.size === 0}>
                 {creating ? '生成中...' : `生成请购单${selected.size > 0 ? `（${selected.size} 项）` : ''}`}
@@ -157,26 +197,23 @@ export default function ReplenishmentPage() {
         }
       />
 
-      <FilterCard>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="商品编码 / 名称..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && apply()}
-              className="w-52"
-            />
-            <Button variant="outline" onClick={apply}>搜索</Button>
-          </div>
-          <div className="h-5 w-px bg-border" />
-          <WarehouseSelect value={warehouseId} onChange={id => setWarehouseId(id)} allowClear placeholder="全部仓库" className="w-44" />
-          {(applied.keyword || applied.warehouseId != null) && (
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={reset}>重置</Button>
-          )}
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={reset}>清空</Button>
           <div className="ml-auto text-sm text-muted-foreground">共 <span className="font-semibold text-foreground">{total}</span> 项待补货</div>
         </div>
-      </FilterCard>
+      )}
+      {(chips.length === 0) && (
+        <div className="flex justify-end text-sm text-muted-foreground">共 <span className="font-semibold text-foreground">{total}</span> 项待补货</div>
+      )}
 
       {isError && !data ? (
         <QueryErrorState
@@ -234,6 +271,13 @@ export default function ReplenishmentPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ReplenishmentQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
     </div>
   )
 }

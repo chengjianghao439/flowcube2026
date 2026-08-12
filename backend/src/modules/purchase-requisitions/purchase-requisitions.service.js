@@ -396,7 +396,7 @@ async function convert(id, { lines, requestKey }, operator) {
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', warehouseId = '', applicantId = '' } = {}, scopeWarehouseIds = null) {
+async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', warehouseId = '', applicantId = '', startDate = '', endDate = '' } = {}, scopeWarehouseIds = null) {
   const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['r.deleted_at IS NULL']
   const params = []
@@ -405,6 +405,8 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', war
   if (applicantId) { conds.push('r.applicant_id=?'); params.push(Number(applicantId)) }
   const kw = String(keyword || '').trim()
   if (kw) { conds.push('(r.requisition_no LIKE ? OR r.title LIKE ? OR r.applicant_name LIKE ?)'); params.push(`%${kw}%`, `%${kw}%`, `%${kw}%`) }
+  if (startDate) { conds.push('r.created_at >= ?'); params.push(`${startDate} 00:00:00`) }
+  if (endDate) { conds.push('r.created_at <= ?'); params.push(`${endDate} 23:59:59`) }
   const scope = scopeFilter(scopeWarehouseIds, 'r.warehouse_id')
   const where = `WHERE ${conds.join(' AND ')}${scope.sql}`
   const allParams = [...params, ...scope.params]

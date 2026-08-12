@@ -4,9 +4,9 @@
  */
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,7 @@ import { getWarehousesActiveApi } from '@/api/warehouses'
 import { LOCATION_STATUS_OPTIONS, type Location, type CreateLocationParams } from '@/types/locations'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import LocationQueryDialog, { type LocationQueryValues } from './LocationQueryDialog'
 import type { TableColumn } from '@/types'
 
 const STATUS_LABEL: Record<number, string> = { 1: '启用', 2: '停用' }
@@ -41,16 +42,24 @@ function buildCode(zone: string, aisle: string, rack: string, level: string, pos
 export default function LocationsPage() {
   const qc = useQueryClient()
   const [keyword, setKeyword]         = useState('')
-  const [search, setSearch]           = useState('')
-  const [warehouseFilter, setWarehouseFilter] = useState<string>('')
+  const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
+  const [statusFilter, setStatusFilter] = useState('')
+  const [zoneFilter, setZoneFilter]     = useState('')
+  const [queryOpen, setQueryOpen]     = useState(false)
   const [dialogOpen, setDialogOpen]   = useState(false)
   const [editTarget, setEditTarget]   = useState<Location | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Location | null>(null)
   const [form, setForm]               = useState<CreateLocationParams>(EMPTY_FORM)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['locations', keyword, warehouseFilter],
-    queryFn: () => getLocationsApi({ keyword, warehouseId: warehouseFilter ? +warehouseFilter : undefined, pageSize: 99999 }),
+    queryKey: ['locations', keyword, warehouseFilter, statusFilter, zoneFilter],
+    queryFn: () => getLocationsApi({
+      keyword,
+      warehouseId: warehouseFilter ?? undefined,
+      status: statusFilter || undefined,
+      zone: zoneFilter || undefined,
+      pageSize: 99999,
+    }),
   })
 
   const { data: whData } = useQuery({
@@ -101,6 +110,27 @@ export default function LocationsPage() {
     return next
   })
 
+  // ── 查询弹窗筛选值 ──
+  const initialQuery: LocationQueryValues = {
+    keyword, warehouseId: warehouseFilter, status: statusFilter, zone: zoneFilter,
+  }
+  function applyQuery(v: LocationQueryValues) {
+    setKeyword(v.keyword)
+    setWarehouseFilter(v.warehouseId)
+    setStatusFilter(v.status)
+    setZoneFilter(v.zone)
+    setQueryOpen(false)
+  }
+  function clearAll() { setKeyword(''); setWarehouseFilter(null); setStatusFilter(''); setZoneFilter('') }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
+    warehouseFilter && { key: 'warehouse', label: `仓库：${(whData ?? []).find((w: { id: number; name: string }) => w.id === warehouseFilter)?.name ?? warehouseFilter}`, onRemove: () => setWarehouseFilter(null) },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABEL[Number(statusFilter)] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
+    zoneFilter && { key: 'zone', label: `区域：${zoneFilter}`, onRemove: () => setZoneFilter('') },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
+
   const columns: TableColumn<Location>[] = [
     { key: 'code',          title: '库位编号', width: 120,
       render: v => <span className="text-doc-code-strong">{v as string}</span> },
@@ -134,30 +164,27 @@ export default function LocationsPage() {
       <PageHeader
         title="库位管理"
         description="管理仓库内的存储库位"
-        actions={<Button onClick={openCreate}>+ 新建库位</Button>}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button onClick={openCreate}>+ 新建库位</Button>
+          </>
+        }
       />
 
-      <FilterCard>
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[180px]">
-            <Input placeholder="库位编号 / 区域" value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
-            />
-          </div>
-          <Select value={warehouseFilter || '__all__'} onValueChange={v => { setWarehouseFilter(v === '__all__' ? '' : v) }}>
-            <SelectTrigger className="w-36"><SelectValue placeholder="全部仓库" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">全部</SelectItem>
-              {(whData ?? []).map((w: { id: number; name: string }) => (
-                <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => { setKeyword(search) }}>搜索</Button>
-          <Button variant="outline" onClick={() => { setSearch(''); setKeyword(''); setWarehouseFilter('') }}>重置</Button>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
         </div>
-      </FilterCard>
+      )}
 
       <DataTable
         columns={columns}
@@ -228,6 +255,13 @@ export default function LocationsPage() {
         confirmText="确认删除"
         onConfirm={() => { deleteMut.mutate(deleteTarget!.id); setDeleteTarget(null) }}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <LocationQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
       />
     </div>
   )

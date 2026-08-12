@@ -12,6 +12,9 @@ const list = async (req, res, next) => {
       pageSize: +req.query.pageSize || 20,
       keyword: req.query.keyword || '',
       status: req.query.status ?? null,
+      startDate: req.query.startDate || '',
+      endDate: req.query.endDate || '',
+      carrierId: req.query.carrierId ? Number(req.query.carrierId) : null,
       warehouseIds: scope(req),
     }))
   } catch (e) { next(e) }

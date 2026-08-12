@@ -62,9 +62,9 @@ const NAV_GROUP_ORDER: Record<string, number> = {
   库存: 50,
   仓储: 60,
   财务: 70,
-  会计: 75,
-  报表: 80,
-  打印: 90,
+  审批中心: 76,
+  会计: 80,
+  报表: 90,
   系统: 100,
 }
 
@@ -82,7 +82,7 @@ const RequisitionFormPage = lazy(() => import('@/pages/purchase-requisitions/for
 const ProductPage = lazy(() => import('@/pages/products'))
 const ProductFormPage = lazy(() => import('@/pages/products/form'))
 const CategoryPage = lazy(() => import('@/pages/categories'))
-const WarehousePage = lazy(() => import('@/pages/warehouses'))
+const WarehouseStructurePage = lazy(() => import('@/pages/warehouse-structure'))
 const InventoryPage = lazy(() => import('@/pages/inventory'))
 const PlasticBoxesPage = lazy(() => import('@/pages/plastic-boxes'))
 const StockcheckPage = lazy(() => import('@/pages/stockcheck'))
@@ -96,9 +96,6 @@ const InboundTasksPage = lazy(() => import('@/pages/inbound-tasks'))
 const InboundTaskCreatePage = lazy(() => import('@/pages/inbound-tasks/create'))
 const InboundTaskDetailPage = lazy(() => import('@/pages/inbound-tasks/detail'))
 const PickingWavesPage = lazy(() => import('@/pages/picking-waves'))
-const SortingBinsPage = lazy(() => import('@/pages/sorting-bins'))
-const LocationsPage = lazy(() => import('@/pages/locations'))
-const RacksPage = lazy(() => import('@/pages/racks'))
 const CustomersPage = lazy(() => import('@/pages/customers'))
 const CarriersPage = lazy(() => import('@/pages/carriers'))
 const LogisticsPage = lazy(() => import('@/pages/logistics'))
@@ -367,7 +364,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     path: '/warehouses',
     title: '仓库管理',
     permission: PERMISSIONS.WAREHOUSE_VIEW,
-    component: WarehousePage,
+    component: WarehouseStructurePage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '仓储', section: '仓库结构', order: 20 },
@@ -376,28 +373,25 @@ export const routeRegistry: RouteRegistryEntry[] = [
     path: '/locations',
     title: '库位管理',
     permission: PERMISSIONS.LOCATION_VIEW,
-    component: LocationsPage,
+    component: WarehouseStructurePage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '仓储', section: '仓库结构', order: 30 },
   },
   {
     path: '/racks',
     title: '货架管理',
     permission: PERMISSIONS.RACK_VIEW,
-    component: RacksPage,
+    component: WarehouseStructurePage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '仓储', section: '仓库结构', order: 40 },
   },
   {
     path: '/sorting-bins',
     title: '分拣格管理',
     permission: PERMISSIONS.SORTING_BIN_VIEW,
-    component: SortingBinsPage,
+    component: WarehouseStructurePage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '仓储', section: '仓库结构', order: 50 },
   },
 
   // ── 财务 ──────────────────────────────────────────────
@@ -667,6 +661,9 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '报表', section: '岗位与审批', order: 60 },
+    // 后端报表/通知接口返回的「异常工作台」path（reports.query.js / reports.metrics.js）
+    // 前端从未注册该页面，归一到岗位工作台（待办/异常聚合入口，语义一致），避免死链
+    aliases: ['/reports/exception-workbench'],
   },
 
   // ── 打印 ──────────────────────────────────────────────
@@ -677,7 +674,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: PrintTemplatesPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '打印', order: 10 },
+    nav: { kind: 'menu', group: '系统', section: '打印', order: 55 },
   },
   {
     path: '/settings/printers',
@@ -686,7 +683,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: PrintersPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '打印', order: 20 },
+    nav: { kind: 'menu', group: '系统', section: '打印', order: 60 },
   },
   {
     path: '/settings/barcode-print-query',
@@ -695,7 +692,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: BarcodePrintQueryPage,
     keepAlive: true,
     tabIdentity: { kind: 'full-url' },
-    nav: { kind: 'menu', group: '打印', order: 30 },
+    nav: { kind: 'menu', group: '系统', section: '打印', order: 65 },
   },
 
   // ── 系统 ──────────────────────────────────────────────
@@ -706,7 +703,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: ApprovalPendingPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '系统', section: '审批中心', order: 5 },
+    nav: { kind: 'menu', group: '审批中心', order: 10 },
   },
   {
     path: '/approvals/flows',
@@ -715,7 +712,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: ApprovalFlowsPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '系统', section: '审批中心', order: 15 },
+    nav: { kind: 'menu', group: '审批中心', order: 20 },
   },
   {
     path: '/departments',

@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
+import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import Pagination from '@/components/shared/Pagination'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getOpLogsApi, clearLogsApi } from '@/api/oplogs'
 import { usePermission } from '@/hooks/usePermission'
@@ -24,6 +24,8 @@ import {
   isSensitivePath,
   type OperationLogStatusTone,
 } from '@/utils/operationLogFormatters'
+import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import OpLogQueryDialog, { type OpLogQueryValues } from './OpLogQueryDialog'
 import type { OpLog } from '@/api/oplogs'
 import type { TableColumn } from '@/types'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -53,18 +55,57 @@ function DetailRow({ label, value }: { label: string; value: unknown }) {
 export default function OpLogsPage() {
   const { can } = usePermission()
   const qc = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [keyword, setKeyword] = useState('')
-  const [module, setModule] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [queryOpen, setQueryOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [clearConfirm, setClearConfirm] = useState(false)
   const [detail, setDetail] = useState<OpLog | null>(null)
 
+  // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
+  const keyword   = readStringParam(searchParams, 'keyword')
+  const module    = readStringParam(searchParams, 'module')
+  const startDate = readStringParam(searchParams, 'startDate')
+  const endDate   = readStringParam(searchParams, 'endDate')
+
   const PAGE_SIZE = 20
-  const { data, isLoading } = useQuery({ queryKey: ['oplogs', { keyword, module, page }], queryFn: () => getOpLogsApi({ page, pageSize: PAGE_SIZE, keyword, module }) })
+  const { data, isLoading } = useQuery({
+    queryKey: ['oplogs', { keyword, module, startDate, endDate, page }],
+    queryFn: () => getOpLogsApi({ page, pageSize: PAGE_SIZE, keyword, module, startDate, endDate }),
+  })
   const total = data?.pagination?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const clear = useMutation({ mutationFn: clearLogsApi, onSuccess: () => qc.invalidateQueries({ queryKey: ['oplogs'] }) })
+
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
+
+  // 查询弹窗初始值
+  const initialQuery: OpLogQueryValues = { keyword, module, startDate, endDate }
+
+  function applyQuery(v: OpLogQueryValues) {
+    updateParams({
+      keyword: v.keyword || null,
+      module: v.module || null,
+      startDate: v.startDate || null,
+      endDate: v.endDate || null,
+    })
+    setPage(1)
+    setQueryOpen(false)
+  }
+
+  function clearAll() {
+    updateParams({ keyword: null, module: null, startDate: null, endDate: null })
+    setPage(1)
+  }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
+    module && { key: 'module', label: `模块：${OPERATION_LOG_MODULE_OPTIONS.find(o => o.value === module)?.label ?? module}`, onRemove: () => updateParams({ module: null }) },
+    startDate && { key: 'startDate', label: `日期从：${startDate}`, onRemove: () => updateParams({ startDate: null }) },
+    endDate && { key: 'endDate', label: `日期至：${endDate}`, onRemove: () => updateParams({ endDate: null }) },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<OpLog>[] = [
     { key: 'createdAt', title: '时间', width: 160, render: (v) => formatDisplayDateTime(v) },
@@ -110,24 +151,24 @@ export default function OpLogsPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="操作日志" description="记录所有写操作，追踪变更历史" actions={
-        can(PERMISSIONS.AUDIT_LOG_CLEAR) ? <Button variant="destructive" size="sm" onClick={() => setClearConfirm(true)}>清理旧日志</Button> : undefined
+        <>
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          {can(PERMISSIONS.AUDIT_LOG_CLEAR) ? <Button variant="destructive" size="sm" onClick={() => setClearConfirm(true)}>清理旧日志</Button> : undefined}
+        </>
       } />
-      <div className="flex gap-2 flex-wrap">
-        <Input placeholder="搜索用户/路径..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} className="w-56"
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }} />
-        <Select value={module || '__all__'} onValueChange={v => { setModule(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-10 w-40">
-            <SelectValue placeholder="全部模块" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部模块</SelectItem>
-            {OPERATION_LOG_MODULE_OPTIONS.map(item => (
-              <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-      </div>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+        </div>
+      )}
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
 
       {/* 分页 */}
@@ -182,6 +223,13 @@ export default function OpLogsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <OpLogQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
     </div>
   )
 }

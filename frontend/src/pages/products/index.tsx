@@ -1,19 +1,18 @@
-import { useState, useRef, useMemo, useEffect } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import Pagination from '@/components/shared/Pagination'
-import { FilterCard } from '@/components/shared/FilterCard'
-import CategoryTreeSelect from '@/components/shared/CategoryTreeSelect'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { useProducts, useDeleteProduct } from '@/hooks/useProducts'
 import { useCategoryTree } from '@/hooks/useCategories'
+import { useSuppliers } from '@/hooks/useSuppliers'
 import { downloadExport } from '@/lib/exportDownload'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
@@ -22,6 +21,7 @@ import { payloadClient as client } from '@/api/client'
 import { printProductLabelApi } from '@/api/products'
 import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import ProductQueryDialog, { type ProductQueryValues } from './ProductQueryDialog'
 import type { Product } from '@/types/products'
 import type { TableColumn } from '@/types'
 import type { Category } from '@/types/categories'
@@ -40,8 +40,13 @@ export default function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const keyword = readStringParam(searchParams, 'keyword')
   const catFilter = readNullableIntParam(searchParams, 'categoryId')
+  const statusFilter = readStringParam(searchParams, 'status')
+  const supplierId = readNullableIntParam(searchParams, 'supplierId')
+  const supplierName = readStringParam(searchParams, 'supplierName')
+  const minPrice = readStringParam(searchParams, 'minPrice')
+  const maxPrice = readStringParam(searchParams, 'maxPrice')
   const page = Math.max(1, Number(searchParams.get('page') || '1') || 1)
-  const [search, setSearch] = useState(keyword)
+  const [queryOpen, setQueryOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [confirmProduct, setConfirmProduct] = useState<Product | null>(null)
   const [importing, setImporting] = useState(false)
@@ -62,15 +67,18 @@ export default function ProductsPage() {
   }
 
   const PAGE_SIZE = 20
-  const { data, isLoading } = useProducts({ page, pageSize: PAGE_SIZE, keyword, categoryId: catFilter })
+  const { data, isLoading } = useProducts({
+    page, pageSize: PAGE_SIZE, keyword, categoryId: catFilter,
+    status: statusFilter || undefined,
+    supplierId: supplierId ?? undefined,
+    minPrice: minPrice || undefined,
+    maxPrice: maxPrice || undefined,
+  })
   const total = data?.pagination?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const { data: categoryTree = [] } = useCategoryTree()
+  const { data: supplierData } = useSuppliers({ pageSize: 99999, page: 1 })
   const { mutate: del } = useDeleteProduct()
-
-  useEffect(() => {
-    setSearch(keyword)
-  }, [keyword])
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
     setSearchParams(upsertSearchParams(searchParams, updates))
@@ -103,6 +111,50 @@ export default function ProductsPage() {
 
   const categoryPathMap = useMemo(() => buildCategoryPathMap(categoryTree), [categoryTree])
 
+  const supplierMap = useMemo(() => {
+    const m = new Map<number, string>()
+    for (const s of supplierData?.list ?? []) m.set(Number(s.id), s.name)
+    return m
+  }, [supplierData])
+
+  // 查询弹窗初始值
+  const initialQuery: ProductQueryValues = {
+    keyword, categoryId: catFilter, status: statusFilter,
+    supplierId, supplierName,
+    minPrice, maxPrice,
+  }
+  function applyQuery(v: ProductQueryValues) {
+    updateParams({
+      keyword: v.keyword || null,
+      categoryId: v.categoryId || null,
+      status: v.status || null,
+      supplierId: v.supplierId || null,
+      supplierName: v.supplierName || null,
+      minPrice: v.minPrice || null,
+      maxPrice: v.maxPrice || null,
+      page: 1,
+    })
+    setQueryOpen(false)
+  }
+  function clearAll() {
+    updateParams({
+      keyword: null, categoryId: null, status: null,
+      supplierId: null, supplierName: null,
+      minPrice: null, maxPrice: null, page: 1,
+    })
+  }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
+    catFilter && { key: 'category', label: `分类：${catFilter}`, onRemove: () => updateParams({ categoryId: null, page: 1 }) },
+    statusFilter === '1' && { key: 'status', label: '状态：启用', onRemove: () => updateParams({ status: null, page: 1 }) },
+    statusFilter === '0' && { key: 'status', label: '状态：停用', onRemove: () => updateParams({ status: null, page: 1 }) },
+    supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierMap.get(supplierId) || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null, page: 1 }) },
+    minPrice && { key: 'minPrice', label: `售价≥${minPrice}`, onRemove: () => updateParams({ minPrice: null, page: 1 }) },
+    maxPrice && { key: 'maxPrice', label: `售价≤${maxPrice}`, onRemove: () => updateParams({ maxPrice: null, page: 1 }) },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
+
   const cols:TableColumn<Product>[] = [
     { key:'code', title:'编码', width:120 },
     { key:'articleNumber', title:'货号', width:100, render:v=>(v as string)||'-' },
@@ -133,6 +185,7 @@ export default function ProductsPage() {
     <div className="space-y-4">
       <PageHeader title="商品管理" description="管理商品档案与分类" actions={
         <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           <Button variant="outline" onClick={()=>downloadExport('/export/stock').catch(e=>toast.error((e as Error).message))}>导出库存</Button>
           <Button variant="outline" onClick={()=>setImportOpen(true)}>批量导入</Button>
           <Button variant="outline" onClick={()=>navigate('/categories')}>分类管理</Button>
@@ -140,23 +193,20 @@ export default function ProductsPage() {
         </div>
       } />
 
-      <FilterCard>
-        <Input placeholder="搜索编码/名称/条码" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>e.key==='Enter'&&updateParams({ keyword: search, page: 1 })} className="h-9 w-60" />
-        <CategoryTreeSelect
-          value={catFilter}
-          onChange={(v) => {
-            updateParams({ categoryId: v, page: 1 })
-          }}
-          emptyLabel="全部分类"
-          leafOnly
-          className="w-48"
-        />
-        <Button size="sm" variant="outline" onClick={()=>updateParams({ keyword: search, page: 1 })}>搜索</Button>
-        {(keyword || catFilter) && <Button size="sm" variant="ghost" onClick={()=>{
-          setSearch('')
-          updateParams({ keyword: null, categoryId: null, page: 1 })
-        }}>重置</Button>}
-      </FilterCard>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+        </div>
+      )}
+
       <DataTable columns={cols} data={data?.list??[]} loading={isLoading} rowKey="id" />
       <Pagination page={page} totalPages={totalPages} total={total} unit="件"
         onPageChange={(p) => updateParams({ page: p })} />
@@ -203,6 +253,12 @@ export default function ProductsPage() {
         confirmText="删除"
         onConfirm={() => { del(confirmProduct!.id); setConfirmProduct(null) }}
         onCancel={() => setConfirmProduct(null)}
+      />
+      <ProductQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
       />
     </div>
   )

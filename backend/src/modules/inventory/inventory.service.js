@@ -899,7 +899,7 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, targetCo
  * 在途采购 = 已提交(status=2)采购单下单量 − 已上架量；只列「补货点>0 且 可用+在途 < 补货点」。
  * 数据权限走 scopeFilter(ip.warehouse_id)。
  */
-async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehouseId = null, scopeWarehouseIds = null }) {
+async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehouseId = null, categoryId = null, scopeWarehouseIds = null }) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
 
   // 在途采购子查询（按 仓库×商品）：每个 PO 行先 GREATEST(0, 下单−已上架) 再求和，
@@ -931,6 +931,7 @@ async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehou
   const baseParams = []
   if (keyword) { conditions.push('(p.code LIKE ? OR p.name LIKE ?)'); baseParams.push(`%${keyword}%`, `%${keyword}%`) }
   if (warehouseId) { conditions.push('ip.warehouse_id = ?'); baseParams.push(warehouseId) }
+  if (categoryId) { conditions.push('p.category_id = ?'); baseParams.push(categoryId) }
   const scope = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
   // 只列需补货：补货点>0 且 可用+在途 < 补货点（表达式直接入 WHERE，避免依赖 ONLY_FULL_GROUP_BY 下的 HAVING）
   const filterCond = `${reorderExpr} > 0 AND (${availableExpr} + ${inTransitExpr}) < ${reorderExpr}`

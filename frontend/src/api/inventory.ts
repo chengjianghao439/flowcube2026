@@ -87,7 +87,7 @@ export interface ReplenishmentItem {
   suggestReorderPoint: number
 }
 
-export const getReplenishmentApi = async (p: { page?: number; pageSize?: number; keyword?: string; warehouseId?: number | null }) =>
+export const getReplenishmentApi = async (p: { page?: number; pageSize?: number; keyword?: string; warehouseId?: number | null; categoryId?: number | null }) =>
   apiClient.get<PaginatedData<ReplenishmentItem>>('/inventory/replenishment', { params: p })
 
 /** 保存补货策略（warehouseId=0 表示通用默认）；采纳「建议补货点」时调用 */

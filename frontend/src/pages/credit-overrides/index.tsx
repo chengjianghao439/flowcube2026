@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import Pagination from '@/components/shared/Pagination'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,6 +20,8 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import CreditOverrideQueryDialog, { type CreditOverrideQueryValues } from './CreditOverrideQueryDialog'
 import type { CreditOverride } from '@/types/credit-override'
 import type { TableColumn } from '@/types'
 
@@ -110,18 +113,25 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
 export default function CreditOverridesPage() {
   const { can } = usePermission()
   const canApply = can(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [queryOpen, setQueryOpen] = useState(false)
 
-  const [status, setStatus] = useState('')
-  const [keyword, setKeyword] = useState('')
-  const [applied, setApplied] = useState<{ keyword: string; status: string }>({ keyword: '', status: '' })
+  // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
+  const keyword   = readStringParam(searchParams, 'keyword')
+  const status    = readStringParam(searchParams, 'status')
+  const startDate = readStringParam(searchParams, 'startDate')
+  const endDate   = readStringParam(searchParams, 'endDate')
+
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
 
   const { data, isLoading, isError, error, refetch } = useCreditOverrides({
     page,
     pageSize: 20,
-    status: applied.status || undefined,
-    keyword: applied.keyword || undefined,
+    status: status || undefined,
+    keyword: keyword || undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
   })
   const { mutate: submit } = useSubmitCreditOverride()
   const { mutate: cancel } = useCancelCreditOverride()
@@ -131,7 +141,36 @@ export default function CreditOverridesPage() {
   const list = useMemo(() => data?.list ?? [], [data])
   const total = data?.pagination.total ?? 0
 
-  function apply() { setApplied({ keyword, status }); setPage(1) }
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
+
+  // 查询弹窗初始值
+  const initialQuery: CreditOverrideQueryValues = { keyword, status, startDate, endDate }
+
+  function applyQuery(v: CreditOverrideQueryValues) {
+    updateParams({
+      keyword: v.keyword || null,
+      status: v.status || null,
+      startDate: v.startDate || null,
+      endDate: v.endDate || null,
+    })
+    setPage(1)
+    setQueryOpen(false)
+  }
+
+  function clearAll() {
+    updateParams({ keyword: null, status: null, startDate: null, endDate: null })
+    setPage(1)
+  }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
+    status && { key: 'status', label: `状态：${STATUS_OPTIONS.find(([v]) => v === status)?.[1] ?? status}`, onRemove: () => updateParams({ status: null }) },
+    startDate && { key: 'startDate', label: `创建日期从：${startDate}`, onRemove: () => updateParams({ startDate: null }) },
+    endDate && { key: 'endDate', label: `创建日期至：${endDate}`, onRemove: () => updateParams({ endDate: null }) },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<CreditOverride>[] = [
     { key: 'overrideNo', title: '申请单号', width: 140, render: v => <span className="text-doc-code">{String(v)}</span> },
@@ -175,19 +214,27 @@ export default function CreditOverridesPage() {
       <PageHeader
         title="超额放行申请"
         description="客户授信不足时，销售员发起放行申请，走审批流；审批通过后该销售单占库自动放行，无需放行权限。"
-        actions={canApply ? <Button onClick={() => setCreateOpen(true)}>发起申请</Button> : undefined}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            {canApply ? <Button onClick={() => setCreateOpen(true)}>发起申请</Button> : undefined}
+          </>
+        }
       />
 
-      <FilterCard>
-        <div className="flex flex-wrap items-center gap-3">
-          <Input placeholder="申请单号 / 销售单号 / 客户" value={keyword} onChange={e => setKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && apply()} className="w-56" />
-          <select value={status} onChange={e => setStatus(e.target.value)} className="h-9 w-32 rounded-md border border-input bg-transparent px-2 text-sm">
-            <option value="">全部状态</option>
-            {STATUS_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <Button size="sm" variant="outline" onClick={apply}>搜索</Button>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
         </div>
-      </FilterCard>
+      )}
 
       {isError && !data ? (
         <QueryErrorState error={error} onRetry={() => void refetch()} title="加载失败" compact />
@@ -197,6 +244,13 @@ export default function CreditOverridesPage() {
       {total > 0 && <Pagination page={page} totalPages={Math.ceil(total / 20)} total={total} onPageChange={setPage} />}
 
       <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+
+      <CreditOverrideQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
     </div>
   )
 }

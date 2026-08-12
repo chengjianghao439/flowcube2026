@@ -1,15 +1,13 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getInventoryAgingApi, getExpiryAlertsApi, type AgingItem, type ExpiryAlert } from '@/api/inventory'
+import InventoryAgingQueryDialog, { type InventoryAgingQueryValues } from './InventoryAgingQueryDialog'
 import type { TableColumn } from '@/types'
 
 function fmtQty(v: unknown): string {
@@ -21,10 +19,10 @@ const fmtMoney = (v: unknown) => `¥${Number(v).toFixed(2)}`
 
 export default function InventoryAgingPage() {
   const [warehouseId, setWarehouseId] = useState<number | null>(null)
-  const [search, setSearch] = useState('')
   const [keyword, setKeyword] = useState('')
   const [staleDays, setStaleDays] = useState(90)
   const [tab, setTab] = useState<'aging' | 'expiry'>('aging')
+  const [queryOpen, setQueryOpen] = useState(false)
 
   const agingQ = useQuery({
     queryKey: ['inventory-aging', keyword, warehouseId, staleDays],
@@ -39,6 +37,26 @@ export default function InventoryAgingPage() {
   const buckets = agingQ.data?.buckets ?? []
   const list = agingQ.data?.list ?? []
   const expiryList = expiryQ.data?.list ?? []
+
+  const initialQuery: InventoryAgingQueryValues = {
+    keyword, warehouseId, warehouseName: '', staleDays,
+  }
+  function applyQuery(v: InventoryAgingQueryValues) {
+    setKeyword(v.keyword)
+    setWarehouseId(v.warehouseId)
+    setStaleDays(v.staleDays)
+    setQueryOpen(false)
+  }
+  function clearAll() {
+    setKeyword(''); setWarehouseId(null); setStaleDays(90)
+  }
+
+  // 当前生效筛选摘要（可逐项移除；呆滞阈值默认 90 天不显示）
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
+    warehouseId && { key: 'warehouse', label: `仓库：${warehouseId}`, onRemove: () => setWarehouseId(null) },
+    staleDays !== 90 && { key: 'staleDays', label: `呆滞阈值：${staleDays} 天`, onRemove: () => setStaleDays(90) },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const agingCols: TableColumn<AgingItem>[] = [
     { key: 'productCode', title: '商品编码', width: 120, render: v => <span className="text-doc-code">{String(v)}</span> },
@@ -71,27 +89,27 @@ export default function InventoryAgingPage() {
       <PageHeader
         title="库龄与呆滞"
         description="库龄自本仓落库起算（调拨/拆分会重置）；金额按移动加权成本 avg_cost 估值，仅供参考不作账。呆滞 = 仍有库存且超过阈值天数无出库。"
-        actions={<Button onClick={() => { agingQ.refetch(); expiryQ.refetch() }}>刷新</Button>}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button onClick={() => { agingQ.refetch(); expiryQ.refetch() }}>刷新</Button>
+          </div>
+        }
       />
 
-      <FilterCard>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Input placeholder="商品编码 / 名称..." value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && setKeyword(search)} className="w-52" />
-            <Button variant="outline" onClick={() => setKeyword(search)}>搜索</Button>
-          </div>
-          <WarehouseSelect value={warehouseId} onChange={id => setWarehouseId(id)} allowClear placeholder="全部仓库" className="w-44" />
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            呆滞阈值
-            <Select value={String(staleDays)} onValueChange={v => setStaleDays(+v)}>
-              <SelectTrigger className="h-9 w-24"><SelectValue /></SelectTrigger>
-              <SelectContent>{[60, 90, 120].map(d => <SelectItem key={d} value={String(d)}>{d} 天</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
         </div>
-      </FilterCard>
+      )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {buckets.map(b => (
@@ -113,6 +131,13 @@ export default function InventoryAgingPage() {
       {tab === 'aging'
         ? <DataTable columns={agingCols} data={list} loading={agingQ.isLoading} rowKey="id" emptyText="暂无库存数据" />
         : <DataTable columns={expiryCols} data={expiryList} loading={expiryQ.isLoading} rowKey="id" emptyText="暂无临期 / 过期批次（仅批次管理商品参与效期预警）" />}
+
+      <InventoryAgingQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
     </div>
   )
 }

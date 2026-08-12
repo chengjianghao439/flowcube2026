@@ -1,44 +1,101 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { listRequisitionsApi } from '@/api/purchase-requisitions'
+import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import RequisitionQueryDialog, { type RequisitionQueryValues } from './RequisitionQueryDialog'
 import type { PurchaseRequisition } from '@/types/purchase-requisition'
 import type { TableColumn } from '@/types'
 
-const STATUS_OPTIONS = [
-  { value: '1', label: '草稿' }, { value: '2', label: '待审批' }, { value: '3', label: '已批准' },
-  { value: '4', label: '已驳回' }, { value: '5', label: '已取消' }, { value: '6', label: '已转采购' },
-]
+const STATUS_LABELS: Record<string, string> = {
+  '1': '草稿', '2': '待审批', '3': '已批准',
+  '4': '已驳回', '5': '已取消', '6': '已转采购',
+}
 
 export default function RequisitionsPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   const { can } = usePermission()
-  const [search, setSearch] = useState('')
-  const [keyword, setKeyword] = useState('')
-  const [status, setStatus] = useState<string | null>(null)
-  const [warehouseId, setWarehouseId] = useState<number | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [queryOpen, setQueryOpen] = useState(false)
+
+  // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
+  const keyword       = readStringParam(searchParams, 'keyword')
+  const statusFilter  = readStringParam(searchParams, 'status')
+  const warehouseId   = Number(searchParams.get('warehouseId') || '') || null
+  const warehouseName = readStringParam(searchParams, 'warehouseName')
+  const applicantId   = Number(searchParams.get('applicantId') || '') || null
+  const applicantName = readStringParam(searchParams, 'applicantName')
+  const startDate     = readStringParam(searchParams, 'startDate')
+  const endDate       = readStringParam(searchParams, 'endDate')
 
   const { data, isLoading } = useQuery({
-    queryKey: ['requisitions', keyword, status, warehouseId],
-    queryFn: () => listRequisitionsApi({ page: 1, pageSize: 200, keyword: keyword || undefined, status: status || undefined, warehouseId: warehouseId ?? undefined }),
+    queryKey: ['requisitions', keyword, statusFilter, warehouseId, applicantId, startDate, endDate],
+    queryFn: () => listRequisitionsApi({
+      page: 1, pageSize: 200,
+      keyword: keyword || undefined,
+      status: statusFilter || undefined,
+      warehouseId: warehouseId ?? undefined,
+      applicantId: applicantId ?? undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    }),
   })
   const list = data?.list ?? []
 
   function open(path: string, title: string) { addTab({ key: path, title, path }); navigate(path) }
-  function reset() { setSearch(''); setKeyword(''); setStatus(null); setWarehouseId(null) }
+
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
+
+  // 查询弹窗初始值
+  const initialQuery: RequisitionQueryValues = {
+    keyword, status: statusFilter,
+    warehouseId, warehouseName,
+    applicantId, applicantName,
+    startDate, endDate,
+  }
+
+  function applyQuery(v: RequisitionQueryValues) {
+    updateParams({
+      keyword: v.keyword || null,
+      status: v.status || null,
+      warehouseId: v.warehouseId || null,
+      warehouseName: v.warehouseName || null,
+      applicantId: v.applicantId || null,
+      applicantName: v.applicantName || null,
+      startDate: v.startDate || null,
+      endDate: v.endDate || null,
+    })
+    setQueryOpen(false)
+  }
+
+  function clearAll() {
+    updateParams({
+      keyword: null, status: null,
+      warehouseId: null, warehouseName: null,
+      applicantId: null, applicantName: null,
+      startDate: null, endDate: null,
+    })
+  }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
+    warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
+    applicantId && { key: 'applicant', label: `申请人：${applicantName || applicantId}`, onRemove: () => updateParams({ applicantId: null, applicantName: null }) },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<PurchaseRequisition>[] = [
     { key: 'requisitionNo', title: '请购单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
@@ -56,31 +113,30 @@ export default function RequisitionsPage() {
       <PageHeader
         title="采购请购"
         description="发起采购需求 → 一级审批 → 转生成采购单。审批人不能是申请人本人；已批准后按供应商拆分转采购单。"
-        actions={can(PERMISSIONS.PURCHASE_REQUISITION_CREATE)
-          ? <Button onClick={() => open('/purchase-requisitions/new', '新建请购单')}>新建请购单</Button>
-          : undefined}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            {can(PERMISSIONS.PURCHASE_REQUISITION_CREATE)
+              ? <Button onClick={() => open('/purchase-requisitions/new', '新建请购单')}>新建请购单</Button>
+              : undefined}
+          </>
+        }
       />
-      <FilterCard>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Input placeholder="单号 / 事由 / 申请人..." value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && setKeyword(search)} className="w-52" />
-            <Button variant="outline" onClick={() => setKeyword(search)}>搜索</Button>
-          </div>
-          <Select value={status ?? '__all__'} onValueChange={v => setStatus(v === '__all__' ? null : v)}>
-            <SelectTrigger className="h-10 w-32"><SelectValue placeholder="全部状态" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">全部状态</SelectItem>
-              {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <WarehouseSelect value={warehouseId} onChange={id => setWarehouseId(id)} allowClear placeholder="全部仓库" className="w-44" />
-          {(keyword || status || warehouseId != null) && (
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={reset}>重置</Button>
-          )}
+
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
         </div>
-      </FilterCard>
+      )}
+
       <DataTable
         columns={columns}
         data={list}
@@ -88,6 +144,13 @@ export default function RequisitionsPage() {
         rowKey="id"
         emptyText="暂无请购单"
         onRowDoubleClick={r => open(`/purchase-requisitions/${r.id}`, `请购单 ${r.requisitionNo}`)}
+      />
+
+      <RequisitionQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
       />
     </div>
   )

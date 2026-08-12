@@ -4,9 +4,9 @@
  */
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,7 @@ import { getWarehousesActiveApi } from '@/api/warehouses'
 import type { TableColumn } from '@/types'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import SortingBinQueryDialog, { type SortingBinQueryValues } from './SortingBinQueryDialog'
 
 const STATUS_TONE:  Record<number, StatusTone> = { 1:'draft', 2:'active' }
 const STATUS_LABEL: Record<number, string>     = { 1:'空闲', 2:'占用' }
@@ -169,20 +170,45 @@ function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 export default function SortingBinsPage() {
   const qc = useQueryClient()
-  const [keyword, setKeyword]     = useState('')
-  const [search, setSearch]       = useState('')
+  const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
-  const [createOpen, setCreateOpen]     = useState(false)
-  const [batchOpen, setBatchOpen]       = useState(false)
+  const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
+  const [warehouseName, setWarehouseName] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [batchOpen, setBatchOpen] = useState(false)
   const [releaseTarget, setReleaseTarget] = useState<SortingBin | null>(null)
   const [deleteTarget, setDeleteTarget]   = useState<SortingBin | null>(null)
   const [editTarget, setEditTarget]       = useState<SortingBin | null>(null)
 
   const { data: bins, isLoading } = useQuery({
-    queryKey: ['sorting-bins', keyword, statusFilter],
-    queryFn: () => getSortingBinsApi({ keyword, status: statusFilter ? +statusFilter : undefined })
-      .then(r => r ?? []),
+    queryKey: ['sorting-bins', keyword, statusFilter, warehouseFilter],
+    queryFn: () => getSortingBinsApi({
+      keyword,
+      status: statusFilter ? +statusFilter : undefined,
+      warehouseId: warehouseFilter ?? undefined,
+    }).then(r => r ?? []),
   })
+
+  // ── 查询弹窗筛选值 ──
+  const initialQuery: SortingBinQueryValues = {
+    keyword, status: statusFilter, warehouseId: warehouseFilter, warehouseName,
+  }
+  function applyQuery(v: SortingBinQueryValues) {
+    setKeyword(v.keyword)
+    setStatusFilter(v.status)
+    setWarehouseFilter(v.warehouseId)
+    setWarehouseName(v.warehouseName)
+    setQueryOpen(false)
+  }
+  function clearAll() { setKeyword(''); setStatusFilter(''); setWarehouseFilter(null); setWarehouseName('') }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABEL[+statusFilter] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
+    warehouseFilter && { key: 'warehouse', label: `仓库：${warehouseName || warehouseFilter}`, onRemove: () => { setWarehouseFilter(null); setWarehouseName('') } },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   function invalidate() { qc.invalidateQueries({ queryKey: ['sorting-bins'] }) }
 
@@ -240,32 +266,26 @@ export default function SortingBinsPage() {
         description="管理仓库 Put Wall 分拣格，查看占用状态"
         actions={
           <>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button variant="outline" onClick={() => setBatchOpen(true)}>批量创建</Button>
             <Button onClick={() => setCreateOpen(true)}>+ 新建分拣格</Button>
           </>
         }
       />
 
-      <FilterCard>
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[180px]">
-            <Input placeholder="搜索编号 / 仓库 / 客户" value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key==='Enter') { setKeyword(search) } }}
-            />
-          </div>
-          <Select value={statusFilter || '__all__'} onValueChange={v => setStatusFilter(v === '__all__' ? '' : v)}>
-            <SelectTrigger className="w-32"><SelectValue placeholder="全部状态" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">全部</SelectItem>
-              <SelectItem value="1">空闲</SelectItem>
-              <SelectItem value="2">占用</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button onClick={() => setKeyword(search)}>搜索</Button>
-          <Button variant="outline" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter('') }}>重置</Button>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
         </div>
-      </FilterCard>
+      )}
 
       <DataTable
         columns={columns}
@@ -277,6 +297,13 @@ export default function SortingBinsPage() {
       <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} onSuccess={invalidate} />
       <BatchDialog  open={batchOpen}  onClose={() => setBatchOpen(false)}  onSuccess={invalidate} />
       <EditDialog   bin={editTarget}  onClose={() => setEditTarget(null)}  onSuccess={invalidate} />
+
+      <SortingBinQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
 
       <ConfirmDialog
         open={!!releaseTarget}

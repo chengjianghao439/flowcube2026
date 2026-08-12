@@ -5,18 +5,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -24,6 +23,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getWaybillsApi, setWaybillTrackingApi, retryWaybillApi, voidWaybillApi } from '@/api/logistics'
 import type { LogisticsWaybill } from '@/types/logistics'
 import type { TableColumn } from '@/types'
+import WaybillQueryDialog, { type WaybillQueryValues } from './WaybillQueryDialog'
 
 const STATUS_OPTIONS = [
   { value: 'all', label: '全部状态' },
@@ -44,11 +44,10 @@ export default function LogisticsPage() {
   const { can } = usePermission()
   const canManage = can(PERMISSIONS.LOGISTICS_MANAGE)
 
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('all')
-  const [applied, setApplied] = useState<{ keyword: string; status: string }>({ keyword: '', status: 'all' })
+  const [applied, setApplied] = useState<{ keyword: string; status: string; carrierId: number | null; startDate: string; endDate: string }>({ keyword: '', status: 'all', carrierId: null, startDate: '', endDate: '' })
   const [trackTarget, setTrackTarget] = useState<LogisticsWaybill | null>(null)
   const [trackingInput, setTrackingInput] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['waybills', applied],
@@ -57,10 +56,12 @@ export default function LogisticsPage() {
       pageSize: 500,
       keyword: applied.keyword || undefined,
       status: applied.status === 'all' ? undefined : applied.status,
+      carrierId: applied.carrierId ?? undefined,
+      startDate: applied.startDate || undefined,
+      endDate: applied.endDate || undefined,
     }),
   })
   const list = data?.list ?? []
-  const total = data?.pagination?.total ?? 0
 
   function invalidate() { qc.invalidateQueries({ queryKey: ['waybills'] }) }
 
@@ -80,8 +81,24 @@ export default function LogisticsPage() {
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
   })
 
-  function apply() { setApplied({ keyword: search, status }) }
-  function reset() { setSearch(''); setStatus('all'); setApplied({ keyword: '', status: 'all' }) }
+  function reset() { setApplied({ keyword: '', status: 'all', carrierId: null, startDate: '', endDate: '' }) }
+
+  // ── 查询弹窗筛选值 ──
+  const initialQuery: WaybillQueryValues = {
+    keyword: applied.keyword, status: applied.status === 'all' ? '' : applied.status,
+    carrierId: applied.carrierId, startDate: applied.startDate, endDate: applied.endDate,
+  }
+  function applyQuery(v: WaybillQueryValues) {
+    setApplied({ keyword: v.keyword, status: v.status || 'all', carrierId: v.carrierId, startDate: v.startDate, endDate: v.endDate })
+    setQueryOpen(false)
+  }
+  function clearAll() { reset() }
+
+  const chips = [
+    applied.keyword && { key: 'keyword', label: `关键字：${applied.keyword}`, onRemove: () => setApplied({ ...applied, keyword: '' }) },
+    applied.status !== 'all' && { key: 'status', label: `状态：${STATUS_OPTIONS.find(o => o.value === applied.status)?.label ?? applied.status}`, onRemove: () => setApplied({ ...applied, status: 'all' }) },
+    applied.carrierId && { key: 'carrier', label: `承运商：${applied.carrierId}`, onRemove: () => setApplied({ ...applied, carrierId: null }) },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<LogisticsWaybill>[] = [
     { key: 'waybillNo', title: '运单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
@@ -125,35 +142,27 @@ export default function LogisticsPage() {
       <PageHeader
         title="物流运单"
         description="发出的每个包裹一张运单：指定承运商并开通电子面单后，打包完成自动生成待取号运单，取号成功回写快递单号并打印面单。未对接平台时可手工录快递单号。"
-        actions={<Button onClick={() => refetch()}>刷新</Button>}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button variant="outline" onClick={() => refetch()}>刷新</Button>
+          </>
+        }
       />
 
-      <FilterCard>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="运单号 / 快递单号 / 销售单 / 收件人..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && apply()}
-              className="w-64"
-            />
-            <Button variant="outline" onClick={apply}>搜索</Button>
-          </div>
-          <div className="h-5 w-px bg-border" />
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="sm" onClick={apply}>筛选</Button>
-          {(applied.keyword || applied.status !== 'all') && (
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={reset}>重置</Button>
-          )}
-          <div className="ml-auto text-sm text-muted-foreground">共 <span className="font-semibold text-foreground">{total}</span> 张运单</div>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
         </div>
-      </FilterCard>
+      )}
 
       {isError && !data ? (
         <QueryErrorState error={error} onRetry={() => void refetch()} title="运单加载失败" compact />
@@ -183,6 +192,13 @@ export default function LogisticsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <WaybillQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
     </div>
   )
 }

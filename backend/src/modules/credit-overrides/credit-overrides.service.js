@@ -185,7 +185,7 @@ async function assertOwner(row, operator) {
   if (Number(row.applicant_id) !== Number(operator?.operatorId)) throw new AppError('只能操作本人发起的放行申请', 403)
 }
 
-async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', saleOrderId = '' } = {}) {
+async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', saleOrderId = '', startDate = '', endDate = '' } = {}) {
   const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['c.deleted_at IS NULL']
   const params = []
@@ -193,6 +193,8 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', sal
   if (saleOrderId) { conds.push('c.sale_order_id=?'); params.push(Number(saleOrderId)) }
   const kw = String(keyword || '').trim()
   if (kw) { conds.push('(c.override_no LIKE ? OR c.sale_order_no LIKE ? OR c.customer_name LIKE ?)'); params.push(`%${kw}%`, `%${kw}%`, `%${kw}%`) }
+  if (startDate) { conds.push('c.created_at >= ?'); params.push(`${String(startDate).slice(0, 10)} 00:00:00`) }
+  if (endDate) { conds.push('c.created_at <= ?'); params.push(`${String(endDate).slice(0, 10)} 23:59:59`) }
   const where = `WHERE ${conds.join(' AND ')}`
   const [rows] = await pool.query(
     `SELECT * FROM sale_credit_overrides c ${where} ORDER BY c.created_at DESC LIMIT ? OFFSET ?`,

@@ -5,14 +5,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   getWavesApi, getWaveByIdApi, startWaveApi, finishPickingApi, finishWaveApi, cancelWaveApi,
@@ -24,6 +22,7 @@ import { confirmAction } from '@/lib/confirm'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import WaveQueryDialog, { type WaveQueryValues } from './WaveQueryDialog'
 
 function getWaveClosureCopy(wave: PickingWave | null) {
   if (!wave) {
@@ -76,8 +75,8 @@ export default function PickingWavesPage() {
   const addTab = useWorkspaceStore(s => s.addTab)
   const [searchParams, setSearchParams] = useSearchParams()
   const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const selectedWaveId = Number(searchParams.get('waveId') || 0) || null
   const focus = searchParams.get('focus') || ''
   const progressRef = useRef<HTMLDivElement | null>(null)
@@ -145,6 +144,22 @@ export default function PickingWavesPage() {
     addTab({ key: path, title, path })
     navigate(path)
   }, [addTab, navigate])
+
+  // ── 查询弹窗筛选值 ──
+  const initialQuery: WaveQueryValues = {
+    keyword, status: statusFilter, warehouseId: null, startDate: '', endDate: '',
+  }
+  function applyQuery(v: WaveQueryValues) {
+    setKeyword(v.keyword)
+    setStatusFilter(v.status)
+    setQueryOpen(false)
+  }
+  function clearAll() { setKeyword(''); setStatusFilter('') }
+
+  const chips = [
+    keyword && { key: 'keyword', label: `波次号：${keyword}`, onRemove: () => setKeyword('') },
+    statusFilter && { key: 'status', label: `状态：${WAVE_STATUS_LABEL[Number(statusFilter) as WaveStatus] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns = useMemo<TableColumn<PickingWave>[]>(() => [
     {
@@ -222,31 +237,25 @@ export default function PickingWavesPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="波次拣货" description="管理波次拣货、分拣推进，以及出库箱贴打印异常的处理。" />
+      <PageHeader
+        title="波次拣货"
+        description="管理波次拣货、分拣推进，以及出库箱贴打印异常的处理。"
+        actions={<Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>}
+      />
 
-      <FilterCard>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[180px] flex-1">
-            <Input
-              placeholder="波次单号"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
-            />
-          </div>
-          <Select value={statusFilter || '__all__'} onValueChange={v => { setStatusFilter(v === '__all__' ? '' : v) }}>
-            <SelectTrigger className="w-32"><SelectValue placeholder="全部状态" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">全部</SelectItem>
-              {([1, 2, 3, 4, 5] as WaveStatus[]).map(s => (
-                <SelectItem key={s} value={String(s)}>{WAVE_STATUS_LABEL[s]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => { setKeyword(search) }}>搜索</Button>
-          <Button variant="outline" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter('') }}>重置</Button>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
         </div>
-      </FilterCard>
+      )}
 
       <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id" />
 
@@ -392,6 +401,13 @@ export default function PickingWavesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <WaveQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
     </div>
   )
 }

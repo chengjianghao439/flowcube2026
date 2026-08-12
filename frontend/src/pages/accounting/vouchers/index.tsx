@@ -7,6 +7,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import { X } from 'lucide-react'
 import { Plus, RefreshCw, Download, FileText, Undo2, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +34,7 @@ import {
   VOUCHER_STATUS_LABELS, VOUCHER_SOURCE_OPTIONS,
   type Voucher, type ManualEntryInput,
 } from '@/types/accounting'
+import VoucherQueryDialog, { type VoucherQueryValues } from './VoucherQueryDialog'
 
 const PAGE_SIZE = 20
 const fmtMoney = (n: number | null | undefined) =>
@@ -272,6 +274,7 @@ export default function VouchersPage() {
   const [sourceType, setSourceType] = useState('')
   const [status, setStatus] = useState('')
   const [keyword, setKeyword] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const [page, setPage] = useState(1)
   const query = useMemo(() => ({
     period: period || undefined, sourceType: sourceType || undefined,
@@ -282,6 +285,26 @@ export default function VouchersPage() {
   const list = data?.list ?? []
   const total = data?.pagination?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  // ── 查询弹窗筛选值 ──
+  const initialQuery: VoucherQueryValues = { period, sourceType, status, keyword }
+  function applyQuery(v: VoucherQueryValues) {
+    setPeriod(v.period)
+    setSourceType(v.sourceType)
+    setStatus(v.status)
+    setKeyword(v.keyword)
+    setPage(1)
+    setQueryOpen(false)
+  }
+  function clearAll() { setPeriod(''); setSourceType(''); setStatus(''); setKeyword(''); setPage(1) }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    period && { key: 'period', label: `期间：${period}`, onRemove: () => setPeriod('') },
+    sourceType && { key: 'sourceType', label: `来源：${VOUCHER_SOURCE_OPTIONS.find(o => o.value === sourceType)?.label ?? sourceType}`, onRemove: () => setSourceType('') },
+    status && { key: 'status', label: `状态：${VOUCHER_STATUS_LABELS[Number(status)] ?? status}`, onRemove: () => setStatus('') },
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const [genOpen, setGenOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
@@ -335,6 +358,7 @@ export default function VouchersPage() {
         description="由业务事实自动生成的借贷凭证，可导出通用记账凭证或金蝶 KIS 格式"
         actions={
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canManage && <Button variant="outline" onClick={() => setGenOpen(true)}><RefreshCw className="mr-1.5 h-4 w-4" />生成本期凭证</Button>}
             {canManage && <Button variant="outline" onClick={() => setManualOpen(true)}><Plus className="mr-1.5 h-4 w-4" />手工凭证</Button>}
             {canExport && (
@@ -354,29 +378,22 @@ export default function VouchersPage() {
 
       <ReconciliationCard />
 
-      {/* 筛选 */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Input value={period} onChange={e => { setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6)); setPage(1) }}
-          placeholder="期间 YYYYMM" className="h-9 w-36 font-mono" />
-        <Select value={sourceType || 'all'} onValueChange={v => { setSourceType(v === 'all' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="来源类型" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部来源</SelectItem>
-            {VOUCHER_SOURCE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={status || 'all'} onValueChange={v => { setStatus(v === 'all' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-9 w-32"><SelectValue placeholder="状态" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部状态</SelectItem>
-            <SelectItem value="1">已生成</SelectItem>
-            <SelectItem value="3">已冲销</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input value={keyword} onChange={e => { setKeyword(e.target.value); setPage(1) }}
-          placeholder="凭证号 / 单号 / 摘要" className="h-9 w-52" />
-        <span className="ml-auto text-sm text-muted-foreground">共 {total} 张</span>
-      </div>
+      {/* 当前生效筛选（可逐项移除） */}
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+        </div>
+      )}
+
+      <div className="text-sm text-muted-foreground">共 {total} 张</div>
 
       <div className="card-base p-2">
         <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无凭证，点击「生成本期凭证」" columnStorageKey="acct-vouchers" />
@@ -394,6 +411,13 @@ export default function VouchersPage() {
       <GenerateDialog open={genOpen} onClose={() => setGenOpen(false)} />
       <ManualDialog open={manualOpen} onClose={() => setManualOpen(false)} />
       <DetailDialog id={detailId} onClose={() => setDetailId(null)} />
+
+      <VoucherQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
 
       <ConfirmDialog
         open={!!reverseTarget}

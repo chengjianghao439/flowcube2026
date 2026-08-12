@@ -1,29 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Package, Warehouse, Lock, CheckCircle } from 'lucide-react'
+import { Package, Warehouse, Lock, CheckCircle, X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import Pagination from '@/components/shared/Pagination'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useLogs, useOutbound, useInventoryOverview } from '@/hooks/useInventory'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { ProductFinder, FinderTrigger } from '@/components/finder'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import ContainerDrawer from '@/components/shared/ContainerDrawer'
-import CategoryTreeSelect from '@/components/shared/CategoryTreeSelect'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
+import { useCategoryTree } from '@/hooks/useCategories'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import InventoryOverviewQueryDialog, { type InventoryOverviewQueryValues } from './InventoryOverviewQueryDialog'
+import InventoryLogsQueryDialog, { type InventoryLogsQueryValues } from './InventoryLogsQueryDialog'
 import type { InventoryLog, InventoryOverviewItem } from '@/types/inventory'
 import type { TableColumn } from '@/types'
+import type { Category } from '@/types/categories'
 import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 
 type Tab = 'overview' | 'logs'
@@ -64,6 +65,17 @@ function AvailableBadge({ available, onHand }: { available: number; onHand: numb
   return <span className={cls}>{formatQty(available)}</span>
 }
 
+function findCatName(nodes: Category[], id: number): string | null {
+  for (const n of nodes) {
+    if (n.id === id) return n.name
+    if (n.children?.length) {
+      const found = findCatName(n.children, id)
+      if (found) return found
+    }
+  }
+  return null
+}
+
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function InventoryPage() {
@@ -73,12 +85,16 @@ export default function InventoryPage() {
   // 总览参数
   const keyword = readStringParam(searchParams, 'keyword')
   const warehouseId = readNullableIntParam(searchParams, 'warehouseId')
+  const warehouseName = readStringParam(searchParams, 'warehouseName')
   const categoryId = readNullableIntParam(searchParams, 'categoryId')
-  const [search, setSearch] = useState(keyword)
 
   // 日志参数
   const rawLogType = Number(searchParams.get('logType') || '')
   const logType = Number.isInteger(rawLogType) && rawLogType > 0 ? rawLogType : null
+  const logProductId = readNullableIntParam(searchParams, 'logProductId')
+  const logProductName = readStringParam(searchParams, 'logProductName')
+  const logWarehouseId = readNullableIntParam(searchParams, 'logWarehouseId')
+  const logWarehouseName = readStringParam(searchParams, 'logWarehouseName')
 
   // 分页参数：总览与流水各用各的（/inventory/overview 与 /inventory/logs 各归各的接口）
   const page     = Math.max(1, Number(searchParams.get('page') || '1') || 1)
@@ -87,6 +103,10 @@ export default function InventoryPage() {
   // 容器侧滑
   const [drawerItem, setDrawerItem] = useState<InventoryOverviewItem | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  // 查询弹窗
+  const [overviewQueryOpen, setOverviewQueryOpen] = useState(false)
+  const [logsQueryOpen, setLogsQueryOpen] = useState(false)
 
   // 出库弹窗
   const [opOpen, setOpOpen] = useState(false); const [, setOpType] = useState<OpType>('outbound')
@@ -97,16 +117,18 @@ export default function InventoryPage() {
   const { data: overview, isLoading: overviewLoading } = useInventoryOverview({
     page, pageSize: PAGE_SIZE, keyword, warehouseId, categoryId,
   })
-  const { data: logs, isLoading: logLoading } = useLogs({ page: logPage, pageSize: PAGE_SIZE, type: logType })
+  const { data: logs, isLoading: logLoading } = useLogs({
+    page: logPage, pageSize: PAGE_SIZE, type: logType,
+    productId: logProductId ?? undefined, warehouseId: logWarehouseId ?? undefined,
+  })
   const overviewTotal = overview?.pagination?.total ?? 0
   const overviewTotalPages = Math.max(1, Math.ceil(overviewTotal / PAGE_SIZE))
   const logsTotal = logs?.pagination?.total ?? 0
   const logsTotalPages = Math.max(1, Math.ceil(logsTotal / PAGE_SIZE))
   const { data: warehouses } = useWarehousesActive()
+  const { data: categoryTree = [] } = useCategoryTree()
   const { mutate: outbound, isPending } = useOutbound()
   const setF = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
-
-  useEffect(() => { setSearch(keyword) }, [keyword])
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
     setSearchParams(upsertSearchParams(searchParams, updates))
@@ -125,6 +147,61 @@ export default function InventoryPage() {
   const TYPE_TONE: Record<number, StatusTone> = { 1: 'success', 2: 'danger', 3: 'info' }
   const TYPE_NAMES: Record<number, string> = { 1: '入库', 2: '出库', 3: '调整' }
 
+  const catName = categoryId ? findCatName(categoryTree, categoryId) : null
+  const overviewWarehouseName = warehouseId ? (warehouseName || (warehouses ?? []).find((w: { id: number; name: string }) => w.id === warehouseId)?.name) || null : null
+  const logsWarehouseName = logWarehouseId ? (warehouses ?? []).find((w: { id: number; name: string }) => w.id === logWarehouseId)?.name ?? null : null
+  // ── 查询弹窗初始值 / 应用 ──
+  const initialOverviewQuery: InventoryOverviewQueryValues = { keyword, categoryId, warehouseId, warehouseName: warehouseName || '' }
+  function applyOverviewQuery(v: InventoryOverviewQueryValues) {
+    updateParams({
+      keyword: v.keyword || null,
+      categoryId: v.categoryId || null,
+      warehouseId: v.warehouseId || null,
+      warehouseName: v.warehouseName || null,
+      page: 1,
+    })
+    setOverviewQueryOpen(false)
+  }
+
+  const initialLogsQuery: InventoryLogsQueryValues = {
+    type: logType,
+    productId: logProductId, productCode: '', productName: logProductName,
+    warehouseId: logWarehouseId, warehouseName: logWarehouseName || logsWarehouseName || '',
+  }
+  function applyLogsQuery(v: InventoryLogsQueryValues) {
+    updateParams({
+      logType: v.type || null,
+      logProductId: v.productId || null,
+      logProductName: v.productName || null,
+      logWarehouseId: v.warehouseId || null,
+      logWarehouseName: v.warehouseName || null,
+      logPage: 1,
+    })
+    setLogsQueryOpen(false)
+  }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = (tab === 'overview'
+    ? [
+        keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
+        categoryId && { key: 'category', label: `分类：${catName ?? categoryId}`, onRemove: () => updateParams({ categoryId: null, page: 1 }) },
+        warehouseId && { key: 'warehouse', label: `仓库：${overviewWarehouseName ?? warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
+      ]
+    : [
+        logType && { key: 'logType', label: `类型：${TYPE_NAMES[logType] ?? logType}`, onRemove: () => updateParams({ logType: null, logPage: 1 }) },
+        logProductId && { key: 'logProduct', label: `商品：${logProductName || logProductId}`, onRemove: () => updateParams({ logProductId: null, logProductName: null, logPage: 1 }) },
+        logWarehouseId && { key: 'logWarehouse', label: `仓库：${logsWarehouseName ?? logWarehouseId}`, onRemove: () => updateParams({ logWarehouseId: null, logWarehouseName: null, logPage: 1 }) },
+      ]
+  ).filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
+
+  function clearAll() {
+    if (tab === 'overview') {
+      updateParams({ keyword: null, categoryId: null, warehouseId: null, warehouseName: null, page: 1 })
+    } else {
+      updateParams({ logType: null, logProductId: null, logProductName: null, logWarehouseId: null, logWarehouseName: null, logPage: 1 })
+    }
+  }
+
   const logCols: TableColumn<InventoryLog>[] = [
     { key: 'createdAt', title: '时间', width: 160, render: v => formatDisplayDateTime(v) },
     { key: 'typeName', title: '类型', width: 80, render: (_, r) => <SoftStatusLabel label={TYPE_NAMES[r.type]} tone={TYPE_TONE[r.type] ?? 'info'} /> },
@@ -142,6 +219,7 @@ export default function InventoryPage() {
     <div className="space-y-4">
       <PageHeader title="库存管理" description="库存总览与出入库记录；采购入库请走「收货订单」上架后计入库存" actions={
         <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => tab === 'logs' ? setLogsQueryOpen(true) : setOverviewQueryOpen(true)}>查询</Button>
           <Button variant="outline" onClick={() => downloadExport(tab === 'logs' ? '/export/inventory-logs' : '/export/stock').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
           <Button variant="outline" onClick={() => openOp('outbound')}>出库</Button>
           <Button variant="outline" asChild><Link to="/stockcheck">盘点调整</Link></Button>
@@ -158,6 +236,20 @@ export default function InventoryPage() {
         ))}
       </div>
 
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+        </div>
+      )}
+
       {tab === 'overview' && (
         <>
           {/* 统计卡片 */}
@@ -171,34 +263,6 @@ export default function InventoryPage() {
             <StatCard icon={<CheckCircle className="h-5 w-5 text-emerald-500" />} label="可用总量"
               value={overviewLoading ? '—' : formatQty(stats?.totalAvailable)} sub="在库 − 预占" accent="text-emerald-600" />
           </div>
-
-          {/* 筛选区 */}
-          <FilterCard>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Input placeholder="商品编码 / 名称..." value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && updateParams({ keyword: search, page: 1 })}
-                  className="w-52" />
-                <Button variant="outline" onClick={() => updateParams({ keyword: search, page: 1 })}>搜索</Button>
-              </div>
-              <div className="h-5 w-px bg-border" />
-              <CategoryTreeSelect value={categoryId} onChange={v => updateParams({ categoryId: v, page: 1 })}
-                emptyLabel="全部分类" leafOnly className="h-10 w-48" />
-              <Select value={warehouseId == null ? '__all__' : String(warehouseId)}
-                onValueChange={v => updateParams({ warehouseId: v === '__all__' ? null : +v, page: 1 })}>
-                <SelectTrigger className="h-10 w-44"><SelectValue placeholder="全部仓库" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">全部仓库</SelectItem>
-                  {(warehouses ?? []).map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {(keyword || warehouseId || categoryId) && (
-                <Button variant="ghost" size="sm" className="text-muted-foreground"
-                  onClick={() => { setSearch(''); updateParams({ keyword: null, warehouseId: null, categoryId: null, page: 1 }) }}>重置</Button>
-              )}
-            </div>
-          </FilterCard>
 
           {/* 库存表格 */}
           <div className="card-base overflow-hidden">
@@ -260,18 +324,6 @@ export default function InventoryPage() {
 
       {tab === 'logs' && (
         <>
-          <FilterCard>
-            <Select value={logType == null ? '__all__' : String(logType)}
-              onValueChange={v => updateParams({ logType: v === '__all__' ? null : +v, logPage: 1 })}>
-              <SelectTrigger className="h-9 w-36"><SelectValue placeholder="全部类型" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">全部类型</SelectItem>
-                <SelectItem value="1">入库</SelectItem>
-                <SelectItem value="2">出库</SelectItem>
-                <SelectItem value="3">调整</SelectItem>
-              </SelectContent>
-            </Select>
-          </FilterCard>
           <DataTable columns={logCols} data={logs?.list ?? []} loading={logLoading} rowKey="id" />
 
           {/* 分页 */}
@@ -311,6 +363,19 @@ export default function InventoryPage() {
       <ProductFinder open={productFinderOpen} warehouseId={form.warehouseId ? +form.warehouseId : null}
         onConfirm={p => { setForm(f => ({ ...f, productId: String(p.id), productName: p.name })); setProductFinderOpen(false) }}
         onClose={() => setProductFinderOpen(false)} />
+
+      <InventoryOverviewQueryDialog
+        open={overviewQueryOpen}
+        initial={initialOverviewQuery}
+        onClose={() => setOverviewQueryOpen(false)}
+        onApply={applyOverviewQuery}
+      />
+      <InventoryLogsQueryDialog
+        open={logsQueryOpen}
+        initial={initialLogsQuery}
+        onClose={() => setLogsQueryOpen(false)}
+        onApply={applyLogsQuery}
+      />
     </div>
   )
 }

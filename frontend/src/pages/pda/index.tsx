@@ -14,13 +14,17 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
 
 // ── 作业入口（带权限过滤）────────────────────────────────────────────────────
-const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm }[] = [
+// perms：可空数组。有值 = 需同时具备（canAll，与路由树 required 的 AND 语义一致）；
+// 无值 = 单个 perm 判断。分拣作业实际权限是 SORTING_BIN_VIEW + WAREHOUSE_TASK_SORT
+// （见 router/index.tsx 的 /pda/sort），入口用 SORTING_BIN_MANAGE 会让只有分拣
+// 执行权限的账号看不到入口。
+const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm; perms?: PdaPerm[] }[] = [
   { icon: '📥', label: '收货订单', path: '/pda/inbound',  perm: PERMISSIONS.INBOUND_ORDER_VIEW },
   { icon: '🔬', label: '来料质检', path: '/pda/inbound-qa', perm: PERMISSIONS.INBOUND_RECEIVE_EXECUTE },
   { icon: '🗑️', label: '拒收处置', path: '/pda/qa-dispose', perm: PERMISSIONS.INBOUND_QA_DISPOSE },
   { icon: '📤', label: '扫码上架', path: '/pda/putaway',  perm: PERMISSIONS.INBOUND_PUTAWAY_EXECUTE },
   { icon: '🗂️', label: '拣货任务', path: '/pda/picking',  perm: PERMISSIONS.WAREHOUSE_TASK_PICK },
-  { icon: '🔀', label: '订单分拣', path: '/pda/sort',      perm: PERMISSIONS.SORTING_BIN_MANAGE },
+  { icon: '🔀', label: '订单分拣', path: '/pda/sort',      perm: PERMISSIONS.SORTING_BIN_VIEW, perms: [PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT] },
   { icon: '✅', label: '复核任务', path: '/pda/check',     perm: PERMISSIONS.WAREHOUSE_TASK_CHECK },
   { icon: '📦', label: '打包作业', path: '/pda/pack',      perm: PERMISSIONS.WAREHOUSE_TASK_PACK },
   { icon: '✂️', label: '塑料盒拆分', path: '/pda/split',     perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT },
@@ -39,7 +43,7 @@ export default function PdaWorkbench() {
   const logout   = useAuthStore(s => s.logout)
   const hour     = new Date().getHours()
   const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
-  const { roleLabel, roleIcon, roleColor, can, permissionsMissing } = usePdaRole()
+  const { roleLabel, roleIcon, roleColor, can, canAll, permissionsMissing } = usePdaRole()
 
   // 绑定状态在渲染时读一次即可：绑定/解绑都会离开本页再回来，回来时组件重新挂载
   const deviceCredential = getDeviceCredential()
@@ -47,7 +51,7 @@ export default function PdaWorkbench() {
   const deviceCode = deviceCredential?.deviceCode ?? ''
   const sessionReady = !!getDeviceSession()
 
-  const allowedOps = ALL_OPS.filter(op => can(op.perm))
+  const allowedOps = ALL_OPS.filter(op => op.perms ? canAll(op.perms) : can(op.perm))
 
   return (
     <div className="min-h-screen bg-background">

@@ -4,11 +4,10 @@
  */
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import { getRacksApi, deleteRackApi, printRackLabelApi } from '@/api/racks'
@@ -21,23 +20,27 @@ import type { Rack } from '@/types/racks'
 import RackFormDialog from '@/pages/locations/components/RackFormDialog'
 import { getLocalPrintEnvironmentKind } from '@/lib/desktopLocalPrint'
 import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
+import RackQueryDialog, { type RackQueryValues } from './RackQueryDialog'
 
 export default function RacksPage() {
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
-  const [warehouseFilter, setWarehouseFilter] = useState<string>('')
+  const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
+  const [warehouseName, setWarehouseName] = useState('')
+  const [zoneFilter, setZoneFilter] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editItem, setEditItem] = useState<Rack | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Rack | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['racks', keyword, warehouseFilter],
+    queryKey: ['racks', keyword, warehouseFilter, zoneFilter],
     queryFn: () =>
       getRacksApi({
         pageSize: 99999,
         keyword,
-        warehouseId: warehouseFilter ? +warehouseFilter : undefined,
+        warehouseId: warehouseFilter ?? undefined,
+        zone: zoneFilter || undefined,
       }),
   })
 
@@ -45,6 +48,26 @@ export default function RacksPage() {
     queryKey: ['warehouses-simple'],
     queryFn: () => getWarehousesActiveApi().then(r => r ?? []),
   })
+
+  // ── 查询弹窗筛选值 ──
+  const initialQuery: RackQueryValues = {
+    keyword, warehouseId: warehouseFilter, warehouseName, zone: zoneFilter,
+  }
+  function applyQuery(v: RackQueryValues) {
+    setKeyword(v.keyword)
+    setWarehouseFilter(v.warehouseId)
+    setWarehouseName(v.warehouseName)
+    setZoneFilter(v.zone)
+    setQueryOpen(false)
+  }
+  function clearAll() { setKeyword(''); setWarehouseFilter(null); setWarehouseName(''); setZoneFilter('') }
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
+    warehouseFilter && { key: 'warehouse', label: `仓库：${warehouseName || (whData ?? []).find((w: { id: number; name: string }) => w.id === warehouseFilter)?.name || warehouseFilter}`, onRemove: () => { setWarehouseFilter(null); setWarehouseName('') } },
+    zoneFilter && { key: 'zone', label: `区域：${zoneFilter}`, onRemove: () => setZoneFilter('') },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => deleteRackApi(id, { skipGlobalError: true }),
@@ -72,10 +95,6 @@ export default function RacksPage() {
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '打印失败'),
   })
-
-  function handleSearch() {
-    setKeyword(search)
-  }
 
   const localPrintEnv = getLocalPrintEnvironmentKind()
 
@@ -132,7 +151,12 @@ export default function RacksPage() {
       <PageHeader
         title="货架管理"
         description="货架唯一条码（H）与标签打印"
-        actions={<Button onClick={() => { setEditItem(null); setFormOpen(true) }}>+ 新建货架</Button>}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button onClick={() => { setEditItem(null); setFormOpen(true) }}>+ 新建货架</Button>
+          </>
+        }
       />
 
       {localPrintEnv !== 'ok' && (
@@ -162,29 +186,19 @@ export default function RacksPage() {
         </div>
       )}
 
-      <FilterCard>
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[180px]">
-            <Input
-              placeholder="编码 / 名称 / 库区"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            />
-          </div>
-          <select
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-            value={warehouseFilter || '__all__'}
-            onChange={e => { setWarehouseFilter(e.target.value === '__all__' ? '' : e.target.value) }}
-          >
-            <option value="__all__">全部仓库</option>
-            {whData?.map(w => (
-              <option key={w.id} value={String(w.id)}>{w.name}</option>
-            ))}
-          </select>
-          <Button size="sm" variant="outline" onClick={handleSearch}>搜索</Button>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
         </div>
-      </FilterCard>
+      )}
 
       <DataTable
         columns={columns}
@@ -212,6 +226,13 @@ export default function RacksPage() {
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
         loading={deleteMut.isPending}
+      />
+
+      <RackQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
       />
     </div>
   )

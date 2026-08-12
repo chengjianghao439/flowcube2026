@@ -6,7 +6,14 @@ const { SAFE_STATION_CLIENT_ID } = require('../print-jobs/print-jobs.middleware'
 const finder = async (req,res,next) => { try { return successResponse(res, await svc.findForFinder({ page:+req.query.page||1, pageSize:+req.query.pageSize||15, keyword:req.query.keyword||'', categoryId:req.query.categoryId?+req.query.categoryId:null, warehouseId:req.query.warehouseId?+req.query.warehouseId:null }), '查询成功') } catch(e){next(e)} }
 
 // 商品
-const list       = async (req,res,next) => { try { return successResponse(res, await svc.findAll({ page:+req.query.page||1, pageSize:+req.query.pageSize||20, keyword:req.query.keyword||'', categoryId:req.query.categoryId?+req.query.categoryId:null }), '查询成功') } catch(e){next(e)} }
+const list       = async (req,res,next) => { try { return successResponse(res, await svc.findAll({
+  page:+req.query.page||1, pageSize:+req.query.pageSize||20, keyword:req.query.keyword||'',
+  categoryId:req.query.categoryId?+req.query.categoryId:null,
+  status:req.query.status||'',
+  supplierId:req.query.supplierId?+req.query.supplierId:null,
+  minPrice:req.query.minPrice!==undefined?req.query.minPrice:null,
+  maxPrice:req.query.maxPrice!==undefined?req.query.maxPrice:null,
+}), '查询成功') } catch(e){next(e)} }
 const listActive = async (req,res,next) => { try { return successResponse(res, await svc.findAllActive(), '查询成功') } catch(e){next(e)} }
 const detail     = async (req,res,next) => { try { return successResponse(res, await svc.findById(+req.params.id), '查询成功') } catch(e){next(e)} }
 const create     = async (req,res,next) => { try { return successResponse(res, await svc.create(req.body), '创建成功', 201) } catch(e){next(e)} }

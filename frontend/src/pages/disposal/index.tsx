@@ -1,13 +1,12 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useDisposalList } from '@/hooks/useDisposal'
+import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -15,6 +14,7 @@ import type { DisposalOrder } from '@/types/disposal'
 import type { TableColumn } from '@/types'
 import DisposalDetailDialog from './components/DisposalDetailDialog'
 import CreateDisposalDialog from './components/CreateDisposalDialog'
+import DisposalQueryDialog, { type DisposalQueryValues } from './DisposalQueryDialog'
 
 const STATUS_TONE: Record<number, StatusTone> = {
   1: 'draft',   // 草稿
@@ -24,16 +24,64 @@ const STATUS_TONE: Record<number, StatusTone> = {
   5: 'danger',  // 已驳回
   6: 'danger',  // 已取消
 }
+const STATUS_LABEL: Record<number, string> = {
+  1: '草稿', 2: '待审批', 3: '已批准', 4: '已处置', 5: '已驳回', 6: '已取消',
+}
 
 export default function DisposalPage() {
   const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
+  const [warehouseName, setWarehouseName] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailId, setDetailId] = useState<number | null>(null)
   const { can } = usePermission()
+  const { data: warehouses } = useWarehousesActive()
 
-  const { data, isLoading } = useDisposalList({ pageSize: 99999, keyword, status: statusFilter || undefined })
+  const { data, isLoading } = useDisposalList({
+    pageSize: 99999,
+    keyword: keyword || undefined,
+    status: statusFilter || undefined,
+    warehouseId: warehouseFilter ?? undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+  })
+
+  const initialQuery: DisposalQueryValues = {
+    keyword, status: statusFilter,
+    warehouseId: warehouseFilter, warehouseName,
+    startDate, endDate,
+  }
+  function applyQuery(v: DisposalQueryValues) {
+    setKeyword(v.keyword)
+    setStatusFilter(v.status)
+    setWarehouseFilter(v.warehouseId)
+    setWarehouseName(v.warehouseName)
+    setStartDate(v.startDate)
+    setEndDate(v.endDate)
+    setQueryOpen(false)
+  }
+  function clearAll() {
+    setKeyword(''); setStatusFilter('')
+    setWarehouseFilter(null); setWarehouseName('')
+    setStartDate(''); setEndDate('')
+  }
+
+  const whName = warehouseFilter
+    ? ((warehouses ?? []).find((w: { id: number; name: string }) => w.id === warehouseFilter)?.name ?? warehouseName) || ''
+    : ''
+
+  // 当前生效筛选摘要（可逐项移除）
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
+    statusFilter && { key: 'status', label: `状态：${STATUS_LABEL[Number(statusFilter)] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
+    warehouseFilter && { key: 'warehouse', label: `仓库：${whName || warehouseFilter}`, onRemove: () => { setWarehouseFilter(null); setWarehouseName('') } },
+    startDate && { key: 'startDate', label: `创建起始：${startDate}`, onRemove: () => setStartDate('') },
+    endDate && { key: 'endDate', label: `创建截止：${endDate}`, onRemove: () => setEndDate('') },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<DisposalOrder>[] = [
     { key: 'disposalNo', title: '处置单号', width: 180, render: (v) => <span className="text-doc-code">{String(v)}</span> },
@@ -65,40 +113,38 @@ export default function DisposalPage() {
         title="呆滞库存处置"
         description="圈选呆滞商品生成处置单 → 审批 → 降价促销/退货供应商/报废（处置只走 ERP 端，出库自动扣库存）"
         actions={
-          can(PERMISSIONS.INVENTORY_DISPOSAL_CREATE) ? (
-            <Button onClick={() => setCreateOpen(true)}>+ 新建处置单</Button>
-          ) : undefined
+          <>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            {can(PERMISSIONS.INVENTORY_DISPOSAL_CREATE) ? (
+              <Button onClick={() => setCreateOpen(true)}>+ 新建处置单</Button>
+            ) : undefined}
+          </>
         }
       />
-      <FilterCard>
-        <Input
-          placeholder="搜索单号/仓库..." value={search}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          className="h-9 w-56"
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') setKeyword(search) }}
-        />
-        <Select value={statusFilter || '__none__'} onValueChange={(v) => setStatusFilter(v === '__none__' ? '' : v)}>
-          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="全部状态" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">全部状态</SelectItem>
-            <SelectItem value="1">草稿</SelectItem>
-            <SelectItem value="2">待审批</SelectItem>
-            <SelectItem value="3">已批准</SelectItem>
-            <SelectItem value="4">已处置</SelectItem>
-            <SelectItem value="5">已驳回</SelectItem>
-            <SelectItem value="6">已取消</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button size="sm" variant="outline" onClick={() => setKeyword(search)}>搜索</Button>
-        {(keyword || statusFilter) && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter('') }}>重置</Button>
-        )}
-      </FilterCard>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+        </div>
+      )}
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
 
       <CreateDisposalDialog open={createOpen} onClose={() => setCreateOpen(false)} />
       <DisposalDetailDialog open={!!detailId} onClose={() => setDetailId(null)} id={detailId} />
+      <DisposalQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
     </div>
   )
 }

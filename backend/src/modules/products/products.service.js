@@ -240,28 +240,35 @@ async function assertProductDeletable(id) {
   }
 }
 
-async function findAll({ page=1, pageSize=20, keyword='', categoryId=null }) {
+async function findAll({ page=1, pageSize=20, keyword='', categoryId=null, status='', supplierId=null, minPrice=null, maxPrice=null }) {
   const offset = (page-1)*pageSize
-  const like = `%${keyword}%`
-  const catFilter = categoryId ? 'AND p.category_id = ?' : ''
-  const params = categoryId
-    ? [like, like, like, categoryId, pageSize, offset]
-    : [like, like, like, pageSize, offset]
+  const conds = ['p.deleted_at IS NULL']
+  const params = []
+  if (keyword) {
+    const like = `%${keyword}%`
+    conds.push('(p.code LIKE ? OR p.name LIKE ? OR p.barcode LIKE ?)')
+    params.push(like, like, like)
+  }
+  if (categoryId) { conds.push('p.category_id = ?'); params.push(categoryId) }
+  // 启用状态（is_active）：'1' 启用 / '0' 停用
+  if (status === '1' || status === '0') { conds.push('p.is_active = ?'); params.push(status) }
+  if (supplierId) { conds.push('p.supplier_id = ?'); params.push(supplierId) }
+  const priceExpr = 'COALESCE(p.sale_price_a, p.sale_price)'
+  if (minPrice != null && minPrice !== '') { conds.push(`${priceExpr} >= ?`); params.push(Number(minPrice)) }
+  if (maxPrice != null && maxPrice !== '') { conds.push(`${priceExpr} <= ?`); params.push(Number(maxPrice)) }
+  const where = conds.join(' AND ')
 
   const [rows] = await pool.query(
     `SELECT p.*, c.name AS category_name, s.name AS supplier_name
      FROM product_items p LEFT JOIN product_categories c ON p.category_id=c.id
      LEFT JOIN supply_suppliers s ON p.supplier_id=s.id
-     WHERE p.deleted_at IS NULL AND (p.code LIKE ? OR p.name LIKE ? OR p.barcode LIKE ?)
-     ${catFilter} ORDER BY p.created_at DESC LIMIT ? OFFSET ?`,
-    params,
+     WHERE ${where} ORDER BY p.created_at DESC LIMIT ? OFFSET ?`,
+    [...params, pageSize, offset],
   )
 
-  const cntParams = categoryId ? [like, like, like, categoryId] : [like, like, like]
   const [[{total}]] = await pool.query(
-    `SELECT COUNT(*) AS total FROM product_items p
-     WHERE p.deleted_at IS NULL AND (p.code LIKE ? OR p.name LIKE ? OR p.barcode LIKE ?) ${catFilter}`,
-    cntParams,
+    `SELECT COUNT(*) AS total FROM product_items p WHERE ${where}`,
+    params,
   )
   const list = rows.map(fmtProduct)
   // 批量带出计量单位（文档03 Phase1 只读展示），一次查询避免 N+1

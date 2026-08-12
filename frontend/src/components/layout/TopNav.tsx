@@ -29,7 +29,7 @@ const ALL_NAV_PATHS: string[] = TOP_NAV_SECTIONS.flatMap((section) =>
  * 当前 pathname 命中的唯一导航项。
  *
  * 必须在**全部**导航项里做最长前缀匹配，不能只在组内匹配：
- * /reports/reconciliation 归「财务」而 /reports 归「报表」，/settings/printers 归「打印」
+ * /reports/reconciliation 归「财务」而 /reports 归「报表」，/settings/printers 归「系统」
  * 而 /settings 归「系统」——组内匹配会让两个一级入口同时高亮，并把父路径那一项误标为 active。
  */
 function resolveActiveNavPath(pathname: string): string | null {

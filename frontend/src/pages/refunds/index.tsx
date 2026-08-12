@@ -1,8 +1,8 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,6 +19,7 @@ import type { RefundOrder } from '@/types/refund'
 import type { TableColumn } from '@/types'
 import { useQuery } from '@tanstack/react-query'
 import RefundDetailDialog from './components/RefundDetailDialog'
+import RefundQueryDialog, { type RefundQueryValues } from './RefundQueryDialog'
 
 const STATUS_TONE: Record<number, StatusTone> = {
   1: 'draft',    // 草稿
@@ -30,15 +31,41 @@ const STATUS_TONE: Record<number, StatusTone> = {
 const m = (n: number) => (Number(n) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function RefundsPage() {
+  const STATUS_NAME: Record<number, string> = { 1: '草稿', 2: '已确认', 3: '已完成', 4: '已取消' }
   const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailId, setDetailId] = useState<number | null>(null)
   const { can } = usePermission()
   const canCreate = can(PERMISSIONS.REFUND_ORDER_CREATE)
 
-  const { data, isLoading } = useRefundList({ pageSize: 99999, keyword, status: statusFilter || undefined })
+  const { data, isLoading } = useRefundList({
+    pageSize: 99999,
+    keyword,
+    status: statusFilter || undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+  })
+
+  // ── 查询弹窗筛选值 ──
+  const initialQuery: RefundQueryValues = { keyword, status: statusFilter, startDate, endDate }
+  function applyQuery(v: RefundQueryValues) {
+    setKeyword(v.keyword)
+    setStatusFilter(v.status)
+    setStartDate(v.startDate)
+    setEndDate(v.endDate)
+    setQueryOpen(false)
+  }
+  function clearAll() { setKeyword(''); setStatusFilter(''); setStartDate(''); setEndDate('') }
+
+  const chips = [
+    keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
+    statusFilter && { key: 'status', label: `状态：${STATUS_NAME[Number(statusFilter)] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
+    (startDate || endDate) && { key: 'date', label: `日期：${startDate || '…'} ~ ${endDate || '…'}`, onRemove: () => { setStartDate(''); setEndDate('') } },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<RefundOrder>[] = [
     { key: 'refundNo', title: '退款单号', width: 170, render: (v) => <span className="text-doc-code">{String(v)}</span> },
@@ -69,35 +96,38 @@ export default function RefundsPage() {
       <PageHeader
         title="退货退款单"
         description="已收款的销售退货需先退款（否则退货被负余额守卫拦截）；退款从资金账户出账并冲减已收金额"
-        actions={canCreate ? <Button onClick={() => setCreateOpen(true)}>+ 新建退款单</Button> : undefined}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            {canCreate ? <Button onClick={() => setCreateOpen(true)}>+ 新建退款单</Button> : undefined}
+          </>
+        }
       />
-      <FilterCard>
-        <Input
-          placeholder="搜索退款单号/销售单号/客户..." value={search}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          className="h-9 w-64"
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') setKeyword(search) }}
-        />
-        <Select value={statusFilter || '__none__'} onValueChange={(v) => setStatusFilter(v === '__none__' ? '' : v)}>
-          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="全部状态" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">全部状态</SelectItem>
-            <SelectItem value="1">草稿</SelectItem>
-            <SelectItem value="2">已确认</SelectItem>
-            <SelectItem value="3">已完成</SelectItem>
-            <SelectItem value="4">已取消</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button size="sm" variant="outline" onClick={() => setKeyword(search)}>搜索</Button>
-        {(keyword || statusFilter) && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setStatusFilter('') }}>重置</Button>
-        )}
-      </FilterCard>
+
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {chips.map(c => (
+            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+        </div>
+      )}
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
 
       <CreateRefundDialog open={createOpen} onClose={() => setCreateOpen(false)} />
       <RefundDetailDialog open={!!detailId} onClose={() => setDetailId(null)} id={detailId} />
+      <RefundQueryDialog
+        open={queryOpen}
+        initial={initialQuery}
+        onClose={() => setQueryOpen(false)}
+        onApply={applyQuery}
+      />
     </div>
   )
 }

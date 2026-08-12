@@ -25,6 +25,9 @@ async function list(req, res, next) {
       pageSize: +q.pageSize || 20,
       keyword: q.keyword || '',
       status: q.status ? +q.status : null,
+      warehouseId: q.warehouseId ? +q.warehouseId : null,
+      startDate: q.startDate || '',
+      endDate: q.endDate || '',
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result, '查询成功')

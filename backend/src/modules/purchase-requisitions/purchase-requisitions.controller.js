@@ -6,7 +6,7 @@ const { extractRequestKey } = require('../../utils/requestKey')
 // operator 补上 warehouseIds（getOperatorFromRequest 不含仓库数据权限，service 的 assertInScope 需要）
 const op = req => ({ ...getOperatorFromRequest(req), warehouseIds: req.user?.warehouseIds ?? null })
 
-const list = async (req, res, next) => { try { return successResponse(res, await svc.findAll({ page: +req.query.page || 1, pageSize: +req.query.pageSize || 20, status: req.query.status || '', keyword: req.query.keyword || '', warehouseId: req.query.warehouseId || '', applicantId: req.query.applicantId || '' }, req.user?.warehouseIds ?? null), '查询成功') } catch (e) { next(e) } }
+const list = async (req, res, next) => { try { return successResponse(res, await svc.findAll({ page: +req.query.page || 1, pageSize: +req.query.pageSize || 20, status: req.query.status || '', keyword: req.query.keyword || '', warehouseId: req.query.warehouseId || '', applicantId: req.query.applicantId || '', startDate: req.query.startDate || '', endDate: req.query.endDate || '' }, req.user?.warehouseIds ?? null), '查询成功') } catch (e) { next(e) } }
 const detail = async (req, res, next) => { try { return successResponse(res, await svc.findById(+req.params.id, req.user?.warehouseIds ?? null), '查询成功') } catch (e) { next(e) } }
 const create = async (req, res, next) => { try { return successResponse(res, await svc.create(req.body, op(req)), '创建成功', 201) } catch (e) { next(e) } }
 const update = async (req, res, next) => { try { await svc.update(+req.params.id, req.body, op(req)); return successResponse(res, null, '保存成功') } catch (e) { next(e) } }
