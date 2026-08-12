@@ -3,6 +3,7 @@
  * 无感操作：扫物流条码 → 自动查询 → 自动出库，无需额外确认按钮
  */
 import { useState, useCallback } from 'react'
+import { Truck, CircleCheck, Package } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
@@ -118,7 +119,7 @@ export default function PdaShipPage() {
 
   if (done && info) return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
-      <div className="text-6xl mb-6">🚚</div>
+      <Truck className="h-16 w-16 text-primary mb-6" />
       <h2 className="text-2xl font-bold text-foreground">出库完成！</h2>
       <p className="text-muted-foreground mt-2 mb-1">订单 <span className="font-mono font-semibold text-foreground">{info.taskNo}</span></p>
       <p className="text-muted-foreground mb-8">{info.customerName} 已完成发货</p>
@@ -224,7 +225,11 @@ export default function PdaShipPage() {
                       pkg.barcode === info.barcode ? 'bg-primary/10 border border-primary/30' : 'bg-muted/20'
                     }`}>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm">{pkg.status === 2 ? '✅' : '📦'}</span>
+                        <span className="flex items-center gap-1 text-xs">
+                          {pkg.status === 2
+                            ? <><CircleCheck className="h-4 w-4 text-green-600" /><span className="font-medium text-green-600">已出库</span></>
+                            : <><Package className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">待出库</span></>}
+                        </span>
                         <p className="font-mono text-sm font-semibold text-foreground">{pkg.barcode}</p>
                         {pkg.barcode === info.barcode && <SoftStatusLabel label="当前" tone="active" />}
                       </div>

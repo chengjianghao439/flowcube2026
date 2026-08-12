@@ -12,11 +12,11 @@ const { assertInScope } = require('../../utils/warehouseScope')
 
 async function tryFinishTask(conn, taskId) {
   const finishRule = assertStatusAction('inboundTask', 'finish', 3)
-  // 待上架(4) 或 待质检(5) 容器只要还有一个未处理，任务就不能完结（含质检未做完，文档 07）
+  // 待上架(4) 容器只要还有一个未处理，任务就不能完结
   const [[{ n }]] = await conn.query(
     `SELECT COUNT(*) AS n FROM inventory_containers
-     WHERE inbound_task_id = ? AND deleted_at IS NULL AND status IN (?, ?)`,
-    [taskId, CONTAINER_STATUS.PENDING_PUTAWAY, CONTAINER_STATUS.PENDING_QA],
+     WHERE inbound_task_id = ? AND deleted_at IS NULL AND status = ?`,
+    [taskId, CONTAINER_STATUS.PENDING_PUTAWAY],
   )
   if (Number(n) > 0) return
 
@@ -34,14 +34,7 @@ async function tryFinishTask(conn, taskId) {
   const [itemRows] = await conn.query('SELECT * FROM inbound_task_items WHERE task_id = ?', [taskId])
   if (!itemRows.length) return
   const allReceived = shortClosed || itemRows.every(r => Number(r.received_qty) >= Number(r.ordered_qty))
-  // 完成判定扣除质检拒收量（文档 07 §5.4）：质检行须「已收全部质检完」且「合格量全部上架」；
-  // 免检行(qa_required=0)其 checked_qty 恒为 0，用 received_qty 当作已质检量，行为与原来完全一致。
-  const allPutaway = itemRows.every(r => {
-    const received = Number(r.received_qty)
-    const effChecked = Number(r.qa_required) === 1 ? Number(r.checked_qty) : received
-    const passable = effChecked - Number(r.rejected_qty)   // 合格量（含让步接收）
-    return received <= effChecked && passable <= Number(r.putaway_qty)
-  })
+  const allPutaway = itemRows.every(r => Number(r.putaway_qty) >= Number(r.received_qty))
   if (!allReceived || !allPutaway) return
 
   try {

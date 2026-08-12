@@ -82,7 +82,6 @@ const fmtTask = r => ({
   submittedBy: r.submitted_by != null ? Number(r.submitted_by) : null,
   submittedByName: r.submitted_by_name || null,
   auditStatus: Number(r.audit_status || 0),
-  qaStatus: Number(r.qa_status || 0),   // 0无需/无待质检 1有待质检容器 2质检已完成（文档07旁路标志）
   auditRemark: r.audit_remark || null,
   auditedAt: r.audited_at || null,
   auditedBy: r.audited_by != null ? Number(r.audited_by) : null,
@@ -108,12 +107,6 @@ const fmtItem = r => ({
   orderedQty: Number(r.ordered_qty),
   receivedQty: Number(r.received_qty),
   putawayQty: Number(r.putaway_qty),
-  // 来料质检（文档07）：qa_required 快照 + 已质检/拒收量；免检行 qaRequired=false、两量恒0
-  qaRequired: Number(r.qa_required) === 1,
-  checkedQty: Number(r.checked_qty || 0),
-  rejectedQty: Number(r.rejected_qty || 0),
-  // 让步接收量（合格量的子集，旁路统计；文档07 Phase3 增强）
-  concessionQty: Number(r.concession_qty || 0),
   // 多单位（文档03 Phase4b）：主辅助单位 + 率，供 PDA 收货按箱快捷录入；未配辅助单位为 null
   boxUnit: r.box_unit || null,
   boxRate: r.box_rate != null ? Number(r.box_rate) : null,

@@ -10,12 +10,9 @@ import {
   cancelInboundApi,
   voidInboundReceiptApi,
   closeReceivingInboundApi,
-  getInboundQaDispositionsApi,
-  qaDisposeInboundApi,
 } from '@/api/inbound-tasks'
 import type { QueryParams } from '@/types'
-import type { CreateInboundTaskParams, QaDisposeParams } from '@/types/inbound-tasks'
-import { createRequestKey } from '@/lib/requestKey'
+import type { CreateInboundTaskParams } from '@/types/inbound-tasks'
 
 const QUERY_KEY = 'inbound-tasks'
 
@@ -89,24 +86,5 @@ export function useCloseReceivingInbound() {
   return useMutation({
     mutationFn: (id: number) => closeReceivingInboundApi(id, { skipGlobalError: true }),
     onSuccess: () => invalidate('inbound_close_receiving'),
-  })
-}
-
-/** 某收货订单的质检拒收处置历史（文档07 Phase2） */
-export function useInboundQaDispositions(id: number | null) {
-  return useQuery({
-    queryKey: [QUERY_KEY, 'qa-dispositions', id],
-    queryFn: () => getInboundQaDispositionsApi(id!).then(r => r ?? []),
-    enabled: !!id,
-  })
-}
-
-/** 一键处置质检拒收品（退供应商/报废）。每次提交带独立幂等键，防连点重复处置 */
-export function useQaDisposeInbound() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: QaDisposeParams }) =>
-      qaDisposeInboundApi(id, data, createRequestKey('inbound_qa_dispose'), { skipGlobalError: true }),
-    onSuccess: () => invalidate('inbound_qa_dispose'),
   })
 }

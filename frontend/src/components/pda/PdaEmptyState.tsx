@@ -13,7 +13,7 @@ interface PdaEmptyStateProps {
   title: string
   /** 副文字说明 */
   description?: string
-  /** 图标节点（emoji 字符串或 ReactNode），默认 📦 */
+  /** 图标节点（lucide 图标组件或字符串，默认空则无图标） */
   icon?: ReactNode
   /** 操作按钮文案 */
   actionText?: string
@@ -26,7 +26,7 @@ interface PdaEmptyStateProps {
 export default function PdaEmptyState({
   title,
   description,
-  icon = '📦',
+  icon,
   actionText,
   onAction,
   className = '',
@@ -36,9 +36,11 @@ export default function PdaEmptyState({
       className={`flex min-h-[60vh] flex-col items-center justify-center px-6 text-center ${className}`}
     >
       {/* 图标 */}
-      <div className="text-5xl mb-4 select-none">
-        {icon}
-      </div>
+      {icon && (
+        <div className="mb-4 flex select-none items-center justify-center text-5xl text-muted-foreground">
+          {icon}
+        </div>
+      )}
 
       {/* 标题 */}
       <p className="text-base font-semibold text-foreground">{title}</p>

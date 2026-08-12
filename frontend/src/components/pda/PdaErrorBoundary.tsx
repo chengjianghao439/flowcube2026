@@ -8,6 +8,7 @@
  */
 import { Component } from 'react'
 import type { ReactNode, ErrorInfo } from 'react'
+import { TriangleAlert } from 'lucide-react'
 
 interface Props {
   children: ReactNode
@@ -51,7 +52,7 @@ export default class PdaErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
-          <p className="text-5xl mb-4">⚠️</p>
+          <TriangleAlert className="mx-auto mb-4 h-14 w-14 text-red-500" />
           <h2 className="text-xl font-bold text-foreground mb-2">页面出现错误</h2>
           <p className="text-sm text-muted-foreground mb-6 max-w-xs">
             当前操作未完成，错误已记录。请先重试；如果仍不能恢复，请返回工作台重新进入任务。

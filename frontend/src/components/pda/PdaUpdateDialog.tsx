@@ -3,6 +3,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { Rocket, CheckCircle2 } from 'lucide-react'
 import type { PdaVersionInfo } from '@/hooks/usePdaUpdate'
 import { PdaAppUpdate, type PdaNativeUpdateProgress } from '@/lib/pdaNativeUpdate'
 import { toast } from '@/lib/toast'
@@ -105,7 +106,7 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 backdrop-blur-[2px]">
       <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-2xl shadow-slate-200/80">
         <div className="mb-4 flex items-start gap-3">
-          <span className="text-3xl">🚀</span>
+          <Rocket className="h-8 w-8 shrink-0 text-primary" />
           <div>
             <h2 className="text-lg font-bold text-foreground">发现新版本 v{version.version}</h2>
             <p className="text-sm text-muted-foreground">当前版本可升级</p>
@@ -132,8 +133,9 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
         )}
         {progress === 100 && (
           <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-center">
-            <p className="text-sm text-emerald-700">
-              {Capacitor.isNativePlatform() ? '✅ 已打开安装界面，请按系统提示完成安装' : '✅ 下载完成，请确认安装'}
+            <p className="flex items-center justify-center gap-1.5 text-sm text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" />
+              {Capacitor.isNativePlatform() ? '已打开安装界面，请按系统提示完成安装' : '下载完成，请确认安装'}
             </p>
           </div>
         )}

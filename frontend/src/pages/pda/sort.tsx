@@ -7,6 +7,7 @@
  *  2. 扫分拣格码 → 自动确认，无需点击按钮
  */
 import { useState } from 'react'
+import {ClipboardList, Loader2} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getSortingBinsApi, scanProductForSortApi } from '@/api/sorting-bins'
@@ -191,7 +192,7 @@ export default function PdaSortPage() {
           step === 'scan-product' ? 'border-primary/30 bg-primary/5' : 'border-green-400/30 bg-green-50'
         }`}>
           <p className="text-sm font-semibold text-foreground">
-            {scanning ? '⏳ 处理中…' :
+            {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />处理中…</span> :
              step === 'scan-product' ? '扫描产品条码' : '扫描分拣格条码'}
           </p>
         </div>
@@ -230,7 +231,7 @@ export default function PdaSortPage() {
               </div>
             </div>
             {(bins ?? []).length === 0 && (
-              <PdaEmptyCard icon="🗂️" title="暂无分拣格" description="请在仓库管理后台创建分拣格" />
+              <PdaEmptyCard icon={<ClipboardList className="h-12 w-12 text-muted-foreground" />} title="暂无分拣格" description="请在仓库管理后台创建分拣格" />
             )}
             <div className="grid grid-cols-3 gap-2">
               {(bins ?? []).map((bin: SortingBin) => (

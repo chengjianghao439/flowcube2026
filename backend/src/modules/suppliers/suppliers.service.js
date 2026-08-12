@@ -26,7 +26,6 @@ function fmt(row) {
     settlementTypeName: SETTLEMENT_TYPE_NAME[normalizeSettlementType(row.settlement_type)],
     paymentTermsDays: row.payment_terms_days != null ? Number(row.payment_terms_days) : 30,
     leadTimeDays: row.lead_time_days != null ? Number(row.lead_time_days) : 0,
-    qaPolicy: row.qa_policy != null ? Number(row.qa_policy) : 0,
     isActive: !!row.is_active, createdAt: row.created_at,
   }
 }
@@ -75,27 +74,27 @@ async function findById(id) {
   return fmt(rows[0])
 }
 
-async function create({ name, contact, phone, email, address, remark, settlementType, paymentTermsDays, qaPolicy, leadTimeDays }) {
+async function create({ name, contact, phone, email, address, remark, settlementType, paymentTermsDays, leadTimeDays }) {
   const normalizedName = await ensureSupplierNameUnique(name)
   const code = await generateMasterCode(pool, 'SUP', 'supply_suppliers')
   // 账期只有月结才有意义，normalizeTermsDays 会把其余结算方式强制归零
   const settle = normalizeSettlementType(settlementType)
   const terms = normalizeTermsDays(settle, paymentTermsDays)
   const [r] = await pool.query(
-    `INSERT INTO supply_suppliers (code,name,contact,phone,email,address,remark,settlement_type,payment_terms_days,qa_policy,lead_time_days) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-    [code, normalizedName, contact||null, phone||null, email||null, address||null, remark||null, settle, terms, Number(qaPolicy) || 0, Math.max(0, Number(leadTimeDays) || 0)],
+    `INSERT INTO supply_suppliers (code,name,contact,phone,email,address,remark,settlement_type,payment_terms_days,lead_time_days) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [code, normalizedName, contact||null, phone||null, email||null, address||null, remark||null, settle, terms, Math.max(0, Number(leadTimeDays) || 0)],
   )
   return { id: r.insertId, code }
 }
 
-async function update(id, { name, contact, phone, email, address, remark, isActive, settlementType, paymentTermsDays, qaPolicy, leadTimeDays }) {
+async function update(id, { name, contact, phone, email, address, remark, isActive, settlementType, paymentTermsDays, leadTimeDays }) {
   await findById(id)
   const normalizedName = await ensureSupplierNameUnique(name, id)
   const settle = normalizeSettlementType(settlementType)
   const terms = normalizeTermsDays(settle, paymentTermsDays)
   await pool.query(
-    `UPDATE supply_suppliers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=?,settlement_type=?,payment_terms_days=?,qa_policy=?,lead_time_days=? WHERE id=? AND deleted_at IS NULL`,
-    [normalizedName, contact||null, phone||null, email||null, address||null, remark||null, isActive?1:0, settle, terms, Number(qaPolicy) || 0, Math.max(0, Number(leadTimeDays) || 0), id],
+    `UPDATE supply_suppliers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=?,settlement_type=?,payment_terms_days=?,lead_time_days=? WHERE id=? AND deleted_at IS NULL`,
+    [normalizedName, contact||null, phone||null, email||null, address||null, remark||null, isActive?1:0, settle, terms, Math.max(0, Number(leadTimeDays) || 0), id],
   )
 }
 

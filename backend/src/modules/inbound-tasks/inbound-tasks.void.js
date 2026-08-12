@@ -28,30 +28,18 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
       entityName: '收货订单',
     })
     assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
-    // 拒收品若已做处置（退供应商/报废，REJECTED 容器已 VOID、货已物理离场，见
-    // inbound-tasks.qa-disposition.js），不能再整单撤回收货——撤回语义是"这批货从没收到"，
-    // 与"拒收品已处置离场"自相矛盾；且被处置的容器已不在下面的反冲查询范围内。
-    const [[{ n: disposedCount }]] = await conn.query(
-      'SELECT COUNT(*) AS n FROM inbound_qa_dispositions WHERE inbound_task_id = ? AND deleted_at IS NULL',
-      [taskId],
-    )
-    if (Number(disposedCount) > 0) {
-      throw new AppError('该收货订单的质检拒收品已做处置（退供应商/报废），无法整单撤回收货', 409)
-    }
     const rule = assertStatusAction('inboundTask', 'voidReceipt', Number(taskRow.status))
 
     // 统一加锁顺序：先按 (product_id, warehouse_id) 升序对涉及维度取 inventory_stock 单行锁，
     // 再锁容器。撤回收货本质是「反向上架」（改容器状态后 syncStockFromContainers 汇总该维度
     // 全部 ACTIVE 容器），必须与 putaway 一样先取维度锁，否则两者对同一商品+仓库 ABBA 死锁
     // （void 持容器等汇总锁、putaway 持维度锁等容器锁）。见 containerEngine.lockStockDimension 注释。
-    // 含来料质检的 PENDING_QA(5)/REJECTED(6) 容器（文档 07）：撤回收货必须一并反冲，否则遗留孤儿容器。
-    // 它们非 ACTIVE，不进 inventory_stock，下面 VOID 时无需反冲缓存（仅 wasActive 分支反冲）。
     const [dimRows] = await conn.query(
       `SELECT DISTINCT product_id, warehouse_id
        FROM inventory_containers
-       WHERE inbound_task_id = ? AND deleted_at IS NULL AND status IN (?, ?, ?, ?, ?)
+       WHERE inbound_task_id = ? AND deleted_at IS NULL AND status IN (?, ?, ?)
        ORDER BY product_id ASC, warehouse_id ASC`,
-      [taskId, CONTAINER_STATUS.ACTIVE, CONTAINER_STATUS.PENDING_PUTAWAY, CONTAINER_STATUS.EMPTY, CONTAINER_STATUS.PENDING_QA, CONTAINER_STATUS.REJECTED],
+      [taskId, CONTAINER_STATUS.ACTIVE, CONTAINER_STATUS.PENDING_PUTAWAY, CONTAINER_STATUS.EMPTY],
     )
     for (const d of dimRows) {
       await lockStockDimension(conn, d.product_id, d.warehouse_id)
@@ -60,9 +48,9 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
     const [containers] = await conn.query(
       `SELECT id, product_id, warehouse_id, remaining_qty, initial_qty, status, locked_by_task_id
        FROM inventory_containers
-       WHERE inbound_task_id = ? AND deleted_at IS NULL AND status IN (?, ?, ?, ?, ?)
+       WHERE inbound_task_id = ? AND deleted_at IS NULL AND status IN (?, ?, ?)
        FOR UPDATE`,
-      [taskId, CONTAINER_STATUS.ACTIVE, CONTAINER_STATUS.PENDING_PUTAWAY, CONTAINER_STATUS.EMPTY, CONTAINER_STATUS.PENDING_QA, CONTAINER_STATUS.REJECTED],
+      [taskId, CONTAINER_STATUS.ACTIVE, CONTAINER_STATUS.PENDING_PUTAWAY, CONTAINER_STATUS.EMPTY],
     )
     // EMPTY 也纳入查询范围：已被后续销售/出库耗尽的容器同样属于"被后续动作碰过"，
     // 靠下面的 remaining_qty≠initial_qty 判断自然拦下，避免把已卖出的货当成从未收到过而误撤
@@ -114,7 +102,7 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
     }
 
     await conn.query(
-      'UPDATE inbound_task_items SET received_qty = 0, putaway_qty = 0, checked_qty = 0, rejected_qty = 0 WHERE task_id = ?',
+      'UPDATE inbound_task_items SET received_qty = 0, putaway_qty = 0 WHERE task_id = ?',
       [taskId],
     )
 
@@ -130,7 +118,6 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
         audited_by: null,
         audited_by_name: null,
         closed_reason: null,
-        qa_status: 0,   // 撤回后本任务再无待质检/已质检容器（文档 07）
       },
     })
     // submitted_at 有意保留不重置：PDA 端只看 submitted_at 是否已设置就允许收货

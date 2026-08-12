@@ -5,6 +5,7 @@
  * 两段：待出库（status=2，调出仓扫码出库） / 待入库（status=3，调入仓扫码入库）。
  * 库存变动全部经 PDA 扫码，ERP 端不再直接执行调拨。
  */
+import { ArrowUpFromLine, ArrowDownToLine } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getTransferListApi } from '@/api/transfer'
@@ -35,7 +36,7 @@ function TransferCard({ order, phase, onTap }: { order: TransferOrder; phase: 'o
           ? <p className="text-xs text-muted-foreground">已出库 {deducted}</p>
           : <p className="text-xs text-muted-foreground">已出库 {deducted} · 已入库 {received}</p>}
         <Button size="pda" className="w-full" variant={phase === 'out' ? 'default' : 'outline'} onClick={onTap}>
-          {phase === 'out' ? '📤 调出仓扫码出库' : '📥 调入仓扫码入库'}
+          {phase === 'out' ? '调出仓扫码出库' : '调入仓扫码入库'}
         </Button>
       </div>
     </PdaCard>
@@ -63,7 +64,7 @@ export default function PdaTransferPage() {
           <section className="space-y-3">
             <p className="text-xs font-medium text-muted-foreground">待出库（调出仓扫码）· {outbound.length}</p>
             {outbound.length === 0
-              ? <PdaEmptyCard icon="📤" title="暂无待出库调拨" />
+              ? <PdaEmptyCard icon={<ArrowUpFromLine className="h-12 w-12 text-muted-foreground" />} title="暂无待出库调拨" />
               : outbound.map(o => <TransferCard key={o.id} order={o} phase="out" onTap={() => navigate(`/pda/transfer-out/${o.id}`)} />)}
           </section>
         )}
@@ -72,7 +73,7 @@ export default function PdaTransferPage() {
           <section className="space-y-3">
             <p className="text-xs font-medium text-muted-foreground">待入库（调入仓扫码）· {inbound.length}</p>
             {inbound.length === 0
-              ? <PdaEmptyCard icon="📥" title="暂无待入库调拨" />
+              ? <PdaEmptyCard icon={<ArrowDownToLine className="h-12 w-12 text-muted-foreground" />} title="暂无待入库调拨" />
               : inbound.map(o => <TransferCard key={o.id} order={o} phase="in" onTap={() => navigate(`/pda/transfer-in/${o.id}`)} />)}
           </section>
         )}

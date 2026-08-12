@@ -2,6 +2,7 @@
  * PDA 打包作业
  * 路由：/pda/pack
  */
+import { Package as PackageIcon, CircleCheck, Ban, PartyPopper } from 'lucide-react'
 import { useState, useCallback, useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -26,6 +27,7 @@ import { triggerPrintPoll } from '@/lib/printQueue'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { PdaTaskState } from '@/components/pda/PdaTaskState'
+import PdaDoneView from '@/components/pda/PdaDoneView'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 
 function readPositiveId(value: string | undefined | null): number {
@@ -55,7 +57,7 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
           {isLoading && <PdaLoading className="h-40" />}
           {!isLoading && tasks.length === 0 && (
-            <PdaEmptyCard icon="📦" title="暂无待打包任务" />
+            <PdaEmptyCard icon={<PackageIcon className="h-12 w-12 text-muted-foreground" />} title="暂无待打包任务" />
           )}
           {tasks.map(task => (
             <PdaCard key={task.id} onClick={() => onSelect(task)} className="w-full text-left space-y-1.5">
@@ -90,7 +92,15 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
       <button onClick={() => { setOpen(o => !o); if (!active && pkg.status !== 3) onActivate() }}
         className="w-full flex items-center justify-between px-4 py-3 text-left">
         <div className="flex items-center gap-2">
-          <span className="text-lg">{pkg.status === 2 ? '✅' : pkg.status === 3 ? '🚫' : active ? '📦' : '🟦'}</span>
+          <span className="flex items-center gap-1">
+            {pkg.status === 2
+              ? <><CircleCheck className="h-4 w-4 text-green-600" /><span className="text-xs font-medium text-green-600">完成</span></>
+              : pkg.status === 3
+                ? <><Ban className="h-4 w-4 text-muted-foreground" /><span className="text-xs font-medium text-muted-foreground">作废</span></>
+                : active
+                  ? <><PackageIcon className="h-4 w-4 text-primary" /><span className="text-xs font-medium text-primary">装箱中</span></>
+                  : <><PackageIcon className="h-4 w-4 text-muted-foreground" /><span className="text-xs font-medium text-muted-foreground">未激活</span></>}
+          </span>
           <div>
             <p className="font-mono font-bold text-foreground text-sm">{pkg.barcode}</p>
             <p className="text-xs text-muted-foreground">{pkg.items.length} 种，{totalQty.toFixed(0)} 件</p>
@@ -135,7 +145,7 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
             onClick={onPrintLabel}
             disabled={printingLabel}
           >
-            {printingLabel ? '打印中…' : '🖨 打印箱贴'}
+            {printingLabel ? '打印中…' : '打印箱贴'}
           </Button>
           {editable && pkg.items.length > 0 && (
             <Button size="sm" className="w-full mt-1" onClick={onFinish} disabled={finishing}>
@@ -144,7 +154,7 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
           )}
           {editable && (
             <Button size="sm" variant="outline" className="w-full mt-1 text-destructive hover:text-destructive" onClick={onVoid} disabled={voiding}>
-              {voiding ? '作废中…' : '🗑 作废本箱（装错重来）'}
+              {voiding ? '作废中…' : '作废本箱（装错重来）'}
             </Button>
           )}
         </div>
@@ -466,18 +476,15 @@ export default function PdaPackPage() {
   const totalItems = activeBoxes.reduce((s, p) => s + p.items.reduce((ss, i) => ss + i.qty, 0), 0)
   // ── 全部完成页 ────────────────────────────────────────────────────────────
   if (allDone) return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
-      <div className="text-6xl mb-6">🎉</div>
-      <h2 className="text-2xl font-bold text-foreground">打包完成！</h2>
-      <p className="text-muted-foreground mt-2 mb-1">任务：<span className="font-mono font-semibold text-foreground">{taskDetail.taskNo}</span></p>
-      <p className="text-muted-foreground mb-4">共 {totalBoxes} 箱，{totalItems.toFixed(0)} 件商品</p>
-      <div className="mb-6 w-full max-w-md">
-      </div>
-      <div className="flex gap-3 w-full max-w-xs">
-        <Button variant="outline" className="flex-1" onClick={goSelectTask}>继续打包</Button>
-        <Button className="flex-1" onClick={() => navigate('/pda')}>返回工作台</Button>
-      </div>
-    </div>
+    <PdaDoneView
+      icon={<PartyPopper className="h-20 w-20 text-green-600" />}
+      title="打包完成！"
+      description={`任务：${taskDetail.taskNo} · 共 ${totalBoxes} 箱，${totalItems.toFixed(0)} 件商品`}
+      actionText="返回工作台"
+      onAction={() => navigate('/pda')}
+      secondaryText="继续打包"
+      onSecondary={goSelectTask}
+    />
   )
 
   return (

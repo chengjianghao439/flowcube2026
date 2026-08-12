@@ -3,6 +3,7 @@
  * 两步：扫在途容器条码 → 扫目标库位 → POST /transfer/:id/scan-in（容器落库位、翻在库）。
  */
 import { useCallback, useState } from 'react'
+import { ArrowDownToLine, CircleCheck, Hourglass } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
@@ -63,7 +64,7 @@ export default function PdaTransferInPage() {
     onSuccess: (result) => {
       setPendingContainer(null)
       if (result.kind === 'pending') { warn('网络中断，入库结果待确认。请先确认结果，避免重复扫码。'); return }
-      if (result.data.completed) ok('✅ 调拨完成，全部入库')
+      if (result.data.completed) ok('调拨完成，全部入库')
       else ok(`✓ 已入库 ${result.data.productName ?? ''} ×${result.data.qty}`)
     },
     onError: (e: unknown) => err((e as { message?: string })?.message ?? '入库失败'),
@@ -97,7 +98,7 @@ export default function PdaTransferInPage() {
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
-        <PdaEmptyState icon="📥" title="请选择调拨单" description="请从调拨执行列表进入待入库调拨。" actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
+        <PdaEmptyState icon={<ArrowDownToLine className="h-12 w-12 text-muted-foreground" />} title="请选择调拨单" description="请从调拨执行列表进入待入库调拨。" actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
       </div>
     )
   }
@@ -113,7 +114,7 @@ export default function PdaTransferInPage() {
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
-        <PdaEmptyState icon={order.status >= 4 ? '✅' : '⏳'} title={order.statusName}
+        <PdaEmptyState icon={order.status >= 4 ? <CircleCheck className="h-12 w-12 text-green-600" /> : <Hourglass className="h-12 w-12 text-muted-foreground" />} title={order.statusName}
           description={order.status < 3 ? '尚未出库，请先由调出仓扫码出库。' : '该调拨单不在待入库状态。'}
           actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
       </div>

@@ -5,6 +5,7 @@
  *   <PdaFlowSteps steps={flow.steps} currentId={engine.stepId} />
  */
 import type { FlowStep } from '@/hooks/usePdaFlow'
+import { Check } from 'lucide-react'
 
 interface Props {
   // 步骤组件不关心每一步的 payload 类型，any 是刻意的
@@ -28,7 +29,9 @@ export default function PdaFlowSteps({ steps, currentId }: Props) {
               state === 'active' ? 'bg-primary text-primary-foreground' :
                                    'bg-muted text-muted-foreground'
             }`}>
-              {state === 'done' ? '✓' : idx + 1}
+              {state === 'done'
+                ? <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                : idx + 1}
             </div>
             <p className={`text-xs truncate ${
               state === 'active' ? 'font-semibold text-foreground' : 'text-muted-foreground'

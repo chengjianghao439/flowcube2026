@@ -7,6 +7,7 @@
  * 容器归还需要额外扫目标库位条码，确认放回后才真正解锁容器、降低已拣数量。
  */
 import { useState } from 'react'
+import {PencilLine, CircleCheck, Loader2} from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -41,7 +42,7 @@ function AdjustmentListPage() {
         <p className="text-xs text-muted-foreground">{tasks.length} 个任务待处理</p>
         {isLoading && <PdaLoading className="h-32" />}
         {!isLoading && tasks.length === 0 && (
-          <PdaEmptyCard icon="✏️" title="暂无待确认改单" description="没有因订单修改而需要归还/拆箱的任务" />
+          <PdaEmptyCard icon={<PencilLine className="h-12 w-12 text-muted-foreground" />} title="暂无待确认改单" description="没有因订单修改而需要归还/拆箱的任务" />
         )}
         {tasks.map(t => (
           <PdaCard key={t.adjustmentId} onClick={() => navigate(`/pda/adjustments/${t.adjustmentId}`)}>
@@ -263,7 +264,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
           step === 'scan' ? 'border-primary/30 bg-primary/5' : 'border-green-400/30 bg-green-50'
         }`}>
           <p className="text-sm font-semibold text-foreground">
-            {scanning ? '⏳ 处理中…' :
+            {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />处理中…</span> :
              step === 'scan' ? '扫描待拆箱的箱子条码，或待归还的容器条码' :
              `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}`}
           </p>
@@ -291,7 +292,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还容器（{pendingReturns.length}）</p>
           {pendingReturns.length === 0 && pendingVoids.length === 0 && (
-            <PdaEmptyCard icon="✅" title="已全部处理完成" description="改单即将自动生效" />
+            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-green-600" />} title="已全部处理完成" description="改单即将自动生效" />
           )}
           <div className="space-y-2">
             {pendingReturns.map(r => (

@@ -10,14 +10,6 @@ const { validateBody } = require('../../utils/route')
 
 const router = Router()
 
-function vParams(schema) {
-  return (req, res, next) => {
-    const r = schema.safeParse(req.params)
-    if (!r.success) return res.status(400).json({ success: false, message: r.error.errors.map(e => e.message).join('；'), data: null })
-    req.params = r.data; next()
-  }
-}
-
 const createSchema = z.union([
   z.object({
     poId: z.number().int().positive('请选择采购单'),
@@ -101,27 +93,6 @@ const putawaySchema = z.object({
   suggestedLocationCode: z.string().trim().max(50).optional(),
 })
 
-// 来料质检（文档 07）：合格量(含让步接收) + 拒收量，至少一项 > 0；concessionQty 是合格量的子集（旁路统计）
-const qaCheckSchema = z.object({
-  productId: z.number().int().positive('请选择商品'),
-  passedQty: z.number().nonnegative('合格量不能为负').default(0),
-  rejectedQty: z.number().nonnegative('拒收量不能为负').default(0),
-  concessionQty: z.number().nonnegative('让步接收量不能为负').default(0),
-  reason: z.string().trim().max(100).optional(),
-}).refine(v => (v.passedQty + v.rejectedQty) > 0, { message: '合格量与拒收量至少一项大于 0' })
-  .refine(v => v.concessionQty <= v.passedQty, { message: '让步接收量不能超过合格量' })
-
-// 质检拒收处置（文档 07 · Phase 2）：退供应商(1)/报废(2)，可选按商品过滤。ERP 侧后台决策。
-const qaDisposeSchema = z.object({
-  dispositionType: z.number().int().refine(v => v === 1 || v === 2, '请选择处置方式（1退供应商 / 2报废）'),
-  productIds: z.array(z.number().int().positive()).optional(),
-  reason: z.string().trim().max(200).optional(),
-  remark: z.string().trim().max(200).optional(),
-})
-
-// 拒收处置 PDA 物理扫出（文档 07 · Phase 3）：扫一个 REJECTED 容器码确认出场
-const disposeScanSchema = z.object({ barcode: z.string().trim().min(1, '请扫描容器条码') })
-const dispositionIdParam = z.object({ dispositionId: z.coerce.number().int().positive('处置单 id 必须为正整数') })
 
 const reprintSchema = z.object({
   mode: z.enum(['task', 'item', 'barcode']).default('task'),
@@ -140,11 +111,6 @@ router.use(authMiddleware)
 
 router.get('/pending-containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.pendingContainers)
 router.get('/purchase-items', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.purchaseItems)
-// 拒收处置 PDA 物理扫出（文档07 Phase3）：待扫出列表 / 扫出详情（只读）/ 扫一个容器码确认出场（PDA-only+设备会话）
-// 注意：静态 /qa-dispositions/* 必须注册在 /:id 动态路由之前，否则被 /:id 吞掉
-router.get('/qa-dispositions/pending', requirePermission(PERMISSIONS.INBOUND_QA_DISPOSE), ctrl.qaDisposePending)
-router.get('/qa-dispositions/:dispositionId/scan-detail', requirePermission(PERMISSIONS.INBOUND_QA_DISPOSE), vParams(dispositionIdParam), ctrl.qaDisposeScanDetail)
-router.post('/qa-dispositions/:dispositionId/scan-out', requirePermission(PERMISSIONS.INBOUND_QA_DISPOSE), pdaSessionRequired(), pdaOnly, vParams(dispositionIdParam), validateBody(disposeScanSchema), ctrl.qaDisposeScanOut)
 router.get('/',              requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.list)
 router.post('/',             requirePermission(PERMISSIONS.INBOUND_ORDER_CREATE), validateBody(createSchema), ctrl.create)
 router.get('/:id/containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.containers)
@@ -154,12 +120,7 @@ router.post('/:id/reprint',  requirePermission(PERMISSIONS.INBOUND_PRINT_REPRINT
 router.post('/:id/receive',  requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaSessionRequired(), pdaOnly, validateBody(receiveSchema), ctrl.receive)
 router.get('/:id/putaway-suggestion', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), putawaySuggestionHandler)
 router.post('/:id/putaway', requirePermission(PERMISSIONS.INBOUND_PUTAWAY_EXECUTE), pdaSessionRequired(), pdaOnly, validateBody(putawaySchema), ctrl.putaway)
-// 来料质检（文档 07 · 方案A）：复用收货执行权限（收货员即初检员），PDA-only + 设备会话
-router.post('/:id/check', requirePermission(PERMISSIONS.INBOUND_RECEIVE_EXECUTE), pdaSessionRequired(), pdaOnly, validateBody(qaCheckSchema), ctrl.qaCheck)
-// 拒收处置（文档 07 · Phase 2）：退供应商/报废，只消费 REJECTED 容器、零 GL。后台管理决策，
 // 非 PDA 现场作业，故 ERP 侧（不挂 pdaOnly），与 voidReceipt 一样属"管理动作而非扫码作业"。
-router.post('/:id/qa-dispose', requirePermission(PERMISSIONS.INBOUND_QA_DISPOSE), validateBody(qaDisposeSchema), ctrl.qaDispose)
-router.get('/:id/qa-dispositions', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.qaDispositions)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.cancel)
 router.post('/:id/void-receipt', requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.voidReceipt)
 router.post('/:id/close-receiving', requirePermission(PERMISSIONS.INBOUND_ORDER_CANCEL), ctrl.closeReceiving)

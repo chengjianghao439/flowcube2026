@@ -54,6 +54,18 @@ export function getApiHealthUrl(): string {
   return `${o}${base}/health`
 }
 
+/**
+ * 始终返回「当前页面 origin 的 /api/health」（相对路径，走 Vite 代理 / 同源）。
+ * 供 PDA dev（浏览器 Vite live）心跳使用：不依赖 apiClient.defaults.baseURL——
+ * 一旦 baseURL 被 ERP fallback 之类改写成绝对地址，getApiHealthUrl 会探测到代理之外导致误报断网。
+ */
+export function getRelativeApiHealthUrl(): string {
+  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
+    return `${window.location.origin}/api/health`
+  }
+  return '/api/health'
+}
+
 /** 已配置 apiOrigin 时探测 /api/health（桌面端门控） */
 export async function checkErpApiHealth(): Promise<boolean> {
   const url = getApiHealthUrl()

@@ -2,6 +2,7 @@
  * PDA 扫码执行页 — 商品视角拣货
  * 路由：/pda/task/:id  (独立全屏，不走 AppLayout)
  */
+import { MapPin, CircleCheck } from 'lucide-react'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { parseBarcode } from '@/utils/barcode'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -25,6 +26,7 @@ import { useOfflineScan } from '@/hooks/useOfflineScan'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
+import PdaDoneView from '@/components/pda/PdaDoneView'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
@@ -40,7 +42,7 @@ function SuggestionRow({ c, onTap, disabled }: {
         ${c.locked ? 'border-border bg-muted opacity-50' : 'border-primary/20 bg-primary/5 hover:bg-primary/10'}`}
     >
       <div>
-        <p className="font-medium text-foreground"><span className="mr-1 text-muted-foreground">📍</span>{c.locationCode||'无库位'}</p>
+        <p className="font-medium text-foreground"><MapPin className="mr-1 inline h-3.5 w-3.5 text-muted-foreground" />{c.locationCode||'无库位'}</p>
         <div className="mt-0.5 flex items-center gap-2">
           <p className="font-mono text-xs text-muted-foreground">{c.barcode}</p>
           <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${c.containerKind === 'plastic_box' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'}`}>{kindLabel}</span>
@@ -270,12 +272,13 @@ export default function PdaTaskPage() {
   const totalPick = items.reduce((s,i) => s + i.pickedQty,   0)
 
   if (finished) return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
-      <div className="text-6xl mb-6">✅</div>
-      <h2 className="text-2xl font-semibold text-foreground mb-2">拣货完成！</h2>
-      <p className="text-muted-foreground mb-8">任务已进入「待分拣」</p>
-      <Button size="lg" onClick={() => navigate('/pda/picking')}>返回任务列表</Button>
-    </div>
+    <PdaDoneView
+      icon={<CircleCheck className="h-20 w-20 text-green-600" />}
+      title="拣货完成！"
+      description="任务已进入「待分拣」"
+      actionText="返回任务列表"
+      onAction={() => navigate('/pda/picking')}
+    />
   )
 
   return (

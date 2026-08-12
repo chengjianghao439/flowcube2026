@@ -2,6 +2,7 @@
  * PDA 上架（收货订单）— 路由 /pda/putaway/:id
  * 扫库存条码 I → 扫货架条码 R → 调用 POST /inbound-tasks/:id/putaway
  */
+import { ArrowUpFromLine, CircleCheck, Hourglass } from 'lucide-react'
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -79,7 +80,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
         right={<span className="text-xs text-muted-foreground">库存上架</span>}
       />
 
-      <div className="px-4 pt-3">
+      <div className="max-w-md mx-auto px-4 pt-3 w-full">
         <PdaCriticalActionNotice
           blockedReason={putawayAction.blockedReason}
           pendingRecord={putawayAction.pendingRecord}
@@ -137,7 +138,7 @@ export default function PdaPutawayPage() {
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
-          icon="📤"
+          icon={<ArrowUpFromLine className="h-12 w-12 text-muted-foreground" />}
           title="请选择上架任务"
           description="请先从收货订单列表进入待上架任务。"
           actionText="返回收货订单"
@@ -161,7 +162,7 @@ export default function PdaPutawayPage() {
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
-          icon="⏳"
+          icon={<Hourglass className="h-12 w-12 text-muted-foreground" />}
           title="待上架"
           description="收货尚未完成，请先完成收货后再上架。"
           actionText="返回收货订单"
@@ -176,7 +177,7 @@ export default function PdaPutawayPage() {
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
-          icon="📤"
+          icon={<ArrowUpFromLine className="h-12 w-12 text-muted-foreground" />}
           title="未提交"
           description="收货订单尚未提交，请先在 ERP 中提交。"
           actionText="返回收货订单"
@@ -191,7 +192,7 @@ export default function PdaPutawayPage() {
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
-          icon="✅"
+          icon={<CircleCheck className="h-12 w-12 text-muted-foreground" />}
           title="已完成"
           description="该订单上架已完成。"
           actionText="返回收货订单"

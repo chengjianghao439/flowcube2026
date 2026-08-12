@@ -489,30 +489,13 @@ async function listStoredContainers(taskId) {
   return queryStoredContainers(taskId)
 }
 
-// 质检拒收容器（REJECTED=6，文档 07）。无库位（质检/收货阶段容器不定库位），location_code 恒空。
-// 供 ERP 收货详情展示拒收品与「处置拒收品」入口；处置后容器转 VOID 即从此查询消失。
-async function queryRejectedContainers(taskId) {
-  const [rows] = await pool.query(
-    `SELECT c.*, p.code AS product_code, p.name AS product_name, loc.code AS location_code
-     FROM inventory_containers c
-     LEFT JOIN product_items p ON p.id = c.product_id
-     LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
-     WHERE c.inbound_task_id = ? AND c.deleted_at IS NULL AND c.status = ?
-       AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
-     ORDER BY c.id ASC`,
-    [taskId, CONTAINER_STATUS.REJECTED],
-  )
-  return rows.map(fmtContainer)
-}
-
 async function listContainers(taskId) {
   await ensureInboundTaskExists(pool, taskId)
-  const [waiting, stored, rejected] = await Promise.all([
+  const [waiting, stored] = await Promise.all([
     queryWaitingContainers(taskId),
     queryStoredContainers(taskId),
-    queryRejectedContainers(taskId),
   ])
-  return { waiting, stored, rejected }
+  return { waiting, stored }
 }
 
 async function refreshPutawayOverdueMarks() {

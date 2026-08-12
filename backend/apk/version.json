@@ -1,7 +1,7 @@
 {
-  "version": "0.4.76",
-  "versionCode": 78,
+  "version": "0.4.77",
+  "versionCode": 80,
   "filename": "app-release.apk",
-  "releaseNote": "- **修复 PDA 开发者模式**：在浏览器打开 PDA 前端（dev:pda）现在会正确进入 PDA 登录页，不再误显示成系统前端",
-  "publishedAt": "2026-08-12T12:59:07.987Z"
+  "releaseNote": "- **PDA 工作台全新改版**：常用作业（收货、上架、拣货、分拣、复核、打包、出库等 14 项）以大图标卡片直接展示，点一下即进入；「塑料盒拆分」等自主操作收进「更多功能」折叠区，界面更简洁",
+  "publishedAt": "2026-08-12T15:25:48.467Z"
 }

@@ -3,7 +3,6 @@ export interface ProductUnit { unitName: string; conversionRate: number; isBase:
 
 export interface Product {
   batchManaged?: boolean
-  qaRequired?: boolean
   shelfLifeDays?: number | null
   safetyStock?: number | null
   reorderPoint?: number | null
@@ -21,7 +20,7 @@ export interface CreateProductParams {
   name: string; categoryId?: number | null; supplierId: number
   unit: string; spec: string; color: string
   costPrice?: number | null; remark?: string
-  batchManaged?: boolean; shelfLifeDays?: number | null; qaRequired?: boolean
+  batchManaged?: boolean; shelfLifeDays?: number | null
   safetyStock?: number | null; reorderPoint?: number | null
   units?: { unitName: string; conversionRate: number }[]
   skuCode?: string; articleNumber?: string
@@ -31,7 +30,7 @@ export interface UpdateProductParams {
   name: string; categoryId?: number | null; supplierId: number
   unit: string; spec: string; color: string
   costPrice?: number | null; remark?: string; isActive: boolean
-  batchManaged?: boolean; shelfLifeDays?: number | null; qaRequired?: boolean
+  batchManaged?: boolean; shelfLifeDays?: number | null
   safetyStock?: number | null; reorderPoint?: number | null
   units?: { unitName: string; conversionRate: number }[]
   articleNumber?: string

@@ -2,9 +2,20 @@
  * PDA 工作台
  * 路由：/pda
  *
- * 当前仅保留作业入口，不再聚合展示「我的任务」。
+ * 入口分两级：
+ * - 常用（被下达任务）：大图标卡片直点进入
+ * - 更多（自主操作）：收进底部「更多功能」折叠区
+ *
+ * 图标统一用 lucide（不用 emoji）。
  */
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+  Inbox, ArrowUpFromLine, ClipboardList, Shuffle,
+  ClipboardCheck, Package, Scissors, ScanSearch, Truck, ArrowLeftRight,
+  Undo2, PackageX, PencilLine, Smartphone, ShieldAlert, Ban, MoreHorizontal, ChevronDown,
+  type LucideIcon,
+} from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { usePdaRole } from '@/hooks/usePdaRole'
 import type { PdaPerm } from '@/hooks/usePdaRole'
@@ -13,27 +24,49 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
 
+type OpTone = 'blue' | 'green' | 'orange' | 'purple' | 'teal' | 'red' | 'indigo' | 'cyan'
+
+const TONE_STYLES: Record<OpTone, { iconBg: string; iconColor: string }> = {
+  blue:   { iconBg: 'bg-blue-50',   iconColor: 'text-blue-600' },
+  green:  { iconBg: 'bg-green-50',  iconColor: 'text-green-600' },
+  orange: { iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
+  purple: { iconBg: 'bg-purple-50', iconColor: 'text-purple-600' },
+  teal:   { iconBg: 'bg-teal-50',   iconColor: 'text-teal-600' },
+  red:    { iconBg: 'bg-red-50',    iconColor: 'text-red-600' },
+  indigo: { iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600' },
+  cyan:   { iconBg: 'bg-cyan-50',   iconColor: 'text-cyan-600' },
+}
+
 // ── 作业入口（带权限过滤）────────────────────────────────────────────────────
 // perms：可空数组。有值 = 需同时具备（canAll，与路由树 required 的 AND 语义一致）；
-// 无值 = 单个 perm 判断。分拣作业实际权限是 SORTING_BIN_VIEW + WAREHOUSE_TASK_SORT
-// （见 router/index.tsx 的 /pda/sort），入口用 SORTING_BIN_MANAGE 会让只有分拣
-// 执行权限的账号看不到入口。
-const ALL_OPS: { icon: string; label: string; path: string; perm: PdaPerm; perms?: PdaPerm[] }[] = [
-  { icon: '📥', label: '收货订单', path: '/pda/inbound',  perm: PERMISSIONS.INBOUND_ORDER_VIEW },
-  { icon: '🔬', label: '来料质检', path: '/pda/inbound-qa', perm: PERMISSIONS.INBOUND_RECEIVE_EXECUTE },
-  { icon: '🗑️', label: '拒收处置', path: '/pda/qa-dispose', perm: PERMISSIONS.INBOUND_QA_DISPOSE },
-  { icon: '📤', label: '扫码上架', path: '/pda/putaway',  perm: PERMISSIONS.INBOUND_PUTAWAY_EXECUTE },
-  { icon: '🗂️', label: '拣货任务', path: '/pda/picking',  perm: PERMISSIONS.WAREHOUSE_TASK_PICK },
-  { icon: '🔀', label: '订单分拣', path: '/pda/sort',      perm: PERMISSIONS.SORTING_BIN_VIEW, perms: [PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT] },
-  { icon: '✅', label: '复核任务', path: '/pda/check',     perm: PERMISSIONS.WAREHOUSE_TASK_CHECK },
-  { icon: '📦', label: '打包作业', path: '/pda/pack',      perm: PERMISSIONS.WAREHOUSE_TASK_PACK },
-  { icon: '✂️', label: '塑料盒拆分', path: '/pda/split',     perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT },
-  { icon: '🔢', label: '扫码盘点', path: '/pda/stockcheck', perm: PERMISSIONS.STOCKCHECK_VIEW },
-  { icon: '🚚', label: '出库确认', path: '/pda/ship',      perm: PERMISSIONS.WAREHOUSE_TASK_SHIP },
-  { icon: '🔁', label: '调拨执行', path: '/pda/transfer',  perm: PERMISSIONS.TRANSFER_ORDER_VIEW },
-  { icon: '↩️', label: '销售退货', path: '/pda/sale-return', perm: PERMISSIONS.RETURN_ORDER_VIEW },
-  { icon: '🧯', label: '取消清理', path: '/pda/cancel-return', perm: PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW },
-  { icon: '✏️', label: '改单确认', path: '/pda/adjustments', perm: PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW },
+// 无值 = 单个 perm 判断。分拣作业实际权限是 SORTING_BIN_VIEW + WAREHOUSE_TASK_SORT。
+// more: true 表示收进底部「更多功能」（自主操作类）。
+interface OpEntry {
+  icon: LucideIcon
+  label: string
+  path: string
+  perm: PdaPerm
+  perms?: PdaPerm[]
+  tone: OpTone
+  more?: boolean
+}
+
+const ALL_OPS: OpEntry[] = [
+  // ── 常用（被下达任务，首页直点） ──
+  { icon: Inbox,           label: '收货订单', path: '/pda/inbound',       perm: PERMISSIONS.INBOUND_ORDER_VIEW, tone: 'blue' },
+  { icon: ArrowUpFromLine, label: '扫码上架', path: '/pda/putaway',       perm: PERMISSIONS.INBOUND_PUTAWAY_EXECUTE, tone: 'teal' },
+  { icon: ClipboardList,   label: '拣货任务', path: '/pda/picking',       perm: PERMISSIONS.WAREHOUSE_TASK_PICK, tone: 'indigo' },
+  { icon: Shuffle,         label: '订单分拣', path: '/pda/sort',          perm: PERMISSIONS.SORTING_BIN_VIEW, perms: [PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT], tone: 'orange' },
+  { icon: ClipboardCheck,  label: '复核任务', path: '/pda/check',         perm: PERMISSIONS.WAREHOUSE_TASK_CHECK, tone: 'green' },
+  { icon: Package,         label: '打包作业', path: '/pda/pack',          perm: PERMISSIONS.WAREHOUSE_TASK_PACK, tone: 'blue' },
+  { icon: ScanSearch,      label: '扫码盘点', path: '/pda/stockcheck',    perm: PERMISSIONS.STOCKCHECK_VIEW, tone: 'cyan' },
+  { icon: Truck,           label: '出库确认', path: '/pda/ship',          perm: PERMISSIONS.WAREHOUSE_TASK_SHIP, tone: 'orange' },
+  { icon: ArrowLeftRight,  label: '调拨执行', path: '/pda/transfer',      perm: PERMISSIONS.TRANSFER_ORDER_VIEW, tone: 'purple' },
+  { icon: Undo2,           label: '销售退货', path: '/pda/sale-return',   perm: PERMISSIONS.RETURN_ORDER_VIEW, tone: 'teal' },
+  { icon: PackageX,        label: '取消清理', path: '/pda/cancel-return', perm: PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, tone: 'red' },
+  { icon: PencilLine,      label: '改单确认', path: '/pda/adjustments',   perm: PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW, tone: 'indigo' },
+  // ── 更多（自主操作，收进底部折叠区） ──
+  { icon: Scissors,        label: '塑料盒拆分', path: '/pda/split',        perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, tone: 'cyan', more: true },
 ]
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────
@@ -43,7 +76,8 @@ export default function PdaWorkbench() {
   const logout   = useAuthStore(s => s.logout)
   const hour     = new Date().getHours()
   const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
-  const { roleLabel, roleIcon, roleColor, can, canAll, permissionsMissing } = usePdaRole()
+  const { roleLabel, roleColor, can, canAll, permissionsMissing } = usePdaRole()
+  const [moreOpen, setMoreOpen] = useState(false)
 
   // 绑定状态在渲染时读一次即可：绑定/解绑都会离开本页再回来，回来时组件重新挂载
   const deviceCredential = getDeviceCredential()
@@ -52,6 +86,8 @@ export default function PdaWorkbench() {
   const sessionReady = !!getDeviceSession()
 
   const allowedOps = ALL_OPS.filter(op => op.perms ? canAll(op.perms) : can(op.perm))
+  const commonOps = allowedOps.filter(op => !op.more)
+  const moreOps = allowedOps.filter(op => op.more)
 
   return (
     <div className="min-h-screen bg-background">
@@ -69,7 +105,7 @@ export default function PdaWorkbench() {
           </div>
           <div className="mt-1 flex items-center justify-between">
             <h1 className="text-xl font-semibold text-foreground">{greeting}，{user?.username ?? '操作员'}</h1>
-            <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${roleColor}`}>{roleIcon} {roleLabel}</span>
+            <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${roleColor}`}>{roleLabel}</span>
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {formatDisplayDateTime(new Date())}
@@ -88,7 +124,7 @@ export default function PdaWorkbench() {
             className="mb-4 w-full rounded-2xl border-2 border-destructive/40 bg-destructive/5 p-4 text-left active:scale-95 transition-all"
           >
             <div className="flex items-center gap-2 text-base font-semibold text-destructive">
-              <span className="text-xl">📱</span>本机尚未绑定设备
+              <Smartphone className="h-5 w-5" />本机尚未绑定设备
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               未绑定的机器无法执行任何作业。点这里扫管理员提供的绑定二维码。
@@ -106,10 +142,10 @@ export default function PdaWorkbench() {
         ) : null}
 
         <div>
-          <p className="text-xs text-muted-foreground mb-3">{roleIcon} {roleLabel} 可用作业（{allowedOps.length} 项）</p>
+          <p className="text-xs text-muted-foreground mb-3">{roleLabel} 可用作业（{allowedOps.length} 项）</p>
           {permissionsMissing ? (
             <PdaEmptyCard
-              icon="🔐"
+              icon={<ShieldAlert className="h-12 w-12 text-amber-500" />}
               title="权限未加载，PDA 已切到受限模式"
               description="未获取到权限信息，PDA 部分功能不可用。请重新登录；若仍异常，请联系管理员。"
               actionText="重新登录"
@@ -117,29 +153,71 @@ export default function PdaWorkbench() {
             />
           ) : allowedOps.length === 0 ? (
             <PdaEmptyCard
-              icon="⛔"
+              icon={<Ban className="h-12 w-12 text-red-500" />}
               title="当前账号没有可用 PDA 作业权限"
               description="当前账号没有收货、拣货、分拣、复核、打包、出库等操作权限。请联系管理员分配权限。"
             />
           ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {allowedOps.map(op => (
-                <button key={op.path} onClick={() => navigate(op.path)}
-                  className="flex flex-col items-start rounded-2xl border border-border bg-card p-4 text-left active:scale-95 transition-all">
-                  <span className="text-3xl mb-3">{op.icon}</span>
-                  <p className="text-base font-medium text-foreground">{op.label}</p>
-                </button>
-              ))}
-            </div>
+            <>
+              {/* 常用：大图标卡片直点 */}
+              <div className="grid grid-cols-3 gap-3">
+                {commonOps.map(op => {
+                  const Icon = op.icon
+                  const tone = TONE_STYLES[op.tone]
+                  return (
+                    <button key={op.path} onClick={() => navigate(op.path)}
+                      className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 active:scale-95 transition-all">
+                      <span className={`flex h-12 w-12 items-center justify-center rounded-xl ${tone.iconBg}`}>
+                        <Icon className={`h-6 w-6 ${tone.iconColor}`} />
+                      </span>
+                      <p className="text-sm font-medium text-foreground text-center leading-tight">{op.label}</p>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* 更多（自主操作）：收进折叠区 */}
+              {moreOps.length > 0 && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setMoreOpen(v => !v)}
+                    className="flex w-full items-center justify-center gap-1 rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-muted-foreground active:scale-95 transition-all"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                    更多功能
+                    <ChevronDown className={`h-4 w-4 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {moreOpen && (
+                    <div className="mt-2 grid grid-cols-3 gap-3">
+                      {moreOps.map(op => {
+                        const Icon = op.icon
+                        const tone = TONE_STYLES[op.tone]
+                        return (
+                          <button key={op.path} onClick={() => navigate(op.path)}
+                            className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 active:scale-95 transition-all">
+                            <span className={`flex h-12 w-12 items-center justify-center rounded-xl ${tone.iconBg}`}>
+                              <Icon className={`h-6 w-6 ${tone.iconColor}`} />
+                            </span>
+                            <p className="text-sm font-medium text-foreground text-center leading-tight">{op.label}</p>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
           {/* 已绑定时入口收到底部：日常不打扰，换机/解绑时还找得到 */}
           {deviceBound && (
             <button
               type="button"
               onClick={() => navigate('/pda/bind')}
-              className="mt-4 w-full rounded-xl border border-border bg-card px-3 py-2.5 text-left text-sm text-muted-foreground active:scale-95 transition-all"
+              className="mt-4 flex w-full items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-sm text-muted-foreground active:scale-95 transition-all"
             >
-              📱 设备绑定：{deviceCode}
+              <Smartphone className="h-4 w-4" />
+              设备绑定：{deviceCode}
             </button>
           )}
         </div>

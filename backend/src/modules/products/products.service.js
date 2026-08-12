@@ -209,7 +209,6 @@ function fmtProduct(row) {
     salePriceC: row.sale_price_c != null ? Number(row.sale_price_c) : null,
     salePriceD: row.sale_price_d != null ? Number(row.sale_price_d) : null,
     batchManaged: Number(row.batch_managed) === 1,
-    qaRequired: Number(row.qa_required) === 1,
     shelfLifeDays: row.shelf_life_days != null ? Number(row.shelf_life_days) : null,
     safetyStock: row.safety_stock != null ? Number(row.safety_stock) : null,
     reorderPoint: row.reorder_point != null ? Number(row.reorder_point) : null,
@@ -309,7 +308,7 @@ async function findById(id) {
   return product
 }
 
-async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, units }) {
+async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units }) {
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
   const normalizedUnits = validateUnits(unit, units)   // 纯校验，任何非法输入在建单前就抛错
   const code = await generateMasterCode(pool, 'P', 'product_items')
@@ -327,9 +326,9 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   try {
     await conn.beginTransaction()
     const [r] = await conn.query(
-      `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days,qa_required)
+      `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0],
+      [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null],
     )
     await replaceProductUnits(conn, r.insertId, normalizedUnits)
     await upsertDefaultStockPolicy(conn, r.insertId, { safetyStock, reorderPoint })
@@ -338,7 +337,7 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, qaRequired, safetyStock, reorderPoint, units }) {
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units }) {
   await findById(id)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const normalizedUnits = validateUnits(unit, units)
@@ -353,9 +352,9 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   try {
     await conn.beginTransaction()
     await conn.query(
-      `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,qa_required=?
+      `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?
        WHERE id=? AND deleted_at IS NULL`,
-      [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, qaRequired?1:0, id],
+      [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, id],
     )
     await replaceProductUnits(conn, id, normalizedUnits)
     await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint })

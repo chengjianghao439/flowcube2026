@@ -26,8 +26,6 @@ const base = z.object({
     v => v === 0 || MONTHLY_TERMS_OPTIONS.includes(v),
     `月结账期只能是 ${MONTHLY_TERMS_OPTIONS.join(' / ')} 天`,
   ).optional(),
-  // 来料质检策略：0=按商品 qa_required 决定 1=强制质检 2=免检
-  qaPolicy: z.number().int().min(0).max(2, '质检策略只能是 0/1/2').optional(),
   // 采购提前期（天），用于采购计划预测
   leadTimeDays: z.number().int().min(0).max(365, '提前期最多 365 天').optional(),
 })

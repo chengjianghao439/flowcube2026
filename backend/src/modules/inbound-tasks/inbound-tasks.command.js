@@ -23,24 +23,6 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
-/**
- * 建单时求值每个商品的 qa_required 快照（文档 07）：
- *   需质检 = 供应商强制(qa_policy=1) 或 (供应商非免检(≠2) 且 商品 qa_required=1)
- * 返回 Map<productId, 0|1>。默认全 0（免检），收货行为不变——这一步只固化快照，不改流程。
- */
-async function resolveQaRequiredMap(conn, supplierId, productIds) {
-  const map = new Map()
-  const ids = [...new Set(productIds.map(Number).filter(n => Number.isFinite(n) && n > 0))]
-  if (!ids.length) return map
-  const [[sup]] = await conn.query('SELECT qa_policy FROM supply_suppliers WHERE id=?', [Number(supplierId)])
-  const qaPolicy = sup ? Number(sup.qa_policy) : 0
-  if (qaPolicy === 2) { ids.forEach(id => map.set(id, 0)); return map }   // 供应商免检
-  if (qaPolicy === 1) { ids.forEach(id => map.set(id, 1)); return map }   // 供应商强制质检
-  const [rows] = await conn.query(`SELECT id, qa_required FROM product_items WHERE id IN (${ids.map(() => '?').join(',')})`, ids)
-  const prod = new Map(rows.map(r => [Number(r.id), Number(r.qa_required)]))
-  ids.forEach(id => map.set(id, prod.get(id) === 1 ? 1 : 0))
-  return map
-}
 
 async function createFromPoId(purchaseOrderId) {
   const purchaseSvc = require('../purchase/purchase.service')
@@ -83,12 +65,11 @@ async function createFromPoId(purchaseOrderId) {
       [taskNo, order.id, order.orderNo, order.supplierName, order.warehouseId, order.warehouseName],
     )
     const taskId = r.insertId
-    const qaMap = await resolveQaRequiredMap(conn, order.supplierId, remainingItems.map(i => i.productId))
     for (const item of remainingItems) {
       await conn.query(
-        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty, qa_required)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [taskId, order.id, order.orderNo, item.purchaseItemId, item.productId, item.productCode, item.productName, item.articleNumber || null, item.spec || null, item.color || null, item.unit, item.remainingQty, qaMap.get(Number(item.productId)) || 0],
+        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [taskId, order.id, order.orderNo, item.purchaseItemId, item.productId, item.productCode, item.productName, item.articleNumber || null, item.spec || null, item.color || null, item.unit, item.remainingQty],
       )
     }
     await appendInboundEvent(conn, taskId, 'created', '创建收货订单', `收货订单 ${taskNo} 已创建，等待提交到 PDA`, null, {
@@ -171,11 +152,10 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
     )
     const taskId = r.insertId
 
-    const qaMap = await resolveQaRequiredMap(conn, supplierIdN, taskItems.map(i => i.productId))
     for (const item of taskItems) {
       await conn.query(
-        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty, qa_required)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           taskId,
           item.purchaseOrderId,
@@ -189,7 +169,6 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
           item.color || null,
           item.unit,
           item.qty,
-          qaMap.get(Number(item.productId)) || 0,
         ],
       )
     }
@@ -541,15 +520,10 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
     const productName = line?.productName || ''
     const itemCount = normalizedPackages.length
 
-    // 来料质检分流（文档 07）：按明细行建单时固化的 qa_required 快照决定本箱容器落 待质检(PENDING_QA)
-    // 还是 待上架(PENDING_PUTAWAY)。免检行(qa_required=0)一字不变走原路径。收货记账/超收/重复扫码闸门/打印均不受影响。
-    const qaByItemId = new Map(itemRowsFresh.map(r => [r.id, Number(r.qa_required) === 1]))
-    let createdQaContainer = false
+    // 收货全部落 待上架(PENDING_PUTAWAY)：质检/拒收功能已下线（迁移 210），不再有待质检分流。
     const containers = []
     for (const pkg of normalizedPackages) {
       const ownerItemId = ownerByLineNo.get(pkg.lineNo) ?? null
-      const needQa = qaByItemId.get(ownerItemId) === true
-      if (needQa) createdQaContainer = true
       const { containerId, barcode } = await createContainer(conn, {
         productId: productIdN,
         warehouseId,
@@ -561,23 +535,18 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         locationId: null,
         inboundTaskId: taskId,
         inboundTaskItemId: ownerItemId,
-        containerStatus: needQa ? CONTAINER_STATUS.PENDING_QA : CONTAINER_STATUS.PENDING_PUTAWAY,
+        containerStatus: CONTAINER_STATUS.PENDING_PUTAWAY,
         sourceType: SOURCE_TYPE.INBOUND_TASK,
         sourceRefId: taskId,
         sourceRefType: 'inbound_task',
         sourceRefNo: taskNo,
-        remark: `${needQa ? '收货待质检' : '收货待上架'} ${taskNo} 第${pkg.lineNo}箱`,
+        remark: `收货待上架 ${taskNo} 第${pkg.lineNo}箱`,
       })
       containers.push({
         containerId,
         containerCode: barcode,
         qty: pkg.qty,
       })
-    }
-
-    // 本次收货产生了待质检容器 → 任务头 qa_status 置 1（旁路展示/筛选标志，权威仍以容器状态为准）
-    if (createdQaContainer) {
-      await conn.query('UPDATE inbound_tasks SET qa_status = 1 WHERE id = ? AND qa_status = 0', [taskId])
     }
 
     await appendInboundEvent(

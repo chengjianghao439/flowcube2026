@@ -24,10 +24,6 @@ export interface InboundTaskItem {
   orderedQty: number
   receivedQty: number
   putawayQty: number
-  qaRequired?: boolean      // 来料质检行（文档07）
-  checkedQty?: number       // 已质检量（合格+让步+拒收）
-  rejectedQty?: number      // 拒收量（不入库不结算）
-  concessionQty?: number    // 让步接收量（合格量的子集，旁路统计）
   boxUnit?: string | null    // 主辅助单位名（如"箱"），供 PDA 收货按箱快捷录入（文档03 Phase4b）
   boxRate?: number | null    // 1 辅助单位 = N 基本单位（率由系统给定，现场不可改）
   unitPrice: number | null
@@ -131,7 +127,6 @@ export interface InboundTask {
   submittedBy?: number | null
   submittedByName?: string | null
   auditStatus?: number
-  qaStatus?: number         // 0无需/无待质检 1有待质检容器 2已完成（文档07）
   auditRemark?: string | null
   auditedAt?: string | null
   auditedBy?: number | null
@@ -209,7 +204,7 @@ export interface InboundContainerRow {
   productName: string | null
   qty: number
   unit: string | null
-  status: 'waiting_putaway' | 'stored' | 'rejected'
+  status: 'waiting_putaway' | 'stored'
   locationId: number | null
   locationCode: string | null
   createdAt: string
@@ -218,89 +213,6 @@ export interface InboundContainerRow {
 export interface InboundContainersResult {
   waiting: InboundContainerRow[]
   stored: InboundContainerRow[]
-  rejected: InboundContainerRow[]   // 质检拒收容器（REJECTED，文档07 Phase2），处置后转 VOID 即消失
-}
-
-/** 来料质检拒收处置单（文档07 Phase2）：退供应商/报废，只消费 REJECTED 容器、零 GL */
-export interface QaDispositionItem {
-  id: number
-  inboundTaskItemId: number | null
-  productId: number
-  productCode: string | null
-  productName: string
-  unit: string | null
-  quantity: number
-  unitPrice: number
-  amount: number
-  containerCount: number
-}
-
-export interface QaDisposition {
-  id: number
-  dispositionNo: string
-  inboundTaskId: number
-  inboundTaskNo: string | null
-  purchaseOrderId: number | null
-  purchaseOrderNo: string | null
-  supplierId: number | null
-  supplierName: string | null
-  warehouseId: number
-  warehouseName: string | null
-  dispositionType: 1 | 2       // 1退供应商 2报废
-  dispositionTypeName: string
-  status: 1 | 2                 // 1待扫出（PDA 物理出场确认中） 2已完成
-  statusName: string
-  scannedCount: number | null  // 已扫出容器数
-  pendingCount: number | null  // 待扫出容器数
-  totalQty: number
-  totalAmount: number          // 参考货值（拒收量×采购单价），非入账金额
-  containerCount: number
-  reason: string | null
-  remark: string | null
-  operatorId: number | null
-  operatorName: string | null
-  createdAt: string
-  items: QaDispositionItem[]
-}
-
-// PDA 拒收处置扫出：单个处置单的待扫/已扫容器清单（文档07 Phase3）
-export interface QaDispositionScanContainer {
-  id: number
-  containerId: number
-  barcode: string
-  qty: number
-  productId: number
-  productName: string | null
-  productCode: string | null
-  scanned: boolean
-  scannedAt: string | null
-}
-export interface QaDispositionScanDetail extends QaDisposition {
-  containers: QaDispositionScanContainer[]
-}
-export interface QaDisposeScanResult {
-  dispositionId: number
-  containerId: number
-  barcode: string
-  pending: number
-  done: boolean
-}
-
-export interface QaDisposeParams {
-  dispositionType: 1 | 2
-  productIds?: number[]
-  reason?: string
-  remark?: string
-}
-
-export interface QaDisposeResult {
-  id: number
-  dispositionNo: string
-  dispositionType: 1 | 2
-  status: 1 | 2                // 新建恒为 1 待扫出
-  totalQty: number
-  totalAmount: number
-  containerCount: number
 }
 
 export interface CreateInboundTaskResult {

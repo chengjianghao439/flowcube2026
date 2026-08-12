@@ -2,6 +2,7 @@
  * PDA 收货任务列表
  * 路由：/pda/inbound
  */
+import { Inbox } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getInboundTasksApi } from '@/api/inbound-tasks'
@@ -46,7 +47,7 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
           </div>
         )}
         <Button size="pda" className="w-full" variant={isReady ? 'outline' : 'default'} onClick={onTap}>
-          {isReady ? '📤 扫码上架' : '📥 开始收货'}
+          {isReady ? '扫码上架' : '开始收货'}
         </Button>
       </div>
     </PdaCard>
@@ -70,7 +71,7 @@ export default function PdaInboundPage() {
         <p className="text-xs text-muted-foreground">{tasks.length} 个待处理任务</p>
         {isLoading && <PdaLoading className="h-32" />}
         {!isLoading && tasks.length===0 && (
-          <PdaEmptyCard icon="📥" title="暂无收货任务" />
+          <PdaEmptyCard icon={<Inbox className="h-12 w-12 text-muted-foreground" />} title="暂无收货任务" />
         )}
         {tasks.map((t:InboundTask) => (
           <InboundCard key={t.id} task={t}

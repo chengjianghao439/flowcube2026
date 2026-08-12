@@ -35,13 +35,6 @@ export const PDA_ROLE_LABEL: Record<PdaRole, string> = {
   receiver:   '收货员',
 }
 
-export const PDA_ROLE_ICON: Record<PdaRole, string> = {
-  supervisor: '👔',
-  picker:     '🗂️',
-  packer:     '📦',
-  receiver:   '📥',
-}
-
 export const PDA_ROLE_COLOR: Record<PdaRole, string> = {
   supervisor: 'bg-purple-100 text-purple-800 border-purple-200',
   picker:     'bg-blue-100   text-blue-800   border-blue-200',
@@ -61,7 +54,6 @@ export function usePdaRole() {
   return {
     role,
     roleLabel: PDA_ROLE_LABEL[role],
-    roleIcon:  PDA_ROLE_ICON[role],
     roleColor: PDA_ROLE_COLOR[role],
     permissions,
     permissionsLoaded,

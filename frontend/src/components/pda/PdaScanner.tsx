@@ -8,6 +8,7 @@
  * 扫码枪识别特征：字符间隔 < 50ms + 末尾 Enter（或超时自动 flush）
  */
 import { useRef, useState, useCallback } from 'react'
+import { Loader2, Keyboard, CheckCircle2, ScanLine } from 'lucide-react'
 import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { parseBarcode } from '@/utils/barcode'
 
@@ -88,8 +89,14 @@ export default function PdaScanner({
           ? 'border-amber-300 bg-amber-50'
           : 'border-border bg-card'
       }`}>
-        <span className="shrink-0 text-xl">
-          {disabled ? '⏳' : manualMode ? '⌨️' : flash ? '✅' : '📷'}
+        <span className="shrink-0">
+          {disabled
+            ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            : manualMode
+              ? <Keyboard className="h-5 w-5 text-amber-500" />
+              : flash
+                ? <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                : <ScanLine className="h-5 w-5 text-muted-foreground" />}
         </span>
 
         <div className="min-w-0 flex-1">

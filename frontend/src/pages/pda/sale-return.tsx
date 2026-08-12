@@ -1,3 +1,4 @@
+import { ArrowDownToLine } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import PdaHeader from '@/components/pda/PdaHeader'
@@ -49,7 +50,7 @@ export default function PdaSaleReturnListPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-3">
         {isLoading && <PdaLoading />}
         {!isLoading && (!tasks || tasks.length === 0) && (
-          <PdaEmptyCard icon="📥" title="暂无退货任务" description="请在 ERP 端确认退货单并提交到 PDA" />
+          <PdaEmptyCard icon={<ArrowDownToLine className="h-12 w-12 text-muted-foreground" />} title="暂无退货任务" description="请在 ERP 端确认退货单并提交到 PDA" />
         )}
         {tasks?.map(t => <TaskCard key={t.id} task={t} />)}
       </div>

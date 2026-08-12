@@ -106,23 +106,6 @@ const putaway = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-const qaCheck = async (req, res, next) => {
-  try {
-    const data = await svc.qaCheck(+req.params.id, {
-      productId: req.body.productId,
-      passedQty: req.body.passedQty,
-      rejectedQty: req.body.rejectedQty,
-      concessionQty: req.body.concessionQty,
-      reason: req.body.reason || null,
-      userId: req.user?.userId ?? null,
-      requestKey: extractRequestKey(req),
-      pdaWarehouseId: req.pda?.warehouseId ?? null,
-      scopeWarehouseIds: req.user?.warehouseIds ?? null,
-    })
-    return successResponse(res, data, '质检确认成功')
-  } catch (e) { next(e) }
-}
-
 const cancel = async (req, res, next) => {
   try {
     await svc.cancel(+req.params.id, req.user?.warehouseIds ?? null)
@@ -146,55 +129,4 @@ const closeReceiving = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-const qaDispose = async (req, res, next) => {
-  try {
-    const operator = getOperatorFromRequest(req)
-    const data = await svc.qaDispose(+req.params.id, {
-      dispositionType: req.body.dispositionType,
-      productIds: req.body.productIds || null,
-      reason: req.body.reason || null,
-      remark: req.body.remark || null,
-      operator,
-      requestKey: extractRequestKey(req),
-      scopeWarehouseIds: req.user?.warehouseIds ?? null,
-    })
-    return successResponse(res, data, '拒收品处置成功')
-  } catch (e) { next(e) }
-}
-
-const qaDispositions = async (req, res, next) => {
-  try {
-    const data = await svc.qaDispositionsByTask(+req.params.id)
-    return successResponse(res, data)
-  } catch (e) { next(e) }
-}
-
-// 拒收处置 PDA 物理扫出（文档07 Phase3）
-const qaDisposePending = async (req, res, next) => {
-  try {
-    const data = await svc.qaDisposePending({ scopeWarehouseIds: req.user?.warehouseIds ?? null })
-    return successResponse(res, data, '查询成功')
-  } catch (e) { next(e) }
-}
-
-const qaDisposeScanDetail = async (req, res, next) => {
-  try {
-    const data = await svc.qaDisposeScanDetail(+req.params.dispositionId, req.user?.warehouseIds ?? null)
-    return successResponse(res, data, '查询成功')
-  } catch (e) { next(e) }
-}
-
-const qaDisposeScanOut = async (req, res, next) => {
-  try {
-    const data = await svc.qaDisposeScanOut(+req.params.dispositionId, {
-      barcode: req.body.barcode,
-      requestKey: extractRequestKey(req),
-      operator: getOperatorFromRequest(req),
-      pdaWarehouseId: req.pda?.warehouseId ?? null,
-      scopeWarehouseIds: req.user?.warehouseIds ?? null,
-    })
-    return successResponse(res, data, '扫出成功')
-  } catch (e) { next(e) }
-}
-
-module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, qaCheck, qaDispose, qaDispositions, qaDisposePending, qaDisposeScanDetail, qaDisposeScanOut, cancel, voidReceipt, closeReceiving }
+module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, cancel, voidReceipt, closeReceiving }

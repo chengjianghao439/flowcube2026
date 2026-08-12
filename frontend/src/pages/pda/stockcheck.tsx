@@ -48,7 +48,7 @@ function CheckList() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title="扫码盘点" subtitle="逐商品扫描在架库存条码" onBack={() => navigate('/pda')} />
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      <div className="max-w-md mx-auto flex-1 space-y-2 overflow-y-auto p-3 w-full">
         {list.length === 0 && <PdaCard><p className="py-8 text-center text-sm text-muted-foreground">暂无进行中的盘点单</p></PdaCard>}
         {list.map(c => (
           <button key={c.id} className="w-full" onClick={() => navigate(`/pda/stockcheck/${c.id}`)}>
@@ -159,7 +159,7 @@ function CheckWork({ checkId }: { checkId: number }) {
       <div className="flex min-h-screen flex-col bg-background">
         <PdaHeader title={activeItem.productName} subtitle={`账面 ${activeItem.bookQty} ${activeItem.unit} · ${activeItem.bookContainerCount} 个在库条码`}
           backLabel="← 商品列表" onBack={() => { setActiveItem(null); setScanned([]) }} />
-        <div className="flex-1 space-y-3 overflow-y-auto p-3">
+        <div className="max-w-md mx-auto flex-1 space-y-3 overflow-y-auto p-3 w-full">
           <PdaCard>
             <p className="text-sm">
               扫描<b>在架的每一个库存条码</b>：已扫 <b className="tabular-nums text-primary">{scanned.length}</b> 个 · 实盘 <b className="tabular-nums text-primary">{totalCounted}</b>
@@ -230,7 +230,7 @@ function CheckWork({ checkId }: { checkId: number }) {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title={detail.checkNo} subtitle={`${detail.warehouseName} · 扫码盘点`} onBack={() => navigate('/pda/stockcheck')} />
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      <div className="max-w-md mx-auto flex-1 space-y-2 overflow-y-auto p-3 w-full">
         {detail.items.length === 0 && <PdaCard><p className="py-8 text-center text-sm text-muted-foreground">该盘点单没有明细</p></PdaCard>}
         {detail.items.map(it => {
           const done = it.actualQty != null

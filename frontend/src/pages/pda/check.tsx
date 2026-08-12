@@ -4,6 +4,7 @@
  *
  * 须扫描拣货阶段使用过的库存条码 / 塑料盒条码（I/B，兼容旧版 CNT），由后端按库存单元累加 checked_qty；禁止手填。
  */
+import { CircleCheck, ClipboardList } from 'lucide-react'
 import { useState, useCallback } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -57,7 +58,7 @@ function TaskSelectStep({
 
           {isLoading && <PdaLoading className="h-40" />}
           {!isLoading && tasks.length === 0 && (
-            <PdaEmptyCard icon="✅" title="暂无待复核任务" description="分拣完成后自动出现在这里" />
+            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-muted-foreground" />} title="暂无待复核任务" description="分拣完成后自动出现在这里" />
           )}
 
           {tasks.map(task => {
@@ -293,7 +294,9 @@ export default function PdaCheckPage() {
   if (step === 'done') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
-        <div className="text-6xl mb-6">{allChecked ? '✅' : '📋'}</div>
+        {allChecked
+          ? <CircleCheck className="mx-auto mb-6 h-20 w-20 text-green-600" />
+          : <ClipboardList className="mx-auto mb-6 h-20 w-20 text-muted-foreground" />}
         <h2 className="text-2xl font-bold text-foreground">
           {allChecked ? '复核完成！' : '已保存'}
         </h2>

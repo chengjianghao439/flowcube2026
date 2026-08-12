@@ -6,6 +6,7 @@
  *  - sku   商品汇总（默认）— 跨订单聚合同 SKU
  *  - order 订单列表         — 原有逻辑
  */
+import { Package, ClipboardList } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -187,7 +188,7 @@ export default function PdaPickingPage() {
         {/* SKU 视图 */}
         {viewMode === 'sku' && !isLoading && !skuLoading && !isError && (
           skuList.length === 0
-            ? <PdaEmptyCard icon="📦" title="暂无待拣商品" description="订单确认后会自动显示在这里" />
+            ? <PdaEmptyCard icon={<Package className="h-12 w-12 text-muted-foreground" />} title="暂无待拣商品" description="订单确认后会自动显示在这里" />
             : skuList.map(sku => (
                 <SkuCard
                   key={sku.productId}
@@ -204,7 +205,7 @@ export default function PdaPickingPage() {
         {/* 订单视图 */}
         {viewMode === 'order' && !isLoading && !isError && (
           tasks.length === 0
-            ? <PdaEmptyCard icon="🗂️" title="暂无拣货任务" description="订单确认后会自动显示在这里" />
+            ? <PdaEmptyCard icon={<ClipboardList className="h-12 w-12 text-muted-foreground" />} title="暂无拣货任务" description="订单确认后会自动显示在这里" />
             : tasks.map(t => (
                 <TaskCard
                   key={t.id}

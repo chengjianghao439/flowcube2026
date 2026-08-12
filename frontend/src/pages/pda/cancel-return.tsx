@@ -6,6 +6,7 @@
  * 而不是后台批量解锁——避免货物已经拿出货架、但系统"看起来"还在原位的账实不符。
  */
 import { useState } from 'react'
+import {PackageX, CircleCheck, Loader2} from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -41,7 +42,7 @@ function CancelReturnListPage() {
         <p className="text-xs text-muted-foreground">{tasks.length} 个任务待归还</p>
         {isLoading && <PdaLoading className="h-32" />}
         {!isLoading && tasks.length === 0 && (
-          <PdaEmptyCard icon="🧯" title="暂无待归还任务" description="没有因订单取消而需要归还货物的任务" />
+          <PdaEmptyCard icon={<PackageX className="h-12 w-12 text-muted-foreground" />} title="暂无待归还任务" description="没有因订单取消而需要归还货物的任务" />
         )}
         {tasks.map(t => (
           <PdaCard key={t.id} onClick={() => navigate(`/pda/cancel-return/${t.id}`)}>
@@ -278,7 +279,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
           step === 'scan-container' ? 'border-primary/30 bg-primary/5' : 'border-green-400/30 bg-green-50'
         }`}>
           <p className="text-sm font-semibold text-foreground">
-            {scanning ? '⏳ 处理中…' :
+            {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />处理中…</span> :
              step === 'scan-container' ? '扫描待归还容器条码，或待拆箱箱子条码' :
              `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}`}
           </p>
@@ -307,7 +308,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还容器（{detail.containers.length}）</p>
           {detail.containers.length === 0 && detail.packages.length === 0 && (
-            <PdaEmptyCard icon="✅" title="已全部归还" description="即将自动完成任务取消" />
+            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-green-600" />} title="已全部归还" description="即将自动完成任务取消" />
           )}
           <div className="space-y-2">
             {detail.containers.map(c => (

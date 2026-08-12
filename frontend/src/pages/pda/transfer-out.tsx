@@ -3,6 +3,7 @@
  * 扫调出仓容器条码 → POST /transfer/:id/scan-out（整容器移到调入仓，标记在途）。
  */
 import { useCallback } from 'react'
+import { ArrowUpFromLine, CircleCheck, Hourglass } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getTransferDetailApi, scanOutTransferApi, type TransferScanResult } from '@/api/transfer'
@@ -79,7 +80,7 @@ export default function PdaTransferOutPage() {
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
-        <PdaEmptyState icon="📤" title="请选择调拨单" description="请从调拨执行列表进入待出库调拨。" actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
+        <PdaEmptyState icon={<ArrowUpFromLine className="h-12 w-12 text-muted-foreground" />} title="请选择调拨单" description="请从调拨执行列表进入待出库调拨。" actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
       </div>
     )
   }
@@ -95,7 +96,7 @@ export default function PdaTransferOutPage() {
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
-        <PdaEmptyState icon={order.status >= 4 ? '✅' : '⏳'} title={order.statusName}
+        <PdaEmptyState icon={order.status >= 4 ? <CircleCheck className="h-12 w-12 text-green-600" /> : <Hourglass className="h-12 w-12 text-muted-foreground" />} title={order.statusName}
           description={order.status === 1 ? '调拨单尚未派发，请先在 ERP 确认派发。' : '该调拨单不在待出库状态。'}
           actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
       </div>

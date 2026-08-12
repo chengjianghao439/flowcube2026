@@ -19,7 +19,6 @@ const empty = {
   name:'', contact:'', phone:'', email:'', address:'', remark:'',
   settlementType: SETTLEMENT_TYPE.MONTHLY as SettlementType,
   paymentTermsDays: 30,
-  qaPolicy: 0,
   leadTimeDays: 0,
   isActive: true,
 }
@@ -37,7 +36,6 @@ export default function SuppliersPage() {
         address:editing.address??'', remark:editing.remark??'',
         settlementType: editing.settlementType ?? SETTLEMENT_TYPE.MONTHLY,
         paymentTermsDays: editing.paymentTermsDays ?? 30,
-        qaPolicy: editing.qaPolicy ?? 0,
         leadTimeDays: editing.leadTimeDays ?? 0,
         isActive: editing.isActive,
       })
@@ -107,15 +105,6 @@ export default function SuppliersPage() {
               onChange={next => setForm(f => ({ ...f, ...next }))}
             />
             <div className="space-y-1">
-              <Label>来料质检策略</Label>
-              <select value={String(form.qaPolicy)} onChange={e => setForm(f => ({ ...f, qaPolicy: Number(e.target.value) }))}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-                <option value="0">按商品设置（默认）</option>
-                <option value="1">强制质检（所有来料先检后入）</option>
-                <option value="2">免检（信任供应商，直接入库）</option>
-              </select>
-            </div>
-            <div className="space-y-1">
               <Label>采购提前期（天）</Label>
               <Input type="number" min="0" max="365" value={String(form.leadTimeDays)}
                 onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setForm(f=>({...f, leadTimeDays: Number(e.target.value) || 0}))}
@@ -127,7 +116,7 @@ export default function SuppliersPage() {
       }}
       submitForm={(editing) => {
         if (form.phone && !PHONE_RE.test(form.phone)) throw { response: { data: { message: '请输入正确的手机号' } } }
-        const p = { name:form.name, contact:form.contact||undefined, phone:form.phone||undefined, email:form.email||undefined, address:form.address||undefined, remark:form.remark||undefined, settlementType:form.settlementType, paymentTermsDays:form.paymentTermsDays, qaPolicy:form.qaPolicy, leadTimeDays:form.leadTimeDays }
+        const p = { name:form.name, contact:form.contact||undefined, phone:form.phone||undefined, email:form.email||undefined, address:form.address||undefined, remark:form.remark||undefined, settlementType:form.settlementType, paymentTermsDays:form.paymentTermsDays, leadTimeDays:form.leadTimeDays }
         return editing
           ? updateSupplierApi(editing.id, {...p, isActive: form.isActive})
           : createSupplierApi(p)
