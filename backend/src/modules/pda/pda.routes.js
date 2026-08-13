@@ -3,7 +3,10 @@ const { z } = require('zod')
 const { successResponse } = require('../../utils/response')
 const { asyncRoute, validateBody } = require('../../utils/route')
 const { authMiddleware } = require('../../middleware/auth')
+const { pdaSessionRequired } = require('../../middleware/pdaSession')
+const { pdaOnly } = require('../../middleware/pdaOnly')
 const pdaSessions = require('./pda.sessions.service')
+const todoCounts = require('./todo-counts.service')
 const ctrl = require('./pda.controller')
 const router = Router()
 
@@ -41,5 +44,19 @@ router.get('/version', asyncRoute(ctrl.getVersion))
  * 下载最新 APK 文件（支持 Range 断点续传）
  */
 router.get('/download', asyncRoute(ctrl.download))
+
+/**
+ * GET /api/pda/todo-counts
+ * PDA 工作台「作业待办通知」：按设备绑定仓库统计各作业待办数。
+ * 需要有效 PDA 设备会话；仅 PDA 客户端可调。
+ */
+router.get('/todo-counts',
+  pdaSessionRequired(),
+  pdaOnly,
+  asyncRoute(async (req, res) => {
+    const counts = await todoCounts.getTodoCounts(req.pda?.warehouseId ?? null)
+    return successResponse(res, counts, '操作成功')
+  }),
+)
 
 module.exports = router

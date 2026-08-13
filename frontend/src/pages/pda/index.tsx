@@ -18,7 +18,9 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { usePdaRole } from '@/hooks/usePdaRole'
+import { usePdaTodoCounts } from '@/hooks/usePdaTodoCounts'
 import type { PdaPerm } from '@/hooks/usePdaRole'
+import type { PdaTodoCounts } from '@/api/pda'
 import { PdaEmptyCard } from '@/components/pda/PdaEmptyState'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -63,11 +65,25 @@ const ALL_OPS: OpEntry[] = [
   { icon: Truck,           label: '出库确认', path: '/pda/ship',          perm: PERMISSIONS.WAREHOUSE_TASK_SHIP, tone: 'orange' },
   { icon: ArrowLeftRight,  label: '调拨执行', path: '/pda/transfer',      perm: PERMISSIONS.TRANSFER_ORDER_VIEW, tone: 'purple' },
   { icon: Undo2,           label: '销售退货', path: '/pda/sale-return',   perm: PERMISSIONS.RETURN_ORDER_VIEW, tone: 'teal' },
-  { icon: PackageX,        label: '取消清理', path: '/pda/cancel-return', perm: PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, tone: 'red' },
+  { icon: PackageX,        label: '拣货退回', path: '/pda/cancel-return', perm: PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, tone: 'red' },
   { icon: PencilLine,      label: '改单确认', path: '/pda/adjustments',   perm: PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW, tone: 'indigo' },
   // ── 更多（自主操作，收进底部折叠区） ──
   { icon: Scissors,        label: '塑料盒拆分', path: '/pda/split',        perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, tone: 'cyan', more: true },
 ]
+
+/** 作业入口 path → todo-counts 计数 key。无可数待办的作业不映射（上架/分拣/拆分等扫码执行入口） */
+const OP_TODO_KEY: Partial<Record<string, keyof PdaTodoCounts>> = {
+  '/pda/inbound':       'inbound',
+  '/pda/picking':       'picking',
+  '/pda/check':         'checking',
+  '/pda/pack':          'packing',
+  '/pda/stockcheck':    'stockcheck',
+  '/pda/ship':          'shipping',
+  '/pda/transfer':      'transfer',
+  '/pda/sale-return':   'saleReturn',
+  '/pda/cancel-return': 'cancelReturn',
+  '/pda/adjustments':   'adjustments',
+}
 
 // ── 主组件 ────────────────────────────────────────────────────────────────────
 export default function PdaWorkbench() {
@@ -78,6 +94,8 @@ export default function PdaWorkbench() {
   const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
   const { roleLabel, roleColor, can, canAll, permissionsMissing } = usePdaRole()
   const [moreOpen, setMoreOpen] = useState(false)
+  // 作业待办通知：按设备绑定仓库聚合各作业待办数，30s 轮询
+  const { data: todoCounts } = usePdaTodoCounts()
 
   // 绑定状态在渲染时读一次即可：绑定/解绑都会离开本页再回来，回来时组件重新挂载
   const deviceCredential = getDeviceCredential()
@@ -88,6 +106,14 @@ export default function PdaWorkbench() {
   const allowedOps = ALL_OPS.filter(op => op.perms ? canAll(op.perms) : can(op.perm))
   const commonOps = allowedOps.filter(op => !op.more)
   const moreOps = allowedOps.filter(op => op.more)
+
+  // 有权限且可数的作业待办列表（供顶部汇总条展示）
+  const todoItems = allowedOps
+    .map(op => ({ op, key: OP_TODO_KEY[op.path] as keyof PdaTodoCounts | undefined }))
+    .filter((x): x is { op: (typeof allowedOps)[number]; key: keyof PdaTodoCounts } => !!x.key)
+    .map(x => ({ ...x, count: todoCounts?.[x.key] ?? 0 }))
+    .filter(x => x.count > 0)
+  const totalTodo = todoItems.reduce((s, i) => s + i.count, 0)
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,7 +153,7 @@ export default function PdaWorkbench() {
               <Smartphone className="h-5 w-5" />本机尚未绑定设备
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              未绑定的机器无法执行任何作业。点这里扫管理员提供的绑定二维码。
+              未绑定的机器无法执行任何作业。点击此处扫描管理员提供的绑定二维码。
             </p>
           </button>
         ) : !sessionReady ? (
@@ -137,16 +163,39 @@ export default function PdaWorkbench() {
             className="mb-4 w-full rounded-2xl border border-amber-500/40 bg-amber-500/5 p-3 text-left active:scale-95 transition-all"
           >
             <p className="text-sm font-medium text-amber-600">设备凭证需要刷新</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">重新登录即可自动恢复；若仍不行，点这里检查绑定状态。</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">重新登录即可自动恢复；若仍未恢复，点击此处检查绑定状态。</p>
           </button>
         ) : null}
+
+        {/* 作业待办汇总条：有可数待办且当前账号有权限时显示，点击直接进入对应作业 */}
+        {totalTodo > 0 && (
+          <div className="mb-4 rounded-2xl border border-border bg-card p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold text-foreground">待办任务</p>
+              <span className="text-xs font-semibold text-destructive tabular-nums">{totalTodo} 项</span>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-0.5">
+              {todoItems.map(({ op, count }) => (
+                <button
+                  key={op.path}
+                  type="button"
+                  onClick={() => navigate(op.path)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground active:scale-95 transition-all"
+                >
+                  <span className="font-medium">{op.label}</span>
+                  <span className="font-bold text-destructive tabular-nums">{count > 99 ? '99+' : count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div>
           <p className="text-xs text-muted-foreground mb-3">{roleLabel} 可用作业（{allowedOps.length} 项）</p>
           {permissionsMissing ? (
             <PdaEmptyCard
               icon={<ShieldAlert className="h-12 w-12 text-amber-500" />}
-              title="权限未加载，PDA 已切到受限模式"
+              title="权限未加载，PDA 已切换至受限模式"
               description="未获取到权限信息，PDA 部分功能不可用。请重新登录；若仍异常，请联系管理员。"
               actionText="重新登录"
               onAction={() => { logout(); navigate('/pda/login') }}
@@ -164,11 +213,17 @@ export default function PdaWorkbench() {
                 {commonOps.map(op => {
                   const Icon = op.icon
                   const tone = TONE_STYLES[op.tone]
+                  const count = OP_TODO_KEY[op.path] ? todoCounts?.[OP_TODO_KEY[op.path] as keyof PdaTodoCounts] ?? 0 : 0
                   return (
                     <button key={op.path} onClick={() => navigate(op.path)}
                       className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 active:scale-95 transition-all">
-                      <span className={`flex h-12 w-12 items-center justify-center rounded-xl ${tone.iconBg}`}>
+                      <span className={`relative flex h-12 w-12 items-center justify-center rounded-xl ${tone.iconBg}`}>
                         <Icon className={`h-6 w-6 ${tone.iconColor}`} />
+                        {count > 0 && (
+                          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white tabular-nums">
+                            {count > 99 ? '99+' : count}
+                          </span>
+                        )}
                       </span>
                       <p className="text-sm font-medium text-foreground text-center leading-tight">{op.label}</p>
                     </button>
@@ -193,11 +248,17 @@ export default function PdaWorkbench() {
                       {moreOps.map(op => {
                         const Icon = op.icon
                         const tone = TONE_STYLES[op.tone]
+                        const count = OP_TODO_KEY[op.path] ? todoCounts?.[OP_TODO_KEY[op.path] as keyof PdaTodoCounts] ?? 0 : 0
                         return (
                           <button key={op.path} onClick={() => navigate(op.path)}
                             className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 active:scale-95 transition-all">
-                            <span className={`flex h-12 w-12 items-center justify-center rounded-xl ${tone.iconBg}`}>
+                            <span className={`relative flex h-12 w-12 items-center justify-center rounded-xl ${tone.iconBg}`}>
                               <Icon className={`h-6 w-6 ${tone.iconColor}`} />
+                              {count > 0 && (
+                                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white tabular-nums">
+                                  {count > 99 ? '99+' : count}
+                                </span>
+                              )}
                             </span>
                             <p className="text-sm font-medium text-foreground text-center leading-tight">{op.label}</p>
                           </button>
