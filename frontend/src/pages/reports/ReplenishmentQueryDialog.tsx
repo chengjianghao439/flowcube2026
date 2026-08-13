@@ -54,7 +54,7 @@ export default function ReplenishmentQueryDialog({ open, initial, onClose, onApp
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">商品编码 / 名称</span>
           <Input
-            placeholder="请输入关键字..."
+            placeholder="请输入关键字…"
             value={draft.keyword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft(d => ({ ...d, keyword: e.target.value }))}
             onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}

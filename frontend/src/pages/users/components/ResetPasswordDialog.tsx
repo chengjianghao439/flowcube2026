@@ -68,7 +68,7 @@ export default function ResetPasswordDialog({
               取消
             </Button>
             <Button type="submit" disabled={isPending || newPassword.length < 6}>
-              {isPending ? '重置中...' : '确认重置'}
+              {isPending ? '重置中…' : '确认重置'}
             </Button>
           </DialogFooter>
         </form>

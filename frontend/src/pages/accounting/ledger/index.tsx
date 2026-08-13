@@ -23,7 +23,7 @@ function LedgerDialog({ accountId, code, name, period, onClose }: { accountId: n
     <Dialog open={!!accountId} onOpenChange={o => { if (!o) onClose() }}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader><DialogTitle>明细账 · {code} {name} <span className="text-sm font-normal text-muted-foreground">（{period}）</span></DialogTitle></DialogHeader>
-        {isLoading || !data ? <div className="py-10 text-center text-sm text-muted-foreground">加载中...</div> : (
+        {isLoading || !data ? <div className="py-10 text-center text-sm text-muted-foreground">加载中…</div> : (
           <div className="max-h-[60vh] overflow-auto rounded-lg border border-border/60">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/60 text-muted-foreground">
@@ -108,7 +108,7 @@ export default function LedgerPage() {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={8} className="py-12 text-center text-sm text-muted-foreground">加载中...</td></tr>
+              <tr><td colSpan={8} className="py-12 text-center text-sm text-muted-foreground">加载中…</td></tr>
             ) : list.length === 0 ? (
               <tr><td colSpan={8} className="py-16 text-center text-sm text-muted-foreground"><Scale className="mx-auto mb-2 h-8 w-8 opacity-30" />该期间暂无发生额，先在「记账凭证」生成本期凭证</td></tr>
             ) : list.map(r => (

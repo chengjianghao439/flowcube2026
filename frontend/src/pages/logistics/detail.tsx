@@ -98,7 +98,7 @@ export default function LogisticsDetailPage() {
         description={wb ? <SoftStatusLabel label={wb.statusLabel} tone={wb.statusTone} /> : undefined}
         actions={
           <div className="flex items-center gap-2">
-            {canManage && canRecord && <Button variant="outline" onClick={() => { setTrackingInput(wb?.trackingNo ?? ''); setTrackOpen(true) }}>手工录号</Button>}
+            {canManage && canRecord && <Button variant="outline" onClick={() => { setTrackingInput(wb?.trackingNo ?? ''); setTrackOpen(true) }}>手工录入快递单号</Button>}
             {canManage && canRetry && <Button variant="outline" onClick={() => retryMut.mutate()} disabled={retryMut.isPending}>重试取号</Button>}
             {canManage && canVoid && <Button variant="outline" className="text-destructive" onClick={() => confirmAction({
               title: '作废运单', description: `确认作废运单 ${wb?.waybillNo}？`, variant: 'destructive', confirmText: '确认作废',

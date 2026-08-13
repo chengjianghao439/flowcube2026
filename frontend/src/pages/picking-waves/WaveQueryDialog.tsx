@@ -61,7 +61,7 @@ export default function WaveQueryDialog({ open, initial, onClose, onApply }: Pro
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">波次单号</span>
           <Input
-            placeholder="请输入波次号..."
+            placeholder="请输入波次号…"
             value={draft.keyword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
             onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}

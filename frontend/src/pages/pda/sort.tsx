@@ -193,7 +193,7 @@ export default function PdaSortPage() {
         }`}>
           <p className="text-sm font-semibold text-foreground">
             {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />处理中…</span> :
-             step === 'scan-product' ? '扫描产品条码' : '扫描分拣格条码'}
+             step === 'scan-product' ? '扫描商品条码' : '扫描分拣格条码'}
           </p>
         </div>
 

@@ -65,7 +65,7 @@ export default function LocationQueryDialog({ open, initial, onClose, onApply }:
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">库位编号 / 名称</span>
           <Input
-            placeholder="请输入关键字..."
+            placeholder="请输入关键字…"
             value={draft.keyword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
             onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
@@ -101,7 +101,7 @@ export default function LocationQueryDialog({ open, initial, onClose, onApply }:
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">区域</span>
           <Input
-            placeholder="按库区（如 A/B/C）查询..."
+            placeholder="按库区（如 A/B/C）查询…"
             value={draft.zone}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('zone', e.target.value)}
             onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}

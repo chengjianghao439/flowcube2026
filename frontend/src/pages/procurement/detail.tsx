@@ -59,7 +59,7 @@ export default function ProcurementPlanDetailPage() {
   const toggle = (id: number) => setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toggleAll = () => setSelected(prev => prev.size === pendingIds.length ? new Set() : new Set(pendingIds))
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">加载中...</div>
+  if (isLoading) return <div className="p-8 text-center text-muted-foreground">加载中…</div>
   if (!plan) return <div className="p-8 text-center text-muted-foreground">采购计划不存在</div>
 
   return (
@@ -157,9 +157,9 @@ export default function ProcurementPlanDetailPage() {
 
       {editable && canConvert && (
         <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">勾选待处理行 → 按（供应商，仓库）分组生成采购单草稿（status=1，需人工确认，绝不自动下单）。未选供应商的行不能转采购。</p>
+          <p className="text-xs text-muted-foreground">勾选待处理行后，将按供应商与仓库分组生成采购单草稿（需人工确认提交）。未指定供应商的行无法转采购。</p>
           <Button disabled={selected.size === 0 || convert.isPending} onClick={() => convert.mutate([...selected])}>
-            {convert.isPending ? '转采购中...' : `转采购（${selected.size} 行）`}
+            {convert.isPending ? '转采购中…' : `转采购（${selected.size} 行）`}
           </Button>
         </div>
       )}

@@ -115,7 +115,7 @@ function CheckWork({ checkId }: { checkId: number }) {
     try {
       const d = await getContainerByBarcodeApi(bc)
       if (d.productId !== activeItem.productId) { err(`条码 ${bc} 不是商品「${activeItem.productName}」的库存条码`); return }
-      if (d.containerStatus !== 'stored') { err(`条码 ${bc} 不是在库条码（待上架/已出库不能盘）`); return }
+      if (d.containerStatus !== 'stored') { err(`条码 ${bc} 不是在库条码（待上架/已出库状态不可盘点）`); return }
       if (d.individual) {
         setScanned(prev => [...prev, { barcode: d.barcode, individual: true, bookQty: 1, countedQty: 1 }])
         ok(`单件 ${d.barcode} 计 1（已扫 ${scanned.length + 1} 个）`)

@@ -33,21 +33,21 @@ export type PaymentType = 1 | 2
 const COPY = {
   1: {
     title: '应付账款',
-    description: '现结供应商：下单当天到期，逐笔确认结算后登记付款；月结供应商见「供应商对账」',
+    description: '现结供应商：到货即结，逐笔确认结算后登记付款；月结供应商见「供应商对账」',
     party: '供应商',
     amountCol: '已付金额',
     payAction: '登记付款',
     payDialog: '登记付款',
-    statusOptions: [['1', '未付'], ['2', '部分付'], ['3', '已付清']] as const,
+    statusOptions: [['1', '未付'], ['2', '部分付款'], ['3', '已结清']] as const,
   },
   2: {
     title: '应收账款',
-    description: '现结客户：下单当天到期，出库后逐笔登记收款；月结客户见「客户对账」',
+    description: '现结客户：出库即结，出库后逐笔登记收款；月结客户见「客户对账」',
     party: '客户',
     amountCol: '已收金额',
     payAction: '登记收款',
     payDialog: '登记收款',
-    statusOptions: [['1', '未收'], ['2', '部分收'], ['3', '已收清']] as const,
+    statusOptions: [['1', '未收'], ['2', '部分收款'], ['3', '已结清']] as const,
   },
 } as const
 

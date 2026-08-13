@@ -125,7 +125,7 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>取消</Button>
-            <Button type="submit" disabled={loading}>{loading ? '保存中...' : '保存'}</Button>
+            <Button type="submit" disabled={loading}>{loading ? '保存中…' : '保存'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

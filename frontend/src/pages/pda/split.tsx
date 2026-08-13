@@ -42,13 +42,13 @@ export default function PdaSplitPage() {
       if (d.lockedByTaskId) {
         err(
           `该容器已被拣货任务 ${d.lockedByTaskNo ?? `#${d.lockedByTaskId}`} 锁定，不可拆分。`
-          + `拆分须在拣货前完成；若塑料盒只是搬运用，无需拆分，直接扫本容器条码拣货即可`,
+          + `拆分须在拣货前完成；若塑料盒仅为搬运用途，则无需拆分，直接扫描该容器条码拣货即可`,
         )
         return
       }
       // 单件库存条码（一件一码）不可拆分：条码就是这件货的唯一身份（后端同样拦截，这里前置提示）
       if (d.individual) {
-        err(`条码 ${d.barcode} 是单件库存条码（一件一码），不可拆分；如需移动请整件扫本条码操作`)
+        err(`条码 ${d.barcode} 是单件库存条码（一件一码），不可拆分；如需移动，请直接扫描该条码按整件操作`)
         return
       }
       setContainerId(d.containerId)

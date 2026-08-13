@@ -45,7 +45,7 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
   return (
     <Dialog open={open} onOpenChange={x => !x && onClose()}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>查询</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>查询资金账户</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
             <Label>关键字</Label>
@@ -213,7 +213,7 @@ export default function FinanceAccountsPage() {
     <div className="space-y-4">
       <PageHeader
         title="账户管理"
-        description="管理收付款用的银行、现金等资金账户。余额由账户流水实时汇总，不可直接修改。"
+        description="管理银行、现金等收付款账户；余额由流水实时汇总，不可直接修改。"
         actions={(
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>

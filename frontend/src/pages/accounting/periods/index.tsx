@@ -73,7 +73,7 @@ export default function AccountingPeriodsPage() {
       key: 'closed', title: '状态', width: 100,
       render: (_, r) => r.closed
         ? <SoftStatusLabel label="已结账" tone="success" />
-        : <SoftStatusLabel label="开放中" tone="active" />,
+        : <SoftStatusLabel label="未结账" tone="active" />,
     },
     {
       key: 'closingStatus', title: '损益结转', width: 120,
@@ -92,7 +92,7 @@ export default function AccountingPeriodsPage() {
       render: (_, r) => (
         <div className="flex gap-2">
           {!r.closed && r.closingStatus !== 'not_required' && (
-            <Button size="sm" variant="outline" onClick={() => setGenerating(r)} title={r.closingStatus === 'current' ? '结转凭证已最新，重新生成为更新金额' : '生成/更新本期损益结转凭证'}>
+            <Button size="sm" variant="outline" onClick={() => setGenerating(r)} title={r.closingStatus === 'current' ? '结转凭证已为最新，重新生成仅更新金额' : '生成/更新本期损益结转凭证'}>
               <RefreshCcw className="mr-1 h-3.5 w-3.5" />生成结转
             </Button>
           )}
@@ -116,7 +116,7 @@ export default function AccountingPeriodsPage() {
 
       <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
         <CalendarCheck className="h-4 w-4" />
-        结账顺序：生成本期业务凭证 → 生成结转凭证（状态需「结转已最新」）→ 结账。期间已结账后再有凭证变动必须先反结账。
+        结账顺序：生成本期业务凭证 → 生成损益结转凭证（状态为「已最新」）→ 结账。期间已结账后再有凭证变动必须先反结账。
       </div>
 
       <DataTable columns={columns} data={data ?? []} loading={isLoading} rowKey="period" />
@@ -131,7 +131,7 @@ export default function AccountingPeriodsPage() {
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenerating(null)} disabled={genMut.isPending}>取消</Button>
-            <Button onClick={() => generating && genMut.mutate(generating.period)} disabled={genMut.isPending}>{genMut.isPending ? '生成中...' : '生成'}</Button>
+            <Button onClick={() => generating && genMut.mutate(generating.period)} disabled={genMut.isPending}>{genMut.isPending ? '生成中…' : '生成'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -145,7 +145,7 @@ export default function AccountingPeriodsPage() {
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setClosing(null)} disabled={closeMut.isPending}>取消</Button>
-            <Button onClick={() => closing && closeMut.mutate(closing.period)} disabled={closeMut.isPending}>{closeMut.isPending ? '结账中...' : '确认结账'}</Button>
+            <Button onClick={() => closing && closeMut.mutate(closing.period)} disabled={closeMut.isPending}>{closeMut.isPending ? '结账中…' : '确认结账'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -116,7 +116,7 @@ export default function ProfitAnalysisPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="利润 / 库存分析基础版"
+        title="利润 / 库存分析"
         description="先看销售毛利、商品毛利、库存金额与滞销库存，每一项都可以直接打开对应的原始单据或基础管理页。"
         actions={(
           <div className="flex flex-wrap gap-2">

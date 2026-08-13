@@ -80,7 +80,7 @@ export default function CustomersPage() {
     <div className="space-y-4">
       <PageHeader title="客户管理" description="管理销售客户档案，可绑定价格 A / B / C / D" actions={<Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>+ 新增客户</Button>} />
       <FilterCard>
-        <Input placeholder="搜索编码/名称..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} />
+        <Input placeholder="搜索编码/名称…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search) }}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword('') }}>重置</Button>}
       </FilterCard>

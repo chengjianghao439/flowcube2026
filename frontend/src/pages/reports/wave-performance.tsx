@@ -131,8 +131,8 @@ export default function WavePerformancePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="波次效率报表"
-        description="波次拣货时长、SKU 分布与拣货效率分析，统一桌面端页头与字号。"
+        title="波次效率"
+        description="分析各波次的拣货时长、SKU 分布与拣货效率。"
         actions={(
           <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
         )}
@@ -142,7 +142,7 @@ export default function WavePerformancePage() {
         <QueryErrorState
           error={error}
           onRetry={() => void refetch()}
-          title="波次效率报表加载失败"
+          title="波次效率加载失败"
           description="当前波次效率数据暂时无法加载，请点击重试或稍后再试"
           compact
         />

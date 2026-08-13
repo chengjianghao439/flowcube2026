@@ -26,7 +26,7 @@ interface PdaScannerProps {
 
 export default function PdaScanner({
   onScan,
-  placeholder = '等待扫码...',
+  placeholder = '等待扫码…',
   disabled = false,
   showTypeHint = true,
   allowManualEntry = true,

@@ -71,37 +71,26 @@ function SkuCard({ sku, onTap }: { sku: PdaTaskSkuSummary; onTap: () => void }) 
   const pct = sku.totalRequired > 0 ? Math.min(100, Math.round(sku.totalPicked / sku.totalRequired * 100)) : 0
   const done = pct >= 100
   return (
-    <PdaCard done={done} onClick={onTap}>
+    <PdaCard done={done} onClick={onTap} className="text-left">
       <div className="space-y-2">
-        <div className="flex items-start justify-between">
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-foreground truncate">{sku.productName}</p>
-            <p className="text-xs font-mono text-muted-foreground">{sku.productCode}</p>
+        <div className="min-w-0">
+          <p className="font-semibold text-foreground truncate">{sku.productName}</p>
+          <p className="text-xs font-mono text-muted-foreground truncate">{sku.productCode}</p>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <div>
+            <p className="text-xs text-muted-foreground">已拣/总需</p>
+            <p className="font-bold text-foreground">
+              <span className="text-primary">{sku.totalPicked.toFixed(0)}</span>
+              <span className="text-muted-foreground">/{sku.totalRequired.toFixed(0)}</span>
+            </p>
           </div>
           {done
-            ? <SoftStatusLabel label="✓ 已拣" tone="success" className="shrink-0 ml-2" />
-            : <SoftStatusLabel label="待拣"   tone="draft"   className="shrink-0 ml-2" />
+            ? <SoftStatusLabel label="✓ 已拣" tone="success" />
+            : <SoftStatusLabel label="待拣" tone="draft" />
           }
         </div>
-        <div className="flex items-center gap-4 text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground">总需</p>
-            <p className="font-bold text-foreground">{sku.totalRequired.toFixed(0)} <span className="text-xs font-normal text-muted-foreground">{sku.unit}</span></p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">已拣</p>
-            <p className="font-bold text-primary">{sku.totalPicked.toFixed(0)} <span className="text-xs font-normal text-muted-foreground">{sku.unit}</span></p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">涉及订单</p>
-            <p className="font-bold text-foreground">{sku.orderCount} 单</p>
-          </div>
-        </div>
         <div>
-          <div className="flex justify-between text-xs text-muted-foreground mb-1">
-            <span>拣货进度</span>
-            <span>{pct}%</span>
-          </div>
           <div className="h-1.5 rounded-full bg-muted">
             <div className="h-1.5 rounded-full transition-all"
               style={{ width: `${pct}%`, background: done ? 'hsl(var(--success))' : 'hsl(var(--primary))' }} />
@@ -189,17 +178,19 @@ export default function PdaPickingPage() {
         {viewMode === 'sku' && !isLoading && !skuLoading && !isError && (
           skuList.length === 0
             ? <PdaEmptyCard icon={<Package className="h-12 w-12 text-muted-foreground" />} title="暂无待拣商品" description="订单确认后会自动显示在这里" />
-            : skuList.map(sku => (
-                <SkuCard
-                  key={sku.productId}
-                  sku={sku}
-                  onTap={() => {
-                    // 跳转到第一个关联任务
-                    const firstTaskId = sku.taskIds[0]
-                    if (firstTaskId) navigate(`/pda/task/${firstTaskId}`)
-                  }}
-                />
-              ))
+            : <div className="grid grid-cols-2 gap-3">
+                {skuList.map(sku => (
+                  <SkuCard
+                    key={sku.productId}
+                    sku={sku}
+                    onTap={() => {
+                      // 跳转到第一个关联任务
+                      const firstTaskId = sku.taskIds[0]
+                      if (firstTaskId) navigate(`/pda/task/${firstTaskId}`)
+                    }}
+                  />
+                ))}
+              </div>
         )}
 
         {/* 订单视图 */}

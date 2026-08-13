@@ -319,7 +319,7 @@ export default function PickingWavesPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-card-title">出库箱贴打印</h3>
-                  <p className="text-muted-body">在这里统一处理箱贴补打、打印超时确认，以及波次推进卡住的位置。</p>
+                  <p className="text-muted-body">在这里统一处理箱贴补打、打印超时确认，以及定位波次推进受阻环节。</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>

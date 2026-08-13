@@ -92,14 +92,12 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
       <button onClick={() => { setOpen(o => !o); if (!active && pkg.status !== 3) onActivate() }}
         className="w-full flex items-center justify-between px-4 py-3 text-left">
         <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1">
+          <span className="shrink-0">
             {pkg.status === 2
-              ? <><CircleCheck className="h-4 w-4 text-green-600" /><span className="text-xs font-medium text-green-600">完成</span></>
+              ? <CircleCheck className="h-4 w-4 text-green-600" />
               : pkg.status === 3
-                ? <><Ban className="h-4 w-4 text-muted-foreground" /><span className="text-xs font-medium text-muted-foreground">作废</span></>
-                : active
-                  ? <><PackageIcon className="h-4 w-4 text-primary" /><span className="text-xs font-medium text-primary">装箱中</span></>
-                  : <><PackageIcon className="h-4 w-4 text-muted-foreground" /><span className="text-xs font-medium text-muted-foreground">未激活</span></>}
+                ? <Ban className="h-4 w-4 text-muted-foreground" />
+                : <PackageIcon className={active ? 'h-4 w-4 text-primary' : 'h-4 w-4 text-muted-foreground'} />}
           </span>
           <div>
             <p className="font-mono font-bold text-foreground text-sm">{pkg.barcode}</p>
@@ -409,7 +407,7 @@ export default function PdaPackPage() {
     if (taskDetail.status !== WT_STATUS.PACKING) { err(`当前任务状态为「${taskDetail.statusName}」，不能打包`); return }
     if (!activePackageId) { err('请先创建或选择一个箱子'); return }
     const parsed = parseBarcode(raw)
-    if (parsed.type !== 'product' && parsed.type !== 'unknown') { err('扫描产品条码'); return }
+    if (parsed.type !== 'product' && parsed.type !== 'unknown') { err('扫描商品条码'); return }
     // 扫码即直接装箱（默认数量 1），无需额外确认
     addMut.mutate({ code: raw, qty: 1 })
   }, [activePackageId, err, addMut, onlineBlocked, taskDetail, taskLoading])
@@ -580,7 +578,7 @@ export default function PdaPackPage() {
       </div>
 
       <PdaBottomBar>
-          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描产品条码" disabled={addMut.isPending || onlineBlocked} onDuplicate={() => err('重复扫码，请稍候')} />}
+          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描商品条码" disabled={addMut.isPending || onlineBlocked} onDuplicate={() => err('重复扫码，请稍候')} />}
           <Button variant={activePackageId ? 'outline' : 'default'} className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending || onlineBlocked}>
             {createMut.isPending ? '创建中…' : '＋ 新建箱子'}
           </Button>

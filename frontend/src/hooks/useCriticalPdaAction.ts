@@ -231,7 +231,7 @@ export function useCriticalPdaAction<T>({
       removePending(action)
       setPhase('failed')
       setPhaseMessage(null)
-      setLastErrorMessage(message || `${label}未提交成功，任务状态未确认推进。请检查后重试。`)
+      setLastErrorMessage(message || `${label}未提交成功，任务状态未能确认已推进。请检查后重试。`)
       throw error
     }
   }, [action, addPending, confirmByServerState, label, networkStatus, onConfirmed, pendingRecord, removePending, statusAction])

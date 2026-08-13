@@ -249,7 +249,7 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="h-8 pl-8 text-sm"
-              placeholder="搜索编码 / 名称 / 条码..."
+              placeholder="搜索编码 / 名称 / 条码…"
               value={keyword}
               onChange={e => handleKeywordChange(e.target.value)}
             />

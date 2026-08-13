@@ -1035,7 +1035,7 @@ export default function PrintTemplateEditor() {
         <PageHeader title="编辑打印模板" description="正在加载…" />
         <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          加载模板...
+          加载模板…
         </div>
       </div>
     )
@@ -1214,7 +1214,7 @@ export default function PrintTemplateEditor() {
 
             <Button size="sm" onClick={handleSave} disabled={isPending} className="gap-1.5">
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              {isPending ? '保存中...' : '保存'}
+              {isPending ? '保存中…' : '保存'}
             </Button>
           </div>
         </div>

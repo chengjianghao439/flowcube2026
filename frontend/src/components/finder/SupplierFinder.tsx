@@ -69,7 +69,7 @@ export function SupplierFinder({ open, onClose, onConfirm }: SupplierFinderProps
       isLoading={isFetching}
       keyword={keyword}
       onKeywordChange={handleKeywordChange}
-      searchPlaceholder="搜索供应商名称、编码..."
+      searchPlaceholder="搜索供应商名称、编码…"
       selectedLabel={r => `${r.name}${r.code ? ` (${r.code})` : ''}`}
     />
   )

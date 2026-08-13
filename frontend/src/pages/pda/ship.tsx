@@ -225,10 +225,10 @@ export default function PdaShipPage() {
                       pkg.barcode === info.barcode ? 'bg-primary/10 border border-primary/30' : 'bg-muted/20'
                     }`}>
                       <div className="flex items-center gap-2">
-                        <span className="flex items-center gap-1 text-xs">
+                        <span className="flex items-center gap-1">
                           {pkg.status === 2
-                            ? <><CircleCheck className="h-4 w-4 text-green-600" /><span className="font-medium text-green-600">已出库</span></>
-                            : <><Package className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">待出库</span></>}
+                            ? <><CircleCheck className="h-4 w-4 text-green-600" /><SoftStatusLabel label="已出库" tone="success" /></>
+                            : <><Package className="h-4 w-4 text-muted-foreground" /><SoftStatusLabel label="待出库" tone="draft" /></>}
                         </span>
                         <p className="font-mono text-sm font-semibold text-foreground">{pkg.barcode}</p>
                         {pkg.barcode === info.barcode && <SoftStatusLabel label="当前" tone="active" />}

@@ -112,7 +112,7 @@ export default function LoginPage() {
           {/* 错误提示 */}
           {error && (
             <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
-              {error.message || '登录失败，请检查账号和密码'}
+              {error.message || '登录失败，请核对账号与密码'}
             </div>
           )}
 
@@ -180,7 +180,7 @@ export default function LoginPage() {
             </div>
 
             <p className="text-xs text-slate-500 dark:text-slate-500">
-              登录成功后仅记住账号，不在本机保存密码。退出或关闭应用后需重新登录。
+              仅在本机记住账号，不保存密码；退出后需重新登录。
             </p>
 
             {/* 提交按钮 */}
@@ -195,7 +195,7 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  <span>登录中...</span>
+                  <span>登录中…</span>
                 </>
               ) : (
                 <>

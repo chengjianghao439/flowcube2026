@@ -41,7 +41,7 @@ export default function PermissionsPage() {
         ))}
       </div>
 
-      {isLoading ? <p className="text-muted-foreground text-sm">加载中...</p> : (
+      {isLoading ? <p className="text-muted-foreground text-sm">加载中…</p> : (
         <div className="bg-white rounded-lg border p-5 space-y-6">
           {PERMISSION_GROUPS.map(group => (
             <div key={group.group}>
@@ -62,7 +62,7 @@ export default function PermissionsPage() {
           {isAdmin && (
             <div className="pt-2 border-t flex items-center justify-between">
               <p className="text-xs text-muted-foreground">已选 {perms.size} 项权限</p>
-              <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中...' : '保存权限配置'}</Button>
+              <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中…' : '保存权限配置'}</Button>
             </div>
           )}
           {!isAdmin && <p className="text-sm text-muted-foreground pt-2 border-t">仅管理员可修改权限</p>}
@@ -70,7 +70,7 @@ export default function PermissionsPage() {
       )}
 
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-        注意：修改权限后，用户需要重新登录才能生效。管理员（admin）角色权限固定，不可修改。
+        提示：修改权限后，用户需要重新登录才能生效。管理员（admin）角色权限固定，不可修改。
       </div>
     </div>
   )

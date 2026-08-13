@@ -56,7 +56,7 @@ export default function BarcodePrintQueryDialog({ open, initial, onClose, onAppl
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">条码 / 单号 / 关键字</span>
           <Input
-            placeholder="请输入关键字..."
+            placeholder="请输入关键字…"
             value={draft.keyword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
             onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}

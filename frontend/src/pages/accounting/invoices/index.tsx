@@ -92,7 +92,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
-          <Button onClick={submit} disabled={isPending || !f.invoiceNo.trim() || !f.partyName.trim() || !(withTax > 0)}>{isPending ? '保存中...' : '保存'}</Button>
+          <Button onClick={submit} disabled={isPending || !f.invoiceNo.trim() || !f.partyName.trim() || !(withTax > 0)}>{isPending ? '保存中…' : '保存'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

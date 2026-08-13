@@ -122,7 +122,7 @@ export default function BarcodePrintQueryPage() {
       },
       {
         key: 'title',
-        title: category === 'inbound' ? '产品信息' : '业务信息',
+        title: category === 'inbound' ? '商品信息' : '业务信息',
         render: (_, row) => (
           <div className="space-y-1">
             <div className="font-medium">{row.title}</div>

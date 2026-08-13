@@ -34,7 +34,7 @@ export interface WidgetDef {
 }
 
 export const CATEGORY_LABEL: Record<WidgetCategory, string> = {
-  kpi: '关键指标', chart: '图表分析', list: '列表看板', fun: '趣味', system: '系统',
+  kpi: '关键指标', chart: '图表分析', list: '列表看板', fun: '趣味组件', system: '系统',
 }
 export const CATEGORY_ORDER: WidgetCategory[] = ['kpi', 'chart', 'list', 'fun', 'system']
 

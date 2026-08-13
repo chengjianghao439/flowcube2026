@@ -69,11 +69,11 @@ export default function ProcurementPlanListPage() {
     <div className="space-y-4">
       <PageHeader
         title="采购计划"
-        description="基于历史出库趋势预测未来需求，套 MRP 净需求算出建议采购量；可逐行调整、按供应商转采购单草稿（需人工确认，绝不自动下单）。"
+        description="基于历史出库趋势预测未来需求，结合库存与在途套用净需求算出建议采购量；可逐行调整，按供应商转为采购单草稿（需人工确认后提交）。"
         actions={canManage ? <Button onClick={() => setGenOpen(true)}>+ 生成计划</Button> : undefined}
       />
       <FilterCard>
-        <Input placeholder="搜索计划编号/名称..." value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e) => { if (e.key === 'Enter') setKeyword(search) }} />
+        <Input placeholder="搜索计划编号/名称…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e) => { if (e.key === 'Enter') setKeyword(search) }} />
         <Button size="sm" variant="outline" onClick={() => setKeyword(search)}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>}
       </FilterCard>
@@ -124,7 +124,7 @@ export default function ProcurementPlanListPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenOpen(false)} disabled={generate.isPending}>取消</Button>
-            <Button onClick={() => generate.mutate()} disabled={generate.isPending}>{generate.isPending ? '生成中...' : '生成'}</Button>
+            <Button onClick={() => generate.mutate()} disabled={generate.isPending}>{generate.isPending ? '生成中…' : '生成'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

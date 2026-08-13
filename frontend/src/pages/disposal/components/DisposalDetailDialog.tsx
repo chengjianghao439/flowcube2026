@@ -57,7 +57,7 @@ export default function DisposalDetailDialog({ open, onClose, id }: Props) {
             {disposal && <SoftStatusLabel label={disposal.statusName} tone={STATUS_TONE[disposal.status] ?? 'draft'} />}
           </DialogTitle>
         </DialogHeader>
-        {isLoading && <p className="text-center py-8 text-muted-foreground">加载中...</p>}
+        {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
         {disposal && (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4 text-sm">

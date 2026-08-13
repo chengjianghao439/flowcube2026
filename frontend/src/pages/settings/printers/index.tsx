@@ -81,7 +81,7 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
           {printer.name} <span className="text-doc-code">({printer.code})</span>
         </p>
         <p className="mb-4 text-helper leading-relaxed">
-          与添加打印机时的「设备类型」不同：此处指定各业务场景使用哪台机。已绑定本项时再次点击可解除绑定。
+          与添加打印机时的「设备类型」不同：此处指定各业务场景使用的打印机。已绑定本项时再次点击可解除绑定。
         </p>
         <div className="space-y-2">
           {BIND_TYPES.map(t => {
@@ -419,7 +419,7 @@ export default function PrintersPage() {
                     </SelectContent>
                   </Select>
                   <p className="mt-1.5 text-helper leading-relaxed">
-                    此为硬件分类，与下方列表中的「绑定用途」无关。实际打印走哪台机请在添加后使用「绑定用途」指定（如产品条码、货架条码等）。
+                    此为硬件分类，与下方列表中的「绑定用途」无关。实际打印所用的打印机请在添加后使用「绑定用途」指定（如产品条码、货架条码等）。
                     打印链路统一使用 ZPL 指令，A4 / 文档打印机无法参与，故不在此列出。
                   </p>
                 </div>

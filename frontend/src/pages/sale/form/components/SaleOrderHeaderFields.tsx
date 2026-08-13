@@ -45,7 +45,7 @@ export function SaleOrderHeaderFields({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
         <div className="space-y-1.5">
           <Label>客户 *</Label>
-          <FinderTrigger value={customerName} placeholder="点击选择客户..." onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn(customerError && 'border-destructive/60 bg-destructive/5')} />
+          <FinderTrigger value={customerName} placeholder="点击选择客户…" onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn(customerError && 'border-destructive/60 bg-destructive/5')} />
         </div>
         <div className="space-y-1.5">
           <Label>出库仓库 *</Label>

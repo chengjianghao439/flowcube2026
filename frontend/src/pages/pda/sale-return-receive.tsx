@@ -92,7 +92,7 @@ export default function PdaSaleReturnReceivePage() {
   const handleScan = useCallback((raw: string) => {
     const parsed = parseBarcode(raw.trim())
     if (parsed?.type !== 'product') {
-      err('请扫描产品条码')
+      err('请扫描商品条码')
       return
     }
     const product = productList.find(p => p.productCode === parsed.code || p.productId === Number(parsed.code))
@@ -144,7 +144,7 @@ export default function PdaSaleReturnReceivePage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-3">
         {/* 产品列表 */}
         {step === 'select' && productList.map(p => (
-          <PdaCard key={p.productId} active={p.totalExpected > p.totalReceived} onClick={() => {
+          <PdaCard key={p.productId} className="w-full" active={p.totalExpected > p.totalReceived} onClick={() => {
             setSelectedProduct({ id: p.productId, code: p.productCode, name: p.productName, unit: p.unit, remaining: p.totalExpected - p.totalReceived })
             setBoxes([0])
             setRejectedQty(0)
@@ -216,7 +216,7 @@ export default function PdaSaleReturnReceivePage() {
 
       <PdaBottomBar>
         {step === 'select' && (
-          <PdaScanner onScan={handleScan} placeholder="扫描产品条码..." />
+          <PdaScanner onScan={handleScan} placeholder="扫描商品条码…" />
         )}
         {step === 'qty' && selectedProduct && totalQty > 0 && (
           <Button className="w-full h-12 text-lg" disabled={receiveAction.phase !== 'idle'}
@@ -237,7 +237,7 @@ export default function PdaSaleReturnReceivePage() {
               },
             )}
           >
-            质检确认 合格{Number(boxes[0]) || 0}{rejectedQty > 0 ? ` 不合格${rejectedQty}` : ''} {selectedProduct.unit}
+            确认质检：合格 {Number(boxes[0]) || 0}{rejectedQty > 0 ? `，不合格 ${rejectedQty}` : ''} {selectedProduct.unit}
           </Button>
         )}
       </PdaBottomBar>

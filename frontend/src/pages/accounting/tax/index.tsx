@@ -47,7 +47,7 @@ export default function TaxFilingPage() {
     <div className="space-y-4">
       <PageHeader
         title="报税数据"
-        description="从会计科目发生额实时投影增值税/所得税申报表要素（税会差异用调整项手工维护），供报税参考。"
+        description="从会计科目发生额实时投影增值税/所得税申报表要素（税会差异，即税法与会计口径的差异，用调整项手工维护），供报税参考。"
       />
 
       <div className="flex items-center gap-2">

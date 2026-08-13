@@ -17,6 +17,7 @@ import PdaScanner from '@/components/pda/PdaScanner'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import {
   getDeviceCredential,
@@ -94,9 +95,7 @@ export default function PdaBindPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">票据状态</span>
-                <span className={session ? 'text-emerald-600' : 'text-destructive'}>
-                  {session ? '有效' : '需重新登录以获取'}
-                </span>
+                <SoftStatusLabel label={session ? '有效' : '需重新登录以获取'} tone={session ? 'success' : 'danger'} />
               </div>
             </div>
             <Button variant="outline" className="w-full" onClick={handleUnbind}>解除绑定</Button>
@@ -116,7 +115,7 @@ export default function PdaBindPage() {
             className="w-full text-left text-sm text-primary"
             onClick={() => setManualOpen(v => !v)}
           >
-            {manualOpen ? '▲ 收起手动输入' : '▼ 扫不了码？手动输入设备码和密钥'}
+            {manualOpen ? '▲ 收起手动输入' : '▼ 扫码失败？可手动输入设备码和密钥'}
           </button>
           {manualOpen && (
             <div className="space-y-2">
@@ -135,7 +134,7 @@ export default function PdaBindPage() {
                 disabled={!manual.code.trim() || !manual.secret.trim() || binding}
                 onClick={() => void bind(manual.code, manual.secret)}
               >
-                {binding ? '绑定中...' : '确认绑定'}
+                {binding ? '绑定中…' : '确认绑定'}
               </Button>
             </div>
           )}

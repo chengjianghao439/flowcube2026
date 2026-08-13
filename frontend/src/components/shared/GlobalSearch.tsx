@@ -111,7 +111,7 @@ export default function GlobalSearch() {
           onFocus={() => setFocused(true)}
           onBlur={() => { if (!suppressBlur.current) setTimeout(() => setFocused(false), 150); suppressBlur.current = false }}
           onKeyDown={onKeyDown}
-          placeholder={`搜索... ${shortcutHint}`}
+          placeholder={`搜索… ${shortcutHint}`}
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground min-w-0"
         />
         {loading && <span className="text-xs text-muted-foreground shrink-0">...</span>}

@@ -95,7 +95,7 @@ export default function RefundsPage() {
     <div className="space-y-4">
       <PageHeader
         title="退货退款单"
-        description="已收款的销售退货需先退款（否则退货被负余额守卫拦截）；退款从资金账户出账并冲减已收金额"
+        description="已收款的销售退货需先完成退款，否则无法继续退货；退款从资金账户出账并冲减已收金额"
         actions={
           <>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
@@ -206,7 +206,7 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => { reset(); onClose() }} disabled={submitting}>取消</Button>
-          <Button onClick={handleCreate} disabled={submitting || create.isPending}>{submitting || create.isPending ? '创建中...' : '创建退款单'}</Button>
+          <Button onClick={handleCreate} disabled={submitting || create.isPending}>{submitting || create.isPending ? '创建中…' : '创建退款单'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

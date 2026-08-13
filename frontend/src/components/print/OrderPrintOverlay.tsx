@@ -107,7 +107,7 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
           {loading ? (
             <span style={{ fontSize: 12, color: '#999', display: 'flex', alignItems: 'center', gap: 4 }}>
               <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
-              加载模板...
+              加载模板…
             </span>
           ) : selected ? (
             <button
@@ -171,7 +171,7 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#888', marginTop: 60 }}>
             <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
-            <span>加载模板中...</span>
+            <span>加载模板中…</span>
           </div>
         ) : selected ? (
           <div

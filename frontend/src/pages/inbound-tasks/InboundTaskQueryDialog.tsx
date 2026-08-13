@@ -82,7 +82,7 @@ export default function InboundTaskQueryDialog({ open, initial, onClose, onApply
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">单号</span>
             <Input
-              placeholder="任务单号 / 采购单号..."
+              placeholder="任务单号 / 采购单号…"
               value={draft.keyword}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
               onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
@@ -124,8 +124,8 @@ export default function InboundTaskQueryDialog({ open, initial, onClose, onApply
           </label>
 
           <QueryPickerField
-            label="产品"
-            placeholder="选择产品"
+            label="商品"
+            placeholder="选择商品"
             value={draft.productName ? `${draft.productName}${draft.productCode ? ` (${draft.productCode})` : ''}` : ''}
             onOpen={() => setProductOpen(true)}
             onClear={() => setDraft(d => ({ ...d, productId: null, productCode: '', productName: '' }))}
@@ -157,7 +157,7 @@ export default function InboundTaskQueryDialog({ open, initial, onClose, onApply
           <label className="flex flex-col gap-1 col-span-2">
             <span className="text-xs font-medium text-muted-foreground">备注</span>
             <Input
-              placeholder="按收货订单备注内容查询..."
+              placeholder="按收货订单备注内容查询…"
               value={draft.remark}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('remark', e.target.value)}
               onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}

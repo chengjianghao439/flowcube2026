@@ -139,7 +139,7 @@ function AccountFormDialog({ open, mode, parentAcct, editAcct, onClose }: FormDi
         {lockCore && (
           <div className="flex items-center gap-1.5 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5" />
-            系统预置科目：编码/名称/分类/方向由映射引擎依赖，仅可修改排序与备注。
+            系统预置科目：编码、名称、分类与方向不可修改，仅可调整排序与备注。
           </div>
         )}
 
@@ -231,7 +231,7 @@ function AccountFormDialog({ open, mode, parentAcct, editAcct, onClose }: FormDi
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
             <Button type="submit" disabled={isPending || !form.code.trim() || !form.name.trim()}>
-              {isPending ? '保存中...' : '保存'}
+              {isPending ? '保存中…' : '保存'}
             </Button>
           </DialogFooter>
         </form>
@@ -411,7 +411,7 @@ export default function AccountsPage() {
 
       <div className="card-base p-2">
         {isLoading ? (
-          <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">加载中...</div>
+          <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">加载中…</div>
         ) : tree.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <BookOpen className="mb-3 h-10 w-10 opacity-30" />

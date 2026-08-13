@@ -46,7 +46,7 @@ function PageLoader() {
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
-      加载中...
+      加载中…
     </div>
   )
 }
@@ -152,8 +152,8 @@ export default function AppRouter() {
               <Route path="ship/:id" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
               <Route path="ship" element={<PdaRoutePermission title="出库确认" required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}><PdaShipPage /></PdaRoutePermission>} />
               <Route path="sort" element={<PdaRoutePermission title="分拣作业" required={[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT]}><PdaSortPage /></PdaRoutePermission>} />
-              <Route path="cancel-return" element={<PdaRoutePermission title="取消清理" required={[PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW]}><PdaCancelReturnPage /></PdaRoutePermission>} />
-              <Route path="cancel-return/:id" element={<PdaRoutePermission title="取消归还" required={[PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN]}><PdaCancelReturnPage /></PdaRoutePermission>} />
+              <Route path="cancel-return" element={<PdaRoutePermission title="拣货退回" required={[PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW]}><PdaCancelReturnPage /></PdaRoutePermission>} />
+              <Route path="cancel-return/:id" element={<PdaRoutePermission title="拣货退回确认" required={[PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN]}><PdaCancelReturnPage /></PdaRoutePermission>} />
               <Route path="adjustments" element={<PdaRoutePermission title="改单确认" required={[PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW]}><PdaAdjustmentPage /></PdaRoutePermission>} />
               <Route path="adjustments/:id" element={<PdaRoutePermission title="改单确认" required={[PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW, PERMISSIONS.WAREHOUSE_TASK_ADJUST]}><PdaAdjustmentPage /></PdaRoutePermission>} />
               <Route path="transfer" element={<PdaRoutePermission title="调拨执行" required={[PERMISSIONS.TRANSFER_ORDER_VIEW]}><PdaTransferPage /></PdaRoutePermission>} />

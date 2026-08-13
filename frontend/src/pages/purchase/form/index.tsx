@@ -300,7 +300,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               {submitting || submitLocked ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  保存中...
+                  保存中…
                 </>
               ) : (
                 <>
@@ -320,7 +320,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             <FinderTrigger
               id="purchase-supplier"
               value={supplierName}
-              placeholder="点击选择供应商..."
+              placeholder="点击选择供应商…"
               onClick={() => setSupplierFinderOpen(true)}
               onDoubleClick={() => {
                 setSupplierFinderOpen(false)
@@ -420,7 +420,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                       >
                         {item.productName
                           ? <span className="truncate font-medium text-foreground">{item.productName}</span>
-                          : <span className="text-muted-foreground">点击选择商品...</span>}
+                          : <span className="text-muted-foreground">点击选择商品…</span>}
                       </button>
                     </td>
                     <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
@@ -562,7 +562,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
   if (isLoading) {
     return (
       <div className="flex h-40 items-center justify-center text-muted-body">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中...
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中…
       </div>
     )
   }
@@ -797,7 +797,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
                 { onSettled: () => { setRejectOpen(false); setRejectReason('') } },
               )}
             >
-              {rejectMutate.isPending ? '驳回中...' : '确认驳回'}
+              {rejectMutate.isPending ? '驳回中…' : '确认驳回'}
             </Button>
           </DialogFooter>
         </DialogContent>

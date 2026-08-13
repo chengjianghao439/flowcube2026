@@ -108,8 +108,8 @@ export default function ApprovalFlowsPage() {
     if (!form.name.trim()) return toast.error('请填写流程名称')
     if (form.steps.length === 0) return toast.error('至少配置一个审批节点')
     for (const s of form.steps) {
-      if (s.approverType === APPROVER_TYPE.ROLE && !s.roleId) return toast.error(`第 ${s.stepOrder} 级：指定角色类型必须选择角色`)
-      if (s.approverType === APPROVER_TYPE.USER && !s.userId) return toast.error(`第 ${s.stepOrder} 级：指定用户类型必须选择用户`)
+      if (s.approverType === APPROVER_TYPE.ROLE && !s.roleId) return toast.error(`第 ${s.stepOrder} 级：审批人类型为「指定角色」时，必须选择角色`)
+      if (s.approverType === APPROVER_TYPE.USER && !s.userId) return toast.error(`第 ${s.stepOrder} 级：审批人类型为「指定用户」时，必须选择用户`)
     }
     const payload = {
       bizType: form.bizType,

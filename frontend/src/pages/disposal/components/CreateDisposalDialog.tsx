@@ -115,7 +115,7 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
             <div className="space-y-1 col-span-2">
               <Label>筛选建议</Label>
               <Input
-                placeholder="按商品编码/名称过滤呆滞商品..." value={keyword}
+                placeholder="按商品编码/名称过滤呆滞商品…" value={keyword}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKeyword(e.target.value)}
                 disabled={!whId}
               />
@@ -228,7 +228,7 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => { reset(); onClose() }} disabled={submitting}>取消</Button>
           <Button onClick={handleCreate} disabled={submitting || mutation.create.isPending}>
-            {submitting || mutation.create.isPending ? '创建中...' : '创建处置单'}
+            {submitting || mutation.create.isPending ? '创建中…' : '创建处置单'}
           </Button>
         </DialogFooter>
       </DialogContent>

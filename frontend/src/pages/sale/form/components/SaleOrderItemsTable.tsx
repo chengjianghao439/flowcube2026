@@ -50,7 +50,7 @@ export function SaleOrderItemsTable({
                 >
                   {item.productName
                     ? <span className="truncate font-medium">{item.productName}</span>
-                    : <span className="text-muted-foreground">点击选择商品...</span>}
+                    : <span className="text-muted-foreground">点击选择商品…</span>}
                 </button>
               </td>
               <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>

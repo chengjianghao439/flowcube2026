@@ -25,6 +25,7 @@ import {
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -109,11 +110,7 @@ export default function PdaDevicesPage() {
       key: 'status', title: '状态', width: 10,
       render: (v) => {
         const status = v as PdaDeviceStatus
-        return (
-          <span className={status === 'active' ? 'text-emerald-600' : 'text-muted-foreground'}>
-            {STATUS_LABEL[status]}
-          </span>
-        )
+        return <SoftStatusLabel label={STATUS_LABEL[status]} tone={status === 'active' ? 'success' : 'draft'} />
       },
     },
     {
@@ -156,7 +153,7 @@ export default function PdaDevicesPage() {
 
       <div className="rounded-xl border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
         绑定仓库后，这台 PDA 只能作业本仓的单据；未绑定的设备可在任何仓作业。
-        停用设备或重置密钥会立即吊销该机在用的会话——设备丢失时用「停用」止血。
+        停用设备或重置密钥会立即吊销该机在用的会话——设备丢失时请立即「停用」。
       </div>
 
       <DataTable
@@ -220,7 +217,7 @@ export default function PdaDevicesPage() {
               disabled={!form.deviceName.trim() || createMut.isPending}
               onClick={() => createMut.mutate()}
             >
-              {createMut.isPending ? '登记中...' : '登记并生成密钥'}
+              {createMut.isPending ? '登记中…' : '登记并生成密钥'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -232,7 +229,7 @@ export default function PdaDevicesPage() {
           <DialogHeader>
             <DialogTitle>用 PDA 扫这个码完成绑定</DialogTitle>
             <DialogDescription>
-              密钥只显示这一次，关闭后无法再查看。忘了或丢了只能重置密钥重新绑定。
+              密钥仅显示一次，关闭后不可再查看；如遗失，需重置密钥后重新绑定。
             </DialogDescription>
           </DialogHeader>
           {secretView && (

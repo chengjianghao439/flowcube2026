@@ -71,7 +71,7 @@ export default function StockCheckPage() {
     <div className="space-y-4">
       <PageHeader title="库存盘点" description="创建盘点单并填写实盘数量，提交后自动调整库存" actions={<Button onClick={()=>setCreateOpen(true)}>+ 新建盘点</Button>} />
       <FilterCard>
-        <Input placeholder="搜索单号/仓库..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} />
+        <Input placeholder="搜索单号/仓库…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search) }}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword('') }}>重置</Button>}
       </FilterCard>
@@ -118,9 +118,9 @@ export default function StockCheckPage() {
                 <Select value={abcClass} onValueChange={v => setAbcClass(v as 'A'|'B'|'C')}>
                   <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="A">A 类（高周转，勤盘）</SelectItem>
+                    <SelectItem value="A">A 类（高周转，盘点更频繁）</SelectItem>
                     <SelectItem value="B">B 类（中周转）</SelectItem>
-                    <SelectItem value="C">C 类（低周转，稀盘）</SelectItem>
+                    <SelectItem value="C">C 类（低周转，盘点频率低）</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">只盘该类到期未盘的商品。首次抽盘前请先「重算本仓 ABC」。</p>
@@ -132,7 +132,7 @@ export default function StockCheckPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={()=>setCreateOpen(false)} disabled={create.isPending || createLocked}>取消</Button>
-              <Button type="submit" disabled={create.isPending || createLocked}>{create.isPending || createLocked?'创建中...':'创建盘点'}</Button>
+              <Button type="submit" disabled={create.isPending || createLocked}>{create.isPending || createLocked?'创建中…':'创建盘点'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

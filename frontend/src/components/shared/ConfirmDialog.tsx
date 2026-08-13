@@ -116,7 +116,7 @@ export function ConfirmDialog({
             {cancelText}
           </Button>
           <Button variant={variant} onClick={onConfirm} disabled={loading}>
-            {loading ? '处理中...' : confirmText}
+            {loading ? '处理中…' : confirmText}
           </Button>
         </div>
       }

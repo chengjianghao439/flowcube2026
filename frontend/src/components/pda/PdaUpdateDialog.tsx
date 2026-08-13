@@ -124,7 +124,7 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
         {downloading && progress < 100 && (
           <div className="mb-4">
             <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-              <span>{nativeStatus || '正在下载...'}</span><span>{progress}%</span>
+              <span>{nativeStatus || '正在下载…'}</span><span>{progress}%</span>
             </div>
             <div className="h-2 rounded-full bg-muted">
               <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />

@@ -71,7 +71,7 @@ export function CustomerFinder({ open, onClose, onConfirm }: CustomerFinderProps
       isLoading={isFetching}
       keyword={keyword}
       onKeywordChange={handleKeywordChange}
-      searchPlaceholder="搜索客户名称、编码..."
+      searchPlaceholder="搜索客户名称、编码…"
       selectedLabel={r => `${r.name}${r.code ? ` (${r.code})` : ''}`}
     />
   )

@@ -189,7 +189,7 @@ export default function ReplenishmentPage() {
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canCreateRequisition && (
               <Button onClick={openConfirm} disabled={creating || selected.size === 0}>
-                {creating ? '生成中...' : `生成请购单${selected.size > 0 ? `（${selected.size} 项）` : ''}`}
+                {creating ? '生成中…' : `生成请购单${selected.size > 0 ? `（${selected.size} 项）` : ''}`}
               </Button>
             )}
             <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>

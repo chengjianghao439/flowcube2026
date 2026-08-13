@@ -91,7 +91,7 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
         <DialogHeader><DialogTitle>生成本期凭证</DialogTitle></DialogHeader>
         <div className="space-y-4 py-1">
           <p className="text-xs text-muted-foreground">
-            从采购结算/销售收入成本/收付款/费用报销/退货/盘点等业务事实全量重算生成凭证。可反复执行，幂等不重复。
+            从采购结算/销售收入成本/收付款/费用报销/退货/盘点等业务事实全量重算生成凭证。可反复执行，重复生成不会产生多余凭证。
           </p>
           <div className="space-y-1.5">
             <Label>会计期间（YYYYMM）</Label>
@@ -106,7 +106,7 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
           <Button onClick={submit} disabled={isPending || (!allPeriods && period.length !== 6)}>
-            {isPending ? '生成中...' : '开始生成'}
+            {isPending ? '生成中…' : '开始生成'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -128,7 +128,7 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
           </DialogTitle>
         </DialogHeader>
         {isLoading || !v ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">加载中...</div>
+          <div className="py-10 text-center text-sm text-muted-foreground">加载中…</div>
         ) : (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
@@ -206,7 +206,7 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent className="sm:max-w-3xl">
-        <DialogHeader><DialogTitle>手工凭证</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>手工凭证录入</DialogTitle></DialogHeader>
         <div className="space-y-3 py-1">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -257,7 +257,7 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
-          <Button onClick={submit} disabled={isPending || !balanced || !complete}>{isPending ? '保存中...' : '保存凭证'}</Button>
+          <Button onClick={submit} disabled={isPending || !balanced || !complete}>{isPending ? '保存中…' : '保存凭证'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -360,7 +360,7 @@ export default function VouchersPage() {
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canManage && <Button variant="outline" onClick={() => setGenOpen(true)}><RefreshCw className="mr-1.5 h-4 w-4" />生成本期凭证</Button>}
-            {canManage && <Button variant="outline" onClick={() => setManualOpen(true)}><Plus className="mr-1.5 h-4 w-4" />手工凭证</Button>}
+            {canManage && <Button variant="outline" onClick={() => setManualOpen(true)}><Plus className="mr-1.5 h-4 w-4" />手工录入</Button>}
             {canExport && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

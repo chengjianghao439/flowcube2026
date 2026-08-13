@@ -90,7 +90,7 @@ export default function ApprovalPendingPage() {
         data={list}
         loading={isLoading}
         rowKey="instanceId"
-        emptyText={list.length === 0 && !isLoading ? '没有待您审批的单据' : undefined}
+        emptyText={list.length === 0 && !isLoading ? '没有待你审批的单据' : undefined}
       />
       {total > 0 && (
         <Pagination page={page} totalPages={Math.ceil(total / 20)} total={total} onPageChange={setPage} />

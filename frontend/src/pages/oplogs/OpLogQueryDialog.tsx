@@ -59,7 +59,7 @@ export default function OpLogQueryDialog({ open, initial, onClose, onApply }: Pr
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">用户 / 路径</span>
           <Input
-            placeholder="请输入关键字..."
+            placeholder="请输入关键字…"
             value={draft.keyword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
             onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}

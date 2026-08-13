@@ -81,7 +81,7 @@ export default function PdaAnomalyPage() {
     <div className="space-y-6">
       <PageHeader
         title="PDA 异常分析"
-        description="扫码错误、撤销操作、异常趋势统一用桌面端页头规格展示。"
+        description="分析扫码错误、撤销操作与异常趋势。"
         actions={(
           <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
         )}

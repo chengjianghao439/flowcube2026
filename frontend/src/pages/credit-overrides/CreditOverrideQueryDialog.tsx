@@ -59,7 +59,7 @@ export default function CreditOverrideQueryDialog({ open, initial, onClose, onAp
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">申请单号 / 销售单号 / 客户</span>
           <Input
-            placeholder="请输入关键字..."
+            placeholder="请输入关键字…"
             value={draft.keyword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
             onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}

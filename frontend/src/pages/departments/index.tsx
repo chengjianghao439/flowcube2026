@@ -107,7 +107,7 @@ export default function DepartmentsPage() {
     <div className="space-y-4">
       <PageHeader
         title="部门管理"
-        description="维护组织部门与负责人，审批流可按部门负责人寻人"
+        description="维护组织部门与负责人；审批流可按部门负责人匹配审批人"
         actions={
           <Button onClick={() => openCreate()}>
             新增部门
@@ -117,7 +117,7 @@ export default function DepartmentsPage() {
 
       <div className="rounded-lg border bg-card p-4">
         {isLoading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">加载中...</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">加载中…</div>
         ) : departments.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">暂无部门，点击右上角「新增部门」创建第一个部门</div>
         ) : (

@@ -8,7 +8,7 @@
  * 使用示例：
  * ```tsx
  * <FilterCard>
- *   <Input placeholder="搜索..." className="w-56" />
+ *   <Input placeholder="搜索…" className="w-56" />
  *   <select ...>...</select>
  *   <Button size="sm">搜索</Button>
  * </FilterCard>

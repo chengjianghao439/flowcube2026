@@ -170,7 +170,7 @@ export default function TransferPage() {
     operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
     statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
-    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
+    productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<TransferOrder>[] = [
@@ -199,12 +199,12 @@ export default function TransferPage() {
           onPrimaryClick={() => goToDetail(r)}
           items={[
             ...(r.status === 1 ? [{
-              label: pendingId === r.id ? '处理中...' : '确认派发',
+              label: pendingId === r.id ? '处理中…' : '确认派发',
               onClick: () => mut(() => confirmTransferApi(r.id), r.id),
               disabled: pendingId === r.id,
             }] : []),
             ...((r.status === 1 || r.status === 2) ? [{
-              label: pendingId === r.id ? '处理中...' : '取消',
+              label: pendingId === r.id ? '处理中…' : '取消',
               onClick: () => openConfirm('取消调拨', '确认取消此调拨单？', () => mut(() => cancelTransferApi(r.id), r.id)),
               disabled: pendingId === r.id,
               destructive: true,
@@ -290,7 +290,7 @@ export default function TransferPage() {
                 setForceCloseState({ open: false, id: null })
               }}
             >
-              {pendingId === forceCloseState.id ? '处理中...' : '确认异常了结'}
+              {pendingId === forceCloseState.id ? '处理中…' : '确认异常了结'}
             </Button>
           </div>
         }

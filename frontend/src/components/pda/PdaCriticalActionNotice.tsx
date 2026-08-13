@@ -71,10 +71,10 @@ export default function PdaCriticalActionNotice({
       {pendingRecord ? (
         <div className="flex gap-2">
           <Button type="button" size="sm" className="flex-1" onClick={onConfirm} disabled={confirming}>
-            {confirming ? '确认中…' : '确认刚才结果'}
+            {confirming ? '确认中…' : '确认上次结果'}
           </Button>
           <Button type="button" size="sm" variant="outline" className="flex-1" onClick={onClear}>
-            确认无推进后清除
+            确认未生效后清除
           </Button>
         </div>
       ) : null}
@@ -84,7 +84,7 @@ export default function PdaCriticalActionNotice({
         </Button>
       ) : null}
       {!pendingRecord && offlineBlocked ? (
-        <p className="text-[11px] text-red-700">恢复网络后再提交，系统不会自动补账。</p>
+        <p className="text-[11px] text-red-700">恢复网络后需重新提交，系统不会自动补录该操作。</p>
       ) : null}
     </PdaCard>
   )

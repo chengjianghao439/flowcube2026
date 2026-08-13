@@ -203,7 +203,7 @@ export default function PurchasePage() {
     statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
-    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
+    productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
     // 日期筛选按需求不在主页展示，仅在查询弹窗中呈现
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
@@ -219,7 +219,7 @@ export default function PurchasePage() {
     { key: 'operatorName', title: '经办人', width: 11 },
     { key: 'createdAt', title: '创建时间', width: 13, render: (v) => formatDisplayDateTime(v) },
     {
-      key: 'remark', title: '订单备注', width: 13,
+      key: 'remark', title: '备注', width: 13,
       render: (v) => v
         ? <span className="line-clamp-1 text-muted-foreground" title={String(v)}>{String(v)}</span>
         : <span className="text-muted-foreground/50">—</span>
@@ -276,10 +276,10 @@ export default function PurchasePage() {
               // （对应后端 closeRemaining 的两条硬性前提），条件不满足就不展示，
               // 避免对必然失败的订单（如还没收过货）诱导点击。
               ...(r.status === 2 && r.canCloseRemaining ? [{
-                label: '关闭剩余',
+                label: '关闭未收结案',
                 onClick: () => openConfirm(
-                  '关闭剩余结案',
-                  '将按已入库的实收数量结算应付并完成采购单，未收部分作罢。',
+                  '关闭未收结案',
+                  '将按已入库的实收数量结算应付并完成采购单，未收部分不再收货。',
                   () => close.mutate(r.id, { onSettled: closeConfirm }),
                   { confirmText: '确认结案' },
                 ),
@@ -308,7 +308,7 @@ export default function PurchasePage() {
     <div className="space-y-4">
       <PageHeader
         title="采购订单"
-        description="采购单仅管理计划与提交；实际到货请在收货订单中按供应商创建本次收货单"
+        description="采购单用于登记与提交采购需求；实际到货请在「收货订单」中按本次到货创建收货单"
         actions={
           <>
             <Button variant="outline"
@@ -402,7 +402,7 @@ export default function PurchasePage() {
                 { onSettled: () => { setRejectTarget(null); setRejectReason('') } },
               )}
             >
-              {reject.isPending ? '驳回中...' : '确认驳回'}
+              {reject.isPending ? '驳回中…' : '确认驳回'}
             </Button>
           </DialogFooter>
         </DialogContent>

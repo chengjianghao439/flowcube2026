@@ -203,7 +203,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             )}
             <Button onClick={handleSubmit} disabled={submitting || submitLocked} className="gap-1.5">
               {submitting || submitLocked ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />保存中...</>
+                <><Loader2 className="h-4 w-4 animate-spin" />保存中…</>
               ) : (
                 <><Save className="h-4 w-4" />{isEdit ? '保存' : '保存草稿'}</>
               )}
@@ -299,7 +299,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                       >
                         {item.productName
                           ? <span className="truncate font-medium">{item.productName}</span>
-                          : <span className="text-muted-foreground">点击选择商品...</span>}
+                          : <span className="text-muted-foreground">点击选择商品…</span>}
                       </button>
                     </td>
                     <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
@@ -379,7 +379,7 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
   if (isLoading) {
     return (
       <div className="flex h-40 items-center justify-center text-muted-body">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中...
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中…
       </div>
     )
   }

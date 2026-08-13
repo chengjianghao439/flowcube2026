@@ -32,7 +32,7 @@ export default function PlasticBoxesPage() {
 
   const columns: TableColumn<PlasticBox>[] = [
     { key: 'barcode', title: '条码', width: 140, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'productName', title: '绑定产品', width: 180, render: (_, row) => row.productName ? `${row.productName} (${row.productCode})` : '—' },
+    { key: 'productName', title: '绑定商品', width: 180, render: (_, row) => row.productName ? `${row.productName} (${row.productCode})` : '—' },
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'remainingQty', title: '当前数量', width: 80, render: v => <span className="font-semibold">{String(v)}</span> },
     {
@@ -48,7 +48,7 @@ export default function PlasticBoxesPage() {
     <>
       <BaseCrudPage<PlasticBox>
         title="塑料盒管理"
-        description="管理永久暂存容器（B 条码），每个塑料盒绑定一个产品，用于零散出货"
+        description="管理永久暂存容器（B 条码），每个塑料盒绑定一个商品，用于零散出货"
         columns={columns}
         queryKey={['plastic-boxes', keyword]}
         listQuery={() => getPlasticBoxesApi({ pageSize: 99999, keyword })}
@@ -60,7 +60,7 @@ export default function PlasticBoxesPage() {
         renderToolbar={
           <FilterCard>
             <Input
-              placeholder="搜索条码 / 产品..."
+              placeholder="搜索条码 / 商品…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="h-9 w-56"
@@ -87,8 +87,8 @@ export default function PlasticBoxesPage() {
         renderForm={() => (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>绑定产品 *</Label>
-              <FinderTrigger value={product?.name ?? ''} placeholder="点击选择产品..." onClick={() => setProductFinderOpen(true)} />
+              <Label>绑定商品 *</Label>
+              <FinderTrigger value={product?.name ?? ''} placeholder="点击选择商品…" onClick={() => setProductFinderOpen(true)} />
             </div>
             <div className="space-y-1.5">
               <Label>所属仓库 *</Label>
@@ -102,7 +102,7 @@ export default function PlasticBoxesPage() {
           </div>
         )}
         submitForm={() => {
-          if (!product) { toast.warning('请选择产品'); throw { response: { data: { message: '请选择产品' } } } }
+          if (!product) { toast.warning('请选择商品'); throw { response: { data: { message: '请选择商品' } } } }
           if (!warehouse) { toast.warning('请选择仓库'); throw { response: { data: { message: '请选择仓库' } } } }
           return createPlasticBoxApi({
             productId: product.id,
@@ -132,13 +132,13 @@ function DetailDialog({ box, onClose }: { box: PlasticBox | null; onClose: () =>
           <DialogTitle>塑料盒流水 · {box?.barcode}</DialogTitle>
         </DialogHeader>
         <div className="text-sm text-muted-foreground">
-          {box?.productName ? `绑定产品：${box.productName} (${box.productCode})` : '未绑定产品'}
+          {box?.productName ? `绑定商品：${box.productName} (${box.productCode})` : '未绑定商品'}
           {box?.warehouseName ? ` · ${box.warehouseName}` : ''}
           {` · 当前数量 ${box?.remainingQty ?? 0}`}
         </div>
         <div className="max-h-[420px] overflow-y-auto">
           {isLoading ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">加载中...</div>
+            <div className="py-8 text-center text-sm text-muted-foreground">加载中…</div>
           ) : !data?.length ? (
             <div className="py-8 text-center text-sm text-muted-foreground">暂无流水</div>
           ) : (

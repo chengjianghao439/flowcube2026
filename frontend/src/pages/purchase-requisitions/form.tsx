@@ -405,7 +405,7 @@ export default function RequisitionFormPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConvertOpen(false)} disabled={busy}>取消</Button>
-            <Button disabled={busy} onClick={submitConvert}>{busy ? '生成中...' : '生成采购单'}</Button>
+            <Button disabled={busy} onClick={submitConvert}>{busy ? '生成中…' : '生成采购单'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

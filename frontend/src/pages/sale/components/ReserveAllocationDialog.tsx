@@ -86,7 +86,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
 
         {isLoading && (
           <div className="flex h-32 items-center justify-center text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中...
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中…
           </div>
         )}
 

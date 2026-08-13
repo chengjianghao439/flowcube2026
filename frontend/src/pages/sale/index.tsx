@@ -197,7 +197,7 @@ export default function SalePage() {
     statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     customerId && { key: 'customer', label: `客户：${customerName || customerId}`, onRemove: () => updateParams({ customerId: null, customerName: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
-    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
+    productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
     // 日期筛选按需求不在主页展示，仅在查询弹窗中呈现
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
@@ -228,7 +228,7 @@ export default function SalePage() {
       },
     },
     {
-      key: 'receivableStatus', title: '回款', width: 5.63,
+      key: 'receivableStatus', title: '回款状态', width: 5.63,
       render: (_, row) => {
         const r = row as SaleOrder
         if (r.receivableStatus == null) return <span className="text-xs text-muted-foreground">—</span>
@@ -280,7 +280,7 @@ export default function SalePage() {
       {/* 页头 */}
       <PageHeader
         title="销售管理"
-        description="销售单创建、确认与出库"
+        description="销售单创建、占库与出库"
         actions={
           <>
             <Button variant="outline"

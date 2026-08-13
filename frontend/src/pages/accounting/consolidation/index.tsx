@@ -108,7 +108,7 @@ export default function ConsolidationPage() {
         <div className="text-sm font-medium">合并期间</div>
         <Input value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="w-32 text-center" />
         <div className="text-sm text-muted-foreground">
-          {group ? `合并根：${group.name}` : '选择集团账套（isGroup=true）查看合并报表'}
+          {group ? `合并根：${group.name}` : '选择集团账套后可查看合并报表'}
         </div>
       </div>
 

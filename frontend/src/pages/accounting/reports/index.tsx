@@ -23,7 +23,7 @@ const TABS: Array<{ key: Tab; label: string }> = [
 ]
 
 function SimpleReport({ rows, loading }: { rows: ReportRow[]; loading: boolean }) {
-  if (loading) return <div className="py-12 text-center text-sm text-muted-foreground">加载中...</div>
+  if (loading) return <div className="py-12 text-center text-sm text-muted-foreground">加载中…</div>
   return (
     <table className="w-full text-sm">
       <tbody>
@@ -50,7 +50,7 @@ function CashFlowView({ period }: { period: string }) {
 
 function BalanceSheetView({ period }: { period: string }) {
   const { data, isLoading } = useBalanceSheet(period)
-  if (isLoading || !data) return <div className="card-base p-12 text-center text-sm text-muted-foreground">加载中...</div>
+  if (isLoading || !data) return <div className="card-base p-12 text-center text-sm text-muted-foreground">加载中…</div>
   const side = (title: string, items: BalanceSheetItem[], total: number, totalLabel: string) => (
     <div className="card-base overflow-hidden p-0">
       <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">{title}</div>

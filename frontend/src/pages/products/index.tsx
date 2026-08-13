@@ -224,7 +224,7 @@ export default function ProductsPage() {
               <Label>选择文件（.xlsx）</Label>
               <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
               <Button variant="outline" className="w-full" onClick={()=>fileRef.current?.click()} disabled={importing}>
-                {importing ? '导入中...' : '选择文件并上传'}
+                {importing ? '导入中…' : '选择文件并上传'}
               </Button>
             </div>
             {importResult && (

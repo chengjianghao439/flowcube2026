@@ -164,7 +164,7 @@ export default function InboundTaskDetailPage() {
                 }}
                 disabled={submitMut.isPending}
               >
-                {submitMut.isPending ? '提交中...' : '提交到 PDA'}
+                {submitMut.isPending ? '提交中…' : '提交到 PDA'}
               </Button>
             )}
             {canCancel && (

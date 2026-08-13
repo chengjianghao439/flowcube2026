@@ -207,7 +207,7 @@ export default function ProductFormPage() {
           <>
 
             <Button onClick={handleSubmit} disabled={submitting || !form.name} className="gap-1.5">
-              {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />保存中...</> : <><Save className="h-4 w-4" />保存</>}
+              {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />保存中…</> : <><Save className="h-4 w-4" />保存</>}
             </Button>
           </>
         }
@@ -223,7 +223,7 @@ export default function ProductFormPage() {
             <Label>分类 *</Label>
             <FinderTrigger
               value={categoryName}
-              placeholder="点击选择分类..."
+              placeholder="点击选择分类…"
               onClick={() => setCategoryFinderOpen(true)}
               onDoubleClick={() => { setCategoryFinderOpen(false); navigate('/categories') }}
             />
@@ -239,7 +239,7 @@ export default function ProductFormPage() {
             <Label>供应商 *</Label>
             <FinderTrigger
               value={supplierName}
-              placeholder="点击选择供应商..."
+              placeholder="点击选择供应商…"
               onClick={() => setSupplierFinderOpen(true)}
               onDoubleClick={() => { setSupplierFinderOpen(false); navigate('/suppliers') }}
             />
@@ -255,11 +255,11 @@ export default function ProductFormPage() {
           </div>
           <div className="space-y-1.5">
             <Label>型号 *</Label>
-            <Input value={form.spec} onChange={e => set('spec', e.target.value)} disabled={submitting} maxLength={100} placeholder="产品型号" />
+            <Input value={form.spec} onChange={e => set('spec', e.target.value)} disabled={submitting} maxLength={100} placeholder="商品型号" />
           </div>
           <div className="space-y-1.5">
             <Label>颜色 *</Label>
-            <Input value={form.color} onChange={e => set('color', e.target.value)} disabled={submitting} maxLength={30} placeholder="产品颜色" />
+            <Input value={form.color} onChange={e => set('color', e.target.value)} disabled={submitting} maxLength={30} placeholder="商品颜色" />
           </div>
           <div className="space-y-1.5">
             <Label>货号</Label>

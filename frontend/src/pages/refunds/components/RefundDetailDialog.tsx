@@ -54,7 +54,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
             {refund && <SoftStatusLabel label={refund.statusName} tone={STATUS_TONE[refund.status] ?? 'draft'} />}
           </DialogTitle>
         </DialogHeader>
-        {isLoading && <p className="text-center py-8 text-muted-foreground">加载中...</p>}
+        {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
         {refund && (
           <div className="grid grid-cols-2 gap-4 py-2 text-sm">
             <div><span className="text-muted-foreground">退款单号：</span><span className="text-doc-code-strong">{refund.refundNo}</span></div>

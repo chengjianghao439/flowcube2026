@@ -135,7 +135,7 @@ export default function InboundTaskCreatePage() {
               {createInbound.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  创建中...
+                  创建中…
                 </>
               ) : (
                 <>
@@ -154,7 +154,7 @@ export default function InboundTaskCreatePage() {
             <p className="text-sm font-medium">供应商 *</p>
             <FinderTrigger
               value={supplier?.name ?? ''}
-              placeholder="点击选择供应商..."
+              placeholder="点击选择供应商…"
               onClick={() => setSupplierFinderOpen(true)}
             />
           </div>
@@ -184,7 +184,7 @@ export default function InboundTaskCreatePage() {
 
           {selectedRows.length === 0 && (
             <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
-              {supplier ? '尚未选择商品，点击右上角「选择商品」挑选本次到货明细' : '先选择供应商，再选择本次到货商品'}
+              {supplier ? '尚未选择商品，点击右上角「选择商品」挑选本次到货明细' : '请先选择供应商，再挑选本次到货商品'}
             </div>
           )}
 

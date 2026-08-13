@@ -46,7 +46,7 @@ const VARIANT_MAP: Record<EmptyVariant, VariantConfig> = {
   'no-result': {
     icon:        <SearchX className="h-10 w-10" />,
     title:       '未找到结果',
-    description: '没有匹配的记录，试试调整筛选条件',
+    description: '未找到匹配的记录，请调整筛选条件后重试',
   },
   error: {
     icon:        <ServerCrash className="h-10 w-10" />,
@@ -56,11 +56,11 @@ const VARIANT_MAP: Record<EmptyVariant, VariantConfig> = {
   'no-permission': {
     icon:        <ShieldOff className="h-10 w-10" />,
     title:       '无访问权限',
-    description: '您没有权限查看该内容，请联系管理员',
+    description: '你没有权限查看该内容，请联系管理员',
   },
   'empty-folder': {
     icon:        <FolderOpen className="h-10 w-10" />,
-    title:       '文件夹为空',
+    title:       '目录为空',
     description: '该目录下暂无内容',
   },
 }

@@ -252,7 +252,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     })
     if (!filledItems) return
     if (discount > total) {
-      toast.warning('折扣不能超过合计金额')
+      toast.warning('折扣金额不能超过订单合计')
       return
     }
     try {
@@ -282,7 +282,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 
             <Button onClick={handleSubmit} disabled={createMutate.isPending} className="gap-1.5">
               {createMutate.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" />保存中...</>
+                ? <><Loader2 className="h-4 w-4 animate-spin" />保存中…</>
                 : <><Save className="h-4 w-4" />保存草稿</>}
             </Button>
           </>
@@ -315,7 +315,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
             <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">还没有商品明细，点击上方"添加商品"开始录入</p>
+            <p className="text-sm text-muted-foreground">尚未添加商品明细，点击右上角「添加商品」开始录入</p>
           </div>
         ) : (
           <>
@@ -416,7 +416,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
     })
     if (!filledItems) return
     if (discount > total) {
-      toast.warning('折扣不能超过合计金额')
+      toast.warning('折扣金额不能超过订单合计')
       return
     }
     try {
@@ -448,7 +448,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
             </Button>
             <Button onClick={handleSubmit} disabled={updateMutate.isPending} className="gap-1.5">
               {updateMutate.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" />保存中...</>
+                ? <><Loader2 className="h-4 w-4 animate-spin" />保存中…</>
                 : <><Save className="h-4 w-4" />保存</>}
             </Button>
           </>
@@ -481,7 +481,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
             <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">还没有商品明细，点击上方"添加商品"开始录入</p>
+            <p className="text-sm text-muted-foreground">尚未添加商品明细，点击右上角「添加商品」开始录入</p>
           </div>
         ) : (
           <SaleOrderItemsTable
@@ -613,7 +613,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
             </Button>
             <Button onClick={handleSubmit} disabled={adjustMutate.isPending} className="gap-1.5">
               {adjustMutate.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" />提交中...</>
+                ? <><Loader2 className="h-4 w-4 animate-spin" />提交中…</>
                 : <><Save className="h-4 w-4" />提交改单</>}
             </Button>
           </>
@@ -621,7 +621,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
       />
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        订单已发往仓库执行，增加数量需要重新拣货；减少数量若涉及已拣/已打包的实物，需要仓库扫码确认放回库位/拆箱后才会真正生效。
+        订单已发往仓库执行。增加数量将触发重新拣货；减少数量若涉及已拣或已打包的商品，需经仓库扫码确认放回库位 / 拆箱后方可生效。
       </div>
 
       <SaleOrderHeaderFields
@@ -649,7 +649,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
             <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">还没有商品明细，点击上方"添加商品"开始录入</p>
+            <p className="text-sm text-muted-foreground">尚未添加商品明细，点击右上角「添加商品」开始录入</p>
           </div>
         ) : (
           <SaleOrderItemsTable
@@ -729,7 +729,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   if (isLoading) {
     return (
       <div className="flex h-40 items-center justify-center text-muted-body">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中...
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中…
       </div>
     )
   }

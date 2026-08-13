@@ -128,11 +128,11 @@ export default function ReportsPage() {
         tone: 'border-blue-200 bg-blue-50',
       },
       {
-        title: '波次效率报表',
+        title: '波次效率',
         description: '查看波次完成率、耗时与作业效率，用于判断拣货和分拣卡在哪里。',
         hint: '重点查看波次详情和仓库任务',
         path: '/reports/wave-performance',
-        tabTitle: '波次效率报表',
+        tabTitle: '波次效率',
         tone: 'border-indigo-200 bg-indigo-50',
       },
       {
@@ -292,7 +292,7 @@ export default function ReportsPage() {
 
         {tab === 'purchase' && !activeQ.isError && (
           <div className="space-y-6">
-            {purchaseQ.isLoading && <p className="py-12 text-center text-muted-foreground">加载中...</p>}
+            {purchaseQ.isLoading && <p className="py-12 text-center text-muted-foreground">加载中…</p>}
             {purchaseQ.data && (
               <>
                 <div className="grid gap-6 lg:grid-cols-2">
@@ -348,7 +348,7 @@ export default function ReportsPage() {
 
         {tab === 'sale' && !activeQ.isError && (
           <div className="space-y-6">
-            {saleQ.isLoading && <p className="py-12 text-center text-muted-foreground">加载中...</p>}
+            {saleQ.isLoading && <p className="py-12 text-center text-muted-foreground">加载中…</p>}
             {saleQ.data && (
               <>
                 <div className="grid gap-6 lg:grid-cols-2">
@@ -404,7 +404,7 @@ export default function ReportsPage() {
 
         {tab === 'inventory' && !activeQ.isError && (
           <div className="space-y-6">
-            {invQ.isLoading && <p className="py-12 text-center text-muted-foreground">加载中...</p>}
+            {invQ.isLoading && <p className="py-12 text-center text-muted-foreground">加载中…</p>}
             {invQ.data && (
               <>
                 <div className="grid gap-4 lg:grid-cols-3">

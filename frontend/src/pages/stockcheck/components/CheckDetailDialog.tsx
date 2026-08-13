@@ -157,7 +157,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
             {check && <SoftStatusLabel label={check.statusName} tone={check.status===1?'active':check.status===2?'success':'danger'} />}
           </DialogTitle>
         </DialogHeader>
-        {isLoading && <p className="text-center py-8 text-muted-foreground">加载中...</p>}
+        {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
         {check && (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4 text-sm">
@@ -245,7 +245,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                 return
               }
               setSubmitConfirm(true)
-            }} disabled={submit.isPending || submitLocked}>{submit.isPending || submitLocked?'提交中...':'提交盘点'}</Button>
+            }} disabled={submit.isPending || submitLocked}>{submit.isPending || submitLocked?'提交中…':'提交盘点'}</Button>
             <Button variant="destructive" onClick={() => setCancelConfirm(true)} disabled={cancel.isPending || cancelLocked}>取消盘点</Button>
           </>}
           <Button variant="outline" onClick={requestClose}>关闭</Button>

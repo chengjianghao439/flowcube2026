@@ -74,7 +74,7 @@ export default function FreightReconciliationPage() {
     { key: 'trackingNo', title: '快递单号', width: 160, render: v => <span className="text-doc-code">{String(v ?? '—')}</span> },
     { key: 'billPeriod', title: '账期', width: 90 },
     { key: 'actualFreight', title: '实际运费', width: 100, align: 'right', render: v => <span className="tabular-nums">{Number(v).toFixed(2)}</span> },
-    { key: 'freightType', title: '运费方式', width: 90, render: v => v === 1 ? '寄付' : v === 2 ? '到付' : v === 3 ? '第三方付' : <span className="text-muted-foreground">未知</span> },
+    { key: 'freightType', title: '运费方式', width: 90, render: v => v === 1 ? '寄付' : v === 2 ? '到付' : v === 3 ? '第三方付款' : <span className="text-muted-foreground">—</span> },
     { key: 'reconciled', title: '状态', width: 90, render: v => <SoftStatusLabel label={v ? '已核对' : '待核对'} tone={v ? 'success' : 'draft'} /> },
   ]
 
@@ -125,7 +125,7 @@ export default function FreightReconciliationPage() {
         >
           生成 / 重算应付
         </Button>
-        {!canGenerate && <span className="text-xs text-muted-foreground">选择具体承运商 + 填账期后可生成应付</span>}
+        {!canGenerate && <span className="text-xs text-muted-foreground">选择承运商并填写账期后，可生成应付</span>}
       </div>
 
       <SectionCard title="运费账单" noPadding>

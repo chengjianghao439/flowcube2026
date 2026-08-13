@@ -161,7 +161,7 @@ export default function UserMenu() {
               </div>
               <div className="px-4 py-2 text-sm">
                 {whLoading ? (
-                  <div className="flex items-center gap-2 text-muted-foreground py-1"><Loader2 className="size-3.5 animate-spin" /> 加载中...</div>
+                  <div className="flex items-center gap-2 text-muted-foreground py-1"><Loader2 className="size-3.5 animate-spin" /> 加载中…</div>
                 ) : isUnrestricted ? (
                   <p className="text-emerald-600 font-medium">不限仓库（可访问全部仓库）</p>
                 ) : (
@@ -216,7 +216,7 @@ export default function UserMenu() {
             <div className="space-y-1"><Label>确认新密码 *</Label><Input type="password" value={confirmPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPwd(e.target.value)} required autoComplete="new-password" /></div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPwdOpen(false)}>取消</Button>
-              <Button type="submit" disabled={changePwd.isPending}>{changePwd.isPending ? '提交中...' : '确认修改'}</Button>
+              <Button type="submit" disabled={changePwd.isPending}>{changePwd.isPending ? '提交中…' : '确认修改'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -36,7 +36,7 @@ export default function WarehouseScopeDialog({ open, onClose, userId, userName }
         <p className="text-sm text-muted-foreground">
           不勾选任何仓库 = 不限仓（默认）。勾选后该用户只能查看/操作所选仓库的数据（超级管理员始终不限仓）。
         </p>
-        {isLoading && <p className="py-4 text-center text-muted-foreground text-sm">加载中...</p>}
+        {isLoading && <p className="py-4 text-center text-muted-foreground text-sm">加载中…</p>}
         <div className="max-h-64 space-y-1 overflow-y-auto">
           {list.map((w: { id: number; name: string; code?: string }) => (
             <label key={w.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50">

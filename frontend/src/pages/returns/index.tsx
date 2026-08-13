@@ -195,7 +195,7 @@ export default function ReturnsPage() {
     statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     partyId && { key: 'party', label: `${partyLabel}：${partyName || partyId}`, onRemove: () => updateParams({ partyId: null, partyName: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
-    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
+    productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<RowType>[] = [
@@ -225,13 +225,13 @@ export default function ReturnsPage() {
           onPrimaryClick={() => goToDetail(r)}
           items={[
             ...(r.status === 1 ? [{
-              label: pendingId === r.id ? '处理中...' : '确认',
+              label: pendingId === r.id ? '处理中…' : '确认',
               onClick: () => mut(() => confirmFn(r.id), r.id),
               disabled: pendingId === r.id,
             }] : []),
             { label: '打印', onClick: () => setPrintTarget(r) },
             ...((r.status === 1 || r.status === 2) ? [{
-              label: pendingId === r.id ? '处理中...' : '取消',
+              label: pendingId === r.id ? '处理中…' : '取消',
               onClick: () => openConfirm('取消退货单', '确认取消此退货单？', () => mut(() => cancelFn(r.id), r.id)),
               disabled: pendingId === r.id,
               destructive: true,

@@ -85,7 +85,7 @@ function ProductCard({
   onClick: () => void
 }) {
   return (
-    <PdaCard active={active} onClick={onClick} className="text-left">
+    <PdaCard active={active} onClick={onClick} className="w-full text-left">
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -207,7 +207,7 @@ function ReceiveEditor({
           清空箱数
         </Button>
         <Button type="button" className="flex-1" onClick={onSubmit} disabled={submitting}>
-          {submitting ? '提交中...' : '打印并登记'}
+          {submitting ? '提交中…' : '打印并登记'}
         </Button>
       </div>
     </PdaCard>
@@ -309,7 +309,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   function handleScan(raw: string) {
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'product' && parsed.type !== 'unknown') {
-      err('扫描产品条码')
+      err('扫描商品条码')
       return
     }
 
@@ -523,7 +523,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
                 active={product.productId === selectedProductId}
                 onClick={() => {
                   if (product.remainingQty <= 0) {
-                    warn(`${product.productName} 已收货完成`)
+                    warn(`${product.productName} 已完成收货`)
                     return
                   }
                   selectProduct(product.productId)
@@ -576,7 +576,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           />
         ) : (
           <PdaCard>
-            <p className="text-sm text-muted-foreground">扫描产品条码</p>
+            <p className="text-sm text-muted-foreground">扫描商品条码</p>
           </PdaCard>
         )}
       </div>
@@ -584,7 +584,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       <PdaBottomBar>
         <PdaScanner
           onScan={handleScan}
-          placeholder="扫描产品条码"
+          placeholder="扫描商品条码"
           disabled={submitting || receiveAction.submitBlocked}
         />
       </PdaBottomBar>

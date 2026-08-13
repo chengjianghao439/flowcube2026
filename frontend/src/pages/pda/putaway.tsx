@@ -164,7 +164,7 @@ export default function PdaPutawayPage() {
         <PdaEmptyState
           icon={<Hourglass className="h-12 w-12 text-muted-foreground" />}
           title="待上架"
-          description="收货尚未完成，请先完成收货后再上架。"
+          description="收货尚未完成，完成后即可上架。"
           actionText="返回收货订单"
           onAction={() => navigate('/pda/inbound')}
         />

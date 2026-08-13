@@ -2,7 +2,7 @@
  * PDA 改单确认 — 销售单执行期改单，减量命中已拣/已打包实物时需要仓库物理确认
  * 路由：/pda/adjustments（任务池列表）、/pda/adjustments/:id（逐项扫码确认，:id 为改单记录ID）
  *
- * 镜像"取消清理"（cancel-return.tsx）的逐容器扫码归还 + 逐箱扫码拆箱确认结构：
+ * 镜像"拣货退回"（cancel-return.tsx）的逐容器扫码归还 + 逐箱扫码拆箱确认结构：
  * 箱子在改单发起时已由系统作废（决策已在ERP侧做完），这里只是procedural确认物理已拆箱；
  * 容器归还需要额外扫目标库位条码，确认放回后才真正解锁容器、降低已拣数量。
  */
@@ -45,7 +45,7 @@ function AdjustmentListPage() {
           <PdaEmptyCard icon={<PencilLine className="h-12 w-12 text-muted-foreground" />} title="暂无待确认改单" description="没有因订单修改而需要归还/拆箱的任务" />
         )}
         {tasks.map(t => (
-          <PdaCard key={t.adjustmentId} onClick={() => navigate(`/pda/adjustments/${t.adjustmentId}`)}>
+          <PdaCard key={t.adjustmentId} className="w-full" onClick={() => navigate(`/pda/adjustments/${t.adjustmentId}`)}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-mono text-xs text-muted-foreground">{t.taskNo}</p>
@@ -273,7 +273,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
         {target && step === 'scan-location' && (
           <PdaCard>
             <div className="space-y-2 text-sm">
-              <p className="text-xs text-muted-foreground">必须放回原库位，系统只接受扫描下方指定的库位条码</p>
+              <p className="text-xs text-muted-foreground">必须放回原库位，系统仅接受下方指定库位的条码</p>
               <div className="rounded-xl bg-primary/5 border border-primary/20 p-4 text-center">
                 <p className="text-3xl font-black text-primary tracking-widest">{target.suggestedLocationCode ?? '—'}</p>
                 <p className="text-xs text-muted-foreground mt-1">请放回此库位</p>
@@ -292,7 +292,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还容器（{pendingReturns.length}）</p>
           {pendingReturns.length === 0 && pendingVoids.length === 0 && (
-            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-green-600" />} title="已全部处理完成" description="改单即将自动生效" />
+            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-green-600" />} title="已全部处理完成" description="系统将自动应用本次改单" />
           )}
           <div className="space-y-2">
             {pendingReturns.map(r => (

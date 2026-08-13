@@ -89,7 +89,7 @@ export default function UsersPage() {
           onPrimaryClick={() => handleEdit(row)}
           items={[
             { label: '重置密码', onClick: () => handleResetPassword(row) },
-            { label: '仓库数据权限', onClick: () => setScopeTarget({ id: row.id, name: row.realName || row.username }) },
+            { label: '仓库访问范围', onClick: () => setScopeTarget({ id: row.id, name: row.realName || row.username }) },
             ...(row.id !== currentUser?.id
               ? [{ label: '删除', destructive: true, separatorBefore: true, onClick: () => handleDelete(row) }]
               : []),

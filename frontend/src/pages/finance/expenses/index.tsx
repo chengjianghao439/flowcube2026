@@ -52,7 +52,7 @@ function ExpensesQueryDialog({ open, initial, onClose, onApply }: {
   return (
     <Dialog open={open} onOpenChange={x => !x && onClose()}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>查询</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>查询费用报销单</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -375,7 +375,7 @@ export default function ExpenseClaimsPage() {
               <SoftStatusLabel label={detail.statusName} tone={detail.statusTone as StatusTone} />
               <span>· 合计 <span className="font-medium text-foreground">{money(detail.totalAmount)}</span></span>
               {detail.approvedByName && <span>· 审批 {detail.approvedByName}</span>}
-              {detail.paidAccountName && <span>· 付自 {detail.paidAccountName}</span>}
+              {detail.paidAccountName && <span>· 付款账户 {detail.paidAccountName}</span>}
             </div>
           )}
           {detail?.rejectReason && (

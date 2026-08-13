@@ -124,8 +124,8 @@ export default function WarehouseOpsPage() {
         {/* 今日核心指标 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatTile icon={Truck} label="今日出库单数" value={s?.shippedToday ?? 0} hint="已完成出库" tone="success" />
-          <StatTile icon={Layers} label="正在拣货" value={s?.pickingNow ?? 0} hint="进行中任务" />
-          <StatTile icon={PackageOpen} label="今日入库" value={s?.inboundToday ?? 0} hint="已完成收货" />
+          <StatTile icon={Layers} label="拣货中任务" value={s?.pickingNow ?? 0} hint="进行中" />
+          <StatTile icon={PackageOpen} label="今日入库单数" value={s?.inboundToday ?? 0} hint="已完成收货" />
           <StatTile icon={BarChart3} label="今日扫码" value={s?.scanCount ?? 0} hint={`拣货 ${s?.pickQty ?? 0} 件`} />
           <StatTile icon={AlertTriangle} label="扫码错误" value={s?.errorCount ?? 0} hint={`错误率 ${s?.errorRate}`} accent={(s?.errorCount ?? 0) > 0} />
           <StatTile icon={Undo2} label="撤销次数" value={s?.undoCount ?? 0} hint="今日" accent={(s?.undoCount ?? 0) > 5} />

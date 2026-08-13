@@ -222,7 +222,7 @@ export default function InventoryPage() {
           <Button variant="outline" onClick={() => tab === 'logs' ? setLogsQueryOpen(true) : setOverviewQueryOpen(true)}>查询</Button>
           <Button variant="outline" onClick={() => downloadExport(tab === 'logs' ? '/export/inventory-logs' : '/export/stock').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
           <Button variant="outline" onClick={() => openOp('outbound')}>出库</Button>
-          <Button variant="outline" asChild><Link to="/stockcheck">盘点调整</Link></Button>
+          <Button variant="outline" asChild><Link to="/stockcheck">库存盘点</Link></Button>
         </div>
       } />
 
@@ -256,12 +256,12 @@ export default function InventoryPage() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard icon={<Package className="h-5 w-5 text-muted-foreground" />} label="商品 SKU 数"
               value={overviewLoading ? '—' : (stats?.totalSkus ?? 0).toLocaleString()} sub="当前筛选条件下" />
-            <StatCard icon={<Warehouse className="h-5 w-5 text-blue-500" />} label="在库总量"
+            <StatCard icon={<Warehouse className="h-5 w-5 text-blue-500" />} label="在库数量"
               value={overviewLoading ? '—' : formatQty(stats?.totalOnHand)} accent="text-blue-600" />
-            <StatCard icon={<Lock className="h-5 w-5 text-amber-500" />} label="预占总量"
+            <StatCard icon={<Lock className="h-5 w-5 text-amber-500" />} label="已预占"
               value={overviewLoading ? '—' : formatQty(stats?.totalReserved)} sub="销售单已占用" accent="text-amber-600" />
-            <StatCard icon={<CheckCircle className="h-5 w-5 text-emerald-500" />} label="可用总量"
-              value={overviewLoading ? '—' : formatQty(stats?.totalAvailable)} sub="在库 − 预占" accent="text-emerald-600" />
+            <StatCard icon={<CheckCircle className="h-5 w-5 text-emerald-500" />} label="可用库存"
+              value={overviewLoading ? '—' : formatQty(stats?.totalAvailable)} sub="在库 − 已预占" accent="text-emerald-600" />
           </div>
 
           {/* 库存表格 */}
@@ -288,7 +288,7 @@ export default function InventoryPage() {
                 </thead>
                 <tbody>
                   {overviewLoading ? (
-                    <tr><td colSpan={9} className="py-16 text-center text-sm text-muted-foreground">加载中...</td></tr>
+                    <tr><td colSpan={9} className="py-16 text-center text-sm text-muted-foreground">加载中…</td></tr>
                   ) : list.length === 0 ? (
                     <tr><td colSpan={9} className="py-16 text-center text-sm text-muted-foreground">暂无库存数据</td></tr>
                   ) : (
@@ -337,7 +337,7 @@ export default function InventoryPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>出库</DialogTitle></DialogHeader>
           <form onSubmit={handleOp} className="space-y-4 py-2">
-            <div className="space-y-2"><Label>商品 *</Label><FinderTrigger value={form.productName} placeholder="点击选择商品..." onClick={() => setProductFinderOpen(true)} disabled={isPending} /></div>
+            <div className="space-y-2"><Label>商品 *</Label><FinderTrigger value={form.productName} placeholder="点击选择商品…" onClick={() => setProductFinderOpen(true)} disabled={isPending} /></div>
             <div className="space-y-2">
               <Label>仓库 *</Label>
               <WarehouseSelect
@@ -354,7 +354,7 @@ export default function InventoryPage() {
             <div className="space-y-2"><Label>备注</Label><Input value={form.remark} onChange={e => setF('remark', e.target.value)} disabled={isPending} placeholder="选填" /></div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpOpen(false)} disabled={isPending}>取消</Button>
-              <Button type="submit" disabled={isPending || !form.productId || !form.warehouseId || !form.quantity}>{isPending ? '提交中...' : '出库'}</Button>
+              <Button type="submit" disabled={isPending || !form.productId || !form.warehouseId || !form.quantity}>{isPending ? '提交中…' : '出库'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

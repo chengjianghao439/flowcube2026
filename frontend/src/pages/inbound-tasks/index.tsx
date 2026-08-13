@@ -193,7 +193,7 @@ export default function InboundTasksPage() {
     operatorId && { key: 'operator', label: `操作人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
     statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
-    productId && { key: 'product', label: `产品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
+    productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<InboundTask>[] = [
@@ -305,7 +305,7 @@ export default function InboundTasksPage() {
             separatorBefore: true,
             onClick: () => openConfirm(
               '结束收货',
-              '供应商短装、不再继续收货时使用：立即结束收货，剩余未收数量作罢，进入待上架，可正常上架已收到的部分。此操作不可撤回。',
+              '供应商发货不足且不再继续收货时使用：立即结束收货，剩余未收数量不再收货，进入待上架，可正常上架已收到的部分。此操作不可撤回。',
               () => closeReceivingMut.mutate(task.id, {
                 onSuccess: () => { toast.success('已结束收货，进入待上架'); closeConfirm() },
                 onError: (error: unknown) => toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '结束收货失败'),

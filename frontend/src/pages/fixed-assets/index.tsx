@@ -84,7 +84,7 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
             departmentName: form.departmentName.trim() || null,
             acquireDate: form.acquireDate, originalCost: Number(form.originalCost),
             residualRate: Number(form.residualRate), usefulMonths: Number(form.usefulMonths),
-          })}>{isPending ? '创建中...' : '创建'}</Button>
+          })}>{isPending ? '创建中…' : '创建'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -133,7 +133,7 @@ function DisposeDialog({ asset, onClose }: { asset: FixedAsset | null; onClose: 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
           <Button variant="destructive" disabled={isPending} onClick={() => dispose({ disposeType: Number(form.disposeType), disposeDate: form.disposeDate, income: Number(form.income) || 0, expense: Number(form.expense) || 0 })}>
-            {isPending ? '处置中...' : '确认处置'}
+            {isPending ? '处置中…' : '确认处置'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -190,7 +190,7 @@ export default function FixedAssetsPage() {
         description="固定资产卡片、按月计提折旧（直线法）、处置/报废。折旧凭证自动生成并进入总账。"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" disabled={deprPending} onClick={() => runDepr(undefined)}>{deprPending ? '计提中...' : '计提本月折旧'}</Button>
+            <Button variant="outline" disabled={deprPending} onClick={() => runDepr(undefined)}>{deprPending ? '计提中…' : '计提本月折旧'}</Button>
             <Button onClick={() => setCreateOpen(true)}>新增资产</Button>
           </div>
         }

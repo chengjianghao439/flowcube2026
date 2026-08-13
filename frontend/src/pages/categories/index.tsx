@@ -171,7 +171,7 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
-            <Button type="submit" disabled={isPending || !form.name}>{isPending ? '保存中...' : '保存'}</Button>
+            <Button type="submit" disabled={isPending || !form.name}>{isPending ? '保存中…' : '保存'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -377,7 +377,7 @@ export default function CategoriesPage() {
     <div>
       <PageHeader
         title="商品分类管理"
-        description={`手风琴展开结构，最多 4 级 · 共 ${totalCount} 个分类`}
+        description={`支持 4 级分类，共 ${totalCount} 个`}
         actions={
           <Button onClick={handleAddRoot}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -402,7 +402,7 @@ export default function CategoriesPage() {
       <div className="card-base p-2">
         {isLoading ? (
           <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-            加载中...
+            加载中…
           </div>
         ) : tree.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">

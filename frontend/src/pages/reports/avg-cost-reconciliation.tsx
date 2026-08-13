@@ -32,7 +32,7 @@ export default function AvgCostReconciliationPage() {
     <div className="space-y-4">
       <PageHeader
         title="成本对账"
-        description="容器口径（ACTIVE 容器 remaining_qty，唯一事实源）vs 缓存口径（inventory_stock.quantity）的数量/价值对比。有差异说明缓存漂移，需执行 resync 修复。"
+        description="对比容器实际库存与库存缓存的数量 / 价值差异，发现缓存漂移后执行修复。"
         actions={
           <div className="flex items-center gap-2">
             {data && (
@@ -49,7 +49,7 @@ export default function AvgCostReconciliationPage() {
       {data && data.driftedCount > 0 && (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
           检测到 {data.driftedCount} 项缓存漂移，总价值差 {money(data.totalDiffValue)}。
-          可执行 <code className="text-doc-code">npm --prefix backend run resync:inventory-stock</code> 修复缓存。
+          请点击「刷新」重新比对，或联系管理员执行缓存修复。
         </div>
       )}
 

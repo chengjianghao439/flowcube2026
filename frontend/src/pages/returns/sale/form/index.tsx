@@ -231,7 +231,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         subtitle={isDirty ? <span className="text-xs font-normal text-muted-foreground">未保存</span> : undefined}
         rightActions={
           <Button onClick={handleSubmit} disabled={submitting} className="gap-1.5">
-            {submitting ? (<><Loader2 className="h-4 w-4 animate-spin" />创建中...</>) : (<><Save className="h-4 w-4" />创建退货单</>)}
+            {submitting ? (<><Loader2 className="h-4 w-4 animate-spin" />创建中…</>) : (<><Save className="h-4 w-4" />创建退货单</>)}
           </Button>
         }
       />
@@ -242,7 +242,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
             <Label>客户 *</Label>
             <FinderTrigger
               value={customer?.name ?? ''}
-              placeholder="点击选择客户..."
+              placeholder="点击选择客户…"
               onClick={() => setCustomerFinderOpen(true)}
               onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }}
               className={cn(customerError && 'border-destructive/60 bg-destructive/5', !!boundSource && 'pointer-events-none opacity-60')}
@@ -277,7 +277,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                 <Button type="button" variant="ghost" size="sm" onClick={clearSourceBinding}>清除</Button>
               ) : (
                 <Button type="button" variant="outline" size="sm" onClick={() => void loadSourceOrder()} disabled={loadingSource || !orderNo.trim()}>
-                  {loadingSource ? '载入中...' : '载入'}
+                  {loadingSource ? '载入中…' : '载入'}
                 </Button>
               )}
             </div>
@@ -344,7 +344,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                         >
                           {item.productName
                             ? <span className="truncate font-medium">{item.productName}</span>
-                            : <span className="text-muted-foreground">点击选择商品...</span>}
+                            : <span className="text-muted-foreground">点击选择商品…</span>}
                         </button>
                       </td>
                       <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
@@ -526,7 +526,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
   }
 
   if (isLoading) {
-    return <div className="flex h-40 items-center justify-center text-muted-body"><Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中...</div>
+    return <div className="flex h-40 items-center justify-center text-muted-body"><Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中…</div>
   }
   if (!ret) {
     return <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground"><p className="text-sm">销售退货单不存在或已删除</p></div>

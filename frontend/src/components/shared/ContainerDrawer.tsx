@@ -102,7 +102,7 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
           <div className="flex-1 overflow-y-auto">
             {isLoading ? (
               <div className="flex h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />加载中...
+                <Loader2 className="h-4 w-4 animate-spin" />加载中…
               </div>
             ) : visible.length === 0 ? (
               <div className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -202,7 +202,7 @@ function ContainerTimeline({ containerId }: { containerId: number }) {
   if (isLoading) {
     return (
       <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" />加载流转记录...
+        <Loader2 className="h-3 w-3 animate-spin" />加载流转记录…
       </div>
     )
   }

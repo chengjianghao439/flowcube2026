@@ -4,7 +4,7 @@ import type { SaleOrder } from '@/types/sale'
 
 /**
  * 前端纯逻辑单元测试（审计 4.3 起步）。
- * saleWorkflowStatus：销售单状态推导（含取消收尾中/部分发货/仓库作业进度分支）。
+ * saleWorkflowStatus：销售单状态推导（含拣货退回中/部分发货/仓库作业进度分支）。
  */
 
 // ── saleWorkflowStatus.ts 状态推导 ─────────────────────────────────────────────
@@ -16,7 +16,7 @@ describe('getSaleWorkflowStatus', () => {
     ...over,
   } as SaleOrder)
 
-  it('取消收尾中（status=5 + cancelRequestedAt）→ 待归还 danger', () => {
+  it('拣货退回中（status=5 + cancelRequestedAt）→ 待归还 danger', () => {
     const r = getSaleWorkflowStatus(base({ status: 5, warehouseTaskCancelRequestedAt: '2026-01-01' }))
     expect(r.label).toBe('待归还')
     expect(r.tone).toBe('danger')

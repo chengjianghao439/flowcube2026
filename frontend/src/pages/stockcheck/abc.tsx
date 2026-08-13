@@ -18,7 +18,7 @@ import type { StatusTone } from '@/lib/statusTone'
 import type { TableColumn } from '@/types'
 
 const ABC_TONE: Record<string, StatusTone> = { A: 'warning', B: 'info', C: 'draft' }
-const ABC_HINT: Record<string, string> = { A: '高周转 · 勤盘', B: '中周转', C: '低周转 · 稀盘' }
+const ABC_HINT: Record<string, string> = { A: '高周转 · 盘点更频繁', B: '中周转', C: '低周转 · 盘点频率低' }
 
 export default function AbcClassPage() {
   const { can } = usePermission()
@@ -112,7 +112,7 @@ export default function AbcClassPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="ABC 分类与循环盘规则" description="按出库消耗金额帕累托分档（A 勤盘 / B 中 / C 稀盘）；循环盘规则决定各类多久盘一次、单次抽多少。" />
+      <PageHeader title="ABC 分类与循环盘规则" description="按出库消耗金额帕累托分档（A 盘点更频繁 / B 中 / C 盘点频率低）；循环盘规则决定各类多久盘一次、单次抽多少。" />
 
       <div className="flex gap-2">
         <Button variant={tab === 'abc' ? 'default' : 'outline'} size="sm" onClick={() => setTab('abc')}>ABC 分类结果</Button>
@@ -138,7 +138,7 @@ export default function AbcClassPage() {
               </div>
             )}
             <Button size="sm" disabled={!canManage || warehouseId <= 0 || recompute.isPending} onClick={() => recompute.mutate()}>
-              {recompute.isPending ? '重算中...' : '重算本仓 ABC'}
+              {recompute.isPending ? '重算中…' : '重算本仓 ABC'}
             </Button>
           </FilterCard>
           {warehouseId <= 0
@@ -187,7 +187,7 @@ export default function AbcClassPage() {
           </div>
           <div className="flex justify-end">
             <Button disabled={!canManage || saveRules.isPending || !draft.length} onClick={() => saveRules.mutate()}>
-              {saveRules.isPending ? '保存中...' : '保存规则'}
+              {saveRules.isPending ? '保存中…' : '保存规则'}
             </Button>
           </div>
         </div>

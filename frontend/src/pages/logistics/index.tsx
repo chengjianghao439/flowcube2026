@@ -106,7 +106,7 @@ export default function LogisticsPage() {
       render: (_, row) => {
         const items = []
         if (canManage && (row.status === 1 || row.status === 4)) {
-          items.push({ label: '手工录号', onClick: () => { setTrackTarget(row); setTrackingInput(row.trackingNo ?? '') } })
+          items.push({ label: '手工录入快递单号', onClick: () => { setTrackTarget(row); setTrackingInput(row.trackingNo ?? '') } })
         }
         if (canManage && row.status === 4 && row.platformCode) {
           items.push({ label: '重试取号', onClick: () => retryMut.mutate(row.id) })
@@ -133,7 +133,7 @@ export default function LogisticsPage() {
     <div className="space-y-4">
       <PageHeader
         title="物流运单"
-        description="发出的每个包裹一张运单：指定承运商并开通电子面单后，打包完成自动生成待取号运单，取号成功回写快递单号并打印面单。未对接平台时可手工录快递单号。"
+        description="每个已发出的包裹对应一张运单。指定承运商并开通电子面单后，打包完成即自动生成待取号运单，取号成功自动回写快递单号并打印面单；未对接平台时可手工录入快递单号。"
         actions={
           <>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
@@ -164,7 +164,7 @@ export default function LogisticsPage() {
           data={list}
           loading={isLoading}
           rowKey="id"
-          emptyText="暂无运单（给销售单指定承运商、打包完成后会自动生成运单）"
+          emptyText="暂无运单"
         />
       )}
 

@@ -199,7 +199,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
               取消
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? '保存中...' : '保存'}
+              {isPending ? '保存中…' : '保存'}
             </Button>
           </DialogFooter>
         </form>

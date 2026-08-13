@@ -177,7 +177,7 @@ export default function OpLogsPage() {
       <ConfirmDialog
         open={clearConfirm}
         title="清理旧日志"
-        description="确认清理 30 天前的操作日志？该操作不可撤销。"
+        description="确认清理创建时间超过 30 天的操作日志？该操作不可撤销。"
         variant="destructive"
         confirmText="清理"
         onConfirm={() => { clear.mutate(); setClearConfirm(false) }}

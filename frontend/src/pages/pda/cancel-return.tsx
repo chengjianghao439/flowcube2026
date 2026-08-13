@@ -1,5 +1,5 @@
 /**
- * PDA 取消清理 — 销售单在拣货中/待分拣被取消后，已拣容器的逆向归还
+ * PDA 拣货退回 — 销售单在拣货中/待分拣被取消后，已拣容器的逆向归还
  * 路由：/pda/cancel-return（任务池列表）、/pda/cancel-return/:id（逐容器扫码归还）
  *
  * 镜像拣货的正向流程：逐容器扫码确认放回，再扫目标库位条码登记新位置，
@@ -9,6 +9,7 @@ import { useState } from 'react'
 import {PackageX, CircleCheck, Loader2} from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
   getCancelReturnDetailApi,
   submitCancelReturnScanApi,
@@ -28,7 +29,7 @@ import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
 import { parseBarcode } from '@/utils/barcode'
 
-// ── 列表：待处理的取消收尾任务池 ──────────────────────────────────────────────
+// ── 列表：待处理的拣货退回任务池 ──────────────────────────────────────────────
 function CancelReturnListPage() {
   const navigate = useNavigate()
   const { data, isLoading, refetch } = usePdaPendingCancelReturns()
@@ -36,7 +37,7 @@ function CancelReturnListPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PdaHeader title="取消清理" subtitle="逆向归还已拣容器" onBack={() => navigate('/pda')}
+      <PdaHeader title="拣货退回" subtitle="逆向归还已拣容器" onBack={() => navigate('/pda')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />} />
       <div className="max-w-md mx-auto px-4 py-5 space-y-4">
         <p className="text-xs text-muted-foreground">{tasks.length} 个任务待归还</p>
@@ -45,16 +46,18 @@ function CancelReturnListPage() {
           <PdaEmptyCard icon={<PackageX className="h-12 w-12 text-muted-foreground" />} title="暂无待归还任务" description="没有因订单取消而需要归还货物的任务" />
         )}
         {tasks.map(t => (
-          <PdaCard key={t.id} onClick={() => navigate(`/pda/cancel-return/${t.id}`)}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-mono text-xs text-muted-foreground">{t.taskNo}</p>
-                <p className="font-semibold text-foreground truncate">{t.customerName ?? '未知客户'}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">{t.warehouseName}</p>
+          <PdaCard key={t.id} className="w-full" onClick={() => navigate(`/pda/cancel-return/${t.id}`)}>
+            <div className="space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-mono text-xs text-muted-foreground min-w-0 truncate">{t.taskNo}</p>
+                <SoftStatusLabel
+                  label={`待归还 ${t.containersRemaining}${t.packagesRemaining > 0 ? ` · 待拆箱 ${t.packagesRemaining}` : ''}`}
+                  tone="warning"
+                  className="shrink-0"
+                />
               </div>
-              <span className="shrink-0 rounded-full bg-orange-100 text-orange-700 text-xs font-bold px-2.5 py-1">
-                待归还 {t.containersRemaining}{t.packagesRemaining > 0 ? ` · 待拆箱 ${t.packagesRemaining}` : ''}
-              </span>
+              <p className="font-semibold text-foreground truncate">{t.customerName ?? '未知客户'}</p>
+              <p className="text-sm text-muted-foreground">{t.warehouseName}</p>
             </div>
           </PdaCard>
         ))}
@@ -79,7 +82,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
 
   const returnAction = useCriticalPdaAction<{ id: number; remaining: number; finalized: boolean }>({
     action: `warehouse.cancel-return.${taskId}`,
-    label: '取消归还扫码',
+    label: '拣货退回扫码',
     onConfirmed: async () => {
       await qc.invalidateQueries({ queryKey: ['pda-cancel-return-detail', taskId] })
       await qc.invalidateQueries({ queryKey: ['pda-cancel-returns-pending'] })
@@ -102,7 +105,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
 
   const boxAction = useCriticalPdaAction<{ id: number; containersRemaining: number; packagesRemaining: number; finalized: boolean }>({
     action: `warehouse.cancel-return-box.${taskId}`,
-    label: '取消归还拆箱确认',
+    label: '拣货退回拆箱确认',
     onConfirmed: async () => {
       await qc.invalidateQueries({ queryKey: ['pda-cancel-return-detail', taskId] })
       await qc.invalidateQueries({ queryKey: ['pda-cancel-returns-pending'] })
@@ -221,7 +224,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   if (isLoading || !detail) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="取消归还" onBack={() => navigate('/pda/cancel-return')} />
+        <PdaHeader title="拣货退回确认" onBack={() => navigate('/pda/cancel-return')} />
         <PdaLoading className="h-40 mt-8" />
       </div>
     )
@@ -229,8 +232,8 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <PdaHeader title="取消归还" subtitle={detail.taskNo}
-        backLabel="← 取消清理" onBack={() => navigate('/pda/cancel-return')}
+      <PdaHeader title="拣货退回确认" subtitle={detail.taskNo}
+        backLabel="← 拣货退回" onBack={() => navigate('/pda/cancel-return')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />} />
 
       <div className="max-w-md mx-auto px-4 pb-32 space-y-4 py-4">
@@ -288,15 +291,21 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         {target && step === 'scan-location' && (
           <PdaCard>
             <div className="space-y-2 text-sm">
-              <p className="text-xs text-muted-foreground">必须放回原库位，系统只接受扫描下方指定的库位条码</p>
+              <p className="text-xs text-muted-foreground">必须放回原库位，系统仅接受下方指定库位的条码</p>
               <div className="rounded-xl bg-primary/5 border border-primary/20 p-4 text-center">
                 <p className="text-3xl font-black text-primary tracking-widest">{target.suggestedLocationCode ?? '—'}</p>
                 <p className="text-xs text-muted-foreground mt-1">请放回此库位</p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><p className="text-xs text-muted-foreground">商品</p><p className="font-semibold truncate">{target.productName ?? '—'}</p></div>
-                <div><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{target.qty}</p></div>
-                <div><p className="text-xs text-muted-foreground">条码</p><p className="font-mono text-xs truncate">{target.barcode}</p></div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">商品</p>
+                  <p className="font-semibold truncate">{target.productName ?? '—'}</p>
+                  <p className="font-mono text-xs text-muted-foreground truncate mt-0.5">{target.barcode}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-xs text-muted-foreground">数量</p>
+                  <p className="font-bold text-primary">{target.qty}</p>
+                </div>
               </div>
               <button className="text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => { setStep('scan-container'); setTarget(null) }}
@@ -308,7 +317,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还容器（{detail.containers.length}）</p>
           {detail.containers.length === 0 && detail.packages.length === 0 && (
-            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-green-600" />} title="已全部归还" description="即将自动完成任务取消" />
+            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-green-600" />} title="已全部归还" description="任务即将自动取消" />
           )}
           <div className="space-y-2">
             {detail.containers.map(c => (
@@ -335,7 +344,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
                     <span className="text-xs text-muted-foreground">{p.items.length} 种商品</span>
                   </div>
                   <p className="text-xs text-muted-foreground truncate mt-1">
-                    {p.items.map(i => `${i.productName ?? '—'}×${i.qty}`).join('、') || '（箱内无商品记录）'}
+                    {p.items.map(i => `${i.productName ?? '—'} × ${i.qty}${i.unit ? ` ${i.unit}` : ''}`).join('、') || '（箱内无商品记录）'}
                   </p>
                 </div>
               ))}

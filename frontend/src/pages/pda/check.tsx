@@ -103,7 +103,7 @@ function CheckItemRow({ item }: { item: CheckItem }) {
           <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
         </div>
         {done
-          ? <SoftStatusLabel label="✓ 已核满" tone="success" className="ml-2 shrink-0" />
+          ? <SoftStatusLabel label="✓ 已核齐" tone="success" className="ml-2 shrink-0" />
           : null}
       </div>
 
@@ -331,7 +331,7 @@ export default function PdaCheckPage() {
         subtitle={taskDetail?.customerName}
         onBack={() => step === 'checking' ? setStep('select-task') : navigate('/pda')}
         right={<SoftStatusLabel label="复核中" tone="active" />}
-        progress={{ current: totalChecked, total: totalPick || 1, label: '复核进度（对已拣）' }}
+        progress={{ current: totalChecked, total: totalPick || 1, label: '复核进度（按已拣数量）' }}
       />
 
       <PdaFlash flash={flash} />
@@ -367,7 +367,7 @@ export default function PdaCheckPage() {
             <CheckItemRow key={item.id} item={item} />
           ))}
           {!taskLoading && items.length > 0 && linesDone && (
-            <p className="text-center text-xs text-green-600 font-medium">✓ 各明细已核数量已与拣货一致</p>
+            <p className="text-center text-xs text-green-600 font-medium">✓ 各明细实核数量与拣货数量一致</p>
           )}
         </div>
       </div>

@@ -34,7 +34,7 @@ export default function SettingsPage() {
     <div className="space-y-6 max-w-3xl">
       <PageHeader
         title="系统设置"
-        description="全局参数配置与角色说明，采用桌面端统一页头和卡片样式。"
+        description="配置全局参数与角色权限。"
       />
 
       {/* 基础参数 */}
@@ -58,7 +58,7 @@ export default function SettingsPage() {
         ))}
         {canUpdate && (
           <div className="pt-2">
-            <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中...' : '保存设置'}</Button>
+            <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中…' : '保存设置'}</Button>
           </div>
         )}
         {!canUpdate && <p className="text-sm text-muted-foreground">当前账号无修改权限</p>}
