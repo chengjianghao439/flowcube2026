@@ -202,7 +202,7 @@ async function main() {
   await openAndCheck('/reports/reconciliation', '供应商对账')
   await openAndCheck('/reports/profit-analysis', '利润 / 库存分析')
   await openAndCheck('/procurement', '采购计划')
-  await openAndCheck('/reports/wave-performance', '波次效率报表')
+  await openAndCheck('/reports/wave-performance', '波次效率')
   await openAndCheck('/reports/warehouse-ops', '仓库运营看板')
   await openAndCheck('/reports/pda-anomaly', 'PDA 异常分析')
   await openAndCheck('/reports/inventory-aging', '库龄与呆滞')
