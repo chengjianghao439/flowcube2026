@@ -241,7 +241,7 @@ async function createCheckScanLog({
       throw new AppError('仅「待复核」任务允许复核扫码', 400)
     }
     if (taskRow.cancel_requested_at) {
-      throw new AppError('该任务正在取消收尾中，不可继续复核', 409)
+      throw new AppError('该任务正在拣货退回中，不可继续复核', 409)
     }
 
     const [[c]] = await conn.query(
@@ -386,7 +386,7 @@ async function createCancelReturnScanLog({
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
     if (!taskRow.cancel_requested_at) {
-      throw new AppError('该任务未处于取消收尾状态，无需归还扫码', 400)
+      throw new AppError('该任务未处于拣货退回状态，无需归还扫码', 400)
     }
 
     const [[c]] = await conn.query(
@@ -452,7 +452,7 @@ async function createCancelReturnScanLog({
         detail: { containerId: c.id, barcode: c.barcode, locationCode: loc.code },
       })
     } catch (eventErr) {
-      logWtSideEffectFailure('仓库任务事件写入失败：取消归还扫码事件', eventErr, {
+      logWtSideEffectFailure('仓库任务事件写入失败：拣货退回扫码事件', eventErr, {
         taskId: Number(taskId),
         taskNo: taskRow.task_no,
         eventType: WT_EVENT.CANCEL_RETURN_SCAN,
@@ -514,7 +514,7 @@ async function createCancelReturnBoxScanLog({
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
     if (!taskRow.cancel_requested_at) {
-      throw new AppError('该任务未处于取消收尾状态，无需拆箱确认', 400)
+      throw new AppError('该任务未处于拣货退回状态，无需拆箱确认', 400)
     }
 
     const [[pkg]] = await conn.query(
@@ -527,7 +527,7 @@ async function createCancelReturnBoxScanLog({
 
     await conn.query('UPDATE packages SET status = 3 WHERE id = ?', [pkg.id])
     await conn.query(
-      `UPDATE print_jobs SET status = 3, error_message = '仓库任务取消收尾：箱子已拆箱作废'
+      `UPDATE print_jobs SET status = 3, error_message = '仓库任务拣货退回：箱子已拆箱作废'
        WHERE ref_type = 'package' AND ref_id = ? AND status IN (0, 1)`,
       [pkg.id],
     )
@@ -541,7 +541,7 @@ async function createCancelReturnBoxScanLog({
         detail: { packageId: pkg.id, barcode: pkg.barcode },
       })
     } catch (eventErr) {
-      logWtSideEffectFailure('仓库任务事件写入失败：取消归还拆箱确认事件', eventErr, {
+      logWtSideEffectFailure('仓库任务事件写入失败：拣货退回拆箱确认事件', eventErr, {
         taskId: Number(taskId),
         taskNo: taskRow.task_no,
         eventType: WT_EVENT.CANCEL_RETURN_BOX_SCAN,

@@ -21,7 +21,7 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
     entityName: '仓库任务',
   })
   if (taskRow.cancel_requested_at) {
-    throw new AppError('该任务正在取消收尾中，不可继续分拣', 409)
+    throw new AppError('该任务正在拣货退回中，不可继续分拣', 409)
   }
   if (taskRow.adjustment_requested_at) {
     throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)

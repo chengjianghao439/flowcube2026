@@ -21,7 +21,7 @@ router.get('/my-sku-summary', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW)
 
 router.get('/stats', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.stats)
 
-// GET /api/warehouse-tasks/cancel-returns/pending — PDA「取消清理」任务池（必须在 /:id 之前注册）
+// GET /api/warehouse-tasks/cancel-returns/pending — PDA「拣货退回」任务池（必须在 /:id 之前注册）
 router.get('/cancel-returns/pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW), ctrl.pendingCancelReturns)
 
 // GET /api/warehouse-tasks/adjustments/pending — PDA「改单确认」任务池（必须在 /:id 之前注册）

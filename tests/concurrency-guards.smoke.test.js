@@ -368,19 +368,19 @@ async function scenarioCancelReverseReturnBasics(log, ctx, adminToken) {
   log.assert('required_qty已clamp到picked_qty', Number(itemAfterCancel.required_qty) === Number(itemAfterCancel.picked_qty))
 
   const readyResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/ready`, { token: adminToken, headers: ctx.pdaHeaders() })
-  log.assert('取消收尾中的任务，ready接口应返回409', readyResp.status === 409, `status=${readyResp.status}`)
+  log.assert('拣货退回中的任务，ready接口应返回409', readyResp.status === 409, `status=${readyResp.status}`)
 
   const rescanResp = await ctx.http.post('/api/scan-logs', {
     token: adminToken, headers: ctx.pdaHeaders(),
     json: { taskId, itemId, containerId: container.id, barcode: container.barcode, productId: Number(ctx.product.id), qty: 1, scanMode: '整件' },
   })
-  log.assert('取消收尾中的任务，拣货扫码应返回409', rescanResp.status === 409, `status=${rescanResp.status}`)
+  log.assert('拣货退回中的任务，拣货扫码应返回409', rescanResp.status === 409, `status=${rescanResp.status}`)
 
   const doubleCancel = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
   log.assert('对已在收尾中的任务重复cancel应返回409', doubleCancel.status === 409, `status=${doubleCancel.status}`)
 
   const suggestResp = await ctx.http.get(`/api/warehouse-tasks/${taskId}/pick-suggestions`, { token: adminToken })
-  log.assert('取消收尾中的任务，pick-suggestions应返回409', suggestResp.status === 409, `status=${suggestResp.status}`)
+  log.assert('拣货退回中的任务，pick-suggestions应返回409', suggestResp.status === 409, `status=${suggestResp.status}`)
 }
 
 // 取消逆向归还：端到端全流程（列表→详情→逐容器扫码归还→finalize→分拣格释放）+ 可见性补丁
@@ -570,7 +570,7 @@ async function scenarioCancelReverseReturnPacking(log, ctx, adminToken) {
 
   // 取消收尾期间，打包相关操作一律应被拒绝
   const addItemAfterCancel = await ctx.http.post('/api/packages', { token: adminToken, headers: ctx.pdaHeaders(), json: { warehouseTaskId: taskId } })
-  log.assert('取消收尾中禁止新建箱子', addItemAfterCancel.status === 409, `status=${addItemAfterCancel.status}`)
+  log.assert('拣货退回中禁止新建箱子', addItemAfterCancel.status === 409, `status=${addItemAfterCancel.status}`)
 
   // 容器归还（复用既有流程，未受箱子分支影响）
   const containerReturn = await ctx.http.post('/api/scan-logs/cancel-return', {
@@ -631,7 +631,7 @@ async function scenarioCancelReverseReturnShipping(log, ctx, adminToken) {
   log.assert('待出库阶段取消成功（走逆向归还分支）', cancelResp.ok, `status=${cancelResp.status}`)
 
   const shipAfterCancel = await ctx.http.put(`/api/warehouse-tasks/${taskId}/ship`, { token: adminToken, headers: ctx.pdaHeaders() })
-  log.assert('取消收尾中禁止出库', shipAfterCancel.status === 409, `status=${shipAfterCancel.status}`)
+  log.assert('拣货退回中禁止出库', shipAfterCancel.status === 409, `status=${shipAfterCancel.status}`)
 
   const containerReturn = await ctx.http.post('/api/scan-logs/cancel-return', {
     token: adminToken, headers: ctx.pdaHeaders(),
@@ -666,10 +666,10 @@ async function scenarioCancelReverseReturnForwardGuards(log, ctx, adminToken) {
     token: adminToken, headers: ctx.pdaHeaders(),
     json: { taskId, barcode: container.barcode },
   })
-  log.assert('取消收尾中的任务，复核扫码应返回409', rescanCheck.status === 409, `status=${rescanCheck.status}`)
+  log.assert('拣货退回中的任务，复核扫码应返回409', rescanCheck.status === 409, `status=${rescanCheck.status}`)
 
   const checkDoneAfterCancel = await ctx.http.put(`/api/warehouse-tasks/${taskId}/check-done`, { token: adminToken, headers: ctx.pdaHeaders() })
-  log.assert('取消收尾中的任务，复核完成应返回409', checkDoneAfterCancel.status === 409, `status=${checkDoneAfterCancel.status}`)
+  log.assert('拣货退回中的任务，复核完成应返回409', checkDoneAfterCancel.status === 409, `status=${checkDoneAfterCancel.status}`)
 
   const detailResp = await ctx.http.get(`/api/warehouse-tasks/${taskId}/cancel-return-detail`, { token: adminToken })
   log.assert('复核阶段取消无任何箱子待处理', (detailResp.data?.data?.packages || []).length === 0)

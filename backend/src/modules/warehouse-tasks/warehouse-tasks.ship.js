@@ -52,7 +52,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
 
   // 加锁顺序统一为「先销售单、后仓库任务」，与 sale.cancel / requestAdjustment(SO→WT) 一致，
   // 避免 ship(原 WT→SO) 与它们并发同一订单+任务时 ABBA 死锁（审计 P2）。这里只「加锁」拿 SO 快照，
-  // SO 的状态校验（已取消/已完成）仍放到 WT 前置校验（取消收尾中/改单中）之后，保持既有错误优先级
+  // SO 的状态校验（已取消/已完成）仍放到 WT 前置校验（拣货退回中/改单中）之后，保持既有错误优先级
   // 不变。只有销售出库有关联销售单；采购退货任务 getShipContext 返回 saleOrderId=null，不锁 SO。
   let saleRow = null
   if (saleOrderId) {
@@ -71,7 +71,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
     entityName: '仓库任务',
   })
   if (taskRow.cancel_requested_at) {
-    throw new AppError('该任务正在取消收尾中，不可出库', 409)
+    throw new AppError('该任务正在拣货退回中，不可出库', 409)
   }
   if (taskRow.adjustment_requested_at) {
     throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
@@ -96,7 +96,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
     await assertTaskPackagePrintClosure(conn, id)
   }
 
-  // SO 状态校验：放在任务级前置校验之后，保持「取消收尾中/改单中」优先报错的既有契约；
+  // SO 状态校验：放在任务级前置校验之后，保持「拣货退回中/改单中」优先报错的既有契约；
   // saleRow 已在函数开头 FOR UPDATE 锁定（销售出库才有；采购退货 saleOrderId=null）。
   if (saleRow) {
     if (Number(saleRow.status) === 5) {

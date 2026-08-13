@@ -65,7 +65,7 @@ async function createPackage(taskId, remark = null, scopeWarehouseIds = null) {
     if (!task) throw new AppError('任务不存在', 404)
     assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
     if (task.cancel_requested_at) {
-      throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
+      throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
     }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('仅「待打包」任务可创建装箱', 400)
@@ -145,7 +145,7 @@ async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null
     if (!task) throw new AppError('任务不存在', 404)
     assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
     if (task.cancel_requested_at) {
-      throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
+      throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
     }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('任务不在待打包状态，禁止装箱', 400)
@@ -259,7 +259,7 @@ async function removeItem(packageId, { itemId, qty }, scopeWarehouseIds = null) 
     if (!task) throw new AppError('任务不存在', 404)
     assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
     if (task.cancel_requested_at) {
-      throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
+      throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
     }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('任务不在待打包状态，禁止移除商品', 400)
@@ -323,7 +323,7 @@ async function voidPackage(packageId, scopeWarehouseIds = null) {
     if (!task) throw new AppError('任务不存在', 404)
     assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
     if (task.cancel_requested_at) {
-      throw new AppError('该任务正在取消收尾中，请通过「取消清理」流程处理该箱子', 409)
+      throw new AppError('该任务正在拣货退回中，请通过「拣货退回」流程处理该箱子', 409)
     }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('任务不在待打包状态，禁止作废箱子', 400)
@@ -459,7 +459,7 @@ async function markPackageFinishedWithinTransaction(conn, packageId) {
     throw new AppError('任务不在待打包状态，禁止完成装箱', 400)
   }
   if (taskRow.cancel_requested_at) {
-    throw new AppError('该任务正在取消收尾中，禁止继续打包操作', 409)
+    throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
   }
 
   if (!alreadyFinished) {

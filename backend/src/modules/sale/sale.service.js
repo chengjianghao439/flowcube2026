@@ -751,7 +751,7 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
       columns: 'id, task_no, status, cancel_requested_at, adjustment_requested_at',
       entityName: '仓库任务',
     })
-    if (taskRow.cancel_requested_at) throw new AppError('该任务正在取消收尾中，暂不能改单', 409)
+    if (taskRow.cancel_requested_at) throw new AppError('该任务正在拣货退回中，暂不能改单', 409)
     if (taskRow.adjustment_requested_at) throw new AppError('该任务已有改单在等待仓库确认，请先处理完成', 409)
     if (!WT_STATUS_ACTIVE.includes(Number(taskRow.status))) {
       throw new AppError('当前仓库任务状态不支持改单', 400)

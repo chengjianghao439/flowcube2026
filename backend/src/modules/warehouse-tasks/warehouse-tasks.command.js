@@ -170,7 +170,7 @@ async function cancel(id, options = {}) {
       entityName: '仓库任务',
     })
     if (taskRow.cancel_requested_at) {
-      throw new AppError('任务已在取消收尾中，请等待逆向归还完成', 409)
+      throw new AppError('任务已在拣货退回中，请等待逆向归还完成', 409)
     }
     const rule = assertWarehouseTaskAction('cancel', taskRow.status)
     if (!isValidTransition(taskRow.status, rule.toStatus)) {
@@ -264,7 +264,7 @@ async function cancel(id, options = {}) {
           },
         })
       } catch (eventErr) {
-        logSideEffectFailure('仓库任务事件写入失败：取消收尾发起事件', eventErr, {
+        logSideEffectFailure('仓库任务事件写入失败：拣货退回发起事件', eventErr, {
           taskId: id,
           taskNo: taskRow.task_no,
           eventType: WT_EVENT.CANCEL_REQUESTED,

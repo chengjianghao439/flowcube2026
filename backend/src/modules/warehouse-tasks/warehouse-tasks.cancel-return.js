@@ -7,7 +7,7 @@ const { logSideEffectFailure } = require('./warehouse-tasks.helpers')
 const { scopeFilter } = require('../../utils/warehouseScope')
 
 /**
- * PDA「取消清理」任务池：列出所有正在取消收尾中（cancel_requested_at 非空）的任务，
+ * PDA「拣货退回」任务池：列出所有正在拣货退回中（cancel_requested_at 非空）的任务，
  * 每条附带该任务名下仍锁定的容器数，供操作员挑选处理。
  */
 async function listPendingCancelReturns(warehouseId, scopeWarehouseIds = null) {
@@ -60,7 +60,7 @@ async function getCancelReturnDetail(taskId) {
     [taskId],
   )
   // 只有已完成（已打印箱贴、有物理实体）的箱子需要人工扫码确认拆箱；
-  // 打包中的箱子在 cancel() 发起取消收尾时已经被自动作废，不会出现在这里。
+  // 打包中的箱子在 cancel() 发起拣货退回时已经被自动作废，不会出现在这里。
   const [packages] = await pool.query(
     `SELECT id, barcode, created_at FROM packages
       WHERE warehouse_task_id = ? AND status = 2
@@ -154,7 +154,7 @@ async function finalizeCancelWithinTransaction(conn, taskId) {
       detail: { sortingBinReleased: !!taskRow.sorting_bin_id },
     })
   } catch (eventErr) {
-    logSideEffectFailure('仓库任务事件写入失败：取消收尾完成事件', eventErr, {
+    logSideEffectFailure('仓库任务事件写入失败：拣货退回完成事件', eventErr, {
       taskId: Number(taskId),
       taskNo: taskRow.task_no,
       eventType: WT_EVENT.CANCEL_FINALIZED,
