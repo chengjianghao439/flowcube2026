@@ -11,7 +11,10 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { Layers, ArrowRight, Download, Smartphone, Boxes, ScanLine, ShieldCheck, Radio, Server } from 'lucide-react'
+import {
+  Layers, ArrowRight, Download, Smartphone, Boxes, ScanLine, ShieldCheck, Radio, Server,
+  Mail, Phone, ArrowUpRight,
+} from 'lucide-react'
 
 // ── 品牌常量 ───────────────────────────────────────────────────────────
 const BRAND = {
@@ -21,43 +24,57 @@ const BRAND = {
   subclaim: '采购 · 销售 · 库存 · 仓储 · 财务一体化 ERP/WMS，电脑端与 PDA 现场协同，扫码即办。',
 }
 
-// ── 能力矩阵（与 routeRegistry.ts 真实模块分组呼应）─────────────────
+// ── 联系方式 ───────────────────────────────────────────────────────────
+const CONTACT = {
+  name: '成江皓',
+  phone: '15701178441',
+  email: '15701178441@139.com',
+}
+
+// ── 能力矩阵（与 routeRegistry.ts 真实模块分组呼应，点击跳对应系统页）──
+// 配色收敛为单一蓝色系（避免多色相显得「跳」）：同相不同明度区分模块
 const MODULES = [
   {
     icon: Boxes,
     title: '采购管理',
     desc: '请购、计划、下单、收货、上架到供应商结算，全链路留痕。',
     color: 'bg-blue-50 text-blue-700',
+    href: '#/purchase',
   },
   {
     icon: Radio,
     title: '销售与出库',
     desc: '订单占库、波次拣货、分拣复核、打包出库，多仓并发不串单。',
-    color: 'bg-indigo-50 text-indigo-700',
+    color: 'bg-blue-50 text-blue-700',
+    href: '#/sale',
   },
   {
     icon: ScanLine,
     title: '仓储现场',
     desc: '容器管理、扫码上架、调拨、盘点、呆滞告警，账面与实际一致。',
-    color: 'bg-sky-50 text-sky-700',
+    color: 'bg-blue-50 text-blue-700',
+    href: '#/picking-waves',
   },
   {
     icon: Server,
     title: '库存与预占',
     desc: '库存唯一事实源 + 预占账，可用量由引擎裁决，绝不出现负库存。',
-    color: 'bg-cyan-50 text-cyan-700',
+    color: 'bg-blue-50 text-blue-700',
+    href: '#/inventory',
   },
   {
     icon: ShieldCheck,
     title: '财务与账款',
     desc: '应收应付自动生成，收款核销、对账单、费用报销，账目可追溯。',
-    color: 'bg-emerald-50 text-emerald-700',
+    color: 'bg-blue-50 text-blue-700',
+    href: '#/payments/payable',
   },
   {
     icon: Boxes,
     title: '报表与分析',
     desc: '库存、波次效率、盈亏、利润分析一键导出，经营决策有据可依。',
-    color: 'bg-teal-50 text-teal-700',
+    color: 'bg-blue-50 text-blue-700',
+    href: '#/reports/warehouse-ops',
   },
 ]
 
@@ -66,14 +83,17 @@ const VALUES = [
   {
     title: '扫码驱动，仓库只执行不决策',
     desc: 'PDA 扫一下，系统告诉你下一步做什么、放哪里、拣什么。现场不靠记忆，作业靠流程。',
+    href: '#/pda/picking',
   },
   {
     title: '一份数据，三端实时一致',
     desc: '桌面办公、浏览器访问、PDA 现场共用同一后端与同一份事实。账面不漂移，对账不扯皮。',
+    href: '#/dashboard',
   },
   {
     title: '打印与作业解耦，坏了不阻塞',
     desc: '标签打印异步入队，桌面客户端领取打印。打印失败不影响业务，现场作业不停摆。',
+    href: '#/settings/print-templates',
   },
 ]
 
@@ -103,7 +123,7 @@ function WorkbenchMockup() {
         <div className="mb-3 flex items-center justify-between text-[11px] text-blue-200/50">
           <span>库区 A · 主通道</span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400" />
+            <span className="inline-block size-1.5 animate-pulse rounded-full bg-[#6EA8FF]" />
             12 个在途任务
           </span>
         </div>
@@ -121,8 +141,8 @@ function WorkbenchMockup() {
               }`}
             />
           ))}
-          {/* 移动亮点：一颗沿网格漂移的「在途容器」 */}
-          <div className="workbench-dot absolute -top-1 left-[8%] size-2 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.9)]" />
+          {/* 移动亮点：一颗沿网格漂移的「在途容器」（品牌亮蓝） */}
+          <div className="workbench-dot absolute -top-1 left-[8%] size-2 rounded-full bg-[#6EA8FF] shadow-[0_0_12px_rgba(110,168,255,0.9)]" />
         </div>
 
         {/* 底部一行统计 */}
@@ -212,7 +232,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-[#F5F7FA] font-sans text-[#0E1B2E] antialiased">
       {/* 顶部导航 */}
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-8 lg:px-10">
           <div className="flex items-center gap-2.5">
             <div className="flex size-8 items-center justify-center rounded-lg bg-[#0B3B8C] text-white">
               <Layers className="size-4.5" />
@@ -243,10 +263,10 @@ export default function LandingPage() {
         <div className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(rgba(255,255,255,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.5)_1px,transparent_1px)] [background-size:44px_44px]" />
         <div className="pointer-events-none absolute -right-40 -top-40 size-[30rem] rounded-full bg-[#1E5AE6]/20 blur-3xl" />
 
-        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-20 pt-16 lg:grid-cols-2 lg:pt-20">
+        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-6 pb-24 pt-20 sm:px-8 lg:grid-cols-2 lg:px-10 lg:pt-24">
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-blue-200">
-              <span className="inline-block size-1.5 rounded-full bg-emerald-400" />
+              <span className="inline-block size-1.5 rounded-full bg-[#6EA8FF]" />
               ERP / WMS 一体化 · 扫码驱动仓库作业
             </div>
             <h1 className="text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl">
@@ -288,31 +308,40 @@ export default function LandingPage() {
       </section>
 
       {/* ── 能力矩阵 ─────────────────────────────────────────── */}
-      <section id="features" className="mx-auto max-w-6xl px-5 py-20">
-        <Reveal className="mx-auto mb-12 max-w-2xl text-center">
+      <section id="features" className="mx-auto max-w-6xl px-6 py-24 sm:px-8 lg:px-10">
+        <Reveal className="mx-auto mb-14 max-w-2xl text-center">
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#1E5AE6]">能力矩阵</p>
           <h2 className="text-3xl font-bold tracking-tight">一套系统，覆盖企业进销存与财务</h2>
           <p className="mt-3 text-sm text-slate-500">从采购下单到客户结算，从账面到实物，全在一个系统里闭环。</p>
         </Reveal>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {MODULES.map((m) => (
             <Reveal key={m.title}>
-              <div className="group h-full rounded-2xl border border-slate-200/80 bg-white p-6 transition hover:-translate-y-0.5 hover:border-[#1E5AE6]/30 hover:shadow-lg hover:shadow-blue-900/5">
-                <div className={`mb-4 inline-flex size-10 items-center justify-center rounded-xl ${m.color}`}>
-                  <m.icon className="size-5" />
+              <a
+                href={m.href}
+                className="group block h-full rounded-2xl border border-slate-200/80 bg-white p-6 transition hover:-translate-y-0.5 hover:border-[#1E5AE6]/30 hover:shadow-lg hover:shadow-blue-900/5"
+              >
+                <div className="mb-4 flex items-start justify-between">
+                  <div className={`inline-flex size-10 items-center justify-center rounded-xl ${m.color}`}>
+                    <m.icon className="size-5" />
+                  </div>
+                  <ArrowUpRight className="size-4 text-slate-300 transition group-hover:text-[#1E5AE6]" />
                 </div>
                 <h3 className="mb-1.5 text-base font-semibold">{m.title}</h3>
                 <p className="text-sm leading-relaxed text-slate-500">{m.desc}</p>
-              </div>
+                <span className="mt-3 inline-block text-xs font-medium text-[#1E5AE6] opacity-0 transition group-hover:opacity-100">
+                  进入模块 →
+                </span>
+              </a>
             </Reveal>
           ))}
         </div>
       </section>
 
       {/* ── 下载 ─────────────────────────────────────────────── */}
-      <section id="download" className="bg-white py-20">
-        <div className="mx-auto max-w-6xl px-5">
-          <Reveal className="mx-auto mb-12 max-w-2xl text-center">
+      <section id="download" className="bg-white py-24">
+        <div className="mx-auto max-w-6xl px-6 sm:px-8 lg:px-10">
+          <Reveal className="mx-auto mb-14 max-w-2xl text-center">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#1E5AE6]">下载</p>
             <h2 className="text-3xl font-bold tracking-tight">三端随时可用</h2>
             <p className="mt-3 text-sm text-slate-500">网页端打开即用；桌面端与 PDA 安装包随时下载。</p>
@@ -331,11 +360,11 @@ export default function LandingPage() {
                   {desktop?.version && <span className="mt-1 block text-slate-400">当前版本 v{desktop.version}</span>}
                 </p>
                 <a
-                  href={desktopUrl || '#'}
+                  href={desktopUrl || '#download'}
                   className="mt-5 inline-flex w-fit items-center gap-2 rounded-xl bg-[#1E5AE6] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1749C4]"
                 >
                   <Download className="size-4" />
-                  下载 Windows 安装包
+                  {desktopUrl ? '下载 Windows 安装包' : '查看桌面端下载说明'}
                 </a>
                 <p className="mt-3 text-xs text-slate-400">下载后双击安装，首次登录即可使用。</p>
               </div>
@@ -344,7 +373,7 @@ export default function LandingPage() {
             {/* PDA */}
             <Reveal>
               <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-[#F5F7FA] p-7">
-                <div className="mb-3 inline-flex size-11 items-center justify-center rounded-xl bg-emerald-600 text-white">
+                <div className="mb-3 inline-flex size-11 items-center justify-center rounded-xl bg-[#0B3B8C] text-white">
                   <Smartphone className="size-5" />
                 </div>
                 <h3 className="text-lg font-semibold">PDA 手持端（Android）</h3>
@@ -354,7 +383,7 @@ export default function LandingPage() {
                 </p>
                 <a
                   href="/api/pda/download"
-                  className="mt-5 inline-flex w-fit items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                  className="mt-5 inline-flex w-fit items-center gap-2 rounded-xl bg-[#1E5AE6] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1749C4]"
                 >
                   <Smartphone className="size-4" />
                   下载 PDA 安装包
@@ -375,19 +404,25 @@ export default function LandingPage() {
       </section>
 
       {/* ── 为什么选我们 ─────────────────────────────────────── */}
-      <section id="values" className="bg-[#0E1B2E] py-20 text-white">
-        <div className="mx-auto max-w-6xl px-5">
-          <Reveal className="mx-auto mb-12 max-w-2xl text-center">
+      <section id="values" className="bg-[#0E1B2E] py-24 text-white">
+        <div className="mx-auto max-w-6xl px-6 sm:px-8 lg:px-10">
+          <Reveal className="mx-auto mb-14 max-w-2xl text-center">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#6EA8FF]">为什么选我们</p>
             <h2 className="text-3xl font-bold tracking-tight">为仓库现场的可靠性而设计</h2>
           </Reveal>
           <div className="grid gap-5 md:grid-cols-3">
             {VALUES.map((v) => (
               <Reveal key={v.title}>
-                <div className="h-full rounded-2xl border border-white/10 bg-white/5 p-6">
-                  <h3 className="mb-2 text-base font-semibold text-white">{v.title}</h3>
+                <a
+                  href={v.href}
+                  className="group block h-full rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:border-white/25 hover:bg-white/10"
+                >
+                  <h3 className="mb-2 flex items-center justify-between text-base font-semibold text-white">
+                    {v.title}
+                    <ArrowUpRight className="size-4 text-blue-200/40 transition group-hover:text-[#6EA8FF]" />
+                  </h3>
                   <p className="text-sm leading-relaxed text-blue-100/70">{v.desc}</p>
-                </div>
+                </a>
               </Reveal>
             ))}
           </div>
@@ -395,8 +430,8 @@ export default function LandingPage() {
       </section>
 
       {/* ── 页脚 ─────────────────────────────────────────────── */}
-      <footer className="bg-[#0A1526] py-12 text-blue-200/50">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-5 text-center">
+      <footer className="bg-[#0E1B2E] py-12 text-blue-200/50">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-6 py-14 text-center sm:px-8 lg:px-10">
           <div className="flex items-center gap-2.5">
             <div className="flex size-7 items-center justify-center rounded-lg bg-white/10 text-white">
               <Layers className="size-4" />
@@ -405,7 +440,18 @@ export default function LandingPage() {
           </div>
           <div className="text-xs leading-relaxed">
             <p>企业管理系统 · ERP / WMS 一体化</p>
-            <p className="mt-1">联系方式：请联系您的系统管理员，或通过「进入系统」联系在线支持</p>
+            <p className="mt-2 font-medium text-blue-100/70">联系我们</p>
+            <p className="mt-1 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+              <a href={`tel:${CONTACT.phone}`} className="inline-flex items-center gap-1.5 text-blue-200/70 transition hover:text-white">
+                <Phone className="size-3.5" />
+                {CONTACT.phone}
+              </a>
+              <a href={`mailto:${CONTACT.email}`} className="inline-flex items-center gap-1.5 text-blue-200/70 transition hover:text-white">
+                <Mail className="size-3.5" />
+                {CONTACT.email}
+              </a>
+            </p>
+            <p className="mt-1 text-blue-200/40">联系人：{CONTACT.name}</p>
           </div>
           <a
             href="#/login"
