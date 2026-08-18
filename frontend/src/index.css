@@ -270,3 +270,102 @@ html {
 .landing-page p {
   text-wrap: pretty;
 }
+
+/* ── 官网宣传页（landing）动画增强 ─────────────────────────────────── */
+
+/* Hero 标题逐行入场 */
+@keyframes fc-hero-line {
+  from { opacity: 0; transform: translateY(26px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-line {
+  display: block;
+  opacity: 0;
+  animation: fc-hero-line 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* 扫描光波：在途容器向外扩散的环形脉冲（扫描感） */
+@keyframes fc-scan-ring {
+  0%   { transform: scale(0.4); opacity: 0.9; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.scan-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(110, 168, 255, 0.7);
+  animation: fc-scan-ring 2.2s ease-out infinite;
+  pointer-events: none;
+}
+
+/* 占用格呼吸：点亮的「在途库位」轻微闪烁 */
+@keyframes fc-cell-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+.cell-breathe {
+  animation: fc-cell-breathe 3.2s ease-in-out infinite;
+}
+
+/* 背景粒子漂移（货在流动的隐喻） */
+@keyframes fc-particle {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  15%  { opacity: 0.7; }
+  85%  { opacity: 0.5; }
+  100% { transform: translateY(-46vh) translateX(6vw); opacity: 0; }
+}
+.fc-particle {
+  position: absolute;
+  border-radius: 9999px;
+  background: rgba(110, 168, 255, 0.6);
+  animation: fc-particle linear infinite;
+  pointer-events: none;
+}
+
+/* 业务流卡片：从左到右流水线依次浮现 */
+@keyframes fc-flow-in {
+  from { opacity: 0; transform: translateX(28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.flow-card {
+  opacity: 0;
+}
+.flow-card.is-in {
+  animation: fc-flow-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* 能力矩阵卡片：错峰淡入 */
+@keyframes fc-stagger-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.stagger-card {
+  opacity: 0;
+}
+.stagger-card.is-in {
+  animation: fc-stagger-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* 按钮微交互：hover 轻微放大 */
+.landing-cta {
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.18s ease, background-color 0.18s ease;
+}
+.landing-cta:hover { transform: translateY(-1px) scale(1.02); }
+.landing-cta:active { transform: scale(0.97); }
+
+/* 卡片图标 hover 上浮 */
+.group:hover .card-icon {
+  transform: translateY(-3px);
+}
+.card-icon {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 尊重减弱动效 */
+@media (prefers-reduced-motion: reduce) {
+  .hero-line, .scan-ring, .fc-particle, .cell-breathe, .flow-card, .stagger-card {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

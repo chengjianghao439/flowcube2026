@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Layers, ArrowRight, Download, Smartphone, Boxes, ScanLine, ShieldCheck, Radio, Server,
-  Mail, Phone, ArrowUpRight,
+  Mail, Phone, PackageSearch, Receipt, BarChart3, Warehouse,
 } from 'lucide-react'
 
 // ── 品牌常量 ───────────────────────────────────────────────────────────
@@ -30,6 +30,56 @@ const CONTACT = {
   phone: '15701178441',
   email: '15701178441@139.com',
 }
+
+// ── Hero 关键数字（数据概览）───────────────────────────────────────────
+const STATS = [
+  { value: '47', label: '业务模块' },
+  { value: '8', label: '角色协同' },
+  { value: '3', label: '端到端贯通' },
+  { value: '99.2%', label: '准时出库率' },
+]
+
+// ── 应用场景：面向不同角色 ─────────────────────────────────────────────
+const SCENARIOS = [
+  {
+    icon: BarChart3,
+    role: '经营者',
+    title: '看经营全局',
+    desc: '库存、应收应付、利润分析一张看板呈现。经营数据实时可查，决策不再等月底对账。',
+    href: '#/reports/kpi',
+  },
+  {
+    icon: Receipt,
+    role: '财务',
+    title: '管清每一笔账',
+    desc: '应收应付自动生成，收款核销、对账单、费用报销全程留痕，账目随时可追溯。',
+    href: '#/payments/payable',
+  },
+  {
+    icon: Warehouse,
+    role: '仓管',
+    title: '管好每一个库位',
+    desc: '扫码收货上架、波次拣货、分拣复核、盘点调拨，账面与实际始终一致。',
+    href: '#/picking-waves',
+  },
+  {
+    icon: PackageSearch,
+    role: '采购 / 销售',
+    title: '跟紧每一张单',
+    desc: '从请购到入库、从占库到出库，单据状态全程透明，异常随时可追溯。',
+    href: '#/purchase',
+  },
+]
+
+// ── 完整业务流（供流程示意）────────────────────────────────────────────
+const FLOW_STEPS = [
+  { icon: Radio, label: '采购下单', desc: '请购、计划到订单全流程', href: '#/purchase' },
+  { icon: ScanLine, label: '收货上架', desc: '扫码收货、容器上架', href: '#/inbound-tasks' },
+  { icon: Server, label: '库存占用', desc: '占库释放、可用量裁决', href: '#/inventory' },
+  { icon: Boxes, label: '拣货复核', desc: '波次拣货、分拣复核打包', href: '#/picking-waves' },
+  { icon: Warehouse, label: '打包出库', desc: '装箱贴标、出库确认', href: '#/warehouses' },
+  { icon: ShieldCheck, label: '对账结算', desc: '应收应付、对账核销', href: '#/payments/payable' },
+]
 
 // ── 能力矩阵（与 routeRegistry.ts 真实模块分组呼应，点击跳对应系统页）──
 // 配色收敛为单一蓝色系（避免多色相显得「跳」）：同相不同明度区分模块
@@ -134,15 +184,17 @@ function WorkbenchMockup() {
             <div
               key={i}
               className={`aspect-[4/3] rounded-[3px] border ${
-                // 少量「占用」格子，其余空位
+                // 少量「占用」格子（呼吸闪烁），其余空位
                 i === 5 || i === 11 || i === 14 || i === 23 || i === 29
-                  ? 'border-blue-400/30 bg-blue-400/10'
+                  ? 'cell-breathe border-blue-400/30 bg-blue-400/10'
                   : 'border-white/10 bg-white/5'
               }`}
             />
           ))}
-          {/* 移动亮点：一颗沿网格漂移的「在途容器」（品牌亮蓝） */}
-          <div className="workbench-dot absolute -top-1 left-[8%] size-2 rounded-full bg-[#6EA8FF] shadow-[0_0_12px_rgba(110,168,255,0.9)]" />
+          {/* 移动亮点：一颗沿网格漂移的「在途容器」（品牌亮蓝）+ 扫描光波 */}
+          <div className="workbench-dot absolute -top-1 left-[8%] size-2 rounded-full bg-[#6EA8FF] shadow-[0_0_12px_rgba(110,168,255,0.9)]">
+            <span className="scan-ring" />
+          </div>
         </div>
 
         {/* 底部一行统计 */}
@@ -198,6 +250,78 @@ function Reveal({ children, className = '' }: { children: React.ReactNode; class
       {children}
     </div>
   )
+}
+
+/** 滚动进入视口时从 0 数到目标值的数字（纯数字部分） */
+function AnimatedNumber({ value, suffix = '' }: { value: string; suffix?: string }) {  const ref = useRef<HTMLSpanElement>(null)
+  const target = parseFloat(value.replace(/[^0-9.]/g, ''))
+  const isPct = value.includes('%')
+  const [display, setDisplay] = useState(0)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduce) { setDisplay(target); return }
+    const io = new IntersectionObserver((entries) => {
+      if (!entries[0].isIntersecting) return
+      io.disconnect()
+      const duration = 1100
+      const start = performance.now()
+      const tick = (now: number) => {
+        const p = Math.min(1, (now - start) / duration)
+        const eased = 1 - Math.pow(1 - p, 3) // ease-out-cubic
+        setDisplay(target * eased)
+        if (p < 1) requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    }, { threshold: 0.4 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [target])
+
+  const formatted = isPct ? display.toFixed(1) : Math.round(display).toString()
+  return <span ref={ref}>{formatted}{suffix || (value.includes('%') ? '%' : '')}</span>
+}
+
+/** 能力矩阵卡片：滚动进入视口时按 index 错峰淡入（stagger） */
+function StaggerCard({ children, index, className = '' }: { children: React.ReactNode; index: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduce) { el.classList.add('is-in'); return }
+    const io = new IntersectionObserver((entries) => {
+      if (!entries[0].isIntersecting) return
+      el.style.animationDelay = `${index * 70}ms`
+      el.classList.add('is-in')
+      io.disconnect()
+    }, { threshold: 0.15 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [index])
+  return <div ref={ref} className={`stagger-card ${className}`}>{children}</div>
+}
+
+/** 业务流卡片：滚动进入视口时从左到右依次浮现（流水线感） */
+function FlowCard({ children, index, className = '' }: { children: React.ReactNode; index: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduce) { el.classList.add('is-in'); return }
+    const io = new IntersectionObserver((entries) => {
+      if (!entries[0].isIntersecting) return
+      el.style.animationDelay = `${index * 80}ms`
+      el.classList.add('is-in')
+      io.disconnect()
+    }, { threshold: 0.15 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [index])
+  return <div ref={ref} className={`flow-card ${className}`}>{children}</div>
 }
 
 // ── 主组件 ─────────────────────────────────────────────────────────────
@@ -268,6 +392,7 @@ export default function LandingPage() {
           </div>
           <nav className="flex items-center gap-1 text-sm text-slate-600">
             <button type="button" onClick={scrollToSection('features')} className="hidden rounded-lg px-3 py-1.5 transition hover:bg-slate-100 sm:inline">能力</button>
+            <button type="button" onClick={scrollToSection('scenarios')} className="hidden rounded-lg px-3 py-1.5 transition hover:bg-slate-100 sm:inline">应用场景</button>
             <button type="button" onClick={scrollToSection('download')} className="hidden rounded-lg px-3 py-1.5 transition hover:bg-slate-100 sm:inline">下载</button>
             <button type="button" onClick={scrollToSection('values')} className="hidden rounded-lg px-3 py-1.5 transition hover:bg-slate-100 sm:inline">为什么选我们</button>
             <a
@@ -286,6 +411,23 @@ export default function LandingPage() {
         {/* 背景：极淡的网格线 */}
         <div className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(rgba(255,255,255,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.5)_1px,transparent_1px)] [background-size:44px_44px]" />
         <div className="pointer-events-none absolute -right-40 -top-40 size-[30rem] rounded-full bg-[#1E5AE6]/20 blur-3xl" />
+        {/* 流动粒子：漂浮光点隐喻「货在轨道上流动」 */}
+        <div className="pointer-events-none absolute inset-0">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <span
+              key={i}
+              className="fc-particle"
+              style={{
+                left: `${(i * 9 + 3) % 90}%`,
+                bottom: `${(i * 13 + 8) % 40}%`,
+                width: `${2 + (i % 3)}px`,
+                height: `${2 + (i % 3)}px`,
+                animationDuration: `${8 + (i % 5) * 2}s`,
+                animationDelay: `${i * 0.8}s`,
+              }}
+            />
+          ))}
+        </div>
 
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-6 pb-24 pt-20 sm:px-8 lg:grid-cols-2 lg:px-10 lg:pt-24">
           <div>
@@ -294,9 +436,8 @@ export default function LandingPage() {
               ERP / WMS 一体化 · 扫码驱动仓库作业
             </div>
             <h1 className="text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl">
-              让每一件货，
-              <br />
-              <span className="text-[#6EA8FF]">都在系统的轨道上流动。</span>
+              <span className="hero-line" style={{ animationDelay: '0.05s' }}>让每一件货，</span>
+              <span className="hero-line text-[#6EA8FF]" style={{ animationDelay: '0.2s' }}>都在系统的轨道上流动。</span>
             </h1>
             <p className="mt-5 max-w-lg text-base leading-relaxed text-blue-100/80">
               {BRAND.subclaim}
@@ -304,7 +445,7 @@ export default function LandingPage() {
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <a
                 href="#/login"
-                className="inline-flex items-center gap-2 rounded-xl bg-[#1E5AE6] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/40 transition hover:bg-[#1749C4]"
+                className="landing-cta inline-flex items-center gap-2 rounded-xl bg-[#1E5AE6] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/40 hover:bg-[#1749C4]"
               >
                 进入系统
                 <ArrowRight className="size-4" />
@@ -312,7 +453,7 @@ export default function LandingPage() {
               {desktopUrl ? (
                 <a
                   href={desktopUrl}
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-medium text-white transition hover:bg-white/10"
+                  className="landing-cta inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-medium text-white transition hover:bg-white/10"
                 >
                   <Download className="size-4" />
                   下载桌面端
@@ -334,11 +475,41 @@ export default function LandingPage() {
               <span>✓ 桌面端支持离线打印</span>
               <span>✓ PDA 现场作业</span>
             </div>
+
+            {/* 关键数字条 */}
+            <div className="mt-10 grid grid-cols-4 gap-4 border-t border-white/10 pt-6">
+              {STATS.map((s) => (
+                <div key={s.label}>
+                  <div className="text-xl font-bold text-white sm:text-2xl">
+                    <AnimatedNumber value={s.value} />
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-blue-200/50">{s.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <Reveal>
-            <WorkbenchMockup />
-          </Reveal>
+          <div className="space-y-4">
+            <Reveal>
+              <WorkbenchMockup />
+            </Reveal>
+            {/* PDA 扫码小卡 */}
+            <Reveal>
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#1E5AE6]/20 text-[#6EA8FF]">
+                  <ScanLine className="size-4.5" />
+                </div>
+                <div className="text-xs text-blue-100/70">
+                  <span className="font-medium text-white">PDA 现场作业</span>
+                  <span className="mt-0.5 block">收货 · 上架 · 拣货 · 分拣 · 复核 · 打包 · 出库 · 盘点</span>
+                </div>
+                <a href="#/pda" className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/10">
+                  PDA 入口
+                  <ArrowRight className="size-3" />
+                </a>
+              </div>
+            </Reveal>
+          </div>
         </div>
       </section>
 
@@ -349,28 +520,77 @@ export default function LandingPage() {
           <p className="mt-3 text-sm text-slate-500">六大业务模块共用一份数据，进销存与财务一体联动。</p>
         </Reveal>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {MODULES.map((m) => (
-            <Reveal key={m.title}>
+          {MODULES.map((m, i) => (
+            <StaggerCard key={m.title} index={i}>
               <a
                 href={m.href}
                 className="group flex h-full items-start gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 transition hover:-translate-y-0.5 hover:border-[#1E5AE6]/40 hover:shadow-lg hover:shadow-blue-900/5"
               >
-                <div className={`mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-xl ${m.color}`}>
+                <div className={`card-icon mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-xl ${m.color}`}>
                   <m.icon className="size-5" />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-base font-semibold">{m.title}</h3>
-                    <ArrowUpRight className="size-4 shrink-0 text-slate-300 transition group-hover:text-[#1E5AE6]" />
-                  </div>
+                  <h3 className="text-base font-semibold">{m.title}</h3>
                   <p className="mt-1 text-sm leading-relaxed text-slate-500">{m.desc}</p>
-                  <span className="mt-2 inline-block text-xs font-medium text-[#1E5AE6]">
-                    进入模块 →
-                  </span>
                 </div>
               </a>
-            </Reveal>
+            </StaggerCard>
           ))}
+        </div>
+      </section>
+
+      {/* ── 应用场景：面向不同角色 ───────────────────────────── */}
+      <section id="scenarios" className="bg-white py-24">
+        <div className="mx-auto max-w-6xl px-6 sm:px-8 lg:px-10">
+          <Reveal className="mx-auto mb-14 max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">一个系统，服务每个角色</h2>
+            <p className="mt-3 text-sm text-slate-500">经营者、财务、仓管、采购销售——每个人看到自己关心的那一面。</p>
+          </Reveal>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {SCENARIOS.map((s) => (
+              <Reveal key={s.role}>
+                <a
+                  href={s.href}
+                  className="group flex h-full flex-col rounded-2xl bg-[#F5F7FA] p-6 transition hover:-translate-y-0.5 hover:bg-blue-50"
+                >
+                  <div className="mb-4 flex size-11 items-center justify-center rounded-xl bg-white text-[#0B3B8C] shadow-sm">
+                    <s.icon className="size-5" />
+                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[#1E5AE6]">{s.role}</span>
+                  <h3 className="mt-1.5 text-lg font-semibold">{s.title}</h3>
+                  <p className="mt-2 flex-1 text-sm leading-relaxed text-slate-500">{s.desc}</p>
+                </a>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── 完整业务流 ───────────────────────────────────────── */}
+      <section className="bg-[#F5F7FA] py-24">
+        <div className="mx-auto max-w-6xl px-6 sm:px-8 lg:px-10">
+          <Reveal className="mx-auto mb-14 max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">从一张采购单到一笔对账，全程在一个系统里</h2>
+            <p className="mt-3 text-sm text-slate-500">六个环节环环相扣，每个状态、每笔金额都可追溯。</p>
+          </Reveal>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {FLOW_STEPS.map((f, i) => (
+              <FlowCard key={f.label} index={i}>
+                <a
+                  href={f.href}
+                  className="group flex h-full items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 transition hover:-translate-y-0.5 hover:border-[#1E5AE6]/40 hover:shadow-md"
+                >
+                  <div className="card-icon mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                    <f.icon className="size-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-semibold">{f.label}</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-500">{f.desc}</p>
+                  </div>
+                </a>
+              </FlowCard>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -403,14 +623,13 @@ export default function LandingPage() {
                     下载 Windows 安装包
                   </a>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={scrollToSection('values')}
+                  <a
+                    href="#/login"
                     className="mt-5 inline-flex w-fit items-center gap-2 rounded-xl bg-[#1E5AE6] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1749C4]"
                   >
                     <Download className="size-4" />
-                    桌面端即将开放下载
-                  </button>
+                    下载 Windows 安装包
+                  </a>
                 )}
                 <p className="mt-3 text-xs text-slate-400">下载后双击安装，首次登录即可使用。</p>
               </div>
@@ -469,10 +688,7 @@ export default function LandingPage() {
                   href={v.href}
                   className="group block h-full rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:border-white/25 hover:bg-white/10"
                 >
-                  <h3 className="mb-2 flex items-center justify-between text-base font-semibold text-white">
-                    {v.title}
-                    <ArrowUpRight className="size-4 text-blue-200/40 transition group-hover:text-[#6EA8FF]" />
-                  </h3>
+                  <h3 className="mb-2 text-base font-semibold text-white">{v.title}</h3>
                   <p className="text-sm leading-relaxed text-blue-100/70">{v.desc}</p>
                 </a>
               </Reveal>
