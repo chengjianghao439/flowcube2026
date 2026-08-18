@@ -36,7 +36,7 @@ function devProxyToBackend(target: string): ProxyOptions {
   return {
     target,
     changeOrigin: true,
-    secure: false, // 允许指向自签名 HTTPS 后端（如生产 47.93.228.251）
+    secure: false, // 允许指向 HTTPS 后端（如生产 https://jixuflow.com）
     configure(proxy) {
       proxy.on('proxyReq', (proxyReq: ClientRequest, req: IncomingMessage) => {
         const host = req.headers.host

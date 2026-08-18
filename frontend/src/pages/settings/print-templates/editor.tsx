@@ -8,17 +8,18 @@
  *   - 画布内移动：mouse events
  */
 
-import { useState, useRef, useEffect, useCallback, useContext, useId } from 'react'
+import { useState, useRef, useEffect, useCallback, useContext, useId, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import {
-  Save, Eye, EyeOff, Trash2, Loader2,
+  Save, Eye, EyeOff, Trash2, Loader2, X,
   AlignLeft, AlignCenter, AlignRight, Bold,
   Table2, Type, SeparatorHorizontal, Barcode, RotateCcw,
   ZoomIn, ZoomOut, Undo2, Redo2, Copy,
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
+  AlignHorizontalSpaceAround, AlignVerticalSpaceAround,
 } from 'lucide-react'
 
 type AlignDir = 'left' | 'hcenter' | 'right' | 'top' | 'vmiddle' | 'bottom'
@@ -31,9 +32,18 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import PageHeader from '@/components/shared/PageHeader'
 import type { PaperSize, TemplateElement, TemplateLayout, TemplateType } from '@/types/print-template'
 import { isZplTemplateLayout } from '@/types/print-template'
-import { DEFAULT_LABEL_ELEMENTS, LABEL_PREVIEW_SAMPLE } from '@/constants/labelZplDefaults'
+import {
+  DOC_FIELD_DEFS,
+  DOC_PREVIEW_ITEMS,
+  DOC_PREVIEW_SAMPLE,
+  LABEL_FIELD_DEFS_BY_TYPE,
+  LABEL_PREVIEW_SAMPLE,
+  TABLE_COLUMN_OPTIONS,
+  type PrintFieldDef,
+} from '@/constants/printFieldDefs'
+import { DEFAULT_LABEL_ELEMENTS } from '@/constants/printFieldDefs'
 import BarcodePreview from '@/components/print/BarcodePreview'
-import { PT_TO_MM } from '@/lib/labelGeometry'
+import { PT_TO_MM, resolveLayout } from '@/lib/labelGeometry'
 
 /** 标签元素字高（mm）：优先 v2 fontHeightMm，旧模板回退 fontSize(pt)×PT_TO_MM —— 与后端 normalize 一致 */
 function labelFontMm(el: TemplateElement): number {
@@ -64,6 +74,11 @@ function clampEditorZoom(z: number) {
   return Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, Math.round(z * 100) / 100))
 }
 
+/** 数值钳制到 [min, max] */
+function clampVal(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v))
+}
+
 const PAPER_SIZES: Record<PaperSize, { w: number; h: number; label: string }> = {
   A4:        { w: 210, h: 297, label: 'A4 (210×297mm)' },
   A5:        { w: 148, h: 210, label: 'A5 (148×210mm)' },
@@ -89,46 +104,14 @@ function isZplLabelType(t: number): t is 5 | 6 | 7 | 8 | 9 {
   return t >= 5 && t <= 9
 }
 
-interface FieldDef {
-  key: string
-  label: string
-  type: 'text' | 'table' | 'divider' | 'title' | 'barcode'
-  icon: React.ReactNode
-  defaultW: number  // mm
-  defaultH: number  // mm
-}
-
-/** 各标签类型可拖拽字段（与销售单画布相同交互） */
-const LABEL_FIELD_DEFS_BY_TYPE: Record<number, FieldDef[]> = {
-  5: [
-    { key: 'rack_barcode', label: '货架条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
-    { key: 'rack_code', label: '货架编码', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 7 },
-    { key: 'zone', label: '库区', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 7 },
-    { key: 'name', label: '名称', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 8 },
-  ],
-  6: [
-    { key: 'container_code', label: '库存条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
-    { key: 'product_name', label: '品名', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 10 },
-    { key: 'qty', label: '数量', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 7 },
-  ],
-  7: [
-    { key: 'box_code', label: '物流条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 12 },
-    { key: 'task_no', label: '任务号', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 6 },
-    { key: 'customer_name', label: '客户', type: 'text', icon: <Type className="size-3.5" />, defaultW: 40, defaultH: 6 },
-    { key: 'carrier_name', label: '快递', type: 'text', icon: <Type className="size-3.5" />, defaultW: 32, defaultH: 6 },
-    { key: 'freight_type_name', label: '运费方式', type: 'text', icon: <Type className="size-3.5" />, defaultW: 32, defaultH: 6 },
-    { key: 'piece_count', label: '件数', type: 'text', icon: <Type className="size-3.5" />, defaultW: 32, defaultH: 6 },
-    { key: 'item_list', label: '装箱内容', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 12 },
-  ],
-  8: [
-    { key: 'product_code', label: '产品条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 14 },
-    { key: 'product_name', label: '产品名称', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 10 },
-    { key: 'spec', label: '规格', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 7 },
-  ],
-  9: [
-    { key: 'container_code', label: '塑料盒条码', type: 'barcode', icon: <Barcode className="size-3.5" />, defaultW: 72, defaultH: 16 },
-    { key: 'product_name', label: '品名', type: 'text', icon: <Type className="size-3.5" />, defaultW: 72, defaultH: 12 },
-  ],
+/** 字段类型 → 面板图标映射（字段元数据不混入 JSX，见 printFieldDefs.ts） */
+function fieldIcon(f: PrintFieldDef): React.ReactNode {
+  switch (f.type) {
+    case 'barcode': return <Barcode className="size-3.5" />
+    case 'table':   return <Table2 className="size-3.5" />
+    case 'divider': return <SeparatorHorizontal className="size-3.5" />
+    default:        return <Type className="size-3.5" />
+  }
 }
 
 function cloneDefaultLabelElements(t: number): TemplateElement[] {
@@ -137,72 +120,13 @@ function cloneDefaultLabelElements(t: number): TemplateElement[] {
   return JSON.parse(JSON.stringify(raw)) as TemplateElement[]
 }
 
-const FIELD_DEFS: FieldDef[] = [
-  // 标题 / 分隔
-  { key: 'title',          label: '大标题',   type: 'title',   icon: <Type className="size-3.5" />,              defaultW: 160, defaultH: 10 },
-  { key: 'divider',        label: '分隔线',   type: 'divider', icon: <SeparatorHorizontal className="size-3.5"/>, defaultW: 160, defaultH: 4  },
-  // 文本字段
-  { key: 'orderNo',        label: '单据编号', type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 80,  defaultH: 7  },
-  { key: 'customerName',   label: '客户名称', type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 80,  defaultH: 7  },
-  { key: 'supplierName',   label: '供应商',   type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 80,  defaultH: 7  },
-  { key: 'orderDate',      label: '单据日期', type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 60,  defaultH: 7  },
-  { key: 'warehouseName',  label: '仓库',     type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 60,  defaultH: 7  },
-  { key: 'salesperson',    label: '业务员',   type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 50,  defaultH: 7  },
-  { key: 'receiverName',   label: '收货人',   type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 60,  defaultH: 7  },
-  { key: 'receiverPhone',  label: '联系电话', type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 70,  defaultH: 7  },
-  { key: 'receiverAddress',label: '收货地址', type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 130, defaultH: 7  },
-  { key: 'totalAmount',    label: '金额合计', type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 70,  defaultH: 7  },
-  { key: 'remark',         label: '备注',     type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 130, defaultH: 12 },
-  { key: 'operator',       label: '经办人',   type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 50,  defaultH: 7  },
-  { key: 'printDate',      label: '打印日期', type: 'text',    icon: <Type className="size-3.5" />,              defaultW: 60,  defaultH: 7  },
-  // 表格
-  { key: 'itemsTable',     label: '商品明细', type: 'table',   icon: <Table2 className="size-3.5" />,            defaultW: 170, defaultH: 50 },
-]
-
-const TABLE_COLUMN_OPTIONS = [
-  { key: 'code',   label: '商品编码' },
-  { key: 'name',   label: '商品名称' },
-  { key: 'spec',   label: '规格' },
-  { key: 'unit',   label: '单位' },
-  { key: 'qty',    label: '数量' },
-  { key: 'price',  label: '单价' },
-  { key: 'amount', label: '金额' },
-]
-
-// ──────────────────────────────────────────────────────────────────────────
-// Sample data for preview
-// ──────────────────────────────────────────────────────────────────────────
-
-const SAMPLE: Record<string, string> = {
-  title:           '销售订单',
-  orderNo:         'SO2024031500001',
-  customerName:    '北京科技有限公司',
-  supplierName:    '上海供应链有限公司',
-  orderDate:       '2024-03-15',
-  warehouseName:   '主仓库',
-  salesperson:     '张三',
-  receiverName:    '李四',
-  receiverPhone:   '13812345678',
-  receiverAddress: '北京市朝阳区 XX 街道 XX 号',
-  totalAmount:     '¥ 3,200.00',
-  remark:          '请注意包装，易碎品。',
-  operator:        '王五',
-  printDate:       formatDisplayDateTime(new Date()),
-}
-
-const SAMPLE_ITEMS = [
-  { code: 'P001', name: '商品A', spec: '500g/件', unit: '件', qty: '10', price: '100.00', amount: '1,000.00' },
-  { code: 'P002', name: '商品B', spec: '1kg/箱',  unit: '箱', qty: '5',  price: '200.00', amount: '1,000.00' },
-  { code: 'P003', name: '商品C', spec: '250ml/瓶',unit: '瓶', qty: '20', price: '60.00',  amount: '1,200.00' },
-]
-
 // ──────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────
 
 function makeId() { return `el_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` }
 
-function mkElement(field: FieldDef, xMm: number, yMm: number, isLabel = false): TemplateElement {
+function mkElement(field: PrintFieldDef, xMm: number, yMm: number, isLabel = false): TemplateElement {
   const base: TemplateElement = {
     id:           makeId(),
     type:         field.type,
@@ -210,8 +134,8 @@ function mkElement(field: FieldDef, xMm: number, yMm: number, isLabel = false): 
     label:        field.label,
     x:            xMm,
     y:            yMm,
-    width:        field.defaultW,
-    height:       field.defaultH,
+    width:        field.defaultW ?? 80,
+    height:       field.defaultH ?? 7,
     fontSize:     field.type === 'title' ? 16 : 10,
     fontWeight:   field.type === 'title' ? 'bold' : 'normal',
     textAlign:    'left',
@@ -254,9 +178,9 @@ function PalettePanel({
   hint,
   onDragStart,
 }: {
-  fields: FieldDef[]
+  fields: PrintFieldDef[]
   hint?: string
-  onDragStart: (field: FieldDef) => void
+  onDragStart: (field: PrintFieldDef) => void
 }) {
   return (
     <div className="flex w-52 shrink-0 flex-col overflow-hidden border-r bg-muted/20">
@@ -272,7 +196,7 @@ function PalettePanel({
             onDragStart={() => onDragStart(f)}
             className="flex cursor-grab items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 py-2 text-sm hover:border-primary/50 hover:bg-primary/5 active:cursor-grabbing select-none"
           >
-            <span className="text-muted-foreground">{f.icon}</span>
+            <span className="text-muted-foreground">{fieldIcon(f)}</span>
             <span className="truncate">{f.label}</span>
           </div>
         ))}
@@ -364,7 +288,8 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
       : <span className="text-muted-foreground/60">{el.label}（{el.barcodeSymbology === 'ean13' ? 'EAN13' : '条码'}）</span>
   } else if (el.type === 'table') {
     const cols = el.tableColumns ?? ['name', 'qty', 'price', 'amount']
-    const colDefs = cols.map(k => TABLE_COLUMN_OPTIONS.find(c => c.key === k)!).filter(Boolean)
+    // 自定义列 key（不在 TABLE_COLUMN_OPTIONS 中）兜底显示 key 本身，保证画布预览不崩
+    const colDefs = cols.map(k => TABLE_COLUMN_OPTIONS.find(c => c.key === k) ?? { key: k, label: k, align: 'left' as const })
     const cellStyle: React.CSSProperties = { border: '1px solid #ddd', padding: '1px 3px', fontSize: `${el.fontSize * scale * 0.35}px` }
     content = (
       <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
@@ -376,7 +301,7 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
           </tr>
         </thead>
         <tbody>
-          {(preview ? SAMPLE_ITEMS : SAMPLE_ITEMS.slice(0, 2)).map((row, i) => (
+          {(preview ? DOC_PREVIEW_ITEMS : DOC_PREVIEW_ITEMS.slice(0, 2)).map((row, i) => (
             <tr key={i}>
               {cols.map(k => <td key={k} style={cellStyle}>{(row as Record<string,string>)[k] ?? ''}</td>)}
             </tr>
@@ -402,15 +327,91 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
   )
 }
 
+interface LabelPreviewOverlayProps {
+  /** v2 标签布局（elements + 画布尺寸 mm），交由 resolveLayout 归一化 */
+  layout: { elements: TemplateElement[]; canvasWidthMm: number; canvasHeightMm: number }
+  data: Record<string, string>
+  paperSize: PaperSize
+  /** mm → px（已含 MM_PX × 缩放） */
+  scale: number
+}
+
+/**
+ * 标签预览走统一几何层：resolveLayout → DrawPrimitive[] → 按 mm 原样渲染。
+ * 与后端 ZPL（×MM_TO_DOT）共用同一几何，字框 / 字高 / showLabel 前缀 /
+ * 空值跳过规则与真机一致，不再用「等宽字体 + PT_TO_MM」近似。
+ */
+function LabelPreviewOverlay({ layout, data, paperSize, scale }: LabelPreviewOverlayProps) {
+  const resolved = useMemo(() => resolveLayout(layout, data, paperSize), [layout, data, paperSize])
+  const px = (mm: number) => mm * scale
+
+  return (
+    <>
+      {resolved.primitives.map((p, i) => {
+        if (p.kind === 'barcode') {
+          return (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                left: px(p.xMm),
+                top: px(p.yMm),
+                width: px(p.widthMm),
+                height: px(p.heightMm),
+                padding: '1px 2px',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
+                pointerEvents: 'none',
+              }}
+            >
+              <BarcodePreview value={p.value} symbology={p.symbology} hri={p.hri} />
+            </div>
+          )
+        }
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: px(p.xMm),
+              top: px(p.yMm),
+              width: px(p.widthMm),
+              height: px(p.heightMm),
+              fontSize: `${p.fontHeightMm * scale}px`,
+              lineHeight: `${p.fontHeightMm * scale}px`,
+              textAlign: p.align,
+              fontFamily: "'Courier New', monospace",
+              whiteSpace: 'pre-wrap',
+              overflow: 'hidden',
+              boxSizing: 'border-box',
+              padding: '1px 2px',
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+          >
+            {p.text}
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
 interface PropertiesPanelProps {
   el: TemplateElement | null
+  /** 多选时显示的选中数量（>1 时进入群组对齐面板） */
+  multiCount: number
   isLabel: boolean
   onChange: (id: string, patch: Partial<TemplateElement>) => void
   onDelete: (id: string) => void
+  /** 多选删除整组 */
+  onDeleteMulti: () => void
   onAlign: (dir: AlignDir) => void
+  onDistribute: (dir: 'horizontal' | 'vertical') => void
 }
 
-function PropertiesPanel({ el, isLabel, onChange, onDelete, onAlign }: PropertiesPanelProps) {
+function PropertiesPanel({ el, multiCount, isLabel, onChange, onDelete, onDeleteMulti, onAlign, onDistribute }: PropertiesPanelProps) {
+  const [customColKey, setCustomColKey] = useState('')
   if (!el) {
     return (
       <div className="flex w-60 shrink-0 flex-col border-l bg-muted/20">
@@ -424,7 +425,58 @@ function PropertiesPanel({ el, isLabel, onChange, onDelete, onAlign }: Propertie
     )
   }
 
+  // 多选群组模式：只显示对齐 / 等距分布操作
+  if (multiCount > 1) {
+    return (
+      <div className="flex w-60 shrink-0 flex-col overflow-hidden border-l bg-muted/20">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">属性面板</p>
+          <span className="text-xs text-muted-foreground">已选 {multiCount} 项</span>
+        </div>
+        <div className="flex-1 space-y-5 overflow-y-auto p-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">对齐画布</label>
+            <div className="grid grid-cols-3 gap-1">
+              {([
+                ['left', <AlignHorizontalJustifyStart className="size-3.5" />, '左对齐'],
+                ['hcenter', <AlignHorizontalJustifyCenter className="size-3.5" />, '水平居中'],
+                ['right', <AlignHorizontalJustifyEnd className="size-3.5" />, '右对齐'],
+                ['top', <AlignVerticalJustifyStart className="size-3.5" />, '顶对齐'],
+                ['vmiddle', <AlignVerticalJustifyCenter className="size-3.5" />, '垂直居中'],
+                ['bottom', <AlignVerticalJustifyEnd className="size-3.5" />, '底对齐'],
+              ] as [AlignDir, React.ReactNode, string][]).map(([dir, icon, title]) => (
+                <Button key={dir} size="sm" variant="outline" className="p-0" title={title}
+                  onClick={() => onAlign(dir)}>
+                  {icon}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">等距分布（需 ≥3 项）</label>
+            <div className="grid grid-cols-2 gap-1">
+              <Button size="sm" variant="outline" className="p-0" title="垂直等距"
+                disabled={multiCount < 3} onClick={() => onDistribute('vertical')}>
+                <AlignVerticalSpaceAround className="size-3.5" />
+              </Button>
+              <Button size="sm" variant="outline" className="p-0" title="水平等距"
+                disabled={multiCount < 3} onClick={() => onDistribute('horizontal')}>
+                <AlignHorizontalSpaceAround className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" className="w-full text-destructive hover:text-destructive"
+            onClick={() => onDeleteMulti()}>
+            删除选中项 (Delete)
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   const num = (v: unknown) => typeof v === 'number' ? v : 0
+  // 不在 TABLE_COLUMN_OPTIONS 里的列 key 视为自定义列
+  const customCols = (el.tableColumns ?? []).filter(k => !TABLE_COLUMN_OPTIONS.some(c => c.key === k))
 
   return (
     <div className="flex w-60 shrink-0 flex-col overflow-hidden border-l bg-muted/20">
@@ -620,6 +672,43 @@ function PropertiesPanel({ el, isLabel, onChange, onDelete, onAlign }: Propertie
                 </label>
               )
             })}
+
+            {/* 自定义列：输入 key 后回车添加；渲染端（TemplateRenderer）对未知 key 兜底显示 key 名 + 空值 */}
+            <div className="space-y-1.5 pt-1">
+              <label className="text-xs font-medium text-muted-foreground">自定义列（key）</label>
+              {customCols.map(key => (
+                <div key={key} className="flex items-center justify-between rounded-md border border-dashed px-2 py-1">
+                  <span className="font-mono text-xs">{key}</span>
+                  <Button size="sm" variant="ghost" className="size-5 p-0 text-muted-foreground hover:text-destructive"
+                    title="移除自定义列"
+                    onClick={() => {
+                      const cols = el.tableColumns ?? []
+                      onChange(el.id, { tableColumns: cols.filter(c => c !== key) })
+                    }}>
+                    <X className="size-3" />
+                  </Button>
+                </div>
+              ))}
+              <form
+                className="flex gap-1"
+                onSubmit={e => {
+                  e.preventDefault()
+                  const key = customColKey.trim()
+                  if (!key) return
+                  const cols = el.tableColumns ?? []
+                  if (!cols.includes(key)) onChange(el.id, { tableColumns: [...cols, key] })
+                  setCustomColKey('')
+                }}
+              >
+                <Input
+                  value={customColKey}
+                  onChange={e => setCustomColKey(e.target.value)}
+                  placeholder="如 batch_no"
+                  className="h-7 flex-1 font-mono text-xs"
+                />
+                <Button type="submit" size="sm" variant="outline" className="h-7 px-2 text-xs">添加</Button>
+              </form>
+            </div>
           </div>
         )}
       </div>
@@ -654,7 +743,8 @@ export default function PrintTemplateEditor() {
   /** 标签类型 5–9：画布纸张（mm），与 layout.canvasWidthMm/HeightMm 同步 */
   const [canvasWidthMm,  setCanvasWidthMm]  = useState(75)
   const [canvasHeightMm, setCanvasHeightMm] = useState(50)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  /** 多选：Shift+点击 toggle；空数组 = 未选中 */
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [preview,    setPreview]    = useState(false)
   const [hydrated,   setHydrated]   = useState(isNew)
   /** 画布仅影响显示与拖拽换算，不改变存库的 mm 坐标 */
@@ -699,11 +789,11 @@ export default function PrintTemplateEditor() {
       setCanvasWidthMm(75)
       setCanvasHeightMm(50)
       setElements(cloneDefaultLabelElements(next))
-      setSelectedId(null)
+      setSelectedIds([])
     } else {
       if (isZplLabelType(prev)) {
         setElements([])
-        setSelectedId(null)
+        setSelectedIds([])
         setPaperSize('A4')
         setCanvasWidthMm(80)
         setCanvasHeightMm(200)
@@ -713,10 +803,9 @@ export default function PrintTemplateEditor() {
 
   // ── Drag state refs ──────────────────────────────────────────
   const canvasRef      = useRef<HTMLDivElement>(null)
-  const draggingField  = useRef<FieldDef | null>(null)   // palette → canvas drag
+  const draggingField  = useRef<PrintFieldDef | null>(null)   // palette → canvas drag
   const draggingElId   = useRef<string | null>(null)      // element move drag
   const dragStartMouse = useRef({ x: 0, y: 0 })
-  const dragStartEl    = useRef({ x: 0, y: 0 })
 
   // ── Save mutations ───────────────────────────────────────────
   const createMut = useMutation({
@@ -743,6 +832,9 @@ export default function PrintTemplateEditor() {
   // ── Helpers ──────────────────────────────────────────────────
   const safeCw = Number.isFinite(canvasWidthMm) ? canvasWidthMm : 75
   const safeCh = Number.isFinite(canvasHeightMm) ? canvasHeightMm : 50
+  const labelPaperSize: PaperSize = isZplLabelType(type)
+    ? (safeCw >= 75 ? 'thermal80' : safeCw >= 58 ? 'thermal75' : 'thermal58')
+    : paperSize
   const paper = isZplLabelType(type)
     ? {
         w: Math.min(120, Math.max(30, safeCw)),
@@ -756,12 +848,15 @@ export default function PrintTemplateEditor() {
   // 单据类型（1-4）只用 A 系纸；热敏纸归标签类型（用 mm 输入），不在此下拉出现
   const paperSelectEntries = Object.entries(PAPER_SIZES).filter(([k]) => !k.startsWith('thermal'))
 
-  const selected = elements.find(e => e.id === selectedId) ?? null
+  /** 单选（属性面板用）：多选时取第一个 */
+  const selected = selectedIds.length === 0
+    ? null
+    : elements.find(e => e.id === selectedIds[0]) ?? null
 
-  const paletteFields = isZplLabelType(type) ? (LABEL_FIELD_DEFS_BY_TYPE[type] ?? []) : FIELD_DEFS
+  const paletteFields = isZplLabelType(type) ? (LABEL_FIELD_DEFS_BY_TYPE[type] ?? []) : DOC_FIELD_DEFS
   const previewData: Record<string, string> = isZplLabelType(type)
     ? { ...(LABEL_PREVIEW_SAMPLE[type] ?? {}) }
-    : { ...SAMPLE }
+    : { ...DOC_PREVIEW_SAMPLE, printDate: formatDisplayDateTime(new Date()) }
 
   // ── Undo / redo history ──────────────────────────────────────
   const historyPast = useRef<TemplateElement[][]>([])
@@ -786,14 +881,14 @@ export default function PrintTemplateEditor() {
     if (!historyPast.current.length) return
     historyFuture.current.push(elementsRef.current)
     setElements(historyPast.current.pop()!)
-    setSelectedId(null)
+    setSelectedIds([])
     bumpHist(v => v + 1)
   }, [])
   const redo = useCallback(() => {
     if (!historyFuture.current.length) return
     historyPast.current.push(elementsRef.current)
     setElements(historyFuture.current.pop()!)
-    setSelectedId(null)
+    setSelectedIds([])
     bumpHist(v => v + 1)
   }, [])
 
@@ -813,17 +908,29 @@ export default function PrintTemplateEditor() {
   const deleteElement = useCallback((id: string) => {
     snapshot()
     setElements(prev => prev.filter(e => e.id !== id))
-    if (selectedId === id) setSelectedId(null)
-  }, [snapshot, selectedId])
+    setSelectedIds(prev => prev.filter(sid => sid !== id))
+  }, [snapshot])
 
-  /** 复制选中元素，偏移 +2mm */
-  const duplicateElement = useCallback((id: string) => {
-    const src = elementsRef.current.find(e => e.id === id)
-    if (!src) return
+  /** 删除整组选中元素（属性面板「删除选中项」） */
+  const deleteSelectedGroup = useCallback(() => {
+    if (selectedIds.length === 0) return
+    const ids = [...selectedIds]
     snapshot()
-    const copy = clampEl({ ...src, id: makeId(), x: src.x + 2, y: src.y + 2 })
-    setElements(prev => [...prev, copy])
-    setSelectedId(copy.id)
+    setElements(prev => prev.filter(e => !ids.includes(e.id)))
+    setSelectedIds([])
+  }, [selectedIds, snapshot])
+
+  /** 复制整组：多选时保持相对位置，整体偏移 +2mm（单选时即复制单个） */
+  const duplicateGroup = useCallback((ids: string[]) => {
+    if (ids.length === 0) return
+    snapshot()
+    const copies = ids
+      .map(id => elementsRef.current.find(e => e.id === id))
+      .filter((e): e is TemplateElement => e != null)
+      .map(src => clampEl({ ...src, id: makeId(), x: src.x + 2, y: src.y + 2 }))
+    if (copies.length === 0) return
+    setElements(prev => [...prev, ...copies])
+    setSelectedIds(copies.map(c => c.id))
   }, [snapshot, clampEl])
 
   /** 拖动吸附：把元素边/中心吸到画布中线或其他元素边/中心，返回吸附坐标 + 参考线 */
@@ -844,20 +951,55 @@ export default function PrintTemplateEditor() {
     }
   }
 
-  /** 选中元素对齐到画布六向 */
+  /** 对齐画布六向：多选时按「目标锚点 + 相对偏移」整体移动，保持相对位置 */
   function alignSelectedToCanvas(dir: AlignDir) {
-    if (!selectedId) return
+    if (selectedIds.length === 0) return
     snapshot()
+    const group = elementsRef.current.filter(e => selectedIds.includes(e.id))
+    if (group.length === 0) return
+    // 取整体包围盒
+    const minX = Math.min(...group.map(e => e.x))
+    const minY = Math.min(...group.map(e => e.y))
+    const maxX = Math.max(...group.map(e => e.x + e.width))
+    const maxY = Math.max(...group.map(e => e.y + e.height))
+    let tx = 0, ty = 0
+    if (dir === 'left') tx = 0 - minX
+    else if (dir === 'hcenter') tx = Math.max(0, (paper.w - (maxX - minX)) / 2) - minX
+    else if (dir === 'right') tx = Math.max(0, paper.w - (maxX - minX)) - minX
+    else if (dir === 'top') ty = 0 - minY
+    else if (dir === 'vmiddle') ty = Math.max(0, (paper.h - (maxY - minY)) / 2) - minY
+    else if (dir === 'bottom') ty = Math.max(0, paper.h - (maxY - minY)) - minY
+    setElements(prev => prev.map(el => selectedIds.includes(el.id)
+      ? { ...el, x: Math.round(el.x + tx), y: Math.round(el.y + ty) }
+      : el))
+  }
+
+  /** 等距分布：以包围盒两端元素为锚，中间元素按中心均匀分布（需 ≥3 个选中） */
+  function distributeSelected(dir: 'horizontal' | 'vertical') {
+    if (selectedIds.length < 3) return
+    snapshot()
+    const group = elementsRef.current.filter(e => selectedIds.includes(e.id))
+    if (group.length < 3) return
+    const isH = dir === 'horizontal'
+    const sorted = [...group].sort((a, b) => (isH ? a.x + a.width / 2 - (b.x + b.width / 2) : a.y + a.height / 2 - (b.y + b.height / 2)))
+    const first = sorted[0], last = sorted[sorted.length - 1]
+    const span = isH
+      ? (last.x + last.width / 2) - (first.x + first.width / 2)
+      : (last.y + last.height / 2) - (first.y + first.height / 2)
+    if (span <= 0) return
+    const step = span / (sorted.length - 1)
     setElements(prev => prev.map(el => {
-      if (el.id !== selectedId) return el
-      let { x, y } = el
-      if (dir === 'left') x = 0
-      else if (dir === 'hcenter') x = Math.max(0, (paper.w - el.width) / 2)
-      else if (dir === 'right') x = Math.max(0, paper.w - el.width)
-      else if (dir === 'top') y = 0
-      else if (dir === 'vmiddle') y = Math.max(0, (paper.h - el.height) / 2)
-      else if (dir === 'bottom') y = Math.max(0, paper.h - el.height)
-      return { ...el, x: Math.round(x), y: Math.round(y) }
+      if (!selectedIds.includes(el.id)) return el
+      const idx = sorted.findIndex(s => s.id === el.id)
+      if (idx === 0 || idx === sorted.length - 1) return el // 两端不动
+      const targetCenter = isH
+        ? first.x + first.width / 2 + step * idx
+        : first.y + first.height / 2 + step * idx
+      return {
+        ...el,
+        x: isH ? Math.round(clampVal(targetCenter - el.width / 2, 0, paper.w - el.width)) : el.x,
+        y: isH ? el.y : Math.round(clampVal(targetCenter - el.height / 2, 0, paper.h - el.height)),
+      }
     }))
   }
 
@@ -885,12 +1027,12 @@ export default function PrintTemplateEditor() {
     if (!isZplLabelType(type)) return
     snapshot()
     setElements(cloneDefaultLabelElements(type))
-    setSelectedId(null)
+    setSelectedIds([])
     toast.success('已恢复默认布局')
   }
 
   // ── Palette → Canvas drag (HTML5 drag API) ───────────────────
-  const handlePaletteDragStart = useCallback((field: FieldDef) => {
+  const handlePaletteDragStart = useCallback((field: PrintFieldDef) => {
     draggingField.current = field
   }, [])
 
@@ -908,13 +1050,13 @@ export default function PrintTemplateEditor() {
     const rect = canvasRef.current!.getBoundingClientRect()
     const xPx  = e.clientX - rect.left
     const yPx  = e.clientY - rect.top
-    const xMm  = Math.max(0, xPx / canvasScale - field.defaultW / 2)
-    const yMm  = Math.max(0, yPx / canvasScale - field.defaultH / 2)
+    const xMm  = Math.max(0, xPx / canvasScale - (field.defaultW ?? 80) / 2)
+    const yMm  = Math.max(0, yPx / canvasScale - (field.defaultH ?? 7) / 2)
 
     snapshot()
     const newEl = mkElement(field, xMm, yMm, isZplLabelType(type))
     setElements(prev => [...prev, newEl])
-    setSelectedId(newEl.id)
+    setSelectedIds([newEl.id])
   }
 
   // ── Element mouse-drag (move) ────────────────────────────────
@@ -922,28 +1064,60 @@ export default function PrintTemplateEditor() {
     if (preview) return
     e.preventDefault()
     e.stopPropagation()
-    setSelectedId(el.id)
 
+    // Shift+点击：切换多选（只加不进拖动）
+    if (e.shiftKey) {
+      setSelectedIds(prev => prev.includes(el.id)
+        ? prev.filter(id => id !== el.id)
+        : [...prev, el.id])
+      return
+    }
+    // 点击未选中元素：改为单选；点击已选中元素：保持多选并整体拖动
+    if (!selectedIds.includes(el.id)) setSelectedIds([el.id])
+
+    // 拖动组：若当前元素已选中则拖动整组，否则只拖该元素
+    const dragGroupIds = selectedIds.includes(el.id) && selectedIds.length > 1
+      ? selectedIds
+      : [el.id]
     draggingElId.current   = el.id
     dragStartMouse.current = { x: e.clientX, y: e.clientY }
-    dragStartEl.current    = { x: el.x, y: el.y }
+    // 记录组内每个元素的起始坐标与尺寸（拖动不改变尺寸）
+    const startPositions = new Map<string, { x: number; y: number; width: number; height: number }>()
+    for (const id of dragGroupIds) {
+      const src = elementsRef.current.find(ee => ee.id === id)
+      if (src) startPositions.set(id, { x: src.x, y: src.y, width: src.width, height: src.height })
+    }
     let moved = false
 
     function onMouseMove(me: MouseEvent) {
       if (!moved) { moved = true; snapshot() }
       const dxMm = (me.clientX - dragStartMouse.current.x) / canvasScale
       const dyMm = (me.clientY - dragStartMouse.current.y) / canvasScale
-      const rawX = Math.max(0, dragStartEl.current.x + dxMm)
-      const rawY = Math.max(0, dragStartEl.current.y + dyMm)
-      const snap = computeSnap(rawX, rawY, el.width, el.height, el.id)
-      setGuides(snap.guides)
-      setElements(prev => prev.map(e => e.id === draggingElId.current ? { ...e, x: snap.x, y: snap.y } : e))
+      const gx: number[] = [], gy: number[] = []
+      const moves = new Map<string, { x: number; y: number }>()
+      for (const [id, start] of startPositions) {
+        const rawX = Math.max(0, start.x + dxMm)
+        const rawY = Math.max(0, start.y + dyMm)
+        const snap = computeSnap(rawX, rawY, start.width, start.height, id)
+        gx.push(...snap.guides.x)
+        gy.push(...snap.guides.y)
+        moves.set(id, { x: snap.x, y: snap.y })
+      }
+      setGuides({ x: [...new Set(gx)], y: [...new Set(gy)] })
+      setElements(prev => prev.map(e => {
+        const m = moves.get(e.id)
+        return m ? { ...e, x: m.x, y: m.y } : e
+      }))
     }
 
     function onMouseUp() {
       setGuides({ x: [], y: [] })
-      // clamp to canvas bounds
-      setElements(prev => prev.map(e => e.id === draggingElId.current ? clampEl(e) : e))
+      // clamp to canvas bounds 并归整到整数 mm（与 resize 一致）
+      setElements(prev => prev.map(e => {
+        if (!startPositions.has(e.id)) return e
+        const c = clampEl(e)
+        return { ...c, x: Math.round(c.x), y: Math.round(c.y) }
+      }))
       draggingElId.current = null
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
@@ -958,7 +1132,7 @@ export default function PrintTemplateEditor() {
     if (preview) return
     e.preventDefault()
     e.stopPropagation()
-    setSelectedId(el.id)
+    setSelectedIds([el.id])
     const startMouse = { x: e.clientX, y: e.clientY }
     const s = { x: el.x, y: el.y, w: el.width, h: el.height }
     const MIN = 3 // mm 最小尺寸
@@ -1008,25 +1182,29 @@ export default function PrintTemplateEditor() {
         return
       }
       if (mod && !inField && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redo(); return }
-      if (mod && !inField && (e.key === 'd' || e.key === 'D') && selectedId) {
-        e.preventDefault(); duplicateElement(selectedId); return
+      if (mod && !inField && (e.key === 'd' || e.key === 'D') && selectedIds.length) {
+        e.preventDefault(); duplicateGroup(selectedIds); return
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !inField) {
-        deleteElement(selectedId)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length && !inField) {
+        // 多选时整组删除（一次 snapshot）
+        const ids = [...selectedIds]
+        snapshot()
+        setElements(prev => prev.filter(el => !ids.includes(el.id)))
+        setSelectedIds([])
       }
-      if (e.key === 'Escape') setSelectedId(null)
-      if (selectedId && !inField && ARROWS[e.key]) {
+      if (e.key === 'Escape') setSelectedIds([])
+      if (selectedIds.length && !inField && ARROWS[e.key]) {
         e.preventDefault()
         snapshot()
         const step = e.shiftKey ? 5 : 1
         const [dx, dy] = ARROWS[e.key]
-        setElements(prev => prev.map(el => el.id === selectedId
+        setElements(prev => prev.map(el => selectedIds.includes(el.id)
           ? clampEl({ ...el, x: el.x + dx * step, y: el.y + dy * step }) : el))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, clampEl, deleteElement, duplicateElement, redo, snapshot, undo])
+  }, [selectedIds, clampEl, duplicateGroup, redo, snapshot, undo])
 
   // ── Loading state ────────────────────────────────────────────
   if (!isNew && (isLoading || !hydrated)) {
@@ -1158,7 +1336,7 @@ export default function PrintTemplateEditor() {
                 <Redo2 className="size-3.5" />
               </Button>
               <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
-                disabled={!selectedId} onClick={() => selectedId && duplicateElement(selectedId)} title="复制选中元素 (Ctrl+D)">
+                disabled={selectedIds.length === 0} onClick={() => duplicateGroup(selectedIds)} title="复制选中元素 (Ctrl+D)">
                 <Copy className="size-3.5" />
               </Button>
             </div>
@@ -1206,7 +1384,7 @@ export default function PrintTemplateEditor() {
               size="sm"
               variant={preview ? 'default' : 'outline'}
               className="gap-1.5"
-              onClick={() => { setPreview(p => !p); setSelectedId(null) }}
+              onClick={() => { setPreview(p => !p); setSelectedIds([]) }}
             >
               {preview ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               {preview ? '退出预览' : '预览'}
@@ -1250,7 +1428,7 @@ export default function PrintTemplateEditor() {
               className={`shrink-0 bg-white shadow-xl ring-1 ring-border/30 ${!preview ? 'cursor-crosshair' : ''}`}
               onDragOver={handleCanvasDragOver}
               onDrop={handleCanvasDrop}
-              onClick={() => { if (!draggingElId.current) setSelectedId(null) }}
+              onClick={() => { if (!draggingElId.current) setSelectedIds([]) }}
             >
               {!preview && (
                 <svg
@@ -1271,20 +1449,29 @@ export default function PrintTemplateEditor() {
                 <div style={{ position: 'absolute', inset: 5 * canvasScale, border: '1px dashed rgba(236,72,153,0.35)', pointerEvents: 'none', zIndex: 1 }} />
               )}
 
-              {elements.map(el => (
-                <ElementNode
-                  key={el.id}
-                  el={el}
-                  selected={selectedId === el.id}
-                  preview={preview}
-                  previewData={previewData}
+              {isZplLabelType(type) && preview ? (
+                <LabelPreviewOverlay
+                  layout={{ elements, canvasWidthMm: safeCw, canvasHeightMm: safeCh }}
+                  data={previewData}
+                  paperSize={labelPaperSize}
                   scale={canvasScale}
-                  isLabel={isZplLabelType(type)}
-                  onMouseDown={e => handleElementMouseDown(e, el)}
-                  onClick={e => { e.stopPropagation(); setSelectedId(el.id) }}
-                  onResizeStart={(e, dir) => handleResizeMouseDown(e, el, dir)}
                 />
-              ))}
+              ) : (
+                elements.map(el => (
+                  <ElementNode
+                    key={el.id}
+                    el={el}
+                    selected={selectedIds.includes(el.id)}
+                    preview={preview}
+                    previewData={previewData}
+                    scale={canvasScale}
+                    isLabel={isZplLabelType(type)}
+                    onMouseDown={e => handleElementMouseDown(e, el)}
+                    onClick={e => { e.stopPropagation() }}
+                    onResizeStart={(e, dir) => handleResizeMouseDown(e, el, dir)}
+                  />
+                ))
+              )}
 
               {!preview && guides.x.map((gx, i) => (
                 <div key={`gx${i}`} style={{ position: 'absolute', left: gx * canvasScale, top: 0, width: 1, height: '100%', background: '#ec4899', zIndex: 30, pointerEvents: 'none' }} />
@@ -1309,10 +1496,13 @@ export default function PrintTemplateEditor() {
           {!preview && (
             <PropertiesPanel
               el={selected}
+              multiCount={selectedIds.length}
               isLabel={isZplLabelType(type)}
               onChange={patchElement}
               onDelete={deleteElement}
+              onDeleteMulti={deleteSelectedGroup}
               onAlign={alignSelectedToCanvas}
+              onDistribute={distributeSelected}
             />
           )}
         </div>

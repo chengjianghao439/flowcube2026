@@ -6,13 +6,40 @@
 
 ## 生产环境固定信息
 
-- 生产浏览器地址：`http://47.93.228.251`
-- 生产服务器：`root@47.93.228.251`
+- 生产浏览器地址：`https://jixuflow.com`
+- 生产服务器：`root@47.93.228.251`（内网 `172.24.56.21`）
 - 生产项目目录：`/opt/flowcube`
 - 桌面下载目录：`/var/www/flowcube-downloads`
 - 桌面更新入口：`/latest.json`
 - 仓库：`chengjianghao439/flowcube2026`
 - 仓库内配置文件：`deploy/production.local.json`（从 `deploy/production.example.json` 复制并填写真实值）
+
+## 对外访问链路（域名 + 正式证书）
+
+生产不直接用容器端口对外。宿主机 Caddy 独占 80+443，前端容器（nginx）回环暴露 8080：
+
+```text
+浏览器/桌面端
+   │  https://jixuflow.com:443（正式证书，SNI=域名）
+   │  https://47.93.228.251:443（自签证书兜底，SNI=IP，桌面端过渡期）
+   ▼
+宿主机 Caddy（/etc/caddy/Caddyfile，systemd 管理）
+   │  80：ACME 证书验证 + HTTP→HTTPS 308 跳转
+   │  443：按 SNI 分流——域名→Let's Encrypt 正式证书；IP→自签证书
+   ▼
+前端容器 nginx（回环 127.0.0.1:8080，映射自 docker-compose.yml）
+   │  /api/ → 后端 3000；静态资源 + /latest.json /versions/ /current/
+   ▼
+后端容器 127.0.0.1:3000
+```
+
+关键配置与注意事项：
+
+- **Caddy 模板**：`docker/Caddyfile`（含部署说明）。换服务器时按模板填真实域名/公网 IP/内网 IP，写入服务器 `/etc/caddy/Caddyfile` 后 `systemctl reload caddy`。
+- **前端容器端口**：必须映射 `127.0.0.1:8080:80`，让出宿主机 80 给 Caddy 做 ACME 验证（见 `docker-compose.yml`）。**不要改回 80**，否则 Caddy 证书自动续期会失败。
+- **IP 站点需同时列公网与内网 IP**：无 SNI 的 IP 连接经 EIP NAT 后，Caddy 看到的目标 IP 是内网 IP（如 `172.24.56.21`），只列公网 IP 会匹配不到证书。
+- **`.env` 生产项**（服务器 `/opt/flowcube/.env`）：`APP_PUBLIC_URL=https://jixuflow.com`（桌面更新链）、`CORS_ORIGIN=https://jixuflow.com`、`TRUST_PROXY=1`。
+- **CI 的 erp_origin**：由 `scripts/read-deploy-config.js` 读 `deploy/production.local.json`，发布后健康检查/页面烟雾自动走域名。
 
 ## 发布原则
 

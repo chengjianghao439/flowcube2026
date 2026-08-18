@@ -28,7 +28,7 @@
       "port": 5173,
       "autoPort": true,
       "env": {
-        "DEV_API_TARGET": "https://47.93.228.251"
+        "DEV_API_TARGET": "https://jixuflow.com"
       }
     }
   ]

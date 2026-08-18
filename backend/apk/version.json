@@ -1,7 +1,7 @@
 {
-  "version": "0.4.79",
-  "versionCode": 82,
+  "version": "0.4.80",
+  "versionCode": 83,
   "filename": "app-release.apk",
   "releaseNote": "- **PDA 工作台全新改版**：常用作业（收货、上架、拣货、分拣、复核、打包、出库等 14 项）以大图标卡片直接展示，点一下即进入；「塑料盒拆分」等自主操作收进「更多功能」折叠区，界面更简洁",
-  "publishedAt": "2026-08-18T13:13:30.385Z"
+  "publishedAt": "2026-08-18T16:19:31.529Z"
 }

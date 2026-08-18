@@ -5,7 +5,7 @@ const os = require('os')
 const path = require('path')
 const ROOT = process.cwd()
 const SESSION = process.env.PLAYWRIGHT_CLI_SESSION || `rj-${process.pid}-${Math.floor(Math.random() * 1e6)}`
-const BASE_URL = process.env.PAGE_SMOKE_BASE_URL || 'http://127.0.0.1'
+const BASE_URL = process.env.PAGE_SMOKE_BASE_URL || 'http://127.0.0.1:8080'
 const SMOKE_USERNAME = String(process.env.SMOKE_USERNAME || '').trim()
 const SMOKE_PASSWORD = String(process.env.SMOKE_PASSWORD || '').trim()
 

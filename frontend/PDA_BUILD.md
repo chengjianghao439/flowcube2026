@@ -32,7 +32,7 @@ export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
 打包前必须提供内置后端地址，二选一：
 
 ```bash
-export VITE_ERP_PRODUCTION_ORIGIN=http://47.93.228.251
+export VITE_ERP_PRODUCTION_ORIGIN=https://jixuflow.com
 ```
 
 或在仓库根目录创建 `deploy/production.local.json`，填写 `erpOrigin`。
@@ -53,7 +53,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 ```bash
 # 1. 构建前端（注入 PDA 默认服务器地址）
-VITE_ERP_PRODUCTION_ORIGIN=http://47.93.228.251 node scripts/build-frontend-bundle.js pda
+VITE_ERP_PRODUCTION_ORIGIN=https://jixuflow.com node scripts/build-frontend-bundle.js pda
 
 # 2. 同步到 Android 项目
 cd frontend

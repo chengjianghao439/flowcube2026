@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import AppLayout from '@/layouts/AppLayout'
@@ -14,6 +14,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
 const LoginPage       = lazy(() => import('@/pages/login'))
 const ForbiddenPage   = lazy(() => import('@/pages/403'))
+const LandingPage     = lazy(() => import('@/pages/landing'))
 
 // ── PDA 子系统页面 ────────────────────────────────────────────────────────────
 const PdaLoginPage   = lazy(() => import('@/pages/pda/login'))
@@ -103,6 +104,31 @@ function PdaGuestRoute() {
   return <Outlet />
 }
 
+/**
+ * 官网宣传页守卫：仅「纯域名根路径访问」（window.location.hash 为空串）渲染 LandingPage。
+ * - 浏览器访问 https://jixuflow.com（无 hash）→ 宣传页
+ * - 点「进入系统」→ hash 变为 #/login，自动切到系统
+ * - 桌面端加载 file://...#/（hash='#/'）→ 非空，跳过，直达系统
+ * - 带路径访问 / 已登录 → 非空 hash，跳过
+ */
+function LandingGate() {
+  const [showLanding, setShowLanding] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.location.hash === '' && window.location.protocol !== 'file:'
+  })
+
+  useEffect(() => {
+    const onHash = () => {
+      setShowLanding(window.location.hash === '' && window.location.protocol !== 'file:')
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  if (showLanding) return <LandingPage />
+  return <Navigate to="/login" replace />
+}
+
 export default function AppRouter() {
   return (
     <HashRouter>
@@ -116,6 +142,9 @@ export default function AppRouter() {
         <ErpDesktopConnectionGate>
         <Suspense fallback={<PageLoader />}>
           <Routes>
+          {/* ── 官网宣传页（纯域名根路径，hash 为空时命中）── */}
+          <Route path="/" element={<LandingGate />} />
+
           {/* ── ERP 游客路由 ── */}
           <Route element={<ErpGuestRoute />}>
             <Route path="/login" element={<LoginPage />} />

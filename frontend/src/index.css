@@ -223,3 +223,40 @@ html {
     transform: scaleX(0);
   }
 }
+
+/* ── 官网宣传页（landing）样式 ─────────────────────────────────────── */
+
+/* 滚动淡入：默认透明位移，被 IntersectionObserver 标记后过渡到可见 */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+.reveal.is-revealed {
+  opacity: 1;
+  transform: none;
+}
+
+/* Hero 工作台：在途容器亮点沿网格漂移 */
+@keyframes fc-workbench-dot {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(720%, 220%); }
+  50%  { transform: translate(220%, 560%); }
+  75%  { transform: translate(760%, 340%); }
+  100% { transform: translate(0, 0); }
+}
+.workbench-dot {
+  animation: fc-workbench-dot 14s ease-in-out infinite;
+}
+
+/* 尊重系统减弱动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .workbench-dot {
+    animation: none;
+  }
+}

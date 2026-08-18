@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 SESSION="${PLAYWRIGHT_CLI_SESSION:-rj-$$-$RANDOM}"
-BASE_URL="${PAGE_SMOKE_BASE_URL:-http://127.0.0.1}"
+BASE_URL="${PAGE_SMOKE_BASE_URL:-http://127.0.0.1:8080}"
 SMOKE_USERNAME="${SMOKE_USERNAME:-}"
 SMOKE_PASSWORD="${SMOKE_PASSWORD:-}"
 
@@ -75,7 +75,7 @@ open_path() {
 
 fetch_jump_paths() {
   node <<'NODE'
-const BASE_URL = process.env.PAGE_SMOKE_BASE_URL || 'http://127.0.0.1'
+const BASE_URL = process.env.PAGE_SMOKE_BASE_URL || 'http://127.0.0.1:8080'
 
 async function login() {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {

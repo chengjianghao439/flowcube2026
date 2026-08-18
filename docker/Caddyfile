@@ -1,0 +1,47 @@
+# FlowCube 生产反向代理（Caddy）配置模板
+#
+# 架构：宿主机 Caddy 独占 80+443 → 前端容器（nginx）回环 8080
+#   - 80：ACME 证书验证 + HTTP→HTTPS 308 跳转（Caddy 自动管理）
+#   - 443 域名：自动申请 Let's Encrypt 正式证书（SNI 命中域名）
+#   - 443 IP 直连：自签证书兜底（旧桌面端在「内置 IP」过渡期仍连 IP 自签，
+#     桌面端 main.js 的 TRUSTED_SELF_SIGNED_HOSTS 放行；域名正式证书在系统信任链内无需豁免）
+#
+# 部署：
+#   1. 替换 YOUR_DOMAIN 为实际域名；PUBLIC_IP 为 ECS 弹性公网 IP
+#   2. 把本文件内容写入服务器 /etc/caddy/Caddyfile（caddy.service 由 systemd 管理）
+#   3. systemctl reload caddy
+#
+# 注意：
+#   - 前端容器必须映射到 127.0.0.1:8080（见 docker-compose.yml），让出 80 给 Caddy 做 ACME
+#   - 无 SNI 的 IP 连接经 EIP NAT 后目标 IP 是内网 IP（如 172.24.56.21），
+#     IP 站点需同时列公网与内网 IP，确保无论 SNI 是否为空都能匹配到自签证书
+#   - ACME 自动申请要求外部 80 端口可达（阿里云安全组放行 TCP 80）
+
+# 域名站点：SNI 命中域名 → 自动申请 Let's Encrypt 正式证书
+YOUR_DOMAIN, www.YOUR_DOMAIN {
+    encode gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    reverse_proxy 127.0.0.1:8080
+}
+
+# IP 直连：自签证书兜底（旧桌面端过渡期）。
+# PUBLIC_IP 为弹性公网 IP；LAN_IP 为 ECS 内网 IP（ssh 里 hostname -I 查询）。
+PUBLIC_IP, LAN_IP {
+    tls /etc/caddy/certs/selfsigned.crt /etc/caddy/certs/selfsigned.key
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    reverse_proxy 127.0.0.1:8080
+}

@@ -6,7 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 PLAYWRIGHT_IMAGE="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.55.0-noble}"
-SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://127.0.0.1}"
+# 前端容器 80 已让位 Caddy，回环端口为 8080（见 docker-compose.yml 注释）
+SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://127.0.0.1:8080}"
 SMOKE_USERNAME="${SMOKE_USERNAME:-}"
 SMOKE_PASSWORD="${SMOKE_PASSWORD:-}"
 
