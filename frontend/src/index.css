@@ -260,3 +260,13 @@ html {
     animation: none;
   }
 }
+
+/* ── 官网宣传页（landing）标题平衡折行 ─────────────────────────────── */
+.landing-page h1,
+.landing-page h2,
+.landing-page h3 {
+  text-wrap: balance;
+}
+.landing-page p {
+  text-wrap: pretty;
+}

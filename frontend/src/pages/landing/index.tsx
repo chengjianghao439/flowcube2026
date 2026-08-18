@@ -205,6 +205,30 @@ export default function LandingPage() {
   const [desktop, setDesktop] = useState<LatestJson | null>(null)
   const [pda, setPda] = useState<PdaVersionData | null>(null)
 
+  // 页内锚点滚动：显式 window.scrollTo，而非 <a href="#section">。
+  // 后者会改写 window.location.hash，被 LandingGate 误判为「离开宣传页」跳登录。
+  // 先按目标元素位置 scrollTo，再 scrollIntoView 兜底（个别环境 scrollTo 不生效时仍能滚）。
+  const scrollToSection = (id: string) => (e: React.MouseEvent) => {
+    e.preventDefault()
+    const el = document.getElementById(id)
+    if (!el) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const top = el.getBoundingClientRect().top + window.scrollY - 72 // 72 = sticky 导航高度
+    const behavior: ScrollBehavior = reduce ? 'auto' : 'smooth'
+    try {
+      window.scrollTo({ top: Math.max(0, top), behavior })
+    } catch {
+      window.scrollTo(0, Math.max(0, top))
+    }
+    // 兜底：若 scrollTo 未改变滚动位置，退回 scrollIntoView
+    const before = window.scrollY
+    setTimeout(() => {
+      if (Math.abs((window.scrollY || 0) - before) < 2) {
+        el.scrollIntoView({ behavior, block: 'start' })
+      }
+    }, 120)
+  }
+
   // 读下载信息（免登录接口）
   useEffect(() => {
     let alive = true
@@ -229,7 +253,7 @@ export default function LandingPage() {
   const pdaVersion = pda?.version || ''
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] font-sans text-[#0E1B2E] antialiased">
+    <div className="landing-page min-h-screen bg-[#F5F7FA] font-sans text-[#0E1B2E] antialiased">
       {/* 顶部导航 */}
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-8 lg:px-10">
@@ -243,9 +267,9 @@ export default function LandingPage() {
             </span>
           </div>
           <nav className="flex items-center gap-1 text-sm text-slate-600">
-            <a href="#features" className="hidden rounded-lg px-3 py-1.5 hover:bg-slate-100 sm:inline">能力</a>
-            <a href="#download" className="hidden rounded-lg px-3 py-1.5 hover:bg-slate-100 sm:inline">下载</a>
-            <a href="#values" className="hidden rounded-lg px-3 py-1.5 hover:bg-slate-100 sm:inline">为什么选我们</a>
+            <button type="button" onClick={scrollToSection('features')} className="hidden rounded-lg px-3 py-1.5 transition hover:bg-slate-100 sm:inline">能力</button>
+            <button type="button" onClick={scrollToSection('download')} className="hidden rounded-lg px-3 py-1.5 transition hover:bg-slate-100 sm:inline">下载</button>
+            <button type="button" onClick={scrollToSection('values')} className="hidden rounded-lg px-3 py-1.5 transition hover:bg-slate-100 sm:inline">为什么选我们</button>
             <a
               href="#/login"
               className="ml-2 inline-flex items-center gap-1.5 rounded-lg bg-[#1E5AE6] px-4 py-1.5 text-sm font-medium text-white transition hover:bg-[#1749C4]"
@@ -285,14 +309,25 @@ export default function LandingPage() {
                 进入系统
                 <ArrowRight className="size-4" />
               </a>
-              <a
-                href={desktopUrl || '#download'}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-medium text-white transition hover:bg-white/10"
-              >
-                <Download className="size-4" />
-                下载桌面端
-                {desktop?.version && <span className="text-blue-200/70">v{desktop.version}</span>}
-              </a>
+              {desktopUrl ? (
+                <a
+                  href={desktopUrl}
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-medium text-white transition hover:bg-white/10"
+                >
+                  <Download className="size-4" />
+                  下载桌面端
+                  {desktop?.version && <span className="text-blue-200/70">v{desktop.version}</span>}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={scrollToSection('download')}
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-medium text-white transition hover:bg-white/10"
+                >
+                  <Download className="size-4" />
+                  查看下载方式
+                </button>
+              )}
             </div>
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-xs text-blue-200/60">
               <span>✓ 网页即用，无需安装</span>
@@ -310,28 +345,29 @@ export default function LandingPage() {
       {/* ── 能力矩阵 ─────────────────────────────────────────── */}
       <section id="features" className="mx-auto max-w-6xl px-6 py-24 sm:px-8 lg:px-10">
         <Reveal className="mx-auto mb-14 max-w-2xl text-center">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#1E5AE6]">能力矩阵</p>
-          <h2 className="text-3xl font-bold tracking-tight">一套系统，覆盖企业进销存与财务</h2>
-          <p className="mt-3 text-sm text-slate-500">从采购下单到客户结算，从账面到实物，全在一个系统里闭环。</p>
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">从采购下单到客户结算，全在一个系统闭环</h2>
+          <p className="mt-3 text-sm text-slate-500">六大业务模块共用一份数据，进销存与财务一体联动。</p>
         </Reveal>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {MODULES.map((m) => (
             <Reveal key={m.title}>
               <a
                 href={m.href}
-                className="group block h-full rounded-2xl border border-slate-200/80 bg-white p-6 transition hover:-translate-y-0.5 hover:border-[#1E5AE6]/30 hover:shadow-lg hover:shadow-blue-900/5"
+                className="group flex h-full items-start gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 transition hover:-translate-y-0.5 hover:border-[#1E5AE6]/40 hover:shadow-lg hover:shadow-blue-900/5"
               >
-                <div className="mb-4 flex items-start justify-between">
-                  <div className={`inline-flex size-10 items-center justify-center rounded-xl ${m.color}`}>
-                    <m.icon className="size-5" />
-                  </div>
-                  <ArrowUpRight className="size-4 text-slate-300 transition group-hover:text-[#1E5AE6]" />
+                <div className={`mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-xl ${m.color}`}>
+                  <m.icon className="size-5" />
                 </div>
-                <h3 className="mb-1.5 text-base font-semibold">{m.title}</h3>
-                <p className="text-sm leading-relaxed text-slate-500">{m.desc}</p>
-                <span className="mt-3 inline-block text-xs font-medium text-[#1E5AE6] opacity-0 transition group-hover:opacity-100">
-                  进入模块 →
-                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-base font-semibold">{m.title}</h3>
+                    <ArrowUpRight className="size-4 shrink-0 text-slate-300 transition group-hover:text-[#1E5AE6]" />
+                  </div>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-500">{m.desc}</p>
+                  <span className="mt-2 inline-block text-xs font-medium text-[#1E5AE6]">
+                    进入模块 →
+                  </span>
+                </div>
               </a>
             </Reveal>
           ))}
@@ -342,8 +378,7 @@ export default function LandingPage() {
       <section id="download" className="bg-white py-24">
         <div className="mx-auto max-w-6xl px-6 sm:px-8 lg:px-10">
           <Reveal className="mx-auto mb-14 max-w-2xl text-center">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#1E5AE6]">下载</p>
-            <h2 className="text-3xl font-bold tracking-tight">三端随时可用</h2>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">三端随时可用</h2>
             <p className="mt-3 text-sm text-slate-500">网页端打开即用；桌面端与 PDA 安装包随时下载。</p>
           </Reveal>
 
@@ -359,13 +394,24 @@ export default function LandingPage() {
                   适合办公室高频操作与打印机管理。支持本地 RAW 打印、自动更新、离线上传。
                   {desktop?.version && <span className="mt-1 block text-slate-400">当前版本 v{desktop.version}</span>}
                 </p>
-                <a
-                  href={desktopUrl || '#download'}
-                  className="mt-5 inline-flex w-fit items-center gap-2 rounded-xl bg-[#1E5AE6] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1749C4]"
-                >
-                  <Download className="size-4" />
-                  {desktopUrl ? '下载 Windows 安装包' : '查看桌面端下载说明'}
-                </a>
+                {desktopUrl ? (
+                  <a
+                    href={desktopUrl}
+                    className="mt-5 inline-flex w-fit items-center gap-2 rounded-xl bg-[#1E5AE6] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1749C4]"
+                  >
+                    <Download className="size-4" />
+                    下载 Windows 安装包
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={scrollToSection('values')}
+                    className="mt-5 inline-flex w-fit items-center gap-2 rounded-xl bg-[#1E5AE6] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1749C4]"
+                  >
+                    <Download className="size-4" />
+                    桌面端即将开放下载
+                  </button>
+                )}
                 <p className="mt-3 text-xs text-slate-400">下载后双击安装，首次登录即可使用。</p>
               </div>
             </Reveal>
@@ -406,10 +452,16 @@ export default function LandingPage() {
       {/* ── 为什么选我们 ─────────────────────────────────────── */}
       <section id="values" className="bg-[#0E1B2E] py-24 text-white">
         <div className="mx-auto max-w-6xl px-6 sm:px-8 lg:px-10">
-          <Reveal className="mx-auto mb-14 max-w-2xl text-center">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#6EA8FF]">为什么选我们</p>
-            <h2 className="text-3xl font-bold tracking-tight">为仓库现场的可靠性而设计</h2>
-          </Reveal>
+          <div className="mb-14 grid gap-6 lg:grid-cols-2 lg:items-end">
+            <Reveal>
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">为仓库现场的可靠性而设计</h2>
+            </Reveal>
+            <Reveal className="lg:justify-self-end">
+              <p className="max-w-md text-sm leading-relaxed text-blue-100/70 lg:text-right">
+                扫码驱动、数据一致、打印解耦——每一个设计取舍，都是为了让现场作业不卡壳、账面不出错。
+              </p>
+            </Reveal>
+          </div>
           <div className="grid gap-5 md:grid-cols-3">
             {VALUES.map((v) => (
               <Reveal key={v.title}>
