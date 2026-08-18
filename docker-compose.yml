@@ -67,7 +67,8 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:80:80"
+      # 80 由宿主 Caddy 独占（ACME 证书验证 + HTTP→HTTPS 重定向），容器内 nginx 挪到 8080 仅回环暴露
+      - "127.0.0.1:8080:80"
     volumes:
       # nginx 只暴露 canonical downloads root，下游路径为 /latest.json、/versions/、/current/。
       - ${FLOWCUBE_DOWNLOADS_DIR:-/var/www/flowcube-downloads}:/usr/share/nginx/downloads:ro
