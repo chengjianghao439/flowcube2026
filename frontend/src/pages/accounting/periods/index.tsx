@@ -14,6 +14,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { confirmAction as confirm } from '@/lib/confirm'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { downloadExport } from '@/lib/exportDownload'
 import { getPeriodsApi, generateClosingVouchersApi, closePeriodApi, reopenPeriodApi } from '@/api/accounting'
 import { CLOSING_STATUS_LABELS } from '@/types/accounting'
 import type { AccountingPeriod } from '@/types/accounting'
@@ -112,7 +113,11 @@ export default function AccountingPeriodsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="会计期间 / 期末结转" description="期间结账后该期间凭证锁定；结账前需先生成损益结转凭证（12 月含年度利润结转）。本系统是正式账，请按月结账。" />
+      <PageHeader
+        title="会计期间 / 期末结转"
+        description="期间结账后该期间凭证锁定；结账前需先生成损益结转凭证（12 月含年度利润结转）。本系统是正式账，请按月结账。"
+        actions={<Button variant="outline" onClick={() => downloadExport('/export/accounting-periods').catch(e => toast.error((e as Error).message))}>导出</Button>}
+      />
 
       <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
         <CalendarCheck className="h-4 w-4" />

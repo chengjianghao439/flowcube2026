@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Package, Warehouse, Lock, CheckCircle, X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
@@ -108,6 +108,12 @@ export default function InventoryPage() {
   const [overviewQueryOpen, setOverviewQueryOpen] = useState(false)
   const [logsQueryOpen, setLogsQueryOpen] = useState(false)
 
+  // 库存导入弹窗
+  const [importOpen, setImportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ success: number; errors: string[] } | null>(null)
+  const importFileRef = useRef<HTMLInputElement>(null)
+
   // 出库弹窗
   const [opOpen, setOpOpen] = useState(false); const [, setOpType] = useState<OpType>('outbound')
   const [form, setForm] = useState(emptyOp)
@@ -215,12 +221,37 @@ export default function InventoryPage() {
     { key: 'remark', title: '备注', render: v => (v as string) || '-' },
   ]
 
+  // 库存初始化导入：下载模板 → 填数上传 → 后端逐行建容器/落库（POST /import/stock）
+  async function handleImportStock(file: File) {
+    setImporting(true)
+    try {
+      const store = JSON.parse(localStorage.getItem('flowcube-auth-v3') || sessionStorage.getItem('flowcube-auth-v3') || 'null')
+      const token = store?.state?.token
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/import/stock', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.message || '导入失败')
+      setImportResult({ success: json?.data?.success ?? 0, errors: json?.data?.errors ?? [] })
+      toast.success(`导入成功：${json?.data?.success ?? 0} 条`)
+    } catch (e) {
+      toast.error((e as Error).message || '导入失败')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader title="库存管理" description="库存总览与出入库记录；采购入库请走「收货订单」上架后计入库存" actions={
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={() => tab === 'logs' ? setLogsQueryOpen(true) : setOverviewQueryOpen(true)}>查询</Button>
           <Button variant="outline" onClick={() => downloadExport(tab === 'logs' ? '/export/inventory-logs' : '/export/stock').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
+          <Button variant="outline" onClick={() => setImportOpen(true)} disabled={tab !== 'overview'}>导入库存</Button>
           <Button variant="outline" onClick={() => openOp('outbound')}>出库</Button>
           <Button variant="outline" asChild><Link to="/stockcheck">库存盘点</Link></Button>
         </div>
@@ -357,6 +388,37 @@ export default function InventoryPage() {
               <Button type="submit" disabled={isPending || !form.productId || !form.warehouseId || !form.quantity}>{isPending ? '提交中…' : '出库'}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 库存导入弹窗：下载模板 → 填数上传 → 后端逐行建容器 */}
+      <Dialog open={importOpen} onOpenChange={v => { setImportOpen(v); if (!v) setImportResult(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>批量导入库存</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">请先下载模板，按照格式填写后上传。模板用于初始化各仓库的商品期初库存。</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => downloadExport('/import/stock/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>
+            </div>
+            <div className="space-y-1">
+              <Label>选择文件（.xlsx）</Label>
+              <input ref={importFileRef} type="file" accept=".xlsx,.xls" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) void handleImportStock(f); e.target.value = '' }} />
+              <Button variant="outline" className="w-full" onClick={() => importFileRef.current?.click()} disabled={importing}>
+                {importing ? '导入中…' : '选择文件并上传'}
+              </Button>
+            </div>
+            {importResult && (
+              <div className="rounded-lg border p-3 text-sm space-y-1">
+                <p className="text-success font-medium">导入成功：{importResult.success} 条</p>
+                {importResult.errors.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto text-destructive text-xs space-y-0.5">
+                    {importResult.errors.slice(0, 20).map((err, i) => <p key={i}>{err}</p>)}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
+import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -240,7 +241,12 @@ export default function PickingWavesPage() {
       <PageHeader
         title="波次拣货"
         description="管理波次拣货、分拣推进，以及出库箱贴打印异常的处理。"
-        actions={<Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => downloadExport('/export/picking-waves').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          </>
+        }
       />
 
       {chips.length > 0 && (

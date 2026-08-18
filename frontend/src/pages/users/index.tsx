@@ -16,6 +16,8 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { SysUser } from '@/types/users'
 import type { TableColumn } from '@/types'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { downloadExport } from '@/lib/exportDownload'
+import { toast } from '@/lib/toast'
 
 export default function UsersPage() {
   const currentUser = useAuthStore((s) => s.user)
@@ -105,9 +107,12 @@ export default function UsersPage() {
         title="用户管理"
         description="管理系统登录账号与角色权限"
         actions={
-          <Button onClick={() => { setEditUser(null); setFormOpen(true) }}>
-            新增用户
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => downloadExport('/export/users').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button onClick={() => { setEditUser(null); setFormOpen(true) }}>
+              新增用户
+            </Button>
+          </>
         }
       />
 

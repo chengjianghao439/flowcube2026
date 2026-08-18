@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
+import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -136,6 +137,7 @@ export default function LogisticsPage() {
         description="每个已发出的包裹对应一张运单。指定承运商并开通电子面单后，打包完成即自动生成待取号运单，取号成功自动回写快递单号并打印面单；未对接平台时可手工录入快递单号。"
         actions={
           <>
+            <Button variant="outline" onClick={() => downloadExport('/export/waybills').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button variant="outline" onClick={() => refetch()}>刷新</Button>
           </>

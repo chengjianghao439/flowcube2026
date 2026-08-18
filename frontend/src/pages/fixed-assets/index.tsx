@@ -17,6 +17,7 @@ import {
 import type { FixedAsset } from '@/api/fixedAssets'
 import type { TableColumn } from '@/types'
 import type { StatusTone } from '@/lib/statusTone'
+import { downloadExport } from '@/lib/exportDownload'
 
 const money = (n: number | null | undefined) => `¥${Number(n ?? 0).toFixed(2)}`
 const ASSET_STATUS: Record<number, { label: string; tone: StatusTone }> = {
@@ -190,6 +191,7 @@ export default function FixedAssetsPage() {
         description="固定资产卡片、按月计提折旧（直线法）、处置/报废。折旧凭证自动生成并进入总账。"
         actions={
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => downloadExport('/export/fixed-assets').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" disabled={deprPending} onClick={() => runDepr(undefined)}>{deprPending ? '计提中…' : '计提本月折旧'}</Button>
             <Button onClick={() => setCreateOpen(true)}>新增资产</Button>
           </div>

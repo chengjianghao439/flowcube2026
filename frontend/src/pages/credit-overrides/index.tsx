@@ -19,6 +19,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
+import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import CreditOverrideQueryDialog, { type CreditOverrideQueryValues } from './CreditOverrideQueryDialog'
@@ -216,6 +217,7 @@ export default function CreditOverridesPage() {
         description="客户授信不足时，销售员发起放行申请，走审批流；审批通过后该销售单占库自动放行，无需放行权限。"
         actions={
           <>
+            <Button variant="outline" onClick={() => downloadExport('/export/credit-overrides').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canApply ? <Button onClick={() => setCreateOpen(true)}>发起申请</Button> : undefined}
           </>

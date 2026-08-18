@@ -12,6 +12,8 @@ import type { TableColumn } from '@/types'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
 import { Button } from '@/components/ui/button'
 import { FilterCard } from '@/components/shared/FilterCard'
+import { downloadExport } from '@/lib/exportDownload'
+import { toast } from '@/lib/toast'
 
 const PHONE_RE = /^1\d{10}$/
 
@@ -69,6 +71,9 @@ export default function SuppliersPage() {
       deleteApi={(id) => deleteSupplierApi(id, { skipGlobalError: true })}
       deleteMessage="仅未被采购、退货或库存流水引用的供应商允许删除；若已被引用，请改为编辑后停用。"
       createLabel="新增供应商"
+      headerActions={
+        <Button variant="outline" onClick={() => downloadExport('/export/suppliers').catch(e => toast.error((e as Error).message))}>导出</Button>
+      }
       saveSuccessMessage={(editing) => editing ? '供应商已保存' : '供应商已创建'}
       formWidthClass="sm:max-w-lg"
       canSubmit={() => !!form.name}

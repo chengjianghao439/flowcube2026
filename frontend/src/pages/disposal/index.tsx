@@ -9,6 +9,8 @@ import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { downloadExport } from '@/lib/exportDownload'
+import { toast } from '@/lib/toast'
 import type { DisposalOrder } from '@/types/disposal'
 import type { TableColumn } from '@/types'
 import DisposalDetailDialog from './components/DisposalDetailDialog'
@@ -102,6 +104,7 @@ export default function DisposalPage() {
         description="圈选呆滞商品生成处置单 → 审批 → 降价促销/退货供应商/报废（处置只走 ERP 端，出库自动扣库存）"
         actions={
           <>
+            <Button variant="outline" onClick={() => downloadExport('/export/disposals').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {can(PERMISSIONS.INVENTORY_DISPOSAL_CREATE) ? (
               <Button onClick={() => setCreateOpen(true)}>+ 新建处置单</Button>

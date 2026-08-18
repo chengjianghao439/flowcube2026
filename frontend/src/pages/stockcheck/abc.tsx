@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { downloadExport } from '@/lib/exportDownload'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -112,7 +113,11 @@ export default function AbcClassPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="ABC 分类与循环盘规则" description="按出库消耗金额帕累托分档（A 盘点更频繁 / B 中 / C 盘点频率低）；循环盘规则决定各类多久盘一次、单次抽多少。" />
+      <PageHeader
+        title="ABC 分类与循环盘规则"
+        description="按出库消耗金额帕累托分档（A 盘点更频繁 / B 中 / C 盘点频率低）；循环盘规则决定各类多久盘一次、单次抽多少。"
+        actions={<Button variant="outline" onClick={() => downloadExport('/export/abc').catch(e => toast.error((e as Error).message))}>导出</Button>}
+      />
 
       <div className="flex gap-2">
         <Button variant={tab === 'abc' ? 'default' : 'outline'} size="sm" onClick={() => setTab('abc')}>ABC 分类结果</Button>

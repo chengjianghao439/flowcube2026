@@ -13,6 +13,7 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { TableColumn } from '@/types'
 import type { FinderResult } from '@/types/finder'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
+import { downloadExport } from '@/lib/exportDownload'
 import {
   getPlasticBoxesApi,
   createPlasticBoxApi,
@@ -55,6 +56,9 @@ export default function PlasticBoxesPage() {
         deleteApi={(id) => deletePlasticBoxApi(id, { skipGlobalError: true })}
         deleteMessage="确认删除该塑料盒？"
         createLabel="+ 新建塑料盒"
+        headerActions={
+          <Button variant="outline" onClick={() => downloadExport('/export/plastic-boxes').catch(e => toast.error((e as Error).message))}>导出</Button>
+        }
         saveSuccessMessage={() => '塑料盒已创建'}
         formWidthClass="max-w-md"
         renderToolbar={

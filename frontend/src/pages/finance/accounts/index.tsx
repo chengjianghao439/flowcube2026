@@ -14,6 +14,7 @@ import { activeTone } from '@/lib/statusTone'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { formatDisplayDate } from '@/lib/dateTime'
+import { downloadExport } from '@/lib/exportDownload'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import {
@@ -216,6 +217,7 @@ export default function FinanceAccountsPage() {
         description="管理银行、现金等收付款账户；余额由流水实时汇总，不可直接修改。"
         actions={(
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => downloadExport('/export/finance-accounts').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button onClick={openCreate}>新建账户</Button>
           </div>

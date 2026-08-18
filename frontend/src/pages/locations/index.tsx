@@ -14,6 +14,8 @@ import { getLocationsApi, createLocationApi, updateLocationApi, deleteLocationAp
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import { LOCATION_STATUS_OPTIONS, type Location, type CreateLocationParams } from '@/types/locations'
 import { Button } from '@/components/ui/button'
+import { downloadExport } from '@/lib/exportDownload'
+import { toast } from '@/lib/toast'
 import LocationQueryDialog, { type LocationQueryValues } from './LocationQueryDialog'
 import type { TableColumn } from '@/types'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
@@ -129,7 +131,10 @@ export default function LocationsPage() {
         onOpen={handleOpen}
         canSubmit={() => !!form.warehouseId && !!form.code}
         headerActions={
-          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          <>
+            <Button variant="outline" onClick={() => downloadExport('/export/locations').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          </>
         }
         renderToolbar={
           chips.length > 0 ? (

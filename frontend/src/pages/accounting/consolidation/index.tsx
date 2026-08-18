@@ -11,6 +11,7 @@ import {
   type AcctCompany,
 } from '@/api/accounting'
 import { toast } from '@/lib/toast'
+import { downloadExport } from '@/lib/exportDownload'
 import type { TableColumn } from '@/types'
 
 const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -97,7 +98,12 @@ export default function ConsolidationPage() {
       <PageHeader
         title="合并报表 / 账套"
         description="多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套）。切换账套后会计各页随之过滤。"
-        actions={<Button onClick={() => setCreateOpen(true)}>新建账套</Button>}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => downloadExport('/export/companies').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button onClick={() => setCreateOpen(true)}>新建账套</Button>
+          </>
+        }
       />
 
       {/* 账套列表 */}

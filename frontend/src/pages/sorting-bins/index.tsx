@@ -24,6 +24,7 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import SortingBinQueryDialog, { type SortingBinQueryValues } from './SortingBinQueryDialog'
 import { SORTING_BIN_STATUS_TONE, SORTING_BIN_STATUS_LABEL } from './constants'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
+import { downloadExport } from '@/lib/exportDownload'
 
 // ─── 批量创建弹窗 ─────────────────────────────────────────────────────────────
 function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
@@ -179,6 +180,7 @@ export default function SortingBinsPage() {
         canSubmit={(editing) => editing ? true : !!form.code && !!form.warehouseId}
         headerActions={
           <>
+            <Button variant="outline" onClick={() => downloadExport('/export/sorting-bins').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button variant="outline" onClick={() => setBatchOpen(true)}>批量创建</Button>
           </>

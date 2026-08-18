@@ -13,6 +13,8 @@ import { getOpLogsApi, clearLogsApi } from '@/api/oplogs'
 import { usePermission } from '@/hooks/usePermission'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { downloadExport } from '@/lib/exportDownload'
+import { toast } from '@/lib/toast'
 import {
   OPERATION_LOG_MODULE_OPTIONS,
   formatApiPath,
@@ -152,6 +154,7 @@ export default function OpLogsPage() {
     <div className="space-y-4">
       <PageHeader title="操作日志" description="记录所有写操作，追踪变更历史" actions={
         <>
+          <Button variant="outline" onClick={() => downloadExport('/export/oplogs').catch(e => toast.error((e as Error).message))}>导出</Button>
           <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           {can(PERMISSIONS.AUDIT_LOG_CLEAR) ? <Button variant="destructive" size="sm" onClick={() => setClearConfirm(true)}>清理旧日志</Button> : undefined}
         </>

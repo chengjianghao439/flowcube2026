@@ -11,6 +11,7 @@ import { SETTLEMENT_TYPE, SETTLEMENT_TYPE_TONE } from '@/generated/status'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
+import { downloadExport } from '@/lib/exportDownload'
 import { useCustomers, useDeleteCustomer } from '@/hooks/useCustomers'
 import CustomerFormDialog from './components/CustomerFormDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -78,7 +79,12 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="客户管理" description="管理销售客户档案，可绑定价格 A / B / C / D" actions={<Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>+ 新增客户</Button>} />
+      <PageHeader title="客户管理" description="管理销售客户档案，可绑定价格 A / B / C / D" actions={
+        <>
+          <Button variant="outline" onClick={() => downloadExport('/export/customers').catch(e => toast.error((e as Error).message))}>导出</Button>
+          <Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>+ 新增客户</Button>
+        </>
+      } />
       <FilterCard>
         <Input placeholder="搜索编码/名称…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search) }}>搜索</Button>

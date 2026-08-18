@@ -14,6 +14,8 @@ import type { TableColumn } from '@/types'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
 import { Button } from '@/components/ui/button'
 import { FilterCard } from '@/components/shared/FilterCard'
+import { downloadExport } from '@/lib/exportDownload'
+import { toast } from '@/lib/toast'
 
 type FormState = CreateCarrierParams & { isActive: boolean }
 const EMPTY_FORM: FormState = {
@@ -79,6 +81,9 @@ export default function CarriersPage() {
       createLabel="+ 新建承运商"
       saveSuccessMessage={(editing) => editing ? '承运商已保存' : '承运商已创建'}
       formWidthClass="max-w-md"
+      headerActions={
+        <Button variant="outline" onClick={() => downloadExport('/export/carriers').catch(e => toast.error((e as Error).message))}>导出</Button>
+      }
       onOpen={handleOpen}
       canSubmit={() => !!form.name}
       renderToolbar={

@@ -20,6 +20,7 @@ import type { Rack } from '@/types/racks'
 import { RACK_STATUS_OPTIONS } from '@/types/racks'
 import { getLocalPrintEnvironmentKind } from '@/lib/desktopLocalPrint'
 import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
+import { downloadExport } from '@/lib/exportDownload'
 import RackQueryDialog, { type RackQueryValues } from './RackQueryDialog'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
 
@@ -161,7 +162,10 @@ export default function RacksPage() {
         onOpen={handleOpen}
         canSubmit={(editing) => !!form.code && (!!editing || !!form.warehouseId)}
         headerActions={
-          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          <>
+            <Button variant="outline" onClick={() => downloadExport('/export/racks').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          </>
         }
         renderToolbar={
           <>

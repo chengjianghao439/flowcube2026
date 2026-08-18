@@ -111,6 +111,68 @@ async function exportStatementDetail(req, res, next) {
   }
 }
 
+// ── 后加实体导出（v0.4.79 批量补齐）───────────────────────────────────────────
+async function exportWaybills(req, res, next) {
+  try { await sendExport(res, await exportService.getWaybillsExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null })) } catch (e) { next(e) }
+}
+async function exportFixedAssets(req, res, next) {
+  try { await sendExport(res, await exportService.getFixedAssetsExportPayload(req.query)) } catch (e) { next(e) }
+}
+async function exportExpenseClaims(req, res, next) {
+  try { await sendExport(res, await exportService.getExpenseClaimsExportPayload(req.query)) } catch (e) { next(e) }
+}
+async function exportFinanceAccounts(req, res, next) {
+  try { await sendExport(res, await exportService.getFinanceAccountsExportPayload()) } catch (e) { next(e) }
+}
+async function exportDisposals(req, res, next) {
+  try { await sendExport(res, await exportService.getDisposalsExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null })) } catch (e) { next(e) }
+}
+async function exportAbc(req, res, next) {
+  try { await sendExport(res, await exportService.getAbcExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null })) } catch (e) { next(e) }
+}
+async function exportCreditOverrides(req, res, next) {
+  try { await sendExport(res, await exportService.getCreditOverridesExportPayload(req.query)) } catch (e) { next(e) }
+}
+async function exportPickingWaves(req, res, next) {
+  try { await sendExport(res, await exportService.getPickingWavesExportPayload(req.query)) } catch (e) { next(e) }
+}
+async function exportUsers(req, res, next) {
+  try { await sendExport(res, await exportService.getUsersExportPayload(req.query)) } catch (e) { next(e) }
+}
+async function exportOplogs(req, res, next) {
+  try { await sendExport(res, await exportService.getOplogsExportPayload(req.query)) } catch (e) { next(e) }
+}
+async function exportCarriers(req, res, next) {
+  try { await sendExport(res, await exportService.getCarriersExportPayload()) } catch (e) { next(e) }
+}
+async function exportPlasticBoxes(req, res, next) {
+  try { await sendExport(res, await exportService.getPlasticBoxesExportPayload(req.query)) } catch (e) { next(e) }
+}
+async function exportLocations(req, res, next) {
+  try { await sendExport(res, await exportService.getLocationsExportPayload()) } catch (e) { next(e) }
+}
+async function exportRacks(req, res, next) {
+  try { await sendExport(res, await exportService.getRacksExportPayload()) } catch (e) { next(e) }
+}
+async function exportSortingBins(req, res, next) {
+  try { await sendExport(res, await exportService.getSortingBinsExportPayload()) } catch (e) { next(e) }
+}
+async function exportSuppliers(req, res, next) {
+  try { await sendExport(res, await exportService.getSuppliersExportPayload()) } catch (e) { next(e) }
+}
+async function exportCustomers(req, res, next) {
+  try { await sendExport(res, await exportService.getCustomersExportPayload()) } catch (e) { next(e) }
+}
+async function exportAccountingPeriods(req, res, next) {
+  try { await sendExport(res, await exportService.getAccountingPeriodsExportPayload()) } catch (e) { next(e) }
+}
+async function exportTaxAdjustments(req, res, next) {
+  try { await sendExport(res, await exportService.getTaxAdjustmentsExportPayload(req.query)) } catch (e) { next(e) }
+}
+async function exportCompanies(req, res, next) {
+  try { await sendExport(res, await exportService.getCompaniesExportPayload()) } catch (e) { next(e) }
+}
+
 module.exports = {
   exportPurchase,
   exportSale,
@@ -125,4 +187,24 @@ module.exports = {
   exportPaymentReceipts,
   exportStatements,
   exportStatementDetail,
+  exportWaybills,
+  exportFixedAssets,
+  exportExpenseClaims,
+  exportFinanceAccounts,
+  exportDisposals,
+  exportAbc,
+  exportCreditOverrides,
+  exportPickingWaves,
+  exportUsers,
+  exportOplogs,
+  exportCarriers,
+  exportPlasticBoxes,
+  exportLocations,
+  exportRacks,
+  exportSortingBins,
+  exportSuppliers,
+  exportCustomers,
+  exportAccountingPeriods,
+  exportTaxAdjustments,
+  exportCompanies,
 }

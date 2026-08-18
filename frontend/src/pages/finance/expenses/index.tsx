@@ -15,6 +15,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
+import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -267,6 +268,7 @@ export default function ExpenseClaimsPage() {
         description="登记日常经营费用，审批通过后从资金账户付款。付款会自动记入账户流水。"
         actions={(
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => downloadExport('/export/expense-claims').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button onClick={openCreate}>新建报销单</Button>
           </div>
