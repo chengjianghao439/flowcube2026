@@ -25,6 +25,15 @@ const {
 } = require('./helpers/smokeTestKit')
 const reportsSvc = require('../backend/src/modules/reports/reports.service')
 
+/**
+ * 本地时区 YYYY-MM-DD（与数据库连接 timezone=+08:00 及 DATE(created_at) 语义一致）。
+ * 不能用 toISOString()（UTC），否则 UTC 日期与本地日期在部分时段错位一天。
+ */
+function localYmd(d) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -43,8 +52,11 @@ async function main() {
   const whId = rWh.insertId
 
   // ── 造 3 张已知金额的采购单（100 / 200 / 300），created_at 落在未来窗口 ──
+  // 用本地时区生成 futureYmd：数据库连接 timezone=+08:00，报表 DATE(created_at) 取本地日期；
+  // 若用 toISOString()（UTC）造日期，在 UTC 16:00 之后跑测试会导致 UTC 日期比本地日期晚一天，
+  // created_at 落在窗口外 → rangeTotal=undefined（CI 曾在此 flaky 失败）。
   const futureDate = new Date(Date.now() + 7 * 86400000)
-  const futureYmd = futureDate.toISOString().slice(0, 10)
+  const futureYmd = localYmd(futureDate)
   const PO_TOTALS = [100, 200, 300]
   const poIds = []
   for (const amt of PO_TOTALS) {
@@ -79,7 +91,7 @@ async function main() {
     `totalAmount=${byMonthP?.totalAmount}`)
 
   const sale = await reportsSvc.saleStats({})
-  const byMonthS = sale.byMonth.find((m) => m.month === new Date().toISOString().slice(0, 7))
+  const byMonthS = sale.byMonth.find((m) => m.month === localYmd(new Date()).slice(0, 7))
   log.assert('销售报表本月订单数 ≥ 造入 2 单', Number(byMonthS?.orderCount ?? 0) >= 2,
     `orderCount=${byMonthS?.orderCount}`)
   log.assert('销售报表本月金额 ≥ 造入 1300', Number(byMonthS?.totalAmount ?? 0) >= 1300,
