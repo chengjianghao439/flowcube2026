@@ -26,12 +26,15 @@ const {
 const reportsSvc = require('../backend/src/modules/reports/reports.service')
 
 /**
- * 本地时区 YYYY-MM-DD（与数据库连接 timezone=+08:00 及 DATE(created_at) 语义一致）。
- * 不能用 toISOString()（UTC），否则 UTC 日期与本地日期在部分时段错位一天。
+ * 按 mysql2 连接 timezone=+08:00 计算 YYYY-MM-DD。
+ * mysql2 写入 JS Date 时按 +08:00 序列化（UTC 时刻 + 8h 后取日期），
+ * 报表 DATE(created_at) 也取这个日期。若用进程本地时区（CI runner 是 UTC）或
+ * toISOString()（纯 UTC），日期会与 created_at 错位一天 → 范围筛选查不到 → flaky。
  */
-function localYmd(d) {
+function cnYmd(d) {
+  const t = new Date(d.getTime() + 8 * 3600000) // 转 +08:00 表示
   const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`
 }
 
 async function main() {
@@ -52,11 +55,12 @@ async function main() {
   const whId = rWh.insertId
 
   // ── 造 3 张已知金额的采购单（100 / 200 / 300），created_at 落在未来窗口 ──
-  // 用本地时区生成 futureYmd：数据库连接 timezone=+08:00，报表 DATE(created_at) 取本地日期；
-  // 若用 toISOString()（UTC）造日期，在 UTC 16:00 之后跑测试会导致 UTC 日期比本地日期晚一天，
-  // created_at 落在窗口外 → rangeTotal=undefined（CI 曾在此 flaky 失败）。
+  // futureYmd 必须按 mysql2 连接 timezone=+08:00 的序列化结果计算（cnYmd）：
+  // mysql2 把 JS Date 转成 +08:00 表示写入，报表 DATE(created_at) 取的是这个日期。
+  // 若用 toISOString()（纯 UTC）或进程本地时区（CI runner 是 UTC），日期会错位一天，
+  // created_at 落在筛选窗口外 → rangeTotal=undefined（CI 曾在此 flaky 失败）。
   const futureDate = new Date(Date.now() + 7 * 86400000)
-  const futureYmd = localYmd(futureDate)
+  const futureYmd = cnYmd(futureDate)
   const PO_TOTALS = [100, 200, 300]
   const poIds = []
   for (const amt of PO_TOTALS) {
@@ -91,7 +95,7 @@ async function main() {
     `totalAmount=${byMonthP?.totalAmount}`)
 
   const sale = await reportsSvc.saleStats({})
-  const byMonthS = sale.byMonth.find((m) => m.month === localYmd(new Date()).slice(0, 7))
+  const byMonthS = sale.byMonth.find((m) => m.month === cnYmd(new Date()).slice(0, 7))
   log.assert('销售报表本月订单数 ≥ 造入 2 单', Number(byMonthS?.orderCount ?? 0) >= 2,
     `orderCount=${byMonthS?.orderCount}`)
   log.assert('销售报表本月金额 ≥ 造入 1300', Number(byMonthS?.totalAmount ?? 0) >= 1300,
