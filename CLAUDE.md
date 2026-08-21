@@ -534,3 +534,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **PDA 错误堆栈脱敏**：`PdaErrorBoundary` 只存 message 摘要 + 组件名（去 stack，防业务数据入 sessionStorage）。
     - **PDA APK 下载签名校验**：`/api/pda/version` 下发 sha256（mtime 缓存），原生 Java 下载后比对（不匹配拒绝安装），浏览器 fallback 用 `crypto.subtle` 比对。
     - **server-update 自动装 cron**：部署后幂等同步 `install-cron.sh`，cron 改动随部署自动生效（此前需手动跑）。
+22. **2026-08-21 设计权衡项修复（2 项，提交 `4cd558f`/`e92499a`/`579adf7`）**：
+    - **JWT refresh token 分离**：access 2h（`JWT_ACCESS_EXPIRES_IN`）+ refresh 30 天（`JWT_REFRESH_EXPIRES_IN`，`tokenType='refresh'`）。`/auth/refresh` 不再挂 authMiddleware（access 过期仍能续期）；authMiddleware 拒绝 refresh token 访问业务接口；`token_version` 校验切断「无限续期」（改密码/禁用用户后旧 refresh 立即失效）。前端 authStore 存 refreshToken，401 自动换新重放（并发去重 + 单次重试）。
+    - **PDA 凭据 SecureStorage**：自建 `SecureStoragePlugin`（Android Keystore AES-GCM 加密存 SharedPreferences，明文不再落盘；密钥系统级保护）。`pdaDeviceBinding` 改内存缓存 + `initDeviceBinding()` 启动水合（boot 调用），同步 getter 兼容 axios 拦截器；非原生回退内存态。**需重新构建 APK 生效**（已随本提交触发 build-pda-apk，服务器新包已上线）。
+    - 已无未解决的设计权衡项；「avg_cost 不回冲」「前端 5 条 warning」「exceljs 告警」等为语义正确/风险不可达的技术债，CLAUDE.md 已记录不处理。
