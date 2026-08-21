@@ -181,6 +181,9 @@ function assertNoErrorText() {
   return sleep(LOAD_SETTLE_MS).then(() => waitFor(expr, { label: '无渲染错误/未注册提示' }))
 }
 
+// 登录态 JSON（ERP/PDA 共用 flowcube-auth-v3），供 PDA 新标签页注入复用
+let AUTH_STORAGE_JSON = ''
+
 async function login() {
   console.log('==> 页面烟雾：登录测试账号...')
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
@@ -194,13 +197,13 @@ async function login() {
   const user = authJson?.data?.user
   if (!token || !user) throw new Error('登录响应缺少 token / user')
 
-  const authStorage = JSON.stringify({
+  AUTH_STORAGE_JSON = JSON.stringify({
     state: { token, user, isAuthenticated: true },
     version: 0,
   })
 
   runPwOpen(['open', `${BASE_URL}/#/login`])
-  runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(authStorage)}), true)`])
+  runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(AUTH_STORAGE_JSON)}), true)`])
   runPw(['eval', '(location.reload(), true)'])
   await waitFor(
     "location.hash.includes('/dashboard') && ((document.body.innerText || '').includes('仪表盘') || (document.body.innerText || '').includes('数据总览'))",
@@ -238,6 +241,31 @@ async function setHashAndConfirm(path) {
   throw new Error(`导航失败：设置 ${target} 后 hash 未就位`)
 }
 
+// PDA 页面真验证：新标签页打开 + 注入登录态 + 断言 PDA 标题。
+//
+// 为什么不能像 ERP 页面那样在同一标签页里切 hash：CrossClientNavigationGuard
+// 会拦截同一标签页内 ERP↔PDA 互跳并弹回原页（刻意设计，PDA 验证必须新开
+// 标签页）。旧脚本对 /pda/* 全是「设 hash → 被弹回 → 检查 ERP 页无错误」的
+// 假通过。这里用 playwright-cli 的 tab-new 开新标签页直接加载 PDA 路由，
+// 注入 sessionStorage 登录态（sessionStorage 按标签页隔离，新页要重放），
+// 断言 PDA 页面独有标题，完成后 tab-close 回 ERP 标签页。
+async function openPdaAndCheck(path, expected) {
+  console.log(`==> 页面烟雾（PDA 新标签页）：${path}`)
+  const url = `${BASE_URL}/#${path}`
+  runPw(['tab-new', url])
+  try {
+    // 新标签页无登录态（sessionStorage 标签页隔离），注入后 reload 生效
+    runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(AUTH_STORAGE_JSON)}), true)`])
+    runPw(['eval', '(location.reload(), true)'])
+    await waitFor(
+      `location.hash.startsWith(${jsQuote(path.split('?')[0])}) && ((document.body.innerText || '').includes(${jsQuote(expected)}))`,
+      { label: `PDA ${path} 渲染 ${expected}` },
+    )
+  } finally {
+    runPw(['tab-close'])
+  }
+}
+
 async function main() {
   requireSmokeCredentials()
   ensureBrowser()
@@ -263,14 +291,11 @@ async function main() {
   await openAndCheck('/locations')
   await openAndCheck('/racks')
   await openAndCheck('/sorting-bins')
-  await openAndCheck('/pda')
-  await openAndCheck('/pda/inbound')
-  await openAndCheck('/pda/receive/1')
-  await openAndCheck('/pda/putaway/1')
-  await openAndCheck('/pda/picking')
-  await openAndCheck('/pda/check')
-  await openAndCheck('/pda/pack')
-  await openAndCheck('/pda/split')
+  // ── PDA 页面（新标签页真验证，见 openPdaAndCheck）──
+  await openPdaAndCheck('/pda/inbound', '收货订单')
+  await openPdaAndCheck('/pda/picking', '拣货任务')
+  await openPdaAndCheck('/pda/split', '塑料盒拆分')
+  await openPdaAndCheck('/pda/transfer', '调拨执行')
   await openAndCheck('/inventory')
   await openAndCheck('/stockcheck')
   await openAndCheck('/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed')
