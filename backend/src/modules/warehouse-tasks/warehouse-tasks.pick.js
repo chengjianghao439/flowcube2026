@@ -8,23 +8,24 @@ const {
 } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
-const { logSideEffectFailure, assertTaskPickScanClosure } = require('./warehouse-tasks.helpers')
+const { logSideEffectFailure, assertTaskPickScanClosure, assertTaskScope } = require('./warehouse-tasks.helpers')
 const { findById } = require('./warehouse-tasks.query')
 
 /**
  * 开始拣货（2 拣货中，已是默认状态，保留此接口供 PDA 兼容调用）
  * 同时清除孤立容器锁
  */
-async function startPicking(id) {
+async function startPicking(id, { scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const taskRow = await lockStatusRow(conn, {
       table: 'warehouse_tasks',
       id,
-      columns: 'id, status',
+      columns: 'id, status, warehouse_id',
       entityName: '仓库任务',
     })
+    assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
     assertWarehouseTaskAction('startPicking', taskRow.status)
     if (Number(taskRow.status) !== WT_STATUS.PICKING) {
       await compareAndSetStatus(conn, {
@@ -65,13 +66,14 @@ async function updatePickedQty() {
  * 拣货完成，自动推进到「待分拣」（2→3）
  * 同步销售单状态 → 3；释放分拣格
  */
-async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {}) {
+async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, task_type, status, sale_order_id, cancel_requested_at, adjustment_requested_at',
+    columns: 'id, task_no, task_type, status, sale_order_id, cancel_requested_at, adjustment_requested_at, warehouse_id',
     entityName: '仓库任务',
   })
+  assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在拣货退回中，不可继续拣货', 409)
   }
@@ -147,11 +149,11 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId } = {
   return payload
 }
 
-async function readyToShip(id, { requestKey, userId } = {}) {
+async function readyToShip(id, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const payload = await readyToShipWithinTransaction(conn, id, { requestKey, userId })
+    const payload = await readyToShipWithinTransaction(conn, id, { requestKey, userId, scopeWarehouseIds, pdaWarehouseId })
     await conn.commit()
     return payload
   } catch (e) {

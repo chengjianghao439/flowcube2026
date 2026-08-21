@@ -5,7 +5,7 @@ const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const { isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
-const { logSideEffectFailure, assertTaskPickScanClosure } = require('./warehouse-tasks.helpers')
+const { logSideEffectFailure, assertTaskPickScanClosure, assertTaskScope } = require('./warehouse-tasks.helpers')
 
 /**
  * 分拣完成，自动推进到「待复核」（3→4）
@@ -13,13 +13,14 @@ const { logSideEffectFailure, assertTaskPickScanClosure } = require('./warehouse
  * @param {number} id - 任务ID
  * @param {Array<{itemId: number, sortedQty: number}>} [sortedItems] - 可选，逐件上报时传入；不传则视为整任务完成
  */
-async function sortTaskWithinTransaction(conn, id, sortedItems = null, { requestKey, userId } = {}) {
+async function sortTaskWithinTransaction(conn, id, sortedItems = null, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code, cancel_requested_at, adjustment_requested_at',
+    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code, cancel_requested_at, adjustment_requested_at, warehouse_id',
     entityName: '仓库任务',
   })
+  assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在拣货退回中，不可继续分拣', 409)
   }
@@ -151,11 +152,11 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
   return payload
 }
 
-async function sortTask(id, sortedItems = null, { requestKey, userId } = {}) {
+async function sortTask(id, sortedItems = null, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const payload = await sortTaskWithinTransaction(conn, id, sortedItems, { requestKey, userId })
+    const payload = await sortTaskWithinTransaction(conn, id, sortedItems, { requestKey, userId, scopeWarehouseIds, pdaWarehouseId })
     await conn.commit()
     return payload
   } catch (e) { await conn.rollback(); throw e }

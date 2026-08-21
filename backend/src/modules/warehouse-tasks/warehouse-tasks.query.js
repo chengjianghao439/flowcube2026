@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { assertInScope } = require('../../utils/warehouseScope')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { WT_STATUS, WT_STATUS_NAME, WT_STATUS_PICK_POOL } = require('../../constants/warehouseTaskStatus')
 const { buildPackagePrintSummary } = require('../../utils/printSummary')
@@ -27,9 +28,11 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, warehouse
   return { list: rows.map(fmt), pagination: { page, pageSize, total } }
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [rows] = await pool.query('SELECT * FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL', [id])
   if (!rows[0]) throw new AppError('仓库任务不存在', 404)
+  // 单据级数据权限（2026-08-21 审计高危）：限仓用户只能看自己仓库的任务
+  assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '仓库任务')
   const task = fmt(rows[0])
   const inboundThresholds = await getInboundClosureThresholds()
   const [items] = await pool.query('SELECT * FROM warehouse_task_items WHERE task_id=?', [id])

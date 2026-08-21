@@ -3,13 +3,13 @@ const AppError = require('../../utils/AppError')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
-const { logSideEffectFailure, assertTaskCheckScanClosure } = require('./warehouse-tasks.helpers')
+const { logSideEffectFailure, assertTaskCheckScanClosure, assertTaskScope } = require('./warehouse-tasks.helpers')
 
-async function checkDone(id) {
+async function checkDone(id, { scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    await checkDoneWithinTransaction(conn, id)
+    await checkDoneWithinTransaction(conn, id, { scopeWarehouseIds, pdaWarehouseId })
     await conn.commit()
   } catch (e) {
     await conn.rollback()
@@ -19,13 +19,14 @@ async function checkDone(id) {
   }
 }
 
-async function checkDoneWithinTransaction(conn, id) {
+async function checkDoneWithinTransaction(conn, id, { scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status, cancel_requested_at, adjustment_requested_at',
+    columns: 'id, task_no, status, cancel_requested_at, adjustment_requested_at, warehouse_id',
     entityName: '仓库任务',
   })
+  assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在拣货退回中，不可继续复核', 409)
   }

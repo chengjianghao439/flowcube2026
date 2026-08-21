@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { assertInScope } = require('../../utils/warehouseScope')
 const { releaseByRef } = require('../../engine/reservationEngine')
 const { unlockContainersByTask } = require('../../engine/containerEngine')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
@@ -128,8 +129,8 @@ async function createForPurchaseReturn({ returnId, returnNo, supplierName, wareh
 /**
  * 分配操作员
  */
-async function assign(id, { userId, userName }) {
-  const task = await findById(id)
+async function assign(id, { userId, userName }, scopeWarehouseIds = null) {
+  const task = await findById(id, scopeWarehouseIds)
   assertWarehouseTaskAction('assign', task.status)
   await pool.query('UPDATE warehouse_tasks SET assigned_to=?, assigned_name=? WHERE id=?', [userId, userName, id])
 }
@@ -137,9 +138,9 @@ async function assign(id, { userId, userName }) {
 /**
  * 修改优先级
  */
-async function updatePriority(id, priority) {
+async function updatePriority(id, priority, scopeWarehouseIds = null) {
   if (![1,2,3].includes(priority)) throw new AppError('优先级无效', 400)
-  const task = await findById(id)
+  const task = await findById(id, scopeWarehouseIds)
   if (WT_STATUS_TERMINAL.includes(Number(task.status))) {
     throw new AppError('已出库或已取消的任务不允许修改优先级', 409, 'WAREHOUSE_TASK_TERMINAL_PRIORITY_FORBIDDEN')
   }
@@ -166,9 +167,11 @@ async function cancel(id, options = {}) {
     const taskRow = await lockStatusRow(conn, {
       table: 'warehouse_tasks',
       id,
-      columns: 'id, task_no, status, sale_order_id, sorting_bin_id, sorting_bin_code, cancel_requested_at',
+      columns: 'id, task_no, status, sale_order_id, sorting_bin_id, sorting_bin_code, cancel_requested_at, warehouse_id',
       entityName: '仓库任务',
     })
+    // 单据级数据权限（2026-08-21 审计高危）：限仓用户不能取消他人仓库的任务
+    assertInScope(options.scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
     if (taskRow.cancel_requested_at) {
       throw new AppError('任务已在拣货退回中，请等待逆向归还完成', 409)
     }

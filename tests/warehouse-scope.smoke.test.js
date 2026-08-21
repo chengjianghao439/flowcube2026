@@ -25,22 +25,45 @@ const {
   login,
   randomRef,
 } = require('./helpers/smokeTestKit')
+const containerEngine = require(path.resolve(__dirname, '../backend/src/engine/containerEngine'))
 
 const SCOPED_USER = 'smoke_scoped'
 const SCOPED_PW = 'SmokeScoped123!'
 const SCOPED_ROLE_ID = 7
 
+/** 通过容器引擎注入在库库存（正规两段式：先待上架再转在库） */
+async function seedStock(pool, productId, warehouseId, qty) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const { containerId } = await containerEngine.createContainer(conn, {
+      productId,
+      warehouseId,
+      initialQty: qty,
+      sourceType: containerEngine.SOURCE_TYPE.MANUAL,
+      sourceRefId: 999997,
+      remark: 'Scope测试铺底库存',
+      containerStatus: containerEngine.CONTAINER_STATUS.PENDING_PUTAWAY,
+    })
+    await containerEngine.promotePendingContainerToActive(conn, containerId, productId, warehouseId)
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
 /** 建一个「只授权某一个仓」的用户：角色权限给足，唯一的限制来自 user_warehouse_scope */
 async function ensureScopedUser(pool, allowedWarehouseId) {
   const bcrypt = require(path.resolve(__dirname, '../backend/node_modules/bcryptjs'))
   const { PERMISSIONS } = require(path.resolve(__dirname, '../backend/src/constants/permissions'))
-
   await pool.query(
     `INSERT INTO sys_roles (id, code, name, remark) VALUES (?, 'smoke_scoped', 'Smoke单仓角色', '仓库数据权限测试')
      ON DUPLICATE KEY UPDATE name=VALUES(name), remark=VALUES(remark)`,
     [SCOPED_ROLE_ID],
-  )
-  // 权限给全：本测试要证明的是「仓库范围」在起作用，而不是「权限点不足」造成的假阴性
+  )  // 权限给全：本测试要证明的是「仓库范围」在起作用，而不是「权限点不足」造成的假阴性
   const codes = [...new Set(Object.values(PERMISSIONS).filter(v => typeof v === 'string'))]
   for (const code of codes) {
     await pool.query(
@@ -372,6 +395,93 @@ async function scenarioSaleScope(ctx, log, adminToken, scopedToken, mine, others
 }
 
 /**
+ * 仓库任务（2026-08-21 审计高危修复）：detail / cancel / ship 全部要过 assertInScope。
+ * 修复前 warehouse-tasks 是唯一写操作不传 scopeWarehouseIds 的核心模块——限仓用户
+ * 知道任务 id 即可跨仓查看/取消/出库（ship 扣真实库存）。
+ */
+async function scenarioWarehouseTaskScope(ctx, log, adminToken, scopedToken, mine, others) {
+  log.section('仓库任务：详情/取消/出库跨仓拦截（2026-08-21 高危修复）')
+  const { http, pool, customer, warehouse, location, product, supplier, printer } = ctx
+
+  // 两个仓库都铺库存（占库/出库需要真实可用库存）
+  await seedStock(pool, product.id, others.id, 50)
+  await seedStock(pool, product.id, mine.id, 50)
+
+  // 管理员在「别人的仓」走完整链路造一个可出库的任务，scoped 用户全程应被拒
+  const other = await http.post('/api/sale', {
+    token: adminToken,
+    json: {
+      customerId: customer.id, customerName: customer.name,
+      warehouseId: others.id, warehouseName: others.name,
+      items: [{
+        productId: product.id, productCode: product.code, productName: product.name,
+        unit: product.unit, quantity: 1, unitPrice: 10,
+      }],
+    },
+  })
+  log.assert('管理员造他人仓销售单成功', other.ok, `status=${other.status}`)
+  const otherSaleId = Number(other.data?.data?.id)
+  const reserve = await http.post(`/api/sale/${otherSaleId}/reserve`, { token: adminToken, json: {} })
+  log.assert('管理员占库成功', reserve.ok, `status=${reserve.status}`)
+
+  // 管理员在别人仓发起出库，从库里取任务 id（ship 接口 data 为 null）
+  const shipInit = await http.post(`/api/sale/${otherSaleId}/ship`, { token: adminToken, json: {} })
+  log.assert('管理员发起出库成功', shipInit.ok, `status=${shipInit.status}`)
+  const [[otherTask]] = await pool.query(
+    'SELECT id FROM warehouse_tasks WHERE sale_order_id=? ORDER BY id DESC LIMIT 1',
+    [otherSaleId],
+  )
+  const taskId = Number(otherTask?.id)
+
+  // 1. 详情被拒（修复前 findById 无 scope 校验）
+  const detail = await http.get(`/api/warehouse-tasks/${taskId}`, { token: scopedToken })
+  log.assert(
+    '★ 别人仓任务详情被拒（修复前完全不过滤）',
+    detail.status === 403,
+    `status=${detail.status} code=${detail.data?.code}`,
+  )
+
+  // 2. 取消被拒（修复前可跨仓取消释放预占+改销售单状态）
+  const cancel = await http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: scopedToken, json: {} })
+  log.assert(
+    '★ 别人仓任务取消被拒',
+    cancel.status === 403,
+    `status=${cancel.status} code=${cancel.data?.code}`,
+  )
+
+  // 3. 出库被拒（修复前可跨仓 ship 扣真实库存）
+  const ship = await http.put(`/api/warehouse-tasks/${taskId}/ship`, { token: scopedToken, json: {} })
+  log.assert(
+    '★ 别人仓任务出库被拒（修复前可跨仓扣库存）',
+    ship.status === 403,
+    `status=${ship.status} code=${ship.data?.code}`,
+  )
+
+  // 4. 自己仓的任务不受影响（隔离不能把人挡在门外）
+  const mineSale = await http.post('/api/sale', {
+    token: adminToken,
+    json: {
+      customerId: customer.id, customerName: customer.name,
+      warehouseId: mine.id, warehouseName: mine.name,
+      items: [{
+        productId: product.id, productCode: product.code, productName: product.name,
+        unit: product.unit, quantity: 1, unitPrice: 10,
+      }],
+    },
+  })
+  const mineSaleId = Number(mineSale.data?.data?.id)
+  await http.post(`/api/sale/${mineSaleId}/reserve`, { token: adminToken, json: {} })
+  await http.post(`/api/sale/${mineSaleId}/ship`, { token: adminToken, json: {} })
+  const [[mineTask]] = await pool.query(
+    'SELECT id FROM warehouse_tasks WHERE sale_order_id=? ORDER BY id DESC LIMIT 1',
+    [mineSaleId],
+  )
+  const mineTaskId = Number(mineTask?.id)
+  const mineDetail = await http.get(`/api/warehouse-tasks/${mineTaskId}`, { token: scopedToken })
+  log.assert('自己仓的任务详情正常', mineDetail.ok, `status=${mineDetail.status}`)
+}
+
+/**
  * 权限提权路径：scoped 用户被授了全部权限点（含 user.update），但它不是超管。
  * 修复前它可以经 PUT /api/users/:id 把任意账号 roleId 改成 1 从而变身超管——
  * 这就是审计 M1。现在要求：改 roleId=1 被 schema 层拦截（400，超管也不放行）。
@@ -433,6 +543,7 @@ async function main() {
     await scenarioStockcheckAndReturnsScope(ctx, log, adminToken, scopedToken, mine, others)
     await scenarioUnscopedUserUnaffected(ctx, log, adminToken, others)
     await scenarioSaleScope(ctx, log, adminToken, scopedToken, mine, others)
+    await scenarioWarehouseTaskScope(ctx, log, adminToken, scopedToken, mine, others)
     await scenarioPrivilegeEscalationBlocked(ctx, log, adminToken, scopedToken)
   } finally {
     await ctx.close()

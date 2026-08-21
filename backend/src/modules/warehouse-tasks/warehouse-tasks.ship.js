@@ -13,6 +13,7 @@ const {
   assertTaskCheckScanClosure,
   assertTaskPackagingClosure,
   assertTaskPackagePrintClosure,
+  assertTaskScope,
 } = require('./warehouse-tasks.helpers')
 const { findById } = require('./warehouse-tasks.query')
 
@@ -47,7 +48,7 @@ async function assertCreditWithinLimit(conn, customerId, thisOrderAmount, operat
 /**
  * 执行出库（6→7）：扣减库存 + 更新销售单状态 + 生成应收账款
  */
-async function shipWithinTransaction(conn, id, operator, saleData, { requestKey } = {}) {
+async function shipWithinTransaction(conn, id, operator, saleData, { requestKey, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const { saleOrderId, warehouseId, totalAmount, items } = saleData
 
   // 加锁顺序统一为「先销售单、后仓库任务」，与 sale.cancel / requestAdjustment(SO→WT) 一致，
@@ -67,9 +68,11 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, task_type, status, return_id, cancel_requested_at, adjustment_requested_at',
+    columns: 'id, task_no, task_type, status, return_id, cancel_requested_at, adjustment_requested_at, warehouse_id',
     entityName: '仓库任务',
   })
+  // 出库是最重的库存动作：限仓用户只能出本仓任务；PDA 设备绑定仓库必须与任务仓库一致
+  assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在拣货退回中，不可出库', 409)
   }
@@ -215,11 +218,11 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey 
   return payload
 }
 
-async function ship(id, operator, saleData, { requestKey } = {}) {
+async function ship(id, operator, saleData, { requestKey, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const payload = await shipWithinTransaction(conn, id, operator, saleData, { requestKey })
+    const payload = await shipWithinTransaction(conn, id, operator, saleData, { requestKey, scopeWarehouseIds, pdaWarehouseId })
     await conn.commit()
     return payload
   } catch (e) { await conn.rollback(); throw e }

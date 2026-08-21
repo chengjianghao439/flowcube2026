@@ -10,18 +10,20 @@ const {
   assertTaskCheckScanClosure,
   assertTaskPackagingClosure,
   assertTaskPackagePrintClosure,
+  assertTaskScope,
 } = require('./warehouse-tasks.helpers')
 
 /**
  * 打包完成，自动推进到「待出库」（5→6）
  */
-async function packDoneWithinTransaction(conn, id, { requestKey, userId } = {}) {
+async function packDoneWithinTransaction(conn, id, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code, cancel_requested_at, adjustment_requested_at',
+    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code, cancel_requested_at, adjustment_requested_at, warehouse_id',
     entityName: '仓库任务',
   })
+  assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在拣货退回中，不可继续打包', 409)
   }
@@ -87,11 +89,11 @@ async function packDoneWithinTransaction(conn, id, { requestKey, userId } = {}) 
   return payload
 }
 
-async function packDone(id, { requestKey, userId } = {}) {
+async function packDone(id, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const payload = await packDoneWithinTransaction(conn, id, { requestKey, userId })
+    const payload = await packDoneWithinTransaction(conn, id, { requestKey, userId, scopeWarehouseIds, pdaWarehouseId })
     await conn.commit()
     return payload
   } catch (e) {

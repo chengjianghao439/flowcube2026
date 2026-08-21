@@ -1,10 +1,24 @@
 const AppError = require('../../utils/AppError')
+const { assertInScope } = require('../../utils/warehouseScope')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
 const logger = require('../../utils/logger')
 
 const TASK_STATUS = WT_STATUS_NAME
 const PRIORITY    = { 1:'紧急',   2:'普通',   3:'低优先级' }
+
+/**
+ * 仓库任务单据级数据权限 + PDA 设备仓库一致性校验（2026-08-21 审计高危修复）。
+ * 每个拿到 taskRow 的写入口都必须调用：
+ * - scopeWarehouseIds：限仓用户只能操作自己仓库的任务（assertInScope）
+ * - pdaWarehouseId：PDA 设备绑定仓库与任务仓库必须一致（防跨仓出库/拣货）
+ */
+function assertTaskScope(taskRow, { scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
+  assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
+  if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(taskRow.warehouse_id)) {
+    throw new AppError('当前设备绑定仓库与该仓库任务所属仓库不一致，无法作业', 403, 'PDA_WAREHOUSE_MISMATCH')
+  }
+}
 
 function logSideEffectFailure(message, error, meta = {}) {
   logger.error(
@@ -230,4 +244,5 @@ module.exports = {
   assertTaskCheckScanClosure,
   assertTaskPackagingClosure,
   assertTaskPackagePrintClosure,
+  assertTaskScope,
 }

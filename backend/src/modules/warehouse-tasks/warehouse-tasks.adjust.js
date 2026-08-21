@@ -5,7 +5,7 @@ const { reserve, partialReleaseByProduct } = require('../../engine/reservationEn
 const { reserveTaskLockedContainersForReturn, unlockAndRelocateContainer } = require('../../engine/containerEngine')
 const { WT_STATUS, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
-const { logSideEffectFailure } = require('./warehouse-tasks.helpers')
+const { logSideEffectFailure, assertTaskScope } = require('./warehouse-tasks.helpers')
 const { scopeFilter } = require('../../utils/warehouseScope')
 
 const QTY_EPS = 1e-6
@@ -292,15 +292,16 @@ async function listPendingAdjustments(warehouseId, scopeWarehouseIds = null) {
 }
 
 /** 改单确认详情：待拆箱箱子 + 待归还容器，供 PDA 逐项扫码确认 */
-async function getAdjustmentDetail(adjustmentId) {
+async function getAdjustmentDetail(adjustmentId, scopeWarehouseIds = null) {
   const [[adj]] = await pool.query(
-    `SELECT soa.*, wt.task_no, wt.warehouse_name, wt.customer_name
+    `SELECT soa.*, wt.task_no, wt.warehouse_name, wt.customer_name, wt.warehouse_id
        FROM sale_order_adjustments soa
        INNER JOIN warehouse_tasks wt ON wt.id = soa.warehouse_task_id
       WHERE soa.id = ?`,
     [adjustmentId],
   )
   if (!adj) throw new AppError('改单记录不存在', 404)
+  assertTaskScope(adj, { scopeWarehouseIds })
 
   const [items] = await pool.query(
     'SELECT * FROM sale_order_adjustment_items WHERE adjustment_id=?',
@@ -371,10 +372,21 @@ async function getAdjustmentDetail(adjustmentId) {
  * PDA 扫码确认拆箱：仅做procedural确认（箱子本身在改单发起时已作废），
  * 确认后检查该改单是否已全部清零。
  */
-async function confirmPackageVoid(voidId, { operator } = {}) {
+async function confirmPackageVoid(voidId, { operator, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const [[voidRow]] = await conn.query(
+      `SELECT v.id, wt.warehouse_id
+       FROM sale_order_adjustment_package_voids v
+       INNER JOIN sale_order_adjustment_items i ON i.id = v.adjustment_item_id
+       INNER JOIN sale_order_adjustments soa ON soa.id = i.adjustment_id
+       INNER JOIN warehouse_tasks wt ON wt.id = soa.warehouse_task_id
+       WHERE v.id=? AND v.status=1 FOR UPDATE`,
+      [voidId],
+    )
+    if (!voidRow) throw new AppError('该拆箱项不存在或已确认', 409)
+    assertTaskScope(voidRow, { scopeWarehouseIds, pdaWarehouseId })
     const [result] = await conn.query(
       `UPDATE sale_order_adjustment_package_voids
        SET status=2, confirmed_by=?, confirmed_by_name=?, confirmed_at=NOW()
@@ -402,15 +414,21 @@ async function confirmPackageVoid(voidId, { operator } = {}) {
  * createCancelReturnScanLog）同一口径，必须扫回容器当前登记的库位（即拆分时继承
  * 自原容器的库位），不允许操作员自选目标库位，否则账面库位和实物摆放位置会脱节。
  */
-async function confirmContainerReturn(returnId, { targetLocationId = null, operator } = {}) {
+async function confirmContainerReturn(returnId, { targetLocationId = null, operator, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const [[ret]] = await conn.query(
-      'SELECT * FROM sale_order_adjustment_container_returns WHERE id=? FOR UPDATE',
+      `SELECT r.*, wt.warehouse_id
+       FROM sale_order_adjustment_container_returns r
+       INNER JOIN sale_order_adjustment_items i ON i.id = r.adjustment_item_id
+       INNER JOIN sale_order_adjustments soa ON soa.id = i.adjustment_id
+       INNER JOIN warehouse_tasks wt ON wt.id = soa.warehouse_task_id
+       WHERE r.id=? FOR UPDATE`,
       [returnId],
     )
     if (!ret) throw new AppError('该归还项不存在', 404)
+    assertTaskScope(ret, { scopeWarehouseIds, pdaWarehouseId })
     if (Number(ret.status) !== 1) throw new AppError('该归还项已确认，无需重复操作', 400)
 
     const [[container]] = await conn.query(

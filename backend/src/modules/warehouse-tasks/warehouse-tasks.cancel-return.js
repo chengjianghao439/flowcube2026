@@ -3,7 +3,7 @@ const AppError = require('../../utils/AppError')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
-const { logSideEffectFailure } = require('./warehouse-tasks.helpers')
+const { logSideEffectFailure, assertTaskScope } = require('./warehouse-tasks.helpers')
 const { scopeFilter } = require('../../utils/warehouseScope')
 
 /**
@@ -42,13 +42,14 @@ async function listPendingCancelReturns(warehouseId, scopeWarehouseIds = null) {
  * 逆向归还详情：该任务名下所有仍 locked_by_task_id=taskId 的容器，附原库位信息作为归还提示。
  * 与 warehouse-tasks.command.js 的 cancel() 里查询归还指引的逻辑保持一致口径。
  */
-async function getCancelReturnDetail(taskId) {
+async function getCancelReturnDetail(taskId, scopeWarehouseIds = null) {
   const [[taskRow]] = await pool.query(
     `SELECT id, task_no, status, cancel_requested_at, warehouse_id, warehouse_name, customer_name
        FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL`,
     [taskId],
   )
   if (!taskRow) throw new AppError('仓库任务不存在', 404)
+  assertTaskScope(taskRow, { scopeWarehouseIds })
   const [containers] = await pool.query(
     `SELECT c.id, c.barcode, c.product_id, c.remaining_qty, c.container_type,
             wti.product_name,
