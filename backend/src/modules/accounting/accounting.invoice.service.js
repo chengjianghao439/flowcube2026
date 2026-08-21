@@ -203,14 +203,17 @@ async function updateInvoice(id, d, operator) {
   )
   const sourceId = quota ? quota.sourceId : (d.sourceId ?? cur.sourceId)
   try {
-    await pool.query(
+    // 状态 CAS（2026-08-21 审计修复）：UPDATE 带 status=1 条件 + affectedRows 校验，
+    // 防止「读到 status=1 → 并发红冲为 2 → 仍执行更新」的 TOCTOU（已红冲发票被改金额）
+    const [r] = await pool.query(
       `UPDATE fin_invoices SET invoice_code=?, invoice_no=?, party_name=?, party_tax_no=?,
          amount_no_tax=?, tax_rate=?, tax_amount=?, amount_with_tax=?, invoice_date=?,
          source_type=?, source_id=?, source_no=?, remark=?
-       WHERE id=? AND deleted_at IS NULL`,
+       WHERE id=? AND status=1 AND deleted_at IS NULL`,
       [d.invoiceCode ?? cur.invoiceCode, v.no, v.party, d.partyTaxNo ?? cur.partyTaxNo,
        v.noTax, round2(d.taxRate ?? cur.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate ?? cur.invoiceDate),
        d.sourceType ?? cur.sourceType, sourceId, d.sourceNo ?? cur.sourceNo, d.remark ?? cur.remark, Number(id)])
+    if (r.affectedRows !== 1) throw new AppError('发票状态已变化（可能已红冲/删除），请刷新重试', 409, 'INVOICE_STATUS_CHANGED')
     logger.info('accounting', `更新发票 [id=${id}]`, { operatorId: operator?.userId })
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') throw new AppError('发票代码+号码与已有发票重复', 400, 'INVOICE_DUP')
@@ -232,7 +235,17 @@ async function changeStatus(id, action, operator) {
 
 async function removeInvoice(id, operator) {
   const cur = await getInvoice(id)
-  await pool.query('UPDATE fin_invoices SET deleted_at=NOW() WHERE id=? AND deleted_at IS NULL', [Number(id)])
+  // 状态校验（2026-08-21 审计修复）：已抵扣/已红冲的发票禁止删除——
+  // 它们已影响凭证/税额，软删会让历史账目追溯断裂
+  if (cur.status !== 1) {
+    throw new AppError(`当前状态「${cur.statusName}」的发票不可删除`, 400, 'INVOICE_DELETE_LOCKED')
+  }
+  // 带状态 CAS：防止「读到 status=1 → 并发红冲 → 仍软删」的 TOCTOU
+  const [r] = await pool.query(
+    'UPDATE fin_invoices SET deleted_at=NOW() WHERE id=? AND status=1 AND deleted_at IS NULL',
+    [Number(id)],
+  )
+  if (r.affectedRows !== 1) throw new AppError('发票状态已变化，请刷新重试', 409, 'INVOICE_STATUS_CHANGED')
   logger.info('accounting', `删除发票 ${cur.invoiceNo}`, { operatorId: operator?.userId })
 }
 

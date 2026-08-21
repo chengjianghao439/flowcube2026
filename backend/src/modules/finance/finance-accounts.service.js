@@ -229,7 +229,7 @@ async function adjust(id, { targetBalance, happenedAt, remark }, operator) {
       direction: diff > 0 ? DIRECTION.IN : DIRECTION.OUT,
       amount: Math.abs(diff),
       bizType: BIZ_TYPE.ADJUST,
-      happenedAt: happenedAt || new Date().toISOString().slice(0, 10),
+      happenedAt: happenedAt || (d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)(new Date()),
       remark: remark || `余额调整：${Number(acc.current_balance).toFixed(2)} → ${target.toFixed(2)}`,
     }, operator)
     await conn.commit()

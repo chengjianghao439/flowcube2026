@@ -228,7 +228,7 @@ async function pay(id, { accountId, happenedAt, remark }, operator) {
       bizId: Number(id),
       bizNo: row.claim_no,
       partyName: row.applicant_name,
-      happenedAt: happenedAt || new Date().toISOString().slice(0, 10),
+      happenedAt: happenedAt || (d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)(new Date()),
       remark: remark || `费用报销 ${row.claim_no}`,
     }, operator)
     await conn.commit()

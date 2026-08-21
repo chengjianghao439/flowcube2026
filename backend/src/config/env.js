@@ -56,7 +56,7 @@ const env = {
   // 密钥轮换（P2-15）：过渡期内可配置旧密钥，旧 token 仍可校验（新 token 用 JWT_SECRET 签发），
   // 切换后移除本变量即完成轮换。空/未配置 = 无旧密钥，只认 JWT_SECRET。
   JWT_SECRET_PREVIOUS: readString('JWT_SECRET_PREVIOUS', { defaultValue: '', allowEmpty: true }),
-  JWT_EXPIRES_IN: readString('JWT_EXPIRES_IN', { defaultValue: '7d' }),
+  JWT_EXPIRES_IN: readString('JWT_EXPIRES_IN', { defaultValue: '24h' }),
   CORS_ORIGIN: readString('CORS_ORIGIN', { defaultValue: IS_PROD ? '' : 'http://localhost:5173', allowEmpty: true }),
   CORS_REFLECT: readBool('CORS_REFLECT', false),
   CORS_ALLOW_NULL_ORIGIN: readBool('CORS_ALLOW_NULL_ORIGIN', !IS_PROD),

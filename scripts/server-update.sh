@@ -80,12 +80,24 @@ SKIP_RELEASE_GATE="${SKIP_RELEASE_GATE:-0}"
 if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   ensure_docker_space
   echo "==> Docker：重建并启动 backend / frontend..."
+  # 迁移回滚兜底（2026-08-21 审计修复）：记录当前运行镜像 tag，migrate 失败时
+  # 回滚到旧镜像，避免「新代码跑在旧 schema 上」的半死状态。
+  ROLLBACK_TAG="flowcube-backend:rollback-$(date +%s)"
+  docker tag flowcube-backend:latest "$ROLLBACK_TAG" 2>/dev/null || true
   docker compose up -d --build backend frontend
   # 数据库迁移是显式步骤（后端不在启动时自动迁移）。
   # 必须在容器重建后、用新镜像里的迁移文件执行，否则新代码会跑在旧表结构上。
   # 失败即中断部署（set -e）——宁可部署失败并告警，也不要静默上线一个坏 schema。
   echo "==> 执行数据库迁移（应用本次发布新增的迁移文件）..."
-  docker compose exec -T backend npm run migrate
+  if ! docker compose exec -T backend npm run migrate; then
+    echo "!! 迁移失败，回滚 backend 到旧镜像 $ROLLBACK_TAG ..." >&2
+    docker compose up -d --no-build --force-recreate backend --quiet-pull 2>/dev/null || true
+    # force-recreate 用当前 compose 配置的镜像（latest）重建——先回退 tag 再重建
+    docker tag "$ROLLBACK_TAG" flowcube-backend:latest 2>/dev/null || true
+    docker compose up -d --no-build --force-recreate backend || true
+    echo "!! 回滚完成，请检查服务状态与告警" >&2
+    exit 1
+  fi
   wait_for_health
   if [ "$SKIP_RELEASE_GATE" = "1" ]; then
     echo "==> 已跳过发布门禁（SKIP_RELEASE_GATE=1）"

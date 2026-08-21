@@ -17,6 +17,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/ops-common.sh
+. "$SCRIPT_DIR/lib/ops-common.sh"
+
+PROJECT_DIR="${PROJECT_DIR:-/opt/flowcube}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/flowcube/backups}"
 RESTORE_IMAGE="${RESTORE_IMAGE:-mysql:8.0}"
 RESTORE_DB="${RESTORE_DB:-flowcube_restore_check}"
@@ -24,13 +29,20 @@ MIN_TABLES="${MIN_TABLES:-80}"
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
+fail() {
+  local reason="$1"
+  echo "[$(ts)] [ERROR] $reason" >&2
+  dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" \
+    "🔴 FlowCube 备份恢复演练失败（$(ts)）：${reason}\n备份可能无法恢复，请尽快人工验证！"
+  exit 1
+}
+
 FILE="${1:-}"
 if [ -z "$FILE" ]; then
   FILE=$(ls -t "$BACKUP_DIR"/flowcube_*.sql.gz 2>/dev/null | head -1)
 fi
 if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
-  echo "[$(ts)] [ERROR] 未找到备份文件（$BACKUP_DIR/flowcube_*.sql.gz）" >&2
-  exit 1
+  fail "未找到备份文件（$BACKUP_DIR/flowcube_*.sql.gz）"
 fi
 echo "[$(ts)] [INFO] 校验备份：$(basename "$FILE")（$(du -h "$FILE" | cut -f1)）"
 
@@ -56,7 +68,7 @@ for i in $(seq 1 60); do
     ready=1
     break
   fi
-  [ "$i" = "60" ] && { echo "[$(ts)] [ERROR] 临时 MySQL 未就绪" >&2; exit 1; }
+  [ "$i" = "60" ] && fail "临时 MySQL 未就绪"
   sleep 2
 done
 [ "$ready" = "1" ] && echo "[$(ts)] [INFO] 临时 MySQL 已就绪"
@@ -68,8 +80,7 @@ docker exec "$CONTAINER" \
   mysql -uroot -prestore_check_pw -e "CREATE DATABASE IF NOT EXISTS \`$RESTORE_DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" >/dev/null 2>&1
 gunzip -c "$FILE" | docker exec -i "$CONTAINER" \
   mysql -uroot -prestore_check_pw "$RESTORE_DB" >/dev/null 2>&1 || {
-    echo "[$(ts)] [ERROR] 备份导入失败 —— 备份可能损坏" >&2
-    exit 1
+    fail "备份导入失败 —— 备份可能损坏"
   }
 
 # 校验表数
@@ -79,8 +90,7 @@ TABLES=$(docker exec "$CONTAINER" \
 
 echo "[$(ts)] [INFO] 恢复后表数：${TABLES}（阈值 ${MIN_TABLES}）"
 if [ "${TABLES:-0}" -lt "$MIN_TABLES" ]; then
-  echo "[$(ts)] [ERROR] 恢复后表数不足（${TABLES} < ${MIN_TABLES}），备份疑似不完整" >&2
-  exit 1
+  fail "恢复后表数不足（${TABLES} < ${MIN_TABLES}），备份疑似不完整"
 fi
 
 # 校验关键表行数（存在即有数据；阈值可放宽为 0，防止历史库本就少数据误报）

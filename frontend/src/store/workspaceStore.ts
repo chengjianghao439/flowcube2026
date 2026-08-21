@@ -17,6 +17,10 @@ export const HOME_TAB: WorkspaceTab = {
   closable: false,
 }
 
+/** 工作区标签上限（2026-08-21 审计 C.3 修复）：keepAlive 组件实例永久累积，
+ *  无上限会让内存/DOM 随使用时长单调增长。超出上限按 LRU 关闭最旧可关闭 tab。 */
+export const MAX_WORKSPACE_TABS = 30
+
 function isDesktopWorkspacePath(path: string) {
   return !(path === '/pda' || path.startsWith('/pda/'))
 }
@@ -51,7 +55,12 @@ function sanitizeTabs(rawTabs: unknown): WorkspaceTab[] {
       closable: true,
     })
   }
-  return Array.from(deduped.values())
+  // 持久化恢复也受上限约束（2026-08-21 审计 C.3 修复）：超出裁剪掉最旧的
+  const all = Array.from(deduped.values())
+  if (all.length > MAX_WORKSPACE_TABS) {
+    return [HOME_TAB, ...all.slice(all.length - MAX_WORKSPACE_TABS + 1)]
+  }
+  return all
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -77,8 +86,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           })
           return true
         }
+        // LRU 上限（2026-08-21 审计 C.3 修复）：超出 MAX_WORKSPACE_TABS 时
+        // 关闭最旧的可关闭 tab（keepAlive 组件实例随之卸载），防止无限累积。
+        let next = [...tabs, { ...tab, key: normalized.key, path: normalized.path, title, closable: true }]
+        if (next.length > MAX_WORKSPACE_TABS) {
+          const lru = next.findIndex(t => t.closable)
+          if (lru !== -1) {
+            next = next.filter((_, i) => i !== lru)
+          }
+        }
         set({
-          tabs: [...tabs, { ...tab, key: normalized.key, path: normalized.path, title, closable: true }],
+          tabs: next,
           activeKey: normalized.key,
         })
         return true

@@ -40,7 +40,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.checkout_ref != '' && github.event.inputs.checkout_ref || github.ref }}
@@ -181,7 +181,7 @@ jobs:
 
       # 勿使用 cache: npm：setup-node 默认在仓库根目录找 package-lock.json，本仓库锁文件在 frontend/、desktop/
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb01c5a8d837db40e1b3bbf4d16c7df
         with:
           node-version: '20'
 
@@ -450,12 +450,14 @@ jobs:
       - name: Setup SSH agent
         if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           KEY_FILE=~/.ssh/flowcube_ci_key
-          printf '%s\n' '${{ secrets.SSH_PRIVATE_KEY }}' > "$KEY_FILE"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
           eval "$(ssh-agent -s)"
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
@@ -603,7 +605,7 @@ jobs:
       # + 服务器 latest.json（前面步骤已完成）。所以 continue-on-error：即使 Actions 存储
       # 配额满导致上传失败，也不拖垮整个发版 job（exe/latest.json 早已发布到位）。
       - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         continue-on-error: true
         with:
           name: FlowCube-Desktop-Setup
@@ -614,7 +616,7 @@ jobs:
       # 当前 win 目标多为 NSIS 仅 .exe；只有实际生成 zip 时才上传 portable artifact。
       - name: Upload portable ZIP artifact (optional)
         if: steps.portable_zip.outputs.present == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         continue-on-error: true
         with:
           name: FlowCube-Desktop-Portable

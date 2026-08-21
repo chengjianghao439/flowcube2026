@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
 
@@ -76,12 +76,12 @@ jobs:
           [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb01c5a8d837db40e1b3bbf4d16c7df
         with:
           node-version: "20"
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: "temurin"
           java-version: "21"
@@ -166,7 +166,7 @@ jobs:
       # PDA 实际更新走后面的「发布到服务器」步骤。若不设 continue-on-error，
       # 存储配额满会让本步骤失败并连带跳过发布+校验，导致 APK 构建成功却没上线。
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         continue-on-error: true
         with:
           name: flowcube-pda-apk
@@ -182,7 +182,7 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           KEY_FILE=~/.ssh/flowcube_ci_key
-          printf '%s\n' '${{ secrets.SSH_PRIVATE_KEY }}' > "$KEY_FILE"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
           eval "$(ssh-agent -s)"
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
@@ -220,9 +220,13 @@ jobs:
           install -m 0644 /tmp/flowcube-pda-app-release.apk backend/apk/app-release.apk
           install -m 0644 /tmp/flowcube-pda-version.json backend/apk/version.json
           rm -f /tmp/flowcube-pda-app-release.apk /tmp/flowcube-pda-version.json
-          if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
-            docker compose up -d --build backend
-          fi
+          # 2026-08-21 审计修复：不再裸跑 docker compose up——与 Deploy workflow
+          # 并发时会互抢容器（2026-08-11 事故复现路径）。改走 server-update.sh，
+          # 复用同一把 /tmp/flowcube-deploy.lock flock 部署锁；PDA 发布不涉及
+          # 业务代码变更，跳过发布门禁（release-gate 由 Deploy workflow 负责）。
+          # backend/apk 是 git 跟踪目录，reset 后由上面 install 覆盖为新产物，
+          # server-update.sh 的 compose up --build 会用新产物重建 backend 镜像。
+          SKIP_GIT_PULL=1 SKIP_RELEASE_GATE=1 bash scripts/server-update.sh
           EOF
 
       - name: Verify live PDA update endpoint

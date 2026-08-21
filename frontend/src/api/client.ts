@@ -17,7 +17,7 @@ import {
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
 import { formatBackendCode, formatErrorMessage } from '@/utils/displayFormatters'
 import { getDeviceSession } from '@/lib/pdaDeviceBinding'
-import { ensureDeviceSession } from './pda-session'
+import { ensureDeviceSession, renewDeviceSession } from './pda-session'
 
 /** 标记已为设备票据失效重试过一次，防止无限换票循环 */
 type RetriableConfig = InternalAxiosRequestConfig & { __pdaSessionRetried?: boolean }
@@ -175,8 +175,24 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error),
 )
 
+// PDA 票据心跳续期（2026-08-21 审计修复）：7 天 TTL 下活跃使用需持续顺延失效窗口。
+// 低频触发（约每 4 小时一次、且仅 PDA 端）避免每次请求都续期；静默失败由
+// 403 自动换票路径兜底。
+let lastPdaRenewAt = 0
+const PDA_RENEW_INTERVAL_MS = 4 * 60 * 60 * 1000
+function maybeRenewPdaSession() {
+  if (!IS_CAPACITOR_PDA) return
+  const now = Date.now()
+  if (now - lastPdaRenewAt < PDA_RENEW_INTERVAL_MS) return
+  lastPdaRenewAt = now
+  renewDeviceSession().catch(() => { /* 静默：失败走 403 换票兜底 */ })
+}
+
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    maybeRenewPdaSession()
+    return response
+  },
   async (error: AxiosError<ApiErrorResponse<PrintQuotaErrorPayload>>) => {
     const status  = error.response?.status
     const transportCode = error.code

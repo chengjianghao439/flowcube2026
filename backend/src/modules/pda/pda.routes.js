@@ -34,6 +34,21 @@ router.post('/sessions', authMiddleware, validateBody(createSessionSchema), asyn
 }))
 
 /**
+ * POST /api/pda/sessions/renew
+ * 心跳续期（2026-08-21 审计修复）：PDA 活跃使用期间定期换新票据，延长有效期。
+ * 需携带现有会话票据（X-PDA-Session 头），由 pdaSessionRequired 校验有效性。
+ */
+router.post('/sessions/renew', authMiddleware, pdaSessionRequired(), asyncRoute(async (req, res) => {
+  const data = await pdaSessions.renewSession({ sessionToken: req.headers['x-pda-session'] })
+  return successResponse(res, {
+    session_token: data.sessionToken,
+    scopes: data.scopes,
+    expires_at: data.expiresAt,
+    warehouse_id: data.warehouseId,
+  }, 'PDA 设备会话已续期')
+}))
+
+/**
  * GET /api/pda/version
  * 返回当前最新 APK 版本信息（无需登录，PDA 启动时静默检查）
  */

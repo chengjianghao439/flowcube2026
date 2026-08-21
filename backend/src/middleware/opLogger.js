@@ -47,6 +47,17 @@ const MODULE_MAP = {
   '/api/dashboard': 'dashboard', '/api/roles': 'roles',
   '/api/reports': 'reports', '/api/carriers': 'carriers',
   '/api/app-update': 'app-update',
+  // 2026-08-21 审计修复：财务/会计/审批/HR 等写操作此前全记成 module='system'，
+  // 审计按模块过滤失效——直接改钱的模块反而最难追溯
+  '/api/finance': 'finance', '/api/refunds': 'refunds',
+  '/api/accounting': 'accounting', '/api/fixed-assets': 'fixed-assets',
+  '/api/hr': 'hr', '/api/approvals': 'approvals',
+  '/api/credit-overrides': 'credit-overrides', '/api/disposals': 'disposal',
+  '/api/departments': 'departments', '/api/customer-addresses': 'customer-addresses',
+  '/api/purchase-requisitions': 'purchase-requisitions',
+  '/api/procurement': 'procurement', '/api/logistics': 'logistics',
+  '/api/plastic-boxes': 'plastic-boxes', '/api/pda-devices': 'pda-devices',
+  '/api/system': 'system',
 }
 
 function getModule(path) {

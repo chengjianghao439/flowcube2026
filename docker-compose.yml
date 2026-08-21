@@ -10,7 +10,10 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./backend/src/database:/docker-entrypoint-initdb.d
+      # 2026-08-21 审计修复：不再挂载迁移目录到 docker-entrypoint-initdb.d——
+      # 空数据卷首次启动会执行全部迁移（不记录 db_migrations），随后 server-update.sh
+      # 的显式 migrate 再跑一遍，ALTER TABLE 会因 Duplicate column 失败。
+      # 迁移只由 server-update.sh 的显式步骤负责（见 scripts/server-update.sh）。
       # 慢查询日志与连接数配置（P2-14）：只读挂载，不覆盖默认配置目录
       - ./docker/mysql/my.cnf:/etc/mysql/conf.d/slowlog.cnf:ro
     ports:
