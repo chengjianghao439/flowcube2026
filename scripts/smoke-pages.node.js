@@ -138,10 +138,13 @@ function sleep(ms) {
 // auto-wait 一致：条件尽快成立就立即返回，真失败的页面才等到超时抛错。
 async function waitFor(expr, { timeout = 20000, interval = 500, label = '页面' } = {}) {
   const deadline = Date.now() + timeout
-  let out = ''
   while (Date.now() < deadline) {
-    out = runPw(['eval', expr])
-    if (out.includes('true')) return true
+    // 导航切换瞬间 page context 可能短暂不可用，eval 抛错按「未就绪」继续轮询
+    try {
+      if (runPw(['eval', expr]).includes('true')) return true
+    } catch {
+      // 忽略单次 eval 失败，等下一轮
+    }
     await sleep(interval)
   }
   // 超时兜底：再取一次页面文本，把「当时到底长什么样」带进报错，便于定位
@@ -205,11 +208,29 @@ async function login() {
   )
 }
 
-function openAndCheck(path, expected = '', forbidden = '') {
+async function openAndCheck(path, expected = '', forbidden = '') {
   console.log(`==> 页面烟雾：${path}`)
-  runPw(['eval', `(location.hash = ${jsQuote(`#${path}`)}, true)`])
+  await setHashAndConfirm(path)
   // 路由切换后轮询等待目标文本；无期望文本时退化为「无渲染错误」
   return expected ? assertText(expected, forbidden) : assertNoErrorText()
+}
+
+// 设置 hash 并确认已生效。playwright-cli 每次 eval 都是独立进程调用，
+// 偶发存在「hash 赋值执行成功但路由未切换」的情况（CI 两次部署失败，
+// 页面文本都停留在上一页——那是 hash 变更被吞掉，而非渲染慢）。
+// 因此先轮询确认 hash 变成目标路径，未就位则重设一次。
+async function setHashAndConfirm(path) {
+  const target = `#${path}`
+  const pathPrefix = target.split('?')[0]
+  for (let attempt = 0; attempt < 2; attempt++) {
+    runPw(['eval', `(location.hash = ${jsQuote(target)}, true)`])
+    const ok = await waitFor(
+      `location.hash.startsWith(${jsQuote(pathPrefix)})`,
+      { timeout: 5000, interval: 500, label: `导航到 ${pathPrefix}` },
+    ).catch(() => false)
+    if (ok) return
+  }
+  throw new Error(`导航失败：设置 ${target} 后 hash 未就位`)
 }
 
 async function main() {
