@@ -222,16 +222,14 @@ async function openAndCheck(path, expected = '', forbidden = '') {
 // 偶发存在「hash 赋值执行成功但路由未切换」的情况（CI 两次部署失败，
 // 页面文本都停留在上一页——那是 hash 变更被吞掉，而非渲染慢）。
 // 因此先轮询确认 hash 变成目标路径，未就位则重设一次。
+// （PDA 内部导航也走这里：PDA→PDA 不被 CrossClientNavigationGuard 拦截，
+//  hash 应能确认成功；ERP→PDA 的守卫弹回场景由 openPdaAndCheck 的
+//  新标签页方案绕开，不再出现。）
 async function setHashAndConfirm(path) {
   const target = `#${path}`
   const pathPrefix = target.split('?')[0]
   for (let attempt = 0; attempt < 2; attempt++) {
     runPw(['eval', `(location.hash = ${jsQuote(target)}, true)`])
-    // PDA 路径受 CrossClientNavigationGuard 保护：同一标签页 ERP→PDA 会被
-    // 弹回原 ERP 页（设计行为，见 router/index.tsx），hash 不可能停在目标。
-    // 这是旧脚本对 /pda/* 一直「假通过」的原因；对 PDA 路径不做 hash 确认，
-    // 保持旧语义（只验证 ERP 上下文里无渲染错误）。
-    if (path === '/pda' || path.startsWith('/pda/')) return
     const ok = await waitFor(
       `location.hash.startsWith(${jsQuote(pathPrefix)})`,
       { timeout: 5000, interval: 500, label: `导航到 ${pathPrefix}` },
@@ -246,19 +244,31 @@ async function setHashAndConfirm(path) {
 // 为什么不能像 ERP 页面那样在同一标签页里切 hash：CrossClientNavigationGuard
 // 会拦截同一标签页内 ERP↔PDA 互跳并弹回原页（刻意设计，PDA 验证必须新开
 // 标签页）。旧脚本对 /pda/* 全是「设 hash → 被弹回 → 检查 ERP 页无错误」的
-// 假通过。这里用 playwright-cli 的 tab-new 开新标签页直接加载 PDA 路由，
-// 注入 sessionStorage 登录态（sessionStorage 按标签页隔离，新页要重放），
-// 断言 PDA 页面独有标题，完成后 tab-close 回 ERP 标签页。
+// 假通过。
+//
+// 时序（sessionStorage 按标签页隔离 + zustand persist 只在初始化时读 storage）：
+// 1. tab-new 打开新标签页 → 未登录 → PdaProtectedRoute 把 URL 弹到 #/pda/login
+// 2. 注入 sessionStorage 登录态后 reload → zustand 重新初始化读到登录态，
+//    PdaGuestRoute 把 /pda/login 重定向到 /pda 首页
+// 3. 再设 hash 到目标 PDA 路径（PDA 内部导航，守卫不拦 ERP↔PDA）
+// 4. 轮询断言 PDA 标题，完成后 tab-close 回 ERP 标签页
 async function openPdaAndCheck(path, expected) {
   console.log(`==> 页面烟雾（PDA 新标签页）：${path}`)
-  const url = `${BASE_URL}/#${path}`
+  const url = `${BASE_URL}/#/pda/login`
   runPw(['tab-new', url])
   try {
-    // 新标签页无登录态（sessionStorage 标签页隔离），注入后 reload 生效
+    // 新标签页无登录态，注入后 reload 让 zustand persist 重新水合
     runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(AUTH_STORAGE_JSON)}), true)`])
     runPw(['eval', '(location.reload(), true)'])
+    // 等待水合完成并落到 PDA 首页（/pda/login → /pda）
     await waitFor(
-      `location.hash.startsWith(${jsQuote(path.split('?')[0])}) && ((document.body.innerText || '').includes(${jsQuote(expected)}))`,
+      "location.hash.startsWith('#/pda') && !location.hash.startsWith('#/pda/login')",
+      { timeout: 10000, interval: 500, label: 'PDA 登录态水合' },
+    )
+    // PDA 内部导航到目标页（同标签页内 PDA→PDA 不被守卫拦截）
+    await setHashAndConfirm(path)
+    await waitFor(
+      `(document.body.innerText || '').includes(${jsQuote(expected)})`,
       { label: `PDA ${path} 渲染 ${expected}` },
     )
   } finally {
