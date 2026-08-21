@@ -76,7 +76,7 @@ jobs:
           [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Setup Node.js
-        uses: actions/setup-node@249970729cb01c5a8d837db40e1b3bbf4d16c7df
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: "20"
 

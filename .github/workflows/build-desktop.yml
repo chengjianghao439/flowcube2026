@@ -181,7 +181,7 @@ jobs:
 
       # 勿使用 cache: npm：setup-node 默认在仓库根目录找 package-lock.json，本仓库锁文件在 frontend/、desktop/
       - name: Setup Node.js
-        uses: actions/setup-node@249970729cb01c5a8d837db40e1b3bbf4d16c7df
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '20'
 
