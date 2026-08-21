@@ -2,7 +2,7 @@
 
 本文件是 Claude Code（claude.ai/code）在本仓库工作的**唯一权威说明书**。内容以当前代码、数据库结构与配置为准。
 
-> 最近一次核对：**2026-07-29**，对着当前代码逐条验证「可机械验证的声明」——各类计数（模块/表/迁移/权限码/路由）、文中提到的每个 npm 脚本是否真能跑、每个路径是否存在、第 20 节的已知风险是否还成立。本次修正了随 147–149 迁移产生的三处计数偏差（迁移 146→149、表 81→82、权限码 144→145），并清理了 `.claude/worktrees/` 下的遗留 worktree、`docs/` 下过期的阶段性报告与 AGENTS.md 旧快照。计数口径 = **已合并到 main**（`customer-addresses` 模块、迁移 150、表 `sale_customer_addresses` 已随 v0.4.37 合并计入，故本文迁移=150、表=83、模块=47）。历史教训（仍适用）：**凡是需要数一下或实跑一遍的条目最容易被照抄旧文本而滞后**——改本文件时，数字和"某某不存在/未启用"这类断言必须当场验证再写。
+> 最近一次核对：**2026-08-21**，通过多智能体深度审计 + 逐项机械验证（见 `docs/audit-report-2026-08-21.md`）。本次修正了自 v0.4.37 以来累积的大规模计数滞后：迁移 150→**210**（db_migrations 实际 211 条，含 1 条手工执行记录）、表 83→**131**（生产实测）、模块 47→**58**、权限码 145→**184**（前后端一致）、路由 47→**59**、状态机 10→**14**（documentStatusRules.js 新增 refundOrder/purchaseRequisition/inventoryDisposal/procurementPlan/creditOverride）。同时记录了 v0.4.73~v0.4.80 的 8 个版本、会计标准 5 项（多账套/固定资产/结转链/工资/报税）、P2 收官功能（审批流/授信放行/退款单/呆滞处置）。计数口径 = **已合并到 main**。历史教训（仍适用）：**凡是需要数一下或实跑一遍的条目最容易被照抄旧文本而滞后**——改本文件时，数字和"某某不存在/未启用"这类断言必须当场验证再写。
 
 > 仓库里还有一份 `AGENTS.md`（已被 `.gitignore` 忽略），是本文件的**旧快照**（模块数、状态机、PDA 描述均已过期）。**不要把 AGENTS.md 当事实来源。**
 > `docs/01-系统技术与架构总规范.md` 是设计规范文档，与本文件冲突时以**代码**为准，其次以本文件为准。
@@ -44,15 +44,15 @@ flowcube/
 │   ├── apk/version.json            PDA 版本清单（APK 本体不入库）
 │   ├── downloads/                  ⚠️ 已废弃的旧桌面发布目录，勿使用
 │   └── src/
-│       ├── app.js                  中间件装配 + 47 条 /api 路由注册 + 静态目录 + 404 + errorHandler
+│       ├── app.js                  中间件装配 + 59 条 /api 路由注册 + 静态目录 + 404 + errorHandler
 │       ├── scheduler.js            仅启动 operation_requests TTL 清理
 │       ├── config/                 db.js（连接池）、env.js（环境变量校验，生产缺项直接拒启动）
-│       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / settlementType / permissions
-│       ├── database/               150 个 .sql 迁移 + migrate.js
-│       ├── engine/                 containerEngine / inventoryEngine / reservationEngine ← 库存唯一合法入口
-│       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger
-│       ├── modules/                47 个业务模块，统一 routes → controller → service
-│       └── utils/                  AppError / response / statusTransition / operationRequest / warehouseScope / codeGenerator …
+│       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / settlementType / voucherSource / permissions
+│       ├── database/               210 个 .sql 迁移 + migrate.js
+│       ├── engine/                 containerEngine / inventoryEngine / reservationEngine / approvalEngine ← 库存唯一合法入口（approvalEngine 为多级审批流引擎，P2-7）
+│       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger / companyScope（多账套公司隔离，会计标准）
+│       ├── modules/                58 个业务模块，统一 routes → controller → service
+│       └── utils/                  AppError / response / statusTransition / operationRequest / warehouseScope / codeGenerator / creditExposure / inboundThresholds / priceLevels / priceReference / printSummary / route / requestContext …
 ├── frontend/
 │   ├── src/{api,components,config,constants,flows,generated,hooks,layouts,lib,pages,router,store,types,utils}
 │   ├── android/                    Capacitor 原生工程（cap sync 生成，手改需谨慎）
@@ -87,7 +87,17 @@ npm run smoke:p1-regression
 npm run smoke:warehouse-scope   # 仓库级数据权限
 npm run smoke:pda-device-session # PDA 设备会话（设备未绑定即拒绝作业）
 npm run smoke:finance           # 财务：收款核销 / 对账单 / 资金账户 / 费用报销
+npm run smoke:accounting        # 会计：凭证 / 结转 / 月结（会计标准）
+npm run smoke:accounting-period
+npm run smoke:invoice-quota     # 开票量校验
+npm run smoke:refund-orders     # 退款单（P2-6）
+npm run smoke:disposal          # 呆滞处置单（P2-9）
+npm run smoke:credit-outbound   # 授信出库拦截
+npm run smoke:reports-values    # 报表口径值
 npm run test:permissions        # 前后端权限码一致性（两份常量表的唯一校验器）
+npm run test:accounting         # 凭证映射纯函数
+npm run test:oplog              # 操作日志
+npm run test:print-purge        # 打印任务清理
 npm run test:integration        # 库存一致性集成测试（独立测试库）
 ```
 
@@ -256,8 +266,8 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 
 ## 8. 数据库与核心模型
 
-- 83 张表（含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。
-- 迁移：`backend/src/database/` 下 150 个 `.sql`，编号 001–150（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
+- 131 张表（生产实测，含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。表漂移对账用 `backend/scripts/schema-reconcile.js`（只读检查，`--strict` 可挂 CI）。
+- 迁移：`backend/src/database/` 下 210 个 `.sql`，编号 001–210（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行；db_migrations 有 211 条执行记录，含 1 条手工执行的迁移）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
 - ⚠️ **数据库里的 `COLUMN_COMMENT` 曾大面积过期，现已大部分订正但仍有残留**（2026-07-27 抽查：`sale_orders.status`、`warehouse_tasks.status` 的注释都已更新并注明"见 documentStatusRules / warehouseTaskStatus"；`sale_orders.closed_reason` 仍写着迁移 127 已废弃的 `partial_ship_close`）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
 
 核心事实表 / 派生字段：
@@ -314,6 +324,11 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 | `purchaseReturn` / `saleReturn` | 1草稿 2已确认 3已执行 4已取消 | confirm(1→2)、execute(2→3，由回调触发)、cancel(1/2→4) |
 | `expenseClaim` | 1草稿 2待审批 3已批准 4已付款 5已驳回 6已取消 | edit(1)、submit(1→2)、withdraw(2→1 本人撤回)、approve(2→3)、reject(2→5)、pay(3→4)、cancel(1/2/5→6；已批准需先驳回，已付款不可取消) |
 | `stockcheck` | 1进行中 2已完成 3已取消 | edit(1)、submit(1→2)、cancel(1→3) |
+| `refundOrder` | 1草稿 2已提交 3已执行 4已取消 | edit(1)、submit(1→2)、execute(2→3)、cancel(1/2→4)（P2-6 退款单，见 `refunds/`） |
+| `purchaseRequisition` | 1草稿 2待审批 3已批准 4已驳回 5已转换 6已取消 | edit(1)、submit(1→2)、withdraw(2→1)、approve(2→3)、reject(2→4)、convert(3→5)、complete、cancel(1/2/4→6)（P2-7 采购请购） |
+| `inventoryDisposal` | 1草稿 2待审批 3已批准 4已执行 5已驳回 6已取消 | edit(1)、submit(1→2)、approve(2→3)、reject(2→5)、dispose(3→4)、cancel(1/2/5→6)（P2-9 呆滞处置单） |
+| `procurementPlan` | 1草稿 2已转换 3已取消 | edit(1)、convert(1→2)、cancel(1→3)（采购计划） |
+| `creditOverride` | 1草稿 2待审批 3已批准 4已驳回 5已取消 | edit(1)、submit(1→2)、approve(2→3)、reject(2→4)、cancel(1/2/4→5)（P2-7 授信超额放行） |
 | `return_tasks`（内联） | 1待收货 2收货中 3待质检 4待上架 5已完成 6已取消 | 见 `return-tasks.service.js` 的 `RT_TRANSITIONS` |
 
 > **不在 `documentStatusRules.js` 里的状态机还有财务三张表**（2026-07-27 核实）：`payment_receipts`（1待核销 2部分核销 3已核销完）、`reconciliation_statements`（1草稿 2已确认 3已核销完）、`finance_accounts`。它们各自在 service 里用「事务 + `SELECT … FOR UPDATE` 锁单头 + 校验状态 + `UPDATE`」实现，与 `compareAndSetStatus` 等效、并发安全，只是没走统一入口。**找状态机时别只翻 `documentStatusRules`**；新增财务状态流转请沿用它们现有的加锁写法，不要退化成不加锁的裸 `UPDATE`。
@@ -340,7 +355,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 ## 12. 权限与安全规则
 
 - 登录 → JWT（`Authorization: Bearer`）。`authMiddleware` 每次请求都回查用户并校验 `token_version`：改密码/禁用用户会使旧 token 立即失效（`AUTH_SESSION_INVALID`）。
-- 权限码在 `backend/src/constants/permissions.js` 与 `frontend/src/lib/permission-codes.ts` **两份手工同步**的常量表（各 145 个，当前双向一致）；改动后跑 `npm run test:permissions` 校验（它做双向 diff + 命名合规检查，已进 CI）。角色权限存 `sys_role_permissions`，`requirePermission` 在校验前按角色现查。
+- 权限码在 `backend/src/constants/permissions.js` 与 `frontend/src/lib/permission-codes.ts` **两份手工同步**的常量表（各 184 个，当前双向一致）；改动后跑 `npm run test:permissions` 校验（它做双向 diff + 命名合规检查，已进 CI）。角色权限存 `sys_role_permissions`，`requirePermission` 在校验前按角色现查。
 - **roleId === 1 是超管，跳过所有权限校验**（前后端都是）。
 - **数据范围**：`user_warehouse_scope`（迁移 122）→ `req.user.warehouseIds`（null=不限仓，超管恒 null，60s 缓存）→ 列表查询用 `scopeFilter()` 拼 SQL。新增涉仓列表接口应接入。
 - 每个业务 routes 文件顶部都有 `router.use(authMiddleware)`。**唯一完全公开的模块是 `/api/app-update/latest`**，另外 `/api/pda/version`、`/api/pda/download`、`/api/auth/login`、`/health`、`/api/health` 免登录。
@@ -359,6 +374,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 - **新增 ERP 页面的标准步骤**：① `src/pages/xxx/index.tsx` ② 在 `src/router/routeRegistry.ts` 追加 `routeRegistry`（含 `permission`、`keepAlive`、`tabIdentity`、`nav.group/order`）或 `routePatterns`（详情/表单页，带 `listPath`）③ 需要新权限时**同时**改后端 `permissions.js`、前端 `permission-codes.ts`，并加一条 seed 迁移把权限授予相应角色。菜单由 `buildTopNavSections()` 自动生成，不要手写菜单。
 - 状态：**Zustand** 只存会话级全局态（`authStore` 存 sessionStorage、关窗即失效，**本地 dev 连本机后端时例外**，见第 5 节；`workspaceStore` 标签页；`dirtyGuardStore`）；**React Query** 管所有服务端数据。
 - **API 一律经 `src/api/*.ts` + `payloadClient`**（自动解信封）。不要在组件里直接 `axios`。需要自行处理错误时传 `{ skipGlobalError: true }`，否则拦截器会弹全局 toast；401 自动登出。
+- **登出必须清 React Query 缓存**：`performSessionLogout()` 要调 `queryClient.clear()`（2026-08-21 审计发现缺失，登出再登录会短暂看到上一账号数据）。新增登出/切号逻辑时检查缓存清理。
 - 状态常量用 `src/generated/status.ts`（由 `npm run generate:status` 从后端常量生成，**不要手改**）。
 - **状态徽章全站唯一写法**：任何「状态」展示（单据状态、任务状态、启用停用、打印结果、分类标识）一律用 `components/shared/StatusBadge` 的 `<SoftStatusLabel label tone>` 或 `<StatusBadge type status>`，tone 取自 `lib/statusTone.ts` 的 6 档：`draft`（草稿/停用/空闲）、`active`（进行中）、`success`（完成/启用）、`warning`（在途/待确认/超时）、`danger`（取消/失败/逾期）、`info`（类型/角色/等级等分类标识）。**禁止**直接写 `<Badge variant="default|secondary|destructive">` 当状态用，**禁止**硬编码 `bg-green-50`/`bg-blue-100` 这类调色板 class。语义色 `success`/`warning`/`info` 已注册进 `tailwind.config.js` 的 theme，`bg-*/10`、`border-*/20` 才会生成——不要退回 `index.css` 手写 utility 的老路（那样 `border-success/20` 会静默失效）。
 - **禁止在前端复制后端业务规则**：可用库存、状态可否流转、金额结算等一律以接口返回为准；前端不得传"目标状态值"让后端照单执行。
@@ -469,7 +485,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 3. ~~PDA 设备会话形同虚设~~ **已启用**：`pdaSessionRequired()` 已挂在调拨扫出扫入、退货 receive/check/putaway、`/scan-logs` 写入等接口上，前端 `api/client.ts` 会发 `X-PDA-Session` 并自动续期，回归由 `smoke:pda-device-session` 守着。见第 12 节。
 4. ~~缺货上报功能未落地~~ **已了结**：迁移 134 `drop_warehouse_task_shortages` 已删表与相关列，代码里也没有残留引用（`sale` 模块里的 shortage 是"缺货弹窗"，与此无关）。
 5. ~~数据库列注释与实际语义脱节~~ **已系统订正**（迁移 146，2026-07-27）。方法是把 61 条状态类列注释逐条对 `constants/` 与前端 `StatusBadge` 核，改掉 5 条：`transfer_orders.status`（旧注释少一个状态且把中间态"在途"写成"已执行"，最严重）、`sale_orders.closed_reason`（`partial_ship_close` 已由 127 废弃）、`purchase_returns`/`sale_returns.status`（"已退货"→"已执行"）、`print_jobs.content_type`（实际只收 zpl）。**状态语义一律以 `backend/src/constants/` 为准这条不变**，注释只作参考。
-6. ~~前后端权限码没有一致性校验~~ **已有校验**：`npm run test:permissions` 做双向 diff + 命名合规检查并已进 CI，当前两边各 145 个、完全一致。仍是两份手工常量表，新增权限码要改三处（后端常量、前端常量、seed 迁移）。
+6. ~~前后端权限码没有一致性校验~~ **已有校验**：`npm run test:permissions` 做双向 diff + 命名合规检查并已进 CI，当前两边各 184 个、完全一致（2026-08-21 核对）。仍是两份手工常量表，新增权限码要改三处（后端常量、前端常量、seed 迁移）。
 7. ~~`/packages/*` 缺 `pdaOnly`~~ **已收紧**：装箱、完成箱、作废箱等写接口都已挂 `pdaOnly`。
 8. **生产库存在 schema 漂移史**（曾出现迁移未真正生效导致缺列；也出现过迁移文本声明了生产从没有过的列）。改动依赖新列的逻辑时，先确认生产已跑过对应迁移。2026-07-27 新增的一例同类问题：`payment_records.order_id` 实际是 `NOT NULL`，而 054 的建表文本与 091 的注释都写它可空——已由迁移 145 订正。
 9. **`avg_cost` 只随入库正向移动**，退货/撤回收货不反冲——这是刻意简化，利润分析用 `sale_order_items.cost_snapshot` 口径，不要"顺手修正"。
@@ -483,3 +499,15 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 13. **2026-08-21 运维事故已修复**：生产 MySQL 容器被 Docker 改名为 `d96fcce6a90a_flowcube-mysql`（`docker compose up` 遇 container_name 冲突时的既定行为），硬编码容器名的 `backup-db.sh` 连续 12 天 mysqldump 失败，且因脚本缺陷无人察觉（每天留下 20 字节空 gzip 被日报当"今日✓"；monitor 去抖只响一声后沉默）。已修复：`lib/ops-common.sh` 的 `resolve_container()` 解析容器名、backup 失败零残留 + 钉钉告警、daily-report 只认体积达标备份、monitor 持续异常重提醒。见第 16 节。**运维脚本的容器名一律经 `resolve_container()` 解析，不要硬编码。**
 14. **门禁测试账号体系**（2026-08-21 补齐）：`smoke_gate`（超管 role 1，CI secrets 注入）跑全量页面；`smoke_limited`（`SmokeLimited123!`，仅 `inbound.order.view` + `dashboard.view`，生产库与测试 helper 同款）专测 403 权限拦截。**新增受限账号密码不得外泄**（它是 CI 门禁专用，不是业务账号）。
 15. **`/pda/*` 页面烟雾现在是真的了**（2026-08-21）：`openPdaAndCheck` 用 playwright-cli `tab-new` 新标签页 + 注入 sessionStorage 登录态（sessionStorage 按标签页隔离，新页要重放 `flowcube-auth-v3`）→ 等 zustand 水合（`#/pda/login` → `#/pda`）→ PDA 内部导航 → 断言 PDA 标题 → `tab-close`。覆盖 4 个列表页（inbound/picking/split/transfer）；带 id 的作业页依赖真实任务数据 + `X-Client: pda` 写接口，不纳入静态烟雾（与 ERP 带 id 页同策略）。
+16. **2026-08-21 深度审计发现的高危缺陷（未修复）**，详见 `docs/audit-report-2026-08-21.md`：
+    - **warehouse-tasks 跨仓 IDOR（高危）**：detail/cancel/assign/updatePriority 等接口不传 `scopeWarehouseIds`、service 无 `assertInScope`——限仓用户可跨仓查看/取消任务（对比 sale/inbound-tasks 都有单据级校验）。修法：controller 传 `req.user?.warehouseIds ?? null`，service 拿到任务行后 `assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')`。
+    - **warehouse-tasks PDA 作业可跨仓出库（高危）**：ship/sortDone/checkDone/packDone 挂 `pdaOnly`+`pdaSessionRequired` 但业务层无 `req.pda.warehouseId` 与 `task.warehouse_id` 一致性校验（inbound-tasks.putaway 有）。绑定 A 仓设备可对 B 仓任务 ship 扣库存。修法：事务内取到 taskRow 后校验设备仓库与任务仓库一致 + 用户级 assertInScope。
+    - **picking-waves 无仓库数据权限校验（中危）**、**全局搜索不过滤仓库（中危，代码注释已承认设计）**。
+    - **CI 部署竞态（中危）**：build-pda-apk.yml 直接 ssh 服务器 `docker compose up --build` 绕过 server-update.sh 的 flock 锁，与 Deploy 并发可能互抢容器。**PDA 发布必须改用 server-update.sh 或纳入同一把锁。**
+    - **迁移失败无回滚（中危）**：server-update.sh 先重建容器再 migrate，失败后新代码跑在旧 schema 上。**改这个文件前先读完整调用链。**
+17. **2026-08-21 深度审计发现的前端缺陷（未修复）**，详见 `docs/audit-report-2026-08-21.md` 附录 C：
+    - **登出不清 React Query 缓存（中危）**：`performSessionLogout()`（authSession.ts:29）只 closeAll + logout，不调 queryClient.clear()；staleTime 5min + keepAlive 组件不卸载，切换账号会短暂看到上一账号数据。修法：登出时 clear()。
+    - **打印模板编辑器 keepAlive 残留（中危）**：editor.tsx:823 `hydrated` 只在初始化置位，切换模板 id 不重置——**模板 A 的未保存编辑会泄漏到模板 B**；且无 useDirtyGuard（违反第 13 节要求）。修法：id 变化时重置 hydrated 与表单态 + 接 useDirtyGuard。
+    - **工作区标签无上限（中危）**：workspaceStore persist 全量存 localStorage 无数量上限，keepAlive 组件实例永久累积。修法：tabs 设上限（如 30，LRU 关闭）。
+    - **PDA 设备凭据明文长期存 localStorage（中危）**：deviceSecret + 30 天票据明文存储。修法：一次性票据 + 心跳续期 / Capacitor Secure Storage。
+18. **审计确认的安全基线**（2026-08-21，可信）：全仓 SQL 参数化无注入点；所有业务 routes 挂 authMiddleware + requirePermission（唯一公开 app-update/latest）；opLogger 敏感字段脱敏；multer 无路径穿越；无硬编码密钥；前端 0 处 dangerouslySetInnerHTML；仅 3 处工具性裸 axios（不带 token）；库存引擎 9 条不变量与第 9 节描述完全一致。
