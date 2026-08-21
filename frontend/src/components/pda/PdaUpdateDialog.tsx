@@ -67,6 +67,8 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
         await PdaAppUpdate.downloadAndInstall({
           url: version.downloadUrl,
           version: version.version,
+          // APK sha256（2026-08-21 审计 E 修复）：原生下载完成后校验，防替换
+          sha256: version.sha256,
         })
         return
       }
@@ -86,6 +88,15 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
         if (contentLength > 0) setProgress(Math.round(received / contentLength * 100))
       }
       const blob = new Blob(chunks as BlobPart[], { type: 'application/vnd.android.package-archive' })
+      // APK sha256 校验（2026-08-21 审计 E 修复）：浏览器 fallback 路径同样比对
+      if (version.sha256) {
+        const buf = await blob.arrayBuffer()
+        const digest = await crypto.subtle.digest('SHA-256', buf)
+        const hex = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
+        if (hex !== version.sha256.toLowerCase()) {
+          throw new Error('更新包校验失败（sha256 不匹配），已中止下载')
+        }
+      }
       const url  = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

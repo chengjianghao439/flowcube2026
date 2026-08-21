@@ -252,6 +252,8 @@ async function buildSaleCogs(conn) {
  *   收款(biz_type=1)：借 银行/现金 / 贷 应收账款〔客户〕
  *   付款(biz_type=2)：借 应付账款〔供应商〕 / 贷 银行/现金
  *   报销(biz_type=3)：借 管理费用6602（费用类别→科目映射暂缺，统一落管理费用）/ 贷 银行/现金
+ *   退款(biz_type=5)：借 应收账款〔客户〕 / 贷 银行/现金（2026-08-21 审计修复：
+ *     此前退款写 OUT 流水减余额但凭证体系无分录，资金账实不勾稽）
  *   余额调整(biz_type=4)：不生成凭证（无对应会计事件）
  */
 async function buildFundVouchers(conn) {
@@ -260,7 +262,7 @@ async function buildFundVouchers(conn) {
            fa.type AS acctType
       FROM finance_account_transactions t
       JOIN finance_accounts fa ON fa.id = t.account_id
-     WHERE t.biz_type IN (1, 2, 3)`)
+     WHERE t.biz_type IN (1, 2, 3, 5)`)
   const specs = []
   for (const r of rows) {
     const amount = round2(r.amount)
@@ -291,6 +293,16 @@ async function buildFundVouchers(conn) {
         legs: [
           { code: '6602', direction: DIR.DEBIT, amount, summary: '管理费用' },
           { code: fundCode, direction: DIR.CREDIT, amount, summary: '付款' },
+        ],
+      })
+    } else if (r.biz_type === 5) {
+      // 退款出账（2026-08-21 审计修复）：钱退回客户，冲减应收账款——与收款凭证对称
+      specs.push({
+        sourceType: SOURCE_TYPES.REFUND_PAY, sourceId: r.txnId, sourceNo: r.biz_no, voucherDate: r.vdate,
+        summary: `退款 ${r.party_name || ''}`.trim(),
+        legs: [
+          { code: '1122', direction: DIR.DEBIT, amount, auxType: 1, auxName: r.party_name || null, summary: '应收账款' },
+          { code: fundCode, direction: DIR.CREDIT, amount, summary: '退款' },
         ],
       })
     }

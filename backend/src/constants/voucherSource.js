@@ -21,6 +21,7 @@ const SOURCE_TYPES = {
   RECEIPT_IN:      'receipt_in',      // 收款核销
   PAYMENT_OUT:     'payment_out',     // 付款核销
   EXPENSE_PAY:     'expense_pay',     // 费用报销付款
+  REFUND_PAY:      'refund_pay',      // 退款出账（退款单 execute，biz_type=5，2026-08-21 审计修复）
   PURCHASE_RETURN: 'purchase_return', // 采购退货出库
   SALE_RETURN:     'sale_return',     // 销售退货入库
   STOCK_CHECK:     'stock_check',     // 盘盈/盘亏
@@ -114,6 +115,14 @@ const ACCOUNT_MAPPING = {
     // 借方按费用类别落管理费用/销售费用（引擎按 expense_categories 映射，默认管理费用）
     legs: [
       { code: '6602', dir: DIR.DEBIT,  aux: null, altCodes: ['6601'] }, // 借 管理费用/销售费用
+      { code: '1002', dir: DIR.CREDIT, aux: null, altCodes: ['1001'] }, // 贷 银行存款/库存现金
+    ],
+  },
+  [SOURCE_TYPES.REFUND_PAY]: {
+    summary: '退款出账',
+    // 退款（biz_type=5，2026-08-21 审计修复）：钱退回客户，冲减应收账款
+    legs: [
+      { code: '1122', dir: DIR.DEBIT,  aux: 'customer' },               // 借 应收账款〔客户〕
       { code: '1002', dir: DIR.CREDIT, aux: null, altCodes: ['1001'] }, // 贷 银行存款/库存现金
     ],
   },

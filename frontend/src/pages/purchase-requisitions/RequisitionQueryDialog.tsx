@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
+import { todayYmd } from '@/lib/dateTime'
 
 /** 请购查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface RequisitionQueryValues {
@@ -23,7 +24,7 @@ const EMPTY: RequisitionQueryValues = {
   keyword: '', status: '',
   warehouseId: null, warehouseName: '',
   applicantId: null, applicantName: '',
-  startDate: '', endDate: '',
+  startDate: todayYmd(), endDate: '',
 }
 
 interface Props {

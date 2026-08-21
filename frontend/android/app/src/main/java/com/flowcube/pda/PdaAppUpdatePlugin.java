@@ -16,8 +16,10 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.security.MessageDigest;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.ExecutorService;
@@ -32,6 +34,7 @@ public class PdaAppUpdatePlugin extends Plugin {
     public void downloadAndInstall(PluginCall call) {
         String rawUrl = call.getString("url");
         String version = call.getString("version", "latest");
+        String expectedSha256 = call.getString("sha256");
         if (rawUrl == null || rawUrl.trim().isEmpty()) {
             call.reject("更新地址不能为空");
             return;
@@ -45,12 +48,39 @@ public class PdaAppUpdatePlugin extends Plugin {
             try {
                 emitProgress("starting", 0, "准备下载更新包");
                 File apkFile = downloadApk(downloadUrl, safeVersion);
+                // APK sha256 校验（2026-08-21 审计 E 修复）：服务端下发哈希，
+                // 下载完成后比对——哈希不匹配说明包被替换（API 基址被指到恶意
+                // 服务器等），拒绝安装
+                if (expectedSha256 != null && !expectedSha256.trim().isEmpty()) {
+                    String actual = sha256Of(apkFile);
+                    if (!expectedSha256.trim().equalsIgnoreCase(actual)) {
+                        emitProgress("error", 0, "更新包校验失败（sha256 不匹配），已中止安装");
+                        if (apkFile.exists()) apkFile.delete();
+                        return;
+                    }
+                }
                 emitProgress("downloaded", 100, "下载完成，准备安装");
                 installApk(apkFile);
             } catch (Exception e) {
                 emitProgress("error", 0, e.getMessage() == null ? "下载失败" : e.getMessage());
             }
         });
+    }
+
+    private String sha256Of(File file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = fis.read(buffer)) != -1) {
+                digest.update(buffer, 0, read);
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (byte b : digest.digest()) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 
     private File downloadApk(String downloadUrl, String version) throws Exception {

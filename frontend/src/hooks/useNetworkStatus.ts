@@ -45,12 +45,16 @@ async function probe(): Promise<boolean> {
   }
 }
 
-// 全局心跳，只启动一次
-let heartbeatStarted = false
+// 全局心跳（2026-08-21 审计 C 修复）：改为引用计数管理——首个订阅者启动、
+// 最后一个退订时清理。旧实现模块级直接 setInterval 永不清除，dev 热更新会叠加
+// 多个定时器与监听器。
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+let eventHandlersBound = false
+let refCount = 0
+
 function startHeartbeat() {
-  if (heartbeatStarted) return
-  heartbeatStarted = true
-  setInterval(async () => {
+  if (heartbeatTimer) return
+  heartbeatTimer = setInterval(async () => {
     // navigator.onLine 在部分环境不可靠（浏览器 dev + 代理/VPN、开发者工具、macOS 网络切换
     // 都可能让它长期为 false 而实际后端可达）。因此 onLine=false 时不直接判离线，
     // 仍做一次真实探测：后端可达就保持 online，只有探测也失败才报 offline。
@@ -63,21 +67,37 @@ function startHeartbeat() {
     if (ok && globalStatus !== 'online') setGlobal('online')
     if (!ok) setGlobal('offline')
   }, HEARTBEAT_INTERVAL)
+
+  if (!eventHandlersBound) {
+    window.addEventListener('online',  async () => {
+      const ok = await probe()
+      setGlobal(ok ? 'online' : 'offline')
+    })
+    window.addEventListener('offline', () => setGlobal('offline'))
+    eventHandlersBound = true
+  }
 }
 
-window.addEventListener('online',  async () => {
-  const ok = await probe()
-  setGlobal(ok ? 'online' : 'offline')
-})
-window.addEventListener('offline', () => setGlobal('offline'))
-startHeartbeat()
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+  // 事件监听器保留（绑定一次，模块生命周期内不重复）；interval 才是叠加源
+}
 
 export function useNetworkStatus() {
   const [status, setStatus] = useState<NetworkStatus>(globalStatus)
 
   useEffect(() => {
+    refCount += 1
+    startHeartbeat()
     listeners.add(setStatus)
-    return () => { listeners.delete(setStatus) }
+    return () => {
+      listeners.delete(setStatus)
+      refCount -= 1
+      if (refCount <= 0) stopHeartbeat()
+    }
   }, [])
 
   return status

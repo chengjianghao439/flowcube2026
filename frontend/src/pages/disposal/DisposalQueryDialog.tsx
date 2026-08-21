@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { DISPOSAL_STATUS_OPTIONS } from './constants'
+import { todayYmd } from '@/lib/dateTime'
 
 /** 呆滞库存处置查询弹窗对外的筛选值 */
 export interface DisposalQueryValues {
@@ -20,7 +21,7 @@ export interface DisposalQueryValues {
 const EMPTY: DisposalQueryValues = {
   keyword: '', status: '',
   warehouseId: null, warehouseName: '',
-  startDate: '', endDate: '',
+  startDate: todayYmd(), endDate: '',
 }
 
 interface Props {

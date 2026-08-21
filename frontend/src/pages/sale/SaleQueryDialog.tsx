@@ -8,6 +8,7 @@ import { CustomerFinder, ProductFinder } from '@/components/finder'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { QueryPickerField } from '@/components/shared/QueryPickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
+import { todayYmd } from '@/lib/dateTime'
 
 /** 销售查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface SaleQueryValues {
@@ -32,7 +33,7 @@ const EMPTY: SaleQueryValues = {
   productId: null, productCode: '', productName: '',
   customerId: null, customerName: '',
   warehouseId: null, warehouseName: '',
-  startDate: '', endDate: '',
+  startDate: todayYmd(), endDate: '',
 }
 
 interface Props {

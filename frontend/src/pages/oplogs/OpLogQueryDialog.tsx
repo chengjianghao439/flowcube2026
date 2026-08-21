@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { OPERATION_LOG_MODULE_OPTIONS } from '@/utils/operationLogFormatters'
+import { todayYmd } from '@/lib/dateTime'
 
 /** 操作日志查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface OpLogQueryValues {
@@ -15,7 +16,7 @@ export interface OpLogQueryValues {
 }
 
 const EMPTY: OpLogQueryValues = {
-  keyword: '', module: '', startDate: '', endDate: '',
+  keyword: '', module: '', startDate: todayYmd(), endDate: '',
 }
 
 interface Props {

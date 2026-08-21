@@ -7,7 +7,7 @@ export type PdaNativeUpdateProgress = {
 }
 
 type PdaAppUpdatePlugin = {
-  downloadAndInstall(options: { url: string; version: string }): Promise<void>
+  downloadAndInstall(options: { url: string; version: string; sha256?: string }): Promise<void>
   addListener(
     eventName: 'updateProgress',
     listenerFunc: (payload: PdaNativeUpdateProgress) => void,

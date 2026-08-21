@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CustomerFinder, SupplierFinder } from '@/components/finder'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
+import { todayYmd } from '@/lib/dateTime'
 
 const todayStr = () => {
   const d = new Date()
@@ -36,7 +37,7 @@ export interface PaymentQueryValues {
 
 export const EMPTY_PAYMENT_QUERY: PaymentQueryValues = {
   docNo: '', partyName: '', status: '', confirmStatus: '',
-  startDate: '', endDate: '', dueStart: '', dueEnd: '',
+  startDate: todayYmd(), endDate: '', dueStart: '', dueEnd: '',
   minAmount: '', maxAmount: '',
 }
 

@@ -288,10 +288,11 @@ async function getCashFlow({ period }) {
   const inflowReceipt = sum(1, 1)          // 收款流入
   const outflowPayment = sum(2, 2)         // 付款流出
   const outflowExpense = sum(3, 2)         // 报销流出
+  const outflowRefund = sum(5, 2)          // 退款流出（2026-08-21 审计修复：此前不进现金流桶）
   const otherIn = sum(4, 1)                // 余额调整(收)
   const otherOut = sum(4, 2)               // 余额调整(付)
   const operatingIn = round2(inflowReceipt)
-  const operatingOut = round2(outflowPayment + outflowExpense)
+  const operatingOut = round2(outflowPayment + outflowExpense + outflowRefund)
   const net = round2(operatingIn - operatingOut + otherIn - otherOut)
   return {
     period, start, end,
@@ -301,6 +302,7 @@ async function getCashFlow({ period }) {
       { name: '二、经营活动现金流出', amount: operatingOut, bold: true },
       { name: '　　采购/供应商付款', amount: outflowPayment },
       { name: '　　费用报销', amount: outflowExpense },
+      ...(outflowRefund ? [{ name: '　　退款', amount: outflowRefund }] : []),
       ...(otherIn || otherOut ? [{ name: '三、其他（账户调整）', amount: round2(otherIn - otherOut) }] : []),
       { name: '经营活动现金流量净额', amount: net, bold: true },
     ],

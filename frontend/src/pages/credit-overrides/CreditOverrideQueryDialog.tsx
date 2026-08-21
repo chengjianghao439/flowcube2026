@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { CREDIT_OVERRIDE_STATUS_OPTIONS } from './constants'
+import { todayYmd } from '@/lib/dateTime'
 
 /** 超额放行查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface CreditOverrideQueryValues {
@@ -15,7 +16,7 @@ export interface CreditOverrideQueryValues {
 }
 
 const EMPTY: CreditOverrideQueryValues = {
-  keyword: '', status: '', startDate: '', endDate: '',
+  keyword: '', status: '', startDate: todayYmd(), endDate: '',
 }
 
 interface Props {

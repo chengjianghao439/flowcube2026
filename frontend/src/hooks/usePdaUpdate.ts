@@ -18,6 +18,8 @@ export interface PdaVersionInfo {
   versionCode: number
   releaseNote: string
   downloadUrl: string
+  /** APK sha256（2026-08-21 审计 E 修复）：下载后比对，防止恶意服务器替换 APK */
+  sha256?: string
   size: number
   publishedAt: string
   available?: boolean

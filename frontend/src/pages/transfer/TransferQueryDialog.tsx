@@ -8,6 +8,7 @@ import { ProductFinder } from '@/components/finder'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { QueryPickerField } from '@/components/shared/QueryPickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
+import { todayYmd } from '@/lib/dateTime'
 
 /** 调拨查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface TransferQueryValues {
@@ -29,7 +30,7 @@ const EMPTY: TransferQueryValues = {
   keyword: '', remark: '', operatorId: null, operatorName: '', status: '',
   productId: null, productCode: '', productName: '',
   warehouseId: null, warehouseName: '',
-  startDate: '', endDate: '',
+  startDate: todayYmd(), endDate: '',
 }
 
 interface Props {

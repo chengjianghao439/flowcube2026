@@ -28,3 +28,9 @@ export function formatDisplayDate(value: unknown, fallback = '—'): string {
     pad(date.getDate()),
   ].join('-')
 }
+
+/** 本地时区今天的 YYYY-MM-DD（2026-08-21：查询弹窗默认时间统一用这个） */
+export function todayYmd(): string {
+  const now = new Date()
+  return [now.getFullYear(), pad(now.getMonth() + 1), pad(now.getDate())].join('-')
+}

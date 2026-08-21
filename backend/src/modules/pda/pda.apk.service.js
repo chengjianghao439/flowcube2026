@@ -1,9 +1,26 @@
 const path = require('path')
 const fs = require('fs')
+const crypto = require('crypto')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
 const AppError = require('../../utils/AppError')
 
 const APK_DIR = path.resolve(__dirname, '../../../apk')
+
+// APK sha256 缓存（按 mtime 失效）：getApkVersion 每次调用都算一遍 5MB 文件的
+// 哈希太重；文件不变时直接复用。下载时校验客户端回传的 hash 是否匹配。
+let apkHashCache = { mtimeMs: 0, sha256: '' }
+
+function sha256OfApk(apkPath) {
+  const stat = fs.statSync(apkPath)
+  if (apkHashCache.mtimeMs === stat.mtimeMs && apkHashCache.sha256) {
+    return apkHashCache.sha256
+  }
+  const hash = crypto.createHash('sha256')
+  hash.update(fs.readFileSync(apkPath))
+  const digest = hash.digest('hex')
+  apkHashCache = { mtimeMs: stat.mtimeMs, sha256: digest }
+  return digest
+}
 
 function loadVersionMeta() {
   const metaPath = path.join(APK_DIR, 'version.json')
@@ -51,6 +68,9 @@ const getApkVersion = async (req) => {
     versionCode: Number(meta.versionCode) || 0,
     releaseNote: meta.releaseNote || '',
     downloadUrl: base ? `${base}${downloadPath}` : downloadPath,
+    // APK sha256（2026-08-21 审计 E 修复）：前端下载后比对，防止 API 基址被
+    // 指向恶意服务器时下载到被替换的 APK
+    sha256: sha256OfApk(apkPath),
     size: stat.size,
     publishedAt: meta.publishedAt || new Date().toISOString(),
     available: true,

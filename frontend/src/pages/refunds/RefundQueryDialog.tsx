@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/shared/DatePicker'
+import { todayYmd } from '@/lib/dateTime'
 
 /** 退款单查询弹窗对外的筛选值 */
 export interface RefundQueryValues {
@@ -14,7 +15,7 @@ export interface RefundQueryValues {
 }
 
 const EMPTY: RefundQueryValues = {
-  keyword: '', status: '', startDate: '', endDate: '',
+  keyword: '', status: '', startDate: todayYmd(), endDate: '',
 }
 
 interface Props {

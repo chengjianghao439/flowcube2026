@@ -26,6 +26,7 @@ import type { LogisticsWaybill } from '@/types/logistics'
 import type { TableColumn } from '@/types'
 import WaybillQueryDialog, { type WaybillQueryValues } from './WaybillQueryDialog'
 import { WAYBILL_STATUS_OPTIONS } from './constants'
+import { todayYmd } from '@/lib/dateTime'
 
 function fmtMoney(v: number | null): string {
   return v == null ? '—' : Number(v).toFixed(2)
@@ -37,7 +38,7 @@ export default function LogisticsPage() {
   const { can } = usePermission()
   const canManage = can(PERMISSIONS.LOGISTICS_MANAGE)
 
-  const [applied, setApplied] = useState<{ keyword: string; status: string; carrierId: number | null; startDate: string; endDate: string }>({ keyword: '', status: 'all', carrierId: null, startDate: '', endDate: '' })
+  const [applied, setApplied] = useState<{ keyword: string; status: string; carrierId: number | null; startDate: string; endDate: string }>({ keyword: '', status: 'all', carrierId: null, startDate: todayYmd(), endDate: todayYmd() })
   const [trackTarget, setTrackTarget] = useState<LogisticsWaybill | null>(null)
   const [trackingInput, setTrackingInput] = useState('')
   const [queryOpen, setQueryOpen] = useState(false)

@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { WAVE_STATUS_LABEL, type WaveStatus } from '@/api/picking-waves'
+import { todayYmd } from '@/lib/dateTime'
 
 /** 波次查询弹窗对外的筛选值 */
 export interface WaveQueryValues {
@@ -17,7 +18,7 @@ export interface WaveQueryValues {
 }
 
 const EMPTY: WaveQueryValues = {
-  keyword: '', status: '', warehouseId: null, startDate: '', endDate: '',
+  keyword: '', status: '', warehouseId: null, startDate: todayYmd(), endDate: '',
 }
 
 interface Props {

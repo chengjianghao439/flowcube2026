@@ -24,6 +24,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import WaveQueryDialog, { type WaveQueryValues } from './WaveQueryDialog'
+import { todayYmd } from '@/lib/dateTime'
 
 function getWaveClosureCopy(wave: PickingWave | null) {
   if (!wave) {
@@ -148,7 +149,7 @@ export default function PickingWavesPage() {
 
   // ── 查询弹窗筛选值 ──
   const initialQuery: WaveQueryValues = {
-    keyword, status: statusFilter, warehouseId: null, startDate: '', endDate: '',
+    keyword, status: statusFilter, warehouseId: null, startDate: todayYmd(), endDate: todayYmd(),
   }
   function applyQuery(v: WaveQueryValues) {
     setKeyword(v.keyword)

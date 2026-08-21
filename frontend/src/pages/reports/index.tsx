@@ -9,6 +9,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
+import { todayYmd } from '@/lib/dateTime'
 
 function withRank<T extends object>(rows: T[]): (T & { rank: number })[] {
   return rows.map((row, index) => ({ ...row, rank: index + 1 }))
@@ -70,7 +71,7 @@ export default function ReportsPage() {
   const [tab, setTab] = useState<SummaryTab>('purchase')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [applied, setApplied] = useState({ startDate: '', endDate: '' })
+  const [applied, setApplied] = useState({ startDate: todayYmd(), endDate: todayYmd() })
   const addTab = useWorkspaceStore(s => s.addTab)
   const navigate = useNavigate()
 

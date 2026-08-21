@@ -40,7 +40,7 @@ type DraftItem = { categoryId: string; amount: string; happenedAt: string; descr
 const emptyItem = (): DraftItem => ({ categoryId: '', amount: '', happenedAt: todayStr(), description: '' })
 
 interface ExpQuery { keyword: string; status: string; startDate: string; endDate: string; minAmount: string; maxAmount: string }
-const EMPTY_EXP_QUERY: ExpQuery = { keyword: '', status: '', startDate: '', endDate: '', minAmount: '', maxAmount: '' }
+const EMPTY_EXP_QUERY: ExpQuery = { keyword: '', status: '', startDate: todayStr(), endDate: todayStr(), minAmount: '', maxAmount: '' }
 const STATUS_NAME: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map(([v, l]) => [v, l]))
 
 /** 费用报销查询弹窗：关键字 + 状态 + 创建日期区间 + 金额区间（比原来平铺的一格搜索框多了日期/金额） */

@@ -105,6 +105,10 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
     echo "==> 运行发布门禁..."
     bash scripts/release-gate.sh
   fi
+  # 运维 cron 同步（2026-08-21 审计 F 修复）：install-cron.sh 的改动不会自动生效，
+  # 此前需手动跑。部署后幂等核对一次（新增任务会装上，已有任务跳过）。
+  echo "==> 同步运维 cron（幂等）..."
+  bash scripts/install-cron.sh >/dev/null 2>&1 || echo "!! cron 同步失败（不影响部署，请手动检查）"
   echo "==> 完成。请确认仓库根 .env 已设置 APP_PUBLIC_URL=https://你的API域名"
   exit 0
 fi

@@ -28,12 +28,13 @@ export default class PdaErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // 存到 sessionStorage 便于排查
+    // 存到 sessionStorage 便于排查（2026-08-21 审计 D 修复）：
+    // 只存 message 摘要 + 组件名，不存完整 stack——堆栈可能含组件 props 中的
+    // 业务数据（订单/容器 ID）与内部实现细节，且该键从不清理。
     try {
       sessionStorage.setItem('pda_last_error', JSON.stringify({
-        message: error.message,
-        stack:   error.stack?.slice(0, 500),
-        component: info.componentStack?.slice(0, 300),
+        message: String(error?.message || error).slice(0, 200),
+        component: (info?.componentStack || '').split('\n').filter(l => l.includes('at ')).slice(0, 3).join(' | ').slice(0, 200),
         time: new Date().toISOString(),
       }))
     } catch { /* ignore */ }

@@ -17,9 +17,10 @@ export interface WaybillQueryValues {
 }
 
 import { WAYBILL_STATUS_OPTIONS } from './constants'
+import { todayYmd } from '@/lib/dateTime'
 
 const EMPTY: WaybillQueryValues = {
-  keyword: '', status: '', carrierId: null, startDate: '', endDate: '',
+  keyword: '', status: '', carrierId: null, startDate: todayYmd(), endDate: '',
 }
 
 interface Props {

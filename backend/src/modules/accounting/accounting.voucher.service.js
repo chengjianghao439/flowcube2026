@@ -17,6 +17,7 @@ const SOURCE_TYPE_LABELS = {
   [SOURCE_TYPES.RECEIPT_IN]:      '收款',
   [SOURCE_TYPES.PAYMENT_OUT]:     '付款',
   [SOURCE_TYPES.EXPENSE_PAY]:     '费用报销',
+  [SOURCE_TYPES.REFUND_PAY]:      '退款',
   [SOURCE_TYPES.PURCHASE_RETURN]: '采购退货',
   [SOURCE_TYPES.SALE_RETURN]:     '销售退货',
   [SOURCE_TYPES.STOCK_CHECK]:     '盘点盈亏',

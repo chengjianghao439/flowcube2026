@@ -9,6 +9,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
 import { QueryPickerField } from '@/components/shared/QueryPickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { INBOUND_STATUS_LABEL, type InboundTaskStatus } from '@/types/inbound-tasks'
+import { todayYmd } from '@/lib/dateTime'
 
 /** 收货订单查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface InboundTaskQueryValues {
@@ -33,7 +34,7 @@ const EMPTY: InboundTaskQueryValues = {
   productId: null, productCode: '', productName: '',
   supplierId: null, supplierName: '',
   warehouseId: null, warehouseName: '',
-  startDate: '', endDate: '',
+  startDate: todayYmd(), endDate: '',
 }
 
 interface Props {
