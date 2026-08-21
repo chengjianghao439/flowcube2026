@@ -128,29 +128,54 @@ function jsQuote(value) {
   return JSON.stringify(value)
 }
 
-function assertText(expected, forbidden = '') {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// 把「固定等待后一次性断言」换成「轮询等待直到条件成立或超时」：
+// 大页面（懒加载 chunk + 多卡片 API）在慢环境下偶发超过 3 秒才渲染完，
+// 旧的固定 setTimeout(3000) 会误报 flaky 失败。轮询语义与 Playwright 的
+// auto-wait 一致：条件尽快成立就立即返回，真失败的页面才等到超时抛错。
+async function waitFor(expr, { timeout = 20000, interval = 500, label = '页面' } = {}) {
+  const deadline = Date.now() + timeout
+  let out = ''
+  while (Date.now() < deadline) {
+    out = runPw(['eval', expr])
+    if (out.includes('true')) return true
+    await sleep(interval)
+  }
+  // 超时兜底：再取一次页面文本，把「当时到底长什么样」带进报错，便于定位
+  const bodyText = runPw(['eval', '(document.body.innerText || "").slice(0, 500)'])
+  throw new Error(`等待超时（${timeout / 1000}s）：${label} 未就绪。页面文本片段：${bodyText.replace(/\s+/g, ' ').trim().slice(0, 300) || '(空)'}`)
+}
+
+const ERROR_MARKERS = "'渲染错误','未注册','服务器内部错误','Minified React error'"
+// 无期望文本页面的加载稳定窗口（毫秒）：给延迟渲染的错误一个浮现机会
+const LOAD_SETTLE_MS = 2000
+
+// 检查主体：期望文本出现且无错误标记。作为 waitFor 的表达式，返回布尔。
+function assertExpr(expected, forbidden) {
   const expectedJs = jsQuote(expected)
   const forbiddenJs = forbidden ? jsQuote(forbidden) : ''
-  const expr = forbidden
-    ? `(() => { const text = document.body.innerText || ''; return text.includes(${expectedJs}) && !text.includes(${forbiddenJs}) && !text.includes('渲染错误') && !text.includes('未注册') && !text.includes('服务器内部错误') && !text.includes('Minified React error'); })()`
-    : `(() => { const text = document.body.innerText || ''; return text.includes(${expectedJs}) && !text.includes('渲染错误') && !text.includes('未注册') && !text.includes('服务器内部错误') && !text.includes('Minified React error'); })()`
-  const out = runPw(['eval', expr])
-  if (!out.includes('true')) {
-    throw new Error(forbidden ? `页面检查失败：期望包含 ${expected}，且不应包含 ${forbidden}` : `页面检查失败：期望包含 ${expected}`)
-  }
+  // ERROR_MARKERS 是引号分隔的列表字面量，拼进数组字面量即 ['渲染错误','未注册',...]
+  const errCheck = `![${ERROR_MARKERS}].some((m) => text.includes(m))`
+  const forbCheck = forbiddenJs ? `&& !text.includes(${forbiddenJs})` : ''
+  return `(() => { const text = document.body.innerText || ''; return text.includes(${expectedJs}) ${forbCheck} && ${errCheck}; })()`
+}
+
+function assertText(expected, forbidden = '') {
+  // 用轮询等待替代单次断言；超时错误已含页面文本，能直接看出是渲染错误还是未加载完
+  return waitFor(assertExpr(expected, forbidden), {
+    label: forbidden ? `期望包含 ${expected} 且不应包含 ${forbidden}` : `期望包含 ${expected}`,
+  })
 }
 
 function assertNoErrorText() {
-  const out = runPw([
-    'eval',
-    `(() => {
-      const text = document.body.innerText || '';
-      return !text.includes('渲染错误') && !text.includes('未注册') && !text.includes('服务器内部错误') && !text.includes('Minified React error');
-    })()`,
-  ])
-  if (!out.includes('true')) {
-    throw new Error('页面检查失败：发现渲染错误或未注册提示')
-  }
+  // 无期望文本的页面（/purchase/1、/sale/1）用「无错误标记」做断言。
+  // 但不能上来就轮询「无错误」——DOM 还没渲染时条件立即成立、马上通过，
+  // 会漏掉延迟渲染的错误。先等一段加载窗口，再进入轮询做最终断言。
+  const expr = `(() => { const text = document.body.innerText || ''; return ![${ERROR_MARKERS}].some((m) => text.includes(m)); })()`
+  return sleep(LOAD_SETTLE_MS).then(() => waitFor(expr, { label: '无渲染错误/未注册提示' }))
 }
 
 async function login() {
@@ -174,24 +199,17 @@ async function login() {
   runPwOpen(['open', `${BASE_URL}/#/login`])
   runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(authStorage)}), true)`])
   runPw(['eval', '(location.reload(), true)'])
-  await new Promise((resolve) => setTimeout(resolve, 3000))
-
-  const ok = runPw([
-    'eval',
+  await waitFor(
     "location.hash.includes('/dashboard') && ((document.body.innerText || '').includes('仪表盘') || (document.body.innerText || '').includes('数据总览'))",
-  ])
-  if (!ok.includes('true')) {
-    throw new Error('登录失败，未进入仪表盘')
-  }
+    { label: '登录后进入仪表盘' },
+  )
 }
 
 function openAndCheck(path, expected = '', forbidden = '') {
   console.log(`==> 页面烟雾：${path}`)
   runPw(['eval', `(location.hash = ${jsQuote(`#${path}`)}, true)`])
-  return new Promise((resolve) => setTimeout(resolve, 3000)).then(() => {
-    if (expected) assertText(expected, forbidden)
-    else assertNoErrorText()
-  })
+  // 路由切换后轮询等待目标文本；无期望文本时退化为「无渲染错误」
+  return expected ? assertText(expected, forbidden) : assertNoErrorText()
 }
 
 async function main() {
