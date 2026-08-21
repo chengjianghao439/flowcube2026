@@ -39,7 +39,7 @@ const CATEGORY_NAME = { 1: '资产', 2: '负债', 3: '权益', 4: '成本', 5: '
  * 会计对表以「1122 应收账款」这种一级科目合计为准，只列末级会对不上。
  * @param {{period:string}} 会计期间 YYYYMM
  */
-async function getTrialBalance({ period }) {
+async function getTrialBalance({ period, companyId = 1 }) {
   const { start, end } = periodRange(period)
   const [rows] = await pool.query(`
     SELECT a.id, a.code, a.name, a.category, a.balance_dir, a.is_leaf,
@@ -50,14 +50,15 @@ async function getTrialBalance({ period }) {
     FROM acct_accounts a
     LEFT JOIN acct_voucher_entries e ON e.account_id = a.id
     LEFT JOIN acct_vouchers v ON v.id = e.voucher_id
-    WHERE a.deleted_at IS NULL AND a.is_leaf = 1
+    WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf = 1
     GROUP BY a.id, a.code, a.name, a.category, a.balance_dir, a.is_leaf
     ORDER BY a.code ASC`,
-    [start, start, start, end, start, end])
+    [companyId, start, start, start, end, start, end])
 
   // 全部科目（含汇总科目），用于把末级发生额上卷到父级
   const [allAccounts] = await pool.query(
-    'SELECT id, code, name, category, balance_dir, parent_id, level, is_leaf FROM acct_accounts WHERE deleted_at IS NULL',
+    'SELECT id, code, name, category, balance_dir, parent_id, level, is_leaf FROM acct_accounts WHERE company_id = ? AND deleted_at IS NULL',
+    [companyId],
   )
   const childrenOf = new Map()
   for (const a of allAccounts) {
@@ -131,16 +132,16 @@ async function getTrialBalance({ period }) {
 // ── 明细账 ────────────────────────────────────────────────────────────────────
 
 /** 某科目在期间内的明细账（逐笔 + 逐笔余额），含期初余额。汇总科目含其全部末级后代的分录。 */
-async function getAccountLedger({ accountId, period }) {
+async function getAccountLedger({ accountId, period, companyId = 1 }) {
   const { start, end } = periodRange(period)
-  const [[acct]] = await pool.query('SELECT id, code, name, balance_dir, is_leaf FROM acct_accounts WHERE id=? AND deleted_at IS NULL', [Number(accountId)])
+  const [[acct]] = await pool.query('SELECT id, code, name, balance_dir, is_leaf FROM acct_accounts WHERE id=? AND company_id=? AND deleted_at IS NULL', [Number(accountId), companyId])
   if (!acct) throw new AppError('科目不存在', 404)
   const dir = acct.balance_dir
 
   // 汇总科目：收集全部末级后代，明细按「后代替换 IN」取数（余额方向沿父级）
   let accountIds = [Number(accountId)]
   if (Number(acct.is_leaf) !== 1) {
-    const [all] = await pool.query('SELECT id, parent_id, is_leaf FROM acct_accounts WHERE deleted_at IS NULL')
+    const [all] = await pool.query('SELECT id, parent_id, is_leaf FROM acct_accounts WHERE company_id = ? AND deleted_at IS NULL', [companyId])
     const childrenOf = new Map()
     for (const a of all) {
       if (a.parent_id == null) continue
@@ -168,7 +169,7 @@ async function getAccountLedger({ accountId, period }) {
     SELECT COALESCE(SUM(CASE WHEN e.direction=1 THEN e.amount END),0) d,
            COALESCE(SUM(CASE WHEN e.direction=2 THEN e.amount END),0) c
       FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
-     WHERE e.account_id IN (${placeholders}) AND v.voucher_date < ?`, [...accountIds, start])
+     WHERE v.company_id = ? AND e.account_id IN (${placeholders}) AND v.voucher_date < ?`, [companyId, ...accountIds, start])
   let running = dir === 1 ? round2(pre.d - pre.c) : round2(pre.c - pre.d)
   const openingBalance = running
 
@@ -196,7 +197,7 @@ async function getAccountLedger({ accountId, period }) {
 // ── 报表取数（简版） ──────────────────────────────────────────────────────────
 
 // 汇总某分类科目在期间的发生净额（按 category），用于利润表
-async function categoryNet(start, end) {
+async function categoryNet(start, end, companyId = 1) {
   const [rows] = await pool.query(`
     SELECT a.category, a.balance_dir,
       COALESCE(SUM(CASE WHEN v.voucher_date BETWEEN ? AND ? AND e.direction=1 THEN e.amount END),0) d,
@@ -205,15 +206,15 @@ async function categoryNet(start, end) {
     FROM acct_accounts a
     LEFT JOIN acct_voucher_entries e ON e.account_id=a.id
     LEFT JOIN acct_vouchers v ON v.id=e.voucher_id
-    WHERE a.deleted_at IS NULL AND a.is_leaf=1
-    GROUP BY a.id, a.category, a.balance_dir, a.code, a.name`, [start, end, start, end])
+    WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf=1
+    GROUP BY a.id, a.category, a.balance_dir, a.code, a.name`, [companyId, start, end, start, end])
   return rows
 }
 
 /** 利润表：主营收入 − 主营成本 − 销售费用 − 管理费用 = 净利润（简版） */
-async function getIncomeStatement({ period }) {
+async function getIncomeStatement({ period, companyId = 1 }) {
   const { start, end } = periodRange(period)
-  const rows = await categoryNet(start, end)
+  const rows = await categoryNet(start, end, companyId)
   const net = (code) => { const r = rows.find(x => x.code === code); if (!r) return 0; return round2((r.balance_dir === 1 ? (r.d - r.c) : (r.c - r.d))) }
   // 收入类(贷方净额)取正，费用/成本类(借方净额)取正
   const revenue = net('6001')
@@ -237,7 +238,7 @@ async function getIncomeStatement({ period }) {
 }
 
 /** 资产负债表（期末时点，简版）：资产 = 负债 + 权益 + 本期利润(未分配) */
-async function getBalanceSheet({ period }) {
+async function getBalanceSheet({ period, companyId = 1 }) {
   const { end } = periodRange(period)
   // 期末余额 = 建账以来累计（<= end）
   const [rows] = await pool.query(`
@@ -247,8 +248,8 @@ async function getBalanceSheet({ period }) {
     FROM acct_accounts a
     LEFT JOIN acct_voucher_entries e ON e.account_id=a.id
     LEFT JOIN acct_vouchers v ON v.id=e.voucher_id
-    WHERE a.deleted_at IS NULL AND a.is_leaf=1
-    GROUP BY a.id, a.code, a.name, a.category, a.balance_dir`, [end, end])
+    WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf=1
+    GROUP BY a.id, a.code, a.name, a.category, a.balance_dir`, [companyId, end, end])
 
   const bal = (r) => round2(r.balance_dir === 1 ? (r.d - r.c) : (r.c - r.d))
   const assets = [], liabilities = [], equity = []

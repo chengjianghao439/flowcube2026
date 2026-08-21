@@ -61,23 +61,24 @@ const BASE_SELECT = `
 
 // ─── 查询 ──────────────────────────────────────────────────────────────────
 
-/** 树形（含 children 递归），按 编码升序 */
-async function getTree() {
-  const [rows] = await pool.query(`${BASE_SELECT} ORDER BY code ASC`)
+/** 树形（含 children 递归），按 编码升序。companyId 账套过滤（2026-08-21 审计高危修复） */
+async function getTree(companyId = 1) {
+  const [rows] = await pool.query(`${BASE_SELECT} AND company_id = ? ORDER BY code ASC`, [companyId])
   return buildTree(rows.map(fmt))
 }
 
 /** 扁平列表（供下拉/凭证选科目用）；onlyLeaf=true 只返回可记账明细科目 */
-async function getFlat({ onlyLeaf = false, onlyActive = false } = {}) {
-  let sql = BASE_SELECT
-  if (onlyLeaf)   sql += ' AND is_leaf = 1'
-  if (onlyActive) sql += ' AND is_active = 1'
-  const [rows] = await pool.query(`${sql} ORDER BY code ASC`)
+async function getFlat({ onlyLeaf = false, onlyActive = false, companyId = 1 } = {}) {
+  let sql = `${BASE_SELECT} AND company_id = ?`
+  const params = [companyId]
+  if (onlyLeaf)   { sql += ' AND is_leaf = 1' }
+  if (onlyActive) { sql += ' AND is_active = 1' }
+  const [rows] = await pool.query(`${sql} ORDER BY code ASC`, params)
   return rows.map(fmt)
 }
 
-async function getById(id, conn = pool) {
-  const [[row]] = await conn.query(`${BASE_SELECT} AND id = ?`, [id])
+async function getById(id, conn = pool, companyId = 1) {
+  const [[row]] = await conn.query(`${BASE_SELECT} AND company_id = ? AND id = ?`, [companyId, id])
   if (!row) throw new AppError('科目不存在', 404)
   return fmt(row)
 }
@@ -97,7 +98,7 @@ function validateCategory(category) {
   return c
 }
 
-async function create({ code, name, category, balanceDir, parentId, auxType, sortOrder, remark }, operatorId) {
+async function create({ code, name, category, balanceDir, parentId, auxType, sortOrder, remark, companyId = 1 }, operatorId) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -110,20 +111,20 @@ async function create({ code, name, category, balanceDir, parentId, auxType, sor
 
     let level = 1
     if (parentId) {
-      const parent = await getById(parentId, conn)
+      const parent = await getById(parentId, conn, companyId)
       if (parent.level >= MAX_LEVEL) throw new AppError(`已达最大层级（${MAX_LEVEL}级），无法在此科目下新建下级`, 400)
       level = parent.level + 1
       // 父科目变为汇总科目（不可直接记账）
-      await conn.query('UPDATE acct_accounts SET is_leaf = 0 WHERE id = ?', [parentId])
+      await conn.query('UPDATE acct_accounts SET is_leaf = 0 WHERE id = ? AND company_id = ?', [parentId, companyId])
     }
 
     let insertId
     try {
       const [r] = await conn.query(
         `INSERT INTO acct_accounts
-           (code, name, category, balance_dir, parent_id, level, is_leaf, aux_type, is_active, is_preset, sort_order, remark)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, 1, 0, ?, ?)`,
-        [theCode, nm, cat, dir, parentId || null, level, auxType ? 1 : 0, sortOrder ?? 0, remark || null],
+           (company_id, code, name, category, balance_dir, parent_id, level, is_leaf, aux_type, is_active, is_preset, sort_order, remark)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 1, 0, ?, ?)`,
+        [companyId, theCode, nm, cat, dir, parentId || null, level, auxType ? 1 : 0, sortOrder ?? 0, remark || null],
       )
       insertId = r.insertId
     } catch (e) {
@@ -132,7 +133,7 @@ async function create({ code, name, category, balanceDir, parentId, auxType, sor
     }
 
     await conn.commit()
-    logger.info('accounting', `新建科目 [${theCode} ${nm}] level=${level}`, { id: insertId, operatorId })
+    logger.info('accounting', `新建科目 [${theCode} ${nm}] level=${level}`, { id: insertId, operatorId, companyId })
     return { id: insertId, code: theCode }
   } catch (e) {
     await conn.rollback()
@@ -142,14 +143,14 @@ async function create({ code, name, category, balanceDir, parentId, auxType, sor
   }
 }
 
-async function update(id, { name, category, balanceDir, auxType, sortOrder, remark }, operatorId) {
-  const acct = await getById(id)
+async function update(id, { name, category, balanceDir, auxType, sortOrder, remark, companyId = 1 }, operatorId) {
+  const acct = await getById(id, pool, companyId)
 
   if (acct.isPreset) {
     // 预置科目：只允许改排序与备注
     await pool.query(
-      'UPDATE acct_accounts SET sort_order = ?, remark = ? WHERE id = ? AND deleted_at IS NULL',
-      [sortOrder ?? acct.sortOrder, remark ?? acct.remark, id],
+      'UPDATE acct_accounts SET sort_order = ?, remark = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL',
+      [sortOrder ?? acct.sortOrder, remark ?? acct.remark, id, companyId],
     )
     logger.info('accounting', `更新预置科目排序/备注 [id=${id}]`, { operatorId })
     return
@@ -163,37 +164,37 @@ async function update(id, { name, category, balanceDir, auxType, sortOrder, rema
   await pool.query(
     `UPDATE acct_accounts
        SET name = ?, category = ?, balance_dir = ?, aux_type = ?, sort_order = ?, remark = ?
-     WHERE id = ? AND deleted_at IS NULL`,
-    [nm, cat, dir, auxType ? 1 : 0, sortOrder ?? acct.sortOrder, remark ?? acct.remark, id],
+     WHERE id = ? AND company_id = ? AND deleted_at IS NULL`,
+    [nm, cat, dir, auxType ? 1 : 0, sortOrder ?? acct.sortOrder, remark ?? acct.remark, id, companyId],
   )
   logger.info('accounting', `更新科目 [${acct.code} ${nm}]`, { operatorId })
 }
 
-async function remove(id, operatorId) {
+async function remove(id, operatorId, companyId = 1) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
 
-    const acct = await getById(id, conn)
+    const acct = await getById(id, conn, companyId)
     if (acct.isPreset) throw new AppError('系统预置科目不可删除', 400, 'ACCT_PRESET_LOCKED')
 
     const [[{ childCount }]] = await conn.query(
-      'SELECT COUNT(*) AS childCount FROM acct_accounts WHERE parent_id = ? AND deleted_at IS NULL', [id],
+      'SELECT COUNT(*) AS childCount FROM acct_accounts WHERE parent_id = ? AND company_id = ? AND deleted_at IS NULL', [id, companyId],
     )
     if (childCount > 0) throw new AppError('该科目下存在下级科目，请先删除下级', 400)
 
-    // 硬删除（非软删）：科目编码是用户手输且受 uk_acct_accounts_code 唯一约束，软删会让该编码被永久占用、
+    // 硬删除（非软删）：科目编码是用户手输且受 uk_acct_accounts_code_company 唯一约束，软删会让该编码被永久占用、
     // 无法重建同码科目。会计语义上删除只针对「建错、从未使用」的科目——凭证分录已快照科目编码/名称
     // （acct_voucher_entries），不依赖科目主表，故硬删不影响历史凭证。「用过但想弃用」的科目走停用(is_active=0)。
     // Phase1 上线凭证后，此处需再加「该科目已有凭证分录则禁止删除、只能停用」的前置校验。
-    await conn.query('DELETE FROM acct_accounts WHERE id = ?', [id])
+    await conn.query('DELETE FROM acct_accounts WHERE id = ? AND company_id = ?', [id, companyId])
 
     // 若父科目已无其它存活下级，回落为明细科目（可记账）
     if (acct.parentId) {
       const [[{ remain }]] = await conn.query(
-        'SELECT COUNT(*) AS remain FROM acct_accounts WHERE parent_id = ? AND deleted_at IS NULL', [acct.parentId],
+        'SELECT COUNT(*) AS remain FROM acct_accounts WHERE parent_id = ? AND company_id = ? AND deleted_at IS NULL', [acct.parentId, companyId],
       )
-      if (remain === 0) await conn.query('UPDATE acct_accounts SET is_leaf = 1 WHERE id = ?', [acct.parentId])
+      if (remain === 0) await conn.query('UPDATE acct_accounts SET is_leaf = 1 WHERE id = ? AND company_id = ?', [acct.parentId, companyId])
     }
 
     await conn.commit()
@@ -206,10 +207,10 @@ async function remove(id, operatorId) {
   }
 }
 
-async function toggleStatus(id, isActive, operatorId) {
-  const acct = await getById(id)
+async function toggleStatus(id, isActive, operatorId, companyId = 1) {
+  const acct = await getById(id, pool, companyId)
   if (acct.isPreset) throw new AppError('系统预置科目不可停用（映射引擎依赖）', 400, 'ACCT_PRESET_LOCKED')
-  await pool.query('UPDATE acct_accounts SET is_active = ? WHERE id = ? AND deleted_at IS NULL', [isActive ? 1 : 0, id])
+  await pool.query('UPDATE acct_accounts SET is_active = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL', [isActive ? 1 : 0, id, companyId])
   logger.info('accounting', `${isActive ? '启用' : '停用'}科目 [${acct.code} ${acct.name}]`, { operatorId })
 }
 

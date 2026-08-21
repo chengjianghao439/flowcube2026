@@ -8,11 +8,16 @@ const { Router } = require('express')
 const { z }      = require('zod')
 const ctrl       = require('./accounting.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { companyScope } = require('../../middleware/companyScope')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { validateBody } = require('../../utils/route')
 
 const router = Router()
 router.use(authMiddleware)
+// 多账套隔离（2026-08-21 审计高危修复）：迁移 197/205 已把会计表唯一键改为
+// (company_id, ...) 维度，service 查询必须按账套过滤，否则账套 2 数据混入主账套。
+// companyId 是内部维度非安全边界，权限仍由 requirePermission 控制。
+router.use(companyScope)
 
 // ── 科目表 /api/accounting/accounts ─────────────────────────────────────
 const accounts = Router()

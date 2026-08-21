@@ -15,9 +15,9 @@ function dateStr(v) {
   return String(v).slice(0, 10)
 }
 
-async function fetchRows(period) {
-  const where = ['v.status <> 3']
-  const params = []
+async function fetchRows(period, companyId = 1) {
+  const where = ['v.status <> 3', 'v.company_id = ?']
+  const params = [companyId]
   if (period) { where.push('v.period = ?'); params.push(String(period)) }
   const [rows] = await pool.query(
     `SELECT v.voucher_no, v.voucher_date, v.summary AS v_summary, v.source_no,
@@ -106,8 +106,8 @@ function buildKingdee(wb, rows) {
   }
 }
 
-async function exportVouchers({ period, format = 'generic' }) {
-  const rows = await fetchRows(period)
+async function exportVouchers({ period, format = 'generic', companyId = 1 }) {
+  const rows = await fetchRows(period, companyId)
   const wb = new ExcelJS.Workbook()
   wb.creator = 'FlowCube'
   if (format === 'kingdee') buildKingdee(wb, rows)

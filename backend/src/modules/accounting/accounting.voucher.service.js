@@ -61,9 +61,9 @@ function fmtEntry(row) {
 
 // ─── 查询 ──────────────────────────────────────────────────────────────────
 
-async function listVouchers({ period, sourceType, status, keyword, page = 1, pageSize = 20 } = {}) {
-  const where = ['1=1']
-  const params = []
+async function listVouchers({ period, sourceType, status, keyword, page = 1, pageSize = 20, companyId = 1 } = {}) {
+  const where = ['company_id = ?']
+  const params = [companyId]
   if (period)     { where.push('period = ?'); params.push(String(period)) }
   if (sourceType) { where.push('source_type = ?'); params.push(String(sourceType)) }
   if (status)     { where.push('status = ?'); params.push(Number(status)) }
@@ -80,8 +80,8 @@ async function listVouchers({ period, sourceType, status, keyword, page = 1, pag
   return { list: rows.map(fmtVoucher), pagination: { page: p, pageSize: ps, total: Number(total) } }
 }
 
-async function getVoucher(id) {
-  const [[row]] = await pool.query('SELECT * FROM acct_vouchers WHERE id = ?', [Number(id)])
+async function getVoucher(id, companyId = 1) {
+  const [[row]] = await pool.query('SELECT * FROM acct_vouchers WHERE id = ? AND company_id = ?', [Number(id), companyId])
   if (!row) throw new AppError('凭证不存在', 404)
   const [entries] = await pool.query('SELECT * FROM acct_voucher_entries WHERE voucher_id = ? ORDER BY line_no ASC', [Number(id)])
   return { ...fmtVoucher(row), entries: entries.map(fmtEntry) }
@@ -89,16 +89,16 @@ async function getVoucher(id) {
 
 // ─── 生成本期凭证 ────────────────────────────────────────────────────────────
 
-async function generatePeriodVouchers({ period = null, userId = null } = {}) {
+async function generatePeriodVouchers({ period = null, userId = null, companyId = 1 } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     if (period) await assertPeriodOpen(conn, period)
     // 全量重算（未指定期间）跳过已结账期间：那些期间的账面已被锁定认可，
     // 重算去动它们等于破坏已结的账（skippedClosed 计入返回，调用方可见）
-    const [closedRows] = await conn.query('SELECT period FROM acct_periods WHERE status = 2')
+    const [closedRows] = await conn.query('SELECT period FROM acct_periods WHERE status = 2 AND company_id = ?', [companyId])
     const closedPeriods = new Set(closedRows.map(r => r.period))
-    const stats = await engine.generateVouchers(conn, { period: period || null, createdBy: userId, closedPeriods })
+    const stats = await engine.generateVouchers(conn, { period: period || null, createdBy: userId, closedPeriods, companyId })
     await conn.commit()
     return stats
   } catch (e) {
@@ -111,11 +111,11 @@ async function generatePeriodVouchers({ period = null, userId = null } = {}) {
 
 // ─── 手工凭证 ────────────────────────────────────────────────────────────────
 
-async function nextVoucherNo(conn, period) {
+async function nextVoucherNo(conn, period, companyId = 1) {
   const [[row]] = await conn.query(
     `SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(voucher_no,'-',-1) AS UNSIGNED)), 0) AS mx
-       FROM acct_vouchers WHERE period = ?`,
-    [period],
+       FROM acct_vouchers WHERE period = ? AND company_id = ?`,
+    [period, companyId],
   )
   return `记-${period}-${String((Number(row.mx) || 0) + 1).padStart(4, '0')}`
 }
@@ -124,7 +124,7 @@ async function nextVoucherNo(conn, period) {
  * 手工凭证录入。source_type='manual'、source_id=NULL（多张手工凭证 source_id 均为 NULL，
  * MySQL 唯一索引对 NULL 视为互异，不冲突）。分录科目必须是启用的明细科目，借贷必平。
  */
-async function createManualVoucher({ voucherDate, summary, entries }, userId) {
+async function createManualVoucher({ voucherDate, summary, entries, companyId = 1 }, userId) {
   if (!Array.isArray(entries) || entries.length < 2) throw new AppError('手工凭证至少需要两条分录', 400)
   const dateStr = engine.toDateStr(voucherDate)
   const period = dateStr.slice(0, 4) + dateStr.slice(5, 7)
@@ -142,8 +142,8 @@ async function createManualVoucher({ voucherDate, summary, entries }, userId) {
       if (!(amount > 0)) throw new AppError('分录金额必须大于 0', 400)
       const dir = Number(e.direction) === 1 ? 1 : 2
       const [[acct]] = await conn.query(
-        'SELECT id, code, name, is_leaf, is_active FROM acct_accounts WHERE id = ? AND deleted_at IS NULL',
-        [Number(e.accountId)],
+        'SELECT id, code, name, is_leaf, is_active FROM acct_accounts WHERE id = ? AND company_id = ? AND deleted_at IS NULL',
+        [Number(e.accountId), companyId],
       )
       if (!acct) throw new AppError(`科目不存在（id=${e.accountId}）`, 400)
       if (!acct.is_leaf) throw new AppError(`汇总科目「${acct.code} ${acct.name}」不可直接记账`, 400)
@@ -153,12 +153,12 @@ async function createManualVoucher({ voucherDate, summary, entries }, userId) {
     }
     if (round2(debit) !== round2(credit)) throw new AppError(`借贷不平：借 ${round2(debit)} ≠ 贷 ${round2(credit)}`, 400, 'ACCT_VOUCHER_UNBALANCED')
 
-    const voucherNo = await nextVoucherNo(conn, period)
+    const voucherNo = await nextVoucherNo(conn, period, companyId)
     const [r] = await conn.query(
       `INSERT INTO acct_vouchers
-         (voucher_no, voucher_date, period, source_type, source_id, source_no, summary, total_debit, total_credit, status, created_by)
-       VALUES (?, ?, ?, 'manual', NULL, NULL, ?, ?, ?, 1, ?)`,
-      [voucherNo, dateStr, period, summary || null, round2(debit), round2(credit), userId || null],
+         (company_id, voucher_no, voucher_date, period, source_type, source_id, source_no, summary, total_debit, total_credit, status, created_by)
+       VALUES (?, ?, ?, ?, 'manual', NULL, NULL, ?, ?, ?, 1, ?)`,
+      [companyId, voucherNo, dateStr, period, summary || null, round2(debit), round2(credit), userId || null],
     )
     let lineNo = 0
     for (const l of legs) {
@@ -182,11 +182,11 @@ async function createManualVoucher({ voucherDate, summary, entries }, userId) {
 }
 
 /** 删除凭证：仅手工凭证可删（自动凭证由重算维护）。 */
-async function removeVoucher(id, userId) {
+async function removeVoucher(id, userId, companyId = 1) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [[v]] = await conn.query('SELECT id, source_type, voucher_no, period FROM acct_vouchers WHERE id = ? FOR UPDATE', [Number(id)])
+    const [[v]] = await conn.query('SELECT id, source_type, voucher_no, period FROM acct_vouchers WHERE id = ? AND company_id = ? FOR UPDATE', [Number(id), companyId])
     if (!v) throw new AppError('凭证不存在', 404)
     if (v.source_type !== SOURCE_TYPES.MANUAL) throw new AppError('自动生成的凭证不可删除（如需修正请重新生成或冲销）', 400, 'ACCT_VOUCHER_NOT_MANUAL')
     await assertPeriodOpen(conn, v.period)
@@ -207,11 +207,11 @@ async function removeVoucher(id, userId) {
  * 原凭证一经生成不物理删除、不就地改分录（审计要求）。冲销后引擎重算会跳过 status=3 的原凭证，
  * 不再覆盖（见 voucher-engine.upsertVoucher）。
  */
-async function reverseVoucher(id, userId) {
+async function reverseVoucher(id, userId, companyId = 1) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [[v]] = await conn.query('SELECT * FROM acct_vouchers WHERE id = ? FOR UPDATE', [Number(id)])
+    const [[v]] = await conn.query('SELECT * FROM acct_vouchers WHERE id = ? AND company_id = ? FOR UPDATE', [Number(id), companyId])
     if (!v) throw new AppError('凭证不存在', 404)
     if (v.status === 3) throw new AppError('该凭证已冲销', 400)
     if (v.is_reversal) throw new AppError('红字冲销凭证本身不可再冲销', 400)
@@ -219,12 +219,12 @@ async function reverseVoucher(id, userId) {
     const [entries] = await conn.query('SELECT * FROM acct_voucher_entries WHERE voucher_id = ? ORDER BY line_no ASC', [Number(id)])
     if (entries.length === 0) throw new AppError('原凭证无分录', 400)
 
-    const voucherNo = await nextVoucherNo(conn, v.period)
+    const voucherNo = await nextVoucherNo(conn, v.period, companyId)
     const [r] = await conn.query(
       `INSERT INTO acct_vouchers
-         (voucher_no, voucher_date, period, source_type, source_id, source_no, summary, total_debit, total_credit, status, is_reversal, reversed_id, created_by)
-       VALUES (?, ?, ?, 'manual', NULL, ?, ?, ?, ?, 1, 1, ?, ?)`,
-      [voucherNo, v.voucher_date, v.period, v.source_no || null, `冲销 ${v.voucher_no}`,
+         (company_id, voucher_no, voucher_date, period, source_type, source_id, source_no, summary, total_debit, total_credit, status, is_reversal, reversed_id, created_by)
+       VALUES (?, ?, ?, ?, 'manual', NULL, ?, ?, ?, ?, 1, 1, ?, ?)`,
+      [companyId, voucherNo, v.voucher_date, v.period, v.source_no || null, `冲销 ${v.voucher_no}`,
        Number(v.total_credit), Number(v.total_debit), Number(id), userId || null],
     )
     let lineNo = 0
@@ -257,24 +257,30 @@ async function reverseVoucher(id, userId) {
  * 不按 status 过滤：红字冲销(原凭证 status=3 + 红字 is_reversal)成对相抵为零，全量纳入才正确
  * （只留红字会算成负的原始额）。见 accounting.ledger.service 顶注同一口径。
  */
-async function reconciliation() {
+async function reconciliation(companyId = 1) {
   const [[fundV]] = await pool.query(
     `SELECT COALESCE(SUM(e.amount),0) s FROM acct_voucher_entries e
        JOIN acct_vouchers v ON v.id = e.voucher_id
-      WHERE v.source_type IN ('receipt_in','payment_out','expense_pay') AND e.account_code IN ('1001','1002')`)
+      WHERE v.company_id = ? AND v.source_type IN ('receipt_in','payment_out','expense_pay') AND e.account_code IN ('1001','1002')`,
+    [companyId],
+  )
   const [[fundT]] = await pool.query(
     `SELECT COALESCE(SUM(t.amount),0) s FROM finance_account_transactions t
        JOIN finance_accounts fa ON fa.id = t.account_id WHERE t.biz_type IN (1,2,3)`)
   const [[payableV]] = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN direction=2 THEN amount ELSE -amount END),0) s
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
-      WHERE e.account_code='2202' AND v.source_type IN ('purchase_settle','purchase_return')`)
+      WHERE v.company_id = ? AND e.account_code='2202' AND v.source_type IN ('purchase_settle','purchase_return')`,
+    [companyId],
+  )
   const [[payableB]] = await pool.query(
     `SELECT COALESCE(SUM(total_amount),0) s FROM payment_records WHERE type=1 AND order_id IS NOT NULL`)
   const [[recvV]] = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN direction=1 THEN amount ELSE -amount END),0) s
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
-      WHERE e.account_code='1122' AND v.source_type IN ('sale_revenue','sale_return')`)
+      WHERE v.company_id = ? AND e.account_code='1122' AND v.source_type IN ('sale_revenue','sale_return')`,
+    [companyId],
+  )
   const [[recvB]] = await pool.query(
     `SELECT COALESCE(SUM(total_amount),0) s FROM payment_records WHERE type=2 AND order_id IS NOT NULL`)
   const item = (name, voucher, business) => ({

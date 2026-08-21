@@ -35,16 +35,16 @@ function periodRange(period) {
 }
 
 /** 期间已结账则抛 409。所有落凭证的写路径都必须先过这道闸。 */
-async function assertPeriodOpen(conn, period) {
+async function assertPeriodOpen(conn, period, companyId = 1) {
   const p = assertPeriodFormat(period)
-  const [[row]] = await conn.query('SELECT status FROM acct_periods WHERE period = ?', [p])
+  const [[row]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? AND company_id = ?', [p, companyId])
   if (row && Number(row.status) === 2) {
     throw new AppError(`会计期间 ${p} 已结账，凭证不可变动；如需调整请先反结账`, 409, 'ACCT_PERIOD_CLOSED')
   }
 }
 
 /** 当期损益类末级科目的本期净额（收入=贷−借；费用=借−贷），用于构造结转分录 */
-async function loadPlNets(conn, period) {
+async function loadPlNets(conn, period, companyId = 1) {
   const { start, end } = periodRange(period)
   const [rows] = await conn.query(
     `SELECT a.code, a.name, a.category, a.balance_dir,
@@ -55,12 +55,12 @@ async function loadPlNets(conn, period) {
        JOIN acct_vouchers v ON v.id = e.voucher_id
         AND v.voucher_date BETWEEN ? AND ?
         AND v.source_type NOT IN (?, ?)
-      WHERE a.deleted_at IS NULL AND a.is_leaf = 1 AND a.category IN (5, 6)
+      WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf = 1 AND a.category IN (5, 6)
       GROUP BY a.id, a.code, a.name, a.category, a.balance_dir
       ORDER BY a.code ASC`,
     // INNER JOIN + ON 条件：范围/来源过滤交给 JOIN，行不命中直接不参与——
     // 之前用 LEFT JOIN 时范围外的凭证留成 NULL 行，SUM 照常加进去，等于全期汇总
-    [start, end, SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y],
+    [start, end, SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y, companyId],
   )
   return rows.map(r => ({
     code: r.code, name: r.name, category: Number(r.category),
@@ -73,9 +73,9 @@ async function loadPlNets(conn, period) {
  * 构造某期间的损益结转 spec（收入/费用清零，差额落 4103 本年利润）。
  * 损益全零返回 null（该期间无需结转）。
  */
-async function buildPlClosingSpec(conn, period) {
+async function buildPlClosingSpec(conn, period, companyId = 1) {
   const { end } = periodRange(period)
-  const nets = await loadPlNets(conn, period)
+  const nets = await loadPlNets(conn, period, companyId)
   if (!nets.length) return null
   const legs = []
   let profit = 0
@@ -98,7 +98,7 @@ async function buildPlClosingSpec(conn, period) {
  * 构造年结 spec（仅 12 月）：4103 本年利润全年净额转 4104 利润分配。
  * 全年净利润 = 4103 贷方−借方（含各月损益结转）；净额为 0 返回 null。
  */
-async function buildYearClosingSpec(conn, period) {
+async function buildYearClosingSpec(conn, period, companyId = 1) {
   const y = period.slice(0, 4)
   const [[row]] = await conn.query(
     `SELECT COALESCE(SUM(CASE WHEN e.direction=2 THEN e.amount END),0) AS c,
@@ -106,9 +106,9 @@ async function buildYearClosingSpec(conn, period) {
        FROM acct_voucher_entries e
        JOIN acct_vouchers v ON v.id = e.voucher_id
        JOIN acct_accounts a ON a.id = e.account_id
-      WHERE a.code = '4103' AND a.deleted_at IS NULL
+      WHERE a.code = '4103' AND a.company_id = ? AND a.deleted_at IS NULL
         AND v.voucher_date BETWEEN ? AND ?`,
-    [`${y}-01-01`, `${y}-12-31`],
+    [companyId, `${y}-01-01`, `${y}-12-31`],
   )
   const profit = engine.round2(Number(row.c) - Number(row.d))
   if (profit === 0) return null
@@ -124,11 +124,11 @@ async function buildYearClosingSpec(conn, period) {
 }
 
 /** 某期间结转凭证的新鲜度：current=最新 / stale=结转后有新业务发生 / missing=未生成 / not_required=损益为零无需结转 */
-async function closingStatus(conn, period) {
-  const spec = await buildPlClosingSpec(conn, period)
+async function closingStatus(conn, period, companyId = 1) {
+  const spec = await buildPlClosingSpec(conn, period, companyId)
   const [[v]] = await conn.query(
-    'SELECT id, source_hash, status FROM acct_vouchers WHERE source_type = ? AND source_id = ?',
-    [SOURCE_TYPES.PERIOD_CLOSE, Number(period)],
+    'SELECT id, source_hash, status FROM acct_vouchers WHERE source_type = ? AND source_id = ? AND company_id = ?',
+    [SOURCE_TYPES.PERIOD_CLOSE, Number(period), companyId],
   )
   const pl = !spec
     ? (v && Number(v.status) !== 3 ? 'stale' : 'not_required')  // 无需结转但存在未冲销的结转凭证 = 过期
@@ -136,10 +136,10 @@ async function closingStatus(conn, period) {
       : (v.source_hash === engine.hashSpec(spec.voucherDate, spec.legs.map(l => ({ ...l, amount: engine.round2(l.amount) })).filter(l => l.amount > 0)) ? 'current' : 'stale'))
   let year = null
   if (period.slice(4, 6) === '12') {
-    const yspec = await buildYearClosingSpec(conn, period)
+    const yspec = await buildYearClosingSpec(conn, period, companyId)
     const [[yv]] = await conn.query(
-      'SELECT id, source_hash, status FROM acct_vouchers WHERE source_type = ? AND source_id = ?',
-      [SOURCE_TYPES.PERIOD_CLOSE_Y, Number(period.slice(0, 4))],
+      'SELECT id, source_hash, status FROM acct_vouchers WHERE source_type = ? AND source_id = ? AND company_id = ?',
+      [SOURCE_TYPES.PERIOD_CLOSE_Y, Number(period.slice(0, 4)), companyId],
     )
     year = !yspec
       ? (yv && Number(yv.status) !== 3 ? 'stale' : 'not_required')
@@ -163,36 +163,36 @@ async function writeClosingDetails(conn, companyId, period, closingType, voucher
 }
 
 /** 生成/重生成某期间的结转凭证（12 月连带年结凭证）。期间已结账则拒。 */
-async function generateClosingVouchers(period, userId) {
+async function generateClosingVouchers(period, userId, companyId = 1) {
   const p = assertPeriodFormat(period)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    await assertPeriodOpen(conn, p)
-    const accountMap = await engine.loadAccountMap(conn)
-    const allocSeq = await engine.makeSeqAllocator(conn)
+    await assertPeriodOpen(conn, p, companyId)
+    const accountMap = await engine.loadAccountMap(conn, companyId)
+    const allocSeq = await engine.makeSeqAllocator(conn, companyId)
     const results = []
-    const plSpec = await buildPlClosingSpec(conn, p)
+    const plSpec = await buildPlClosingSpec(conn, p, companyId)
     if (plSpec) {
-      const r = await engine.upsertVoucher(conn, plSpec, accountMap, allocSeq, userId)
+      const r = await engine.upsertVoucher(conn, plSpec, accountMap, allocSeq, userId, companyId)
       results.push({ kind: '损益结转', ...r })
       if (r.id) {
-        await conn.query('DELETE FROM acct_closing_details WHERE company_id=1 AND period=? AND closing_type=?', [p, 'pl_month'])
-        await writeClosingDetails(conn, 1, p, 'pl_month', r.id, plSpec.legs)
+        await conn.query('DELETE FROM acct_closing_details WHERE company_id=? AND period=? AND closing_type=?', [companyId, p, 'pl_month'])
+        await writeClosingDetails(conn, companyId, p, 'pl_month', r.id, plSpec.legs)
       }
     }
     if (p.slice(4, 6) === '12') {
-      const ySpec = await buildYearClosingSpec(conn, p)
+      const ySpec = await buildYearClosingSpec(conn, p, companyId)
       if (ySpec) {
-        const r = await engine.upsertVoucher(conn, ySpec, accountMap, allocSeq, userId)
+        const r = await engine.upsertVoucher(conn, ySpec, accountMap, allocSeq, userId, companyId)
         results.push({ kind: '年终结转', ...r })
         if (r.id) {
-          await conn.query('DELETE FROM acct_closing_details WHERE company_id=1 AND period=? AND closing_type=?', [p, 'year'])
-          await writeClosingDetails(conn, 1, p, 'year', r.id, ySpec.legs)
+          await conn.query('DELETE FROM acct_closing_details WHERE company_id=? AND period=? AND closing_type=?', [companyId, p, 'year'])
+          await writeClosingDetails(conn, companyId, p, 'year', r.id, ySpec.legs)
         }
       }
     }
-    const status = await closingStatus(conn, p)
+    const status = await closingStatus(conn, p, companyId)
     await conn.commit()
     logger.info('accounting', `生成结转凭证 period=${p}`, { userId, results })
     return { period: p, generated: results.length, results, status }
@@ -201,14 +201,14 @@ async function generateClosingVouchers(period, userId) {
 }
 
 /** 结账：结转凭证必须是最新的（或本期间无需结转），防止"结完又来新业务"的账面漂移。 */
-async function closePeriod(period, operator) {
+async function closePeriod(period, operator, companyId = 1) {
   const p = assertPeriodFormat(period)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [[existing]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? FOR UPDATE', [p])
+    const [[existing]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? AND company_id = ? FOR UPDATE', [p, companyId])
     if (existing && Number(existing.status) === 2) throw new AppError(`会计期间 ${p} 已是结账状态`, 409)
-    const st = await closingStatus(conn, p)
+    const st = await closingStatus(conn, p, companyId)
     const bad = []
     if (st.pl === 'missing') bad.push('损益结转凭证未生成')
     if (st.pl === 'stale') bad.push('损益结转凭证已过期（结转后又有新业务发生）')
@@ -218,10 +218,10 @@ async function closePeriod(period, operator) {
       throw new AppError(`期间 ${p} 尚不能结账：${bad.join('；')}。请先生成/重新生成结转凭证`, 409, 'ACCT_CLOSING_VOUCHER_REQUIRED')
     }
     await conn.query(
-      `INSERT INTO acct_periods (period, status, closed_by, closed_by_name, closed_at)
-       VALUES (?, 2, ?, ?, NOW())
+      `INSERT INTO acct_periods (company_id, period, status, closed_by, closed_by_name, closed_at)
+       VALUES (?, ?, 2, ?, ?, NOW())
        ON DUPLICATE KEY UPDATE status = 2, closed_by = VALUES(closed_by), closed_by_name = VALUES(closed_by_name), closed_at = NOW()`,
-      [p, operator?.userId ?? null, operator?.realName ?? null],
+      [companyId, p, operator?.userId ?? null, operator?.realName ?? null],
     )
     await conn.commit()
     logger.info('accounting', `结账 period=${p}`, { userId: operator?.userId })
@@ -231,14 +231,14 @@ async function closePeriod(period, operator) {
 }
 
 /** 反结账：重新开放期间（要改已结账期间的凭证必须先走这里；留操作日志） */
-async function reopenPeriod(period, operator) {
+async function reopenPeriod(period, operator, companyId = 1) {
   const p = assertPeriodFormat(period)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [[existing]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? FOR UPDATE', [p])
+    const [[existing]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? AND company_id = ? FOR UPDATE', [p, companyId])
     if (!existing || Number(existing.status) !== 2) throw new AppError(`会计期间 ${p} 未处于结账状态`, 409)
-    await conn.query('UPDATE acct_periods SET status = 1 WHERE period = ?', [p])
+    await conn.query('UPDATE acct_periods SET status = 1 WHERE period = ? AND company_id = ?', [p, companyId])
     await conn.commit()
     logger.info('accounting', `反结账 period=${p}`, { userId: operator?.userId })
     return { period: p, status: 1 }
@@ -247,18 +247,18 @@ async function reopenPeriod(period, operator) {
 }
 
 /** 期间列表：出现过凭证的期间 + 当前期间，带出结账状态与结转凭证新鲜度 */
-async function listPeriods() {
-  const [rows] = await pool.query('SELECT DISTINCT period FROM acct_vouchers ORDER BY period DESC LIMIT 36')
+async function listPeriods(companyId = 1) {
+  const [rows] = await pool.query('SELECT DISTINCT period FROM acct_vouchers WHERE company_id = ? ORDER BY period DESC LIMIT 36', [companyId])
   const now = new Date()
   const current = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
   const periods = [...new Set([current, ...rows.map(r => r.period)])].sort().reverse()
-  const [closedRows] = await pool.query('SELECT period, status, closed_by_name, closed_at FROM acct_periods')
+  const [closedRows] = await pool.query('SELECT period, status, closed_by_name, closed_at FROM acct_periods WHERE company_id = ?', [companyId])
   const stateMap = new Map(closedRows.map(r => [r.period, r]))
   const conn = await pool.getConnection()
   try {
     const list = []
     for (const p of periods) {
-      const st = await closingStatus(conn, p)
+      const st = await closingStatus(conn, p, companyId)
       const meta = stateMap.get(p)
       list.push({
         period: p,
