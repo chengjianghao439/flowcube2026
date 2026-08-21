@@ -8,6 +8,7 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getBarcodePrintRecordsApi, reprintBarcodeRecordApi } from '@/api/print-jobs'
+import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
@@ -83,8 +84,18 @@ export default function BarcodePrintQueryPage() {
       category: row.category,
       recordId: row.recordId,
     }, { skipGlobalError: true }),
-    onSuccess: () => {
-      toast.success('已重新加入打印队列')
+    onSuccess: (d) => {
+      if (!d) return
+      if (!d.queued) {
+        toast.warning('未绑定打印机，未创建打印任务')
+        qc.invalidateQueries({ queryKey: ['barcode-print-records'] })
+        qc.invalidateQueries({ queryKey: ['print-jobs'] })
+        return
+      }
+      triggerPrintPoll()
+      const fb = printQueueFeedback(d.dispatchHint)
+      if (fb.level === 'warning') toast.warning(fb.message)
+      else toast.success(fb.message)
       qc.invalidateQueries({ queryKey: ['barcode-print-records'] })
       qc.invalidateQueries({ queryKey: ['print-jobs'] })
     },

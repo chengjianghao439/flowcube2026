@@ -107,6 +107,8 @@ const fmtItem = r => ({
   orderedQty: Number(r.ordered_qty),
   receivedQty: Number(r.received_qty),
   putawayQty: Number(r.putaway_qty),
+  // 行备注：inbound_task_items 无此快照列，只在联表查询时从来源采购明细现查；无来源/手动建单为 null
+  remark: r.purchase_item_remark || null,
   // 多单位（文档03 Phase4b）：主辅助单位 + 率，供 PDA 收货按箱快捷录入；未配辅助单位为 null
   boxUnit: r.box_unit || null,
   boxRate: r.box_rate != null ? Number(r.box_rate) : null,

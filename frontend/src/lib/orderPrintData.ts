@@ -36,6 +36,10 @@ export function mapSaleOrderToPrint(order: SaleOrder): { data: Record<string, st
       quantity: it.quantity,
       unitPrice: Number(it.unitPrice),
       amount: Number(it.amount),
+      articleNumber: it.articleNumber ?? '',
+      spec: it.spec ?? '',
+      color: it.color ?? '',
+      remark: it.remark ?? '',
     })),
   }
 }
@@ -67,6 +71,10 @@ export function mapPurchaseOrderToPrint(order: PurchaseOrder): { data: Record<st
       quantity: it.quantity,
       unitPrice: Number(it.unitPrice),
       amount: Number(it.amount),
+      articleNumber: it.articleNumber ?? '',
+      spec: it.spec ?? '',
+      color: it.color ?? '',
+      remark: it.remark ?? '',
     })),
   }
 }
@@ -98,6 +106,10 @@ export function mapInboundTaskToPrint(task: InboundTask): { data: Record<string,
       quantity: it.orderedQty ?? 0,
       unitPrice: 0,
       amount: 0,
+      articleNumber: it.articleNumber ?? '',
+      spec: it.spec ?? '',
+      color: it.color ?? '',
+      remark: it.remark ?? '',
     })),
   }
 }
@@ -116,12 +128,16 @@ interface ReturnOrderLike {
   createdAt?: string
   statusName?: string
   items?: Array<{
-    productCode?: string
-    productName?: string
-    unit?: string
-    quantity?: number
-    unitPrice?: number
-    amount?: number
+    productCode?: string | null
+    productName?: string | null
+    unit?: string | null
+    quantity?: number | null
+    unitPrice?: number | null
+    amount?: number | null
+    articleNumber?: string | null
+    spec?: string | null
+    color?: string | null
+    remark?: string | null
   }>
 }
 
@@ -151,6 +167,10 @@ export function mapReturnOrderToPrint(order: ReturnOrderLike): { data: Record<st
       quantity: it.quantity ?? 0,
       unitPrice: Number(it.unitPrice ?? 0),
       amount: Number(it.amount ?? 0),
+      articleNumber: it.articleNumber ?? '',
+      spec: it.spec ?? '',
+      color: it.color ?? '',
+      remark: it.remark ?? '',
     })),
   }
 }

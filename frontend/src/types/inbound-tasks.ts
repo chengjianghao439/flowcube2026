@@ -27,6 +27,8 @@ export interface InboundTaskItem {
   boxUnit?: string | null    // 主辅助单位名（如"箱"），供 PDA 收货按箱快捷录入（文档03 Phase4b）
   boxRate?: number | null    // 1 辅助单位 = N 基本单位（率由系统给定，现场不可改）
   unitPrice: number | null
+  /** 行备注：收货明细无快照列，详情联表查询时从来源采购明细现查；手动建单为 null */
+  remark?: string | null
 }
 
 export interface InboundStatusView {

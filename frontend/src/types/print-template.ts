@@ -16,6 +16,12 @@ export interface TemplateElement {
   border: boolean
   // table-specific
   tableColumns?: string[]
+  /** 表格列宽（mm）：列 key → 宽度；缺省的列均分剩余宽度 */
+  tableColumnWidths?: Record<string, number>
+  /** 表格单元格自动换行（默认 true；false = 单行截断） */
+  tableRowWrap?: boolean
+  /** 表格最小行高（mm）；缺省按字号自适应 */
+  tableMinRowHeightMm?: number
   // 标签 v2（type 5-9）：字高用 mm（替代 fontSize），showLabel 控制 "label：" 前缀
   fontHeightMm?: number
   showLabel?: boolean
@@ -24,9 +30,22 @@ export interface TemplateElement {
   barcodeHRI?: boolean
 }
 
+/** 页面边距（mm），打印 @page margin 与编辑器安全区共用 */
+export interface PrintPageMargins {
+  top: number
+  bottom: number
+  left: number
+  right: number
+}
+
 /** 单据画布模板 | ZPL 标签模板（标签可选手动纸张宽高 mm，供画布与打印 ^PW） */
 export type TemplateLayout =
-  | { elements: TemplateElement[]; canvasWidthMm?: number; canvasHeightMm?: number }
+  | {
+      elements: TemplateElement[]
+      canvasWidthMm?: number
+      canvasHeightMm?: number
+      margins?: PrintPageMargins
+    }
   | { format: 'zpl'; body: string }
 
 export function isZplTemplateLayout(layout: TemplateLayout | unknown): layout is { format: 'zpl'; body: string } {

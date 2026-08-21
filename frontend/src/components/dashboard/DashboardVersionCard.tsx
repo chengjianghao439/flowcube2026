@@ -130,6 +130,11 @@ export default function DashboardVersionCard() {
                 有新版本可用
               </Badge>
             )}
+            {showNewAvailable && !showDesktopUpdateButton && (
+              <span className="text-xs text-muted-foreground">
+                浏览器中无法自动更新，请打开 极序 Flow 桌面客户端完成更新
+              </span>
+            )}
             {showDesktopUpdateButton && (
               <Button
                 type="button"

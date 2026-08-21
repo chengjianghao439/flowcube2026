@@ -14,18 +14,42 @@ import { getPrintTemplateListApi } from '@/api/print-templates'
 import TemplateRenderer from './TemplateRenderer'
 import type { PrintItem } from './TemplateRenderer'
 import type { PrintTemplate } from '@/types/print-template'
+import { isZplTemplateLayout } from '@/types/print-template'
 
 const PRINT_STYLE_ID = 'fc-order-print-style'
-const PRINT_CSS = `
+
+/** CSS @page size 关键字：单据纸张只可能是 A4/A5/A6（编辑器纸张下拉已过滤热敏纸） */
+function paperCssSize(paperSize: PrintTemplate['paperSize']): string {
+  return paperSize === 'A5' || paperSize === 'A6' ? paperSize : 'A4'
+}
+
+/** 从模板布局读取页面边距（mm）；缺省与历史默认一致：上下 8 / 左右 0 */
+function marginsOf(t: PrintTemplate | null): { top: number; bottom: number; left: number; right: number } {
+  const layout = t?.layout
+  if (!layout || isZplTemplateLayout(layout)) return { top: 8, bottom: 8, left: 0, right: 0 }
+  const m = layout.margins
+  const n = (v: number | undefined, d: number) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : d)
+  return {
+    top: n(m?.top, 8),
+    bottom: n(m?.bottom, 8),
+    left: n(m?.left, 0),
+    right: n(m?.right, 0),
+  }
+}
+
+function buildPrintCss(t: PrintTemplate | null): string {
+  const m = marginsOf(t)
+  return `
 @media print {
   body > *:not(#fc-print-root) { display: none !important; }
   #fc-print-root   { position: static !important; overflow: visible !important; background: #fff !important; }
   #fc-print-tb     { display: none !important; }
   #fc-print-page   { box-shadow: none !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; transform: none !important; }
-  /* 上下留 8mm 安全边距（避免边缘裁切、续页不贴顶）；左右 0 以免 210mm 内容溢出右边 */
-  @page            { size: A4; margin: 8mm 0; }
+  /* 页边距读模板 layout.margins（编辑器「页边距」可调）：避免边缘裁切、续页不贴顶；左右边距参与避免 210mm 内容溢出 */
+  @page            { size: ${paperCssSize(t?.paperSize ?? 'A4')}; margin: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm; }
 }
 `
+}
 
 export interface OrderPrintOverlayProps {
   templateType: number
@@ -45,15 +69,19 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
   const docZoomRef = useRef(1)
   docZoomRef.current = docZoom
 
+  // @page 边距跟随选中模板（layout.margins），切换模板时重写 style 标签
   useEffect(() => {
-    if (!document.getElementById(PRINT_STYLE_ID)) {
-      const el = document.createElement('style')
-      el.id = PRINT_STYLE_ID
-      el.textContent = PRINT_CSS
-      document.head.appendChild(el)
+    const el = document.getElementById(PRINT_STYLE_ID)
+    if (el) {
+      el.textContent = buildPrintCss(selected)
+    } else {
+      const style = document.createElement('style')
+      style.id = PRINT_STYLE_ID
+      style.textContent = buildPrintCss(selected)
+      document.head.appendChild(style)
     }
     return () => { document.getElementById(PRINT_STYLE_ID)?.remove() }
-  }, [])
+  }, [selected])
 
   useEffect(() => {
     const before = () => {

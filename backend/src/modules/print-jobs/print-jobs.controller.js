@@ -76,7 +76,14 @@ async function reprintBarcode(req, res, next) {
       recordId: body.recordId,
       createdBy: req.user?.userId ?? req.user?.id ?? null,
     })
-    return successResponse(res, job)
+    if (!job) {
+      // 未解析到打印机（未绑定 / 绑定缺失），补打不产生任何业务副作用，直接告知前端
+      return successResponse(res, { queued: false, jobId: null, printerCode: null, printerName: null, dispatchHint: null })
+    }
+    // 与 packages.controller / racks.controller 一致：入队后补算派发提示，
+    // 让前端能区分「客户端离线」「打印机未绑定客户端」与正常排队，而不是一律 toast 成功。
+    const dispatchHint = await svc.getDispatchHintForJob(job.printerCode, job.id)
+    return successResponse(res, { queued: true, ...job, dispatchHint })
   } catch (e) {
     next(e)
   }

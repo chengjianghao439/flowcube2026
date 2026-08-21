@@ -30,7 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import PageHeader from '@/components/shared/PageHeader'
-import type { PaperSize, TemplateElement, TemplateLayout, TemplateType } from '@/types/print-template'
+import type { PaperSize, PrintPageMargins, TemplateElement, TemplateLayout, TemplateType } from '@/types/print-template'
 import { isZplTemplateLayout } from '@/types/print-template'
 import {
   DOC_FIELD_DEFS,
@@ -288,22 +288,43 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
       : <span className="text-muted-foreground/60">{el.label}（{el.barcodeSymbology === 'ean13' ? 'EAN13' : '条码'}）</span>
   } else if (el.type === 'table') {
     const cols = el.tableColumns ?? ['name', 'qty', 'price', 'amount']
+    const allCols = ['#', ...cols]
     // 自定义列 key（不在 TABLE_COLUMN_OPTIONS 中）兜底显示 key 本身，保证画布预览不崩
-    const colDefs = cols.map(k => TABLE_COLUMN_OPTIONS.find(c => c.key === k) ?? { key: k, label: k, align: 'left' as const })
-    const cellStyle: React.CSSProperties = { border: '1px solid #ddd', padding: '1px 3px', fontSize: `${el.fontSize * scale * 0.35}px` }
+    const colDefs = allCols.map(k => TABLE_COLUMN_OPTIONS.find(c => c.key === k) ?? { key: k, label: k, align: 'left' as const })
+    // 列宽：显式（mm）优先，其余均分；与 TemplateRenderer.FlowTable 同一口径
+    const colWm = el.tableColumnWidths ?? {}
+    const totalMm = el.width
+    const knownMm = allCols.filter(k => {
+      const w = colWm[k]
+      return w != null && Number.isFinite(w) && w > 0
+    })
+    const usedMm = knownMm.reduce((s, k) => s + (colWm[k] as number), 0)
+    const unknownMm = allCols.length - knownMm.length
+    const shareMm = unknownMm > 0 ? Math.max(0, totalMm - usedMm) / unknownMm : 0
+    const widthMmOf = (k: string) => {
+      const w = colWm[k]
+      return w != null && Number.isFinite(w) && w > 0 ? w : shareMm
+    }
+    const wrap = el.tableRowWrap !== false
+    const cellStyle: React.CSSProperties = {
+      border: '1px solid #ddd', padding: '1px 3px',
+      fontSize: `${el.fontSize * scale * 0.35}px`,
+      whiteSpace: wrap ? 'normal' : 'nowrap',
+      wordBreak: 'break-all',
+    }
     content = (
       <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
         <thead>
           <tr>
             {colDefs.map(c => (
-              <th key={c.key} style={{ ...cellStyle, background: '#f5f5f5', fontWeight: 'bold' }}>{c.label}</th>
+              <th key={c.key} style={{ ...cellStyle, width: `${widthMmOf(c.key) * scale}px`, background: '#f5f5f5', fontWeight: 'bold' }}>{c.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {(preview ? DOC_PREVIEW_ITEMS : DOC_PREVIEW_ITEMS.slice(0, 2)).map((row, i) => (
             <tr key={i}>
-              {cols.map(k => <td key={k} style={cellStyle}>{(row as Record<string,string>)[k] ?? ''}</td>)}
+              {allCols.map(k => <td key={k} style={{ ...cellStyle, width: `${widthMmOf(k) * scale}px` }}>{k === '#' ? i + 1 : (row as Record<string, string>)[k] ?? ''}</td>)}
             </tr>
           ))}
         </tbody>
@@ -652,29 +673,48 @@ function PropertiesPanel({ el, multiCount, isLabel, onChange, onDelete, onDelete
 
         {/* 表格列 */}
         {el.type === 'table' && (
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">表格列（勾选显示）</label>
-            {TABLE_COLUMN_OPTIONS.map(col => {
-              const checked = (el.tableColumns ?? []).includes(col.key)
-              return (
-                <label key={col.key} className="flex cursor-pointer items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => {
-                      const cols = el.tableColumns ?? []
-                      const next = checked ? cols.filter(c => c !== col.key) : [...cols, col.key]
-                      onChange(el.id, { tableColumns: next })
-                    }}
-                    className="size-3"
-                  />
-                  {col.label}
-                </label>
-              )
-            })}
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">表格列（勾选显示，可设列宽 mm）</label>
+              {TABLE_COLUMN_OPTIONS.map(col => {
+                const checked = (el.tableColumns ?? []).includes(col.key)
+                const colW = (el.tableColumnWidths ?? {})[col.key]
+                return (
+                  <div key={col.key} className="flex items-center gap-2 text-xs">
+                    <label className="flex flex-1 cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const cols = el.tableColumns ?? []
+                          const next = checked ? cols.filter(c => c !== col.key) : [...cols, col.key]
+                          onChange(el.id, { tableColumns: next })
+                        }}
+                        className="size-3"
+                      />
+                      <span className="flex-1 truncate">{col.label}</span>
+                    </label>
+                    <Input
+                      type="number" min="0" step="1"
+                      placeholder="均分"
+                      disabled={!checked}
+                      value={colW ?? ''}
+                      onChange={e => {
+                        const v = e.target.value === '' ? undefined : +e.target.value
+                        const widths = { ...(el.tableColumnWidths ?? {}) }
+                        if (v != null && Number.isFinite(v) && v > 0) widths[col.key] = v
+                        else delete widths[col.key]
+                        onChange(el.id, { tableColumnWidths: widths })
+                      }}
+                      className="h-6 w-14 text-xs"
+                    />
+                  </div>
+                )
+              })}
+            </div>
 
             {/* 自定义列：输入 key 后回车添加；渲染端（TemplateRenderer）对未知 key 兜底显示 key 名 + 空值 */}
-            <div className="space-y-1.5 pt-1">
+            <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">自定义列（key）</label>
               {customCols.map(key => (
                 <div key={key} className="flex items-center justify-between rounded-md border border-dashed px-2 py-1">
@@ -683,7 +723,9 @@ function PropertiesPanel({ el, multiCount, isLabel, onChange, onDelete, onDelete
                     title="移除自定义列"
                     onClick={() => {
                       const cols = el.tableColumns ?? []
-                      onChange(el.id, { tableColumns: cols.filter(c => c !== key) })
+                      const widths = { ...(el.tableColumnWidths ?? {}) }
+                      delete widths[key]
+                      onChange(el.id, { tableColumns: cols.filter(c => c !== key), tableColumnWidths: widths })
                     }}>
                     <X className="size-3" />
                   </Button>
@@ -708,6 +750,36 @@ function PropertiesPanel({ el, multiCount, isLabel, onChange, onDelete, onDelete
                 />
                 <Button type="submit" size="sm" variant="outline" className="h-7 px-2 text-xs">添加</Button>
               </form>
+            </div>
+
+            {/* 行高与换行 */}
+            <div className="space-y-1.5 border-t border-border/60 pt-3">
+              <label className="text-xs font-medium text-muted-foreground">行高与换行</label>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-xs text-muted-foreground">最小行高</span>
+                <Input
+                  type="number" min="0" step="0.5"
+                  placeholder="自适应"
+                  value={el.tableMinRowHeightMm ?? ''}
+                  onChange={e => {
+                    const v = e.target.value === '' ? undefined : +e.target.value
+                    onChange(el.id, {
+                      tableMinRowHeightMm: v != null && Number.isFinite(v) && v > 0 ? v : undefined,
+                    })
+                  }}
+                  className="h-7 flex-1 text-xs"
+                />
+                <span className="shrink-0 text-xs text-muted-foreground">mm</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground">自动换行</label>
+                <button
+                  className={`relative h-5 w-9 rounded-full transition-colors ${el.tableRowWrap !== false ? 'bg-primary' : 'bg-input'}`}
+                  onClick={() => onChange(el.id, { tableRowWrap: el.tableRowWrap === false })}
+                >
+                  <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${el.tableRowWrap !== false ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -743,6 +815,8 @@ export default function PrintTemplateEditor() {
   /** 标签类型 5–9：画布纸张（mm），与 layout.canvasWidthMm/HeightMm 同步 */
   const [canvasWidthMm,  setCanvasWidthMm]  = useState(75)
   const [canvasHeightMm, setCanvasHeightMm] = useState(50)
+  /** 单据类型页面边距（mm），写入 layout.margins；打印 @page 与安全区共用 */
+  const [margins, setMargins] = useState<PrintPageMargins>({ top: 8, bottom: 8, left: 0, right: 0 })
   /** 多选：Shift+点击 toggle；空数组 = 未选中 */
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [preview,    setPreview]    = useState(false)
@@ -767,11 +841,18 @@ export default function PrintTemplateEditor() {
         }
       } else {
         setElements(Array.isArray(remote.layout.elements) ? remote.layout.elements : [])
+        const lo = remote.layout as { canvasWidthMm?: number; canvasHeightMm?: number; margins?: PrintPageMargins }
+        if (lo.margins) {
+          setMargins({
+            top:    Number.isFinite(lo.margins.top) ? lo.margins.top : 8,
+            bottom: Number.isFinite(lo.margins.bottom) ? lo.margins.bottom : 8,
+            left:   Number.isFinite(lo.margins.left) ? lo.margins.left : 0,
+            right:  Number.isFinite(lo.margins.right) ? lo.margins.right : 0,
+          })
+        }
         if (isZplLabelType(remote.type)) {
-          const lo = remote.layout as { canvasWidthMm?: number; canvasHeightMm?: number }
-          const p = PAPER_SIZES[remote.paperSize] ?? PAPER_SIZES.thermal75
-          const cw = typeof lo.canvasWidthMm === 'number' ? lo.canvasWidthMm : p.w
-          const ch = typeof lo.canvasHeightMm === 'number' ? lo.canvasHeightMm : p.h
+          const cw = typeof lo.canvasWidthMm === 'number' ? lo.canvasWidthMm : 75
+          const ch = typeof lo.canvasHeightMm === 'number' ? lo.canvasHeightMm : 50
           setCanvasWidthMm(Math.min(120, Math.max(30, cw)))
           setCanvasHeightMm(Math.min(500, Math.max(40, ch)))
         }
@@ -1015,7 +1096,7 @@ export default function PrintTemplateEditor() {
       : paperSize
     const layout: TemplateLayout = isZplLabelType(type)
       ? { elements, canvasWidthMm: cw, canvasHeightMm: ch }
-      : { elements }
+      : { elements, margins }
     if (isNew) {
       createMut.mutate({ name, type, paperSize: derivedPaper, layout })
     } else {
@@ -1323,6 +1404,28 @@ export default function PrintTemplateEditor() {
             </Button>
           )}
 
+          {!isZplLabelType(type) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted-foreground shrink-0">页边距 (mm)</span>
+              {([['上', 'top'], ['下', 'bottom'], ['左', 'left'], ['右', 'right']] as const).map(([zh, k]) => (
+                <div key={k} className="flex items-center gap-0.5">
+                  <span className="text-[10px] text-muted-foreground">{zh}</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={40}
+                    step={1}
+                    value={margins[k]}
+                    onChange={e => setMargins(m => ({ ...m, [k]: Math.max(0, Number(e.target.value) || 0) }))}
+                    onBlur={() => setMargins(m => ({ ...m, [k]: Math.min(40, Math.max(0, Math.round(Number(m[k]) || 0))) }))}
+                    className="h-9 w-[3rem] text-sm"
+                    title={`页面${zh}边距 mm`}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">{elements.length} 个元素</span>
 
@@ -1406,15 +1509,15 @@ export default function PrintTemplateEditor() {
             />
           )}
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center overflow-auto bg-muted/40 p-6 gap-4">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-muted/40 p-6 gap-4">
             {preview && (
-              <div className="flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary">
+              <div className="mx-auto flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary">
                 <Eye className="size-3.5" />
                 预览模式 — 示例数据
               </div>
             )}
             {!preview && (
-              <p className="text-xs text-muted-foreground text-center max-w-xl">
+              <p className="mx-auto text-xs text-muted-foreground text-center max-w-xl">
                 {isZplLabelType(type)
                   ? '从左侧拖拽字段到画布 · 打印时按毫米坐标生成 ZPL · 工具栏可放大画布 · '
                   : '从左侧拖拽字段到画布 · 点击选中元素后可拖动位置或在右侧修改属性 · 工具栏可放大画布 · '}
@@ -1425,7 +1528,7 @@ export default function PrintTemplateEditor() {
             <div
               ref={canvasRef}
               style={{ width: canvasW, height: canvasH, position: 'relative' }}
-              className={`shrink-0 bg-white shadow-xl ring-1 ring-border/30 ${!preview ? 'cursor-crosshair' : ''}`}
+              className={`mx-auto shrink-0 bg-white shadow-xl ring-1 ring-border/30 ${!preview ? 'cursor-crosshair' : ''}`}
               onDragOver={handleCanvasDragOver}
               onDrop={handleCanvasDrop}
               onClick={() => { if (!draggingElId.current) setSelectedIds([]) }}
@@ -1444,9 +1547,17 @@ export default function PrintTemplateEditor() {
                 </svg>
               )}
 
-              {/* 单据打印安全区（距纸边 5mm）：提示避让打印机不可打印区，避免边缘裁切 */}
+              {/* 单据打印安全区：按页面边距（mm）提示避让打印机不可打印区，避免边缘裁切 */}
               {!preview && !isZplLabelType(type) && (
-                <div style={{ position: 'absolute', inset: 5 * canvasScale, border: '1px dashed rgba(236,72,153,0.35)', pointerEvents: 'none', zIndex: 1 }} />
+                <div style={{
+                  position: 'absolute',
+                  top: margins.top * canvasScale,
+                  bottom: margins.bottom * canvasScale,
+                  left: margins.left * canvasScale,
+                  right: margins.right * canvasScale,
+                  border: '1px dashed rgba(236,72,153,0.35)',
+                  pointerEvents: 'none', zIndex: 1,
+                }} />
               )}
 
               {isZplLabelType(type) && preview ? (
@@ -1488,7 +1599,7 @@ export default function PrintTemplateEditor() {
               )}
             </div>
 
-            <p className="text-xs text-muted-foreground">
+            <p className="mx-auto text-xs text-muted-foreground">
               {paper.label} · {paper.w} × {paper.h} mm
             </p>
           </div>

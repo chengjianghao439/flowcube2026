@@ -1,6 +1,7 @@
 import { payloadClient as client } from './client'
 
 import type { BarcodePrintCategory, BarcodePrintRecordPage } from '@/types/print-jobs'
+import type { PrintQueueDispatchHint } from '@/lib/printQueue'
 
 export const getBarcodePrintRecordsApi = (params: {
   category: BarcodePrintCategory
@@ -18,9 +19,11 @@ export const reprintBarcodeRecordApi = (data: {
   recordId: number
 }, config?: Parameters<typeof client.post>[2]) =>
   client.post<{
-    id: number
-    printStateLabel: string
-    printerCode: string | null
-    printerName: string | null
-    statusKey: string
+    queued: boolean
+    id?: number
+    printStateLabel?: string
+    printerCode?: string | null
+    printerName?: string | null
+    statusKey?: string
+    dispatchHint?: PrintQueueDispatchHint | null
   }>('/print-jobs/barcodes/reprint', data, config)

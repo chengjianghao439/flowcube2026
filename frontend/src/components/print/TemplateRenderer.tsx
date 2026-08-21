@@ -25,13 +25,29 @@ const PAPER_MM: Record<string, { w: number; h: number }> = {
 }
 
 const COL_DEF: Record<string, { label: string; align: 'left' | 'center' | 'right' }> = {
-  code:   { label: '商品编码', align: 'left'   },
-  name:   { label: '商品名称', align: 'left'   },
-  spec:   { label: '规格',     align: 'left'   },
-  unit:   { label: '单位',     align: 'center' },
-  qty:    { label: '数量',     align: 'right'  },
-  price:  { label: '单价',     align: 'right'  },
-  amount: { label: '金额',     align: 'right'  },
+  articleNo: { label: '货号',     align: 'left'   },
+  code:      { label: '商品编码', align: 'left'   },
+  name:      { label: '商品名称', align: 'left'   },
+  spec:      { label: '规格',     align: 'left'   },
+  color:     { label: '颜色',     align: 'center' },
+  unit:      { label: '单位',     align: 'center' },
+  qty:       { label: '数量',     align: 'right'  },
+  price:     { label: '单价',     align: 'right'  },
+  amount:    { label: '金额',     align: 'right'  },
+  remark:    { label: '备注',     align: 'left'   },
+}
+
+/** 模板页面边距（mm）；缺省与历史默认一致：上下 8 / 左右 0。打印 @page 与无表格单页高度共用 */
+function layoutMargins(layout: TemplateLayout): { top: number; bottom: number; left: number; right: number } {
+  if (isZplTemplateLayout(layout)) return { top: 8, bottom: 8, left: 0, right: 0 }
+  const m = layout.margins
+  const n = (v: number | undefined, d: number) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : d)
+  return {
+    top:    n(m?.top, 8),
+    bottom: n(m?.bottom, 8),
+    left:   n(m?.left, 0),
+    right:  n(m?.right, 0),
+  }
 }
 
 // ─── 通用商品行 ───────────────────────────────────────────────────────────────
@@ -43,19 +59,26 @@ export interface PrintItem {
   quantity: number
   unitPrice: number
   amount: number
+  /** 货号 / 规格 / 颜色 / 行备注（订单明细行均有，透传后可由模板列显示） */
+  articleNumber?: string
+  spec?: string
+  color?: string
   remark?: string
 }
 
 function colValue(col: string, item: PrintItem): string {
   switch (col) {
-    case 'code':   return item.productCode
-    case 'name':   return item.productName
-    case 'spec':   return ''
-    case 'unit':   return item.unit
-    case 'qty':    return String(item.quantity)
-    case 'price':  return `¥${(Number(item.unitPrice) || 0).toFixed(2)}`
-    case 'amount': return `¥${(Number(item.amount) || 0).toFixed(2)}`
-    default:       return ''
+    case 'articleNo': return item.articleNumber ?? ''
+    case 'code':      return item.productCode
+    case 'name':      return item.productName
+    case 'spec':      return item.spec ?? ''
+    case 'color':     return item.color ?? ''
+    case 'unit':      return item.unit
+    case 'qty':       return String(item.quantity)
+    case 'price':     return `¥${(Number(item.unitPrice) || 0).toFixed(2)}`
+    case 'amount':    return `¥${(Number(item.amount) || 0).toFixed(2)}`
+    case 'remark':    return item.remark ?? ''
+    default:          return ''
   }
 }
 
@@ -112,6 +135,13 @@ function ElementNode({
 
   if (el.type === 'table') {
     const cols = el.tableColumns ?? ['name', 'qty', 'price', 'amount']
+    const wrap = el.tableRowWrap !== false
+    // 表头预览：按列宽(mm)应用宽度，与 FlowTable 一致
+    const explicit = el.tableColumnWidths ?? {}
+    const widthPx = (k: string) => {
+      const w = explicit[k]
+      return w != null && Number.isFinite(w) && w > 0 ? px(w) : undefined
+    }
 
     return (
       <div style={{ ...base, padding: 0, overflow: 'visible' }}>
@@ -121,13 +151,14 @@ function ElementNode({
             borderCollapse: 'collapse',
             fontSize: `${el.fontSize * scale}pt`,
             fontFamily: 'inherit',
+            tableLayout: 'fixed',
           }}
         >
           <thead>
             <tr>
-              <th style={thStyle('#', 'center')}>序号</th>
+              <th style={thStyle('center', wrap, widthPx('#'))}>序号</th>
               {cols.map(c => (
-                <th key={c} style={thStyle(c, COL_DEF[c]?.align ?? 'left')}>
+                <th key={c} style={thStyle(COL_DEF[c]?.align ?? 'left', wrap, widthPx(c))}>
                   {COL_DEF[c]?.label ?? c}
                 </th>
               ))}
@@ -158,17 +189,6 @@ function ElementNode({
       <span>{value}</span>
     </div>
   )
-}
-
-function thStyle(_key: string, align: string): React.CSSProperties {
-  return {
-    background:  '#f0f0f0',
-    border:      '1px solid #bbb',
-    padding:     '4px 5px',
-    fontWeight:  600,
-    textAlign:   align as React.CSSProperties['textAlign'],
-    whiteSpace:  'nowrap',
-  }
 }
 
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
@@ -213,10 +233,12 @@ export default function TemplateRenderer({ layout, paperSize, data, items, displ
 
   const tableEl = layout.elements.find(e => e.type === 'table')
 
-  // 无明细表格：单页固定版式（绝对定位），保留原行为
+  // 无明细表格：单页固定版式（绝对定位），高度 = 可打印区高度（纸高 − 上下页边距），保留原行为
   if (!tableEl) {
+    const m = layoutMargins(layout)
+    const pageH = Math.max(1, paper.h - m.top - m.bottom)
     return (
-      <div style={{ ...baseStyle, position: 'relative', width: pw(paper.w), height: pw(paper.h), overflow: 'hidden' }}>
+      <div style={{ ...baseStyle, position: 'relative', width: pw(paper.w), height: pw(pageH), overflow: 'hidden' }}>
         {layout.elements.map(el => <ElementNode key={el.id} el={el} data={data} scale={scale} />)}
       </div>
     )
@@ -253,11 +275,33 @@ export default function TemplateRenderer({ layout, paperSize, data, items, displ
 function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem[]; scale: number }) {
   const pw = (mm: number) => mm * MM_PX * scale
   const cols = el.tableColumns ?? ['name', 'qty', 'price', 'amount']
+  const allCols = ['#', ...cols]
+
+  // 列宽：显式指定（mm）优先，其余均分剩余宽度
+  const totalPx = pw(el.width)
+  const explicit = el.tableColumnWidths ?? {}
+  const explicitPx: Record<string, number | null> = {}
+  for (const k of allCols) {
+    const w = explicit[k]
+    explicitPx[k] = w != null && Number.isFinite(w) && w > 0 ? pw(w) : null
+  }
+  const known = allCols.filter(k => explicitPx[k] != null)
+  const used = known.reduce((s, k) => s + (explicitPx[k] as number), 0)
+  const unknown = allCols.length - known.length
+  const share = unknown > 0 ? Math.max(0, totalPx - used) / unknown : 0
+  const widthOf = (k: string) => (explicitPx[k] != null ? (explicitPx[k] as number) : share)
+
+  const wrap = el.tableRowWrap !== false
+  const minRowPx =
+    el.tableMinRowHeightMm != null && Number.isFinite(el.tableMinRowHeightMm) && el.tableMinRowHeightMm > 0
+      ? pw(el.tableMinRowHeightMm)
+      : undefined
+
   return (
     <table
       style={{
         marginLeft: pw(el.x),
-        width: pw(el.width),
+        width: totalPx,
         borderCollapse: 'collapse',
         fontSize: `${el.fontSize * scale}pt`,
         fontFamily: 'inherit',
@@ -267,9 +311,9 @@ function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem
       {/* table-header-group：跨页时每页顶部重复表头 */}
       <thead style={{ display: 'table-header-group' }}>
         <tr>
-          <th style={thStyle('#', 'center')}>序号</th>
+          <th style={thStyle('center', wrap, widthOf('#'))}>序号</th>
           {cols.map(c => (
-            <th key={c} style={thStyle(c, COL_DEF[c]?.align ?? 'left')}>
+            <th key={c} style={thStyle(COL_DEF[c]?.align ?? 'left', wrap, widthOf(c))}>
               {COL_DEF[c]?.label ?? c}
             </th>
           ))}
@@ -278,20 +322,20 @@ function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem
       <tbody>
         {items.map((item, i) => (
           <tr key={i} style={{ background: i % 2 === 1 ? '#fafafa' : '#fff', breakInside: 'avoid' }}>
-            <td style={tdStyle('center')}>{i + 1}</td>
+            <td style={tdStyle('center', wrap, minRowPx)}>{i + 1}</td>
             {cols.map(c => (
-              <td key={c} style={tdStyle(COL_DEF[c]?.align ?? 'left')}>
+              <td key={c} style={tdStyle(COL_DEF[c]?.align ?? 'left', wrap, minRowPx)}>
                 {colValue(c, item)}
               </td>
             ))}
           </tr>
         ))}
         <tr style={{ background: '#f5f5f5', fontWeight: 600, breakInside: 'avoid' }}>
-          <td colSpan={cols.indexOf('amount') >= 0 ? cols.indexOf('amount') + 1 : cols.length} style={tdStyle('right')}>
+          <td colSpan={cols.indexOf('amount') >= 0 ? cols.indexOf('amount') + 1 : cols.length} style={tdStyle('right', wrap, minRowPx)}>
             合计：
           </td>
           {cols.indexOf('amount') >= 0 && (
-            <td style={tdStyle('right')}>
+            <td style={tdStyle('right', wrap, minRowPx)}>
               ¥{items.reduce((s, it) => s + Number(it.amount ?? 0), 0).toFixed(2)}
             </td>
           )}
@@ -301,11 +345,28 @@ function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem
   )
 }
 
-function tdStyle(align: string): React.CSSProperties {
+function thStyle(align: string, wrap: boolean, width?: number): React.CSSProperties {
   return {
-    border:   '1px solid #d8d8d8',
-    padding:  '4px 5px',
-    textAlign: align as React.CSSProperties['textAlign'],
+    background: '#f0f0f0',
+    border:     '1px solid #bbb',
+    padding:    '4px 5px',
+    fontWeight: 600,
+    textAlign:  align as React.CSSProperties['textAlign'],
+    verticalAlign: 'middle',
+    whiteSpace: wrap ? 'normal' : 'nowrap',
+    wordBreak:  'break-all',
+    width:      width,
+  }
+}
+
+function tdStyle(align: string, wrap: boolean, minRowPx?: number): React.CSSProperties {
+  return {
+    border:     '1px solid #d8d8d8',
+    padding:    '4px 5px',
+    textAlign:  align as React.CSSProperties['textAlign'],
     verticalAlign: 'top',
+    whiteSpace: wrap ? 'normal' : 'nowrap',
+    wordBreak:  'break-all',
+    minHeight:  minRowPx,
   }
 }

@@ -96,13 +96,16 @@ export interface TableColumnOption {
 }
 
 export const TABLE_COLUMN_OPTIONS: TableColumnOption[] = [
+  { key: 'articleNo', label: '货号' },
   { key: 'code', label: '商品编码' },
   { key: 'name', label: '商品名称' },
   { key: 'spec', label: '规格' },
+  { key: 'color', label: '颜色' },
   { key: 'unit', label: '单位' },
   { key: 'qty', label: '数量' },
   { key: 'price', label: '单价' },
   { key: 'amount', label: '金额' },
+  { key: 'remark', label: '备注' },
 ]
 
 /**
@@ -171,7 +174,7 @@ export const DOC_PREVIEW_SAMPLE: Record<string, string> = {
 
 /** 单据画布预览示例明细（与 TemplateRenderer.PrintItem 一致） */
 export const DOC_PREVIEW_ITEMS = [
-  { code: 'P001', name: '商品A', spec: '500g/件', unit: '件', qty: '10', price: '100.00', amount: '1,000.00' },
-  { code: 'P002', name: '商品B', spec: '1kg/箱', unit: '箱', qty: '5', price: '200.00', amount: '1,000.00' },
-  { code: 'P003', name: '商品C', spec: '250ml/瓶', unit: '瓶', qty: '20', price: '60.00', amount: '1,200.00' },
+  { articleNo: 'JH-1001', code: 'P001', name: '商品A', spec: '500g/件', color: '黑色', unit: '件', qty: '10', price: '100.00', amount: '1,000.00', remark: '易碎品' },
+  { articleNo: 'JH-1002', code: 'P002', name: '商品B', spec: '1kg/箱', color: '白色', unit: '箱', qty: '5', price: '200.00', amount: '1,000.00', remark: '' },
+  { articleNo: 'JH-1003', code: 'P003', name: '商品C', spec: '250ml/瓶', color: '', unit: '瓶', qty: '20', price: '60.00', amount: '1,200.00', remark: '按批次发货' },
 ]
