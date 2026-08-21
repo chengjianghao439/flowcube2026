@@ -296,10 +296,12 @@ async function openPdaAndCheck(path, expected) {
     // 新标签页无登录态，注入后 reload 让 zustand persist 重新水合
     runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(AUTH_STORAGE_JSON)}), true)`])
     runPw(['eval', '(location.reload(), true)'])
-    // 等待水合完成并落到 PDA 首页（/pda/login → /pda）
+    // 等待水合完成并落到 PDA 首页（/pda/login → /pda）。
+    // 超时用 PAGE_SMOKE_TIMEOUT_MS（默认 20s）：CI Playwright 容器连续开新标签页
+    // 时偶发初始化慢，10s 的 NAV_TIMEOUT*2 不够（2026-08-21 连续两次 CI 失败点）
     await waitFor(
       "location.hash.startsWith('#/pda') && !location.hash.startsWith('#/pda/login')",
-      { timeout: PAGE_SMOKE_NAV_TIMEOUT_MS * 2, interval: PAGE_SMOKE_INTERVAL_MS, label: 'PDA 登录态水合' },
+      { timeout: PAGE_SMOKE_TIMEOUT_MS, interval: PAGE_SMOKE_INTERVAL_MS, label: 'PDA 登录态水合' },
     )
     // PDA 内部导航到目标页（同标签页内 PDA→PDA 不被守卫拦截）
     await setHashAndConfirm(path)
