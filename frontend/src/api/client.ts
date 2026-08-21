@@ -22,6 +22,36 @@ import { ensureDeviceSession, renewDeviceSession } from './pda-session'
 /** 标记已为设备票据失效重试过一次，防止无限换票循环 */
 type RetriableConfig = InternalAxiosRequestConfig & { __pdaSessionRetried?: boolean }
 
+/**
+ * 用 refresh token 换新 access（2026-08-21 权衡修复）。
+ * 成功则更新 authStore 令牌并返回 true；失败（refresh 也失效）返回 false，
+ * 由调用方登出。并发 401 时只允许一个 refresh 请求，其余等待。
+ */
+let refreshInFlight: Promise<boolean> | null = null
+async function tryRefreshTokens(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = (async () => {
+    const refreshToken = useAuthStore.getState().refreshToken
+    if (!refreshToken) return false
+    try {
+      const res = await axios.post<{ data?: { token?: string; refreshToken?: string | null } }>(
+        '/api/auth/refresh',
+        { refreshToken },
+        { skipGlobalError: true as never },
+      )
+      const d = res.data?.data
+      if (!d?.token) return false
+      useAuthStore.getState().setTokens(d.token, d.refreshToken ?? null)
+      return true
+    } catch {
+      return false
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+  return refreshInFlight
+}
+
 /** 独立 APK：勿走 ERP 浏览器的候选地址回退（易误连占位域名或 localhost） */
 function isNativePdaNoViteLive(): boolean {
   if (typeof window === 'undefined') return false
@@ -260,6 +290,19 @@ apiClient.interceptors.response.use(
     })
 
     if (status === 401) {
+      // access token 过期（2026-08-21 权衡修复）：先尝试用 refresh token 换新，
+      // 成功则重放原请求；refresh 也失效（过期/被吊销/改密码）才登出。
+      // 只重试一次并打标记，避免 401→refresh→401 死循环。
+      const cfg401 = error.config as (InternalAxiosRequestConfig & { __authRefreshed?: boolean }) | undefined
+      if (cfg401 && !cfg401.__authRefreshed && useAuthStore.getState().refreshToken) {
+        const refreshed = await tryRefreshTokens()
+        if (refreshed) {
+          cfg401.__authRefreshed = true
+          cfg401.headers = cfg401.headers ?? {}
+          ;(cfg401.headers as Record<string, string>).Authorization = `Bearer ${useAuthStore.getState().token}`
+          return apiClient.request(cfg401)
+        }
+      }
       performSessionLogout()
       return Promise.reject(structuredError)
     }

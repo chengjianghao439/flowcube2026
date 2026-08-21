@@ -22,7 +22,8 @@ export function useLogin(redirectTo = '/dashboard') {
       persistErpApiBaseAfterLogin()
       applyErpApiBaseFromStorage()
       useWorkspaceStore.getState().closeAll()
-      login(data.token, data.user)
+      // refreshToken（2026-08-21 权衡修复）：access 2h 过期后自动换新
+      login(data.token, data.refreshToken ?? null, data.user)
       await syncPdaLabelPrinterBinding().catch(() => null)
       // PDA 端登录后立刻用本机设备凭据换一张设备票据；没绑定过设备就跳过，
       // 由后端的观察/强制模式决定后续作业是否放行，不在这里打断登录

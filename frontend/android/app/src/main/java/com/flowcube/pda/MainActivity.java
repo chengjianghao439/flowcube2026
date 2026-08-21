@@ -13,6 +13,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(PdaAppUpdatePlugin.class);
+        // 设备凭据加密存储（2026-08-21 权衡修复）：Android Keystore AES-GCM
+        registerPlugin(SecureStoragePlugin.class);
         super.onCreate(savedInstanceState);
 
         Window window = getWindow();

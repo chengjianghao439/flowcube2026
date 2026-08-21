@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import './index.css'
 import { Capacitor } from '@capacitor/core'
 import { applyPdaApiBaseFromStorage, installPdaGlobals } from '@/lib/pdaRuntime'
+import { initDeviceBinding } from '@/lib/pdaDeviceBinding'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
 import { bootstrapErpApiConnection } from '@/lib/erpApiBootstrap'
 import { IS_CAPACITOR_PDA } from '@/lib/platform'
@@ -24,6 +25,9 @@ async function boot(): Promise<void> {
   if (isNative) {
     applyPdaApiBaseFromStorage()
     installPdaGlobals()
+    // 设备凭据水合（2026-08-21 权衡修复）：从 SecureStorage 加载到内存缓存，
+    // 同步 getter（axios 拦截器）才能读到票据
+    await initDeviceBinding()
   }
   if (isPdaBuild || isNative) {
     const inHash = (window.location.hash.replace(/^#/, '').split('?')[0] || '/').trim()

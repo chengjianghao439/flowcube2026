@@ -33,10 +33,13 @@ removeLegacyAuthStorage()
 
 interface AuthState {
   token: string | null
+  /** refresh token（2026-08-21 权衡修复）：access 2h 过期后自动换新，无需重登 */
+  refreshToken: string | null
   user: User | null
   isAuthenticated: boolean
   /** JWT 存 sessionStorage（本地开发连本机后端时为 localStorage），见 USE_PERSISTENT_DEV_SESSION */
-  login: (token: string, user: User) => void
+  login: (token: string, refreshToken: string | null, user: User) => void
+  setTokens: (token: string, refreshToken: string | null) => void
   logout: () => void
   updateUser: (user: Partial<User>) => void
 }
@@ -45,15 +48,25 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       token: null,
+      refreshToken: null,
       user: null,
       isAuthenticated: false,
 
-      login: (token, user) => {
+      login: (token, refreshToken, user) => {
         set({
           token,
+          refreshToken,
           user,
           isAuthenticated: true,
         })
+      },
+
+      /** 刷新成功后更新令牌（2026-08-21 权衡修复） */
+      setTokens: (token, refreshToken) => {
+        set((state) => ({
+          token,
+          refreshToken: refreshToken ?? state.refreshToken,
+        }))
       },
 
       logout: () => {
@@ -66,6 +79,7 @@ export const useAuthStore = create<AuthState>()(
         }
         set({
           token: null,
+          refreshToken: null,
           user: null,
           isAuthenticated: false,
         })
@@ -84,6 +98,7 @@ export const useAuthStore = create<AuthState>()(
         if (!state.token) return {}
         return {
           token: state.token,
+          refreshToken: state.refreshToken,
           user: state.user,
           isAuthenticated: true,
         }
@@ -94,6 +109,7 @@ export const useAuthStore = create<AuthState>()(
           state.isAuthenticated = true
         } else {
           state.token = null
+          state.refreshToken = null
           state.user = null
           state.isAuthenticated = false
         }

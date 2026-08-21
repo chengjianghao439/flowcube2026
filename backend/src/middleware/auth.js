@@ -34,6 +34,11 @@ async function authMiddleware(req, res, next) {
     if (!Number.isFinite(tokenVersion) || tokenVersion !== currentTokenVersion) {
       return next(new AppError('登录状态已失效，请重新登录', 401, 'AUTH_SESSION_INVALID'))
     }
+    // refresh token 不能访问业务接口（2026-08-21 权衡修复）：它只能调 /auth/refresh
+    // 换新 access；拿 refresh 直接访问数据 = 越权
+    if (payload.tokenType === 'refresh') {
+      return next(new AppError('请使用登录后获取的访问令牌', 401, 'AUTH_SESSION_INVALID'))
+    }
     req.user = {
       ...payload,
       userId: user.id,

@@ -42,8 +42,12 @@ router.post('/login', loginLimiter, (req, res, next) => {
 // GET /api/auth/me — 需要认证
 router.get('/me', authMiddleware, authController.getMe)
 
-// POST /api/auth/refresh — 当前 Token 有效时换取新 Token（长期运行的打印客户端等）
-router.post('/refresh', authMiddleware, authController.refresh)
+// POST /api/auth/refresh — 用 refresh token 换新 access + 新 refresh（2026-08-21
+// 权衡修复：不再挂 authMiddleware——access 过期后仍能续期；refresh token 带
+// tokenType='refresh'，authMiddleware 会拒绝它访问业务接口，只能在此换 access）
+router.post('/refresh', validateBody(z.object({
+  refreshToken: z.string().min(1, '缺少 refresh token'),
+})), authController.refresh)
 
 // PUT /api/auth/change-password — 修改自己的密码
 router.put('/change-password', authMiddleware, validateBody(z.object({

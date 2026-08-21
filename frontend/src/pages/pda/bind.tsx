@@ -39,13 +39,13 @@ export default function PdaBindPage() {
 
   async function bind(deviceCode: string, deviceSecret: string) {
     setBinding(true)
-    saveDeviceCredential(deviceCode, deviceSecret)
+    await saveDeviceCredential(deviceCode, deviceSecret)
     try {
       const created = await ensureDeviceSession()
       if (!created) {
         // 凭据存下来了但换不到票据：多半是设备被停用或密钥已被重置，
         // 留着一份错的凭据只会让后续每个请求都失败，不如直接清掉重来
-        clearDeviceBinding()
+        await clearDeviceBinding()
         setCredential(null)
         setSession(null)
         err('绑定失败：设备码或密钥无效，也可能该设备已被停用，请让管理员确认后重新生成二维码')
@@ -68,8 +68,8 @@ export default function PdaBindPage() {
     void bind(parsed.deviceCode, parsed.deviceSecret)
   }
 
-  function handleUnbind() {
-    clearDeviceBinding()
+  async function handleUnbind() {
+    await clearDeviceBinding()
     setCredential(null)
     setSession(null)
     warn('已解除绑定，这台机器需要重新扫码才能继续作业')

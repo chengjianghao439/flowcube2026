@@ -56,7 +56,11 @@ const env = {
   // 密钥轮换（P2-15）：过渡期内可配置旧密钥，旧 token 仍可校验（新 token 用 JWT_SECRET 签发），
   // 切换后移除本变量即完成轮换。空/未配置 = 无旧密钥，只认 JWT_SECRET。
   JWT_SECRET_PREVIOUS: readString('JWT_SECRET_PREVIOUS', { defaultValue: '', allowEmpty: true }),
-  JWT_EXPIRES_IN: readString('JWT_EXPIRES_IN', { defaultValue: '24h' }),
+  // access token 有效期（2026-08-21 权衡修复：从 24h 缩到 2h，泄露窗口大幅缩短；
+  // 长期运行客户端靠 refresh token 自动续期，不受影响）
+  JWT_ACCESS_EXPIRES_IN: readString('JWT_ACCESS_EXPIRES_IN', { defaultValue: '2h' }),
+  // refresh token 有效期（默认 30 天；一次性使用 + 轮换，被泄露后重放即失效）
+  JWT_REFRESH_EXPIRES_IN: readString('JWT_REFRESH_EXPIRES_IN', { defaultValue: '30d' }),
   CORS_ORIGIN: readString('CORS_ORIGIN', { defaultValue: IS_PROD ? '' : 'http://localhost:5173', allowEmpty: true }),
   CORS_REFLECT: readBool('CORS_REFLECT', false),
   CORS_ALLOW_NULL_ORIGIN: readBool('CORS_ALLOW_NULL_ORIGIN', !IS_PROD),

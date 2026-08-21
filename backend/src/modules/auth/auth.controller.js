@@ -22,7 +22,9 @@ async function getMe(req, res, next) {
 
 async function refresh(req, res, next) {
   try {
-    const result = await authService.refreshAccessToken(req.user.userId)
+    // refresh token 从请求体取（2026-08-21 权衡修复：不再依赖 authMiddleware，
+    // access 过期后仍能用 refresh 换新 access）
+    const result = await authService.refreshAccessToken(req.body?.refreshToken)
     return successResponse(res, result, 'Token 已刷新')
   } catch (err) {
     next(err)

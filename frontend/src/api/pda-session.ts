@@ -37,12 +37,12 @@ export async function ensureDeviceSession(): Promise<PdaDeviceSession | null> {
       expiresAt: data.expires_at ?? null,
       scopes: Array.isArray(data.scopes) ? data.scopes : [],
     }
-    saveDeviceSession(session)
+    await saveDeviceSession(session)
     return session
   } catch {
     // 建会话失败的原因（密钥被重置、设备被停用、网络不通）在这里区分不了也不该猜，
     // 清掉旧票据即可：真正的原因会在后续业务请求里由服务端明确告知。
-    clearDeviceSession()
+    await clearDeviceSession()
     return null
   }
 }
@@ -68,10 +68,10 @@ export async function renewDeviceSession(): Promise<PdaDeviceSession | null> {
       expiresAt: data.expires_at ?? null,
       scopes: Array.isArray(data.scopes) ? data.scopes : [],
     }
-    saveDeviceSession(renewed)
+    await saveDeviceSession(renewed)
     return renewed
   } catch {
-    clearDeviceSession()
+    await clearDeviceSession()
     return null
   }
 }

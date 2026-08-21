@@ -8,6 +8,8 @@ export interface LoginParams {
 
 export interface LoginResult {
   token: string
+  /** refresh token（2026-08-21 权衡修复）：access 过期后自动换新 */
+  refreshToken?: string | null
   user: User
 }
 
