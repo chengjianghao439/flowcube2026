@@ -233,3 +233,43 @@ deviceSecret 与设备会话票据（30 天）明文 JSON 存 localStorage，无
 - **验证**：高危发现（warehouse-tasks IDOR、PDA 跨仓出库）已人工逐行确认代码证据
 
 **审计范围**：backend/src（286 文件/4.4 万行）、frontend/src（441 文件/6 万行）、scripts/、tests/（32 文件/8423 行）、.github/workflows/（5 个）、docker-compose.yml、生产服务器运行时状态。
+
+---
+
+## 附录 E：财务审计发现（已验证）
+
+**总评**：核销路径设计严谨（全局升序预锁、余额唯一事实源、1e-6 容差、金额 DECIMAL(14,4) 处理得当）；收款核销/登记付款/退款执行/报销付款均有 requestKey 或 CAS 防护。但发现 2 个高危 + 5 个中危。
+
+### E.1 高危：手工建账款无任何幂等防护（连点两次应付款翻倍）
+`createManual`（payments.service.js:123）是全财务域唯一无幂等防护的改钱写路径：不接 `beginOperationRequest`，`order_id` 恒为 NULL（迁移 145 注释自证"多个 NULL 不互相冲突"，UNIQUE(type, order_id) 不生效）。连点两次落两条同金额账款，各自可核销/付款翻倍。同文件 recordPayment/receiptCreate/settle 均已接 requestKey，唯独此路径遗漏（controller:10 不传 extractRequestKey）。
+**修复**：createManual 接 beginOperationRequest 或同参短窗口去重；前端补 createRequestKey。
+
+### E.2 高危：多账套隔离未接入 accounting 模块（数据污染风险）
+companyScope 中间件只挂 fixed-assets/hr，accounting 模块 0 处消费 req.companyId。后果：(a) 读侧泄漏——凭证/报表/试算平衡无 company_id 过滤，账套 2 数据混入主账套；(b) 写侧错套——generateVouchers 固定写 company_id=1；(c) 结账校验误判——closingStatus 无 company 过滤。
+**修复**：accounting.routes.js 挂 companyScope，req.companyId 贯穿 service 层全部 SQL。
+
+### E.3 中危：退款/退货回冲不刷新对账单投影（unlock 误拒）
+退款 execute 与退货回冲改 paid_amount 后不调 refreshSettlement，reconciliation_statements 的 settled_amount 过期，unlock 校验用存储列误拒（已核销完的账款退款后永远无法解锁回草稿）。
+**修复**：退款/回冲路径补 refreshSettlement（参照 recordPayment 既有范式）。
+
+### E.4 中危：开票量校验与 INSERT 无事务锁（并发可突破上限）
+assertInvoiceQuota 先读再插，无事务无锁，并发请求可同时通过校验导致超开票。
+**修复**：锁单据行 FOR UPDATE → 校验 → INSERT 同一事务。
+
+### E.5 中危：退款资金流水（biz_type=5）无凭证不进现金流量表
+refund 写 OUT 流水减余额，但 buildFundVouchers 只生成 biz_type IN (1,2,3) 凭证，退款流出在凭证体系无分录，资金账实不勾稽。
+**修复**：为 biz_type=5 生成凭证并归集退款现金流桶。
+
+### E.6 中危：已使用会计科目可硬删除（报表被破坏）
+remove() 只校验无下级科目，注释自认"Phase1 上线凭证后需加校验"但未补。删除已使用科目后试算平衡/报表缺科目、明细账 404。
+**修复**：删除前查 acct_voucher_entries 引用，存在则拒绝引导停用。
+
+### E.7 低危
+- 资金流水默认日期用 UTC toISOString（本地凌晨记到前一天，与 +08:00 口径不一致）
+- 发票更新/删除无状态 CAS（已红冲发票可被编辑）
+- opLogger MODULE_MAP 缺 finance/refunds/accounting（财务写操作审计记成 system）
+- 取消退款单无操作人归属校验
+
+---
+
+*报告终版：2026-08-21。人工核对 + 4 个定向子代理（后端安全/财务/前端/CI）全部完成，深度扫描工作流因模型性能挂起未产出（已在正文说明）。*

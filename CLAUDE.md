@@ -511,3 +511,11 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **工作区标签无上限（中危）**：workspaceStore persist 全量存 localStorage 无数量上限，keepAlive 组件实例永久累积。修法：tabs 设上限（如 30，LRU 关闭）。
     - **PDA 设备凭据明文长期存 localStorage（中危）**：deviceSecret + 30 天票据明文存储。修法：一次性票据 + 心跳续期 / Capacitor Secure Storage。
 18. **审计确认的安全基线**（2026-08-21，可信）：全仓 SQL 参数化无注入点；所有业务 routes 挂 authMiddleware + requirePermission（唯一公开 app-update/latest）；opLogger 敏感字段脱敏；multer 无路径穿越；无硬编码密钥；前端 0 处 dangerouslySetInnerHTML；仅 3 处工具性裸 axios（不带 token）；库存引擎 9 条不变量与第 9 节描述完全一致。
+19. **2026-08-21 财务审计发现（未修复）**，详见 `docs/audit-report-2026-08-21.md` 附录 E：
+    - **手工建账款无幂等（高危）**：`createManual`（payments.service.js:123）不接 requestKey、order_id 恒 NULL（UNIQUE 不生效），连点两次应付款翻倍。**修法：接 beginOperationRequest。**
+    - **多账套未隔离（高危）**：accounting 模块不消费 req.companyId（companyScope 只挂 fixed-assets/hr），账套 2 数据混入主账套、凭证固定写 company_id=1。**修法：routes 挂 companyScope + 贯穿 service SQL。**
+    - **退款/退货回冲不刷新对账单投影（中危）**：unlock 用过期 settled_amount 误拒。
+    - **开票量校验无事务锁（中危）**：并发可突破累计开票上限。
+    - **退款流水无凭证不进现金流（中危）**：biz_type=5 无分录，资金账实不勾稽。
+    - **已使用科目可硬删（中危）**：报表被破坏。
+    - 改动财务模块务必跑 `npm run smoke:finance` + `smoke:accounting`。
