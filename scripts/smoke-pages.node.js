@@ -191,8 +191,10 @@ function assertNoErrorText() {
 let AUTH_STORAGE_JSON = ''
 
 // 用指定账号登录，把登录态写入当前浏览器标签页并等待进入系统。
-// expectedHash 用于区分 ERP 登录（/dashboard）与受限账号登录（可能无仪表盘权限时用其他入口）
-async function loginAs(username, password, { expectedText = '仪表盘', fallbackHash = '/dashboard' } = {}) {
+// expectedHash 用于区分 ERP 登录（/dashboard）与受限账号登录（可能无仪表盘权限时用其他入口）。
+// expectedTexts 为「任一匹配即通过」的文本列表：受限账号登录后可能落仪表盘，
+// 也可能被历史 workspace tabs 弹到 403 页，两者都是合法登录后页面。
+async function loginAs(username, password, { expectedText = '仪表盘', expectedTexts = null, fallbackHash = '/dashboard' } = {}) {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -215,8 +217,10 @@ async function loginAs(username, password, { expectedText = '仪表盘', fallbac
   // 无权限的 tab，KeepAliveOutlet 权限拦截会把它弹到 403，导致「等待进入系统」超时
   runPw(['eval', '(localStorage.removeItem(\'flowcube-workspace\'), true)'])
   runPw(['eval', '(location.reload(), true)'])
+  const texts = expectedTexts || [expectedText]
+  const textCond = texts.map(t => `(document.body.innerText || '').includes(${jsQuote(t)})`).join(' || ')
   await waitFor(
-    `location.hash.includes(${jsQuote(fallbackHash)}) && ((document.body.innerText || '').includes(${jsQuote(expectedText)}))`,
+    `location.hash.includes(${jsQuote(fallbackHash)}) && (${textCond})`,
     { label: `${username} 登录后进入系统` },
   )
 }
@@ -347,9 +351,8 @@ async function main() {
   // ── 403 权限场景（受限账号，密码与 tests/helpers/smokeTestKit.js 一致）──
   // 用 smoke_limited（仅 inbound.order.view + dashboard.view）访问需要
   // picking.wave.view 的页面，应被前端权限拦截转到 403 页。
-  // 登录断言用宽松模式：smoke_limited 有 dashboard.view，登录后默认落仪表盘；
-  // 若被历史 workspace tabs 弹到 403 也能通过（403 页本身是合法登录后页面）。
-  await loginAs('smoke_limited', 'SmokeLimited123!', { expectedText: '无访问权限', fallbackHash: '/' })
+  // 登录断言用任一匹配：落仪表盘（有 dashboard.view）或被弹 403 都算登录成功。
+  await loginAs('smoke_limited', 'SmokeLimited123!', { expectedTexts: ['仪表盘', '无访问权限'], fallbackHash: '/' })
   await assertForbidden('/picking-waves')
   // 受限账号有权访问的页面不应 403（对照：inbound.order.view 授权了新建收货订单）
   await setHashAndConfirm('/inbound-tasks/new')
