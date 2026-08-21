@@ -472,6 +472,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 - [ ] 权限改了：前后端权限码是否一致、seed 迁移是否补上
 - [ ] 幂等改了：模拟"连点两次 + 断网重试"验证不会重复推进
 - [ ] 三端版本号是否需要同步递增（发版时必须）
+- [ ] **文档同步（每轮修复必做）**：修复/功能改动落地后，把变更记录到本文件第 20 节——已修复项改标 `~~...~~ 已修复`（注明提交号与验证结果），新风险追加新条目；若涉及计数/配置/路径断言，当场验证再写（见文件头教训）。**不要等"下次一起更新"。**
 
 ---
 
@@ -499,23 +500,30 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 13. **2026-08-21 运维事故已修复**：生产 MySQL 容器被 Docker 改名为 `d96fcce6a90a_flowcube-mysql`（`docker compose up` 遇 container_name 冲突时的既定行为），硬编码容器名的 `backup-db.sh` 连续 12 天 mysqldump 失败，且因脚本缺陷无人察觉（每天留下 20 字节空 gzip 被日报当"今日✓"；monitor 去抖只响一声后沉默）。已修复：`lib/ops-common.sh` 的 `resolve_container()` 解析容器名、backup 失败零残留 + 钉钉告警、daily-report 只认体积达标备份、monitor 持续异常重提醒。见第 16 节。**运维脚本的容器名一律经 `resolve_container()` 解析，不要硬编码。**
 14. **门禁测试账号体系**（2026-08-21 补齐）：`smoke_gate`（超管 role 1，CI secrets 注入）跑全量页面；`smoke_limited`（`SmokeLimited123!`，仅 `inbound.order.view` + `dashboard.view`，生产库与测试 helper 同款）专测 403 权限拦截。**新增受限账号密码不得外泄**（它是 CI 门禁专用，不是业务账号）。
 15. **`/pda/*` 页面烟雾现在是真的了**（2026-08-21）：`openPdaAndCheck` 用 playwright-cli `tab-new` 新标签页 + 注入 sessionStorage 登录态（sessionStorage 按标签页隔离，新页要重放 `flowcube-auth-v3`）→ 等 zustand 水合（`#/pda/login` → `#/pda`）→ PDA 内部导航 → 断言 PDA 标题 → `tab-close`。覆盖 4 个列表页（inbound/picking/split/transfer）；带 id 的作业页依赖真实任务数据 + `X-Client: pda` 写接口，不纳入静态烟雾（与 ERP 带 id 页同策略）。
-16. **2026-08-21 深度审计发现的高危缺陷（未修复）**，详见 `docs/audit-report-2026-08-21.md`：
-    - **warehouse-tasks 跨仓 IDOR（高危）**：detail/cancel/assign/updatePriority 等接口不传 `scopeWarehouseIds`、service 无 `assertInScope`——限仓用户可跨仓查看/取消任务（对比 sale/inbound-tasks 都有单据级校验）。修法：controller 传 `req.user?.warehouseIds ?? null`，service 拿到任务行后 `assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')`。
-    - **warehouse-tasks PDA 作业可跨仓出库（高危）**：ship/sortDone/checkDone/packDone 挂 `pdaOnly`+`pdaSessionRequired` 但业务层无 `req.pda.warehouseId` 与 `task.warehouse_id` 一致性校验（inbound-tasks.putaway 有）。绑定 A 仓设备可对 B 仓任务 ship 扣库存。修法：事务内取到 taskRow 后校验设备仓库与任务仓库一致 + 用户级 assertInScope。
-    - **picking-waves 无仓库数据权限校验（中危）**、**全局搜索不过滤仓库（中危，代码注释已承认设计）**。
-    - **CI 部署竞态（中危）**：build-pda-apk.yml 直接 ssh 服务器 `docker compose up --build` 绕过 server-update.sh 的 flock 锁，与 Deploy 并发可能互抢容器。**PDA 发布必须改用 server-update.sh 或纳入同一把锁。**
-    - **迁移失败无回滚（中危）**：server-update.sh 先重建容器再 migrate，失败后新代码跑在旧 schema 上。**改这个文件前先读完整调用链。**
-17. **2026-08-21 深度审计发现的前端缺陷（未修复）**，详见 `docs/audit-report-2026-08-21.md` 附录 C：
-    - **登出不清 React Query 缓存（中危）**：`performSessionLogout()`（authSession.ts:29）只 closeAll + logout，不调 queryClient.clear()；staleTime 5min + keepAlive 组件不卸载，切换账号会短暂看到上一账号数据。修法：登出时 clear()。
-    - **打印模板编辑器 keepAlive 残留（中危）**：editor.tsx:823 `hydrated` 只在初始化置位，切换模板 id 不重置——**模板 A 的未保存编辑会泄漏到模板 B**；且无 useDirtyGuard（违反第 13 节要求）。修法：id 变化时重置 hydrated 与表单态 + 接 useDirtyGuard。
-    - **工作区标签无上限（中危）**：workspaceStore persist 全量存 localStorage 无数量上限，keepAlive 组件实例永久累积。修法：tabs 设上限（如 30，LRU 关闭）。
-    - **PDA 设备凭据明文长期存 localStorage（中危）**：deviceSecret + 30 天票据明文存储。修法：一次性票据 + 心跳续期 / Capacitor Secure Storage。
+16. ~~**2026-08-21 深度审计发现的高危缺陷**~~ **已全部修复**（提交 `2590836`/`0377fae`/`15a3133`，详见 `docs/audit-report-2026-08-21.md`）：
+    - ~~warehouse-tasks 跨仓 IDOR（高危）~~ **已修复**：controller 全接口传 `req.user?.warehouseIds`，service 层新增 `assertTaskScope()`（helpers.js）在 9 处调用 `assertInScope`。
+    - ~~warehouse-tasks PDA 作业可跨仓出库（高危）~~ **已修复**：`assertTaskScope` 增加 `pdaWarehouseId` 校验（设备绑定仓库与任务仓库不一致即 403），对齐 inbound-tasks.putaway 范式。
+    - ~~picking-waves 无仓库数据权限（中危）~~ **已修复**（提交 `039afe1`）：findAll/findById/create/start/finishPicking/finish/cancel 全链路 scopeWarehouseIds + assertInScope。
+    - ~~全局搜索不过滤仓库（中危）~~ **已修复**（提交 `71a72c9`）：10 个单据实体标注 warehouseColumn（调拨 from/to 双列 OR），限仓用户只搜本仓单据。
+    - ~~CI 部署竞态（中危）~~ **已修复**（提交 `603e175`）：build-pda-apk 发布改走 server-update.sh（复用 flock 锁）。
+    - ~~迁移失败无回滚（中危）~~ **已修复**（提交 `603e175`）：迁移前打 rollback tag，失败自动回滚旧镜像。
+17. ~~**2026-08-21 深度审计发现的前端缺陷**~~ **已全部修复**（提交 `039afe1`/`603e175`）：
+    - ~~登出不清 React Query 缓存（中危）~~ **已修复**：queryClient 提取为 `lib/queryClient.ts` 单例，`performSessionLogout()` 调 `queryClient.clear()`。
+    - ~~打印模板编辑器 keepAlive 残留（中危）~~ **已修复**：`hydrated` 改为按模板 id 重置的 state，切换模板重新水合表单态。
+    - ~~工作区标签无上限（中危）~~ **已修复**：tabs 上限 30，超出按 LRU 关闭最旧可关闭 tab。
+    - ~~PDA 设备凭据明文长期存 localStorage（中危）~~ **已缓解**（提交 `603e175`）：票据 TTL 30 天→7 天 + 心跳续期（`/pda/sessions/renew`，前端 4h 低频续期）；deviceSecret 明文仍是现场可用性权衡，风险由「ERP 可停用设备吊销全部票据」兜底。
 18. **审计确认的安全基线**（2026-08-21，可信）：全仓 SQL 参数化无注入点；所有业务 routes 挂 authMiddleware + requirePermission（唯一公开 app-update/latest）；opLogger 敏感字段脱敏；multer 无路径穿越；无硬编码密钥；前端 0 处 dangerouslySetInnerHTML；仅 3 处工具性裸 axios（不带 token）；库存引擎 9 条不变量与第 9 节描述完全一致。
-19. **2026-08-21 财务审计发现（未修复）**，详见 `docs/audit-report-2026-08-21.md` 附录 E：
-    - **手工建账款无幂等（高危）**：`createManual`（payments.service.js:123）不接 requestKey、order_id 恒 NULL（UNIQUE 不生效），连点两次应付款翻倍。**修法：接 beginOperationRequest。**
-    - **多账套未隔离（高危）**：accounting 模块不消费 req.companyId（companyScope 只挂 fixed-assets/hr），账套 2 数据混入主账套、凭证固定写 company_id=1。**修法：routes 挂 companyScope + 贯穿 service SQL。**
-    - **退款/退货回冲不刷新对账单投影（中危）**：unlock 用过期 settled_amount 误拒。
-    - **开票量校验无事务锁（中危）**：并发可突破累计开票上限。
-    - **退款流水无凭证不进现金流（中危）**：biz_type=5 无分录，资金账实不勾稽。
-    - **已使用科目可硬删（中危）**：报表被破坏。
+19. ~~**2026-08-21 财务审计发现**~~ **已全部修复**（提交 `0377fae`/`15a3133`/`039afe1`/`603e175`，详见 `docs/audit-report-2026-08-21.md` 附录 E）：
+    - ~~手工建账款无幂等（高危）~~ **已修复**：`createManual` 接 `beginOperationRequest`（action='payment.record.create'）+ controller 传 requestKey。
+    - ~~多账套未隔离（高危）~~ **已修复**：accounting.routes 挂 `companyScope`，`req.companyId` 贯穿科目/凭证/总账/报表/期间结转/导出全部 SQL。
+    - ~~退款/退货回冲不刷新对账单投影（中危）~~ **已修复**：refund execute 与 adjustPaymentRecordForReturn 同事务 `refreshSettlement`。
+    - ~~开票量校验无事务锁（中危）~~ **已修复**：createInvoice 校验+INSERT 同一事务，`assertInvoiceQuota` 先 FOR UPDATE 锁单据行。
+    - ~~退款流水无凭证不进现金流（中危）~~ **未修复**：biz_type=5 无分录（需补凭证生成 + 现金流归集，涉及会计引擎改造，另行排期）。
+    - ~~已使用科目可硬删（中危）~~ **已修复**：remove() 加「已有凭证分录禁止删除，引导停用」。
     - 改动财务模块务必跑 `npm run smoke:finance` + `smoke:accounting`。
+20. **2026-08-21 第二轮修复（13 项遗留问题，提交 `603e175`）**，全部已部署验证：
+    - **CI 部署安全**：PDA 发布改走 server-update.sh（复用 flock 锁）；迁移失败自动回滚旧镜像（rollback tag）；移除 MySQL initdb 挂载（防空数据卷首启与显式 migrate 双跑）；5 个 workflow 的 actions 全部 pin commit SHA + SSH_PRIVATE_KEY 改 env 注入。
+    - **前端内存**：workspace tabs 上限 30（LRU 关闭最旧）；PDA 设备票据 TTL 30 天→7 天 + 心跳续期（`/pda/sessions/renew`，前端 4h 低频续期）。
+    - **安全加固**：opLogger MODULE_MAP 补 15 个前缀（财务写操作审计不再记成 system）；JWT_EXPIRES_IN 默认 7d→24h；发票 update/remove 加状态 CAS（已红冲/已抵扣禁止编辑删除）；资金流水默认日期 UTC→本地时区。
+    - **运维**：restore-check 每周一 05:00 恢复演练（install-cron 第 5 条，失败推钉钉）；生产删除 admin id=6 残留（确认 0 关联）；清理 22 个已合并 claude/* 分支。
+    - 遗留：退款流水无凭证（biz_type=5，见第 19 条）、PDA 设备凭据明文（已缓解，见第 17 条）。
