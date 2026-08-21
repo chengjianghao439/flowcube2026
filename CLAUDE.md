@@ -527,3 +527,10 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **安全加固**：opLogger MODULE_MAP 补 15 个前缀（财务写操作审计不再记成 system）；JWT_EXPIRES_IN 默认 7d→24h；发票 update/remove 加状态 CAS（已红冲/已抵扣禁止编辑删除）；资金流水默认日期 UTC→本地时区。
     - **运维**：restore-check 每周一 05:00 恢复演练（install-cron 第 5 条，失败推钉钉）；生产删除 admin id=6 残留（确认 0 关联）；清理 22 个已合并 claude/* 分支。
     - 遗留：退款流水无凭证（biz_type=5，见第 19 条）、PDA 设备凭据明文（已缓解，见第 17 条）。
+21. **2026-08-21 第三轮修复（6 项遗留，提交 `9d9fc63`）**，全部已部署验证：
+    - **退款流水无凭证（biz_type=5）**：`voucher-engine.buildFundVouchers` 生成退款凭证（借应收/贷银行），`SOURCE_TYPES` 新增 `REFUND_PAY`，现金流量表加退款流出桶。
+    - **查询弹窗默认当天**：17 个 `*QueryDialog.tsx` 与页面级筛选默认 `startDate=endDate=todayYmd()`（新增 `lib/dateTime.todayYmd` helper）；全局搜索的时间范围下拉此前已做。
+    - **useNetworkStatus 心跳清理**：改引用计数管理（首订启动/末退清理），dev 热更新不再叠加定时器。
+    - **PDA 错误堆栈脱敏**：`PdaErrorBoundary` 只存 message 摘要 + 组件名（去 stack，防业务数据入 sessionStorage）。
+    - **PDA APK 下载签名校验**：`/api/pda/version` 下发 sha256（mtime 缓存），原生 Java 下载后比对（不匹配拒绝安装），浏览器 fallback 用 `crypto.subtle` 比对。
+    - **server-update 自动装 cron**：部署后幂等同步 `install-cron.sh`，cron 改动随部署自动生效（此前需手动跑）。
