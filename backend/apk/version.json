@@ -1,7 +1,7 @@
 {
   "version": "0.4.81",
-  "versionCode": 84,
+  "versionCode": 86,
   "filename": "app-release.apk",
-  "releaseNote": "- **修复无法连接服务器**：内置服务器地址从 IP 切换为正式域名 jixuflow.com（IP 直连因证书校验失败会被系统拒绝）",
-  "publishedAt": "2026-08-21T11:20:00.000Z"
+  "releaseNote": "- **全局搜索增强**：支持按仓库过滤（限仓用户只看到自己仓库的单据），新增时间范围筛选（默认当天，可切近 7 天/近 30 天/全部）",
+  "publishedAt": "2026-08-21T15:58:13.271Z"
 }
