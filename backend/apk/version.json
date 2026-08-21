@@ -1,7 +1,7 @@
 {
-  "version": "0.4.80",
-  "versionCode": 83,
+  "version": "0.4.81",
+  "versionCode": 84,
   "filename": "app-release.apk",
-  "releaseNote": "- **PDA 工作台全新改版**：常用作业（收货、上架、拣货、分拣、复核、打包、出库等 14 项）以大图标卡片直接展示，点一下即进入；「塑料盒拆分」等自主操作收进「更多功能」折叠区，界面更简洁",
-  "publishedAt": "2026-08-18T16:19:31.529Z"
+  "releaseNote": "- **修复无法连接服务器**：内置服务器地址从 IP 切换为正式域名 jixuflow.com（IP 直连因证书校验失败会被系统拒绝）",
+  "publishedAt": "2026-08-21T11:20:00.000Z"
 }
