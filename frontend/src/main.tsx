@@ -66,22 +66,12 @@ void (async () => {
   ])
 
   const { createRoot } = reactDom
-  const { QueryClient, QueryClientProvider } = reactQuery
+  const { QueryClientProvider } = reactQuery
   const AppRouter = routerModule.default
   const { GlobalErrorBoundary } = errorBoundaryModule
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: 1,
-        staleTime: 1000 * 60 * 5,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: true,
-      },
-      mutations: {
-        retry: 0,
-      },
-    },
-  })
+  // 单例 queryClient（lib/queryClient.ts）：登出时 performSessionLogout 需要 clear()
+  // 清掉上一账号的查询缓存（2026-08-21 审计 C.1 修复）
+  const { queryClient } = await import('@/lib/queryClient')
 
   await boot()
 

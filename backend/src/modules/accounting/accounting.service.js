@@ -183,6 +183,15 @@ async function remove(id, operatorId, companyId = 1) {
     )
     if (childCount > 0) throw new AppError('该科目下存在下级科目，请先删除下级', 400)
 
+    // 已使用科目禁止删除（2026-08-21 审计 E.6 修复）：凭证分录快照科目编码/名称，
+    // 但试算平衡/报表 FROM acct_accounts LEFT JOIN entries 依赖科目主表——删掉后
+    // 该科目历史发生额从报表消失、借贷恒等式被打破、明细账 404。引导走停用(is_active=0)。
+    const [[{ entryCount }]] = await conn.query(
+      'SELECT COUNT(*) AS entryCount FROM acct_voucher_entries WHERE account_id = ?',
+      [id],
+    )
+    if (entryCount > 0) throw new AppError('该科目已有凭证分录，不可删除；请改为停用', 400, 'ACCT_ACCOUNT_IN_USE')
+
     // 硬删除（非软删）：科目编码是用户手输且受 uk_acct_accounts_code_company 唯一约束，软删会让该编码被永久占用、
     // 无法重建同码科目。会计语义上删除只针对「建错、从未使用」的科目——凭证分录已快照科目编码/名称
     // （acct_voucher_entries），不依赖科目主表，故硬删不影响历史凭证。「用过但想弃用」的科目走停用(is_active=0)。

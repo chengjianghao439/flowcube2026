@@ -820,15 +820,20 @@ export default function PrintTemplateEditor() {
   /** 多选：Shift+点击 toggle；空数组 = 未选中 */
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [preview,    setPreview]    = useState(false)
-  const [hydrated,   setHydrated]   = useState(isNew)
   /** 画布仅影响显示与拖拽换算，不改变存库的 mm 坐标 */
   const [editorZoom, setEditorZoom] = useState(1)
   /** 拖动时的对齐参考线（mm 坐标），松手清空 */
   const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] })
 
-  // Load remote template once
+  // Load remote template once per template id（2026-08-21 审计 C.2 修复）：
+  // 页面是 keepAlive（tabIdentity=pathname），切换 /5 → /7 组件不卸载——hydrated
+  // 必须随 id 变化重置，否则模板 A 的未保存编辑会残留并可能保存到模板 B。
+  const [hydrated, setHydrated] = useState<number | null>(null)
   useEffect(() => {
-    if (remote && !hydrated) {
+    setHydrated(null)
+  }, [id])
+  useEffect(() => {
+    if (remote && hydrated === null) {
       setName(remote.name)
       setType(remote.type)
       setPaperSize(remote.paperSize)
@@ -857,9 +862,9 @@ export default function PrintTemplateEditor() {
           setCanvasHeightMm(Math.min(500, Math.max(40, ch)))
         }
       }
-      setHydrated(true)
+      setHydrated(Number(id) || 0)
     }
-  }, [remote, hydrated])
+  }, [remote, hydrated, id])
 
   function handleTypeChange(v: string) {
     const next = +v as TemplateType
@@ -1288,7 +1293,8 @@ export default function PrintTemplateEditor() {
   }, [selectedIds, clampEl, duplicateGroup, redo, snapshot, undo])
 
   // ── Loading state ────────────────────────────────────────────
-  if (!isNew && (isLoading || !hydrated)) {
+  // isNew 不需要 hydrated（新建页没有远程数据）；编辑页等 remote 加载完成
+  if (!isNew && (isLoading || hydrated === null)) {
     return (
       <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden px-4 pb-4 pt-2">
         <PageHeader title="编辑打印模板" description="正在加载…" />

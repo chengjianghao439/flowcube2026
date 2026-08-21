@@ -27,6 +27,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { getRequestId } = require('../../utils/requestContext')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('../payments/payment-events.service')
+const statementSvc = require('../payments/reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
 const { normalizePagination } = require('../../utils/pagination')
 
@@ -212,6 +213,20 @@ async function execute(id, operator) {
         happenedAt: row.refund_date || new Date().toISOString().slice(0, 10),
         remark: `退货退款 ${row.refund_no}（销售单 ${row.sale_order_no}）`,
       }, { operatorId: operator?.userId, operatorName: operator?.realName || operator?.username })
+    }
+
+    // 对账单投影刷新（2026-08-21 审计 E.3 修复）：退款冲减 paid_amount 后，
+    // 若该账款属于某对账单，同事务刷新 settled_amount/状态——否则 unlock 用
+    // 过期存储列误拒（已核销完的账款退款后永远无法解锁回草稿）。
+    const [stmtRows] = await conn.query(
+      'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id = ? ORDER BY statement_id',
+      [row.payment_record_id],
+    )
+    for (const s of stmtRows) {
+      await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [s.statement_id])
+    }
+    for (const s of stmtRows) {
+      await statementSvc.refreshSettlement(conn, s.statement_id)
     }
 
     await recordPaymentEvent(conn, {

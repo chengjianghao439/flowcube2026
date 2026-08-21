@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { assertInScope } = require('../../utils/warehouseScope')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { WT_STATUS, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
 const {
@@ -72,7 +73,7 @@ const genWaveNo = conn => generateDailyCode(conn, 'W', 'picking_waves', 'wave_no
 
 async function lockWaveForTransition(conn, id) {
   const [[wave]] = await conn.query(
-    'SELECT id, status FROM picking_waves WHERE id = ? FOR UPDATE',
+    'SELECT id, status, warehouse_id FROM picking_waves WHERE id = ? FOR UPDATE',
     [id],
   )
   if (!wave) throw new AppError('波次不存在', 404)
@@ -94,7 +95,7 @@ async function casWaveStatus(conn, { id, fromStatus, toStatus, extraSet = '', ex
 
 // ── 列表查询 ──────────────────────────────────────────────────────────────────
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, warehouseId = null, startDate = '', endDate = '' }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, warehouseId = null, startDate = '', endDate = '', scopeWarehouseIds = null }) {
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const conds = ['w.wave_no LIKE ?']
@@ -103,6 +104,11 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, w
   if (warehouseId) { conds.push('w.warehouse_id = ?'); params.push(warehouseId) }
   if (startDate)   { conds.push('w.created_at >= ?');  params.push(`${startDate} 00:00:00`) }
   if (endDate)     { conds.push('w.created_at <= ?');  params.push(`${endDate} 23:59:59`) }
+  // 仓库数据权限（2026-08-21 审计 A.3 修复）：限仓用户只看到自己仓库的波次
+  if (Array.isArray(scopeWarehouseIds)) {
+    conds.push(scopeWarehouseIds.length ? 'w.warehouse_id IN (?)' : '1=0')
+    if (scopeWarehouseIds.length) params.push(scopeWarehouseIds)
+  }
   const where = conds.join(' AND ')
 
   const [rows] = await pool.query(
@@ -136,7 +142,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, w
 
 // ── 详情 ──────────────────────────────────────────────────────────────────────
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [[row]] = await pool.query(
     `SELECT w.*, wh.name AS warehouse_name
      FROM picking_waves w
@@ -145,6 +151,8 @@ async function findById(id) {
     [id],
   )
   if (!row) throw new AppError('波次不存在', 404)
+  // 单据级数据权限（2026-08-21 审计 A.3 修复）：限仓用户不能看他人仓库波次
+  assertInScope(scopeWarehouseIds, row.warehouse_id, '波次')
 
   if (row.status < 4) {
     await refreshWavePickedFromTasks(pool, id)
@@ -234,7 +242,7 @@ async function findById(id) {
 
 // ── 创建波次 ──────────────────────────────────────────────────────────────────
 
-async function create({ taskIds, remark, priority = 2 }) {
+async function create({ taskIds, remark, priority = 2 }, scopeWarehouseIds = null) {
   if (!taskIds?.length || taskIds.length < 2) {
     throw new AppError('请选择至少 2 个任务创建波次', 400)
   }
@@ -291,6 +299,9 @@ async function create({ taskIds, remark, priority = 2 }) {
       throw new AppError('选中任务不属于同一仓库，无法创建波次', 400)
     }
 
+    // 仓库数据权限（2026-08-21 审计 A.3 修复）：限仓用户不能用他人仓库的任务建波次
+    assertInScope(scopeWarehouseIds, whIds[0], '波次')
+
     const warehouseId = whIds[0]
     const waveNo = await genWaveNo(conn)
 
@@ -341,11 +352,12 @@ async function create({ taskIds, remark, priority = 2 }) {
 
 // ── 开始拣货（1 → 2）──────────────────────────────────────────────────────────
 
-async function startPicking(id, { userId, userName }) {
+async function startPicking(id, { userId, userName }, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const wave = await lockWaveForTransition(conn, id)
+    assertInScope(scopeWarehouseIds, wave.warehouse_id, '波次')
     if (Number(wave.status) !== WAVE_STATUS_CODE.PENDING) {
       throw new AppError('只有"待拣货"状态可以开始拣货', 409)
     }
@@ -367,11 +379,12 @@ async function startPicking(id, { userId, userName }) {
 
 // ── 完成拣货（2 → 3 待分拣）────────────────────────────────────────────────────
 
-async function finishPicking(id) {
+async function finishPicking(id, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const wave = await lockWaveForTransition(conn, id)
+    assertInScope(scopeWarehouseIds, wave.warehouse_id, '波次')
     if (Number(wave.status) !== WAVE_STATUS_CODE.PICKING) {
       throw new AppError('只有"拣货中"状态可以完成拣货', 409)
     }
@@ -404,11 +417,12 @@ async function finishPicking(id) {
 
 // ── 完成分拣（3 → 4 已完成）─ 将已拣数量回写到各任务 ──────────────────────────
 
-async function finish(id) {
+async function finish(id, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const wave = await lockWaveForTransition(conn, id)
+    assertInScope(scopeWarehouseIds, wave.warehouse_id, '波次')
     if (Number(wave.status) !== WAVE_STATUS_CODE.SORTING) {
       throw new AppError('只有"待分拣"状态可以完成波次', 409)
     }
@@ -445,11 +459,12 @@ async function finish(id) {
 
 // ── 取消波次 ──────────────────────────────────────────────────────────────────
 
-async function cancel(id) {
+async function cancel(id, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const wave = await lockWaveForTransition(conn, id)
+    assertInScope(scopeWarehouseIds, wave.warehouse_id, '波次')
     const currentStatus = Number(wave.status)
     if (currentStatus === WAVE_STATUS_CODE.DONE || currentStatus === WAVE_STATUS_CODE.CANCELLED) {
       throw new AppError('波次已完成或已取消', 409)

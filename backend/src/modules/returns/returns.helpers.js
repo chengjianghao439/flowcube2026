@@ -1,6 +1,7 @@
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('../payments/payment-events.service')
+const statementSvc = require('../payments/reconciliation-statements.service')
 const { getRequestId } = require('../../utils/requestContext')
 
 const genNo = (conn, prefix, table, col) => generateDailyCode(conn, prefix, table, col)
@@ -61,6 +62,19 @@ async function adjustPaymentRecordForReturn(conn, {
     'UPDATE payment_records SET total_amount=?, balance=?, status=?, confirm_status=0 WHERE id=?',
     [newTotal, balance, status, record.id],
   )
+
+  // 对账单投影刷新（2026-08-21 审计 E.3 修复）：退货冲减 total_amount 后，
+  // 若该账款属于某对账单，同事务刷新 settled_amount/状态（对齐 recordPayment 范式）。
+  const [stmtRows] = await conn.query(
+    'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id = ? ORDER BY statement_id',
+    [record.id],
+  )
+  for (const s of stmtRows) {
+    await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [s.statement_id])
+  }
+  for (const s of stmtRows) {
+    await statementSvc.refreshSettlement(conn, s.statement_id)
+  }
   await recordPaymentEvent(conn, {
     paymentRecordId: Number(record.id),
     orderNo: record.order_no,

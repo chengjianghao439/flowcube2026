@@ -98,22 +98,23 @@ async function getInvoice(id) {
  * @param {number} [excludeId]     - 编辑时排除自身，避免自算
  * @returns {Promise<{base: number, issued: number, sourceId: number|null}|null>}
  */
-async function assertInvoiceQuota(d, excludeId = null) {
+async function assertInvoiceQuota(d, excludeId = null, conn = pool) {
   const sourceNo = String(d.sourceNo ?? '').trim()
   if (!sourceNo) return null
   const type = Number(d.invoiceType)
   const table = type === 2 ? 'sale_orders' : 'purchase_orders'
   const recType = type === 2 ? 2 : 1
 
-  // 1. 按单号反查单据 id（弱关联只存单号字符串，这里补查）
-  const [[order]] = await pool.query(
-    `SELECT id FROM ${table} WHERE order_no = ? AND deleted_at IS NULL`,
+  // 1. 按单号反查单据 id（弱关联只存单号字符串，这里补查）。
+  //    并发防超开票：FOR UPDATE 锁单据行，让同单并发开票串行化（审计 E.4 修复）
+  const [[order]] = await conn.query(
+    `SELECT id FROM ${table} WHERE order_no = ? AND deleted_at IS NULL FOR UPDATE`,
     [sourceNo],
   )
   if (!order) return null   // 查不到单据：不校验（可能是期初/无单发票）
 
   // 2. 该单的权威应收/应付基准（payment_records 是出库/收货后重算的唯一事实源；此表无 deleted_at）
-  const [[pr]] = await pool.query(
+  const [[pr]] = await conn.query(
     'SELECT total_amount FROM payment_records WHERE type = ? AND order_id = ? LIMIT 1',
     [recType, order.id],
   )
@@ -124,7 +125,7 @@ async function assertInvoiceQuota(d, excludeId = null) {
   //    同时按 source_id 与 source_no 匹配：旧数据可能只有 source_no 没 source_id。
   const excludeSql = excludeId ? 'AND id <> ?' : ''
   const params = excludeId ? [type, order.id, sourceNo, excludeId] : [type, order.id, sourceNo]
-  const [[{ issuedSum }]] = await pool.query(
+  const [[{ issuedSum }]] = await conn.query(
     `SELECT COALESCE(SUM(amount_with_tax), 0) AS issuedSum
        FROM fin_invoices
       WHERE invoice_type = ? AND deleted_at IS NULL
@@ -162,10 +163,14 @@ function validatePayload(d) {
 
 async function createInvoice(d, operator) {
   const v = validatePayload(d)
-  // P2-5 防多开票：关联单据时校验累计开票量不超过应收/应付基准
-  const quota = await assertInvoiceQuota({ ...d, invoiceType: v.type, amountWithTax: v.withTax })
+  const conn = await pool.getConnection()
   try {
-    const [r] = await pool.query(
+    await conn.beginTransaction()
+    // 并发防超开票（2026-08-21 审计 E.4 修复）：锁单据行 FOR UPDATE 让并发
+    // 开票串行化——否则两个请求同时读到 issued=100 各自放行，累计突破上限。
+    // assertInvoiceQuota 内先锁目标单据行再读累计，与 INSERT 同一事务。
+    const quota = await assertInvoiceQuota({ ...d, invoiceType: v.type, amountWithTax: v.withTax }, null, conn)
+    const [r] = await conn.query(
       `INSERT INTO fin_invoices
          (invoice_type, invoice_code, invoice_no, party_name, party_tax_no,
           amount_no_tax, tax_rate, tax_amount, amount_with_tax, invoice_date, status,
@@ -175,11 +180,15 @@ async function createInvoice(d, operator) {
        v.noTax, round2(d.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate),
        d.sourceType || (quota ? 'invoice_order' : null), quota ? quota.sourceId : (d.sourceId || null), d.sourceNo || null, d.remark || null,
        operator?.userId || null, operator?.username || null])
+    await conn.commit()
     logger.info('accounting', `录入${v.type === 1 ? '进项' : '销项'}发票 ${v.no} 价税${v.withTax}`, { id: r.insertId, operatorId: operator?.userId })
     return { id: r.insertId }
   } catch (e) {
+    await conn.rollback()
     if (e.code === 'ER_DUP_ENTRY') throw new AppError(`发票 ${d.invoiceCode || ''} ${v.no} 已存在`, 400, 'INVOICE_DUP')
     throw e
+  } finally {
+    conn.release()
   }
 }
 

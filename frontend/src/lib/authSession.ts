@@ -3,6 +3,7 @@
  */
 import { useAuthStore } from '@/store/authStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { queryClient } from '@/lib/queryClient'
 
 function routeLooksLikePda(): boolean {
   const h = (window.location.hash.replace(/^#/, '').split('?')[0] || '/').trim()
@@ -29,5 +30,8 @@ export function redirectReplaceToLogin(): void {
 export function performSessionLogout(): void {
   useWorkspaceStore.getState().closeAll()
   useAuthStore.getState().logout()
+  // 清 React Query 缓存（2026-08-21 审计 C.1 修复）：queryKey 无用户维度 + keepAlive
+  // 组件不卸载 + staleTime 5min，不清缓存会让切换账号短暂看到上一账号的销售/账款/审批数据
+  queryClient.clear()
   redirectReplaceToLogin()
 }
