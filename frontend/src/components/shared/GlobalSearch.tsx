@@ -44,8 +44,34 @@ const TYPE_COLOR: Record<string, string> = {
 // 分组展示顺序（与后端 ENTITIES 一致）
 const TYPE_ORDER = ['product','supplier','customer','purchase','sale','requisition','transfer','purchaseReturn','saleReturn','inbound','expense','disposal','refund','creditOverride','stockcheck','invoice']
 
+/** 时间筛选选项（2026-08-21：默认「今天」，可切最近 7 天/30 天/全部） */
+const RANGE_OPTIONS = [
+  { key: 'today',  label: '今天',     days: 0 },
+  { key: 'week',   label: '近 7 天',  days: 7 },
+  { key: 'month',  label: '近 30 天', days: 30 },
+  { key: 'all',    label: '全部',     days: null },
+] as const
+
+function toYmd(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** 按范围 key 计算 [startDate, endDate]（全部返回空串 = 不过滤） */
+function rangeToDates(key: string): { startDate: string; endDate: string } {
+  const opt = RANGE_OPTIONS.find(o => o.key === key)
+  if (!opt || opt.days === null) return { startDate: '', endDate: '' }
+  const end = new Date()
+  const start = new Date()
+  if (opt.days > 0) start.setDate(start.getDate() - opt.days)
+  return { startDate: toYmd(start), endDate: toYmd(end) }
+}
+
 export default function GlobalSearch() {
   const [query, setQuery] = useState('')
+  const [rangeKey, setRangeKey] = useState<string>('today')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -67,18 +93,25 @@ export default function GlobalSearch() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const search = (q: string) => {
+  const search = (q: string, range: string) => {
     setQuery(q)
+    setRangeKey(range)
     clearTimeout(timer.current)
     if (!q.trim()) { setResults([]); return }
+    const { startDate, endDate } = rangeToDates(range)
     timer.current = setTimeout(async () => {
       setLoading(true)
       try {
-        const r = await client.get<SearchResult[]>('/search', { params: { q } })
+        const r = await client.get<SearchResult[]>('/search', { params: { q, startDate, endDate } })
         setResults(r || [])
       } catch (_) {}
       setLoading(false)
     }, 300)
+  }
+
+  const changeRange = (range: string) => {
+    setRangeKey(range)
+    if (query.trim()) search(query, range)
   }
 
   const go = (result: SearchResult) => {
@@ -107,13 +140,25 @@ export default function GlobalSearch() {
         <input
           ref={inputRef}
           value={query}
-          onChange={e => search(e.target.value)}
+          onChange={e => search(e.target.value, rangeKey)}
           onFocus={() => setFocused(true)}
           onBlur={() => { if (!suppressBlur.current) setTimeout(() => setFocused(false), 150); suppressBlur.current = false }}
           onKeyDown={onKeyDown}
           placeholder={`搜索… ${shortcutHint}`}
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground min-w-0"
         />
+        {/* 时间筛选（2026-08-21：默认「今天」，下拉切换范围） */}
+        <select
+          value={rangeKey}
+          onChange={e => changeRange(e.target.value)}
+          onMouseDown={e => e.stopPropagation()}
+          className="shrink-0 border-l pl-2 pr-1 py-0.5 text-xs text-muted-foreground bg-transparent outline-none cursor-pointer"
+          title="搜索时间范围"
+        >
+          {RANGE_OPTIONS.map(o => (
+            <option key={o.key} value={o.key}>{o.label}</option>
+          ))}
+        </select>
         {loading && <span className="text-xs text-muted-foreground shrink-0">...</span>}
       </div>
 
