@@ -120,10 +120,24 @@ async function findAll({
   }
 }
 
-async function createManual({ type, orderNo, partyName, totalAmount, dueDate, remark }, operator) {
+async function createManual({ type, orderNo, partyName, totalAmount, dueDate, remark }, operator, requestKey) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 幂等（2026-08-21 审计高危修复）：手工建账款是全财务域唯一无防护的改钱路径——
+    // order_id 恒 NULL 使 UNIQUE(type, order_id) 失效（多个 NULL 不冲突），连点两次
+    // 会落两条同金额账款各自可核销翻倍。这里与 recordPayment 对齐接 requestKey。
+    // 缺 X-Request-Key 时 beginOperationRequest 返回 enabled:false 直接放行，不影响老客户端。
+    const reqState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'payment.record.create',
+      userId: operator?.operatorId ?? null,
+    })
+    if (reqState.replay) {
+      await conn.commit()
+      return reqState.responseData ?? { id: null, replayed: true }
+    }
+
     // 手工创建的账款由录入人负责金额，视为已确认（confirm_status=1），
     // 待确认闸门只针对采购上架自动结算的应付（见 inbound-tasks.settle.js）。
     // order_id 必须显式写 NULL：它是 UNIQUE(type, order_id) 的一半，手工账款没有关联单据，
@@ -134,14 +148,15 @@ async function createManual({ type, orderNo, partyName, totalAmount, dueDate, re
        VALUES (?,NULL,?,?,?,?,1,?,?)`,
       [type, orderNo, partyName, totalAmount, totalAmount, dueDate || null, remark || null],
     )
+    const created = { id: result.insertId }
     await recordPaymentEvent(conn, {
       paymentRecordId: result.insertId,
       orderNo,
       eventType: PAYMENT_EVENT.CREATED,
       title: '账款记录已创建',
       description: `${type === 1 ? '应付' : '应收'}账款已创建`,
-      operatorId: operator.operatorId,
-      operatorName: operator.operatorName,
+      operatorId: operator?.operatorId ?? null,
+      operatorName: operator?.operatorName ?? null,
       requestId: getRequestId(),
       payload: {
         type,
@@ -152,8 +167,9 @@ async function createManual({ type, orderNo, partyName, totalAmount, dueDate, re
         remark: remark || null,
       },
     })
+    await completeOperationRequest(conn, reqState, { data: created })
     await conn.commit()
-    return { id: result.insertId }
+    return created
   } catch (error) {
     await conn.rollback()
     throw error
