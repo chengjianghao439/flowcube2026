@@ -9,6 +9,12 @@ const BASE_URL = process.env.PAGE_SMOKE_BASE_URL || 'http://127.0.0.1:8080'
 const SMOKE_USERNAME = String(process.env.SMOKE_USERNAME || '').trim()
 const SMOKE_PASSWORD = String(process.env.SMOKE_PASSWORD || '').trim()
 
+// ── 超时参数（可用环境变量覆盖，CI 环境特别慢时可调而不改代码）──
+const PAGE_SMOKE_TIMEOUT_MS = Number(process.env.PAGE_SMOKE_TIMEOUT_MS || 20000) // 页面等待总超时
+const PAGE_SMOKE_INTERVAL_MS = Number(process.env.PAGE_SMOKE_INTERVAL_MS || 500) // 轮询间隔
+const PAGE_SMOKE_NAV_TIMEOUT_MS = Number(process.env.PAGE_SMOKE_NAV_TIMEOUT_MS || 5000) // hash 导航确认超时
+const PAGE_SMOKE_SETTLE_MS = Number(process.env.PAGE_SMOKE_SETTLE_MS || 2000) // 无期望文本页面加载稳定窗口
+
 function requireSmokeCredentials() {
   if (!SMOKE_USERNAME || !SMOKE_PASSWORD) {
     throw new Error('缺少 SMOKE_USERNAME / SMOKE_PASSWORD，请通过环境变量显式注入测试账号凭据')
@@ -136,7 +142,7 @@ function sleep(ms) {
 // 大页面（懒加载 chunk + 多卡片 API）在慢环境下偶发超过 3 秒才渲染完，
 // 旧的固定 setTimeout(3000) 会误报 flaky 失败。轮询语义与 Playwright 的
 // auto-wait 一致：条件尽快成立就立即返回，真失败的页面才等到超时抛错。
-async function waitFor(expr, { timeout = 20000, interval = 500, label = '页面' } = {}) {
+async function waitFor(expr, { timeout = PAGE_SMOKE_TIMEOUT_MS, interval = PAGE_SMOKE_INTERVAL_MS, label = '页面' } = {}) {
   const deadline = Date.now() + timeout
   while (Date.now() < deadline) {
     // 导航切换瞬间 page context 可能短暂不可用，eval 抛错按「未就绪」继续轮询
@@ -154,7 +160,7 @@ async function waitFor(expr, { timeout = 20000, interval = 500, label = '页面'
 
 const ERROR_MARKERS = "'渲染错误','未注册','服务器内部错误','Minified React error'"
 // 无期望文本页面的加载稳定窗口（毫秒）：给延迟渲染的错误一个浮现机会
-const LOAD_SETTLE_MS = 2000
+const LOAD_SETTLE_MS = PAGE_SMOKE_SETTLE_MS
 
 // 检查主体：期望文本出现且无错误标记。作为 waitFor 的表达式，返回布尔。
 function assertExpr(expected, forbidden) {
@@ -184,14 +190,15 @@ function assertNoErrorText() {
 // 登录态 JSON（ERP/PDA 共用 flowcube-auth-v3），供 PDA 新标签页注入复用
 let AUTH_STORAGE_JSON = ''
 
-async function login() {
-  console.log('==> 页面烟雾：登录测试账号...')
+// 用指定账号登录，把登录态写入当前浏览器标签页并等待进入系统。
+// expectedHash 用于区分 ERP 登录（/dashboard）与受限账号登录（可能无仪表盘权限时用其他入口）
+async function loginAs(username, password, { expectedText = '仪表盘', fallbackHash = '/dashboard' } = {}) {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: SMOKE_USERNAME, password: SMOKE_PASSWORD }),
+    body: JSON.stringify({ username, password }),
   })
-  if (!res.ok) throw new Error(`登录失败：${res.status}`)
+  if (!res.ok) throw new Error(`登录失败（${username}）：${res.status}`)
   const authJson = await res.json()
   const token = authJson?.data?.token
   const user = authJson?.data?.user
@@ -206,8 +213,30 @@ async function login() {
   runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(AUTH_STORAGE_JSON)}), true)`])
   runPw(['eval', '(location.reload(), true)'])
   await waitFor(
-    "location.hash.includes('/dashboard') && ((document.body.innerText || '').includes('仪表盘') || (document.body.innerText || '').includes('数据总览'))",
-    { label: '登录后进入仪表盘' },
+    `location.hash.includes(${jsQuote(fallbackHash)}) && ((document.body.innerText || '').includes(${jsQuote(expectedText)}))`,
+    { label: `${username} 登录后进入系统` },
+  )
+}
+
+async function login() {
+  console.log('==> 页面烟雾：登录测试账号...')
+  await loginAs(SMOKE_USERNAME, SMOKE_PASSWORD)
+}
+
+// 受限账号访问无权限页面的 403 场景：登录后导航到目标路径，断言显示
+// 「无访问权限」。KeepAliveOutlet 权限拦截会 navigate('/403') 到 ForbiddenPage。
+// 这补上了超管账号测不到的分支——smoke_gate 是 role 1 超管，权限拦截路径
+// （前端 usePermission + 后端 requirePermission）对它完全不生效。
+//
+// 注意：不能先 setHashAndConfirm——403 会把 hash 从目标路径弹到 /403，
+// hash 永远确认不到目标路径。直接设 hash 后轮询「无访问权限」文本即可，
+// 能等到 = 403 生效；等不到 = 权限拦截坏了（或页面没拦）。
+async function assertForbidden(path, expected = '无访问权限') {
+  console.log(`==> 页面烟雾（403 场景）：${path} 应显示 ${expected}`)
+  runPw(['eval', `(location.hash = ${jsQuote(`#${path}`)}, true)`])
+  await waitFor(
+    `(document.body.innerText || '').includes(${jsQuote(expected)})`,
+    { label: `${path} 显示 ${expected}` },
   )
 }
 
@@ -232,7 +261,7 @@ async function setHashAndConfirm(path) {
     runPw(['eval', `(location.hash = ${jsQuote(target)}, true)`])
     const ok = await waitFor(
       `location.hash.startsWith(${jsQuote(pathPrefix)})`,
-      { timeout: 5000, interval: 500, label: `导航到 ${pathPrefix}` },
+      { timeout: PAGE_SMOKE_NAV_TIMEOUT_MS, interval: PAGE_SMOKE_INTERVAL_MS, label: `导航到 ${pathPrefix}` },
     ).catch(() => false)
     if (ok) return
   }
@@ -263,7 +292,7 @@ async function openPdaAndCheck(path, expected) {
     // 等待水合完成并落到 PDA 首页（/pda/login → /pda）
     await waitFor(
       "location.hash.startsWith('#/pda') && !location.hash.startsWith('#/pda/login')",
-      { timeout: 10000, interval: 500, label: 'PDA 登录态水合' },
+      { timeout: PAGE_SMOKE_NAV_TIMEOUT_MS * 2, interval: PAGE_SMOKE_INTERVAL_MS, label: 'PDA 登录态水合' },
     )
     // PDA 内部导航到目标页（同标签页内 PDA→PDA 不被守卫拦截）
     await setHashAndConfirm(path)
@@ -311,6 +340,19 @@ async function main() {
   await openAndCheck('/settings/barcode-print-query?category=inbound&inboundTaskId=1&status=failed')
   await openAndCheck('/settings/barcode-print-query?category=outbound&status=failed')
   await openAndCheck('/settings/barcode-print-query?category=logistics&status=failed')
+
+  // ── 403 权限场景（受限账号，密码与 tests/helpers/smokeTestKit.js 一致）──
+  // 用 smoke_limited（仅 inbound.order.view + dashboard.view）访问需要
+  // picking.wave.view 的页面，应被前端权限拦截转到 403 页。
+  await loginAs('smoke_limited', 'SmokeLimited123!', { expectedText: '仪表盘' })
+  await assertForbidden('/picking-waves')
+  // 受限账号有权访问的页面不应 403（对照：inbound.order.view 授权了新建收货订单）
+  await setHashAndConfirm('/inbound-tasks/new')
+  await waitFor(
+    `(document.body.innerText || '').includes('新建收货订单')`,
+    { label: '受限账号可访问 /inbound-tasks/new' },
+  )
+
   console.log()
   console.log('页面烟雾检查通过')
 }

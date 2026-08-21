@@ -401,7 +401,15 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 - 数据库迁移**由部署链路自动执行，不需要手动补跑**：`scripts/server-update.sh` 在 `docker compose up -d --build` 之后、健康检查之前显式跑 `docker compose exec -T backend npm run migrate`（用新镜像里的迁移文件，失败即中断部署）。「后端进程启动时不自动迁移」说的是 `backend/index.js`，别把两者混为一谈——推 main 时迁移是跟着一起上的。只有绕开该脚本手动改动服务器时才需要自己跑一次。
 - 桌面更新源：`/var/www/flowcube-downloads/latest.json`（顶层唯一权威入口，由 `scripts/release-desktop.js` 写入）；`current/` 只放固定文件名的当前安装包；`/downloads` 是**已废弃**的兼容别名（仅 GET/HEAD）。
 - 应急手动部署：`ssh flowcube-prod 'cd /opt/flowcube && SKIP_RELEASE_GATE=1 bash scripts/server-update.sh'`。
-- 其他运维脚本：`scripts/backup-db.sh`（每日 02:00 容器内 mysqldump，保留 14 天）、`scripts/monitor.sh`（5 分钟健康检查 + 每日心跳，钉钉告警）、`scripts/release-gate.sh`（服务器端发布门禁）。
+- 其他运维脚本（2026-08-21 重构，容器名不再硬编码）：
+  - `scripts/lib/ops-common.sh`：运维脚本公共库——`resolve_container()` 三级回退解析 compose 容器名（`docker compose ps -q` → 期望名 → 捞被 Docker 改名加 hash 前缀的容器，2026-08-21 事故的教训：容器被改名后硬编码名字会让备份静默失败 12 天）、`read_dingtalk_webhook()`、`dingtalk_send()`。
+  - `scripts/backup-db.sh`（每日 02:00 容器内 mysqldump，保留 14 天）：**失败零残留**——先写 `.part` 临时文件，通过体积 + gzip + 建表语句三重校验才落正式名；任何失败删除残骸并推钉钉。**不要改回 `set -e` + 管道直写最终文件的旧写法**（那是 8-10 起连续 12 天空备份的根因）。
+  - `scripts/monitor.sh`（每 5 分钟健康检查 + 钉钉告警）：状态去抖改为 `bad <epoch>` 格式，持续异常按 `REMIND_HOURS`（默认 24h）重提醒，不再只响一声。
+  - `scripts/daily-report.sh`（每日 09:00 日报）：只统计体积 ≥ `MIN_BYTES`（默认 1024）的有效备份，损坏文件单列"待清理"。
+  - `scripts/rotate-slowlog.sh`（每日 04:00，`install-cron.sh` 安装）：容器内 `truncate` 慢查询日志（MySQL 持写句柄，mv 改名会让日志不再增长，truncate 才无损），>1M 才轮转并保留一份 `.prev`。
+  - `scripts/install-cron.sh`：幂等安装上述四条 cron（backup / monitor / daily-report / rotate-slowlog）。
+  - `scripts/release-gate.sh`（服务器端发布门禁）：`smoke-pages.node.js` 页面烟雾——ERP 页面轮询等待（`PAGE_SMOKE_TIMEOUT_MS` 等环境变量可调），PDA 页面在**新标签页**真验证（`openPdaAndCheck`：tab-new → 注入 sessionStorage 登录态 → 水合 → 断言 PDA 标题），另用 `smoke_limited` 受限账号（密码 `SmokeLimited123!`，与 `tests/helpers/smokeTestKit.js` 一致，仅 `inbound.order.view` + `dashboard.view`）验证 403 权限拦截。门禁账号：`smoke_gate`（超管 role 1，CI secrets 注入）。
+- MySQL 慢查询配置（`docker/mysql/my.cnf`）：**`log_queries_not_using_indexes` 已关闭**（2026-08-21，该开关把 0.0004s 扫 1 行的查询全记成"慢查询"，12 天堆 10.9 万条/83M 假阳性，让 monitor 的慢查询告警形同虚设）；`max_connections=151`，monitor 连接数告警阈值 `MAX_CONN_WARN` 默认 120（与上限拉开检测余量）。
 - CI 门禁 `test.yml`：纯函数单测 + 在临时 MySQL 上跑 migrate + `smoke:mainline` / `concurrency-guards` / `sale-adjustment` / `p0-regression` / `p1-regression` / `warehouse-scope` / `pda-device-session` / `finance` + `test:integration`。**绝不连接生产库。**
 
 ---
@@ -472,3 +480,6 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - 剩下的 9 条 `npm audit --omit=dev` 告警**全部同源**：`exceljs@4.4.0`（已是最新版）固定依赖 `archiver@^5` → `glob@7` → `minimatch@3` → `brace-expansion@1.1.16`。上游没有可升的版本，`npm audit fix --force` 也无版本可换，只会破坏依赖，**不要执行**。
     - 风险实际不可达：该 DoS 需要攻击者控制传给 `glob` 的模式串，而本项目只用 exceljs 读写文件，glob 模式全是库内部的固定路径，不接受任何用户输入。
     - 解除条件：exceljs 发布带 `archiver@6+` 的版本，或改用别的导出库。
+13. **2026-08-21 运维事故已修复**：生产 MySQL 容器被 Docker 改名为 `d96fcce6a90a_flowcube-mysql`（`docker compose up` 遇 container_name 冲突时的既定行为），硬编码容器名的 `backup-db.sh` 连续 12 天 mysqldump 失败，且因脚本缺陷无人察觉（每天留下 20 字节空 gzip 被日报当"今日✓"；monitor 去抖只响一声后沉默）。已修复：`lib/ops-common.sh` 的 `resolve_container()` 解析容器名、backup 失败零残留 + 钉钉告警、daily-report 只认体积达标备份、monitor 持续异常重提醒。见第 16 节。**运维脚本的容器名一律经 `resolve_container()` 解析，不要硬编码。**
+14. **门禁测试账号体系**（2026-08-21 补齐）：`smoke_gate`（超管 role 1，CI secrets 注入）跑全量页面；`smoke_limited`（`SmokeLimited123!`，仅 `inbound.order.view` + `dashboard.view`，生产库与测试 helper 同款）专测 403 权限拦截。**新增受限账号密码不得外泄**（它是 CI 门禁专用，不是业务账号）。
+15. **`/pda/*` 页面烟雾现在是真的了**（2026-08-21）：`openPdaAndCheck` 用 playwright-cli `tab-new` 新标签页 + 注入 sessionStorage 登录态（sessionStorage 按标签页隔离，新页要重放 `flowcube-auth-v3`）→ 等 zustand 水合（`#/pda/login` → `#/pda`）→ PDA 内部导航 → 断言 PDA 标题 → `tab-close`。覆盖 4 个列表页（inbound/picking/split/transfer）；带 id 的作业页依赖真实任务数据 + `X-Client: pda` 写接口，不纳入静态烟雾（与 ERP 带 id 页同策略）。
