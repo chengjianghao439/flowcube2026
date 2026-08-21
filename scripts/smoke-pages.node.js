@@ -224,6 +224,11 @@ async function setHashAndConfirm(path) {
   const pathPrefix = target.split('?')[0]
   for (let attempt = 0; attempt < 2; attempt++) {
     runPw(['eval', `(location.hash = ${jsQuote(target)}, true)`])
+    // PDA 路径受 CrossClientNavigationGuard 保护：同一标签页 ERP→PDA 会被
+    // 弹回原 ERP 页（设计行为，见 router/index.tsx），hash 不可能停在目标。
+    // 这是旧脚本对 /pda/* 一直「假通过」的原因；对 PDA 路径不做 hash 确认，
+    // 保持旧语义（只验证 ERP 上下文里无渲染错误）。
+    if (path === '/pda' || path.startsWith('/pda/')) return
     const ok = await waitFor(
       `location.hash.startsWith(${jsQuote(pathPrefix)})`,
       { timeout: 5000, interval: 500, label: `导航到 ${pathPrefix}` },
