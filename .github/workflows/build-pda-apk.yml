@@ -221,7 +221,10 @@ jobs:
           set -euo pipefail
           cd "$APP_PATH"
           git fetch origin main
-          git reset --hard "$GITHUB_SHA"
+          # 2026-08-22 修复：不再 reset 到自己的 GITHUB_SHA——PDA 发布与 Deploy Browser
+          # 并发跑时各自 reset --hard 会互相覆盖，把服务器回退到旧 commit（Verify 误报失败）。
+          # PDA 发布只需 backend/apk 目录 + server-update.sh 脚本，一律基于 origin/main 最新。
+          git reset --hard origin/main
           mkdir -p backend/apk
           install -m 0644 /tmp/flowcube-pda-app-release.apk backend/apk/app-release.apk
           install -m 0644 /tmp/flowcube-pda-version.json backend/apk/version.json
