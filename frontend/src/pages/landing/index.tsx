@@ -31,12 +31,12 @@ const CONTACT = {
   email: '15701178441@139.com',
 }
 
-// ── Hero 关键数字（数据概览）───────────────────────────────────────────
+// ── Hero 关键数字（数据概览，口径与代码一致：modules 目录实数为 60）────
 const STATS = [
-  { value: '47', label: '业务模块' },
-  { value: '8', label: '角色协同' },
+  { value: '60', label: '功能模块' },
+  { value: '5', suffix: '+', label: '内置角色' },
   { value: '3', label: '端到端贯通' },
-  { value: '99.2%', label: '准时出库率' },
+  { value: '0', label: '负库存容忍' },
 ]
 
 // ── 应用场景：面向不同角色 ─────────────────────────────────────────────
@@ -202,7 +202,7 @@ function WorkbenchMockup() {
           {[
             ['今日收件', '328'],
             ['待上架', '41'],
-            ['准时出库', '99.2%'],
+            ['准时出库', '99%'],
           ].map(([label, val]) => (
             <div key={label} className="rounded-lg bg-white/5 px-2 py-2">
               <div className="text-base font-semibold text-white">{val}</div>
@@ -252,8 +252,9 @@ function Reveal({ children, className = '' }: { children: React.ReactNode; class
   )
 }
 
-/** 滚动进入视口时从 0 数到目标值的数字（纯数字部分） */
-function AnimatedNumber({ value, suffix = '' }: { value: string; suffix?: string }) {  const ref = useRef<HTMLSpanElement>(null)
+/** 滚动进入视口时从 0 数到目标值的数字（suffix 为附加字符，如「+」） */
+function AnimatedNumber({ value, suffix = '' }: { value: string; suffix?: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
   const target = parseFloat(value.replace(/[^0-9.]/g, ''))
   const isPct = value.includes('%')
   const [display, setDisplay] = useState(0)
@@ -481,7 +482,7 @@ export default function LandingPage() {
               {STATS.map((s) => (
                 <div key={s.label}>
                   <div className="text-xl font-bold text-white sm:text-2xl">
-                    <AnimatedNumber value={s.value} />
+                    <AnimatedNumber value={s.value} suffix={s.suffix} />
                   </div>
                   <div className="mt-0.5 text-[11px] text-blue-200/50">{s.label}</div>
                 </div>
