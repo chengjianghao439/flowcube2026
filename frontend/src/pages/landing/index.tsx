@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Layers, ArrowRight, Download, Smartphone, Boxes, ScanLine, ShieldCheck, Radio, Server,
-  Mail, Phone, PackageSearch, Receipt, BarChart3, Warehouse,
+  Mail, Phone, PackageSearch, Receipt, BarChart3, Warehouse, Menu, X,
 } from 'lucide-react'
 
 // ── 品牌常量 ───────────────────────────────────────────────────────────
@@ -21,8 +21,11 @@ const BRAND = {
   name: '极序 Flow',
   tagline: '企业管理系统',
   claim: '从下单到出库，让每一步仓库作业都有系统在调度。',
-  subclaim: '采购 · 销售 · 库存 · 仓储 · 财务一体化 ERP/WMS，电脑端与 PDA 现场协同，扫码即办。',
+  subclaim: '扫码、上架、拣货、出库——每条商品从条码进入系统，变成可追踪的状态、可对账的金额。仓库现场只执行，系统替你决策每一步。',
 }
+
+// 安全线琥珀：全场唯一暖色（仓库防撞柱/安全标线母题），条码、扫描光、关键强调专用
+const AMBER = 'var(--fc-amber)'
 
 // ── 联系方式 ───────────────────────────────────────────────────────────
 const CONTACT = {
@@ -155,6 +158,29 @@ interface PdaVersionData {
   version?: string
   releaseNote?: string
 }
+
+/** 纯 CSS 条码（细竖线序列，1-3px 交错），随文字换行显示在首尾 */
+function Barcode({ label, className = '' }: { label?: string; className?: string }) {
+  const bars = Array.from({ length: 22 })
+  return (
+    <span className={`barcode ${className}`} aria-hidden="true">
+      {bars.map((_, i) => <i key={i} />)}
+      {label && <span className="barcode-label ml-2">{label}</span>}
+    </span>
+  )
+}
+
+/** 胶囊指示器：琥珀小圆点 + 标签（安全标线语气） */
+function Pill({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs ${className}`}>
+      <span className="pill-dot" />
+      {children}
+    </span>
+  )
+}
+
+/** Hero 副标语（截图占位）*/
 
 // ── Hero 工作台示意：网格 = 库位，亮点 = 在途任务 ─────────────────────
 function WorkbenchMockup() {
@@ -329,12 +355,13 @@ function FlowCard({ children, index, className = '' }: { children: React.ReactNo
 export default function LandingPage() {
   const [desktop, setDesktop] = useState<LatestJson | null>(null)
   const [pda, setPda] = useState<PdaVersionData | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   // 页内锚点滚动：显式 window.scrollTo，而非 <a href="#section">。
   // 后者会改写 window.location.hash，被 LandingGate 误判为「离开宣传页」跳登录。
   // 先按目标元素位置 scrollTo，再 scrollIntoView 兜底（个别环境 scrollTo 不生效时仍能滚）。
-  const scrollToSection = (id: string) => (e: React.MouseEvent) => {
-    e.preventDefault()
+  const scrollToSection = (id: string) => (e?: React.MouseEvent) => {
+    e?.preventDefault()
     const el = document.getElementById(id)
     if (!el) return
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -374,11 +401,21 @@ export default function LandingPage() {
     }
   }, [])
 
+  // 手机导航：窗口拉宽到 sm 断点以上时自动收起，避免与桌面导航同时出现
+  useEffect(() => {
+    if (!menuOpen) return
+    const onResize = () => {
+      if (window.innerWidth >= 640) setMenuOpen(false)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [menuOpen])
+
   const desktopUrl = desktop?.url ? (desktop.url.startsWith('http') ? desktop.url : `${desktop.url}`) : ''
   const pdaVersion = pda?.version || ''
 
   return (
-    <div className="landing-page min-h-screen bg-[#F5F7FA] font-sans text-[#0E1B2E] antialiased">
+    <div className="landing-page landing-hero min-h-screen bg-[#F5F7FA] font-sans text-[#0E1B2E] antialiased">
       {/* 顶部导航 */}
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-8 lg:px-10">
@@ -386,6 +423,7 @@ export default function LandingPage() {
             <div className="flex size-8 items-center justify-center rounded-lg bg-[#0B3B8C] text-white">
               <Layers className="size-[18px]" />
             </div>
+            <Barcode className="hidden text-slate-400/60 md:inline-flex" />
             <span className="text-base font-bold tracking-tight text-[#0E1B2E]">{BRAND.name}</span>
             <span className="hidden text-[10px] font-medium uppercase tracking-widest text-slate-400 sm:inline">
               {BRAND.tagline}
@@ -403,8 +441,40 @@ export default function LandingPage() {
               进入系统
               <ArrowRight className="size-3.5" />
             </a>
+            {/* 手机端汉堡菜单 */}
+            <button
+              type="button"
+              aria-label={menuOpen ? '关闭导航菜单' : '打开导航菜单'}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+              className="ml-1 inline-flex size-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 sm:hidden"
+            >
+              {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+            </button>
           </nav>
         </div>
+        {menuOpen && (
+          <div className="border-t border-slate-200/70 bg-white px-6 py-3 sm:hidden">
+            {[
+              ['能力', 'features'],
+              ['应用场景', 'scenarios'],
+              ['下载', 'download'],
+              ['为什么选我们', 'values'],
+            ].map(([label, id]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false)
+                  scrollToSection(id)()
+                }}
+                className="block w-full rounded-lg px-3 py-2.5 text-left text-sm text-slate-600 transition hover:bg-slate-100"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       {/* ── Hero ─────────────────────────────────────────────── */}
@@ -438,7 +508,7 @@ export default function LandingPage() {
             </div>
             <h1 className="text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl">
               <span className="hero-line" style={{ animationDelay: '0.05s' }}>让每一件货，</span>
-              <span className="hero-line text-[#6EA8FF]" style={{ animationDelay: '0.2s' }}>都在系统的轨道上流动。</span>
+              <span className="hero-line scan-underline text-[#6EA8FF]" style={{ animationDelay: '0.2s' }}>都在系统的轨道上流动。</span>
             </h1>
             <p className="mt-5 max-w-lg text-base leading-relaxed text-blue-100/80">
               {BRAND.subclaim}

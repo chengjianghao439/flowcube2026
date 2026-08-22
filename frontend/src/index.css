@@ -273,6 +273,155 @@ html {
 
 /* ── 官网宣传页（landing）动画增强 ─────────────────────────────────── */
 
+/* 设备感通用：等宽数字（统计、版本号） */
+.mono-num {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* 安全线琥珀（全场唯一暖色，仓库防撞柱/安全标线母题）*/
+:root {
+  --fc-amber: #F5A524;
+}
+
+/* 图纸网格（浅色区 + Hero 用），极淡 */
+.bg-sheet-grid {
+  background-image:
+    linear-gradient(rgba(14, 27, 46, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 27, 46, 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+.landing-hero .bg-sheet-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+
+/* Hero 标题下扫过的扫描下划线 */
+@keyframes fc-scan-underline {
+  0%   { transform: translateX(-105%); }
+  55%  { transform: translateX(105%); }
+  100% { transform: translateX(105%); }
+}
+.scan-underline {
+  position: relative;
+  display: inline-block;
+}
+.scan-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.06em;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--fc-amber), transparent);
+  animation: fc-scan-underline 5.2s ease-in-out 1.6s infinite;
+}
+
+/* 条码装饰：细竖线序列（纯 CSS，线宽 1-3px 交错），随文字自然换行 */
+.barcode {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1;
+  white-space: nowrap;
+}
+.barcode i {
+  display: inline-block;
+  width: 1px;
+  height: 100%;
+  min-height: 14px;
+  background: currentColor;
+  opacity: 0.85;
+}
+.barcode i:nth-child(3n)   { width: 2px; }
+.barcode i:nth-child(4n)   { width: 3px; height: 92%; }
+.barcode i:nth-child(5n)   { width: 1.4px; }
+.barcode i:nth-child(7n)   { width: 2.6px; height: 88%; }
+.barcode-label {
+  font-size: 0.5em;
+  letter-spacing: 0.35em;
+  opacity: 0.7;
+}
+
+/* 卡片 hover：琥珀扫描光带斜扫过 */
+@keyframes fc-card-scan {
+  0%   { transform: translateX(-130%) skewX(-18deg); }
+  100% { transform: translateX(130%) skewX(-18deg); }
+}
+.scan-card {
+  position: relative;
+  overflow: hidden;
+}
+.scan-card::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 26%;
+  background: linear-gradient(90deg, transparent, rgba(245, 165, 36, 0.10), transparent);
+  transform: translateX(-130%) skewX(-18deg);
+  pointer-events: none;
+}
+.scan-card:hover::after {
+  animation: fc-card-scan 0.65s ease-out;
+}
+
+/* Hero 工作台 mockup：琥珀光带反复横扫（一直在扫描的作业台） */
+@keyframes fc-mockup-scan {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+.mockup-sweep {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.mockup-sweep::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 18%;
+  background: linear-gradient(90deg, transparent, rgba(245, 165, 36, 0.14), transparent);
+  animation: fc-mockup-scan 3.4s ease-in-out 1s infinite;
+}
+
+/* 「胶囊指示器」通用：小圆点 + 标签，强调用琥珀 */
+.pill-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--fc-amber);
+  box-shadow: 0 0 8px rgba(245, 165, 36, 0.8);
+}
+
+/* 能力矩阵：hover 琥珀底线从左扩出 */
+.mod-link {
+  position: relative;
+}
+.mod-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--fc-amber);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.mod-link:hover::after {
+  transform: scaleX(1);
+}
+
 /* Hero 标题逐行入场 */
 @keyframes fc-hero-line {
   from { opacity: 0; transform: translateY(26px); }
@@ -363,7 +512,8 @@ html {
 
 /* 尊重减弱动效 */
 @media (prefers-reduced-motion: reduce) {
-  .hero-line, .scan-ring, .fc-particle, .cell-breathe, .flow-card, .stagger-card {
+  .hero-line, .scan-ring, .fc-particle, .cell-breathe, .flow-card, .stagger-card,
+  .scan-underline::after, .scan-card::after, .mockup-sweep::before {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;

@@ -561,3 +561,11 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 26. **2026-08-22 第 6 轮 P2 加固（提交 986eb07）**：
     - PDA 设备会话 TTL 清理（scheduler 每日，过期/吊销且 30 天前）；裸 throw 统一 AppError(500,'INTERNAL_CONFIG')（statusTransition/warehouseTaskStatus/documentStatusRules）；loadRolePermissions 缺表显式告警；deprecated /downloads 日志降噪（console.warn→logger.warn）；operation_logs 清理改分批（每批 2000 行）；scheduler worker 注入 `scheduler:<name>` requestId 上下文。
     - 验证：lint 0 error、mainline 49、pda-device-session 28、status-rules 338 全绿。
+27. **2026-08-22 落地页（landing）优化收尾（净增量，未发布）**：
+    - 说明：本批的 P0/P1 项（数据失实修正 60/5+/0、robots/sitemap/favicon 落地、meta/OG、size-4.5→size-[18px]）已由并行会话完成并随 **v0.5.3 上线**，此处只记录未发布的净增量。
+    - **手机端汉堡菜单**（landing header，<sm 显示汉堡，点击展开四项锚点，点击项自动收起；窗口拉宽到 sm 断点以上自动收起，避免与桌面导航同时出现）。
+    - **登录回跳**：`ErpProtectedRoute` 未登录跳 `/login` 时带 `state.from`；`ErpGuestRoute`/`LoginPage`（`useLogin(from || '/dashboard')`）登录成功后回原页——落地页能力卡片点击 → 登录 → 回到目标页，动线不再断。
+    - **scrollToSection 参数修复**：`(e?: React.MouseEvent)` 改为可选 + `e?.preventDefault()`，使手机菜单按钮（无事件对象）可复用同一滚动逻辑。
+    - 变更文件：`frontend/src/pages/landing/index.tsx`、`frontend/src/router/index.tsx`、`frontend/src/pages/login/index.tsx`。
+    - 验证：tsc 0 错误、前端 lint 0 error（5 warnings 存量）、生产 build 通过、dev 浏览器实测（菜单展开/收起、数字动画终值 60/5+/3/0、meta 生效）。
+

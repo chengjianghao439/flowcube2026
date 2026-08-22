@@ -1,11 +1,15 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Layers, CircleCheck, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { useLogin } from '@/hooks/useAuth'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
 import { loadSavedLoginForm } from '@/lib/loginCredentials'
 
 export default function LoginPage() {
-  const { mutate: login, isPending, error } = useLogin()
+  const location = useLocation()
+  // 落地页能力卡片 → 未登录被 ErpProtectedRoute 拦截后带 state.from；登录成功后回到该页
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
+  const { mutate: login, isPending, error } = useLogin(from || '/dashboard')
 
   const [username, setUsername] = useState(() => loadSavedLoginForm().username)
   const [password, setPassword] = useState('')

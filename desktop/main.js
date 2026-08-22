@@ -1,9 +1,15 @@
-console.log('🔥 当前 main.js 已加载')
-
 const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron')
 const os = require('os')
 const path = require('path')
 const fs = require('fs')
+const log = require('electron-log/main')
+log.initialize()
+// 本地日志文件（2026-08-22 接入 electron-log）：用户报「更新不弹/连不上」时可取日志排障。
+// Windows: %USERPROFILE%\AppData\Roaming\极序 Flow\logs\main.log（electron-builder 自动按 productName 命名）
+log.transports.file.maxSize = 5 * 1024 * 1024 // 5MB 滚动
+log.transports.file.level = 'info'
+log.transports.console.level = 'debug' // 开发时控制台仍可见
+log.info('🔥 当前 main.js 已加载')
 const { pathToFileURL } = require('url')
 const { checkAppUpdate, startUpdateDownload, ignoreVersion, isValidDownloadUrl } = require('./lib/updateCheck')
 const { printZpl } = require('./lib/localPrint')
@@ -31,7 +37,7 @@ async function resolveCanonicalPrinterNameForRaw(event, requestedName) {
   try {
     list = await wc.getPrintersAsync()
   } catch (e) {
-    console.warn('[FlowCube] getPrintersAsync 失败，使用原始打印机名:', e?.message || e)
+    log.warn('[FlowCube] getPrintersAsync 失败，使用原始打印机名:', e?.message || e)
     return raw
   }
   const printers = Array.isArray(list) ? list : []
@@ -101,18 +107,18 @@ function readEmbeddedBuildCommit() {
   }
 }
 
-console.log('🔥 BUILD VERSION:', app.getVersion())
-console.log(
+log.info('🔥 BUILD VERSION:', app.getVersion())
+log.info(
   '🔥 BUILD COMMIT:',
   process.env.GITHUB_SHA || readEmbeddedBuildCommit() || 'local',
 )
 
 process.on('uncaughtException', (err) => {
-  console.error('[FlowCube] 未捕获异常:', err)
+  log.error('[FlowCube] 未捕获异常:', err)
 })
 
 process.on('unhandledRejection', (reason) => {
-  console.error('[FlowCube] Promise 异常:', reason)
+  log.error('[FlowCube] Promise 异常:', reason)
 })
 
 function rendererDist() {
@@ -169,7 +175,7 @@ function triggerPackagedUpdateCheck(win, originRaw) {
   packagedUpdateCheckStarted = true
   setTimeout(() => {
     checkAppUpdate(app, win, () => origin, { ui: 'ipc', quitForInstall: quitForInstaller }).catch((err) => {
-      console.error('[FlowCube] 自动更新检查失败:', err)
+      log.error('[FlowCube] 自动更新检查失败:', err)
     })
   }, PACKAGED_UPDATE_CHECK_DELAY_MS)
 }
@@ -189,12 +195,12 @@ ipcMain.handle('flowcube:trigger-update-check', async (event) => {
   try {
     const origin = await getRendererApiOrigin(win)
     if (!origin) {
-      console.warn('[FlowCube] 手动更新检查：无法获取 API 根地址')
+      log.warn('[FlowCube] 手动更新检查：无法获取 API 根地址')
       return
     }
     await checkAppUpdate(app, win, () => origin, { ui: 'ipc', quitForInstall: quitForInstaller })
   } catch (err) {
-    console.error('[FlowCube] 手动更新检查失败:', err)
+    log.error('[FlowCube] 手动更新检查失败:', err)
   }
 })
 
@@ -255,7 +261,7 @@ ipcMain.handle('flowcube:get-system-printers', async (event) => {
       isDefault: !!p.isDefault,
     }))
   } catch (e) {
-    console.error('[flowcube:get-system-printers]', e)
+    log.error('[flowcube:get-system-printers]', e)
     return []
   }
 })
@@ -329,7 +335,7 @@ function createWindow() {
   const indexHtml = path.join(rendererDist(), 'index.html')
   const url = pathToFileURL(indexHtml).href + '#/'
   win.loadURL(url).catch((err) => {
-    console.error('[FlowCube] 无法加载界面文件:', indexHtml, err)
+    log.error('[FlowCube] 无法加载界面文件:', indexHtml, err)
   })
 
   if (app.isPackaged) {
@@ -347,7 +353,7 @@ function createWindow() {
             origin = await getRendererApiOrigin(win)
           }
           if (!origin) {
-            console.warn(
+            log.warn(
               '[FlowCube] 更新检查已禁用：未解析到 API 根地址（API_BASE_URL runtime override 或构建期默认值）',
             )
             void dialog.showMessageBox(win, {
@@ -363,7 +369,7 @@ function createWindow() {
           }
           triggerPackagedUpdateCheck(win, origin)
         } catch (err) {
-          console.error('[FlowCube] 自动更新检查（fallback）失败:', err)
+          log.error('[FlowCube] 自动更新检查（fallback）失败:', err)
         }
       }, 8000)
     })
@@ -408,10 +414,10 @@ if (!gotTheLock) {
 
     mainWindow = createWindow()
 
-    console.log('🚀 应用已启动')
+    log.info('🚀 应用已启动')
 
     if (!app.isPackaged) {
-      console.log('ℹ️ 未打包：自动更新仅在安装包中启用')
+      log.info('ℹ️ 未打包：自动更新仅在安装包中启用')
     }
   })
 }

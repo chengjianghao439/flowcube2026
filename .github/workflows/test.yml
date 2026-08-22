@@ -47,6 +47,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
+      - name: 三端版本一致性校验（防只升一端就发版，2026-08-22 补齐）
+        run: |
+          set -euo pipefail
+          B=$(node -p "require('./backend/package.json').version")
+          F=$(node -p "require('./frontend/package.json').version")
+          D=$(node -p "require('./desktop/package.json').version")
+          echo "backend=$B frontend=$F desktop=$D"
+          [ "$B" = "$F" ] && [ "$F" = "$D" ] || { echo "::error::三端版本号不一致：backend=$B frontend=$F desktop=$D"; exit 1; }
+
       - name: Setup Node 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:

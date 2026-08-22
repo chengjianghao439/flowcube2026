@@ -77,10 +77,11 @@ function CrossClientNavigationGuard() {
   return null
 }
 
-/** ERP 已登录守卫：未登录跳 /login */
+/** ERP 已登录守卫：未登录跳 /login，并携带原路径供登录后回跳（landing 卡片点击等场景） */
 function ErpProtectedRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  if (!isAuthenticated) return <Navigate to="/login" replace />
+  const location = useLocation()
+  if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location }} />
   return <Outlet />
 }
 
@@ -91,10 +92,12 @@ function PdaProtectedRoute() {
   return <Outlet />
 }
 
-/** ERP 游客守卫：已登录跳 /dashboard */
+/** ERP 游客守卫：已登录跳回受保护页（无来源则 /dashboard） */
 function ErpGuestRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />
+  const location = useLocation()
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
+  if (isAuthenticated) return <Navigate to={from || '/dashboard'} replace />
   return <Outlet />
 }
 

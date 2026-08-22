@@ -277,3 +277,35 @@ fs.writeFileSync(currentVersion, `${version}\n`, 'utf8')
 log(manifestOnly ? `已补齐 manifest: ${version}` : `已发布版本: ${version}`)
 log(`latest.json -> ${latest.url}`)
 log('历史版本未覆盖；current 指针已更新，可通过重写 latest/current 回滚。')
+
+// /versions 保留策略（2026-08-22）：桌面安装包每版 100MB+，磁盘有限。
+// 发布成功后清理历史目录，只保留最近 N 版（默认 5，FLOWCUBE_VERSIONS_KEEP 可覆盖），
+// 本次刚发布的版本永久保留。
+function pruneVersions() {
+  if (manifestOnly || rollback) return
+  const keep = Math.max(2, Number(process.env.FLOWCUBE_VERSIONS_KEEP || 5))
+  const versionsDir = path.join(DOWNLOAD_ROOT, 'versions')
+  if (!fs.existsSync(versionsDir)) return
+  const entries = fs.readdirSync(versionsDir)
+    .filter((name) => /^v\d+\.\d+\.\d+/.test(name))
+    .sort((a, b) => {
+      const parse = (s) => s.replace(/^v/, '').split('.').map(Number)
+      const [a1, a2, a3] = parse(a)
+      const [b1, b2, b3] = parse(b)
+      return b1 - a1 || b2 - a2 || b3 - a3
+    })
+  // 保留：本次发布的版本 + 排序后前 keep 个（不含本次）
+  const keepNames = new Set([`v${version}`])
+  for (const name of entries) {
+    if (name === `v${version}`) continue
+    if (keepNames.size < keep + 1) keepNames.add(name)
+    else {
+      const target = path.join(versionsDir, name)
+      if (fs.existsSync(target)) {
+        fs.rmSync(target, { recursive: true, force: true })
+        log(`清理历史版本: ${name}`)
+      }
+    }
+  }
+}
+pruneVersions()

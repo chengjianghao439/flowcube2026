@@ -363,6 +363,22 @@ async function main() {
     { label: '受限账号可访问 /inbound-tasks/new' },
   )
 
+  // ── routeRegistry 覆盖提醒（2026-08-22）：路由注册与烟雾清单一致性粗检 ──
+  // 只对「menu 类型的新增列表页」提醒（详情/表单页有 listPath 无法静态烟雾，
+  // 与 ERP 带 id 页同策略不纳入）；不阻断，仅提示人工补 smoke。
+  try {
+    const registrySrc = fs.readFileSync(path.join(ROOT, 'frontend/src/router/routeRegistry.ts'), 'utf8')
+    const known = ['role-workbench', 'reconciliation', 'profit-analysis', 'wave-performance',
+      'warehouse-ops', 'pda-anomaly', 'inventory-aging', 'picking-waves', 'sale', 'purchase',
+      'customers', 'suppliers', 'payments', 'carriers', 'locations', 'racks', 'sorting-bins',
+      'inventory', 'stockcheck', 'price-change']
+    const registered = [...registrySrc.matchAll(/path: '(\/[a-z0-9-]+)'/g)].map((m) => m[1]).filter((p) => !p.includes(':'))
+    const missing = registered.filter((p) => !known.some((k) => p.includes(k)))
+    if (missing.length) {
+      console.log(`[提醒] 以下路由未纳入页面烟雾：${missing.join(', ')}（列表页请补 openAndCheck；详情/表单页可跳过）`)
+    }
+  } catch (_) { /* routeRegistry 解析失败不阻断 */ }
+
   console.log()
   console.log('页面烟雾检查通过')
 }
