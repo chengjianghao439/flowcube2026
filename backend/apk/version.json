@@ -1,7 +1,7 @@
 {
-  "version": "0.5.2",
-  "versionCode": 92,
+  "version": "0.5.3",
+  "versionCode": 94,
   "filename": "app-release.apk",
-  "releaseNote": "- **商品列表「申请改价」入口**：商品列表行操作新增「申请改价」，点击自动跳转改价申请页并预填商品，操作更顺畅",
-  "publishedAt": "2026-08-22T14:48:06.625Z"
+  "releaseNote": "- **盘点提速**：盘点提交的库存校验与调整改为批量处理（此前每件商品单独查询，全仓盘点需要几分钟，现在大幅缩短）",
+  "publishedAt": "2026-08-22T15:53:54.085Z"
 }

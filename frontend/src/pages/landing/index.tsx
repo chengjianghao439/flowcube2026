@@ -384,7 +384,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-8 lg:px-10">
           <div className="flex items-center gap-2.5">
             <div className="flex size-8 items-center justify-center rounded-lg bg-[#0B3B8C] text-white">
-              <Layers className="size-4.5" />
+              <Layers className="size-[18px]" />
             </div>
             <span className="text-base font-bold tracking-tight text-[#0E1B2E]">{BRAND.name}</span>
             <span className="hidden text-[10px] font-medium uppercase tracking-widest text-slate-400 sm:inline">
@@ -498,7 +498,7 @@ export default function LandingPage() {
             <Reveal>
               <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#1E5AE6]/20 text-[#6EA8FF]">
-                  <ScanLine className="size-4.5" />
+                  <ScanLine className="size-[18px]" />
                 </div>
                 <div className="text-xs text-blue-100/70">
                   <span className="font-medium text-white">PDA 现场作业</span>
