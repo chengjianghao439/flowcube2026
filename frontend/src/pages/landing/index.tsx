@@ -24,9 +24,6 @@ const BRAND = {
   subclaim: '扫码、上架、拣货、出库——每条商品从条码进入系统，变成可追踪的状态、可对账的金额。仓库现场只执行，系统替你决策每一步。',
 }
 
-// 安全线琥珀：全场唯一暖色（仓库防撞柱/安全标线母题），条码、扫描光、关键强调专用
-const AMBER = 'var(--fc-amber)'
-
 // ── 联系方式 ───────────────────────────────────────────────────────────
 const CONTACT = {
   name: '成江皓',
@@ -170,12 +167,7 @@ function Barcode({ label, className = '' }: { label?: string; className?: string
   )
 }
 
-/** 胶囊指示器：琥珀小圆点 + 标签（安全标线语气） */
-function Pill({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs ${className}`}>
-      <span className="pill-dot" />
-      {children}
+
     </span>
   )
 }
@@ -577,9 +569,10 @@ export default function LandingPage() {
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#1E5AE6]/20 text-[#6EA8FF]">
                   <ScanLine className="size-[18px]" />
                 </div>
-                <div className="text-xs text-blue-100/70">
+                <div className="min-w-0 text-xs text-blue-100/70">
                   <span className="font-medium text-white">PDA 现场作业</span>
                   <span className="mt-0.5 block">收货 · 上架 · 拣货 · 分拣 · 复核 · 打包 · 出库 · 盘点</span>
+                  <Barcode className="mt-1.5 text-blue-200/40" />
                 </div>
                 <a href="#/pda" className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/10">
                   PDA 入口
