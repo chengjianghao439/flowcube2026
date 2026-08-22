@@ -32,7 +32,7 @@ const CONTACT = {
 }
 
 // ── Hero 关键数字（数据概览，口径与代码一致：modules 目录实数为 60）────
-const STATS = [
+const STATS: { value: string; suffix?: string; label: string }[] = [
   { value: '60', label: '功能模块' },
   { value: '5', suffix: '+', label: '内置角色' },
   { value: '3', label: '端到端贯通' },
@@ -518,7 +518,7 @@ export default function LandingPage() {
       <section id="features" className="mx-auto max-w-6xl px-6 py-24 sm:px-8 lg:px-10">
         <Reveal className="mx-auto mb-14 max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">从采购下单到客户结算，全在一个系统闭环</h2>
-          <p className="mt-3 text-sm text-slate-500">六大业务模块共用一份数据，进销存与财务一体联动。</p>
+          <p className="mt-3 text-sm text-slate-500">六大业务域覆盖全流程，进销存与财务一体联动。</p>
         </Reveal>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {MODULES.map((m, i) => (
