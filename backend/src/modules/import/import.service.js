@@ -153,7 +153,7 @@ async function importProducts({ fileBuffer }) {
       )
       success += 1
     } catch (error) {
-      errors.push(`第${index + 2}行：${error.message}`)
+      errors.push(`第${index + 2}行：${error instanceof AppError ? error.message : '导入失败（数据格式或约束不符）'}`)
     }
   }
 
@@ -303,7 +303,9 @@ async function importSingleStockRow({
     return { ok: true }
   } catch (error) {
     await connection.rollback()
-    return { ok: false, error: `第${rowIndex + 2}行：${error.message}` }
+    // 错误脱敏（2026-08-22 加固）：不回显 MySQL 原始 message（schema 细节）
+    const safe = error instanceof AppError ? error.message : '导入失败（数据格式或约束不符）'
+    return { ok: false, error: `第${rowIndex + 2}行：${safe}` }
   } finally {
     connection.release()
   }
@@ -424,7 +426,7 @@ async function importCustomers({ fileBuffer }) {
       )
       success += 1
     } catch (error) {
-      errors.push(`第${index + 2}行：${error.message}`)
+      errors.push(`第${index + 2}行：${error instanceof AppError ? error.message : '导入失败（数据格式或约束不符）'}`)
     }
   }
 

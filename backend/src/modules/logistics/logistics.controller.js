@@ -62,7 +62,8 @@ const listSettlements = async (req, res, next) => {
 }
 const generateSettlement = async (req, res, next) => {
   try {
-    return successResponse(res, await freight.generateSettlement(req.body, { createdBy: req.user?.id ?? null }), '已生成承运商应付')
+    // 修正 2026-08-22：JWT payload 是 userId 而非 id，此前 createdBy 恒为 null（审计字段缺失）
+    return successResponse(res, await freight.generateSettlement(req.body, { createdBy: req.user?.userId ?? null }), '已生成承运商应付')
   } catch (e) { next(e) }
 }
 

@@ -118,6 +118,11 @@ if (IS_PROD) {
   if (!env.APP_PUBLIC_URL) {
     throw new Error('生产环境必须显式设置 APP_PUBLIC_URL，避免桌面更新链进入半残运行')
   }
+  // 2026-08-22 加固：反代后必须显式 TRUST_PROXY=1——否则登录限流按代理 IP 计数，
+  // 所有客户端共享一个配额，可被单点爆破打满造成全员登录 DoS（见 auth.routes 限流注释）。
+  if (!env.TRUST_PROXY) {
+    throw new Error('生产环境必须显式设置 TRUST_PROXY=1（位于反代之后，登录限流按真实客户端 IP 计数）')
+  }
 }
 
 module.exports = { env, getWaybillCredential }

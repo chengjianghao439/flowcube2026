@@ -24,6 +24,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { getRequestId } = require('../../utils/requestContext')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('../payments/payment-events.service')
@@ -182,10 +183,20 @@ async function submit(id, operator, scopeWarehouseIds = null) {
  * 执行退款：已确认 → 已完成。事务内做四件事（同生共死）：
  *   锁账款 → 校验 → 冲减已收 → 写退款流水 + 账户出账 → 状态推进。
  */
-async function execute(id, operator, scopeWarehouseIds = null) {
+async function execute(id, operator, scopeWarehouseIds = null, requestKey = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 幂等（2026-08-22 补）：执行退款是多表写事务（冲账+流水+账户出账），连点两次/断网重试会重复退钱
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'refund.execute',
+      userId: operator?.userId ?? null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
     const row = await lockStatusRow(conn, {
       table: 'refund_orders', id,
       columns: 'id, refund_no, sale_order_id, sale_order_no, customer_name, amount, status, payment_record_id, account_id, refund_date',
@@ -269,6 +280,12 @@ async function execute(id, operator, scopeWarehouseIds = null) {
 
     await compareAndSetStatus(conn, { table: 'refund_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '退款单' })
     await conn.query('UPDATE refund_orders SET refunded_at=NOW() WHERE id=?', [id])
+    await completeOperationRequest(conn, requestState, {
+      data: { id: Number(id), refundNo: row.refund_no, amount },
+      message: '退款完成',
+      resourceType: 'refund_order',
+      resourceId: Number(id),
+    })
     await conn.commit()
     return { id: Number(id), refundNo: row.refund_no, amount }
   } catch (e) {

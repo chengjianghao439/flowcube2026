@@ -27,12 +27,16 @@ const requestStatus = async (req, res, next) => {
  * 前端错误上报（P2-12 错误追踪）：GlobalErrorBoundary 捕获 render 错误时调用。
  * 用 logger.error 记录 → 配置了 LOKI_URL 时自动进 Loki（与后端错误同一检索源）。
  * 只记一条 warn 级日志，绝不抛错影响响应。
+ *
+ * 加固（2026-08-22）：url 剥查询串（防 query 里的敏感参数进日志）；stack 截断+脱敏字符。
  */
 const reportError = async (req, res, next) => {
   try {
     const { message, stack, componentStack, url } = req.body || {}
-    logger.error('[frontend-error] ' + String(message || '未知前端错误'),
-      { url, stack: String(stack || '').slice(0, 2000), componentStack: String(componentStack || '').slice(0, 2000) },
+    const safeUrl = String(url || '').split('?')[0].slice(0, 500)
+    const sanitize = s => String(s || '').replace(/[^\x20-\x7E一-龥]/g, '?').slice(0, 2000)
+    logger.error('[frontend-error] ' + String(message || '未知前端错误').slice(0, 500),
+      { url: safeUrl, stack: sanitize(stack), componentStack: sanitize(componentStack) },
       { module: 'frontend' },
     )
     return successResponse(res, null, '已记录')

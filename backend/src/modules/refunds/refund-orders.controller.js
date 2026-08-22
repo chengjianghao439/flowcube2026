@@ -1,6 +1,7 @@
 const svc = require('./refund-orders.service')
 const { successResponse } = require('../../utils/response')
 const { getOperatorFromRequest } = require('../../utils/operator')
+const { extractRequestKey } = require('../../utils/requestKey')
 
 async function list(req, res, next) {
   try {
@@ -40,7 +41,7 @@ async function submit(req, res, next) {
 
 async function execute(req, res, next) {
   try {
-    const result = await svc.execute(+req.params.id, getOperatorFromRequest(req), req.user?.warehouseIds ?? null)
+    const result = await svc.execute(+req.params.id, getOperatorFromRequest(req), req.user?.warehouseIds ?? null, extractRequestKey(req))
     return successResponse(res, result, '退款已完成')
   } catch (e) { next(e) }
 }

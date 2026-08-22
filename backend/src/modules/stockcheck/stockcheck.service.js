@@ -4,6 +4,7 @@ const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS, lockStockDimension, syncStockFromContainers } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
@@ -316,10 +317,20 @@ async function getCurrentBookQty(conn, productId, warehouseId) {
 }
 
 // 提交盘点，批量调整库存
-async function submit(id, operator, scopeWarehouseIds = null) {
+async function submit(id, operator, scopeWarehouseIds = null, requestKey = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 幂等（2026-08-22 补）：盘点提交是多表写事务，连点两次/断网重试会重复入账
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'stockcheck.submit',
+      userId: operator?.userId ?? null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
     const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, entityName: '盘点单' })
     assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
     const rule = assertStatusAction('stockcheck', 'submit', checkRow.status)
@@ -484,6 +495,12 @@ async function submit(id, operator, scopeWarehouseIds = null) {
         [check.warehouseId, pid, id],
       )
     }
+    await completeOperationRequest(conn, requestState, {
+      data: { id: Number(id), checkNo: check.checkNo },
+      message: '盘点已提交',
+      resourceType: 'stockcheck',
+      resourceId: Number(id),
+    })
     await conn.commit()
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
