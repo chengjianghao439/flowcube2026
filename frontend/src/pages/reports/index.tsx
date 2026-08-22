@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getInventoryStatsApi, getPurchaseStatsApi, getSaleStatsApi } from '@/api/reports'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { getInventoryStatsApi, getPurchaseStatsApi, getSaleStatsApi, getPurchasePriceTrendApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/shared/DatePicker'
+import ProductFinderModal from '@/components/shared/ProductFinderModal'
+import { chartTooltip, axisTick, money } from '@/components/dashboard/chartTheme'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
@@ -23,6 +26,38 @@ function rankColumn<T extends { rank: number }>(): TableColumn<T> {
 }
 
 type SummaryTab = 'purchase' | 'sale' | 'inventory'
+
+/** 库存周转明细列：周转率/周转天数由后端按（期初+期末）/2 口径计算 */
+const turnoverColumns: TableColumn<{
+  code: string
+  name: string
+  unit: string
+  inboundQty: number
+  outboundQty: number
+  currentQty: number
+  avgStock: number
+  turnRate: number
+  turnDays: number | null
+  rank: number
+}>[] = [
+  { key: 'rank', title: '排名', width: 70, render: v => <span className="text-muted-foreground">#{v as number}</span> },
+  { key: 'code', title: '编码', width: 120, render: v => <span className="text-muted-foreground">{String(v)}</span> },
+  { key: 'name', title: '名称', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
+  { key: 'unit', title: '单位', width: 70 },
+  { key: 'inboundQty', title: '入库量', width: 95, render: v => <span className="text-green-600">+{String(v)}</span> },
+  { key: 'outboundQty', title: '出库量', width: 95, render: v => <span className="text-red-500">-{String(v)}</span> },
+  { key: 'currentQty', title: '当前库存', width: 100, render: v => <span className="font-semibold">{String(v)}</span> },
+  { key: 'avgStock', title: '平均库存', width: 100, render: v => <span className="text-muted-foreground">{String(v)}</span> },
+  { key: 'turnRate', title: '周转率', width: 90, render: v => <span className="font-medium tabular-nums">{Number(v).toFixed(2)}</span> },
+  {
+    key: 'turnDays',
+    title: '周转天数',
+    width: 100,
+    render: v => v == null
+      ? <span className="text-muted-foreground">—</span>
+      : <span className="font-medium tabular-nums">{Number(v).toFixed(1)}</span>,
+  },
+]
 
 type HubCard = {
   title: string
@@ -72,6 +107,8 @@ export default function ReportsPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [applied, setApplied] = useState({ startDate: todayYmd(), endDate: todayYmd() })
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [priceProduct, setPriceProduct] = useState<{ id: number; name: string } | null>(null)
   const addTab = useWorkspaceStore(s => s.addTab)
   const navigate = useNavigate()
 
@@ -171,6 +208,13 @@ export default function ReportsPage() {
     queryKey: ['report-inv', applied],
     queryFn: () => getInventoryStatsApi(applied),
     enabled: tab === 'inventory',
+  })
+
+  // 采购价格趋势：只在商品已选且位于采购 tab 时请求
+  const priceTrendQ = useQuery({
+    queryKey: ['report-price-trend', priceProduct?.id, applied],
+    queryFn: () => getPurchasePriceTrendApi({ productId: priceProduct!.id, ...applied }),
+    enabled: tab === 'purchase' && priceProduct != null,
   })
 
   const activeQ = tab === 'purchase' ? purchaseQ : tab === 'sale' ? saleQ : invQ
@@ -342,6 +386,45 @@ export default function ReportsPage() {
                     emptyText="暂无数据"
                   />
                 </div>
+                <div className="rounded-lg border border-border bg-card p-5">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-card-title">采购价格趋势</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        按商品查看已收齐采购单的月度均价（当前日期范围），便于观察进价波动
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
+                      {priceProduct ? `切换商品：${priceProduct.name}` : '选择商品'}
+                    </Button>
+                  </div>
+                  {priceTrendQ.isError && !priceTrendQ.data && (
+                    <QueryErrorState error={priceTrendQ.error} onRetry={() => priceTrendQ.refetch()} title="价格趋势加载失败" />
+                  )}
+                  {!priceProduct ? (
+                    <p className="py-8 text-center text-muted-body">先选择商品，查看其采购单价走势</p>
+                  ) : priceTrendQ.isLoading ? (
+                    <p className="py-8 text-center text-muted-foreground">加载中…</p>
+                  ) : priceTrendQ.data && priceTrendQ.data.length > 0 ? (
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={priceTrendQ.data} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="month" tick={axisTick} />
+                          <YAxis tick={axisTick} width={64} tickFormatter={(v) => money(Number(v))} domain={['auto', 'auto']} />
+                          <Tooltip
+                            formatter={(v) => [money(Number(v ?? 0)), '均价']}
+                            contentStyle={chartTooltip}
+                            cursor={{ stroke: 'hsl(var(--border))' }}
+                          />
+                          <Line type="monotone" dataKey="avgPrice" name="均价" stroke="hsl(var(--warning))" strokeWidth={2} dot={{ r: 3 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <p className="py-8 text-center text-muted-body">该区间内没有已收齐的采购记录</p>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -421,26 +504,32 @@ export default function ReportsPage() {
                   )}
                 </div>
                 <div className="rounded-lg border border-border bg-card p-5">
-                  <h3 className="mb-4 text-card-title">商品出入库量 Top 30</h3>
+                  <h3 className="mb-4 text-card-title">商品出入库量 Top 30（周转率 / 周转天数）</h3>
                   <DataTable
-                    columns={[
-                      { key: 'code', title: '编码', width: 120, render: v => <span className="text-muted-foreground">{String(v)}</span> },
-                      { key: 'name', title: '名称', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
-                      { key: 'unit', title: '单位', width: 80 },
-                      { key: 'inboundQty', title: '入库量', width: 100, render: v => <span className="text-green-600">+{String(v)}</span> },
-                      { key: 'outboundQty', title: '出库量', width: 100, render: v => <span className="text-red-500">-{String(v)}</span> },
-                      { key: 'currentQty', title: '当前库存', width: 100, render: v => <span className="font-semibold">{String(v)}</span> },
-                    ]}
+                    columns={turnoverColumns}
                     data={invQ.data.turnover.map((item, index) => ({ ...item, rank: index + 1 }))}
                     rowKey="rank"
                     emptyText="暂无数据"
                   />
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    周转率 = 期内出库量 ÷ 平均库存（(期初+期末)÷2）；周转天数 = 期内天数 ÷ 周转率。
+                    「平均库存」为 0 或仅 1 条流水、以及未选完整日期区间时，周转天数显示 —。
+                  </p>
                 </div>
               </>
             )}
           </div>
         )}
       </section>
+
+      <ProductFinderModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onConfirm={(product) => {
+          setPriceProduct({ id: product.id, name: product.name })
+          setPickerOpen(false)
+        }}
+      />
     </div>
   )
 }

@@ -51,9 +51,51 @@ async function importStock(req, res, next) {
   }
 }
 
+async function downloadCustomerTemplate(req, res, next) {
+  try {
+    const workbook = await importService.buildCustomerTemplate()
+    sendWorkbook(res, workbook)
+  } catch (error) {
+    next(error)
+  }
+}
+
+async function importCustomers(req, res, next) {
+  try {
+    if (!req.file) throw new AppError('请上传文件', 400)
+    const result = await importService.importCustomers({ fileBuffer: req.file.buffer })
+    return successResponse(res, result.data, result.message)
+  } catch (error) {
+    next(error)
+  }
+}
+
+async function downloadPriceListTemplate(req, res, next) {
+  try {
+    const workbook = await importService.buildPriceListTemplate()
+    sendWorkbook(res, workbook)
+  } catch (error) {
+    next(error)
+  }
+}
+
+async function importPriceListItems(req, res, next) {
+  try {
+    if (!req.file) throw new AppError('请上传文件', 400)
+    const result = await importService.importPriceListItems({ fileBuffer: req.file.buffer })
+    return successResponse(res, result.data, result.message)
+  } catch (error) {
+    next(error)
+  }
+}
+
 module.exports = {
   downloadProductTemplate,
   importProducts,
   downloadStockTemplate,
   importStock,
+  downloadCustomerTemplate,
+  importCustomers,
+  downloadPriceListTemplate,
+  importPriceListItems,
 }

@@ -1,4 +1,4 @@
-const { exportXlsx, exportStatementXlsx } = require('../../utils/excelExport')
+const { exportXlsx, exportStatementXlsx, exportMultiSheetXlsx } = require('../../utils/excelExport')
 const exportService = require('./export.service')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { getOperatorFromRequest } = require('../../utils/operator')
@@ -180,6 +180,25 @@ async function exportCompanies(req, res, next) {
   try { await sendExport(res, await exportService.getCompaniesExportPayload()) } catch (e) { next(e) }
 }
 
+/** 利润/库存分析导出：多 sheet（销售毛利/商品毛利/库存金额/滞销库存 + 汇总块） */
+async function exportProfitAnalysis(req, res, next) {
+  try {
+    const payload = await exportService.getProfitAnalysisExportPayload({
+      ...req.query,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    await exportMultiSheetXlsx(res, payload.filename, payload.sheets)
+  } catch (e) { next(e) }
+}
+
+/** 应收/应付账龄导出：多 sheet（分桶 + Top 往来方） */
+async function exportAging(req, res, next) {
+  try {
+    const payload = await exportService.getAgingExportPayload()
+    await exportMultiSheetXlsx(res, payload.filename, payload.sheets)
+  } catch (e) { next(e) }
+}
+
 module.exports = {
   exportPurchase,
   exportSale,
@@ -214,4 +233,6 @@ module.exports = {
   exportAccountingPeriods,
   exportTaxAdjustments,
   exportCompanies,
+  exportProfitAnalysis,
+  exportAging,
 }

@@ -13,7 +13,7 @@ import { SaleRowActions } from './components/SaleRowActions'
 import StockShortageDialog, { type StockShortageItem } from './components/StockShortageDialog'
 import ReserveAllocationDialog from './components/ReserveAllocationDialog'
 import SaleQueryDialog, { type SaleQueryValues } from './SaleQueryDialog'
-import { useSaleList, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
+import { useSaleList, useReleaseSale, useShipSale, useCancelSale, useDeleteSale, useBatchConfirmSale } from '@/hooks/useSale'
 import { getSaleDetailApi } from '@/api/sale'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -21,6 +21,8 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import type { SaleOrder } from '@/types/sale'
 import type { TableColumn } from '@/types'
 
@@ -69,6 +71,11 @@ export default function SalePage() {
   const [queryOpen, setQueryOpen] = useState(false)
   const [confirmState, setConfirmState] = useState<ConfirmState>(EMPTY_CONFIRM)
   const [printOrder,   setPrintOrder]   = useState<SaleOrder | null>(null)
+  // 多选（批量操作）：selectedIds 受控，只允许勾选草稿单（status=1）
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [batchFailures, setBatchFailures] = useState<{ id: number; message: string }[] | null>(null)
+  const { can } = usePermission()
+  const canReserve = can(PERMISSIONS.SALE_ORDER_RESERVE)
 
   const PAGE_SIZE = 20
   const { data, isLoading } = useSaleList({
@@ -92,6 +99,7 @@ export default function SalePage() {
   const ship          = useShipSale()
   const cancel        = useCancelSale()
   const deleteMutate  = useDeleteSale()
+  const batchConfirm  = useBatchConfirmSale()
   const navigate  = useNavigate()
   const { addTab } = useWorkspaceStore()
 
@@ -133,6 +141,33 @@ export default function SalePage() {
     } catch {
       toast.error('获取订单详情失败，无法打印')
     }
+  }
+
+  // 批量确认占库：只勾选草稿单（后端对非草稿单也会逐单拒绝，不会误推进已占库订单）
+  function handleBatchConfirm() {
+    const ids = [...selectedIds]
+    if (!ids.length) { toast.error('请先勾选要确认的销售单'); return }
+    setConfirmState({
+      open: true,
+      title: '批量确认',
+      description: `将对选中的 ${ids.length} 张销售单逐单占用库存（任一单失败不影响其余），确认继续？`,
+      onConfirm: () => {
+        setConfirmState(s => ({ ...s, open: false }))
+        batchConfirm.mutate(ids, {
+          onSuccess: (result) => {
+            setSelectedIds(new Set())
+            const failed = result?.failed ?? []
+            if (failed.length) {
+              setBatchFailures(failed)
+              toast.warning(`批量确认完成：成功 ${result?.succeeded?.length ?? 0} 单，失败 ${failed.length} 单`)
+            } else {
+              toast.success(`批量确认成功，共 ${result?.succeeded?.length ?? ids.length} 单`)
+            }
+          },
+          onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '批量确认失败'),
+        })
+      },
+    })
   }
 
   // 导出参数（与列表当前筛选保持一致）
@@ -288,6 +323,11 @@ export default function SalePage() {
               导出 Excel
             </Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            {canReserve && (
+              <Button variant="outline" onClick={handleBatchConfirm} disabled={batchConfirm.isPending || selectedIds.size === 0}>
+                {batchConfirm.isPending ? '确认中…' : `批量确认${selectedIds.size ? `（${selectedIds.size}）` : ''}`}
+              </Button>
+            )}
             <Button onClick={goToNew}>+ 新建销售单</Button>
           </>
         }
@@ -307,7 +347,7 @@ export default function SalePage() {
         </div>
       )}
 
-      {/* 数据表格 */}
+      {/* 数据表格：多选模式只勾选草稿单，用于批量确认 */}
       <DataTable
         columns={columns}
         data={data?.list ?? []}
@@ -315,6 +355,10 @@ export default function SalePage() {
         onRowDoubleClick={goToDetail}
         fluid
         columnStorageKey="sale:fluid-v1"
+        selectionMode="multiple"
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        selectableCheck={(row) => (row as SaleOrder).status === 1}
       />
 
       {/* 分页 */}
@@ -331,6 +375,23 @@ export default function SalePage() {
         onConfirm={confirmState.onConfirm}
         onCancel={closeConfirm}
       />
+
+      {/* 批量确认失败清单（banner：ConfirmDialog 的 description 只支持 string，Electron 端走原生对话框） */}
+      {batchFailures && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-medium text-destructive">批量确认失败清单（{batchFailures.length} 单）</p>
+            <Button size="sm" variant="ghost" onClick={() => setBatchFailures(null)}>收起</Button>
+          </div>
+          <div className="max-h-48 space-y-1 overflow-y-auto">
+            {batchFailures.map(f => (
+              <div key={f.id} className="text-xs text-muted-foreground">
+                <span className="text-doc-code">#{f.id}</span>：{f.message}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 打印预览全屏遮罩 */}
       {printOrder && (

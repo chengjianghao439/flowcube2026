@@ -16,10 +16,11 @@ function normalizeJobType(jobType, contentType) {
   const j = String(jobType || '').trim().toLowerCase()
   if (j === 'container_label') return 'container_label'
   if (j === 'rack_label') return 'rack_label'
+  if (j === 'location_label') return 'location_label'
   if (j === 'package_label') return 'package_label'
   if (j === 'pda_label' || j === 'label') return 'product_label'
   if (
-    ['waybill', 'product_label', 'inventory_label', 'rack_label', 'container_label', 'package_label'].includes(j)
+    ['waybill', 'product_label', 'inventory_label', 'rack_label', 'container_label', 'package_label', 'location_label'].includes(j)
   ) {
     return j
   }
@@ -33,6 +34,7 @@ function bindingFallbackChain(primary) {
   const map = {
     rack_label: ['rack_label', 'inventory_label'],
     container_label: ['container_label', 'inventory_label'],
+    location_label: ['location_label', 'inventory_label'],
     package_label: ['package_label'],
     waybill: ['waybill'],
     product_label: ['product_label'],

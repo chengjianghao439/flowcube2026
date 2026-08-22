@@ -1,4 +1,5 @@
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+const AppError = require('../../utils/AppError')
 const {
   firstValue,
   mapWorkbenchItem,
@@ -18,6 +19,7 @@ const {
   fetchReconciliationRows,
   fetchProfitAnalysisRows,
   fetchKpiRows,
+  fetchPurchasePriceTrend,
 } = require('./reports.query')
 
 async function purchaseStats(params) {
@@ -40,10 +42,8 @@ async function saleStats(params) {
 
 async function inventoryStats(params) {
   const { turnover, byWarehouse } = await fetchInventoryStatsRows(params)
-  return {
-    turnover: turnover.map(r => ({ code: r.code, name: r.name, unit: r.unit, inboundQty: +r.inbound_qty, outboundQty: +r.outbound_qty, currentQty: +r.current_qty })),
-    byWarehouse: byWarehouse.map(r => ({ warehouseName: r.warehouse_name, totalQty: +r.total_qty, totalValue: +r.total_value })),
-  }
+  // turnover 已在 query 层完成口径计算（avgStock/turnRate/turnDays），这里只透传
+  return { turnover, byWarehouse }
 }
 
 async function pdaPerformance(scopeWarehouseIds = null) {
@@ -475,6 +475,21 @@ async function avgCostReconciliation({ scopeWarehouseIds = null } = {}) {
   return { ok: driftedCount === 0, driftedCount, totalDiffValue, totalRows: list.length, list }
 }
 
+/**
+ * 采购价格趋势：按商品查询已收齐采购单的逐月均价序列。
+ * productId 必填（无商品维度的全库均价没有业务意义）；非法值 400。
+ */
+async function purchasePriceTrend({ productId = null, startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
+  const pid = Number(productId)
+  if (!Number.isInteger(pid) || pid <= 0) throw new AppError('请选择商品', 400)
+  const rows = await fetchPurchasePriceTrend({ productId: pid, startDate, endDate, scopeWarehouseIds })
+  return rows.map(r => ({
+    month: r.month,
+    avgPrice: Math.round(Number(r.avg_price) * 100) / 100,
+    orderCount: Number(r.order_count),
+  }))
+}
+
 module.exports = {
   purchaseStats,
   saleStats,
@@ -486,4 +501,5 @@ module.exports = {
   profitAnalysis,
   kpiMetrics,
   avgCostReconciliation,
+  purchasePriceTrend,
 }

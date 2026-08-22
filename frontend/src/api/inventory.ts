@@ -47,6 +47,64 @@ export const getContainerByBarcodeApi = async (barcode: string) =>
     inboundTaskId?: number | null
   }>(`/inventory/containers/barcode/${encodeURIComponent(barcode)}`)
 
+// ─── PDA 只读库存查询（无副作用）──────────────────────────────────────────
+
+export interface InventoryQueryContainer {
+  containerId: number
+  barcode: string
+  productId: number
+  productCode: string
+  productName: string
+  warehouseId: number
+  warehouseName: string
+  locationId: number | null
+  locationCode: string | null
+  batchNo: string | null
+  mfgDate: string | null
+  expDate: string | null
+  remainingQty: number
+  unit: string | null
+  containerKind: 'inventory' | 'plastic_box'
+  containerStatus: 'waiting_putaway' | 'stored'
+  individual: boolean
+  lockedByTaskId: number | null
+  lockedByTaskNo: string | null
+  isLegacy?: boolean
+  remark?: string | null
+}
+
+export const queryInventoryByBarcodeApi = async (barcode: string) =>
+  apiClient.get<InventoryQueryContainer[]>(`/inventory/query-by-barcode`, {
+    params: { barcode },
+  })
+
+export interface InventoryQueryByProductResult {
+  productId: number
+  productCode: string
+  productName: string
+  unit: string | null
+  containers: Array<{
+    containerId: number
+    barcode: string
+    warehouseId: number
+    warehouseName: string
+    locationCode: string | null
+    batchNo: string | null
+    mfgDate: string | null
+    expDate: string | null
+    remainingQty: number
+    containerKind: 'inventory' | 'plastic_box'
+    individual: boolean
+    lockedByTaskId: number | null
+    lockedByTaskNo: string | null
+  }>
+}
+
+export const queryInventoryByProductApi = async (productId: number, warehouseId?: number | null) =>
+  apiClient.get<InventoryQueryByProductResult>(`/inventory/query-by-product`, {
+    params: { productId, ...(warehouseId ? { warehouseId } : {}) },
+  })
+
 export interface SplitContainerResult {
   sourceContainerId: number
   sourceBarcode: string

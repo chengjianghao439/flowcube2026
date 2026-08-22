@@ -37,6 +37,8 @@ router.get('/',           requirePermission(PERMISSIONS.SALE_ORDER_VIEW), ctrl.l
 router.get('/:id',        requirePermission(PERMISSIONS.SALE_ORDER_VIEW), ctrl.detail)
 router.get('/:id/reserve-preview', requirePermission(PERMISSIONS.SALE_ORDER_RESERVE), ctrl.reservePreview)
 router.post('/',          requirePermission(PERMISSIONS.SALE_ORDER_CREATE), validateBody(createSchema), ctrl.create)
+// 批量确认占库（静态路径，必须注册在 '/:id' 动态路由之前）
+router.post('/batch-confirm', requirePermission(PERMISSIONS.SALE_ORDER_RESERVE), validateBody(z.object({ ids: z.array(z.number().int().positive()).min(1).max(50) })), ctrl.batchConfirm)
 router.put('/:id',        requirePermission(PERMISSIONS.SALE_ORDER_UPDATE), validateBody(createSchema), ctrl.update)
 router.put('/:id/adjust', requirePermission(PERMISSIONS.SALE_ORDER_UPDATE), validateBody(createSchema), ctrl.adjust)
 router.post('/:id/reserve',  requirePermission(PERMISSIONS.SALE_ORDER_RESERVE), validateBody(reserveSchema), ctrl.reserve)

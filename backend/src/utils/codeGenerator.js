@@ -20,7 +20,55 @@
  */
 
 /**
+ * 解析单据/主数据编码前缀（单号规则自定义）。
+ *
+ * 查询 sys_settings 表 `code_prefix_${prefix.toLowerCase()}` 键：
+ *  - 有配置（非空值）→ 用配置值覆盖默认前缀（值本身不追加日期段，仅替换前缀字母段）；
+ *  - 无配置或值为空 → 用原前缀，行为与历史完全一致。
+ *
+ * 设置项由迁移 seed（215_add_doc_code_prefix_settings.sql）预置，用户在「系统设置」
+ * 页直接编辑；sys_settings.value 非空即生效。逐次查询（不缓存）保证改完设置立即可见，
+ * 代价是每次生成编号多一条只读查询——单据创建是低频操作，可接受。
+ *
+ * 说明：仅业务单据编码（generateDailyCode）受前缀覆盖；主数据编码（generateMasterCode）
+ * 不接入（历史设置值带连字符与累计流水格式不匹配，见 generateMasterCode 注释）。
+ * 客户/供应商/商品编号前缀由 011 迁移的 code_prefix_customer/supplier/product 管理，
+ * 但当前格式仍固定为「前缀 + 6 位数字」，与本文档 1 的规则一致。
+ *
+ * 同前缀多单据冲突处理：默认前缀 SC 被盘点单（inventory_checks）与客户对账单
+ * （reconciliation_statements type=2）共用，若共用 `code_prefix_sc` 会互相污染。
+ * 用 PREFIX_KEY_OVERRIDES 按 (table, prefix) 精确路由到独立设置键；其余单据走通用键。
+ *
+ * @param {object} conn   - mysql2 连接或连接池（与调用方同连接，事务内读取）
+ * @param {string} prefix - 默认前缀，如 'SO'、'PO'
+ * @param {string} [table] - 数据表名，用于同前缀冲突时的精确路由
+ * @returns {Promise<string>} - 实际生效的前缀
+ */
+const PREFIX_KEY_OVERRIDES = {
+  'reconciliation_statements:SC': 'code_prefix_scstmt',
+}
+
+async function resolvePrefix(conn, prefix, table = '') {
+  const upper = String(prefix).toUpperCase()
+  const key = PREFIX_KEY_OVERRIDES[`${table}:${upper}`] || `code_prefix_${upper.toLowerCase()}`
+  try {
+    const [rows] = await conn.query('SELECT value FROM sys_settings WHERE key_name = ?', [key])
+    const value = rows?.[0]?.value
+    const resolved = value != null ? String(value).trim() : ''
+    return resolved || prefix
+  } catch (_e) {
+    // 表缺失等异常时回退默认前缀，绝不因设置查询失败阻断单据创建
+    return prefix
+  }
+}
+
+/**
  * 生成主数据编码（累计）。
+ *
+ * 注意：主数据编码（客户/供应商/商品等）刻意不接入 resolvePrefix 前缀覆盖——
+ * 迁移 011 预置的 code_prefix_customer/supplier/product 历史值带连字符（'CUS-'），
+ * 与累计流水格式（无连字符 6 位数字）不匹配，接入会让新老编号格式分叉。
+ * 前缀自定义仅覆盖业务单据编码（generateDailyCode），见 resolvePrefix。
  *
  * @param {object} conn        - mysql2 连接或连接池
  * @param {string} prefix      - 编码前缀，如 'C'、'P'
@@ -51,9 +99,10 @@ async function generateMasterCode(conn, prefix, table, codeField = 'code') {
  * @returns {Promise<string>}  - 如 'SO20260308001'
  */
 async function generateDailyCode(conn, prefix, table, codeField) {
+  const resolvedPrefix = await resolvePrefix(conn, prefix, table)
   const d = new Date()
   const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
-  const todayPrefix = `${prefix}${dateStr}`
+  const todayPrefix = `${resolvedPrefix}${dateStr}`
   const seqKey = `${table}:${codeField}:${dateStr}`
 
   // LAST_INSERT_ID 依赖连接一致性；若传入的是 pool 则需要获取专用连接
@@ -133,4 +182,4 @@ async function generateContainerCode(conn, prefix = 'I') {
   }
 }
 
-module.exports = { generateMasterCode, generateDailyCode, generateContainerCode }
+module.exports = { generateMasterCode, generateDailyCode, generateContainerCode, resolvePrefix }

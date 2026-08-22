@@ -14,7 +14,7 @@ import {
   Inbox, ArrowUpFromLine, ClipboardList, Shuffle,
   ClipboardCheck, Package, Scissors, ScanSearch, Truck, ArrowLeftRight,
   Undo2, PackageX, PencilLine, Smartphone, ShieldAlert, Ban, MoreHorizontal, ChevronDown,
-  type LucideIcon,
+  Search, type LucideIcon,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { usePdaRole } from '@/hooks/usePdaRole'
@@ -69,6 +69,7 @@ const ALL_OPS: OpEntry[] = [
   { icon: PencilLine,      label: '改单确认', path: '/pda/adjustments',   perm: PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW, tone: 'indigo' },
   // ── 更多（自主操作，收进底部折叠区） ──
   { icon: Scissors,        label: '塑料盒拆分', path: '/pda/split',        perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, tone: 'cyan', more: true },
+  { icon: Search,          label: '库存查询',   path: '/pda/inventory-query', perm: PERMISSIONS.INVENTORY_VIEW, tone: 'teal', more: true },
 ]
 
 /** 作业入口 path → todo-counts 计数 key。无可数待办的作业不映射（上架/分拣/拆分等扫码执行入口） */

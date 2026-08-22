@@ -3,19 +3,21 @@
  * 路由：/locations
  */
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { getLocationsApi, createLocationApi, updateLocationApi, deleteLocationApi } from '@/api/locations'
+import { getLocationsApi, createLocationApi, updateLocationApi, deleteLocationApi, printLocationLabelApi } from '@/api/locations'
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import { LOCATION_STATUS_OPTIONS, type Location, type CreateLocationParams } from '@/types/locations'
 import { Button } from '@/components/ui/button'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
+import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 import LocationQueryDialog, { type LocationQueryValues } from './LocationQueryDialog'
 import type { TableColumn } from '@/types'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
@@ -48,6 +50,23 @@ export default function LocationsPage() {
   const { data: whData } = useQuery({
     queryKey: ['warehouses-simple'],
     queryFn: () => getWarehousesActiveApi().then(r => r ?? []),
+  })
+
+  // 库位标签打印（与货架标签同构：入队 + 桌面端本机 RAW 出纸）
+  const printMut = useMutation({
+    mutationFn: (id: number) => printLocationLabelApi(id),
+    onSuccess: (d) => {
+      if (!d) return
+      if (!d.queued) {
+        toast.warning('未绑定打印机或离线')
+        return
+      }
+      triggerPrintPoll()
+      const fb = printQueueFeedback(d.dispatchHint)
+      if (fb.level === 'warning') toast.warning(fb.message)
+      else toast.success(fb.message)
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '打印失败'),
   })
 
   // 打开弹窗时回填表单（新建=默认值，编辑=行数据）
@@ -140,6 +159,23 @@ export default function LocationsPage() {
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </>
         }
+        renderActions={(row, helpers) => (
+          <TableActionsMenu
+            primaryLabel="打印"
+            primaryVariant="outline"
+            primaryDisabled={printMut.isPending && printMut.variables === row.id}
+            onPrimaryClick={() => printMut.mutate(row.id)}
+            items={[
+              { label: '编辑', onClick: () => helpers.openEdit(row) },
+              {
+                label: '删除',
+                destructive: true,
+                separatorBefore: true,
+                onClick: () => helpers.openDelete(row),
+              },
+            ]}
+          />
+        )}
         renderToolbar={
           chips.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">

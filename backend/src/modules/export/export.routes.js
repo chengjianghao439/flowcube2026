@@ -44,5 +44,7 @@ router.get('/customers', requirePermission(PERMISSIONS.CUSTOMER_VIEW), controlle
 router.get('/accounting-periods', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportAccountingPeriods)
 router.get('/tax-adjustments', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportTaxAdjustments)
 router.get('/companies', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportCompanies)
+router.get('/profit-analysis', requirePermission(PERMISSIONS.REPORT_VIEW), controller.exportProfitAnalysis)
+router.get('/aging', requirePermission(PERMISSIONS.PAYMENT_VIEW), controller.exportAging)
 
 module.exports = router

@@ -39,6 +39,7 @@ const PdaAdjustmentPage = lazy(() => import('@/pages/pda/adjustment'))
 const PdaTransferPage    = lazy(() => import('@/pages/pda/transfer'))
 const PdaTransferOutPage = lazy(() => import('@/pages/pda/transfer-out'))
 const PdaTransferInPage  = lazy(() => import('@/pages/pda/transfer-in'))
+const PdaInventoryQueryPage = lazy(() => import('@/pages/pda/inventory-query'))
 
 function PageLoader() {
   return (
@@ -188,6 +189,8 @@ export default function AppRouter() {
               <Route path="transfer" element={<PdaRoutePermission title="调拨执行" required={[PERMISSIONS.TRANSFER_ORDER_VIEW]}><PdaTransferPage /></PdaRoutePermission>} />
               <Route path="transfer-out/:id" element={<PdaRoutePermission title="调出仓扫码出库" required={[PERMISSIONS.TRANSFER_ORDER_VIEW, PERMISSIONS.TRANSFER_ORDER_EXECUTE]}><PdaTransferOutPage /></PdaRoutePermission>} />
               <Route path="transfer-in/:id" element={<PdaRoutePermission title="调入仓扫码入库" required={[PERMISSIONS.TRANSFER_ORDER_VIEW, PERMISSIONS.TRANSFER_ORDER_EXECUTE]}><PdaTransferInPage /></PdaRoutePermission>} />
+              {/* 只读库存查询（无决策入口）：仅需库存查看权限 */}
+              <Route path="inventory-query" element={<PdaRoutePermission title="库存查询" required={[PERMISSIONS.INVENTORY_VIEW]}><PdaInventoryQueryPage /></PdaRoutePermission>} />
               <Route path="sale-return" element={<PdaRoutePermission title="销售退货" required={[PERMISSIONS.RETURN_ORDER_VIEW]}><PdaSaleReturnListPage /></PdaRoutePermission>} />
               <Route path="sale-return/:id/receive" element={<PdaRoutePermission title="退货收货" required={[PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.RETURN_ORDER_EXECUTE]}><PdaSaleReturnReceivePage /></PdaRoutePermission>} />
               <Route path="sale-return/:id/putaway" element={<PdaRoutePermission title="退货上架" required={[PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.RETURN_ORDER_EXECUTE]}><PdaSaleReturnPutawayPage /></PdaRoutePermission>} />

@@ -10,6 +10,7 @@ router.get('/code/:code', requirePermission(PERMISSIONS.LOCATION_VIEW), ctrl.fin
 router.get('/by-warehouse/:warehouseId', requirePermission(PERMISSIONS.LOCATION_VIEW), ctrl.listByWarehouse)  // 入库任务上架等：按仓库拉库位列表
 router.get('/',      requirePermission(PERMISSIONS.LOCATION_VIEW), ctrl.list)
 router.get('/:id',   requirePermission(PERMISSIONS.LOCATION_VIEW), ctrl.detail)
+router.post('/:id/print-label', requirePermission(PERMISSIONS.LOCATION_VIEW), ctrl.printLabel)  // 库位标签打印（只读业务，无需写权限）
 router.post('/',     requirePermission(PERMISSIONS.LOCATION_CREATE), ctrl.create)
 router.put('/:id',   requirePermission(PERMISSIONS.LOCATION_UPDATE), ctrl.update)
 router.delete('/:id', requirePermission(PERMISSIONS.LOCATION_DELETE), ctrl.remove)

@@ -16,5 +16,6 @@ router.get('/reconciliation',  requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.
 router.get('/profit-analysis', requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.profitAnalysis)
 router.get('/avg-cost-reconciliation', requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.avgCostReconciliation)
 router.get('/kpi',             requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.kpi)
+router.get('/purchase-price-trend', requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.purchasePriceTrend)
 
 module.exports = router

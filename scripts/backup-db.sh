@@ -93,6 +93,8 @@ TABLE_COUNT=$(zcat "$PART" 2>/dev/null | grep -c '^CREATE TABLE' || true)
   && fail "备份内容不含 CREATE TABLE 语句，疑似导出了空库"
 
 mv -f "$PART" "$FILE" || fail "无法写入最终备份文件 $FILE"
+# 备份含完整业务数据（客户/供应商/账务），收紧权限只允许 root 读
+chmod 600 "$FILE" || true
 
 # 清理过期备份
 find "$BACKUP_DIR" -name 'flowcube_*.sql.gz' -mtime "+${KEEP_DAYS}" -delete 2>/dev/null || true

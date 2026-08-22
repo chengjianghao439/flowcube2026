@@ -19,6 +19,20 @@ fi
 echo "==> 获得部署锁，开始部署（PID $$）"
 trap 'echo "==> 部署结束，释放锁"; flock -u 9' EXIT
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="${PROJECT_DIR:-$ROOT}"
+
+# 部署失败统一出口（2026-08-22 新增）：钉钉告警 + 失败处理，所有 fail 点共用
+fail_deploy() {
+  local reason="$1"
+  echo "!! 部署失败：$reason" >&2
+  # shellcheck source=lib/ops-common.sh
+  . "$SCRIPT_DIR/lib/ops-common.sh"
+  dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" \
+    "🔴 FlowCube 部署失败（$(ts)）：${reason}\n请查看部署日志并人工介入。"
+  exit 1
+}
+
 wait_for_health() {
   local attempts=30
   local delay=2
@@ -82,28 +96,36 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   echo "==> Docker：重建并启动 backend / frontend..."
   # 迁移回滚兜底（2026-08-21 审计修复）：记录当前运行镜像 tag，migrate 失败时
   # 回滚到旧镜像，避免「新代码跑在旧 schema 上」的半死状态。
+  # 2026-08-22 扩展：backend 与 frontend **两个镜像都打** rollback tag——
+  # 前端容器镜像也可能随本次重建变坏（如构建产物缺陷），失败时一起回滚，不做部分回滚。
   ROLLBACK_TAG="flowcube-backend:rollback-$(date +%s)"
+  FRONTEND_ROLLBACK_TAG="flowcube-frontend:rollback-$(date +%s)"
   docker tag flowcube-backend:latest "$ROLLBACK_TAG" 2>/dev/null || true
+  docker tag flowcube-frontend:latest "$FRONTEND_ROLLBACK_TAG" 2>/dev/null || true
   docker compose up -d --build backend frontend
   # 数据库迁移是显式步骤（后端不在启动时自动迁移）。
   # 必须在容器重建后、用新镜像里的迁移文件执行，否则新代码会跑在旧表结构上。
   # 失败即中断部署（set -e）——宁可部署失败并告警，也不要静默上线一个坏 schema。
   echo "==> 执行数据库迁移（应用本次发布新增的迁移文件）..."
   if ! docker compose exec -T backend npm run migrate; then
-    echo "!! 迁移失败，回滚 backend 到旧镜像 $ROLLBACK_TAG ..." >&2
+    echo "!! 迁移失败，回滚 backend 与 frontend 到旧镜像 ..." >&2
     docker compose up -d --no-build --force-recreate backend --quiet-pull 2>/dev/null || true
     # force-recreate 用当前 compose 配置的镜像（latest）重建——先回退 tag 再重建
     docker tag "$ROLLBACK_TAG" flowcube-backend:latest 2>/dev/null || true
     docker compose up -d --no-build --force-recreate backend || true
+    docker tag "$FRONTEND_ROLLBACK_TAG" flowcube-frontend:latest 2>/dev/null || true
+    docker compose up -d --no-build --force-recreate frontend || true
     echo "!! 回滚完成，请检查服务状态与告警" >&2
-    exit 1
+    fail_deploy "数据库迁移失败，已回滚 backend/frontend 到部署前镜像"
   fi
   wait_for_health
   if [ "$SKIP_RELEASE_GATE" = "1" ]; then
     echo "==> 已跳过发布门禁（SKIP_RELEASE_GATE=1）"
   else
     echo "==> 运行发布门禁..."
-    bash scripts/release-gate.sh
+    if ! bash scripts/release-gate.sh; then
+      fail_deploy "发布门禁未通过（页面烟雾/权限拦截检查失败）"
+    fi
   fi
   # 运维 cron 同步（2026-08-21 审计 F 修复）：install-cron.sh 的改动不会自动生效，
   # 此前需手动跑。部署后幂等核对一次（新增任务会装上，已有任务跳过）。

@@ -128,6 +128,31 @@ async function containerByBarcode(req, res, next) {
   } catch (e) { next(e) }
 }
 
+async function queryByBarcode(req, res, next) {
+  try {
+    const barcode = String(req.query.barcode || '').trim()
+    if (!barcode) return res.status(400).json({ success: false, message: '缺少条码参数', data: null })
+    const result = await svc.queryByBarcode(barcode, {
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    return successResponse(res, result, '查询成功')
+  } catch (e) { next(e) }
+}
+
+async function queryByProduct(req, res, next) {
+  try {
+    const productId = req.query.productId ? +req.query.productId : null
+    if (!productId) return res.status(400).json({ success: false, message: '缺少 productId 参数', data: null })
+    const warehouseId = req.query.warehouseId ? +req.query.warehouseId : null
+    const result = await svc.queryByProduct({
+      productId,
+      warehouseId,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    return successResponse(res, result, '查询成功')
+  } catch (e) { next(e) }
+}
+
 async function assignContainerLocation(req, res, next) {
   try {
     const containerId = +req.params.containerId
@@ -241,6 +266,8 @@ module.exports = {
   containers,
   containerLogs,
   containerByBarcode,
+  queryByBarcode,
+  queryByProduct,
   assignContainerLocation,
   splitContainer,
 }

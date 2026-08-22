@@ -32,3 +32,13 @@ export function useSaveRolePermissions() {
     onSuccess: () => qc.invalidateQueries({ queryKey: [ROLE_PERMS_QUERY_KEY] }),
   })
 }
+
+/** 复制角色（含权限）。成功后清角色列表缓存，权限页角色栏立即出现新角色 */
+export function useDuplicateRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ roleId, code, name, remark }: { roleId: number; code: string; name: string; remark?: string }) =>
+      client.post(`/roles/${roleId}/duplicate`, { code, name, remark }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [ROLES_QUERY_KEY] }),
+  })
+}

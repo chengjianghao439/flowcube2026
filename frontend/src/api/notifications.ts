@@ -6,7 +6,7 @@ export interface NotificationItem {
   icon: string
   text: string
   path: string
-  category?: 'finance' | 'inventory' | 'operations' | 'system'
+  category?: 'finance' | 'inventory' | 'operations' | 'system' | 'approval'
   priority?: number
   dedupeKey?: string
 }

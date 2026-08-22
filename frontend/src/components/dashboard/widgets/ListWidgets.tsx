@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import {
-  AlertTriangle, Truck, ScanLine, HandCoins, Wallet, ListTodo, Users, Building2, TriangleAlert, ChevronRight,
+  AlertTriangle, Truck, ScanLine, HandCoins, Wallet, ListTodo, Users, Building2, TriangleAlert, ChevronRight, ClipboardCheck,
 } from 'lucide-react'
 import { WidgetShell } from '../WidgetShell'
 import { money, EMPTY_HINT } from '../chartTheme'
@@ -11,7 +11,9 @@ import type { AgingParty } from '@/api/payments'
 import {
   useLowStock, useIncomingPurchases, usePdaPerformance, useAging,
   useRoleWorkbench, useSaleStats, usePurchaseStats, usePdaAnomaly,
+  usePendingApprovalsBrief,
 } from '@/hooks/useDashboard'
+import type { PendingApproval } from '@/types/approval'
 
 // 固定卡高下，滚动交给 WidgetShell 的 scrollBody；列表本身只管排布
 const scroll = 'space-y-1'
@@ -228,9 +230,69 @@ export function ListTopSupplier() {
   )
 }
 
+// —— 待我审批（approval.task.view）——
+const BIZ_LABEL: Record<string, string> = {
+  purchase_requisition: '采购请购单',
+  expense_claim: '费用报销',
+  purchase_order: '采购单',
+  inventory_disposal: '呆滞处置单',
+  sale_credit_override: '超额放行',
+  product_price: '商品改价',
+}
+
+function approvalDetailPath(item: PendingApproval): string {
+  switch (item.bizType) {
+    case 'purchase_requisition': return `/purchase-requisitions/${item.bizId}`
+    case 'expense_claim': return `/finance/expenses`
+    case 'inventory_disposal': return `/disposals/${item.bizId}`
+    case 'sale_credit_override': return `/credit-overrides/${item.bizId}`
+    case 'purchase_order': return `/purchase/${item.bizId}`
+    case 'product_price': return `/products`
+    default: return `/approvals/pending`
+  }
+}
+
+export function ListPendingApprovals() {
+  const { data } = usePendingApprovalsBrief()
+  const navigate = useNavigate()
+  const addTab = useWorkspaceStore(s => s.addTab)
+  const list = data?.list ?? []
+  const total = data?.pagination.total ?? 0
+  function go(path: string, title: string) { addTab({ key: path, title, path }); navigate(path) }
+  return (
+    <WidgetShell title="待我审批" icon={ClipboardCheck} tone="warning" scrollBody
+      action={total > 0 ? <SoftStatusLabel label={`${total} 件待办`} tone="warning" /> : undefined}>
+      {list.length === 0 ? <p className={EMPTY_HINT}>暂无待你审批的单据</p> : (
+        <div className="space-y-1">
+          {list.slice(0, 5).map(item => (
+            <button
+              key={item.instanceId}
+              type="button"
+              onClick={() => go(approvalDetailPath(item), `待审批 · ${BIZ_LABEL[item.bizType] ?? item.bizType}`)}
+              className="flex w-full items-center gap-3 rounded-lg border border-border px-3 py-2 text-left transition-colors hover:bg-muted/40"
+            >
+              <SoftStatusLabel label={BIZ_LABEL[item.bizType] ?? '审批'} tone="info" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{item.no || `#${item.bizId}`}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {item.title || '—'} · {item.applicantName} · ¥{item.amount.toFixed(2)}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-xs text-muted-foreground">第 {item.currentStep} 级</p>
+                <p className="text-xs text-muted-foreground">{formatDisplayDate(item.createdAt)}</p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            </button>
+          ))}
+        </div>
+      )}
+    </WidgetShell>
+  )
+}
+
 // —— 异常扫码分析（scan.log.view）——
-export function ListAnomaly() {
-  const { data } = usePdaAnomaly()
+export function ListAnomaly() {  const { data } = usePdaAnomaly()
   const reasons = data?.byReason ?? []
   return (
     <WidgetShell title="异常扫码分析（近 30 天）" icon={TriangleAlert} tone="danger" scrollBody>

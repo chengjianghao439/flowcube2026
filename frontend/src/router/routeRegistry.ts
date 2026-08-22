@@ -146,6 +146,8 @@ const PrintTemplatesPage = lazy(() => import('@/pages/settings/print-templates')
 const PrintTemplateEditorPage = lazy(() => import('@/pages/settings/print-templates/editor'))
 const PrintersPage = lazy(() => import('@/pages/settings/printers'))
 const PdaDevicesPage = lazy(() => import('@/pages/settings/pda-devices'))
+const PortalStatementsPage = lazy(() => import('@/pages/portal/statements'))
+const PortalPurchaseStatusPage = lazy(() => import('@/pages/portal/purchase-status'))
 
 /** 数组顺序与顶栏结构保持一致，便于对照；实际排序由 nav.order 与 NAV_GROUP_ORDER 决定 */
 export const routeRegistry: RouteRegistryEntry[] = [
@@ -264,6 +266,24 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '销售', section: '基础资料', order: 30 },
+  },
+  {
+    path: '/portal/statements',
+    title: '客户对账门户',
+    permission: PERMISSIONS.PAYMENT_VIEW,
+    component: PortalStatementsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '销售', section: '门户', order: 50 },
+  },
+  {
+    path: '/portal/purchase-status',
+    title: '供应商到货门户',
+    permission: PERMISSIONS.PURCHASE_ORDER_VIEW,
+    component: PortalPurchaseStatusPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '采购', section: '门户', order: 50 },
   },
   {
     path: '/carriers',

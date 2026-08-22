@@ -11,6 +11,8 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getProfitAnalysisApi, type ProfitSaleOrderRow, type ProfitProductRow, type ProfitStockValueRow, type ProfitSlowMovingRow } from '@/api/reports'
+import { downloadExport } from '@/lib/exportDownload'
+import { toast } from '@/lib/toast'
 import type { TableColumn } from '@/types'
 
 type ProfitTab = 'sale' | 'product' | 'stock' | 'slow'
@@ -120,6 +122,13 @@ export default function ProfitAnalysisPage() {
         description="先看销售毛利、商品毛利、库存金额与滞销库存，每一项都可以直接打开对应的原始单据或基础管理页。"
         actions={(
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline"
+              onClick={() => downloadExport('/export/profit-analysis', {
+                ...(applied.startDate ? { startDate: applied.startDate } : {}),
+                ...(applied.endDate ? { endDate: applied.endDate } : {}),
+              }).catch(e => toast.error((e as Error).message))}>
+              导出 Excel
+            </Button>
             <Button variant="outline" onClick={() => openPath('/sale', '销售管理')}>查看销售管理</Button>
             <Button variant="outline" onClick={() => openPath('/inventory/overview', '库存总览')}>查看库存总览</Button>
             <Button onClick={() => refetch()}>立即刷新</Button>

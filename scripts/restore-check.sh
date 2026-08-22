@@ -13,7 +13,11 @@
 #   RESTORE_IMAGE   临时 MySQL 镜像（默认 mysql:8.0）
 #   RESTORE_DB      校验用库名（默认 flowcube_restore_check，用完即删）
 #   BACKUP_DIR      备份目录（默认 /opt/flowcube/backups）
-#   MIN_TABLES      最小表数阈值（默认 80，低于视为恢复异常）
+#   MIN_TABLES      最小表数阈值（默认从迁移文件数推导：backend/src/database/*.sql
+#                   中的 CREATE TABLE 净数 - 2 容差；可显式覆盖）
+#   MIN_ROWS        关键表最小行数（默认 1：0 行即判恢复异常）
+#   FRESH_HOURS     sale_orders 最新数据允许的最大「小时龄」（默认 48 = 2 天，
+#                   超出说明备份里没有近期业务数据，即便表非空也判为异常）
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -25,7 +29,26 @@ PROJECT_DIR="${PROJECT_DIR:-/opt/flowcube}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/flowcube/backups}"
 RESTORE_IMAGE="${RESTORE_IMAGE:-mysql:8.0}"
 RESTORE_DB="${RESTORE_DB:-flowcube_restore_check}"
+MIN_TABLES="${MIN_TABLES:-}"
+
+# 推导表数阈值：取仓库迁移文件里「CREATE TABLE 净数」- 2 容差（脚本在服务器
+# /opt/flowcube 下运行，仓库相对路径为 ../backend/src/database）。
+# 直接用 .sql 文件数会虚高（含少量纯删除/索引迁移），且生产实测表数约 131，
+# 文件数与其脱节，必须按迁移声明的建表数推导。
+MIGRATION_DIR="$SCRIPT_DIR/../backend/src/database"
+MIGRATION_DIR="$(cd "$MIGRATION_DIR" 2>/dev/null && pwd || true)"
+DERIVED_MIN_TABLES=0
+if [ -n "$MIGRATION_DIR" ] && ls "$MIGRATION_DIR"/*.sql >/dev/null 2>&1; then
+  DERIVED_MIN_TABLES=$(
+    created=$(grep -h '^CREATE TABLE' "$MIGRATION_DIR"/*.sql | wc -l | tr -d ' ')
+    dropped=$(grep -h '^DROP TABLE' "$MIGRATION_DIR"/*.sql | wc -l | tr -d ' ')
+    echo $(( created - dropped - 2 ))
+  )
+fi
+MIN_TABLES="${MIN_TABLES:-$DERIVED_MIN_TABLES}"
 MIN_TABLES="${MIN_TABLES:-80}"
+MIN_ROWS="${MIN_ROWS:-1}"
+FRESH_HOURS="${FRESH_HOURS:-48}"
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
@@ -93,20 +116,31 @@ if [ "${TABLES:-0}" -lt "$MIN_TABLES" ]; then
   fail "恢复后表数不足（${TABLES} < ${MIN_TABLES}），备份疑似不完整"
 fi
 
-# 校验关键表行数（存在即有数据；阈值可放宽为 0，防止历史库本就少数据误报）
-echo "[$(ts)] [INFO] 关键表行数抽查："
+# 校验关键表行数（2026-08-22 变硬）：不再「存在即通过」——任一关键表 0 行即 FAIL。
+# 关键表是业务主链路的核心表，任何一张是空表都说明备份不完整或导入有问题。
+echo "[$(ts)] [INFO] 关键表行数抽查（阈值 ≥${MIN_ROWS} 行）："
 for t in sys_users product_items sale_orders purchase_orders inventory_containers; do
-  EXISTS=$(docker exec "$CONTAINER" \
+  ROWS=$(docker exec "$CONTAINER" \
     mysql -uroot -prestore_check_pw -N -e \
-    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$RESTORE_DB' AND table_name='$t'" 2>/dev/null | tr -d ' ')
-  if [ "$EXISTS" = "1" ]; then
-    ROWS=$(docker exec "$CONTAINER" \
-      mysql -uroot -prestore_check_pw -N -e \
-      "SELECT COUNT(*) FROM \`$RESTORE_DB\`.\`$t\`" 2>/dev/null | tr -d ' ')
-    echo "    $t: ${ROWS} 行"
-  else
-    echo "    $t: 表不存在（历史备份可能无此表，忽略）"
+    "SELECT COUNT(*) FROM \`$RESTORE_DB\`.\`$t\`" 2>/dev/null | tr -d ' ')
+  ROWS=${ROWS:-0}
+  echo "    $t: ${ROWS} 行"
+  if [ "${ROWS:-0}" -lt "$MIN_ROWS" ]; then
+    fail "关键表 $t 行数为 0（阈值 ${MIN_ROWS}），备份疑似不完整"
   fi
 done
+
+# 数据新鲜度检查：sale_orders 最新 created_at 距今 > FRESH_HOURS 小时即 FAIL。
+# 备份可能表非空但数据陈旧（如误删后马上备份、或备份流程静默停摆多日）。
+LATEST_SO=$(docker exec "$CONTAINER" \
+  mysql -uroot -prestore_check_pw -N -e \
+  "SELECT TIMESTAMPDIFF(HOUR, MAX(created_at), NOW()) FROM \`$RESTORE_DB\`.\`sale_orders\`" 2>/dev/null | tr -d ' ')
+LATEST_SO=${LATEST_SO:-}
+if [ -n "$LATEST_SO" ]; then
+  echo "[$(ts)] [INFO] sale_orders 最新数据距今 ${LATEST_SO} 小时（阈值 ${FRESH_HOURS}h）"
+  if [ "$LATEST_SO" -gt "$FRESH_HOURS" ]; then
+    fail "sale_orders 最新数据距今 ${LATEST_SO} 小时（阈值 ${FRESH_HOURS}h），备份数据过于陈旧"
+  fi
+fi
 
 echo "[$(ts)] [OK] 备份恢复演练通过：$(basename "$FILE") 可完整导入（${TABLES} 张表）"
