@@ -339,8 +339,8 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units }) {
-  await findById(id)
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units }, operator = null) {
+  const current = await findById(id)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const normalizedUnits = validateUnits(unit, units)
   const rates = await loadPriceRates(pool)
@@ -360,6 +360,29 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
     )
     await replaceProductUnits(conn, id, normalizedUnits)
     await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint })
+    // 价格变更历史（2026-08-22 功能：价格体系落地）——凡有价格列变化的写历史，可追溯
+    const priceFields = [
+      ['sale', current.salePrice, sp],
+      ['a', current.salePriceA, spA],
+      ['b', current.salePriceB, spB],
+      ['c', current.salePriceC, spC],
+      ['d', current.salePriceD, spD],
+      ['cost', current.costPrice, normalizedCost],
+    ]
+    for (const [type, oldP, newP] of priceFields) {
+      const oldV = oldP != null ? Number(oldP) : null
+      const newV = newP != null ? Number(newP) : null
+      if (oldV !== newV) {
+        await conn.query(
+          `INSERT INTO product_price_history
+             (product_id, product_code, product_name, price_type, old_price, new_price,
+              change_source, operator_id, operator_name)
+           VALUES (?,?,?,?,?,?, 'manual', ?, ?)`,
+          [id, current.code, current.name, type, oldV, newV,
+           operator?.userId || null, operator?.realName || operator?.username || null],
+        )
+      }
+    }
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }

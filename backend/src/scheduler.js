@@ -60,6 +60,16 @@ function startScheduler() {
     await pool.query('DELETE FROM inventory_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)', [days])
   }, num('INVENTORY_LOG_CLEAN_INTERVAL_MS', 6 * 60 * 60 * 1000))
 
+  // 事件时间线表 + 物流轨迹（2026-08-22 扫描）：此前无任何 TTL，随业务量无界增长。
+  // 事件表按 180 天清理（与流水一致）；EVENT_LOG_TTL_DAYS 可调。
+  startWorker('event-log-cleanup', async () => {
+    const days = num('EVENT_LOG_TTL_DAYS', 180)
+    const tables = ['warehouse_task_events', 'sale_order_events', 'inbound_task_events', 'logistics_tracking_events']
+    for (const t of tables) {
+      await pool.query(`DELETE FROM \`${t}\` WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`, [days])
+    }
+  }, num('EVENT_LOG_CLEAN_INTERVAL_MS', 6 * 60 * 60 * 1000))
+
   // 电子面单（文档 06）：取号 worker + 轨迹 worker，均在事务外做 HTTP。
   // 可用 LOGISTICS_WORKER_ENABLED=0 关闭（如无快递平台对接的部署）。
   if (bool('LOGISTICS_WORKER_ENABLED', true)) {
@@ -83,6 +93,37 @@ function startScheduler() {
     logger.info(`[scheduler] 循环盘自动排程完成：${r.warehouses} 仓，生成 ${r.created.length} 张抽盘单${r.skipped.length ? `，跳过 ${r.skipped.length} 项` : ''}`, { created: r.created }, 'Scheduler')
   }, num('STOCKCHECK_CYCLE_INTERVAL_MS', 60 * 60 * 1000))
   logger.info('[scheduler] 循环盘自动排程 worker 已启动（每日一次，可 STOCKCHECK_CYCLE_INTERVAL_MS 调检查频率）', {}, 'Scheduler')
+
+  // 库存/账款预警钉钉推送（2026-08-22 功能）：复用 buildNotifications 口径，
+  // 命中高危事件（逾期应收应付/低于补货点/临期批次/呆滞）时推钉钉，管理层无需进系统。
+  // 去重：按「类别+日期」记录，同类别当天只推一次（避免每轮扫描都刷屏）。
+  // 配置 DINGTALK_ALERT_WEBHOOK 启用，未配置静默跳过。
+  const { sendDingtalkAlert } = require('./utils/dingtalkAlert')
+  let lastAlertDate = ''
+  let alertedCodes = new Set()
+  startWorker('dingtalk-alert', async () => {
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    if (lastAlertDate !== today) {
+      lastAlertDate = today
+      alertedCodes = new Set()
+    }
+    const { buildNotifications } = require('./modules/notifications/notifications.service')
+    const result = await buildNotifications(null)
+    const DANGER_CODES = new Set(['OVERDUE_PAYABLE', 'OVERDUE_RECEIVABLE', 'LOW_STOCK', 'EXPIRING_STOCK', 'STALE_STOCK'])
+    const targets = (result.items || []).filter(i => DANGER_CODES.has(i.code) && !alertedCodes.has(i.code))
+    if (!targets.length) return
+    const lines = targets.map(t => `- **${t.text}**（[查看](${t.path})）`)
+    const ok = await sendDingtalkAlert(
+      `⚠️ 极序 Flow 经营预警 ${today}`,
+      `### 经营预警\n\n${lines.join('\n')}\n\n> 由系统自动推送，请及时处理。`,
+    )
+    if (ok) {
+      for (const t of targets) alertedCodes.add(t.code)
+      logger.info(`[scheduler] 钉钉预警已推送：${targets.map(t => t.code).join(',')}`, {}, 'Scheduler')
+    }
+  }, num('DINGTALK_ALERT_INTERVAL_MS', 30 * 60 * 1000))
+  logger.info('[scheduler] 钉钉预警 worker 已启动（30 分钟扫描，DINGTALK_ALERT_WEBHOOK 未配置则静默）', {}, 'Scheduler')
 }
 
 module.exports = { startScheduler }

@@ -135,6 +135,12 @@ jobs:
       - name: 单元测试 — 个税累计预扣法（纯函数，无需 DB）
         run: npm run test:hr-tax
 
+      - name: 单元测试 — 操作日志脱敏（纯函数，无需 DB）
+        run: npm run test:oplog
+
+      - name: 单元测试 — 状态机动作表完整性（纯静态，防常量漂移）
+        run: node tests/status-rules-integrity.test.js
+
       - name: 迁移文件编号校验（历史重复/缺号 warn；新增撞号编号会失败，审计 4.10）
         run: npm --prefix backend run migrate -- --check-gaps
 
@@ -202,6 +208,18 @@ jobs:
 
       - name: 冒烟测试 — 会计凭证引擎（借贷平衡 / 资金勾稽 / 幂等）
         run: npm run smoke:accounting
+
+      - name: 冒烟测试 — 会计期间结转/月结（期间锁定+结转链，2026-08-22 补入 CI）
+        run: npm run smoke:accounting-period
+
+      - name: 冒烟测试 — 打印任务过期/回收清理（队列防卡死）
+        run: npm run test:print-purge
+
+      - name: 冒烟测试 — 全局搜索仓库过滤（审计 A.4 守护，2026-08-22 新增）
+        run: node tests/search-scope.smoke.test.js
+
+      - name: 冒烟测试 — 用户改密/禁用 token 失效（安全语义守护，2026-08-22 新增）
+        run: node tests/users-roles.smoke.test.js
 
       - name: 冒烟测试 — 报表数值正确性（与底层表核对，审计 4.6）
         run: npm run smoke:reports-values
