@@ -211,9 +211,13 @@ jobs:
           REMOTE="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
           PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
           APP_PATH="${{ steps.deploy_config.outputs.server_app_path }}"
-          scp -P "$PORT" "$APK_PATH" "$REMOTE:/tmp/flowcube-pda-app-release.apk"
-          scp -P "$PORT" "$VERSION_JSON" "$REMOTE:/tmp/flowcube-pda-version.json"
-          ssh -p "$PORT" "$REMOTE" <<EOF
+          # SSH 保活（2026-08-22 修复）：server-update.sh 含 docker 镜像重建耗时数分钟，
+          # 无 keepalive 的长连接会被中间设备断开（反复 Broken pipe 255）。每 30s 保活，
+          # 容忍 3 分钟无响应。
+          SSHO="-o ServerAliveInterval=30 -o ServerAliveCountMax=6"
+          scp $SSHO -P "$PORT" "$APK_PATH" "$REMOTE:/tmp/flowcube-pda-app-release.apk"
+          scp $SSHO -P "$PORT" "$VERSION_JSON" "$REMOTE:/tmp/flowcube-pda-version.json"
+          ssh $SSHO -p "$PORT" "$REMOTE" <<EOF
           set -euo pipefail
           cd "$APP_PATH"
           git fetch origin main
