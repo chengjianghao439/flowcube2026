@@ -558,3 +558,6 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **商品改价审批闭环**：迁移 216 `price_change_requests` 表；新模块 `price-change`（create/submit/approve/reject/cancel），submit 走 approvalEngine（bizType=`product_price`），审批通过自动更新商品价格并写 `product_price_history`（change_source='approval'）；documentStatusRules 新增 `priceChangeRequest` 状态机（1待审批 2已通过 3已驳回 4已取消，submit 不流转）；前端页面「商品改价申请」（库存→商品资料）；审批内控（申请人不得自批等）由引擎兜底。
     - **安全加固（第 5 轮）**：settings.updateMany key 白名单；role.assign 提权链（permissions 更新与角色复制）路由层仅超管；oplogs/clear 仅超管；import 错误脱敏（不回显 MySQL schema 细节）；error-report url 剥查询串+控制字符清洗；logistics.createdBy 修正（req.user.id→userId）；env 生产必设 TRUST_PROXY；stockcheck.submit 与 refund.execute 接事务内幂等（断网重试不再重复入账）。
     - **验证**：lint 0 error、integration 96、mainline 49、warehouse-scope 41、refund 14、disposal 27、p0 41、status-rules 338、改价审批端到端（申请→审批→价格 100→88 生效+历史留痕）全绿。
+26. **2026-08-22 第 6 轮 P2 加固（提交 986eb07）**：
+    - PDA 设备会话 TTL 清理（scheduler 每日，过期/吊销且 30 天前）；裸 throw 统一 AppError(500,'INTERNAL_CONFIG')（statusTransition/warehouseTaskStatus/documentStatusRules）；loadRolePermissions 缺表显式告警；deprecated /downloads 日志降噪（console.warn→logger.warn）；operation_logs 清理改分批（每批 2000 行）；scheduler worker 注入 `scheduler:<name>` requestId 上下文。
+    - 验证：lint 0 error、mainline 49、pda-device-session 28、status-rules 338 全绿。
