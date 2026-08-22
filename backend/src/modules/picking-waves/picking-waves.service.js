@@ -124,18 +124,29 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, w
     `SELECT COUNT(*) AS total FROM picking_waves w WHERE ${where}`, params,
   )
 
-  const list = []
-  for (const r of rows) {
-    const wave = fmt(r)
-    const [items] = await pool.query(
-      'SELECT COUNT(*) AS cnt, SUM(total_qty) AS totalQty, SUM(picked_qty) AS pickedQty FROM picking_wave_items WHERE wave_id = ?',
-      [r.id],
+  // 批量聚合（2026-08-22 性能）：此前逐行查 picking_wave_items 聚合（列表页 1+N），
+  // 改为一次 IN 查询取回本页全部波次的 itemCount/totalQty/pickedQty。
+  const waveIds = rows.map(r => r.id)
+  const aggMap = new Map()
+  if (waveIds.length) {
+    const [aggRows] = await pool.query(
+      `SELECT wave_id, COUNT(*) AS cnt, SUM(total_qty) AS totalQty, SUM(picked_qty) AS pickedQty
+       FROM picking_wave_items WHERE wave_id IN (?) GROUP BY wave_id`,
+      [waveIds],
     )
-    wave.itemCount = Number(items[0].cnt)
-    wave.totalQty  = Number(items[0].totalQty || 0)
-    wave.pickedQty = Number(items[0].pickedQty || 0)
-    list.push(wave)
+    for (const a of aggRows) {
+      aggMap.set(Number(a.wave_id), {
+        itemCount: Number(a.cnt),
+        totalQty: Number(a.totalQty || 0),
+        pickedQty: Number(a.pickedQty || 0),
+      })
+    }
   }
+
+  const list = rows.map(r => ({
+    ...fmt(r),
+    ...(aggMap.get(Number(r.id)) || { itemCount: 0, totalQty: 0, pickedQty: 0 }),
+  }))
 
   return { list, pagination: { page, pageSize: ps, total } }
 }

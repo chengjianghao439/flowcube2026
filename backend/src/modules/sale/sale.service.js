@@ -3,7 +3,7 @@ const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
 const AppError = require('../../utils/AppError')
 const { reserve, releaseByRef } = require('../../engine/reservationEngine')
-const { getAvailableStockForDecision } = require('../../engine/containerEngine')
+const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { getAvailabilityByProducts } = require('../inventory/inventory.service')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { foldEntryItems, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
@@ -1081,14 +1081,41 @@ async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOve
     if (!itemRows.length) throw new AppError('销售单无明细，无法占用库存', 400)
 
     // 可用量按明细行自己的仓库检查（分仓订单不同行可能在不同仓库；缺省行仓库=订单头）
+    // 批量读可用量（2026-08-22 性能）：此前逐行 getAvailableStockForDecision（每行 2 次查询），
+    // 20 行明细 = 40 次往返；改为一次查询取回全部 (product, warehouse) 的可用量（无锁，语义一致：
+    // ACTIVE 容器合计 − reserved）。
     const itemWh = item => (item.warehouse_id != null ? Number(item.warehouse_id) : Number(orderRow.warehouse_id))
+    const itemPairs = itemRows.map(item => ({ productId: Number(item.product_id), warehouseId: itemWh(item) }))
+    const availMap = new Map()
+    const uniqPairs = [...new Map(itemPairs.map(p => [`${p.productId}:${p.warehouseId}`, p])).values()]
+    if (uniqPairs.length) {
+      const placeholders = uniqPairs.map(() => '(?,?)').join(',')
+      const pairParams = uniqPairs.flatMap(p => [p.productId, p.warehouseId])
+      // 一次取容器合计（ACTIVE）+ 一次取 reserved 投影，内存合并——避免逐行 N+1
+      const [availRows] = await conn.query(
+        `SELECT c.product_id, c.warehouse_id,
+                COALESCE(SUM(c.remaining_qty), 0) AS qty
+         FROM inventory_containers c
+         WHERE (c.product_id, c.warehouse_id) IN (${placeholders})
+           AND c.status = ? AND c.deleted_at IS NULL
+         GROUP BY c.product_id, c.warehouse_id`,
+        [...pairParams, CONTAINER_STATUS.ACTIVE],
+      )
+      const [stockRows] = await conn.query(
+        `SELECT product_id, warehouse_id, COALESCE(reserved, 0) AS reserved
+         FROM inventory_stock WHERE (product_id, warehouse_id) IN (${placeholders})`,
+        pairParams,
+      )
+      const reservedMap = new Map(stockRows.map(r => [`${Number(r.product_id)}:${Number(r.warehouse_id)}`, Number(r.reserved)]))
+      for (const r of availRows) {
+        const key = `${Number(r.product_id)}:${Number(r.warehouse_id)}`
+        availMap.set(key, Math.max(0, Number(r.qty) - (reservedMap.get(key) ?? 0)))
+      }
+    }
     const shortages = []
     for (const item of itemRows) {
-      const { available } = await getAvailableStockForDecision(conn, {
-        productId: item.product_id,
-        warehouseId: itemWh(item),
-        lock: false,
-      })
+      const key = `${Number(item.product_id)}:${itemWh(item)}`
+      const available = availMap.get(key) ?? 0
       if (available < Number(item.quantity)) {
         shortages.push({
           productId: item.product_id,
