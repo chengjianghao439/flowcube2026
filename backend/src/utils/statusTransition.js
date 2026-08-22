@@ -2,13 +2,14 @@ const AppError = require('./AppError')
 
 function assertSqlIdentifier(value, label) {
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
-    throw new Error(`Invalid SQL identifier for ${label}: ${value}`)
+    // 程序员错误性质（配置缺陷），统一走 AppError 便于日志/Sentry 归类
+    throw new AppError(`Invalid SQL identifier for ${label}: ${value}`, 500, 'INTERNAL_CONFIG')
   }
 }
 
 function normalizeStatusList(fromStatus) {
   const list = Array.isArray(fromStatus) ? fromStatus : [fromStatus]
-  if (!list.length) throw new Error('fromStatus is required')
+  if (!list.length) throw new AppError('fromStatus is required', 500, 'INTERNAL_CONFIG')
   return list
 }
 

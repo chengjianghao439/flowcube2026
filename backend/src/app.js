@@ -180,12 +180,12 @@ try {
 }
 
 function logDeprecatedDownloadsAccess(req) {
-  console.warn('[Downloads] DEPRECATED /downloads alias accessed; use /versions/ or /current/ for new clients.', {
+  // 2026-08-22 降噪：console.warn 逐请求打日志无 requestId 且刷屏——改 logger.warn（带 requestId 上下文）
+  const logger = require('./utils/logger')
+  logger.warn('[Downloads] DEPRECATED /downloads alias accessed; use /versions/ or /current/ for new clients.', {
     method: req.method,
     path: req.originalUrl,
-    ip: req.ip,
-    userAgent: req.get('user-agent') || '',
-  })
+  }, 'Downloads')
 }
 
 function deprecatedDownloadsOnly(req, res, next) {

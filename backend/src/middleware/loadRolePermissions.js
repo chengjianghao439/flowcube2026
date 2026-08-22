@@ -37,6 +37,9 @@ async function loadRolePermissions(req, res, next) {
     next()
   } catch (err) {
     if (err.code === 'ER_NO_SUCH_TABLE') {
+      // 2026-08-22 加固：缺表继续服务会让所有接口 403（安全方向）但排查困难——显式告警
+      const logger = require('../utils/logger')
+      logger.error(`[auth] sys_role_permissions 表缺失——所有需权限接口将 403，请检查迁移`, {}, 'Auth')
       req.user.permissions = []
       return next()
     }

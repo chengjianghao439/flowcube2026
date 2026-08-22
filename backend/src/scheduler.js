@@ -5,6 +5,7 @@
 const { startCleanupSweeper } = require('./utils/operationRequest')
 const { pool } = require('./config/db')
 const logger = require('./utils/logger')
+const { runWithRequestContext } = require('./utils/requestContext')
 const { runFetchWaybills, runTrackWaybills } = require('./modules/logistics/logistics.worker')
 
 const num = (name, def) => {
@@ -20,6 +21,8 @@ const bool = (name, def) => {
 /**
  * 事务外异步 worker 的通用启动器：带"上一轮未跑完就跳过本轮"的重入保护，
  * 避免慢平台/长队列时多轮任务叠加。worker 自身已捕获异常，这里再兜一层。
+ * 2026-08-22 加固：每轮 tick 注入 scheduler:<name> 的 requestId 上下文，
+ * 让 worker 内所有 logger 输出可追溯到具体调度任务。
  */
 function startWorker(name, fn, intervalMs) {
   let running = false
@@ -27,7 +30,7 @@ function startWorker(name, fn, intervalMs) {
     if (running) return
     running = true
     try {
-      await fn()
+      await runWithRequestContext({ requestId: `scheduler:${name}` }, fn)
     } catch (e) {
       logger.error(`[scheduler] ${name} 执行异常`, e, {}, 'Scheduler')
     } finally {
@@ -69,6 +72,14 @@ function startScheduler() {
       await pool.query(`DELETE FROM \`${t}\` WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`, [days])
     }
   }, num('EVENT_LOG_CLEAN_INTERVAL_MS', 6 * 60 * 60 * 1000))
+
+  // PDA 设备会话 TTL（2026-08-22 扫描）：过期/吊销会话无清理任务，表随设备数缓慢膨胀。
+  // 只清「已过期且 30 天前」的记录——活跃会话靠心跳续期，不会误删。
+  startWorker('pda-session-cleanup', async () => {
+    await pool.query(
+      'DELETE FROM pda_device_sessions WHERE (expires_at < NOW() OR revoked_at IS NOT NULL) AND updated_at < DATE_SUB(NOW(), INTERVAL 30 DAY)',
+    )
+  }, num('PDA_SESSION_CLEAN_INTERVAL_MS', 24 * 60 * 60 * 1000))
 
   // 电子面单（文档 06）：取号 worker + 轨迹 worker，均在事务外做 HTTP。
   // 可用 LOGISTICS_WORKER_ENABLED=0 关闭（如无快递平台对接的部署）。

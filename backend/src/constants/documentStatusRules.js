@@ -330,9 +330,9 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
 
 function getStatusRule(machine, action) {
   const machineRules = DOCUMENT_STATUS_RULES[machine]
-  if (!machineRules) throw new Error(`Unknown status machine: ${machine}`)
+  if (!machineRules) throw new AppError(`Unknown status machine: ${machine}`, 500, 'INTERNAL_CONFIG')
   const rule = machineRules.actions?.[action]
-  if (!rule) throw new Error(`Unknown action "${action}" for machine "${machine}"`)
+  if (!rule) throw new AppError(`Unknown action "${action}" for machine "${machine}"`, 500, 'INTERNAL_CONFIG')
   return { ...rule, entityName: machineRules.entityName }
 }
 

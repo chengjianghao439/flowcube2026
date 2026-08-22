@@ -285,7 +285,7 @@ function isValidTransition(from, to) {
 
 function assertWarehouseTaskAction(action, status) {
   const rule = WT_ACTION_RULES[action]
-  if (!rule) throw new Error(`Unknown warehouse task action: ${action}`)
+  if (!rule) throw new AppError(`Unknown warehouse task action: ${action}`, 500, 'INTERNAL_CONFIG')
   const normalized = Number(status)
   if (rule.allowed.includes(normalized)) return rule
   if (rule.blocked?.[normalized]) throw new AppError(rule.blocked[normalized], 400)
