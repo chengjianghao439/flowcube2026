@@ -7,21 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { payloadClient as client } from '@/api/client'
+import { getMyInfoApi, getMyWarehouseScopeApi } from '@/api/users'
 import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
-
-interface MyInfo {
-  id: number
-  username: string
-  realName: string
-  roleId: number
-  roleName: string
-  isActive: boolean
-  departmentId: number | null
-  departmentName: string | null
-}
-interface WarehouseScope { warehouseId: number; warehouseName: string }
 
 export default function UserMenu() {
   const { user } = useAuthStore()
@@ -46,12 +35,12 @@ export default function UserMenu() {
   const myId = user?.id ?? 0
   const { data: myInfo } = useQuery({
     queryKey: ['my-info', myId],
-    queryFn: () => client.get<MyInfo>(`/users/${myId}`).then(r => r ?? null),
+    queryFn: () => getMyInfoApi(myId),
     enabled: infoOpen && myId > 0,
   })
   const { data: myWarehouses, isLoading: whLoading } = useQuery({
     queryKey: ['my-warehouses', myId],
-    queryFn: () => client.get<WarehouseScope[]>(`/users/${myId}/warehouse-scope`).then(r => r ?? []),
+    queryFn: () => getMyWarehouseScopeApi(myId),
     enabled: infoOpen && myId > 0,
   })
 

@@ -24,6 +24,36 @@ export async function createUserApi(data: CreateUserParams): Promise<{ id: numbe
   return res
 }
 
+export interface MyInfo {
+  id: number
+  username: string
+  realName: string
+  roleId: number
+  roleName: string
+  isActive: boolean
+  departmentId: number | null
+  departmentName: string | null
+  createdAt: string
+}
+
+/** 当前登录用户信息（UserMenu 头像/姓名用，仅需登录态） */
+export async function getMyInfoApi(id: number): Promise<MyInfo | null> {
+  const res = await apiClient.get<MyInfo>(`/users/${id}`)
+  return res ?? null
+}
+
+export interface WarehouseScopeItem {
+  warehouseId: number
+  warehouseName?: string
+  [key: string]: unknown
+}
+
+/** 当前用户仓库范围（UserMenu 展示限仓信息用） */
+export async function getMyWarehouseScopeApi(id: number): Promise<WarehouseScopeItem[]> {
+  const res = await apiClient.get<WarehouseScopeItem[]>(`/users/${id}/warehouse-scope`)
+  return res ?? []
+}
+
 export async function updateUserApi(id: number, data: UpdateUserParams): Promise<void> {
   await apiClient.put(`/users/${id}`, data)
 }

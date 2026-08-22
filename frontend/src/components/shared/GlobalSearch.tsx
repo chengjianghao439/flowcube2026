@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Package, Factory, User, ShoppingCart, Truck, ClipboardList, ArrowLeftRight, Undo2, Inbox, Receipt, Archive, Banknote, ShieldCheck, ListChecks, FileText } from 'lucide-react'
-import { payloadClient as client } from '@/api/client'
+import { searchGlobalApi } from '@/api/search'
 
 interface SearchResult { id: number; type: string; typeLabel: string; title: string; subtitle: string; path: string }
 
@@ -102,8 +102,8 @@ export default function GlobalSearch() {
     timer.current = setTimeout(async () => {
       setLoading(true)
       try {
-        const r = await client.get<SearchResult[]>('/search', { params: { q, startDate, endDate } })
-        setResults(r || [])
+        const r = await searchGlobalApi(q, startDate, endDate)
+        setResults(r as unknown as SearchResult[] || [])
       } catch (_) {}
       setLoading(false)
     }, 300)
