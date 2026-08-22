@@ -194,7 +194,7 @@ function WorkbenchMockup() {
         <span className="ml-3 text-[11px] tracking-wide text-blue-200/60">极序 Flow · 仓储工作台</span>
       </div>
 
-      {/* 内容：库位网格 + 移动亮点 */}
+      {/* 内容：库位网格 + 移动亮点 + 扫描光带 */}
       <div className="relative p-4 sm:p-6">
         <div className="mb-3 flex items-center justify-between text-[11px] text-blue-200/50">
           <span>库区 A · 主通道</span>
@@ -212,7 +212,7 @@ function WorkbenchMockup() {
               className={`aspect-[4/3] rounded-[3px] border ${
                 // 少量「占用」格子（呼吸闪烁），其余空位
                 i === 5 || i === 11 || i === 14 || i === 23 || i === 29
-                  ? 'cell-breathe border-blue-400/30 bg-blue-400/10'
+                  ? 'cell-breathe border-amber-400/30 bg-amber-400/10'
                   : 'border-white/10 bg-white/5'
               }`}
             />
@@ -221,9 +221,11 @@ function WorkbenchMockup() {
           <div className="workbench-dot absolute -top-1 left-[8%] size-2 rounded-full bg-[#6EA8FF] shadow-[0_0_12px_rgba(110,168,255,0.9)]">
             <span className="scan-ring" />
           </div>
+          {/* 扫描光带：一直在扫的作业台 */}
+          <div className="mockup-sweep absolute inset-0 -mx-2" />
         </div>
 
-        {/* 底部一行统计 */}
+        {/* 底部一行统计 + 条码页脚 */}
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           {[
             ['今日收件', '328'],
@@ -231,10 +233,14 @@ function WorkbenchMockup() {
             ['准时出库', '99%'],
           ].map(([label, val]) => (
             <div key={label} className="rounded-lg bg-white/5 px-2 py-2">
-              <div className="text-base font-semibold text-white">{val}</div>
+              <div className="mono-num text-base font-semibold text-white">{val}</div>
               <div className="text-[10px] text-blue-200/50">{label}</div>
             </div>
           ))}
+        </div>
+        <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3 text-[10px] text-blue-200/40">
+          <Barcode className="text-blue-200/40" />
+          <span className="mono-num">SEG::A1</span>
         </div>
       </div>
     </div>
@@ -511,7 +517,8 @@ export default function LandingPage() {
               <span className="hero-line scan-underline text-[#6EA8FF]" style={{ animationDelay: '0.2s' }}>都在系统的轨道上流动。</span>
             </h1>
             <p className="mt-5 max-w-lg text-base leading-relaxed text-blue-100/80">
-              {BRAND.subclaim}
+              扫码、上架、拣货、出库——一条条商品从条码进入系统，变成可追踪的状态、可对账的金额。
+              仓库现场只执行，系统替你决策每一步。
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <a
@@ -547,11 +554,11 @@ export default function LandingPage() {
               <span>✓ PDA 现场作业</span>
             </div>
 
-            {/* 关键数字条 */}
+            {/* 关键数字条：等宽数字 = 设备读数 */}
             <div className="mt-10 grid grid-cols-4 gap-4 border-t border-white/10 pt-6">
               {STATS.map((s) => (
                 <div key={s.label}>
-                  <div className="text-xl font-bold text-white sm:text-2xl">
+                  <div className="mono-num text-xl font-bold text-white sm:text-2xl">
                     <AnimatedNumber value={s.value} suffix={s.suffix} />
                   </div>
                   <div className="mt-0.5 text-[11px] text-blue-200/50">{s.label}</div>
