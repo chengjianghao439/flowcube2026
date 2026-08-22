@@ -1,7 +1,6 @@
 const { Router } = require('express')
 const rateLimit = require('express-rate-limit')
 const { z } = require('zod')
-const { pool } = require('../../config/db')
 const { successResponse } = require('../../utils/response')
 const authController = require('./auth.controller')
 const authService = require('./auth.service')
@@ -61,9 +60,9 @@ router.put('/change-password', authMiddleware, validateBody(z.object({
 })
 
 // PUT /api/auth/profile — 修改个人信息
-router.put('/profile', authMiddleware, validateBody(z.object({ realName: z.string().min(1) })), async (req, res, next) => {
+router.put('/profile', authMiddleware, validateBody(z.object({ realName: z.string().min(1).max(50) })), async (req, res, next) => {
   try {
-    await pool.query('UPDATE sys_users SET real_name=? WHERE id=?', [req.body.realName, req.user.userId])
+    await authService.updateProfile(req.user.userId, req.body)
     return successResponse(res, null, '信息更新成功')
   } catch (e) { next(e) }
 })

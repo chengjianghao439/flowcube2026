@@ -197,4 +197,14 @@ async function changePassword(userId, oldPassword, newPassword) {
   )
 }
 
-module.exports = { login, getMe, refreshAccessToken, changePassword }
+/** 修改个人资料（真实姓名）——原 auth.routes 路由层直写 SQL，收编进 service（2026-08-22） */
+async function updateProfile(userId, { realName }) {
+  const [[user]] = await pool.query(
+    'SELECT id FROM sys_users WHERE id=? AND deleted_at IS NULL',
+    [userId],
+  )
+  if (!user) throw new AppError('用户不存在', 404, 'USER_NOT_FOUND')
+  await pool.query('UPDATE sys_users SET real_name=? WHERE id=?', [String(realName).trim(), userId])
+}
+
+module.exports = { login, getMe, refreshAccessToken, changePassword, updateProfile }
