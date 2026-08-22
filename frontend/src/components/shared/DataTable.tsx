@@ -288,9 +288,10 @@ export default function DataTable<T extends object>({
           <thead>
             <tr className="border-b border-border bg-muted/30">
               {isSelectEnabled && (
-                <th className="w-10 px-4 py-2.5">
+                <th scope="col" className="w-10 px-4 py-2.5">
                   <input
                     type="checkbox"
+                    aria-label="选择当前页全部行"
                     checked={allSelected}
                     ref={el => { if (el) el.indeterminate = someSelected }}
                     onChange={toggleAll}
@@ -301,6 +302,8 @@ export default function DataTable<T extends object>({
               {orderedColumns.map((col) => (
                 <th
                   key={String(col.key)}
+                  scope="col"
+                  aria-sort={sortKey === String(col.key) ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}
                   draggable={!isAction(String(col.key), col.title)}
                   onDragStart={() => setDraggingKey(String(col.key))}
                   onDragOver={(e) => {
@@ -322,6 +325,7 @@ export default function DataTable<T extends object>({
                     {col.sortable && onSortChange ? (
                       <button
                         type="button"
+                        aria-label={`按${col.title}排序`}
                         onClick={() => onSortChange(String(col.key))}
                         className={`min-w-0 flex-1 whitespace-nowrap transition-colors hover:text-foreground ${
                           col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
