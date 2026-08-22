@@ -59,6 +59,7 @@ jobs:
             -e GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
             ghcr.io/gitleaks/gitleaks:latest detect \
             --source=/repo \
+            --config=/repo/.gitleaks.toml \
             --report-format=sarif \
             --report-path=/repo/gitleaks-report.sarif \
             --verbose

@@ -1,0 +1,18 @@
+# gitleaks 配置：把测试专用的假密钥加入 allowlist。
+# 这些值只存在于 tests/ 的测试夹具里（CI 测试库专用账号/设备密码），
+# 不是真实凭据；generic-api-key 规则会对 `xxx-secret-数字` 结构误报。
+[extend]
+useDefault = true
+
+[allowlist]
+description = "smoke 测试专用假密钥（tests/ 夹具，非真实凭据）"
+regexes = [
+  '''smoke-pda-secret-2''',
+  '''smoke-pda-secret''',
+  '''SmokeAdmin123!''',
+  '''SmokeLimited123!''',
+  '''SmokeSearchScoped123!''',
+  '''SmokeUser123!''',
+  '''SmokeUser456!''',
+  '''smoke-pda-key-2''',
+]
