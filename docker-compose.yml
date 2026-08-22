@@ -58,6 +58,7 @@ services:
       CORS_ALLOW_NULL_ORIGIN: ${CORS_ALLOW_NULL_ORIGIN:-0}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
+      DINGTALK_ALERT_WEBHOOK: ${DINGTALK_ALERT_WEBHOOK:-}
       APP_UPDATE_DOWNLOADS_DIR: /var/www/flowcube-downloads
       # 日志集中检索（P2-12）：起 observability profile 后填 loki 服务地址即可接入
       LOKI_URL: ${LOKI_URL:-}
