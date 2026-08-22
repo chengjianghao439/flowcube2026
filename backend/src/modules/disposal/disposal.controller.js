@@ -63,21 +63,21 @@ async function update(req, res, next) {
       warehouseId: body.warehouseId,
       remark: body.remark,
       items: body.items,
-    })
+    }, req.user?.warehouseIds ?? null)
     return successResponse(res, result, '保存成功')
   } catch (e) { next(e) }
 }
 
 async function submit(req, res, next) {
   try {
-    await svc.submit(+req.params.id)
+    await svc.submit(+req.params.id, req.user?.warehouseIds ?? null)
     return successResponse(res, null, '已提交审批')
   } catch (e) { next(e) }
 }
 
 async function approve(req, res, next) {
   try {
-    await svc.approve(+req.params.id, getOperatorFromRequest(req))
+    await svc.approve(+req.params.id, getOperatorFromRequest(req), req.user?.warehouseIds ?? null)
     return successResponse(res, null, '已审批通过')
   } catch (e) { next(e) }
 }
@@ -87,21 +87,21 @@ async function reject(req, res, next) {
     await svc.reject(+req.params.id, {
       reason: (req.body || {}).reason,
       operator: getOperatorFromRequest(req),
-    })
+    }, req.user?.warehouseIds ?? null)
     return successResponse(res, null, '已驳回')
   } catch (e) { next(e) }
 }
 
 async function dispose(req, res, next) {
   try {
-    const result = await svc.dispose(+req.params.id, getOperatorFromRequest(req))
+    const result = await svc.dispose(+req.params.id, getOperatorFromRequest(req), req.user?.warehouseIds ?? null)
     return successResponse(res, result, '处置完成')
   } catch (e) { next(e) }
 }
 
 async function cancel(req, res, next) {
   try {
-    await svc.cancel(+req.params.id)
+    await svc.cancel(+req.params.id, req.user?.warehouseIds ?? null)
     return successResponse(res, null, '已取消')
   } catch (e) { next(e) }
 }

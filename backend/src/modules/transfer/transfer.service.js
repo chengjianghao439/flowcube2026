@@ -193,7 +193,7 @@ async function confirm(id, operator = null, scopeWarehouseIds = null) {
 }
 
 // 调出仓 PDA 扫码出库：整容器移到调入仓设 PENDING_PUTAWAY（在途，暂不计入调入仓），调出仓库存立即减。
-async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWarehouseIds = null) {
+async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWarehouseIds = null, pdaWarehouseId = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -202,6 +202,10 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
 
     const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
     assertTransferInScope(scopeWarehouseIds, orderRow.from_warehouse_id, orderRow.to_warehouse_id)
+    // 设备绑定仓拦截（对齐 putaway/warehouse-tasks 范式）：扫出必须由源仓设备执行
+    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(orderRow.from_warehouse_id)) {
+      throw new AppError('设备绑定仓库与调拨源仓不一致，无法扫出', 403, 'PDA_WAREHOUSE_MISMATCH')
+    }
     assertStatusAction('transfer', 'scanOut', orderRow.status)
     assertDifferentWarehouses(orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     const fromWh = Number(orderRow.from_warehouse_id)
@@ -285,7 +289,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
 }
 
 // 调入仓 PDA 扫码入库上架：在途容器翻 ACTIVE + 落库位，调入仓库存立即增；全部收齐则完成。
-async function scanIn(id, { containerBarcode, locationId }, operator, requestKey, scopeWarehouseIds = null) {
+async function scanIn(id, { containerBarcode, locationId }, operator, requestKey, scopeWarehouseIds = null, pdaWarehouseId = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -294,6 +298,10 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
 
     const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
     assertTransferInScope(scopeWarehouseIds, orderRow.from_warehouse_id, orderRow.to_warehouse_id)
+    // 设备绑定仓拦截（对齐 putaway/warehouse-tasks 范式）：扫入必须由目标仓设备执行
+    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(orderRow.to_warehouse_id)) {
+      throw new AppError('设备绑定仓库与调拨目标仓不一致，无法扫入', 403, 'PDA_WAREHOUSE_MISMATCH')
+    }
     assertStatusAction('transfer', 'scanIn', orderRow.status)
     const toWh = Number(orderRow.to_warehouse_id)
 

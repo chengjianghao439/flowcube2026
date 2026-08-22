@@ -248,12 +248,13 @@ async function create({ warehouseId, remark, items, operator, scopeWarehouseIds 
 }
 
 /** 编辑草稿：整单替换明细（同盘点单 updateItems 语义）。提交后不可编辑 */
-async function update(id, { warehouseId, remark, items }) {
+async function update(id, { warehouseId, remark, items }, scopeWarehouseIds = null) {
   assertValidItems(items)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, warehouse_id, status', entityName: '处置单' })
+    assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
     assertStatusAction('inventoryDisposal', 'edit', row.status)
     if (Number(row.warehouse_id) !== Number(warehouseId)) throw new AppError('处置单仓库不可修改', 400)
 
@@ -299,11 +300,12 @@ async function update(id, { warehouseId, remark, items }) {
 }
 
 /** 提交审批：草稿 → 待审批 */
-async function submit(id) {
+async function submit(id, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status', entityName: '处置单' })
+    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status, warehouse_id', entityName: '处置单' })
+    assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
     const rule = assertStatusAction('inventoryDisposal', 'submit', row.status)
     await compareAndSetStatus(conn, {
       table: 'inventory_disposal_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '处置单',
@@ -318,11 +320,12 @@ async function submit(id) {
 }
 
 /** 审批通过：待审批 → 已批准 */
-async function approve(id, operator) {
+async function approve(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status', entityName: '处置单' })
+    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status, warehouse_id', entityName: '处置单' })
+    assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
     const rule = assertStatusAction('inventoryDisposal', 'approve', row.status)
     await compareAndSetStatus(conn, {
       table: 'inventory_disposal_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '处置单',
@@ -341,11 +344,12 @@ async function approve(id, operator) {
 }
 
 /** 驳回：待审批 → 已驳回 */
-async function reject(id, { reason, operator }) {
+async function reject(id, { reason, operator }, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status', entityName: '处置单' })
+    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status, warehouse_id', entityName: '处置单' })
+    assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
     const rule = assertStatusAction('inventoryDisposal', 'reject', row.status)
     await compareAndSetStatus(conn, {
       table: 'inventory_disposal_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '处置单',
@@ -367,11 +371,12 @@ async function reject(id, { reason, operator }) {
  * 执行处置：已批准 → 已处置。逐行 FIFO 扣减容器 + 刷新缓存 + 写流水；
  * 报废行额外落 disposal_scrapped 台账。整单一个事务，任一行失败整单回滚。
  */
-async function dispose(id, operator) {
+async function dispose(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, warehouse_id, warehouse_name, disposal_no, status', entityName: '处置单' })
+    assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
     const rule = assertStatusAction('inventoryDisposal', 'dispose', row.status)
 
     const [items] = await conn.query(
@@ -455,11 +460,12 @@ async function dispose(id, operator) {
 }
 
 /** 取消：草稿/待审批 → 已取消 */
-async function cancel(id) {
+async function cancel(id, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status', entityName: '处置单' })
+    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status, warehouse_id', entityName: '处置单' })
+    assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
     const rule = assertStatusAction('inventoryDisposal', 'cancel', row.status)
     await compareAndSetStatus(conn, {
       table: 'inventory_disposal_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '处置单',

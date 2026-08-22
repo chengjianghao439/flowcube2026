@@ -24,11 +24,13 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 
-async function createFromPoId(purchaseOrderId) {
+async function createFromPoId(purchaseOrderId, scopeWarehouseIds = null) {
   const purchaseSvc = require('../purchase/purchase.service')
   const order = await purchaseSvc.findById(purchaseOrderId)
   assertStatusAction('purchase', 'createInboundTask', order.status)
   if (!order.items.length) throw new AppError('采购单无明细', 400)
+  // 跨仓校验：限仓用户只能给本仓采购单建收货任务
+  assertInScope(scopeWarehouseIds, order.warehouseId, '采购单')
 
   // 混单收货单的 inbound_tasks.purchase_order_id 头字段为空，必须按明细行关联查找，
   // 否则混单场景下查重会漏检，导致同一采购单被重复建单、超收。
@@ -86,7 +88,7 @@ async function createFromPoId(purchaseOrderId) {
   }
 }
 
-async function createManualTask({ supplierId, supplierName, remark, items }) {
+async function createManualTask({ supplierId, supplierName, remark, items }, scopeWarehouseIds = null) {
   const supplierIdN = Number(supplierId)
   if (!Number.isFinite(supplierIdN) || supplierIdN <= 0) throw new AppError('请选择供应商', 400)
   if (!supplierName?.trim()) throw new AppError('供应商名称不能为空', 400)
@@ -138,6 +140,8 @@ async function createManualTask({ supplierId, supplierName, remark, items }) {
 
     const warehouseId = taskItems[0].warehouseId
     const warehouseName = taskItems[0].warehouseName
+    // 跨仓校验：限仓用户只能给本仓建收货任务
+    assertInScope(scopeWarehouseIds, warehouseId, '收货订单')
     const purchaseOrders = [...new Set(taskItems.map(item => `${item.purchaseOrderId}:${item.purchaseOrderNo}`))]
     const headerPurchaseOrderId = purchaseOrders.length === 1 ? taskItems[0].purchaseOrderId : null
     const headerPurchaseOrderNo = purchaseOrders.length === 1

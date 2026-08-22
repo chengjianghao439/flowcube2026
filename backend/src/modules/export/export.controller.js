@@ -1,5 +1,7 @@
 const { exportXlsx, exportStatementXlsx } = require('../../utils/excelExport')
 const exportService = require('./export.service')
+const { PERMISSIONS } = require('../../constants/permissions')
+const { getOperatorFromRequest } = require('../../utils/operator')
 
 async function sendExport(res, payload) {
   await exportXlsx(res, payload.filename, payload.sheetName, payload.columns, payload.rows)
@@ -119,7 +121,12 @@ async function exportFixedAssets(req, res, next) {
   try { await sendExport(res, await exportService.getFixedAssetsExportPayload(req.query)) } catch (e) { next(e) }
 }
 async function exportExpenseClaims(req, res, next) {
-  try { await sendExport(res, await exportService.getExpenseClaimsExportPayload(req.query)) } catch (e) { next(e) }
+  try {
+    // 越权读防护（对齐 finance 列表口径）：无 VIEW_ALL 时强制导出自己的报销单
+    const canViewAll = Number(req.user?.roleId) === 1 || (req.user?.permissions || []).includes(PERMISSIONS.FINANCE_EXPENSE_VIEW_ALL)
+    const query = canViewAll ? req.query : { ...req.query, applicantId: getOperatorFromRequest(req).operatorId }
+    await sendExport(res, await exportService.getExpenseClaimsExportPayload(query))
+  } catch (e) { next(e) }
 }
 async function exportFinanceAccounts(req, res, next) {
   try { await sendExport(res, await exportService.getFinanceAccountsExportPayload()) } catch (e) { next(e) }
