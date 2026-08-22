@@ -209,38 +209,26 @@ async function moveStock(conn, {
       let runningBefore = before
       for (const d of deducted) {
         const chunkAfter = runningBefore - d.taken
-        await conn.query(
-          `INSERT INTO inventory_logs
-             (move_type, type, product_id, warehouse_id, supplier_id,
-              quantity, before_qty, after_qty, unit_price,
-              ref_type, ref_id, ref_no,
-              container_id, log_source_type, log_source_ref_id,
-              remark, operator_id, operator_name)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [moveType, 2, productId, warehouseId, supplierId,
-            d.taken, runningBefore, chunkAfter, unitPrice,
-            refType, refId, refNo,
-            d.containerId, logSourceType, logSourceRefId,
-            logRemark, operatorId, operatorName],
-        )
+        await writeInventoryLog(conn, {
+          moveType, type: 2,
+          productId, warehouseId, supplierId,
+          quantity: d.taken, beforeQty: runningBefore, afterQty: chunkAfter, unitPrice,
+          refType, refId, refNo,
+          containerId: d.containerId, sourceType: logSourceType, sourceRefId: logSourceRefId,
+          remark: logRemark, operatorId, operatorName,
+        })
         runningBefore = chunkAfter
       }
     } else {
       const primaryContainerId = deducted[0]?.containerId ?? null
-      await conn.query(
-        `INSERT INTO inventory_logs
-           (move_type, type, product_id, warehouse_id, supplier_id,
-            quantity, before_qty, after_qty, unit_price,
-            ref_type, ref_id, ref_no,
-            container_id, log_source_type, log_source_ref_id,
-            remark, operator_id, operator_name)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [moveType, 2, productId, warehouseId, supplierId,
-          absQty, before, after, unitPrice,
-          refType, refId, refNo,
-          primaryContainerId, logSourceType, logSourceRefId,
-          logRemark, operatorId, operatorName],
-      )
+      await writeInventoryLog(conn, {
+        moveType, type: 2,
+        productId, warehouseId, supplierId,
+        quantity: absQty, beforeQty: before, afterQty: after, unitPrice,
+        refType, refId, refNo,
+        containerId: primaryContainerId, sourceType: logSourceType, sourceRefId: logSourceRefId,
+        remark: logRemark, operatorId, operatorName,
+      })
     }
 
     return { before, after }

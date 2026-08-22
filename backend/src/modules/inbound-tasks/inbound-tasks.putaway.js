@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { syncStockFromContainers, lockStockDimension, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
-const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { appendInboundEvent, assertPurchaseOrdersOpen } = require('./inbound-tasks.helpers')
 const { assertTaskCanPutaway } = require('./inbound-tasks.status')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
@@ -223,23 +223,25 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
       }
     }
 
-    await conn.query(
-      `INSERT INTO inventory_logs
-         (move_type, type, product_id, warehouse_id, supplier_id,
-          quantity, before_qty, after_qty, unit_price,
-          ref_type, ref_id, ref_no, container_id, log_source_type, log_source_ref_id,
-          remark, operator_id, operator_name)
-       VALUES (?,1,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        MOVE_TYPE.PURCHASE_IN,
-        c.product_id, c.warehouse_id,
-        qty, beforeQty, afterQty, purchasePrice,
-        'inbound_task', taskId, c.task_no,
-        containerId, SOURCE_TYPE.INBOUND_TASK, taskId,
-        `入库上架 ${c.task_no} 容器#${c.barcode}`,
-        operator?.userId || null, operator?.realName || null,
-      ],
-    )
+    await writeInventoryLog(conn, {
+      moveType: MOVE_TYPE.PURCHASE_IN,
+      type: 1,
+      productId: c.product_id,
+      warehouseId: c.warehouse_id,
+      supplierId: null,
+      quantity: qty,
+      beforeQty, afterQty,
+      unitPrice: purchasePrice,
+      refType: 'inbound_task',
+      refId: taskId,
+      refNo: c.task_no,
+      containerId,
+      sourceType: SOURCE_TYPE.INBOUND_TASK,
+      sourceRefId: taskId,
+      remark: `入库上架 ${c.task_no} 容器#${c.barcode}`,
+      operatorId: operator?.userId || null,
+      operatorName: operator?.realName || null,
+    })
 
     // 上架量回写：优先落到容器自己携带的归属明细行，剩余部分才退回 first-fit（审计 P1-4）。
     // 收货时已经知道这箱货属于哪张采购单的哪一行，再按 id 顺序猜一遍会让 putaway_qty 落到
