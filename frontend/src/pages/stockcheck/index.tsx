@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,8 +31,11 @@ export default function StockCheckPage() {
   const [checkType, setCheckType] = useState<'1'|'2'>('1')
   const [abcClass, setAbcClass] = useState<'A'|'B'|'C'>('A')
   const [createLocked, setCreateLocked] = useState(false)
+  const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useCheckList({ pageSize: 99999, keyword })
+  const { data, isLoading } = useCheckList({ page, pageSize: 20, keyword })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / 20))
   const { data: warehouses } = useWarehousesActive()
   const create = useCreateCheck()
 
@@ -71,11 +75,12 @@ export default function StockCheckPage() {
     <div className="space-y-4">
       <PageHeader title="库存盘点" description="创建盘点单并填写实盘数量，提交后自动调整库存" actions={<Button onClick={()=>setCreateOpen(true)}>+ 新建盘点</Button>} />
       <FilterCard>
-        <Input placeholder="搜索单号/仓库…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} />
-        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search) }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword('') }}>重置</Button>}
+        <Input placeholder="搜索单号/仓库…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
+        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); setPage(1) }}>搜索</Button>
+        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
       </FilterCard>
       <DataTable columns={columns} data={data?.list||[]} loading={isLoading} />
+      <Pagination page={page} totalPages={totalPages} total={total} unit="单" onPageChange={setPage} />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>

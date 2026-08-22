@@ -38,6 +38,7 @@ function platformPayload(f: FormState) {
 export default function CarriersPage() {
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
 
   const set = (k: keyof FormState, v: string | boolean) => setForm(f => ({ ...f, [k]: v }))
@@ -74,8 +75,9 @@ export default function CarriersPage() {
       title="承运商管理"
       description="管理物流、快递等承运商信息"
       columns={columns}
-      queryKey={['carriers', keyword]}
-      listQuery={() => getCarriersApi({ keyword, pageSize: 99999 })}
+      queryKey={['carriers', { page, pageSize: 20, keyword }]}
+      listQuery={() => getCarriersApi({ keyword, page, pageSize: 20 })}
+      pagination={{ page, pageSize: 20, unit: '个', onPageChange: setPage }}
       deleteApi={(id) => deleteCarrierApi(id, { skipGlobalError: true })}
       deleteMessage="确认删除该承运商？删除后不可恢复。"
       createLabel="+ 新建承运商"
@@ -92,11 +94,11 @@ export default function CarriersPage() {
             <div className="flex-1 min-w-[180px]">
               <Input placeholder="名称 / 编号" value={search}
                 onChange={e => setSearch(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
+                onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
               />
             </div>
-            <Button size="sm" variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
-            <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>
+            <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>
           </div>
         </FilterCard>
       }

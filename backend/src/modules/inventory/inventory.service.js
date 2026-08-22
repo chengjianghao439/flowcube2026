@@ -784,6 +784,119 @@ async function getContainerByBarcode(barcode) {
 }
 
 /**
+ * PDA 只读库存查询（按条码）：命中容器则返回容器详情（含商品/仓库/库位/批次/效期/剩余量）。
+ * 仅查 ACTIVE(1) 与待上架(4) 容器；按 scopeFilter 做仓库数据权限过滤，未命中抛 404。
+ * 只读接口，不产生任何库存副作用。
+ */
+async function queryByBarcode(barcode, { scopeWarehouseIds = null } = {}) {
+  const bc = String(barcode || '').trim()
+  if (!bc) throw new AppError('条码不能为空', 400)
+  const scope = scopeFilter(scopeWarehouseIds, 'c.warehouse_id')
+  const [rows] = await pool.query(
+    `SELECT c.id, c.barcode, c.container_type, c.product_id, c.warehouse_id, c.location_id,
+            c.remaining_qty, c.initial_qty, c.unit, c.status, c.inbound_task_id,
+            c.batch_no, c.mfg_date, c.exp_date, c.remark,
+            c.source_type, c.source_ref_id, c.is_legacy,
+            c.locked_by_task_id,
+            p.code AS product_code, p.name AS product_name,
+            w.name AS warehouse_name,
+            loc.code AS location_code,
+            lt.task_no AS locked_task_no
+     FROM inventory_containers c
+     LEFT JOIN product_items p ON p.id = c.product_id
+     LEFT JOIN inventory_warehouses w ON w.id = c.warehouse_id
+     LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
+     LEFT JOIN warehouse_tasks lt ON lt.id = c.locked_by_task_id
+     WHERE c.barcode = ? AND c.deleted_at IS NULL AND c.status IN (1, 4)
+       ${scope.sql}
+     LIMIT 10`,
+    [bc, ...scope.params],
+  )
+  if (!rows.length) throw new AppError('未找到该条码对应的库存容器', 404, 'INVENTORY_BARCODE_NOT_FOUND')
+  return rows.map(r => ({
+    containerId:   r.id,
+    barcode:       r.barcode,
+    productId:     r.product_id,
+    productCode:   r.product_code,
+    productName:   r.product_name,
+    warehouseId:   r.warehouse_id,
+    warehouseName: r.warehouse_name,
+    locationId:    r.location_id  || null,
+    locationCode:  r.location_code || null,
+    batchNo:       r.batch_no     || null,
+    mfgDate:       r.mfg_date     || null,
+    expDate:       r.exp_date     || null,
+    remainingQty:  Number(r.remaining_qty),
+    unit:          r.unit,
+    containerKind: Number(r.container_type) === 2 || /^B/i.test(String(r.barcode || '')) ? 'plastic_box' : 'inventory',
+    containerStatus: Number(r.status) === 4 ? 'waiting_putaway' : 'stored',
+    individual:    Number(r.container_type) === 1 && Number(r.initial_qty) === 1,
+    lockedByTaskId: r.locked_by_task_id != null ? Number(r.locked_by_task_id) : null,
+    lockedByTaskNo: r.locked_task_no || null,
+    isLegacy:      !!Number(r.is_legacy),
+    remark:        r.remark || null,
+  }))
+}
+
+/**
+ * PDA 只读库存查询（按商品×仓库）：列出该商品在指定仓库的全部在库（ACTIVE）容器。
+ * 复用 scopeFilter 过滤仓库数据权限；不提供任何写操作。
+ */
+async function queryByProduct({ productId, warehouseId, scopeWarehouseIds = null }) {
+  const pid = Number(productId)
+  if (!Number.isFinite(pid) || pid <= 0) throw new AppError('productId 无效', 400)
+  const scope = scopeFilter(scopeWarehouseIds, 'c.warehouse_id')
+  const wh = warehouseId ? Number(warehouseId) : null
+  const whCond = wh ? 'AND c.warehouse_id = ?' : ''
+  const params = wh ? [pid, wh, ...scope.params] : [pid, ...scope.params]
+  const [rows] = await pool.query(
+    `SELECT c.id, c.barcode, c.container_type, c.product_id, c.warehouse_id, c.location_id,
+            c.remaining_qty, c.initial_qty, c.unit,
+            c.batch_no, c.mfg_date, c.exp_date,
+            c.source_type, c.source_ref_id,
+            c.locked_by_task_id,
+            p.code AS product_code, p.name AS product_name,
+            w.name AS warehouse_name,
+            loc.code AS location_code,
+            lt.task_no AS locked_task_no
+     FROM inventory_containers c
+     JOIN product_items p ON p.id = c.product_id
+     JOIN inventory_warehouses w ON w.id = c.warehouse_id
+     LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
+     LEFT JOIN warehouse_tasks lt ON lt.id = c.locked_by_task_id
+     WHERE c.product_id = ? AND c.status = 1 AND c.deleted_at IS NULL
+       AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+       ${whCond}
+       ${scope.sql}
+     ORDER BY c.warehouse_id ASC, c.id ASC`,
+    params,
+  )
+  if (!rows.length) return []
+  const first = rows[0]
+  return {
+    productId:     first.product_id,
+    productCode:   first.product_code,
+    productName:   first.product_name,
+    unit:          first.unit,
+    containers: rows.map(r => ({
+      containerId:   r.id,
+      barcode:       r.barcode,
+      warehouseId:   r.warehouse_id,
+      warehouseName: r.warehouse_name,
+      locationCode:  r.location_code || null,
+      batchNo:       r.batch_no     || null,
+      mfgDate:       r.mfg_date     || null,
+      expDate:       r.exp_date     || null,
+      remainingQty:  Number(r.remaining_qty),
+      containerKind: Number(r.container_type) === 2 || /^B/i.test(String(r.barcode || '')) ? 'plastic_box' : 'inventory',
+      individual:    Number(r.container_type) === 1 && Number(r.initial_qty) === 1,
+      lockedByTaskId: r.locked_by_task_id != null ? Number(r.locked_by_task_id) : null,
+      lockedByTaskNo: r.locked_task_no || null,
+    })),
+  }
+}
+
+/**
  * 上架操作：将容器绑定到指定库位
  * 仅更新 location_id，不触发库存数量变动
  *
@@ -1088,6 +1201,8 @@ module.exports = {
   checkStockConsistency,
   resolveSourceDocumentsBatch,
   getContainerByBarcode,
+  queryByBarcode,
+  queryByProduct,
   assignContainerLocation,
   splitContainerOp,
 }

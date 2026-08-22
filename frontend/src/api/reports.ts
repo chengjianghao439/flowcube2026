@@ -11,7 +11,20 @@ export interface SaleStats {
   byProduct: { productName: string; totalQty: number; totalAmount: number }[]
 }
 export interface InventoryStats {
-  turnover: { code: string; name: string; unit: string; inboundQty: number; outboundQty: number; currentQty: number }[]
+  turnover: {
+    code: string
+    name: string
+    unit: string
+    inboundQty: number
+    outboundQty: number
+    currentQty: number
+    /** 期内平均库存 (期初+期末)/2 */
+    avgStock: number
+    /** 周转率 = 期内出库量 / 平均库存 */
+    turnRate: number
+    /** 周转天数 = 期内天数 / 周转率；无完整日期区间或无出库时为 null */
+    turnDays: number | null
+  }[]
   byWarehouse: { warehouseName: string; totalQty: number; totalValue: number }[]
 }
 
@@ -308,3 +321,12 @@ export interface WavePerformance {
 
 export const getWavePerformanceApi = (params: { startDate?: string; endDate?: string } = {}) =>
   client.get<WavePerformance>(`/reports/wave-performance?${q(params)}`)
+
+// ── 采购价格趋势 ──────────────────────────────────────────────────────────────
+export interface PurchasePricePoint {
+  month: string
+  avgPrice: number
+  orderCount: number
+}
+export const getPurchasePriceTrendApi = (params: { productId: number; startDate?: string; endDate?: string }) =>
+  client.get<PurchasePricePoint[]>(`/reports/purchase-price-trend?${q(params)}`)

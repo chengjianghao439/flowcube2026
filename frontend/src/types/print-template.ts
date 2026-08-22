@@ -1,5 +1,5 @@
 export type PaperSize = 'A4' | 'A5' | 'A6' | 'thermal80' | 'thermal75' | 'thermal58'
-export type TemplateType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+export type TemplateType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 
 export interface TemplateElement {
   id: string

@@ -25,6 +25,7 @@ import {
 export default function PlasticBoxesPage() {
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [detailTarget, setDetailTarget] = useState<PlasticBox | null>(null)
   // 新建表单状态（塑料盒不支持编辑，弹窗固定是创建态）
   const [product, setProduct] = useState<FinderResult | null>(null)
@@ -51,8 +52,9 @@ export default function PlasticBoxesPage() {
         title="塑料盒管理"
         description="管理永久暂存容器（B 条码），每个塑料盒绑定一个商品，用于零散出货"
         columns={columns}
-        queryKey={['plastic-boxes', keyword]}
-        listQuery={() => getPlasticBoxesApi({ pageSize: 99999, keyword })}
+        queryKey={['plastic-boxes', { page, pageSize: 20, keyword }]}
+        listQuery={() => getPlasticBoxesApi({ page, pageSize: 20, keyword })}
+        pagination={{ page, pageSize: 20, unit: '个', onPageChange: setPage }}
         deleteApi={(id) => deletePlasticBoxApi(id, { skipGlobalError: true })}
         deleteMessage="确认删除该塑料盒？"
         createLabel="+ 新建塑料盒"
@@ -68,10 +70,10 @@ export default function PlasticBoxesPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="h-9 w-56"
-              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
+              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
             />
-            <Button size="sm" variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
-            {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>}
+            <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
+            {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
           </FilterCard>
         }
         renderActions={(row, helpers) => (

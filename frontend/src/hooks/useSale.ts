@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { getSaleListApi, getSaleDetailApi, getSaleReservePreviewApi, createSaleApi, updateSaleApi, adjustSaleApi, reserveSaleApi, releaseSaleApi, shipSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
+import { getSaleListApi, getSaleDetailApi, getSaleReservePreviewApi, createSaleApi, updateSaleApi, adjustSaleApi, reserveSaleApi, releaseSaleApi, shipSaleApi, cancelSaleApi, deleteSaleApi, batchConfirmSaleApi } from '@/api/sale'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import { toast } from '@/lib/toast'
 import { ApiClientError } from '@/api/client'
@@ -90,6 +90,15 @@ export const useReleaseSale = () => {
   return useMutation({
     mutationFn: (id: number) => releaseSaleApi(id),
     onSuccess: () => { invalidate('sale_reserve'); toast.success('库存已释放') },
+  })
+}
+
+/** 批量确认占库：后端逐单尽力而为，失败清单在 onSuccess 的 result.failed 里，页面自行展示 */
+export const useBatchConfirmSale = () => {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: number[]) => batchConfirmSaleApi(ids),
+    onSuccess: () => { invalidate('sale_reserve') },
   })
 }
 

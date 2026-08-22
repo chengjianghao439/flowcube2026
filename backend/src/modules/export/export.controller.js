@@ -1,5 +1,7 @@
-const { exportXlsx, exportStatementXlsx } = require('../../utils/excelExport')
+const { exportXlsx, exportStatementXlsx, exportMultiSheetXlsx } = require('../../utils/excelExport')
 const exportService = require('./export.service')
+const { PERMISSIONS } = require('../../constants/permissions')
+const { getOperatorFromRequest } = require('../../utils/operator')
 
 async function sendExport(res, payload) {
   await exportXlsx(res, payload.filename, payload.sheetName, payload.columns, payload.rows)
@@ -119,7 +121,12 @@ async function exportFixedAssets(req, res, next) {
   try { await sendExport(res, await exportService.getFixedAssetsExportPayload(req.query)) } catch (e) { next(e) }
 }
 async function exportExpenseClaims(req, res, next) {
-  try { await sendExport(res, await exportService.getExpenseClaimsExportPayload(req.query)) } catch (e) { next(e) }
+  try {
+    // 越权读防护（对齐 finance 列表口径）：无 VIEW_ALL 时强制导出自己的报销单
+    const canViewAll = Number(req.user?.roleId) === 1 || (req.user?.permissions || []).includes(PERMISSIONS.FINANCE_EXPENSE_VIEW_ALL)
+    const query = canViewAll ? req.query : { ...req.query, applicantId: getOperatorFromRequest(req).operatorId }
+    await sendExport(res, await exportService.getExpenseClaimsExportPayload(query))
+  } catch (e) { next(e) }
 }
 async function exportFinanceAccounts(req, res, next) {
   try { await sendExport(res, await exportService.getFinanceAccountsExportPayload()) } catch (e) { next(e) }
@@ -173,6 +180,25 @@ async function exportCompanies(req, res, next) {
   try { await sendExport(res, await exportService.getCompaniesExportPayload()) } catch (e) { next(e) }
 }
 
+/** 利润/库存分析导出：多 sheet（销售毛利/商品毛利/库存金额/滞销库存 + 汇总块） */
+async function exportProfitAnalysis(req, res, next) {
+  try {
+    const payload = await exportService.getProfitAnalysisExportPayload({
+      ...req.query,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    })
+    await exportMultiSheetXlsx(res, payload.filename, payload.sheets)
+  } catch (e) { next(e) }
+}
+
+/** 应收/应付账龄导出：多 sheet（分桶 + Top 往来方） */
+async function exportAging(req, res, next) {
+  try {
+    const payload = await exportService.getAgingExportPayload()
+    await exportMultiSheetXlsx(res, payload.filename, payload.sheets)
+  } catch (e) { next(e) }
+}
+
 module.exports = {
   exportPurchase,
   exportSale,
@@ -207,4 +233,6 @@ module.exports = {
   exportAccountingPeriods,
   exportTaxAdjustments,
   exportCompanies,
+  exportProfitAnalysis,
+  exportAging,
 }

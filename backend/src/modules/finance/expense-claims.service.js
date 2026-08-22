@@ -284,13 +284,17 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', app
   }
 }
 
-async function findById(id) {
+async function findById(id, { applicantId = null, allowAll = false } = {}) {
   const [[row]] = await pool.query(
     `SELECT c.*, a.name AS paid_account_name FROM expense_claims c
        LEFT JOIN finance_accounts a ON a.id = c.paid_account_id
       WHERE c.id=? AND c.deleted_at IS NULL`, [id],
   )
   if (!row) throw new AppError('费用报销单不存在', 404)
+  // 越权读防护（对齐列表的 canViewAll/applicantId 口径）：非查看全部者只能读自己的单
+  if (!allowAll && applicantId != null && Number(row.applicant_id) !== Number(applicantId)) {
+    throw new AppError('无权查看他人的费用报销单', 403, 'EXPENSE_VIEW_DENIED')
+  }
   const [items] = await pool.query(
     'SELECT * FROM expense_claim_items WHERE claim_id=? ORDER BY happened_at ASC, id ASC', [id],
   )

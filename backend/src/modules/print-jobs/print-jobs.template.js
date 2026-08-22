@@ -27,6 +27,19 @@ function buildRackLabelZpl({ rack_barcode, rack_code, zone, name }) {
   return `^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,22,22^FD${rc}^FS^FO32,138^A0N,20,20^FD${z} ${n}^FS^XZ`
 }
 
+/** \u5e93\u4f4d\u6807\u7b7e\uff08warehouse_locations\uff0c\u6761\u7801 R+\u6570\u5b57\uff09\uff1a\u6761\u7801 + \u5e93\u4f4d\u7f16\u7801 + \u533a\u57df/\u540d\u79f0 */
+function buildLocationLabelZpl({ location_barcode, location_code, zone, name }) {
+  const code = String(location_barcode ?? '').replace(/[\r\n^~]/g, '')
+  const lc = String(location_code ?? '')
+    .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
+    .slice(0, 28)
+  const z = String(zone ?? '').slice(0, 12)
+  const n = String(name ?? '')
+    .replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '?')
+    .slice(0, 20)
+  return `^XA^CI28^LH0,0^FO32,24^BY2^BCN,70,Y,N,N^FD${code}^FS^FO32,108^A0N,22,22^FD${lc}^FS^FO32,138^A0N,20,20^FD${z} ${n}^FS^XZ`
+}
+
 function buildPackageLabelZpl({ box_code, task_no, customer_name, carrier_name, freight_type_name, piece_count, item_list, summary }) {
   const bc = String(box_code ?? '').replace(/[\r\n^~]/g, '')
   const tn = String(task_no ?? '').slice(0, 20)
@@ -68,6 +81,7 @@ module.exports = {
   buildContainerLabelZpl,
   buildPlasticBoxLabelZpl,
   buildRackLabelZpl,
+  buildLocationLabelZpl,
   buildPackageLabelZpl,
   buildProductLabelZpl,
 }

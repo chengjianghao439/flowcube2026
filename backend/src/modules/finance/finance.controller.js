@@ -24,7 +24,11 @@ const expenseList = async(req,res,next)=>{ try{
   const query = canViewAll ? req.query : { ...req.query, applicantId: op.operatorId }
   return successResponse(res, await expenseSvc.findAll(query), '查询成功')
 }catch(e){next(e)} }
-const expenseDetail = async(req,res,next)=>{ try{return successResponse(res,await expenseSvc.findById(+req.params.id),'查询成功')}catch(e){next(e)} }
+const expenseDetail = async(req,res,next)=>{ try{
+  const op = getOperatorFromRequest(req)
+  const canViewAll = Number(req.user?.roleId) === 1 || (req.user?.permissions || []).includes(PERMISSIONS.FINANCE_EXPENSE_VIEW_ALL)
+  return successResponse(res, await expenseSvc.findById(+req.params.id, { applicantId: canViewAll ? null : op.operatorId, allowAll: canViewAll }), '查询成功')
+}catch(e){next(e)} }
 const expenseCreate = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.create(req.body,op),'报销单已创建',201)}catch(e){next(e)} }
 const expenseUpdate = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.update(+req.params.id,req.body,op),'保存成功')}catch(e){next(e)} }
 const expenseSubmit = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.submit(+req.params.id,op),'已提交审批')}catch(e){next(e)} }

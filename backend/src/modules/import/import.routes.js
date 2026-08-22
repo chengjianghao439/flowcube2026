@@ -28,5 +28,10 @@ router.get('/products/template', requirePermission(PERMISSIONS.IMPORT_PRODUCT_EX
 router.post('/products', requirePermission(PERMISSIONS.IMPORT_PRODUCT_EXECUTE), upload.single('file'), controller.importProducts)
 router.get('/stock/template', requirePermission(PERMISSIONS.IMPORT_STOCK_EXECUTE), controller.downloadStockTemplate)
 router.post('/stock', requirePermission(PERMISSIONS.IMPORT_STOCK_EXECUTE), upload.single('file'), controller.importStock)
+// 客户导入：复用客户创建权限；价格表明细导入：复用价格表更新权限（均为写操作，语义一致）
+router.get('/customers/template', requirePermission(PERMISSIONS.CUSTOMER_CREATE), controller.downloadCustomerTemplate)
+router.post('/customers', requirePermission(PERMISSIONS.CUSTOMER_CREATE), upload.single('file'), controller.importCustomers)
+router.get('/price-list-items/template', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), controller.downloadPriceListTemplate)
+router.post('/price-list-items', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), upload.single('file'), controller.importPriceListItems)
 
 module.exports = router

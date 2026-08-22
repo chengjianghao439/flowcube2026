@@ -45,6 +45,9 @@ router.get('/aging/expiry',            requirePermission(PERMISSIONS.REPORT_VIEW
 router.get('/procurement-plan',        requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.procurementPlan)
 router.get('/containers',              requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.containers)
 router.get('/containers/barcode/:bc',  requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.containerByBarcode)
+// PDA 只读库存查询（按条码 / 按商品×仓库），复用 INVENTORY_VIEW，经 scopeFilter 做仓库数据权限过滤
+router.get('/query-by-barcode',        requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.queryByBarcode)
+router.get('/query-by-product',        requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.queryByProduct)
 router.get('/containers/:id/logs',     requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.containerLogs)
 router.get('/stock',                   requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.stock)
 router.get('/logs',                    requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.logs)

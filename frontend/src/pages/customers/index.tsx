@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
 import { downloadExport } from '@/lib/exportDownload'
+import { payloadClient as client } from '@/api/client'
 import { useCustomers, useDeleteCustomer } from '@/hooks/useCustomers'
 import CustomerFormDialog from './components/CustomerFormDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -21,18 +23,45 @@ import type { Customer } from '@/types/customers'
 import type { TableColumn } from '@/types'
 
 const PRICE_LEVELS = ['A', 'B', 'C', 'D'] as const
+const PAGE_SIZE = 20
 
 export default function CustomersPage() {
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [bindOpen, setBindOpen] = useState(false)
   const [bindCustomer, setBindCustomer] = useState<Customer | null>(null)
   const [selectedPriceLevel, setSelectedPriceLevel] = useState<'A' | 'B' | 'C' | 'D'>('A')
+  const [importOpen, setImportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ success: number; errors: string[] } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  const { data, isLoading } = useCustomers({ pageSize: 99999, keyword })
+  // 客户批量导入：模板列 = 编码/名称/联系人/电话/结算方式/授信额度，行级回执由后端逐行返回
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await client.post('/import/customers', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setImportResult(r as { success: number; errors: string[] })
+      qc.invalidateQueries({ queryKey: ['customers'] })
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '导入失败')
+    } finally {
+      setImporting(false)
+      e.target.value = ''
+    }
+  }
+
+  const { data, isLoading } = useCustomers({ page, pageSize: PAGE_SIZE, keyword })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const del = useDeleteCustomer()
   const [confirmTarget, setConfirmTarget] = useState<Customer | null>(null)
   const bindMut = useMutation({
@@ -82,15 +111,42 @@ export default function CustomersPage() {
       <PageHeader title="客户管理" description="管理销售客户档案，可绑定价格 A / B / C / D" actions={
         <>
           <Button variant="outline" onClick={() => downloadExport('/export/customers').catch(e => toast.error((e as Error).message))}>导出</Button>
+          <Button variant="outline" onClick={() => setImportOpen(v => !v)}>批量导入</Button>
           <Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>+ 新增客户</Button>
         </>
       } />
       <FilterCard>
-        <Input placeholder="搜索编码/名称…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} />
-        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search) }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword('') }}>重置</Button>}
+        <Input placeholder="搜索编码/名称…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
+        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); setPage(1) }}>搜索</Button>
+        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
       </FilterCard>
+
+      {importOpen && (
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+          <p className="text-sm text-muted-foreground">请先下载模板，按照格式填写后上传。列：客户编码（可空，留空自动生成）、客户名称、联系人、电话、结算方式（现结/月结/预付定金/货到付款）、授信额度（可空）。名称重复或编码重复的行会跳过并留痕。</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => downloadExport('/import/customers/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>
+            <div className="flex items-center gap-2">
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportFile} />
+              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importing}>
+                {importing ? '导入中…' : '选择文件并上传'}
+              </Button>
+            </div>
+          </div>
+          {importResult && (
+            <div className="rounded-lg border p-3 text-sm space-y-1">
+              <p className="text-success font-medium">导入成功：{importResult.success} 条</p>
+              {importResult.errors.length > 0 && (
+                <div className="max-h-40 space-y-0.5 overflow-y-auto text-xs text-muted-foreground">
+                  {importResult.errors.map((err, i) => <p key={i}>{err}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <DataTable columns={columns} data={data?.list||[]} loading={isLoading} />
+      <Pagination page={page} totalPages={totalPages} total={total} unit="个" onPageChange={setPage} />
       <CustomerFormDialog open={dialogOpen} onClose={()=>setDialogOpen(false)} customer={editing} />
       <ConfirmDialog
         open={!!confirmTarget}

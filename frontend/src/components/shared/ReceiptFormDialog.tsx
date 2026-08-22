@@ -72,8 +72,8 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
     queryKey: ['payments', 'settleable', { type, partyName, settlementTypes, target }],
     // 两个分支返回的 list 元素类型不同，显式收敛成联合类型交给下面的 candidates 归一
     queryFn: async (): Promise<{ list: (PaymentRecord | ReconciliationStatement)[] }> => byStatement
-      ? getStatementsApi({ type, pageSize: 99999, keyword: partyName })
-      : getPaymentsApi({ type, pageSize: 99999, keyword: partyName, settlementTypes }),
+      ? getStatementsApi({ type, pageSize: 500, keyword: partyName })
+      : getPaymentsApi({ type, pageSize: 500, keyword: partyName, settlementTypes }),
     enabled: open && partyName.trim().length > 0,
   })
 

@@ -24,21 +24,32 @@ function ymd(value) {
 async function exportXlsx(res, filename, sheetName, columns, data) {
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet(sheetName)
+  fillSheet(ws, columns, data, 1)
 
+  await writeWorkbook(res, wb, filename)
+}
+
+/**
+ * 单 sheet 渲染（表头 + 斑马纹 + 细边框），多 sheet 导出复用同一份样式。
+ * @param {number} startRow - 表头所在行（1 起）；startRow>1 时其上方的行留给汇总块
+ */
+function fillSheet(ws, columns, data, startRow = 1) {
   ws.columns = columns.map(c => ({ header: c.header, key: c.key, width: c.width || 18 }))
 
   // 表头样式
-  ws.getRow(1).eachCell(cell => {
+  const headerRow = ws.getRow(startRow)
+  headerRow.values = columns.map(c => c.header)
+  headerRow.eachCell(cell => {
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } }
     cell.alignment = { horizontal: 'center', vertical: 'middle' }
     cell.border = { bottom: { style: 'thin', color: { argb: 'FFAAAAAA' } } }
   })
-  ws.getRow(1).height = 24
+  headerRow.height = 24
 
   data.forEach((row, i) => {
     ws.addRow(row)
-    const r = ws.getRow(i + 2)
+    const r = ws.getRow(startRow + 1 + i)
     r.eachCell(cell => {
       cell.border = { bottom: { style: 'hair', color: { argb: 'FFDDDDDD' } } }
     })
@@ -47,12 +58,44 @@ async function exportXlsx(res, filename, sheetName, columns, data) {
       )
     }
   })
+}
 
+async function writeWorkbook(res, wb, filename) {
   const safeFilename = encodeURIComponent(filename)
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${safeFilename}.xlsx`)
   await wb.xlsx.write(res)
   res.end()
+}
+
+/**
+ * 多 sheet xlsx 导出。payload.sheets = [{ sheetName, columns, rows, summaryRows? }]，
+ * summaryRows 为 [[label, value], ...]，渲染为该 sheet 头部一个两列加粗汇总块，
+ * 汇总块下方空一行再接标准表格（表头 + 数据）。
+ */
+async function exportMultiSheetXlsx(res, filename, sheets) {
+  const wb = new ExcelJS.Workbook()
+  for (const sheet of sheets) {
+    const ws = wb.addWorksheet(sheet.sheetName)
+    ws.columns = sheet.columns.map(c => ({ header: c.header, key: c.key, width: c.width || 18 }))
+    let startRow = 1
+    if (Array.isArray(sheet.summaryRows) && sheet.summaryRows.length) {
+      sheet.summaryRows.forEach(([label, value], i) => {
+        const r = i + 1
+        const labelCell = ws.getCell(`A${r}`)
+        labelCell.value = label
+        labelCell.font = { bold: true }
+        const valueCell = ws.getCell(`B${r}`)
+        valueCell.value = value
+        valueCell.font = { bold: true }
+        ws.getRow(r).height = 20
+      })
+      // 汇总块末尾空一行，表头从 summaryRows.length + 2 行开始
+      startRow = sheet.summaryRows.length + 2
+    }
+    fillSheet(ws, sheet.columns, sheet.rows || [], startRow)
+  }
+  await writeWorkbook(res, wb, filename)
 }
 
 /**
@@ -177,4 +220,4 @@ async function exportStatementXlsx(res, meta, items) {
   res.end()
 }
 
-module.exports = { exportXlsx, exportStatementXlsx, ymd }
+module.exports = { exportXlsx, exportStatementXlsx, exportMultiSheetXlsx, ymd }

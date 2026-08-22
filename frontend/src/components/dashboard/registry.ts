@@ -5,6 +5,7 @@ import {
   Activity, BarChart3, Warehouse, TrendingUp, ShoppingBag, CalendarClock, Coins, PieChart,
   AlertTriangle, ListTodo, Users, Building2, TriangleAlert, Info,
   Sparkles, Timer, PartyPopper, Hourglass, Quote, Fish, Clover, Droplet, StickyNote, Gauge,
+  ClipboardCheck,
 } from 'lucide-react'
 import * as Kpi from './widgets/KpiWidgets'
 import * as Chart from './widgets/ChartWidgets'
@@ -74,6 +75,7 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'list-top-customer', title: 'Top 客户',      description: '销售额最高的客户',          icon: Users,         category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListTopCustomer },
   { id: 'list-top-supplier', title: 'Top 供应商',    description: '采购额最高的供应商',        icon: Building2,     category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListTopSupplier },
   { id: 'list-anomaly',      title: '异常扫码分析',  description: '近 30 天扫码异常概况',      icon: TriangleAlert, category: 'list', permission: PERMISSIONS.SCAN_LOG_VIEW,  defaultW: 2, size: 'lg', Component: List.ListAnomaly },
+  { id: 'list-pending-approvals', title: '待我审批', description: '流转到当前节点的审批单据', icon: ClipboardCheck, category: 'list', permission: PERMISSIONS.APPROVAL_TASK_VIEW, defaultW: 2, size: 'lg', Component: List.ListPendingApprovals },
 
   // —— 趣味 ——
   { id: 'fun-wooden-fish', title: '电子木鱼',   description: '敲一敲，功德 +1（连击特效）', icon: Sparkles,    category: 'fun', defaultW: 1, size: 'sm', Component: Fun.WoodenFish },

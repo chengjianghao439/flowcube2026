@@ -13,7 +13,7 @@ function pushNotification(items, seen, item) {
  * 站内通知：按当前用户仓库 scope 过滤「仓库相关」的计数（采购/销售/库存/调拨/收货/打印）。
  * 账款、系统健康等无仓库维度的全局项不受影响。
  */
-async function buildNotifications(scopeWarehouseIds = null) {
+async function buildNotifications(scopeWarehouseIds = null, userId = null) {
   const inboundThresholds = await getInboundClosureThresholds()
   const printTimeoutMinutes = Number(inboundThresholds.printTimeoutMinutes)
   const putawayTimeoutHours = Number(inboundThresholds.putawayTimeoutHours)
@@ -220,8 +220,16 @@ async function buildNotifications(scopeWarehouseIds = null) {
      WHERE created_at >= NOW() - INTERVAL 24 HOUR
        AND severity IN ('danger', 'warning', 'fix_failed')`,
   )
+  // 审批待办（2026-08-22 功能）：按当前用户待审批数（userId 为空时跳过，如 scheduler 全局扫描）
+  let pendingApprovals = 0
+  if (userId != null) {
+    const approvalEngine = require('../../engine/approvalEngine')
+    const pendingRows = await approvalEngine.listPendingTasks(pool, { userId: Number(userId) })
+    pendingApprovals = pendingRows.length
+  }
   const items = []
   const seen = new Set()
+  if (pendingApprovals > 0) pushNotification(items, seen, { code: 'PENDING_APPROVAL', category: 'approval', priority: 5, type: 'warning', icon: '✅', text: `${pendingApprovals} 条审批待处理`, path: '/approvals' })
   if (overduePayable > 0) pushNotification(items, seen, { code: 'OVERDUE_PAYABLE', category: 'finance', priority: 10, type: 'danger', icon: '🚨', text: `${overduePayable} 笔应付账款已逾期`, path: '/payments/payable' })
   if (overdueReceivable > 0) pushNotification(items, seen, { code: 'OVERDUE_RECEIVABLE', category: 'finance', priority: 10, type: 'danger', icon: '🚨', text: `${overdueReceivable} 笔应收账款已逾期`, path: '/payments/receivable' })
   if (lowStockCount > 0) pushNotification(items, seen, { code: 'LOW_STOCK', category: 'inventory', priority: 20, type: 'warning', icon: '⚠️', text: `${lowStockCount} 项库存低于补货点`, path: '/reports/replenishment' })

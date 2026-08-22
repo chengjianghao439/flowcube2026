@@ -20,6 +20,8 @@ import { getAgingApi } from '@/api/payments'
 import type { AgingSide } from '@/api/payments'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { StatTile } from '@/components/dashboard/StatTile'
+import { downloadExport } from '@/lib/exportDownload'
+import { toast } from '@/lib/toast'
 
 const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const wan = (n: number) => Math.abs(n) >= 10000 ? `${(n / 10000).toFixed(n >= 1e6 ? 0 : 1)}万` : String(Math.round(n))
@@ -172,6 +174,10 @@ export default function FinanceDashboardPage() {
         description="账户余额、区间现金流、应收应付账龄一屏总览。数据实时取自账户流水与账款，不做统计缓存。"
         actions={(
           <div className="flex gap-2">
+            <Button variant="outline"
+              onClick={() => downloadExport('/export/aging').catch(e => toast.error((e as Error).message))}>
+              导出账龄 Excel
+            </Button>
             <Button variant="outline" onClick={() => openPath('/finance/accounts', '账户管理')}>账户管理</Button>
             <Button variant="outline" onClick={() => openPath('/finance/expenses', '费用报销')}>费用报销</Button>
           </div>

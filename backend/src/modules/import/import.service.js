@@ -5,6 +5,7 @@ const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../../engine/containerEngine')
+const { normalizeSettlementType, normalizeTermsDays } = require('../../constants/settlementType')
 
 
 async function buildWorkbookBuffer(sheets) {
@@ -339,9 +340,204 @@ async function importStock({ fileBuffer, originalName, operator }) {
   }
 }
 
+// ── 客户导入 ──────────────────────────────────────────────────────────────────
+// 列：code/name/contact/phone/settlement_type/credit_limit
+// 与 customers.service.create 口径一致：名称查重、结算方式归一、账期归零、授信额度可空。
+
+async function buildCustomerTemplate() {
+  const rows = [
+    ['客户编码', '客户名称*', '联系人', '电话', '结算方式', '授信额度'],
+    ['C0001', '示例客户', '张三', '13800000000', '现结', '50000'],
+  ]
+  const widths = [14, 24, 12, 16, 12, 14]
+  return {
+    filename: '客户导入模板.xlsx',
+    buffer: await buildWorkbookBuffer([{ name: '客户导入', rows, widths }]),
+  }
+}
+
+async function importCustomers({ fileBuffer }) {
+  const rows = await readSheetRows(fileBuffer)
+  const dataRows = rows.slice(1).filter((row) => row[0] || row[1])
+  if (!dataRows.length) throw new AppError('文件无数据行', 400)
+
+  let success = 0
+  const errors = []
+  const cut = (v, max) => {
+    const s = String(v ?? '').trim()
+    return s ? s.slice(0, max) : null
+  }
+
+  for (let index = 0; index < dataRows.length; index += 1) {
+    const [code, name, contact, phone, settlementType, creditLimit] = dataRows[index]
+    const normalizedName = String(name ?? '').trim()
+    if (!normalizedName) {
+      errors.push(`第${index + 2}行：客户名称为必填`)
+      continue
+    }
+    try {
+      // 名称唯一（与 customers.service.ensureCustomerNameUnique 同口径）
+      const [dup] = await pool.query(
+        'SELECT id FROM sale_customers WHERE name=? AND deleted_at IS NULL LIMIT 1',
+        [normalizedName],
+      )
+      if (dup[0]) {
+        errors.push(`第${index + 2}行：客户名称"${normalizedName}"已存在`)
+        continue
+      }
+
+      // 编码：留空自动生成，填写则查重后使用
+      let finalCode = String(code ?? '').trim()
+      if (!finalCode) {
+        finalCode = await generateMasterCode(pool, 'CUS', 'sale_customers')
+      } else {
+        const [codeDup] = await pool.query(
+          'SELECT id FROM sale_customers WHERE code=? AND deleted_at IS NULL LIMIT 1',
+          [finalCode],
+        )
+        if (codeDup[0]) {
+          errors.push(`第${index + 2}行：客户编码"${finalCode}"已存在`)
+          continue
+        }
+      }
+
+      const settle = normalizeSettlementType(settlementType)
+      const terms = normalizeTermsDays(settle, null)
+      const limit = creditLimit === '' || creditLimit === null || creditLimit === undefined
+        ? null
+        : Math.max(0, Number(creditLimit))
+
+      await pool.query(
+        `INSERT INTO sale_customers
+           (code,name,contact,phone,price_level,settlement_type,payment_terms_days,credit_limit)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [
+          finalCode,
+          normalizedName,
+          cut(contact, 50),
+          cut(phone, 20),
+          'A',
+          settle,
+          terms,
+          limit,
+        ],
+      )
+      success += 1
+    } catch (error) {
+      errors.push(`第${index + 2}行：${error.message}`)
+    }
+  }
+
+  return {
+    data: { success, errors },
+    message: `导入完成：成功${success}条${errors.length ? `，失败${errors.length}条` : ''}`,
+  }
+}
+
+// ── 价格表明细导入 ────────────────────────────────────────────────────────────
+// 列：list_id/product_code/sale_price。product_code 按商品编码解析（需已存在），
+// 行级回执与商品导入一致；重复 (list_id, product_code) 行后写覆盖前者。
+
+async function buildPriceListTemplate() {
+  const [lists] = await pool.query(
+    'SELECT id, name FROM price_lists WHERE deleted_at IS NULL ORDER BY id',
+  )
+  const rows = [
+    ['价格表ID*', '商品编码*', '销售价*'],
+    ...lists.map(l => [l.id, `商品编码（价格表：${l.name}）`, '15.00']),
+  ]
+  return {
+    filename: '价格表明细导入模板.xlsx',
+    buffer: await buildWorkbookBuffer([{ name: '价格表明细', rows, widths: [12, 24, 12] }]),
+  }
+}
+
+async function importPriceListItems({ fileBuffer }) {
+  const rows = await readSheetRows(fileBuffer)
+  const dataRows = rows.slice(1).filter((row) => row[0] || row[1])
+  if (!dataRows.length) throw new AppError('文件无数据行', 400)
+
+  // 按 (list_id, product_code) 去重：重复行以后写为准
+  const merged = new Map()
+  for (const row of dataRows) {
+    const key = `${String(row[0]).trim()}|${String(row[1]).trim()}`
+    merged.set(key, row)
+  }
+  const listIds = new Set()
+  for (const row of merged.values()) listIds.add(String(row[0]).trim())
+
+  // 预载价格表与商品（一次查询，避免逐行 N+1；不存在/停用的商品跳过并留痕）
+  const listWhere = [...listIds].length
+    ? listIds
+    : []
+  const validListIds = new Set()
+  if (listWhere.length) {
+    const placeholders = listWhere.map(() => '?').join(',')
+    const [lists] = await pool.query(
+      `SELECT id FROM price_lists WHERE deleted_at IS NULL AND id IN (${placeholders})`,
+      listWhere,
+    )
+    lists.forEach(l => validListIds.add(String(l.id)))
+  }
+  const [products] = await pool.query('SELECT code, id, name, unit FROM product_items WHERE deleted_at IS NULL')
+  const productByCode = new Map()
+  products.forEach(p => productByCode.set(String(p.code), p))
+
+  let success = 0
+  const errors = []
+
+  for (const row of merged.values()) {
+    const [listIdRaw, productCodeRaw, priceRaw] = row
+    const listId = String(listIdRaw ?? '').trim()
+    const productCode = String(productCodeRaw ?? '').trim()
+    const lineNo = dataRows.indexOf(row) + 2
+    const label = `第${lineNo}行`
+
+    if (!listId || !productCode || priceRaw === '' || priceRaw === null || priceRaw === undefined) {
+      errors.push(`${label}：价格表ID、商品编码、销售价为必填`)
+      continue
+    }
+    if (!validListIds.has(listId)) {
+      errors.push(`${label}：价格表 ${listId} 不存在或已删除`)
+      continue
+    }
+    const product = productByCode.get(productCode)
+    if (!product) {
+      errors.push(`${label}：商品编码"${productCode}"不存在`)
+      continue
+    }
+    const price = Number(priceRaw)
+    if (!Number.isFinite(price) || price < 0) {
+      errors.push(`${label}：销售价无效`)
+      continue
+    }
+
+    try {
+      await pool.query(
+        `INSERT INTO price_list_items (list_id,product_id,product_code,product_name,unit,sale_price)
+         VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE sale_price = VALUES(sale_price)`,
+        [Number(listId), product.id, product.code, product.name, product.unit, price],
+      )
+      success += 1
+    } catch (error) {
+      errors.push(`${label}：${error.message}`)
+    }
+  }
+
+  return {
+    data: { success, errors },
+    message: `导入完成：成功${success}条${errors.length ? `，失败${errors.length}条` : ''}`,
+  }
+}
+
 module.exports = {
   buildProductTemplate,
   importProducts,
   buildStockTemplate,
   importStock,
+  buildCustomerTemplate,
+  importCustomers,
+  buildPriceListTemplate,
+  importPriceListItems,
 }

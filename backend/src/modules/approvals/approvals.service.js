@@ -18,6 +18,7 @@ const BIZ_TYPES = [
   { value: 'expense_claim', label: '费用报销' },
   { value: 'purchase_order', label: '采购单' },
   { value: 'inventory_disposal', label: '呆滞处置单' },
+  { value: 'product_price', label: '商品改价申请' }, // 2026-08-22 价格体系：改价走审批
 ]
 
 const APPROVER_TYPE_LABEL = { 1: '指定角色', 2: '部门负责人', 3: '指定用户' }

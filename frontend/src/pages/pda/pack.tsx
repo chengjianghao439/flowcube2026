@@ -47,7 +47,7 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
   const navigate = useNavigate()
   const { data, isLoading } = useQuery({
     queryKey: ['pda-pack-tasks'],
-    queryFn: () => getTasksApi({ status: WT_STATUS.PACKING, pageSize: 99999 }),
+    queryFn: () => getTasksApi({ status: WT_STATUS.PACKING, pageSize: 200 }),
   })
   const tasks = data?.list ?? []
   return (

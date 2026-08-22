@@ -30,7 +30,7 @@ export function SupplierFinder({ open, onClose, onConfirm }: SupplierFinderProps
     if (!open) { setKeyword(''); setSearchText(''); setSelected(null) }
   }, [open])
 
-  const { data, isFetching } = useSuppliers({ pageSize: 99999, keyword: searchText })
+  const { data, isFetching } = useSuppliers({ pageSize: 500, keyword: searchText })
 
   function handleKeywordChange(v: string) {
     setKeyword(v)

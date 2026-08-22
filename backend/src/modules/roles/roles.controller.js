@@ -26,8 +26,18 @@ async function updatePermissions(req, res, next) {
   }
 }
 
+async function duplicate(req, res, next) {
+  try {
+    const result = await svc.duplicate(req.params.roleId, req.body)
+    return successResponse(res, result, '角色复制成功', 201)
+  } catch (error) {
+    next(error)
+  }
+}
+
 module.exports = {
   list,
   permissions,
   updatePermissions,
+  duplicate,
 }

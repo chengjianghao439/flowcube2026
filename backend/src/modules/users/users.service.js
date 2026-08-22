@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { normalizePagination } = require('../../utils/pagination')
 
 // roleId=1 是超管，跳过全部权限校验（前后端都是）。允许创建/改到超管的唯一入口是
 // 调用方自己就是超管——否则任何一个有 user.create / user.update 权限的普通角色
@@ -12,7 +13,8 @@ function assertCanAssignRole(operator, targetRoleId) {
 }
 
 async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
-  const offset = (page - 1) * pageSize
+  // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
 
   const [rows] = await pool.query(
@@ -24,7 +26,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
        AND (u.username LIKE ? OR u.real_name LIKE ?)
      ORDER BY u.created_at DESC
      LIMIT ? OFFSET ?`,
-    [like, like, pageSize, offset],
+    [like, like, ps, offset],
   )
 
   const [[{ total }]] = await pool.query(
@@ -45,7 +47,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
       departmentName: u.department_name || null,
       createdAt: u.created_at,
     })),
-    pagination: { page, pageSize, total },
+    pagination: { page, pageSize: ps, total },
   }
 }
 

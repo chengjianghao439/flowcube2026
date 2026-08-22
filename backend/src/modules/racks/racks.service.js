@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { normalizePagination } = require('../../utils/pagination')
 
 function fmt(r) {
   return {
@@ -23,7 +24,8 @@ function makeRackBarcode(id) {
 }
 
 async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null, zone = null }) {
-  const offset = (page - 1) * pageSize
+  // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const conds = ['r.deleted_at IS NULL', '(r.code LIKE ? OR r.name LIKE ? OR r.zone LIKE ?)']
   const params = [like, like, like]
@@ -40,13 +42,13 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
      WHERE ${where}
      ORDER BY r.warehouse_id ASC, r.zone ASC, r.code ASC
      LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset],
+    [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM warehouse_racks r WHERE ${where}`,
     params,
   )
-  return { list: rows.map(fmt), pagination: { page, pageSize, total } }
+  return { list: rows.map(fmt), pagination: { page, pageSize: ps, total } }
 }
 
 async function findActive(warehouseId) {

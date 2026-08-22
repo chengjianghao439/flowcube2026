@@ -16,14 +16,33 @@ const findItems = async (listId) => {
 }
 
 const findCustomerPrice = async (customerId, productId) => {
-  const [[cust]] = await pool.query('SELECT price_level FROM sale_customers WHERE id=?', [customerId])
+  const [[cust]] = await pool.query(
+    'SELECT price_level, price_list_id, price_list_name FROM sale_customers WHERE id=?',
+    [customerId],
+  )
+  // 客户绑定了价格表（price_lists 落地，2026-08-22）：优先查价格表明细，未覆盖再回退等级价
+  if (cust?.price_list_id) {
+    const [[item]] = await pool.query(
+      'SELECT sale_price FROM price_list_items WHERE list_id=? AND product_id=?',
+      [cust.price_list_id, productId],
+    )
+    if (item && item.sale_price != null) {
+      return {
+        salePrice: Number(item.sale_price),
+        priceLevel: null,
+        priceLevelName: cust.price_list_name || '价格表',
+        source: 'price_list',
+        priceListId: Number(cust.price_list_id),
+      }
+    }
+  }
   const level = String(cust?.price_level || 'A').toUpperCase()
   const fieldMap = { A: 'sale_price_a', B: 'sale_price_b', C: 'sale_price_c', D: 'sale_price_d' }
   const field = fieldMap[level] || fieldMap.A
   const [[item]] = await pool.query(
     `SELECT ${field} AS sale_price FROM product_items WHERE id=? AND deleted_at IS NULL`,
     [productId])
-  return item ? { salePrice: Number(item.sale_price || 0), priceLevel: level, priceLevelName: priceLevelLabel(level) } : null
+  return item ? { salePrice: Number(item.sale_price || 0), priceLevel: level, priceLevelName: priceLevelLabel(level), source: 'price_level' } : null
 }
 
 const create = async (name, remark) => {

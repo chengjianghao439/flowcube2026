@@ -77,7 +77,7 @@ export default function ProductsPage() {
   const total = data?.pagination?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const { data: categoryTree = [] } = useCategoryTree()
-  const { data: supplierData } = useSuppliers({ pageSize: 99999, page: 1 })
+  const { data: supplierData } = useSuppliers({ pageSize: 500, page: 1 })
   const { mutate: del } = useDeleteProduct()
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {

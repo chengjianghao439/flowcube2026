@@ -3,6 +3,7 @@ const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { loadPriceRates, computeTierPrices } = require('../../utils/priceLevels')
 const { getInventoryDisplayProjectionSql } = require('../inventory/inventoryProjection')
+const { normalizePagination } = require('../../utils/pagination')
 
 async function ensureCategoryExists(categoryId) {
   if (!categoryId) throw new AppError('请选择商品分类', 400)
@@ -102,6 +103,7 @@ async function validateProductPayload({ name, categoryId, barcode, costPrice, cu
  * - 自动构建完整分类路径（一级 > 二级 > 三级 > 四级）
  */
 async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId = null, warehouseId = null }) {
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   // 1. 先取所有分类，用于路径拼接 + 子孙 ID 展开
   const [catRows] = await pool.query(
@@ -151,7 +153,6 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
     : '0'
   const stockParams = warehouseId ? [warehouseId] : []
 
-  const offset = (page - 1) * pageSize
   const [rows] = await pool.query(
     `SELECT p.id, p.code, p.sku_code, p.article_number, p.name, p.category_id, p.supplier_id, p.unit, p.sale_price, p.sale_price_a, p.sale_price_b, p.sale_price_c, p.sale_price_d, p.cost_price, p.spec, p.color, p.barcode,
             c.name AS category_name, s.name AS supplier_name, ${stockCol} AS stock
@@ -161,7 +162,7 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
      ${stockJoin}
      ${where}
      ORDER BY p.name ASC LIMIT ? OFFSET ?`,
-    [...stockParams, ...queryParams, pageSize, offset],
+    [...stockParams, ...queryParams, ps, offset],
   )
 
   const [[{ total }]] = await pool.query(
@@ -189,7 +190,7 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
       costPrice: r.cost_price != null ? Number(r.cost_price) : null,
       stock: Number(r.stock),
     })),
-    pagination: { page, pageSize, total },
+    pagination: { page, pageSize: ps, total },
   }
 }
 
@@ -240,7 +241,8 @@ async function assertProductDeletable(id) {
 }
 
 async function findAll({ page=1, pageSize=20, keyword='', categoryId=null, status='', supplierId=null, minPrice=null, maxPrice=null }) {
-  const offset = (page-1)*pageSize
+  // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['p.deleted_at IS NULL']
   const params = []
   if (keyword) {
@@ -262,7 +264,7 @@ async function findAll({ page=1, pageSize=20, keyword='', categoryId=null, statu
      FROM product_items p LEFT JOIN product_categories c ON p.category_id=c.id
      LEFT JOIN supply_suppliers s ON p.supplier_id=s.id
      WHERE ${where} ORDER BY p.created_at DESC LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset],
+    [...params, ps, offset],
   )
 
   const [[{total}]] = await pool.query(
@@ -337,8 +339,8 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units }) {
-  await findById(id)
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units }, operator = null) {
+  const current = await findById(id)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const normalizedUnits = validateUnits(unit, units)
   const rates = await loadPriceRates(pool)
@@ -358,6 +360,29 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
     )
     await replaceProductUnits(conn, id, normalizedUnits)
     await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint })
+    // 价格变更历史（2026-08-22 功能：价格体系落地）——凡有价格列变化的写历史，可追溯
+    const priceFields = [
+      ['sale', current.salePrice, sp],
+      ['a', current.salePriceA, spA],
+      ['b', current.salePriceB, spB],
+      ['c', current.salePriceC, spC],
+      ['d', current.salePriceD, spD],
+      ['cost', current.costPrice, normalizedCost],
+    ]
+    for (const [type, oldP, newP] of priceFields) {
+      const oldV = oldP != null ? Number(oldP) : null
+      const newV = newP != null ? Number(newP) : null
+      if (oldV !== newV) {
+        await conn.query(
+          `INSERT INTO product_price_history
+             (product_id, product_code, product_name, price_type, old_price, new_price,
+              change_source, operator_id, operator_name)
+           VALUES (?,?,?,?,?,?, 'manual', ?, ?)`,
+          [id, current.code, current.name, type, oldV, newV,
+           operator?.userId || null, operator?.realName || operator?.username || null],
+        )
+      }
+    }
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }

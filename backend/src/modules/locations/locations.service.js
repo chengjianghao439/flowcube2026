@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { normalizePagination } = require('../../utils/pagination')
 
 function pad(val) {
   if (!val) return ''
@@ -45,7 +46,8 @@ async function assertLocationDeletable(id) {
 }
 
 async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null, status = '', zone = '' }) {
-  const offset = (page - 1) * pageSize
+  // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
 
   const conditions = ['wl.deleted_at IS NULL', '(wl.code LIKE ? OR wl.name LIKE ?)']
@@ -73,7 +75,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
      WHERE ${where}
      ORDER BY wl.warehouse_id ASC, wl.code ASC
      LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset],
+    [...params, ps, offset],
   )
 
   const [[{ total }]] = await pool.query(
@@ -81,7 +83,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
     params,
   )
 
-  return { list: rows.map(formatRow), pagination: { page, pageSize, total } }
+  return { list: rows.map(formatRow), pagination: { page, pageSize: ps, total } }
 }
 
 async function findById(id) {
@@ -221,6 +223,29 @@ async function findByCode(code) {
   return { id: r.id, code: r.code, barcode: r.barcode ?? null, name: r.name, zone: r.zone, aisle: r.aisle, rack: r.rack, level: r.level, position: r.position, warehouseId: r.warehouse_id, status: r.status }
 }
 
+/**
+ * 库位标签打印入队（对照 racks.service.enqueuePrintLabel）。
+ * 返回 null = 未解析到打印机（前端提示未绑定/离线）；其余返回打印任务摘要。
+ */
+async function enqueuePrintLabel(id, { userId = null } = {}) {
+  await findById(id)
+  const { enqueueLocationLabelJob } = require('../print-jobs/print-jobs.service')
+  // 不传 jobUniqueKey：由打印域按「对象 + 时间窗」默认分桶去重（见 print-jobs.label-command）
+  const job = await enqueueLocationLabelJob({
+    locationId: id,
+    createdBy: userId,
+  })
+  if (!job) return null
+  return {
+    id:            job.id != null ? Number(job.id) : null,
+    printerCode:   job.printerCode ?? null,
+    printerName:   job.printerName ?? null,
+    dispatchHint:  job.dispatchHint ?? null,
+    contentType:   job.contentType ?? null,
+    content:       job.content ?? null,
+  }
+}
+
 module.exports = {
   findByCode,
   findAll,
@@ -230,4 +255,5 @@ module.exports = {
   update,
   softDelete,
   generateCode,
+  enqueuePrintLabel,
 }

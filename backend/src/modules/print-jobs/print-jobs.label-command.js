@@ -7,6 +7,7 @@ const {
   buildContainerLabelZpl,
   buildPlasticBoxLabelZpl,
   buildRackLabelZpl,
+  buildLocationLabelZpl,
   buildPackageLabelZpl,
   buildProductLabelZpl,
 } = require('./print-jobs.template')
@@ -201,6 +202,72 @@ async function enqueueRackLabelJob(payload) {
       copies: 1,
       createdBy: payload.createdBy ?? null,
       jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('rack_label', rackId),
+    })
+    const dispatchHint = await getDispatchHintForJob(job.printerCode, job.id)
+    return {
+      id: job.id,
+      printerCode: job.printerCode,
+      printerName: job.printerName,
+      dispatchHint,
+      contentType: label.contentType,
+      content: label.content,
+    }
+  } catch (e) {
+    if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/i.test(String(e.message))) {
+      throw new AppError('打印入库失败：数据库字段异常，请先执行迁移或联系管理员', 503, 'DB_CONFIG_MISSING')
+    }
+    throw e
+  }
+}
+
+/**
+ * 库位标签入队（warehouse_locations，条码 R+数字）。
+ * 对照 enqueueRackLabelJob：同款 resolveLabelPrinter（按库位所属仓库解析）、
+ * 默认分桶幂等键（location_label:<id>:<时间窗>）、模板 type 10（库位标签）。
+ */
+async function enqueueLocationLabelJob(payload) {
+  const locationId = payload?.locationId
+  if (!locationId) return null
+  const [[row]] = await pool.query(
+    `SELECT wl.id, wl.barcode, wl.code, wl.zone, wl.aisle, wl.rack, wl.level, wl.position, wl.name, wl.warehouse_id
+     FROM warehouse_locations wl
+     WHERE wl.id = ? AND wl.deleted_at IS NULL`,
+    [locationId],
+  )
+  if (!row || !row.barcode) return null
+  const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
+  const { printerId, dispatchReason } = await resolveLabelPrinter({
+    warehouseId: wh,
+    jobType: 'location_label',
+  })
+  if (!printerId) return null
+  const vars = {
+    location_barcode: row.barcode,
+    location_code: row.code,
+    zone: row.zone,
+    name: row.name,
+  }
+  const label = await buildLabelBody({
+    printerId,
+    templateType: 10,
+    vars,
+    zplBuilder: buildLocationLabelZpl,
+  })
+  try {
+    const job = await create({
+      printerId,
+      dispatchReason,
+      warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
+      jobType: 'location_label',
+      title: `库位标 ${row.barcode}`,
+      contentType: label.contentType,
+      content: label.content,
+      copies: 1,
+      createdBy: payload.createdBy ?? null,
+      jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('location_label', locationId),
+      refType: 'warehouse_location',
+      refId: Number(locationId),
+      refCode: row.barcode,
     })
     const dispatchHint = await getDispatchHintForJob(job.printerCode, job.id)
     return {
@@ -460,6 +527,7 @@ async function reprintBarcodeRecord({ category, recordId, createdBy = null } = {
 module.exports = {
   enqueueContainerLabelJob,
   enqueueRackLabelJob,
+  enqueueLocationLabelJob,
   enqueuePackageLabelJob,
   enqueueWaybillLabelJob,
   enqueueProductLabelJob,

@@ -9,6 +9,7 @@ import {
 } from '@/api/reports'
 import { getFinanceDashboardApi } from '@/api/finance'
 import { getAgingApi } from '@/api/payments'
+import { listPendingApprovalsApi } from '@/api/approvals'
 import { getRelativeDateRange } from '@/lib/dateRange'
 import type { DashboardLayout } from '@/types/dashboard'
 
@@ -37,6 +38,8 @@ export const useSaleStats       = () => useQuery({ queryKey:['dash-sale-stats',R
 export const usePurchaseStats   = () => useQuery({ queryKey:['dash-purchase-stats',RANGE_180], queryFn:()=>getPurchaseStatsApi(RANGE_180).then(r=>r!), staleTime:300000 })
 export const useInventoryStats  = () => useQuery({ queryKey:['dash-inventory-stats'], queryFn:()=>getInventoryStatsApi({}).then(r=>r!), staleTime:300000 })
 export const usePdaAnomaly      = () => useQuery({ queryKey:['dash-anomaly',RANGE_30], queryFn:()=>getPdaAnomalyApi(RANGE_30).then(r=>r!), staleTime:300000 })
+/** 待我审批（approval.task.view）——首页 widget 每 60s 与通知中心同步刷新 */
+export const usePendingApprovalsBrief = () => useQuery({ queryKey:['dash-pending-approvals'], queryFn:()=>listPendingApprovalsApi({ page: 1, pageSize: 5 }).then(r=>r!), refetchInterval:60000 })
 
 // ── 个性化布局存取 ─────────────────────────────────────────────────────────────
 export const useDashboardLayout = () => useQuery({

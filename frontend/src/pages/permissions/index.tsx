@@ -2,14 +2,84 @@ import { useState, useEffect } from 'react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { usePermission } from '@/hooks/usePermission'
-import { useRoles, useRolePermissions, useSaveRolePermissions } from '@/hooks/usePermissions'
+import { useRoles, useRolePermissions, useSaveRolePermissions, useDuplicateRole, type Role } from '@/hooks/usePermissions'
 import { PERMISSIONS, PERMISSION_GROUPS } from '@/lib/permission-codes'
+
+/** 复制角色弹窗：输入新角色编码/名称/备注，成功后角色栏自动刷新 */
+function DuplicateRoleDialog({ role, onClose }: { role: Role | null; onClose: () => void }) {
+  const [code, setCode] = useState('')
+  const [name, setName] = useState('')
+  const [remark, setRemark] = useState('')
+  const dup = useDuplicateRole()
+
+  useEffect(() => {
+    if (role) {
+      setCode(`${role.code}_copy`)
+      setName(`${role.name}（副本）`)
+      setRemark('')
+    }
+  }, [role])
+
+  const submit = () => {
+    if (!role) return
+    dup.mutate(
+      { roleId: role.id, code: code.trim(), name: name.trim(), remark: remark.trim() || undefined },
+      {
+        onSuccess: () => {
+          toast.success(`已复制为「${name.trim()}」`)
+          onClose()
+        },
+        onError: (e: unknown) =>
+          toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '复制失败'),
+      },
+    )
+  }
+
+  return (
+    <Dialog open={!!role} onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>复制角色</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div>
+            <Label>源角色</Label>
+            <Input value={role?.name ?? ''} disabled className="mt-1 bg-muted/50" />
+          </div>
+          <div>
+            <Label>角色编码 *</Label>
+            <Input className="mt-1" value={code} onChange={e => setCode(e.target.value)} placeholder="如 warehouse_manager_copy" maxLength={50} />
+          </div>
+          <div>
+            <Label>角色名称 *</Label>
+            <Input className="mt-1" value={name} onChange={e => setName(e.target.value)} placeholder="如 仓库管理员（副本）" maxLength={50} />
+          </div>
+          <div>
+            <Label>备注</Label>
+            <Input className="mt-1" value={remark} onChange={e => setRemark(e.target.value)} maxLength={255} />
+          </div>
+          <p className="text-xs text-muted-foreground">复制会连同该角色的全部权限一起带入新角色，之后可在本页单独调整。</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button onClick={submit} disabled={dup.isPending || !code.trim() || !name.trim()}>
+            {dup.isPending ? '复制中…' : '确认复制'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export default function PermissionsPage() {
   const { can } = usePermission()
   const isAdmin = can(PERMISSIONS.ROLE_ASSIGN)
   const [selectedRole, setSelectedRole] = useState<number>(2)
+  const [dupTarget, setDupTarget] = useState<Role | null>(null)
   const [perms, setPerms] = useState<Set<string>>(new Set())
 
   const { data: roles } = useRoles()
@@ -34,10 +104,22 @@ export default function PermissionsPage() {
 
       <div className="flex gap-2 flex-wrap">
         {roles?.filter(r => r.id !== 1).map(r => (
-          <button key={r.id} onClick={() => setSelectedRole(r.id)}
-            className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${selectedRole === r.id ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent'}`}>
-            {r.name}
-          </button>
+          <div key={r.id} className="flex items-center gap-1">
+            <button onClick={() => setSelectedRole(r.id)}
+              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${selectedRole === r.id ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent'}`}>
+              {r.name}
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                title={`复制「${r.name}」`}
+                onClick={() => setDupTarget(r)}
+                className="px-2 py-2 rounded-lg border text-xs text-muted-foreground hover:bg-accent transition-colors"
+              >
+                复制
+              </button>
+            )}
+          </div>
         ))}
       </div>
 
@@ -72,6 +154,8 @@ export default function PermissionsPage() {
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
         提示：修改权限后，用户需要重新登录才能生效。管理员（admin）角色权限固定，不可修改。
       </div>
+
+      <DuplicateRoleDialog role={dupTarget} onClose={() => setDupTarget(null)} />
     </div>
   )
 }

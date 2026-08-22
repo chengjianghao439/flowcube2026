@@ -37,6 +37,7 @@ export default function RacksPage() {
   const [queryOpen, setQueryOpen] = useState(false)
   const [form, setForm] = useState(defaultForm)
   const [scanRaw, setScanRaw] = useState('')
+  const [page, setPage] = useState(1)
 
   const { data: whData } = useQuery({
     queryKey: ['warehouses-simple'],
@@ -71,9 +72,10 @@ export default function RacksPage() {
     setWarehouseFilter(v.warehouseId)
     setWarehouseName(v.warehouseName)
     setZoneFilter(v.zone)
+    setPage(1)
     setQueryOpen(false)
   }
-  function clearAll() { setKeyword(''); setWarehouseFilter(null); setWarehouseName(''); setZoneFilter('') }
+  function clearAll() { setKeyword(''); setWarehouseFilter(null); setWarehouseName(''); setZoneFilter(''); setPage(1) }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
@@ -145,15 +147,17 @@ export default function RacksPage() {
         title="货架管理"
         description="货架唯一条码（H）与标签打印"
         columns={columns}
-        queryKey={['racks', keyword, warehouseFilter, zoneFilter]}
+        queryKey={['racks', keyword, warehouseFilter, zoneFilter, page]}
         listQuery={() =>
           getRacksApi({
-            pageSize: 99999,
+            pageSize: 20,
+            page,
             keyword,
             warehouseId: warehouseFilter ?? undefined,
             zone: zoneFilter || undefined,
           })
         }
+        pagination={{ page, pageSize: 20, unit: '个', onPageChange: setPage }}
         deleteApi={(id) => deleteRackApi(id, { skipGlobalError: true })}
         deleteMessage="若库位或库存仍指向该货架编码，将禁止删除。"
         createLabel="+ 新建货架"

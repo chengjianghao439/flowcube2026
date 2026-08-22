@@ -32,7 +32,7 @@ export function CustomerFinder({ open, onClose, onConfirm }: CustomerFinderProps
   }, [open])
 
   // Reset page when search changes
-  const { data, isFetching } = useCustomers({ pageSize: 99999, keyword: searchText })
+  const { data, isFetching } = useCustomers({ pageSize: 500, keyword: searchText })
 
   function handleKeywordChange(v: string) {
     setKeyword(v)

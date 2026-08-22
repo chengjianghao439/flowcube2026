@@ -30,6 +30,7 @@ const { PAYMENT_EVENT, record: recordPaymentEvent } = require('../payments/payme
 const statementSvc = require('../payments/reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
 const { normalizePagination } = require('../../utils/pagination')
+const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
 
 const STATUS = { 1: '草稿', 2: '已确认', 3: '已完成', 4: '已取消' }
 const genNo = conn => generateDailyCode(conn, 'RF', 'refund_orders', 'refund_no')
@@ -55,26 +56,35 @@ const fmt = r => ({
   createdAt: r.created_at,
 })
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, startDate = null, endDate = null } = {}) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
-  const conds = ['deleted_at IS NULL']
+  const conds = ['ro.deleted_at IS NULL']
   const params = []
-  if (keyword) { conds.push('(refund_no LIKE ? OR sale_order_no LIKE ? OR customer_name LIKE ?)'); const k = `%${keyword}%`; params.push(k, k, k) }
-  if (status) { conds.push('status = ?'); params.push(Number(status)) }
-  if (startDate) { conds.push('created_at >= ?'); params.push(`${startDate} 00:00:00`) }
-  if (endDate) { conds.push('created_at <= ?'); params.push(`${endDate} 23:59:59`) }
+  if (keyword) { conds.push('(ro.refund_no LIKE ? OR ro.sale_order_no LIKE ? OR ro.customer_name LIKE ?)'); const k = `%${keyword}%`; params.push(k, k, k) }
+  if (status) { conds.push('ro.status = ?'); params.push(Number(status)) }
+  if (startDate) { conds.push('ro.created_at >= ?'); params.push(`${startDate} 00:00:00`) }
+  if (endDate) { conds.push('ro.created_at <= ?'); params.push(`${endDate} 23:59:59`) }
+  // 限仓用户只能看到本仓销售单对应的退款单
+  const scope = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+  if (scope.sql) { conds.push(scope.sql); params.push(...scope.params) }
   const where = conds.join(' AND ')
-  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM refund_orders WHERE ${where}`, params)
+  const joins = 'LEFT JOIN sale_orders so ON so.id = ro.sale_order_id'
+  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM refund_orders ro ${joins} WHERE ${where}`, params)
   const [rows] = await pool.query(
-    `SELECT * FROM refund_orders WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT ro.* FROM refund_orders ro ${joins} WHERE ${where} ORDER BY ro.created_at DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   return { list: rows.map(fmt), pagination: { page, pageSize: ps, total: Number(total) } }
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [[row]] = await pool.query('SELECT * FROM refund_orders WHERE id = ? AND deleted_at IS NULL', [Number(id)])
   if (!row) throw new AppError('退款单不存在', 404)
+  // 读路径越权防护：按关联销售单仓库校验（超管/不限仓放行）
+  if (Array.isArray(scopeWarehouseIds)) {
+    const [[sale]] = await pool.query('SELECT warehouse_id FROM sale_orders WHERE id = ?', [row.sale_order_id])
+    assertInScope(scopeWarehouseIds, sale?.warehouse_id ?? null, '退款单')
+  }
   return fmt(row)
 }
 
@@ -84,7 +94,7 @@ async function findById(id) {
  *   saleOrderId 与 saleOrderNo 二选一（前端弱关联输入单号，后端按单号反查）。
  * 金额校验：≤ 该销售单已收金额（paid_amount，FOR UPDATE 读，避免并发下超退）。
  */
-async function create(d, operator) {
+async function create(d, operator, scopeWarehouseIds = null) {
   const saleOrderId = Number(d.saleOrderId)
   const saleOrderNo = String(d.saleOrderNo ?? '').trim()
   const amount = Number(d.amount)
@@ -100,13 +110,15 @@ async function create(d, operator) {
     const cond = Number.isInteger(saleOrderId) && saleOrderId > 0 ? 'so.id = ?' : 'so.order_no = ?'
     const condParam = Number.isInteger(saleOrderId) && saleOrderId > 0 ? saleOrderId : saleOrderNo
     const [[sale]] = await conn.query(
-      `SELECT so.id AS sale_order_id, so.order_no, so.customer_name, pr.id AS payment_record_id, pr.paid_amount
+      `SELECT so.id AS sale_order_id, so.order_no, so.warehouse_id, so.customer_name, pr.id AS payment_record_id, pr.paid_amount
          FROM sale_orders so
          LEFT JOIN payment_records pr ON pr.type = 2 AND pr.order_id = so.id
         WHERE ${cond} AND so.deleted_at IS NULL`,
       [condParam],
     )
     if (!sale) throw new AppError('关联销售单不存在', 404)
+    // 跨仓校验：只允许给本仓销售单建退款
+    assertInScope(scopeWarehouseIds, sale.warehouse_id, '销售单')
     const paid = Number(sale.paid_amount || 0)
     if (amount > paid + 1e-6) {
       throw new AppError(`退款金额 ¥${amount.toFixed(2)} 超过该销售单已收金额 ¥${paid.toFixed(2)}`, 400, 'REFUND_EXCEED_PAID')
@@ -132,12 +144,25 @@ async function create(d, operator) {
   }
 }
 
+/**
+ * 锁单后按关联销售单仓库做范围校验（submit/execute/cancel 共用）。
+ * 超管/不限仓（scopeWarehouseIds 非数组）直接放行。
+ */
+async function assertRefundInScope(conn, scopeWarehouseIds, refundId) {
+  if (!Array.isArray(scopeWarehouseIds)) return
+  const [[refund]] = await conn.query('SELECT sale_order_id FROM refund_orders WHERE id=?', [refundId])
+  if (!refund?.sale_order_id) throw new AppError('退款单未关联销售单，无法校验仓库范围', 403, 'WAREHOUSE_SCOPE_DENIED')
+  const [[sale]] = await conn.query('SELECT warehouse_id FROM sale_orders WHERE id=?', [refund.sale_order_id])
+  assertInScope(scopeWarehouseIds, sale?.warehouse_id ?? null, '退款单')
+}
+
 /** 确认退款：草稿 → 已确认（财务认可金额后进入可执行态） */
-async function submit(id, operator) {
+async function submit(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const row = await lockStatusRow(conn, { table: 'refund_orders', id, columns: 'id, status', entityName: '退款单' })
+    await assertRefundInScope(conn, scopeWarehouseIds, id)
     const rule = assertStatusAction('refundOrder', 'submit', row.status)
     await compareAndSetStatus(conn, { table: 'refund_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '退款单' })
     await conn.query(
@@ -157,7 +182,7 @@ async function submit(id, operator) {
  * 执行退款：已确认 → 已完成。事务内做四件事（同生共死）：
  *   锁账款 → 校验 → 冲减已收 → 写退款流水 + 账户出账 → 状态推进。
  */
-async function execute(id, operator) {
+async function execute(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -166,6 +191,7 @@ async function execute(id, operator) {
       columns: 'id, refund_no, sale_order_id, sale_order_no, customer_name, amount, status, payment_record_id, account_id, refund_date',
       entityName: '退款单',
     })
+    await assertRefundInScope(conn, scopeWarehouseIds, id)
     const rule = assertStatusAction('refundOrder', 'execute', row.status)
     const amount = Number(row.amount)
 
@@ -254,11 +280,12 @@ async function execute(id, operator) {
 }
 
 /** 取消：草稿/已确认 → 已取消 */
-async function cancel(id) {
+async function cancel(id, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const row = await lockStatusRow(conn, { table: 'refund_orders', id, columns: 'id, status', entityName: '退款单' })
+    await assertRefundInScope(conn, scopeWarehouseIds, id)
     const rule = assertStatusAction('refundOrder', 'cancel', row.status)
     await compareAndSetStatus(conn, { table: 'refund_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '退款单' })
     await conn.commit()

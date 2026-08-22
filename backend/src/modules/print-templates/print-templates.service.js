@@ -12,11 +12,12 @@ const TYPE_NAME = {
   7: '物流条码标签(ZPL)',
   8: '产品条码标签(ZPL)',
   9: '塑料盒标签(ZPL)',
+  10: '库位条码标签(ZPL)',
 }
 
 function validateLayout(type, layout) {
   const t = Number(type)
-  if (t >= 5 && t <= 9) {
+  if (t >= 5 && t <= 10) {
     if (!layout) throw new AppError('布局不能为空', 400)
     if (layout.format === 'zpl' && typeof layout.body === 'string' && layout.body.trim()) {
       if (!String(layout.body).includes('^XA')) {
@@ -117,13 +118,13 @@ async function create({ name, type, paperSize, layout, createdBy }) {
   validateLayout(type, layout)
   const t = Number(type)
   const paper =
-    t >= 5 && t <= 9 ? paperSize || 'thermal75' : paperSize || 'A4'
+    t >= 5 && t <= 10 ? paperSize || 'thermal75' : paperSize || 'A4'
   const [r] = await pool.query(
     `INSERT INTO print_templates (name, type, paper_size, layout_json, created_by) VALUES (?,?,?,?,?)`,
     [name, type, paper, JSON.stringify(layout), createdBy || null]
   )
-  // 标签模板（5–9）：保存即设为该 type 默认，修复「改了真机没变」
-  if (t >= 5 && t <= 9) await applyAsTypeDefault(r.insertId, t)
+  // 标签模板（5–10）：保存即设为该 type 默认，修复「改了真机没变」
+  if (t >= 5 && t <= 10) await applyAsTypeDefault(r.insertId, t)
   return { id: r.insertId }
 }
 
@@ -132,13 +133,13 @@ async function update(id, { name, type, paperSize, layout }) {
   validateLayout(type, layout)
   const t = Number(type)
   const paper =
-    t >= 5 && t <= 9 ? paperSize || 'thermal75' : paperSize || 'A4'
+    t >= 5 && t <= 10 ? paperSize || 'thermal75' : paperSize || 'A4'
   await pool.query(
     `UPDATE print_templates SET name=?, type=?, paper_size=?, layout_json=? WHERE id=?`,
     [name, type, paper, JSON.stringify(layout), id]
   )
-  // 标签模板（5–9）：保存即设为该 type 默认，修复「改了真机没变」
-  if (t >= 5 && t <= 9) await applyAsTypeDefault(id, t)
+  // 标签模板（5–10）：保存即设为该 type 默认，修复「改了真机没变」
+  if (t >= 5 && t <= 10) await applyAsTypeDefault(id, t)
 }
 
 async function setDefault(id) {

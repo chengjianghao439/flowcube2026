@@ -1,10 +1,12 @@
 const { pool } = require('../../config/db')
+const logger = require('../../utils/logger')
 const reportsService = require('../reports/reports.service')
 const { ymd } = require('../../utils/excelExport')
 const paymentsService = require('../payments/payments.service')
 const receiptsService = require('../payments/payment-receipts.service')
 const statementsService = require('../payments/reconciliation-statements.service')
 const { scopeFilter, transferScopeFilter } = require('../../utils/warehouseScope')
+const agingService = require('../payments/payment-aging.service')
 // ── 后加实体导出：复用各业务模块的列表查询与状态映射 ──
 const logisticsService = require('../logistics/logistics.service')
 const fixedAssetsService = require('../fixed-assets/fixed-assets.service')
@@ -31,7 +33,16 @@ function buildDateStamp() {
   return new Date().toLocaleDateString('zh-CN').replace(/\//g, '')
 }
 
+// 导出行数上限（性能守卫）：ExcelJS 全内存渲染，超限直接截断并告警，
+// 防止大库导出把进程 OOM。各导出函数统一经 buildExportPayload 出口生效。
+const EXPORT_MAX_ROWS = 10000
+
 function buildExportPayload({ filenamePrefix, sheetName, columns, rows }) {
+  const total = Array.isArray(rows) ? rows.length : 0
+  if (total > EXPORT_MAX_ROWS) {
+    logger.warn(`[export] ${filenamePrefix} 导出超限：${total} 行 > ${EXPORT_MAX_ROWS}，已截断`, { total, max: EXPORT_MAX_ROWS }, 'Export')
+    rows = rows.slice(0, EXPORT_MAX_ROWS)
+  }
   return {
     filename: `${filenamePrefix}_${buildDateStamp()}`,
     sheetName,
@@ -65,7 +76,7 @@ async function getPurchaseExportPayload(query) {
   if (warehouseId) { sql += ' AND o.warehouse_id=?'; params.push(+warehouseId) }
   if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY o.created_at DESC'
+  sql += ' ORDER BY o.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '采购单列表',
@@ -109,7 +120,7 @@ async function getSaleExportPayload(query) {
   if (warehouseId) { sql += ' AND o.warehouse_id=?'; params.push(+warehouseId) }
   if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY o.created_at DESC'
+  sql += ' ORDER BY o.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '销售单列表',
@@ -209,7 +220,7 @@ async function getInboundTasksExportPayload(query) {
   if (operatorId) { sql += ' AND t.operator_id=?'; params.push(+operatorId) }
   if (startDate) { sql += ' AND DATE(t.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(t.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY t.created_at DESC'
+  sql += ' ORDER BY t.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '收货订单',
@@ -320,7 +331,7 @@ async function getTransferExportPayload(query = {}) {
   if (operatorId) { sql += ' AND o.operator_id=?'; params.push(+operatorId) }
   if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY o.created_at DESC'
+  sql += ' ORDER BY o.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '调拨单',
@@ -363,7 +374,7 @@ async function getPurchaseReturnsExportPayload(query = {}) {
   if (operatorId) { sql += ' AND r.operator_id=?'; params.push(+operatorId) }
   if (startDate) { sql += ' AND DATE(r.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(r.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY r.created_at DESC'
+  sql += ' ORDER BY r.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '采购退货单',
@@ -407,7 +418,7 @@ async function getSaleReturnsExportPayload(query = {}) {
   if (operatorId) { sql += ' AND r.operator_id=?'; params.push(+operatorId) }
   if (startDate) { sql += ' AND DATE(r.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(r.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY r.created_at DESC'
+  sql += ' ORDER BY r.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '销售退货单',
@@ -570,6 +581,183 @@ async function getStatementDetailExportPayload(id) {
       remark: st.remark || '',
     },
     items: st.items,
+  }
+}
+
+/**
+ * 利润/库存分析导出：复用 reports.metrics.profitAnalysis 的查询逻辑与毛利口径
+ * （cost_snapshot 优先），四个区块（销售毛利/商品毛利/库存金额/滞销库存）各一页。
+ */
+async function getProfitAnalysisExportPayload(query) {
+  const data = await reportsService.profitAnalysis({
+    startDate: query.startDate || null,
+    endDate: query.endDate || null,
+    scopeWarehouseIds: query.scopeWarehouseIds ?? null,
+  })
+  const round2 = (v) => (Number(v) || 0).toFixed(2)
+  const saleRows = data.saleOrders.map(r => ({
+    orderNo: r.orderNo,
+    customerName: r.customerName,
+    warehouseName: r.warehouseName,
+    totalAmount: round2(r.totalAmount),
+    costAmount: round2(r.costAmount),
+    grossProfit: round2(r.grossProfit),
+    marginRate: `${(Number(r.marginRate) || 0).toFixed(1)}%`,
+  }))
+  const productRows = data.products.map(r => ({
+    code: r.code,
+    name: r.name,
+    unit: r.unit,
+    totalQty: Number(r.totalQty).toFixed(2),
+    revenueAmount: round2(r.revenueAmount),
+    costAmount: round2(r.costAmount),
+    grossProfit: round2(r.grossProfit),
+    marginRate: `${(Number(r.marginRate) || 0).toFixed(1)}%`,
+  }))
+  const stockRows = data.stockValue.map(r => ({
+    code: r.code,
+    name: r.name,
+    warehouseName: r.warehouseName,
+    unit: r.unit,
+    totalQty: Number(r.totalQty).toFixed(2),
+    totalValue: round2(r.totalValue),
+  }))
+  const slowRows = data.slowMoving.map(r => ({
+    code: r.code,
+    name: r.name,
+    unit: r.unit,
+    currentQty: Number(r.currentQty).toFixed(2),
+    stockValue: round2(r.stockValue),
+    lastOutboundAt: r.lastOutboundAt ? String(r.lastOutboundAt).slice(0, 16) : '',
+    outbound90d: Number(r.outbound90d).toFixed(2),
+  }))
+
+  return {
+    filename: `利润库存分析_${buildDateStamp()}`,
+    sheets: [
+      {
+        sheetName: '销售毛利',
+        columns: [
+          { header: '销售单号', key: 'orderNo', width: 22 },
+          { header: '客户', key: 'customerName', width: 20 },
+          { header: '仓库', key: 'warehouseName', width: 16 },
+          { header: '销售额', key: 'totalAmount', width: 14 },
+          { header: '成本', key: 'costAmount', width: 14 },
+          { header: '毛利', key: 'grossProfit', width: 14 },
+          { header: '毛利率', key: 'marginRate', width: 10 },
+        ],
+        rows: saleRows,
+      },
+      {
+        sheetName: '商品毛利',
+        columns: [
+          { header: '商品编码', key: 'code', width: 16 },
+          { header: '商品名称', key: 'name', width: 24 },
+          { header: '单位', key: 'unit', width: 8 },
+          { header: '销售量', key: 'totalQty', width: 12 },
+          { header: '销售额', key: 'revenueAmount', width: 14 },
+          { header: '成本', key: 'costAmount', width: 14 },
+          { header: '毛利', key: 'grossProfit', width: 14 },
+          { header: '毛利率', key: 'marginRate', width: 10 },
+        ],
+        rows: productRows,
+      },
+      {
+        sheetName: '库存金额',
+        columns: [
+          { header: '商品编码', key: 'code', width: 16 },
+          { header: '商品名称', key: 'name', width: 24 },
+          { header: '仓库', key: 'warehouseName', width: 16 },
+          { header: '单位', key: 'unit', width: 8 },
+          { header: '库存数量', key: 'totalQty', width: 12 },
+          { header: '库存金额', key: 'totalValue', width: 14 },
+        ],
+        rows: stockRows,
+      },
+      {
+        sheetName: '滞销库存',
+        columns: [
+          { header: '商品编码', key: 'code', width: 16 },
+          { header: '商品名称', key: 'name', width: 24 },
+          { header: '单位', key: 'unit', width: 8 },
+          { header: '现存数量', key: 'currentQty', width: 12 },
+          { header: '库存金额', key: 'stockValue', width: 14 },
+          { header: '最近出库', key: 'lastOutboundAt', width: 18 },
+          { header: '90天出库量', key: 'outbound90d', width: 14 },
+        ],
+        rows: slowRows,
+      },
+    ],
+    // 汇总角标：第一页顶部附加合计行
+    summaryRows: [
+      ['销售额', round2(data.summary.saleAmount)],
+      ['销售成本', round2(data.summary.costAmount)],
+      ['销售毛利', round2(data.summary.grossProfit)],
+      ['库存金额', round2(data.summary.stockValue)],
+      ['滞销库存金额', round2(data.summary.slowMovingValue)],
+    ],
+  }
+}
+
+/**
+ * 应收/应付账龄导出：复用 payment-aging.service 的分桶口径（as-of 今天，
+ * 未结清且 balance>0，跨结算方式汇总）。应收/应付各一页 + Top 往来方两页。
+ */
+async function getAgingExportPayload() {
+  const data = await agingService.aging({ topLimit: 50 })
+  const bucketRows = (side, direction) => side.buckets.map(b => ({
+    direction,
+    bucket: b.label,
+    count: b.count,
+    amount: (Number(b.amount) || 0).toFixed(2),
+  }))
+  const partyRows = (side, direction) => side.topParties.map(p => ({
+    direction,
+    partyName: p.partyName,
+    count: p.count,
+    amount: (Number(p.amount) || 0).toFixed(2),
+    overdueAmount: (Number(p.overdueAmount) || 0).toFixed(2),
+    maxOverdueDays: p.maxOverdueDays,
+  }))
+  return {
+    filename: `账龄分析_${buildDateStamp()}`,
+    sheets: [
+      {
+        sheetName: '账龄分桶',
+        columns: [
+          { header: '方向', key: 'direction', width: 10 },
+          { header: '账龄区间', key: 'bucket', width: 16 },
+          { header: '笔数', key: 'count', width: 10 },
+          { header: '敞口金额', key: 'amount', width: 16 },
+        ],
+        rows: [
+          ...bucketRows(data.receivable, '应收'),
+          ...bucketRows(data.payable, '应付'),
+        ],
+      },
+      {
+        sheetName: '应收Top往来方',
+        columns: [
+          { header: '往来方', key: 'partyName', width: 20 },
+          { header: '笔数', key: 'count', width: 10 },
+          { header: '敞口金额', key: 'amount', width: 16 },
+          { header: '逾期金额', key: 'overdueAmount', width: 16 },
+          { header: '最长逾期(天)', key: 'maxOverdueDays', width: 14 },
+        ],
+        rows: partyRows(data.receivable, '应收'),
+      },
+      {
+        sheetName: '应付Top往来方',
+        columns: [
+          { header: '往来方', key: 'partyName', width: 20 },
+          { header: '笔数', key: 'count', width: 10 },
+          { header: '敞口金额', key: 'amount', width: 16 },
+          { header: '逾期金额', key: 'overdueAmount', width: 16 },
+          { header: '最长逾期(天)', key: 'maxOverdueDays', width: 14 },
+        ],
+        rows: partyRows(data.payable, '应付'),
+      },
+    ],
   }
 }
 
@@ -1333,4 +1521,6 @@ module.exports = {
   getAccountingPeriodsExportPayload,
   getTaxAdjustmentsExportPayload,
   getCompaniesExportPayload,
+  getProfitAnalysisExportPayload,
+  getAgingExportPayload,
 }

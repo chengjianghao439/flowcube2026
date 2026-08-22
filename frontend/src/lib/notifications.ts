@@ -1,4 +1,4 @@
-export type NotificationCategory = 'finance' | 'inventory' | 'operations' | 'system'
+export type NotificationCategory = 'finance' | 'inventory' | 'operations' | 'system' | 'approval'
 
 export interface NotificationEntry {
   code?: string
@@ -43,6 +43,8 @@ export function getNotificationCategoryLabel(category?: NotificationCategory) {
       return '作业'
     case 'system':
       return '系统'
+    case 'approval':
+      return '审批'
     default:
       return '提醒'
   }

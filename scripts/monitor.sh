@@ -7,6 +7,9 @@
 #   2. 磁盘使用率是否超阈值
 #   3. 后端 /api/health 是否 200
 #   4. MySQL 深检：连接可用性 + 慢查询堆积 + 连接数
+#   5. 公网 HTTPS 探测（走 Caddy 全链路）
+#   6. TLS 证书到期检查（剩余 <14 天告警）
+#   7. 容器重启计数（反复崩溃被拉起）
 #
 # 异常时推送钉钉群机器人（webhook 从 .env 的 DINGTALK_WEBHOOK 读取，不入库）；
 # 未配置 webhook 时仅记录到日志。带状态去抖：「正常→异常」与「异常→恢复」时
@@ -24,6 +27,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-/opt/flowcube}"
 DISK_THRESHOLD="${DISK_THRESHOLD:-85}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/api/health}"
+# 公网探测地址：走 Caddy 全链路（DNS → Caddy → backend），能发现回环检查看不到的
+# 域名解析 / Caddy 挂掉 / 证书链等问题（2026-08-22 新增）
+PUBLIC_HEALTH_URL="${PUBLIC_HEALTH_URL:-https://jixuflow.com/api/health}"
+# TLS 证书到期告警阈值（天）。Caddy 内置 ACME 通常提前 30 天自动续期，
+# 连续几天告警说明续期链路有问题，需人工介入
+CERT_HOST="${CERT_HOST:-jixuflow.com}"
+CERT_DAYS_WARN="${CERT_DAYS_WARN:-14}"
+# 容器重启计数告警阈值：restart: unless-stopped 会把崩溃容器反复拉起，
+# 重启次数高说明容器在 crash-loop，仅靠「running」检查会漏报
+RESTART_WARN="${RESTART_WARN:-3}"
 STATE_FILE="${STATE_FILE:-/opt/flowcube/backups/.monitor.state}"
 # 持续异常的重提醒间隔（小时）。0 表示只在状态切换时通知（旧行为，不推荐）
 REMIND_HOURS="${REMIND_HOURS:-24}"
@@ -83,6 +96,42 @@ if docker inspect "$MYSQL_CONTAINER" >/dev/null 2>&1; then
   fi
 fi
 
+# 当前时间戳提前计算（证书到期检查要算剩余天数；后面状态去抖也用它）
+now_epoch=$(date +%s)
+
+# 5. 公网 HTTPS 探测：与第 3 项的区别是走公网域名全链路（DNS→Caddy→backend），
+#    回环检查无法发现 Caddy 挂掉、证书链异常、域名解析失败等问题
+pub_code=$(curl -fsS -m 5 -o /dev/null -w '%{http_code}' "$PUBLIC_HEALTH_URL" 2>/dev/null)
+pub_code=${pub_code:-000}
+[ "$pub_code" != "200" ] && problems="${problems}公网探测 ${PUBLIC_HEALTH_URL} HTTP ${pub_code}；"
+
+# 6. TLS 证书到期检查：剩余不足 CERT_DAYS_WARN 天告警。
+#    Caddy 自动续期正常时应恒为「充足」，反复告警说明续期链路有问题。
+cert_end=$(echo | openssl s_client -servername "$CERT_HOST" -connect "$CERT_HOST:443" \
+  2>/dev/null | openssl x509 -noout -enddate 2>/dev/null)
+if [ -n "$cert_end" ]; then
+  cert_date=$(printf '%s' "$cert_end" | cut -d= -f2-)
+  cert_epoch=$(date -d "$cert_date" +%s 2>/dev/null || date -j -f '%b %d %H:%M:%S %Y %Z' "$cert_date" +%s 2>/dev/null)
+  if [ -n "$cert_epoch" ]; then
+    days_left=$(( (cert_epoch - now_epoch) / 86400 ))
+    if [ "$days_left" -lt "$CERT_DAYS_WARN" ]; then
+      problems="${problems}${CERT_HOST} 证书 ${days_left} 天后到期（阈值${CERT_DAYS_WARN}天，过期：${cert_date}）；"
+    fi
+  fi
+fi
+
+# 7. 容器重启计数：restart: unless-stopped 会把崩溃容器反复拉起，
+#    重启次数 > 阈值说明容器在 crash-loop（running 检查看不出问题）
+for pair in "mysql:flowcube-mysql" "backend:flowcube-backend" "frontend:flowcube-frontend"; do
+  svc="${pair%%:*}"; expected="${pair##*:}"
+  actual=$(resolve_container "$svc" "$expected")
+  rc=$(docker inspect -f '{{.RestartCount}}' "$actual" 2>/dev/null | tr -d '\n' || true)
+  if [ -n "${rc:-}" ]; then
+    [ "$rc" -gt "$RESTART_WARN" ] \
+      && problems="${problems}容器 $expected 重启 ${rc} 次（阈值${RESTART_WARN}，疑似 crash-loop）；"
+  fi
+done
+
 notify() { dingtalk_send "$DINGTALK_WEBHOOK" "$1"; echo "[$(ts)] $1"; }
 
 # 状态文件格式：`ok` 或 `bad <上次通知的 epoch 秒>`
@@ -91,7 +140,6 @@ if [ -f "$STATE_FILE" ]; then
   read -r prev prev_at < "$STATE_FILE" 2>/dev/null || { prev="ok"; prev_at=0; }
   prev="${prev:-ok}"; prev_at="${prev_at:-0}"
 fi
-now_epoch=$(date +%s)
 
 if [ -n "$problems" ]; then
   # ⚠️ 持续异常必须定期重提醒（2026-08-21 事故）：旧版只在 ok→bad 切换时通知一次，

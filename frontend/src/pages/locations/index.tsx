@@ -3,19 +3,21 @@
  * 路由：/locations
  */
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { getLocationsApi, createLocationApi, updateLocationApi, deleteLocationApi } from '@/api/locations'
+import { getLocationsApi, createLocationApi, updateLocationApi, deleteLocationApi, printLocationLabelApi } from '@/api/locations'
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import { LOCATION_STATUS_OPTIONS, type Location, type CreateLocationParams } from '@/types/locations'
 import { Button } from '@/components/ui/button'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
+import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 import LocationQueryDialog, { type LocationQueryValues } from './LocationQueryDialog'
 import type { TableColumn } from '@/types'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
@@ -43,10 +45,28 @@ export default function LocationsPage() {
   const [zoneFilter, setZoneFilter]     = useState('')
   const [queryOpen, setQueryOpen]     = useState(false)
   const [form, setForm]               = useState<CreateLocationParams>(EMPTY_FORM)
+  const [page, setPage]               = useState(1)
 
   const { data: whData } = useQuery({
     queryKey: ['warehouses-simple'],
     queryFn: () => getWarehousesActiveApi().then(r => r ?? []),
+  })
+
+  // 库位标签打印（与货架标签同构：入队 + 桌面端本机 RAW 出纸）
+  const printMut = useMutation({
+    mutationFn: (id: number) => printLocationLabelApi(id),
+    onSuccess: (d) => {
+      if (!d) return
+      if (!d.queued) {
+        toast.warning('未绑定打印机或离线')
+        return
+      }
+      triggerPrintPoll()
+      const fb = printQueueFeedback(d.dispatchHint)
+      if (fb.level === 'warning') toast.warning(fb.message)
+      else toast.success(fb.message)
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '打印失败'),
   })
 
   // 打开弹窗时回填表单（新建=默认值，编辑=行数据）
@@ -82,9 +102,10 @@ export default function LocationsPage() {
     setWarehouseFilter(v.warehouseId)
     setStatusFilter(v.status)
     setZoneFilter(v.zone)
+    setPage(1)
     setQueryOpen(false)
   }
-  function clearAll() { setKeyword(''); setWarehouseFilter(null); setStatusFilter(''); setZoneFilter('') }
+  function clearAll() { setKeyword(''); setWarehouseFilter(null); setStatusFilter(''); setZoneFilter(''); setPage(1) }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
@@ -115,14 +136,16 @@ export default function LocationsPage() {
         title="库位管理"
         description="管理仓库内的存储库位"
         columns={columns}
-        queryKey={['locations', keyword, warehouseFilter, statusFilter, zoneFilter]}
+        queryKey={['locations', keyword, warehouseFilter, statusFilter, zoneFilter, page]}
         listQuery={() => getLocationsApi({
           keyword,
           warehouseId: warehouseFilter ?? undefined,
           status: statusFilter || undefined,
           zone: zoneFilter || undefined,
-          pageSize: 99999,
+          pageSize: 20,
+          page,
         })}
+        pagination={{ page, pageSize: 20, unit: '个', onPageChange: setPage }}
         deleteApi={(id) => deleteLocationApi(id, { skipGlobalError: true })}
         deleteMessage="仅未被库存容器引用的库位允许删除；若仍在使用，请改为编辑后停用。"
         createLabel="+ 新建库位"
@@ -136,6 +159,23 @@ export default function LocationsPage() {
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </>
         }
+        renderActions={(row, helpers) => (
+          <TableActionsMenu
+            primaryLabel="打印"
+            primaryVariant="outline"
+            primaryDisabled={printMut.isPending && printMut.variables === row.id}
+            onPrimaryClick={() => printMut.mutate(row.id)}
+            items={[
+              { label: '编辑', onClick: () => helpers.openEdit(row) },
+              {
+                label: '删除',
+                destructive: true,
+                separatorBefore: true,
+                onClick: () => helpers.openDelete(row),
+              },
+            ]}
+          />
+        )}
         renderToolbar={
           chips.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">

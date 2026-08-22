@@ -446,14 +446,15 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     countParams.push(warehouseId)
   }
   if (startDate) {
-    cond += ' AND DATE(so.created_at)>=?'
-    countCond += ' AND DATE(created_at)>=?'
-    params.push(startDate)
-    countParams.push(startDate)
+    // 半开区间写法（DATE(col)>=? 会废掉 (status,created_at) 索引）：start 从当天 00:00 起
+    cond += ' AND so.created_at >= ?'
+    countCond += ' AND created_at >= ?'
+    params.push(`${startDate} 00:00:00`)
+    countParams.push(`${startDate} 00:00:00`)
   }
   if (endDate) {
-    cond += ' AND DATE(so.created_at)<=?'
-    countCond += ' AND DATE(created_at)<=?'
+    cond += ' AND so.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
+    countCond += ' AND created_at < DATE_ADD(?, INTERVAL 1 DAY)'
     params.push(endDate)
     countParams.push(endDate)
   }
@@ -476,16 +477,33 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     params.push(...scope.params)
     countParams.push(...scope.params)
   }
-  const [rows] = await pool.query(
-    `SELECT so.*, ${warehouseTaskProjection}, ${itemAggProjection}, ${paymentProjection}
+  // 两段式列表查询（性能）：itemAggJoin 是对整张 sale_order_items 的全量 GROUP BY 派生表，
+  // 直接 LEFT JOIN 时每翻一页都全表重建一次。改为先分页取本页订单 id，再对
+  // 本页 id 做 IN 聚合，明细表走 idx_order_id，翻页成本与数据总量解耦。
+  const [pageRows] = await pool.query(
+    `SELECT so.*, ${warehouseTaskProjection}, ${paymentProjection}
      FROM sale_orders so
      ${latestWarehouseTaskJoin}
-     ${itemAggJoin}
      ${paymentJoin}
      WHERE so.deleted_at IS NULL ${cond}
      ORDER BY so.created_at DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
+  const pageIds = pageRows.map(r => r.id)
+  const aggMap = new Map()
+  if (pageIds.length) {
+    const [aggRows] = await pool.query(
+      `SELECT order_id,
+              SUM(quantity) AS ordered_total_qty,
+              SUM(shipped_qty) AS shipped_total_qty,
+              COUNT(DISTINCT warehouse_id) AS warehouse_count,
+              SUM(CASE WHEN dispatched = 0 THEN 1 ELSE 0 END) AS undispatched_count
+       FROM sale_order_items WHERE order_id IN (?) GROUP BY order_id`,
+      [pageIds],
+    )
+    for (const a of aggRows) aggMap.set(Number(a.order_id), a)
+  }
+  const rows = pageRows.map(r => ({ ...r, ...(aggMap.get(r.id) || {}) }))
   const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_orders WHERE deleted_at IS NULL ${countCond}`,countParams)
   return { list:rows.map(fmt), pagination:{page, pageSize: ps, total} }
 }
@@ -1371,6 +1389,34 @@ async function deleteOrder(id, scopeWarehouseIds = null) {
   }
 }
 
+/**
+ * 批量确认占库（批量操作）：逐单复用 reserveStock 的完整逻辑（状态机 1→2、
+ * 信用额度校验、可用量检查、按商品排序加锁、预占），每单独立事务——
+ * 任一单失败不影响其余，失败清单随响应返回，由前端展示。
+ *
+ * 调用方（controller）不传 requestKey：batch 语义本身就是「逐单尽力而为」，
+ * 重复提交不会产生部分重复推进（每单幂等由单条路径自身的锁/状态机保证）。
+ */
+async function batchConfirm(ids, operator, { scopeWarehouseIds = null } = {}) {
+  const orderIds = Array.isArray(ids)
+    ? [...new Set(ids.map(Number).filter(n => Number.isInteger(n) && n > 0))]
+    : []
+  if (!orderIds.length) throw new AppError('请至少选择一张销售单', 400)
+  if (orderIds.length > 50) throw new AppError('单次批量确认最多 50 张销售单', 400)
+
+  const succeeded = []
+  const failed = []
+  for (const id of orderIds) {
+    try {
+      await reserveStock(id, operator, [], { scopeWarehouseIds })
+      succeeded.push(id)
+    } catch (error) {
+      failed.push({ id, message: error?.message || '确认失败' })
+    }
+  }
+  return { succeeded, failed }
+}
+
 module.exports = {
   findAll,
   findById,
@@ -1379,6 +1425,7 @@ module.exports = {
   requestAdjustment,
   getReservePreview,
   reserveStock,
+  batchConfirm,
   releaseStock,
   ship,
   cancel,

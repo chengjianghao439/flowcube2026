@@ -8,8 +8,15 @@ interface DataTableProps<T extends object> {
   loading?: boolean
   rowKey?: keyof T
   emptyText?: string
+  /** 兼容旧用法：等价于 selectionMode="multiple" */
   selectable?: boolean
+  /** 多选模式：显示 checkbox 列，受控 selectedIds/onSelectionChange */
+  selectionMode?: 'multiple'
+  /** 多选模式下哪些行可勾选（返回 false 的行 checkbox 禁用） */
+  selectableCheck?: (row: T) => boolean
   selectedIds?: Set<number>
+  /** 选中变化回调（onSelectChange 的别名，命名与 selectionMode 呼应） */
+  onSelectionChange?: (ids: Set<number>) => void
   onSelectChange?: (ids: Set<number>) => void
   onRowDoubleClick?: (row: T) => void
   columnStorageKey?: string
@@ -32,7 +39,7 @@ function isAction(key: string, title: string): boolean {
 export default function DataTable<T extends object>({
   columns, data, loading = false,
   rowKey = 'id' as keyof T, emptyText = '暂无数据',
-  selectable = false, selectedIds, onSelectChange,
+  selectable = false, selectionMode, selectedIds, onSelectChange, onSelectionChange, selectableCheck,
   onRowDoubleClick,
   columnStorageKey,
   sortKey, sortDirection, onSortChange,
@@ -155,11 +162,13 @@ export default function DataTable<T extends object>({
     return Number.isFinite(parsed) ? parsed : fallback
   }, [columnWidths, fluid, orderedColumns, columns])
 
+  const isSelectEnabled = !!(selectable || selectionMode)
+
   const tableWidth = useMemo(() => {
     if (fluid) return 0
     const base = orderedColumns.reduce((sum, col) => sum + getColumnWidth(col), 0)
-    return base + (selectable ? 56 : 0)
-  }, [orderedColumns, selectable, fluid, getColumnWidth])
+    return base + (isSelectEnabled ? 56 : 0)
+  }, [orderedColumns, isSelectEnabled, fluid, getColumnWidth])
 
   const startResize = (event: ReactMouseEvent, col: TableColumn<T>) => {
     event.preventDefault()
@@ -178,10 +187,10 @@ export default function DataTable<T extends object>({
     const snapshot: Record<string, number> = {}
     if (colgroupRef.current) {
       const colEls = colgroupRef.current.querySelectorAll('col')
-      let ci = selectable ? 1 : 0
+      let ci = isSelectEnabled ? 1 : 0
       colEls.forEach(el => {
-        if (selectable && ci === 0) { ci++; return }
-        const idx = selectable ? ci - 1 : ci
+        if (isSelectEnabled && ci === 0) { ci++; return }
+        const idx = isSelectEnabled ? ci - 1 : ci
         if (idx >= 0 && idx < allCols.length) {
           snapshot[String(allCols[idx].key)] = el.getBoundingClientRect().width
         }
@@ -234,45 +243,51 @@ export default function DataTable<T extends object>({
   }
 
   const allIds = data.map(r => Number((r as Record<string, unknown>)[String(rowKey)]))
-  const allSelected = allIds.length > 0 && allIds.every(id => selectedIds?.has(id))
-  const someSelected = !allSelected && allIds.some(id => selectedIds?.has(id))
+  const enabledIds = selectableCheck ? allIds.filter(id => selectableCheck(data.find(r => Number((r as Record<string, unknown>)[String(rowKey)]) === id)!)) : allIds
+  const allSelected = enabledIds.length > 0 && enabledIds.every(id => selectedIds?.has(id))
+  const someSelected = !allSelected && enabledIds.some(id => selectedIds?.has(id))
+
+  const handleSelectChange = (next: Set<number>) => {
+    if (onSelectionChange) onSelectionChange(next)
+    else onSelectChange?.(next)
+  }
 
   const toggleAll = () => {
-    if (!onSelectChange) return
+    if (!onSelectChange && !onSelectionChange) return
     if (allSelected) {
       const next = new Set(selectedIds)
-      allIds.forEach(id => next.delete(id))
-      onSelectChange(next)
+      enabledIds.forEach(id => next.delete(id))
+      handleSelectChange(next)
     } else {
       const next = new Set(selectedIds)
-      allIds.forEach(id => next.add(id))
-      onSelectChange(next)
+      enabledIds.forEach(id => next.add(id))
+      handleSelectChange(next)
     }
   }
 
   const toggleRow = (id: number) => {
-    if (!onSelectChange) return
+    if (!onSelectChange && !onSelectionChange) return
     const next = new Set(selectedIds)
     if (next.has(id)) next.delete(id)
     else next.add(id)
-    onSelectChange(next)
+    handleSelectChange(next)
   }
 
-  const colCount = orderedColumns.length + (selectable ? 1 : 0)
+  const colCount = orderedColumns.length + (isSelectEnabled ? 1 : 0)
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="table-fixed text-sm" style={fluid ? { width: '100%' } : { width: Math.max(tableWidth, 0), minWidth: '100%' }}>
           <colgroup ref={colgroupRef}>
-            {selectable && <col style={{ width: 56 }} />}
+            {isSelectEnabled && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
               <col key={String(col.key)} style={{ width: fluid ? `${getColumnWidth(col)}%` : getColumnWidth(col) }} />
             ))}
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              {selectable && (
+              {isSelectEnabled && (
                 <th className="w-10 px-4 py-2.5">
                   <input
                     type="checkbox"
@@ -344,7 +359,7 @@ export default function DataTable<T extends object>({
               // Skeleton rows
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b border-border last:border-0">
-                  {selectable && <td className="min-h-12 px-4 py-2.5" />}
+                  {isSelectEnabled && <td className="min-h-12 px-4 py-2.5" />}
                   {orderedColumns.map((col) => (
                     <td key={String(col.key)} className="min-h-12 px-4 py-2.5">
                       <div className="h-3.5 w-3/4 animate-pulse rounded bg-muted" />
@@ -365,6 +380,7 @@ export default function DataTable<T extends object>({
               data.map((row) => {
                 const rowId = Number((row as Record<string, unknown>)[String(rowKey)])
                 const isSelected = selectedIds?.has(rowId) ?? false
+                const rowSelectable = selectableCheck ? selectableCheck(row) : true
                 return (
                   <tr
                     key={String(row[rowKey])}
@@ -373,13 +389,15 @@ export default function DataTable<T extends object>({
                       isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'
                     } ${onRowDoubleClick ? 'cursor-pointer' : ''}`}
                   >
-                    {selectable && (
+                    {isSelectEnabled && (
                       <td className="px-4">
                         <input
                           type="checkbox"
                           checked={isSelected}
+                          disabled={!rowSelectable}
                           onChange={() => toggleRow(rowId)}
                           className="h-4 w-4 cursor-pointer rounded"
+                          title={rowSelectable ? undefined : '该行不可勾选'}
                         />
                       </td>
                     )}

@@ -16,6 +16,7 @@
  *   type 7 物流:  box_code, task_no, customer_name, carrier_name, freight_type_name, piece_count, summary, item_list
  *   type 8 产品:  product_code, product_name, spec, unit, price
  *   type 9 塑料盒: container_code, product_name
+ *   type 10 库位: location_barcode, location_code, zone, name
  */
 
 import type { TemplateElement } from '@/types/print-template'
@@ -86,6 +87,12 @@ export const LABEL_FIELD_DEFS_BY_TYPE: Record<number, PrintFieldDef[]> = {
     { key: 'container_code', label: '塑料盒条码', type: 'barcode', defaultW: 72, defaultH: 16 },
     { key: 'product_name', label: '品名', type: 'text', defaultW: 72, defaultH: 12 },
   ],
+  10: [
+    { key: 'location_barcode', label: '库位条码', type: 'barcode', defaultW: 72, defaultH: 14 },
+    { key: 'location_code', label: '库位编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'zone', label: '区域', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'name', label: '名称', type: 'text', defaultW: 72, defaultH: 8 },
+  ],
 }
 
 /** 单据明细表格列选项（type 1–3），key 与后端商品行字段一致 */
@@ -143,6 +150,12 @@ export const DEFAULT_LABEL_ELEMENTS: Record<number, TemplateElement[]> = {
     { id: 'lb9_bc', type: 'barcode', fieldKey: 'container_code', label: '塑料盒条码', x: 2, y: 2, width: 71, height: 12, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
     { id: 'lb9_pn', type: 'text', fieldKey: 'product_name', label: '品名', x: 2, y: 16, width: 71, height: 10, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
   ],
+  10: [
+    { id: 'lb10_bc', type: 'barcode', fieldKey: 'location_barcode', label: '库位条码', x: 2, y: 2, width: 71, height: 12, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+    { id: 'lb10_lc', type: 'text', fieldKey: 'location_code', label: '库位编码', x: 2, y: 16, width: 71, height: 6, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+    { id: 'lb10_z', type: 'text', fieldKey: 'zone', label: '区域', x: 2, y: 24, width: 71, height: 6, fontSize: 8, fontWeight: 'normal', textAlign: 'left', border: false },
+    { id: 'lb10_n', type: 'text', fieldKey: 'name', label: '名称', x: 2, y: 32, width: 71, height: 14, fontSize: 8, fontWeight: 'normal', textAlign: 'left', border: false },
+  ],
 }
 
 /** 标签画布预览示例数据（与打印变量一致，字段面板收敛后自动跟随） */
@@ -152,6 +165,7 @@ export const LABEL_PREVIEW_SAMPLE: Record<number, Record<string, string>> = {
   7: { box_code: 'L000001', task_no: 'WT202403010001', customer_name: '某某客户', carrier_name: '顺丰速运', freight_type_name: '寄付', piece_count: '3 件', summary: '2 行 / 3 件', item_list: '商品A×2, 商品B×1' },
   8: { product_code: 'SP0001', product_name: '示例 SKU', spec: '500g', unit: '件', price: '12.50' },
   9: { container_code: 'B000456', product_name: '零散商品' },
+  10: { location_barcode: 'R000001', location_code: 'A01-01-0101', zone: 'A区', name: '主通道货架-1' },
 }
 
 /** 单据画布预览示例数据（type 1–4） */

@@ -267,11 +267,12 @@ async function create({ warehouseId, warehouseName, remark, operator, scopeWareh
 }
 
 // 填写实盘数量
-async function updateItems(id, items) {
+async function updateItems(id, items, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, columns: 'id, status', entityName: '盘点单' })
+    const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, columns: 'id, status, warehouse_id', entityName: '盘点单' })
+    assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
     assertStatusAction('stockcheck', 'edit', checkRow.status)
     const [itemRows] = await conn.query('SELECT * FROM inventory_check_items WHERE check_id=? ORDER BY id ASC', [id])
     const [scanRows] = await conn.query(
@@ -315,11 +316,12 @@ async function getCurrentBookQty(conn, productId, warehouseId) {
 }
 
 // 提交盘点，批量调整库存
-async function submit(id, operator) {
+async function submit(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, entityName: '盘点单' })
+    assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
     const rule = assertStatusAction('stockcheck', 'submit', checkRow.status)
     const [itemRows] = await conn.query(
       'SELECT * FROM inventory_check_items WHERE check_id=? ORDER BY id ASC', [id])
@@ -489,11 +491,12 @@ async function submit(id, operator) {
 
 // 刷新单行账面数：盘点期间该商品发生过出入库时，把 book_qty 重置为当前账面，
 // 并清空实盘/差异（实盘数是基于旧库存状态点的实物计数，账面变了必须重数）。
-async function refreshItem(id, itemId) {
+async function refreshItem(id, itemId, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, columns: 'id, warehouse_id, status', entityName: '盘点单' })
+    assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
     assertStatusAction('stockcheck', 'edit', checkRow.status)
     const [[item]] = await conn.query(
       'SELECT id, product_id, product_name FROM inventory_check_items WHERE id=? AND check_id=?',
@@ -517,11 +520,12 @@ async function refreshItem(id, itemId) {
   }
 }
 
-async function cancel(id) {
+async function cancel(id, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, columns: 'id, status', entityName: '盘点单' })
+    const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, columns: 'id, status, warehouse_id', entityName: '盘点单' })
+    assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
     const rule = assertStatusAction('stockcheck', 'cancel', checkRow.status)
     await compareAndSetStatus(conn, {
       table: 'inventory_checks',

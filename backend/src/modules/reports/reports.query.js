@@ -123,12 +123,18 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
   const dateParams = [startDate, endDate].filter(Boolean)
   const lWh = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
   const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
+  // 周转率 = 期内出库量 / 平均库存，平均库存 = (期初 + 期末) / 2。
+  // 期初 = 期末 + 期内入库 − 期内出库（流水 quantity 恒为正数，方向由 type 区分），
+  // 即平均库存 = 期末 + (入库 − 出库) / 2。期内只有 1 条流水时没有库存观测点，
+  // 期初退化失败，这类商品在 JS 侧标记 turnDays=null 降级展示。
+  const periodDays = startDate && endDate ? Math.max(1, Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000) + 1) : null
 
   const turnover = await fetchMany(
     `SELECT p.code, p.name, p.unit,
             SUM(CASE WHEN l.type=1 THEN l.quantity ELSE 0 END) AS inbound_qty,
             SUM(CASE WHEN l.type=2 THEN l.quantity ELSE 0 END) AS outbound_qty,
-            COALESCE(s.total_qty, 0) AS current_qty
+            COALESCE(s.total_qty, 0) AS current_qty,
+            COUNT(*) AS log_count
      FROM inventory_logs l
      JOIN product_items p ON l.product_id = p.id
      LEFT JOIN (
@@ -153,7 +159,29 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
     ipWh.params,
   )
 
-  return { turnover, byWarehouse }
+  return { turnover: turnover.map(r => {
+    const outboundQty = Number(r.outbound_qty)
+    const inboundQty = Number(r.inbound_qty)
+    const currentQty = Number(r.current_qty)
+    // 期初 = 期末 + 期内入库 − 期内出库；只有一条流水（log_count=1）时无期内库存观测点
+    const openingQty = currentQty + inboundQty - outboundQty
+    const avgStock = (openingQty + currentQty) / 2
+    // 展示用比率保留两位小数；周转天数用未舍入比率计算，避免舍入误差被放大
+    const rawRate = avgStock > 0 ? outboundQty / avgStock : 0
+    const turnRate = Math.round(rawRate * 100) / 100
+    return {
+      code: r.code,
+      name: r.name,
+      unit: r.unit,
+      inboundQty,
+      outboundQty,
+      currentQty,
+      avgStock: Math.round(avgStock * 1000) / 1000,
+      turnRate,
+      // 周转天数 = 期内天数 / 周转率；无出库或未指定完整日期区间（无期初观测）时展示 null
+      turnDays: (periodDays != null && rawRate > 0) ? Math.round(periodDays / rawRate * 10) / 10 : null,
+    }
+  }), byWarehouse: byWarehouse.map(r => ({ warehouseName: r.warehouse_name, totalQty: +r.total_qty, totalValue: +r.total_value })) }
 }
 
 async function fetchPdaPerformanceRows(scopeWarehouseIds = null) {
@@ -954,6 +982,34 @@ async function fetchKpiRows({ period = null, offsetPeriods = -1, scopeWarehouseI
   }
 }
 
+/**
+ * 采购价格趋势（P2 报表增强）：按商品返回采购单明细行的逐单均价时间序列。
+ * 口径：purchase_orders.status=3（已收齐）+ 非删除；按月分组取 AVG(unit_price) 均价。
+ * 均价为简单平均（各采购单明细行 unit_price 的均值，不按数量加权）——单行价格就是
+ * 该次采购的成交价，适合观察进价波动；若后续要看「加权成本」请改口径并同步前端图例。
+ * 无筛选条件时保留最近 12 个月（当前代码路径总是带 startDate/endDate，这里是兜底）。
+ */
+async function fetchPurchasePriceTrend({ productId, startDate = null, endDate = null, scopeWarehouseIds = null }) {
+  const dateCond = startDate && endDate
+    ? 'AND DATE(o.created_at) BETWEEN ? AND ?'
+    : startDate ? 'AND DATE(o.created_at) >= ?' : endDate ? 'AND DATE(o.created_at) <= ?' : ''
+  const dateParams = [startDate, endDate].filter(Boolean)
+  const wh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
+  const fallback = (!startDate && !endDate) ? 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)' : ''
+
+  return fetchMany(
+    `SELECT DATE_FORMAT(o.created_at, '%Y-%m') AS month,
+            ROUND(AVG(i.unit_price), 4) AS avg_price,
+            COUNT(*) AS order_count
+     FROM purchase_order_items i
+     INNER JOIN purchase_orders o ON o.id = i.order_id
+     WHERE o.deleted_at IS NULL AND o.status = 3
+       AND i.product_id = ? ${dateCond}${fallback}${wh.sql}
+     GROUP BY month ORDER BY month ASC`,
+    [Number(productId), ...dateParams, ...wh.params],
+  )
+}
+
 module.exports = {
   fetchOne,
   fetchMany,
@@ -967,4 +1023,5 @@ module.exports = {
   fetchReconciliationRows,
   fetchProfitAnalysisRows,
   fetchKpiRows,
+  fetchPurchasePriceTrend,
 }

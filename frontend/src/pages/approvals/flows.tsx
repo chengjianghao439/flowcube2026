@@ -26,6 +26,7 @@ const BIZ_TYPES = [
   { value: 'expense_claim', label: '费用报销' },
   { value: 'purchase_order', label: '采购单' },
   { value: 'inventory_disposal', label: '呆滞处置单' },
+  { value: 'product_price', label: '商品改价申请' },
 ]
 const BIZ_LABEL: Record<string, string> = Object.fromEntries(BIZ_TYPES.map(b => [b.value, b.label]))
 const APPROVER_LABEL: Record<number, string> = { [APPROVER_TYPE.ROLE]: '指定角色', [APPROVER_TYPE.DEPT_MANAGER]: '部门负责人', [APPROVER_TYPE.USER]: '指定用户' }
@@ -55,7 +56,7 @@ export default function ApprovalFlowsPage() {
   const { mutate: deleteFlow } = useDeleteApprovalFlow()
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r || []) })
   const { data: departments = [] } = useDepartments()
-  const { data: usersData } = useUsers({ pageSize: 99999, keyword: '' })
+  const { data: usersData } = useUsers({ pageSize: 500, keyword: '' })
   const users = usersData?.list ?? []
 
   const [formOpen, setFormOpen] = useState(false)

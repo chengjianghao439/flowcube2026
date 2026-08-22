@@ -50,8 +50,8 @@ const purchaseItems = async (req, res, next) => {
 const create = async (req, res, next) => {
   try {
     const data = 'poId' in req.body
-      ? await svc.createFromPoId(req.body.poId)
-      : await svc.createManualTask(req.body)
+      ? await svc.createFromPoId(req.body.poId, req.user?.warehouseIds ?? null)
+      : await svc.createManualTask(req.body, req.user?.warehouseIds ?? null)
     return successResponse(res, data, '入库任务已创建', 201)
   } catch (e) { next(e) }
 }
