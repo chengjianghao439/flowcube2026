@@ -43,12 +43,13 @@ const KNOWN_STATES = {
   inventoryDisposal: [1, 2, 3, 4, 5, 6],
   procurementPlan: [1, 2, 3, 4], // 3=已转换 4=已作废（cancel.to=4）
   creditOverride: [1, 2, 3, 4, 5],
+  priceChangeRequest: [1, 2, 3, 4], // 1待审批 2已通过 3已驳回 4已取消（2026-08-22 新增）
 }
 const SELF_LOOP_OK = new Set(['transfer.scanOut', 'inboundTask.receiveComplete'])
 
 console.log('状态机动作表完整性（documentStatusRules）')
 const machines = Object.keys(DOCUMENT_STATUS_RULES)
-assert('机器数量与已知清单一致（14，warehouseTask 独立）', machines.length === Object.keys(KNOWN_STATES).length, `实际 ${machines.length}: ${machines.join(',')}`)
+assert('机器数量与已知清单一致（15，warehouseTask 独立）', machines.length === Object.keys(KNOWN_STATES).length, `实际 ${machines.length}: ${machines.join(',')}`)
 
 for (const machine of machines) {
   const states = KNOWN_STATES[machine]

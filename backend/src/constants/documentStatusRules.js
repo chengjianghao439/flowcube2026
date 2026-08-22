@@ -251,6 +251,23 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       },
     },
   },
+  // 商品改价申请（2026-08-22 价格体系·审批闭环）：1待审批 2已通过 3已驳回 4已取消。
+  // submit 不改变状态（1 即待审批，submit 仅启动审批实例）；审批通过/驳回/取消才流转。
+  priceChangeRequest: {
+    entityName: '商品改价申请',
+    actions: {
+      submit: { from: [1], message: '只有待审批的改价申请可以提交审批' },
+      approve: {
+        from: [1], to: 2, message: '只有待审批的改价申请可以审批通过',
+        blocked: { 2: '该改价申请已通过（价格已生效）', 3: '该改价申请已驳回', 4: '该改价申请已取消' },
+      },
+      reject: { from: [1], to: 3, message: '只有待审批的改价申请可以驳回' },
+      cancel: {
+        from: [1], to: 4, message: '当前状态的改价申请不能取消',
+        blocked: { 2: '已通过的改价申请不能取消（价格已生效）', 3: '该改价申请已驳回', 4: '该改价申请已取消' },
+      },
+    },
+  },
   inboundTask: {
     entityName: '收货订单',
     actions: {

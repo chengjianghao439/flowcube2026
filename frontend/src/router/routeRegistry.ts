@@ -80,6 +80,7 @@ const PurchaseFormPage = lazy(() => import('@/pages/purchase/form'))
 const RequisitionsPage = lazy(() => import('@/pages/purchase-requisitions'))
 const RequisitionFormPage = lazy(() => import('@/pages/purchase-requisitions/form'))
 const ProductPage = lazy(() => import('@/pages/products'))
+const PriceChangePage = lazy(() => import('@/pages/price-change'))
 const ProductFormPage = lazy(() => import('@/pages/products/form'))
 const CategoryPage = lazy(() => import('@/pages/categories'))
 const WarehouseStructurePage = lazy(() => import('@/pages/warehouse-structure'))
@@ -368,6 +369,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '库存', section: '商品资料', order: 60 },
+  },
+  {
+    path: '/price-change',
+    title: '商品改价申请',
+    permission: PERMISSIONS.PRODUCT_VIEW,
+    component: PriceChangePage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '库存', section: '商品资料', order: 70 },
   },
 
   // ── 仓储 ──────────────────────────────────────────────
