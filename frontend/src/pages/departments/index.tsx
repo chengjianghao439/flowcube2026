@@ -21,7 +21,7 @@ const emptyForm = (): DeptFormState => ({ name: '', parentId: 0, managerId: null
 
 export default function DepartmentsPage() {
   const { data: departments = [], isLoading } = useDepartments()
-  const { data: usersData } = useUsers({ pageSize: 99999, keyword: '' })
+  const { data: usersData } = useUsers({ pageSize: 500, keyword: '' })
   const users = usersData?.list ?? []
   const { mutate: createDept } = useCreateDepartment()
   const { mutate: updateDept } = useUpdateDepartment()

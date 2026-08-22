@@ -140,7 +140,7 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
   // ── 数据 ──
   const { data: categoryTree = [] } = useCategoryTree()
   const { data: finderData, isFetching } = useProductFinder(
-    { pageSize: 99999, keyword: searchText, categoryId, warehouseId: warehouseId ?? null },
+    { pageSize: 500, keyword: searchText, categoryId, warehouseId: warehouseId ?? null },
     open,
   )
 

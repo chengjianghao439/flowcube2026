@@ -33,7 +33,7 @@ export function deletePlasticBoxApi(id: number, config?: Parameters<typeof paylo
 export function usePlasticBoxes(keyword: string) {
   return useQuery({
     queryKey: [QUERY_KEY, keyword],
-    queryFn: () => getPlasticBoxesApi({ pageSize: 99999, keyword }),
+    queryFn: () => getPlasticBoxesApi({ pageSize: 500, keyword }),
   })
 }
 

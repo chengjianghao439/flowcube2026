@@ -385,7 +385,9 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
     if (!expDate && mfgDate && Number(productRow.shelf_life_days) > 0) {
       const d = new Date(`${mfgDate}T00:00:00`)
       d.setDate(d.getDate() + Number(productRow.shelf_life_days))
-      expDate = d.toISOString().slice(0, 10)
+      // 直接透传 Date 对象：连接池 timezone=+08:00 会把本地午夜序列化为当天日期。
+      // 此前 toISOString().slice(0,10) 先转 UTC，+08 下效期回退一天（同 containerEngine.fmtSqlDate 的坑）。
+      expDate = d
     }
     if (!expDate) throw new AppError('该商品启用了批次管理，请录入效期（或录入生产日期并在商品资料维护保质期天数）', 400)
   }

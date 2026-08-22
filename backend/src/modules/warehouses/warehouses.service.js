@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
+const { normalizePagination } = require('../../utils/pagination')
 
 const TYPE_NAMES = { 1: '成品仓', 2: '原料仓', 3: '退货仓', 4: '其他' }
 
@@ -49,7 +50,8 @@ async function assertWarehouseDeletable(id) {
 }
 
 async function findAll({ page = 1, pageSize = 20, keyword = '', scopeWarehouseIds = null }) {
-  const offset = (page - 1) * pageSize
+  // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const scope = scopeFilter(scopeWarehouseIds, 'id')
 
@@ -57,7 +59,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', scopeWarehouseId
     `SELECT * FROM inventory_warehouses
      WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)${scope.sql}
      ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    [like, like, ...scope.params, pageSize, offset],
+    [like, like, ...scope.params, ps, offset],
   )
 
   const [[{ total }]] = await pool.query(
@@ -66,7 +68,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', scopeWarehouseId
     [like, like, ...scope.params],
   )
 
-  return { list: rows.map(formatRow), pagination: { page, pageSize, total } }
+  return { list: rows.map(formatRow), pagination: { page, pageSize: ps, total } }
 }
 
 async function findAllActive(scopeWarehouseIds = null) {

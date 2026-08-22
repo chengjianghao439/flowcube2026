@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,16 +40,20 @@ export default function RefundsPage() {
   const [queryOpen, setQueryOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailId, setDetailId] = useState<number | null>(null)
+  const [page, setPage] = useState(1)
   const { can } = usePermission()
   const canCreate = can(PERMISSIONS.REFUND_ORDER_CREATE)
 
   const { data, isLoading } = useRefundList({
-    pageSize: 99999,
+    page,
+    pageSize: 20,
     keyword,
     status: statusFilter || undefined,
     startDate: startDate || undefined,
     endDate: endDate || undefined,
   })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / 20))
 
   // ── 查询弹窗筛选值 ──
   const initialQuery: RefundQueryValues = { keyword, status: statusFilter, startDate, endDate }
@@ -57,9 +62,10 @@ export default function RefundsPage() {
     setStatusFilter(v.status)
     setStartDate(v.startDate)
     setEndDate(v.endDate)
+    setPage(1)
     setQueryOpen(false)
   }
-  function clearAll() { setKeyword(''); setStatusFilter(''); setStartDate(''); setEndDate('') }
+  function clearAll() { setKeyword(''); setStatusFilter(''); setStartDate(''); setEndDate(''); setPage(1) }
 
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
@@ -119,6 +125,7 @@ export default function RefundsPage() {
       )}
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
+      <Pagination page={page} totalPages={totalPages} total={total} unit="单" onPageChange={setPage} />
 
       <CreateRefundDialog open={createOpen} onClose={() => setCreateOpen(false)} />
       <RefundDetailDialog open={!!detailId} onClose={() => setDetailId(null)} id={detailId} />

@@ -47,7 +47,7 @@ export default function PdaTransferPage() {
   const navigate = useNavigate()
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['pda-transfers'],
-    queryFn: () => getTransferListApi({ page: 1, pageSize: 99999 }).then(r => r?.list ?? []),
+    queryFn: () => getTransferListApi({ page: 1, pageSize: 200 }).then(r => r?.list ?? []),
     refetchInterval: 30_000,
   })
   const list = (data ?? []) as TransferOrder[]

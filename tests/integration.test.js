@@ -214,9 +214,25 @@ async function main() {
       await http.post(`/api/transfer/${transferId}/scan-out`, { token, headers: ctx.pdaHeaders(), json: { containerBarcode: transferContainerBarcode } }),
       '源仓 PDA 扫码出库成功',
     )
+    // 设备绑定仓拦截（2026-08-22 安全修复）：scan-in 必须由目标仓设备执行。
+    // 测试的 SMOKE-PDA-01 绑定源仓，这里建第二台绑定目标仓的设备 + 会话用于 scan-in。
+    const wh2DeviceCode = `SMOKE-PDA-${randomRef('W2')}`
+    const path = require('path')
+    const bcrypt = require(path.resolve(__dirname, '../backend/node_modules/bcryptjs'))
+    await pool.query(
+      `INSERT INTO pda_devices (device_code, device_name, warehouse_id, status, secret_hash)
+       VALUES (?, 'Smoke PDA Target', ?, 'active', ?)`,
+      [wh2DeviceCode, wh2.id, bcrypt.hashSync('smoke-pda-secret-2', 10)],
+    )
+    const { createSession: createPdaSession } = require('../backend/src/modules/pda/pda.sessions.service')
+    const wh2Session = await createPdaSession({
+      deviceCode: wh2DeviceCode,
+      deviceSecret: 'smoke-pda-secret-2',
+      userId: 1,
+    })
     await expectOk(
       log,
-      await http.post(`/api/transfer/${transferId}/scan-in`, { token, headers: ctx.pdaHeaders(), json: { containerBarcode: transferContainerBarcode, locationId: wh2LocationId } }),
+      await http.post(`/api/transfer/${transferId}/scan-in`, { token, headers: { 'X-Client': 'pda', 'X-PDA-Session': wh2Session.sessionToken }, json: { containerBarcode: transferContainerBarcode, locationId: wh2LocationId } }),
       '目标仓 PDA 扫码入库成功（调拨完成）',
     )
 

@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { normalizePagination } = require('../../utils/pagination')
 
 function pad(val) {
   if (!val) return ''
@@ -45,7 +46,8 @@ async function assertLocationDeletable(id) {
 }
 
 async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null, status = '', zone = '' }) {
-  const offset = (page - 1) * pageSize
+  // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
 
   const conditions = ['wl.deleted_at IS NULL', '(wl.code LIKE ? OR wl.name LIKE ?)']
@@ -73,7 +75,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
      WHERE ${where}
      ORDER BY wl.warehouse_id ASC, wl.code ASC
      LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset],
+    [...params, ps, offset],
   )
 
   const [[{ total }]] = await pool.query(
@@ -81,7 +83,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
     params,
   )
 
-  return { list: rows.map(formatRow), pagination: { page, pageSize, total } }
+  return { list: rows.map(formatRow), pagination: { page, pageSize: ps, total } }
 }
 
 async function findById(id) {

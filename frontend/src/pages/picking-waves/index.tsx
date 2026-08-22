@@ -19,6 +19,7 @@ import {
   type PickingWave, type WaveStatus,
 } from '@/api/picking-waves'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { confirmAction } from '@/lib/confirm'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
@@ -79,15 +80,18 @@ export default function PickingWavesPage() {
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [queryOpen, setQueryOpen] = useState(false)
+  const [page, setPage] = useState(1)
   const selectedWaveId = Number(searchParams.get('waveId') || 0) || null
   const focus = searchParams.get('focus') || ''
   const progressRef = useRef<HTMLDivElement | null>(null)
   const printClosureRef = useRef<HTMLDivElement | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['picking-waves', keyword, statusFilter],
-    queryFn: () => getWavesApi({ keyword, pageSize: 99999, ...(statusFilter ? { status: statusFilter } : {}) }),
+    queryKey: ['picking-waves', keyword, statusFilter, page],
+    queryFn: () => getWavesApi({ keyword, page, pageSize: 20, ...(statusFilter ? { status: statusFilter } : {}) }),
   })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / 20))
 
   const { data: detail } = useQuery({
     queryKey: ['picking-wave-detail', selectedWaveId],
@@ -154,9 +158,10 @@ export default function PickingWavesPage() {
   function applyQuery(v: WaveQueryValues) {
     setKeyword(v.keyword)
     setStatusFilter(v.status)
+    setPage(1)
     setQueryOpen(false)
   }
-  function clearAll() { setKeyword(''); setStatusFilter('') }
+  function clearAll() { setKeyword(''); setStatusFilter(''); setPage(1) }
 
   const chips = [
     keyword && { key: 'keyword', label: `波次号：${keyword}`, onRemove: () => setKeyword('') },
@@ -265,6 +270,7 @@ export default function PickingWavesPage() {
       )}
 
       <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id" />
+      <Pagination page={page} totalPages={totalPages} total={total} unit="个" onPageChange={setPage} />
 
       <Dialog open={!!selectedWaveId} onOpenChange={v => !v && closeDetail()}>
         <DialogContent className="max-w-4xl">

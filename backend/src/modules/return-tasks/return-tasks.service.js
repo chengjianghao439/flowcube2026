@@ -297,7 +297,10 @@ async function allocateQaContainers(conn, { taskId, taskNo, productId, passedQty
 
 function fmtSqlDate(d) {
   if (!d) return null
-  if (d instanceof Date) return d.toISOString().slice(0, 10)
+  // Date 对象直接透传：连接池 timezone=+08:00 会把本地午夜序列化为当天的日期字符串，
+  // 写进 DATE 列不错位（同 containerEngine.fmtSqlDate 的结论）。
+  // 此前 toISOString().slice(0,10) 先转 UTC，+08 下日期回退一天。
+  if (d instanceof Date) return d
   return String(d).slice(0, 10)
 }
 

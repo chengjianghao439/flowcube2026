@@ -1,4 +1,5 @@
 const { pool } = require('../../config/db')
+const logger = require('../../utils/logger')
 const reportsService = require('../reports/reports.service')
 const { ymd } = require('../../utils/excelExport')
 const paymentsService = require('../payments/payments.service')
@@ -31,7 +32,16 @@ function buildDateStamp() {
   return new Date().toLocaleDateString('zh-CN').replace(/\//g, '')
 }
 
+// 导出行数上限（性能守卫）：ExcelJS 全内存渲染，超限直接截断并告警，
+// 防止大库导出把进程 OOM。各导出函数统一经 buildExportPayload 出口生效。
+const EXPORT_MAX_ROWS = 10000
+
 function buildExportPayload({ filenamePrefix, sheetName, columns, rows }) {
+  const total = Array.isArray(rows) ? rows.length : 0
+  if (total > EXPORT_MAX_ROWS) {
+    logger.warn(`[export] ${filenamePrefix} 导出超限：${total} 行 > ${EXPORT_MAX_ROWS}，已截断`, { total, max: EXPORT_MAX_ROWS }, 'Export')
+    rows = rows.slice(0, EXPORT_MAX_ROWS)
+  }
   return {
     filename: `${filenamePrefix}_${buildDateStamp()}`,
     sheetName,
@@ -65,7 +75,7 @@ async function getPurchaseExportPayload(query) {
   if (warehouseId) { sql += ' AND o.warehouse_id=?'; params.push(+warehouseId) }
   if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY o.created_at DESC'
+  sql += ' ORDER BY o.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '采购单列表',
@@ -109,7 +119,7 @@ async function getSaleExportPayload(query) {
   if (warehouseId) { sql += ' AND o.warehouse_id=?'; params.push(+warehouseId) }
   if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY o.created_at DESC'
+  sql += ' ORDER BY o.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '销售单列表',
@@ -209,7 +219,7 @@ async function getInboundTasksExportPayload(query) {
   if (operatorId) { sql += ' AND t.operator_id=?'; params.push(+operatorId) }
   if (startDate) { sql += ' AND DATE(t.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(t.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY t.created_at DESC'
+  sql += ' ORDER BY t.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '收货订单',
@@ -320,7 +330,7 @@ async function getTransferExportPayload(query = {}) {
   if (operatorId) { sql += ' AND o.operator_id=?'; params.push(+operatorId) }
   if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY o.created_at DESC'
+  sql += ' ORDER BY o.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '调拨单',
@@ -363,7 +373,7 @@ async function getPurchaseReturnsExportPayload(query = {}) {
   if (operatorId) { sql += ' AND r.operator_id=?'; params.push(+operatorId) }
   if (startDate) { sql += ' AND DATE(r.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(r.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY r.created_at DESC'
+  sql += ' ORDER BY r.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '采购退货单',
@@ -407,7 +417,7 @@ async function getSaleReturnsExportPayload(query = {}) {
   if (operatorId) { sql += ' AND r.operator_id=?'; params.push(+operatorId) }
   if (startDate) { sql += ' AND DATE(r.created_at)>=?'; params.push(startDate) }
   if (endDate) { sql += ' AND DATE(r.created_at)<=?'; params.push(endDate) }
-  sql += ' ORDER BY r.created_at DESC'
+  sql += ' ORDER BY r.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '销售退货单',

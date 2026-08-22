@@ -78,7 +78,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
   }
   const { data, isLoading } = useQuery({
     queryKey: ['payment-receipts', { type, query }],
-    queryFn: () => getReceiptsApi({ ...exportParams, pageSize: 99999 }),
+    queryFn: () => getReceiptsApi({ ...exportParams, pageSize: 500 }),
   })
   const { data: detail } = useQuery({
     queryKey: ['payment-receipt-detail', detailId],

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import Pagination from '@/components/shared/Pagination'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,18 +22,22 @@ import type { Customer } from '@/types/customers'
 import type { TableColumn } from '@/types'
 
 const PRICE_LEVELS = ['A', 'B', 'C', 'D'] as const
+const PAGE_SIZE = 20
 
 export default function CustomersPage() {
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [bindOpen, setBindOpen] = useState(false)
   const [bindCustomer, setBindCustomer] = useState<Customer | null>(null)
   const [selectedPriceLevel, setSelectedPriceLevel] = useState<'A' | 'B' | 'C' | 'D'>('A')
 
-  const { data, isLoading } = useCustomers({ pageSize: 99999, keyword })
+  const { data, isLoading } = useCustomers({ page, pageSize: PAGE_SIZE, keyword })
+  const total = data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const del = useDeleteCustomer()
   const [confirmTarget, setConfirmTarget] = useState<Customer | null>(null)
   const bindMut = useMutation({
@@ -86,11 +91,12 @@ export default function CustomersPage() {
         </>
       } />
       <FilterCard>
-        <Input placeholder="搜索编码/名称…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} />
-        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search) }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword('') }}>重置</Button>}
+        <Input placeholder="搜索编码/名称…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
+        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); setPage(1) }}>搜索</Button>
+        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
       </FilterCard>
       <DataTable columns={columns} data={data?.list||[]} loading={isLoading} />
+      <Pagination page={page} totalPages={totalPages} total={total} unit="个" onPageChange={setPage} />
       <CustomerFormDialog open={dialogOpen} onClose={()=>setDialogOpen(false)} customer={editing} />
       <ConfirmDialog
         open={!!confirmTarget}

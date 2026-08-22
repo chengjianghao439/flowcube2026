@@ -1,6 +1,7 @@
 const { pool }    = require('../../config/db')
 const AppError    = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
+const { normalizePagination } = require('../../utils/pagination')
 
 const fmt = r => ({
   id:        r.id,
@@ -22,18 +23,19 @@ const fmt = r => ({
 })
 
 async function findAll({ page = 1, pageSize = 20, keyword = '' } = {}) {
+  // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like   = `%${keyword}%`
-  const offset = (page - 1) * pageSize
   const [rows] = await pool.query(
     `SELECT * FROM carriers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ? OR contact LIKE ?)
      ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    [like, like, like, pageSize, offset],
+    [like, like, like, ps, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM carriers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ? OR contact LIKE ?)`,
     [like, like, like],
   )
-  return { list: rows.map(fmt), pagination: { page, pageSize, total } }
+  return { list: rows.map(fmt), pagination: { page, pageSize: ps, total } }
 }
 
 async function findAllActive() {

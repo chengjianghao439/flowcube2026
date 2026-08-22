@@ -55,7 +55,7 @@ export default function ApprovalFlowsPage() {
   const { mutate: deleteFlow } = useDeleteApprovalFlow()
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r || []) })
   const { data: departments = [] } = useDepartments()
-  const { data: usersData } = useUsers({ pageSize: 99999, keyword: '' })
+  const { data: usersData } = useUsers({ pageSize: 500, keyword: '' })
   const users = usersData?.list ?? []
 
   const [formOpen, setFormOpen] = useState(false)

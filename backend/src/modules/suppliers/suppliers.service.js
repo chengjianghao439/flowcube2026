@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
+const { normalizePagination } = require('../../utils/pagination')
 const {
   SETTLEMENT_TYPE_NAME,
   normalizeSettlementType,
@@ -45,18 +46,19 @@ async function assertSupplierDeletable(id) {
 }
 
 async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
-  const offset = (page - 1) * pageSize
+  // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const [rows] = await pool.query(
     `SELECT * FROM supply_suppliers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)
      ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    [like, like, pageSize, offset],
+    [like, like, ps, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM supply_suppliers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)`,
     [like, like],
   )
-  return { list: rows.map(fmt), pagination: { page, pageSize, total } }
+  return { list: rows.map(fmt), pagination: { page, pageSize: ps, total } }
 }
 
 async function findAllActive() {

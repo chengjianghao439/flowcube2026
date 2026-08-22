@@ -1,4 +1,5 @@
 const { pool } = require('../../config/db')
+const { clearRolePermissionsCache } = require('../../middleware/loadRolePermissions')
 
 async function findAll() {
   const [rows] = await pool.query(
@@ -41,6 +42,8 @@ async function replacePermissions(roleId, permissions) {
       )
     }
     await conn.commit()
+    // 权限缓存失效：60s TTL 之外，改完立即让下一个请求看到新权限
+    clearRolePermissionsCache(roleId)
   } catch (e) {
     await conn.rollback()
     throw e

@@ -89,7 +89,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
 
   const reconciliationQ = useQuery({
     queryKey: ['reconciliation', type, query],
-    queryFn: () => getReconciliationApi({ ...exportParams, pageSize: 99999, settlementTypes: MONTHLY_SCOPE }),
+    queryFn: () => getReconciliationApi({ ...exportParams, pageSize: 500, settlementTypes: MONTHLY_SCOPE }),
   })
 
   const { data, isLoading, isError, error, refetch } = reconciliationQ

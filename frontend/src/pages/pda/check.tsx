@@ -45,7 +45,7 @@ function TaskSelectStep({
   const navigate = useNavigate()
   const { data, isLoading } = useQuery({
     queryKey: ['pda-check-tasks'],
-    queryFn: () => getTasksApi({ status: WT_STATUS.CHECKING, pageSize: 99999 }),
+    queryFn: () => getTasksApi({ status: WT_STATUS.CHECKING, pageSize: 200 }),
   })
 
   const tasks = data?.list ?? []

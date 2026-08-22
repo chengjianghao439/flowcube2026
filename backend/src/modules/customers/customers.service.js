@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { getCustomerCreditUsed } = require('../../utils/creditExposure')
+const { normalizePagination } = require('../../utils/pagination')
 const {
   SETTLEMENT_TYPE_NAME,
   normalizeSettlementType,
@@ -52,10 +53,12 @@ async function assertCustomerDeletable(id) {
 }
 
 async function findAll({ page=1, pageSize=20, keyword='' }) {
-  const offset=(page-1)*pageSize, like=`%${keyword}%`
-  const [rows] = await pool.query(`SELECT * FROM sale_customers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?) ORDER BY created_at DESC LIMIT ? OFFSET ?`,[like,like,pageSize,offset])
+  // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
+  const like=`%${keyword}%`
+  const [rows] = await pool.query(`SELECT * FROM sale_customers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?) ORDER BY created_at DESC LIMIT ? OFFSET ?`,[like,like,ps,offset])
   const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_customers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)`,[like,like])
-  return { list:rows.map(fmt), pagination:{page,pageSize,total} }
+  return { list:rows.map(fmt), pagination:{page,pageSize:ps,total} }
 }
 async function findAllActive() {
   const [rows] = await pool.query('SELECT id,code,name,price_level FROM sale_customers WHERE deleted_at IS NULL AND is_active=1 ORDER BY name ASC')

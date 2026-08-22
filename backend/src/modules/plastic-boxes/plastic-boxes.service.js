@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { createContainer } = require('../../engine/containerEngine')
+const { normalizePagination } = require('../../utils/pagination')
 
 async function findAll({ page = 1, pageSize = 20, keyword, warehouseId, productId } = {}) {
   const conditions = ["c.deleted_at IS NULL", "c.barcode LIKE 'B%'"]
@@ -20,7 +21,8 @@ async function findAll({ page = 1, pageSize = 20, keyword, warehouseId, productI
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-  const offset = (Math.max(1, Number(page)) - 1) * Number(pageSize)
+  // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
 
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM inventory_containers c LEFT JOIN product_items p ON p.id = c.product_id ${where}`, params)
   const [rows] = await pool.query(
@@ -30,12 +32,12 @@ async function findAll({ page = 1, pageSize = 20, keyword, warehouseId, productI
      LEFT JOIN product_items p ON p.id = c.product_id
      LEFT JOIN inventory_warehouses w ON w.id = c.warehouse_id
      ${where} ORDER BY c.id DESC LIMIT ? OFFSET ?`,
-    [...params, Number(pageSize), offset],
+    [...params, ps, offset],
   )
 
   return {
     list: rows.map(fmt),
-    pagination: { page: Number(page), pageSize: Number(pageSize), total: Number(total) },
+    pagination: { page, pageSize: ps, total: Number(total) },
   }
 }
 

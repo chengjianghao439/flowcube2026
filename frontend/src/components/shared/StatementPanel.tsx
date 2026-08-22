@@ -77,7 +77,7 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
   }
   const { data, isLoading } = useQuery({
     queryKey: ['payment-statements', { type, query }],
-    queryFn: () => getStatementsApi({ ...exportParams, pageSize: 99999 }),
+    queryFn: () => getStatementsApi({ ...exportParams, pageSize: 500 }),
   })
   const { data: detail } = useQuery({
     queryKey: ['payment-statement-detail', detailId],
