@@ -71,7 +71,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 
 - 生产默认地址来自 `VITE_ERP_PRODUCTION_ORIGIN`，或 [deploy/production.local.json](/Users/chengjianghao/flowcube/deploy/production.local.json) 的 `erpOrigin`（CI 可用 GitHub Variable `VITE_ERP_PRODUCTION_ORIGIN`）。
 - **Build Desktop Installer** 工作流和本地 `desktop` 打包脚本都会强制注入该地址；缺失时直接失败，避免安装包默认连 `localhost:3000`。
-- 仍可在登录页「服务器地址」或 **Ctrl+Shift+S** 修改为其它环境。
+- 桌面端连哪个服务器是**打包期焊死**的（见 `docs/换服务器与桌面端自动更新说明.md`）；旧版的登录页改地址 / `Ctrl+Shift+S` 入口已彻底移除。
 
 本地桌面打包示例：`VITE_ERP_PRODUCTION_ORIGIN=https://api.example.com npm run dist:win --prefix desktop`。
 
