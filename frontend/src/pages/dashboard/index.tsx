@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Pencil, Save, X, RotateCcw, GripVertical, Plus, Minus, LayoutGrid, Check, Sparkles,
 } from 'lucide-react'
@@ -239,7 +239,10 @@ export default function DashboardPage() {
                     </div>
                   </>
                 )}
-                <Body />
+                {/* Suspense：图表 widget 为 lazy（recharts 按需加载），fallback 占位避免白屏 */}
+                <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-muted-foreground">加载中…</div>}>
+                  <Body />
+                </Suspense>
               </div>
             )
           })}

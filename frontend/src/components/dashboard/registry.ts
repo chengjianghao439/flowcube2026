@@ -1,4 +1,5 @@
-import type { ComponentType } from 'react'
+import type { ComponentType, LazyExoticComponent } from 'react'
+import { lazy } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   Package, Boxes, Wallet, ShoppingCart, ClipboardList, Truck, ScanLine, HandCoins, CreditCard, Landmark,
@@ -8,7 +9,16 @@ import {
   ClipboardCheck,
 } from 'lucide-react'
 import * as Kpi from './widgets/KpiWidgets'
-import * as Chart from './widgets/ChartWidgets'
+// 图表 widget（2026-08-22 性能）：recharts 389KB vendor 只被图表用，改 lazy——
+// 不再随 ERP/PDA 首屏依赖图预取，仅打开仪表盘且渲染对应图表时才加载对应 chunk。
+const ChartIoTrend = lazy(() => import('./widgets/ChartWidgets').then(m => ({ default: m.ChartIoTrend })))
+const ChartTopStock = lazy(() => import('./widgets/ChartWidgets').then(m => ({ default: m.ChartTopStock })))
+const ChartWarehouseStock = lazy(() => import('./widgets/ChartWidgets').then(m => ({ default: m.ChartWarehouseStock })))
+const ChartSaleTrend = lazy(() => import('./widgets/ChartWidgets').then(m => ({ default: m.ChartSaleTrend })))
+const ChartPurchaseTrend = lazy(() => import('./widgets/ChartWidgets').then(m => ({ default: m.ChartPurchaseTrend })))
+const ChartAging = lazy(() => import('./widgets/ChartWidgets').then(m => ({ default: m.ChartAging })))
+const ChartCashflow = lazy(() => import('./widgets/ChartWidgets').then(m => ({ default: m.ChartCashflow })))
+const ChartAccountBalance = lazy(() => import('./widgets/ChartWidgets').then(m => ({ default: m.ChartAccountBalance })))
 import * as List from './widgets/ListWidgets'
 import * as Fun from './widgets/FunWidgets'
 import DashboardVersionCard from './DashboardVersionCard'
@@ -31,7 +41,8 @@ export interface WidgetDef {
   defaultW: number
   /** 高度档（固定卡高，内容在卡内居中/滚动，不随内容变化） */
   size: WidgetSize
-  Component: ComponentType
+  /** lazy 组件需渲染处包 Suspense（图表 widget 为 lazy 加载） */
+  Component: ComponentType | LazyExoticComponent<ComponentType>
 }
 
 export const CATEGORY_LABEL: Record<WidgetCategory, string> = {
@@ -56,14 +67,14 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'kpi-credit-warning',  title: '授信预警',         description: '客户授信超限/高危占用',       icon: Gauge,         category: 'kpi', permission: PERMISSIONS.SALE_CREDIT_VIEW,    defaultW: 1, size: 'sm', Component: Kpi.KpiCreditWarning },
 
   // —— 图表分析（lg）——
-  { id: 'chart-io-trend',       title: '出入库趋势',      description: '近 7 天出入库数量走势',     icon: Activity,      category: 'chart', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 2, size: 'lg', Component: Chart.ChartIoTrend },
-  { id: 'chart-top-stock',      title: '库存价值 Top 10', description: '库存金额最高的商品',        icon: BarChart3,     category: 'chart', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 2, size: 'lg', Component: Chart.ChartTopStock },
-  { id: 'chart-warehouse-stock', title: '各仓库存分布',   description: '各仓库库存价值对比',        icon: Warehouse,     category: 'chart', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 2, size: 'lg', Component: Chart.ChartWarehouseStock },
-  { id: 'chart-sale-trend',     title: '月度销售趋势',    description: '近半年销售额与发货额',      icon: TrendingUp,    category: 'chart', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 2, size: 'lg', Component: Chart.ChartSaleTrend },
-  { id: 'chart-purchase-trend', title: '月度采购趋势',    description: '近半年采购额与收货额',      icon: ShoppingBag,   category: 'chart', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 2, size: 'lg', Component: Chart.ChartPurchaseTrend },
-  { id: 'chart-aging',          title: '应收应付账龄',    description: '账龄桶分布对比',            icon: CalendarClock, category: 'chart', permission: PERMISSIONS.PAYMENT_VIEW,         defaultW: 2, size: 'lg', Component: Chart.ChartAging },
-  { id: 'chart-cashflow',       title: '月度现金流',      description: '近半年收入 / 支出 / 净额',  icon: Coins,         category: 'chart', permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW, defaultW: 2, size: 'lg', Component: Chart.ChartCashflow },
-  { id: 'chart-account-balance', title: '账户余额分布',   description: '各资金账户余额占比',        icon: PieChart,      category: 'chart', permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW, defaultW: 2, size: 'lg', Component: Chart.ChartAccountBalance },
+  { id: 'chart-io-trend',       title: '出入库趋势',      description: '近 7 天出入库数量走势',     icon: Activity,      category: 'chart', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 2, size: 'lg', Component: ChartIoTrend },
+  { id: 'chart-top-stock',      title: '库存价值 Top 10', description: '库存金额最高的商品',        icon: BarChart3,     category: 'chart', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 2, size: 'lg', Component: ChartTopStock },
+  { id: 'chart-warehouse-stock', title: '各仓库存分布',   description: '各仓库库存价值对比',        icon: Warehouse,     category: 'chart', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 2, size: 'lg', Component: ChartWarehouseStock },
+  { id: 'chart-sale-trend',     title: '月度销售趋势',    description: '近半年销售额与发货额',      icon: TrendingUp,    category: 'chart', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 2, size: 'lg', Component: ChartSaleTrend },
+  { id: 'chart-purchase-trend', title: '月度采购趋势',    description: '近半年采购额与收货额',      icon: ShoppingBag,   category: 'chart', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 2, size: 'lg', Component: ChartPurchaseTrend },
+  { id: 'chart-aging',          title: '应收应付账龄',    description: '账龄桶分布对比',            icon: CalendarClock, category: 'chart', permission: PERMISSIONS.PAYMENT_VIEW,         defaultW: 2, size: 'lg', Component: ChartAging },
+  { id: 'chart-cashflow',       title: '月度现金流',      description: '近半年收入 / 支出 / 净额',  icon: Coins,         category: 'chart', permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW, defaultW: 2, size: 'lg', Component: ChartCashflow },
+  { id: 'chart-account-balance', title: '账户余额分布',   description: '各资金账户余额占比',        icon: PieChart,      category: 'chart', permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW, defaultW: 2, size: 'lg', Component: ChartAccountBalance },
 
   // —— 列表看板（lg）——
   { id: 'list-low-stock',    title: '低库存预警',    description: '库存不足的商品清单',        icon: AlertTriangle, category: 'list', permission: PERMISSIONS.DASHBOARD_VIEW, defaultW: 2, size: 'lg', Component: List.ListLowStock },

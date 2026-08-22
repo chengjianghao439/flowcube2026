@@ -541,16 +541,16 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
             </button>
             {batchOpen && (
               <div className="mt-2 grid grid-cols-1 gap-2">
-                <input className="h-10 rounded-md border border-border bg-background px-3 text-sm" placeholder="批次号"
+                <input data-scanner-manual="true" className="h-10 rounded-md border border-border bg-background px-3 text-sm" placeholder="批次号"
                   value={batchNo} onChange={e => setBatchNo(e.target.value)} maxLength={50} />
                 <div className="flex items-center gap-2">
                   <span className="w-16 shrink-0 text-xs text-muted-foreground">生产日期</span>
-                  <input type="date" className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                  <input data-scanner-manual="true" type="date" className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
                     value={mfgDate} onChange={e => setMfgDate(e.target.value)} />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-16 shrink-0 text-xs text-muted-foreground">效期至</span>
-                  <input type="date" className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                  <input data-scanner-manual="true" type="date" className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
                     value={expDate} onChange={e => setExpDate(e.target.value)} />
                 </div>
                 <p className="text-xs text-muted-foreground">商品维护了保质期天数时，只填生产日期即可自动算效期</p>

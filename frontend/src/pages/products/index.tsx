@@ -175,6 +175,8 @@ export default function ProductsPage() {
         onPrimaryClick={()=>navigate(`/products/${r.id}`)}
         items={[
           { label:'打印标签', onClick:()=>void handlePrintProductLabel(r), disabled: printingIds.has(r.id) },
+          // 改价走审批（v0.5.1 价格体系）：跳转改价申请页并预填商品
+          { label:'申请改价', onClick:()=>navigate(`/price-change?productId=${r.id}`) },
           { label:'删除', onClick:()=>setConfirmProduct(r), destructive:true, separatorBefore:true },
         ]}
       />

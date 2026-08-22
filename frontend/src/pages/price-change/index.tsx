@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import Pagination from '@/components/shared/Pagination'
@@ -14,6 +15,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import ProductFinderModal from '@/components/shared/ProductFinderModal'
 import { payloadClient } from '@/api/client'
 import { usePermission } from '@/hooks/usePermission'
+import { readNullableIntParam } from '@/lib/urlSearchParams'
 import type { TableColumn } from '@/types'
 
 const STATUS_TONE: Record<number, 'warning' | 'success' | 'danger' | 'info'> = { 1: 'warning', 2: 'success', 3: 'danger', 4: 'info' }
@@ -52,6 +54,7 @@ interface ApproveResult {
 
 export default function PriceChangePage() {
   const qc = useQueryClient()
+  const [searchParams] = useSearchParams()
   const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
@@ -66,6 +69,20 @@ export default function PriceChangePage() {
   const [cancelTarget, setCancelTarget] = useState<PriceChangeRequest | null>(null)
   const { can } = usePermission()
   const canApprove = can('approval.task.view')
+
+  // 商品列表「申请改价」跳转（?productId=）时预填商品并打开申请弹窗
+  const preselectProductId = readNullableIntParam(searchParams, 'productId')
+  useEffect(() => {
+    if (preselectProductId != null && !product) {
+      payloadClient.get<{ id: number; code: string; name: string }>(`/products/${preselectProductId}`).then((p) => {
+        if (p?.id) {
+          setProduct({ id: p.id, code: p.code, name: p.name })
+          setCreateOpen(true)
+        }
+      }).catch(() => { /* 商品不存在则忽略 */ })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectProductId])
 
   const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
