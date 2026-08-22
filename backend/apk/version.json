@@ -1,7 +1,7 @@
 {
-  "version": "0.5.3",
-  "versionCode": 94,
+  "version": "0.5.4",
+  "versionCode": 95,
   "filename": "app-release.apk",
   "releaseNote": "- **盘点提速**：盘点提交的库存校验与调整改为批量处理（此前每件商品单独查询，全仓盘点需要几分钟，现在大幅缩短）",
-  "publishedAt": "2026-08-22T15:53:54.085Z"
+  "publishedAt": "2026-08-22T20:22:16.297Z"
 }
