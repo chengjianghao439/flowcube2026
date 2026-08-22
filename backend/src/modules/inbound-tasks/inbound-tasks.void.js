@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { CONTAINER_STATUS, syncStockFromContainers, lockStockDimension } = require('../../engine/containerEngine')
-const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { appendInboundEvent } = require('./inbound-tasks.helpers')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertInScope } = require('../../utils/warehouseScope')
@@ -85,19 +85,22 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
       )
       if (wasActive) {
         const afterQty = await syncStockFromContainers(conn, c.product_id, c.warehouse_id)
-        await conn.query(
-          `INSERT INTO inventory_logs
-             (move_type, type, product_id, warehouse_id, quantity, before_qty, after_qty,
-              ref_type, ref_id, ref_no, container_id, remark, operator_id, operator_name)
-           VALUES (?, 3, ?, ?, ?, ?, ?, 'inbound_task', ?, ?, ?, ?, ?, ?)`,
-          [
-            MOVE_TYPE.RECEIPT_VOID, c.product_id, c.warehouse_id,
-            Number(c.remaining_qty), beforeQty, afterQty,
-            taskId, taskRow.task_no, c.id,
-            `撤回收货 ${taskRow.task_no} 容器#${c.id}`,
-            operator?.userId || null, operator?.realName || null,
-          ],
-        )
+        await writeInventoryLog(conn, {
+          moveType: MOVE_TYPE.RECEIPT_VOID,
+          type: 3,
+          productId: c.product_id,
+          warehouseId: c.warehouse_id,
+          quantity: Number(c.remaining_qty),
+          beforeQty,
+          afterQty,
+          refType: 'inbound_task',
+          refId: taskId,
+          refNo: taskRow.task_no,
+          containerId: c.id,
+          remark: `撤回收货 ${taskRow.task_no} 容器#${c.id}`,
+          operatorId: operator?.userId || null,
+          operatorName: operator?.realName || null,
+        })
       }
     }
 

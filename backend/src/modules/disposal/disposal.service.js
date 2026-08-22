@@ -16,7 +16,7 @@
 
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, lockStockDimension } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
@@ -423,24 +423,25 @@ async function dispose(id, operator, scopeWarehouseIds = null) {
       disposedValue += Number(quantity) * Number(unit_value)
 
       // 写库存变动日志（与盘点盘亏同口径，type=2 出库方向）
-      await conn.query(
-        `INSERT INTO inventory_logs
-           (move_type, type, product_id, warehouse_id,
-            quantity, before_qty, after_qty, unit_price,
-            ref_type, ref_id, ref_no,
-            container_id, log_source_type, log_source_ref_id,
-            remark, operator_id, operator_name)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          MOVE_TYPE.DISPOSAL, 2,
-          product_id, Number(row.warehouse_id),
-          Number(quantity), beforeAfter.before, beforeAfter.after, unit_value,
-          'disposal', id, row.disposal_no,
-          beforeAfter.primaryDeductContainerId, SOURCE_TYPE.DISPOSAL, id,
-          `${DISPOSE_TYPE_LABEL[dispose_type]} ${row.disposal_no}`,
-          operator.userId, operator.realName,
-        ],
-      )
+      await writeInventoryLog(conn, {
+        moveType: MOVE_TYPE.DISPOSAL,
+        type: 2,
+        productId: product_id,
+        warehouseId: Number(row.warehouse_id),
+        quantity: Number(quantity),
+        beforeQty: beforeAfter.before,
+        afterQty: beforeAfter.after,
+        unitPrice: unit_value,
+        refType: 'disposal',
+        refId: id,
+        refNo: row.disposal_no,
+        containerId: beforeAfter.primaryDeductContainerId,
+        sourceType: SOURCE_TYPE.DISPOSAL,
+        sourceRefId: id,
+        remark: `${DISPOSE_TYPE_LABEL[dispose_type]} ${row.disposal_no}`,
+        operatorId: operator.userId,
+        operatorName: operator.realName,
+      })
     }
 
     await compareAndSetStatus(conn, {

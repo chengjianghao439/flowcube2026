@@ -1,6 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS, lockStockDimension, syncStockFromContainers } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
@@ -441,33 +441,41 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
         if (!losses.length) continue
 
         const before = item.bookQty
-        for (const loss of losses) {
-          await conn.query(
-            'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
-            [loss.left, loss.left === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE, loss.id],
-          )
+        // 批量 UPDATE（2026-08-22 性能）：逐容器 UPDATE 改 CASE WHEN 一条语句，
+        // 语义等价（remaining_qty 更新 + 0 时置 EMPTY）
+        if (losses.length) {
+          const states = losses.map(l => l.left === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE)
+          const params = []
+          let updateSql = 'UPDATE inventory_containers SET remaining_qty = CASE id '
+          losses.forEach((l) => { updateSql += 'WHEN ? THEN ? '; params.push(l.id, l.left) })
+          updateSql += 'END, status = CASE id '
+          losses.forEach((l, i) => { updateSql += 'WHEN ? THEN ? '; params.push(l.id, states[i]) })
+          updateSql += 'END WHERE id IN ('
+          params.push(...losses.map(l => l.id))
+          updateSql += losses.map(() => '?').join(',') + ')'
+          await conn.query(updateSql, params)
         }
         const after = await syncStockFromContainers(conn, item.productId, check.warehouseId)
         // 每只亏损容器一条流水：容器时间线能精确看到「这只少了多少」，而不是只有一行商品级总数
         for (const loss of losses) {
-          await conn.query(
-            `INSERT INTO inventory_logs
-               (move_type, type, product_id, warehouse_id,
-                quantity, before_qty, after_qty,
-                ref_type, ref_id, ref_no,
-                container_id, log_source_type, log_source_ref_id,
-                remark, operator_id, operator_name)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [
-              MOVE_TYPE.STOCKCHECK, 2,
-              item.productId, check.warehouseId,
-              loss.lose, before, after,
-              'stockcheck', check.id, check.checkNo,
-              loss.id, SOURCE_TYPE.STOCKCHECK, check.id,
-              `盘点盘亏 ${check.checkNo}：条码 ${loss.barcode} 账面少 ${loss.lose}${loss.left === 0 ? '（未扫到，整只计亏）' : ''}`,
-              operator.userId, operator.realName,
-            ],
-          )
+          await writeInventoryLog(conn, {
+            moveType: MOVE_TYPE.STOCKCHECK,
+            type: 2,
+            productId: item.productId,
+            warehouseId: check.warehouseId,
+            quantity: loss.lose,
+            beforeQty: before,
+            afterQty: after,
+            refType: 'stockcheck',
+            refId: check.id,
+            refNo: check.checkNo,
+            containerId: loss.id,
+            sourceType: SOURCE_TYPE.STOCKCHECK,
+            sourceRefId: check.id,
+            remark: `盘点盘亏 ${check.checkNo}：条码 ${loss.barcode} 账面少 ${loss.lose}${loss.left === 0 ? '（未扫到，整只计亏）' : ''}`,
+            operatorId: operator.userId,
+            operatorName: operator.realName,
+          })
         }
         continue
       }
@@ -490,25 +498,24 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
       const containerId = item.diffQty > 0 ? createdContainerId : primaryDeductContainerId
 
       // 写库存变动日志
-      await conn.query(
-        `INSERT INTO inventory_logs
-           (move_type, type, product_id, warehouse_id,
-            quantity, before_qty, after_qty,
-            ref_type, ref_id, ref_no,
-            container_id, log_source_type, log_source_ref_id,
-            remark, operator_id, operator_name)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          MOVE_TYPE.STOCKCHECK,
-          item.diffQty > 0 ? 1 : 2,     // 盘盈=1(入库方向), 盘亏=2(出库方向)
-          item.productId, check.warehouseId,
-          Math.abs(item.diffQty), before, after,
-          'stockcheck', check.id, check.checkNo,
-          containerId, SOURCE_TYPE.STOCKCHECK, check.id,
-          `盘点调整 ${check.checkNo}（差异 ${item.diffQty > 0 ? '+' : ''}${item.diffQty}）`,
-          operator.userId, operator.realName,
-        ]
-      )
+      await writeInventoryLog(conn, {
+        moveType: MOVE_TYPE.STOCKCHECK,
+        type: item.diffQty > 0 ? 1 : 2,     // 盘盈=1(入库方向), 盘亏=2(出库方向)
+        productId: item.productId,
+        warehouseId: check.warehouseId,
+        quantity: Math.abs(item.diffQty),
+        beforeQty: before,
+        afterQty: after,
+        refType: 'stockcheck',
+        refId: check.id,
+        refNo: check.checkNo,
+        containerId,
+        sourceType: SOURCE_TYPE.STOCKCHECK,
+        sourceRefId: check.id,
+        remark: `盘点调整 ${check.checkNo}（差异 ${item.diffQty > 0 ? '+' : ''}${item.diffQty}）`,
+        operatorId: operator.userId,
+        operatorName: operator.realName,
+      })
     }
     await compareAndSetStatus(conn, {
       table: 'inventory_checks',

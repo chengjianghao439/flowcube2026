@@ -93,8 +93,13 @@ const downloadApk = (req, res) => {
   res.setHeader('X-FlowCube-PDA-Version-Code', String(Number(meta.versionCode) || 0))
   if (range) {
     const [startStr, endStr] = range.replace(/bytes=/, '').split('-')
-    const start = parseInt(startStr, 10)
+    const start = parseInt(startStr, 10) // 前缀 'bytes=' 已剥；非法/越界值须拦截，否则 chunkSize 为负/NaN
     const end = endStr ? parseInt(endStr, 10) : fileSize - 1
+    if (!Number.isFinite(start) || start < 0 || start >= fileSize || end < start || end >= fileSize) {
+      res.setHeader('Content-Range', `bytes */${fileSize}`)
+      res.status(416).end()
+      return
+    }
     const chunkSize = end - start + 1
     res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`)
     res.setHeader('Content-Length', chunkSize)

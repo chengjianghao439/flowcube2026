@@ -253,4 +253,54 @@ async function moveStock(conn, {
   )
 }
 
-module.exports = { moveStock, MOVE_TYPE, MOVE_TYPE_LABEL }
+/**
+ * 统一写库存流水（2026-08-22 DRY 收敛）：此前 8 处模块各自手写 16 列 INSERT，
+ * 列序/取值漂移风险高。所有写流水的调用方改走本函数。
+ *
+ * @param {object} conn 事务连接
+ * @param {object} log {
+ *   moveType,        // MOVE_TYPE 常量（inventory_logs.move_type）
+ *   type,            // 1=入库方向 2=出库方向（inventory_logs.type）
+ *   productId, warehouseId,
+ *   quantity, beforeQty, afterQty,
+ *   supplierId,       // 可空（inventory_logs.supplier_id，手动出库用）
+ *   unitPrice,        // 可空（inventory_logs.unit_price，处置/手动出库用）
+ *   refType, refId, refNo,
+ *   containerId,      // 可空
+ *   sourceType, sourceRefId,   // log_source_type/log_source_ref_id
+ *   remark, operatorId, operatorName
+ * }
+ */
+async function writeInventoryLog(conn, {
+  moveType, type,
+  productId, warehouseId,
+  quantity, beforeQty, afterQty,
+  supplierId = null, unitPrice = null,
+  refType, refId, refNo,
+  containerId = null,
+  sourceType, sourceRefId,
+  remark, operatorId, operatorName,
+}) {
+  await conn.query(
+    `INSERT INTO inventory_logs
+       (move_type, type, product_id, warehouse_id, supplier_id,
+        quantity, before_qty, after_qty, unit_price,
+        ref_type, ref_id, ref_no,
+        container_id, log_source_type, log_source_ref_id,
+        remark, operator_id, operator_name)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      moveType, type,
+      Number(productId), Number(warehouseId),
+      supplierId != null ? Number(supplierId) : null,
+      Number(quantity), beforeQty != null ? Number(beforeQty) : null, afterQty != null ? Number(afterQty) : null,
+      unitPrice != null ? Number(unitPrice) : null,
+      refType || null, refId != null ? Number(refId) : null, refNo || null,
+      containerId != null ? Number(containerId) : null,
+      sourceType || null, sourceRefId != null ? Number(sourceRefId) : null,
+      remark || null, operatorId != null ? Number(operatorId) : null, operatorName || null,
+    ],
+  )
+}
+
+module.exports = { moveStock, writeInventoryLog, MOVE_TYPE, MOVE_TYPE_LABEL }

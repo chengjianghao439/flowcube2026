@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
-const { MOVE_TYPE, MOVE_TYPE_LABEL } = require('../../engine/inventoryEngine')
+const { MOVE_TYPE, MOVE_TYPE_LABEL, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, splitContainer } = require('../../engine/containerEngine')
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
@@ -219,23 +219,26 @@ async function changeStock({ type, productId, warehouseId, supplierId, quantity,
     })
 
     // 写库存变动日志
-    await conn.query(
-      `INSERT INTO inventory_logs
-         (move_type, type, product_id, warehouse_id, supplier_id,
-          quantity, before_qty, after_qty, unit_price,
-          ref_type, ref_id, ref_no,
-          container_id, log_source_type, log_source_ref_id,
-          remark, operator_id, operator_name)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        moveType, 2,
-        productId, warehouseId, supplierId || null,
-        quantity, before, after, unitPrice || null,
-        'manual', operator.userId, `OP${operator.userId}`,
-        primaryDeductContainerId, SOURCE_TYPE.MANUAL, operator.userId,
-        remark || null, operator.userId, operator.realName,
-      ]
-    )
+    await writeInventoryLog(conn, {
+      moveType,
+      type: 2,
+      productId,
+      warehouseId,
+      supplierId: supplierId || null,
+      quantity,
+      beforeQty: before,
+      afterQty: after,
+      unitPrice: unitPrice || null,
+      refType: 'manual',
+      refId: operator.userId,
+      refNo: `OP${operator.userId}`,
+      containerId: primaryDeductContainerId,
+      sourceType: SOURCE_TYPE.MANUAL,
+      sourceRefId: operator.userId,
+      remark: remark || null,
+      operatorId: operator.userId,
+      operatorName: operator.realName,
+    })
 
     await conn.commit()
     return { beforeQty: before, afterQty: after }

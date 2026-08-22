@@ -1,6 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { SOURCE_TYPE, getAvailableStockForDecision, syncStockFromContainers, CONTAINER_STATUS, lockStockDimension } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
@@ -260,15 +260,24 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
     const fromAfter = await syncStockFromContainers(conn, c.product_id, fromWh)
     const fromBefore = fromAfter + qty
 
-    await conn.query(
-      `INSERT INTO inventory_logs
-         (move_type, type, product_id, warehouse_id, quantity, before_qty, after_qty,
-          ref_type, ref_id, ref_no, container_id, log_source_type, log_source_ref_id, remark, operator_id, operator_name)
-       VALUES (?,2,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [MOVE_TYPE.TRANSFER_OUT, c.product_id, fromWh, qty, fromBefore, fromAfter,
-       'transfer', id, orderRow.order_no, c.id, SOURCE_TYPE.TRANSFER, id,
-       `调拨出 ${orderRow.order_no} 容器#${c.barcode}`, operator?.userId ?? null, operator?.realName ?? null],
-    )
+    await writeInventoryLog(conn, {
+      moveType: MOVE_TYPE.TRANSFER_OUT,
+      type: 2,
+      productId: c.product_id,
+      warehouseId: fromWh,
+      quantity: qty,
+      beforeQty: fromBefore,
+      afterQty: fromAfter,
+      refType: 'transfer',
+      refId: id,
+      refNo: orderRow.order_no,
+      containerId: c.id,
+      sourceType: SOURCE_TYPE.TRANSFER,
+      sourceRefId: id,
+      remark: `调拨出 ${orderRow.order_no} 容器#${c.barcode}`,
+      operatorId: operator?.userId ?? null,
+      operatorName: operator?.realName ?? null,
+    })
     await conn.query('UPDATE transfer_order_items SET deducted_qty = deducted_qty + ? WHERE id = ?', [qty, item.id])
 
     if (Number(orderRow.status) === 2) {
@@ -329,15 +338,24 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
     const toAfter = await syncStockFromContainers(conn, c.product_id, toWh)
     const toBefore = toAfter - qty
 
-    await conn.query(
-      `INSERT INTO inventory_logs
-         (move_type, type, product_id, warehouse_id, quantity, before_qty, after_qty,
-          ref_type, ref_id, ref_no, container_id, log_source_type, log_source_ref_id, remark, operator_id, operator_name)
-       VALUES (?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [MOVE_TYPE.TRANSFER_IN, c.product_id, toWh, qty, toBefore, toAfter,
-       'transfer', id, orderRow.order_no, c.id, SOURCE_TYPE.TRANSFER, id,
-       `调拨入 ${orderRow.order_no} 容器#${c.barcode}`, operator?.userId ?? null, operator?.realName ?? null],
-    )
+    await writeInventoryLog(conn, {
+      moveType: MOVE_TYPE.TRANSFER_IN,
+      type: 1,
+      productId: c.product_id,
+      warehouseId: toWh,
+      quantity: qty,
+      beforeQty: toBefore,
+      afterQty: toAfter,
+      refType: 'transfer',
+      refId: id,
+      refNo: orderRow.order_no,
+      containerId: c.id,
+      sourceType: SOURCE_TYPE.TRANSFER,
+      sourceRefId: id,
+      remark: `调拨入 ${orderRow.order_no} 容器#${c.barcode}`,
+      operatorId: operator?.userId ?? null,
+      operatorName: operator?.realName ?? null,
+    })
     const [[item]] = await conn.query(
       'SELECT id FROM transfer_order_items WHERE order_id = ? AND product_id = ? ORDER BY id LIMIT 1',
       [id, c.product_id],

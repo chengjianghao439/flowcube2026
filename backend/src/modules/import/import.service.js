@@ -3,7 +3,7 @@ const { Readable } = require('stream')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
-const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../../engine/containerEngine')
 const { normalizeSettlementType, normalizeTermsDays } = require('../../constants/settlementType')
 
@@ -269,35 +269,24 @@ async function importSingleStockRow({
 
     const containerId = diff > 0 ? createdContainerId : primaryDeductContainerId
     const logType = diff > 0 ? 1 : 2
-    await connection.query(
-      `INSERT INTO inventory_logs
-         (move_type, type, product_id, warehouse_id, supplier_id,
-          quantity, before_qty, after_qty, unit_price,
-          ref_type, ref_id, ref_no,
-          container_id, log_source_type, log_source_ref_id,
-          remark, operator_id, operator_name)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        MOVE_TYPE.STOCKCHECK,
-        logType,
-        product.id,
-        +warehouseId,
-        null,
-        Math.abs(diff),
-        before,
-        after,
-        null,
-        'import',
-        batchId,
-        `IMP${batchId}`,
-        containerId,
-        SOURCE_TYPE.IMPORT,
-        batchId,
-        `库存Excel导入 第${rowIndex + 2}行`,
-        userId,
-        operatorName,
-      ],
-    )
+    await writeInventoryLog(connection, {
+      moveType: MOVE_TYPE.STOCKCHECK,
+      type: logType,
+      productId: product.id,
+      warehouseId: +warehouseId,
+      quantity: Math.abs(diff),
+      beforeQty: before,
+      afterQty: after,
+      refType: 'import',
+      refId: batchId,
+      refNo: `IMP${batchId}`,
+      containerId,
+      sourceType: SOURCE_TYPE.IMPORT,
+      sourceRefId: batchId,
+      remark: `库存Excel导入 第${rowIndex + 2}行`,
+      operatorId: userId,
+      operatorName,
+    })
 
     await connection.commit()
     return { ok: true }
