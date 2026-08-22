@@ -316,6 +316,32 @@ async function getCurrentBookQty(conn, productId, warehouseId) {
   return Number(qty)
 }
 
+/**
+ * 批量读账面数（2026-08-22 性能）：盘点提交校验阶段此前逐行调 getCurrentBookQty
+ * （每次 SUM ... FOR UPDATE 锁该商品全部 ACTIVE 容器），千级 SKU 全仓盘点 =
+ * 千次串行往返。改为一次查询批量取回全部被盘商品的容器合计（FOR UPDATE 一次锁全），
+ * 锁顺序不变（维度锁已先取），事务语义与逐行完全等价。
+ */
+async function getCurrentBookQties(conn, productWhPairs) {
+  const pairs = [...new Set(productWhPairs.map(p => `${Number(p.productId)}:${Number(p.warehouseId)}`))]
+  if (!pairs.length) return new Map()
+  const values = pairs.map(p => p.split(':').map(Number))
+  const placeholders = values.map(() => '(?,?)').join(',')
+  const params = values.flat()
+  const [rows] = await conn.query(
+    `SELECT product_id, warehouse_id, COALESCE(SUM(remaining_qty), 0) AS qty
+     FROM inventory_containers
+     WHERE (product_id, warehouse_id) IN (${placeholders})
+       AND status=? AND deleted_at IS NULL
+     GROUP BY product_id, warehouse_id
+     FOR UPDATE`,
+    [...params, CONTAINER_STATUS.ACTIVE],
+  )
+  const map = new Map()
+  for (const r of rows) map.set(`${Number(r.product_id)}:${Number(r.warehouse_id)}`, Number(r.qty))
+  return map
+}
+
 // 提交盘点，批量调整库存
 async function submit(id, operator, scopeWarehouseIds = null, requestKey = null) {
   const conn = await pool.getConnection()
@@ -365,9 +391,14 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
 
     // 先整单校验再调整：任何一行账面已漂移都不动库存，把漂移行一次性列全，
     // 避免"调到一半才报错"给现场造成部分行已生效的错觉（事务虽会回滚，但报错要完整）。
+    // 批量读账面（性能）：一次 FOR UPDATE 取回全部被盘商品容器合计，替代逐行查询。
+    const bookQtyMap = await getCurrentBookQties(
+      conn,
+      check.items.map(i => ({ productId: i.productId, warehouseId: check.warehouseId })),
+    )
     const staleLines = []
     for (const item of check.items) {
-      const currentBookQty = await getCurrentBookQty(conn, item.productId, check.warehouseId)
+      const currentBookQty = bookQtyMap.get(`${item.productId}:${check.warehouseId}`) ?? 0
       if (currentBookQty !== item.bookQty) {
         staleLines.push(`「${item.productName}」账面 ${item.bookQty}→${currentBookQty}`)
       }
