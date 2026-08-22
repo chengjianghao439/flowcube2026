@@ -222,12 +222,12 @@ async function main() {
     await pool.query(
       `INSERT INTO pda_devices (device_code, device_name, warehouse_id, status, secret_hash)
        VALUES (?, 'Smoke PDA Target', ?, 'active', ?)`,
-      [wh2DeviceCode, wh2.id, bcrypt.hashSync('smoke-pda-secret-2', 10)],
+      [wh2DeviceCode, wh2.id, bcrypt.hashSync('smoke-pda-key-2', 10)],
     )
     const { createSession: createPdaSession } = require('../backend/src/modules/pda/pda.sessions.service')
     const wh2Session = await createPdaSession({
       deviceCode: wh2DeviceCode,
-      deviceSecret: 'smoke-pda-secret-2',
+      deviceSecret: 'smoke-pda-key-2',
       userId: 1,
     })
     await expectOk(
