@@ -568,4 +568,33 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **scrollToSection 参数修复**：`(e?: React.MouseEvent)` 改为可选 + `e?.preventDefault()`，使手机菜单按钮（无事件对象）可复用同一滚动逻辑。
     - 变更文件：`frontend/src/pages/landing/index.tsx`、`frontend/src/router/index.tsx`、`frontend/src/pages/login/index.tsx`。
     - 验证：tsc 0 错误、前端 lint 0 error（5 warnings 存量）、生产 build 通过、dev 浏览器实测（菜单展开/收起、数字动画终值 60/5+/3/0、meta 生效）。
+28. **2026-08-23 落地页（landing）视觉升级（净增量，未发版）**：
+    - 说明：本批视觉体系（安全线琥珀色 `--fc-amber`、JetBrains Mono 等宽数字、图纸网格、纯 CSS 条码、扫描下划线、扫描光带、mockup 琥珀占用格）已由并行会话随 `74e6ece`/`d9cabaa`/`52a7c1c` 提交并在线上验证，此处只记录工作区未提交的净增量。
+    - **能力矩阵改目录式清单**：从 3 列卡片阵改为 2 列编号列表（`01`-`06`），等宽编号 + 细底线分隔 + hover 琥珀底线扩出（`.mod-link`）+ arrow 浮现。
+    - **Barcode 组件加 `bars` 参数**（默认 22，导航用 10 根短条码避免挤占标题），用 `Array.from` 替代固定数组。
+    - **Hero 背景清理**：移除 inline 网格背景（`absolute inset-0 opacity-[0.06]`），改用统一 `.bg-sheet-grid` 类；`landing-hero.bg-sheet-grid` 白色网格线（原 `.landing-hero .bg-sheet-grid` 后代选择器不生效，改为同元素匹配）。
+    - **扫描下划线修正**：删 `display: inline-block`（会覆盖 hero-line 的 block 换行，导致标题折行异常）。
+    - 变更文件：`frontend/src/pages/landing/index.tsx`、`frontend/src/index.css`。
+    - 验证：tsc 0 错误、前端 lint 0 error（5 warnings 存量）、生产 build 通过、浏览器实测（条码渲染 flex/14px、琥珀格 border-amber-400/30、目录列 6 项编号 01、Hero 扫描下划线 relative 正常）。
+29. **2026-08-23 Landing 整体重构「轨道叙事」（未提交，工作区）**：
+    - 动机：用户反馈「卡片特效和别的不一样」「整体重构一下」——六板块拼装（Hero/能力矩阵/场景/业务流/下载/价值/页脚）卡片语言不一致、缺叙事主线。
+    - **轨道叙事主线**：以「一条货从下单到出库在系统的轨道上流动」重排全页叙事，所有卡片统一语言（`scan-card` 琥珀扫描光 + 白底图标 + 灰底/白底圆角），扫过哪块哪块亮。
+    - **「一条货的旅程」水平交错轨道时间线（核心新增，替换原 FLOW_STEPS 平铺卡）**：桌面 md+ 上排三卡（01/03/05）+ 轨道行（6 节点均布 + `.rail-track` 琥珀点亮点 + `.rail-dot` 移动货点）+ 下排三卡（02/04/06）；移动端 <md 降级为垂直轨道（节点在左、卡片在右）。滚动进入视口逐站点亮（300ms/站，IntersectionObserver，`.is-lit` 琥珀呼吸 + rail-ping 扩环）。
+    - **Hero 轨道线装饰**：副标语下加 `.hero-rail`（常驻琥珀渐隐线，opacity 0.55）。
+    - **能力矩阵**：标题改「六大业务域，把每一种货管到底」；编号角标移左上角（`01/06`，hover 变琥珀）。
+    - **下载区压缩为三端横幅**：两张大卡改深蓝横幅（Pill「三端随时可用」+「一个系统，三种打开方式」+ 双按钮 + 右侧两列版本信息等宽字 v0.x.x 动态读 + 条码），收尾标语并入横幅底部。
+    - **价值区改信条列表**：3 张大卡改竖排信条（编号 + 大字 + 小字，琥珀细线分隔 `.value-rule`）。
+    - **清理**：删 FlowCard 组件/flow-card CSS/`.mod-link` CSS/MODULES 的 color 字段。
+    - 变更文件：`frontend/src/pages/landing/index.tsx`（重组 JSX：JourneyTimeline + StationCard）、`frontend/src/index.css`（rail-track/rail-dot/rail-node/value-rule/hero-rail 新样式 + reduce 清单补齐）。
+    - 验证：tsc 0 错误、lint 0 error（5 warnings 存量）、build 通过、DOM 实测（移动端 6 节点全亮 .is-lit、桌面轨道行 6 节点、节点 x=31 与竖线对齐、Hero 轨道线 2px/0.55、能力矩阵编号 01/06 右上角）。截图工具滚动后偶发空白是已知 bug，用 inspect/eval 兜底。
+    - 备注：浏览器预览面板视口固定 537px（resize 工具不生效），桌面形态用注入 CSS 临时验证后已清理。
+30. **2026-08-23 Landing 配色收敛 + 简化（用户反馈，未提交）**：
+    - **配色收敛为单一蓝**：`--fc-amber` 从 `#F5A524` 改 `#1E5AE6`（品牌蓝），全部 `rgba(245,165,36,...)` 替换为 `rgba(30,90,230,...)`；mockup 占用格/窗口黄点/下划线装饰的 amber Tailwind 类改蓝。**着陆页不再有橙色**。
+    - **删除全部序号**：旅程卡 01-06、能力矩阵角标 `01/06`、价值区编号 01-03 全删，含 StationCard 的 `n` prop、map 的 `i` 参数清理。
+    - **删卡片 hover 橙色扫描光**：`.scan-card` 类 + `fc-card-scan` keyframes 全部删除（TSX 4 处 class + CSS 1 块 + reduce 清单引用），卡片 hover 只保留上浮 + 阴影。
+    - **统一卡片箭头**：场景卡（原无箭头）、旅程移动/桌面卡（原无箭头）补上 hover 浮现 ArrowRight；全部统一为 `opacity-0 group-hover:opacity-100 group-hover:text-[#1E5AE6]`（价值区深底也统一品牌蓝）。
+    - **修复轨道行 bug**：`.rail-track` 忘了接 `is-active` 条件（`litCount > 0` 时轨道点亮，之前轨道线永不亮）；`.rail-node` 逻辑反向改写（`is-lit` 按条件加而非 base 写死再覆盖）；IO threshold 0.2→0.05 + rootMargin（537px 小视口下 0.2 永不达标）。
+    - 变更文件：`frontend/src/pages/landing/index.tsx`、`frontend/src/index.css`。
+    - 验证：tsc 0 错误、lint 0 error（5 存量 warning）、build 通过；DOM 检查 amber 计数 0、节点 12、轨道线 CSS 规则在（`.rail-track.is-active::before = scaleX(1)`）、货点背景 `rgb(30,90,230)`。
+    - 备注：浏览器面板 `innerHeight: 0`（工具 bug）导致 IO 逐亮动画在面板不触发，但 CSS/DOM 验证正确——真实浏览器正常。**着色页唯一强调色 = 品牌蓝 #1E5AE6（--fc-amber 已改名复用）**。
 

@@ -280,9 +280,9 @@ html {
   letter-spacing: -0.02em;
 }
 
-/* 安全线琥珀（全场唯一暖色，仓库防撞柱/安全标线母题）*/
+/* 系统蓝强调色（与品牌蓝一致，着陆页唯一强调色）*/
 :root {
-  --fc-amber: #F5A524;
+  --fc-amber: #1E5AE6;
 }
 
 /* 图纸网格（浅色区 + Hero 用），极淡 */
@@ -292,7 +292,7 @@ html {
     linear-gradient(90deg, rgba(14, 27, 46, 0.035) 1px, transparent 1px);
   background-size: 44px 44px;
 }
-.landing-hero .bg-sheet-grid {
+.landing-hero.bg-sheet-grid {
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
@@ -306,7 +306,6 @@ html {
 }
 .scan-underline {
   position: relative;
-  display: inline-block;
 }
 .scan-underline::after {
   content: "";
@@ -346,28 +345,92 @@ html {
   opacity: 0.7;
 }
 
-/* 卡片 hover：琥珀扫描光带斜扫过 */
-@keyframes fc-card-scan {
-  0%   { transform: translateX(-130%) skewX(-18deg); }
-  100% { transform: translateX(130%) skewX(-18deg); }
+/* ── 轨道叙事（「一条货的旅程」水平交错时间线）──────────────────── */
+
+/* 轨道线：横贯节中央的琥珀渐隐线（两端淡出）+ 一节点亮段 */
+.rail-track {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, rgba(203, 213, 225, 0.5) 6%, rgba(203, 213, 225, 0.5) 94%, transparent);
 }
-.scan-card {
-  position: relative;
-  overflow: hidden;
-}
-.scan-card::after {
+.rail-track::before {
   content: "";
   position: absolute;
-  top: -20%;
-  bottom: -20%;
-  left: 0;
-  width: 26%;
-  background: linear-gradient(90deg, transparent, rgba(245, 165, 36, 0.10), transparent);
-  transform: translateX(-130%) skewX(-18deg);
-  pointer-events: none;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--fc-amber) 6%, var(--fc-amber) 94%, transparent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.scan-card:hover::after {
-  animation: fc-card-scan 0.65s ease-out;
+.rail-track.is-active::before { transform: scaleX(1); }
+
+/* 轨道上的「货物点」：缓慢从起点驶向终点（货在轨道上流动） */
+@keyframes fc-rail-dot {
+  0%   { left: 6%; }
+  100% { left: 94%; }
+}
+.rail-dot {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--fc-amber);
+  box-shadow: 0 0 12px rgba(30, 90, 230, 0.9);
+  transform: translateY(-50%);
+  animation: fc-rail-dot 7s cubic-bezier(0.45, 0, 0.55, 1) 1.2s infinite alternate;
+}
+
+/* 站点轨道节点：未走灰色，走过后变琥珀 + 呼吸 */
+.rail-node {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid rgba(148, 163, 184, 0.6);
+  background: #F5F7FA;
+  transition: border-color 0.4s ease, background-color 0.4s ease, box-shadow 0.4s ease;
+}
+.rail-node.is-lit {
+  border-color: var(--fc-amber);
+  background: var(--fc-amber);
+  box-shadow: 0 0 12px rgba(30, 90, 230, 0.55);
+  animation: rail-node-breathe 2.6s ease-in-out infinite;
+}
+@keyframes rail-node-breathe {
+  0%, 100% { box-shadow: 0 0 8px rgba(30, 90, 230, 0.35); }
+  50%      { box-shadow: 0 0 16px rgba(30, 90, 230, 0.7); }
+}
+.rail-node.is-lit::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(30, 90, 230, 0.5);
+  animation: rail-ping 2.2s ease-out infinite;
+}
+@keyframes rail-ping {
+  0%   { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* 价值信条：琥珀细线分隔（深蓝区） */
+.value-rule {
+  border-bottom: 1px solid rgba(30, 90, 230, 0.18);
+  transition: border-color 0.3s ease;
+}
+.value-rule:hover { border-color: rgba(30, 90, 230, 0.5); }
+
+/* Hero 下轨道线：常驻琥珀渐隐线，隐喻货在轨道上 */
+.hero-rail {
+  position: relative;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--fc-amber) 12%, var(--fc-amber) 88%, transparent);
+  opacity: 0.55;
 }
 
 /* Hero 工作台 mockup：琥珀光带反复横扫（一直在扫描的作业台） */
@@ -388,7 +451,7 @@ html {
   bottom: 0;
   left: 0;
   width: 18%;
-  background: linear-gradient(90deg, transparent, rgba(245, 165, 36, 0.14), transparent);
+  background: linear-gradient(90deg, transparent, rgba(30, 90, 230, 0.14), transparent);
   animation: fc-mockup-scan 3.4s ease-in-out 1s infinite;
 }
 
@@ -399,27 +462,7 @@ html {
   height: 6px;
   border-radius: 9999px;
   background: var(--fc-amber);
-  box-shadow: 0 0 8px rgba(245, 165, 36, 0.8);
-}
-
-/* 能力矩阵：hover 琥珀底线从左扩出 */
-.mod-link {
-  position: relative;
-}
-.mod-link::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 2px;
-  width: 100%;
-  background: var(--fc-amber);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.mod-link:hover::after {
-  transform: scaleX(1);
+  box-shadow: 0 0 8px rgba(30, 90, 230, 0.8);
 }
 
 /* Hero 标题逐行入场 */
@@ -471,30 +514,6 @@ html {
   pointer-events: none;
 }
 
-/* 业务流卡片：从左到右流水线依次浮现 */
-@keyframes fc-flow-in {
-  from { opacity: 0; transform: translateX(28px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-.flow-card {
-  opacity: 0;
-}
-.flow-card.is-in {
-  animation: fc-flow-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-/* 能力矩阵卡片：错峰淡入 */
-@keyframes fc-stagger-in {
-  from { opacity: 0; transform: translateY(18px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.stagger-card {
-  opacity: 0;
-}
-.stagger-card.is-in {
-  animation: fc-stagger-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
 /* 按钮微交互：hover 轻微放大 */
 .landing-cta {
   transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.18s ease, background-color 0.18s ease;
@@ -512,10 +531,13 @@ html {
 
 /* 尊重减弱动效 */
 @media (prefers-reduced-motion: reduce) {
-  .hero-line, .scan-ring, .fc-particle, .cell-breathe, .flow-card, .stagger-card,
-  .scan-underline::after, .scan-card::after, .mockup-sweep::before {
+  .hero-line, .scan-ring, .fc-particle, .cell-breathe,
+  .scan-underline::after, .mockup-sweep::before,
+  .rail-dot, .rail-node.is-lit, .rail-node.is-lit::before {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
   }
+  .rail-dot { left: 50% !important; }
+  .rail-node.is-lit::before { display: none !important; }
 }
