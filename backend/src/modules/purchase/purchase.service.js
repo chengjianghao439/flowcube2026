@@ -80,11 +80,12 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     params.push(warehouseId)
   }
   if (startDate) {
-    whereExtra += ' AND DATE(po.created_at) >= ?'
-    params.push(startDate)
+    // 半开区间（2026-08-22 性能）：DATE(col)>=? 废掉 (status,created_at) 索引
+    whereExtra += ' AND po.created_at >= ?'
+    params.push(`${startDate} 00:00:00`)
   }
   if (endDate) {
-    whereExtra += ' AND DATE(po.created_at) <= ?'
+    whereExtra += ' AND po.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
     params.push(endDate)
   }
   if (remark) {

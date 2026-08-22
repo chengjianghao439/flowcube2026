@@ -35,9 +35,9 @@ async function fetchOptional(metricName, promise, fallback) {
 
 async function fetchPurchaseStatsRows({ startDate, endDate, scopeWarehouseIds = null }) {
   const dateCond = startDate && endDate
-    ? 'AND DATE(o.created_at) BETWEEN ? AND ?'
-    : startDate ? 'AND DATE(o.created_at) >= ?' : endDate ? 'AND DATE(o.created_at) <= ?' : ''
-  const dateParams = [startDate, endDate].filter(Boolean)
+    ? 'AND o.created_at >= ? AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
+    : startDate ? 'AND o.created_at >= ?' : endDate ? 'AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''
+  const dateParams = startDate && endDate ? [startDate, endDate, endDate] : [startDate, endDate].filter(Boolean)
   const wh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
 
   const byMonth = await fetchMany(
@@ -76,9 +76,9 @@ async function fetchPurchaseStatsRows({ startDate, endDate, scopeWarehouseIds = 
 
 async function fetchSaleStatsRows({ startDate, endDate, scopeWarehouseIds = null }) {
   const dateCond = startDate && endDate
-    ? 'AND DATE(o.created_at) BETWEEN ? AND ?'
-    : startDate ? 'AND DATE(o.created_at) >= ?' : endDate ? 'AND DATE(o.created_at) <= ?' : ''
-  const dateParams = [startDate, endDate].filter(Boolean)
+    ? 'AND o.created_at >= ? AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
+    : startDate ? 'AND o.created_at >= ?' : endDate ? 'AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''
+  const dateParams = startDate && endDate ? [startDate, endDate, endDate] : [startDate, endDate].filter(Boolean)
   const wh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
 
   const byMonth = await fetchMany(
@@ -118,9 +118,9 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   const productInventoryProjectionSql = getProductInventoryProjectionSql()
   const dateCond = startDate && endDate
-    ? 'AND DATE(l.created_at) BETWEEN ? AND ?'
-    : startDate ? 'AND DATE(l.created_at) >= ?' : endDate ? 'AND DATE(l.created_at) <= ?' : ''
-  const dateParams = [startDate, endDate].filter(Boolean)
+    ? 'AND l.created_at >= ? AND l.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
+    : startDate ? 'AND l.created_at >= ?' : endDate ? 'AND l.created_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''
+  const dateParams = startDate && endDate ? [startDate, endDate, endDate] : [startDate, endDate].filter(Boolean)
   const lWh = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
   const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
   // 周转率 = 期内出库量 / 平均库存，平均库存 = (期初 + 期末) / 2。
@@ -231,9 +231,9 @@ async function fetchPdaPerformanceRows(scopeWarehouseIds = null) {
 
 async function fetchWavePerformanceRows({ startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
   const dateCond = startDate && endDate
-    ? 'AND DATE(pw.created_at) BETWEEN ? AND ?'
-    : startDate ? 'AND DATE(pw.created_at) >= ?' : endDate ? 'AND DATE(pw.created_at) <= ?' : ''
-  const dateParams = [startDate, endDate].filter(Boolean)
+    ? 'AND pw.created_at >= ? AND pw.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
+    : startDate ? 'AND pw.created_at >= ?' : endDate ? 'AND pw.created_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''
+  const dateParams = startDate && endDate ? [startDate, endDate, endDate] : [startDate, endDate].filter(Boolean)
   const wh = scopeFilter(scopeWarehouseIds, 'pw.warehouse_id')
 
   const summary = await fetchOne(
@@ -991,9 +991,9 @@ async function fetchKpiRows({ period = null, offsetPeriods = -1, scopeWarehouseI
  */
 async function fetchPurchasePriceTrend({ productId, startDate = null, endDate = null, scopeWarehouseIds = null }) {
   const dateCond = startDate && endDate
-    ? 'AND DATE(o.created_at) BETWEEN ? AND ?'
-    : startDate ? 'AND DATE(o.created_at) >= ?' : endDate ? 'AND DATE(o.created_at) <= ?' : ''
-  const dateParams = [startDate, endDate].filter(Boolean)
+    ? 'AND o.created_at >= ? AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
+    : startDate ? 'AND o.created_at >= ?' : endDate ? 'AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''
+  const dateParams = startDate && endDate ? [startDate, endDate, endDate] : [startDate, endDate].filter(Boolean)
   const wh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
   const fallback = (!startDate && !endDate) ? 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)' : ''
 

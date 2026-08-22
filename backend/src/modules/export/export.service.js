@@ -74,8 +74,8 @@ async function getPurchaseExportPayload(query) {
   }
   if (supplierId) { sql += ' AND o.supplier_id=?'; params.push(+supplierId) }
   if (warehouseId) { sql += ' AND o.warehouse_id=?'; params.push(+warehouseId) }
-  if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
-  if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
+  if (startDate) { sql += ' AND o.created_at >= ?'; params.push(`${startDate} 00:00:00`) }
+  if (endDate) { sql += ' AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   sql += ' ORDER BY o.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
@@ -118,8 +118,8 @@ async function getSaleExportPayload(query) {
   }
   if (customerId) { sql += ' AND o.customer_id=?'; params.push(+customerId) }
   if (warehouseId) { sql += ' AND o.warehouse_id=?'; params.push(+warehouseId) }
-  if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
-  if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
+  if (startDate) { sql += ' AND o.created_at >= ?'; params.push(`${startDate} 00:00:00`) }
+  if (endDate) { sql += ' AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   sql += ' ORDER BY o.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
@@ -283,8 +283,8 @@ async function getInventoryLogsExportPayload(query) {
   const sc = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
   sql += sc.sql
   params.push(...sc.params)
-  if (startDate) { sql += ' AND DATE(l.created_at)>=?'; params.push(startDate) }
-  if (endDate) { sql += ' AND DATE(l.created_at)<=?'; params.push(endDate) }
+  if (startDate) { sql += ' AND l.created_at >= ?'; params.push(`${startDate} 00:00:00`) }
+  if (endDate) { sql += ' AND l.created_at < DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   sql += ' ORDER BY l.created_at DESC LIMIT 10000'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
@@ -329,8 +329,8 @@ async function getTransferExportPayload(query = {}) {
   }
   if (warehouseId) { sql += ' AND (o.from_warehouse_id=? OR o.to_warehouse_id=?)'; params.push(+warehouseId, +warehouseId) }
   if (operatorId) { sql += ' AND o.operator_id=?'; params.push(+operatorId) }
-  if (startDate) { sql += ' AND DATE(o.created_at)>=?'; params.push(startDate) }
-  if (endDate) { sql += ' AND DATE(o.created_at)<=?'; params.push(endDate) }
+  if (startDate) { sql += ' AND o.created_at >= ?'; params.push(`${startDate} 00:00:00`) }
+  if (endDate) { sql += ' AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   sql += ' ORDER BY o.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
