@@ -167,11 +167,6 @@ function Barcode({ label, className = '' }: { label?: string; className?: string
   )
 }
 
-
-    </span>
-  )
-}
-
 /** Hero 副标语（截图占位）*/
 
 // ── Hero 工作台示意：网格 = 库位，亮点 = 在途任务 ─────────────────────
