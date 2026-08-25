@@ -8,6 +8,7 @@ import { GlobalConfirmDialog } from '@/components/shared/GlobalConfirmDialog'
 import NotificationBell from '@/components/shared/NotificationBell'
 import GlobalSearch from '@/components/shared/GlobalSearch'
 import UserMenu from '@/components/shared/UserMenu'
+import BrandLogo from '@/components/shared/BrandLogo'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
@@ -22,10 +23,14 @@ export default function AppLayout() {
       */}
       <header className="flex shrink-0 flex-col border-b border-border bg-background">
         <div className="flex h-12 shrink-0 items-center gap-2 px-3">
-          <div className="flex shrink-0 items-center pr-1">
-            <span className="text-base font-bold tracking-tight text-foreground">
-              极序 Flow
-            </span>
+          <div className="flex shrink-0 items-center gap-2 pr-1">
+            {/* 公司 Logo：有 Logo 只显示图片（右侧不再跟「极序 Flow」文字）；未上传时回退纯文字 */}
+            <BrandLogo
+              imgClassName="h-6 max-w-24"
+              text="极序 Flow"
+              textClassName="text-base font-bold tracking-tight text-foreground"
+              alt="极序 Flow"
+            />
           </div>
 
           <div className="min-w-0 flex-1">

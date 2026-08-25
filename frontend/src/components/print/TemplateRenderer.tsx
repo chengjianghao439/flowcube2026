@@ -108,6 +108,17 @@ function ElementNode({
     lineHeight: 1.3,
   }
 
+  if (el.type === 'image') {
+    // 公司 Logo：src 取自 data[fieldKey]（系统 Logo URL，带 v= 参数）；空值表示未上传/无值 → 整体不渲染
+    const src = data[el.fieldKey] ?? ''
+    if (!src) return null
+    return (
+      <div style={{ ...base, padding: 0 }}>
+        <img src={src} alt={el.label || 'Logo'} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+      </div>
+    )
+  }
+
   if (el.type === 'barcode') {
     const v = (data[el.fieldKey] ?? '') || el.label
     return (
@@ -247,8 +258,18 @@ export default function TemplateRenderer({ layout, paperSize, data, items, displ
   // 有明细表格：上方定位区 + 表格流式分页 + 下方跟随区。整体高度自适应、可跨页、不裁剪。
   const tableBottom = tableEl.y + tableEl.height
   const aboveEls = layout.elements.filter(e => e.type !== 'table' && e.y < tableEl.y)
-  const belowEls = layout.elements.filter(e => e.type !== 'table' && e.y >= tableBottom)
-  const belowHeight = belowEls.reduce((m, e) => Math.max(m, (e.y - tableBottom) + e.height), 0)
+  // 2026-08-25 评审修复：原实现只取 e.y >= tableBottom 为下方元素，y 落在 [table.y, tableBottom)
+  // 区间内的元素（画布上「叠在表格框内」的非表格元素）既不进上方也不进下方 → 打印时无声消失。
+  // 表格高度打印时随行数自适应，该区间无精确定位语义，统一归入下方跟随区顶部（按原 y 排序堆叠），保证可见且顺序稳定。
+  const belowEls = layout.elements
+    .filter(e => e.type !== 'table' && e.y >= tableEl.y)
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+  const normalizedBelow = belowEls.map(e => ({
+    ...e,
+    // 原 y 已在表格底部之下 → 相对表格底部；夹在表格框内 → 归入跟随区顶部，按顺序堆叠
+    y: e.y >= tableBottom ? e.y - tableBottom : 0,
+  }))
+  const belowHeight = normalizedBelow.reduce((m, e) => Math.max(m, e.y + e.height), 0)
 
   return (
     <div style={{ ...baseStyle, width: pw(paper.w) }}>
@@ -261,8 +282,8 @@ export default function TemplateRenderer({ layout, paperSize, data, items, displ
       {/* 表格下方：跟随区（合计/签字/备注），相对表格底部定位 */}
       {belowHeight > 0 && (
         <div style={{ position: 'relative', height: pw(belowHeight), marginTop: pw(2) }}>
-          {belowEls.map(el => (
-            <ElementNode key={el.id} el={{ ...el, y: el.y - tableBottom }} data={data} scale={scale} />
+          {normalizedBelow.map(el => (
+            <ElementNode key={el.id} el={el} data={data} scale={scale} />
           ))}
         </div>
       )}
@@ -275,7 +296,9 @@ export default function TemplateRenderer({ layout, paperSize, data, items, displ
 function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem[]; scale: number }) {
   const pw = (mm: number) => mm * MM_PX * scale
   const cols = el.tableColumns ?? ['name', 'qty', 'price', 'amount']
-  const allCols = ['#', ...cols]
+  // 序号列可显隐（showIndex 缺省 true 兼容旧模板），用符号列名 '#' 与业务列统一进列宽/图元逻辑
+  const showIndex = el.showIndex !== false
+  const allCols = showIndex ? ['#', ...cols] : cols
 
   // 列宽：显式指定（mm）优先，其余均分剩余宽度
   const totalPx = pw(el.width)
@@ -311,7 +334,7 @@ function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem
       {/* table-header-group：跨页时每页顶部重复表头 */}
       <thead style={{ display: 'table-header-group' }}>
         <tr>
-          <th style={thStyle('center', wrap, widthOf('#'))}>序号</th>
+          {showIndex && <th style={thStyle('center', wrap, widthOf('#'))}>序号</th>}
           {cols.map(c => (
             <th key={c} style={thStyle(COL_DEF[c]?.align ?? 'left', wrap, widthOf(c))}>
               {COL_DEF[c]?.label ?? c}
@@ -322,7 +345,7 @@ function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem
       <tbody>
         {items.map((item, i) => (
           <tr key={i} style={{ background: i % 2 === 1 ? '#fafafa' : '#fff', breakInside: 'avoid' }}>
-            <td style={tdStyle('center', wrap, minRowPx)}>{i + 1}</td>
+            {showIndex && <td style={tdStyle('center', wrap, minRowPx)}>{i + 1}</td>}
             {cols.map(c => (
               <td key={c} style={tdStyle(COL_DEF[c]?.align ?? 'left', wrap, minRowPx)}>
                 {colValue(c, item)}
@@ -331,7 +354,8 @@ function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem
           </tr>
         ))}
         <tr style={{ background: '#f5f5f5', fontWeight: 600, breakInside: 'avoid' }}>
-          <td colSpan={cols.indexOf('amount') >= 0 ? cols.indexOf('amount') + 1 : cols.length} style={tdStyle('right', wrap, minRowPx)}>
+          {/* 合计标签跨列 = 序号列（如显示）+ amount 列之前的所有列 */}
+          <td colSpan={(showIndex ? 1 : 0) + (cols.indexOf('amount') >= 0 ? cols.indexOf('amount') : cols.length)} style={tdStyle('right', wrap, minRowPx)}>
             合计：
           </td>
           {cols.indexOf('amount') >= 0 && (

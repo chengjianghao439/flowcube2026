@@ -25,7 +25,7 @@ import type { TemplateElement } from '@/types/print-template'
 export interface PrintFieldDef {
   key: string
   label: string
-  type: 'text' | 'table' | 'divider' | 'title' | 'barcode'
+  type: 'text' | 'table' | 'divider' | 'title' | 'barcode' | 'image'
   defaultW?: number // mm
   defaultH?: number // mm
 }
@@ -35,6 +35,8 @@ export const DOC_FIELD_DEFS: PrintFieldDef[] = [
   // 标题 / 分隔
   { key: 'title', label: '大标题', type: 'title', defaultW: 160, defaultH: 10 },
   { key: 'divider', label: '分隔线', type: 'divider', defaultW: 160, defaultH: 4 },
+  // 公司 Logo（image）：src 固定取自系统设置 → 品牌标识（字段键 companyLogo）
+  { key: 'companyLogo', label: '公司 Logo', type: 'image', defaultW: 40, defaultH: 12 },
   // 文本字段
   { key: 'orderNo', label: '单据编号', type: 'text', defaultW: 80, defaultH: 7 },
   { key: 'customerName', label: '客户名称', type: 'text', defaultW: 80, defaultH: 7 },

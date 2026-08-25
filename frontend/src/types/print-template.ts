@@ -3,7 +3,7 @@ export type TemplateType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 
 export interface TemplateElement {
   id: string
-  type: 'text' | 'table' | 'divider' | 'title' | 'barcode'
+  type: 'text' | 'table' | 'divider' | 'title' | 'barcode' | 'image'
   fieldKey: string
   label: string
   x: number        // mm from canvas left
@@ -16,6 +16,8 @@ export interface TemplateElement {
   border: boolean
   // table-specific
   tableColumns?: string[]
+  /** 是否显示序号列（第 1 列，打印表格序号；默认 true 不写即显示，兼容旧模板） */
+  showIndex?: boolean
   /** 表格列宽（mm）：列 key → 宽度；缺省的列均分剩余宽度 */
   tableColumnWidths?: Record<string, number>
   /** 表格单元格自动换行（默认 true；false = 单行截断） */

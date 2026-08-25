@@ -1,7 +1,7 @@
 {
-  "version": "0.5.5",
-  "versionCode": 97,
+  "version": "0.6.0",
+  "versionCode": 98,
   "filename": "app-release.apk",
-  "releaseNote": "- **经营 KPI 仪表盘升级**：新增「近 12 个月经营趋势」图表（GMV / 毛利折线 + 回款柱状）与「当月分仓表现」明细表，选月份后趋势、指标卡、分仓数据同步联动",
-  "publishedAt": "2026-08-25T12:16:19.157Z"
+  "releaseNote": "- **公司 Logo 上传（品牌自定）**：系统设置页新增「品牌标识」——上传一张 Logo 图片（PNG/JPEG/WebP/SVG，≤2MB），ERP 顶栏、登录页、PDA 登录页与首页立即全端生效；不传则保持默认样式",
+  "publishedAt": "2026-08-25T15:08:59.089Z"
 }

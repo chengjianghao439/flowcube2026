@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Layers, CircleCheck, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { CircleCheck, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { useLogin } from '@/hooks/useAuth'
+import BrandLogo from '@/components/shared/BrandLogo'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
 import { loadSavedLoginForm } from '@/lib/loginCredentials'
 
@@ -32,9 +33,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
-            <Layers className="size-5" />
-          </div>
+          <BrandLogo imgClassName="h-8" boxClassName="h-8 w-8 rounded-lg" iconClassName="size-5" alt="极序 Flow" />
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">极序 Flow</h1>
           <div className="absolute -bottom-4 left-11 whitespace-nowrap text-[10px] font-medium uppercase tracking-widest text-slate-400">
             企业管理系统
@@ -98,9 +97,7 @@ export default function LoginPage() {
 
           {/* Mobile Logo（仅小屏显示） */}
           <div className="relative mb-12 flex items-center gap-3 lg:hidden">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
-              <Layers className="size-5" />
-            </div>
+            <BrandLogo imgClassName="h-8" boxClassName="h-8 w-8 rounded-lg" iconClassName="size-5" alt="极序 Flow" />
             <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">极序 Flow</h1>
             <div className="absolute -bottom-4 left-11 whitespace-nowrap text-[10px] font-medium uppercase tracking-widest text-slate-400">
               企业管理系统

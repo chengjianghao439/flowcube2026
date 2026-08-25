@@ -22,6 +22,7 @@ import { usePdaTodoCounts } from '@/hooks/usePdaTodoCounts'
 import type { PdaPerm } from '@/hooks/usePdaRole'
 import type { PdaTodoCounts } from '@/api/pda'
 import { PdaEmptyCard } from '@/components/pda/PdaEmptyState'
+import BrandLogo from '@/components/shared/BrandLogo'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
@@ -121,7 +122,11 @@ export default function PdaWorkbench() {
       <div className="border-b border-border bg-card px-4 pt-4 pb-4">
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-mono text-muted-foreground tracking-wider uppercase">极序 Flow</p>
+            <div className="flex min-w-0 items-center gap-2">
+              {/* 公司 Logo（上传后替换，无 Logo 回退纯文字） */}
+              <BrandLogo hideFallbackIcon imgClassName="h-4 max-w-20" alt="极序 Flow" />
+              <p className="truncate text-xs font-mono text-muted-foreground tracking-wider uppercase">极序 Flow</p>
+            </div>
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event('pda:check-update'))}

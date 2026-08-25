@@ -7,10 +7,12 @@
 
 import { createPortal, flushSync } from 'react-dom'
 import { useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Printer, X, ChevronDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PrintPreviewZoomControls } from '@/components/shared/PrintPreviewZoomControls'
 import { getPrintTemplateListApi } from '@/api/print-templates'
+import { getLogoApi } from '@/api/settings'
 import TemplateRenderer from './TemplateRenderer'
 import type { PrintItem } from './TemplateRenderer'
 import type { PrintTemplate } from '@/types/print-template'
@@ -67,7 +69,16 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
   const [docZoom, setDocZoom] = useState(1)
   const prePrintZoomRef = useRef(1)
   const docZoomRef = useRef(1)
+  const printRootRef = useRef<HTMLDivElement>(null)
   docZoomRef.current = docZoom
+
+  // 公司 Logo（image 元素数据源）：与 BrandLogo/设置页共享查询键；未上传 url='' → 模板 image 元素不渲染
+  const { data: brandLogo } = useQuery({
+    queryKey: ['brand-logo'],
+    queryFn: () => getLogoApi({ skipGlobalError: true }),
+    staleTime: 5 * 60_000,
+    retry: 1,
+  })
 
   // @page 边距跟随选中模板（layout.margins），切换模板时重写 style 标签
   useEffect(() => {
@@ -111,9 +122,26 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
       .finally(() => setLoading(false))
   }, [templateType])
 
+  /**
+   * 打印前等待打印页内所有 <img> 完成解码（公司 Logo 等），避免首帧未解码导致打印空白。
+   * decode() 失败（如 CORS/非法图片）时静默放行，不阻塞打印。
+   */
+  async function handlePrint() {
+    const root = printRootRef.current
+    if (root) {
+      const imgs = Array.from(root.querySelectorAll('img'))
+      await Promise.all(imgs.map(img => (img.decode?.() ?? Promise.resolve()).catch(() => {})))
+    }
+    window.print()
+  }
+
+  /** 传给 TemplateRenderer 的 data：把公司 Logo URL 注入 companyLogo 键（模板 image 元素取用） */
+  const printData = { ...data, companyLogo: brandLogo?.url ?? '' }
+
   return createPortal(
     <div
       id="fc-print-root"
+      ref={printRootRef}
       style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, overflowY: 'auto', background: '#e0e0e0' }}
     >
       {/* 工具栏 */}
@@ -183,7 +211,7 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button size="sm" onClick={() => window.print()} disabled={!selected}>
+          <Button size="sm" onClick={handlePrint} disabled={!selected}>
             <Printer className="mr-1.5 h-4 w-4" />
             打印
           </Button>
@@ -209,7 +237,7 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
             <TemplateRenderer
               layout={selected.layout}
               paperSize={selected.paperSize}
-              data={data}
+              data={printData}
               items={items}
               displayScale={docZoom}
             />

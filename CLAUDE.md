@@ -48,7 +48,7 @@ flowcube/
 │       ├── scheduler.js            仅启动 operation_requests TTL 清理
 │       ├── config/                 db.js（连接池）、env.js（环境变量校验，生产缺项直接拒启动）
 │       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / settlementType / voucherSource / permissions
-│       ├── database/               210 个 .sql 迁移 + migrate.js
+│       ├── database/               218 个 .sql 迁移 + migrate.js
 │       ├── engine/                 containerEngine / inventoryEngine / reservationEngine / approvalEngine ← 库存唯一合法入口（approvalEngine 为多级审批流引擎，P2-7）
 │       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger / companyScope（多账套公司隔离，会计标准）
 │       ├── modules/                58 个业务模块，统一 routes → controller → service
@@ -267,7 +267,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 ## 8. 数据库与核心模型
 
 - 131 张表（生产实测，含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。表漂移对账用 `backend/scripts/schema-reconcile.js`（只读检查，`--strict` 可挂 CI）。
-- 迁移：`backend/src/database/` 下 210 个 `.sql`，编号 001–210（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行；db_migrations 有 211 条执行记录，含 1 条手工执行的迁移）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
+- 迁移：`backend/src/database/` 下 218 个 `.sql`，编号 001–218（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行；db_migrations 有 211 条执行记录，含 1 条手工执行的迁移）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
 - ⚠️ **数据库里的 `COLUMN_COMMENT` 曾大面积过期，现已大部分订正但仍有残留**（2026-07-27 抽查：`sale_orders.status`、`warehouse_tasks.status` 的注释都已更新并注明"见 documentStatusRules / warehouseTaskStatus"；`sale_orders.closed_reason` 仍写着迁移 127 已废弃的 `partial_ship_close`）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
 
 核心事实表 / 派生字段：
@@ -358,7 +358,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 - 权限码在 `backend/src/constants/permissions.js` 与 `frontend/src/lib/permission-codes.ts` **两份手工同步**的常量表（各 184 个，当前双向一致）；改动后跑 `npm run test:permissions` 校验（它做双向 diff + 命名合规检查，已进 CI）。角色权限存 `sys_role_permissions`，`requirePermission` 在校验前按角色现查。
 - **roleId === 1 是超管，跳过所有权限校验**（前后端都是）。
 - **数据范围**：`user_warehouse_scope`（迁移 122）→ `req.user.warehouseIds`（null=不限仓，超管恒 null，60s 缓存）→ 列表查询用 `scopeFilter()` 拼 SQL。新增涉仓列表接口应接入。
-- 每个业务 routes 文件顶部都有 `router.use(authMiddleware)`。**唯一完全公开的模块是 `/api/app-update/latest`**，另外 `/api/pda/version`、`/api/pda/download`、`/api/auth/login`、`/health`、`/api/health` 免登录。
+- 每个业务 routes 文件顶部都有 `router.use(authMiddleware)`。**唯一完全公开的模块是 `/api/app-update/latest`**，另外 `/api/pda/version`、`/api/pda/download`、`/api/auth/login`、`/health`、`/api/health` 免登录。**刻意豁免**：`GET /api/settings/logo` 与 `/api/settings/logo/image`（公司 Logo 元数据/图片流）在 authMiddleware 之前注册——登录页与 PDA 未登录态要显示 Logo，`<img>` 又无法带 Bearer；仅返回 Logo，无任何业务数据。`POST /api/settings/logo`（上传，`settings.update` 权限）仍在 auth 之后，不受此豁免影响。
 - 少数登录后免细粒度权限的低敏感接口：`/users/options`、`/products|suppliers|customers/next-code`。新增接口**不要**跟随这个例外，一律加 `requirePermission`。
 - **PDA-only 接口**（`pdaOnly` 校验请求头 `X-Client: pda`）：收货、上架、调拨 scan-out/scan-in、退货 receive/check/putaway、扫码写入（`/scan-logs`、`/scan-logs/check`、`/scan-logs/cancel-return[/box]`；`/error`、`/undo` 不限）、仓库任务 start-picking/ready/sort-done/check-done/pack-done/ship、改单的两个 PDA 物理确认接口。**ERP 端不得绕过这些接口直接改任务状态。**
 - **PDA 设备会话已强制启用**（`pda_device_sessions` + `middleware/pdaSession`）：前端 `api/client.ts` 会带上 `X-PDA-Session`（含自动续期），`pdaSessionRequired()` 已挂在调拨 scan-out/scan-in、退货 receive/check/putaway、`/scan-logs` 写入等关键作业接口上；设备需先在 `/pda/bind` 绑定。回归由 `npm run smoke:pda-device-session` 守着（设备未绑定即拒绝作业）。上架接口另用 `req.pda?.warehouseId` 做跨仓拦截。
@@ -512,7 +512,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - ~~打印模板编辑器 keepAlive 残留（中危）~~ **已修复**：`hydrated` 改为按模板 id 重置的 state，切换模板重新水合表单态。
     - ~~工作区标签无上限（中危）~~ **已修复**：tabs 上限 30，超出按 LRU 关闭最旧可关闭 tab。
     - ~~PDA 设备凭据明文长期存 localStorage（中危）~~ **已缓解**（提交 `603e175`）：票据 TTL 30 天→7 天 + 心跳续期（`/pda/sessions/renew`，前端 4h 低频续期）；deviceSecret 明文仍是现场可用性权衡，风险由「ERP 可停用设备吊销全部票据」兜底。
-18. **审计确认的安全基线**（2026-08-21，可信）：全仓 SQL 参数化无注入点；所有业务 routes 挂 authMiddleware + requirePermission（唯一公开 app-update/latest）；opLogger 敏感字段脱敏；multer 无路径穿越；无硬编码密钥；前端 0 处 dangerouslySetInnerHTML；仅 3 处工具性裸 axios（不带 token）；库存引擎 9 条不变量与第 9 节描述完全一致。
+18. **审计确认的安全基线**（2026-08-21，可信）：全仓 SQL 参数化无注入点；所有业务 routes 挂 authMiddleware + requirePermission（唯一公开 app-update/latest；另 `GET /api/settings/logo`、`/logo/image` 为登录页/PDA 品牌展示刻意豁免，见第 12 节）；opLogger 敏感字段脱敏；multer 无路径穿越；无硬编码密钥；前端 0 处 dangerouslySetInnerHTML；仅 3 处工具性裸 axios（不带 token）；库存引擎 9 条不变量与第 9 节描述完全一致。
 19. ~~**2026-08-21 财务审计发现**~~ **已全部修复**（提交 `0377fae`/`15a3133`/`039afe1`/`603e175`，详见 `docs/audit-report-2026-08-21.md` 附录 E）：
     - ~~手工建账款无幂等（高危）~~ **已修复**：`createManual` 接 `beginOperationRequest`（action='payment.record.create'）+ controller 传 requestKey。
     - ~~多账套未隔离（高危）~~ **已修复**：accounting.routes 挂 `companyScope`，`req.companyId` 贯穿科目/凭证/总账/报表/期间结转/导出全部 SQL。
@@ -539,7 +539,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **PDA 凭据 SecureStorage**：自建 `SecureStoragePlugin`（Android Keystore AES-GCM 加密存 SharedPreferences，明文不再落盘；密钥系统级保护）。`pdaDeviceBinding` 改内存缓存 + `initDeviceBinding()` 启动水合（boot 调用），同步 getter 兼容 axios 拦截器；非原生回退内存态。**需重新构建 APK 生效**（已随本提交触发 build-pda-apk，服务器新包已上线）。
     - 已无未解决的设计权衡项；「avg_cost 不回冲」「前端 5 条 warning」「exceljs 告警」等为语义正确/风险不可达的技术债，CLAUDE.md 已记录不处理。
 23. **2026-08-22 全仓死代码/过期文件清理**（分支 `chore/cleanup-dead-code-2026-08-22`，未发版）：
-    - **扫描结论**：5 路多智能体全仓扫描（backend/frontend/desktop+scripts+tests/依赖配置/docs）+ 人工交叉验证。代码引用链非常健康——后端 286 文件全部可达、前端 443 文件全部被引用、无整块注释死代码、无孤儿中间件/脚本、无未用依赖、210 个迁移全部在用。
+    - **扫描结论**：5 路多智能体全仓扫描（backend/frontend/desktop+scripts+tests/依赖配置/docs）+ 人工交叉验证。代码引用链非常健康——后端 286 文件全部可达、前端 443 文件全部被引用、无整块注释死代码、无孤儿中间件/脚本、无未用依赖、218 个迁移全部在用。
     - **已删除（git 历史可恢复）**：`frontend/src/types/desktop.ts`（零引用）、`frontend/src/constants/labelZplDefaults.ts`（自证 deprecated 的 re-export shim，消费方已直连 `printFieldDefs.ts`）、`scripts/cleanup-fix-all.sh` + `cleanup-debug-logs.sh` + `cleanup-dep-report.sh`（自包含孤儿组，零调用方）；空目录 `frontend/src/pages/{warehouses,locations}/components/`、`desktop/release/`。
     - **文档修订**：`docs/proposals/04-序列号管理.md`（取向被 13 推翻）与 `07-采购收货质检.md`（功能已随 v0.4.77 整体下线）删除，README 状态表 10 项「待实现」改为「已实现（版本号）」并补 15 行；`docs/RELEASE.md` 删「登录页改地址/Ctrl+Shift+S」过期句；`docs/换服务器与桌面端自动更新说明.md` 第五节改「域名已启用（v0.4.80）」；`docs/02-部署指南.md` 重新定位为「本地开发部署指南」。
     - **保留未动**（确认非死代码）：后端 45 个「未引用导出」（均为内部自用的活函数/常量）、`react-is`/`terser` 前端依赖（传递依赖显式遮蔽，删有风险）、CI 死角测试 `print-jobs-purge`/`oplog`（有 script 但 test.yml 未跑，未补）、`seedTestData.js`/`resetBusinessData.js`（gitignore 的本地造数工具）、docker 三件套（nginx 配置/backup-entrypoint/Caddyfile 均在用或属备份骨架）。
@@ -627,3 +627,59 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - 验证：后端 lint 0、前端 lint 0 / tsc 0、smoke:reports 全绿、test:permissions 184/184、smoke:mainline 49/49；浏览器实测——库存总览「SKU0001 | YN-1001 | X200 | 测试商品1 | 黑色」五列同屏、利润分析商品 tab 列出现；本地测试库给 SKU0001-0004 补了货号/型号/颜色便于验证（测试数据，非业务改动）。
     - 说明：空值渲染 `—`（沿用商品页先例）；后端返回字段名统一 `articleNumber/spec/color`（null 或缺失由前端兜底）。
 
+34. **2026-08-25 上传系统 Logo（未提交，工作区）**：
+    - 需求：用户增加「上传 Logo」功能，显示范围=系统品牌位全部（ERP 顶栏、ERP 登录页、PDA 登录页/首页），上传入口在系统设置页。
+    - **架构**：Logo 以 base64 data URL 存 `sys_settings`（键 `company_logo` + `company_logo_updated_at`），零部署改动、备份/恢复天然覆盖；**不落盘**（避免新 compose 卷+静态挂载+nginx location）。
+    - **迁移 218**：`sys_settings.value` 扩 `MEDIUMTEXT`（原 201 字符的 VARCHAR/TEXT 容不下 2MB base64）；seed 两个键（type=`image`/`timestamp`）。注意本机此列实测为 `TEXT`（64KB）且 `key_name` 为 100 字符，与 011 建表文本漂移（第 20 节第 8 条的老问题），迁移判断条件按「非 mediumtext 就 ALTER」覆盖两种现状。
+    - **接口**：`GET /api/settings/logo`（返回 `{url, updatedAt}` 元数据）与 `GET /api/settings/logo/image?v=<时间戳>`（图片二进制流，未设置 404）——**公开**（authMiddleware 之前，登录页/PDA 无 JWT 也要显示；Logo 非敏感，见第 12 节刻意豁免）；`POST /api/settings/logo`（multipart，`settings.update` 权限）、`PUT /api/settings` 的 `updateMany` **拒绝** image/timestamp 键（防「保存设置」整组提交误清 Logo，`SETTINGS_KEY_SPECIAL`）。
+    - **安全**：multer memoryStorage + 2MB 上限（MulterError 转 AppError）；fileFilter 只收 png/jpeg/webp/svg；PNG/JPEG/WebP 魔术字节校验防伪装；SVG 黑名单（`<script`/`on*=`/`href=javascript:`/外部引用/`<iframe`/`<foreignObject`）——前端一律 `<img>` 渲染双保险。opLogger 截断 500 字符，大 base64 不爆 `operation_logs`。
+    - **前端**：新组件 `components/shared/BrandLogo.tsx`（React Query 键 `['brand-logo']` 多点位共享一次请求；有 Logo 渲染 `<img>`，无/失败回退默认图标盒或空；`imgClassName`/`boxClassName` 分开控制图片与回退盒；不导出常量键避免 react-refresh warning）；接入 AppLayout 顶栏（`hideFallbackIcon` 保纯文字现状）/login 桌面+移动重品牌区（box 回退）/pda/login（h-14 圆角盒）/pda 首页（hideFallbackIcon）；设置页新增「品牌标识」卡片（预览+上传按钮+前端校验 ≤2MB/类型）；`api/settings.ts` 加 `getLogoApi`（经 `resolveApiFetchUrl` 拼绝对 URL——注意它自带 `/api` 前缀，后端返回先去 `/api` 再传）/`uploadLogoApi`（FormData）。
+    - **缓存**：`GET /logo/image?v=<YYYYMMDDHHMMSS>`——时间戳随上传变化，URL 变即破 HTTP 缓存；React Query 侧上传后 invalidate `['brand-logo']`。
+    - 验证：后端 lint 0、前端 lint 0（5 warnings 存量）/tsc 0、test:permissions 184/184、smoke:mainline 49/49、迁移 218 本机实跑；curl 全链路（公开 200/未设置 404/无 token 401/伪装 400/超限 400/SVG 脚本 400）+ 浏览器 5 品牌位实测（上传替换/回退/跨端口 PDA 代理）。
+    - 不做（范围外）：单据打印模板 logo（TemplateRenderer 仅文本字段，需扩展引擎另议）、官网 landing（已确认不含）。
+35. **2026-08-25 单据打印模板支持公司 Logo（image 元素，未提交，工作区）**：
+    - 需求：继第 34 条上传 Logo 后，用户要求**单据打印模板也显示 Logo**。范围经确认：**仅 HTML 单据模板**（type 1-4：销售/采购/出库/仓库任务单，A4/A5/A6 浏览器打印）；**条码标签（type 5-10，ZPL）不做**——走热敏机需图片解码 + `^GF` 位图，后端 Node 无此能力且标签场景少。
+    - **元素类型**：`TemplateElement.type` 加 `'image'`（纯前端类型，layout_json 是 MySQL JSON 列，无需迁移）。渲染语义：`data[fieldKey]` 取系统 Logo URL，**空值渲染 null**（未上传时打印/预览无空白框）；`object-fit: contain` 固定，不裁剪。
+    - **数据来源**：`fieldKey` 固定 `companyLogo` = `getLogoApi().url`（公开接口，带 v= 破缓存），与 BrandLogo/设置页共享 React Query 键 `['brand-logo']`。注入点仅 2 处覆盖 4 种单据：`OrderPrintOverlay`（`SaleOrderPrintTemplate` 复用它）+ 编辑器 `previewData.companyLogo`。
+    - **改动文件**（纯前端 5 个）：print-template.ts（type 联合）、printFieldDefs.ts（PrintFieldDef + DOC_FIELD_DEFS 加 companyLogo 40×12mm）、TemplateRenderer.tsx（ElementNode image 分支）、editor.tsx（fieldIcon/mkElement 中性默认/ElementNode 编辑占位+预览 img/PropertiesPanel 白名单排除 image + 来源说明/顶部 brand-logo 查询）、OrderPrintOverlay.tsx（data 合并 + 打印前 `Promise.all(img.decode())` 防首帧空白）。
+    - **安全**：src 来自系统内部 Logo URL 而非用户输入；标签画布经 `resolveLayout → normalizeElement` 白名单剔除未知类型，image 不可能进 ZPL。
+    - 验证：tsc 0、前端 lint 0（5 存量）/后端 lint 0、test:label + test:permissions 184/184、smoke:mainline 49/49；浏览器实测——编辑器预览/打印预览 logo 出图（40×12mm→151×45px 精确对应）、未上传不渲染、编辑器拖拽/属性面板（字体与对齐正确排除）、标签模板字段面板无 image 项、模板 #1 测试数据已还原。
+    - 备注：若未来做 ZPL 标签 logo，需后端图片解码（建议 sharp）+ `^GF` 位图 + labelGeometry/labelZpl/测试快照三处同步，属于独立工程，勿与本次混做。
+36. **2026-08-25 打印模板编辑器「全部修复」（评审驱动，未提交，工作区）**：
+    - 背景：对 A4 单据打印模板编辑器做双评估评审（A=设计评审 21/40 Nielsen、B=浏览器实测），发现 P0×1 + P1×5 + P2×2 优先级问题，用户要求全部修复。
+    - **P0 类型切换**（editor.tsx）：切换类型前 confirm（"将重建画布"），且切换入 undo 栈。undo/redo 历史从「仅 elements 数组」升级为**全量 EditorSnapshot**（elements+type+paper+canvas+margins+selectedIds）——否则 undo 回退类型切换时元素与类型会错乱。
+    - **P1 预览≠打印（3 处）**：① editor 编辑预览文本补「label：」前缀（与 TemplateRenderer 打印端一致）；② 表格属性面板加「打印高度随行数自适应」说明；③ **TemplateRenderer 修复丢弃区间**——非表格元素 y 落在 `[table.y, tableBottom)` 原先直接不渲染（打印无声消失），现归入下方跟随区（normalizedBelow 按 y 排序相对表格底部堆叠）。
+    - **P1 属性输入无约束**：`numInputValue()`（空→不写 NaN、越界→clamp 回画布内）用于 x/y/宽/高（canvasW/canvasH 动态边界）、字号/字高、页边距、标签画布尺寸；此前 x=-20 会飞出画布、9999 原样保存、NaN 永久不可点选。
+    - **P1 未保存保护**：`useDirtyGuard(tabPath, isDirty)` + water 完成时从 `remote` 构造 cleanSnapshot 基准（不依赖 setState 时序）+ 保存成功 markClean。笔误：水合 effect 的 setTimeout(0) 读 refs 会滞后，基准直接读 remote 构造。
+    - **P1 可达性**：画布元素加 `tabIndex`/`role=button`/`aria-label`/`onFocus` 选中/Enter-空格选中（键盘用户此前完全被锁画布外——选择只能鼠标）；17 个图标按钮补 aria-label；4 个自造 toggle 加 `role=switch`+`aria-checked`；画布占位文字 `text-muted-foreground/60`（2.30:1）→ `text-muted-foreground`（4.76:1）。
+    - **P2 粉线分离**：吸附参考线 `#ec4899` → `hsl(var(--primary))`（蓝）；打印安全区 `rgba(236,72,153,.35)` → `rgba(245,158,11,.45)`（琥珀）。此前同为 pink-500，拖元素贴近边距分不清"对齐了"还是"踩到不可打印区"。
+    - **P2 效率三件套**：① 坐标 HUD（画布右上角显示选中元素 X/Y/尺寸，拖动实时更新）；② **元素图层面板**（左栏字段列表下方，列表点击选中/上下移动调 z 序=数组顺序/删除——重叠元素不再只能删了重加；标签类型隐藏）；③ **画布空白处框选（marquee）**多选。
+    - **次要 7 项**：undo 保持选中（快照含 selectedIds，恢复时过滤已删元素 id）；文本输入合并 undo（label 首次击键 snapshot 一次，onBlur 结束，一次编辑=一个 undo）；LabelPreviewOverlay useMemo 失效修复（layout 字面量拆分传 elements+尺寸，依赖稳定）；拖动/缩放 window blur 兜底（Alt-Tab 不残留监听器）；10-11px 微字提升 12px；PageHeader 加「返回列表」按钮+描述文案去 ZPL 黑话；PAPER_MM/PAPER_SIZES 双写不动（跨文件共享耦合风险大于收益，评审已说明）。
+    - **附带发现并修复**：**`.dark` 主题变量块在编译产物中丢失**（B 实证：dev 注入与 dist 均无 `.dark{`，加 class 不变色）。根因：Tailwind 3.4 purge/jit 剔除 `@layer base` 内「无 class 语义」的纯变量声明。修复：`:root`/`.dark` 变量块移到 `@tailwind base` 指令之前（顶层规则恒保留），@layer base 只留带 @apply 的规则。已验证 `npx tailwindcss` 提取产物含 `.dark` 块（暗色背景值在内）——**暗色主题此前从未生效过，修复后如未来开 dark 模式才可用**（全站仍无主题切换入口）。
+    - 验证：tsc 0、前端 lint 0（5 存量）/后端 lint 0、test:label + test:print + test:permissions 184/184、smoke:mainline 49/49；浏览器实测——类型切换 confirm+undo 回退、dirty guard 注册/保存清除、label 前缀预览一致、图层面板/aria-label/HUD/marquee 就位、标签模板字段面板无 image + 图层隐藏、测试污染已还原（模板 #1 title x=25）。
+    - 备注：375px 窄屏仍不可用（属性面板被裁出视口，评审 B 实测 496px 内容 vs 293px 容器）——ERP 主要桌面使用，窄屏适配未排期；dark 修复为「未来可用」非「当前生效」。
+37. **2026-08-25 打印表格序号列显隐 + 列顺序可编辑（未提交，工作区）**：
+    - 需求：用户要求打印模板表格「序号支持显示/隐藏」+「表格显示顺序可编辑」。
+    - **设计**：`tableColumns` 只存业务列（不含序号）；新增 `showIndex?: boolean`（**缺省 true 兼容旧模板**——不写即显示序号，老模板无需数据迁移）。序号列以符号列名 `'#'` 与业务列统一进列宽逻辑（均分/显式宽）。
+    - **实现**（纯前端 3 文件）：
+      - `types/print-template.ts`：`TemplateElement` 加 `showIndex?`；
+      - `TemplateRenderer.tsx` FlowTable：`allCols = showIndex ? ['#', ...cols] : cols`，表头/行/合计 colspan 均按 showIndex 动态（**colspan = (showIndex?1:0) + amount 之前列数**；合计行若 amount 列不存在时 colspan=showIndex+cols.length 也会正确）；
+      - `editor.tsx`：① ElementNode 表格预览同口径处理序号列；② 属性面板表格区块重构为三段——「显示序号列」switch、**「表格列（打印顺序）」已选列列表（↑↓ 调序、勾选移除、列宽 mm）**、「添加列」可勾选追加（替代旧的"常量序 checkbox 列表"——旧 UI 勾选顺序决定打印列序但按固定序展示，用户无从知道）。
+    - 验证：tsc 0、前端 lint 0（5 存量）；浏览器实测——序号隐藏后表头=「商品编码/商品名称/单位/数量」无序号列、名次调序「商品名称」上移后预览列序=商品名称→商品编码（渲染端与面板同步）；测试数据已还原（模板 #1 删 showIndex、列顺序回种子 [code,name,unit,qty,price,amount]）。
+    - 兼容性：老布局 `tableColumns` 无 `#`、无 `showIndex` → 序号默认显示（行为不变）；只剩 UI 从"常量序勾选"改"打印顺序列表"，模板数据零改动。
+38. **2026-08-25 打印模板编辑器画布自适应缩放（修复「属性面板挡住画布」，未提交，工作区）**：
+    - 用户反馈：窄视口（~1179px）下编辑 A4 模板时，图纸 1050px 装不进画布列（~649px），macOS 滚动条隐藏看不到横向滚动，右侧表格（金额列）被裁 —— 表现为「属性面板挡住画布」。
+    - **根因**：画布列 `flex-1` 被挤压（属性面板 w-60 + 字段面板 w-52 固定），图纸 `mx-auto` 在宽内容超出时左对齐，超出部分被 `overflow` 裁掉且无滚动提示。
+    - **修复**（editor.tsx）：
+      - **自动 fit**：ResizeObserver + window resize 兜底监听画布列宽，未手动缩放时把 `editorZoom` 双向对齐 fitZoom（A4 @100% 1050px 装不下则缩到整图可见；装得下且此前被压小则恢复 100%）。
+      - **手动缩放优先**：缩放 ±/重置按钮设 `manualZoomRef=true`，后续窗口变化不干预手动态；「适应」（新增按钮）重置 manual 并重新 fit。
+      - 副作用验证：画布内元素坐标（mm）不受 zoom 影响（zoom 只是显示换算），拖拽/吸附/参考线/HUD 全部随 canvasScale 正确联动（沿用原 zoom 语义）。
+    - 验证：1179px 截图整 A4（标题+明细表+合计）完整可见；1000px 自动 40%；1600px 自动 97%（双向 fit）；手动 zoom 后 resize 不干预（107% 保持）；「适应」一键恢复。tsc 0 / lint 0（5 存量）。
+39. **2026-08-25 打印表格列宽画布拖拽（未提交，工作区）**：
+    - 需求：用户要求「表格支持按列编辑，可手动拖动列宽」。
+    - **实现**（editor.tsx，纯前端）：
+      - 选中表格元素时，表头每个列分隔线渲染拖拽手柄（`cursor-col-resize`，hover 高亮，aria-label「调整列宽」）；
+      - 拖动换算：`dxPx / canvasScale` → mm，写入 `tableColumnWidths[colKey]`（3mm 下限、不超表总宽），与属性面板数字输入、打印端 FlowTable 同一口径（显式宽优先、未知列均分剩余）；
+      - 复用既有拖拽模式：snapshot（拖动首移一次 undo）、window blur 兜底清理监听器。
+    - 验证：模拟拖动商品编码 +50px → 列宽写入 8mm 且属性面板同步显示；预览表头宽度 商品编码 189px / 商品名称 87px / 其余 137px（均分）；序号列含在内。测试数据已还原（清除 tableColumnWidths）。
+    - 说明：列宽 0/空 = 均分（沿用既有语义）；删除显式列宽回均分在属性面板输入框清空即可。
