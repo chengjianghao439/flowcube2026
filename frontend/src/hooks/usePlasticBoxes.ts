@@ -9,6 +9,9 @@ export interface PlasticBox {
   productId: number | null
   productName: string | null
   productCode: string | null
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   warehouseId: number | null
   warehouseName: string | null
   locationId: number | null

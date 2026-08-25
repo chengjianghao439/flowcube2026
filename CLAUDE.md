@@ -597,4 +597,33 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - 变更文件：`frontend/src/pages/landing/index.tsx`、`frontend/src/index.css`。
     - 验证：tsc 0 错误、lint 0 error（5 存量 warning）、build 通过；DOM 检查 amber 计数 0、节点 12、轨道线 CSS 规则在（`.rail-track.is-active::before = scaleX(1)`）、货点背景 `rgb(30,90,230)`。
     - 备注：浏览器面板 `innerHeight: 0`（工具 bug）导致 IO 逐亮动画在面板不触发，但 CSS/DOM 验证正确——真实浏览器正常。**着色页唯一强调色 = 品牌蓝 #1E5AE6（--fc-amber 已改名复用）**。
+31. **2026-08-25 财务/会计/报表三大类页面精简与重新分类（未提交，工作区）**：
+    - 用户反馈「三大类页面功能重复多，一个功能一个页面」+ 点名「退货退款应在财务而非会计」。经 3 路多智能体深度扫描确认。
+    - **分类修正**：退货退款单 `/refunds` 从「会计→发票税务」移**「财务→往来账款」**（routeRegistry.ts + permission-codes.ts 权限分组同步；依据：退款单锁 payment_records/写 payment_entries/刷新对账单投影，是销售退货的钱侧配套）；补货建议 `/reports/replenishment` 从「报表→经营分析」移「报表→**库存分析**」（后端在 inventory 模块，属库存决策工具）。
+    - **报表去重**：报表中心删「热销商品 Top20」（与利润分析商品毛利同源同过滤）、删「库存周转各仓价值卡」（与利润分析库存金额汇总数一致）、头部删两个对账按钮（菜单+卡片已有入口）；利润分析删「滞销库存」tab 明细、汇总卡可点击跳库龄与呆滞（跳转已实测）；仓库运营看板异常卡片补分工文案（今日快照 vs 区间分析）。
+    - **成本对账后端二合一**：`avgCostReconciliation`（reports.metrics）与 `checkStockConsistency`（inventory.service，`GET /inventory/check-consistency` 运维入口）本是同一库存不变量（ACTIVE 容器合计 vs inventory_stock.quantity）两套 SQL——抽公共基座 `findStockDrift`（双向覆盖 + 价值列 + scope），两入口各自适配。接口实测两个入口数据一致（同一漂移 -150）。
+    - **会计缺陷修复**（均为真实 bug）：① `voucher-engine.generateVouchers` 补传 companyId（此前账套 2 点「生成本期凭证」写进账套 1；内部函数 loadAccountMap/makeSeqAllocator/upsertVoucher 本就支持该参数，只差透传）+ `voucher.service` 4 处 assertPeriodOpen 补 companyId；② `loadTaxMaps` 进项发票加 `status IN (2,3)`（待认证发票不再静默计入 222101/申报表；销项 status<>2 排除已红冲不变）；③ 利润表与报税口径统一：`categoryNet`/`profitAndLoss` 均排除结转凭证（PERIOD_CLOSE/PERIOD_CLOSE_Y，与 period.service.loadPlNets 一致），利润表净利润改全类别净额并新增「其他损益」行（此前硬编码 6001/6401/6601/6602 且不含结转排除，结账后与报税/期间页口径互相矛盾）。
+    - 验证：后端 lint 0 问题、前端 lint 0 error / tsc 0 错误、test:permissions 184/184、smoke:accounting 11 + smoke:finance 103 + smoke:mainline 49 + smoke:accounting-period 14 + test:integration 96 + test:accounting 7 全绿；浏览器实测（报表中心销售/库存 tab 去重、利润分析 tab 3 个 + 汇总卡跳转、成本对账出数据、退款单在财务菜单往来账款段、补货建议在库存分析段）。
+    - 注：landing 色（#1E5AE6）在本轮无关，未触碰。
+    - 后续（同日）：报表中心再精简——删「每日待办」「作业绩效」「对账与分析」三个引导区块和头部快捷按钮，只留经营总览（采购/销售/库存统计）；改单入口收敛：对账走财务菜单+页面卡片，岗位工作台/库龄呆滞/PDA 异常等走报表菜单，页面不再重复引导。
+32. **2026-08-25 经营 KPI 页面丰富（未提交，工作区）**：
+    - 用户要求「丰富经营 KPI 页面」。扩展为「5 张卡 + 近 12 个月趋势图 + 当月分仓表」仪表盘。
+    - **后端**：`reports.query.js` 新增 `fetchKpiTrendRows`（近 12 月序列，口径与卡片一致——销售 status=4+sale_date、回款 payment_entries 按 payment_date，空月补零、MONTHS 上限 36）与 `fetchKpiByWarehouseRows`（当月按订单头仓库 GROUP BY，CLAUDE.md 7.2 分仓发货注意：这里刻意用订单头仓而非行级 soi.warehouse_id，与卡片同口径）；`reports.metrics.js` 的 `kpiMetrics` 追加 `trend`/`byWarehouse` 字段（原 period/prevPeriod/metrics 不变，兼容）；`backend/scripts/smoke-reports.js` 补 kpiMetrics 覆盖（此前 smoke 无 KPI 项）。
+    - **前端**：`api/reports.ts` 加 `KpiTrendRow`/`KpiByWarehouseRow` 类型；`pages/reports/kpi.tsx` 重写——5 张 StatTile（loading 骨架 + chartTheme.money 金额格式，替掉原手写 fmtMoney 整数格式）+ ComposedChart 趋势图（Bar 回款 success + Line GMV primary + Line 毛利 warning，照抄 ChartSaleTrend 范式）+ 分仓 DataTable（含 GMV 占比列）+ QueryErrorState 标准化。
+    - 验证：后端 lint 0、前端 lint 0 error / tsc 0、test:permissions 184/184、smoke:reports 全绿（含新增 kpiMetrics）；接口实测 trend 12 月序列与卡片口径一致（2026-08 gmv 5740 = 分仓合计）、分仓合计 = 总 GMV；浏览器实测月份联动（2026-08→07 卡片/趋势/分仓表同步切换）。
+    - 明确不做：导出 Excel（后端 /export/kpi 未做）、月末库存快照（inventory_logs 有 180 天 TTL，历史不可靠）、OTD 指标（warehouse-ops 已有当日口径，月度 OTD 需另行定义）。
+33. **2026-08-25 库存漂移「自动巡检 + 一键修复」（未提交，工作区）**：
+    - 背景：用户问「漂移是什么 / 设计足够好是否可取消对账」→ 结论：缓存(投影)与容器(事实源)失联是架构固有风险，设计防不住测试残留/手改库/未来 bug，对账应**自动化**而非取消。
+    - **自动巡检**：`scheduler.js` 新增 `stock-drift-check` worker（默认 30 分钟，`STOCK_DRIFT_CHECK_INTERVAL_MS` 可调）：跑 `findStockDrift` 发现漂移即推钉钉（复用 `sendDingtalkAlert`，未配置静默），含前 5 项明细 + 总价值差 + 「成本对账页修复」指引；同日去重。**只报警不自动修**——漂移是机制失效信号，自动改可能掩盖根因。
+    - **一键修复**：后端 `POST /inventory/resync-stock`（`inventory.service.resyncStock`，权限 `INVENTORY_TRACE_VIEW`，与 check-consistency 同级）：仅对漂移组合重算 `syncStockFromContainers`（不扫全表、支持 scopeWarehouseIds 限仓），返回修复明细；前端成本对账页（avg-cost-reconciliation.tsx）加「修复缓存」按钮——confirm 二次确认 + toast 结果 + refetch，无漂移时按钮禁用，修复中显示 loading。
+    - 验证：后端 lint 0、前端 lint 0 / tsc 0、smoke:reports 全绿、test:permissions 184/184；闭环实测——注入漂移(42/80) → 页面识别「1 项漂移」→ 点修复 → 数据库恢复 80 + 按钮自动禁用；巡检模拟——注入后 `findStockDrift` 命中、修复后静默；幂等（再跑 fixed=0）。
+    - 设计说明：`resyncStock` 与 `scripts/resync-inventory-stock.js` 的区别——只扫漂移组合（快、少锁）而非全表；非超管只修 scope 内仓库。
+34. **2026-08-25 全系统商品显示补「货号/型号/颜色」（未提交，工作区）**：
+    - 用户反馈「显示商品的地方有的只有编码+名称，要把货号/型号/颜色全部显示」。经探索代理全量扫描：主档 `product_items` 有 article_number/spec/color；7 张业务表（采购/销售/调拨/收货/双退货/装箱/仓库任务）有快照（迁移 082/092/093/095/096/097/099/114）；商品管理页/选择弹窗/各单据表单**已完整**（好先例）。
+    - **设计决策**：有快照的表读快照列（历史单据按当时信息展示）；无快照的过程性表（退货任务/盘点/处置/波次/请购/采购计划/改价申请）**JOIN 主档取当前值，不追加快照列**（避免 7 个迁移+回填连锁改动，主档是唯一事实源）。
+    - **后端 A 档**（JOIN 主档补字段，约 15 处）：inventory.service（总览/流水/overview/trace/对账/条码×2/补货）、inventory.aging（库龄/效期）、inventory.procurement（采购计划）、reports.query（采购/销售 Top20 改快照字段、库存周转、利润分析商品/库存/滞销）、reports.metrics 映射、stockcheck.cycle（ABC）、disposal.service（呆滞候选）、plastic-boxes、warehouse-tasks.findMyTaskSkuSummary（快照字段）、sale.service ship 回读。
+    - **后端 B 档**（无快照表 JOIN 主档）：stockcheck.findById、disposal.findById（明细）、picking-waves.findById（波次明细）、return-tasks.findById（退货任务）、purchase-requisitions.findById、procurement 计划明细、price-change 列表/详情。
+    - **前端**（约 18 处）：库存总览表格（手动 th 加 3 列）+ 类型补字段；利润分析商品/库存列；报表中心采购 Top20；库存周转表；库龄/效期列；成本对账列；补货建议列；ABC（拼接）；改价申请列；处置详情/创建（拼接）；波次/请购/采购计划/塑料盒（拼接）；发货选择/占库弹窗/ContainerDrawer（拼接）。
+    - 验证：后端 lint 0、前端 lint 0 / tsc 0、smoke:reports 全绿、test:permissions 184/184、smoke:mainline 49/49；浏览器实测——库存总览「SKU0001 | YN-1001 | X200 | 测试商品1 | 黑色」五列同屏、利润分析商品 tab 列出现；本地测试库给 SKU0001-0004 补了货号/型号/颜色便于验证（测试数据，非业务改动）。
+    - 说明：空值渲染 `—`（沿用商品页先例）；后端返回字段名统一 `articleNumber/spec/color`（null 或缺失由前端兜底）。
 

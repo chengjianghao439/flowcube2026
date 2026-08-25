@@ -29,6 +29,9 @@ const fmt = r => ({
   productId: Number(r.product_id),
   productCode: r.product_code,
   productName: r.product_name,
+  articleNumber: r.article_number || null,
+  spec: r.spec || null,
+  color: r.color || null,
   priceType: r.price_type,
   oldPrice: r.old_price != null ? Number(r.old_price) : null,
   newPrice: Number(r.new_price),
@@ -52,14 +55,21 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM price_change_requests ${where}`, params)
   const [rows] = await pool.query(
-    `SELECT * FROM price_change_requests ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT pcr.*, p.article_number, p.spec, p.color
+       FROM price_change_requests pcr
+       JOIN product_items p ON p.id = pcr.product_id
+      ${where} ORDER BY pcr.created_at DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   return { list: rows.map(fmt), pagination: { page, pageSize: ps, total: Number(total) } }
 }
 
 async function findById(id) {
-  const [[row]] = await pool.query('SELECT * FROM price_change_requests WHERE id = ?', [Number(id)])
+  const [[row]] = await pool.query(
+    `SELECT pcr.*, p.article_number, p.spec, p.color
+       FROM price_change_requests pcr
+       JOIN product_items p ON p.id = pcr.product_id
+      WHERE pcr.id = ?`, [Number(id)])
   if (!row) throw new AppError('改价申请不存在', 404)
   return fmt(row)
 }

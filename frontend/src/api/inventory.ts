@@ -4,6 +4,9 @@ import type { StockItem, InventoryLog, StockChangeParams, InventoryOverviewParam
 
 export const getStockApi    = async (p: QueryParams) => apiClient.get<PaginatedData<StockItem>>('/inventory/stock', { params: p })
 export const getLogsApi     = async (p: QueryParams) => apiClient.get<PaginatedData<InventoryLog>>('/inventory/logs', { params: p })
+
+/** 修复缓存漂移（成本对账页按钮）：仅重算存在漂移的 SKU+仓库,返回修复明细 */
+export const resyncStockApi = async () => apiClient.post<{ ok: boolean; fixed: number; total: number; rows: Array<{ productId: number; warehouseId: number; before: number; after: number }> }>('/inventory/resync-stock')
 export const inboundApi     = async (d: StockChangeParams) => apiClient.post<unknown>('/inventory/inbound', d)
 export const outboundApi    = async (d: StockChangeParams) => apiClient.post<unknown>('/inventory/outbound', d)
 export const adjustApi      = async (d: Omit<StockChangeParams,'supplierId'|'unitPrice'>) => apiClient.post<unknown>('/inventory/adjust', d)
@@ -130,6 +133,9 @@ export interface ReplenishmentItem {
   productCode: string
   productName: string
   unit: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   warehouseId: number
   warehouseName: string
   onHand: number
@@ -158,6 +164,7 @@ export interface AgingBucket { bucket: string; skuCount: number; totalQty: numbe
 export interface AgingItem {
   id: string
   productId: number; productCode: string; productName: string; unit: string
+  articleNumber: string | null; spec: string | null; color: string | null
   warehouseId: number; warehouseName: string
   qty0_30: number; qty30_60: number; qty60_90: number; qty90p: number
   totalQty: number; avgAgeDays: number; maxAgeDays: number; totalValue: number
@@ -172,6 +179,7 @@ export interface InventoryAgingReport {
 export interface ExpiryAlert {
   id: string
   productId: number; productCode: string; productName: string; unit: string
+  articleNumber: string | null; spec: string | null; color: string | null
   warehouseId: number; warehouseName: string
   batchNo: string | null; expDate: string | null; remainingQty: number
   daysToExpiry: number | null; expiryState: 'expired' | 'near_expiry' | 'ok'

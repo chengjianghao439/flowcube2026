@@ -8,16 +8,15 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { useWorkspaceStore } from '@/store/workspaceStore'
-import { formatDisplayDateTime } from '@/lib/dateTime'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { getProfitAnalysisApi, type ProfitSaleOrderRow, type ProfitProductRow, type ProfitStockValueRow, type ProfitSlowMovingRow } from '@/api/reports'
+import { getProfitAnalysisApi, type ProfitSaleOrderRow, type ProfitProductRow, type ProfitStockValueRow } from '@/api/reports'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import type { TableColumn } from '@/types'
 
-type ProfitTab = 'sale' | 'product' | 'stock' | 'slow'
+type ProfitTab = 'sale' | 'product' | 'stock'
 
-function SummaryCard({ label, value, hint, tone }: { label: string; value: number | string; hint: string; tone: 'blue' | 'amber' | 'emerald' | 'rose' }) {
+function SummaryCard({ label, value, hint, tone, onClick }: { label: string; value: number | string; hint: string; tone: 'blue' | 'amber' | 'emerald' | 'rose'; onClick?: () => void }) {
   const toneClass = tone === 'amber'
     ? 'border-amber-200 bg-amber-50'
     : tone === 'emerald'
@@ -26,7 +25,10 @@ function SummaryCard({ label, value, hint, tone }: { label: string; value: numbe
         ? 'border-rose-200 bg-rose-50'
         : 'border-blue-200 bg-blue-50'
   return (
-    <div className={`rounded-lg border px-4 py-3 ${toneClass}`}>
+    <div
+      className={`rounded-lg border px-4 py-3 ${toneClass} ${onClick ? 'cursor-pointer transition-colors hover:border-rose-300' : ''}`}
+      onClick={onClick}
+    >
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
@@ -83,8 +85,11 @@ export default function ProfitAnalysisPage() {
   ]
 
   const productColumns: TableColumn<ProfitProductRow>[] = [
-    { key: 'code', title: '商品编码', width: 140, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'code', title: '商品编码', width: 120, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
+    { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
     { key: 'name', title: '商品名称' },
+    { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
     { key: 'unit', title: '单位', width: 70 },
     { key: 'totalQty', title: '销售量', width: 90, render: v => <span>{Number(v).toFixed(2)}</span> },
     { key: 'revenueAmount', title: '销售额', width: 110, render: v => <span>¥{Number(v).toFixed(2)}</span> },
@@ -95,23 +100,15 @@ export default function ProfitAnalysisPage() {
   ]
 
   const stockColumns: TableColumn<ProfitStockValueRow>[] = [
-    { key: 'code', title: '商品编码', width: 140, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'code', title: '商品编码', width: 120, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
+    { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
     { key: 'name', title: '商品名称' },
+    { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
     { key: 'warehouseName', title: '仓库', width: 120 },
     { key: 'unit', title: '单位', width: 70 },
     { key: 'totalQty', title: '库存数量', width: 100, render: v => <span className="font-medium">{Number(v).toFixed(2)}</span> },
     { key: 'totalValue', title: '库存金额', width: 120, render: v => <span className="font-semibold">¥{Number(v).toFixed(2)}</span> },
-    { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '库存总览')}>查看库存</Button> },
-  ]
-
-  const slowColumns: TableColumn<ProfitSlowMovingRow>[] = [
-    { key: 'code', title: '商品编码', width: 140, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'name', title: '商品名称' },
-    { key: 'unit', title: '单位', width: 70 },
-    { key: 'currentQty', title: '现存数量', width: 100, render: v => <span className="font-medium">{Number(v).toFixed(2)}</span> },
-    { key: 'stockValue', title: '库存金额', width: 120, render: v => <span className="font-semibold">¥{Number(v).toFixed(2)}</span> },
-    { key: 'lastOutboundAt', title: '最近出库', width: 160, render: v => v ? formatDisplayDateTime(String(v)) : <span className="text-muted-foreground">从未出库</span> },
-    { key: 'outbound90d', title: '90天出库量', width: 120, render: v => <span>{Number(v).toFixed(2)}</span> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '库存总览')}>查看库存</Button> },
   ]
 
@@ -140,7 +137,7 @@ export default function ProfitAnalysisPage() {
         <SummaryCard label="销售毛利" value={`¥${(summary?.grossProfit ?? 0).toFixed(2)}`} hint={`销售额 ¥${(summary?.saleAmount ?? 0).toFixed(2)}`} tone="emerald" />
         <SummaryCard label="销售成本" value={`¥${(summary?.costAmount ?? 0).toFixed(2)}`} hint="按销售单明细成本估算" tone="amber" />
         <SummaryCard label="库存金额" value={`¥${(summary?.stockValue ?? 0).toFixed(2)}`} hint="当前库存成本价值" tone="blue" />
-        <SummaryCard label="滞销库存" value={summary?.slowMovingCount ?? 0} hint={`金额 ¥${(summary?.slowMovingValue ?? 0).toFixed(2)}`} tone="rose" />
+        <SummaryCard label="滞销库存" value={summary?.slowMovingCount ?? 0} hint={`金额 ¥${(summary?.slowMovingValue ?? 0).toFixed(2)} · 点击查看明细`} tone="rose" onClick={() => openPath('/reports/inventory-aging', '库龄与呆滞')} />
       </div>
 
       <DateRangeQueryBar
@@ -178,7 +175,6 @@ export default function ProfitAnalysisPage() {
           { key: 'sale' as const, label: '销售毛利' },
           { key: 'product' as const, label: '商品毛利' },
           { key: 'stock' as const, label: '库存金额' },
-          { key: 'slow' as const, label: '滞销库存' },
         ]).map(item => (
           <button
             key={item.key}
@@ -217,16 +213,6 @@ export default function ProfitAnalysisPage() {
           data={data?.stockValue ?? []}
           loading={isLoading}
           emptyText="暂无库存金额数据"
-          onRowDoubleClick={row => openPath(row.path, row.name)}
-        />
-      )}
-
-      {tab === 'slow' && !isError && (
-        <DataTable
-          columns={slowColumns}
-          data={data?.slowMoving ?? []}
-          loading={isLoading}
-          emptyText="暂无滞销库存数据"
           onRowDoubleClick={row => openPath(row.path, row.name)}
         />
       )}

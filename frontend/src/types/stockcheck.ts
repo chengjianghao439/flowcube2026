@@ -34,6 +34,7 @@ export interface CreateCheckParams {
 }
 export interface AbcClassRow {
   warehouseId: number; warehouseName: string; productId: number; productCode: string; productName: string
+  articleNumber: string | null; spec: string | null; color: string | null
   abcClass: 'A' | 'B' | 'C'; metricType: string; metricValue: number; cumulativePct: number; windowDays: number; computedAt: string
 }
 export interface CycleCandidate { productIds: number[]; scopeType: string; scopeValue: string }

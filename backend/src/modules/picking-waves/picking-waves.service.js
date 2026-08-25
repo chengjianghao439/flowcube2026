@@ -190,7 +190,10 @@ async function findById(id, scopeWarehouseIds = null) {
   }))
 
   const [items] = await pool.query(
-    'SELECT * FROM picking_wave_items WHERE wave_id = ? ORDER BY id ASC', [id],
+    `SELECT pwi.*, p.article_number, p.spec, p.color
+       FROM picking_wave_items pwi
+       JOIN product_items p ON p.id = pwi.product_id
+      WHERE pwi.wave_id = ? ORDER BY pwi.id ASC`, [id],
   )
   wave.items = items.map(i => ({
     id:          i.id,
@@ -198,6 +201,9 @@ async function findById(id, scopeWarehouseIds = null) {
     productCode: i.product_code,
     productName: i.product_name,
     unit:        i.unit,
+    articleNumber: i.article_number || null,
+    spec:        i.spec || null,
+    color:       i.color || null,
     totalQty:    Number(i.total_qty),
     pickedQty:   Number(i.picked_qty),
   }))

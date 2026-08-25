@@ -4,6 +4,10 @@ import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { useAvgCostReconciliation, type AvgCostRow } from '@/hooks/useAvgCostReconciliation'
+import { resyncStockApi } from '@/api/inventory'
+import { confirmAction } from '@/lib/confirm'
+import { toast } from '@/lib/toast'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { TableColumn } from '@/types'
 
 const money = (n: number) => `¥${Number(n).toFixed(2)}`
@@ -11,10 +15,37 @@ const fmtQty = (v: unknown) => Number(v).toLocaleString()
 
 export default function AvgCostReconciliationPage() {
   const { data, isLoading, isError, error, refetch } = useAvgCostReconciliation()
+  const queryClient = useQueryClient()
+
+  const resyncMut = useMutation({
+    mutationFn: () => resyncStockApi(),
+    onSuccess: (r) => {
+      if (r?.fixed > 0) {
+        toast.success(`已修复 ${r.fixed} 项缓存漂移`)
+      } else {
+        toast.warning('缓存与容器一致，无需修复')
+      }
+      void refetch()
+      void queryClient.invalidateQueries({ queryKey: ['avg-cost-reconciliation'] })
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : '修复失败'),
+  })
+
+  function handleResync() {
+    confirmAction({
+      title: '修复缓存漂移',
+      description: '将按容器实际库存重算缓存数量（仅涉及存在差异的 SKU+仓库）。容器是唯一事实源，此操作只校准缓存，不改实物账。',
+      confirmText: '确认修复',
+      onConfirm: () => resyncMut.mutate(),
+    })
+  }
 
   const columns: TableColumn<AvgCostRow>[] = [
-    { key: 'productCode', title: '商品编码', width: 130, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'productCode', title: '商品编码', width: 110, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
+    { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
     { key: 'productName', title: '商品名称' },
+    { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
     { key: 'unitCost', title: '单位成本', width: 90, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
     { key: 'cacheQty', title: '缓存数量', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'containerQty', title: '容器实际', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
@@ -41,6 +72,9 @@ export default function AvgCostReconciliationPage() {
                 tone={data.ok ? 'success' : 'danger'}
               />
             )}
+            <Button variant="outline" disabled={!data || data.driftedCount === 0 || resyncMut.isPending} onClick={handleResync}>
+              {resyncMut.isPending ? '修复中…' : '修复缓存'}
+            </Button>
             <Button variant="outline" onClick={() => refetch()}>刷新</Button>
           </div>
         }

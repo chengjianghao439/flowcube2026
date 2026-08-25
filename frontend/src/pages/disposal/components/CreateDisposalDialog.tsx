@@ -142,6 +142,7 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
                   <div className="col-span-3">
                     <span className="text-doc-code">{s.productCode}</span>{' '}
                     <span className="text-muted-foreground">{s.productName}</span>
+                    <div className="text-xs text-muted-foreground">{s.articleNumber ? `货号 ${s.articleNumber}` : ''}{s.spec ? ` · 型号 ${s.spec}` : ''}{s.color ? ` · ${s.color}` : ''}</div>
                   </div>
                   <div className="col-span-1 tabular-nums">{s.totalQty}{s.unit}</div>
                   <div className="col-span-2 tabular-nums">¥{s.totalValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div>

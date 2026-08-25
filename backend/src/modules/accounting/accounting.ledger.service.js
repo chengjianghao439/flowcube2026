@@ -14,6 +14,7 @@
  */
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { SOURCE_TYPES } = require('../../constants/voucherSource')
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
@@ -197,6 +198,8 @@ async function getAccountLedger({ accountId, period, companyId = 1 }) {
 // ── 报表取数（简版） ──────────────────────────────────────────────────────────
 
 // 汇总某分类科目在期间的发生净额（按 category），用于利润表
+// ⚠️ 排除期末结转凭证（PERIOD_CLOSE/PERIOD_CLOSE_Y）：结转分录把损益科目清零（借 6001 贷 4103 等），
+// 不排除会让已结账期间的利润表/报税利润被「清零」而期间页结转净额却按结转前口径——三处口径必须一致。
 async function categoryNet(start, end, companyId = 1) {
   const [rows] = await pool.query(`
     SELECT a.category, a.balance_dir,
@@ -205,13 +208,18 @@ async function categoryNet(start, end, companyId = 1) {
       a.code, a.name
     FROM acct_accounts a
     LEFT JOIN acct_voucher_entries e ON e.account_id=a.id
-    LEFT JOIN acct_vouchers v ON v.id=e.voucher_id
+    LEFT JOIN acct_vouchers v ON v.id=e.voucher_id AND v.source_type NOT IN (?, ?)
     WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf=1
-    GROUP BY a.id, a.category, a.balance_dir, a.code, a.name`, [companyId, start, end, start, end])
+    GROUP BY a.id, a.category, a.balance_dir, a.code, a.name`,
+    [start, end, start, end, SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y, companyId])
   return rows
 }
 
-/** 利润表：主营收入 − 主营成本 − 销售费用 − 管理费用 = 净利润（简版） */
+/**
+ * 利润表：主营收入 − 主营成本 − 销售费用 − 管理费用 + 其他损益 = 净利润。
+ * 净利润 = 全部损益类科目（category 4/5/6）净额——与报税利润总额、期间页结转净额同口径；
+ * 四科目行保留作为「主营」明细，其余损益差额单列「其他损益」行。
+ */
 async function getIncomeStatement({ period, companyId = 1 }) {
   const { start, end } = periodRange(period)
   const rows = await categoryNet(start, end, companyId)
@@ -222,7 +230,15 @@ async function getIncomeStatement({ period, companyId = 1 }) {
   const sellExp = net('6601')
   const adminExp = net('6602')
   const grossProfit = round2(revenue - cost)
-  const profit = round2(revenue - cost - sellExp - adminExp)
+  // 全类别净额（含新增科目如 6051 其他业务收入）：收入=贷−借，费用/成本=借−贷
+  let totalRevenue = 0, totalExpense = 0
+  for (const r of rows) {
+    const n = round2(r.balance_dir === 1 ? (r.d - r.c) : (r.c - r.d))
+    if (Number(r.category) === 5) totalRevenue += n
+    else if (Number(r.category) === 4 || Number(r.category) === 6) totalExpense += n
+  }
+  const otherPnl = round2(totalRevenue - totalExpense - grossProfit + sellExp + adminExp)
+  const profit = round2(totalRevenue - totalExpense)
   return {
     period, start, end,
     rows: [
@@ -231,6 +247,7 @@ async function getIncomeStatement({ period, companyId = 1 }) {
       { name: '二、主营业务利润', amount: grossProfit, bold: true },
       { name: '减：销售费用', amount: sellExp },
       { name: '减：管理费用', amount: adminExp },
+      { name: '加：其他损益', amount: otherPnl },
       { name: '三、净利润', amount: profit, bold: true },
     ],
     profit,

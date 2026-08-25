@@ -56,6 +56,7 @@ async function getInventoryAging({ page = 1, pageSize = 20, keyword = '', wareho
   const offset = (page - 1) * pageSize
   const [rows] = await pool.query(
     `SELECT c.product_id, p.code AS product_code, p.name AS product_name, p.unit,
+            p.article_number, p.spec, p.color,
             c.warehouse_id, w.name AS warehouse_name,
             SUM(CASE WHEN ${AGE_EXPR} < 30 THEN c.remaining_qty ELSE 0 END)               AS qty_0_30,
             SUM(CASE WHEN ${AGE_EXPR} BETWEEN 30 AND 59 THEN c.remaining_qty ELSE 0 END)   AS qty_30_60,
@@ -97,6 +98,9 @@ async function getInventoryAging({ page = 1, pageSize = 20, keyword = '', wareho
       productCode: r.product_code,
       productName: r.product_name,
       unit: r.unit,
+      articleNumber: r.article_number || null,
+      spec: r.spec || null,
+      color: r.color || null,
       warehouseId: r.warehouse_id,
       warehouseName: r.warehouse_name,
       qty0_30: Number(r.qty_0_30),
@@ -126,6 +130,7 @@ async function getExpiryAlerts({ warehouseId = null, warnDays = 30, scopeWarehou
 
   const [rows] = await pool.query(
     `SELECT c.product_id, p.code AS product_code, p.name AS product_name, p.unit,
+            p.article_number, p.spec, p.color,
             c.warehouse_id, w.name AS warehouse_name, c.batch_no, c.exp_date, c.remaining_qty,
             DATEDIFF(c.exp_date, NOW()) AS days_to_expiry,
             CASE WHEN c.exp_date < NOW() THEN 'expired'
@@ -149,6 +154,9 @@ async function getExpiryAlerts({ warehouseId = null, warnDays = 30, scopeWarehou
       productCode: r.product_code,
       productName: r.product_name,
       unit: r.unit,
+      articleNumber: r.article_number || null,
+      spec: r.spec || null,
+      color: r.color || null,
       warehouseId: r.warehouse_id,
       warehouseName: r.warehouse_name,
       batchNo: r.batch_no,

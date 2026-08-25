@@ -46,6 +46,10 @@ const checks = [
     name: 'profitAnalysis',
     run: () => svc.profitAnalysis({}),
   },
+  {
+    name: 'kpiMetrics',
+    run: () => svc.kpiMetrics({}),
+  },
 ]
 
 async function main() {

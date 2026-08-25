@@ -30,6 +30,7 @@ import type { FinderResult } from '@/types/finder'
 
 interface EditItem {
   productId: number; productCode: string; productName: string; unit: string
+  articleNumber?: string | null; spec?: string | null; color?: string | null
   quantity: string; estimatedPrice: string
   suggestedSupplierId: number | null; suggestedSupplierName: string
   convertedQty?: number
@@ -155,9 +156,10 @@ export default function RequisitionFormPage() {
   }
   function removeItem(idx: number) { setItems(list => list.filter((_, i) => i !== idx)) }
 
-  function onPickProduct(p: { id: number; code?: string; name: string; unit?: string }) {
+  function onPickProduct(p: { id: number; code?: string; name: string; unit?: string; articleNumber?: string | null; spec?: string | null; color?: string | null }) {
     setItems(list => [...list, {
       productId: p.id, productCode: p.code ?? '', productName: p.name, unit: p.unit ?? '',
+      articleNumber: p.articleNumber ?? null, spec: p.spec ?? null, color: p.color ?? null,
       quantity: '1', estimatedPrice: '', suggestedSupplierId: null, suggestedSupplierName: '',
     }])
     setProductFinderOpen(false)
@@ -334,7 +336,7 @@ export default function RequisitionFormPage() {
                 <tr><td colSpan={5} className="py-10 text-center text-muted-foreground">暂无明细{editable ? '，点右上角「添加商品」' : ''}</td></tr>
               ) : items.map((it, idx) => (
                 <tr key={idx} className="border-b border-border/40">
-                  <td className="px-3 py-2"><div className="font-medium">{it.productName}</div><div className="text-xs text-muted-foreground">{it.productCode} · {it.unit}</div></td>
+                  <td className="px-3 py-2"><div className="font-medium">{it.productName}</div><div className="text-xs text-muted-foreground">{it.productCode}{it.articleNumber ? ` · 货号 ${it.articleNumber}` : ''}{it.spec ? ` · ${it.spec}` : ''}{it.color ? ` · ${it.color}` : ''} · {it.unit}</div></td>
                   <td className="px-3 py-2 text-right">
                     {editable ? <Input type="number" step="0.0001" min="0" value={it.quantity} onChange={e => setItem(idx, { quantity: e.target.value })} disabled={busy} className="h-8 text-right tabular-nums" />
                       : <span className="tabular-nums">{it.quantity}</span>}

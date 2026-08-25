@@ -197,8 +197,8 @@ export default function WarehouseOpsPage() {
 
           <ReportPanel
             title="最新异常记录"
-            description="最近 10 条异常日志"
-            helper="关注扫码错误、撤销和条码问题"
+            description="最近 10 条异常日志（今日快照）"
+            helper="关注扫码错误、撤销和条码问题；按日期/原因/条码的完整分析在「PDA 异常分析」"
             empty={data.recentErrors.length === 0}
             emptyTitle="暂无异常记录"
             emptyDescription="暂无异常日志"

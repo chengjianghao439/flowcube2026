@@ -7,6 +7,9 @@ export interface DisposalSuggestion {
   productCode: string
   productName: string
   unit: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   warehouseId: number
   warehouseName: string
   totalQty: number
@@ -22,6 +25,9 @@ export interface DisposalItem {
   productCode: string
   productName: string
   unit: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   quantity: number
   unitValue: number
   value: number

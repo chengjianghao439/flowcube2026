@@ -35,6 +35,7 @@ const policiesSchema = z.object({
 
 router.use(authMiddleware)
 router.get('/check-consistency',      requirePermission(PERMISSIONS.INVENTORY_TRACE_VIEW), ctrl.checkConsistency)
+router.post('/resync-stock',          requirePermission(PERMISSIONS.INVENTORY_TRACE_VIEW), ctrl.resyncStock)
 router.get('/trace/:productId',       requirePermission(PERMISSIONS.INVENTORY_TRACE_VIEW), ctrl.trace)
 router.get('/overview',                requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.overview)
 router.get('/replenishment',           requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.replenishment)

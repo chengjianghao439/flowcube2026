@@ -841,12 +841,12 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
       let meta = productMeta.get(pid)
       if (!meta) {
         const [[ti]] = await conn.query(
-          'SELECT product_code, product_name, unit FROM warehouse_task_items WHERE task_id=? AND product_id=?',
+          'SELECT product_code, product_name, unit, article_number, spec, color FROM warehouse_task_items WHERE task_id=? AND product_id=?',
           [orderRow.task_id, pid],
         )
         meta = ti
-          ? { productCode: ti.product_code, productName: ti.product_name, unit: ti.unit }
-          : { productCode: '', productName: `商品#${pid}`, unit: '' }
+          ? { productCode: ti.product_code, productName: ti.product_name, unit: ti.unit, articleNumber: ti.article_number, spec: ti.spec, color: ti.color }
+          : { productCode: '', productName: `商品#${pid}`, unit: '', articleNumber: null, spec: null, color: null }
       }
       const descriptor = await adjustSvc.applyProductDeltaWithinTransaction(conn, {
         taskId: Number(orderRow.task_id),
@@ -1416,34 +1416,6 @@ async function deleteOrder(id, scopeWarehouseIds = null) {
   }
 }
 
-/**
- * 批量确认占库（批量操作）：逐单复用 reserveStock 的完整逻辑（状态机 1→2、
- * 信用额度校验、可用量检查、按商品排序加锁、预占），每单独立事务——
- * 任一单失败不影响其余，失败清单随响应返回，由前端展示。
- *
- * 调用方（controller）不传 requestKey：batch 语义本身就是「逐单尽力而为」，
- * 重复提交不会产生部分重复推进（每单幂等由单条路径自身的锁/状态机保证）。
- */
-async function batchConfirm(ids, operator, { scopeWarehouseIds = null } = {}) {
-  const orderIds = Array.isArray(ids)
-    ? [...new Set(ids.map(Number).filter(n => Number.isInteger(n) && n > 0))]
-    : []
-  if (!orderIds.length) throw new AppError('请至少选择一张销售单', 400)
-  if (orderIds.length > 50) throw new AppError('单次批量确认最多 50 张销售单', 400)
-
-  const succeeded = []
-  const failed = []
-  for (const id of orderIds) {
-    try {
-      await reserveStock(id, operator, [], { scopeWarehouseIds })
-      succeeded.push(id)
-    } catch (error) {
-      failed.push({ id, message: error?.message || '确认失败' })
-    }
-  }
-  return { succeeded, failed }
-}
-
 module.exports = {
   findAll,
   findById,
@@ -1452,7 +1424,6 @@ module.exports = {
   requestAdjustment,
   getReservePreview,
   reserveStock,
-  batchConfirm,
   releaseStock,
   ship,
   cancel,

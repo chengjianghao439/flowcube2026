@@ -69,6 +69,7 @@ async function listAbc({ warehouseId = null, abcClass = null, scopeWarehouseIds 
   const scope = scopeFilter(scopeWarehouseIds, 'a.warehouse_id')
   const [rows] = await pool.query(
     `SELECT a.warehouse_id, w.name AS warehouse_name, a.product_id, p.code AS product_code, p.name AS product_name,
+            p.article_number, p.spec, p.color,
             a.abc_class, a.metric_type, a.metric_value, a.cumulative_pct, a.window_days, a.computed_at
      FROM product_abc_classes a
      JOIN product_items p ON p.id=a.product_id
@@ -80,6 +81,7 @@ async function listAbc({ warehouseId = null, abcClass = null, scopeWarehouseIds 
   return rows.map(r => ({
     warehouseId: r.warehouse_id, warehouseName: r.warehouse_name,
     productId: r.product_id, productCode: r.product_code, productName: r.product_name,
+    articleNumber: r.article_number || null, spec: r.spec || null, color: r.color || null,
     abcClass: r.abc_class, metricType: r.metric_type, metricValue: Number(r.metric_value),
     cumulativePct: Number(r.cumulative_pct), windowDays: r.window_days, computedAt: r.computed_at,
   }))

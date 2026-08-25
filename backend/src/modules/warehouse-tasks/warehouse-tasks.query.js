@@ -133,6 +133,9 @@ async function findMyTaskSkuSummary() {
       wti.product_code AS product_code,
       wti.product_name AS product_name,
       wti.unit AS unit,
+      wti.article_number AS article_number,
+      wti.spec AS spec,
+      wti.color AS color,
       COALESCE(SUM(wti.required_qty),0) AS total_required,
       COALESCE(SUM(wti.picked_qty),0) AS total_picked,
       COUNT(DISTINCT wt.id) AS order_count,
@@ -142,7 +145,7 @@ async function findMyTaskSkuSummary() {
     WHERE wt.status IN (${WT_STATUS_PICK_POOL.join(',')})
       AND wt.deleted_at IS NULL
       AND wt.cancel_requested_at IS NULL
-    GROUP BY wti.product_id, wti.product_code, wti.product_name, wti.unit
+    GROUP BY wti.product_id, wti.product_code, wti.product_name, wti.unit, wti.article_number, wti.spec, wti.color
     ORDER BY
       CASE WHEN COALESCE(SUM(wti.picked_qty),0) >= COALESCE(SUM(wti.required_qty),0) THEN 1 ELSE 0 END ASC,
       wti.product_name ASC,
@@ -153,6 +156,9 @@ async function findMyTaskSkuSummary() {
     productCode: row.product_code,
     productName: row.product_name,
     unit: row.unit,
+    articleNumber: row.article_number || null,
+    spec: row.spec || null,
+    color: row.color || null,
     totalRequired: Number(row.total_required),
     totalPicked: Number(row.total_picked),
     orderCount: Number(row.order_count),

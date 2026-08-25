@@ -38,6 +38,9 @@ const fmtItem = r => ({
   productCode: r.product_code,
   productName: r.product_name,
   unit: r.unit,
+  articleNumber: r.article_number || null,
+  spec: r.spec || null,
+  color: r.color || null,
   quantity: Number(r.quantity),
   unitValue: Number(r.unit_value),
   value: Number(r.quantity) * Number(r.unit_value),
@@ -81,6 +84,7 @@ async function getSuggestions({ page = 1, pageSize = 50, keyword = '', warehouse
 
   const [rows] = await pool.query(
     `SELECT c.product_id, p.code AS product_code, p.name AS product_name, p.unit, p.avg_cost,
+            p.article_number, p.spec, p.color,
             c.warehouse_id, w.name AS warehouse_name,
             SUM(c.remaining_qty) AS total_qty,
             MAX(${VALUE_EXPR}) AS unit_value,       -- 单容器持有成本相同（同一商品），取 MAX 即单件成本
@@ -121,6 +125,9 @@ async function getSuggestions({ page = 1, pageSize = 50, keyword = '', warehouse
     productCode: r.product_code,
     productName: r.product_name,
     unit: r.unit,
+    articleNumber: r.article_number || null,
+    spec: r.spec || null,
+    color: r.color || null,
     warehouseId: r.warehouse_id,
     warehouseName: r.warehouse_name,
     totalQty: Number(r.total_qty),
@@ -164,7 +171,10 @@ async function findById(id, scopeWarehouseIds = null) {
   assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '处置单')
   const disposal = fmt(rows[0])
   const [items] = await pool.query(
-    'SELECT * FROM inventory_disposal_items WHERE disposal_id=? ORDER BY id ASC', [id],
+    `SELECT idi.*, p.article_number, p.spec, p.color
+       FROM inventory_disposal_items idi
+       JOIN product_items p ON p.id = idi.product_id
+      WHERE idi.disposal_id=? ORDER BY idi.id ASC`, [id],
   )
   disposal.items = items.map(fmtItem)
   return disposal

@@ -30,9 +30,11 @@ export function SaleRowActions({
   const printItem = { label: '打印订单', onClick: onPrint }
 
   if (row.status === 1) {
+    // 待占用（草稿）：动作未发生，用描边弱化 + 动态标签，避免实心按钮看起来像已占用
     return (
       <TableActionsMenu
-        primaryLabel="占用"
+        primaryLabel="占库"
+        primaryVariant="outline"
         primaryDisabled={anyPending}
         onPrimaryClick={() => onReserveSale(row.id)}
         items={[

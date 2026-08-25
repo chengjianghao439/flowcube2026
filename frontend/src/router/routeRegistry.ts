@@ -562,7 +562,9 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: RefundsPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '会计', section: '发票税务', order: 60 },
+    // 退款单锁 payment_records/写 payment_entries/刷新对账单投影,是销售退货的钱侧配套
+    //（退货冲减账款负余额的前置）——归资金往来,不属发票税务
+    nav: { kind: 'menu', group: '财务', section: '往来账款', order: 25 },
   },
   {
     path: '/accounting/periods',
@@ -645,7 +647,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     component: ReplenishmentPage,
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '报表', section: '经营分析', order: 25 },
+    nav: { kind: 'menu', group: '报表', section: '库存分析', order: 35 },
   },
   {
     path: '/reports/inventory-aging',

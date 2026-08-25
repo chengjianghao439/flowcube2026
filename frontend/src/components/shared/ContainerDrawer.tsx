@@ -53,6 +53,9 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
               </SheetTitle>
               <SheetDescription className="font-mono text-xs">
                 {item?.productCode}
+                {item?.articleNumber && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-xs not-italic">货号 {item.articleNumber}</span>}
+                {item?.spec && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-xs not-italic">{item.spec}</span>}
+                {item?.color && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-xs not-italic">{item.color}</span>}
                 {item?.warehouseName && (
                   <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-xs not-italic">
                     {item.warehouseName}

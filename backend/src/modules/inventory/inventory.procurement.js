@@ -50,7 +50,7 @@ async function getProcurementPlan({ window = 30, horizon = 30, keyword = '', war
 
   const [rows] = await pool.query(
     `SELECT sold.product_id, sold.warehouse_id, sold.total_sold, sold.recent_sold,
-            p.code AS product_code, p.name AS product_name, p.unit,
+            p.code AS product_code, p.name AS product_name, p.unit, p.article_number, p.spec, p.color,
             w.name AS warehouse_name,
             GREATEST(0, COALESCE(ip.quantity, 0) - COALESCE(ip.reserved, 0)) AS available,
             COALESCE(pt.in_transit, 0)                                       AS in_transit,
@@ -95,6 +95,9 @@ async function getProcurementPlan({ window = 30, horizon = 30, keyword = '', war
       productId: r.product_id,
       productCode: r.product_code,
       productName: r.product_name,
+      articleNumber: r.article_number || null,
+      spec: r.spec || null,
+      color: r.color || null,
       unit: r.unit,
       warehouseId: r.warehouse_id,
       warehouseName: r.warehouse_name,

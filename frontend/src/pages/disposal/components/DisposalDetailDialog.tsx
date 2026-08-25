@@ -85,8 +85,8 @@ export default function DisposalDetailDialog({ open, onClose, id }: Props) {
               </div>
               {disposal.items?.map(item => (
                 <div key={item.id} className="grid grid-cols-12 gap-2 items-center py-1 border-b last:border-0 text-sm">
-                  <div className="col-span-2 text-doc-code">{item.productCode}</div>
-                  <div className="col-span-3">{item.productName}</div>
+                  <div className="col-span-2 text-doc-code">{item.productCode}{item.articleNumber ? <span className="ml-1 text-xs text-muted-foreground">货 {item.articleNumber}</span> : null}</div>
+                  <div className="col-span-3">{item.productName}<div className="text-xs text-muted-foreground">{item.spec || ''}{item.spec && item.color ? ' · ' : ''}{item.color || ''}</div></div>
                   <div className="col-span-1 text-muted-foreground">{item.unit}</div>
                   <div className="col-span-1 tabular-nums">{item.quantity}</div>
                   <div className="col-span-2 tabular-nums">¥{item.unitValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div>

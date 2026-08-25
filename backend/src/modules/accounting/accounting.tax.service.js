@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { SOURCE_TYPES } = require('../../constants/voucherSource')
 
 /**
  * 替代报税数据支持（文档10 完整会计准则 · 功能5）。
@@ -44,11 +45,12 @@ async function profitAndLoss(companyId, period) {
        COALESCE(SUM(CASE WHEN e.direction=2 THEN e.amount END),0) AS c
      FROM acct_voucher_entries e
      JOIN acct_vouchers v ON v.id=e.voucher_id
+        AND v.source_type NOT IN (?, ?)
      JOIN acct_accounts a ON a.id=e.account_id
      WHERE a.company_id=? AND a.is_leaf=1 AND a.category IN (4,5,6) AND a.deleted_at IS NULL
        AND v.company_id=? AND v.voucher_date BETWEEN ? AND ?
      GROUP BY a.category`,
-    [Number(companyId) || 1, Number(companyId) || 1, `${period.slice(0,4)}-${period.slice(4,6)}-01`, `${period.slice(0,4)}-${period.slice(4,6)}-31`],
+    [SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y, Number(companyId) || 1, Number(companyId) || 1, `${period.slice(0,4)}-${period.slice(4,6)}-01`, `${period.slice(0,4)}-${period.slice(4,6)}-31`],
   )
   let revenue = 0, expense = 0
   for (const r of rows) {

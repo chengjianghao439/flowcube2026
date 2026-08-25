@@ -63,11 +63,12 @@ async function fetchPurchaseStatsRows({ startDate, endDate, scopeWarehouseIds = 
   )
 
   const byProduct = await fetchMany(
-    `SELECT i.product_name, SUM(i.quantity) AS total_qty, SUM(i.amount) AS total_amount
+    `SELECT i.product_code, i.product_name, i.article_number, i.spec, i.color,
+            SUM(i.quantity) AS total_qty, SUM(i.amount) AS total_amount
      FROM purchase_order_items i
      JOIN purchase_orders o ON i.order_id = o.id
      WHERE o.deleted_at IS NULL AND o.status = 3 ${dateCond}${wh.sql}
-     GROUP BY i.product_id, i.product_name ORDER BY total_amount DESC LIMIT 20`,
+     GROUP BY i.product_code, i.product_name, i.article_number, i.spec, i.color ORDER BY total_amount DESC LIMIT 20`,
     [...dateParams, ...wh.params],
   )
 
@@ -103,11 +104,12 @@ async function fetchSaleStatsRows({ startDate, endDate, scopeWarehouseIds = null
   )
 
   const byProduct = await fetchMany(
-    `SELECT i.product_name, SUM(i.quantity) AS total_qty, SUM(i.amount) AS total_amount
+    `SELECT i.product_code, i.product_name, i.article_number, i.spec, i.color,
+            SUM(i.quantity) AS total_qty, SUM(i.amount) AS total_amount
      FROM sale_order_items i
      JOIN sale_orders o ON i.order_id = o.id
      WHERE o.deleted_at IS NULL AND o.status = 4 ${dateCond}${wh.sql}
-     GROUP BY i.product_id, i.product_name ORDER BY total_amount DESC LIMIT 20`,
+     GROUP BY i.product_code, i.product_name, i.article_number, i.spec, i.color ORDER BY total_amount DESC LIMIT 20`,
     [...dateParams, ...wh.params],
   )
 
@@ -130,7 +132,7 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
   const periodDays = startDate && endDate ? Math.max(1, Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000) + 1) : null
 
   const turnover = await fetchMany(
-    `SELECT p.code, p.name, p.unit,
+    `SELECT p.code, p.name, p.unit, p.article_number, p.spec, p.color,
             SUM(CASE WHEN l.type=1 THEN l.quantity ELSE 0 END) AS inbound_qty,
             SUM(CASE WHEN l.type=2 THEN l.quantity ELSE 0 END) AS outbound_qty,
             COALESCE(s.total_qty, 0) AS current_qty,
@@ -173,6 +175,9 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
       code: r.code,
       name: r.name,
       unit: r.unit,
+      articleNumber: r.article_number || null,
+      spec: r.spec || null,
+      color: r.color || null,
       inboundQty,
       outboundQty,
       currentQty,
@@ -827,6 +832,9 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
        p.code,
        p.name,
        p.unit,
+       p.article_number,
+       p.spec,
+       p.color,
        COALESCE(SUM(soi.quantity), 0) AS total_qty,
        COALESCE(SUM(soi.amount), 0) AS revenue_amount,
        COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost_amount,
@@ -835,7 +843,7 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
      INNER JOIN sale_order_items soi ON soi.order_id = so.id
      INNER JOIN product_items p ON p.id = soi.product_id
      ${saleWhere}
-     GROUP BY p.id, p.code, p.name, p.unit
+     GROUP BY p.id, p.code, p.name, p.unit, p.article_number, p.spec, p.color
      ORDER BY gross_profit DESC, revenue_amount DESC
      LIMIT 20`,
     saleParams,
@@ -847,6 +855,9 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
        p.code,
        p.name,
        p.unit,
+       p.article_number,
+       p.spec,
+       p.color,
        w.name AS warehouse_name,
        SUM(ip.quantity) AS total_qty,
        SUM(ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS total_value
@@ -854,7 +865,7 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
      INNER JOIN product_items p ON p.id = ip.product_id
      INNER JOIN inventory_warehouses w ON w.id = ip.warehouse_id
      WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL${ipWh.sql}
-     GROUP BY p.id, p.code, p.name, p.unit, w.name
+     GROUP BY p.id, p.code, p.name, p.unit, p.article_number, p.spec, p.color, w.name
      ORDER BY total_value DESC
      LIMIT 30`,
     ipWh.params,
@@ -866,6 +877,9 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
        p.code,
        p.name,
        p.unit,
+       p.article_number,
+       p.spec,
+       p.color,
        COALESCE(st.qty, 0) AS current_qty,
        COALESCE(st.value, 0) AS stock_value,
        lo.last_outbound_at,
@@ -983,6 +997,110 @@ async function fetchKpiRows({ period = null, offsetPeriods = -1, scopeWarehouseI
 }
 
 /**
+ * 经营 KPI 月度趋势序列：近 N 个月（含所选月）的 GMV/毛利/订单数/回款/客单。
+ * 口径与 fetchKpiRows 完全一致（销售 status=4 + sale_date；回款 payment_entries 按 payment_date），
+ * 只是把「单月 fetchOne」扩成「按月 GROUP BY」；空月补零，保证序列连续。
+ * months 为包含当前月在内的月数（默认 12）；period 为空时以当前月为最后一个点。
+ */
+async function fetchKpiTrendRows({ period = null, months = 12, scopeWarehouseIds = null } = {}) {
+  const now = new Date()
+  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const n = Math.max(1, Math.min(36, Number(months) || 12))
+  const [y, m] = p.split('-').map(Number)
+  const monthsAgo = (k) => {
+    const d = new Date(Date.UTC(y, m - 1 + k, 1))
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+  }
+  const start = `${monthsAgo(-(n - 1))}-01`
+  const soWh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+
+  // 销售侧：按月 GROUP BY（status=4 + sale_date 口径，与卡片一致）
+  const saleRows = await fetchMany(
+    `SELECT DATE_FORMAT(so.sale_date,'%Y-%m') AS month,
+            COALESCE(SUM(so.total_amount), 0) AS gmv,
+            COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost,
+            COUNT(DISTINCT so.id) AS orderCount
+     FROM sale_orders so
+     INNER JOIN sale_order_items soi ON soi.order_id = so.id
+     INNER JOIN product_items p ON p.id = soi.product_id
+     WHERE so.deleted_at IS NULL AND so.status = 4 AND so.sale_date >= ?${soWh.sql}
+     GROUP BY month ORDER BY month ASC`,
+    [start, ...soWh.params],
+  )
+
+  // 回款侧：按月 GROUP BY（payment_entries 无仓库列，延续 fetchKpiRows 现状不带 scope）
+  const receiptRows = await fetchMany(
+    `SELECT DATE_FORMAT(pe.payment_date,'%Y-%m') AS month,
+            COALESCE(SUM(pe.amount), 0) AS received
+     FROM payment_entries pe
+     INNER JOIN payment_records pr ON pr.id = pe.record_id AND pr.type = 2
+     WHERE pe.payment_date >= ?
+     GROUP BY month ORDER BY month ASC`,
+    [start],
+  )
+
+  const saleMap = new Map(saleRows.map(r => [r.month, r]))
+  const receiptMap = new Map(receiptRows.map(r => [r.month, Number(r.received)]))
+
+  // 空月补零，序列连续（最近 n 个月，含所选月）
+  return Array.from({ length: n }, (_, i) => {
+    const month = monthsAgo(i - (n - 1))
+    const s = saleMap.get(month)
+    const gmv = s ? Number(s.gmv) : 0
+    const orderCount = s ? Number(s.orderCount) : 0
+    const cost = s ? Number(s.cost) : 0
+    const received = receiptMap.get(month) ?? 0
+    return {
+      month,
+      gmv: Math.round(gmv * 100) / 100,
+      grossProfit: Math.round((gmv - cost) * 100) / 100,
+      orderCount,
+      received: Math.round(received * 100) / 100,
+      avgOrderValue: orderCount > 0 ? Math.round((gmv / orderCount) * 100) / 100 : 0,
+    }
+  })
+}
+
+/**
+ * 经营 KPI 分仓口径：所选月的各仓 GMV/毛利/订单数/客单。
+ * 按订单头 so.warehouse_id 分组（与 KPI 卡片口径一致，不用行级 soi.warehouse_id——
+ * 分仓发货单的归属以订单头仓为准，与卡片数字同口径对比）。
+ */
+async function fetchKpiByWarehouseRows({ period = null, scopeWarehouseIds = null } = {}) {
+  const now = new Date()
+  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const soWh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+
+  const rows = await fetchMany(
+    `SELECT so.warehouse_id, so.warehouse_name,
+            COALESCE(SUM(so.total_amount), 0) AS gmv,
+            COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost,
+            COUNT(DISTINCT so.id) AS orderCount
+     FROM sale_orders so
+     INNER JOIN sale_order_items soi ON soi.order_id = so.id
+     INNER JOIN product_items p ON p.id = soi.product_id
+     WHERE so.deleted_at IS NULL AND so.status = 4 AND so.sale_date BETWEEN ? AND ?${soWh.sql}
+     GROUP BY so.warehouse_id, so.warehouse_name
+     ORDER BY gmv DESC`,
+    [...soWh.params, `${p}-01`, `${p}-31`],
+  )
+
+  return rows.map(r => {
+    const gmv = Number(r.gmv) || 0
+    const cost = Number(r.cost) || 0
+    const orderCount = Number(r.orderCount) || 0
+    return {
+      warehouseId: Number(r.warehouse_id),
+      warehouseName: r.warehouse_name,
+      gmv: Math.round(gmv * 100) / 100,
+      grossProfit: Math.round((gmv - cost) * 100) / 100,
+      orderCount,
+      avgOrderValue: orderCount > 0 ? Math.round((gmv / orderCount) * 100) / 100 : 0,
+    }
+  })
+}
+
+/**
  * 采购价格趋势（P2 报表增强）：按商品返回采购单明细行的逐单均价时间序列。
  * 口径：purchase_orders.status=3（已收齐）+ 非删除；按月分组取 AVG(unit_price) 均价。
  * 均价为简单平均（各采购单明细行 unit_price 的均值，不按数量加权）——单行价格就是
@@ -1023,5 +1141,7 @@ module.exports = {
   fetchReconciliationRows,
   fetchProfitAnalysisRows,
   fetchKpiRows,
+  fetchKpiTrendRows,
+  fetchKpiByWarehouseRows,
   fetchPurchasePriceTrend,
 }

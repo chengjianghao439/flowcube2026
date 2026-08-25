@@ -15,7 +15,15 @@
 #   - 前端容器必须映射到 127.0.0.1:8080（见 docker-compose.yml），让出 80 给 Caddy 做 ACME
 #   - 无 SNI 的 IP 连接经 EIP NAT 后目标 IP 是内网 IP（如 172.24.56.21），
 #     IP 站点需同时列公网与内网 IP，确保无论 SNI 是否为空都能匹配到自签证书
+#   - **Android PDA 直连 IP 时按 RFC 规范不发 SNI**（SNI 仅限域名），
+#     若 global 块缺 default_sni，Caddy 会给无 SNI 连接回退 12h 临时证书（Caddy Local Authority），
+#     PDA 只信任内置自签证书 → 连接失败。必须在 global 块配置 default_sni PUBLIC_IP（2026-08-25 事故教训）
 #   - ACME 自动申请要求外部 80 端口可达（阿里云安全组放行 TCP 80）
+
+{
+    # 无 SNI 的 IP 直连（Android PDA）固定选 IP 站点 → 自签证书，防止 Caddy 回退临时证书
+    default_sni PUBLIC_IP
+}
 
 # 域名站点：SNI 命中域名 → 自动申请 Let's Encrypt 正式证书
 YOUR_DOMAIN, www.YOUR_DOMAIN {

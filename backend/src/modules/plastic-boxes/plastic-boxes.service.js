@@ -27,7 +27,7 @@ async function findAll({ page = 1, pageSize = 20, keyword, warehouseId, productI
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM inventory_containers c LEFT JOIN product_items p ON p.id = c.product_id ${where}`, params)
   const [rows] = await pool.query(
     `SELECT c.id, c.barcode, c.product_id, c.warehouse_id, c.location_id, c.remaining_qty, c.status, c.unit, c.created_at, c.updated_at,
-            p.name AS product_name, p.code AS product_code, w.name AS warehouse_name
+            p.name AS product_name, p.code AS product_code, p.article_number, p.spec, p.color, w.name AS warehouse_name
      FROM inventory_containers c
      LEFT JOIN product_items p ON p.id = c.product_id
      LEFT JOIN inventory_warehouses w ON w.id = c.warehouse_id
@@ -43,7 +43,7 @@ async function findAll({ page = 1, pageSize = 20, keyword, warehouseId, productI
 
 async function findById(id) {
   const [[row]] = await pool.query(
-    `SELECT c.*, p.name AS product_name, p.code AS product_code, w.name AS warehouse_name, l.name AS location_name
+    `SELECT c.*, p.name AS product_name, p.code AS product_code, p.article_number, p.spec, p.color, w.name AS warehouse_name, l.name AS location_name
      FROM inventory_containers c
      LEFT JOIN product_items p ON p.id = c.product_id
      LEFT JOIN inventory_warehouses w ON w.id = c.warehouse_id
@@ -108,6 +108,9 @@ function fmt(row) {
     productId: row.product_id != null ? Number(row.product_id) : null,
     productName: row.product_name || null,
     productCode: row.product_code || null,
+    articleNumber: row.article_number || null,
+    spec: row.spec || null,
+    color: row.color || null,
     warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
     warehouseName: row.warehouse_name || null,
     locationId: row.location_id != null ? Number(row.location_id) : null,

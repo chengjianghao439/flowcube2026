@@ -135,6 +135,32 @@ function startScheduler() {
     }
   }, num('DINGTALK_ALERT_INTERVAL_MS', 30 * 60 * 1000))
   logger.info('[scheduler] 钉钉预警 worker 已启动（30 分钟扫描，DINGTALK_ALERT_WEBHOOK 未配置则静默）', {}, 'Scheduler')
+
+  // 库存缓存漂移巡检（2026-08-25）：缓存(投影)与容器(事实源)失联时,业务判断会静默出错。
+  // 每 30 分钟跑一次 findStockDrift,发现漂移推钉钉,人工经成本对账页「修复缓存」或 resync 处理。
+  // 与 dingtalk-alert 复用同一 webhook;去重:同一天只推一次,避免每轮扫描都刷屏。
+  // 注意:巡检只报警不自动修——漂移是「机制失效」信号,自动改可能掩盖根因。
+  let lastDriftAlertDate = ''
+  startWorker('stock-drift-check', async () => {
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const { findStockDrift } = require('./modules/inventory/inventory.service')
+    const { list } = await findStockDrift({})
+    const drifted = list.filter(r => r.drifted)
+    if (!drifted.length) return
+    if (lastDriftAlertDate === today) return
+    const totalDiffValue = Math.round(drifted.reduce((s, r) => s + r.diffValue, 0) * 100) / 100
+    const top = drifted.slice(0, 5).map(r => `- ${r.productName}（仓 ${r.warehouseId}）缓存 ${r.cacheQty} / 容器 ${r.containerQty}，差 ${r.diffQty}`)
+    const ok = await sendDingtalkAlert(
+      `🔴 极序 Flow 库存缓存漂移 ${today}`,
+      `### 发现 ${drifted.length} 项缓存漂移,总价值差 ¥${totalDiffValue.toLocaleString('zh-CN')}\n\n${top.join('\n')}${drifted.length > 5 ? `\n- …共 ${drifted.length} 项` : ''}\n\n> 请在「报表 → 库存分析 → 成本对账」查看明细并点击「修复缓存」。`,
+    )
+    if (ok) {
+      lastDriftAlertDate = today
+      logger.warn(`[scheduler] 库存缓存漂移告警已推送：${drifted.length} 项`, { top }, 'Scheduler')
+    }
+  }, num('STOCK_DRIFT_CHECK_INTERVAL_MS', 30 * 60 * 1000))
+  logger.info('[scheduler] 库存缓存漂移巡检 worker 已启动（30 分钟扫描，DINGTALK_ALERT_WEBHOOK 未配置则静默）', {}, 'Scheduler')
 }
 
 module.exports = { startScheduler }

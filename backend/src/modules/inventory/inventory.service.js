@@ -2,7 +2,7 @@ const { pool } = require('../../config/db')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE, MOVE_TYPE_LABEL, writeInventoryLog } = require('../../engine/inventoryEngine')
-const { adjustContainerStock, SOURCE_TYPE, splitContainer } = require('../../engine/containerEngine')
+const { adjustContainerStock, SOURCE_TYPE, splitContainer, syncStockFromContainers } = require('../../engine/containerEngine')
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
 
@@ -27,6 +27,7 @@ async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', war
     `SELECT COALESCE(s.id, -((dims.product_id * 1000000) + dims.warehouse_id)) AS id,
             COALESCE(c.quantity, 0) AS quantity, COALESCE(s.reserved, 0) AS reserved,
             p.id AS product_id, p.code AS product_code, p.name AS product_name, p.unit,
+            p.article_number, p.spec, p.color,
             w.id AS warehouse_id, w.name AS warehouse_name
      FROM (
        SELECT product_id, warehouse_id FROM inventory_stock
@@ -84,6 +85,7 @@ async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', war
         reserved,
         available: Math.max(0, onHand - reserved),
         productId: r.product_id, productCode: r.product_code, productName: r.product_name, unit: r.unit,
+        articleNumber: r.article_number || null, spec: r.spec || null, color: r.color || null,
         warehouseId: r.warehouse_id, warehouseName: r.warehouse_name,
       }
     }),
@@ -139,6 +141,7 @@ async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehou
 
   const [rows] = await pool.query(
     `SELECT l.*, p.code AS product_code, p.name AS product_name, p.unit,
+            p.article_number, p.spec, p.color,
             w.name AS warehouse_name, s.name AS supplier_name
      FROM inventory_logs l
      JOIN product_items p ON l.product_id=p.id
@@ -157,6 +160,7 @@ async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehou
     list: rows.map(r => ({
       id: r.id, type: r.type, typeName: TYPE_NAMES[r.type],
       productId: r.product_id, productCode: r.product_code, productName: r.product_name, unit: r.unit,
+      articleNumber: r.article_number || null, spec: r.spec || null, color: r.color || null,
       warehouseId: r.warehouse_id, warehouseName: r.warehouse_name,
       supplierId: r.supplier_id, supplierName: r.supplier_name,
       quantity: Number(r.quantity), beforeQty: Number(r.before_qty), afterQty: Number(r.after_qty),
@@ -324,7 +328,7 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
        ip.quantity, ip.reserved,
        NULL AS updated_at,
        p.id AS product_id, p.code AS product_code, p.name AS product_name,
-       p.unit, p.category_id,
+       p.unit, p.category_id, p.article_number, p.spec, p.color,
        w.id AS warehouse_id, w.name AS warehouse_name
      FROM ${inventoryDisplayProjectionSql} ip
      JOIN product_items p ON ip.product_id = p.id
@@ -363,6 +367,9 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
         productCode:  r.product_code,
         productName:  r.product_name,
         unit:         r.unit,
+        articleNumber: r.article_number || null,
+        spec:         r.spec || null,
+        color:        r.color || null,
         categoryId:   r.category_id || null,
         categoryPath: buildCatPath(r.category_id),
         warehouseId:  r.warehouse_id,
@@ -549,7 +556,7 @@ async function traceByProductId(productId, {
   includeLegacy = false,
 } = {}) {
   const [[p]] = await pool.query(
-    'SELECT id, code, name, unit FROM product_items WHERE id=? AND deleted_at IS NULL',
+    'SELECT id, code, name, unit, article_number, spec, color FROM product_items WHERE id=? AND deleted_at IS NULL',
     [productId],
   )
   if (!p) throw new AppError('商品不存在', 404)
@@ -646,6 +653,9 @@ async function traceByProductId(productId, {
     productCode: p.code,
     productName: p.name,
     unit: p.unit,
+    articleNumber: p.article_number || null,
+    spec: p.spec || null,
+    color: p.color || null,
     filters: { containerId, sourceType, sourceRefId, includeLegacy },
     summary: [...summaryMap.values()],
     chains,
@@ -666,43 +676,40 @@ async function traceByProductId(productId, {
   }
 }
 
-/** 校验容器汇总（ACTIVE）与 inventory_stock.quantity 是否一致 */
-async function checkStockConsistency({ productId = null, warehouseId = null, limit = 500 } = {}) {
+/**
+ * 库存漂移全量对账基座：ACTIVE 容器 remaining_qty 合计 vs inventory_stock.quantity，
+ * 双向覆盖（容器有量缺缓存、缓存有量无容器、两边都有但数量不等），
+ * 附产品信息与单位成本价值列。checkStockConsistency（运维入口）与
+ * reports.avgCostReconciliation（成本对账页面）共用，避免同一不变量两套 SQL。
+ * 纯只读。scopeWarehouseIds 语义同 scopeFilter（null=不限仓）。
+ */
+async function findStockDrift({ productId = null, warehouseId = null, scopeWarehouseIds = null } = {}) {
+  const [scC, scS] = [scopeFilter(scopeWarehouseIds, 'c.warehouse_id'), scopeFilter(scopeWarehouseIds, 's.warehouse_id')]
   const condC = ['c.status = 1', 'c.deleted_at IS NULL']
   const paramsC = []
   if (productId) { condC.push('c.product_id = ?'); paramsC.push(productId) }
   if (warehouseId) { condC.push('c.warehouse_id = ?'); paramsC.push(warehouseId) }
 
-  // 单次 LEFT JOIN 查询，避免 N+1
-  const [rows] = await pool.query(
+  // 容器主视角：有 ACTIVE 容器的商品×仓（含缓存为 0 或缺失的）
+  const [cRows] = await pool.query(
     `SELECT c.product_id AS productId, c.warehouse_id AS warehouseId,
             SUM(c.remaining_qty) AS containerQty,
-            COALESCE(s.quantity, 0) AS stockQty
+            COALESCE(s.quantity, 0) AS cacheQty
      FROM inventory_containers c
      LEFT JOIN inventory_stock s ON s.product_id = c.product_id AND s.warehouse_id = c.warehouse_id
-     WHERE ${condC.join(' AND ')}
-     GROUP BY c.product_id, c.warehouse_id
-     LIMIT ?`,
-    [...paramsC, limit],
+     WHERE ${condC.join(' AND ')}${scC.sql}
+     GROUP BY c.product_id, c.warehouse_id`,
+    [...paramsC, ...scC.params],
   )
 
-  const mismatches = []
-  for (const row of rows) {
-    const cQty = Number(row.containerQty)
-    const sQty = Number(row.stockQty)
-    const diff = sQty - cQty
-    if (Math.abs(diff) > 0.0001) {
-      mismatches.push({ productId: row.productId, warehouseId: row.warehouseId, containerQty: cQty, stockQty: sQty, diff })
-    }
-  }
-
+  // 缓存主视角补查：缓存有量但无容器（LEFT JOIN 不到的行，仅此方向会漏）
   const condS = ['s.quantity > 0.0001']
   const paramsS = []
   if (productId) { condS.push('s.product_id = ?'); paramsS.push(productId) }
   if (warehouseId) { condS.push('s.warehouse_id = ?'); paramsS.push(warehouseId) }
 
-  const [stockOnly] = await pool.query(
-    `SELECT s.product_id AS productId, s.warehouse_id AS warehouseId, s.quantity AS stockQty
+  const [sRows] = await pool.query(
+    `SELECT s.product_id AS productId, s.warehouse_id AS warehouseId, s.quantity AS cacheQty
      FROM inventory_stock s
      LEFT JOIN (
        SELECT product_id, warehouse_id, SUM(remaining_qty) AS sq
@@ -710,34 +717,105 @@ async function checkStockConsistency({ productId = null, warehouseId = null, lim
        WHERE status = 1 AND deleted_at IS NULL
        GROUP BY product_id, warehouse_id
      ) x ON x.product_id = s.product_id AND x.warehouse_id = s.warehouse_id
-     WHERE ${condS.join(' AND ')}
+     WHERE ${condS.join(' AND ')}${scS.sql}
        AND (x.sq IS NULL OR x.sq = 0)`,
-    paramsS,
+    [...paramsS, ...scS.params],
   )
 
-  for (const row of stockOnly) {
-    const cQty = 0
-    const sQty = Number(row.stockQty)
-    mismatches.push({
-      productId: row.productId,
-      warehouseId: row.warehouseId,
-      containerQty: cQty,
-      stockQty: sQty,
-      diff: sQty - cQty,
-      note: '库存表有量但无在库容器汇总',
-    })
+  const rows = new Map()
+  for (const r of cRows) {
+    rows.set(`${r.productId}-${r.warehouseId}`, { productId: Number(r.productId), warehouseId: Number(r.warehouseId), containerQty: Number(r.containerQty), cacheQty: Number(r.cacheQty), note: null })
+  }
+  for (const r of sRows) {
+    const key = `${r.productId}-${r.warehouseId}`
+    if (rows.has(key)) continue
+    rows.set(key, { productId: Number(r.productId), warehouseId: Number(r.warehouseId), containerQty: 0, cacheQty: Number(r.cacheQty), note: '库存表有量但无在库容器汇总' })
   }
 
-  mismatches.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
-  const total = mismatches.length
-  const list = mismatches.slice(0, Math.min(Math.max(1, limit), 2000))
+  let list = [...rows.values()].map(row => {
+    const diffQty = Math.round((row.cacheQty - row.containerQty) * 1000) / 1000
+    return { ...row, diffQty, drifted: Math.abs(row.cacheQty - row.containerQty) > 0.0001 }
+  })
 
+  // 产品信息与单位成本（批量取，避免 N+1）
+  if (list.length) {
+    const [pRows] = await pool.query(
+      `SELECT id, code, name, unit, article_number, spec, color, COALESCE(NULLIF(avg_cost,0), NULLIF(cost_price,0), 0) AS unit_cost
+       FROM product_items WHERE id IN (?) AND deleted_at IS NULL`,
+      [list.map(r => r.productId)],
+    )
+    const pmap = new Map(pRows.map(r => [Number(r.id), r]))
+    list = list.map(row => {
+      const p = pmap.get(row.productId)
+      const unitCost = p ? Number(p.unit_cost) : 0
+      const cacheQty = row.cacheQty
+      const containerQty = row.containerQty
+      return {
+        rowKey: `${row.productId}-${row.warehouseId}`,
+        productId: row.productId,
+        productCode: p ? p.code : '—',
+        productName: p ? p.name : '—',
+        unit: p ? p.unit : '',
+        articleNumber: p ? (p.article_number || null) : null,
+        spec: p ? (p.spec || null) : null,
+        color: p ? (p.color || null) : null,
+        warehouseId: row.warehouseId,
+        unitCost,
+        cacheQty,
+        containerQty,
+        diffQty: row.diffQty,
+        cacheValue: Math.round(cacheQty * unitCost * 100) / 100,
+        containerValue: Math.round(containerQty * unitCost * 100) / 100,
+        diffValue: Math.round(row.diffQty * unitCost * 100) / 100,
+        drifted: row.drifted,
+        note: row.note,
+      }
+    })
+    list.sort((a, b) => Math.abs(b.diffQty) - Math.abs(a.diffQty) || (a.productName < b.productName ? -1 : 1))
+  }
+  return { list }
+}
+
+/** 校验容器汇总（ACTIVE）与 inventory_stock.quantity 是否一致（运维入口） */
+async function checkStockConsistency({ productId = null, warehouseId = null, limit = 500 } = {}) {
+  const { list } = await findStockDrift({ productId, warehouseId })
+  const driftRows = list.filter(r => r.drifted).map(r => ({
+    productId: r.productId,
+    warehouseId: r.warehouseId,
+    containerQty: r.containerQty,
+    stockQty: r.cacheQty,
+    diff: r.diffQty,
+    ...(r.note ? { note: r.note } : {}),
+  }))
+  const total = driftRows.length
   return {
     ok: total === 0,
     mismatchCount: total,
     checkedHint: '按 SKU+仓库 比对 ACTIVE 容器 remaining_qty 合计与 inventory_stock.quantity',
-    mismatches: list,
+    mismatches: driftRows.slice(0, Math.min(Math.max(1, limit), 2000)),
   }
+}
+
+/**
+ * 修复缓存漂移：仅对「存在漂移」的组合重算 inventory_stock.quantity（= syncStockFromContainers）。
+ * 与 scripts/resync-inventory-stock.js 的区别：①不扫全表,只扫漂移组合(快、少锁)；
+ * ②支持 scopeWarehouseIds 按数据权限限仓(非超管只修自己仓);③返回修复明细供页面展示。
+ * 同一事务? 每组合一次 syncStockFromContainers(它内部 SUM FOR UPDATE + upsert 自行持锁),
+ * 不同组合互不干扰,无需包大事务——与脚本行为一致,幂等可重复。
+ * 纯修复动作,不改容器事实(容器是唯一真相,这里只校准缓存)。
+ */
+async function resyncStock({ scopeWarehouseIds = null } = {}) {
+  const { list } = await findStockDrift({ scopeWarehouseIds })
+  const drifted = list.filter(r => r.drifted)
+  if (!drifted.length) return { ok: true, fixed: 0, total: 0, rows: [] }
+
+  const fixed = []
+  for (const r of drifted) {
+    const after = await syncStockFromContainers(pool, r.productId, r.warehouseId)
+    fixed.push({ productId: r.productId, warehouseId: r.warehouseId, before: r.cacheQty, after })
+  }
+
+  return { ok: true, fixed: fixed.length, total: drifted.length, rows: fixed }
 }
 
 async function getContainerByBarcode(barcode) {
@@ -746,7 +824,7 @@ async function getContainerByBarcode(barcode) {
             c.remaining_qty, c.initial_qty, c.unit, c.status, c.inbound_task_id,
             c.source_type, c.source_ref_id, c.is_legacy,
             c.locked_by_task_id,
-            p.code AS product_code, p.name AS product_name,
+            p.code AS product_code, p.name AS product_name, p.article_number, p.spec, p.color,
             w.name AS warehouse_name,
             loc.code AS location_code,
             lt.task_no AS locked_task_no
@@ -765,6 +843,9 @@ async function getContainerByBarcode(barcode) {
     productId:     row.product_id,
     productCode:   row.product_code,
     productName:   row.product_name,
+    articleNumber: row.article_number || null,
+    spec:          row.spec || null,
+    color:         row.color || null,
     warehouseId:   row.warehouse_id,
     warehouseName: row.warehouse_name,
     locationId:    row.location_id  || null,
@@ -801,7 +882,7 @@ async function queryByBarcode(barcode, { scopeWarehouseIds = null } = {}) {
             c.batch_no, c.mfg_date, c.exp_date, c.remark,
             c.source_type, c.source_ref_id, c.is_legacy,
             c.locked_by_task_id,
-            p.code AS product_code, p.name AS product_name,
+            p.code AS product_code, p.name AS product_name, p.article_number, p.spec, p.color,
             w.name AS warehouse_name,
             loc.code AS location_code,
             lt.task_no AS locked_task_no
@@ -858,7 +939,7 @@ async function queryByProduct({ productId, warehouseId, scopeWarehouseIds = null
             c.batch_no, c.mfg_date, c.exp_date,
             c.source_type, c.source_ref_id,
             c.locked_by_task_id,
-            p.code AS product_code, p.name AS product_name,
+            p.code AS product_code, p.name AS product_name, p.article_number, p.spec, p.color,
             w.name AS warehouse_name,
             loc.code AS location_code,
             lt.task_no AS locked_task_no
@@ -881,6 +962,9 @@ async function queryByProduct({ productId, warehouseId, scopeWarehouseIds = null
     productCode:   first.product_code,
     productName:   first.product_name,
     unit:          first.unit,
+    articleNumber: first.article_number || null,
+    spec:          first.spec || null,
+    color:         first.color || null,
     containers: rows.map(r => ({
       containerId:   r.id,
       barcode:       r.barcode,
@@ -1071,6 +1155,7 @@ async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehou
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const [rows] = await pool.query(
     `SELECT p.id AS product_id, p.code AS product_code, p.name AS product_name, p.unit,
+            p.article_number, p.spec, p.color,
             w.id AS warehouse_id, w.name AS warehouse_name,
             ip.quantity, ip.reserved,
             ${availableExpr} AS available,
@@ -1102,6 +1187,9 @@ async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehou
         productCode: r.product_code,
         productName: r.product_name,
         unit: r.unit,
+        articleNumber: r.article_number || null,
+        spec: r.spec || null,
+        color: r.color || null,
         warehouseId: r.warehouse_id,
         warehouseName: r.warehouse_name,
         onHand: Number(r.quantity),
@@ -1202,6 +1290,8 @@ module.exports = {
   getContainerLogs,
   traceByProductId,
   checkStockConsistency,
+  findStockDrift,
+  resyncStock,
   resolveSourceDocumentsBatch,
   getContainerByBarcode,
   queryByBarcode,

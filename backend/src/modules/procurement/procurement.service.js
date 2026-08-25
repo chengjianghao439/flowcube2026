@@ -30,6 +30,7 @@ function fmtItem(r) {
   return {
     id: Number(r.id), planId: Number(r.plan_id),
     productId: Number(r.product_id), productCode: r.product_code, productName: r.product_name, unit: r.unit,
+    articleNumber: r.article_number || null, spec: r.spec || null, color: r.color || null,
     warehouseId: Number(r.warehouse_id), warehouseName: r.warehouse_name,
     supplierId: r.supplier_id != null ? Number(r.supplier_id) : null, supplierName: r.supplier_name || null,
     adu: Number(r.adu), forecastDemand: Number(r.forecast_demand), safetyStock: Number(r.safety_stock),
@@ -115,7 +116,10 @@ async function getPlan(id, scopeWarehouseIds = null) {
   // 明细按数据权限过滤（跨仓计划里，限权用户只看自己仓的行）
   const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   const [items] = await pool.query(
-    `SELECT * FROM procurement_plan_items WHERE plan_id = ?${scope.sql} ORDER BY suggested_qty DESC, id`,
+    `SELECT ppi.*, p.article_number, p.spec, p.color
+       FROM procurement_plan_items ppi
+       JOIN product_items p ON p.id = ppi.product_id
+      WHERE ppi.plan_id = ?${scope.sql} ORDER BY ppi.suggested_qty DESC, ppi.id`,
     [id, ...scope.params],
   )
   return { ...fmtPlan(plan), items: items.map(fmtItem) }

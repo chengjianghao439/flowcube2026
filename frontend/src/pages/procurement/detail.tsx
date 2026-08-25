@@ -106,7 +106,7 @@ export default function ProcurementPlanDetailPage() {
                   <td className="px-3 py-2 text-center">
                     {editable && canConvert && pending && <input type="checkbox" checked={selected.has(it.id)} onChange={() => toggle(it.id)} className="h-4 w-4 accent-primary" />}
                   </td>
-                  <td className="px-3 py-2"><div>{it.productName}</div><div className="text-xs text-muted-foreground text-doc-code">{it.productCode}</div></td>
+                  <td className="px-3 py-2"><div>{it.productName}</div><div className="text-xs text-muted-foreground text-doc-code">{it.productCode}{it.articleNumber ? ` · 货号 ${it.articleNumber}` : ''}{it.spec ? ` · ${it.spec}` : ''}{it.color ? ` · ${it.color}` : ''}</div></td>
                   <td className="px-3 py-2">{it.warehouseName}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{num(it.adu)}</td>
                   <td className="px-3 py-2 text-right tabular-nums" title="日均 ×(提前期+覆盖周期)">{num(it.forecastDemand)}</td>

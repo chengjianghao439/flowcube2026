@@ -379,7 +379,7 @@ export default function PickingWavesPage() {
                       <tr key={item.id}>
                         <td className="px-3 py-2">
                           <div className="font-medium">{item.productName}</div>
-                          <div className="text-xs text-muted-foreground">{item.productCode}</div>
+                          <div className="text-xs text-muted-foreground">{item.productCode}{item.articleNumber ? ` · 货号 ${item.articleNumber}` : ''}{item.spec ? ` · ${item.spec}` : ''}{item.color ? ` · ${item.color}` : ''}</div>
                         </td>
                         <td className="px-3 py-2 text-left">{item.totalQty}</td>
                         <td className="px-3 py-2 text-left">{item.pickedQty}</td>

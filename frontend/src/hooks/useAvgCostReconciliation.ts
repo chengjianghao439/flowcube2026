@@ -7,6 +7,9 @@ export interface AvgCostRow {
   productCode: string
   productName: string
   unit: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   warehouseId: number
   unitCost: number
   cacheQty: number

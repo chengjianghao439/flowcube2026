@@ -35,7 +35,10 @@ async function listBookStocksFromActiveContainers(conn, warehouseId, productIds 
         COALESCE(SUM(c.remaining_qty), 0) AS quantity,
         p.code AS product_code,
         p.name AS product_name,
-        p.unit
+        p.unit,
+        p.article_number,
+        p.spec,
+        p.color
      FROM inventory_containers c
      JOIN product_items p ON c.product_id = p.id
      WHERE c.warehouse_id = ?
@@ -70,10 +73,12 @@ async function findById(id, scopeWarehouseIds = null) {
   assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '盘点单')
   const check = fmt(rows[0])
   const [items] = await pool.query(
-    `SELECT ici.*,
+    `SELECT ici.*, p.article_number, p.spec, p.color,
             (SELECT COUNT(*) FROM inventory_check_item_containers s WHERE s.check_item_id = ici.id) AS scanned_container_count
-       FROM inventory_check_items ici WHERE ici.check_id=? ORDER BY ici.id ASC`, [id])
-  check.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, bookQty:Number(r.book_qty), actualQty:r.actual_qty!=null?Number(r.actual_qty):null, diffQty:r.diff_qty!=null?Number(r.diff_qty):null,
+       FROM inventory_check_items ici
+       JOIN product_items p ON p.id = ici.product_id
+       WHERE ici.check_id=? ORDER BY ici.id ASC`, [id])
+  check.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, articleNumber:r.article_number||null, spec:r.spec||null, color:r.color||null, bookQty:Number(r.book_qty), actualQty:r.actual_qty!=null?Number(r.actual_qty):null, diffQty:r.diff_qty!=null?Number(r.diff_qty):null,
     // PDA 扫码盘点（文档13 §4.3）：有扫码记录的行实盘数由扫码集派生，ERP 手填锁定
     scanDriven: Number(r.scanned_container_count) > 0,
     scannedContainerCount: Number(r.scanned_container_count),
@@ -260,8 +265,7 @@ async function create({ warehouseId, warehouseName, remark, operator, scopeWareh
     if (type === 2 && !stocks.length) throw new AppError('该抽盘范围内没有有货商品，无需盘点', 400)
     for(const s of stocks) {
       await conn.query(`INSERT INTO inventory_check_items (check_id,product_id,product_code,product_name,unit,book_qty) VALUES (?,?,?,?,?,?)`,[checkId,s.product_id,s.product_code,s.product_name,s.unit,s.quantity])
-    }
-    await conn.commit()
+    }    await conn.commit()
     return { id:checkId, checkNo }
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }

@@ -61,7 +61,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
                   </td>
                   <td className="px-2 py-1.5">
                     {item.productName}
-                    <span className="ml-1 text-xs text-muted-foreground">{item.productCode}</span>
+                    <span className="ml-1 text-xs text-muted-foreground">{item.productCode}{item.articleNumber ? ` · 货号 ${item.articleNumber}` : ''}{item.spec ? ` · ${item.spec}` : ''}{item.color ? ` · ${item.color}` : ''}</span>
                   </td>
                   {order.isMultiWarehouse && <td className="px-2 py-1.5">{item.warehouseName || '默认仓库'}</td>}
                   <td className="px-2 py-1.5 text-right tabular-nums">{item.quantity} {item.unit}</td>

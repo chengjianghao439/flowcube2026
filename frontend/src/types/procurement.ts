@@ -5,6 +5,9 @@ export interface ProcurementPlanItem {
   productCode: string
   productName: string
   unit: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   warehouseId: number
   warehouseName: string
   supplierId: number | null

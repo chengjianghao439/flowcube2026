@@ -35,6 +35,18 @@ async function checkConsistency(req, res, next) {
   } catch (e) { next(e) }
 }
 
+/**
+ * 修复缓存漂移（成本对账页「修复缓存」按钮后端）：
+ * 仅重算存在漂移的组合;非超管只修自己 scope 内的仓库(scopeWarehouseIds 由 auth 中间件注入,
+ * 超管恒 null=全仓)。与 check-consistency 同权限(INVENTORY_TRACE_VIEW)。
+ */
+async function resyncStock(req, res, next) {
+  try {
+    const result = await svc.resyncStock({ scopeWarehouseIds: req.user?.warehouseIds ?? null })
+    return successResponse(res, result, result.fixed > 0 ? `已修复 ${result.fixed} 项漂移` : '缓存与容器一致，无需修复')
+  } catch (e) { next(e) }
+}
+
 async function stock(req, res, next) {
   try {
     const result = await svc.getStock({
@@ -257,6 +269,7 @@ module.exports = {
   expiryAlerts,
   procurementPlan,
   checkConsistency,
+  resyncStock,
   stock,
   logs,
   inbound,

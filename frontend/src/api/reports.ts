@@ -222,6 +222,9 @@ export interface ProfitProductRow {
   code: string
   name: string
   unit: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   totalQty: number
   revenueAmount: number
   costAmount: number
@@ -235,6 +238,9 @@ export interface ProfitStockValueRow {
   code: string
   name: string
   unit: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   warehouseName: string
   totalQty: number
   totalValue: number
@@ -246,6 +252,9 @@ export interface ProfitSlowMovingRow {
   code: string
   name: string
   unit: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   currentQty: number
   stockValue: number
   lastOutboundAt: string | null
@@ -282,10 +291,30 @@ export interface KpiMetric {
   /** 环比变化率（%），上期为 0 时为 null */
   changePct: number | null
 }
+/** 近 N 个月趋势序列的一行（口径与 KpiMetric 一致：status=4+sale_date / payment_date） */
+export interface KpiTrendRow {
+  month: string
+  gmv: number
+  grossProfit: number
+  orderCount: number
+  received: number
+  avgOrderValue: number
+}
+/** 当月分仓口径的一行（按订单头仓库分组） */
+export interface KpiByWarehouseRow {
+  warehouseId: number
+  warehouseName: string
+  gmv: number
+  grossProfit: number
+  orderCount: number
+  avgOrderValue: number
+}
 export interface KpiReport {
   period: string
   prevPeriod: string
   metrics: KpiMetric[]
+  trend: KpiTrendRow[]
+  byWarehouse: KpiByWarehouseRow[]
 }
 export const getKpiApi = (params: { period?: string; offset?: number } = {}) =>
   client.get<KpiReport>(`/reports/kpi?${q(params)}`)

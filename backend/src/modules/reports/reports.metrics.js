@@ -19,6 +19,8 @@ const {
   fetchReconciliationRows,
   fetchProfitAnalysisRows,
   fetchKpiRows,
+  fetchKpiTrendRows,
+  fetchKpiByWarehouseRows,
   fetchPurchasePriceTrend,
 } = require('./reports.query')
 
@@ -27,7 +29,7 @@ async function purchaseStats(params) {
   return {
     byMonth: byMonth.map(r => ({ month: r.month, orderCount: +r.order_count, totalAmount: +r.total_amount, receivedAmount: +r.received_amount })),
     bySupplier: bySupplier.map(r => ({ supplierName: r.supplier_name, orderCount: +r.order_count, totalAmount: +r.total_amount, receivedAmount: +r.received_amount })),
-    byProduct: byProduct.map(r => ({ productName: r.product_name, totalQty: +r.total_qty, totalAmount: +r.total_amount })),
+    byProduct: byProduct.map(r => ({ productCode: r.product_code, productName: r.product_name, articleNumber: r.article_number || null, spec: r.spec || null, color: r.color || null, totalQty: +r.total_qty, totalAmount: +r.total_amount })),
   }
 }
 
@@ -36,7 +38,7 @@ async function saleStats(params) {
   return {
     byMonth: byMonth.map(r => ({ month: r.month, orderCount: +r.order_count, totalAmount: +r.total_amount, shippedAmount: +r.shipped_amount })),
     byCustomer: byCustomer.map(r => ({ customerName: r.customer_name, orderCount: +r.order_count, totalAmount: +r.total_amount })),
-    byProduct: byProduct.map(r => ({ productName: r.product_name, totalQty: +r.total_qty, totalAmount: +r.total_amount })),
+    byProduct: byProduct.map(r => ({ productCode: r.product_code, productName: r.product_name, articleNumber: r.article_number || null, spec: r.spec || null, color: r.color || null, totalQty: +r.total_qty, totalAmount: +r.total_amount })),
   }
 }
 
@@ -363,6 +365,9 @@ async function profitAnalysis(params = {}) {
       code: row.code,
       name: row.name,
       unit: row.unit,
+      articleNumber: row.article_number || null,
+      spec: row.spec || null,
+      color: row.color || null,
       totalQty: safeNum(row.total_qty),
       revenueAmount: safeNum(row.revenue_amount),
       costAmount: safeNum(row.cost_amount),
@@ -375,6 +380,9 @@ async function profitAnalysis(params = {}) {
       code: row.code,
       name: row.name,
       unit: row.unit,
+      articleNumber: row.article_number || null,
+      spec: row.spec || null,
+      color: row.color || null,
       warehouseName: row.warehouse_name,
       totalQty: safeNum(row.total_qty),
       totalValue: safeNum(row.total_value),
@@ -385,6 +393,9 @@ async function profitAnalysis(params = {}) {
       code: row.code,
       name: row.name,
       unit: row.unit,
+      articleNumber: row.article_number || null,
+      spec: row.spec || null,
+      color: row.color || null,
       currentQty: safeNum(row.current_qty),
       stockValue: safeNum(row.stock_value),
       lastOutboundAt: row.last_outbound_at || null,
@@ -394,9 +405,11 @@ async function profitAnalysis(params = {}) {
   }
 }
 
-/** 经营 KPI 仪表盘（P2-10）：GMV/毛利/回款/订单数/客单 + 上期对比 */
+/** 经营 KPI 仪表盘（P2-10）：GMV/毛利/回款/订单数/客单 + 上期对比 + 近12月趋势 + 当月分仓 */
 async function kpiMetrics(params = {}) {
   const { period, prevPeriod, current, previous } = await fetchKpiRows(params)
+  const trend = await fetchKpiTrendRows(params)
+  const byWarehouse = await fetchKpiByWarehouseRows(params)
   // 环比变化率（%）：上期为 0 时返回 null（无法计算）
   const pct = (cur, prev) => {
     const c = Number(cur) || 0
@@ -407,6 +420,8 @@ async function kpiMetrics(params = {}) {
   return {
     period,
     prevPeriod,
+    trend,
+    byWarehouse,
     metrics: [
       { key: 'gmv', label: 'GMV', current: current.gmv, previous: previous.gmv, changePct: pct(current.gmv, previous.gmv) },
       { key: 'grossProfit', label: '毛利', current: current.grossProfit, previous: previous.grossProfit, changePct: pct(current.grossProfit, previous.grossProfit) },
@@ -422,54 +437,13 @@ async function kpiMetrics(params = {}) {
  * 容器口径 = ACTIVE 容器 remaining_qty 合计 × avg_cost（唯一事实源）；
  * 缓存口径 = inventory_stock.quantity × avg_cost（只应由 syncStockFromContainers 写）。
  * 数量或价值有差异即视为缓存漂移（违反 CLAUDE.md 不变量 1/2），提示走 resync 修复。
- * 纯只读，不写库。
+ * 纯只读，不写库。基座复用 inventory.service 的 findStockDrift，与
+ * /inventory/check-consistency 同一实现，避免同一不变量两套 SQL。
  */
 async function avgCostReconciliation({ scopeWarehouseIds = null } = {}) {
-  const { pool } = require('../../config/db')
-  const { scopeFilter } = require('../../utils/warehouseScope')
-  const sc = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
-  const [rows] = await pool.query(
-    `SELECT s.product_id, s.warehouse_id,
-            p.code AS product_code, p.name AS product_name, p.unit,
-            COALESCE(NULLIF(p.avg_cost,0), NULLIF(p.cost_price,0), 0) AS unit_cost,
-            s.quantity AS cache_qty,
-            COALESCE(cont.container_qty, 0) AS container_qty,
-            s.quantity * COALESCE(NULLIF(p.avg_cost,0), NULLIF(p.cost_price,0), 0) AS cache_value,
-            COALESCE(cont.container_qty,0) * COALESCE(NULLIF(p.avg_cost,0), NULLIF(p.cost_price,0), 0) AS container_value
-     FROM inventory_stock s
-     JOIN product_items p ON p.id = s.product_id AND p.deleted_at IS NULL
-     LEFT JOIN (
-        SELECT c.product_id, c.warehouse_id, SUM(c.remaining_qty) AS container_qty
-        FROM inventory_containers c
-        WHERE c.status=1 AND c.deleted_at IS NULL
-        GROUP BY c.product_id, c.warehouse_id
-     ) cont ON cont.product_id=s.product_id AND cont.warehouse_id=s.warehouse_id
-     WHERE 1=1${sc.sql}
-     ORDER BY ABS(s.quantity - COALESCE(cont.container_qty,0)) DESC, p.name ASC
-     LIMIT 200`,
-    sc.params,
-  )
-  const list = rows.map(r => {
-    const cacheQty = Number(r.cache_qty)
-    const containerQty = Number(r.container_qty)
-    const unitCost = Number(r.unit_cost)
-    return {
-      rowKey: `${r.product_id}-${r.warehouse_id}`,
-      productId: Number(r.product_id),
-      productCode: r.product_code,
-      productName: r.product_name,
-      unit: r.unit,
-      warehouseId: Number(r.warehouse_id),
-      unitCost,
-      cacheQty,
-      containerQty,
-      diffQty: Math.round((cacheQty - containerQty) * 1000) / 1000,
-      cacheValue: Math.round(cacheQty * unitCost * 100) / 100,
-      containerValue: Math.round(containerQty * unitCost * 100) / 100,
-      diffValue: Math.round((cacheQty - containerQty) * unitCost * 100) / 100,
-      drifted: Math.abs(cacheQty - containerQty) > 0.0001,
-    }
-  })
+  const { findStockDrift } = require('../inventory/inventory.service')
+  const { list: all } = await findStockDrift({ scopeWarehouseIds })
+  const list = all.slice(0, 200)
   const driftedCount = list.filter(r => r.drifted).length
   const totalDiffValue = Math.round(list.reduce((s, r) => s + r.diffValue, 0) * 100) / 100
   return { ok: driftedCount === 0, driftedCount, totalDiffValue, totalRows: list.length, list }

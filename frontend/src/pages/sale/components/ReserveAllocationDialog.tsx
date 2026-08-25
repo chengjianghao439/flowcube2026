@@ -111,7 +111,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                       <td className="px-3 py-2">
                         <div className="font-medium">{item.productName}</div>
                         <div className="text-xs text-muted-foreground">
-                          {item.productCode}{item.spec ? ` · ${item.spec}` : ''}{item.color ? ` · ${item.color}` : ''}
+                          {item.productCode}{item.articleNumber ? ` · 货号 ${item.articleNumber}` : ''}{item.spec ? ` · ${item.spec}` : ''}{item.color ? ` · ${item.color}` : ''}
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right tabular-nums">{item.quantity} {item.unit}</td>

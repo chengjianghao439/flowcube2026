@@ -27,6 +27,9 @@ interface PriceChangeRequest {
   requestNo: string
   productCode: string | null
   productName: string | null
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
   priceType: string
   oldPrice: number | null
   newPrice: number
@@ -131,7 +134,10 @@ export default function PriceChangePage() {
   const columns: TableColumn<PriceChangeRequest>[] = [
     { key: 'requestNo', title: '申请单号', width: 150 },
     { key: 'productCode', title: '商品编码', width: 110 },
+    { key: 'articleNumber', title: '货号', width: 100, render: v => (v as string) || '—' },
+    { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '—' },
     { key: 'productName', title: '商品名称', width: 180 },
+    { key: 'color', title: '颜色', width: 80, render: v => (v as string) || '—' },
     { key: 'priceType', title: '价格类型', width: 90, render: (v) => PRICE_TYPE_LABEL[String(v)] ?? String(v) },
     { key: 'oldPrice', title: '现价', width: 90, align: 'right', render: (v) => v != null ? `¥${Number(v).toFixed(2)}` : '—' },
     { key: 'newPrice', title: '新价', width: 90, align: 'right', render: (v) => `¥${Number(v).toFixed(2)}` },

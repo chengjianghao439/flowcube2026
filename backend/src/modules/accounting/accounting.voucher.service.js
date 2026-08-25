@@ -94,7 +94,7 @@ async function generatePeriodVouchers({ period = null, userId = null, companyId 
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    if (period) await assertPeriodOpen(conn, period)
+    if (period) await assertPeriodOpen(conn, period, companyId)
     // 全量重算（未指定期间）跳过已结账期间：那些期间的账面已被锁定认可，
     // 重算去动它们等于破坏已结的账（skippedClosed 计入返回，调用方可见）
     const [closedRows] = await conn.query('SELECT period FROM acct_periods WHERE status = 2 AND company_id = ?', [companyId])
@@ -133,7 +133,7 @@ async function createManualVoucher({ voucherDate, summary, entries, companyId = 
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    await assertPeriodOpen(conn, period)
+    await assertPeriodOpen(conn, period, companyId)
 
     // 解析科目并校验（启用的明细科目）
     const legs = []
@@ -190,7 +190,7 @@ async function removeVoucher(id, userId, companyId = 1) {
     const [[v]] = await conn.query('SELECT id, source_type, voucher_no, period FROM acct_vouchers WHERE id = ? AND company_id = ? FOR UPDATE', [Number(id), companyId])
     if (!v) throw new AppError('凭证不存在', 404)
     if (v.source_type !== SOURCE_TYPES.MANUAL) throw new AppError('自动生成的凭证不可删除（如需修正请重新生成或冲销）', 400, 'ACCT_VOUCHER_NOT_MANUAL')
-    await assertPeriodOpen(conn, v.period)
+    await assertPeriodOpen(conn, v.period, companyId)
     await conn.query('DELETE FROM acct_voucher_entries WHERE voucher_id = ?', [Number(id)])
     await conn.query('DELETE FROM acct_vouchers WHERE id = ?', [Number(id)])
     await conn.commit()
@@ -216,7 +216,7 @@ async function reverseVoucher(id, userId, companyId = 1) {
     if (!v) throw new AppError('凭证不存在', 404)
     if (v.status === 3) throw new AppError('该凭证已冲销', 400)
     if (v.is_reversal) throw new AppError('红字冲销凭证本身不可再冲销', 400)
-    await assertPeriodOpen(conn, v.period)
+    await assertPeriodOpen(conn, v.period, companyId)
     const [entries] = await conn.query('SELECT * FROM acct_voucher_entries WHERE voucher_id = ? ORDER BY line_no ASC', [Number(id)])
     if (entries.length === 0) throw new AppError('原凭证无分录', 400)
 

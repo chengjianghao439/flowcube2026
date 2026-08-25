@@ -303,7 +303,10 @@ export default function InventoryPage() {
                   <tr className="border-b bg-muted/30">
                     {[
                       { label: '商品编码', cls: 'w-32 text-left' },
+                      { label: '货号', cls: 'w-24 text-left' },
+                      { label: '型号', cls: 'w-24 text-left' },
                       { label: '商品名称', cls: 'text-left' },
+                      { label: '颜色', cls: 'w-20 text-left' },
                       { label: '分类路径', cls: 'text-left' },
                       { label: '仓库', cls: 'w-28 text-left' },
                       { label: '在库数量', cls: 'w-28 text-left' },
@@ -319,14 +322,17 @@ export default function InventoryPage() {
                 </thead>
                 <tbody>
                   {overviewLoading ? (
-                    <tr><td colSpan={9} className="py-16 text-center text-sm text-muted-foreground">加载中…</td></tr>
+                    <tr><td colSpan={13} className="py-16 text-center text-sm text-muted-foreground">加载中…</td></tr>
                   ) : list.length === 0 ? (
-                    <tr><td colSpan={9} className="py-16 text-center text-sm text-muted-foreground">暂无库存数据</td></tr>
+                    <tr><td colSpan={13} className="py-16 text-center text-sm text-muted-foreground">暂无库存数据</td></tr>
                   ) : (
                     list.map((row: InventoryOverviewItem) => (
                       <tr key={row.id} className={`border-b border-border/40 transition-colors hover:bg-muted/20 ${drawerItem?.id === row.id && drawerOpen ? 'bg-primary/5' : ''}`}>
                         <td className="px-4 py-3"><span className="text-doc-code-muted">{row.productCode}</span></td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{row.articleNumber || '—'}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{row.spec || '—'}</td>
                         <td className="px-4 py-3 font-medium">{row.productName}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{row.color || '—'}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground"><CategoryPathDisplay path={row.categoryPath} /></td>
                         <td className="px-4 py-3 text-muted-foreground">{row.warehouseName}</td>
                         <td className="px-4 py-3 text-left"><span className="font-medium">{formatQty(row.onHand)}</span><span className="ml-1 text-xs text-muted-foreground">{row.unit}</span></td>

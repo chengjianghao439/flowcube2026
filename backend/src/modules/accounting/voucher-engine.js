@@ -425,7 +425,7 @@ async function loadTaxMaps(conn) {
   try {
     const [poRows] = await conn.query(`
       SELECT source_id AS id, COALESCE(SUM(tax_amount),0) tax FROM fin_invoices
-       WHERE invoice_type=1 AND source_type='purchase_order' AND source_id IS NOT NULL AND deleted_at IS NULL
+       WHERE invoice_type=1 AND source_type='purchase_order' AND source_id IS NOT NULL AND status IN (2, 3) AND deleted_at IS NULL
        GROUP BY source_id`)
     const [soRows] = await conn.query(`
       SELECT source_id AS id, COALESCE(SUM(tax_amount),0) tax FROM fin_invoices
@@ -441,9 +441,10 @@ async function loadTaxMaps(conn) {
   }
 }
 
-async function generateVouchers(conn, { period = null, createdBy = null, closedPeriods = null } = {}) {
-  const accountMap = await loadAccountMap(conn)
-  const allocSeq = await makeSeqAllocator(conn)
+async function generateVouchers(conn, { period = null, createdBy = null, closedPeriods = null, companyId = 1 } = {}) {
+  const cid = Number(companyId) || 1
+  const accountMap = await loadAccountMap(conn, cid)
+  const allocSeq = await makeSeqAllocator(conn, cid)
   const { taxByPO, taxBySO } = await loadTaxMaps(conn)
   const specs = [
     ...await buildPurchaseSettle(conn, taxByPO),
@@ -461,14 +462,14 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
     if (period && periodOf(dateStr) !== period) continue
     stats.total += 1
     if (closedPeriods && closedPeriods.has(periodOf(dateStr))) { stats.skippedClosed += 1; continue }
-    const res = await upsertVoucher(conn, spec, accountMap, allocSeq, createdBy)
+    const res = await upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, cid)
     if (res.created) stats.created += 1
     else if (res.updated) stats.updated += 1
     else if (res.reason === 'unchanged') stats.unchanged += 1
     else if (res.reason === 'reversed') stats.reversed += 1
     else stats.empty += 1
   }
-  logger.info('accounting', `生成凭证 period=${period || 'ALL'} ${JSON.stringify(stats)}`, { createdBy })
+  logger.info('accounting', `生成凭证 period=${period || 'ALL'} company=${cid} ${JSON.stringify(stats)}`, { createdBy })
   return stats
 }
 

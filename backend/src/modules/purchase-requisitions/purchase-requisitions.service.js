@@ -425,7 +425,11 @@ async function findById(id, scopeWarehouseIds = null) {
   const [[row]] = await pool.query('SELECT * FROM purchase_requisitions WHERE id=? AND deleted_at IS NULL', [id])
   if (!row) throw new AppError('请购单不存在', 404)
   assertInScope(scopeWarehouseIds, row.warehouse_id, '请购单')
-  const [items] = await pool.query('SELECT * FROM purchase_requisition_items WHERE requisition_id=? ORDER BY id ASC', [id])
+  const [items] = await pool.query(
+    `SELECT pri.*, p.article_number, p.color
+       FROM purchase_requisition_items pri
+       JOIN product_items p ON p.id = pri.product_id
+      WHERE pri.requisition_id=? ORDER BY pri.id ASC`, [id])
 
   // 审批进度（多级审批流实例；无则 null，前端走单级展示）
   const conn = await pool.getConnection()
@@ -463,7 +467,9 @@ async function findById(id, scopeWarehouseIds = null) {
       productCode: i.product_code,
       productName: i.product_name,
       unit: i.unit,
+      articleNumber: i.article_number || null,
       spec: i.spec,
+      color: i.color || null,
       quantity: Number(i.quantity),
       estimatedPrice: i.estimated_price == null ? null : Number(i.estimated_price),
       suggestedSupplierId: i.suggested_supplier_id != null ? Number(i.suggested_supplier_id) : null,

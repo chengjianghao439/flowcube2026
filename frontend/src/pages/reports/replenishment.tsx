@@ -84,8 +84,11 @@ export default function ReplenishmentPage() {
   }, [list, selected])
 
   const columns: TableColumn<ReplenishmentItem>[] = [
-    { key: 'productCode', title: '商品编码', width: 130, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'productCode', title: '商品编码', width: 110, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
+    { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
     { key: 'productName', title: '商品名称' },
+    { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
     { key: 'warehouseName', title: '仓库', width: 110 },
     { key: 'available', title: '可用', width: 90, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'inTransit', title: '在途采购', width: 100, align: 'right', render: v => Number(v) > 0

@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { getInventoryStatsApi, getPurchaseStatsApi, getSaleStatsApi, getPurchasePriceTrendApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
@@ -9,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/shared/DatePicker'
 import ProductFinderModal from '@/components/shared/ProductFinderModal'
 import { chartTooltip, axisTick, money } from '@/components/dashboard/chartTheme'
-import { useWorkspaceStore } from '@/store/workspaceStore'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { todayYmd } from '@/lib/dateTime'
@@ -59,15 +57,6 @@ const turnoverColumns: TableColumn<{
   },
 ]
 
-type HubCard = {
-  title: string
-  description: string
-  hint: string
-  path: string
-  tabTitle: string
-  tone: string
-}
-
 function AmountBar({ value, max }: { value: number; max: number }) {
   const pct = max > 0 ? (value / max) * 100 : 0
   return (
@@ -80,28 +69,6 @@ function AmountBar({ value, max }: { value: number; max: number }) {
   )
 }
 
-function HubEntryCard({
-  card,
-  onOpen,
-}: {
-  card: HubCard
-  onOpen: (path: string, title: string) => void
-}) {
-  return (
-    <div className={`rounded-lg border p-5 ${card.tone}`}>
-      <div className="space-y-2">
-        <p className="text-helper">推荐入口</p>
-        <h3 className="text-card-title">{card.title}</h3>
-        <p className="text-muted-body min-h-[44px]">{card.description}</p>
-        <p className="text-helper">{card.hint}</p>
-      </div>
-      <div className="mt-4">
-        <Button onClick={() => onOpen(card.path, card.tabTitle)}>进入处理</Button>
-      </div>
-    </div>
-  )
-}
-
 export default function ReportsPage() {
   const [tab, setTab] = useState<SummaryTab>('purchase')
   const [startDate, setStartDate] = useState('')
@@ -109,82 +76,6 @@ export default function ReportsPage() {
   const [applied, setApplied] = useState({ startDate: todayYmd(), endDate: todayYmd() })
   const [pickerOpen, setPickerOpen] = useState(false)
   const [priceProduct, setPriceProduct] = useState<{ id: number; name: string } | null>(null)
-  const addTab = useWorkspaceStore(s => s.addTab)
-  const navigate = useNavigate()
-
-  const openPage = (path: string, title: string) => {
-    addTab({ key: path, title, path })
-    navigate(path)
-  }
-
-  const hubGroups = useMemo(() => {
-    const primaryFlow: HubCard[] = [
-      {
-        title: '岗位工作台',
-        description: '按仓库、销售客服、管理角色聚合今日最该先处理的待办，适合作为日常进入系统后的第一站。',
-        hint: '优先处理今日待办和最紧急事项',
-        path: '/reports/role-workbench',
-        tabTitle: '岗位工作台',
-        tone: 'border-emerald-200 bg-emerald-50',
-      },
-    ]
-
-    const management: HubCard[] = [
-      {
-        title: '供应商对账',
-        description: '按时间范围核对采购应付账单，未结清和逾期记录会优先展示，可从对账单直接打开采购单与收货单。',
-        hint: '适合先核对余额、状态，再回到原始单据',
-        path: '/reports/reconciliation/payable',
-        tabTitle: '供应商对账',
-        tone: 'border-cyan-200 bg-cyan-50',
-      },
-      {
-        title: '客户对账',
-        description: '按时间范围核对销售应收账单，未结清和逾期记录会优先展示，可从对账单直接打开销售单。',
-        hint: '适合先核对余额、状态，再回到原始单据',
-        path: '/reports/reconciliation/receivable',
-        tabTitle: '客户对账',
-        tone: 'border-cyan-200 bg-cyan-50',
-      },
-      {
-        title: '利润 / 库存分析',
-        description: '用轻量化方式查看销售毛利、商品毛利、库存金额与滞销库存，可从结果直接打开原始单据。',
-        hint: '默认按最近时间范围打开',
-        path: '/reports/profit-analysis',
-        tabTitle: '利润 / 库存分析',
-        tone: 'border-violet-200 bg-violet-50',
-      },
-    ]
-
-    const performance: HubCard[] = [
-      {
-        title: '仓库运营看板',
-        description: '查看当日出入库、扫码量和作业瓶颈，是作业绩效页里最适合先打开的全局视角。',
-        hint: '适合先看当日风险，再查看任务明细',
-        path: '/reports/warehouse-ops',
-        tabTitle: '仓库运营看板',
-        tone: 'border-blue-200 bg-blue-50',
-      },
-      {
-        title: '波次效率',
-        description: '查看波次完成率、耗时与作业效率，用于判断拣货和分拣卡在哪里。',
-        hint: '重点查看波次详情和仓库任务',
-        path: '/reports/wave-performance',
-        tabTitle: '波次效率',
-        tone: 'border-indigo-200 bg-indigo-50',
-      },
-      {
-        title: 'PDA 异常分析',
-        description: '追踪扫码错误、撤销操作与异常条码，适合作为现场扫码问题排查和培训复盘的入口。',
-        hint: '重点查看异常工作台和条码记录',
-        path: '/reports/pda-anomaly',
-        tabTitle: 'PDA 异常分析',
-        tone: 'border-rose-200 bg-rose-50',
-      },
-    ]
-
-    return { primaryFlow, management, performance }
-  }, [])
 
   const summaryTabs: { key: SummaryTab; label: string }[] = [
     { key: 'purchase', label: '采购统计' },
@@ -223,57 +114,8 @@ export default function ReportsPage() {
     <div className="space-y-5">
       <PageHeader
         title="报表中心"
-        description="集中进入待办处理、往来对账、利润分析与作业绩效报表；先处理待办，再看核对与分析。"
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => openPage('/reports/role-workbench', '岗位工作台')}>
-              今日待办
-            </Button>
-            <Button variant="outline" onClick={() => openPage('/reports/reconciliation/payable', '供应商对账')}>
-              供应商对账
-            </Button>
-            <Button variant="outline" onClick={() => openPage('/reports/reconciliation/receivable', '客户对账')}>
-              客户对账
-            </Button>
-          </div>
-        }
+        description="采购、销售、库存三类基础统计一屏总览。"
       />
-
-      <section className="rounded-lg border border-border bg-card p-5 space-y-4">
-        <div className="space-y-1">
-          <h2 className="text-card-title">每日待办</h2>
-          <p className="text-muted-body">先处理今天必须推进的事项，再进入核对、分析和绩效页面。</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {hubGroups.primaryFlow.map(card => (
-            <HubEntryCard key={card.path} card={card} onOpen={openPage} />
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-border bg-card p-5 space-y-4">
-        <div className="space-y-1">
-          <h2 className="text-card-title">对账与分析</h2>
-          <p className="text-muted-body">对账、利润 / 库存分析是日常核对与管理依赖的常用入口。</p>
-        </div>
-        <div className="grid gap-4 xl:grid-cols-3">
-          {hubGroups.management.map(card => (
-            <HubEntryCard key={card.path} card={card} onOpen={openPage} />
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-border bg-card p-5 space-y-4">
-        <div className="space-y-1">
-          <h2 className="text-card-title">作业绩效</h2>
-          <p className="text-muted-body">三张作业绩效页保持统一的筛选和空态展示，建议先看全局，再看波次和 PDA 细项。</p>
-        </div>
-        <div className="grid gap-4 xl:grid-cols-3">
-          {hubGroups.performance.map(card => (
-            <HubEntryCard key={card.path} card={card} onOpen={openPage} />
-          ))}
-        </div>
-      </section>
 
       <section className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -377,7 +219,11 @@ export default function ReportsPage() {
                   <DataTable
                     columns={[
                       rankColumn(),
-                      { key: 'productName', title: '商品', width: 180 },
+                      { key: 'productCode', title: '编码', width: 110, render: v => <span className="text-doc-code">{String(v)}</span> },
+                      { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
+                      { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
+                      { key: 'productName', title: '商品', width: 160 },
+                      { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
                       { key: 'totalQty', title: '数量', width: 90 },
                       { key: 'totalAmount', title: '金额', width: 120, render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
                     ]}
@@ -467,20 +313,6 @@ export default function ReportsPage() {
                     />
                   </div>
                 </div>
-                <div className="rounded-lg border border-border bg-card p-5">
-                  <h3 className="mb-4 text-card-title">热销商品 Top 20</h3>
-                  <DataTable
-                    columns={[
-                      rankColumn(),
-                      { key: 'productName', title: '商品', width: 180 },
-                      { key: 'totalQty', title: '销售量', width: 90 },
-                      { key: 'totalAmount', title: '销售额', width: 120, render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
-                    ]}
-                    data={withRank(saleQ.data.byProduct)}
-                    rowKey="rank"
-                    emptyText="暂无数据"
-                  />
-                </div>
               </>
             )}
           </div>
@@ -491,18 +323,6 @@ export default function ReportsPage() {
             {invQ.isLoading && <p className="py-12 text-center text-muted-foreground">加载中…</p>}
             {invQ.data && (
               <>
-                <div className="grid gap-4 lg:grid-cols-3">
-                  {invQ.data.byWarehouse.map(item => (
-                    <div key={item.warehouseName} className="rounded-lg border border-border bg-card p-4">
-                      <p className="text-sm text-muted-foreground">{item.warehouseName}</p>
-                      <p className="mt-1 text-2xl font-bold">{item.totalQty.toFixed(0)}</p>
-                      <p className="mt-1 text-helper">总件数 · 价值 ¥{(item.totalValue / 10000).toFixed(2)}万</p>
-                    </div>
-                  ))}
-                  {!invQ.data.byWarehouse.length && (
-                    <p className="col-span-3 py-6 text-center text-muted-body">暂无数据</p>
-                  )}
-                </div>
                 <div className="rounded-lg border border-border bg-card p-5">
                   <h3 className="mb-4 text-card-title">商品出入库量 Top 30（周转率 / 周转天数）</h3>
                   <DataTable

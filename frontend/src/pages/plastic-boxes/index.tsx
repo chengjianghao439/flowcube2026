@@ -34,7 +34,7 @@ export default function PlasticBoxesPage() {
 
   const columns: TableColumn<PlasticBox>[] = [
     { key: 'barcode', title: '条码', width: 140, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'productName', title: '绑定商品', width: 180, render: (_, row) => row.productName ? `${row.productName} (${row.productCode})` : '—' },
+    { key: 'productName', title: '绑定商品', width: 220, render: (_, row) => row.productName ? <span>{row.productName} ({row.productCode}){row.articleNumber ? ` · 货号 ${row.articleNumber}` : ''}{row.spec ? ` · ${row.spec}` : ''}{row.color ? ` · ${row.color}` : ''}</span> : '—' },
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'remainingQty', title: '当前数量', width: 80, render: v => <span className="font-semibold">{String(v)}</span> },
     {

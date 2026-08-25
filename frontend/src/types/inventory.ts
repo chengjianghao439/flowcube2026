@@ -37,6 +37,9 @@ export interface InventoryOverviewItem {
   productCode:  string
   productName:  string
   unit:         string
+  articleNumber: string | null
+  spec:         string | null
+  color:        string | null
   categoryId:   number | null
   categoryPath: string
   warehouseId:  number

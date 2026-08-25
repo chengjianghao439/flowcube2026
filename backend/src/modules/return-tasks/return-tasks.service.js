@@ -64,7 +64,10 @@ async function findById(id, scopeWarehouseIds = null) {
   if (!row) throw new AppError('退货任务不存在', 404)
   assertInScope(scopeWarehouseIds, row.warehouse_id, '退货任务')
   const [items] = await pool.query(
-    'SELECT * FROM return_task_items WHERE task_id = ? ORDER BY id',
+    `SELECT rti.*, p.article_number, p.spec, p.color
+       FROM return_task_items rti
+       JOIN product_items p ON p.id = rti.product_id
+      WHERE rti.task_id = ? ORDER BY rti.id`,
     [id],
   )
   const [rejectedContainers] = await pool.query(
@@ -567,6 +570,9 @@ function fmtItem(row) {
     productCode: row.product_code,
     productName: row.product_name,
     unit: row.unit,
+    articleNumber: row.article_number || null,
+    spec: row.spec || null,
+    color: row.color || null,
     expectedQty: Number(row.expected_qty),
     receivedQty: Number(row.received_qty),
     checkedQty: Number(row.checked_qty),
