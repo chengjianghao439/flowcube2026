@@ -74,6 +74,7 @@ bump 三端版本 ──┐
 bash .claude/skills/release-flowcube/scripts/bump-version.sh <version>
 ```
 > 为什么三端一起升：版本号是系统整体标识，后端 `/health`、桌面关于页、桌面更新都各读各自 package.json；三端不一致会让「线上到底是哪一版」难以排查。root `package.json` 没有 version 字段，无需改。
+> **脚本是幂等的**（2026-08-26 修复）：真换版本（versionName 变化）才递增 PDA `versionCode`；同一版本重跑（如写 notes 后想补 PDA 更新说明）不会重复 +1、不会虚刷新 `publishedAt`。**推荐顺序：先写第 3 步的 notes 再跑本脚本**，PDA 更新说明第一次就写入；顺序颠倒也没关系，写完 notes 后重跑是安全的。
 
 ### 3. 写本版更新内容
 创建 `docs/release-notes/<version>.md`（文件名是纯版本号，**不带 v**）。这就是桌面端更新弹窗里用户看到的「更新内容」。沿用现有风格：`# v<version>` 标题 + 分类小节。

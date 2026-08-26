@@ -722,7 +722,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - 验证：tsc 0 错误、前端 lint 0 error（5 存量）、test:permissions 184/184（label 不在比对范围，code 未动）、test:print 15 项通过；浏览器实测——ABC 页（标题/三 tab/筛选器全换）+ 批次拣货页（无「波次」残留）。
     - 明确不做：后端/数据库字段（avg_cost/comment 等注释里的旧词保留——那是开发文档不是用户文案）；landing 官网「波次拣货」已在映射内（landing 也是产品文案）。
 
-42. **2026-08-26 打印模板表格「名称后附加信息」（未提交，工作区）**：
+42. **2026-08-26 打印模板表格「名称后附加信息」（已随 v0.7.1 发布）**：
     - 需求：A4 单据模板（销售/采购/出库/仓库任务单）表格中，把颜色/规格/单位/货号**拼接在商品名称后**（如「商品A [黑色] [500g/件] [件] [JH-1001]」），不再作为独立列。
     - **设计**：`TemplateElement` 新增 `nameAttrs?: string[]`（勾选的字段 key，顺序即拼接顺序）；仅当 `tableColumns` 含 `name` 时生效；旧模板缺省 = 不拼接（行为零变化，无需数据迁移）。layout_json 是 MySQL JSON 列原样存取，无字段过滤。
     - **实现**（纯前端 3 文件）：
@@ -733,3 +733,9 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - 验证：tsc 0 错误、lint 0 error（5 存量）、test:print 15 项 + test:label 5 例通过；浏览器实测——选中销售订单模板表格元素 → 属性面板出现 chip 组 → 勾四项后画布预览「商品A [500g/件] [黑色] [件] [JH-1001]」→ 取消勾选还原（模板数据未改）。
     - 明确不做：标签模板（type 5-10，ZPL）不适用（表格只有单据画布类型）；nameAttrs 的 GUI 只保留颜色/规格/单位/货号四个常用字段（`articleNo` 对应货号；如需更多可扩展 chip 组，渲染器 `nameAttrValue` 已兜底任意 key）。
     - **标签订正（同日，用户点出「商品资料没有规格却缺型号」）**：全站 `spec` 字段语义统一是「型号」——商品资料页列/表单（「型号 *」必填）、商品选择器、销售/采购/调拨/改价/处置/ABC、后端 zod（`'型号不能为空'`）、089 迁移注释全是「型号」；唯独打印模板 3 处标签 + 079 种子模板误标「规格」（004 建表文本 COMMENT '规格' 是历史遗留，列语义以 089 后订正为准）。修复：`printFieldDefs.ts`/`TemplateRenderer.tsx`/`editor.tsx`/`nameAttrs` 注释 4 处「规格」→「型号」；**迁移 219**（`219_print_spec_label_rename.sql`）订正已入库 layout_json 中 `fieldKey='spec' AND label='规格'` 的元素（JSON_TABLE 保序重组 + JSON_SET 覆盖 label，幂等），本机实测 affectedRows=1 → 残留 0、元素顺序不变。
+
+43. **2026-08-26 bump-version.sh 幂等性修复（已提交，随下次发版生效）**：
+    - 背景：`skills/release-flowcube/scripts/bump-version.sh` 对 PDA `versionCode` 无条件 +1——v0.7.0 与 v0.7.1 **连续两次**因「写 notes 后按提示重跑脚本」导致 versionCode 重复递增（99→100→101），均需手工修正回正确值。风险：version.json 与 build.gradle 不一致、PDA 端跳过版本、CI 重复构建。
+    - **修复**（bump-version.sh）：① 幂等核心——只有 `versionName` 真变化（新版本）才 `versionCode +1`，同版本重跑保持不动并打印提示；② `publishedAt` 只随真换版本刷新（同版本重跑不虚更新日期）；③ 正则锚定 `defaultConfig` 块（防误匹配块外同名字段）；④ 版本/编号合法性校验（缺失即报错，不再静默）。
+    - 测试两场景全过：同版本重跑 ×2 → versionCode 与 publishedAt 均不变；真换版本 0.7.1→0.7.2 → versionCode 100→101、publishedAt 刷新、三端 package.json 一致。
+    - SKILL.md 已同步：写明「脚本幂等；推荐先写 notes 再 bump，顺序颠倒重跑也安全」。

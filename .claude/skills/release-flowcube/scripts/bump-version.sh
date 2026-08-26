@@ -49,20 +49,55 @@ const fs = require('fs')
 const [version, gradlePath, apkJsonPath, root] = process.argv.slice(2)
 
 let gradle = fs.readFileSync(gradlePath, 'utf8')
-const codeMatch = gradle.match(/versionCode\s+(\d+)/)
-if (!codeMatch) throw new Error('build.gradle 中找不到 versionCode')
-// versionCode 必须是单调递增整数（Android 用它判断新旧，versionName 只是展示）
-const nextCode = Number(codeMatch[1]) + 1
-gradle = gradle
-  .replace(/versionCode\s+\d+/, `versionCode ${nextCode}`)
-  .replace(/versionName\s+"[^"]*"/, `versionName "${version}"`)
+
+// 锚定到 defaultConfig 块内的 versionCode / versionName，避免误匹配其他位置的同类字段
+const cfgMatch = gradle.match(/defaultConfig\s*\{([\s\S]*?)\}/)
+if (!cfgMatch) throw new Error('build.gradle 中找不到 defaultConfig 块')
+const cfg = cfgMatch[1]
+const codeMatch = cfg.match(/versionCode\s+(\d+)/)
+const nameMatch = cfg.match(/versionName\s+"([^"]*)"/)
+if (!codeMatch) throw new Error('defaultConfig 中找不到 versionCode')
+if (!nameMatch) throw new Error('defaultConfig 中找不到 versionName')
+const curName = nameMatch[1]
+const curCode = Number(codeMatch[1])
+if (!Number.isInteger(curCode) || curCode <= 0) throw new Error(`versionCode 非法: ${curCode}`)
+
+// 幂等核心（2026-08-26 修复）：只有真正切换到新版本（versionName 变化）才递增 versionCode。
+// 同一版本重跑（如补写 release notes 后重跑本脚本）不得重复 +1 ——
+// 历史教训：v0.7.0/v0.7.1 连续两次因重跑把 versionCode 递增了两次（99→100 / 100→101），
+// 均需手工修正，风险是 PDA 端跳过版本、CI 构建跑两遍。
+let nextCode = curCode
+if (curName !== version) {
+  nextCode = curCode + 1
+} else {
+  console.log(`  ! versionName 已是 ${version}（同版本重跑），versionCode 保持 ${curCode} 不变`)
+}
+
+// 只替换 defaultConfig 块内的值（不碰块外可能出现同名段）
+const replaceInDefault = (pat, repl) => {
+  const before = cfgMatch[0]
+  const after = before.replace(pat, repl)
+  gradle = gradle.replace(before, after)
+}
+replaceInDefault(/versionCode\s+\d+/, `versionCode ${nextCode}`)
+replaceInDefault(/versionName\s+"[^"]*"/, `versionName "${version}"`)
 fs.writeFileSync(gradlePath, gradle)
 
 const apk = JSON.parse(fs.readFileSync(apkJsonPath, 'utf8'))
+// version.json 与 build.gradle 的 versionCode 必须一致（历史曾出现 101/100 不一致，
+// 以 gradle 为准并对齐 JSON —— PDA 下载判新旧依据的是 version.json 公布值）
+const jsonCode = Number(apk.versionCode)
+if (Number.isInteger(jsonCode) && jsonCode !== nextCode && curName !== version) {
+  console.log(`  ! version.json.versionCode(${jsonCode}) 与 build.gradle(${nextCode}) 不一致，已对齐`)
+}
 apk.version = version
+const codeChanged = nextCode !== curCode
 apk.versionCode = nextCode
-// PDA 更新提示会展示发布时间，不刷新会一直显示上一版的日期
-apk.publishedAt = new Date().toISOString()
+// PDA 更新提示会展示发布时间：只有真正切换版本（versionCode 变化）才刷新，
+// 同版本重跑（补 notes）不应虚更新日期
+if (codeChanged) {
+  apk.publishedAt = new Date().toISOString()
+}
 // 更新说明取本版 release notes 的首段（PDA 更新提示里展示给用户）
 const notesPath = `${root}/docs/release-notes/${version}.md`
 if (fs.existsSync(notesPath)) {
@@ -75,7 +110,7 @@ if (fs.existsSync(notesPath)) {
   console.log(`  ! 未找到 docs/release-notes/${version}.md，PDA 更新说明沿用上一版，请写完 notes 后重跑本脚本`)
 }
 fs.writeFileSync(apkJsonPath, `${JSON.stringify(apk, null, 2)}\n`)
-console.log(`  ✓ PDA -> ${version} (versionCode ${codeMatch[1]} → ${nextCode})`)
+console.log(`  ✓ PDA -> ${version} (versionCode ${curCode} → ${nextCode})`)
 NODE
 else
   echo "  ! 跳过 PDA 版本同步（未找到 build.gradle 或 backend/apk/version.json）"
