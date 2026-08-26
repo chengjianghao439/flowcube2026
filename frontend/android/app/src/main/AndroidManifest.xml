@@ -11,6 +11,14 @@
         android:usesCleartextTraffic="false"
         android:theme="@style/AppTheme">
 
+        <!-- ML Kit 条码识别模型（@capacitor-mlkit/barcode-scanning）：扫码插件渲染相机取景需
+             预下该模型；不声明则扫描时报 "No module" 运行时错误。CAMERA 权限见下方。
+             barcode_ui 是插件自带的相机取景 UI 模块（含 barcode 核心解码）。
+             多模型时 value 逗号分隔（如 "barcode,face"），本应用只用条码。 -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
+
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation"
             android:name=".MainActivity"

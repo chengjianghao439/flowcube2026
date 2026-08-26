@@ -10,6 +10,7 @@
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Camera } from 'lucide-react'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
@@ -19,6 +20,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
+import { useCameraScanner } from '@/hooks/useCameraScanner'
+import { Capacitor } from '@capacitor/core'
 import {
   getDeviceCredential,
   getDeviceSession,
@@ -31,6 +34,7 @@ import { ensureDeviceSession } from '@/api/pda-session'
 export default function PdaBindPage() {
   const nav = useNavigate()
   const { flash, ok, err, warn } = usePdaFeedback()
+  const { scan, scanning } = useCameraScanner()
   const [credential, setCredential] = useState(() => getDeviceCredential())
   const [session, setSession] = useState(() => getDeviceSession())
   const [manual, setManual] = useState({ code: '', secret: '' })
@@ -66,6 +70,15 @@ export default function PdaBindPage() {
       return
     }
     void bind(parsed.deviceCode, parsed.deviceSecret)
+  }
+
+  async function handleCameraScan() {
+    const raw = await scan()
+    if (raw) {
+      handleScan(raw)
+    } else {
+      err('未识别到二维码，请让 ERP 屏幕上的绑定码对准相机取景框')
+    }
   }
 
   async function handleUnbind() {
@@ -142,7 +155,23 @@ export default function PdaBindPage() {
       </div>
 
       <PdaBottomBar>
-        <PdaScanner onScan={handleScan} placeholder="扫描绑定二维码" disabled={binding} />
+        <div className="flex items-stretch gap-2">
+          <div className="flex-1">
+            <PdaScanner onScan={handleScan} placeholder="扫描绑定二维码" disabled={binding} />
+          </div>
+          {Capacitor.isNativePlatform() && (
+            <button
+              type="button"
+              onClick={() => void handleCameraScan()}
+              disabled={scanning || binding}
+              className="shrink-0 rounded-2xl border border-border bg-card px-4 text-muted-foreground transition-all active:scale-95 disabled:opacity-40"
+              aria-label="相机扫码"
+            >
+              <Camera className="mx-auto h-5 w-5" />
+              <span className="mt-0.5 block text-xs">{scanning ? '识别中…' : '相机扫码'}</span>
+            </button>
+          )}
+        </div>
       </PdaBottomBar>
     </div>
   )
