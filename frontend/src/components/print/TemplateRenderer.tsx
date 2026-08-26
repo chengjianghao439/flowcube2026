@@ -28,7 +28,7 @@ const COL_DEF: Record<string, { label: string; align: 'left' | 'center' | 'right
   articleNo: { label: '货号',     align: 'left'   },
   code:      { label: '商品编码', align: 'left'   },
   name:      { label: '商品名称', align: 'left'   },
-  spec:      { label: '规格',     align: 'left'   },
+  spec:      { label: '型号',     align: 'left'   },
   color:     { label: '颜色',     align: 'center' },
   unit:      { label: '单位',     align: 'center' },
   qty:       { label: '数量',     align: 'right'  },
@@ -59,7 +59,7 @@ export interface PrintItem {
   quantity: number
   unitPrice: number
   amount: number
-  /** 货号 / 规格 / 颜色 / 行备注（订单明细行均有，透传后可由模板列显示） */
+  /** 货号 / 型号 / 颜色 / 行备注（订单明细行均有，透传后可由模板列显示） */
   articleNumber?: string
   spec?: string
   color?: string
@@ -80,6 +80,30 @@ function colValue(col: string, item: PrintItem): string {
     case 'remark':    return item.remark ?? ''
     default:          return ''
   }
+}
+
+/** nameAttrs 的取值（与 colValue 的规则一致） */
+function nameAttrValue(key: string, item: PrintItem): string {
+  switch (key) {
+    case 'spec':      return item.spec ?? ''
+    case 'color':     return item.color ?? ''
+    case 'unit':      return item.unit
+    case 'articleNo': case 'articleNumber': return item.articleNumber ?? ''
+    case 'code':      return item.productCode
+    case 'name':      return item.productName
+    default:          return ''
+  }
+}
+
+/**
+ * 名称列内容：商品名称 + 勾选的附加信息（nameAttrs）依次拼在名称后，
+ * 如「商品A [黑色] [500g/件] [件]」。空值跳过；nameAttrs 缺省 = 不拼接（兼容旧模板）。
+ */
+function nameValue(el: TemplateElement, item: PrintItem): string {
+  const attrs = el.nameAttrs ?? []
+  if (!attrs.length) return item.productName
+  const parts = attrs.map(k => nameAttrValue(k, item)).filter(v => String(v).trim() !== '')
+  return parts.length ? `${item.productName} [${parts.join('] [')}]` : item.productName
 }
 
 // ─── 单元渲染 ─────────────────────────────────────────────────────────────────
@@ -348,7 +372,7 @@ function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem
             {showIndex && <td style={tdStyle('center', wrap, minRowPx)}>{i + 1}</td>}
             {cols.map(c => (
               <td key={c} style={tdStyle(COL_DEF[c]?.align ?? 'left', wrap, minRowPx)}>
-                {colValue(c, item)}
+                {c === 'name' ? nameValue(el, item) : colValue(c, item)}
               </td>
             ))}
           </tr>

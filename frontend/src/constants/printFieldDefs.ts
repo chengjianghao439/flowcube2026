@@ -81,7 +81,7 @@ export const LABEL_FIELD_DEFS_BY_TYPE: Record<number, PrintFieldDef[]> = {
   8: [
     { key: 'product_code', label: '产品条码', type: 'barcode', defaultW: 72, defaultH: 14 },
     { key: 'product_name', label: '产品名称', type: 'text', defaultW: 72, defaultH: 10 },
-    { key: 'spec', label: '规格', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'spec', label: '型号', type: 'text', defaultW: 72, defaultH: 7 },
     { key: 'unit', label: '单位', type: 'text', defaultW: 24, defaultH: 6 },
     { key: 'price', label: '售价', type: 'text', defaultW: 40, defaultH: 6 },
   ],
@@ -108,7 +108,7 @@ export const TABLE_COLUMN_OPTIONS: TableColumnOption[] = [
   { key: 'articleNo', label: '货号' },
   { key: 'code', label: '商品编码' },
   { key: 'name', label: '商品名称' },
-  { key: 'spec', label: '规格' },
+  { key: 'spec', label: '型号' },
   { key: 'color', label: '颜色' },
   { key: 'unit', label: '单位' },
   { key: 'qty', label: '数量' },
@@ -146,7 +146,7 @@ export const DEFAULT_LABEL_ELEMENTS: Record<number, TemplateElement[]> = {
   8: [
     { id: 'lb8_bc', type: 'barcode', fieldKey: 'product_code', label: '产品条码', x: 2, y: 2, width: 71, height: 12, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
     { id: 'lb8_pn', type: 'text', fieldKey: 'product_name', label: '产品名称', x: 2, y: 16, width: 71, height: 8, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
-    { id: 'lb8_sp', type: 'text', fieldKey: 'spec', label: '规格', x: 2, y: 26, width: 71, height: 6, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+    { id: 'lb8_sp', type: 'text', fieldKey: 'spec', label: '型号', x: 2, y: 26, width: 71, height: 6, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
   ],
   9: [
     { id: 'lb9_bc', type: 'barcode', fieldKey: 'container_code', label: '塑料盒条码', x: 2, y: 2, width: 71, height: 12, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },

@@ -18,6 +18,12 @@ export interface TemplateElement {
   tableColumns?: string[]
   /** 是否显示序号列（第 1 列，打印表格序号；默认 true 不写即显示，兼容旧模板） */
   showIndex?: boolean
+  /**
+   * 名称列后拼接的附加信息（颜色/型号/单位/货号等）：
+   * 勾选后这些字段不再作为独立列，自动排在名称后面（如「商品A [黑色] [500g] [件]」）。
+   * 只在 tableColumns 包含 'name' 时生效；旧模板缺省 = 不拼接（行为不变）。
+   */
+  nameAttrs?: string[]
   /** 表格列宽（mm）：列 key → 宽度；缺省的列均分剩余宽度 */
   tableColumnWidths?: Record<string, number>
   /** 表格单元格自动换行（默认 true；false = 单行截断） */

@@ -474,7 +474,17 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
         <tbody>
           {(preview ? DOC_PREVIEW_ITEMS : DOC_PREVIEW_ITEMS.slice(0, 2)).map((row, i) => (
             <tr key={i}>
-              {allCols.map(k => <td key={k} style={{ ...cellStyle, width: `${widthMmOf(k) * scale}px` }}>{k === '#' ? i + 1 : (row as Record<string, string>)[k] ?? ''}</td>)}
+              {allCols.map(k => {
+                const raw = k === '#' ? String(i + 1) : (row as Record<string, string>)[k] ?? ''
+                // 名称列 + nameAttrs：与 TemplateRenderer.nameValue 同口径（拼接附加信息，不再独立成列）
+                const cell = k === 'name' && el.nameAttrs?.length
+                  ? (() => {
+                      const parts = el.nameAttrs.map(a => (row as Record<string, string>)[a] ?? '').filter(v => String(v).trim() !== '')
+                      return parts.length ? `${raw} [${parts.join('] [')}]` : raw
+                    })()
+                  : raw
+                return <td key={k} style={{ ...cellStyle, width: `${widthMmOf(k) * scale}px` }}>{cell}</td>
+              })}
             </tr>
           ))}
         </tbody>
@@ -902,6 +912,41 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
                 <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${el.showIndex !== false ? 'translate-x-4' : 'translate-x-0.5'}`} />
               </button>
             </div>
+
+            {/* 名称列后拼接（颜色/型号/单位/货号）：勾选的字段不再独立成列，自动排在名称后面 */}
+            {(el.tableColumns ?? ['name', 'qty', 'price', 'amount']).includes('name') && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">名称后附加信息</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['color', 'spec', 'unit', 'articleNo'] as const).map(key => {
+                    const def = TABLE_COLUMN_OPTIONS.find(c => c.key === key) ?? { key, label: key }
+                    const checked = (el.nameAttrs ?? []).includes(key)
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={checked}
+                        onClick={() => {
+                          const next = checked
+                            ? (el.nameAttrs ?? []).filter(k => k !== key)
+                            : [...(el.nameAttrs ?? []), key]
+                          onChange(el.id, { nameAttrs: next })
+                        }}
+                        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                          checked
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border text-muted-foreground hover:border-primary/50'
+                        }`}
+                      >
+                        {def.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">勾选后拼接在商品名称后（如「商品A [黑色] [500g] [件]」），不再作为独立列。</p>
+              </div>
+            )}
 
             {/* 已选列：按打印顺序显示（可上下移调序、取消勾选移除、设列宽 mm） */}
             <div className="space-y-1.5">

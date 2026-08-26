@@ -721,3 +721,15 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **同步**：`scripts/smoke-pages.node.js` 三处标题断言（批次效率/存放时长与滞销/批次拣货）——门禁断言的是页面标题，改文案必须同步，否则发布门禁卡死。
     - 验证：tsc 0 错误、前端 lint 0 error（5 存量）、test:permissions 184/184（label 不在比对范围，code 未动）、test:print 15 项通过；浏览器实测——ABC 页（标题/三 tab/筛选器全换）+ 批次拣货页（无「波次」残留）。
     - 明确不做：后端/数据库字段（avg_cost/comment 等注释里的旧词保留——那是开发文档不是用户文案）；landing 官网「波次拣货」已在映射内（landing 也是产品文案）。
+
+42. **2026-08-26 打印模板表格「名称后附加信息」（未提交，工作区）**：
+    - 需求：A4 单据模板（销售/采购/出库/仓库任务单）表格中，把颜色/规格/单位/货号**拼接在商品名称后**（如「商品A [黑色] [500g/件] [件] [JH-1001]」），不再作为独立列。
+    - **设计**：`TemplateElement` 新增 `nameAttrs?: string[]`（勾选的字段 key，顺序即拼接顺序）；仅当 `tableColumns` 含 `name` 时生效；旧模板缺省 = 不拼接（行为零变化，无需数据迁移）。layout_json 是 MySQL JSON 列原样存取，无字段过滤。
+    - **实现**（纯前端 3 文件）：
+      - `types/print-template.ts`：`TemplateElement.nameAttrs?: string[]`；
+      - `TemplateRenderer.tsx`：`FlowTable` 名称列单元格改走 `nameValue(el, item)`（名称 + 勾选字段 `[值]` 拼接，空值跳过）；辅助 `nameAttrValue`（spec/color/unit/articleNo/code 取值，与 `colValue` 同口径）；
+      - `editor.tsx`：属性面板表格区块加「名称后附加信息」chip 组（颜色/规格/单位/货号，`role="checkbox"`）；画布表格预览的数据行同口径拼接（`DOC_PREVIEW_ITEMS` 的 key 与 nameAttr 一致）。
+    - **前置**：`orderPrintData.ts` 各单据映射已带 `articleNumber/spec/color/unit`（无需改动）；`printFieldDefs` 的 `TABLE_COLUMN_OPTIONS` 已有这四个列选项（chip 标签复用）。
+    - 验证：tsc 0 错误、lint 0 error（5 存量）、test:print 15 项 + test:label 5 例通过；浏览器实测——选中销售订单模板表格元素 → 属性面板出现 chip 组 → 勾四项后画布预览「商品A [500g/件] [黑色] [件] [JH-1001]」→ 取消勾选还原（模板数据未改）。
+    - 明确不做：标签模板（type 5-10，ZPL）不适用（表格只有单据画布类型）；nameAttrs 的 GUI 只保留颜色/规格/单位/货号四个常用字段（`articleNo` 对应货号；如需更多可扩展 chip 组，渲染器 `nameAttrValue` 已兜底任意 key）。
+    - **标签订正（同日，用户点出「商品资料没有规格却缺型号」）**：全站 `spec` 字段语义统一是「型号」——商品资料页列/表单（「型号 *」必填）、商品选择器、销售/采购/调拨/改价/处置/ABC、后端 zod（`'型号不能为空'`）、089 迁移注释全是「型号」；唯独打印模板 3 处标签 + 079 种子模板误标「规格」（004 建表文本 COMMENT '规格' 是历史遗留，列语义以 089 后订正为准）。修复：`printFieldDefs.ts`/`TemplateRenderer.tsx`/`editor.tsx`/`nameAttrs` 注释 4 处「规格」→「型号」；**迁移 219**（`219_print_spec_label_rename.sql`）订正已入库 layout_json 中 `fieldKey='spec' AND label='规格'` 的元素（JSON_TABLE 保序重组 + JSON_SET 覆盖 label，幂等），本机实测 affectedRows=1 → 残留 0、元素顺序不变。
