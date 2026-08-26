@@ -22,7 +22,7 @@ import { usePdaTodoCounts } from '@/hooks/usePdaTodoCounts'
 import type { PdaPerm } from '@/hooks/usePdaRole'
 import type { PdaTodoCounts } from '@/api/pda'
 import { PdaEmptyCard } from '@/components/pda/PdaEmptyState'
-import BrandLogo from '@/components/shared/BrandLogo'
+import SystemBrand from '@/components/shared/SystemBrand'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
@@ -123,8 +123,8 @@ export default function PdaWorkbench() {
         <div className="max-w-md mx-auto">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
-              {/* 公司 Logo（上传后替换，无 Logo 回退纯文字） */}
-              <BrandLogo hideFallbackIcon imgClassName="h-4 max-w-20" alt="极序 Flow" />
+              {/* 系统品牌（极序，产品门面恒为系统 Logo，不受公司 Logo 影响） */}
+              <SystemBrand hideFallbackIcon />
               <p className="truncate text-xs font-mono text-muted-foreground tracking-wider uppercase">极序 Flow</p>
             </div>
             <button
@@ -198,7 +198,15 @@ export default function PdaWorkbench() {
 
         <div>
           <p className="text-xs text-muted-foreground mb-3">{roleLabel} 可用作业（{allowedOps.length} 项）</p>
-          {permissionsMissing ? (
+          {!deviceBound ? (
+            <PdaEmptyCard
+              icon={<Smartphone className="h-12 w-12 text-amber-500" />}
+              title="当前 PDA 未绑定设备"
+              description="系统已切换为受限模式。未绑定的机器无法执行任何作业，请先到「设备绑定」页面扫码绑定管理员生成的绑定码。"
+              actionText="去绑定设备"
+              onAction={() => navigate('/pda/bind')}
+            />
+          ) : permissionsMissing ? (
             <PdaEmptyCard
               icon={<ShieldAlert className="h-12 w-12 text-amber-500" />}
               title="权限未加载，PDA 已切换至受限模式"
