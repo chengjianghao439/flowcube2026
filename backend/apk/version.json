@@ -1,7 +1,7 @@
 {
-  "version": "0.6.0",
-  "versionCode": 98,
+  "version": "0.7.0",
+  "versionCode": 99,
   "filename": "app-release.apk",
-  "releaseNote": "- **公司 Logo 上传（品牌自定）**：系统设置页新增「品牌标识」——上传一张 Logo 图片（PNG/JPEG/WebP/SVG，≤2MB），ERP 顶栏、登录页、PDA 登录页与首页立即全端生效；不传则保持默认样式",
-  "publishedAt": "2026-08-25T15:08:59.089Z"
+  "releaseNote": "- **PDA 绑定页新增「相机扫码」**：PDA 的红外/激光扫码枪只能扫一维条码，扫不了绑定二维码——现在绑定页可以直接调用相机扫码，对准 ERP 屏幕上的绑定码即可完成设备绑定（仅 PDA 安装包生效，需更新 APK）",
+  "publishedAt": "2026-08-26T11:48:01.208Z"
 }
