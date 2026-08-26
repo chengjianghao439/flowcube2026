@@ -29,7 +29,7 @@ export default function AppLayout() {
               imgClassName="h-6 max-w-24"
               text="极序 Flow"
               textClassName="text-base font-bold tracking-tight text-foreground"
-              alt="极序 Flow"
+              alt="公司 Logo"
             />
           </div>
 

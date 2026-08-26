@@ -358,10 +358,11 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 - 权限码在 `backend/src/constants/permissions.js` 与 `frontend/src/lib/permission-codes.ts` **两份手工同步**的常量表（各 184 个，当前双向一致）；改动后跑 `npm run test:permissions` 校验（它做双向 diff + 命名合规检查，已进 CI）。角色权限存 `sys_role_permissions`，`requirePermission` 在校验前按角色现查。
 - **roleId === 1 是超管，跳过所有权限校验**（前后端都是）。
 - **数据范围**：`user_warehouse_scope`（迁移 122）→ `req.user.warehouseIds`（null=不限仓，超管恒 null，60s 缓存）→ 列表查询用 `scopeFilter()` 拼 SQL。新增涉仓列表接口应接入。
-- 每个业务 routes 文件顶部都有 `router.use(authMiddleware)`。**唯一完全公开的模块是 `/api/app-update/latest`**，另外 `/api/pda/version`、`/api/pda/download`、`/api/auth/login`、`/health`、`/api/health` 免登录。**刻意豁免**：`GET /api/settings/logo` 与 `/api/settings/logo/image`（公司 Logo 元数据/图片流）在 authMiddleware 之前注册——登录页与 PDA 未登录态要显示 Logo，`<img>` 又无法带 Bearer；仅返回 Logo，无任何业务数据。`POST /api/settings/logo`（上传，`settings.update` 权限）仍在 auth 之后，不受此豁免影响。
+- 每个业务 routes 文件顶部都有 `router.use(authMiddleware)`。**唯一完全公开的模块是 `/api/app-update/latest`**，另外 `/api/pda/version`、`/api/pda/download`、`/api/auth/login`、`/health`、`/api/health` 免登录。**刻意豁免**：`GET /api/settings/logo` 与 `/api/settings/logo/image`（公司 Logo 元数据/图片流）在 authMiddleware 之前注册——消费方全部以 `<img src>` 渲染（ERP 顶栏、设置页预览、单据打印模板），`<img>` 无法带 Bearer；仅返回 Logo，无任何业务数据。（2026-08-26 双区品牌后登录页/PDA 门面改显系统品牌，不再消费公司 Logo，但 `<img>` 场景仍要求公开，豁免不变。）`POST /api/settings/logo`（上传，`settings.update` 权限）仍在 auth 之后，不受此豁免影响。
 - 少数登录后免细粒度权限的低敏感接口：`/users/options`、`/products|suppliers|customers/next-code`。新增接口**不要**跟随这个例外，一律加 `requirePermission`。
 - **PDA-only 接口**（`pdaOnly` 校验请求头 `X-Client: pda`）：收货、上架、调拨 scan-out/scan-in、退货 receive/check/putaway、扫码写入（`/scan-logs`、`/scan-logs/check`、`/scan-logs/cancel-return[/box]`；`/error`、`/undo` 不限）、仓库任务 start-picking/ready/sort-done/check-done/pack-done/ship、改单的两个 PDA 物理确认接口。**ERP 端不得绕过这些接口直接改任务状态。**
 - **PDA 设备会话已强制启用**（`pda_device_sessions` + `middleware/pdaSession`）：前端 `api/client.ts` 会带上 `X-PDA-Session`（含自动续期），`pdaSessionRequired()` 已挂在调拨 scan-out/scan-in、退货 receive/check/putaway、`/scan-logs` 写入等关键作业接口上；设备需先在 `/pda/bind` 绑定。回归由 `npm run smoke:pda-device-session` 守着（设备未绑定即拒绝作业）。上架接口另用 `req.pda?.warehouseId` 做跨仓拦截。
+- **PDA 未绑定 = 受限模式**（2026-08-26）：后端强制未绑定即 403 `PDA_SESSION_REQUIRED`，但前端此前只在请求发出后弹全局错误 toast（用户看到「显示错误」而非「受限模式」）。修复（纯前端）：`PdaRoutePermission` 新增「未绑定设备」分支（`!getDeviceCredential()` → 显示「当前 PDA 未绑定设备 + 去绑定设备」引导页，不发请求），工作台作业区同样显示受限卡（替代可点作业入口），与既有「权限未加载/无权限」两种受限态并列。
 - 全局限流 `/api`（默认 60s/1000 次，`RATE_LIMIT_*` 可调），登录另有更严限流；`/health` 不受限流影响。
 - 生产必填环境变量：`DB_*`、`JWT_SECRET`（≥32 位）、`APP_PUBLIC_URL`，缺一后端拒绝启动。
 - **绝不**把密钥、Token、数据库口令写进代码、文档或提交；`.env*`、`deploy/production*.json`、备份 SQL 已 gitignore，CI 有 gitleaks 扫描。
@@ -388,6 +389,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 
 - PDA 与 ERP 是**同一份前端代码**，靠 `/pda/*` 路由树与 `PdaLayout` 隔离；每个 PDA 路由用 `PdaRoutePermission` 声明所需权限（与后端权限码一致）。
 - 当前 PDA 页面：`inbound`、`receive/:id`、`putaway[/:id]`、`picking`、`task/:id`、`sort`、`check[/:id]`、`pack[/:id]`、`ship[/:id]`、`split`、`cancel-return[/:id]`（取消归还）、`adjustments[/:id]`（改单物理确认）、`transfer`、`transfer-out/:id`、`transfer-in/:id`、`sale-return`、`sale-return/:id/receive`、`sale-return/:id/putaway`；另有两个不在作业流里的：`/pda/login`（挂在 `PdaProtectedRoute` 之外）与 `/pda/bind`（设备绑定，树内但不校验业务权限）。
+- **PDA 相机扫码**（2026-08-26）：PDA 红外/激光枪只能扫一维条码，绑定二维码（QR）扫不了。`/pda/bind` 绑定页新增「相机扫码」按钮：`hooks/useCameraScanner.ts` 走 `@capacitor-mlkit/barcode-scanning@8.1.0`（ML Kit 原生解码，Capacitor v8 兼容），仅 `Capacitor.isNativePlatform()` 时显示按钮；扫码结果与扫码枪走同一 `handleScan`。原生配置：AndroidManifest `application` 内加了 `com.google.mlkit.vision.DEPENDENCIES = barcode_ui`（README 要求；`barcode` 不含相机取景 UI 会运行时报错），CAMERA 权限已有。**只服务绑定页；其余 PDA 作业页仍用扫码枪（一维条码），不引入相机扫码。**
 - **关键操作不做离线队列**（这是刻意设计，`useOfflineQueue.enqueue` 会直接抛错）：`useCriticalPdaAction` 在断网时**阻断提交**；只有"已提交但结果未知"（网络波动/超时）才记为 pending，恢复网络后先查回执，再由页面提供的 `resolveServerState` 回查真实业务状态兜底。**不要给关键动作加自动重放。**
   - 回执查询走 `GET /api/system/request-status/:key`（`modules/system/system.routes.js`，前端 `api/operation-requests.ts`），断网重连后先查回执确认「上次到底成没成」。**新增关键动作时仍要提供 `resolveServerState`** 作为第二道兜底——回执只覆盖走过 `beginOperationRequest` 的动作，业务真实状态还得回查。目前 PDA 各作业页（含 `sale-return-receive/putaway`）都已提供。
 - 扫码枪走键盘模式，`usePdaScanner` 统一处理：字符间隔 50ms 聚合、最短 3 位、1s 内同码去重；手动输入框需标 `data-scanner-manual="true"` 以避免被扫码缓冲吞掉。
@@ -512,7 +514,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - ~~打印模板编辑器 keepAlive 残留（中危）~~ **已修复**：`hydrated` 改为按模板 id 重置的 state，切换模板重新水合表单态。
     - ~~工作区标签无上限（中危）~~ **已修复**：tabs 上限 30，超出按 LRU 关闭最旧可关闭 tab。
     - ~~PDA 设备凭据明文长期存 localStorage（中危）~~ **已缓解**（提交 `603e175`）：票据 TTL 30 天→7 天 + 心跳续期（`/pda/sessions/renew`，前端 4h 低频续期）；deviceSecret 明文仍是现场可用性权衡，风险由「ERP 可停用设备吊销全部票据」兜底。
-18. **审计确认的安全基线**（2026-08-21，可信）：全仓 SQL 参数化无注入点；所有业务 routes 挂 authMiddleware + requirePermission（唯一公开 app-update/latest；另 `GET /api/settings/logo`、`/logo/image` 为登录页/PDA 品牌展示刻意豁免，见第 12 节）；opLogger 敏感字段脱敏；multer 无路径穿越；无硬编码密钥；前端 0 处 dangerouslySetInnerHTML；仅 3 处工具性裸 axios（不带 token）；库存引擎 9 条不变量与第 9 节描述完全一致。
+18. **审计确认的安全基线**（2026-08-21，可信）：全仓 SQL 参数化无注入点；所有业务 routes 挂 authMiddleware + requirePermission（唯一公开 app-update/latest；另 `GET /api/settings/logo`、`/logo/image` 为公司 Logo 的 `<img>` 消费方刻意豁免——ERP 顶栏/设置页预览/打印模板均无法带 Bearer 头，见第 12 节；登录页/PDA 门面自 2026-08-26 起改显系统品牌，不再依赖该豁免）；opLogger 敏感字段脱敏；multer 无路径穿越；无硬编码密钥；前端 0 处 dangerouslySetInnerHTML；仅 3 处工具性裸 axios（不带 token）；库存引擎 9 条不变量与第 9 节描述完全一致。
 19. ~~**2026-08-21 财务审计发现**~~ **已全部修复**（提交 `0377fae`/`15a3133`/`039afe1`/`603e175`，详见 `docs/audit-report-2026-08-21.md` 附录 E）：
     - ~~手工建账款无幂等（高危）~~ **已修复**：`createManual` 接 `beginOperationRequest`（action='payment.record.create'）+ controller 传 requestKey。
     - ~~多账套未隔离（高危）~~ **已修复**：accounting.routes 挂 `companyScope`，`req.companyId` 贯穿科目/凭证/总账/报表/期间结转/导出全部 SQL。
@@ -627,13 +629,13 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - 验证：后端 lint 0、前端 lint 0 / tsc 0、smoke:reports 全绿、test:permissions 184/184、smoke:mainline 49/49；浏览器实测——库存总览「SKU0001 | YN-1001 | X200 | 测试商品1 | 黑色」五列同屏、利润分析商品 tab 列出现；本地测试库给 SKU0001-0004 补了货号/型号/颜色便于验证（测试数据，非业务改动）。
     - 说明：空值渲染 `—`（沿用商品页先例）；后端返回字段名统一 `articleNumber/spec/color`（null 或缺失由前端兜底）。
 
-34. **2026-08-25 上传系统 Logo（未提交，工作区）**：
-    - 需求：用户增加「上传 Logo」功能，显示范围=系统品牌位全部（ERP 顶栏、ERP 登录页、PDA 登录页/首页），上传入口在系统设置页。
+34. **2026-08-25 上传公司 Logo（2026-08-26 已调整为双区品牌，见第 40 节）**：
+    - 需求：用户增加「上传 Logo」功能，上传入口在系统设置页。当时范围=系统品牌位全部（ERP 顶栏、ERP 登录页、PDA 登录页/首页）；**2026-08-26 调整**——产品门面位（登录页/PDA）改回系统品牌，公司 Logo 只显示客户内场位（ERP 顶栏、打印单据）。
     - **架构**：Logo 以 base64 data URL 存 `sys_settings`（键 `company_logo` + `company_logo_updated_at`），零部署改动、备份/恢复天然覆盖；**不落盘**（避免新 compose 卷+静态挂载+nginx location）。
     - **迁移 218**：`sys_settings.value` 扩 `MEDIUMTEXT`（原 201 字符的 VARCHAR/TEXT 容不下 2MB base64）；seed 两个键（type=`image`/`timestamp`）。注意本机此列实测为 `TEXT`（64KB）且 `key_name` 为 100 字符，与 011 建表文本漂移（第 20 节第 8 条的老问题），迁移判断条件按「非 mediumtext 就 ALTER」覆盖两种现状。
     - **接口**：`GET /api/settings/logo`（返回 `{url, updatedAt}` 元数据）与 `GET /api/settings/logo/image?v=<时间戳>`（图片二进制流，未设置 404）——**公开**（authMiddleware 之前，登录页/PDA 无 JWT 也要显示；Logo 非敏感，见第 12 节刻意豁免）；`POST /api/settings/logo`（multipart，`settings.update` 权限）、`PUT /api/settings` 的 `updateMany` **拒绝** image/timestamp 键（防「保存设置」整组提交误清 Logo，`SETTINGS_KEY_SPECIAL`）。
     - **安全**：multer memoryStorage + 2MB 上限（MulterError 转 AppError）；fileFilter 只收 png/jpeg/webp/svg；PNG/JPEG/WebP 魔术字节校验防伪装；SVG 黑名单（`<script`/`on*=`/`href=javascript:`/外部引用/`<iframe`/`<foreignObject`）——前端一律 `<img>` 渲染双保险。opLogger 截断 500 字符，大 base64 不爆 `operation_logs`。
-    - **前端**：新组件 `components/shared/BrandLogo.tsx`（React Query 键 `['brand-logo']` 多点位共享一次请求；有 Logo 渲染 `<img>`，无/失败回退默认图标盒或空；`imgClassName`/`boxClassName` 分开控制图片与回退盒；不导出常量键避免 react-refresh warning）；接入 AppLayout 顶栏（`hideFallbackIcon` 保纯文字现状）/login 桌面+移动重品牌区（box 回退）/pda/login（h-14 圆角盒）/pda 首页（hideFallbackIcon）；设置页新增「品牌标识」卡片（预览+上传按钮+前端校验 ≤2MB/类型）；`api/settings.ts` 加 `getLogoApi`（经 `resolveApiFetchUrl` 拼绝对 URL——注意它自带 `/api` 前缀，后端返回先去 `/api` 再传）/`uploadLogoApi`（FormData）。
+    - **前端**：新组件 `components/shared/BrandLogo.tsx`（React Query 键 `['brand-logo']` 多点位共享一次请求；有 Logo 渲染 `<img>`，无/失败回退默认图标盒或空；`imgClassName`/`boxClassName` 分开控制图片与回退盒；不导出常量键避免 react-refresh warning）；接入 AppLayout 顶栏（`hideFallbackIcon` 保纯文字现状）；设置页新增「品牌标识」卡片（预览+上传按钮+前端校验 ≤2MB/类型）；`api/settings.ts` 加 `getLogoApi`（经 `resolveApiFetchUrl` 拼绝对 URL——注意它自带 `/api` 前缀，后端返回先去 `/api` 再传）/`uploadLogoApi`（FormData）。（2026-08-26：login/pda/login/pda 首页三处的 BrandLogo 替换为 SystemBrand，见第 40 节。）
     - **缓存**：`GET /logo/image?v=<YYYYMMDDHHMMSS>`——时间戳随上传变化，URL 变即破 HTTP 缓存；React Query 侧上传后 invalidate `['brand-logo']`。
     - 验证：后端 lint 0、前端 lint 0（5 warnings 存量）/tsc 0、test:permissions 184/184、smoke:mainline 49/49、迁移 218 本机实跑；curl 全链路（公开 200/未设置 404/无 token 401/伪装 400/超限 400/SVG 脚本 400）+ 浏览器 5 品牌位实测（上传替换/回退/跨端口 PDA 代理）。
     - 不做（范围外）：单据打印模板 logo（TemplateRenderer 仅文本字段，需扩展引擎另议）、官网 landing（已确认不含）。
@@ -683,3 +685,39 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
       - 复用既有拖拽模式：snapshot（拖动首移一次 undo）、window blur 兜底清理监听器。
     - 验证：模拟拖动商品编码 +50px → 列宽写入 8mm 且属性面板同步显示；预览表头宽度 商品编码 189px / 商品名称 87px / 其余 137px（均分）；序号列含在内。测试数据已还原（清除 tableColumnWidths）。
     - 说明：列宽 0/空 = 均分（沿用既有语义）；删除显式列宽回均分在属性面板输入框清空即可。
+
+40. **2026-08-26 系统品牌与公司 Logo 双区分工（未提交，工作区）**：
+    - 需求：用户指出昨天（第 34 节）上传 Logo 后「分不清是系统本身的 Logo 还是使用者公司的 Logo」——一个公司 Logo 会把登录页/顶栏上的极序品牌整个替换掉。经确认采用**双区品牌**：产品门面位恒为系统品牌（极序 Flow），客户内场位显示公司 Logo。
+    - **品牌位归属**：
+      | 品牌位 | 系统品牌（极序） | 公司 Logo（上传） |
+      |--------|------------------|-------------------|
+      | ERP 登录页 | ✓（固定） | — |
+      | PDA 登录页/首页 | ✓（固定） | — |
+      | ERP 顶栏 | 回退文字 | ✓（优先） |
+      | 打印单据模板（image 元素） | — | ✓ |
+    - **实现**（纯前端）：
+      - 新组件 `components/shared/SystemBrand.tsx`：内置「Layers 图标 + 品牌色圆角色块」回退同款，**零接口请求、零 React Query**（登录页未登录态不发任何请求）；props 与 BrandLogo 的 box/icon/hideFallbackIcon 同构。
+      - 登录页两处（桌面品牌区 + 移动 Logo）、PDA 登录页（h-14 圆角盒）、PDA 首页（hideFallbackIcon 只留极序文字）4 处从 BrandLogo 换为 SystemBrand；AppLayout 顶栏仍用 BrandLogo（公司 Logo 优先，无则回退「极序 Flow」文字）——这是公司 Logo 唯一保留的 UI 品牌位，其余为打印模板 image 元素。
+      - 设置页「品牌标识」卡拆两段：①系统品牌（极序 Flow，内置不可改，只读说明「不随公司 Logo 更换」）②公司 Logo（文案明确作用范围 = ERP 顶栏 + 打印单据模板，未上传时回退极序）。
+    - **安全豁免不变**：`GET /api/settings/logo`/`/logo/image` 仍须公开——消费方全为 `<img src>`（ERP 顶栏、设置页预览、打印模板），无 Bearer 可带；「登录页要显示」的旧理由已不成立，routes 注释与第 12/18 节措辞已同步改为 `<img>` 场景理由。
+    - **CORP 修复（2026-08-26，v0.6.0 已带 Logo 功能但桌面端不显示）**：Electron file:// 页面 origin=null，`<img>` 加载 https 生产 API 的 Logo 图片流被 Helmet 默认的 `Cross-Origin-Resource-Policy: same-origin` 拦截（浏览器同源页不受影响 =「浏览器显示、桌面端不显示」）。元数据接口走 fetch/axios 可靠 CORS 反射协商，图片 `<img>` 无协商余地。修复：routes 层对这两个公开路由 `res.removeHeader('Cross-Origin-Resource-Policy')`（已公开、只回图片字节，去 CORP 无安全损失）。file:// 实测：生产修复前 img naturalWidth=0 / 修复后本机 200 + naturalWidth=1。
+    - 改动文件：`SystemBrand.tsx`（新）、`login/index.tsx`、`pda/login.tsx`、`pda/index.tsx`、`layouts/AppLayout.tsx`、`pages/settings/index.tsx`、`BrandLogo.tsx`（文件头注释）、`settings.routes.js`（注释）、CLAUDE.md。
+    - 验证：前端 lint 0 error（5 warnings 存量 react-refresh）/tsc 0 错误。
+    - 明确不做：系统 Logo 上传入口（产品方定制部署用，当前无此场景含 landing——landing 是极序对外官网，不属本产品品牌位）；迁移 219（无需变更数据库，纯前端分工）。
+
+41. **2026-08-26 前端专业名词简化（作业类，未提交，工作区）**：
+    - 需求：用户反馈「前端显示专业名词」难看懂，指明简化面向作业人员的文案。经确认采用**作业类全改**：仓库员工作业词换大白话，分拣/复核/调拨/上架等一线熟悉词保留，管理会计黑话（帕累托/ABC）也顺带简化。
+    - **术语映射**（34 文件、199 处脚本替换 + ABC 页手改）：
+      | 旧词 | 新词 | 范围 |
+      |------|------|------|
+      | 波次（拣货/效率/明细/详情…） | 批次 | picking-waves、wave-performance、barcode-print-query、warehouse-ops、landing、type/barcode 注释 |
+      | 呆滞（库存/处置/商品/告警…） | 滞销 | disposal、inventory-aging、approvals、ListWidgets、landing、permission 标签 |
+      | 请购（单/明细/数量/审批…） | 采购申请 | purchase-requisitions、replenishment、approvals、landing、permission 标签 |
+      | 库龄（明细/平均） | 存放时长 | inventory-aging、InventoryAgingQueryDialog、profit-analysis 跳转、routeRegistry |
+      | 覆盖率 / 盘点覆盖率 | 按期盘点率 | abc.tsx、types/stockcheck |
+      | 循环盘（规则）/ 循环抽盘 / 抽盘 | 分批盘点（规则） | abc.tsx、stockcheck/index、permission 标签 |
+      | ABC 分类 / ABC 类别 / 帕累托 | 商品分档 / 档位 / 按出库金额 | abc.tsx（含 ABC_HINT→「卖得快盘得勤」）、stockcheck/index |
+    - **保留**：前端权限码、后端 permissions.js 的 code、查询键（abc-classes/cycle-rules）、类型字段（abcClass）、`picking-waves` 路由路径（改路径要动后端+数据库+门禁，收益低）——只改展示层文案，标识符零变动。
+    - **同步**：`scripts/smoke-pages.node.js` 三处标题断言（批次效率/存放时长与滞销/批次拣货）——门禁断言的是页面标题，改文案必须同步，否则发布门禁卡死。
+    - 验证：tsc 0 错误、前端 lint 0 error（5 存量）、test:permissions 184/184（label 不在比对范围，code 未动）、test:print 15 项通过；浏览器实测——ABC 页（标题/三 tab/筛选器全换）+ 批次拣货页（无「波次」残留）。
+    - 明确不做：后端/数据库字段（avg_cost/comment 等注释里的旧词保留——那是开发文档不是用户文案）；landing 官网「波次拣货」已在映射内（landing 也是产品文案）。
