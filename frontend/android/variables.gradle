@@ -1,5 +1,7 @@
 ext {
-    minSdkVersion = 22
+    // 2026-08-26: 22→23 —— ML Kit 扫码插件(@capacitor-mlkit/barcode-scanning 8.1.0)
+    // 传递依赖 androidx.camera:camera-video:1.5.2 要求 minSdk 23,Android 5.0 已无实际设备
+    minSdkVersion = 23
     compileSdkVersion = 35
     targetSdkVersion = 35
     androidxActivityVersion = '1.9.2'

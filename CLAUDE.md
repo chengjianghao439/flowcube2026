@@ -28,7 +28,7 @@
 - **后端**：Node ≥20，Express 4.21，CommonJS，`mysql2/promise` 连接池（**无 ORM，全部手写 SQL**），zod 校验，jsonwebtoken，bcryptjs，helmet，cors，express-rate-limit，multer，exceljs。
 - **前端**：React 18.3 + TypeScript 5.7 + Vite 6 + Tailwind 3.4 + Radix UI(shadcn 风格) + React Query 5 + Zustand 5 + axios + react-router-dom 6（**HashRouter**）+ recharts。
 - **桌面端**：Electron 33 + electron-builder 25（NSIS 安装包，仅 Windows x64 走 CI）。
-- **PDA**：Capacitor 8（CLI 7），Android `minSdk 22 / target 35 / compileSdk 35`，`@vitejs/plugin-legacy` 兼容 Android ≥5，构建目标 `es2015`。
+- **PDA**：Capacitor 8（CLI 7），Android `minSdk 23 / target 35 / compileSdk 35`（2026-08-26 由 22 上调：ML Kit 扫码插件 camera 依赖要求 23，Android 5.0 无实际设备），`@vitejs/plugin-legacy` 兼容 Android ≥6，构建目标 `es2015`。
 - **数据库**：MySQL 8.0，`utf8mb4_unicode_ci`，连接池 `timezone=+08:00`。
 - **部署**：Docker Compose（mysql / backend / frontend-nginx）+ GitHub Actions。
 
