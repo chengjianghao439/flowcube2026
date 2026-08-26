@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Upload, Loader2, Layers } from 'lucide-react'
+import { Upload, Loader2 } from 'lucide-react'
 import { getSettingsApi, updateSettingsApi, getRolesApi, getLogoApi, uploadLogoApi } from '@/api/settings'
 // 与 BrandLogo 组件的查询键保持一致（那里为避免 react-refresh warning 未导出常量）
 const BRAND_LOGO_QUERY_KEY = ['brand-logo']
@@ -89,26 +89,7 @@ export default function SettingsPage() {
       <div className="rounded-lg border border-border bg-card p-6 space-y-6">
         <h2 className="font-semibold text-base border-b pb-3">品牌标识</h2>
 
-        {/* ① 系统品牌（极序 Flow）：产品门面位固定，不可覆盖 */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white">
-              <Layers className="size-5" />
-            </span>
-            <div>
-              <p className="text-sm font-medium">系统品牌</p>
-              <p className="text-xs text-muted-foreground">极序 Flow（系统自带，不可修改）</p>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            固定显示于 ERP 登录页、PDA 登录页与 PDA 首页——这些是极序 Flow 的产品门面位；
-            <span className="font-medium text-foreground">不随下方公司 Logo 更换</span>。
-          </p>
-        </div>
-
-        <div className="border-t border-border/60" />
-
-        {/* ② 公司 Logo：客户内场位（ERP 顶栏、打印单据模板） */}
+        {/* 公司 Logo：客户内场位（ERP 顶栏、打印单据模板） */}
         <div className="flex items-start gap-6">
           {/* 预览：有 Logo 显示图片（后端时间戳参数破缓存），无 Logo 显示默认图标 */}
           <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/30">
