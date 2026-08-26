@@ -8,7 +8,7 @@ import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { DISPOSAL_STATUS_OPTIONS } from './constants'
 import { todayYmd } from '@/lib/dateTime'
 
-/** 呆滞库存处置查询弹窗对外的筛选值 */
+/** 滞销库存处理查询弹窗对外的筛选值 */
 export interface DisposalQueryValues {
   keyword: string
   status: string

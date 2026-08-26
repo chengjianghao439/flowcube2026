@@ -11,7 +11,7 @@ export const OPERATION_LOG_MODULE_OPTIONS = [
   { value: 'inbound-tasks', label: '入库任务' },
   { value: 'scan-logs', label: '扫码记录' },
   { value: 'print-jobs', label: '打印任务' },
-  { value: 'picking-waves', label: '波次拣货' },
+  { value: 'picking-waves', label: '批次拣货' },
   { value: 'packages', label: '包裹' },
   { value: 'pda', label: 'PDA 作业' },
   { value: 'sale', label: '销售' },

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 
-/** 库龄与呆滞查询弹窗对外的筛选值 */
+/** 存放时长与滞销查询弹窗对外的筛选值 */
 export interface InventoryAgingQueryValues {
   keyword: string
   warehouseId: number | null
@@ -34,7 +34,7 @@ export default function InventoryAgingQueryDialog({ open, initial, onClose, onAp
       open={open}
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="inventory-aging-query"
-      title="查询库龄与呆滞"
+      title="查询存放时长与滞销"
       resizable={false}
       defaultWidth={520}
       defaultHeight={440}
@@ -75,7 +75,7 @@ export default function InventoryAgingQueryDialog({ open, initial, onClose, onAp
         </label>
 
         <label className="flex flex-col gap-1 col-span-2">
-          <span className="text-xs font-medium text-muted-foreground">呆滞阈值</span>
+          <span className="text-xs font-medium text-muted-foreground">滞销阈值</span>
           <Select value={String(draft.staleDays)} onValueChange={v => setDraft(d => ({ ...d, staleDays: Number(v) }))}>
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>

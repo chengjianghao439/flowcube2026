@@ -232,10 +232,10 @@ export function ListTopSupplier() {
 
 // —— 待我审批（approval.task.view）——
 const BIZ_LABEL: Record<string, string> = {
-  purchase_requisition: '采购请购单',
+  purchase_requisition: '采购申请单',
   expense_claim: '费用报销',
   purchase_order: '采购单',
-  inventory_disposal: '呆滞处置单',
+  inventory_disposal: '滞销处理单',
   sale_credit_override: '超额放行',
   product_price: '商品改价',
 }

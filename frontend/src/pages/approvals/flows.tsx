@@ -21,11 +21,11 @@ import type { ApprovalFlow } from '@/types/approval'
 import type { TableColumn } from '@/types'
 
 const BIZ_TYPES = [
-  { value: 'purchase_requisition', label: '采购请购单' },
+  { value: 'purchase_requisition', label: '采购申请单' },
   { value: 'sale_credit_override', label: '超额放行申请' },
   { value: 'expense_claim', label: '费用报销' },
   { value: 'purchase_order', label: '采购单' },
-  { value: 'inventory_disposal', label: '呆滞处置单' },
+  { value: 'inventory_disposal', label: '滞销处理单' },
   { value: 'product_price', label: '商品改价申请' },
 ]
 const BIZ_LABEL: Record<string, string> = Object.fromEntries(BIZ_TYPES.map(b => [b.value, b.label]))
@@ -204,7 +204,7 @@ export default function ApprovalFlowsPage() {
               </div>
               <div className="space-y-2">
                 <Label>流程名称</Label>
-                <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：请购多级审批" />
+                <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：采购申请多级审批" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

@@ -1,5 +1,5 @@
 /**
- * 波次拣货管理页
+ * 批次拣货管理页
  * 路由：/picking-waves
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -30,15 +30,15 @@ import { todayYmd } from '@/lib/dateTime'
 function getWaveClosureCopy(wave: PickingWave | null) {
   if (!wave) {
     return {
-      stageLabel: '待选择波次',
-      description: '从列表打开波次详情后，可继续查看拣货、分拣进度和箱贴打印情况。',
-      nextAction: '先打开具体波次',
+      stageLabel: '待选择批次',
+      description: '从列表打开批次详情后，可继续查看拣货、分拣进度和箱贴打印情况。',
+      nextAction: '先打开具体批次',
     }
   }
 
   const printSummary = wave.printSummary
   if (wave.status === 5) {
-    return { stageLabel: '已取消', description: '该波次已取消，不再进行出库打印。', nextAction: '如需恢复，请重新建波次' }
+    return { stageLabel: '已取消', description: '该批次已取消，不再进行出库打印。', nextAction: '如需恢复，请重新建批次' }
   }
   if ((printSummary?.failedCount ?? 0) > 0 || (printSummary?.timeoutCount ?? 0) > 0) {
     return {
@@ -48,18 +48,18 @@ function getWaveClosureCopy(wave: PickingWave | null) {
     }
   }
   if (wave.status === 1) {
-    return { stageLabel: '待拣货', description: '波次已创建，等待仓库开始拣货。', nextAction: '安排仓库开始拣货' }
+    return { stageLabel: '待拣货', description: '批次已创建，等待仓库开始拣货。', nextAction: '安排仓库开始拣货' }
   }
   if (wave.status === 2) {
-    return { stageLabel: '拣货中', description: '波次正在按路线推进，优先确认进度和卡点。', nextAction: '跟进拣货推进与异常容器' }
+    return { stageLabel: '拣货中', description: '批次正在按路线推进，优先确认进度和卡点。', nextAction: '跟进拣货推进与异常容器' }
   }
   if (wave.status === 3) {
-    return { stageLabel: '待分拣', description: '波次拣货已完成，等待后续分拣 / 复核 / 出库。', nextAction: '继续推进分拣与出库' }
+    return { stageLabel: '待分拣', description: '批次拣货已完成，等待后续分拣 / 复核 / 出库。', nextAction: '继续推进分拣与出库' }
   }
   if (wave.status === 4) {
-    return { stageLabel: '已完成', description: '该波次已完成，仍可复盘打印和任务执行情况。', nextAction: '可回看打印与执行记录' }
+    return { stageLabel: '已完成', description: '该批次已完成，仍可复盘打印和任务执行情况。', nextAction: '可回看打印与执行记录' }
   }
-  return { stageLabel: wave.statusName, description: '当前波次可继续查看执行与打印信息。', nextAction: '检查主链处理状态' }
+  return { stageLabel: wave.statusName, description: '当前批次可继续查看执行与打印信息。', nextAction: '检查主链处理状态' }
 }
 
 function StatBlock({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
@@ -123,7 +123,7 @@ export default function PickingWavesPage() {
   })
   const finishMut = useMutation({
     mutationFn: finishWaveApi,
-    onSuccess: () => { toast.success('波次已完成'); invalidate(); closeDetail() },
+    onSuccess: () => { toast.success('批次已完成'); invalidate(); closeDetail() },
   })
   const cancelMut = useMutation({
     mutationFn: cancelWaveApi,
@@ -164,14 +164,14 @@ export default function PickingWavesPage() {
   function clearAll() { setKeyword(''); setStatusFilter(''); setPage(1) }
 
   const chips = [
-    keyword && { key: 'keyword', label: `波次号：${keyword}`, onRemove: () => setKeyword('') },
+    keyword && { key: 'keyword', label: `批次号：${keyword}`, onRemove: () => setKeyword('') },
     statusFilter && { key: 'status', label: `状态：${WAVE_STATUS_LABEL[Number(statusFilter) as WaveStatus] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns = useMemo<TableColumn<PickingWave>[]>(() => [
     {
       key: 'waveNo',
-      title: '波次单号',
+      title: '批次单号',
       width: 160,
       render: (_, row) => (
         <button type="button" className="text-left" onClick={() => openWaveDetail(row)}>
@@ -245,8 +245,8 @@ export default function PickingWavesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="波次拣货"
-        description="管理波次拣货、分拣推进，以及出库箱贴打印异常的处理。"
+        title="批次拣货"
+        description="管理批次拣货、分拣推进，以及出库箱贴打印异常的处理。"
         actions={
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/picking-waves').catch(e => toast.error((e as Error).message))}>导出</Button>
@@ -276,7 +276,7 @@ export default function PickingWavesPage() {
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>
-              波次详情 — <span className="text-doc-code-strong">{detail?.waveNo ?? `#${selectedWaveId}`}</span>
+              批次详情 — <span className="text-doc-code-strong">{detail?.waveNo ?? `#${selectedWaveId}`}</span>
             </DialogTitle>
           </DialogHeader>
 
@@ -297,7 +297,7 @@ export default function PickingWavesPage() {
             <section ref={progressRef} className="space-y-4 rounded-lg border border-border bg-card p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-card-title">波次推进</h3>
+                  <h3 className="text-card-title">批次进度</h3>
                   <p className="text-muted-body">统一查看拣货进度、任务数量和当前责任人。</p>
                 </div>
                 {detail ? <SoftStatusLabel label={WAVE_STATUS_LABEL[detail.status]} tone={detail.status === 4 ? 'success' : detail.status === 5 ? 'danger' : detail.status === 1 ? 'draft' : 'active'} /> : null}
@@ -332,7 +332,7 @@ export default function PickingWavesPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-card-title">出库箱贴打印</h3>
-                  <p className="text-muted-body">在这里统一处理箱贴补打、打印超时确认，以及定位波次推进受阻环节。</p>
+                  <p className="text-muted-body">在这里统一处理箱贴补打、打印超时确认，以及定位批次进度受阻环节。</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>
@@ -354,7 +354,7 @@ export default function PickingWavesPage() {
                   ? `当前有 ${printSummary.noJobCount} 个包裹未生成打印任务，请先回打包或补打入口生成可追踪任务。`
                   : printSummary?.failedCount || printSummary?.timeoutCount
                   ? `当前仍有 ${Number(printSummary?.failedCount ?? 0) + Number(printSummary?.timeoutCount ?? 0)} 个出库标签需要处理。建议先补打，再继续分拣或出库。`
-                  : '当前未发现阻断出库的打印异常，可继续推进波次执行。'}
+                  : '当前未发现阻断出库的打印异常，可继续推进批次执行。'}
                 {printSummary?.recentPrinter ? ` 最近打印机：${printSummary.recentPrinter}。` : ''}
                 {printSummary?.recentError ? ` 最近异常：${printSummary.recentError}。` : ''}
               </div>
@@ -363,7 +363,7 @@ export default function PickingWavesPage() {
             {detail?.items?.length ? (
               <section className="space-y-3 rounded-lg border border-border bg-card p-4">
                 <div>
-                  <h3 className="text-card-title">波次商品汇总</h3>
+                  <h3 className="text-card-title">批次商品汇总</h3>
                   <p className="text-muted-body">按商品查看应拣与已拣，快速定位缺口。</p>
                 </div>
                 <table className="w-full text-sm">
@@ -394,15 +394,15 @@ export default function PickingWavesPage() {
           <DialogFooter className="gap-2">
             {detail?.status === 1 ? <Button onClick={() => startMut.mutate(detail.id)} disabled={startMut.isPending}>开始拣货</Button> : null}
             {detail?.status === 2 ? <Button onClick={() => finishPickMut.mutate(detail.id)} disabled={finishPickMut.isPending}>完成拣货</Button> : null}
-            {detail?.status === 3 ? <Button onClick={() => finishMut.mutate(detail.id)} disabled={finishMut.isPending}>完成波次</Button> : null}
+            {detail?.status === 3 ? <Button onClick={() => finishMut.mutate(detail.id)} disabled={finishMut.isPending}>完成批次</Button> : null}
             {detail && [1, 2, 3].includes(detail.status) ? (
               <Button
                 variant="destructive"
                 onClick={() => confirmAction({
-                  title: '取消波次',
-                  description: `确定取消波次「${detail.waveNo}」吗？此操作不可随意撤销。`,
+                  title: '取消批次',
+                  description: `确定取消批次「${detail.waveNo}」吗？此操作不可随意撤销。`,
                   variant: 'destructive',
-                  confirmText: '取消波次',
+                  confirmText: '取消批次',
                   onConfirm: () => cancelMut.mutate(detail.id),
                 })}
                 disabled={cancelMut.isPending}

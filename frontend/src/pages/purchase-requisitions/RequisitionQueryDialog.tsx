@@ -8,7 +8,7 @@ import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
 import { todayYmd } from '@/lib/dateTime'
 
-/** 请购查询弹窗对外的筛选值（与 URL 参数一一对应） */
+/** 采购申请查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface RequisitionQueryValues {
   keyword: string
   status: string
@@ -49,7 +49,7 @@ export default function RequisitionQueryDialog({ open, initial, onClose, onApply
         open={open}
         onOpenChange={v => { if (!v) onClose() }}
         dialogId="requisition-query"
-        title="查询请购单"
+        title="查询采购申请单"
         resizable={false}
         defaultWidth={520}
         defaultHeight={520}

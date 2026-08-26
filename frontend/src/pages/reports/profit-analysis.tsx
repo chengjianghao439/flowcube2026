@@ -137,7 +137,7 @@ export default function ProfitAnalysisPage() {
         <SummaryCard label="销售毛利" value={`¥${(summary?.grossProfit ?? 0).toFixed(2)}`} hint={`销售额 ¥${(summary?.saleAmount ?? 0).toFixed(2)}`} tone="emerald" />
         <SummaryCard label="销售成本" value={`¥${(summary?.costAmount ?? 0).toFixed(2)}`} hint="按销售单明细成本估算" tone="amber" />
         <SummaryCard label="库存金额" value={`¥${(summary?.stockValue ?? 0).toFixed(2)}`} hint="当前库存成本价值" tone="blue" />
-        <SummaryCard label="滞销库存" value={summary?.slowMovingCount ?? 0} hint={`金额 ¥${(summary?.slowMovingValue ?? 0).toFixed(2)} · 点击查看明细`} tone="rose" onClick={() => openPath('/reports/inventory-aging', '库龄与呆滞')} />
+        <SummaryCard label="滞销库存" value={summary?.slowMovingCount ?? 0} hint={`金额 ¥${(summary?.slowMovingValue ?? 0).toFixed(2)} · 点击查看明细`} tone="rose" onClick={() => openPath('/reports/inventory-aging', '存放时长与滞销')} />
       </div>
 
       <DateRangeQueryBar

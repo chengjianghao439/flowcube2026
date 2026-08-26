@@ -209,7 +209,7 @@ export default function BarcodePrintQueryPage() {
                   ? [{ label: '打开收货详情', onClick: () => openPath(`/inbound-tasks/${row.inboundTaskId}?focus=print-batches`, row.bizNo || `收货订单 #${row.inboundTaskId}`) }]
                   : []),
                 ...(row.category === 'outbound' && row.waveId
-                  ? [{ label: '打开波次详情', onClick: () => openPath(`/picking-waves?waveId=${row.waveId}&focus=print-closure`, row.waveNo || `波次 #${row.waveId}`) }]
+                  ? [{ label: '打开批次详情', onClick: () => openPath(`/picking-waves?waveId=${row.waveId}&focus=print-closure`, row.waveNo || `批次 #${row.waveId}`) }]
                   : []),
               ]}
             />
@@ -309,16 +309,16 @@ export default function BarcodePrintQueryPage() {
             <div>
               <p className="text-sm font-semibold text-foreground">当前正在处理出库打印链路</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                波次 <span className="text-doc-code">{outboundContext.waveNo}</span> 的出库箱贴都在这里追踪。先处理失败 / 超时的打印任务，再回到波次详情继续拣货与分拣。
+                批次 <span className="text-doc-code">{outboundContext.waveNo}</span> 的出库箱贴都在这里追踪。先处理失败 / 超时的打印任务，再回到批次详情继续拣货与分拣。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => openPath(`/picking-waves?waveId=${outboundContext.waveId}&focus=print-closure`, `波次 ${outboundContext.waveNo}`)}
+                onClick={() => openPath(`/picking-waves?waveId=${outboundContext.waveId}&focus=print-closure`, `批次 ${outboundContext.waveNo}`)}
               >
-                返回波次详情
+                返回批次详情
               </Button>
             </div>
           </div>

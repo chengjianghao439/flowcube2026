@@ -67,7 +67,7 @@ export default function ReplenishmentPage() {
       qc.invalidateQueries({ queryKey: ['replenishment'] })
       setConfirmOpen(false)
       setSelected(new Set())
-      toast.success(`已生成请购单 ${r.requisitionNo}，待审批`)
+      toast.success(`已生成采购申请单 ${r.requisitionNo}，待审批`)
       navigate(`/purchase-requisitions/${r.id}`)
     },
     onError: (e: Error) => toast.error(e.message),
@@ -159,15 +159,15 @@ export default function ReplenishmentPage() {
 
   function openConfirm() {
     if (selectedRows.length === 0) return toast.warning('请先勾选要补货的商品')
-    // 请购单是单仓单据：勾选跨仓商品时提示分仓生成（请购头只能一个期望入库仓）
+    // 采购申请单是单仓单据：勾选跨仓商品时提示分仓生成（采购申请头只能一个期望入库仓）
     const warehouses = new Set(selectedRows.map(r => r.warehouseId))
     if (warehouses.size > 1) {
-      return toast.warning('勾选商品分属多个仓库，请按仓库分别生成请购单')
+      return toast.warning('勾选商品分属多个仓库，请按仓库分别生成采购申请单')
     }
     setConfirmOpen(true)
   }
   function handleConfirm() {
-    // 按勾选行生成请购草稿：同一仓库一组，source='replenishment'
+    // 按勾选行生成采购申请草稿：同一仓库一组，source='replenishment'
     const items = selectedRows.map(r => ({
       productId: Number(r.productId),
       quantity: Number(r.suggestQty),
@@ -192,7 +192,7 @@ export default function ReplenishmentPage() {
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canCreateRequisition && (
               <Button onClick={openConfirm} disabled={creating || selected.size === 0}>
-                {creating ? '生成中…' : `生成请购单${selected.size > 0 ? `（${selected.size} 项）` : ''}`}
+                {creating ? '生成中…' : `生成采购申请单${selected.size > 0 ? `（${selected.size} 项）` : ''}`}
               </Button>
             )}
             <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
@@ -242,12 +242,12 @@ export default function ReplenishmentPage() {
       <Dialog open={confirmOpen} onOpenChange={v => !v && setConfirmOpen(false)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>生成采购请购单</DialogTitle>
+            <DialogTitle>生成采购申请单</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">
-              将勾选的 <span className="font-semibold text-foreground">{selectedRows.length}</span> 项补货建议生成一张采购请购单（仓库「
-              {selectedRows[0]?.warehouseName ?? '—'}」），进入审批流程。数量取各行的「建议采购量」，可在请购单中调整。
+              将勾选的 <span className="font-semibold text-foreground">{selectedRows.length}</span> 项补货建议生成一张采购申请单（仓库「
+              {selectedRows[0]?.warehouseName ?? '—'}」），进入审批流程。数量取各行的「建议采购量」，可在采购申请单中调整。
             </p>
             <div className="max-h-56 overflow-auto rounded-md border">
               <table className="w-full text-sm">
@@ -270,7 +270,7 @@ export default function ReplenishmentPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={creating}>取消</Button>
-            <Button onClick={handleConfirm} disabled={creating}>生成请购单</Button>
+            <Button onClick={handleConfirm} disabled={creating}>生成采购申请单</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

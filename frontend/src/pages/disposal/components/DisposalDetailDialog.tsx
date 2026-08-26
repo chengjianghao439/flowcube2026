@@ -53,7 +53,7 @@ export default function DisposalDetailDialog({ open, onClose, id }: Props) {
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            呆滞处置单详情
+            滞销处理单详情
             {disposal && <SoftStatusLabel label={disposal.statusName} tone={STATUS_TONE[disposal.status] ?? 'draft'} />}
           </DialogTitle>
         </DialogHeader>

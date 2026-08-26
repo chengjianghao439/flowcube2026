@@ -158,7 +158,7 @@ export const getReplenishmentApi = async (p: { page?: number; pageSize?: number;
 export const saveStockPoliciesApi = async (items: Array<{ productId: number; warehouseId: number; safetyStock?: number; reorderPoint?: number; targetStock?: number | null }>) =>
   apiClient.put<{ saved: number; deleted: number }>('/inventory/stock-policies', { items })
 
-// ─── 库龄与呆滞报表（文档 09）──────────────────────────────────────────────────
+// ─── 存放时长与滞销报表（文档 09）──────────────────────────────────────────────────
 
 export interface AgingBucket { bucket: string; skuCount: number; totalQty: number; totalValue: number }
 export interface AgingItem {

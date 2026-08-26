@@ -1,5 +1,5 @@
 /**
- * 波次效率报表
+ * 批次效率报表
  * 路由：/reports/wave-performance
  */
 import { useState } from 'react'
@@ -20,7 +20,7 @@ import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { StatTile } from '@/components/dashboard/StatTile'
 
-/** 与 pages/picking-waves 的波次状态取色保持一致 */
+/** 与 pages/picking-waves 的批次状态取色保持一致 */
 const STATUS_TONE: Record<number, StatusTone> = {
   1: 'draft', 2: 'active', 3: 'active', 4: 'success', 5: 'danger',
 }
@@ -94,7 +94,7 @@ export default function WavePerformancePage() {
 
   const cols: TableColumn<WaveStats>[] = [
     {
-      key: 'waveNo', title: '波次号', width: 180,
+      key: 'waveNo', title: '批次号', width: 180,
       render: (_, w) => (
         <div>
           <p className="text-doc-code-strong">{w.waveNo}</p>
@@ -131,8 +131,8 @@ export default function WavePerformancePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="波次效率"
-        description="分析各波次的拣货时长、SKU 分布与拣货效率。"
+        title="批次效率"
+        description="分析各批次的拣货时长、SKU 分布与拣货效率。"
         actions={(
           <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
         )}
@@ -142,8 +142,8 @@ export default function WavePerformancePage() {
         <QueryErrorState
           error={error}
           onRetry={() => void refetch()}
-          title="波次效率加载失败"
-          description="当前波次效率数据暂时无法加载，请点击重试或稍后再试"
+          title="批次效率加载失败"
+          description="当前批次效率数据暂时无法加载，请点击重试或稍后再试"
           compact
         />
       )}
@@ -168,10 +168,10 @@ export default function WavePerformancePage() {
 
       {/* 汇总卡片 */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <StatTile icon={Layers} label="总波次数" value={data?.summary.totalWaves ?? '-'} hint="近 30 天" />
+        <StatTile icon={Layers} label="总批次数" value={data?.summary.totalWaves ?? '-'} hint="近 30 天" />
         <StatTile
           icon={CheckCircle2}
-          label="已完成波次"
+          label="已完成批次"
           value={data?.summary.completedWaves ?? '-'}
           hint={data ? `完成率 ${data.summary.totalWaves > 0 ? Math.round(data.summary.completedWaves / data.summary.totalWaves * 100) : 0}%` : undefined}
           tone="success"
@@ -180,20 +180,20 @@ export default function WavePerformancePage() {
           icon={Clock4}
           label="平均拣货时长"
           value={data?.summary.avgDurationMinutes != null ? fmtDuration(Math.round(data.summary.avgDurationMinutes)) : '—'}
-          hint="波次平均完成时间"
+          hint="批次平均完成时间"
         />
-        <StatTile icon={Boxes} label="平均 SKU 数" value={data?.summary.avgSkuCount ?? '—'} hint="每波次平均种类" />
+        <StatTile icon={Boxes} label="平均 SKU 数" value={data?.summary.avgSkuCount ?? '—'} hint="每批次平均种类" />
         <StatTile icon={PackageOpen} label="累计拣货量" value={data?.summary.totalPickedQty.toFixed(0) ?? '-'} hint="件" />
       </div>
 
-      {/* 波次明细表 */}
+      {/* 批次明细表 */}
       <ReportPanel
-        title="波次明细"
-        description="点击列标题排序，查看每个波次的任务数、SKU 与效率。"
+        title="批次明细"
+        description="点击列标题排序，查看每个批次的任务数、SKU 与效率。"
         helper="当前列表支持按任务数、SKU、拣货量和时长排序"
         empty={!isLoading && !isError && waves.length === 0}
-        emptyTitle="暂无波次数据"
-        emptyDescription="当前筛选条件下没有波次记录"
+        emptyTitle="暂无批次数据"
+        emptyDescription="当前筛选条件下没有批次记录"
       >
         {isLoading ? (
           <div className="flex h-40 items-center justify-center">
@@ -204,7 +204,7 @@ export default function WavePerformancePage() {
             columns={cols}
             data={waves}
             rowKey="id"
-            emptyText="暂无波次数据"
+            emptyText="暂无批次数据"
             sortKey={sortField}
             sortDirection={sortAsc ? 'asc' : 'desc'}
             onSortChange={toggleSort}

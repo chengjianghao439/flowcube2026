@@ -98,7 +98,7 @@ export default function RequisitionsPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<PurchaseRequisition>[] = [
-    { key: 'requisitionNo', title: '请购单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'requisitionNo', title: '采购申请单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'title', title: '事由', render: v => (v as string) || '—' },
     { key: 'warehouseName', title: '期望入库仓', width: 120 },
     { key: 'applicantName', title: '申请人', width: 100 },
@@ -111,13 +111,13 @@ export default function RequisitionsPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="采购请购"
+        title="采购申请"
         description="发起采购需求，经一级审批后转为采购单（可按供应商拆分）。审批人不能是申请人本人。"
         actions={
           <>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {can(PERMISSIONS.PURCHASE_REQUISITION_CREATE)
-              ? <Button onClick={() => open('/purchase-requisitions/new', '新建请购单')}>新建请购单</Button>
+              ? <Button onClick={() => open('/purchase-requisitions/new', '新建采购申请单')}>新建采购申请单</Button>
               : undefined}
           </>
         }
@@ -142,8 +142,8 @@ export default function RequisitionsPage() {
         data={list}
         loading={isLoading}
         rowKey="id"
-        emptyText="暂无请购单"
-        onRowDoubleClick={r => open(`/purchase-requisitions/${r.id}`, `请购单 ${r.requisitionNo}`)}
+        emptyText="暂无采购申请单"
+        onRowDoubleClick={r => open(`/purchase-requisitions/${r.id}`, `采购申请单 ${r.requisitionNo}`)}
       />
 
       <RequisitionQueryDialog

@@ -1,5 +1,5 @@
 /**
- * 采购请购单 — 新建 / 编辑 / 详情页（独立路由）
+ * 采购申请单 — 新建 / 编辑 / 详情页（独立路由）
  *   /purchase-requisitions/new   → 新建
  *   /purchase-requisitions/:id   → 草稿可编辑；其余状态只读 + 按状态显示操作
  */
@@ -174,9 +174,9 @@ export default function RequisitionFormPage() {
 
   function buildPayload() {
     if (!warehouseId) { toast.warning('请选择期望入库仓'); return null }
-    if (!items.length) { toast.warning('请至少添加一条请购明细'); return null }
+    if (!items.length) { toast.warning('请至少添加一条采购申请明细'); return null }
     for (const it of items) {
-      if (!it.quantity || Number(it.quantity) <= 0) { toast.warning(`商品「${it.productName}」的请购数量必须大于 0`); return null }
+      if (!it.quantity || Number(it.quantity) <= 0) { toast.warning(`商品「${it.productName}」的采购申请数量必须大于 0`); return null }
     }
     return {
       title: title || undefined,
@@ -210,9 +210,9 @@ export default function RequisitionFormPage() {
       setBusy(true)
       try {
         const r = await createRequisitionApi(payload)
-        toast.success('请购单已创建')
+        toast.success('采购申请单已创建')
         const path = `/purchase-requisitions/${r!.id}`
-        useWorkspaceStore.getState().addTab({ key: path, title: `请购单 ${r!.requisitionNo}`, path })
+        useWorkspaceStore.getState().addTab({ key: path, title: `采购申请单 ${r!.requisitionNo}`, path })
         navigate(path)
       } catch (e) { toast.error(e instanceof Error ? e.message : '创建失败') }
       finally { setBusy(false) }
@@ -249,7 +249,7 @@ export default function RequisitionFormPage() {
     setBusy(true)
     try {
       const res = await convertRequisitionApi(editId as number, lines)
-      toast.success(`已生成 ${res!.createdOrders.length} 张采购单${res!.completed ? '，请购单已结案' : ''}`)
+      toast.success(`已生成 ${res!.createdOrders.length} 张采购单${res!.completed ? '，采购申请单已结案' : ''}`)
       setConvertOpen(false)
       await refetch()
     } catch (e) { toast.error(e instanceof Error ? e.message : '转采购单失败') }
@@ -257,7 +257,7 @@ export default function RequisitionFormPage() {
   }
 
   if (editId && !detail && !isLoading) {
-    return <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">请购单不存在</div>
+    return <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">采购申请单不存在</div>
   }
 
   const canCreate = can(PERMISSIONS.PURCHASE_REQUISITION_CREATE)
@@ -267,7 +267,7 @@ export default function RequisitionFormPage() {
   return (
     <div className="flex flex-col gap-4">
       <ActionBar
-        title={isNew ? '新建请购单' : `请购单 ${detail?.requisitionNo ?? ''}`}
+        title={isNew ? '新建采购申请单' : `采购申请单 ${detail?.requisitionNo ?? ''}`}
         subtitle={detail ? <SoftStatusLabel label={detail.statusName} tone={detail.statusTone} /> : undefined}
         rightActions={
           <div className="flex flex-wrap gap-2">
@@ -279,7 +279,7 @@ export default function RequisitionFormPage() {
             {status === 3 && canConvert && <Button disabled={busy} onClick={openConvert}>转采购单</Button>}
             {editId && (status === 1 || status === 2 || status === 4) && canCreate && (
               <Button variant="ghost" className="text-destructive" disabled={busy}
-                onClick={() => confirmAction({ title: '取消请购单', description: '确定取消这张请购单吗？此操作不可撤销。', onConfirm: () => run(() => cancelRequisitionApi(editId), '已取消') })}>取消</Button>
+                onClick={() => confirmAction({ title: '取消采购申请单', description: '确定取消这张采购申请单吗？此操作不可撤销。', onConfirm: () => run(() => cancelRequisitionApi(editId), '已取消') })}>取消</Button>
             )}
           </div>
         }
@@ -318,13 +318,13 @@ export default function RequisitionFormPage() {
         </div>
       </Section>
 
-      <Section title="请购明细" actions={editable && <Button size="sm" variant="outline" onClick={() => setProductFinderOpen(true)} disabled={busy}><Plus className="mr-1 h-4 w-4" />添加商品</Button>}>
+      <Section title="采购申请明细" actions={editable && <Button size="sm" variant="outline" onClick={() => setProductFinderOpen(true)} disabled={busy}><Plus className="mr-1 h-4 w-4" />添加商品</Button>}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
                 <th className="px-3 py-2 text-left">商品</th>
-                <th className="px-3 py-2 text-right w-28">请购数量</th>
+                <th className="px-3 py-2 text-right w-28">采购申请数量</th>
                 <th className="px-3 py-2 text-right w-28">预估单价</th>
                 <th className="px-3 py-2 text-left w-48">建议供应商</th>
                 {!editable && <th className="px-3 py-2 text-right w-24">已转采购</th>}
@@ -364,7 +364,7 @@ export default function RequisitionFormPage() {
       {/* 驳回原因 */}
       <Dialog open={rejectOpen} onOpenChange={v => !v && setRejectOpen(false)}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>驳回请购单</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>驳回采购申请单</DialogTitle></DialogHeader>
           <div className="space-y-2 py-2">
             <Label>驳回原因 *</Label>
             <Input value={rejectReason} onChange={e => setRejectReason(e.target.value)} maxLength={300} placeholder="请填写驳回原因" />

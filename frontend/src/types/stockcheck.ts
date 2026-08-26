@@ -47,7 +47,7 @@ export interface CycleRule {
 }
 export interface CycleRulesResult { warehouseId: number; rules: CycleRule[] }
 
-/** 盘点覆盖率（文档08）：各仓各 ABC 类的应盘/到期未盘/覆盖率 */
+/** 按期盘点率（文档08）：各仓各 档位的应盘/到期未盘/按期盘点率 */
 export interface CoverageRow {
   rowKey: string
   warehouseId: number

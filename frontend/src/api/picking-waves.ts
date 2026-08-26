@@ -37,7 +37,7 @@ export const WAVE_PRIORITY_LABEL: Record<WavePriority, string> = {
   1: '紧急', 2: '普通', 3: '低',
 }
 
-/** 波次内可扫码的仓库任务明细行（按任务顺序分配拣货量） */
+/** 批次内可扫码的仓库任务明细行（按任务顺序分配拣货量） */
 export interface WavePickLine {
   taskId: number
   itemId: number

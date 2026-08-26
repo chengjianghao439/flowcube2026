@@ -107,8 +107,8 @@ export default function DisposalPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="呆滞库存处置"
-        description="圈选呆滞商品生成处置单 → 审批 → 降价促销/退货供应商/报废（处置只走 ERP 端，出库自动扣库存）"
+        title="滞销库存处理"
+        description="圈选滞销商品生成处置单 → 审批 → 降价促销/退货供应商/报废（处置只走 ERP 端，出库自动扣库存）"
         actions={
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/disposals').catch(e => toast.error((e as Error).message))}>导出</Button>

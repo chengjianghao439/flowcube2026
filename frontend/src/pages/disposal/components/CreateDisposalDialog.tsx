@@ -61,7 +61,7 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
 
   async function handleCreate() {
     if (!warehouse) { toast.warning('请选择仓库'); return }
-    if (!rows.length) { toast.warning('请至少圈选一件呆滞商品'); return }
+    if (!rows.length) { toast.warning('请至少圈选一件滞销商品'); return }
     const invalid = rows.find(r => {
       const q = Number(r.quantity)
       return !Number.isFinite(q) || q <= 0
@@ -97,9 +97,9 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) { reset(); onClose() } }}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>新建呆滞处置单</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>新建滞销处理单</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
-          {/* 仓库 + 呆滞建议列表 */}
+          {/* 仓库 + 滞销建议列表 */}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label>选择仓库 *</Label>
@@ -110,12 +110,12 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
                   {warehouses?.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">建议按「90 天无出库」识别呆滞商品</p>
+              <p className="text-xs text-muted-foreground">建议按「90 天无出库」识别滞销商品</p>
             </div>
             <div className="space-y-1 col-span-2">
               <Label>筛选建议</Label>
               <Input
-                placeholder="按商品编码/名称过滤呆滞商品…" value={keyword}
+                placeholder="按商品编码/名称过滤滞销商品…" value={keyword}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKeyword(e.target.value)}
                 disabled={!whId}
               />
@@ -159,7 +159,7 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
             })}
             {!suggestions?.list?.length && (
               <p className="text-center py-6 text-sm text-muted-foreground">
-                {whId ? '没有符合筛选的呆滞商品' : '请先选择仓库'}
+                {whId ? '没有符合筛选的滞销商品' : '请先选择仓库'}
               </p>
             )}
           </div>

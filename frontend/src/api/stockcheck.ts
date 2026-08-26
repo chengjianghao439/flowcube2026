@@ -23,7 +23,7 @@ export const saveCheckItemScansApi = (id: number, itemId: number, scans: { barco
     { headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' } },
   )
 
-// 循环盘点 ABC / 候选（文档 08）
+// 分批盘点 ABC / 候选（文档 08）
 export const recomputeAbcApi = (data: { warehouseId: number; metricType?: string; windowDays?: number }, config?: Parameters<typeof client.post>[2]) =>
   client.post<{ warehouseId: number; metricType: string; windowDays: number; classified: number; totalMetric: number }>('/stockcheck/abc/recompute', data, config)
 export const getAbcListApi = (params: { warehouseId?: number; abcClass?: string }) =>

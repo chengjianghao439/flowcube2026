@@ -8,7 +8,7 @@ import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { WAVE_STATUS_LABEL, type WaveStatus } from '@/api/picking-waves'
 import { todayYmd } from '@/lib/dateTime'
 
-/** 波次查询弹窗对外的筛选值 */
+/** 批次查询弹窗对外的筛选值 */
 export interface WaveQueryValues {
   keyword: string
   status: string
@@ -42,7 +42,7 @@ export default function WaveQueryDialog({ open, initial, onClose, onApply }: Pro
       open={open}
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="wave-query"
-      title="查询波次"
+      title="查询批次"
       resizable={false}
       defaultWidth={520}
       defaultHeight={520}
@@ -60,9 +60,9 @@ export default function WaveQueryDialog({ open, initial, onClose, onApply }: Pro
     >
       <div className="grid h-full grid-cols-2 gap-4 overflow-y-auto px-5 py-4">
         <label className="flex flex-col gap-1 col-span-2">
-          <span className="text-xs font-medium text-muted-foreground">波次单号</span>
+          <span className="text-xs font-medium text-muted-foreground">批次单号</span>
           <Input
-            placeholder="请输入波次号…"
+            placeholder="请输入批次号…"
             value={draft.keyword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
             onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}

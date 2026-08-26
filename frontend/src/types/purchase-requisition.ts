@@ -23,7 +23,7 @@ export interface RequisitionApprovalTask {
   actionAt: string | null
 }
 
-/** 多级审批流实例进度（请购接入 approvalEngine 后有值；否则为 null，前端走单级展示） */
+/** 多级审批流实例进度（采购申请接入 approvalEngine 后有值；否则为 null，前端走单级展示） */
 export interface RequisitionApproval {
   instanceId: number
   status: number

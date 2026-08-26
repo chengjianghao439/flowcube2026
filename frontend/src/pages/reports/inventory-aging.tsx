@@ -51,11 +51,11 @@ export default function InventoryAgingPage() {
     setKeyword(''); setWarehouseId(null); setStaleDays(90)
   }
 
-  // 当前生效筛选摘要（可逐项移除；呆滞阈值默认 90 天不显示）
+  // 当前生效筛选摘要（可逐项移除；滞销阈值默认 90 天不显示）
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseId}`, onRemove: () => setWarehouseId(null) },
-    staleDays !== 90 && { key: 'staleDays', label: `呆滞阈值：${staleDays} 天`, onRemove: () => setStaleDays(90) },
+    staleDays !== 90 && { key: 'staleDays', label: `滞销阈值：${staleDays} 天`, onRemove: () => setStaleDays(90) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const agingCols: TableColumn<AgingItem>[] = [
@@ -70,10 +70,10 @@ export default function InventoryAgingPage() {
     { key: 'qty60_90', title: '60-90天', width: 82, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'qty90p', title: '90+天', width: 82, align: 'right', render: v => Number(v) > 0 ? <span className="tabular-nums font-medium text-amber-600">{fmtQty(v)}</span> : <span className="tabular-nums text-muted-foreground">—</span> },
     { key: 'totalQty', title: '合计', width: 80, align: 'right', render: v => <span className="tabular-nums font-medium">{fmtQty(v)}</span> },
-    { key: 'avgAgeDays', title: '平均库龄', width: 90, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
+    { key: 'avgAgeDays', title: '平均存放时长', width: 90, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
     { key: 'totalValue', title: '金额', width: 110, align: 'right', render: v => <span className="tabular-nums">{fmtMoney(v)}</span> },
     { key: 'lastOutboundAt', title: '最后出库', width: 150, render: v => v ? formatDisplayDateTime(String(v)) : <span className="text-muted-foreground">从未出库</span> },
-    { key: 'isStale', title: '呆滞', width: 96, render: (_, r) => r.isStale ? <SoftStatusLabel label={`呆滞${r.daysSinceOutbound != null ? ` ${r.daysSinceOutbound}天` : ''}`} tone="danger" /> : <span className="text-xs text-muted-foreground">正常</span> },
+    { key: 'isStale', title: '滞销', width: 96, render: (_, r) => r.isStale ? <SoftStatusLabel label={`滞销${r.daysSinceOutbound != null ? ` ${r.daysSinceOutbound}天` : ''}`} tone="danger" /> : <span className="text-xs text-muted-foreground">正常</span> },
   ]
 
   const expiryCols: TableColumn<ExpiryAlert>[] = [
@@ -93,8 +93,8 @@ export default function InventoryAgingPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="库龄与呆滞"
-        description="库龄自本仓落库起算（调拨/拆分会重置）；金额按移动加权成本 avg_cost 估值，仅供参考不作账。呆滞 = 仍有库存且超过阈值天数无出库。"
+        title="存放时长与滞销"
+        description="存放时长自本仓落库起算（调拨/拆分会重置）；金额按移动加权成本 avg_cost 估值，仅供参考不作账。滞销 = 仍有库存且超过阈值天数无出库。"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
@@ -128,7 +128,7 @@ export default function InventoryAgingPage() {
       </div>
 
       <div className="flex gap-1 border-b border-border">
-        {([{ k: 'aging', l: '库龄明细' }, { k: 'expiry', l: '效期预警' }] as const).map(t => (
+        {([{ k: 'aging', l: '存放明细' }, { k: 'expiry', l: '效期预警' }] as const).map(t => (
           <button key={t.k} type="button" onClick={() => setTab(t.k)}
             className={`px-4 py-2 text-sm font-medium transition-colors ${tab === t.k ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}>{t.l}</button>
         ))}

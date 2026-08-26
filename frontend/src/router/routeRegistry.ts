@@ -174,7 +174,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/purchase-requisitions',
-    title: '采购请购',
+    title: '采购申请',
     permission: PERMISSIONS.PURCHASE_REQUISITION_VIEW,
     component: RequisitionsPage,
     keepAlive: true,
@@ -327,7 +327,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/stockcheck/abc',
-    title: 'ABC分类与循环盘规则',
+    title: '商品分档与分批盘规则',
     permission: PERMISSIONS.STOCKCHECK_ABC_VIEW,
     component: AbcClassPage,
     keepAlive: true,
@@ -336,7 +336,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/disposals',
-    title: '呆滞库存处置',
+    title: '滞销库存处理',
     permission: PERMISSIONS.INVENTORY_DISPOSAL_VIEW,
     component: DisposalPage,
     keepAlive: true,
@@ -383,7 +383,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   // ── 仓储 ──────────────────────────────────────────────
   {
     path: '/picking-waves',
-    title: '波次拣货',
+    title: '批次拣货',
     permission: PERMISSIONS.PICKING_WAVE_VIEW,
     component: PickingWavesPage,
     keepAlive: true,
@@ -651,7 +651,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/inventory-aging',
-    title: '库龄与呆滞',
+    title: '存放时长与滞销',
     permission: PERMISSIONS.REPORT_VIEW,
     component: InventoryAgingPage,
     keepAlive: true,
@@ -669,7 +669,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/wave-performance',
-    title: '波次效率',
+    title: '批次效率',
     permission: PERMISSIONS.REPORT_VIEW,
     component: WavePerformancePage,
     keepAlive: true,
@@ -850,7 +850,7 @@ export const routePatterns: RoutePatternEntry[] = [
   },
   {
     pattern: /^\/purchase-requisitions\/(new|\d+)$/,
-    title: (path) => path === '/purchase-requisitions/new' ? '新建请购单' : `请购单 #${path.split('/').pop()}`,
+    title: (path) => path === '/purchase-requisitions/new' ? '新建采购申请单' : `采购申请单 #${path.split('/').pop()}`,
     permission: PERMISSIONS.PURCHASE_REQUISITION_VIEW,
     component: RequisitionFormPage,
     keepAlive: true,

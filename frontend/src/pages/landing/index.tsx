@@ -59,24 +59,24 @@ const SCENARIOS = [
     icon: Warehouse,
     role: '仓管',
     title: '管好每一个库位',
-    desc: '扫码收货上架、波次拣货、分拣复核、盘点调拨，账面与实际始终一致。',
+    desc: '扫码收货上架、批次拣货、分拣复核、盘点调拨，账面与实际始终一致。',
     href: '#/picking-waves',
   },
   {
     icon: PackageSearch,
     role: '采购 / 销售',
     title: '跟紧每一张单',
-    desc: '从请购到入库、从占库到出库，单据状态全程透明，异常随时可追溯。',
+    desc: '从采购申请到入库、从占库到出库，单据状态全程透明，异常随时可追溯。',
     href: '#/purchase',
   },
 ]
 
 // ── 完整业务流（供流程示意）────────────────────────────────────────────
 const FLOW_STEPS = [
-  { icon: Radio, label: '采购下单', desc: '请购、计划到订单全流程', href: '#/purchase' },
+  { icon: Radio, label: '采购下单', desc: '采购申请、计划到订单全流程', href: '#/purchase' },
   { icon: ScanLine, label: '收货上架', desc: '扫码收货、容器上架', href: '#/inbound-tasks' },
   { icon: Server, label: '库存占用', desc: '占库释放、可用量裁决', href: '#/inventory' },
-  { icon: Boxes, label: '拣货复核', desc: '波次拣货、分拣复核打包', href: '#/picking-waves' },
+  { icon: Boxes, label: '拣货复核', desc: '批次拣货、分拣复核打包', href: '#/picking-waves' },
   { icon: Warehouse, label: '打包出库', desc: '装箱贴标、出库确认', href: '#/warehouses' },
   { icon: ShieldCheck, label: '对账结算', desc: '应收应付、对账核销', href: '#/payments/payable' },
 ]
@@ -87,19 +87,19 @@ const MODULES = [
   {
     icon: Boxes,
     title: '采购管理',
-    desc: '请购、计划、下单、收货、上架到供应商结算，全链路留痕。',
+    desc: '采购申请、计划、下单、收货、上架到供应商结算，全链路留痕。',
     href: '#/purchase',
   },
   {
     icon: Radio,
     title: '销售与出库',
-    desc: '订单占库、波次拣货、分拣复核、打包出库，多仓并发不串单。',
+    desc: '订单占库、批次拣货、分拣复核、打包出库，多仓并发不串单。',
     href: '#/sale',
   },
   {
     icon: ScanLine,
     title: '仓储现场',
-    desc: '容器管理、扫码上架、调拨、盘点、呆滞告警，账面与实际一致。',
+    desc: '容器管理、扫码上架、调拨、盘点、滞销告警，账面与实际一致。',
     href: '#/picking-waves',
   },
   {
@@ -117,7 +117,7 @@ const MODULES = [
   {
     icon: Boxes,
     title: '报表与分析',
-    desc: '库存、波次效率、盈亏、利润分析一键导出，经营决策有据可依。',
+    desc: '库存、批次效率、盈亏、利润分析一键导出，经营决策有据可依。',
     href: '#/reports/warehouse-ops',
   },
 ]

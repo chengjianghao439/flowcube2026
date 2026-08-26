@@ -94,8 +94,8 @@ export default function WarehouseOpsPage() {
         description={`实时数据 · 每分钟自动刷新 · 更新于 ${updatedTime}`}
         actions={(
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => openPath('/reports/wave-performance', '波次效率')}>
-              查看波次效率
+            <Button size="sm" variant="outline" onClick={() => openPath('/reports/wave-performance', '批次效率')}>
+              查看批次效率
             </Button>
             <Button size="sm" variant="outline" onClick={() => openPath('/reports/pda-anomaly', 'PDA 异常分析')}>
               查看异常分析

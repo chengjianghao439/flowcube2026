@@ -10,10 +10,10 @@ import type { PendingApproval } from '@/types/approval'
 import type { TableColumn } from '@/types'
 
 const BIZ_LABEL: Record<string, string> = {
-  purchase_requisition: '采购请购单',
+  purchase_requisition: '采购申请单',
   expense_claim: '费用报销',
   purchase_order: '采购单',
-  inventory_disposal: '呆滞处置单',
+  inventory_disposal: '滞销处理单',
 }
 
 export default function ApprovalPendingPage() {
