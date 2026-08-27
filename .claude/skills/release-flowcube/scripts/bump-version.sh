@@ -73,14 +73,31 @@ if (curName !== version) {
   console.log(`  ! versionName 已是 ${version}（同版本重跑），versionCode 保持 ${curCode} 不变`)
 }
 
-// 只替换 defaultConfig 块内的值（不碰块外可能出现同名段）
+// 只替换 defaultConfig 块内的值（不碰块外可能出现同名段）。
+// 两个坑（2026-08-27 实测）：
+//  1. 必须在**当前** gradle 内容上重新锚定块——首次替换（versionCode）会改变块文本，
+//     若仍用最初读取的 cfgMatch 快照做第二次替换（versionName），replace 会因
+//     「快照文本已不存在于文件」而静默不生效（versionName 漏改、无报错）。
+//  2. after === before 可能是「恒等替换」（同版本重跑时值与模式一致），是正常幂等
+//     路径，不抛错——真正的「未匹配」由锚定正则为 null 捕获。
 const replaceInDefault = (pat, repl) => {
-  const before = cfgMatch[0]
+  const m = gradle.match(/defaultConfig\s*\{([\s\S]*?)\}/)
+  if (!m) throw new Error('build.gradle 中找不到 defaultConfig 块')
+  const before = m[0]
   const after = before.replace(pat, repl)
-  gradle = gradle.replace(before, after)
+  if (after !== before) {
+    gradle = gradle.replace(before, after)
+  }
 }
 replaceInDefault(/versionCode\s+\d+/, `versionCode ${nextCode}`)
 replaceInDefault(/versionName\s+"[^"]*"/, `versionName "${version}"`)
+// 写盘前的最终校验：字段必须真实落盘，杜绝静默漏改。
+// 同版本重跑时替换是恒等替换（值未变），绕过本校验是对的——只拦「发生了替换但文件没变」。
+if (curName !== version) {
+  if (!gradle.includes(`versionName "${version}"`) || !gradle.includes(`versionCode ${nextCode}`)) {
+    throw new Error('build.gradle 写盘校验失败：版本字段未全部更新')
+  }
+}
 fs.writeFileSync(gradlePath, gradle)
 
 const apk = JSON.parse(fs.readFileSync(apkJsonPath, 'utf8'))

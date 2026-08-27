@@ -29,7 +29,7 @@
 - **前端**：React 18.3 + TypeScript 5.7 + Vite 6 + Tailwind 3.4 + Radix UI(shadcn 风格) + React Query 5 + Zustand 5 + axios + react-router-dom 6（**HashRouter**）+ recharts。
 - **桌面端**：Electron 33 + electron-builder 25（NSIS 安装包，仅 Windows x64 走 CI）。
 - **PDA**：Capacitor 8（CLI 7），Android `minSdk 23 / target 35 / compileSdk 35`（2026-08-26 由 22 上调：ML Kit 扫码插件 camera 依赖要求 23，Android 5.0 无实际设备），`@vitejs/plugin-legacy` 兼容 Android ≥6，构建目标 `es2015`。
-- **数据库**：MySQL 8.0，`utf8mb4_unicode_ci`，连接池 `timezone=+08:00`。
+- **数据库**：MySQL 8.0，`utf8mb4_unicode_ci`，连接池 `timezone=+08:00`。**业务时间唯一权威时区 = 北京时间**（2026-08-27 固化，见第 20 节第 45 条）：mysql 容器 `TZ=Asia/Shanghai` + my.cnf `default-time-zone='+08:00'`（`NOW()`/`CURRENT_TIMESTAMP` 生成北京字面量）、backend 容器 `TZ=Asia/Shanghai`、前端日期工具强制 +08:00（`lib/dateTime.ts`，不依赖宿主时区）。
 - **部署**：Docker Compose（mysql / backend / frontend-nginx）+ GitHub Actions。
 
 ---
@@ -389,7 +389,8 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 
 - PDA 与 ERP 是**同一份前端代码**，靠 `/pda/*` 路由树与 `PdaLayout` 隔离；每个 PDA 路由用 `PdaRoutePermission` 声明所需权限（与后端权限码一致）。
 - 当前 PDA 页面：`inbound`、`receive/:id`、`putaway[/:id]`、`picking`、`task/:id`、`sort`、`check[/:id]`、`pack[/:id]`、`ship[/:id]`、`split`、`cancel-return[/:id]`（取消归还）、`adjustments[/:id]`（改单物理确认）、`transfer`、`transfer-out/:id`、`transfer-in/:id`、`sale-return`、`sale-return/:id/receive`、`sale-return/:id/putaway`；另有两个不在作业流里的：`/pda/login`（挂在 `PdaProtectedRoute` 之外）与 `/pda/bind`（设备绑定，树内但不校验业务权限）。
-- **PDA 相机扫码**（2026-08-26）：PDA 红外/激光枪只能扫一维条码，绑定二维码（QR）扫不了。`/pda/bind` 绑定页新增「相机扫码」按钮：`hooks/useCameraScanner.ts` 走 `@capacitor-mlkit/barcode-scanning@8.1.0`（ML Kit 原生解码，Capacitor v8 兼容），仅 `Capacitor.isNativePlatform()` 时显示按钮；扫码结果与扫码枪走同一 `handleScan`。原生配置：AndroidManifest `application` 内加了 `com.google.mlkit.vision.DEPENDENCIES = barcode_ui`（README 要求；`barcode` 不含相机取景 UI 会运行时报错），CAMERA 权限已有。**只服务绑定页；其余 PDA 作业页仍用扫码枪（一维条码），不引入相机扫码。**
+- **PDA 相机扫码**（2026-08-26 引入，2026-08-27 修复实现）：PDA 红外/激光枪只能扫一维条码，绑定二维码（QR）扫不了。`/pda/bind` 绑定页新增「相机扫码」按钮：`hooks/useCameraScanner.ts` 走 `@capacitor-mlkit/barcode-scanning@8.1.0`（ML Kit 原生解码，Capacitor v8 兼容），仅 `Capacitor.isNativePlatform()` 时显示按钮；扫码结果与扫码枪走同一 `handleScan`。原生配置：AndroidManifest `application` 内加了 `com.google.mlkit.vision.DEPENDENCIES = barcode_ui`（README 要求；`barcode` 不含相机取景 UI 会运行时报错），CAMERA 权限已有。**只服务绑定页；其余 PDA 作业页仍用扫码枪（一维条码），不引入相机扫码。**
+  - **2026-08-27 修复「点了没反应」**：8.1.0 的 `scan()` 路由到 GMS Code Scanner 一键式界面——要求设备有 Google Play Services 且预装 GMS 扫码模块（`isGoogleBarcodeScannerModuleAvailable` 假直接 reject `ERROR_GOOGLE_BARCODE_SCANNER_MODULE_NOT_AVAILABLE`）；而本项目声明的是 ML Kit 本地模型 `barcode_ui`（unbundled，deps 确为 unbundled 坐标），表单形态不对接，工业 PDA 大多无 Play Services（本地依赖树已验证：`com.google.mlkit:barcode-scanning:17.3.0` 的 AAR 内置 `assets/mlkit_barcode_models/*.tflite`，声明 `barcode_ui` 即模型已打进 APK；如设备无前置相机 `isSupported` 也同理失败）。修复：hook 改用插件自带的 **CameraX 连续扫描 `startScan`**（ML Kit 本地解码，无 GMS 依赖；扫描期持续运行、一次扫码即回调 `barcodesScanned` → `close()` + `handleScan`）；取景机制为「WebView 背景透明 → 插件把原生预览塞进 WebView 底层的兄弟视图」——扫描期间页面根必须透明（`open` 时绑定页**整体让位**只渲引导浮层 + `body.barcode-scanner-active` 透明规则 + PdaLayout 根补 `pda-root` 类），否则原生画面被不透明背景盖住。**改这段前先读 `useCameraScanner.ts` 头注释**（记录了本次根因）。
 - **关键操作不做离线队列**（这是刻意设计，`useOfflineQueue.enqueue` 会直接抛错）：`useCriticalPdaAction` 在断网时**阻断提交**；只有"已提交但结果未知"（网络波动/超时）才记为 pending，恢复网络后先查回执，再由页面提供的 `resolveServerState` 回查真实业务状态兜底。**不要给关键动作加自动重放。**
   - 回执查询走 `GET /api/system/request-status/:key`（`modules/system/system.routes.js`，前端 `api/operation-requests.ts`），断网重连后先查回执确认「上次到底成没成」。**新增关键动作时仍要提供 `resolveServerState`** 作为第二道兜底——回执只覆盖走过 `beginOperationRequest` 的动作，业务真实状态还得回查。目前 PDA 各作业页（含 `sale-return-receive/putaway`）都已提供。
 - 扫码枪走键盘模式，`usePdaScanner` 统一处理：字符间隔 50ms 聚合、最短 3 位、1s 内同码去重；手动输入框需标 `data-scanner-manual="true"` 以避免被扫码缓冲吞掉。
@@ -416,7 +417,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 - 生产服务器 `root@47.93.228.251`，项目在 `/opt/flowcube`，SSH alias `flowcube-prod`（密钥在本机 `~/.ssh/`，不入库）。
 - **`main` 是唯一发布来源**：push main → GitHub Actions `deploy-browser.yml` → SSH 到服务器 → 精确 checkout 到该 commit → `docker compose up -d --build backend frontend`。
 - 打 `v*` tag → `build-desktop.yml`（Windows runner）构建安装包并发布 `latest.json`；`frontend/**` 变更 → `build-pda-apk.yml` 构建 APK。发版统一用 `npm run release:prod`（要求在 main 且工作区干净），或直接用 `/release-flowcube` 技能，**三端版本号必须同步递增**。
-- 数据库迁移**由部署链路自动执行，不需要手动补跑**：`scripts/server-update.sh` 在 `docker compose up -d --build` 之后、健康检查之前显式跑 `docker compose exec -T backend npm run migrate`（用新镜像里的迁移文件，失败即中断部署）。「后端进程启动时不自动迁移」说的是 `backend/index.js`，别把两者混为一谈——推 main 时迁移是跟着一起上的。只有绕开该脚本手动改动服务器时才需要自己跑一次。
+- 数据库迁移**由部署链路自动执行，不需要手动补跑**：`scripts/server-update.sh` 在 `docker compose up -d --build` 之后、健康检查之前显式跑 `docker compose exec -T backend npm run migrate`（用新镜像里的迁移文件，失败即中断部署）。「后端进程启动时不自动迁移」说的是 `backend/index.js`，别把两者混为一谈——推 main 时迁移是跟着一起上的。只有绕开该脚本手动改动服务器时才需要自己跑一次。**2026-08-27 起该脚本在 up backend/frontend 之后、migrate 之前追加 `docker compose up -d --no-build mysql`**——mysql 容器不在重建列表里，但首次部署时区改动（`TZ` + my.cnf 挂载）需要显式 up 才生效；数据卷不动、无停机迁移。
 - 桌面更新源：`/var/www/flowcube-downloads/latest.json`（顶层唯一权威入口，由 `scripts/release-desktop.js` 写入）；`current/` 只放固定文件名的当前安装包；`/downloads` 是**已废弃**的兼容别名（仅 GET/HEAD）。
 - 应急手动部署：`ssh flowcube-prod 'cd /opt/flowcube && SKIP_RELEASE_GATE=1 bash scripts/server-update.sh'`。
 - 其他运维脚本（2026-08-21 重构，容器名不再硬编码）：
@@ -739,3 +740,30 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **修复**（bump-version.sh）：① 幂等核心——只有 `versionName` 真变化（新版本）才 `versionCode +1`，同版本重跑保持不动并打印提示；② `publishedAt` 只随真换版本刷新（同版本重跑不虚更新日期）；③ 正则锚定 `defaultConfig` 块（防误匹配块外同名字段）；④ 版本/编号合法性校验（缺失即报错，不再静默）。
     - 测试两场景全过：同版本重跑 ×2 → versionCode 与 publishedAt 均不变；真换版本 0.7.1→0.7.2 → versionCode 100→101、publishedAt 刷新、三端 package.json 一致。
     - SKILL.md 已同步：写明「脚本幂等；推荐先写 notes 再 bump，顺序颠倒重跑也安全」。
+
+44. **2026-08-27 PDA 绑定页相机扫码修复（`BarcodeScanner.scan()` → `startScan()`，工作区未提交）**：
+    - 背景：用户反馈「绑定密钥点击扫描还是无法调用系统摄像头」。上一版（第 14 节，v0.7.0 引入）用 `BarcodeScanner.scan()`，8.1.0 里该 API 路由到 **GMS Code Scanner 一键式界面**：要求设备有 Google Play Services 且预装 GMS 扫码模块，模块不可用直接 reject —— 工业 PDA 大多无 Play Services，且与项目声明的 ML Kit 本地模型（unbundled `barcode_ui`）形态不对接（`deployment` 是 16.1.0 的 docs 老路径，8.x 的 16.1.2 AAR 就不内置模型了，17.3.0 才带 `assets/mlkit_barcode_models/*.tflite`——本项目解析的正是 17.3.0，AAR 内容已实测：内置 3 个 tflite 模型）。`isSupported()` 只查硬件特性，真机无前置相机也会失败（后端 16/17 摄像头另有 8.x 弃用但本机有）。
+    - **修复**（`useCameraScanner.ts` + `pages/pda/bind.tsx` + `layouts/PdaLayout.tsx` + `index.css`，全前端）：
+      - hook 改调**插件自带 CameraX 连续扫描 `startScan({ formats: [QrCode] })`**（ML Kit 本地解码，无 GMS 依赖），`barcodesScanned` 事件驱动 → 调 `onResult`；扫描保持打开（补扫不重开相机），调用方 `close()` 停止。
+      - 取景机制：插件把原生预览塞进 WebView 底层的兄弟视图，靠 WebView 背景透明透出 —— 而页面上 body/PdaLayout 根/绑定页主内容全都是不透明背景，原生画面即使开了也被整个盖住（「点了按钮什么也没发生」的第二层原因）。修复：**扫描期间绑定页整体让位**（`open` 时只渲染透明根 `CameraOverlay` 浮层，主内容全退出），CSS 加 `body.barcode-scanner-active`（`background: transparent !important` 作用于 body 与 `.pda-root`），PdaLayout 根容器补 `pda-root` 类。
+      - CameraOverlay 是 JSX 组件，放 `.ts` 的 hook 文件会解析错误，移到 `bind.tsx` 本地组件（本项目 react-refresh warning 存量原因即组件+函数同文件，照此惯例）。
+    - 验证：前端 lint 0 error（5 存量 warning）、tsc 0 错误、`build:pda` 生产构建通过、Android 依赖树解析正常（`com.google.mlkit:barcode-scanning:17.3.0` 已含）。**需重新构建 APK 并安装才能生效**（`Capacitor.isNativePlatform()` 为假则 hook 恒不可用，浏览器 dev 无法验证——这是纯原生行为，验证方式=真机装新 APK 点「相机扫码」）。
+    - 边界（未做）：`scan()` 的 GMS 路径与 `isGoogleBarcodeScannerModuleAvailable`/模块安装没做（工业 PDA 无 Play Services，走不上）；`startScan` 无「扫到即停」语义，一次扫码即回调但相机保持开——绑定完成后 `close()` 已停；权限：系统弹窗拒绝后需去设置手动开（浮层文案已提示）。**下次把这个功能挂到 PDA 其它作业页（如收货）时，记得也要处理取景期背景透明的整页让位，并给相机加权限引导。**
+
+45. **2026-08-27 系统时间强制北京时间（前后端全链固化，工作区未提交）**：
+    - 需求：用户要求「把系统时间改为北京时间」——不是显示层改一改，而是全系统业务时间唯一权威时区 == +08:00，任何环节（DB 默认值、服务进程、前端设备时区）都不再影响业务日期/时间的正确性。范围=**业务时间**（日期流水、账款到期日、报表口径、显示），不强制物理时间戳格式。
+    - **根因清单**（5 类）：
+      - ① MySQL 官方镜像默认 UTC：`NOW()`/`CURRENT_TIMESTAMP` 生成的 created_at 与连接池 `timezone=+08:00` 差 8 小时；
+      - ② mysql2 连接池 timezone **读写均生效**：写把 Date 序列化成北京字面量；读把 DATETIME 拼 +08:00 解析（时间轴正确）、把 DATE 解析成「北京午夜」——**`toISOString().slice(0,10)` 在 +08 下回退一天**（dashboard/报表/reports.metrics 的 daily 序列/payment-aging/hr/procurement 6+ 处同类 bug）；
+      - ③ 后端进程 `TZ` 未显式设置：Node 的 `getFullYear/getHours` 依赖宿主时区，本地开发无影响但容器/CI 不可控；
+      - ④ 前端 `formatDisplayDateTime/formatDisplayDate/todayYmd` 用宿主本地字段：用户设备改时区（出差、PDA 设置恶意篡改）即显示错位；
+      - ⑤ 无时区后缀日期字符串（'YYYY-MM-DD HH:mm:ss'）被 V8 原生 parse 按**宿主时区**解释。
+    - **修复**：
+      - **MySQL**（docker/my.cnf）：`default-time-zone = '+08:00'`——偏移量格式不查 time_zone 表，任何 MySQL 都支持；`NOW()`/`CURRENT_TIMESTAMP` 默认值直接生成北京时间字面量（本机实测）。docker-compose.yml 给 mysql 服务加 `TZ: Asia/Shanghai`（system_time_zone 与日志显示）。
+      - **server-update.sh**：`docker compose up -d --build backend frontend` 之后、migrate 之前追加 `docker compose up -d --no-build mysql`——mysql 容器不在重建列表里，但 my.cnf 挂载/TZ 变更要重建容器进程才生效；数据卷不动、只重启进程，无停机迁移。
+      - **后端**（Dockerfile.backend + compose）：容器 `ENV TZ=Asia/Shanghai` 并安装 tzdata；新增 `utils/backendTime.js`（`beijingTodayYmd` / `beijingYmdAddDays`，+8h 偏移 + UTC 字段法，纯 Offset 无 TZ 依赖）。后端「今天/当前月」计算全部改走它：dashboard、payment-aging、reports.query（pda-performance、warehouse-ops、KPI 3 处默认期间）、inventory.procurement、hr.payPayroll、scheduler（循环盘/钉钉预警/库存漂移 3 个 worker 的去重日期）、codeGenerator.generateDailyCode（单号日期流水）、pda-devices.generateDeviceCode（设备码日期）、accounting.period（当前期间）、finance-accounts/expense-claims/refund-orders（happenedAt 默认今天）、finance-dashboard（近 6 月区间）、excelExport（打印日期）、export.service（文件名日期戳）、settings（logo 缓存时间戳）、logger（日志时间戳）。
+      - **前端**（`lib/dateTime.ts` 重写）：`toDate` 三种输入统一——Date 原样、数字毫秒、**无时区字符串按 +08:00 显式解析（−8h 得绝对时刻，不再交给宿主时区 parse）**、带 Z/±HH:MM 自含偏移原样 parse；`formatDisplayDateTime/formatDisplayDate/todayYmd` 与新增 `beijingHour()` 全部走 `beijingFields`（+8h 偏移 + getUTC* 字段）。PDA 首页问候语（`pages/pda/index.tsx`）改用 `beijingHour()`（此前 `new Date().getHours()` 依赖设备时区）。
+    - **验证**：
+      - 边界模拟：`TZ=UTC/America-Los_Angeles/Asia/Shanghai` 三种宿主下跑前端工具 11 用例全过（UTC 16:30 = 北京次日 00:30、无时区字符串 18:30:00 → 18:30、带 +05:00/−07:00 偏移、仅日期 → 北京零点、非法回退）；`TZ=UTC` 下 backendTime 输出 2026-08-27（+7 天 09-03）与上海时区一致；logger 时间戳在 TZ=UTC 与 Asia/Shanghai 下输出完全一致。
+      - 实测：smoke:mainline 49、smoke:finance 103、smoke:accounting 11、smoke:accounting-period 14、smoke:refund-orders 14、smoke:reports 11 项全绿、test:integration 96、test:permissions 184/184；两端 lint 0 error（前端 5 存量 warning）、前端 tsc 0 错误、`build:pda` 通过；浏览器实测 PDA 首页问候语与时钟（本机 +08 下 18:11 /「晚上好」与 Node 计算的北京时间一致）。
+    - **边界**：①「存库格式」不变——DATETIME 列存的仍是北京字面量（与连接池读写字面量一致），无迁移、无数据改写；② mysql 容器重建只发生在下次 server-update 部署——**本次改动需发版生效**，发版时该行会滚动重建 mysql（唯一一次容器重启，数据卷不动）；③ 物理时间戳（`toISOString`/epoch）语义不变，只改「按本地字段取日期」的地方；④ 前端「无时区字符串按北京解析」要求后端输出与解析互为逆映射——已有后端全链 +08:00 背书；⑤ landing 官网不属业务时间，未动。
