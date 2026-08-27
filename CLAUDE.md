@@ -740,8 +740,9 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **修复**（bump-version.sh）：① 幂等核心——只有 `versionName` 真变化（新版本）才 `versionCode +1`，同版本重跑保持不动并打印提示；② `publishedAt` 只随真换版本刷新（同版本重跑不虚更新日期）；③ 正则锚定 `defaultConfig` 块（防误匹配块外同名字段）；④ 版本/编号合法性校验（缺失即报错，不再静默）。
     - 测试两场景全过：同版本重跑 ×2 → versionCode 与 publishedAt 均不变；真换版本 0.7.1→0.7.2 → versionCode 100→101、publishedAt 刷新、三端 package.json 一致。
     - SKILL.md 已同步：写明「脚本幂等；推荐先写 notes 再 bump，顺序颠倒重跑也安全」。
+    - **2026-08-27 发版实测又修一个静默漏改**：`replaceInDefault` 用最初读取的 `defaultConfig` 快照做两次替换——第一次替换 versionCode 改变文件内容后，第二次拿旧快照 replace versionName 找不到匹配、**静默返回原文本**（versionName 停在旧版、versionCode 已 +1，无任何报错；v0.7.2 bump 时初版脚本正是这样漏改了 build.gradle 的 versionName）。修复：每次替换**重新锚定** defaultConfig 块；`after === before` 是正常幂等路径（同版本重跑的恒等替换）不抛错，真正的「未匹配」由锚定正则 null 捕获；写盘前对「发生了替换的字段」做落盘校验。**再改这个脚本时记住：任何对文件内容的二次操作都不能基于第一次读取的快照。**
 
-44. **2026-08-27 PDA 绑定页相机扫码修复（`BarcodeScanner.scan()` → `startScan()`，工作区未提交）**：
+44. **2026-08-27 PDA 绑定页相机扫码修复（`BarcodeScanner.scan()` → `startScan()`，已随 v0.7.2 发布，提交 `f035853`）**：
     - 背景：用户反馈「绑定密钥点击扫描还是无法调用系统摄像头」。上一版（第 14 节，v0.7.0 引入）用 `BarcodeScanner.scan()`，8.1.0 里该 API 路由到 **GMS Code Scanner 一键式界面**：要求设备有 Google Play Services 且预装 GMS 扫码模块，模块不可用直接 reject —— 工业 PDA 大多无 Play Services，且与项目声明的 ML Kit 本地模型（unbundled `barcode_ui`）形态不对接（`deployment` 是 16.1.0 的 docs 老路径，8.x 的 16.1.2 AAR 就不内置模型了，17.3.0 才带 `assets/mlkit_barcode_models/*.tflite`——本项目解析的正是 17.3.0，AAR 内容已实测：内置 3 个 tflite 模型）。`isSupported()` 只查硬件特性，真机无前置相机也会失败（后端 16/17 摄像头另有 8.x 弃用但本机有）。
     - **修复**（`useCameraScanner.ts` + `pages/pda/bind.tsx` + `layouts/PdaLayout.tsx` + `index.css`，全前端）：
       - hook 改调**插件自带 CameraX 连续扫描 `startScan({ formats: [QrCode] })`**（ML Kit 本地解码，无 GMS 依赖），`barcodesScanned` 事件驱动 → 调 `onResult`；扫描保持打开（补扫不重开相机），调用方 `close()` 停止。
@@ -750,7 +751,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - 验证：前端 lint 0 error（5 存量 warning）、tsc 0 错误、`build:pda` 生产构建通过、Android 依赖树解析正常（`com.google.mlkit:barcode-scanning:17.3.0` 已含）。**需重新构建 APK 并安装才能生效**（`Capacitor.isNativePlatform()` 为假则 hook 恒不可用，浏览器 dev 无法验证——这是纯原生行为，验证方式=真机装新 APK 点「相机扫码」）。
     - 边界（未做）：`scan()` 的 GMS 路径与 `isGoogleBarcodeScannerModuleAvailable`/模块安装没做（工业 PDA 无 Play Services，走不上）；`startScan` 无「扫到即停」语义，一次扫码即回调但相机保持开——绑定完成后 `close()` 已停；权限：系统弹窗拒绝后需去设置手动开（浮层文案已提示）。**下次把这个功能挂到 PDA 其它作业页（如收货）时，记得也要处理取景期背景透明的整页让位，并给相机加权限引导。**
 
-45. **2026-08-27 系统时间强制北京时间（前后端全链固化，工作区未提交）**：
+45. **2026-08-27 系统时间强制北京时间（前后端全链固化，已随 v0.7.2 发布，提交 `f035853`）**：
     - 需求：用户要求「把系统时间改为北京时间」——不是显示层改一改，而是全系统业务时间唯一权威时区 == +08:00，任何环节（DB 默认值、服务进程、前端设备时区）都不再影响业务日期/时间的正确性。范围=**业务时间**（日期流水、账款到期日、报表口径、显示），不强制物理时间戳格式。
     - **根因清单**（5 类）：
       - ① MySQL 官方镜像默认 UTC：`NOW()`/`CURRENT_TIMESTAMP` 生成的 created_at 与连接池 `timezone=+08:00` 差 8 小时；
