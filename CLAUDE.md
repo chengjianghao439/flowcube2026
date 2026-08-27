@@ -421,7 +421,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 - 桌面更新源：`/var/www/flowcube-downloads/latest.json`（顶层唯一权威入口，由 `scripts/release-desktop.js` 写入）；`current/` 只放固定文件名的当前安装包；`/downloads` 是**已废弃**的兼容别名（仅 GET/HEAD）。
 - 应急手动部署：`ssh flowcube-prod 'cd /opt/flowcube && SKIP_RELEASE_GATE=1 bash scripts/server-update.sh'`。
 - 其他运维脚本（2026-08-21 重构，容器名不再硬编码）：
-  - `scripts/lib/ops-common.sh`：运维脚本公共库——`resolve_container()` 三级回退解析 compose 容器名（`docker compose ps -q` → 期望名 → 捞被 Docker 改名加 hash 前缀的容器，2026-08-21 事故的教训：容器被改名后硬编码名字会让备份静默失败 12 天）、`read_dingtalk_webhook()`、`dingtalk_send()`。
+  - `scripts/lib/ops-common.sh`：运维脚本公共库——`resolve_container()` 三级回退解析 compose 容器名（`docker compose ps -q` → 期望名 → 捞被 Docker 改名加 hash 前缀的容器，2026-08-21 事故的教训：容器被改名后硬编码名字会让备份静默失败 12 天）、`read_dingtalk_webhook()`、`dingtalk_send()`、`ts()`（2026-08-27 补：server-update.sh 的 fail_deploy 经公共库调 `$(ts)` 曾 command not found，部署失败告警缺时间戳；各脚本自带同名 ts() 覆盖它，行为不变）。
   - `scripts/backup-db.sh`（每日 02:00 容器内 mysqldump，保留 14 天）：**失败零残留**——先写 `.part` 临时文件，通过体积 + gzip + 建表语句三重校验才落正式名；任何失败删除残骸并推钉钉。**不要改回 `set -e` + 管道直写最终文件的旧写法**（那是 8-10 起连续 12 天空备份的根因）。
   - `scripts/monitor.sh`（每 5 分钟健康检查 + 钉钉告警）：状态去抖改为 `bad <epoch>` 格式，持续异常按 `REMIND_HOURS`（默认 24h）重提醒，不再只响一声。
   - `scripts/daily-report.sh`（每日 09:00 日报）：只统计体积 ≥ `MIN_BYTES`（默认 1024）的有效备份，损坏文件单列"待清理"。
@@ -768,3 +768,10 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
       - 边界模拟：`TZ=UTC/America-Los_Angeles/Asia/Shanghai` 三种宿主下跑前端工具 11 用例全过（UTC 16:30 = 北京次日 00:30、无时区字符串 18:30:00 → 18:30、带 +05:00/−07:00 偏移、仅日期 → 北京零点、非法回退）；`TZ=UTC` 下 backendTime 输出 2026-08-27（+7 天 09-03）与上海时区一致；logger 时间戳在 TZ=UTC 与 Asia/Shanghai 下输出完全一致。
       - 实测：smoke:mainline 49、smoke:finance 103、smoke:accounting 11、smoke:accounting-period 14、smoke:refund-orders 14、smoke:reports 11 项全绿、test:integration 96、test:permissions 184/184；两端 lint 0 error（前端 5 存量 warning）、前端 tsc 0 错误、`build:pda` 通过；浏览器实测 PDA 首页问候语与时钟（本机 +08 下 18:11 /「晚上好」与 Node 计算的北京时间一致）。
     - **边界**：①「存库格式」不变——DATETIME 列存的仍是北京字面量（与连接池读写字面量一致），无迁移、无数据改写；② mysql 容器重建只发生在下次 server-update 部署——**本次改动需发版生效**，发版时该行会滚动重建 mysql（唯一一次容器重启，数据卷不动）；③ 物理时间戳（`toISOString`/epoch）语义不变，只改「按本地字段取日期」的地方；④ 前端「无时区字符串按北京解析」要求后端输出与解析互为逆映射——已有后端全链 +08:00 背书；⑤ landing 官网不属业务时间，未动。
+
+46. **2026-08-28 钉钉经营预警「查看」链接无效（已随 v0.7.3 发布，提交 `4092fc1`/`a1e580e`）**：
+    - 需求：用户反馈预警推送（1 笔应付逾期/4 笔应收逾期/100 项呆滞）点「查看」——电脑端无反应、手机端打开网页显示无法连接。
+    - **根因**：`scheduler.js` 的 dingtalk-alert worker 把 `notifications.service.buildNotifications` 的 `t.path`（相对路径，如 `/payments/payable`）直接写进钉钉 markdown 链接（`[查看](${t.path})`）。钉钉客户端只认绝对 http(s) URL，相对路径被解析到钉钉自己域下成为死链。且前端是 **HashRouter**，即使拼域也要 `/#` 前缀（`https://jixuflow.com/#/payments/payable` 才可点）。
+    - **修复**（仅 `backend/src/scheduler.js`）：本地拼 `alertLink(path)`——`APP_PUBLIC_URL`（生产必填，config/env.js 校验）+ `/#` + path；未配置时降级为原相对路径（本地 dev 不影响）。**注意哈：钉钉/短信等站外链接一律要拼绝对 URL + HashRouter 前缀，不要再直接写相对 path。**
+    - 验证：node 直测 7 例（含带查询串/尾斜杠/空 path）+ mainline 49/49 + 后端 lint 0。
+    - 说明：桌面端/PDA 此版无功能变化，仅随版本号同步（三端 0.7.3，PDA versionCode 102）。

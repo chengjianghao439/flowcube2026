@@ -60,6 +60,11 @@ read_dingtalk_webhook() {
   fi
 }
 
+# 推送到钉钉的消息/日志统一时间戳（2026-08-27 部署时发现缺失：ops-common.sh 里没有
+# ts() 定义，而 server-update.sh 的 fail_deploy 经公共库调 $(ts) 会 command not found，
+# 部署失败告警的时间戳缺失。各运维脚本内置的同名 ts() 会覆盖此定义，行为不变）
+ts() { date '+%Y-%m-%d %H:%M:%S'; }
+
 # 推送钉钉文本消息；未配置 webhook 时静默跳过（仍由调用方写日志）。
 #   用法：dingtalk_send "$webhook" "消息内容"
 dingtalk_send() {
