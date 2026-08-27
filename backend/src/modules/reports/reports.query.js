@@ -3,6 +3,7 @@ const { buildDateFilter } = require('./reports.helpers')
 const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
 const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
 const { scopeFilter } = require('../../utils/warehouseScope')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 const logger = require('../../utils/logger')
 
 async function fetchOne(sql, params = []) {
@@ -190,7 +191,7 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
 }
 
 async function fetchPdaPerformanceRows(scopeWarehouseIds = null) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = beijingTodayYmd()
   // scan_logs 通过 task_id → warehouse_tasks 关联仓库；带 scope 时按任务仓库过滤
   const join = scopeWarehouseIds && Array.isArray(scopeWarehouseIds)
     ? `INNER JOIN warehouse_tasks wt ON wt.id = sl.task_id AND wt.warehouse_id IN (${scopeWarehouseIds.map(() => '?').join(',')})`
@@ -296,7 +297,7 @@ async function fetchWavePerformanceRows({ startDate = null, endDate = null, scop
 }
 
 async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = beijingTodayYmd()
   // scope：warehouse_tasks / inbound_tasks 自带 warehouse_id；scan_logs 经 task_id 关联。
   const wtWh = scopeFilter(scopeWarehouseIds, 'wt.warehouse_id')
   const itWh = scopeFilter(scopeWarehouseIds, 'it.warehouse_id')
@@ -917,8 +918,8 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
  * 复用 profitAnalysis 的毛利口径（cost_snapshot 优先），保证两个报表数字一致。
  */
 async function fetchKpiRows({ period = null, offsetPeriods = -1, scopeWarehouseIds = null } = {}) {
-  const now = new Date()
-  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  // 默认期间 = 北京时间的当月（显式 backendTime：月报口径按业务日历分月）
+  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : beijingTodayYmd().slice(0, 7)
   const [y, m] = p.split('-').map(Number)
   const offset = Number(offsetPeriods) || -1
   const monthsAgo = (n) => {
@@ -1003,8 +1004,8 @@ async function fetchKpiRows({ period = null, offsetPeriods = -1, scopeWarehouseI
  * months 为包含当前月在内的月数（默认 12）；period 为空时以当前月为最后一个点。
  */
 async function fetchKpiTrendRows({ period = null, months = 12, scopeWarehouseIds = null } = {}) {
-  const now = new Date()
-  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  // 默认末月 = 北京时间的当月（同 fetchKpiRows 口径）
+  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : beijingTodayYmd().slice(0, 7)
   const n = Math.max(1, Math.min(36, Number(months) || 12))
   const [y, m] = p.split('-').map(Number)
   const monthsAgo = (k) => {
@@ -1067,8 +1068,8 @@ async function fetchKpiTrendRows({ period = null, months = 12, scopeWarehouseIds
  * 分仓发货单的归属以订单头仓为准，与卡片数字同口径对比）。
  */
 async function fetchKpiByWarehouseRows({ period = null, scopeWarehouseIds = null } = {}) {
-  const now = new Date()
-  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  // 默认期间 = 北京时间的当月（同 fetchKpiRows 口径）
+  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : beijingTodayYmd().slice(0, 7)
   const soWh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
 
   const rows = await fetchMany(

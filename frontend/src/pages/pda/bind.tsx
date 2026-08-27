@@ -31,10 +31,42 @@ import {
 } from '@/lib/pdaDeviceBinding'
 import { ensureDeviceSession } from '@/api/pda-session'
 
+/**
+ * 相机扫码引导浮层（扫描期间主内容整体让位，见 handleCameraScan）：
+ * 浮层本身不画任何大块背景——相机画面由「WebView 背景透明」透出的原生视图呈现，
+ * 悬浮 UI 只负责引导文案与取消按钮。
+ */
+function CameraOverlay({ onCancel, scanning }: { onCancel: () => void; scanning: boolean }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-end pb-[16vh] pointer-events-none">
+      <div className="pointer-events-auto rounded-2xl border border-border bg-black/60 px-5 py-3 text-center text-white backdrop-blur-sm">
+        <div className="text-sm">
+          {scanning ? (
+            <>
+              <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white align-middle" />
+              正在识别…
+            </>
+          ) : (
+            '将二维码对准取景框'
+          )}
+        </div>
+        <p className="mt-1 text-xs text-white/70">若相机已打开但没有画面，请检查系统相机权限</p>
+      </div>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="pointer-events-auto mt-4 rounded-full bg-background/90 px-8 py-2 text-sm font-medium text-foreground shadow-lg active:scale-95"
+      >
+        取消
+      </button>
+    </div>
+  )
+}
+
 export default function PdaBindPage() {
   const nav = useNavigate()
   const { flash, ok, err, warn } = usePdaFeedback()
-  const { scan, scanning } = useCameraScanner()
+  const { scan, close, scanning, open } = useCameraScanner()
   const [credential, setCredential] = useState(() => getDeviceCredential())
   const [session, setSession] = useState(() => getDeviceSession())
   const [manual, setManual] = useState({ code: '', secret: '' })
@@ -73,12 +105,14 @@ export default function PdaBindPage() {
   }
 
   async function handleCameraScan() {
-    const raw = await scan()
-    if (raw) {
-      handleScan(raw)
-    } else {
-      err('未识别到二维码，请让 ERP 屏幕上的绑定码对准相机取景框')
-    }
+    await scan(
+      raw => {
+        // 相机取景在原生层，一个扫码结果回调即完成本次绑定；关闭取景后 toast 提示
+        close()
+        handleScan(raw)
+      },
+      () => err('无法打开相机，本机可能没有摄像头或相机被其他应用占用'),
+    )
   }
 
   async function handleUnbind() {
@@ -86,6 +120,17 @@ export default function PdaBindPage() {
     setCredential(null)
     setSession(null)
     warn('已解除绑定，这台机器需要重新扫码才能继续作业')
+  }
+
+  // —— 相机取景模式（startScan 的原生预览从 WebView 底层透出）—————
+  // 页面主内容全部让位：只渲染透明根 + 引导浮层，否则 header/卡片/底栏的
+  // 不透明背景会盖住预览，页面文字也会叠在相机画面上。
+  if (open) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <CameraOverlay onCancel={close} scanning={scanning} />
+      </div>
+    )
   }
 
   return (

@@ -1,4 +1,5 @@
 const { pool } = require('../../config/db')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 
 /**
  * 应收 / 应付账龄分析（as-of 今天）。
@@ -99,7 +100,7 @@ async function aging({ topLimit = 8 } = {}) {
     topParties(1, topLimit),
   ])
   return {
-    asOf: new Date().toISOString().slice(0, 10),
+    asOf: beijingTodayYmd(),
     receivable: { ...receivable, topParties: arTop },
     payable: { ...payable, topParties: apTop },
   }

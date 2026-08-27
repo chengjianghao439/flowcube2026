@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 
 const STATUS = Object.freeze(['active', 'disabled', 'retired'])
@@ -17,8 +18,8 @@ function generateSecret() {
 
 /** 设备码：PDA-YYMMDD-XXXX，肉眼可读、便于现场对号，唯一性由数据库唯一键兜底 */
 async function generateDeviceCode(conn = pool) {
-  const now = new Date()
-  const ymd = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  // 北京时间的 YYMMDD（按业务日期分天，不依赖进程 TZ）
+  const ymd = beijingTodayYmd().replace(/-/g, '').slice(2)
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const suffix = crypto.randomBytes(2).toString('hex').toUpperCase()
     const code = `PDA-${ymd}-${suffix}`

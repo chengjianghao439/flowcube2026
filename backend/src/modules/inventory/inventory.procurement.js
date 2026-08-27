@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const { scopeFilter } = require('../../utils/warehouseScope')
+const { beijingYmdAddDays } = require('../../utils/backendTime')
 
 /**
  * 采购计划预测（文档 11 · MVP 只读报表版）。纯只读：基于历史出库趋势预测未来需求，
@@ -28,9 +29,8 @@ const IN_TRANSIT_SQL = `(
 )`
 
 function addDays(days) {
-  const d = new Date()
-  d.setDate(d.getDate() + Number(days || 0))
-  return d.toISOString().slice(0, 10)
+  // 北京时间的今天 + days 天（此前 d.setDate + toISOString 是 UTC 截断，+08 午夜前会回退一天）
+  return beijingYmdAddDays(Number(days || 0))
 }
 
 async function getProcurementPlan({ window = 30, horizon = 30, keyword = '', warehouseId = null, defaultLeadTime = 7, scopeWarehouseIds = null, forecastMethod = 'sma' }) {

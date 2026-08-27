@@ -9,6 +9,11 @@ services:
         max-size: "50m"
         max-file: "3"
     environment:
+      # 【时区固化 2026-08-27】MySQL 服务端时区 = 北京时间。官方 mysql:8.0 镜像
+      # 默认 UTC，NOW()/CURRENT_TIMESTAMP 默认值会与后端连接池 timezone=+08:00
+      # 的读写字面量差 8 小时。TZ 环境变量对官方镜像的 mysqld 生效（读 /etc/localtime
+      # 的 system_time_zone；MySQL 的 session time_zone 默认继承 system）。
+      TZ: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       MYSQL_DATABASE: ${DB_NAME:?DB_NAME is required}
       MYSQL_USER: ${DB_USER:?DB_USER is required}
@@ -45,6 +50,10 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      # 【时区固化 2026-08-27】业务时间唯一权威时区 = 北京时间。
+      # Dockerfile.backend 已设 ENV TZ，这里显式再声明一眼可读；mysql 容器同名，
+      # 使 NOW()/CURRENT_TIMESTAMP 默认值也与 +08:00 连接池读写一致。
+      TZ: Asia/Shanghai
       PORT: ${PORT:-3000}
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: ${DB_PORT:-3306}

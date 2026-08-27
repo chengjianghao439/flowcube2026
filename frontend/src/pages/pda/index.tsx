@@ -24,7 +24,7 @@ import type { PdaTodoCounts } from '@/api/pda'
 import { PdaEmptyCard } from '@/components/pda/PdaEmptyState'
 import SystemBrand from '@/components/shared/SystemBrand'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDateTime, beijingHour } from '@/lib/dateTime'
 import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
 
 type OpTone = 'blue' | 'green' | 'orange' | 'purple' | 'teal' | 'red' | 'indigo' | 'cyan'
@@ -92,7 +92,8 @@ export default function PdaWorkbench() {
   const navigate = useNavigate()
   const user     = useAuthStore(s => s.user)
   const logout   = useAuthStore(s => s.logout)
-  const hour     = new Date().getHours()
+  // 问候语按北京时间分时段（不依赖设备时区——仓库 PDA 时间被改慢/改快不影响显示）
+  const hour     = beijingHour()
   const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
   const { roleLabel, roleColor, can, canAll, permissionsMissing } = usePdaRole()
   const [moreOpen, setMoreOpen] = useState(false)

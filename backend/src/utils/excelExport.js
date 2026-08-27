@@ -1,4 +1,5 @@
 const ExcelJS = require('exceljs')
+const { beijingTodayYmd } = require('./backendTime')
 
 /**
  * 日期列格式化为 YYYY-MM-DD。
@@ -130,7 +131,7 @@ async function exportStatementXlsx(res, meta, items) {
     [`${meta.partyLabel}：${meta.partyName}`, `对账单号：${meta.statementNo}`],
     [
       `对账期间：${ymd(meta.periodStart) || '—'} 至 ${ymd(meta.periodEnd) || '—'}`,
-      `打印日期：${ymd(new Date())}`,
+      `打印日期：${beijingTodayYmd()}`,
     ],
   ]
   infoRows.forEach((pair, i) => {

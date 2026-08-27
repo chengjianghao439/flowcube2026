@@ -87,6 +87,8 @@ async function generateMasterCode(conn, prefix, table, codeField = 'code') {
   return `${prefix}${String(Number(maxNum) + 1).padStart(6, '0')}`
 }
 
+const { beijingTodayYmd } = require('./backendTime')
+
 /**
  * 生成业务单据编码（日期流水）。
  *
@@ -100,8 +102,8 @@ async function generateMasterCode(conn, prefix, table, codeField = 'code') {
  */
 async function generateDailyCode(conn, prefix, table, codeField) {
   const resolvedPrefix = await resolvePrefix(conn, prefix, table)
-  const d = new Date()
-  const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+  // 北京时间的 YYYYMMDD（显式 backendTime：单号按业务日期分天，不依赖进程 TZ）
+  const dateStr = beijingTodayYmd().replace(/-/g, '')
   const todayPrefix = `${resolvedPrefix}${dateStr}`
   const seqKey = `${table}:${codeField}:${dateStr}`
 

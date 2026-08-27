@@ -73,7 +73,12 @@ async function pdaPerformance(scopeWarehouseIds = null) {
     topOperator: operators[0] || null,
     operators,
     daily: daily.map(d => ({
-      date: d.date.toISOString ? d.date.toISOString().slice(0, 10) : String(d.date),
+      // 注意：mysql2 在 timezone=+08:00 下把 DATE 解析成「北京当地午夜」的 Date，
+      // toISOString().slice(0,10) 会整体回退一天（UTC 前一日）。按本地字段取，
+      // 与 excelExport.ymd 同一口径（TZ=Asia/Shanghai 下 getFullYear 即北京日期）。
+      date: d.date instanceof Date && !Number.isNaN(d.date.getTime())
+        ? `${d.date.getFullYear()}-${String(d.date.getMonth() + 1).padStart(2, '0')}-${String(d.date.getDate()).padStart(2, '0')}`
+        : String(d.date),
       scanCount: Number(d.scan_count),
       pickQty: Number(d.pick_qty),
     })),

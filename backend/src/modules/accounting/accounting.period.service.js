@@ -12,6 +12,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 const engine = require('./voucher-engine')
 const { SOURCE_TYPES } = require('../../constants/voucherSource')
 
@@ -249,8 +250,8 @@ async function reopenPeriod(period, operator, companyId = 1) {
 /** 期间列表：出现过凭证的期间 + 当前期间，带出结账状态与结转凭证新鲜度 */
 async function listPeriods(companyId = 1) {
   const [rows] = await pool.query('SELECT DISTINCT period FROM acct_vouchers WHERE company_id = ? ORDER BY period DESC LIMIT 36', [companyId])
-  const now = new Date()
-  const current = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
+  // 当前期间 = 北京时间的 YYYYMM（显式 backendTime，不依赖进程 TZ；历史依赖 TZ=Asia/Shanghai 容器配置）
+  const current = beijingTodayYmd().replace(/-/g, '').slice(0, 6)
   const periods = [...new Set([current, ...rows.map(r => r.period)])].sort().reverse()
   const [closedRows] = await pool.query('SELECT period, status, closed_by_name, closed_at FROM acct_periods WHERE company_id = ?', [companyId])
   const stateMap = new Map(closedRows.map(r => [r.period, r]))

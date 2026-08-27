@@ -22,6 +22,7 @@
 
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
@@ -233,7 +234,7 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
     await conn.query(
       `INSERT INTO payment_entries (record_id, amount, payment_date, method, remark, operator_id, operator_name)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [row.payment_record_id, -amount, row.refund_date || (d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)(new Date()), 'refund',
+      [row.payment_record_id, -amount, row.refund_date || beijingTodayYmd(), 'refund',
        `退货退款 ${row.refund_no}`, operator?.userId || null, operator?.realName || operator?.username || null],
     )
 
@@ -247,7 +248,7 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
         bizId: Number(id),
         bizNo: row.refund_no,
         partyName: row.customer_name,
-        happenedAt: row.refund_date || (d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)(new Date()),
+        happenedAt: row.refund_date || beijingTodayYmd(),
         remark: `退货退款 ${row.refund_no}（销售单 ${row.sale_order_no}）`,
       }, { operatorId: operator?.userId, operatorName: operator?.realName || operator?.username })
     }

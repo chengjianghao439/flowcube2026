@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
 const { scopeFilter } = require('../../utils/warehouseScope')
+const { beijingTodayYmd, beijingYmdAddDays } = require('../../utils/backendTime')
 
 async function getSummary(scopeWarehouseIds = null) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
@@ -118,8 +119,8 @@ async function getIncomingPurchases(scopeWarehouseIds = null) {
      ORDER BY po.expected_date ASC`,
     sc.params,
   )
-  const today = new Date().toISOString().slice(0, 10)
-  const weekLater = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const today = beijingTodayYmd()
+  const weekLater = beijingYmdAddDays(7)
   const mapRow = r => ({
     id: Number(r.id), orderNo: r.order_no, supplierName: r.supplier_name,
     expectedDate: r.expected_date, totalAmount: Number(r.total_amount),

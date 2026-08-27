@@ -5,6 +5,7 @@ const engine = require('../accounting/voucher-engine')
 const { SOURCE_TYPES, DIR } = require('../../constants/voucherSource')
 const { calcMonthlyTax, netPay } = require('./hr.tax')
 const { normalizePagination } = require('../../utils/pagination')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 
 /**
  * 工资社保个税核算（文档10 完整会计准则 · 功能4）。
@@ -185,7 +186,7 @@ async function calculatePayroll(id, operator, companyId = 1) {
 /** 发放工资：生成 4 张凭证（计提/单位社保/代扣/发放），工资单 → 已发放。 */
 async function payPayroll(id, { paidDate }, operator, companyId = 1) {
   const cid = Number(companyId) || 1
-  const date = String(paidDate || new Date().toISOString().slice(0, 10))
+  const date = String(paidDate || beijingTodayYmd())
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()

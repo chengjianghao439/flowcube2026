@@ -103,7 +103,7 @@ export default function PdaLayout() {
         - touch-action: manipulation 加快点击响应，消除 300ms 延迟
       */}
       <div
-        className="flex min-h-[100dvh] flex-col overflow-x-hidden overflow-y-auto bg-background text-foreground antialiased"
+        className="pda-root flex min-h-[100dvh] flex-col overflow-x-hidden overflow-y-auto bg-background text-foreground antialiased"
         style={{
           WebkitTapHighlightColor: 'transparent',
           touchAction: 'manipulation',

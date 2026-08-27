@@ -5,6 +5,7 @@
 const { startCleanupSweeper } = require('./utils/operationRequest')
 const { pool } = require('./config/db')
 const logger = require('./utils/logger')
+const { beijingTodayYmd } = require('./utils/backendTime')
 const { runWithRequestContext } = require('./utils/requestContext')
 const { runFetchWaybills, runTrackWaybills } = require('./modules/logistics/logistics.worker')
 
@@ -95,9 +96,8 @@ function startScheduler() {
   const { runAutoCycleScheduling } = require('./modules/stockcheck/stockcheck.cycle')
   let lastCycleDate = ''
   startWorker('stockcheck-cycle', async () => {
-    // 本地日期（+08:00 部署）做「每天一次」判断，避免 UTC 跨日错位
-    const now = new Date()
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    // 北京时间的「今天」做每天一次判断（显式 backendTime，不依赖进程 TZ）
+    const today = beijingTodayYmd()
     if (lastCycleDate === today) return
     const r = await runAutoCycleScheduling()
     lastCycleDate = today
@@ -113,8 +113,7 @@ function startScheduler() {
   let lastAlertDate = ''
   let alertedCodes = new Set()
   startWorker('dingtalk-alert', async () => {
-    const now = new Date()
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const today = beijingTodayYmd()
     if (lastAlertDate !== today) {
       lastAlertDate = today
       alertedCodes = new Set()
@@ -142,8 +141,7 @@ function startScheduler() {
   // 注意:巡检只报警不自动修——漂移是「机制失效」信号,自动改可能掩盖根因。
   let lastDriftAlertDate = ''
   startWorker('stock-drift-check', async () => {
-    const now = new Date()
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const today = beijingTodayYmd()
     const { findStockDrift } = require('./modules/inventory/inventory.service')
     const { list } = await findStockDrift({})
     const drifted = list.filter(r => r.drifted)

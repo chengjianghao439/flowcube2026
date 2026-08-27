@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const logger = require('../../utils/logger')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 const reportsService = require('../reports/reports.service')
 const { ymd } = require('../../utils/excelExport')
 const paymentsService = require('../payments/payments.service')
@@ -30,7 +31,8 @@ const taxService = require('../accounting/accounting.tax.service')
 const companiesService = require('../accounting/companies.service')
 
 function buildDateStamp() {
-  return new Date().toLocaleDateString('zh-CN').replace(/\//g, '')
+  // 北京时间的 YYYYMMDD（文件名日期戳；此前 toLocaleDateString 依赖宿主区域设置）
+  return beijingTodayYmd().replace(/-/g, '')
 }
 
 // 导出行数上限（性能守卫）：ExcelJS 全内存渲染，超限直接截断并告警，

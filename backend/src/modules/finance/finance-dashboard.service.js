@@ -1,4 +1,5 @@
 const { pool } = require('../../config/db')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 
 /**
  * 资金看板：账户余额分布、收支趋势、费用构成。
@@ -7,12 +8,13 @@ const { pool } = require('../../config/db')
  * 不新增任何冗余统计表——统计一旦落库就会与事实源漂移，而这里的查询量很小，实时算即可。
  */
 
-/** 默认统计区间：近 6 个自然月 */
+/** 默认统计区间：近 6 个自然月（北京时间为准，显式 backendTime，不依赖进程 TZ） */
 function defaultRange() {
-  const end = new Date()
-  const start = new Date(end.getFullYear(), end.getMonth() - 5, 1)
-  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  return { startDate: ymd(start), endDate: ymd(end) }
+  const endDate = beijingTodayYmd()
+  const [y, m] = endDate.split('-').map(Number)
+  let startY = y, startM = m - 5
+  if (startM <= 0) { startY -= 1; startM += 12 }
+  return { startDate: `${startY}-${String(startM).padStart(2, '0')}-01`, endDate }
 }
 
 async function overview({ startDate, endDate } = {}) {

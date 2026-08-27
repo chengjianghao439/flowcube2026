@@ -29,7 +29,10 @@ function emit(level, msg, meta, module_) {
 }
 
 function timestamp() {
-  return new Date().toISOString().replace('T', ' ').slice(0, 23)
+  // 北京时间字面量（+8h 偏移 + UTC 字段，不依赖进程 TZ）——日志时间与业务时区一致
+  const d = new Date(Date.now() + 8 * 3600 * 1000)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.${String(d.getUTCMilliseconds()).padStart(3, '0')}`
 }
 
 function fmt(level, module_, msg, meta) {

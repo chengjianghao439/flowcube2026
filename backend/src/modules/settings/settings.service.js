@@ -110,10 +110,10 @@ async function updateLogo(dataUrl) {
     throw new AppError('Logo 设置项不存在：请先执行数据库迁移', 500, 'LOGO_SETTING_MISSING')
   }
   const [tsRows] = await pool.query("SELECT key_name FROM sys_settings WHERE key_name='company_logo_updated_at'")
-  const timestamp = new Date()
-    .toISOString()
-    .replace(/[-:TZ.]/g, '')
-    .slice(0, 14) // YYYYMMDDHHMMSS
+  // 北京时间 YYYYMMDDHHMMSS（+8h 偏移 + UTC 字段，不依赖进程 TZ；仅作缓存破坏参数）
+  const tsNow = new Date(Date.now() + 8 * 3600 * 1000)
+  const tsPad = n => String(n).padStart(2, '0')
+  const timestamp = `${tsNow.getUTCFullYear()}${tsPad(tsNow.getUTCMonth() + 1)}${tsPad(tsNow.getUTCDate())}${tsPad(tsNow.getUTCHours())}${tsPad(tsNow.getUTCMinutes())}${tsPad(tsNow.getUTCSeconds())}`
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()

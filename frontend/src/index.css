@@ -96,6 +96,20 @@
     @apply font-sans bg-background text-foreground;
   }
 
+  /*
+   * 原生相机扫码（PDA 绑定页，useCameraScanner）：
+   * 插件 startScan 把 CameraX 预览塞进 WebView 底层的兄弟视图，靠 WebView
+   * 背景透明透出。扫描期间 body 与 pda-root 两个背景必须同步透明，否则
+   * 预览被不透明背景盖住——用户表现为「点了相机按钮什么都没发生」。
+   * 绑定页扫描中会整体退出主内容渲染，这里只兜底 body/PdaLayout 根。
+   */
+  body.barcode-scanner-active {
+    background: transparent !important;
+  }
+  body.barcode-scanner-active .pda-root {
+    background: transparent !important;
+  }
+
   /* 全局隐藏 number 输入框的上下调节箭头（Chrome/Safari/Edge + Firefox） */
   input[type='number']::-webkit-outer-spin-button,
   input[type='number']::-webkit-inner-spin-button {

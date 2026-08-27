@@ -103,6 +103,12 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   docker tag flowcube-backend:latest "$ROLLBACK_TAG" 2>/dev/null || true
   docker tag flowcube-frontend:latest "$FRONTEND_ROLLBACK_TAG" 2>/dev/null || true
   docker compose up -d --build backend frontend
+  # 【时区固化 2026-08-27】MySQL 服务端时区 = 北京时间：docker-compose.yml 给 mysql
+  # 加了 TZ=Asia/Shanghai，但 mysql 容器不在上方重建（up -d 只重建 backend/frontend）。
+  # 显式 up -d mysql 让 TZ 环境变量生效（官方镜像 mysqld 读 /etc/localtime 为
+  # system_time_zone）；mysql 镜像不变、数据卷不动、无停机迁移，只是重建容器进程。
+  # 注意：若此处省略，compose 配置变更对 mysql 永不生效。
+  docker compose up -d --no-build mysql
   # 数据库迁移是显式步骤（后端不在启动时自动迁移）。
   # 必须在容器重建后、用新镜像里的迁移文件执行，否则新代码会跑在旧表结构上。
   # 失败即中断部署（set -e）——宁可部署失败并告警，也不要静默上线一个坏 schema。

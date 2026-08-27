@@ -2,7 +2,16 @@ FROM node:20-alpine
 # 非 root 运行（P2-13）：node 镜像自带 node 用户 + su-exec 工具。
 # entrypoint 以 root 启动（仅做挂载目录 chown 这一件需要权限的事），
 # 然后降权到 node 用户跑业务进程——业务进程不持有 root 权限。
-RUN apk add --no-cache su-exec && mkdir -p /app && chown -R node:node /app
+# 【时区固化 2026-08-27】TZ=Asia/Shanghai：业务时间的唯一权威时区。
+# 此前容器默认 UTC，Node 侧 getFullYear()/codeGenerator 单据号/MySQL NOW() 均随
+# 容器时区走，与连接池的 timezone=+08:00（写+读）不一致——连接池按北京字面量
+# 解析，Node 生成却按 UTC 字面量，跨午夜后错 8 小时。tzdata 是 alpine 时区库，
+# 安装后 TZ 对进程与 MySQL 客户端会话均生效。
+RUN apk add --no-cache su-exec tzdata \
+  && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+  && echo "Asia/Shanghai" > /etc/timezone
+ENV TZ=Asia/Shanghai
+RUN mkdir -p /app && chown -R node:node /app
 WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
