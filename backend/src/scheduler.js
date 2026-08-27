@@ -123,7 +123,16 @@ function startScheduler() {
     const DANGER_CODES = new Set(['OVERDUE_PAYABLE', 'OVERDUE_RECEIVABLE', 'LOW_STOCK', 'EXPIRING_STOCK', 'STALE_STOCK'])
     const targets = (result.items || []).filter(i => DANGER_CODES.has(i.code) && !alertedCodes.has(i.code))
     if (!targets.length) return
-    const lines = targets.map(t => `- **${t.text}**（[查看](${t.path})）`)
+    // 【钉钉「查看」链接 2026-08-28】钉钉客户端只认绝对 http(s) URL，且前端是 HashRouter：
+    // 必须拼成 https://<APP_PUBLIC_URL>/#/<path> 才是可点的真实链接。此前直接写 t.path
+    // （相对路径 /payments/payable），钉钉解析成自己域下的无效相对链接——电脑端点开
+    // 无反应、手机端显示无法连接。APP_PUBLIC_URL 生产必填（config/env.js 校验）。
+    const publicUrl = String(process.env.APP_PUBLIC_URL || '').replace(/\/$/, '')
+    const alertLink = (path) => {
+      const p = (path || '').startsWith('/') ? path : `/${path || ''}`
+      return publicUrl ? `${publicUrl}/#${p}` : p
+    }
+    const lines = targets.map(t => `- **${t.text}**（[查看](${alertLink(t.path)})）`)
     const ok = await sendDingtalkAlert(
       `⚠️ 极序 Flow 经营预警 ${today}`,
       `### 经营预警\n\n${lines.join('\n')}\n\n> 由系统自动推送，请及时处理。`,
