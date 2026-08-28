@@ -4,6 +4,7 @@ import { loginApi, type LoginParams } from '@/api/auth'
 import { useAuthStore } from '@/store/authStore'
 import { persistErpApiBaseAfterLogin } from '@/config/api'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
+import { IS_CAPACITOR_PDA } from '@/lib/platform'
 import { persistLoginSuccess } from '@/lib/loginCredentials'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { syncPdaLabelPrinterBinding } from '@/lib/pdaRuntime'
@@ -20,7 +21,17 @@ export function useLogin(redirectTo = '/dashboard') {
       loginApi({ username, password }),
     onSuccess: async (data, variables) => {
       persistErpApiBaseAfterLogin()
-      applyErpApiBaseFromStorage()
+      // 【PDA baseURL 覆盖 bug 2026-08-28】applyErpApiBaseFromStorage 只适用于
+      // ERP/桌面（file:// 或浏览器同源），不适用独立 PDA——Capacitor WebView 的
+      // origin 是 https://localhost，getEffectiveApiOrigin() 返回 null 时它会把
+      // apiClient.baseURL 重置回相对 /api，导致登录后所有 axios 请求发到
+      // localhost/api（真机无服务）而失败：登录能通（baseURL 尚为生产）、
+      // ensureDeviceSession/todo-counts 全挂——呈现为「扫码后密钥失效」。
+      // PDA 的 API 基址由 pdaRuntime 统一管理（boot 时 applyPdaApiBaseFromStorage
+      // 已设好绝对地址），登录后不得再覆盖。
+      if (!IS_CAPACITOR_PDA) {
+        applyErpApiBaseFromStorage()
+      }
       useWorkspaceStore.getState().closeAll()
       // refreshToken（2026-08-21 权衡修复）：access 2h 过期后自动换新
       login(data.token, data.refreshToken ?? null, data.user)

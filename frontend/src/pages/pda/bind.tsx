@@ -79,12 +79,20 @@ export default function PdaBindPage() {
     try {
       const created = await ensureDeviceSession()
       if (!created) {
-        // 凭据存下来了但换不到票据：多半是设备被停用或密钥已被重置，
-        // 留着一份错的凭据只会让后续每个请求都失败，不如直接清掉重来
-        await clearDeviceBinding()
-        setCredential(null)
-        setSession(null)
-        err('绑定失败：设备码或密钥无效，也可能该设备已被停用，请让管理员确认后重新生成二维码')
+        // 2026-08-28 区分失败原因（此前一律清空重扫并提示密钥无效，网络问题被误导）：
+        // ensureDeviceSession 内部已判——业务拒绝（401/403/特定 code）会连凭据一起清掉；
+        // 网络/基址失败保留凭据。这里以「凭据是否还在」为唯一判据：
+        const stillHas = getDeviceCredential()
+        if (stillHas) {
+          // 凭据还在 = 网络/基址问题（服务器不可达、baseURL 被误覆盖），
+          // 凭据没有错，不要清——用户只需修好网络/地址后重试
+          err('无法连接服务器换取设备票据，请检查 PDA 网络与服务器地址后重试（凭据已保存，无需重新扫码）')
+        } else {
+          // 凭据被清 = 密钥确实无效/设备被停用，引导重新生成
+          setCredential(null)
+          setSession(null)
+          err('绑定失败：设备码或密钥无效，也可能该设备已被停用，请让管理员确认后重新生成二维码')
+        }
         return
       }
       setCredential(getDeviceCredential())
