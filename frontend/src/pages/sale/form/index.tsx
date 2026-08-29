@@ -25,12 +25,14 @@ import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import ShipSelectDialog from '@/pages/sale/components/ShipSelectDialog'
 import StockShortageDialog, { type StockShortageItem } from '@/pages/sale/components/StockShortageDialog'
 import ReserveAllocationDialog from '@/pages/sale/components/ReserveAllocationDialog'
+import ReleaseAllocationDialog from '@/pages/sale/components/ReleaseAllocationDialog'
 import { SectionCard }    from '@/components/shared/SectionCard'
 import { CustomerFinder, ProductFinder } from '@/components/finder'
-import { useCreateSale, useUpdateSale, useAdjustSale, useSaleDetail, useReleaseSale, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
+import { useCreateSale, useUpdateSale, useAdjustSale, useSaleDetail, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { useCarriersActive } from '@/hooks/useCarriers'
 import { toast } from '@/lib/toast'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
+import { getReceivableStatus } from '@/lib/receivableStatus'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { getCustomerPriceApi } from '@/api/price-lists'
@@ -551,13 +553,14 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 改单视图（已占库/拣货中，仓库任务已存在——增减数量/加删商品行）
+// 改单视图（已占库/部分占库/拣货中——增减数量/加删商品行）
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * 执行期改单：status∈{2,3} 且已发起出库（有关联仓库任务）时可用。提交后若涉及
- * 已拣/已打包实物的归还（pending=true），后端会把任务挂起等待 PDA 扫码确认，
- * 这里只需提示、不阻塞——具体进度请去 PDA「改单确认」查看。
+ * 改单：status∈{2,6}（占库期，未发货）走占库期改单，已占量按新明细对齐；
+ * status=3（已发起出库，有关联仓库任务）走执行期改单，提交后若涉及已拣/已打包
+ * 实物的归还（pending=true），后端会把任务挂起等待 PDA 扫码确认，这里只需提示、
+ * 不阻塞——具体进度请去 PDA「改单确认」查看。
  */
 function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; tabPath: string; onDone: () => void }) {
   const adjustMutate = useAdjustSale()
@@ -709,7 +712,6 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
 
 function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: string; closeTab: () => void }) {
   const { data: order, isLoading } = useSaleDetail(saleId)
-  const releaseMutate  = useReleaseSale()
   const shipMutate     = useShipSale()
   const deleteMutate   = useDeleteSale()
   const cancelMutate   = useCancelSale()
@@ -720,6 +722,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const [editing, setEditing] = useState(false)
   const [shipDialogOpen, setShipDialogOpen] = useState(false)
   const [reserveDialogOpen, setReserveDialogOpen] = useState(false)
+  const [releaseDialogOpen, setReleaseDialogOpen] = useState(false)
   const [shortageDialog, setShortageDialog] = useState<{ orderId: number; shortages: StockShortageItem[] } | null>(null)
 
   const [confirmState, setConfirmState] = useState<{
@@ -752,9 +755,10 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     return <AdjustView order={order} tabPath={tabPath} onDone={() => setAdjustMode(false)} />
   }
 
-  const isPending = releaseMutate.isPending || shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending
-  // 分仓/分批：多仓订单、或已有部分发货的订单，明细已锁定（后端拒绝改单），不进改单视图
-  const canAdjust = (order.status === 2 || order.status === 3) && !!order.taskId
+  const isPending = shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending
+  // 分仓/分批：多仓订单、或已有部分发货的订单，明细已锁定（后端拒绝改单），不进改单视图。
+  // 占库期（状态2/6）无 taskId 也可改单（占库期改单）；执行期（状态3）需有 taskId。
+  const canAdjust = (order.status === 2 || order.status === 3 || order.status === 6)
     && !order.warehouseTaskCancelRequestedAt && !order.warehouseTaskAdjustmentRequestedAt
     && !order.isMultiWarehouse && (order.shippedTotalQty ?? 0) === 0
   const ws = getSaleWorkflowStatus(order)
@@ -780,7 +784,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <X className="h-4 w-4 mr-1" />删除订单
               </Button>
             )}
-            {(order.status === 1 || order.status === 2 || order.status === 3) && (
+            {(order.status === 1 || order.status === 2 || order.status === 3 || order.status === 6) && (
               <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5" disabled={isPending}
                 onClick={() => setConfirmState({
                   open: true, title: '取消订单',
@@ -788,7 +792,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                     ? ((order.shippedTotalQty ?? 0) > 0
                       ? '该订单已有部分商品出库：未发货的商品明细将被删除，已出库部分保留，订单直接变为已出库状态，是否继续？'
                       : '将同步取消关联仓库任务并释放锁定资源，是否继续？')
-                    : order.status === 2
+                    : (order.status === 2 || order.status === 6)
                       ? '将释放已占用库存并取消销售单，是否继续？'
                       : '取消后订单将变为已取消状态，是否继续？',
                   variant: 'destructive', confirmText: '确认取消',
@@ -797,23 +801,19 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <X className="h-4 w-4 mr-1" />取消订单
               </Button>
             )}
-            {order.status === 1 && (
+            {(order.status === 1 || order.status === 6) && (
               <Button variant="outline" disabled={isPending} onClick={() => setReserveDialogOpen(true)}>
-                <Warehouse className="h-4 w-4 mr-1" />占用库存
+                <Warehouse className="h-4 w-4 mr-1" />{order.status === 6 ? '补占库存' : '占用库存'}
               </Button>
             )}
-            {order.status === 2 && (
-              <Button variant="outline" disabled={isPending}
-                onClick={() => setConfirmState({
-                  open: true, title: '取消占库', description: '将释放已预占的库存并将订单恢复为草稿状态，是否继续？', variant: 'default', confirmText: '取消占库',
-                  onConfirm: () => { setConfirmState(s => ({ ...s, open: false })); releaseMutate.mutate(order.id) },
-                })}>
+            {(order.status === 2 || order.status === 6) && (
+              <Button variant="outline" disabled={isPending} onClick={() => setReleaseDialogOpen(true)}>
                 <Warehouse className="h-4 w-4 mr-1" />取消占库
               </Button>
             )}
             {/* 打印与订单状态无关（模板只依赖订单基础信息 + 明细），每个状态都可打印，与采购单一致 */}
             <Button variant="outline" onClick={() => setPrintOpen(true)}>打印订单</Button>
-            {order.status === 2 && (
+            {(order.status === 2 || order.status === 6) && (
               <Button disabled={isPending} onClick={() => setShipDialogOpen(true)}>
                 发起出库
               </Button>
@@ -885,17 +885,18 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <div><span className="text-muted-foreground">联系电话：</span><span>{order.receiverPhone || '-'}</span></div>
                 <div className="col-span-2"><span className="text-muted-foreground">收货地址：</span><span>{order.receiverAddress || '-'}</span></div>
                 <div><span className="text-muted-foreground">备注：</span><span>{order.remark || '-'}</span></div>
-                {order.receivableStatus != null && (
-                  <div>
-                    <span className="text-muted-foreground">回款：</span>
-                    <span className={order.receivableOverdue ? 'text-destructive font-medium' : order.receivableStatus === 3 ? 'text-success font-medium' : ''}>
-                      {order.receivableStatusName}{order.receivableOverdue ? '·逾期' : ''}
-                    </span>
-                    {order.receivableDueDate && (
-                      <span className="ml-1.5 text-xs text-muted-foreground">账期至 {order.receivableDueDate.slice(0, 10)}</span>
-                    )}
-                  </div>
-                )}
+                {(() => {
+                  const rs = getReceivableStatus(order)
+                  return (
+                    <div>
+                      <span className="text-muted-foreground">回款：</span>
+                      <SoftStatusLabel label={rs.label} tone={rs.tone} />
+                      {rs.dueDate && (
+                        <span className="ml-1.5 text-xs text-muted-foreground">账期至 {rs.dueDate.slice(0, 10)}</span>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </SectionCard>
@@ -1166,10 +1167,15 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         onClose={() => setReserveDialogOpen(false)}
         onShortage={(orderId, shortages) => { setReserveDialogOpen(false); setShortageDialog({ orderId, shortages }) }}
       />
+      <ReleaseAllocationDialog
+        open={releaseDialogOpen}
+        orderId={order.id}
+        items={order.items ?? []}
+        onClose={() => setReleaseDialogOpen(false)}
+      />
       <StockShortageDialog
         open={!!shortageDialog}
         onClose={() => setShortageDialog(null)}
-        orderId={shortageDialog?.orderId ?? null}
         shortages={shortageDialog?.shortages ?? []}
       />
     </div>

@@ -22,7 +22,11 @@ export interface SaleOrderItem {
   warehouseName?: string | null
   /** 已发数量（分批累加）；shippedQty < quantity 表示该行还有未发部分 */
   shippedQty?: number
-  /** 是否已派发到仓库任务（分批发货：false 表示还没发起出库，可在下次发货中选中） */
+  /** 已占数量（按数量占库）；reservedQty < quantity 表示该行还有未占部分 */
+  reservedQty?: number
+  /** 已派发到仓库任务的数量（替代 dispatched 布尔）；dispatchedQty < reservedQty 表示还有已占未发 */
+  dispatchedQty?: number
+  /** 是否已派发到仓库任务（历史兼容字段，业务判断改读 dispatchedQty） */
   dispatched?: boolean
   quantity: number
   unitPrice: number
@@ -83,7 +87,7 @@ export interface SaleOrder {
   customerName: string
   warehouseId: number
   warehouseName: string
-  status: 1 | 2 | 3 | 4 | 5
+  status: 1 | 2 | 3 | 4 | 5 | 6
   statusName: string
   warehouseTaskStatus?: number | null
   warehouseTaskStatusName?: string | null
@@ -107,6 +111,8 @@ export interface SaleOrder {
   receivableDueDate?: string | null
   receivableBalance?: number | null
   receivableOverdue?: boolean
+  /** 应收结算方式快照（1现结 2月结），出库后才有；未出库为 null */
+  receivableSettlementType?: 1 | 2 | null
   saleDate?: string
   totalAmount: number
   /** 整单折扣金额（P2-4），应收 = 原值 − 折扣 */
@@ -163,7 +169,7 @@ export interface ReserveWarehouseOption {
   available: number
 }
 
-/** 占库预览（GET /sale/:id/reserve-preview）：逐行商品 + 各仓可用量，供占库弹窗选仓库 */
+/** 占库预览（GET /sale/:id/reserve-preview）：逐行商品 + 各仓可用量，供占库弹窗选仓库/数量 */
 export interface ReservePreviewItem {
   itemId: number
   productId: number
@@ -174,6 +180,10 @@ export interface ReservePreviewItem {
   color?: string | null
   unit: string
   quantity: number
+  /** 已占数量 */
+  reservedQty: number
+  /** 未占余量 = quantity - reservedQty */
+  remainToReserve: number
   currentWarehouseId: number
   currentWarehouseName: string
   warehouses: ReserveWarehouseOption[]
@@ -194,9 +204,11 @@ export interface ReservePreview {
   } | null
 }
 
-/** POST /sale/:id/reserve 的分仓选择：逐行覆盖发货仓库 */
+/** POST /sale/:id/reserve 的按行占库：逐行指定发货仓库 + 本次占库数量 */
 export interface ReserveItemOverride {
   id: number
   warehouseId: number
   warehouseName: string
+  /** 本次要占的数量（可 < 需求，未传/0 表示不占该行） */
+  qty: number
 }

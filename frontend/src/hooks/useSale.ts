@@ -88,7 +88,8 @@ export const useReserveSale = () => {
 export const useReleaseSale = () => {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (id: number) => releaseSaleApi(id),
+    // items 可选：按产品/数量释放；不传 = 整单释放
+    mutationFn: ({ id, items }: { id: number; items?: ReserveItemOverride[] }) => releaseSaleApi(id, items),
     onSuccess: () => { invalidate('sale_reserve'); toast.success('库存已释放') },
   })
 }

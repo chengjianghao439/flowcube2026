@@ -24,6 +24,9 @@ export function getSaleWorkflowStatus(order: SaleOrder): WorkflowStatus {
   // 已取消
   if (order.status === 5) return status('已取消', 'danger')
 
+  // 部分占库（按数量占库后仍有未占部分）
+  if (order.status === 6) return status('部分占库', 'active')
+
   // 部分发货：分仓/分批订单尚在履约、还没按订单量全发完。「部分发货」四个字是唯一
   // 允许超出统一 3 字符规则的例外。主动关闭剩余时明细会被精简为"要求量=实发量"
   // （见 sale.service.js 的 cancel()），订单直接落回普通"已出库"，不会停留在这个状态。

@@ -16,13 +16,13 @@ async function getCustomerCreditUsed(conn, customerId) {
      WHERE pr.type = 2 AND pr.status IN (1, 2) AND so.customer_id = ?`,
     [customerId],
   )
-  // (B) 在途敞口：已占库(2)/拣货中(3)订单的 (订单总额 − 已生成应收总额)，防与(A)双算
+  // (B) 在途敞口：已占库(2)/部分占库(6)/拣货中(3)订单的 (订单总额 − 已生成应收总额)，防与(A)双算
   //     已发货部分已进(A)，这里减掉；已占库未发货部分应收为 0，全额计入敞口
   const [[b]] = await conn.query(
     `SELECT COALESCE(SUM(GREATEST(0, so.total_amount - COALESCE(pr.total_amount, 0))), 0) AS used_open
      FROM sale_orders so
      LEFT JOIN payment_records pr ON pr.type = 2 AND pr.order_id = so.id
-     WHERE so.customer_id = ? AND so.status IN (2, 3) AND so.deleted_at IS NULL`,
+     WHERE so.customer_id = ? AND so.status IN (2, 3, 6) AND so.deleted_at IS NULL`,
     [customerId],
   )
   return Math.round((Number(a.used) + Number(b.used_open)) * 10000) / 10000

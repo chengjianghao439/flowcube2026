@@ -30,6 +30,7 @@ const reserveSchema = z.object({
     id: z.number().int().positive(),
     warehouseId: z.number().int().positive(),
     warehouseName: z.string(),
+    qty: z.number().positive(),
   })).optional(),
 })
 router.use(authMiddleware)

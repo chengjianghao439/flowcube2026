@@ -8,7 +8,6 @@ import Pagination from '@/components/shared/Pagination'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
-import type { StatusTone } from '@/lib/statusTone'
 import { SaleRowActions } from './components/SaleRowActions'
 import StockShortageDialog, { type StockShortageItem } from './components/StockShortageDialog'
 import ReserveAllocationDialog from './components/ReserveAllocationDialog'
@@ -21,6 +20,7 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
+import { getReceivableStatus } from '@/lib/receivableStatus'
 import type { SaleOrder } from '@/types/sale'
 import type { TableColumn } from '@/types'
 
@@ -230,21 +230,12 @@ export default function SalePage() {
     {
       key: 'receivableStatus', title: '回款状态', width: 5.63,
       render: (_, row) => {
-        const r = row as SaleOrder
-        if (r.receivableStatus == null) return <span className="text-xs text-muted-foreground">—</span>
-        const tone: StatusTone = r.receivableOverdue
-          ? 'danger'
-          : r.receivableStatus === 3
-            ? 'success'
-            : r.receivableStatus === 2
-              ? 'active'
-              : 'draft'
-        const label = r.receivableOverdue ? `${r.receivableStatusName}·逾期` : (r.receivableStatusName ?? '—')
+        const rs = getReceivableStatus(row as SaleOrder)
         return (
           <SoftStatusLabel
-            label={label}
-            tone={tone}
-            title={r.receivableDueDate ? `账期至 ${r.receivableDueDate.slice(0, 10)}` : undefined}
+            label={rs.label}
+            tone={rs.tone}
+            title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined}
           />
         )
       },
@@ -261,7 +252,7 @@ export default function SalePage() {
             anyPending={releaseMutate.isPending || ship.isPending || cancel.isPending || deleteMutate.isPending}
             onAsk={(title, desc, cb) => openConfirm(title, desc, () => { closeConfirm(); cb() })}
             onReserveSale={id => setReserveDialogOrderId(id)}
-            onReleaseSale={id => releaseMutate.mutate(id)}
+            onReleaseSale={id => releaseMutate.mutate({ id })}
             onShipSale={id => ship.mutate({ id })}
             onCancelSale={id => cancel.mutate(id)}
             onDeleteSale={id => deleteMutate.mutate(id)}
@@ -346,7 +337,6 @@ export default function SalePage() {
       <StockShortageDialog
         open={!!shortageDialog}
         onClose={() => setShortageDialog(null)}
-        orderId={shortageDialog?.orderId ?? null}
         shortages={shortageDialog?.shortages ?? []}
       />
 

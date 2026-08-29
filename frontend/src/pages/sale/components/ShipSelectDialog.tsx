@@ -13,11 +13,11 @@ interface Props {
 }
 
 /**
- * 发货选择弹窗（分批发货）：列出该订单尚未派发到仓库任务的明细行，勾选本次要发的行。
- * 默认全选（等价于「全部发货」）。取消勾选某些行即分批——未选的留待下次「继续发货」。
+ * 发货选择弹窗（分批/分数量发货）：列出「已占未发完」的明细行，勾选本次要发的行。
+ * 每行本次发货量 = 已占数量 - 已派发数量（只发已占部分）。默认全选（等价于全部发货）。
  */
 export default function ShipSelectDialog({ open, onClose, order, loading, onConfirm }: Props) {
-  const undispatched = (order.items ?? []).filter(i => !i.dispatched)
+  const undispatched = (order.items ?? []).filter(i => (i.dispatchedQty ?? 0) < (i.reservedQty ?? 0))
   const [selected, setSelected] = useState<Set<number>>(new Set())
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
       <DialogContent className="max-w-2xl">
         <DialogHeader><DialogTitle>发起出库</DialogTitle></DialogHeader>
         <p className="text-sm text-muted-foreground">
-          勾选本次要发货的商品。默认全选=全部发货；只勾一部分即分批发货，其余留待之后「继续发货」。
+          勾选本次要发货的商品，每行只发「已占未发」的数量。默认全选=全部发货；只勾一部分即分批，其余留待之后「继续发货」。
           {order.isMultiWarehouse && '（本单跨多个仓库，按仓库分别建出库任务）'}
         </p>
         <div className="max-h-80 overflow-y-auto rounded-md border">
@@ -50,7 +50,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
                 </th>
                 <th className="px-2 py-1.5 text-left">商品</th>
                 {order.isMultiWarehouse && <th className="px-2 py-1.5 text-left">发货仓库</th>}
-                <th className="px-2 py-1.5 text-right">数量</th>
+                <th className="px-2 py-1.5 text-right">本次发货量</th>
               </tr>
             </thead>
             <tbody>
@@ -64,11 +64,13 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
                     <span className="ml-1 text-xs text-muted-foreground">{item.productCode}{item.articleNumber ? ` · 货号 ${item.articleNumber}` : ''}{item.spec ? ` · ${item.spec}` : ''}{item.color ? ` · ${item.color}` : ''}</span>
                   </td>
                   {order.isMultiWarehouse && <td className="px-2 py-1.5">{item.warehouseName || '默认仓库'}</td>}
-                  <td className="px-2 py-1.5 text-right tabular-nums">{item.quantity} {item.unit}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {(item.reservedQty ?? 0) - (item.dispatchedQty ?? 0)} {item.unit}
+                  </td>
                 </tr>
               ))}
               {!undispatched.length && (
-                <tr><td colSpan={4} className="px-2 py-4 text-center text-muted-foreground">没有可发货的明细</td></tr>
+                <tr><td colSpan={4} className="px-2 py-4 text-center text-muted-foreground">没有可发货的明细（请先占库）</td></tr>
               )}
             </tbody>
           </table>

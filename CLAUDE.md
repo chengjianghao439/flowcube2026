@@ -48,7 +48,7 @@ flowcube/
 │       ├── scheduler.js            仅启动 operation_requests TTL 清理
 │       ├── config/                 db.js（连接池）、env.js（环境变量校验，生产缺项直接拒启动）
 │       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / settlementType / voucherSource / permissions
-│       ├── database/               218 个 .sql 迁移 + migrate.js
+│       ├── database/               220 个 .sql 迁移 + migrate.js
 │       ├── engine/                 containerEngine / inventoryEngine / reservationEngine / approvalEngine ← 库存唯一合法入口（approvalEngine 为多级审批流引擎，P2-7）
 │       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger / companyScope（多账套公司隔离，会计标准）
 │       ├── modules/                58 个业务模块，统一 routes → controller → service
@@ -207,8 +207,8 @@ PDA  收货(逐箱扫码 + 建容器 status=4 待上架 + 入队标签打印) �
 ### 7.2 销售 → 占库 → 仓库任务 → 出库
 
 ```
-ERP  销售单(草稿1) → 占用库存(已占库2，只加 reserved，不动实物)
-     → 发起出库：按明细行的发货仓库分组，每组建一个仓库任务；订单 2→3 拣货中
+ERP  销售单(草稿1) → 占用库存(已占库2 / 部分占库6，只加 reserved，不动实物)
+     → 发起出库：按明细行的发货仓库分组，每组建一个仓库任务；订单 2/6→3 拣货中
 PDA  拣货(扫容器条码，scan-logs 累加 picked_qty) → 拣货完成(校验闭合) → 待分拣(3)
      → 分拣(扫商品 → 扫分拣格) → 待复核(4) → 复核(扫容器) → 待打包(5)
      → 打包(建箱、装箱、完成箱 → 打印箱贴) → 全部箱完成 ⇒ 待出库(6)
@@ -216,11 +216,12 @@ PDA  拣货(扫容器条码，scan-logs 累加 picked_qty) → 拣货完成(校�
 销售单：全部明细发完 ⇒ 已出库(4)；应收按 shipped_qty 全量重算（分批幂等）
 ```
 
-必须知道的四件事（旧版文档均未覆盖）：
+必须知道的五件事（旧版文档均未覆盖）：
 1. **分仓发货**：`sale_order_items.warehouse_id` 是行级发货仓库，一张销售单可以有多个仓库任务。任何按 `product_id` 关联 `sale_order_items` 的 SQL **必须带 warehouse_id 维度**，否则出库明细会被 JOIN 放大成 N 倍扣减（`warehouse-tasks.ship.js` 有 `assertNoShipItemFanout` 兜底）。
-2. **分批发货**：`sale_order_items.dispatched` 标记该行是否已派发到仓库任务；`ship(id, { itemIds })` 只对未派发行建任务。`shipped_qty` 按批累加。
-3. **执行期改单**：`PUT /sale/:id/adjust`（`sale.service.requestAdjustment` + `warehouse-tasks.adjust.js`）允许订单在已占库/拣货中改明细；增量把任务退回拣货中，减量若命中已打包/已复核则要 PDA 物理确认（拆箱作废 / 容器归还分拣格）后任务退回待复核。落表：`sale_order_adjustments*`。
-4. **取消**：草稿直接取消；已占库释放预占；拣货中会逐个取消活跃仓库任务（走逆向归还，PDA `/pda/cancel-return` 确认归还库位），并整单兜底释放预占。若已有任务出库过，则**不是取消**——未发行整行删除、部分发的行数量降到实发量，订单直接结案为已出库(4)。
+2. **按产品/按数量占库（迁移 220）**：`sale_order_items.reserved_qty`（已占）、`dispatched_qty`（已派发到任务）是数量语义，替代旧的布尔 `dispatched`（列保留兼容）。占库经专用弹窗可只勾部分产品、按数量占（需求 100 占 60），`reserveStock(id, items:[{id,warehouseId,qty}])`；不传 items = 占满全部未占余量（向后兼容）。占完统计全满→`已占库(2)`、否则→`部分占库(6)`。发货只发 `reserved_qty - dispatched_qty` 差额，一行可多次「补占→发货」。释放支持按产品/数量（`releaseStock(id, items:[{id,qty}])`）或整单。
+3. **执行期改单 / 占库期改单**：`PUT /sale/:id/adjust`（`sale.service.requestAdjustment`）。有仓库任务（拣货中 3）走执行期改单（`warehouse-tasks.adjust.js`）：增量退回拣货中，减量命中已打包/已复核需 PDA 物理确认，落表 `sale_order_adjustments*`。无仓库任务（已占库 2/部分占库 6）走占库期改单（`adjustReservedWithinTransaction`）：保留已占量（改数量时夹到新数量、删商品释放预占、加商品占 0），重建明细后重算状态 2/6。多仓、已发货订单明细仍锁定。
+4. **取消**：草稿直接取消；已占库/部分占库释放预占；拣货中会逐个取消活跃仓库任务（走逆向归还，PDA `/pda/cancel-return` 确认归还库位），并整单兜底释放预占。若已有任务出库过，则**不是取消**——未发行整行删除、部分发的行数量降到实发量，订单直接结案为已出库(4)。
+5. **回款状态独立于订单状态**（2026-08-29）：列表「回款状态」列不混进状态徽章，读 `receivableStatus`（应收快照）+ `receivableSettlementType`（快照优先、未出库回退客户主数据）。决策表：已付清(3)=绿「已付清」；部分付(2)=蓝「部分付」；未付未逾期时现结灰「未付」/月结蓝「月结」；逾期时月结红「逾期」、现结红「未付」。逾期边界=到期日<北京今天（当天不算逾期，与对账页 `isOverdue`、`pr.due_date<CURDATE()` 一致）。
 
 ### 7.3 退货
 
@@ -267,7 +268,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 ## 8. 数据库与核心模型
 
 - 131 张表（生产实测，含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。表漂移对账用 `backend/scripts/schema-reconcile.js`（只读检查，`--strict` 可挂 CI）。
-- 迁移：`backend/src/database/` 下 218 个 `.sql`，编号 001–218（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行；db_migrations 有 211 条执行记录，含 1 条手工执行的迁移）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
+- 迁移：`backend/src/database/` 下 220 个 `.sql`，编号 001–220（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行；db_migrations 有 212 条执行记录，含 1 条手工执行的迁移）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
 - ⚠️ **数据库里的 `COLUMN_COMMENT` 曾大面积过期，现已大部分订正但仍有残留**（2026-07-27 抽查：`sale_orders.status`、`warehouse_tasks.status` 的注释都已更新并注明"见 documentStatusRules / warehouseTaskStatus"；`sale_orders.closed_reason` 仍写着迁移 127 已废弃的 `partial_ship_close`）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
 
 核心事实表 / 派生字段：
@@ -280,7 +281,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 | `inventory_logs` | 流水 | 每次库存动作写一条，带 `container_id` 与 `move_type` |
 | `purchase_orders/_items` | 采购 | `closed_reason='short_close'` 表示短装结案 |
 | `inbound_tasks/_items` | 收货 | `ordered/received/putaway_qty` 三段量；`lock_version` 乐观锁；`audit_status` 只走 0→1 |
-| `sale_orders/_items` | 销售 | 行级 `warehouse_id`、`shipped_qty`、`dispatched`、`cost_snapshot`(COGS) |
+| `sale_orders/_items` | 销售 | 行级 `warehouse_id`、`shipped_qty`、`reserved_qty`(已占)、`dispatched_qty`(已派发，迁移 220 取代 `dispatched` 布尔)、`cost_snapshot`(COGS) |
 | `warehouse_tasks/_items` | 出库任务 | `task_type` sale_out / purchase_return；`cancel_requested_at`、`adjustment_requested_at` 非空时该任务对正向 PDA 流程不可见 |
 | `payment_records` | 应收应付 | `UNIQUE(type, order_id)` 幂等；`confirm_status` 财务确认闸门 |
 | `operation_requests` | 幂等回执 | `UNIQUE(request_key, action, user_id)`，7 天 TTL 清理 |
@@ -316,7 +317,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 | 机器 | 状态 | 动作（from→to） |
 |------|------|------------------|
 | `purchase` | 1草稿 2已提交 3已完成 4已取消 | edit(1)、confirm(1→2)、withdrawConfirm(2→1)、createInboundTask(2)、complete(2→3 自动)、close(2→3 短装人工)、reopen(3→2 仅撤回收货内部联动)、cancel(1/2→4) |
-| `sale` | 1草稿 2已占库 3拣货中 4已出库 5已取消 | edit(1)、adjust(2/3)、reserve(1→2)、release(2→1)、ship(2→3，拣货中可继续分批)、completeShip(3→4)、cancel(1/2/3→5)、delete(5) |
+| `sale` | 1草稿 2已占库 3拣货中 4已出库 5已取消 6部分占库 | edit(1)、adjust(2/3/6，无任务走占库期改单/有任务走执行期改单)、reserve(1/6→2或6)、release(2/6→1或6，按产品或整单)、ship(2/6→3，只发已占未发)、completeShip(3→4)、cancel(1/2/3/6→5)、delete(5) |
 | `warehouseTask` | 1待拣货(跳过) 2拣货中 3待分拣 4待复核 5待打包 6待出库 7已出库 8已取消 | startPicking、readyToShip(2→3)、sortTask(3→4)、checkDone(4→5)、packDone(5→6)、ship(6→7)、cancel(活跃→8)；改单专用反向边 adjustReopenPicking / adjustReopenChecking **仅供 adjust.js 内部调用** |
 | `inboundTask` | 1待收货 2收货中 3待上架 4已完成 5已取消 | submit、receiveStart(1→2)、receive、receiveComplete(2/3→3)、putaway、finish(3→4 含自动结算)、cancel(1→5)、voidReceipt(2/3/4→1) |
 | `inboundTaskAudit` | 0待结算 1已结算 | approve(0→1)，仅供上架完成时自动结算复用；状态 2(已退回)已下线不可达 |
@@ -776,3 +777,9 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **修复**（仅 `backend/src/scheduler.js`）：本地拼 `alertLink(path)`——`APP_PUBLIC_URL`（生产必填，config/env.js 校验）+ `/#` + path；未配置时降级为原相对路径（本地 dev 不影响）。**注意哈：钉钉/短信等站外链接一律要拼绝对 URL + HashRouter 前缀，不要再直接写相对 path。**
     - 验证：node 直测 7 例（含带查询串/尾斜杠/空 path）+ mainline 49/49 + 后端 lint 0。
     - 说明：桌面端/PDA 此版无功能变化，仅随版本号同步（三端 0.7.3，PDA versionCode 102）。
+47. **2026-08-29 销售占库改为「按产品/按数量」+ 新增「部分占库」状态 + 占库期改单（未发版）**：
+    - **按产品/按数量占库（迁移 220）**：`sale_order_items` 新增 `reserved_qty`（已占）、`dispatched_qty`（已派发），取代布尔 `dispatched`（列保留兼容）。占库弹窗支持勾选产品 + 填本次占库数量（需求 100 可占 60）；`reserveStock` 不传 items = 占满未占余量（向后兼容）。占完统计全满→`已占库(2)`、否则→新增状态 **6「部分占库」**。发货只发 `reserved_qty - dispatched_qty` 差额，一行可多次「补占→发货」。释放支持按产品/数量（`releaseStock(items:[{id,qty}])`）或整单。授信在途敞口纳入状态 6。`StockShortageDialog` 移除「按可用量改单并重新占库」一键操作（改为引导回占库弹窗调数量）。
+    - **占库期改单**：`requestAdjustment` 无 `task_id`（状态 2/6）时走新分支 `adjustReservedWithinTransaction`——保留已占量（改数量时夹到新数量、删商品释放预占、加商品占 0），重建明细后重算状态 2/6。状态 3（有任务）仍走原执行期改单。多仓、已发货订单明细仍锁定。
+    - **回款状态改造（本轮先做）**：列表「回款状态」列独立于订单状态，读应收快照 + 结算方式（未出库回退客户主数据）。决策表：已付清绿/部分付蓝/未付未逾期（现结灰「未付」、月结蓝「月结」）/逾期（月结红「逾期」、现结红「未付」）。逾期边界统一为「到期日 < 北京今天」（当天不算逾期），对账页 `isOverdue` 与后端 `receivableOverdue` 同步改（后端此前 `new Date(due_date).getTime() < Date.now()` 会把当天从凌晨误判逾期）。
+    - **发现的脏数据**：生产库与本地库均有孤儿 `payment_records`（`order_id` 错配到新订单、`order_no` 指向不存在的旧单号，如生产 `SO20260827001` 草稿单被 `order_no=SO20260314002` 的应收记录污染显示「逾期」）。**待清理**（零 `payment_entries` 分录，删除无副作用，属删数据操作需用户确认）。
+    - 验证：tsc 0、两端 lint 0 error、迁移 220 本机实跑回填正确、smoke mainline 49/concurrency 83/p0 41/p1 44/adjust 57/integration 96 全绿；真实 API 闭环——部分占6→状态6、补占→状态2、按产品释放3→状态6、整单释放→状态1、发货只发已占(需求10占6发货→任务 required_qty=6)、占库期改单（数量减少夹已占量/删商品释放/加商品占0）全通过。

@@ -11,7 +11,7 @@ export const updateSaleApi     = ({ id, ...data }: UpdateSaleParams) => client.p
 export const adjustSaleApi     = ({ id, ...data }: UpdateSaleParams) => client.put<AdjustSaleResult>(`/sale/${id}/adjust`, data)
 export const reserveSaleApi    = (id: number, items?: ReserveItemOverride[], confirmCreditOverride?: boolean) =>
   client.post<null>(`/sale/${id}/reserve`, { ...(items?.length ? { items } : {}), ...(confirmCreditOverride ? { confirmCreditOverride: true } : {}) }, { skipGlobalError: true })
-export const releaseSaleApi    = (id: number) => client.post<null>(`/sale/${id}/release`)
+export const releaseSaleApi    = (id: number, items?: ReserveItemOverride[]) => client.post<null>(`/sale/${id}/release`, items?.length ? { items } : {})
 // itemIds 为空/不传 = 发全部未派发行；传了 = 只发选中的行（分批发货）
 export const shipSaleApi       = (id: number, itemIds?: number[]) => client.post<null>(`/sale/${id}/ship`, itemIds?.length ? { itemIds } : {})
 export const cancelSaleApi     = (id: number) => client.post<null>(`/sale/${id}/cancel`)

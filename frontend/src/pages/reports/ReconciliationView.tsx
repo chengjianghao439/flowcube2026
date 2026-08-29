@@ -7,7 +7,7 @@ import TableActionsMenu, { type TableActionItem } from '@/components/shared/Tabl
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { downloadExport } from '@/lib/exportDownload'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDateTime, formatDisplayDate, todayYmd } from '@/lib/dateTime'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -52,7 +52,10 @@ const COPY = {
 function isOverdue(record: ReconciliationRecord) {
   if (!record.dueDate) return false
   if (record.status === 3) return false
-  return record.dueDate < new Date().toISOString().slice(0, 10)
+  // 统一口径：到期日 < 北京今天才算逾期（当天到期不算）。此前用
+  // new Date().toISOString().slice(0,10) 是 UTC 今天，北京凌晨 0-8 点会偏一天；
+  // dueDate 是后端 ISO 字符串，formatDisplayDate 转成北京 YYYY-MM-DD 再与今天比较。
+  return formatDisplayDate(record.dueDate) < todayYmd()
 }
 
 export default function ReconciliationView({ type }: { type: StatementType }) {
@@ -145,7 +148,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
               tone={Number(v) === 3 ? 'success' : Number(v) === 2 ? 'active' : 'draft'}
             />
           )}
-          {overdue && <SoftStatusLabel label="已逾期" tone="danger" />}
+          {overdue && <SoftStatusLabel label="逾期" tone="danger" />}
         </div>
       )
     } },

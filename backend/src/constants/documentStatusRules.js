@@ -42,15 +42,18 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
     entityName: '销售单',
     actions: {
       edit: { from: [1], message: '只有草稿状态的销售单可以编辑' },
-      // 执行期改单：已占库/拣货中（对应仓库任务在拣货中~待出库任一活跃阶段）均可改，
+      // 改单：已占库(2)/部分占库(6) 走「占库期改单」（保留已占量，无任务）；拣货中(3) 走「执行期改单」（有任务）。
       // 已出库后不可再改——出库已经扣减实物库存、生成应收，详见 warehouse-tasks.adjust.js。
-      adjust: { from: [2, 3], message: '只有已占库/拣货中的销售单可修改明细，已出库后不可修改' },
-      reserve: { from: [1], to: 2, message: '只有草稿状态可以占用库存' },
-      release: { from: [2], to: 1, message: '只有已占库的订单可以取消占库' },
-      ship: { from: [2], to: 3, message: '只有已占库的销售单可以发起出库' },
+      adjust: { from: [2, 3, 6], message: '只有已占库/部分占库/拣货中的销售单可修改明细，已出库后不可修改' },
+      // 占库：草稿(1)或部分占库(6)都可补占。to 不固定，由 reserveStock 按「占完后是否全满」
+      // 动态推进到已占库(2)或部分占库(6)（compareAndSetStatus 传实际目标状态）。
+      reserve: { from: [1, 6], message: '只有草稿或部分占库状态可以占用库存' },
+      // 取消占库：已占库(2)/部分占库(6)都可，按产品/数量释放。to 由 releaseStock 动态决定。
+      release: { from: [2, 6], message: '只有已占库或部分占库的订单可以取消占库' },
+      ship: { from: [2, 6], to: 3, message: '只有已占库或部分占库的销售单可以发起出库' },
       completeShip: { from: [3], to: 4, message: '只有拣货中的销售单可以完成出库' },
       cancel: {
-        from: [1, 2, 3],
+        from: [1, 2, 3, 6],
         to: 5,
         message: '当前状态的订单不能取消',
         blocked: {

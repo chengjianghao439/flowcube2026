@@ -267,6 +267,7 @@ export const WT_KANBAN_COLUMNS = [
 export const SALE_STATUS = {
   "CANCELLED": 5,
   "DRAFT": 1,
+  "PARTIAL_RESERVED": 6,
   "PICKING": 3,
   "RESERVED": 2,
   "SHIPPED": 4
@@ -277,19 +278,22 @@ export const SALE_STATUS_NAME = {
   "2": "已占库",
   "3": "拣货中",
   "4": "已出库",
-  "5": "已取消"
+  "5": "已取消",
+  "6": "部分占库"
 } as const
 export const SALE_STATUS_TONE = {
   "1": "draft",
   "2": "active",
   "3": "active",
   "4": "success",
-  "5": "danger"
+  "5": "danger",
+  "6": "active"
 } as const
 export const SALE_STATUS_ACTIVE = [
   1,
   2,
-  3
+  3,
+  6
 ] as const
 export const SALE_STATUS_TERMINAL = [
   4,
@@ -311,7 +315,8 @@ export const SALE_ACTION_RULES = {
     "from": [
       1,
       2,
-      3
+      3,
+      6
     ],
     "message": "当前状态的订单不能取消",
     "to": 5
@@ -337,23 +342,24 @@ export const SALE_ACTION_RULES = {
   },
   "release": {
     "from": [
-      2
+      2,
+      6
     ],
-    "message": "只有已占库的订单可以取消占库",
-    "to": 1
+    "message": "只有已占库或部分占库的订单可以取消占库"
   },
   "reserve": {
     "from": [
-      1
+      1,
+      6
     ],
-    "message": "只有草稿状态可以占用库存",
-    "to": 2
+    "message": "只有草稿或部分占库状态可以占用库存"
   },
   "ship": {
     "from": [
-      2
+      2,
+      6
     ],
-    "message": "只有已占库的销售单可以发起出库",
+    "message": "只有已占库或部分占库的销售单可以发起出库",
     "to": 3
   }
 } as const
@@ -381,6 +387,10 @@ export const SALE_STATUS_OPTIONS = [
   {
     "label": "已取消",
     "value": "5"
+  },
+  {
+    "label": "部分占库",
+    "value": "6"
   }
 ] as const
 

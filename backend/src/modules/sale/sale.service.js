@@ -2,7 +2,7 @@ const { pool } = require('../../config/db')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
 const AppError = require('../../utils/AppError')
-const { reserve, releaseByRef } = require('../../engine/reservationEngine')
+const { reserve, releaseByRef, partialReleaseByProduct } = require('../../engine/reservationEngine')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { getAvailabilityByProducts } = require('../inventory/inventory.service')
 const { generateDailyCode } = require('../../utils/codeGenerator')
@@ -11,10 +11,11 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { getCustomerCreditUsed, hasCreditOverridePermission } = require('../../utils/creditExposure')
 const creditOverrideSvc = require('../credit-overrides/credit-overrides.service')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
-const { SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
-const { buildDueDateSql, normalizeSettlementType } = require('../../constants/settlementType')
+const { SALE_STATUS, SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
+const { SETTLEMENT_TYPE, buildDueDateSql, normalizeSettlementType } = require('../../constants/settlementType')
 const { WT_STATUS_NAME, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 const adjustSvc = require('../warehouse-tasks/warehouse-tasks.adjust')
 const { WT_EVENT, record: recordWtEvent } = require('../warehouse-tasks/warehouse-task-events.service')
 
@@ -48,8 +49,16 @@ const fmt = row => ({
   receivableStatusName: row.receivable_status != null ? (RECEIVABLE_STATUS_NAME[Number(row.receivable_status)] || null) : null,
   receivableDueDate: row.receivable_due_date || null,
   receivableBalance: row.receivable_balance != null ? Number(row.receivable_balance) : null,
-  receivableOverdue: row.receivable_status != null && Number(row.receivable_status) !== 3
-    && row.receivable_due_date != null && new Date(row.receivable_due_date).getTime() < Date.now(),
+  // 应收结算方式：应收快照优先，未出库回退客户主数据（COALESCE 兜底为月结），恒非 null。
+  receivableSettlementType: row.receivable_settlement_type != null ? Number(row.receivable_settlement_type) : null,
+  // 逾期 = 未付清（status 非 3，含未出库 null）且到期日严格早于北京今天（当天到期算最后付款日，不算逾期）。
+  // 统一口径：对账页 SQL 用 pr.due_date < CURDATE()（当天不算逾期），之前这里用
+  // new Date(due_date).getTime() < Date.now() 会把「今天到期」从凌晨就误判逾期。
+  // due_date 是 DATE 列，mysql2 在 timezone=+08:00 下解析成北京午夜（UTC 前一天 16:00Z），
+  // beijingTodayYmd 能把两边都还原成北京 YYYY-MM-DD 再做字符串比较。
+  receivableOverdue: Number(row.receivable_status) !== 3
+    && row.receivable_due_date != null
+    && beijingTodayYmd(new Date(row.receivable_due_date)) < beijingTodayYmd(),
   carrierId:row.carrier_id||null,
   carrier: row.carrier_name || row.carrier || null,   // 优先承运商表名称，回退文本字段
   freightType:row.freight_type||null,
@@ -82,7 +91,7 @@ const itemAggJoin = `
            SUM(quantity) AS ordered_total_qty,
            SUM(shipped_qty) AS shipped_total_qty,
            COUNT(DISTINCT warehouse_id) AS warehouse_count,
-           SUM(CASE WHEN dispatched = 0 THEN 1 ELSE 0 END) AS undispatched_count
+           SUM(CASE WHEN dispatched_qty < reserved_qty THEN 1 ELSE 0 END) AS undispatched_count
     FROM sale_order_items GROUP BY order_id
   ) soi_agg ON soi_agg.order_id = so.id
 `
@@ -91,13 +100,22 @@ const itemAggProjection = `
   soi_agg.undispatched_count
 `
 
-// 回款信息（不改订单状态机，独立于订单状态展示）：payment_records type=2（应收）
+// 回款信息（不改订单状态机，独立于订单状态展示）：payment_records type=2（应收）。
+// 结算方式读「应收快照优先、回退客户主数据」——未出库订单还没有应收记录，只能靠
+// 客户主数据的 settlement_type 区分现结/月结（COALESCE 默认月结，与 normalizeSettlementType 一致）。
 const paymentJoin = `
   LEFT JOIN payment_records pr_recv ON pr_recv.type = 2 AND pr_recv.order_id = so.id
+  LEFT JOIN sale_customers cust ON cust.id = so.customer_id AND cust.deleted_at IS NULL
 `
 const paymentProjection = `
-  pr_recv.status AS receivable_status, pr_recv.due_date AS receivable_due_date,
-  pr_recv.balance AS receivable_balance
+  pr_recv.status AS receivable_status,
+  CASE
+    WHEN pr_recv.due_date IS NOT NULL THEN pr_recv.due_date
+    WHEN COALESCE(pr_recv.settlement_type, cust.settlement_type, 2) = ${SETTLEMENT_TYPE.CASH} THEN DATE(so.created_at)
+    ELSE NULL
+  END AS receivable_due_date,
+  pr_recv.balance AS receivable_balance,
+  COALESCE(pr_recv.settlement_type, cust.settlement_type, 2) AS receivable_settlement_type
 `
 const RECEIVABLE_STATUS_NAME = { 1: '未付', 2: '部分付', 3: '已付清' }
 
@@ -571,6 +589,8 @@ async function findById(id, scopeWarehouseIds = null) {
     warehouseId: r.warehouse_id != null ? Number(r.warehouse_id) : null,
     warehouseName: r.warehouse_name || null,
     shippedQty: r.shipped_qty != null ? Number(r.shipped_qty) : 0,
+    reservedQty: r.reserved_qty != null ? Number(r.reserved_qty) : 0,
+    dispatchedQty: r.dispatched_qty != null ? Number(r.dispatched_qty) : 0,
     dispatched: Number(r.dispatched) === 1,
     quantity:Number(r.quantity),
     unitPrice:Number(r.unit_price),
@@ -762,7 +782,11 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
     if (Number(adjGuard.shippedAny) > 0) {
       throw new AppError('销售单已部分发货，明细已锁定，只能继续发剩余或取消剩余', 400)
     }
-    if (!orderRow.task_id) throw new AppError('销售单尚未发起出库，没有关联的仓库任务', 400)
+    if (!orderRow.task_id) {
+      // 占库期改单：状态 2（已占库）/6（部分占库）尚未发货、无仓库任务，改单不再依赖 WMS 任务联动。
+      // 保留已占量：改数量时已占量夹到新数量内；删商品释放其已占；加商品占 0。重建明细后重算状态 2/6。
+      return await adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState })
+    }
 
     const taskRow = await lockStatusRow(conn, {
       table: 'warehouse_tasks', id: orderRow.task_id,
@@ -958,6 +982,97 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
   finally { conn.release() }
 }
 
+// 占库期改单（状态 2/6，未发货、无仓库任务）：在已占库存的约束下编辑明细。
+//
+// 已占量联动规则：
+//   - 保留已占量：同名商品改数量时，新已占量 = min(旧已占量, 新数量)，超过部分释放预占；
+//   - 删商品：释放该商品全部已占；
+//   - 加商品：占 0（改完单后仍需用户去占库弹窗补占）。
+// 明细行整体删除重建（同 update() 模式），重建时按 (product, warehouse) 聚合后的数量与
+// 已占量对齐；改完重新统计所有行 reserved_qty 是否全满 → 已占库(2)/部分占库(6)。
+async function adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState }) {
+  const id = Number(orderRow.id)
+  const folded = await foldEntryItems(conn, items)
+  if (!folded.length) throw new AppError('至少需要一条商品明细', 400)
+
+  const [oldItemRows] = await conn.query(
+    'SELECT * FROM sale_order_items WHERE order_id = ? FOR UPDATE',
+    [id],
+  )
+  // 单仓边界沿用执行期改单口径：占库期改单也只支持单仓（多仓明细锁定，先取消占库再改）
+  const whCount = new Set(oldItemRows.map(r => Number(r.warehouse_id))).size
+  if (whCount > 1) {
+    throw new AppError('多仓发货的销售单不支持占库期改单，如需调整请先取消占库再编辑', 400)
+  }
+
+  // 旧已占量按 (product, warehouse) 聚合
+  const oldReservedByKey = new Map()
+  for (const r of oldItemRows) {
+    const key = `${Number(r.product_id)}:${r.warehouse_id != null ? Number(r.warehouse_id) : Number(orderRow.warehouse_id)}`
+    oldReservedByKey.set(key, (oldReservedByKey.get(key) || 0) + (Number(r.reserved_qty) || 0))
+  }
+  // 新数量按 (product, warehouse) 聚合（folded 里 warehouseId 缺省继承订单头）
+  const newQtyByKey = new Map()
+  for (const item of folded) {
+    const whId = item.warehouseId != null ? Number(item.warehouseId) : Number(orderRow.warehouse_id)
+    const key = `${Number(item.productId)}:${whId}`
+    newQtyByKey.set(key, (newQtyByKey.get(key) || 0) + Number(item.quantity))
+  }
+
+  // 计算每个 (product, warehouse) 需要释放的预占差额（旧已占 − 新已占），按 product 排序统一加锁顺序
+  const releaseDeltas = []
+  for (const [key, oldReserved] of oldReservedByKey) {
+    const newQty = newQtyByKey.get(key) || 0
+    const keep = Math.min(oldReserved, newQty)
+    const release = Math.max(0, oldReserved - keep)
+    if (release > 0) releaseDeltas.push({ key, productId: Number(key.split(':')[0]), warehouseId: Number(key.split(':')[1]), release })
+  }
+  releaseDeltas.sort((a, b) => a.productId - b.productId || a.warehouseId - b.warehouseId)
+  for (const d of releaseDeltas) {
+    await partialReleaseByProduct(conn, {
+      refType: 'sale_order', refId: id,
+      productId: d.productId, warehouseId: d.warehouseId, qty: d.release,
+    })
+  }
+
+  // 重建明细：每行的 reserved_qty = min(旧已占, 新数量)
+  const total = round2(folded.reduce((s, i) => s + i.amount, 0))
+  await conn.query('UPDATE sale_orders SET total_amount=? WHERE id=?', [total, id])
+  await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
+  for (const item of folded) {
+    const whId = item.warehouseId != null ? Number(item.warehouseId) : Number(orderRow.warehouse_id)
+    const whName = item.warehouseName || orderRow.warehouse_name
+    const key = `${Number(item.productId)}:${whId}`
+    const reservedQty = Math.min(oldReservedByKey.get(key) || 0, Number(item.quantity))
+    await conn.query(
+      `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark,reserved_qty,dispatched_qty) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`,
+      [id, whId, whName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber || null, item.spec || null, item.color || null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark || null, reservedQty],
+    )
+  }
+
+  // 重算状态：所有行 reserved_qty >= quantity → 已占库(2)，否则部分占库(6)
+  const [[{ unfilled }]] = await conn.query(
+    'SELECT COUNT(*) AS unfilled FROM sale_order_items WHERE order_id = ? AND reserved_qty < quantity',
+    [id],
+  )
+  const toStatus = Number(unfilled) === 0 ? SALE_STATUS.RESERVED : SALE_STATUS.PARTIAL_RESERVED
+  await compareAndSetStatus(conn, {
+    table: 'sale_orders', id,
+    fromStatus: Number(orderRow.status), toStatus, entityName: '销售单',
+  })
+
+  await appendSaleEvent(conn, id, 'adjusted', '占库期改单',
+    `改单完成，已占量按新明细对齐，当前${toStatus === SALE_STATUS.RESERVED ? '已全部占满' : '仍有未占部分'}`, operator)
+  await buildPricingEvents(conn, id, folded, operator)
+
+  const result = { adjustmentId: null, adjustmentNo: null, pending: false }
+  await completeOperationRequest(conn, requestState, {
+    data: result, message: '修改成功', resourceType: 'sale_order', resourceId: id,
+  })
+  await conn.commit()
+  return result
+}
+
 // 占库前的分仓预览：按明细行的产品，列出各仓库当前可用量，供占库弹窗逐行选仓库。
 async function getReservePreview(id, scopeWarehouseIds = null) {
   const [[orderRow]] = await pool.query(
@@ -1014,6 +1129,8 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
       color: item.color || null,
       unit: item.unit,
       quantity: Number(item.quantity),
+      reservedQty: item.reserved_qty != null ? Number(item.reserved_qty) : 0,
+      remainToReserve: Math.max(0, Number(item.quantity) - (item.reserved_qty != null ? Number(item.reserved_qty) : 0)),
       currentWarehouseId: item.warehouse_id != null ? Number(item.warehouse_id) : Number(orderRow.warehouse_id),
       currentWarehouseName: item.warehouse_name || orderRow.warehouse_name,
       warehouses: (availByProduct.get(item.product_id) || []).sort((a, b) => b.available - a.available),
@@ -1024,13 +1141,13 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
 
 // ① 占用库存：仅调用 reservationEngine.reserve()，不创建仓库任务
 //
-// 先做一次全量可用量检查（不实际预占），把所有不足的商品一次性收集进错误明细——
-// 而不是像 reserve() 循环那样第一个不足就抛错、后面的商品可用量对用户完全不可见。
-// 前端可用这份明细直接展示"按可用量修改订单"的一键操作（见 requestAdjustment）。
+// 按产品/按数量占库：items 指定「本次占哪些行、每行占多少」（qty 可 < quantity，未传的行不占）。
+// 占完后统计是否所有行 reserved_qty >= quantity，全满 → 已占库(2)，否则 → 部分占库(6)。
+// 支持从草稿(1)或部分占库(6)重复打开弹窗补占。
 //
-// itemOverrides：占库弹窗里逐行选好的发货仓库（[{id, warehouseId, warehouseName}]），
-// 在可用量检查前先写回明细行，让 shortages 按用户选的仓库计算。
-async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOverride = false, scopeWarehouseIds = null } = {}) {
+// items: [{ id, warehouseId, warehouseName, qty }]（qty 为本次要占的数量，>0）
+// 先做一次全量可用量检查（不实际预占），把所有不足的商品一次性收集进错误明细。
+async function reserveStock(id, operator, items = [], { confirmCreditOverride = false, scopeWarehouseIds = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -1040,7 +1157,7 @@ async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOve
 
     // —— 信用额度校验（在锁库存之前）。客户行 FOR UPDATE 是同客户并发占库的串行化点：
     // 第二个占库事务会在此阻塞，直到第一单 COMMIT 落入在途敞口(B)，再读到的 used 已含第一单。
-    // 加锁顺序：客户行(sale_customers) → 订单单头(sale_orders,已锁) → 库存维度(下方 reserve)，全局一致防死锁。
+    // 授信是「订单级」额度，按整单 total_amount 校验，不因本次只占部分货而打折。
     const [[cust]] = await conn.query(
       'SELECT id, credit_limit FROM sale_customers WHERE id = ? FOR UPDATE',
       [orderRow.customer_id],
@@ -1051,9 +1168,6 @@ async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOve
       const limit = Number(cust.credit_limit)
       if (used + thisOrder > limit) {
         const overBy = Math.round((used + thisOrder - limit) * 100) / 100
-        // 放行通道（任一即可）：
-        //   ① 本单已有「已批准」的超额放行申请单（文档 05 Phase 2，走过多级审批）→ 自动放行
-        //   ② 带 confirmCreditOverride + 有 sale.credit.override 权限 → 一次性授权放行（紧急场景）
         const approvedOverrideId = await creditOverrideSvc.hasApprovedOverride(id)
         const allowOverride = approvedOverrideId != null || (confirmCreditOverride && await hasCreditOverridePermission(conn, operator))
         if (!allowOverride) {
@@ -1068,30 +1182,47 @@ async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOve
       }
     }
 
-    if (itemOverrides.length) {
-      for (const o of itemOverrides) {
-        await conn.query(
-          'UPDATE sale_order_items SET warehouse_id = ?, warehouse_name = ? WHERE id = ? AND order_id = ?',
-          [o.warehouseId, o.warehouseName, o.id, id],
-        )
+    // 按 items 里的 id 精确取本次要占的明细行，并用 items 里的 qty/仓库覆盖
+    const [allItemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
+    if (!allItemRows.length) throw new AppError('销售单无明细，无法占用库存', 400)
+    const itemById = new Map(allItemRows.map(r => [Number(r.id), r]))
+    // 向后兼容：不传 items（旧客户端/测试）＝占满所有未占余量（等价于旧的整单占库）
+    const effectiveItems = items.length
+      ? items
+      : allItemRows.map(r => ({ id: r.id, qty: Math.max(0, Number(r.quantity) - (Number(r.reserved_qty) || 0)) }))
+    const reserveItems = []
+    for (const it of effectiveItems) {
+      const row = itemById.get(Number(it.id))
+      if (!row) throw new AppError(`明细行 ${it.id} 不存在`, 400)
+      const qty = Number(it.qty)
+      if (!(qty > 0)) continue   // 本次不占该行
+      const already = Number(row.reserved_qty) || 0
+      const remain = Number(row.quantity) - already
+      if (qty > remain + 1e-6) {
+        throw new AppError(`商品「${row.product_name}」本次占库量 ${qty} 超过未占余量 ${remain}`, 400)
       }
+      const whId = it.warehouseId != null ? Number(it.warehouseId)
+        : (row.warehouse_id != null ? Number(row.warehouse_id) : Number(orderRow.warehouse_id))
+      const whName = it.warehouseName || row.warehouse_name || orderRow.warehouse_name
+      reserveItems.push({ ...row, reserveQty: qty, warehouseId: whId, warehouseName: whName })
+    }
+    if (!reserveItems.length) throw new AppError('本次没有有效的占库数量', 400)
+
+    // 写回每行仓库（分仓发货：占库时选定发货仓库）
+    for (const it of reserveItems) {
+      await conn.query(
+        'UPDATE sale_order_items SET warehouse_id = ?, warehouse_name = ? WHERE id = ? AND order_id = ?',
+        [it.warehouseId, it.warehouseName, it.id, id],
+      )
     }
 
-    const [itemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
-    if (!itemRows.length) throw new AppError('销售单无明细，无法占用库存', 400)
-
-    // 可用量按明细行自己的仓库检查（分仓订单不同行可能在不同仓库；缺省行仓库=订单头）
-    // 批量读可用量（2026-08-22 性能）：此前逐行 getAvailableStockForDecision（每行 2 次查询），
-    // 20 行明细 = 40 次往返；改为一次查询取回全部 (product, warehouse) 的可用量（无锁，语义一致：
-    // ACTIVE 容器合计 − reserved）。
-    const itemWh = item => (item.warehouse_id != null ? Number(item.warehouse_id) : Number(orderRow.warehouse_id))
-    const itemPairs = itemRows.map(item => ({ productId: Number(item.product_id), warehouseId: itemWh(item) }))
+    // 可用量按本次要占的数量检查（分仓订单不同行可能在不同仓库）
+    const itemWh = it => Number(it.warehouseId)
+    const uniqPairs = [...new Map(reserveItems.map(it => [`${Number(it.product_id)}:${itemWh(it)}`, it])).values()]
     const availMap = new Map()
-    const uniqPairs = [...new Map(itemPairs.map(p => [`${p.productId}:${p.warehouseId}`, p])).values()]
     if (uniqPairs.length) {
       const placeholders = uniqPairs.map(() => '(?,?)').join(',')
-      const pairParams = uniqPairs.flatMap(p => [p.productId, p.warehouseId])
-      // 一次取容器合计（ACTIVE）+ 一次取 reserved 投影，内存合并——避免逐行 N+1
+      const pairParams = uniqPairs.flatMap(p => [Number(p.product_id), itemWh(p)])
       const [availRows] = await conn.query(
         `SELECT c.product_id, c.warehouse_id,
                 COALESCE(SUM(c.remaining_qty), 0) AS qty
@@ -1113,15 +1244,15 @@ async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOve
       }
     }
     const shortages = []
-    for (const item of itemRows) {
-      const key = `${Number(item.product_id)}:${itemWh(item)}`
+    for (const it of reserveItems) {
+      const key = `${Number(it.product_id)}:${itemWh(it)}`
       const available = availMap.get(key) ?? 0
-      if (available < Number(item.quantity)) {
+      if (available < Number(it.reserveQty)) {
         shortages.push({
-          productId: item.product_id,
-          productName: item.product_name,
-          warehouseName: item.warehouse_name || orderRow.warehouse_name,
-          required: Number(item.quantity),
+          productId: it.product_id,
+          productName: it.product_name,
+          warehouseName: it.warehouseName,
+          required: Number(it.reserveQty),
           available,
         })
       }
@@ -1136,11 +1267,8 @@ async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOve
       )
     }
 
-    // 按 (product_id, warehouse_id) 排序后再逐行预占，强制所有并发事务以同一顺序获取
-    // inventory_stock 行锁。明细行的自然顺序（ORDER BY id）与商品无关，两张订单若商品
-    // 顺序相反就会互相持锁等待 → InnoDB 死锁，随机报「占库失败」。统一加锁顺序是消除
-    // 这类死锁的标准手法（审计 P1-6）。
-    const reserveOrder = [...itemRows].sort(
+    // 按 (product_id, warehouse_id) 排序后逐行预占，统一加锁顺序防死锁（审计 P1-6）。
+    const reserveOrder = [...reserveItems].sort(
       (a, b) => Number(a.product_id) - Number(b.product_id) || itemWh(a) - itemWh(b),
     )
     for (const item of reserveOrder) {
@@ -1148,20 +1276,39 @@ async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOve
         productId:   item.product_id,
         productName: item.product_name,
         warehouseId: itemWh(item),
-        qty:         Number(item.quantity),
+        qty:         Number(item.reserveQty),
         refType:     'sale_order',
         refId:       Number(orderRow.id),
         refNo:       orderRow.order_no,
       })
+      await conn.query(
+        'UPDATE sale_order_items SET reserved_qty = reserved_qty + ? WHERE id = ?',
+        [Number(item.reserveQty), item.id],
+      )
     }
+
+    // 占完后统计：所有行 reserved_qty >= quantity → 已占库(2)，否则部分占库(6)
+    const [[{ unfilled }]] = await conn.query(
+      'SELECT COUNT(*) AS unfilled FROM sale_order_items WHERE order_id = ? AND reserved_qty < quantity',
+      [id],
+    )
+    const toStatus = Number(unfilled) === 0 ? SALE_STATUS.RESERVED : SALE_STATUS.PARTIAL_RESERVED
     await compareAndSetStatus(conn, {
       table: 'sale_orders',
       id,
       fromStatus: rule.from,
-      toStatus: rule.to,
+      toStatus,
       entityName: '销售单',
     })
-    await appendSaleEvent(conn, id, 'reserved', '确认占库', `已预占库存`, operator)
+    const wasPartial = Number(orderRow.status) === SALE_STATUS.PARTIAL_RESERVED
+    const nowFull = toStatus === SALE_STATUS.RESERVED
+    await appendSaleEvent(conn, id, 'reserved',
+      nowFull ? (wasPartial ? '补占完成' : '确认占库') : (wasPartial ? '补充占库' : '部分占库'),
+      nowFull
+        ? (wasPartial ? `补占后已全部占满` : `已预占全部库存`)
+        : `本次预占 ${reserveItems.length} 行，仍有未占部分`,
+      operator,
+      { reserveCount: reserveItems.length, fullReserved: nowFull })
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -1171,9 +1318,9 @@ async function reserveStock(id, operator, itemOverrides = [], { confirmCreditOve
 // 订单进入拣货中（status=3）。单仓订单 = 只有一组 = 一个任务（与旧行为一致）。
 // sale_orders.task_id/task_no 记录"最近创建的任务"（兼容旧字段，主查询走 sale_order_id 反查）。
 //
-// 分批发货：只对「未派发(dispatched=0)」且（传了 itemIds 时）被选中的行建任务，
-// 建完标记 dispatched=1。首次发货 status 2→3；后续继续发剩余行时订单已在 3，保持不变。
-// 不传 itemIds = 发全部未派发行（含首次一次性全发的旧行为）。
+// 发货只发「已占未发」的数量：每行本次发货量 = reserved_qty - dispatched_qty（差额）。
+// 建完任务把该行 dispatched_qty 提到 reserved_qty。首次发货 2/6→3；继续发剩余保持 3。
+// 不传 itemIds = 发全部「已占未发完」的行。
 async function ship(id, operator, { itemIds = null, scopeWarehouseIds = null } = {}) {
   const conn = await pool.getConnection()
   try {
@@ -1181,28 +1328,29 @@ async function ship(id, operator, { itemIds = null, scopeWarehouseIds = null } =
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     const curStatus = Number(orderRow.status)
-    // 允许从「已占库(2)」首次发货，或「履约中(3)」继续发剩余行；其它状态走标准报错
-    if (curStatus !== 2 && curStatus !== 3) {
+    // 允许从「已占库(2)/部分占库(6)」首次发货，或「履约中(3)」继续发剩余；其它状态走标准报错
+    if (curStatus !== SALE_STATUS.RESERVED && curStatus !== SALE_STATUS.PARTIAL_RESERVED && curStatus !== SALE_STATUS.PICKING) {
       assertStatusAction('sale', 'ship', orderRow.status)
     }
 
-    // 取未派发行；传了 itemIds 则只发选中的那些未派发行（分批）
+    // 取「已占未发完」的行；传了 itemIds 则只发选中的那些行（分批）
     let [itemRows] = await conn.query(
-      'SELECT * FROM sale_order_items WHERE order_id = ? AND dispatched = 0 ORDER BY id',
+      'SELECT * FROM sale_order_items WHERE order_id = ? AND dispatched_qty < reserved_qty ORDER BY id',
       [id],
     )
-    if (!itemRows.length) throw new AppError('该销售单已无未发货明细，无需再发起出库', 400)
+    if (!itemRows.length) throw new AppError('该销售单已无可发货明细，请先占库', 400)
     if (Array.isArray(itemIds) && itemIds.length) {
       const wanted = new Set(itemIds.map(Number))
       itemRows = itemRows.filter(r => wanted.has(Number(r.id)))
-      if (!itemRows.length) throw new AppError('选中的明细行均已发起出库，无可发货项', 400)
+      if (!itemRows.length) throw new AppError('选中的明细行均已发货，无可发货项', 400)
     }
 
-    // 按发货仓库分组（缺省行仓库=订单头）
+    // 按发货仓库分组（缺省行仓库=订单头）；每行本次发货量 = 已占 - 已派发
     const groups = new Map()
     for (const r of itemRows) {
       const whId = r.warehouse_id != null ? Number(r.warehouse_id) : Number(orderRow.warehouse_id)
       const whName = r.warehouse_name || orderRow.warehouse_name
+      const shipQty = Number(r.reserved_qty) - Number(r.dispatched_qty)
       if (!groups.has(whId)) groups.set(whId, { warehouseId: whId, warehouseName: whName, items: [] })
       groups.get(whId).items.push({
         id: r.id,
@@ -1213,7 +1361,7 @@ async function ship(id, operator, { itemIds = null, scopeWarehouseIds = null } =
         articleNumber: r.article_number || null,
         spec: r.spec || null,
         color: r.color || null,
-        quantity: Number(r.quantity),
+        quantity: shipQty,
       })
     }
 
@@ -1232,15 +1380,17 @@ async function ship(id, operator, { itemIds = null, scopeWarehouseIds = null } =
       })
       created.push({ taskId, taskNo, warehouseName: grp.warehouseName })
     }
-    // 标记本次已派发的行
-    await conn.query(
-      'UPDATE sale_order_items SET dispatched = 1 WHERE id IN (?)',
-      [itemRows.map(r => r.id)],
-    )
+    // 标记本次已派发：dispatched_qty 提到 reserved_qty（本行已占部分全派发）
+    for (const r of itemRows) {
+      await conn.query(
+        'UPDATE sale_order_items SET dispatched_qty = reserved_qty WHERE id = ?',
+        [r.id],
+      )
+    }
 
     const last = created[created.length - 1]
-    if (curStatus === 2) {
-      // 首次发货：已占库(2) → 履约中(3)
+    if (curStatus !== SALE_STATUS.PICKING) {
+      // 首次发货：已占库(2)/部分占库(6) → 履约中(3)
       const rule = assertStatusAction('sale', 'ship', orderRow.status)
       await compareAndSetStatus(conn, {
         table: 'sale_orders', id,
@@ -1252,9 +1402,9 @@ async function ship(id, operator, { itemIds = null, scopeWarehouseIds = null } =
       await conn.query('UPDATE sale_orders SET task_id = ?, task_no = ? WHERE id = ?', [last.taskId, last.taskNo, id])
     }
 
-    // 是否还有未派发行（用于事件描述与前端「继续发货」入口判断）
+    // 是否还有「已占未发」的行（用于事件描述与前端「继续发货」入口判断）
     const [[{ remaining }]] = await conn.query(
-      'SELECT COUNT(*) AS remaining FROM sale_order_items WHERE order_id = ? AND dispatched = 0',
+      'SELECT COUNT(*) AS remaining FROM sale_order_items WHERE order_id = ? AND dispatched_qty < reserved_qty',
       [id],
     )
     const partial = Number(remaining) > 0
@@ -1271,23 +1421,62 @@ async function ship(id, operator, { itemIds = null, scopeWarehouseIds = null } =
   finally { conn.release() }
 }
 
-// 取消占库：RESERVED(2) → DRAFT(1)，释放预占
-async function releaseStock(id, operator, scopeWarehouseIds = null) {
+// 取消占库：按产品/数量释放（items 传 [{id, qty}]）或整单释放（items 为 null）。
+// 释放后统计：全部行 reserved_qty=0 → 草稿(1)；仍有部分 → 部分占库(6)。
+async function releaseStock(id, operator, items = null, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     const rule = assertStatusAction('sale', 'release', orderRow.status)
-    await releaseByRef(conn, 'sale_order', id)
-    await compareAndSetStatus(conn, {
-      table: 'sale_orders',
-      id,
-      fromStatus: rule.from,
-      toStatus: rule.to,
-      entityName: '销售单',
-    })
-    await appendSaleEvent(conn, id, 'released', '取消占库', `销售单 ${orderRow.order_no} 已取消占库并恢复草稿`, operator)
+
+    if (Array.isArray(items) && items.length) {
+      // 按产品/数量释放：先锁明细行，逐行 partialReleaseByProduct，回写 reserved_qty
+      const [itemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? FOR UPDATE', [id])
+      const itemById = new Map(itemRows.map(r => [Number(r.id), r]))
+      for (const it of items) {
+        const row = itemById.get(Number(it.id))
+        if (!row) throw new AppError(`明细行 ${it.id} 不存在`, 400)
+        const qty = Number(it.qty)
+        if (!(qty > 0)) continue
+        const already = Number(row.reserved_qty) || 0
+        if (qty > already + 1e-6) {
+          throw new AppError(`商品「${row.product_name}」释放数量 ${qty} 超过已占量 ${already}`, 400)
+        }
+        const whId = row.warehouse_id != null ? Number(row.warehouse_id) : Number(orderRow.warehouse_id)
+        await partialReleaseByProduct(conn, {
+          refType: 'sale_order', refId: Number(orderRow.id),
+          productId: row.product_id, warehouseId: whId, qty,
+        })
+        await conn.query(
+          'UPDATE sale_order_items SET reserved_qty = reserved_qty - ? WHERE id = ?',
+          [qty, row.id],
+        )
+      }
+      const [[{ remaining }]] = await conn.query(
+        'SELECT COALESCE(SUM(reserved_qty), 0) AS remaining FROM sale_order_items WHERE order_id = ?',
+        [id],
+      )
+      const toStatus = Number(remaining) === 0 ? SALE_STATUS.DRAFT : SALE_STATUS.PARTIAL_RESERVED
+      await compareAndSetStatus(conn, {
+        table: 'sale_orders', id,
+        fromStatus: rule.from, toStatus, entityName: '销售单',
+      })
+      await appendSaleEvent(conn, id, 'released',
+        toStatus === SALE_STATUS.DRAFT ? '取消占库' : '部分取消占库',
+        toStatus === SALE_STATUS.DRAFT ? `销售单 ${orderRow.order_no} 已取消占库并恢复草稿` : `销售单 ${orderRow.order_no} 已释放部分预占`,
+        operator)
+    } else {
+      // 整单释放
+      await releaseByRef(conn, 'sale_order', id)
+      await conn.query('UPDATE sale_order_items SET reserved_qty = 0 WHERE order_id = ?', [id])
+      await compareAndSetStatus(conn, {
+        table: 'sale_orders', id,
+        fromStatus: rule.from, toStatus: SALE_STATUS.DRAFT, entityName: '销售单',
+      })
+      await appendSaleEvent(conn, id, 'released', '取消占库', `销售单 ${orderRow.order_no} 已取消占库并恢复草稿`, operator)
+    }
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -1302,8 +1491,9 @@ async function cancel(id, operator, scopeWarehouseIds = null) {
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     const rule = assertStatusAction('sale', 'cancel', orderRow.status)
 
-    if (Number(orderRow.status) === 2) {
+    if (Number(orderRow.status) === 2 || Number(orderRow.status) === 6) {
       await releaseByRef(conn, 'sale_order', id)
+      await conn.query('UPDATE sale_order_items SET reserved_qty = 0 WHERE order_id = ?', [id])
     }
 
     if (Number(orderRow.status) === 3) {
