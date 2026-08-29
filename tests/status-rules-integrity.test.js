@@ -30,7 +30,7 @@ function assert(name, cond, detail = '') {
 // inboundTask.receiveComplete(2,3→3)——不算空转，空转检查跳过这两个。
 const KNOWN_STATES = {
   purchase: [1, 2, 3, 4, 5],
-  sale: [1, 2, 3, 4, 5],
+  sale: [1, 2, 3, 4, 5, 6],
   inboundTask: [1, 2, 3, 4, 5],
   inboundTaskAudit: [0, 1, 2],
   transfer: [1, 2, 3, 4, 5],
