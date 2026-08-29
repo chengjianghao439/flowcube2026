@@ -777,7 +777,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **修复**（仅 `backend/src/scheduler.js`）：本地拼 `alertLink(path)`——`APP_PUBLIC_URL`（生产必填，config/env.js 校验）+ `/#` + path；未配置时降级为原相对路径（本地 dev 不影响）。**注意哈：钉钉/短信等站外链接一律要拼绝对 URL + HashRouter 前缀，不要再直接写相对 path。**
     - 验证：node 直测 7 例（含带查询串/尾斜杠/空 path）+ mainline 49/49 + 后端 lint 0。
     - 说明：桌面端/PDA 此版无功能变化，仅随版本号同步（三端 0.7.3，PDA versionCode 102）。
-47. **2026-08-29 销售占库改为「按产品/按数量」+ 新增「部分占库」状态 + 占库期改单（未发版）**：
+47. **2026-08-29 销售占库改为「按产品/按数量」+ 新增「部分占库」状态 + 占库期改单（已随 v0.7.5 发布，提交 `a87514b`/`9185a6c`）**：
     - **按产品/按数量占库（迁移 220）**：`sale_order_items` 新增 `reserved_qty`（已占）、`dispatched_qty`（已派发），取代布尔 `dispatched`（列保留兼容）。占库弹窗支持勾选产品 + 填本次占库数量（需求 100 可占 60）；`reserveStock` 不传 items = 占满未占余量（向后兼容）。占完统计全满→`已占库(2)`、否则→新增状态 **6「部分占库」**。发货只发 `reserved_qty - dispatched_qty` 差额，一行可多次「补占→发货」。释放支持按产品/数量（`releaseStock(items:[{id,qty}])`）或整单。授信在途敞口纳入状态 6。`StockShortageDialog` 移除「按可用量改单并重新占库」一键操作（改为引导回占库弹窗调数量）。
     - **占库期改单**：`requestAdjustment` 无 `task_id`（状态 2/6）时走新分支 `adjustReservedWithinTransaction`——保留已占量（改数量时夹到新数量、删商品释放预占、加商品占 0），重建明细后重算状态 2/6。状态 3（有任务）仍走原执行期改单。多仓、已发货订单明细仍锁定。
     - **回款状态改造（本轮先做）**：列表「回款状态」列独立于订单状态，读应收快照 + 结算方式（未出库回退客户主数据）。决策表：已付清绿/部分付蓝/未付未逾期（现结灰「未付」、月结蓝「月结」）/逾期（月结红「逾期」、现结红「未付」）。逾期边界统一为「到期日 < 北京今天」（当天不算逾期），对账页 `isOverdue` 与后端 `receivableOverdue` 同步改（后端此前 `new Date(due_date).getTime() < Date.now()` 会把当天从凌晨误判逾期）。
