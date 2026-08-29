@@ -1,7 +1,7 @@
 {
-  "version": "0.7.5",
-  "versionCode": 104,
+  "version": "0.7.6",
+  "versionCode": 105,
   "filename": "app-release.apk",
-  "releaseNote": "- 销售订单支持「按产品/按数量」占库：可只占部分产品或部分数量，未占部分留待补占。",
-  "publishedAt": "2026-08-29T15:17:30.544Z"
+  "releaseNote": "- 修复工资发放：有社保/公积金的账套下，工资单可正常发放（此前会因凭证借贷不平而失败）。",
+  "publishedAt": "2026-08-29T18:23:05.779Z"
 }

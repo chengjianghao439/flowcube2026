@@ -1,11 +1,13 @@
 const svc = require('./printers.service')
 const { successResponse } = require('../../utils/response')
 
+const scopeOf = (req) => req.user?.warehouseIds ?? null
+
 const list   = async (req, res, next) => { try { return successResponse(res, await svc.findAll({ type: req.query.type ? +req.query.type : undefined })) } catch(e) { next(e) } }
-const detail = async (req, res, next) => { try { return successResponse(res, await svc.findById(+req.params.id)) } catch(e) { next(e) } }
+const detail = async (req, res, next) => { try { return successResponse(res, await svc.findById(+req.params.id, scopeOf(req))) } catch(e) { next(e) } }
 const create = async (req, res, next) => { try { return successResponse(res, await svc.create(req.body), '创建成功', 201) } catch(e) { next(e) } }
-const update = async (req, res, next) => { try { return successResponse(res, await svc.update(+req.params.id, req.body)) } catch(e) { next(e) } }
-const remove = async (req, res, next) => { try { await svc.remove(+req.params.id); return successResponse(res, null) } catch(e) { next(e) } }
+const update = async (req, res, next) => { try { return successResponse(res, await svc.update(+req.params.id, req.body, scopeOf(req))) } catch(e) { next(e) } }
+const remove = async (req, res, next) => { try { await svc.remove(+req.params.id, scopeOf(req)); return successResponse(res, null) } catch(e) { next(e) } }
 
 const updateClientAlias = async (req, res, next) => {
   try {

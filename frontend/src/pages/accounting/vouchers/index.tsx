@@ -21,6 +21,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import { toast } from '@/lib/toast'
+import { todayYmd } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -180,12 +181,12 @@ const emptyRow = (direction = 1): Row => ({ accountId: null, direction, amount: 
 function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data: accounts = [] } = useAccountFlat({ onlyLeaf: true, onlyActive: true })
   const { mutate: create, isPending } = useCreateManualVoucher()
-  const [voucherDate, setVoucherDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [voucherDate, setVoucherDate] = useState(() => todayYmd())
   const [summary, setSummary] = useState('')
   const [rows, setRows] = useState<Row[]>([emptyRow(1), emptyRow(2)])
 
   function reset() {
-    setVoucherDate(new Date().toISOString().slice(0, 10)); setSummary(''); setRows([emptyRow(1), emptyRow(2)])
+    setVoucherDate(todayYmd()); setSummary(''); setRows([emptyRow(1), emptyRow(2)])
   }
   function setRow(i: number, patch: Partial<Row>) { setRows(rs => rs.map((r, idx) => idx === i ? { ...r, ...patch } : r)) }
 

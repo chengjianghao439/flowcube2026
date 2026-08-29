@@ -176,8 +176,10 @@ async function runDepreciation({ period, companyId = 1 }, operator) {
       )
       const accum = engine.round2(Number(agg.accum))
       const totalDepr = engine.round2(Number(fa.original_cost) * (1 - Number(fa.residual_rate)))
-      // 已提足 → 停提（状态 2）
-      if (accum + monthly >= totalDepr - 0.01) {
+      // 已提足 → 停提（状态 2）。用「已提累计 >= 应提总额 - 1e-6」判断，而不是 accum+monthly 提前停：
+      // 旧写法 accum+monthly >= totalDepr-0.01 会在「提满前一期」就停，最后一个月折旧永远漏提，
+      // 累计折旧恒低于原值−残值、账面净值虚高（审计 2026-08-30）。
+      if (accum >= totalDepr - 1e-6) {
         await conn.query('UPDATE fixed_assets SET status = 2 WHERE id = ?', [fa.id])
         results.skipped += 1
         continue
@@ -185,14 +187,17 @@ async function runDepreciation({ period, companyId = 1 }, operator) {
 
       // 处置当期：处置日期所在期间 == 目标期间 → 提最后一期
       const isDisposalPeriod = fa.dispose_date != null && String(fa.dispose_date).slice(0, 6) === p
-      const newAccum = engine.round2(accum + monthly)
+      // 最后一期：若本期计提后超过应提总额，差额计提（clamp 到 totalDepr），避免累计折旧超过「原值−残值」
+      const lastPeriodMonthly = engine.round2(totalDepr - accum)
+      const actualMonthly = lastPeriodMonthly < monthly ? lastPeriodMonthly : monthly
+      const newAccum = engine.round2(accum + actualMonthly)
 
       // 台账行（UNIQUE(asset_id, period) 幂等）
       await conn.query(
         `INSERT INTO fixed_asset_depr (company_id, asset_id, period, depr_date, monthly_amount, accum_amount, is_disposal, created_by)
          VALUES (?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE monthly_amount=VALUES(monthly_amount), accum_amount=VALUES(accum_amount), is_disposal=VALUES(is_disposal)`,
-        [cid, fa.id, p, `${p.slice(0,4)}-${p.slice(4,6)}-28`, monthly, newAccum, isDisposalPeriod ? 1 : 0, operator?.userId ?? null],
+        [cid, fa.id, p, `${p.slice(0,4)}-${p.slice(4,6)}-28`, actualMonthly, newAccum, isDisposalPeriod ? 1 : 0, operator?.userId ?? null],
       )
       const [[deprRow]] = await conn.query(
         'SELECT id FROM fixed_asset_depr WHERE asset_id = ? AND period = ?', [fa.id, p],

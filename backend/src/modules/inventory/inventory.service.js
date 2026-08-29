@@ -5,6 +5,7 @@ const { MOVE_TYPE, MOVE_TYPE_LABEL, writeInventoryLog } = require('../../engine/
 const { adjustContainerStock, SOURCE_TYPE, splitContainer, syncStockFromContainers } = require('../../engine/containerEngine')
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 // ─── 库存查询 ─────────────────────────────────────────────────────────────────
 
@@ -183,10 +184,19 @@ async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehou
 //
 // 所有路径均通过 containerEngine 完成，inventory_stock 仅作缓存写入
 
-async function changeStock({ type, productId, warehouseId, supplierId, quantity, unitPrice, remark, operator }) {
+async function changeStock({ type, productId, warehouseId, supplierId, quantity, unitPrice, remark, operator, requestKey = null }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const requestState = await beginOperationRequest(conn, {
+      requestKey,
+      action: 'inventory.manual-out',
+      userId: operator?.userId ?? null,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData ?? null
+    }
 
     const [[product]] = await conn.query(
       'SELECT id, name, unit FROM product_items WHERE id=? AND deleted_at IS NULL', [productId],
@@ -244,6 +254,12 @@ async function changeStock({ type, productId, warehouseId, supplierId, quantity,
       operatorName: operator.realName,
     })
 
+    await completeOperationRequest(conn, requestState, {
+      data: { beforeQty: before, afterQty: after },
+      message: '出库成功',
+      resourceType: 'inventory',
+      resourceId: productId,
+    })
     await conn.commit()
     return { beforeQty: before, afterQty: after }
   } catch (err) {

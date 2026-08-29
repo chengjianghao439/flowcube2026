@@ -18,6 +18,7 @@ import type { FixedAsset } from '@/api/fixedAssets'
 import type { TableColumn } from '@/types'
 import type { StatusTone } from '@/lib/statusTone'
 import { downloadExport } from '@/lib/exportDownload'
+import { todayYmd } from '@/lib/dateTime'
 
 const money = (n: number | null | undefined) => `¥${Number(n ?? 0).toFixed(2)}`
 const ASSET_STATUS: Record<number, { label: string; tone: StatusTone }> = {
@@ -28,7 +29,7 @@ const ASSET_STATUS: Record<number, { label: string; tone: StatusTone }> = {
 
 function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const qc = useQueryClient()
-  const [form, setForm] = useState({ assetName: '', category: '', departmentName: '', acquireDate: new Date().toISOString().slice(0, 10), originalCost: '', residualRate: '0.05', usefulMonths: '36' })
+  const [form, setForm] = useState({ assetName: '', category: '', departmentName: '', acquireDate: todayYmd(), originalCost: '', residualRate: '0.05', usefulMonths: '36' })
   const { mutate: create, isPending } = useMutation({
     mutationFn: createFixedAssetApi,
     onSuccess: (r) => { toast.success(`已创建固定资产 ${r.assetNo}`); onClose(); onSaved(); qc.invalidateQueries({ queryKey: ['fixed-assets'] }) },
@@ -94,7 +95,7 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
 
 function DisposeDialog({ asset, onClose }: { asset: FixedAsset | null; onClose: () => void }) {
   const qc = useQueryClient()
-  const [form, setForm] = useState({ disposeType: '1', disposeDate: new Date().toISOString().slice(0, 10), income: '', expense: '' })
+  const [form, setForm] = useState({ disposeType: '1', disposeDate: todayYmd(), income: '', expense: '' })
   const { mutate: dispose, isPending } = useMutation({
     mutationFn: (d: { disposeType: number; disposeDate: string; income: number; expense: number }) => disposeFixedAssetApi(asset!.id, d),
     onSuccess: (r) => { toast.success(`处置完成 ${r.disposeNo}，净损益 ${money(r.gain)}`); onClose(); qc.invalidateQueries({ queryKey: ['fixed-assets'] }) },

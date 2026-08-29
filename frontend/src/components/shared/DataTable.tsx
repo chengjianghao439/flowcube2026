@@ -230,16 +230,24 @@ export default function DataTable<T extends object>({
       const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - (newTarget - snapshot[key])))
       const nextWidths = toStoredWidths({ ...snapshot, [key]: newTarget, [compKey]: newComp })
       persistLayout(columnOrder.length ? columnOrder : columns.map(item => String(item.key)), nextWidths)
+      cleanup()
+    }
+
+    // 失焦兜底：拖拽中 Alt-Tab 切走，mousemove/mouseup 不会触发，残留监听器直到下次 mousedown（对齐 editor 的 onWindowBlur）
+    const cleanup = () => {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('blur', handleBlur)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
+    const handleBlur = () => { cleanup() }
 
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('blur', handleBlur)
   }
 
   const allIds = data.map(r => Number((r as Record<string, unknown>)[String(rowKey)]))

@@ -13,7 +13,7 @@ import { getActiveAccountsApi } from '@/api/finance'
 import { createRequestKey } from '@/lib/requestKey'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
-import { formatDisplayDate } from '@/lib/dateTime'
+import { formatDisplayDate, todayYmd } from '@/lib/dateTime'
 
 interface Props {
   open: boolean
@@ -49,7 +49,7 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
 
   const [partyName, setPartyName] = useState('')
   const [amount, setAmount] = useState('')
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10))
+  const [payDate, setPayDate] = useState(todayYmd())
   const [method, setMethod] = useState('转账')
   const [accountId, setAccountId] = useState('')
   const [remark, setRemark] = useState('')
@@ -60,7 +60,7 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
     if (!open) return
     setPartyName(receipt?.partyName ?? '')
     setAmount(receipt ? String(receipt.balance) : '')
-    setPayDate(receipt?.paymentDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10))
+    setPayDate(receipt?.paymentDate?.slice(0, 10) ?? todayYmd())
     setMethod(receipt?.method || '转账')
     setAccountId(receipt?.accountId ? String(receipt.accountId) : '')
     setRemark('')

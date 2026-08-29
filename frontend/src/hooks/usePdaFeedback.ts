@@ -12,7 +12,7 @@
  *  err('条码无效')   → 红色 flash + 长震 + 错误音
  *  warn('已拣完')    → 黄色 flash + 双震
  */
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 
 export interface FlashState {
   type: 'ok' | 'err' | 'warn'
@@ -59,6 +59,15 @@ export function usePdaFeedback(options: {
   const { sound = true, vibrate: useVibrate = true } = options
   const [flash, setFlash]   = useState<FlashState | null>(null)
   const timerRef            = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 卸载时清理定时器：flash 展示期间组件若卸载（PDA 快速切页），残留的 setTimeout
+  // 会在卸载后 setFlash(null) 触发已卸载组件 setState。audioCtx 是模块级单例，
+  // 被所有组件共享，不能在单个组件卸载时 close（否则会让其它组件的音效失效）。
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
 
   function show(type: FlashState['type'], msg: string, ms: number) {
     if (timerRef.current) clearTimeout(timerRef.current)

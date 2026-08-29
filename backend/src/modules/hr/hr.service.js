@@ -229,9 +229,11 @@ async function payPayroll(id, { paidDate }, operator, companyId = 1) {
     }
 
     // ④ 发放：借 应付职工薪酬-工资(净额) + 借 其他应付款-代扣个税 / 贷 银行存款
+    // 借方 221101 应冲减「尚未转出的部分」= gross - sp（个人社保已在③转出）= net + tax。
+    // 此前误用 gross，贷方合计 tax+net，借贷差 = sp（个人社保），有社保账套下 assertBalanced 抛错。
     const tax = Number(payroll.total_tax)
     const net = Number(payroll.total_net)
-    const payLegs = [legs('221101', DIR.DEBIT, gross, `${period} 发放工资`)]
+    const payLegs = [legs('221101', DIR.DEBIT, net + tax, `${period} 发放工资`)]
     if (tax > 0) payLegs.push(legs('224101', DIR.CREDIT, tax, `${period} 代扣个税`))
     payLegs.push(legs('1002', DIR.CREDIT, net, `${period} 实发工资`))
     await engine.upsertVoucher(conn, {

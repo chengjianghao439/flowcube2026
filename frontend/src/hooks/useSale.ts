@@ -54,10 +54,13 @@ export const useAdjustSale = () => {
 export const useReserveSale = () => {
   const invalidate = useInvalidate()
   const { can } = usePermission()
+  // 稳定幂等键：断网重试/连点复用同一 key，后端据此识别「已成功」避免 reserved_qty 二次累加；
+  // 仅在确认成功后轮换（失败保持，因第一次可能已提交但响应丢失）。
+  const keyRef = useRef(createRequestKey('sale-reserve'))
   return useMutation({
     // items 可选：占库弹窗逐行选好的发货仓库覆盖；confirmCreditOverride 为超额授权放行
-    mutationFn: ({ id, items, confirmCreditOverride }: { id: number; items?: ReserveItemOverride[]; confirmCreditOverride?: boolean }) => reserveSaleApi(id, items, confirmCreditOverride),
-    onSuccess: () => { invalidate('sale_reserve'); toast.success('库存已占用') },
+    mutationFn: ({ id, items, confirmCreditOverride }: { id: number; items?: ReserveItemOverride[]; confirmCreditOverride?: boolean }) => reserveSaleApi(id, items, confirmCreditOverride, keyRef.current),
+    onSuccess: () => { invalidate('sale_reserve'); toast.success('库存已占用'); keyRef.current = createRequestKey('sale-reserve') },
     onError: (e: unknown, variables) => {
       if (e instanceof ApiClientError && e.code === 'STOCK_SHORTAGE') return
       // 客户授信超额：有放行权限者弹授权确认框，确认后带 confirmCreditOverride 重试；无权限仅提示（后端仍会拦）
@@ -70,8 +73,8 @@ export const useReserveSale = () => {
             confirmText: '授权放行',
             variant: 'destructive',
             onConfirm: () => {
-              reserveSaleApi(variables.id, variables.items, true)
-                .then(() => { invalidate('sale_reserve'); toast.success('已授权放行，库存已占用') })
+              reserveSaleApi(variables.id, variables.items, true, keyRef.current)
+                .then(() => { invalidate('sale_reserve'); toast.success('已授权放行，库存已占用'); keyRef.current = createRequestKey('sale-reserve') })
                 .catch(err => toast.error(err instanceof ApiClientError ? err.message : '放行占库失败'))
             },
           })
@@ -87,19 +90,21 @@ export const useReserveSale = () => {
 
 export const useReleaseSale = () => {
   const invalidate = useInvalidate()
+  const keyRef = useRef(createRequestKey('sale-release'))
   return useMutation({
     // items 可选：按产品/数量释放；不传 = 整单释放
-    mutationFn: ({ id, items }: { id: number; items?: ReserveItemOverride[] }) => releaseSaleApi(id, items),
-    onSuccess: () => { invalidate('sale_reserve'); toast.success('库存已释放') },
+    mutationFn: ({ id, items }: { id: number; items?: ReserveItemOverride[] }) => releaseSaleApi(id, items, keyRef.current),
+    onSuccess: () => { invalidate('sale_reserve'); toast.success('库存已释放'); keyRef.current = createRequestKey('sale-release') },
   })
 }
 
 export const useShipSale = () => {
   const invalidate = useInvalidate()
+  const keyRef = useRef(createRequestKey('sale-ship'))
   return useMutation({
     // itemIds 可选：分批发货时只发选中的明细行
-    mutationFn: ({ id, itemIds }: { id: number; itemIds?: number[] }) => shipSaleApi(id, itemIds),
-    onSuccess: () => { invalidate('sale_ship'); toast.success('已发起出库') },
+    mutationFn: ({ id, itemIds }: { id: number; itemIds?: number[] }) => shipSaleApi(id, itemIds, keyRef.current),
+    onSuccess: () => { invalidate('sale_ship'); toast.success('已发起出库'); keyRef.current = createRequestKey('sale-ship') },
   })
 }
 

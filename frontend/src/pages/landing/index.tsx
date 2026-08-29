@@ -276,6 +276,7 @@ function AnimatedNumber({ value, suffix = '' }: { value: string; suffix?: string
     if (!el) return
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (reduce) { setDisplay(target); return }
+    let rafId = 0
     const io = new IntersectionObserver((entries) => {
       if (!entries[0].isIntersecting) return
       io.disconnect()
@@ -285,12 +286,12 @@ function AnimatedNumber({ value, suffix = '' }: { value: string; suffix?: string
         const p = Math.min(1, (now - start) / duration)
         const eased = 1 - Math.pow(1 - p, 3) // ease-out-cubic
         setDisplay(target * eased)
-        if (p < 1) requestAnimationFrame(tick)
+        if (p < 1) rafId = requestAnimationFrame(tick)
       }
-      requestAnimationFrame(tick)
+      rafId = requestAnimationFrame(tick)
     }, { threshold: 0.4 })
     io.observe(el)
-    return () => io.disconnect()
+    return () => { io.disconnect(); if (rafId) cancelAnimationFrame(rafId) }
   }, [target])
 
   const formatted = isPct ? display.toFixed(1) : Math.round(display).toString()
@@ -313,18 +314,19 @@ function JourneyTimeline() {
     if (!el) return
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (reduce) { setLitCount(FLOW_STEPS.length); return }
+    let timer: ReturnType<typeof setInterval> | null = null
     const io = new IntersectionObserver((entries) => {
       if (!entries[0].isIntersecting) return
       io.disconnect()
       let n = 1
-      const timer = setInterval(() => {
+      timer = setInterval(() => {
         setLitCount(n)
         n += 1
-        if (n > FLOW_STEPS.length) clearInterval(timer)
+        if (n > FLOW_STEPS.length && timer) clearInterval(timer)
       }, 300)
     }, { threshold: 0.05, rootMargin: '0px 0px -10% 0px' })
     io.observe(el)
-    return () => { io.disconnect(); }
+    return () => { io.disconnect(); if (timer) clearInterval(timer) }
   }, [])
 
   return (

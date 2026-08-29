@@ -48,6 +48,10 @@ router.post('/refresh', validateBody(z.object({
   refreshToken: z.string().min(1, '缺少 refresh token'),
 })), authController.refresh)
 
+// POST /api/auth/logout — 登出：作废当前 refresh token（一次性轮换配套）。公开接口，
+// 因为 access 可能已过期（此时 authMiddleware 会拒），但登出仍需能作废 refresh。
+router.post('/logout', authController.logout)
+
 // PUT /api/auth/change-password — 修改自己的密码
 router.put('/change-password', authMiddleware, validateBody(z.object({
   oldPassword: z.string().min(1),

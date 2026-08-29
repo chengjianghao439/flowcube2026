@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { SOURCE_TYPES } = require('../../constants/voucherSource')
+const { periodRange } = require('./accounting.ledger.service')
 
 /**
  * 替代报税数据支持（文档10 完整会计准则 · 功能5）。
@@ -23,6 +24,7 @@ async function loadAdjustments(companyId, period, taxType) {
 
 /** 科目某期间借/贷发生额（按 company_id + 期间过滤） */
 async function accountTurnover(companyId, period, code) {
+  const { start, end } = periodRange(period)
   const [[row]] = await pool.query(
     `SELECT
        COALESCE(SUM(CASE WHEN e.direction=1 THEN e.amount END),0) AS d,
@@ -32,13 +34,14 @@ async function accountTurnover(companyId, period, code) {
      JOIN acct_accounts a ON a.id=e.account_id
      WHERE a.company_id=? AND a.code=? AND a.deleted_at IS NULL
        AND v.company_id=? AND v.voucher_date BETWEEN ? AND ?`,
-    [Number(companyId) || 1, code, Number(companyId) || 1, `${period.slice(0,4)}-${period.slice(4,6)}-01`, `${period.slice(0,4)}-${period.slice(4,6)}-31`],
+    [Number(companyId) || 1, code, Number(companyId) || 1, start, end],
   )
   return { debit: Number(row.d), credit: Number(row.c) }
 }
 
 /** 损益净额（收入贷−借、费用借−贷），= 利润表净利润同口径 */
 async function profitAndLoss(companyId, period) {
+  const { start, end } = periodRange(period)
   const [rows] = await pool.query(
     `SELECT a.category,
        COALESCE(SUM(CASE WHEN e.direction=1 THEN e.amount END),0) AS d,
@@ -50,7 +53,7 @@ async function profitAndLoss(companyId, period) {
      WHERE a.company_id=? AND a.is_leaf=1 AND a.category IN (4,5,6) AND a.deleted_at IS NULL
        AND v.company_id=? AND v.voucher_date BETWEEN ? AND ?
      GROUP BY a.category`,
-    [SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y, Number(companyId) || 1, Number(companyId) || 1, `${period.slice(0,4)}-${period.slice(4,6)}-01`, `${period.slice(0,4)}-${period.slice(4,6)}-31`],
+    [SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y, Number(companyId) || 1, Number(companyId) || 1, start, end],
   )
   let revenue = 0, expense = 0
   for (const r of rows) {

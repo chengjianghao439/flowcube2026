@@ -251,8 +251,8 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', app
   if (applicantId) { conds.push('c.applicant_id=?'); params.push(Number(applicantId)) }
   const kw = String(keyword || '').trim()
   if (kw) { conds.push('(c.claim_no LIKE ? OR c.title LIKE ? OR c.applicant_name LIKE ?)'); params.push(`%${kw}%`, `%${kw}%`, `%${kw}%`) }
-  if (startDate) { conds.push('DATE(c.created_at)>=?'); params.push(startDate) }
-  if (endDate) { conds.push('DATE(c.created_at)<=?'); params.push(endDate) }
+  if (startDate) { conds.push('c.created_at>=?'); params.push(`${startDate} 00:00:00`) }
+  if (endDate) { conds.push('c.created_at<DATE_ADD(?, INTERVAL 1 DAY)'); params.push(endDate) }
   if (minAmount !== '' && minAmount != null) { conds.push('c.total_amount>=?'); params.push(Number(minAmount)) }
   if (maxAmount !== '' && maxAmount != null) { conds.push('c.total_amount<=?'); params.push(Number(maxAmount)) }
   const where = `WHERE ${conds.join(' AND ')}`

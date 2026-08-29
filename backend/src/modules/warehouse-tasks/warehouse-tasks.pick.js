@@ -207,8 +207,8 @@ async function _fetchContainersForProducts(productIds, warehouseId, taskId) {
 /**
  * 自动推荐拣货容器（N+1 已优化：批量查询后 JS 分组）
  */
-async function getPickSuggestions(taskId) {
-  const task = await findById(taskId)
+async function getPickSuggestions(taskId, scopeWarehouseIds = null) {
+  const task = await findById(taskId, scopeWarehouseIds)
   if (task.cancelRequestedAt) {
     throw new AppError('该任务正在拣货退回中，不可继续拣货', 409)
   }
@@ -244,8 +244,8 @@ async function getPickSuggestions(taskId) {
 /**
  * 生成最优拣货路线（N+1 已优化：批量查询后 JS 分组排序）
  */
-async function getPickRoute(taskId) {
-  const task = await findById(taskId)
+async function getPickRoute(taskId, scopeWarehouseIds = null) {
+  const task = await findById(taskId, scopeWarehouseIds)
   if (task.cancelRequestedAt) {
     throw new AppError('该任务正在拣货退回中，不可继续拣货', 409)
   }

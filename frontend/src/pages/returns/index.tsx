@@ -104,6 +104,7 @@ export default function ReturnsPage() {
     if (id) setPendingId(id)
     fn()
       .then(inv)
+      .catch(() => { /* 失败已由全局拦截器弹 toast，这里吞掉避免 unhandledrejection */ })
       .finally(() => { if (id) setPendingId(null) })
   }
 

@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:22-alpine
 # 非 root 运行（P2-13）：node 镜像自带 node 用户 + su-exec 工具。
 # entrypoint 以 root 启动（仅做挂载目录 chown 这一件需要权限的事），
 # 然后降权到 node 用户跑业务进程——业务进程不持有 root 权限。

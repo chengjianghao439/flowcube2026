@@ -59,7 +59,7 @@ const env = {
   // access token 有效期（2026-08-21 权衡修复：从 24h 缩到 2h，泄露窗口大幅缩短；
   // 长期运行客户端靠 refresh token 自动续期，不受影响）
   JWT_ACCESS_EXPIRES_IN: readString('JWT_ACCESS_EXPIRES_IN', { defaultValue: '2h' }),
-  // refresh token 有效期（默认 30 天；一次性使用 + 轮换，被泄露后重放即失效）
+  // refresh token 有效期（默认 30 天；一次性轮换 + jti 会话表，被泄露后重放即失效）
   JWT_REFRESH_EXPIRES_IN: readString('JWT_REFRESH_EXPIRES_IN', { defaultValue: '30d' }),
   CORS_ORIGIN: readString('CORS_ORIGIN', { defaultValue: IS_PROD ? '' : 'http://localhost:5173', allowEmpty: true }),
   CORS_REFLECT: readBool('CORS_REFLECT', false),

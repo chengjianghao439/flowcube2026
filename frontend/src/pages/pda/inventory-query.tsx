@@ -17,6 +17,7 @@ import { queryInventoryByBarcodeApi, type InventoryQueryContainer } from '@/api/
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
+import { formatDisplayDate } from '@/lib/dateTime'
 
 function formatQty(qty: number): string {
   return Number.isFinite(qty) ? String(qty) : '—'
@@ -24,9 +25,7 @@ function formatQty(qty: number): string {
 
 function formatDate(v: string | null): string {
   if (!v) return '—'
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return v
-  return d.toISOString().slice(0, 10)
+  return formatDisplayDate(v, v)
 }
 
 function ContainerRow({ c }: { c: InventoryQueryContainer }) {

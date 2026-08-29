@@ -33,6 +33,12 @@ const reserveSchema = z.object({
     qty: z.number().positive(),
   })).optional(),
 })
+const releaseSchema = z.object({
+  items: z.array(z.object({
+    id: z.number().int().positive(),
+    qty: z.number().positive(),
+  })).optional(),
+})
 router.use(authMiddleware)
 router.get('/',           requirePermission(PERMISSIONS.SALE_ORDER_VIEW), ctrl.list)
 router.get('/:id',        requirePermission(PERMISSIONS.SALE_ORDER_VIEW), ctrl.detail)
@@ -41,7 +47,7 @@ router.post('/',          requirePermission(PERMISSIONS.SALE_ORDER_CREATE), vali
 router.put('/:id',        requirePermission(PERMISSIONS.SALE_ORDER_UPDATE), validateBody(createSchema), ctrl.update)
 router.put('/:id/adjust', requirePermission(PERMISSIONS.SALE_ORDER_UPDATE), validateBody(createSchema), ctrl.adjust)
 router.post('/:id/reserve',  requirePermission(PERMISSIONS.SALE_ORDER_RESERVE), validateBody(reserveSchema), ctrl.reserve)
-router.post('/:id/release',  requirePermission(PERMISSIONS.SALE_ORDER_RELEASE), ctrl.release)
+router.post('/:id/release',  requirePermission(PERMISSIONS.SALE_ORDER_RELEASE), validateBody(releaseSchema), ctrl.release)
 router.post('/:id/ship',     requirePermission(PERMISSIONS.SALE_ORDER_SHIP), ctrl.ship)
 router.post('/:id/cancel',   requirePermission(PERMISSIONS.SALE_ORDER_CANCEL), ctrl.cancel)
 router.delete('/:id',        requirePermission(PERMISSIONS.SALE_ORDER_DELETE), ctrl.del)

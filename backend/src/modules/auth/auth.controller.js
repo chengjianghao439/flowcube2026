@@ -31,4 +31,15 @@ async function refresh(req, res, next) {
   }
 }
 
-module.exports = { login, getMe, refresh }
+async function logout(req, res, next) {
+  try {
+    // 作废当前 refresh token（一次性轮换配套）：jti 在服务端标记 revoked，
+    // 即使 refresh 已泄露也无法再续期。access 短效（2h）自然失效。
+    await authService.logout(req.body?.refreshToken)
+    return successResponse(res, null, '已退出登录')
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = { login, getMe, refresh, logout }

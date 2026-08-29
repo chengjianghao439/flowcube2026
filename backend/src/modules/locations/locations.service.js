@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { normalizePagination } = require('../../utils/pagination')
+const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
 
 function pad(val) {
   if (!val) return ''
@@ -45,7 +46,7 @@ async function assertLocationDeletable(id) {
   }
 }
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null, status = '', zone = '' }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null, status = '', zone = '', scopeWarehouseIds = null }) {
   // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
@@ -65,8 +66,9 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
     conditions.push('wl.zone LIKE ?')
     params.push(`%${zone}%`)
   }
-
-  const where = conditions.join(' AND ')
+  const scope = scopeFilter(scopeWarehouseIds, 'wl.warehouse_id')
+  const where = conditions.join(' AND ') + scope.sql
+  const whereParams = [...params, ...scope.params]
 
   const [rows] = await pool.query(
     `SELECT wl.*, iw.name AS warehouse_name
@@ -75,18 +77,18 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
      WHERE ${where}
      ORDER BY wl.warehouse_id ASC, wl.code ASC
      LIMIT ? OFFSET ?`,
-    [...params, ps, offset],
+    [...whereParams, ps, offset],
   )
 
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM warehouse_locations wl WHERE ${where}`,
-    params,
+    whereParams,
   )
 
   return { list: rows.map(formatRow), pagination: { page, pageSize: ps, total } }
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [rows] = await pool.query(
     `SELECT wl.*, iw.name AS warehouse_name
      FROM warehouse_locations wl
@@ -95,6 +97,7 @@ async function findById(id) {
     [id],
   )
   if (!rows[0]) throw new AppError('库位不存在', 404)
+  assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '库位')
   return formatRow(rows[0])
 }
 
@@ -154,8 +157,8 @@ async function create(data) {
   return findById(insertId)
 }
 
-async function update(id, data) {
-  await findById(id)
+async function update(id, data, scopeWarehouseIds = null) {
+  await findById(id, scopeWarehouseIds)
   const { warehouseId, zone, aisle, rack, level, position, name, remark, status } = data
 
   const code = generateCode({ zone, aisle, rack, level, position })
@@ -177,8 +180,8 @@ async function update(id, data) {
   return findById(id)
 }
 
-async function softDelete(id) {
-  await findById(id)
+async function softDelete(id, scopeWarehouseIds = null) {
+  await findById(id, scopeWarehouseIds)
   await assertLocationDeletable(id)
   await pool.query(
     'UPDATE warehouse_locations SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL',
@@ -227,8 +230,8 @@ async function findByCode(code) {
  * 库位标签打印入队（对照 racks.service.enqueuePrintLabel）。
  * 返回 null = 未解析到打印机（前端提示未绑定/离线）；其余返回打印任务摘要。
  */
-async function enqueuePrintLabel(id, { userId = null } = {}) {
-  await findById(id)
+async function enqueuePrintLabel(id, { userId = null, scopeWarehouseIds = null } = {}) {
+  await findById(id, scopeWarehouseIds)
   const { enqueueLocationLabelJob } = require('../print-jobs/print-jobs.service')
   // 不传 jobUniqueKey：由打印域按「对象 + 时间窗」默认分桶去重（见 print-jobs.label-command）
   const job = await enqueueLocationLabelJob({

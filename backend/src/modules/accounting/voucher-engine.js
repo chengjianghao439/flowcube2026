@@ -346,7 +346,7 @@ async function buildSaleReturn(conn) {
       JOIN return_task_items rti ON rti.task_id = rt.id
       JOIN sale_return_items sri ON sri.id = rti.return_item_id
       LEFT JOIN sale_order_items soi ON soi.id = sri.sale_item_id
-      LEFT JOIN product_items p ON p.id = soi.product_id
+      LEFT JOIN product_items p ON p.id = sri.product_id
      WHERE sr.status = 3 AND sr.deleted_at IS NULL
      GROUP BY sr.id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at`)
   const specs = []

@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { assertInScope } = require('../../utils/warehouseScope')
 
 const TYPE_NAME = { 1: '标签打印机', 2: '面单打印机', 3: 'A4打印机' }
 
@@ -41,7 +42,7 @@ async function findAll({ type } = {}) {
   return rows.map(fmt)
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [[row]] = await pool.query(
     `SELECT p.*, pc.alias_name AS client_alias_name, pc.hostname AS client_hostname
      FROM printers p
@@ -50,6 +51,8 @@ async function findById(id) {
     [id],
   )
   if (!row) throw new AppError('打印机不存在', 404)
+  // 限仓校验：warehouse_id 为 NULL 表示全局打印机（不限仓库），assertInScope 对 null 会放行。
+  assertInScope(scopeWarehouseIds, row.warehouse_id, '打印机')
   return fmt(row)
 }
 
@@ -115,8 +118,8 @@ async function update(id, {
   status,
   warehouseId,
   clientId,
-}) {
-  const existing = await findById(id)
+}, scopeWarehouseIds = null) {
+  const existing = await findById(id, scopeWarehouseIds)
   const nameVal = name !== undefined ? normalizePrinterName(name) : existing.name
   if (name !== undefined && !nameVal) throw new AppError('名称不能为空', 400)
   const clientIdVal =
@@ -155,8 +158,8 @@ async function update(id, {
  * printer_bindings 无外键约束，残留的悬空绑定会让打印路由整体失效
  * （候选集非空但全部不可用 → 跳过 fallback 链 → 兜底到全库第一台打印机）。
  */
-async function remove(id) {
-  await findById(id)
+async function remove(id, scopeWarehouseIds = null) {
+  await findById(id, scopeWarehouseIds)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()

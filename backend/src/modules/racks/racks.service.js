@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { normalizePagination } = require('../../utils/pagination')
+const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
 
 function fmt(r) {
   return {
@@ -23,7 +24,7 @@ function makeRackBarcode(id) {
   return `H${String(id).padStart(6, '0')}`
 }
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null, zone = null }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = null, zone = null, scopeWarehouseIds = null }) {
   // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
@@ -32,8 +33,9 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
 
   if (warehouseId) { conds.push('r.warehouse_id = ?'); params.push(warehouseId) }
   if (zone)        { conds.push('r.zone = ?');         params.push(zone) }
-
-  const where = conds.join(' AND ')
+  const scope = scopeFilter(scopeWarehouseIds, 'r.warehouse_id')
+  const where = conds.join(' AND ') + scope.sql
+  const whereParams = [...params, ...scope.params]
 
   const [rows] = await pool.query(
     `SELECT r.*, w.name AS warehouse_name
@@ -42,11 +44,11 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
      WHERE ${where}
      ORDER BY r.warehouse_id ASC, r.zone ASC, r.code ASC
      LIMIT ? OFFSET ?`,
-    [...params, ps, offset],
+    [...whereParams, ps, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM warehouse_racks r WHERE ${where}`,
-    params,
+    whereParams,
   )
   return { list: rows.map(fmt), pagination: { page, pageSize: ps, total } }
 }
@@ -62,7 +64,7 @@ async function findActive(warehouseId) {
   return rows.map(fmt)
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [[row]] = await pool.query(
     `SELECT r.*, w.name AS warehouse_name
      FROM warehouse_racks r
@@ -71,6 +73,7 @@ async function findById(id) {
     [id],
   )
   if (!row) throw new AppError('货架不存在', 404)
+  assertInScope(scopeWarehouseIds, row.warehouse_id, '货架')
   return fmt(row)
 }
 
@@ -112,8 +115,8 @@ async function create(data) {
   return findById(newId)
 }
 
-async function update(id, data) {
-  await findById(id)
+async function update(id, data, scopeWarehouseIds = null) {
+  await findById(id, scopeWarehouseIds)
   const { zone, code, name, maxLevels, maxPositions, status, remark } = data
 
   if (code) {
@@ -175,8 +178,8 @@ async function assertRackSafeToDelete(rack) {
   }
 }
 
-async function softDelete(id) {
-  const rack = await findById(id)
+async function softDelete(id, scopeWarehouseIds = null) {
+  const rack = await findById(id, scopeWarehouseIds)
   await assertRackSafeToDelete(rack)
   await pool.query(
     'UPDATE warehouse_racks SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL',
@@ -284,8 +287,8 @@ async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }
   return { kind: 'ok', message: '未识别为 H/P/I 等条码或仓库内商品编码，无额外绑定提示' }
 }
 
-async function enqueuePrintLabel(id, { userId = null } = {}) {
-  await findById(id)
+async function enqueuePrintLabel(id, { userId = null, scopeWarehouseIds = null } = {}) {
+  await findById(id, scopeWarehouseIds)
   const { enqueueRackLabelJob } = require('../print-jobs/print-jobs.service')
   // 不传 jobUniqueKey：由打印域按「对象 + 时间窗」默认分桶去重（见 print-jobs.label-command）
   const job = await enqueueRackLabelJob({

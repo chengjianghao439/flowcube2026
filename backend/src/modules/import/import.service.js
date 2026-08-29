@@ -210,10 +210,16 @@ async function importSingleStockRow({
   row,
   userId,
   operatorName,
+  scopeWarehouseIds,
 }) {
   const [code, warehouseId, qty] = row
   if (!code || !warehouseId || qty === '') {
     return { ok: false, error: `第${rowIndex + 2}行：数据不完整` }
+  }
+
+  // 仓库 scope 校验（2026-08-30 审计）：文件内 warehouseId 由用户控制，限仓用户不得对他仓做库存调整
+  if (Array.isArray(scopeWarehouseIds) && !scopeWarehouseIds.includes(Number(warehouseId))) {
+    return { ok: false, error: `第${rowIndex + 2}行：无权限操作仓库 ${warehouseId}` }
   }
 
   const connection = await pool.getConnection()
@@ -300,7 +306,7 @@ async function importSingleStockRow({
   }
 }
 
-async function importStock({ fileBuffer, originalName, operator }) {
+async function importStock({ fileBuffer, originalName, operator, scopeWarehouseIds = null }) {
   const dataRows = await parseStockImportRows(fileBuffer)
   const batchId = await createImportBatch(originalName)
   const userId = operator?.userId ?? null
@@ -315,6 +321,7 @@ async function importStock({ fileBuffer, originalName, operator }) {
       row: dataRows[index],
       userId,
       operatorName,
+      scopeWarehouseIds,
     })
     if (result.ok) {
       success += 1
@@ -512,7 +519,9 @@ async function importPriceListItems({ fileBuffer }) {
       )
       success += 1
     } catch (error) {
-      errors.push(`${label}：${error.message}`)
+      // 错误脱敏（与 importProducts/importCustomers 一致）：MySQL 原始 message 含表名/唯一键名/字段值，
+      // 回显会泄露 schema 细节（审计 2026-08-30）
+      errors.push(`${label}：${error instanceof AppError ? error.message : '导入失败（数据格式或约束不符）'}`)
     }
   }
 

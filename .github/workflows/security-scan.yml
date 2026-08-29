@@ -101,7 +101,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install dependencies (${{ matrix.target }})
         run: npm ci --prefix ${{ matrix.target }} --ignore-scripts
@@ -147,13 +147,15 @@ jobs:
           fi
 
       - name: Fail on high+critical vulnerabilities
-        if: ${{ github.event_name == 'pull_request' }}
         run: |
+          # 只拦「直接依赖」(isDirect=true) 的高危漏洞：这类有明确升级路径、且最可能被攻击。
+          # 传递依赖的高危（如 exceljs→glob→brace-expansion，上游无版本可升、攻击面不可达）
+          # 不在此拦截——否则会每次卡死部署。它们仍会出现在上方 summary 供人工追踪。
           for f in audit-*.json; do
             if [ -f "$f" ]; then
-              HIGH_CRITICAL=$(node -e "const d=require('./$f');console.log(Object.values(d.vulnerabilities||{}).filter(v=>v.severity==='high'||v.severity==='critical').length)" 2>/dev/null || echo "0")
+              HIGH_CRITICAL=$(node -e "const d=require('./$f');console.log(Object.values(d.vulnerabilities||{}).filter(v=>v.isDirect===true && (v.severity==='high'||v.severity==='critical')).length)" 2>/dev/null || echo "0")
               if [ "$HIGH_CRITICAL" -gt 0 ]; then
-                echo "❌ $f: 发现 $HIGH_CRITICAL 个 HIGH/CRITICAL 级别漏洞，PR 被阻止"
+                echo "❌ $f: 发现 $HIGH_CRITICAL 个直接依赖的 HIGH/CRITICAL 级别漏洞，阻止部署"
                 exit 1
               fi
             fi

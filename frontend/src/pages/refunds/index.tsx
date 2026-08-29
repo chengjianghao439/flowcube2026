@@ -16,6 +16,7 @@ import { getActiveAccountsApi } from '@/api/finance'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { todayYmd } from '@/lib/dateTime'
 import type { RefundOrder } from '@/types/refund'
 import type { TableColumn } from '@/types'
 import { useQuery } from '@tanstack/react-query'
@@ -146,12 +147,12 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [saleOrderNo, setSaleOrderNo] = useState('')
   const [amount, setAmount] = useState('')
   const [accountId, setAccountId] = useState('')
-  const [refundDate, setRefundDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [refundDate, setRefundDate] = useState(() => todayYmd())
   const [remark, setRemark] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   function reset() {
-    setSaleOrderNo(''); setAmount(''); setAccountId(''); setRefundDate(new Date().toISOString().slice(0, 10)); setRemark('')
+    setSaleOrderNo(''); setAmount(''); setAccountId(''); setRefundDate(todayYmd()); setRemark('')
   }
 
   async function handleCreate() {

@@ -220,8 +220,8 @@ async function getInboundTasksExportPayload(query) {
   }
   if (warehouseId) { sql += ' AND t.warehouse_id=?'; params.push(+warehouseId) }
   if (operatorId) { sql += ' AND t.operator_id=?'; params.push(+operatorId) }
-  if (startDate) { sql += ' AND DATE(t.created_at)>=?'; params.push(startDate) }
-  if (endDate) { sql += ' AND DATE(t.created_at)<=?'; params.push(endDate) }
+  if (startDate) { sql += ' AND t.created_at>=?'; params.push(`${startDate} 00:00:00`) }
+  if (endDate) { sql += ' AND t.created_at<DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   sql += ' ORDER BY t.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
@@ -374,8 +374,8 @@ async function getPurchaseReturnsExportPayload(query = {}) {
   if (supplierId) { sql += ' AND r.supplier_id=?'; params.push(+supplierId) }
   if (warehouseId) { sql += ' AND r.warehouse_id=?'; params.push(+warehouseId) }
   if (operatorId) { sql += ' AND r.operator_id=?'; params.push(+operatorId) }
-  if (startDate) { sql += ' AND DATE(r.created_at)>=?'; params.push(startDate) }
-  if (endDate) { sql += ' AND DATE(r.created_at)<=?'; params.push(endDate) }
+  if (startDate) { sql += ' AND r.created_at>=?'; params.push(`${startDate} 00:00:00`) }
+  if (endDate) { sql += ' AND r.created_at<DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   sql += ' ORDER BY r.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
@@ -418,8 +418,8 @@ async function getSaleReturnsExportPayload(query = {}) {
   if (customerId) { sql += ' AND r.customer_id=?'; params.push(+customerId) }
   if (warehouseId) { sql += ' AND r.warehouse_id=?'; params.push(+warehouseId) }
   if (operatorId) { sql += ' AND r.operator_id=?'; params.push(+operatorId) }
-  if (startDate) { sql += ' AND DATE(r.created_at)>=?'; params.push(startDate) }
-  if (endDate) { sql += ' AND DATE(r.created_at)<=?'; params.push(endDate) }
+  if (startDate) { sql += ' AND r.created_at>=?'; params.push(`${startDate} 00:00:00`) }
+  if (endDate) { sql += ' AND r.created_at<DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   sql += ' ORDER BY r.created_at DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
@@ -1086,6 +1086,7 @@ async function getPickingWavesExportPayload(query = {}) {
     warehouseId: query.warehouseId || null,
     startDate: query.startDate || '',
     endDate: query.endDate || '',
+    scopeWarehouseIds: query.scopeWarehouseIds ?? null,
   })
   const rows = list.map(w => ({
     wave_no: w.waveNo,

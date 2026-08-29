@@ -86,6 +86,7 @@ export default function TransferPage() {
     if (id) setPendingId(id)
     fn()
       .then(() => qc.invalidateQueries({ queryKey: ['transfer'] }))
+      .catch(() => { /* 失败已由全局拦截器弹 toast */ })
       .finally(() => { if (id) setPendingId(null) })
   }
 

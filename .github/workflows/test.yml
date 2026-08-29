@@ -56,10 +56,10 @@ jobs:
           echo "backend=$B frontend=$F desktop=$D"
           [ "$B" = "$F" ] && [ "$F" = "$D" ] || { echo "::error::三端版本号不一致：backend=$B frontend=$F desktop=$D"; exit 1; }
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: 安装后端依赖
         run: npm --prefix backend ci
@@ -119,10 +119,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: backend/package-lock.json
 

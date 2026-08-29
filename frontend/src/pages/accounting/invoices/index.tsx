@@ -16,6 +16,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import { toast } from '@/lib/toast'
+import { todayYmd } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { useInvoices, useCreateInvoice, useUpdateInvoice, useChangeInvoiceStatus, useDeleteInvoice } from '@/hooks/useInvoices'
@@ -37,7 +38,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
   const isPending = creating || updating
   const [f, setF] = useState({
     invoiceCode: '', invoiceNo: '', partyName: '', partyTaxNo: '',
-    withTax: '', taxRate: '0.13', invoiceDate: new Date().toISOString().slice(0, 10), sourceNo: '', remark: '',
+    withTax: '', taxRate: '0.13', invoiceDate: todayYmd(), sourceNo: '', remark: '',
   })
   useEffect(() => {
     if (!open) return
@@ -45,7 +46,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
       invoiceCode: edit.invoiceCode ?? '', invoiceNo: edit.invoiceNo ?? '', partyName: edit.partyName, partyTaxNo: edit.partyTaxNo ?? '',
       withTax: String(edit.amountWithTax), taxRate: String(edit.taxRate), invoiceDate: String(edit.invoiceDate).slice(0, 10), sourceNo: edit.sourceNo ?? '', remark: edit.remark ?? '',
     })
-    else setF({ invoiceCode: '', invoiceNo: '', partyName: '', partyTaxNo: '', withTax: '', taxRate: '0.13', invoiceDate: new Date().toISOString().slice(0, 10), sourceNo: '', remark: '' })
+    else setF({ invoiceCode: '', invoiceNo: '', partyName: '', partyTaxNo: '', withTax: '', taxRate: '0.13', invoiceDate: todayYmd(), sourceNo: '', remark: '' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, edit?.id])
 

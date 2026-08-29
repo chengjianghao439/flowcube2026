@@ -201,8 +201,8 @@ async function fetchPdaPerformanceRows(scopeWarehouseIds = null) {
     `SELECT COUNT(*) AS scan_count, COALESCE(SUM(qty), 0) AS pick_qty
      FROM scan_logs sl
      ${join}
-     WHERE DATE(sl.scanned_at) = ?`,
-    [...scopeParams, today],
+     WHERE sl.scanned_at >= ? AND sl.scanned_at < DATE_ADD(?, INTERVAL 1 DAY)`,
+    [...scopeParams, today, today],
   )
   const byOperator = await fetchMany(
     `SELECT
@@ -214,11 +214,11 @@ async function fetchPdaPerformanceRows(scopeWarehouseIds = null) {
        MAX(sl.scanned_at) AS last_scan
      FROM scan_logs sl
      ${join}
-     WHERE DATE(sl.scanned_at) = ?
+     WHERE sl.scanned_at >= ? AND sl.scanned_at < DATE_ADD(?, INTERVAL 1 DAY)
        AND sl.operator_id IS NOT NULL
      GROUP BY sl.operator_id, sl.operator_name
      ORDER BY scan_count DESC`,
-    [...scopeParams, today],
+    [...scopeParams, today, today],
   )
   const daily = await fetchMany(
     `SELECT
@@ -319,25 +319,25 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
   const todayInbound = await fetchOptional('warehouseOps.todayInbound', fetchOne(
     `SELECT COUNT(*) AS inbound_count
      FROM inbound_tasks it
-     WHERE it.status = 3 AND DATE(it.updated_at) = ?${itWh.sql}`,
-    [...itWh.params, today],
+     WHERE it.status = 3 AND it.updated_at >= ? AND it.updated_at < DATE_ADD(?, INTERVAL 1 DAY)${itWh.sql}`,
+    [today, today, ...itWh.params],
   ), { inbound_count: 0 })
   const scanSummary = await fetchOptional('warehouseOps.scanSummary', fetchOne(
     `SELECT COUNT(*) AS scan_count, COALESCE(SUM(qty),0) AS pick_qty
      FROM scan_logs sl
      ${slJoin}
-     WHERE DATE(sl.scanned_at) = ?`,
-    [...slParams, today],
+     WHERE sl.scanned_at >= ? AND sl.scanned_at < DATE_ADD(?, INTERVAL 1 DAY)`,
+    [...slParams, today, today],
   ), { scan_count: 0, pick_qty: 0 })
   const errSummary = await fetchOptional('warehouseOps.errSummary', fetchOne(
     `SELECT COUNT(*) AS error_count
-     FROM pda_error_logs WHERE DATE(created_at) = ?`,
-    [today],
+     FROM pda_error_logs WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
+    [today, today],
   ), { error_count: 0 })
   const undoSummary = await fetchOptional('warehouseOps.undoSummary', fetchOne(
     `SELECT COUNT(*) AS undo_count
-     FROM pda_undo_logs WHERE DATE(created_at) = ?`,
-    [today],
+     FROM pda_undo_logs WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
+    [today, today],
   ), { undo_count: 0 })
   const byOperator = await fetchOptional('warehouseOps.byOperator', fetchMany(
     `SELECT
@@ -349,16 +349,16 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
        MAX(sl.scanned_at) AS lastScan
      FROM scan_logs sl
      ${slJoin}
-     WHERE DATE(sl.scanned_at) = ? AND sl.operator_id IS NOT NULL
+     WHERE sl.scanned_at >= ? AND sl.scanned_at < DATE_ADD(?, INTERVAL 1 DAY) AND sl.operator_id IS NOT NULL
      GROUP BY sl.operator_id, sl.operator_name
      ORDER BY scanCount DESC LIMIT 20`,
-    [...slParams, today],
+    [...slParams, today, today],
   ), [])
   const errByOp = await fetchOptional('warehouseOps.errByOp', fetchMany(
     `SELECT operator_id AS operatorId, COUNT(*) AS errCount
-     FROM pda_error_logs WHERE DATE(created_at) = ?
+     FROM pda_error_logs WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
      GROUP BY operator_id`,
-    [today],
+    [today, today],
   ), [])
   const flowRows = await fetchOptional('warehouseOps.flowRows', fetchMany(
     `SELECT status, COUNT(*) AS cnt
@@ -371,9 +371,9 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
     `SELECT HOUR(sl.scanned_at) AS hr, COUNT(*) AS cnt
      FROM scan_logs sl
      ${slJoin}
-     WHERE DATE(sl.scanned_at) = ?
+     WHERE sl.scanned_at >= ? AND sl.scanned_at < DATE_ADD(?, INTERVAL 1 DAY)
      GROUP BY HOUR(sl.scanned_at) ORDER BY hr ASC`,
-    [...slParams, today],
+    [...slParams, today, today],
   ), [])
   const recentErrors = await fetchOptional('warehouseOps.recentErrors', fetchMany(
     `SELECT id, task_id AS taskId, barcode, reason, operator_name AS operatorName, created_at AS createdAt

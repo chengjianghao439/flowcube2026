@@ -67,6 +67,17 @@ async function createCompany({ code, name, taxNo, parentId, isGroup, startPeriod
        FROM acct_accounts WHERE company_id = 1 AND is_preset = 1 AND deleted_at IS NULL`,
       [newId],
     )
+    // parent_id 重映射：上一步把主账套科目的 parent_id 原样复制，指向的是主账套(company_id=1)的科目 id，
+    // 与新账套复制出的科目 id 是两套自增值，导致新账套科目树的父级断链（getTree 平铺、试算平衡一级科目恒 0）。
+    // 科目 code 在账套内唯一（uk_acct_accounts_code_company），故按「主账套父科目 code → 新账套同 code 科目」重定向。
+    await conn.query(
+      `UPDATE acct_accounts child
+       JOIN acct_accounts parent_master ON parent_master.id = child.parent_id
+       JOIN acct_accounts parent_new ON parent_new.company_id = child.company_id AND parent_new.code = parent_master.code
+       SET child.parent_id = parent_new.id
+       WHERE child.company_id = ?`,
+      [newId],
+    )
     await conn.commit()
     return { id: newId, code: c }
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }

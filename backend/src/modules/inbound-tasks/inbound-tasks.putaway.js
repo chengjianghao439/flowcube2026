@@ -203,18 +203,24 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
       )
     if (priceRow && Number(priceRow.unit_price) > 0) {
       purchasePrice = Number(priceRow.unit_price)
-      const [[{ globalQty }]] = await conn.query(
-        `SELECT COALESCE(SUM(remaining_qty), 0) AS globalQty
-         FROM inventory_containers
-         WHERE product_id = ? AND status = 1 AND deleted_at IS NULL`,
-        [c.product_id],
-      )
-      const prevQty = Math.max(0, Number(globalQty) - qty)
+      // 移动加权成本跨仓串行化：product_items 行锁是「同商品」的串行化点（先锁它）。
+      // globalQty 必须用锁定读（FOR UPDATE 当前读），否则 REPEATABLE READ 下是快照读——
+      // 两个仓同时上架同一商品时各自读到不含对方的过期 globalQty，后写覆盖先写，avg_cost 算错
+      // （审计 2026-08-30）。锁定读会与「另一仓同时上架同一商品」的极端交错成环，
+      // InnoDB 死锁检测自动回滚一方（1213），PDA 上架有幂等键 + 重试兜底，代价是偶发重试。
       const [[prod]] = await conn.query(
         'SELECT avg_cost, cost_price FROM product_items WHERE id = ? FOR UPDATE',
         [c.product_id],
       )
       if (prod) {
+        const [[{ globalQty }]] = await conn.query(
+          `SELECT COALESCE(SUM(remaining_qty), 0) AS globalQty
+           FROM inventory_containers
+           WHERE product_id = ? AND status = 1 AND deleted_at IS NULL
+           FOR UPDATE`,
+          [c.product_id],
+        )
+        const prevQty = Math.max(0, Number(globalQty) - qty)
         const oldAvg = Number(prod.avg_cost ?? prod.cost_price ?? 0) || 0
         const newAvg = prevQty > 0
           ? (prevQty * oldAvg + qty * purchasePrice) / (prevQty + qty)

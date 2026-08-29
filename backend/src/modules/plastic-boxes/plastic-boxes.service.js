@@ -98,7 +98,7 @@ async function remove(id) {
   if (Number(box.remainingQty) > 0) {
     throw new AppError('塑料盒尚有库存，无法删除', 400)
   }
-  await pool.query('UPDATE inventory_containers SET deleted_at = NOW() WHERE id = ?', [id])
+  await pool.query('UPDATE inventory_containers SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL', [id])
 }
 
 function fmt(row) {

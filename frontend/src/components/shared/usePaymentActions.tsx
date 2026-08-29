@@ -11,6 +11,7 @@ import { payApi, getEntriesApi, confirmPaymentApi, getSettlementDetailApi } from
 import type { PaymentRecord, PaymentEntry } from '@/api/payments'
 import { getActiveAccountsApi } from '@/api/finance'
 import { createRequestKey } from '@/lib/requestKey'
+import { todayYmd } from '@/lib/dateTime'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 
@@ -31,7 +32,7 @@ export function usePaymentActions(type: 1 | 2) {
   const [entriesOpen, setEntriesOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [payAmount, setPayAmount] = useState('')
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10))
+  const [payDate, setPayDate] = useState(todayYmd())
   const [payMethod, setPayMethod] = useState('转账')
   const [payRemark, setPayRemark] = useState('')
   const [payAccountId, setPayAccountId] = useState('')

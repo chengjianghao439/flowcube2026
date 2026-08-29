@@ -97,7 +97,7 @@ async function update(id, { name, type, contact, phone, remark, isActive, ...res
 
 async function remove(id) {
   await findById(id)
-  await pool.query(`UPDATE carriers SET deleted_at=NOW() WHERE id=?`, [id])
+  await pool.query(`UPDATE carriers SET deleted_at=NOW() WHERE id=? AND deleted_at IS NULL`, [id])
 }
 
 module.exports = { findAll, findAllActive, findById, create, update, remove }

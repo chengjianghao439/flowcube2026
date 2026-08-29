@@ -66,8 +66,8 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
   }
   if (warehouseId) { whereExtra += ' AND (from_warehouse_id=? OR to_warehouse_id=?)'; params.push(warehouseId, warehouseId) }
   if (operatorId) { whereExtra += ' AND operator_id=?'; params.push(operatorId) }
-  if (startDate) { whereExtra += ' AND DATE(created_at)>=?'; params.push(startDate) }
-  if (endDate) { whereExtra += ' AND DATE(created_at)<=?'; params.push(endDate) }
+  if (startDate) { whereExtra += ' AND created_at>=?'; params.push(`${startDate} 00:00:00`) }
+  if (endDate) { whereExtra += ' AND created_at<DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   if (remark) { whereExtra += ' AND remark LIKE ?'; params.push(`%${remark}%`) }
   // 调拨天然跨仓：源仓或目标仓任一在 scope 内即可见，否则发货方看不到自己发出的单子
   const scope = transferScopeFilter(scopeWarehouseIds, 'from_warehouse_id', 'to_warehouse_id')
@@ -239,6 +239,16 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
     if (!item) throw new AppError('该商品不在本调拨单明细内', 400)
 
     const qty = Number(c.remaining_qty)
+    // 数量上限校验：整容器搬出量不得超过该明细行「剩余可调量」= quantity - deducted_qty。
+    // 此前只校验源仓可用量，不校验调拨单数量——扫一只装 100 件的容器调 10 件，会把整箱 100 件搬走、
+    // deducted_qty/received_qty 记成 100，超出订单 90 件，跨仓多搬货且无告警（审计 2026-08-30）。
+    const remainQty = Number(item.quantity) - (Number(item.deducted_qty) || 0)
+    if (qty > remainQty + 1e-6) {
+      throw new AppError(
+        `该容器 ${qty} 件超出调拨单剩余可调量 ${remainQty} 件，无法整箱扫出；请改用数量相符的容器或改单`,
+        409,
+      )
+    }
     // 复检源仓可用量（available = ACTIVE 容器合计 − reserved）≥ 本容器搬出量。
     // confirm 时校验过一次，但 confirm→scanOut 之间可能新增销售占库（reserve 只加 reserved、
     // 不锁容器），若把已被占库(未拣)的容器整箱调走，会使源仓 available 变负、reserved 无货可拣
@@ -313,6 +323,17 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
     }
     assertStatusAction('transfer', 'scanIn', orderRow.status)
     const toWh = Number(orderRow.to_warehouse_id)
+
+    // 先按 (商品, 目标仓) 取维度锁，再锁容器——顺序与 scanOut/上架/收货一致（先 lockStockDimension
+    // 后单容器）。此前这里先锁容器、再在 syncStockFromContainers 里汇总锁 ACTIVE 范围，与上架的
+    // 「先 stock 后容器」相反，且 scanIn 把 status 4→1 迁移会触发插入意向锁与间隙锁冲突，成环死锁
+    // （审计 2026-08-30）。product_id/warehouse_id 是容器不可变字段，无锁预读安全。
+    const [[cRef]] = await conn.query(
+      'SELECT product_id, warehouse_id FROM inventory_containers WHERE barcode = ? AND deleted_at IS NULL',
+      [String(containerBarcode || '').trim()],
+    )
+    if (!cRef) throw new AppError('容器条码不存在', 404)
+    await lockStockDimension(conn, cRef.product_id, toWh)
 
     const [[c]] = await conn.query(
       'SELECT * FROM inventory_containers WHERE barcode = ? AND deleted_at IS NULL FOR UPDATE',

@@ -44,6 +44,7 @@ async function importStock(req, res, next) {
       fileBuffer: req.file.buffer,
       originalName: req.file.originalname,
       operator: getOperatorFromRequest(req),
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result.data, result.message)
   } catch (error) {

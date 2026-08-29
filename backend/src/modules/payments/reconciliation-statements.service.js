@@ -76,8 +76,8 @@ async function listCandidates({ type, partyName, startDate, endDate }) {
     'i.id IS NULL',
   ]
   const params = [Number(type), partyName, SETTLEMENT_TYPE.MONTHLY]
-  if (startDate) { conds.push('DATE(pr.created_at) >= ?'); params.push(startDate) }
-  if (endDate) { conds.push('DATE(pr.created_at) <= ?'); params.push(endDate) }
+  if (startDate) { conds.push('pr.created_at >= ?'); params.push(`${startDate} 00:00:00`) }
+  if (endDate) { conds.push('pr.created_at < DATE_ADD(?, INTERVAL 1 DAY)'); params.push(endDate) }
   const [rows] = await pool.query(
     `SELECT pr.id, pr.order_no, pr.total_amount, pr.paid_amount, pr.balance, pr.status, pr.due_date, pr.created_at
        FROM payment_records pr
@@ -234,8 +234,8 @@ async function findAll({
   if (no) { conds.push('s.statement_no LIKE ?'); params.push(`%${no}%`) }
   const party = String(partyName || '').trim()
   if (party) { conds.push('s.party_name LIKE ?'); params.push(`%${party}%`) }
-  if (startDate) { conds.push('DATE(s.created_at)>=?'); params.push(startDate) }
-  if (endDate)   { conds.push('DATE(s.created_at)<=?'); params.push(endDate) }
+  if (startDate) { conds.push('s.created_at>=?'); params.push(`${startDate} 00:00:00`) }
+  if (endDate)   { conds.push('s.created_at<DATE_ADD(?, INTERVAL 1 DAY)'); params.push(endDate) }
   if (minAmount !== '' && minAmount != null) { conds.push('s.total_amount>=?'); params.push(Number(minAmount)) }
   if (maxAmount !== '' && maxAmount != null) { conds.push('s.total_amount<=?'); params.push(Number(maxAmount)) }
   const where = `WHERE ${conds.join(' AND ')}`

@@ -3,6 +3,7 @@ const aging = require('./inventory.aging')
 const procurement = require('./inventory.procurement')
 const { successResponse } = require('../../utils/response')
 const { getOperatorFromRequest } = require('../../utils/operator')
+const { extractRequestKey } = require('../../utils/requestKey')
 
 async function trace(req, res, next) {
   try {
@@ -87,6 +88,7 @@ async function outbound(req, res, next) {
     const result = await svc.changeStock({
       type: 2, ...req.body,
       operator: getOperatorFromRequest(req),
+      requestKey: extractRequestKey(req),
     })
     return successResponse(res, result, '出库成功')
   } catch(e){next(e)}

@@ -82,6 +82,23 @@ function startScheduler() {
     )
   }, num('PDA_SESSION_CLEAN_INTERVAL_MS', 24 * 60 * 60 * 1000))
 
+  // refresh token 会话清理（迁移 221，一次性轮换配套）：作废/过期的 jti 记录不再需要，
+  // 只保留「已作废且 7 天前」或「已过期且 7 天前」的，避免表随登录次数无界增长。
+  // 保留 7 天兜底期：重放攻击的审计与排查需要近期作废记录（refresh 有效期 30 天）。
+  startWorker('refresh-session-cleanup', async () => {
+    await pool.query(
+      'DELETE FROM refresh_token_sessions WHERE (revoked_at IS NOT NULL OR expires_at < NOW()) AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)',
+    )
+  }, num('REFRESH_SESSION_CLEAN_INTERVAL_MS', 24 * 60 * 60 * 1000))
+
+  // PDA 现场错误扫码/撤销流水清理（2026-08-30 审计）：两张运行时自建表无 TTL，随 PDA 作业无界增长。
+  // 保留 180 天（与 scan_logs 一致），异常查询只查短期窗口。
+  startWorker('pda-anomaly-log-cleanup', async () => {
+    for (const t of ['pda_error_logs', 'pda_undo_logs']) {
+      await pool.query(`DELETE FROM \`${t}\` WHERE created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)`)
+    }
+  }, num('PDA_ANOMALY_LOG_CLEAN_INTERVAL_MS', 24 * 60 * 60 * 1000))
+
   // 电子面单（文档 06）：取号 worker + 轨迹 worker，均在事务外做 HTTP。
   // 可用 LOGISTICS_WORKER_ENABLED=0 关闭（如无快递平台对接的部署）。
   if (bool('LOGISTICS_WORKER_ENABLED', true)) {

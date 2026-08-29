@@ -140,14 +140,18 @@ const INVALIDATION_MAP = {
     ['purchase'],
   ],
 
-  /** 采购审批通过（审计 4.7）：待审批 → 已提交，刷新采购列表 */
+  /** 采购审批通过（审计 4.7）：待审批 → 已提交，刷新采购列表 + 待我审批 */
   purchase_approve: [
     ['purchase'],
+    ['approval-pending'],
+    ['dash-pending-approvals'],
   ],
 
-  /** 采购审批驳回（审计 4.7）：待审批 → 草稿，刷新采购列表 */
+  /** 采购审批驳回（审计 4.7）：待审批 → 草稿，刷新采购列表 + 待我审批 */
   purchase_reject: [
     ['purchase'],
+    ['approval-pending'],
+    ['dash-pending-approvals'],
   ],
 
   // ── 入库任务 ──────────────────────────────────────────────────────────────

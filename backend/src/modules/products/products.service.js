@@ -231,6 +231,9 @@ async function assertProductDeletable(id) {
     ['inventory_stock', 'SELECT 1 FROM inventory_stock WHERE product_id=? LIMIT 1'],
     ['inventory_logs', 'SELECT 1 FROM inventory_logs WHERE product_id=? LIMIT 1'],
     ['scan_logs', 'SELECT 1 FROM scan_logs WHERE product_id=? LIMIT 1'],
+    ['price_change_requests', 'SELECT 1 FROM price_change_requests WHERE product_id=? LIMIT 1'],
+    ['demand_forecasts', 'SELECT 1 FROM demand_forecasts WHERE product_id=? LIMIT 1'],
+    ['product_price_history', 'SELECT 1 FROM product_price_history WHERE product_id=? LIMIT 1'],
   ]
   for (const [, sql] of checks) {
     const [rows] = await pool.query(sql, [id])

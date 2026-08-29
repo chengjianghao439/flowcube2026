@@ -4,6 +4,7 @@
  */
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
 
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 
@@ -110,7 +111,7 @@ async function findAll(warehouseId) {
 /**
  * 查询所有仓库的分拣格（管理页）
  */
-async function findAllWarehouses({ keyword = '', status = null, warehouseId = null } = {}) {
+async function findAllWarehouses({ keyword = '', status = null, warehouseId = null, scopeWarehouseIds = null } = {}) {
   const conds = ['1=1']
   const params = []
   if (keyword) {
@@ -120,6 +121,9 @@ async function findAllWarehouses({ keyword = '', status = null, warehouseId = nu
   }
   if (status) { conds.push('sb.status = ?'); params.push(+status) }
   if (warehouseId) { conds.push('sb.warehouse_id = ?'); params.push(+warehouseId) }
+  const scope = scopeFilter(scopeWarehouseIds, 'sb.warehouse_id')
+  const where = conds.join(' AND ') + scope.sql
+  const whereParams = [...params, ...scope.params]
 
   const [rows] = await pool.query(
     `SELECT sb.*,
@@ -129,9 +133,9 @@ async function findAllWarehouses({ keyword = '', status = null, warehouseId = nu
      FROM sorting_bins sb
      JOIN inventory_warehouses wh ON wh.id = sb.warehouse_id
      LEFT JOIN warehouse_tasks wt ON wt.id = sb.current_task_id
-     WHERE ${conds.join(' AND ')}
+     WHERE ${where}
      ORDER BY sb.warehouse_id ASC, sb.code ASC`,
-    params,
+    whereParams,
   )
   return rows.map(r => ({ ...fmt(r), warehouseName: r.warehouse_name }))
 }
@@ -185,7 +189,10 @@ async function batchCreate({ warehouseId, prefix, from, to }) {
 /**
  * 更新备注 / 容量阈值
  */
-async function update(id, { remark, capacity }) {
+async function update(id, { remark, capacity }, scopeWarehouseIds = null) {
+  const [[bin]] = await pool.query('SELECT warehouse_id FROM sorting_bins WHERE id=?', [id])
+  if (!bin) throw new AppError('分拣格不存在', 404)
+  assertInScope(scopeWarehouseIds, bin.warehouse_id, '分拣格')
   const cap = capacity === undefined ? undefined : (capacity === null || capacity === '' ? null : Number(capacity))
   if (cap !== undefined && cap !== null && (!Number.isFinite(cap) || cap <= 0)) {
     throw new AppError('容量阈值必须为大于 0 的整数', 400)
@@ -200,9 +207,10 @@ async function update(id, { remark, capacity }) {
 /**
  * 删除（仅空闲格可删）
  */
-async function remove(id) {
+async function remove(id, scopeWarehouseIds = null) {
   const [[bin]] = await pool.query('SELECT * FROM sorting_bins WHERE id=?', [id])
   if (!bin) throw new AppError('分拣格不存在', 404)
+  assertInScope(scopeWarehouseIds, bin.warehouse_id, '分拣格')
   if (bin.status === 2) throw new AppError('占用中的分拣格不能删除', 400)
   await pool.query('DELETE FROM sorting_bins WHERE id=?', [id])
 }
@@ -268,9 +276,10 @@ async function releaseByTask(conn, taskId) {
 /**
  * 强制释放（管理员手动释放）
  */
-async function forceRelease(id) {
+async function forceRelease(id, scopeWarehouseIds = null) {
   const [[bin]] = await pool.query('SELECT * FROM sorting_bins WHERE id=?', [id])
   if (!bin) throw new AppError('分拣格不存在', 404)
+  assertInScope(scopeWarehouseIds, bin.warehouse_id, '分拣格')
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()

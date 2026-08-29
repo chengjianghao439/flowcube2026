@@ -4,6 +4,7 @@ const logger = require('../../utils/logger')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { normalizePagination } = require('../../utils/pagination')
 const {
   parseJson,
   fmtTask,
@@ -272,7 +273,7 @@ async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_T
 }
 
 async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, productId = null, warehouseId = null, operatorId = null, startDate = null, endDate = null, remark = null, supplierId = null, scopeWarehouseIds = null }) {
-  const offset = (page - 1) * pageSize
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['t.deleted_at IS NULL']
   const params = []
   if (keyword) {
@@ -297,8 +298,8 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
   }
   if (warehouseId) { conds.push('t.warehouse_id = ?'); params.push(warehouseId) }
   if (operatorId) { conds.push('t.operator_id = ?'); params.push(operatorId) }
-  if (startDate) { conds.push('DATE(t.created_at) >= ?'); params.push(startDate) }
-  if (endDate) { conds.push('DATE(t.created_at) <= ?'); params.push(endDate) }
+  if (startDate) { conds.push('t.created_at >= ?'); params.push(`${startDate} 00:00:00`) }
+  if (endDate) { conds.push('t.created_at < DATE_ADD(?, INTERVAL 1 DAY)'); params.push(endDate) }
   if (remark) { conds.push('t.remark LIKE ?'); params.push(`%${remark}%`) }
   // 仓库数据权限：列表与计数共用 conds/params
   const scope = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
@@ -310,7 +311,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
 
   const [rows] = await pool.query(
     `SELECT t.* FROM inbound_tasks t WHERE ${where} ORDER BY t.created_at DESC LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset],
+    [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM inbound_tasks t WHERE ${where}`,
@@ -321,7 +322,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
   const summaryMap = await loadInboundTaskClosureSummary(list.map(item => item.id), thresholds)
   return {
     list: list.map(task => buildTaskWithClosure(task, [], summaryMap.get(task.id), [], [], thresholds)),
-    pagination: { page, pageSize, total },
+    pagination: { page, pageSize: ps, total },
   }
 }
 

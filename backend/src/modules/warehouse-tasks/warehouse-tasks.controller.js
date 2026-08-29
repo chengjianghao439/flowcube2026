@@ -13,8 +13,8 @@ const list = async(req,res,next)=>{ try{const{page=1,pageSize=20,keyword='',stat
 const myTasks = async(req,res,next)=>{ try{return successResponse(res,await svc.findMyTasks(),'查询成功')}catch(e){next(e)} }
 const myTaskSkuSummary = async(req,res,next)=>{ try{return successResponse(res,await svc.findMyTaskSkuSummary(),'查询成功')}catch(e){next(e)} }
 const stats = async(req,res,next)=>{ try{return successResponse(res,await svc.getTaskStats(),'查询成功')}catch(e){next(e)} }
-const pickSuggestions = async(req,res,next)=>{ try{return successResponse(res,await svc.getPickSuggestions(+req.params.id))}catch(e){next(e)} }
-const pickRoute = async(req,res,next)=>{ try{return successResponse(res,await svc.getPickRoute(+req.params.id))}catch(e){next(e)} }
+const pickSuggestions = async(req,res,next)=>{ try{return successResponse(res,await svc.getPickSuggestions(+req.params.id, scopeOf(req)))}catch(e){next(e)} }
+const pickRoute = async(req,res,next)=>{ try{return successResponse(res,await svc.getPickRoute(+req.params.id, scopeOf(req)))}catch(e){next(e)} }
 const pendingCancelReturns = async(req,res,next)=>{ try{const{warehouseId}=req.query;return successResponse(res,await svc.listPendingCancelReturns(warehouseId?+warehouseId:null, scopeOf(req)),'查询成功')}catch(e){next(e)} }
 const cancelReturnDetail = async(req,res,next)=>{ try{return successResponse(res,await svc.getCancelReturnDetail(+req.params.id, scopeOf(req)),'查询成功')}catch(e){next(e)} }
 const detail = async(req,res,next)=>{ try{return successResponse(res,await svc.findById(+req.params.id, scopeOf(req)),'查询成功')}catch(e){next(e)} }
@@ -22,8 +22,8 @@ const assign = async(req,res,next)=>{ try{await svc.assign(+req.params.id,req.bo
 const startPicking = async(req,res,next)=>{ try{await svc.startPicking(+req.params.id,{scopeWarehouseIds:scopeOf(req),pdaWarehouseId:pdaWarehouseOf(req)});return successResponse(res,null,'备货已开始')}catch(e){next(e)} }
 const pickedQtyDeprecated = (req,res)=>res.status(410).json({success:false,code:'WAREHOUSE_TASK_PICKED_QTY_GONE',message:'该接口已废弃，请使用 PDA 拣货扫码路径 POST /api/scan-logs',data:null})
 const readyToShip = async(req,res,next)=>{ try{const data=await svc.readyToShip(+req.params.id,{requestKey:extractRequestKey(req),userId:req.user?.userId??null,scopeWarehouseIds:scopeOf(req),pdaWarehouseId:pdaWarehouseOf(req)});return successResponse(res,data,'已标记为待分拣')}catch(e){next(e)} }
-const findEvents = async(req,res,next)=>{ try{return successResponse(res,await svc.findEvents(+req.params.id),'ok')}catch(e){next(e)} }
-const debugSnapshot = async(req,res,next)=>{ try{return successResponse(res,await svc.getDebugSnapshot(+req.params.id),'任务数据快照')}catch(e){next(e)} }
+const findEvents = async(req,res,next)=>{ try{return successResponse(res,await svc.findEvents(+req.params.id, scopeOf(req)),'ok')}catch(e){next(e)} }
+const debugSnapshot = async(req,res,next)=>{ try{return successResponse(res,await svc.getDebugSnapshot(+req.params.id, scopeOf(req)),'任务数据快照')}catch(e){next(e)} }
 const sortDone = async(req,res,next)=>{ try{const sortedItems=req.body?.items??null;const result=await svc.sortTask(+req.params.id,sortedItems,{requestKey:extractRequestKey(req),userId:req.user?.userId??null,scopeWarehouseIds:scopeOf(req),pdaWarehouseId:pdaWarehouseOf(req)});const msg=result.allSorted?'分拣完成，已进入待复核':`分拣进度 ${result.progress}，继续操作`;return successResponse(res,result,msg)}catch(e){next(e)} }
 const checkDone = async(req,res,next)=>{ try{await svc.checkDone(+req.params.id,{scopeWarehouseIds:scopeOf(req),pdaWarehouseId:pdaWarehouseOf(req)});return successResponse(res,null,'已标记为待打包')}catch(e){next(e)} }
 const packDone = async(req,res,next)=>{ try{const data=await svc.packDone(+req.params.id,{requestKey:extractRequestKey(req),userId:req.user?.userId??null,scopeWarehouseIds:scopeOf(req),pdaWarehouseId:pdaWarehouseOf(req)});return successResponse(res,data,'已标记为待出库')}catch(e){next(e)} }

@@ -141,8 +141,8 @@ async function findAllSR({ page=1, pageSize=20, keyword='', status=null, product
   if (customerId) { whereExtra += ' AND customer_id=?'; params.push(customerId) }
   if (warehouseId) { whereExtra += ' AND warehouse_id=?'; params.push(warehouseId) }
   if (operatorId) { whereExtra += ' AND operator_id=?'; params.push(operatorId) }
-  if (startDate) { whereExtra += ' AND DATE(created_at)>=?'; params.push(startDate) }
-  if (endDate) { whereExtra += ' AND DATE(created_at)<=?'; params.push(endDate) }
+  if (startDate) { whereExtra += ' AND created_at>=?'; params.push(`${startDate} 00:00:00`) }
+  if (endDate) { whereExtra += ' AND created_at<DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   if (remark) { whereExtra += ' AND remark LIKE ?'; params.push(`%${remark}%`) }
   const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   if (scope.sql) { whereExtra += scope.sql; params.push(...scope.params) }

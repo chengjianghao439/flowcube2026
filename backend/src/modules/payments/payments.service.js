@@ -80,8 +80,9 @@ async function findAll({
   if (confirmStatus !== '' && confirmStatus != null) {
     conds.push('pr.confirm_status=?'); params.push(Number(confirmStatus))
   }
-  if (startDate) { conds.push('DATE(pr.created_at)>=?'); params.push(startDate) }
-  if (endDate)   { conds.push('DATE(pr.created_at)<=?'); params.push(endDate) }
+  // 半开区间（对齐 sale/purchase 的写法）：DATE(col) 包裹会废掉 created_at 索引（审计 2026-08-30）
+  if (startDate) { conds.push('pr.created_at>=?'); params.push(`${startDate} 00:00:00`) }
+  if (endDate)   { conds.push('pr.created_at<DATE_ADD(?, INTERVAL 1 DAY)'); params.push(endDate) }
   if (dueStart)  { conds.push('pr.due_date>=?'); params.push(dueStart) }
   if (dueEnd)    { conds.push('pr.due_date<=?'); params.push(dueEnd) }
   if (minAmount !== '' && minAmount != null) { conds.push('pr.total_amount>=?'); params.push(Number(minAmount)) }

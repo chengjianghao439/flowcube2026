@@ -86,13 +86,14 @@ async function getSuggestions({ page = 1, pageSize = 50, keyword = '', warehouse
     `SELECT c.product_id, p.code AS product_code, p.name AS product_name, p.unit, p.avg_cost,
             p.article_number, p.spec, p.color,
             c.warehouse_id, w.name AS warehouse_name,
-            SUM(c.remaining_qty) AS total_qty,
+            SUM(c.remaining_qty) - COALESCE(MAX(st.reserved), 0) AS total_qty,
             MAX(${VALUE_EXPR}) AS unit_value,       -- 单容器持有成本相同（同一商品），取 MAX 即单件成本
             SUM(${VALUE_EXPR}) AS total_value,
             MAX(lo.last_outbound_at) AS last_outbound_at
      FROM inventory_containers c
      JOIN product_items p        ON p.id = c.product_id AND p.deleted_at IS NULL
      JOIN inventory_warehouses w ON w.id = c.warehouse_id AND w.deleted_at IS NULL
+     LEFT JOIN inventory_stock st ON st.product_id = c.product_id AND st.warehouse_id = c.warehouse_id
      LEFT JOIN (SELECT product_id, warehouse_id, MAX(created_at) AS last_outbound_at
                 FROM inventory_logs WHERE type = 2 GROUP BY product_id, warehouse_id) lo
             ON lo.product_id = c.product_id AND lo.warehouse_id = c.warehouse_id

@@ -17,7 +17,7 @@ export default function WarehouseScopeDialog({ open, onClose, userId, userName }
 
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses-active-all'],
-    queryFn: () => getWarehousesApi({ page: 1, pageSize: 999 }),
+    queryFn: () => getWarehousesApi({ page: 1, pageSize: 500 }),
     enabled: open,
   })
   const { data: scope, isLoading } = useUserWarehouseScope(userId, open)

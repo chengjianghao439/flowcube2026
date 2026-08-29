@@ -2,12 +2,13 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { assertInScope } = require('../../utils/warehouseScope')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+const { normalizePagination } = require('../../utils/pagination')
 const { WT_STATUS, WT_STATUS_NAME, WT_STATUS_PICK_POOL } = require('../../constants/warehouseTaskStatus')
 const { buildPackagePrintSummary } = require('../../utils/printSummary')
 const { fmt, optionalTaskDetailQuery } = require('./warehouse-tasks.helpers')
 
 async function findAll({ page=1, pageSize=20, keyword='', status=null, warehouseId=null, scopeWarehouseIds=null }) {
-  const offset = (page - 1) * pageSize
+  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['deleted_at IS NULL']
   const params = []
   if (keyword) {
@@ -23,9 +24,9 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, warehouse
   }
   const where = conds.join(' AND ')
 
-  const [rows] = await pool.query(`SELECT * FROM warehouse_tasks WHERE ${where} ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?`, [...params, pageSize, offset])
+  const [rows] = await pool.query(`SELECT * FROM warehouse_tasks WHERE ${where} ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?`, [...params, ps, offset])
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM warehouse_tasks WHERE ${where}`, params)
-  return { list: rows.map(fmt), pagination: { page, pageSize, total } }
+  return { list: rows.map(fmt), pagination: { page, pageSize: ps, total } }
 }
 
 async function findById(id, scopeWarehouseIds = null) {
@@ -199,7 +200,7 @@ async function getTaskStats() {
   return counts
 }
 
-async function findEvents(taskId) {
+async function findEvents(taskId, scopeWarehouseIds = null) {
   const [events] = await pool.query(
     `SELECT id, event_type, from_status, to_status, operator_name, detail, created_at
      FROM warehouse_task_events
@@ -207,10 +208,14 @@ async function findEvents(taskId) {
      ORDER BY created_at ASC`,
     [taskId],
   )
+  // 越权读防护（2026-08-30 审计）：限仓用户只能看自己仓库任务的事件。
+  // 先查任务归属再 assertInScope；事件本身无 warehouse_id 列，须回查 task。
+  const [[taskRow]] = await pool.query('SELECT warehouse_id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL', [taskId])
+  if (taskRow) assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
   return events
 }
 
-async function getDebugSnapshot(taskId) {
+async function getDebugSnapshot(taskId, scopeWarehouseIds = null) {
   const [[task]] = await pool.query(
     `SELECT t.*,
             wh.name AS warehouse_name_full,
@@ -224,6 +229,8 @@ async function getDebugSnapshot(taskId) {
     [taskId],
   )
   if (!task) throw new AppError('任务不存在', 404)
+  // 越权读防护：调试快照泄露锁定容器/分拣格/扫码流水，必须校验仓库归属（2026-08-30 审计）
+  assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
 
   const [items] = await pool.query(
     `SELECT id, product_id, product_code, product_name, unit,
