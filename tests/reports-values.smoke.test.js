@@ -73,13 +73,19 @@ async function main() {
   }
 
   // ── 造 2 张已知金额的销售单（500 / 800）──────────────────────────────────
+  // 显式传 created_at（= 当前时刻）：报表按 DATE_FORMAT(created_at,'%Y-%m') 统计"本月"，
+  // 测试用 cnYmd(new Date()) 算北京本月核对。若不显式传，走 MySQL CURRENT_TIMESTAMP，
+  // 其值取决于服务器时区——CI 临时库是 UTC（北京凌晨 = UTC 上月末，跨月）时 DATE_FORMAT
+  // 落到上月，byMonthS 查不到本月 → orderCount=undefined（测试自身缺陷，注释第 61 行已承认）。
+  // 显式传 Date 走 mysql2 连接池 timezone=+08:00 序列化，与 cnYmd 口径一致，与服务器时区无关。
+  const thisDate = new Date()
   const SO_TOTALS = [500, 800]
   const soIds = []
   for (const amt of SO_TOTALS) {
     const [r] = await pool.query(
-      `INSERT INTO sale_orders (order_no, customer_id, customer_name, warehouse_id, warehouse_name, total_amount, status, operator_id, operator_name)
-       VALUES (?, ?, ?, ?, ?, ?, 2, 1, '报表测试员')`,
-      [randomRef('REPSO').slice(0, 20), customer.id, customer.name, whId, '报表测试仓', amt],
+      `INSERT INTO sale_orders (order_no, customer_id, customer_name, warehouse_id, warehouse_name, total_amount, status, operator_id, operator_name, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 2, 1, '报表测试员', ?)`,
+      [randomRef('REPSO').slice(0, 20), customer.id, customer.name, whId, '报表测试仓', amt, thisDate],
     )
     soIds.push(r.insertId)
   }
