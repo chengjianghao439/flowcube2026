@@ -190,3 +190,19 @@ export const getInventoryAgingApi = (p: { page?: number; pageSize?: number; keyw
 
 export const getExpiryAlertsApi = (p: { warehouseId?: number | null; warnDays?: number }) =>
   apiClient.get<{ warnDays: number; list: ExpiryAlert[] }>('/inventory/aging/expiry', { params: p })
+
+// ─── 库存初始化导入（POST /import/stock）────────────────────────────────────────────────
+
+export interface ImportStockResult {
+  success: number
+  errors: Array<{ row: number; message: string }>
+}
+
+export const importStockApi = (file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return apiClient.post<ImportStockResult>('/import/stock', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60_000,
+  })
+}

@@ -257,6 +257,10 @@ async function reverseVoucher(id, userId, companyId = 1) {
  * 资金/应付/应收三项勾稽核对，供 UI 展示与自查（对齐设计 §10）。
  * 不按 status 过滤：红字冲销(原凭证 status=3 + 红字 is_reversal)成对相抵为零，全量纳入才正确
  * （只留红字会算成负的原始额）。见 accounting.ledger.service 顶注同一口径。
+ *
+ * companyId 参数用于过滤凭证数据（acct_vouchers/entries 有 company_id）。
+ * 资金流水（finance_account_transactions）和账款（payment_records）是公司级表，
+ * 目前不支持按账套过滤——如果资金账户和账款需要账套隔离，需要后续迁移添加对应字段。
  */
 async function reconciliation(companyId = 1) {
   const [[fundV]] = await pool.query(
@@ -265,15 +269,20 @@ async function reconciliation(companyId = 1) {
       WHERE v.company_id = ? AND v.source_type IN ('receipt_in','payment_out','expense_pay') AND e.account_code IN ('1001','1002')`,
     [companyId],
   )
+  // 资金流水合计：通过 JOIN finance_accounts 获取账套过滤（如果 finance_accounts 已添加 company_id）
   const [[fundT]] = await pool.query(
     `SELECT COALESCE(SUM(t.amount),0) s FROM finance_account_transactions t
-       JOIN finance_accounts fa ON fa.id = t.account_id WHERE t.biz_type IN (1,2,3)`)
+       JOIN finance_accounts fa ON fa.id = t.account_id
+      WHERE t.biz_type IN (1,2,3) AND fa.company_id = ?`,
+    [companyId],
+  )
   const [[payableV]] = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN direction=2 THEN amount ELSE -amount END),0) s
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
       WHERE v.company_id = ? AND e.account_code='2202' AND v.source_type IN ('purchase_settle','purchase_return')`,
     [companyId],
   )
+  // 应付账款余额：公司级数据，payment_records 目前不支持账套过滤
   const [[payableB]] = await pool.query(
     `SELECT COALESCE(SUM(total_amount),0) s FROM payment_records WHERE type=1 AND order_id IS NOT NULL`)
   const [[recvV]] = await pool.query(
@@ -282,6 +291,7 @@ async function reconciliation(companyId = 1) {
       WHERE v.company_id = ? AND e.account_code='1122' AND v.source_type IN ('sale_revenue','sale_return')`,
     [companyId],
   )
+  // 应收账款余额：公司级数据，payment_records 目前不支持账套过滤
   const [[recvB]] = await pool.query(
     `SELECT COALESCE(SUM(total_amount),0) s FROM payment_records WHERE type=2 AND order_id IS NOT NULL`)
   const item = (name, voucher, business) => ({

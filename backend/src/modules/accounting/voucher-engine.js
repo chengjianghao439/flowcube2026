@@ -420,17 +420,27 @@ async function buildStockCheck(conn) {
  * 加载价税分离所需的发票税额（Phase3）。进项按 PO 合计（全部非删除发票），
  * 销项按 SO 合计（排除已红冲 status=2）。无 fin_invoices 表（迁移未到）时返回空 Map，不影响生成。
  */
-async function loadTaxMaps(conn) {
+async function loadTaxMaps(conn, companyId = 1) {
+  const cid = Number(companyId) || 1
   const empty = { taxByPO: new Map(), taxBySO: new Map() }
   try {
+    // 过滤当前账套的发票
     const [poRows] = await conn.query(`
-      SELECT source_id AS id, COALESCE(SUM(tax_amount),0) tax FROM fin_invoices
-       WHERE invoice_type=1 AND source_type='purchase_order' AND source_id IS NOT NULL AND status IN (2, 3) AND deleted_at IS NULL
-       GROUP BY source_id`)
+      SELECT f.source_id AS id, COALESCE(SUM(f.tax_amount),0) tax FROM fin_invoices f
+       WHERE f.invoice_type=1 AND f.source_type='purchase_order' AND f.source_id IS NOT NULL
+         AND f.status IN (2, 3) AND f.deleted_at IS NULL
+         AND (f.company_id = ? OR f.company_id IS NULL)
+       GROUP BY f.source_id`,
+      [cid],
+    )
     const [soRows] = await conn.query(`
-      SELECT source_id AS id, COALESCE(SUM(tax_amount),0) tax FROM fin_invoices
-       WHERE invoice_type=2 AND source_type='sale_order' AND source_id IS NOT NULL AND status<>2 AND deleted_at IS NULL
-       GROUP BY source_id`)
+      SELECT f.source_id AS id, COALESCE(SUM(f.tax_amount),0) tax FROM fin_invoices f
+       WHERE f.invoice_type=2 AND f.source_type='sale_order' AND f.source_id IS NOT NULL
+         AND f.status<>2 AND f.deleted_at IS NULL
+         AND (f.company_id = ? OR f.company_id IS NULL)
+       GROUP BY f.source_id`,
+      [cid],
+    )
     return {
       taxByPO: new Map(poRows.map(r => [Number(r.id), Number(r.tax)])),
       taxBySO: new Map(soRows.map(r => [Number(r.id), Number(r.tax)])),
@@ -445,7 +455,7 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
   const cid = Number(companyId) || 1
   const accountMap = await loadAccountMap(conn, cid)
   const allocSeq = await makeSeqAllocator(conn, cid)
-  const { taxByPO, taxBySO } = await loadTaxMaps(conn)
+  const { taxByPO, taxBySO } = await loadTaxMaps(conn, cid)
   const specs = [
     ...await buildPurchaseSettle(conn, taxByPO),
     ...await buildSaleRevenue(conn, taxBySO),

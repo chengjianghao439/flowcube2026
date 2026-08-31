@@ -49,7 +49,16 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       // 动态推进到已占库(2)或部分占库(6)（compareAndSetStatus 传实际目标状态）。
       reserve: { from: [1, 6], message: '只有草稿或部分占库状态可以占用库存' },
       // 取消占库：已占库(2)/部分占库(6)都可，按产品/数量释放。to 由 releaseStock 动态决定。
-      release: { from: [2, 6], message: '只有已占库或部分占库的订单可以取消占库' },
+      release: {
+        from: [2, 6],
+        message: '只有已占库或部分占库的订单可以取消占库',
+        blocked: {
+          1: '草稿状态无需释放占库',
+          3: '拣货中的订单不能直接取消占库，请先取消仓库任务',
+          4: '已出库的订单不能取消占库',
+          5: '订单已取消',
+        },
+      },
       ship: { from: [2, 6], to: 3, message: '只有已占库或部分占库的销售单可以发起出库' },
       completeShip: { from: [3], to: 4, message: '只有拣货中的销售单可以完成出库' },
       cancel: {

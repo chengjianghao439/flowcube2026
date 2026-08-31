@@ -24,6 +24,9 @@ const pool = mysql.createPool({
 /** 会话字符集与排序规则，避免极少数环境下连接未按 utf8mb4 解释中文（姓名乱码、排序异常） */
 pool.on('connection', (connection) => {
   void connection.query('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
+  // 事务锁等待超时：极端死锁时快速失败，防止连接挂满 wait_timeout（默认8小时）。
+  // InnoDB lock_wait_timeout 默认 50 秒，设为 30 秒让死锁更快暴露。
+  void connection.query('SET SESSION innodb_lock_wait_timeout = 30')
 })
 
 async function testConnection() {

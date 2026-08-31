@@ -26,6 +26,7 @@ import type { InventoryLog, InventoryOverviewItem } from '@/types/inventory'
 import type { TableColumn } from '@/types'
 import type { Category } from '@/types/categories'
 import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import { importStockApi } from '@/api/inventory'
 
 type Tab = 'overview' | 'logs'
 type OpType = 'outbound'
@@ -225,21 +226,13 @@ export default function InventoryPage() {
   async function handleImportStock(file: File) {
     setImporting(true)
     try {
-      const store = JSON.parse(localStorage.getItem('flowcube-auth-v3') || sessionStorage.getItem('flowcube-auth-v3') || 'null')
-      const token = store?.state?.token
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch('/api/import/stock', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.message || '导入失败')
-      setImportResult({ success: json?.data?.success ?? 0, errors: json?.data?.errors ?? [] })
-      toast.success(`导入成功：${json?.data?.success ?? 0} 条`)
+      const res = await importStockApi(file)
+      const errors = (res.errors ?? []).map(e => `第${e.row}行: ${e.message}`)
+      setImportResult({ success: res.success ?? 0, errors })
+      toast.success(`导入成功：${res.success ?? 0} 条`)
     } catch (e) {
-      toast.error((e as Error).message || '导入失败')
+      const err = e as { message?: string }
+      toast.error(err?.message || '导入失败')
     } finally {
       setImporting(false)
     }
