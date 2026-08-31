@@ -227,7 +227,7 @@ export default function InventoryPage() {
     setImporting(true)
     try {
       const res = await importStockApi(file)
-      const errors = (res.errors ?? []).map(e => `第${e.row}行: ${e.message}`)
+      const errors = res.errors ?? []
       setImportResult({ success: res.success ?? 0, errors })
       toast.success(`导入成功：${res.success ?? 0} 条`)
     } catch (e) {

@@ -269,13 +269,15 @@ async function reconciliation(companyId = 1) {
       WHERE v.company_id = ? AND v.source_type IN ('receipt_in','payment_out','expense_pay') AND e.account_code IN ('1001','1002')`,
     [companyId],
   )
-  // 资金流水合计：通过 JOIN finance_accounts 获取账套过滤（如果 finance_accounts 已添加 company_id）
+  // 资金流水合计：这里刻意不加 fa.company_id 过滤（不用 a90348b 的按账套过滤）——
+  // 业务事实 finance_account_transactions 是公司级表（无 company_id 列，账户 company_id
+  // 也恒为 1，见 create(finance_accounts) 不写该列），且凭证生成侧 buildFundVouchers 读的
+  // 是全量流水。若只把业务侧单边改成按账套过滤，账套≠1 时 fundV（含全量流水凭证）
+  // 与 fundT（过滤后≈0）必不平，且与 getCashFlow/finance-dashboard 的全账套口径相悖。
+  // 故勾稽保持公司级全量口径，与凭证生成来源一致（2026-08-31 审计 P0-2）。
   const [[fundT]] = await pool.query(
     `SELECT COALESCE(SUM(t.amount),0) s FROM finance_account_transactions t
-       JOIN finance_accounts fa ON fa.id = t.account_id
-      WHERE t.biz_type IN (1,2,3) AND fa.company_id = ?`,
-    [companyId],
-  )
+       WHERE t.biz_type IN (1,2,3)`)
   const [[payableV]] = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN direction=2 THEN amount ELSE -amount END),0) s
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id

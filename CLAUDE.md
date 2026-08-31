@@ -48,7 +48,7 @@ flowcube/
 │       ├── scheduler.js            仅启动 operation_requests TTL 清理
 │       ├── config/                 db.js（连接池）、env.js（环境变量校验，生产缺项直接拒启动）
 │       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / settlementType / voucherSource / permissions
-│       ├── database/               220 个 .sql 迁移 + migrate.js
+│       ├── database/               226 个 .sql 迁移 + migrate.js
 │       ├── engine/                 containerEngine / inventoryEngine / reservationEngine / approvalEngine ← 库存唯一合法入口（approvalEngine 为多级审批流引擎，P2-7）
 │       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger / companyScope（多账套公司隔离，会计标准）
 │       ├── modules/                58 个业务模块，统一 routes → controller → service
@@ -268,7 +268,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 ## 8. 数据库与核心模型
 
 - 131 张表（生产实测，含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。表漂移对账用 `backend/scripts/schema-reconcile.js`（只读检查，`--strict` 可挂 CI）。
-- 迁移：`backend/src/database/` 下 220 个 `.sql`，编号 001–220（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行；db_migrations 有 212 条执行记录，含 1 条手工执行的迁移）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
+- 迁移：`backend/src/database/` 下 226 个 `.sql`，编号 001–226（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行；db_migrations 有 212 条执行记录，含 1 条手工执行的迁移）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
 - ⚠️ **数据库里的 `COLUMN_COMMENT` 曾大面积过期，现已大部分订正但仍有残留**（2026-07-27 抽查：`sale_orders.status`、`warehouse_tasks.status` 的注释都已更新并注明"见 documentStatusRules / warehouseTaskStatus"；`sale_orders.closed_reason` 仍写着迁移 127 已废弃的 `partial_ship_close`）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
 
 核心事实表 / 派生字段：
@@ -816,4 +816,23 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **低危**：固定资产最后一期折旧漏提（`accum + monthly >= totalDepr - 0.01` 提前停 → 改 `accum >= totalDepr - 1e-6` 且最后一期差额计提）；软删补 `AND deleted_at IS NULL`（sale/plastic-boxes/carriers）；refresh 密钥轮换兜底（`refreshAccessToken` 补 JWT_SECRET_PREVIOUS）；CORS 注释补安全提示；DataTable 拖拽补 window blur 兜底。
     - **未改（记录为交付后）**：① 跨月分批发货/收货凭证期间归属——需按「订单+结算批次」拆分 source_id（架构级，仓促改 updated_at 会把首批收入挪到末月）；② `buildNotifications` 串行 25 条 COUNT 改 Promise.all、N+1 循环合并、findMyTaskSkuSummary/findPdaTasks 无 LIMIT——「数据量上来才慢」的优化项，重构风险高于收益；③ 迁移 212 非幂等——已成功执行，按「禁止改已执行迁移」硬约束不改，仅记录；④ JWT 加 aud/iss、勾稽账套维度标注、system_health_logs 死表、useInvalidate 11 死事件——防御性/清理性质，风险收益不划算。
     - 验证：后端 lint 0、前端 lint 0 error / tsc 0、test:permissions 184/184、smoke mainline 49/sale-adjustment 57/concurrency 83/p0 41/finance 103/accounting 11/disposal 27/warehouse-scope 41/integration 96 全绿。
+
+50. **2026-09-01 上线后审查修复（a90348b 提交的 P0 财务账套隔离实际未生效 + 半截改动，已修复）**：
+    - **背景**：v0.7.6 发布后的 a90348b 声称"P0 财务账套隔离"，但 5 路多智能体审查（见 audit-post-release）发现：**业务事实表（采购单/销售单/资金流水/账款/退货/盘点/调拨）全部无 company_id——当前系统实际是公司级单账套架构**，只有 acct_* 会计表带账套。在此数据基础上，a90348b 的部分改动要么空转、要么反而破坏勾稽。
+    - **P0-1 发票账套隔离未生效（已修）**：迁移 223 给 fin_invoices 加 company_id，但写入端 invoiceCreate/invoiceUpdate 未落该列 → 所有发票恒 NULL；loadTaxMaps 用 `(company_id=? OR company_id IS NULL)`，IS NULL 恒命中 → 过滤退化为全量 → 每个账套重复计税（报税重复计数）。修复：① invoiceCreate 落 company_id（controller 传 companyOf(req)，service 接收 companyId）；② loadTaxMaps 改严格 `company_id = ?`（去 OR IS NULL）；③ **迁移 225** 回填历史 NULL 发票到主账套 1（业务单无账套维度，历史票只能归主账套）。
+    - **P0-2 勾稽 fundT 半截改动（已修）**：a90348b 只把 fundT 单边改成按 fa.company_id 过滤，但凭证生成侧 buildFundVouchers 读全量流水、业务表无账套维度 → 账套≠1 时 fundV（含全量流水凭证）与 fundT（过滤后≈0）必不平，且与 getCashFlow/finance-dashboard 全账套口径相悖。修复：撤销 fundT 的账套过滤，恢复公司级全量口径（与凭证生成来源一致）。
+    - **P1 前端库存导入 errors 类型不符（已修）**：`ImportStockResult.errors` 声明为 `{row,message}[]`，后端实返 string[] → 页面 map(e=>e.row) 取 undefined 显示"第undefined行"（tsc/lint 不报错，静默错）。修复：改类型为 string[]，页面直接取；importStockApi 补 `skipGlobalError: true` 防拦截器+页面双重 toast。
+    - **P2 approvals.service（非本次引入，已顺手加固）**：listPending 的 N+1 优化行为等价（按 biz_type 分组批量查，仅 purchase_requisition 有元数据，其余仍空——与改动前一致）；getBizApproval 加事务正确（引擎不嵌套事务，纯读无死锁）；顺手清理 `applicantCol` 死字段 + `!got` 分支 rollback 改 commit 防双重 rollback。
+    - **未改（遵循硬约束）**：迁移 223/224 已应用，按"禁止改已执行迁移"不改正文（224 头注释"finance_account_transactions 添加 company_id"夸大，但正文只给 finance_accounts 加列——已在 225 记录说明，未动 224 正文）；223/224 非幂等已在 225 改用幂等 UPDATE。
+    - **验证**：后端 lint 0、前端 lint 0 error / tsc 0、test:accounting 7/7、smoke:accounting 11/11、smoke:finance 103/103、smoke:mainline 49/49、test:permissions 184/184、迁移 225 本机实跑成功。
+    - **遗留（架构级，未做）**：真正的按账套隔离需给业务表（payment_records/finance_account_transactions 等）加 company_id + 回填，并给 buildFundVouchers/getCashFlow/finance-dashboard 同步过滤——独立工程。当前以「公司级单账套」为准，勾稽/发票/报税按此口径。
+
+51. **2026-09-01 商品资料「货号」改「供应商型号」+ 取消自动生成（已实现）**：
+    - **需求**：原商品资料的「货号」字段（product_items.article_number）只在留空时自动生成 6 位随机数（products.service.create 的 `String(Math.floor(100000+Math.random()*900000))`），无业务含义。真实需求是**系统型号（spec）可能与供应商型号不一致，需单独记录「供应商型号」**。故把 article_number 语义改为「供应商型号」，并取消自动生成（供应商型号由供应商给定、人工填写）。
+    - **改动**（不动列名/字段结构，仅改语义 + 展示标签）：
+      - 前端展示标签「货号」→「供应商型号」：商品资料表单（form.tsx）、列表（index.tsx）、商品选择器弹窗（ProductFinderModal.tsx）、容器抽屉（ContainerDrawer.tsx）、打印模板字段定义（printFieldDefs.ts 的 articleNo label，key 不变不破坏旧模板）。
+      - 后端取消自动生成：products.service.create 的 `generatedArticle = articleNumber || null`（不再随机生成）；import.service 商品导入删「补齐6位/自动生成5开头6位」整段，改 `String(articleNumber||'').trim() || null`，模板表头「货号」→「供应商型号」。
+      - **迁移 226**：product_items.article_number COMMENT 改为「供应商型号」。
+    - **关键约束**：article_number 被 7 张业务表快照引用（迁移 092/093/095/096/097/099/114）且有历史数据，**列名保持 article_number**（改列名=改全部引用，风险大、收益低）；7 张业务表快照列注释不随动，语义跟随主档。前端类型字段名 articleNumber 不变。
+    - **验证**：后端 lint 0、前端 lint 0 error（5 条既有 warning）/tsc 0、test:permissions 184/184、smoke:mainline 49/49、迁移 226 本机实跑成功。
 

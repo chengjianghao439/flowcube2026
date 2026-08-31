@@ -56,17 +56,19 @@ interface OpEntry {
 
 const ALL_OPS: OpEntry[] = [
   // ── 常用（被下达任务，首页直点） ──
+  // 按作业链路流程排序：入库（收货→上架）→ 出库（拣货→分拣→复核→打包→出库）
+  // → 调拨/退货/盘点 等辅助与异常收尾
   { icon: Inbox,           label: '收货订单', path: '/pda/inbound',       perm: PERMISSIONS.INBOUND_ORDER_VIEW, tone: 'blue' },
   { icon: ArrowUpFromLine, label: '扫码上架', path: '/pda/putaway',       perm: PERMISSIONS.INBOUND_PUTAWAY_EXECUTE, tone: 'teal' },
   { icon: ClipboardList,   label: '拣货任务', path: '/pda/picking',       perm: PERMISSIONS.WAREHOUSE_TASK_PICK, tone: 'indigo' },
   { icon: Shuffle,         label: '订单分拣', path: '/pda/sort',          perm: PERMISSIONS.SORTING_BIN_VIEW, perms: [PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT], tone: 'orange' },
   { icon: ClipboardCheck,  label: '复核任务', path: '/pda/check',         perm: PERMISSIONS.WAREHOUSE_TASK_CHECK, tone: 'green' },
   { icon: Package,         label: '打包作业', path: '/pda/pack',          perm: PERMISSIONS.WAREHOUSE_TASK_PACK, tone: 'blue' },
-  { icon: ScanSearch,      label: '扫码盘点', path: '/pda/stockcheck',    perm: PERMISSIONS.STOCKCHECK_VIEW, tone: 'cyan' },
   { icon: Truck,           label: '出库确认', path: '/pda/ship',          perm: PERMISSIONS.WAREHOUSE_TASK_SHIP, tone: 'orange' },
   { icon: ArrowLeftRight,  label: '调拨执行', path: '/pda/transfer',      perm: PERMISSIONS.TRANSFER_ORDER_VIEW, tone: 'purple' },
-  { icon: Undo2,           label: '销售退货', path: '/pda/sale-return',   perm: PERMISSIONS.RETURN_ORDER_VIEW, tone: 'teal' },
-  { icon: PackageX,        label: '拣货退回', path: '/pda/cancel-return', perm: PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, tone: 'red' },
+  { icon: PackageX,        label: '销售退货', path: '/pda/sale-return',   perm: PERMISSIONS.RETURN_ORDER_VIEW, tone: 'teal' },
+  { icon: ScanSearch,      label: '扫码盘点', path: '/pda/stockcheck',    perm: PERMISSIONS.STOCKCHECK_VIEW, tone: 'cyan' },
+  { icon: Undo2,           label: '拣货退回', path: '/pda/cancel-return', perm: PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, tone: 'red' },
   { icon: PencilLine,      label: '改单确认', path: '/pda/adjustments',   perm: PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW, tone: 'indigo' },
   // ── 更多（自主操作，收进底部折叠区） ──
   { icon: Scissors,        label: '塑料盒拆分', path: '/pda/split',        perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, tone: 'cyan', more: true },

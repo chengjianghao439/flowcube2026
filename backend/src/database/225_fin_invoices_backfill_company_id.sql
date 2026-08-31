@@ -1,0 +1,21 @@
+-- FlowCube ERP - Migration 225
+-- 回填历史发票的 company_id 归属（审计 2026-08-31 P0-1 配套）
+--
+-- 背景：
+-- - 迁移 223 给 fin_invoices 加 company_id 列，但写入端（invoiceCreate/invoiceUpdate，
+--   见 accounting.invoice.service.js）当时未落该列，导致所有发票（含迁移前历史票 +
+--   新录票）company_id 恒为 NULL。
+-- - voucher-engine 的 loadTaxMaps 因而用 `(company_id = ? OR company_id IS NULL)`，
+--   IS NULL 恒命中 → 过滤退化为无条件全量 → 每一张发票的税额被每个账套的凭证各自计入一次，
+--   报税（getVatReport 按账套汇总 222101/222102）重复计数。
+--
+-- 本迁移：把历史 NULL 发票归属到主账套（company_id = 1）。
+--   - 合理默认：多账套是后加的功能，迁移前的发票都在「单一/主账套」时期录入，
+--     业务单据（采购单/销售单）本身无 company_id 维度，无法做成多套归属，只能归主账套。
+--   - 已归属（company_id 已填）的发票不触碰；新发票由 invoiceCreate 落 company_id。
+--   - 配合 loadTaxMaps 改为严格 `company_id = ?`（去掉 OR IS NULL）后真正实现按账套隔离。
+--
+-- 幂等可重入：UPDATE ... WHERE company_id IS NULL 天然幂等（第二次 affected_rows=0），
+-- 无需信息栏护栏；列由迁移 223 提供，本迁移编号 > 223，执行顺序保证列已存在。
+
+UPDATE fin_invoices SET company_id = 1 WHERE company_id IS NULL;

@@ -424,12 +424,14 @@ async function loadTaxMaps(conn, companyId = 1) {
   const cid = Number(companyId) || 1
   const empty = { taxByPO: new Map(), taxBySO: new Map() }
   try {
-    // 过滤当前账套的发票
+    // 过滤当前账套的发票（迁移 225 已回填历史 NULL 发票到主账套 1；
+    // 新发票由 invoiceCreate 落 company_id）。严格 `= ?`，不加 `OR IS NULL`——
+    // 否则历史未归属发票会被每个账套重复计税（报税重复，P0-1）。
     const [poRows] = await conn.query(`
       SELECT f.source_id AS id, COALESCE(SUM(f.tax_amount),0) tax FROM fin_invoices f
        WHERE f.invoice_type=1 AND f.source_type='purchase_order' AND f.source_id IS NOT NULL
          AND f.status IN (2, 3) AND f.deleted_at IS NULL
-         AND (f.company_id = ? OR f.company_id IS NULL)
+         AND f.company_id = ?
        GROUP BY f.source_id`,
       [cid],
     )
@@ -437,7 +439,7 @@ async function loadTaxMaps(conn, companyId = 1) {
       SELECT f.source_id AS id, COALESCE(SUM(f.tax_amount),0) tax FROM fin_invoices f
        WHERE f.invoice_type=2 AND f.source_type='sale_order' AND f.source_id IS NOT NULL
          AND f.status<>2 AND f.deleted_at IS NULL
-         AND (f.company_id = ? OR f.company_id IS NULL)
+         AND f.company_id = ?
        GROUP BY f.source_id`,
       [cid],
     )

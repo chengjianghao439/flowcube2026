@@ -90,6 +90,25 @@ async function importPriceListItems(req, res, next) {
   }
 }
 
+async function downloadSupplierTemplate(req, res, next) {
+  try {
+    const workbook = await importService.buildSupplierTemplate()
+    sendWorkbook(res, workbook)
+  } catch (error) {
+    next(error)
+  }
+}
+
+async function importSuppliers(req, res, next) {
+  try {
+    if (!req.file) throw new AppError('请上传文件', 400)
+    const result = await importService.importSuppliers({ fileBuffer: req.file.buffer })
+    return successResponse(res, result.data, result.message)
+  } catch (error) {
+    next(error)
+  }
+}
+
 module.exports = {
   downloadProductTemplate,
   importProducts,
@@ -97,6 +116,8 @@ module.exports = {
   importStock,
   downloadCustomerTemplate,
   importCustomers,
+  downloadSupplierTemplate,
+  importSuppliers,
   downloadPriceListTemplate,
   importPriceListItems,
 }

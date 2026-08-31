@@ -1,7 +1,7 @@
 {
-  "version": "0.7.6",
-  "versionCode": 105,
+  "version": "0.7.7",
+  "versionCode": 106,
   "filename": "app-release.apk",
-  "releaseNote": "- 修复工资发放：有社保/公积金的账套下，工资单可正常发放（此前会因凭证借贷不平而失败）。",
-  "publishedAt": "2026-08-29T18:23:05.779Z"
+  "releaseNote": "- 供应商管理：新增**批量导入**，支持下载模板、按模板批量建档，编码/结算方式与手工创建一致。",
+  "publishedAt": "2026-08-31T18:02:42.296Z"
 }

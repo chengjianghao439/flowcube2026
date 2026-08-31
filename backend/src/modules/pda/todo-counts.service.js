@@ -5,7 +5,9 @@
  * 供工作台顶部汇总条 + 图标角标展示。设备未绑仓库（warehouseId null）时返回全部。
  *
  * 口径说明（与各作业列表页保持一致）：
- * - inbound      收货订单：status 1待收货 2收货中 3待上架
+ * - inbound      收货订单：status 1待收货 2收货中 3待上架，且已提交到 PDA（submitted_at 非空）
+ *                 —— 计数口径与 PDA 列表页一致：列表前端 filter 掉未提交的，计数也要同样排除，
+ *                    否则 ERP 建单未提交的收货会显示「有任务」但列表为空（2026-09 生产事故）。
  * - picking      拣货：warehouse_tasks status IN (1待拣货, 2拣货中) 且未在拣货退回
  * - checking     复核：warehouse_tasks status = 4 待复核
  * - packing      打包：warehouse_tasks status = 5 待打包
@@ -27,7 +29,7 @@ async function getTodoCounts(warehouseId) {
 
   const [inboundRows] = await pool.query(
     `SELECT COUNT(*) AS n FROM inbound_tasks
-     WHERE status IN (1,2,3) AND deleted_at IS NULL ${whCond}`,
+     WHERE status IN (1,2,3) AND deleted_at IS NULL AND submitted_at IS NOT NULL ${whCond}`,
     whParams,
   )
 

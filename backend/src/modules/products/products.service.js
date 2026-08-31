@@ -318,7 +318,7 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   const normalizedUnits = validateUnits(unit, units)   // 纯校验，任何非法输入在建单前就抛错
   const code = await generateMasterCode(pool, 'P', 'product_items')
   const generatedSku = skuCode || await generateMasterCode(pool, 'SKU', 'product_items', 'sku_code')
-  const generatedArticle = articleNumber || String(Math.floor(100000 + Math.random() * 900000))
+  const generatedArticle = articleNumber || null   // 供应商型号（供应商给的型号，人工填；缺失即 NULL，不再随机生成）
   const generatedBarcode = normalizedBarcode || await generateMasterCode(pool, 'BC', 'product_items', 'barcode')
   const rates = await loadPriceRates(pool)
   const auto = computeTierPrices(normalizedCost, rates)

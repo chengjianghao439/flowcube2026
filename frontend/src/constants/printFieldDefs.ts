@@ -105,7 +105,7 @@ export interface TableColumnOption {
 }
 
 export const TABLE_COLUMN_OPTIONS: TableColumnOption[] = [
-  { key: 'articleNo', label: '货号' },
+  { key: 'articleNo', label: '供应商型号' },
   { key: 'code', label: '商品编码' },
   { key: 'name', label: '商品名称' },
   { key: 'spec', label: '型号' },

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SettlementTypeField } from '@/components/shared/SettlementTypeField'
@@ -14,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
+import { payloadClient as client } from '@/api/client'
 
 const PHONE_RE = /^1\d{10}$/
 
@@ -30,6 +32,33 @@ export default function SuppliersPage() {
   const [page, setPage] = useState(1)
   const [form, setForm] = useState(empty)
   const set = (k:string, v:string|boolean) => setForm(f=>({...f,[k]:v}))
+  const qc = useQueryClient()
+
+  // ── 批量导入（参照客户/商品导入范式） ──
+  const [importOpen, setImportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ success: number; errors: string[] } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  // 供应商批量导入：模板列 = 编码/名称/联系人/电话/结算方式(1现结/2月结)/账期/提前期/地址
+  // 后端逐行返回回执；编码、结算方式等与 suppliers.service.create 口径一致。
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await client.post<{ success: number; errors: string[] }>('/import/suppliers', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setImportResult({ success: r.success ?? 0, errors: r.errors ?? [] })
+      qc.invalidateQueries({ queryKey: ['suppliers'] })
+    } catch (err: unknown) {
+      toast.error((err as { message?: string }).message || '导入失败')
+    } finally {
+      setImporting(false)
+      e.target.value = ''
+    }
+  }
 
   // 打开弹窗时回填表单（新建=默认值，编辑=行数据）
   function handleOpen(editing: Supplier | null) {
@@ -74,18 +103,49 @@ export default function SuppliersPage() {
       deleteMessage="仅未被采购、退货或库存流水引用的供应商允许删除；若已被引用，请改为编辑后停用。"
       createLabel="新增供应商"
       headerActions={
-        <Button variant="outline" onClick={() => downloadExport('/export/suppliers').catch(e => toast.error((e as Error).message))}>导出</Button>
+        <>
+          <Button variant="outline" onClick={() => downloadExport('/export/suppliers').catch(e => toast.error((e as Error).message))}>导出</Button>
+          <Button variant="outline" onClick={() => setImportOpen(v => !v)}>批量导入</Button>
+        </>
       }
       saveSuccessMessage={(editing) => editing ? '供应商已保存' : '供应商已创建'}
       formWidthClass="sm:max-w-lg"
       canSubmit={() => !!form.name}
       onOpen={handleOpen}
       renderToolbar={
-        <FilterCard>
-          <Input placeholder="搜索编码或名称" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} className="h-9 w-60" />
-          <Button size="sm" variant="outline" onClick={()=>{setKeyword(search);setPage(1)}}>搜索</Button>
-          {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('');setPage(1)}}>重置</Button>}
-        </FilterCard>
+        <>
+          {importOpen && (
+            <div className="space-y-3 rounded-lg border border-border bg-card p-4">
+              <p className="text-sm text-muted-foreground">
+                请先下载模板，按格式填写后上传。列：供应商编码（可空，留空自动生成）、供应商名称*、联系人、电话、结算方式（填 1=现结 / 2=月结）、账期（天，仅月结有效）、采购提前期（天）、地址。名称或编码重复的行会跳过并留痕。
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => downloadExport('/import/suppliers/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>
+                <div className="flex items-center gap-2">
+                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportFile} />
+                  <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importing}>
+                    {importing ? '导入中…' : '选择文件并上传'}
+                  </Button>
+                </div>
+              </div>
+              {importResult && (
+                <div className="rounded-lg border p-3 text-sm space-y-1">
+                  <p className="text-success font-medium">导入成功：{importResult.success} 条</p>
+                  {importResult.errors.length > 0 && (
+                    <div className="max-h-40 space-y-0.5 overflow-y-auto text-xs text-muted-foreground">
+                      {importResult.errors.map((err, i) => <p key={i}>{err}</p>)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <FilterCard>
+            <Input placeholder="搜索编码或名称" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} className="h-9 w-60" />
+            <Button size="sm" variant="outline" onClick={()=>{setKeyword(search);setPage(1)}}>搜索</Button>
+            {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('');setPage(1)}}>重置</Button>}
+          </FilterCard>
+        </>
       }
       renderForm={(editing) => {
         const isEdit = !!editing

@@ -181,50 +181,68 @@ async function removeFlow(id) {
 
 /** 审批待办列表（引擎只按 user_id 命中，这里补业务概要 + 分页）。 */
 async function listPending({ page = 1, pageSize = 20 }, userId) {
-  const offset = (Number(page) - 1) * Number(pageSize)
+  const ps = Math.min(Math.max(Number(pageSize) || 20, 1), 100)
+  const offset = (Number(page) - 1) * ps
   const totalRows = await approvalEngine.listPendingTasks(pool, { userId })
   const total = totalRows.length
-  const rows = totalRows.slice(offset, offset + Number(pageSize))
+  const rows = totalRows.slice(offset, offset + ps)
 
+  // N+1 优化：按 biz_type 分组后批量查询，避免逐行查询
   const bizTypeMeta = {
-    purchase_requisition: { table: 'purchase_requisitions', noCol: 'requisition_no', titleCol: 'title', applicantCol: 'applicant_name', statusCol: 'status' },
+    purchase_requisition: { table: 'purchase_requisitions', noCol: 'requisition_no', titleCol: 'title', statusCol: 'status' },
   }
-  const list = []
+  const grouped = {}
   for (const r of rows) {
-    const meta = bizTypeMeta[r.biz_type]
-    let biz = {}
-    if (meta) {
-      const [[b]] = await pool.query(
-        `SELECT ${meta.noCol} AS no, ${meta.titleCol} AS title, ${meta.statusCol} AS status FROM ${meta.table} WHERE id=?`,
-        [Number(r.biz_id)],
-      )
-      biz = { no: b?.no || '', title: b?.title || '', status: b?.status ?? null }
-    }
-    list.push({
+    if (!grouped[r.biz_type]) grouped[r.biz_type] = []
+    grouped[r.biz_type].push(Number(r.biz_id))
+  }
+  const bizCache = {}
+  for (const [bizType, ids] of Object.entries(grouped)) {
+    const meta = bizTypeMeta[bizType]
+    if (!meta || !ids.length) continue
+    const placeholders = ids.map(() => '?').join(',')
+    const [rows2] = await pool.query(
+      `SELECT id, ${meta.noCol} AS no, ${meta.titleCol} AS title, ${meta.statusCol} AS status FROM ${meta.table} WHERE id IN (${placeholders})`,
+      ids,
+    )
+    for (const b of rows2) bizCache[`${bizType}:${b.id}`] = { no: b.no || '', title: b.title || '', status: b.status ?? null }
+  }
+
+  const list = rows.map(r => {
+    const key = `${r.biz_type}:${r.biz_id}`
+    const biz = bizCache[key] || {}
+    return {
       instanceId: Number(r.instance_id),
       taskId: Number(r.task_id),
       bizType: r.biz_type,
       bizId: Number(r.biz_id),
-      ...biz,
+      no: biz.no || '',
+      title: biz.title || '',
+      status: biz.status ?? null,
       applicantId: Number(r.applicant_id),
       applicantName: r.applicant_name,
       amount: Number(r.amount),
       currentStep: Number(r.current_step),
       flowId: Number(r.flow_id),
       createdAt: r.created_at,
-    })
-  }
-  return { list, pagination: { page: Number(page), pageSize: Number(pageSize), total } }
+    }
+  })
+  return { list, pagination: { page: Number(page), pageSize: ps, total } }
 }
 
 /** 供业务详情页查询审批进度（含终态历史）。 */
 async function getBizApproval({ bizType, bizId }) {
   const conn = await pool.getConnection()
   try {
+    await conn.beginTransaction()
     const got = await approvalEngine.getLatestInstanceByBiz(conn, { bizType, bizId })
-    if (!got) return null
+    if (!got) {
+      // 纯读事务无写入，commit 安全（避免 rollback 抛错落入 catch 二次 rollback 的双重回滚）
+      await conn.commit()
+      return null
+    }
     const { instance, tasks } = got
-    return {
+    const result = {
       instanceId: Number(instance.id),
       flowId: Number(instance.flow_id),
       status: Number(instance.status),
@@ -243,7 +261,14 @@ async function getBizApproval({ bizType, bizId }) {
         actionAt: t.action_at,
       })),
     }
-  } finally { conn.release() }
+    await conn.commit()
+    return result
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 module.exports = { BIZ_TYPES, listFlows, getFlow, createFlow, updateFlow, removeFlow, listPending, getBizApproval }

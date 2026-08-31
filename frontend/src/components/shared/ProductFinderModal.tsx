@@ -149,7 +149,7 @@ export default function ProductFinderModal({ open, warehouseId, onConfirm, onClo
 
   const columns: FinderColumn<ProductRow>[] = useMemo(() => [
     { key: 'code', title: '编码', width: 96, render: v => <span className="font-mono text-xs">{v as string}</span> },
-    { key: 'articleNumber', title: '货号', width: 96, render: v => <span className="text-xs text-muted-foreground">{(v as string) || '—'}</span> },
+    { key: 'articleNumber', title: '供应商型号', width: 96, render: v => <span className="text-xs text-muted-foreground">{(v as string) || '—'}</span> },
     { key: 'spec', title: '型号', width: 110, render: v => <span className="text-xs text-muted-foreground">{(v as string) || '—'}</span> },
     { key: 'name', title: '商品名称', render: v => <span className="font-medium">{v as string}</span> },
     { key: 'color', title: '颜色', width: 70, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },

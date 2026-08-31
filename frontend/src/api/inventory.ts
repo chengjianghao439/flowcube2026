@@ -193,9 +193,11 @@ export const getExpiryAlertsApi = (p: { warehouseId?: number | null; warnDays?: 
 
 // ─── 库存初始化导入（POST /import/stock）────────────────────────────────────────────────
 
+// 注意：后端 importStock 返回的 errors 是字符串数组（每项已是完整文案"第N行：..."），
+// 不是 {row, message} 对象——旧类型声明成对象导致前端 map(e=>e.row) 取到 undefined（静默错）。
 export interface ImportStockResult {
   success: number
-  errors: Array<{ row: number; message: string }>
+  errors: string[]
 }
 
 export const importStockApi = (file: File) => {
@@ -203,6 +205,8 @@ export const importStockApi = (file: File) => {
   form.append('file', file)
   return apiClient.post<ImportStockResult>('/import/stock', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    // 导入失败时拦截器会弹全局 toast，这里只需页面 catch 兜底一次，避免双重弹窗
+    skipGlobalError: true,
     timeout: 60_000,
   })
 }

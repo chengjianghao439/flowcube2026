@@ -33,5 +33,8 @@ router.get('/customers/template', requirePermission(PERMISSIONS.CUSTOMER_CREATE)
 router.post('/customers', requirePermission(PERMISSIONS.CUSTOMER_CREATE), upload.single('file'), controller.importCustomers)
 router.get('/price-list-items/template', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), controller.downloadPriceListTemplate)
 router.post('/price-list-items', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), upload.single('file'), controller.importPriceListItems)
+// 供应商导入：复用供应商创建权限
+router.get('/suppliers/template', requirePermission(PERMISSIONS.SUPPLIER_CREATE), controller.downloadSupplierTemplate)
+router.post('/suppliers', requirePermission(PERMISSIONS.SUPPLIER_CREATE), upload.single('file'), controller.importSuppliers)
 
 module.exports = router

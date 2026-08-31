@@ -161,8 +161,9 @@ function validatePayload(d) {
   return { type, noTax, tax, withTax, no, party }
 }
 
-async function createInvoice(d, operator) {
+async function createInvoice(d, operator, companyId = 1) {
   const v = validatePayload(d)
+  const cid = Number(companyId) || 1
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -170,18 +171,21 @@ async function createInvoice(d, operator) {
     // 开票串行化——否则两个请求同时读到 issued=100 各自放行，累计突破上限。
     // assertInvoiceQuota 内先锁目标单据行再读累计，与 INSERT 同一事务。
     const quota = await assertInvoiceQuota({ ...d, invoiceType: v.type, amountWithTax: v.withTax }, null, conn)
+    // 发票归属记账账套（迁移 223 的 company_id）：发票是「先到、归属后定」，
+    // 录入时按当前账套落 company_id，配合 loadTaxMaps 的按账套过滤，实现报税按账套隔离。
+    // 若 invoiceCreate 不传 companyId（旧调用），这里 cid=1 主账套兜底。
     const [r] = await conn.query(
       `INSERT INTO fin_invoices
          (invoice_type, invoice_code, invoice_no, party_name, party_tax_no,
           amount_no_tax, tax_rate, tax_amount, amount_with_tax, invoice_date, status,
-          source_type, source_id, source_no, remark, operator_id, operator_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+          source_type, source_id, source_no, remark, operator_id, operator_name, company_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
       [v.type, d.invoiceCode || null, v.no, v.party, d.partyTaxNo || null,
        v.noTax, round2(d.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate),
        d.sourceType || (quota ? 'invoice_order' : null), quota ? quota.sourceId : (d.sourceId || null), d.sourceNo || null, d.remark || null,
-       operator?.userId || null, operator?.username || null])
+       operator?.userId || null, operator?.username || null, cid])
     await conn.commit()
-    logger.info('accounting', `录入${v.type === 1 ? '进项' : '销项'}发票 ${v.no} 价税${v.withTax}`, { id: r.insertId, operatorId: operator?.userId })
+    logger.info('accounting', `录入${v.type === 1 ? '进项' : '销项'}发票 ${v.no} 价税${v.withTax} 账套${cid}`, { id: r.insertId, operatorId: operator?.userId })
     return { id: r.insertId }
   } catch (e) {
     await conn.rollback()

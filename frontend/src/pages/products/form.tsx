@@ -262,8 +262,8 @@ export default function ProductFormPage() {
             <Input value={form.color} onChange={e => set('color', e.target.value)} disabled={submitting} maxLength={30} placeholder="商品颜色" />
           </div>
           <div className="space-y-1.5">
-            <Label>货号</Label>
-            <Input value={form.articleNumber} onChange={e => set('articleNumber', e.target.value)} disabled={submitting} maxLength={50} placeholder="留空则自动生成6位随机数" />
+            <Label>供应商型号</Label>
+            <Input value={form.articleNumber} onChange={e => set('articleNumber', e.target.value)} disabled={submitting} maxLength={100} placeholder="供应商给的商品型号（选填）" />
           </div>
           <div className="space-y-1.5">
             <Label>进价 *</Label>

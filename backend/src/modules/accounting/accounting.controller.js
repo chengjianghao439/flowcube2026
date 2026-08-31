@@ -112,10 +112,10 @@ const invoiceDetail = async (req, res, next) => {
   try { return successResponse(res, await invoiceSvc.getInvoice(+req.params.id), '查询成功') } catch (e) { next(e) }
 }
 const invoiceCreate = async (req, res, next) => {
-  try { return successResponse(res, await invoiceSvc.createInvoice(req.body, req.user), '创建成功', 201) } catch (e) { next(e) }
+  try { return successResponse(res, await invoiceSvc.createInvoice(req.body, req.user, companyOf(req)), '创建成功', 201) } catch (e) { next(e) }
 }
 const invoiceUpdate = async (req, res, next) => {
-  try { await invoiceSvc.updateInvoice(+req.params.id, req.body, req.user); return successResponse(res, null, '更新成功') } catch (e) { next(e) }
+  try { await invoiceSvc.updateInvoice(+req.params.id, req.body, req.user, companyOf(req)); return successResponse(res, null, '更新成功') } catch (e) { next(e) }
 }
 const invoiceStatus = async (req, res, next) => {
   try { return successResponse(res, await invoiceSvc.changeStatus(+req.params.id, req.body.action, req.user), '操作成功') } catch (e) { next(e) }

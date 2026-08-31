@@ -157,7 +157,7 @@ export default function ProductsPage() {
 
   const cols:TableColumn<Product>[] = [
     { key:'code', title:'编码', width:120 },
-    { key:'articleNumber', title:'货号', width:100, render:v=>(v as string)||'-' },
+    { key:'articleNumber', title:'供应商型号', width:100, render:v=>(v as string)||'-' },
     { key:'spec', title:'型号', render:v=>(v as string)||'-' },
     { key:'name', title:'商品名称', width:180 },
     { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
