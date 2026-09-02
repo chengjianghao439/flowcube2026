@@ -4,6 +4,7 @@ const { beijingTodayYmd } = require('../../utils/backendTime')
 const { generateDailyCode, generateMasterCode } = require('../../utils/codeGenerator')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { assertNotSelfApproval } = require('../../utils/selfApprove')
 const accountSvc = require('./finance-accounts.service')
 
 /**
@@ -168,15 +169,13 @@ async function withdraw(id, operator) {
 }
 
 /**
- * 审批通过。**审批人不能是申请人本人**——一级审批只有这一道内控，
- * 少了它等于自己批自己的报销。
+ * 审批通过。**审批人默认不能是申请人本人**——一级审批只有这一道内控，
+ * 少了它等于自己批自己的报销。豁免按用户授予（sys_users.allow_self_approve，见 utils/selfApprove）。
  */
 async function approve(id, operator) {
   const [[row]] = await pool.query('SELECT applicant_id, applicant_name FROM expense_claims WHERE id=? AND deleted_at IS NULL', [id])
   if (!row) throw new AppError('费用报销单不存在', 404)
-  if (Number(row.applicant_id) === Number(operator.operatorId)) {
-    throw new AppError('不能审批自己提交的报销单，请由他人审批', 403)
-  }
+  await assertNotSelfApproval(row.applicant_id, operator.operatorId, '不能审批自己提交的报销单，请由他人审批')
   return transition(id, 'approve',
     'UPDATE expense_claims SET approved_by=?,approved_by_name=?,approved_at=NOW(),reject_reason=NULL WHERE id=?',
     [operator.operatorId, operator.operatorName])
@@ -185,9 +184,7 @@ async function approve(id, operator) {
 async function reject(id, { reason }, operator) {
   const [[row]] = await pool.query('SELECT applicant_id FROM expense_claims WHERE id=? AND deleted_at IS NULL', [id])
   if (!row) throw new AppError('费用报销单不存在', 404)
-  if (Number(row.applicant_id) === Number(operator.operatorId)) {
-    throw new AppError('不能驳回自己提交的报销单', 403)
-  }
+  await assertNotSelfApproval(row.applicant_id, operator.operatorId, '不能驳回自己提交的报销单')
   if (!String(reason || '').trim()) throw new AppError('请填写驳回原因', 400)
   return transition(id, 'reject',
     'UPDATE expense_claims SET approved_by=?,approved_by_name=?,approved_at=NOW(),reject_reason=? WHERE id=?',

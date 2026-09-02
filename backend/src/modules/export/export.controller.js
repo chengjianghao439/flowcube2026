@@ -131,6 +131,9 @@ async function exportExpenseClaims(req, res, next) {
 async function exportFinanceAccounts(req, res, next) {
   try { await sendExport(res, await exportService.getFinanceAccountsExportPayload()) } catch (e) { next(e) }
 }
+async function exportFinanceTransactions(req, res, next) {
+  try { await sendExport(res, await exportService.getFinanceTransactionsExportPayload(req.query)) } catch (e) { next(e) }
+}
 async function exportDisposals(req, res, next) {
   try { await sendExport(res, await exportService.getDisposalsExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null })) } catch (e) { next(e) }
 }
@@ -217,6 +220,7 @@ module.exports = {
   exportFixedAssets,
   exportExpenseClaims,
   exportFinanceAccounts,
+  exportFinanceTransactions,
   exportDisposals,
   exportAbc,
   exportCreditOverrides,

@@ -35,13 +35,19 @@ function logReservedClamp(context, detail) {
  * @param {number} params.qty           - 预占数量（正数）
  * @param {string} params.refType       - 固定为 'sale_order'
  * @param {number} params.refId         - 销售单 ID
+ * @param {number} [params.refItemId]   - 销售单明细行 id（在途绑定时记录）
  * @param {string} params.refNo         - 销售单编号
+ * @param {boolean} [params.includeExpected=false] - 是否把采购单预计到货量算进可用（仅销售占库用）
+ * @param {Array<{purchase_order_id,purchase_item_id,burnable}>} [params.expectedItems]
+ *        - 该 (product, warehouse) 下可绑定的采购单明细（FIFO），仅 includeExpected 时传入
  */
-async function reserve(conn, { productId, productName = '该商品', warehouseId, qty, refType, refId, refNo }) {
+async function reserve(conn, { productId, productName = '该商品', warehouseId, qty,
+  refType, refId, refItemId = null, refNo, includeExpected = false, expectedItems = [] }) {
   const { quantity: onHand, reserved, available } = await getAvailableStockForDecision(conn, {
     productId,
     warehouseId,
     lock: true,
+    includeExpected,
   })
 
   if (available < qty) {
@@ -65,6 +71,27 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
     `INSERT INTO stock_reservations (product_id, warehouse_id, qty, ref_type, ref_id, ref_no, status) VALUES (?,?,?,?,?,?,1)`,
     [productId, warehouseId, qty, refType, refId, refNo]
   )
+
+  // 记录「靠预计到货量支撑」的绑定：本次占用量里超出【现货 − 已预占】的部分，
+  // 即没有现货兜底、需要采购单到货来兑现的量。按 expectedItems 的 FIFO 顺序分摊到具体采购单明细。
+  if (includeExpected && refItemId != null) {
+    let fromExpected = Math.max(0, Number(qty) - Math.max(0, Number(onHand) - Number(reserved)))
+    if (fromExpected > 0) {
+      let remaining = fromExpected
+      for (const it of expectedItems) {
+        if (remaining <= 1e-6) break
+        const take = Math.min(Number(it.burnable), remaining)
+        if (take <= 1e-6) continue
+        await conn.query(
+          `INSERT INTO sale_order_expected_bindings
+             (sale_order_id, sale_order_item_id, purchase_order_id, purchase_item_id, product_id, warehouse_id, qty)
+           VALUES (?,?,?,?,?,?,?)`,
+          [refId, refItemId, it.purchase_order_id, it.purchase_item_id, productId, warehouseId, take],
+        )
+        remaining -= take
+      }
+    }
+  }
 }
 
 /**
@@ -101,6 +128,11 @@ async function releaseByRef(conn, refType, refId) {
     )
     // 标记为已释放
     await conn.query('UPDATE stock_reservations SET status=3 WHERE id=?', [r.id])
+    // 回收在途绑定：整单取消 ⇒ 该单所有未释放的预计量绑定全部作废
+    await conn.query(
+      'UPDATE sale_order_expected_bindings SET released_at=NOW() WHERE sale_order_id=? AND released_at IS NULL',
+      [refId],
+    )
   }
 }
 
@@ -226,6 +258,26 @@ async function partialReleaseByProduct(conn, { refType, refId, productId, wareho
   }
   if (remaining > 0) {
     throw new AppError(`商品预占记录不足，无法释放 ${qty} 中的剩余 ${remaining}`, 409)
+  }
+  // 回收在途绑定：按量释放该 (销售单,商品,仓库) 的预计量绑定（first-fit FIFO）
+  if (released > 0) {
+    let rem = released
+    const [binds] = await conn.query(
+      `SELECT id, qty FROM sale_order_expected_bindings
+        WHERE sale_order_id=? AND product_id=? AND warehouse_id=? AND released_at IS NULL
+        ORDER BY id ASC FOR UPDATE`,
+      [refId, productId, warehouseId],
+    )
+    for (const b of binds) {
+      if (rem <= 1e-6) break
+      const take = Math.min(Number(b.qty), rem)
+      if (take >= Number(b.qty)) {
+        await conn.query('UPDATE sale_order_expected_bindings SET released_at=NOW() WHERE id=?', [b.id])
+      } else {
+        await conn.query('UPDATE sale_order_expected_bindings SET qty=qty-? WHERE id=?', [take, b.id])
+      }
+      rem -= take
+    }
   }
 }
 

@@ -26,7 +26,8 @@ export interface AccountTransaction {
   direction: 1 | 2
   directionName: string
   amount: number
-  bizType: 1 | 2 | 3 | 4
+  /** 1收款 2付款 3费用报销 4余额调整 5退货退款（后端 BIZ_TYPE） */
+  bizType: 1 | 2 | 3 | 4 | 5
   bizTypeName: string
   bizId?: number | null
   bizNo?: string | null
@@ -53,8 +54,9 @@ export const deleteAccountApi = (id: number) => client.delete<unknown>(`/finance
 export const adjustAccountApi = (id: number, d: { targetBalance: number; happenedAt?: string; remark?: string }) =>
   client.post<{ id:number; balance:number; diff:number }>(`/finance/accounts/${id}/adjust`, d)
 
-export const getAccountTransactionsApi = (p: { accountId?: number; bizType?: string; direction?: string; startDate?: string; endDate?: string; pageSize?: number }) =>
-  client.get<{ list: AccountTransaction[]; summary: { inAmount:number; outAmount:number }; pagination: unknown }>(
+/** 账户流水。不传 accountId = 查全部账户（资金流水页的默认形态） */
+export const getAccountTransactionsApi = (p: { accountId?: number; bizType?: string; direction?: string; startDate?: string; endDate?: string; keyword?: string; page?: number; pageSize?: number }) =>
+  client.get<{ list: AccountTransaction[]; summary: { inAmount:number; outAmount:number }; pagination: Pagination }>(
     '/finance/accounts/transactions', { params: p })
 
 // ── 费用报销 ──────────────────────────────────────────────────────────────────

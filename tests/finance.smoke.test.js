@@ -645,6 +645,41 @@ async function scenarioExpenseClaim(ctx, log, token, approverToken, accountId, a
   // 申请人字段确实记的是提交人（内控判定的依据）
   log.assert('报销单申请人 = 建单人', Number(claim0.applicant_id) === Number(applicantId),
     `applicant=${claim0.applicant_id} expected=${applicantId}`)
+
+  // ── 用户级「允许自行审批」（迁移 227）：默认关闭时上面两条 ★ 内控断言成立；授予后可自批 ──
+  // 单人/小团队场景下禁止自批会让报销单永远卡在待审批、走不到付款（账户选择器也就不出现）。
+  // 该豁免是 sys_users.allow_self_approve 的用户属性，测完必须收回（finally），否则污染后续运行。
+  const c3 = await http.post('/api/finance/expense-claims', {
+    token, json: { items: [{ categoryId, amount: 30, happenedAt: today() }] },
+  })
+  const claim3 = Number(c3.data?.data?.id)
+  await http.post(`/api/finance/expense-claims/${claim3}/submit`, { token })
+  // 用户更新接口要求全量传 realName/isActive，先读回当前值，避免测试把账号资料改坏
+  const [applicantRow] = await dbQuery(pool, 'SELECT real_name, is_active FROM sys_users WHERE id=?', [applicantId])
+  const selfApprovePayload = (allow) => ({
+    realName: applicantRow.real_name, isActive: !!applicantRow.is_active, allowSelfApprove: allow,
+  })
+  try {
+    const grant = await http.put(`/api/users/${applicantId}`, { token, json: selfApprovePayload(true) })
+    log.assert('超管可授予「允许自行审批」', grant.ok, `status=${grant.status} ${JSON.stringify(grant.data?.message || '')}`)
+    const selfOk = await http.post(`/api/finance/expense-claims/${claim3}/approve`, { token })
+    log.assert('★ 授予后申请人可自批', selfOk.ok, `status=${selfOk.status} ${JSON.stringify(selfOk.data?.message || '')}`)
+    const [c3row] = await dbQuery(pool, 'SELECT status FROM expense_claims WHERE id=?', [claim3])
+    log.assert('自批后状态=已批准（可进入付款）', Number(c3row.status) === 3, `status=${c3row.status}`)
+  } finally {
+    await http.put(`/api/users/${applicantId}`, { token, json: selfApprovePayload(false) })
+  }
+  const [swRow] = await dbQuery(pool,
+    'SELECT allow_self_approve FROM sys_users WHERE id=?', [applicantId])
+  log.assert('自批豁免已收回（不污染后续运行）', Number(swRow?.allow_self_approve) === 0, `value=${swRow?.allow_self_approve}`)
+
+  const c4 = await http.post('/api/finance/expense-claims', {
+    token, json: { items: [{ categoryId, amount: 30, happenedAt: today() }] },
+  })
+  const claim4 = Number(c4.data?.data?.id)
+  await http.post(`/api/finance/expense-claims/${claim4}/submit`, { token })
+  const selfDenied = await http.post(`/api/finance/expense-claims/${claim4}/approve`, { token })
+  log.assert('★ 关关后自批重新被拒（内控恢复）', selfDenied.status === 403, `status=${selfDenied.status}`)
 }
 
 // ── 6b. 登记付款：浮点尾款结清 / 幂等去重 ─────────────────────────────────────

@@ -121,6 +121,7 @@ const ReportsPage = lazy(() => import('@/pages/reports'))
 const RoleWorkbenchPage = lazy(() => import('@/pages/reports/role-workbench'))
 const FinanceDashboardPage = lazy(() => import('@/pages/finance/dashboard'))
 const FinanceAccountsPage = lazy(() => import('@/pages/finance/accounts'))
+const FinanceTransactionsPage = lazy(() => import('@/pages/finance/transactions'))
 const ExpenseClaimsPage = lazy(() => import('@/pages/finance/expenses'))
 const ExpenseCategoriesPage = lazy(() => import('@/pages/finance/expense-categories'))
 const AcctAccountsPage = lazy(() => import('@/pages/accounting/accounts'))
@@ -499,6 +500,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '财务', section: '资金', order: 55 },
+  },
+  {
+    path: '/finance/transactions',
+    title: '资金流水',
+    permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW,
+    component: FinanceTransactionsPage,
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '资金', order: 57 },
   },
   {
     path: '/finance/expenses',

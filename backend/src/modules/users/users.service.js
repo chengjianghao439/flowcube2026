@@ -12,13 +12,22 @@ function assertCanAssignRole(operator, targetRoleId) {
   throw new AppError('只有超级管理员可以授予或变更为超级管理员角色', 403, 'ROLE_ASSIGN_DENIED')
 }
 
+// 「允许自行审批」豁免的是全站审批内控（申请人不得批自己的单），与角色授予同属提权动作：
+// 不锁死的话，任何持 user.update 权限的人都能给自己开这个开关，等于单方面取消内控。
+// 未传该字段 = 不改动（普通管理员照常编辑姓名/部门等，不会被这道校验挡住）。
+function assertCanGrantSelfApprove(operator, value) {
+  if (value === undefined) return
+  if (Number(operator?.roleId) === 1) return
+  throw new AppError('只有超级管理员可以设置「允许自行审批」', 403, 'SELF_APPROVE_GRANT_DENIED')
+}
+
 async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
   // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
 
   const [rows] = await pool.query(
-    `SELECT u.id, u.username, u.real_name, u.role_id, u.role_name, u.is_active,
+    `SELECT u.id, u.username, u.real_name, u.role_id, u.role_name, u.is_active, u.allow_self_approve,
             u.department_id, d.name AS department_name, u.created_at
      FROM sys_users u
      LEFT JOIN sys_departments d ON d.id = u.department_id AND d.deleted_at IS NULL
@@ -43,6 +52,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
       roleId: u.role_id,
       roleName: u.role_name,
       isActive: !!u.is_active,
+      allowSelfApprove: !!u.allow_self_approve,
       departmentId: u.department_id != null ? Number(u.department_id) : null,
       departmentName: u.department_name || null,
       createdAt: u.created_at,
@@ -65,7 +75,7 @@ async function listOptions(currentUserId = null) {
 
 async function findById(id) {
   const [rows] = await pool.query(
-    `SELECT u.id, u.username, u.real_name, u.role_id, u.role_name, u.is_active,
+    `SELECT u.id, u.username, u.real_name, u.role_id, u.role_name, u.is_active, u.allow_self_approve,
             u.department_id, d.name AS department_name
      FROM sys_users u
      LEFT JOIN sys_departments d ON d.id = u.department_id AND d.deleted_at IS NULL
@@ -81,6 +91,7 @@ async function findById(id) {
     roleId: user.role_id,
     roleName: user.role_name,
     isActive: !!user.is_active,
+    allowSelfApprove: !!user.allow_self_approve,
     departmentId: user.department_id != null ? Number(user.department_id) : null,
     departmentName: user.department_name || null,
   }
@@ -127,19 +138,21 @@ async function create({ username, password, realName, roleId, departmentId = nul
   return { id: result.insertId }
 }
 
-async function update(id, { realName, roleId, isActive, departmentId }, operator = null) {
+async function update(id, { realName, roleId, isActive, departmentId, allowSelfApprove }, operator = null) {
   assertCanAssignRole(operator, roleId)
+  assertCanGrantSelfApprove(operator, allowSelfApprove)
   const user = await findById(id)
   // roleId 可省略（编辑超管账号时不传）；省略则保持原角色不动
   const finalRoleId = roleId !== undefined ? roleId : user.roleId
   const roleName = roleId !== undefined ? await resolveRoleName(roleId) : user.roleName
   const finalDeptId = departmentId !== undefined ? departmentId : (user.departmentId ?? null)
+  const finalSelfApprove = allowSelfApprove !== undefined ? (allowSelfApprove ? 1 : 0) : (user.allowSelfApprove ? 1 : 0)
   if (finalDeptId) await assertDepartmentExists(finalDeptId)
 
   await pool.query(
-    `UPDATE sys_users SET real_name = ?, role_id = ?, role_name = ?, is_active = ?, department_id = ?
+    `UPDATE sys_users SET real_name = ?, role_id = ?, role_name = ?, is_active = ?, department_id = ?, allow_self_approve = ?
      WHERE id = ? AND deleted_at IS NULL`,
-    [realName, finalRoleId, roleName, isActive ? 1 : 0, finalDeptId || null, id],
+    [realName, finalRoleId, roleName, isActive ? 1 : 0, finalDeptId || null, finalSelfApprove, id],
   )
 }
 

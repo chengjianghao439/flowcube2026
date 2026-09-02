@@ -952,6 +952,65 @@ async function getFinanceAccountsExportPayload() {
   })
 }
 
+/**
+ * 资金流水（全部账户或指定账户）。
+ *
+ * 直接写 SQL 而非复用 findTransactions：后者经 normalizePagination 把 pageSize 夹到 500，
+ * 导出要的是 EXPORT_MAX_ROWS(10000) 上限（由 buildExportPayload 统一截断 + 告警）。
+ * 筛选条件与列表页保持同口径——happened_at 是 DATE 列，起止日期用闭区间。
+ */
+async function getFinanceTransactionsExportPayload(query = {}) {
+  const { accountId, bizType, direction, startDate, endDate, keyword } = query
+  let sql = `SELECT DATE_FORMAT(t.happened_at,'%Y-%m-%d') AS happened_at, a.name AS account_name,
+      CASE t.biz_type WHEN 1 THEN '收款' WHEN 2 THEN '付款' WHEN 3 THEN '费用报销'
+                      WHEN 4 THEN '余额调整' WHEN 5 THEN '退货退款' ELSE '其他' END AS biz_type_name,
+      t.direction, t.amount, t.balance_after, t.biz_no, t.party_name, t.operator_name, t.remark
+    FROM finance_account_transactions t
+    JOIN finance_accounts a ON a.id = t.account_id
+    WHERE 1=1`
+  const params = []
+  if (accountId) { sql += ' AND t.account_id=?'; params.push(Number(accountId)) }
+  if (bizType) { sql += ' AND t.biz_type=?'; params.push(Number(bizType)) }
+  if (direction) { sql += ' AND t.direction=?'; params.push(Number(direction)) }
+  if (startDate) { sql += ' AND t.happened_at>=?'; params.push(startDate) }
+  if (endDate) { sql += ' AND t.happened_at<=?'; params.push(endDate) }
+  const kw = String(keyword || '').trim()
+  if (kw) { sql += ' AND (t.biz_no LIKE ? OR t.party_name LIKE ?)'; params.push(`%${kw}%`, `%${kw}%`) }
+  sql += ' ORDER BY t.happened_at DESC, t.id DESC LIMIT ?'
+  params.push(EXPORT_MAX_ROWS + 1) // +1 让 buildExportPayload 能识别出「超限」并告警
+
+  const [list] = await pool.query(sql, params)
+  const rows = list.map(t => ({
+    happened_at: t.happened_at,
+    account_name: t.account_name,
+    biz_type_name: t.biz_type_name,
+    in_amount: Number(t.direction) === 1 ? Number(t.amount) : '',
+    out_amount: Number(t.direction) === 2 ? Number(t.amount) : '',
+    balance_after: Number(t.balance_after),
+    biz_no: t.biz_no || '—',
+    party_name: t.party_name || '—',
+    operator_name: t.operator_name || '—',
+    remark: t.remark || '',
+  }))
+  return buildExportPayload({
+    filenamePrefix: '资金流水',
+    sheetName: '资金流水',
+    columns: [
+      { header: '日期', key: 'happened_at', width: 14 },
+      { header: '账户', key: 'account_name', width: 20 },
+      { header: '类型', key: 'biz_type_name', width: 12 },
+      { header: '收入', key: 'in_amount', width: 14 },
+      { header: '支出', key: 'out_amount', width: 14 },
+      { header: '余额', key: 'balance_after', width: 14 },
+      { header: '关联单号', key: 'biz_no', width: 22 },
+      { header: '往来方', key: 'party_name', width: 20 },
+      { header: '操作人', key: 'operator_name', width: 12 },
+      { header: '备注', key: 'remark', width: 30 },
+    ],
+    rows,
+  })
+}
+
 /** 呆滞处置单 */
 async function getDisposalsExportPayload(query = {}) {
   const { list } = await disposalService.findAll({
@@ -1508,6 +1567,7 @@ module.exports = {
   getFixedAssetsExportPayload,
   getExpenseClaimsExportPayload,
   getFinanceAccountsExportPayload,
+  getFinanceTransactionsExportPayload,
   getDisposalsExportPayload,
   getAbcExportPayload,
   getCreditOverridesExportPayload,

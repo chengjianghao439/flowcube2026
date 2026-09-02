@@ -5,6 +5,7 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { normalizePagination } = require('../../utils/pagination')
 const approvalEngine = require('../../engine/approvalEngine')
+const { assertNotSelfApproval } = require('../../utils/selfApprove')
 
 /**
  * 超额放行审批单（文档 05 Phase 2）：销售员发起「申请—审批」两步。
@@ -120,7 +121,7 @@ async function approve(id, operator) {
     const row = await lockStatusRow(conn, {
       table: 'sale_credit_overrides', id, columns: 'id, status, applicant_id', entityName: '放行申请单',
     })
-    if (Number(row.applicant_id) === Number(operator.operatorId)) throw new AppError('不能审批自己发起的放行申请', 403)
+    await assertNotSelfApproval(row.applicant_id, operator.operatorId, '不能审批自己发起的放行申请')
     const rule = assertStatusAction('creditOverride', 'approve', row.status)
 
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'sale_credit_override', bizId: id })
@@ -149,7 +150,7 @@ async function reject(id, { reason }, operator) {
     const row = await lockStatusRow(conn, {
       table: 'sale_credit_overrides', id, columns: 'id, status, applicant_id', entityName: '放行申请单',
     })
-    if (Number(row.applicant_id) === Number(operator.operatorId)) throw new AppError('不能驳回自己发起的放行申请', 403)
+    await assertNotSelfApproval(row.applicant_id, operator.operatorId, '不能驳回自己发起的放行申请')
     if (!String(reason || '').trim()) throw new AppError('请填写驳回原因', 400)
     const rule = assertStatusAction('creditOverride', 'reject', row.status)
 

@@ -5,6 +5,7 @@ const { MOVE_TYPE, MOVE_TYPE_LABEL, writeInventoryLog } = require('../../engine/
 const { adjustContainerStock, SOURCE_TYPE, splitContainer, syncStockFromContainers } = require('../../engine/containerEngine')
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
+const { getExpectedStock } = require('../../utils/expectedStock')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 // ─── 库存查询 ─────────────────────────────────────────────────────────────────
@@ -102,7 +103,7 @@ async function getStock(params) {
  * 指定产品在所有启用仓库的可用库存（含库存量为 0 的仓库，CROSS JOIN 保证组合齐全）。
  * 用于「占用库存」分仓选择弹窗——按产品展示各仓可用量供用户挑选，非关键业务判定。
  */
-async function getAvailabilityByProducts({ productIds, scopeWarehouseIds = null }) {
+async function getAvailabilityByProducts({ productIds, scopeWarehouseIds = null, includeExpected = false }) {
   if (!productIds?.length) return []
   const scope = scopeFilter(scopeWarehouseIds, 'w.id')
   const [rows] = await pool.query(
@@ -120,12 +121,28 @@ async function getAvailabilityByProducts({ productIds, scopeWarehouseIds = null 
      WHERE p.id IN (?) AND w.deleted_at IS NULL ${scope.sql}`,
     [productIds, ...scope.params],
   )
-  return rows.map(r => ({
-    productId: r.product_id,
-    warehouseId: r.warehouse_id,
-    warehouseName: r.warehouse_name,
-    available: Math.max(0, Number(r.quantity) - Number(r.reserved)),
-  }))
+
+  // 销售占库预览：把「已提交采购单预计到货量」算进可用（ATP）。默认 false ⇒ 其它场景不引入。
+  let expByPair = new Map()
+  if (includeExpected && rows.length) {
+    const pairs = rows.map(r => ({ productId: r.product_id, warehouseId: r.warehouse_id }))
+    const exp = await getExpectedStock(pool, pairs)
+    expByPair = exp.byPair
+  }
+
+  return rows.map(r => {
+    const key = `${Number(r.product_id)}:${Number(r.warehouse_id)}`
+    const expected = includeExpected ? (expByPair.get(key) ?? 0) : 0
+    return {
+      productId: r.product_id,
+      warehouseId: r.warehouse_id,
+      warehouseName: r.warehouse_name,
+      quantity: Number(r.quantity),
+      reserved: Number(r.reserved),
+      expected,
+      available: Math.max(0, Number(r.quantity) + expected - Number(r.reserved)),
+    }
+  })
 }
 
 // ─── 流水记录 ─────────────────────────────────────────────────────────────────

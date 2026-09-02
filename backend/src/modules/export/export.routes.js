@@ -28,6 +28,7 @@ router.get('/waybills', requirePermission(PERMISSIONS.LOGISTICS_VIEW), controlle
 router.get('/fixed-assets', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportFixedAssets)
 router.get('/expense-claims', requirePermission(PERMISSIONS.FINANCE_EXPENSE_VIEW), controller.exportExpenseClaims)
 router.get('/finance-accounts', requirePermission(PERMISSIONS.FINANCE_ACCOUNT_VIEW), controller.exportFinanceAccounts)
+router.get('/finance-transactions', requirePermission(PERMISSIONS.FINANCE_ACCOUNT_VIEW), controller.exportFinanceTransactions)
 router.get('/disposals', requirePermission(PERMISSIONS.INVENTORY_DISPOSAL_VIEW), controller.exportDisposals)
 router.get('/abc', requirePermission(PERMISSIONS.STOCKCHECK_ABC_VIEW), controller.exportAbc)
 router.get('/credit-overrides', requirePermission(PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW), controller.exportCreditOverrides)

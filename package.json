@@ -20,6 +20,7 @@
     "smoke:accounting-period": "node tests/accounting-period.smoke.test.js",
     "smoke:concurrency-guards": "node tests/concurrency-guards.smoke.test.js",
     "smoke:sale-adjustment": "node tests/sale-adjustment.smoke.test.js",
+    "smoke:atp": "node tests/sale-atp.smoke.test.js",
     "smoke:p0-regression": "node tests/p0-regression.smoke.test.js",
     "smoke:p1-regression": "node tests/p1-regression.smoke.test.js",
     "smoke:warehouse-scope": "node tests/warehouse-scope.smoke.test.js",

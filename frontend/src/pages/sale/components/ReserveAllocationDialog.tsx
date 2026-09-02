@@ -54,6 +54,8 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
 
   const availableFor = (itemId: number, warehouseId: number) =>
     items.find(i => i.itemId === itemId)?.warehouses.find(w => w.warehouseId === warehouseId)?.available ?? 0
+  const expectedFor = (itemId: number, warehouseId: number) =>
+    items.find(i => i.itemId === itemId)?.warehouses.find(w => w.warehouseId === warehouseId)?.expected ?? 0
 
   const shortRows = selectedRows.filter(i => {
     const st = rows[i.itemId]
@@ -193,11 +195,13 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                           className="h-9 text-sm tabular-nums"
                         />
                       </td>
-                      <td className={cn('px-2 py-2 text-right tabular-nums font-medium', short ? 'text-destructive' : 'text-muted-foreground')}>
+                      <td className="px-2 py-2 text-right tabular-nums font-medium">
                         <span className="inline-flex items-center gap-1">
                           {short && <AlertTriangle className="h-3.5 w-3.5" />}
                           {available}
                         </span>
+                        {(() => { const exp = expectedFor(item.itemId, st.warehouseId); return exp > 0
+                          ? <div className="text-xs font-normal text-info">在途 +{exp}</div> : null })()}
                       </td>
                     </tr>
                   )

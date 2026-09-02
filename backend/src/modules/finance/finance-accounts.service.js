@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const { generateMasterCode } = require('../../utils/codeGenerator')
+const { normalizePagination } = require('../../utils/pagination')
 
 /**
  * 资金账户与账户流水。
@@ -256,9 +257,15 @@ async function softDelete(id) {
   return { id: Number(id) }
 }
 
-async function findTransactions({ accountId, page = 1, pageSize = 50, bizType = '', direction = '', startDate = '', endDate = '' } = {}) {
-  const p = Number(page) || 1
-  const ps = Number(pageSize) || 50
+/**
+ * 账户流水查询。资金流水页（全部账户）与账户管理页的单账户弹窗共用本函数。
+ *
+ * - 不传 accountId = 查全部账户（资金流水页的默认形态）；
+ * - happened_at 是 DATE 列，起止日期用闭区间即可，不要改成半开区间；
+ * - 不做仓库 scope：财务是公司级可见（与账款/收付款/对账同口径），且本表无 warehouse_id。
+ */
+async function findTransactions({ accountId, page = 1, pageSize = 50, bizType = '', direction = '', startDate = '', endDate = '', keyword = '' } = {}) {
+  const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = []
   const params = []
   if (accountId) { conds.push('t.account_id=?'); params.push(Number(accountId)) }
@@ -266,6 +273,8 @@ async function findTransactions({ accountId, page = 1, pageSize = 50, bizType = 
   if (direction) { conds.push('t.direction=?'); params.push(Number(direction)) }
   if (startDate) { conds.push('t.happened_at>=?'); params.push(startDate) }
   if (endDate) { conds.push('t.happened_at<=?'); params.push(endDate) }
+  const kw = String(keyword || '').trim()
+  if (kw) { conds.push('(t.biz_no LIKE ? OR t.party_name LIKE ?)'); params.push(`%${kw}%`, `%${kw}%`) }
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
 
   const [rows] = await pool.query(
@@ -275,7 +284,7 @@ async function findTransactions({ accountId, page = 1, pageSize = 50, bizType = 
        ${where}
       ORDER BY t.happened_at DESC, t.id DESC
       LIMIT ? OFFSET ?`,
-    [...params, ps, (p - 1) * ps],
+    [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM finance_account_transactions t ${where}`, params,

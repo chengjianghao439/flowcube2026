@@ -10,6 +10,7 @@ const { beginOperationRequest, completeOperationRequest } = require('../../utils
 const { recomputePurchasePayable } = require('../inbound-tasks/inbound-tasks.settle')
 const { foldEntryItem, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { assertNotSelfApproval } = require('../../utils/selfApprove')
 const { normalizePagination } = require('../../utils/pagination')
 const { getPriceReferenceWarnings } = require('../../utils/priceReference')
 
@@ -279,6 +280,32 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
 }
 
 // 短装结案：把「已提交(2)」采购单手动完成（剩余未收量作罢），前提是相关收货订单已全部上架完成（audit_status 随上架完成自动置1）且确有实收入库。
+/**
+ * 采购单取消/短装前检查：是否存在销售单占用了它的预计到货量。
+ *
+ * 用户语义：采购单取消/短装时，必须先解除绑定那些「占用了它预计量」的销售单，
+ * 否则取消/短装动作被拒（列出来由操作员到销售单处理）。系统不自动改销售单。
+ */
+async function assertNoActiveSaleBinding(conn, purchaseOrderId, actionLabel) {
+  const [binds] = await conn.query(
+    `SELECT b.sale_order_id, so.order_no, SUM(b.qty) AS bound_qty
+     FROM sale_order_expected_bindings b
+     JOIN sale_orders so ON so.id = b.sale_order_id
+     WHERE b.purchase_order_id = ? AND b.released_at IS NULL
+     GROUP BY b.sale_order_id, so.order_no
+     ORDER BY b.sale_order_id`,
+    [purchaseOrderId],
+  )
+  if (!binds.length) return
+  const list = binds.map(b => `${b.order_no}（${Number(b.bound_qty)}）`).join('、')
+  throw new AppError(
+    `无法${actionLabel}：采购单的预计到货量已被销售单占用，请先到销售单解除绑定后再操作。涉及：${list}`,
+    409,
+    'BINDING_SALE_DEPENDENCY',
+    { saleOrders: binds.map(b => ({ saleOrderId: Number(b.sale_order_id), orderNo: b.order_no, boundQty: Number(b.bound_qty) })) },
+  )
+}
+
 async function closeRemaining(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
@@ -286,6 +313,7 @@ async function closeRemaining(id, operator, scopeWarehouseIds = null) {
     const row = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, order_no, status, warehouse_id', entityName: '采购单' })
     assertInScope(scopeWarehouseIds, row.warehouse_id, '采购单')
     const rule = assertStatusAction('purchase', 'close', row.status)
+    await assertNoActiveSaleBinding(conn, id, '结案短装')
     const [[{ pending }]] = await conn.query(
       `SELECT COUNT(DISTINCT it.id) AS pending
          FROM inbound_task_items iti JOIN inbound_tasks it ON it.id=iti.task_id
@@ -406,9 +434,7 @@ async function approve(id, operator, scopeWarehouseIds = null) {
     const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id, operator_id, order_no', entityName: '采购单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
     const rule = assertStatusAction('purchase', 'approve', orderRow.status)
-    if (Number(orderRow.operator_id) === Number(operator?.userId)) {
-      throw new AppError('不能审批自己提交的采购单，请由他人审批', 403)
-    }
+    await assertNotSelfApproval(orderRow.operator_id, operator?.userId, '不能审批自己提交的采购单，请由他人审批')
     await conn.query(
       'UPDATE purchase_orders SET approved_by=?, approved_by_name=?, approved_at=NOW(), reject_reason=NULL WHERE id=?',
       [operator?.userId ?? null, operator?.realName ?? null, id],
@@ -439,9 +465,7 @@ async function reject(id, { reason }, operator, scopeWarehouseIds = null) {
     const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id, operator_id, order_no', entityName: '采购单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
     const rule = assertStatusAction('purchase', 'reject', orderRow.status)
-    if (Number(orderRow.operator_id) === Number(operator?.userId)) {
-      throw new AppError('不能驳回自己提交的采购单', 403)
-    }
+    await assertNotSelfApproval(orderRow.operator_id, operator?.userId, '不能驳回自己提交的采购单')
     await conn.query(
       'UPDATE purchase_orders SET approved_by=?, approved_by_name=?, approved_at=NOW(), reject_reason=? WHERE id=?',
       [operator?.userId ?? null, operator?.realName ?? null, String(reason).trim(), id],
@@ -488,6 +512,7 @@ async function cancel(id, operator, scopeWarehouseIds = null) {
     const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, entityName: '采购单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
     const cancelRule = assertStatusAction('purchase', 'cancel', orderRow.status)
+    await assertNoActiveSaleBinding(conn, id, '取消采购单')
 
     // 本采购单在收货单里已产生实际收货（即便是混单场景），不能随取消动作静默消失，必须先走收货流程处理
     for (const taskRow of taskRows) {

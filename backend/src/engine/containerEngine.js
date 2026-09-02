@@ -16,6 +16,7 @@
 const AppError = require('../utils/AppError')
 const logger   = require('../utils/logger')
 const { generateContainerCode } = require('../utils/codeGenerator')
+const { getExpectedForPair } = require('../utils/expectedStock')
 
 /** 与 inventory_containers.status 一致 */
 const CONTAINER_STATUS = {
@@ -456,6 +457,7 @@ async function getStockProjection(conn, {
   productId,
   warehouseId,
   lock = false,
+  includeExpected = false,
 }) {
   if (lock) {
     // 统一加锁顺序：先锁 inventory_stock 维度单行、再锁 ACTIVE 容器行，与 lockStockDimension/
@@ -481,10 +483,18 @@ async function getStockProjection(conn, {
   )
   const reserved = Number(stockRow?.reserved ?? 0)
 
+  // 仅销售占库判定用：把「已提交采购单的预计到货量」算进可用（ATP）。默认 false ⇒
+  // 出库/调拨/超收闸门/盘点等一律维持「现货 − reserved」口径，不受影响。
+  let expected = 0
+  if (includeExpected) {
+    expected = await getExpectedForPair(conn, productId, warehouseId)
+  }
+
   return {
     quantity,
     reserved,
-    available: Math.max(0, quantity - reserved),
+    expected,
+    available: Math.max(0, quantity + expected - reserved),
   }
 }
 

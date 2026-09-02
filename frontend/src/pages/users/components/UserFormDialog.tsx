@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { useCreateUser, useUpdateUser } from '@/hooks/useUsers'
 import { useDepartmentOptions } from '@/hooks/useDepartments'
+import { usePermission } from '@/hooks/usePermission'
 import type { SysUser } from '@/types/users'
 
 // 角色 1（管理员/超管）不能经此表单创建或改派：后端 users.routes schema 只放行 2-5，
@@ -39,6 +40,11 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
   const [roleId, setRoleId] = useState(2)
   const [departmentId, setDepartmentId] = useState<number | null>(null)
   const [isActive, setIsActive] = useState(true)
+  const [allowSelfApprove, setAllowSelfApprove] = useState(false)
+
+  // 当前登录者是否超管——决定「允许自行审批」开关是否出现（后端另有权威校验）
+  const { roleId: operatorRoleId } = usePermission()
+  const isOperatorSuperAdmin = operatorRoleId === 1
 
   const { mutate: createUser, isPending: creating, error: createError } = useCreateUser()
   const { mutate: updateUser, isPending: updating, error: updateError } = useUpdateUser()
@@ -53,6 +59,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
       setRoleId(editUser.roleId)
       setDepartmentId(editUser.departmentId ?? null)
       setIsActive(editUser.isActive)
+      setAllowSelfApprove(!!editUser.allowSelfApprove)
     } else {
       setUsername('')
       setPassword('')
@@ -60,6 +67,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
       setRoleId(2)
       setDepartmentId(null)
       setIsActive(true)
+      setAllowSelfApprove(false)
     }
   }, [editUser, open])
 
@@ -67,9 +75,12 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
     e.preventDefault()
     if (isEdit && editUser) {
       // 编辑超管账号时不传 roleId（后端保持原角色）——超管不可经此表单改派
-      const payload = isSuperAdmin(editUser.roleId)
+      // allowSelfApprove 只在操作者是超管时才带上：非超管传该字段会被后端 403 拒绝，
+      // 不传则保持原值，普通管理员照常编辑姓名/部门。
+      const base = isSuperAdmin(editUser.roleId)
         ? { realName, isActive, departmentId }
         : { realName, roleId, isActive, departmentId }
+      const payload = isOperatorSuperAdmin ? { ...base, allowSelfApprove } : base
       updateUser(
         { id: editUser.id, data: payload },
         { onSuccess: onClose },
@@ -175,17 +186,42 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
           </div>
 
           {isEdit && (
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="form-isActive"
-                checked={isActive}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIsActive(e.target.checked)}
-                disabled={isPending}
-                className="accent-primary"
-              />
-              <Label htmlFor="form-isActive" className="cursor-pointer">启用账号</Label>
-            </div>
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="form-isActive"
+                  checked={isActive}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIsActive(e.target.checked)}
+                  disabled={isPending}
+                  className="accent-primary"
+                />
+                <Label htmlFor="form-isActive" className="cursor-pointer">启用账号</Label>
+              </div>
+
+              {/* 提权类开关：豁免「申请人不得审批自己提交的单」这道全站内控，只有超管能设
+                  （后端 users.service.assertCanGrantSelfApprove 是权威校验，这里只是不给非超管入口）。
+                  非超管编辑用户时整块不渲染 ⇒ 表单不传该字段 ⇒ 后端保持原值，不会触发 403。 */}
+              {isOperatorSuperAdmin && (
+                <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="form-allowSelfApprove"
+                      checked={allowSelfApprove}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAllowSelfApprove(e.target.checked)}
+                      disabled={isPending}
+                      className="accent-primary"
+                    />
+                    <Label htmlFor="form-allowSelfApprove" className="cursor-pointer">允许自行审批</Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    开启后该账号可审批/驳回自己提交的费用报销、采购单、采购申请、授信放行与审批流单据。
+                    适合单人或小团队记账；默认关闭，须由他人审批。
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
           {error && (

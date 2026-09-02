@@ -84,6 +84,15 @@ export default function UsersPage() {
         <SoftStatusLabel label={row.isActive ? '启用' : '禁用'} tone={activeTone(row.isActive)} />
       ),
     },
+    {
+      key: 'allowSelfApprove',
+      title: '自行审批',
+      width: 90,
+      // 只标出被豁免的账号（默认关闭的不占视觉重量）
+      render: (_, row) => (row.allowSelfApprove
+        ? <SoftStatusLabel label="已开启" tone="warning" />
+        : <span className="text-muted-foreground">—</span>),
+    },
     { key: 'createdAt', title: '创建时间', render: (v) => formatDisplayDateTime(v) },
     {
       key: 'id',

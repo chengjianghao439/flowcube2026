@@ -44,14 +44,14 @@ flowcube/
 │   ├── apk/version.json            PDA 版本清单（APK 本体不入库）
 │   ├── downloads/                  ⚠️ 已废弃的旧桌面发布目录，勿使用
 │   └── src/
-│       ├── app.js                  中间件装配 + 59 条 /api 路由注册 + 静态目录 + 404 + errorHandler
+│       ├── app.js                  中间件装配 + 61 条 /api 路由注册 + 静态目录 + 404 + errorHandler
 │       ├── scheduler.js            仅启动 operation_requests TTL 清理
 │       ├── config/                 db.js（连接池）、env.js（环境变量校验，生产缺项直接拒启动）
 │       ├── constants/              documentStatusRules / warehouseTaskStatus / saleOrderStatus / settlementType / voucherSource / permissions
-│       ├── database/               226 个 .sql 迁移 + migrate.js
+│       ├── database/               228 个 .sql 迁移 + migrate.js
 │       ├── engine/                 containerEngine / inventoryEngine / reservationEngine / approvalEngine ← 库存唯一合法入口（approvalEngine 为多级审批流引擎，P2-7）
 │       ├── middleware/             auth / errorHandler / loadRolePermissions / opLogger / pdaOnly / pdaSession / requestLogger / companyScope（多账套公司隔离，会计标准）
-│       ├── modules/                58 个业务模块，统一 routes → controller → service
+│       ├── modules/                60 个业务模块，统一 routes → controller → service
 │       └── utils/                  AppError / response / statusTransition / operationRequest / warehouseScope / codeGenerator / creditExposure / inboundThresholds / priceLevels / priceReference / printSummary / route / requestContext …
 ├── frontend/
 │   ├── src/{api,components,config,constants,flows,generated,hooks,layouts,lib,pages,router,store,types,utils}
@@ -82,6 +82,7 @@ npm run test:print              # 打印调度策略 / 状态纯函数单测
 npm run smoke:mainline          # 主链路冒烟（需 MySQL）
 npm run smoke:concurrency-guards
 npm run smoke:sale-adjustment
+npm run smoke:atp             # 销售占库「在途预计量」(采购单 ATP) + 取消/短装先解绑拦截
 npm run smoke:p0-regression
 npm run smoke:p1-regression
 npm run smoke:warehouse-scope   # 仓库级数据权限
@@ -268,7 +269,7 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
 ## 8. 数据库与核心模型
 
 - 131 张表（生产实测，含 `db_migrations`），命名 `[模块]_[资源]`，均带 `created_at/updated_at`，多数带 `deleted_at` 逻辑删除。表漂移对账用 `backend/scripts/schema-reconcile.js`（只读检查，`--strict` 可挂 CI）。
-- 迁移：`backend/src/database/` 下 226 个 `.sql`，编号 001–226（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行；db_migrations 有 212 条执行记录，含 1 条手工执行的迁移）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
+- 迁移：`backend/src/database/` 下 228 个 `.sql`，编号 001–228（**存在重复编号 057/064/089，缺 008/009/040**，靠文件名排序执行；db_migrations 有 212 条执行记录，含 1 条手工执行的迁移）。**后端进程启动时不会自动迁移**（本机改完 schema 需手动 `npm run migrate`）；生产部署由 `server-update.sh` 代跑，见第 16 节。
 - ⚠️ **数据库里的 `COLUMN_COMMENT` 曾大面积过期，现已大部分订正但仍有残留**（2026-07-27 抽查：`sale_orders.status`、`warehouse_tasks.status` 的注释都已更新并注明"见 documentStatusRules / warehouseTaskStatus"；`sale_orders.closed_reason` 仍写着迁移 127 已废弃的 `partial_ship_close`）。**状态语义一律以 `backend/src/constants/` 下的常量文件为准，不要相信列注释。**
 
 核心事实表 / 派生字段：
@@ -836,3 +837,44 @@ sweeper（print-jobs.dispatch.js，进程内 setInterval）：过期任务失败
     - **关键约束**：article_number 被 7 张业务表快照引用（迁移 092/093/095/096/097/099/114）且有历史数据，**列名保持 article_number**（改列名=改全部引用，风险大、收益低）；7 张业务表快照列注释不随动，语义跟随主档。前端类型字段名 articleNumber 不变。
     - **验证**：后端 lint 0、前端 lint 0 error（5 条既有 warning）/tsc 0、test:permissions 184/184、smoke:mainline 49/49、迁移 226 本机实跑成功。
 
+52. **2026-09-01 独立「资金流水」页 + 用户级「允许自行审批」（迁移 227，未提交）**：
+    - **背景**：用户反馈「财务报销没有可以选择账户的地方」「没有专用的账户流水页面」。查证：
+      ① 报销的付款账户选择器**本来就有**（付款弹窗），但入口是行操作下拉里的「付款」，只在 `status=3(已批准)` 且有 `FINANCE_EXPENSE_PAY` 权限时渲染；而 `expense-claims.service.approve/reject` 硬性禁止「审批自己提交的单」**且无超管豁免** ⇒ 单账号场景下报销单永远卡在待审批，走不到付款，账户选择器永远不出现 —— 这就是「没有看到」。
+      ② 账户流水后端能力齐全（`GET /finance/accounts/transactions` 支持全账户 + bizType/direction/日期筛选 + 分页汇总），但前端只有账户管理页的单账户弹窗（写死 `pageSize:200`、无筛选无分页），无独立页面与菜单入口。
+      用户确认：**报销页 UI 不动**，改为让流程能走通；后续追加要求——豁免放在**用户管理编辑页**（不是系统设置）且覆盖**全部审批**。
+    - **资金流水页 `/finance/transactions`**（财务 → 资金，order 57）：跨账户查询 + 账户/业务类型/收支方向/日期区间/关键字（单号·往来方）筛选 + 分页（PAGE_SIZE 50）+ 收入/支出/净额汇总卡 + 导出。**复用 `FINANCE_ACCOUNT_VIEW` 权限码**（后端该接口本就用它），故未动 permissions.js / permission-codes.ts / seed 迁移（仍是 184 个）。
+      - 后端 `findTransactions` 接 `normalizePagination`（此前 pageSize 无 clamp，传 99999 即全表拉取；实测现夹到 500）并新增 `keyword` 过滤。`happened_at` 是 **DATE** 列，起止日期用闭区间即可 —— **别照搬别处的半开区间改造**。
+      - 导出 `/export/finance-transactions` 直接写 SQL 而非复用列表 service：后者被 clamp 到 500，导出要 `EXPORT_MAX_ROWS`(10000) 上限（由 `buildExportPayload` 统一截断告警）。
+      - **不做仓库 scope**：与账款/收付款/对账同口径（财务公司级可见，见第 48 条），且该表无 warehouse_id。
+    - **用户级「允许自行审批」`sys_users.allow_self_approve`（默认 0）**：全仓原有 **5 处**各写一遍的自批内控，现统一收敛到 `utils/selfApprove.js` 的 `assertNotSelfApproval()` / `canSelfApprove()`：
+      | 位置 | 原行为 |
+      |---|---|
+      | `expense-claims.service` approve/reject | 硬拒 |
+      | `purchase.service` approve/reject | 硬拒 |
+      | `purchase-requisitions.service` approve/reject | 硬拒 |
+      | `credit-overrides.service` approve/reject | 硬拒 |
+      | `approvalEngine.startApproval` | 提交时把申请人剔出审批人名单，名单空则 400 —— **卡在提交环节，比其他四处更早** |
+      - **为什么是用户属性而不是全局开关**（用户决策）：谁能自批是人的属性（老板/单人记账员），不是系统的属性；逐人授予也留下「谁被豁免了内控」的记录。
+      - **只有超管能授予**：`users.service.assertCanGrantSelfApprove`（照 `assertCanAssignRole` 先例）——否则持 `user.update` 权限者可自我豁免。**不传该字段 = 保持原值**，普通管理员照常编辑姓名/部门不会被 403 挡住；前端 `UserFormDialog` 也只对超管渲染该开关。
+      - 不加缓存：审批是低频动作，且缓存会让「刚收回某人的自批权」延迟生效——内控收紧必须立即生效。
+      - 用户列表新增「自行审批」列，只对已开启的账号标 `warning` 徽章。
+    - **测试**：`tests/finance.smoke.test.js` 原有两条 ★ 断言（不能自批/自驳，期望 403）因默认关闭而继续成立，未改；末尾新增 5 条覆盖「授予 → 自批成功 → 状态=已批准 → **收回** → 重新被拒」，用 try/finally 保证不污染后续运行，且 realName 动态读回而非硬编码。**改这段时务必保留 finally 的还原**。
+    - **验证**：迁移实跑 + 幂等重跑；两端 lint 0 error / tsc 0 / 生产 build 通过；smoke **finance 108**（原 103 + 新 5）/ mainline 49 / accounting 11 / disposal 27 / refund 14 / approval-flow 30 / credit-override 11 / purchase-approval 6 / users-roles 8 / p0 41 / p1 44 / concurrency 83 / integration 96 / permissions 184 全绿。
+      - API 实测（资金流水）：全账户 592 条分页正确、pageSize 99999 被夹到 500、bizType=3 筛出 65 条全为报销支出、bizType=5 退货退款 20 条（前端 `AccountTransaction.bizType` 类型此前漏了 5，已补）、关键字搜单号命中、导出 xlsx 65 行与接口 total 一致、**流水页与账户页弹窗两入口同账户数据完全一致**。
+      - API 实测（自批）：非超管给自己开开关被拒 `SELF_APPROVE_GRANT_DENIED` 且不影响其普通编辑；报销全链路「授予 → 自批 → 已批准 → **付款选账户** → 出账 → 落入资金流水」跑通；approvalEngine 用「指定审批人=申请人本人」的临时审批流验证——未授予时提交被拒（400 没有可用审批人）、授予后可提交并自己批完（价格生效）。测试数据已清理。
+    - **顺带发现的既有缺陷（未修，已挂待办）**：`price-change.service.js:125` 在 `approvalEngine.startApproval` 返回 null（无匹配审批流，引擎的既定语义）时直接读 `inst.instanceId` → 500。与本次改动无关，本机没配 `product_price` 审批流时必现。
+
+53. **2026-09-02 采购订单预计量纳入销售占库（ATP）+ 取消/短装「先解绑」拦截（迁移 228，未提交）**：
+    - **需求**：用户要求「采购单提交后，其商品也要能被销售单占用」。现状销售占库只认「已上架实物」（`可用 = ACTIVE 容器合计 − reserved`），采购单提交后仍是预计到货、占不进来。
+    - **语义（用户三轮确认）**：① 数值把「在途预计量」算进销售占库可用（**ATP**，到货后按库存现状发，不自动匹配销售单）；② **不自动改销售单**——采购单取消/短装时不静默释放，而是**先解绑拦截**（列出占用它的销售单由人工处理）；③ 粒度——整单取消解绑全部、短装只释放未到货那部分。
+    - **实现**：
+      - **在途投影**（不缓存，决策时现算）：新 `utils/expectedStock.js` → `getExpectedStock(conn, pairs)`。口径 = 采购单 `status IN (2已提交, 5待审批)` 的明细 `quantity` − 已收（`inbound_task_items.putaway_qty` 且任务已审计未取消）− 已绑定给销售单的未释放量。排除 status=3/4。独立成 util 因 containerEngine 不能被 purchase 反向 require（会循环）。
+      - **`containerEngine.getStockProjection` 加 `includeExpected`**：`true` 时 `available = quantity + expected − reserved`；默认 false ⇒ 出库/调拨/超收闸门/盘点维持「现货 − reserved」口径不变。
+      - **`inventory.getAvailabilityByProducts` 加 `includeExpected` + `expected` 字段**（占库预览）。
+      - **`reservationEngine.reserve` 加 `includeExpected` + `expectedItems` + `refItemId`**：物理预占逻辑不变（reserved/stock_reservations），但**超出「现货 − 已预占」的部分**按 `expectedItems` FIFO 分摊记录绑定。
+      - **新表 `sale_order_expected_bindings`**（迁移 228，information_schema 护栏建表）：`sale_order_id/item_id, purchase_order_id/item_id, product_id, warehouse_id, qty, released_at`。释放（销售单取消 `releaseByRef` / 改单减量 `partialReleaseByProduct`）时置 `released_at`。
+      - **采购单取消/短装**：`purchase.service.cancel` / `closeRemaining` 加 `assertNoActiveSaleBinding` ——查到未释放绑定即 `409 BINDING_SALE_DEPENDENCY`，列出被占用销售单单号与量，提示先去销售单解除绑定。**不自动释放**。
+    - **前端**：占库弹窗 `ReserveAllocationDialog` 每个仓库「可用量」旁标「在途 +N」（`ReserveWarehouseOption` 加 `expected?`）。
+    - **测试**：新 `tests/sale-atp.smoke.test.js`（`npm run smoke:atp`，8 项断言）——全新商品现货 0 → 建采购单提交 → 销售单占库用上在途成功 → 绑定记录 → 采购单取消被 409 拦截且列出销售单 → 释放后绑定作废 → 解除后采购单可取消。用 `code LIKE 'ATP%'` 定位测后清理。
+    - **验证**：迁移实跑；后端 lint 0、前端 lint 0 error / tsc 0、生产 build 通过；回归 mainline 49 / sale-adjustment 57 / concurrency 83 / integration 96 / p0 41 / p1 44 / finance 108 / warehouse-scope 41 / permissions 184 全绿；`smoke:atp` 8/8；API 实测——现货 0 商品占库 5 成功、绑定归到对应采购单（FIFO 按 expected_date 近的先）、取消被拦截 409、释放后绑定清零。
+    - **已知行为（语义正确，非 bug）**：占库成功但实物未到时，仓库任务/拣货会提示实物不足（到货后按库存现状补发）；在途是软投影，多张销售单可对同一预计池超配，靠采购单取消/短装的时间点拦截兜底。这是「现货 + 在途」ATP 模型的固有属性，用户已确认。

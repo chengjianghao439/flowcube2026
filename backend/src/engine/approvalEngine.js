@@ -1,4 +1,5 @@
 const AppError = require('../utils/AppError')
+const { canSelfApprove } = require('../utils/selfApprove')
 
 /**
  * 多级审批流引擎（P2-7）。只做「审批编排」，不碰业务单据的状态与金额：
@@ -10,8 +11,10 @@ const AppError = require('../utils/AppError')
  *   - 按 biz_type + 金额区间选一个审批流，串行逐级（step_order 升序），上一节点通过才轮到下一节点。
  *   - 节点审批人三选一（配置）：1=指定角色 2=部门负责人 3=指定用户。
  *     startApproval 时把每节点的「命中审批人集合」解析并快照到 approval_instance_task_approvers
- *     （排除申请人本人）；「任一命中审批人可批」等同或签，此后流程/人员改配不影响运行中的实例。
- *   - 申请人不得审批自己的单；超管 role_id=1 恒可代批（approver_name 记录实际经办人）。
+ *     （排除申请人本人，除非该账号被授予 sys_users.allow_self_approve）；「任一命中审批人可批」
+ *     等同或签，此后流程/人员改配不影响运行中的实例。
+ *   - 申请人默认不得审批自己的单（豁免见 utils/selfApprove）；超管 role_id=1 恒可代批
+ *     （approver_name 记录实际经办人）。
  *   - 终态（驳回/撤销）后允许重新发起：引擎只认 status=1 审批中的活跃实例。
  *
  * 引擎不改业务单据状态；业务在 startApproval 返回 null（无匹配流程）时退回各自原单级逻辑。
@@ -97,12 +100,15 @@ async function startApproval(conn, { bizType, bizId, amount, applicantId, applic
   if (active) throw new AppError('该单据已有进行中的审批，请勿重复提交', 409, 'APPROVAL_ALREADY_PENDING')
 
   const resolved = []
+  // 申请人默认不能出现在自己的审批人名单里；被授予「允许自行审批」的账号除外
+  // （单人/小团队场景，否则这里会直接把提交动作卡死，见 utils/selfApprove 的说明）。
+  const applicantMayApproveSelf = await canSelfApprove(applicantId)
   for (const step of flow.steps) {
     const userIds = await resolveApproverUserIds(conn, {
       approverType: step.approver_type, roleId: step.role_id,
       departmentId: step.department_id, userId: step.user_id, applicantId,
     })
-    const others = userIds.filter(id => id !== Number(applicantId))
+    const others = applicantMayApproveSelf ? userIds : userIds.filter(id => id !== Number(applicantId))
     if (!others.length) {
       throw new AppError(`审批流「${flow.name}」第 ${step.step_order} 级没有可用的审批人（或审批人即申请人本人），请检查流程配置或相关用户/部门设置`, 400)
     }

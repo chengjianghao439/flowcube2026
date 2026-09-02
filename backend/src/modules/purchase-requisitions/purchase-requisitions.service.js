@@ -7,6 +7,7 @@ const { beginOperationRequest, completeOperationRequest } = require('../../utils
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
 const approvalEngine = require('../../engine/approvalEngine')
+const { assertNotSelfApproval } = require('../../utils/selfApprove')
 
 /**
  * 采购请购单（PR → 审批 → 转生成采购单）。
@@ -230,9 +231,7 @@ async function approve(id, operator) {
       columns: 'id, status, applicant_id, warehouse_id, estimated_amount', entityName: '请购单',
     })
     assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
-    if (Number(row.applicant_id) === Number(operator.operatorId)) {
-      throw new AppError('不能审批自己提交的请购单，请由他人审批', 403)
-    }
+    await assertNotSelfApproval(row.applicant_id, operator.operatorId, '不能审批自己提交的请购单，请由他人审批')
     const rule = assertStatusAction('purchaseRequisition', 'approve', row.status)
 
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'purchase_requisition', bizId: id })
@@ -270,7 +269,7 @@ async function reject(id, { reason }, operator) {
       table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id', entityName: '请购单',
     })
     assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
-    if (Number(row.applicant_id) === Number(operator.operatorId)) throw new AppError('不能驳回自己提交的请购单', 403)
+    await assertNotSelfApproval(row.applicant_id, operator.operatorId, '不能驳回自己提交的请购单')
     if (!String(reason || '').trim()) throw new AppError('请填写驳回原因', 400)
     const rule = assertStatusAction('purchaseRequisition', 'reject', row.status)
 

@@ -162,11 +162,12 @@ export interface AdjustSaleResult {
   pending: boolean
 }
 
-/** 占库弹窗：某产品在某仓库的可用量 */
+/** 占库弹窗：某产品在某仓库的可用量。expected=已提交采购单预计到货量（在途，支撑占库） */
 export interface ReserveWarehouseOption {
   warehouseId: number
   warehouseName: string
   available: number
+  expected?: number
 }
 
 /** 占库预览（GET /sale/:id/reserve-preview）：逐行商品 + 各仓可用量，供占库弹窗选仓库/数量 */
