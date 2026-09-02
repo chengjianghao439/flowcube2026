@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useContext, useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -12,7 +12,9 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { usePermission } from '@/hooks/usePermission'
+import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { TabPathContext } from '@/components/layout/TabPathContext'
 import { getAbcListApi, recomputeAbcApi, getCycleRulesApi, saveCycleRulesApi, getCoverageApi } from '@/api/stockcheck'
 import type { AbcClassRow, CycleRule, CoverageRow } from '@/types/stockcheck'
 import type { StatusTone } from '@/lib/statusTone'
@@ -60,6 +62,18 @@ export default function AbcClassPage() {
   })
   const patchDraft = (cls: string, patch: Partial<CycleRule>) =>
     setDraft(prev => prev.map(r => r.abcClass === cls ? { ...r, ...patch } : r))
+
+  // 未保存变更保护：仅规则 tab 且可编辑时，草稿偏离服务端基线即脏（关闭标签拦截）
+  const tabPath = useContext(TabPathContext) || ''
+  const isDirty = useMemo(() => {
+    if (tab !== 'rules' || !canManage) return false
+    const norm = (list: CycleRule[]) => list.map(r => ({ abcClass: r.abcClass, intervalDays: Number(r.intervalDays), batchLimit: Number(r.batchLimit), enabled: !!r.enabled }))
+    const base = norm(rulesQ.data?.rules ?? [])
+    const cur = norm(draft)
+    if (cur.length !== base.length) return true
+    return cur.some((r, i) => { const b = base[i]; return !b || r.intervalDays !== b.intervalDays || r.batchLimit !== b.batchLimit || r.enabled !== b.enabled })
+  }, [tab, canManage, draft, rulesQ.data])
+  useDirtyGuard(tabPath, isDirty)
 
   // ── 按期盘点率看板（文档08）──
   const coverageQ = useQuery({

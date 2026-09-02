@@ -9,11 +9,14 @@ import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import { useUsers, useDeleteUser } from '@/hooks/useUsers'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import UserFormDialog from './components/UserFormDialog'
 import WarehouseScopeDialog from './components/WarehouseScopeDialog'
 import ResetPasswordDialog from './components/ResetPasswordDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import type { SysUser } from '@/types/users'
 import type { TableColumn } from '@/types'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -22,6 +25,12 @@ import { toast } from '@/lib/toast'
 
 export default function UsersPage() {
   const currentUser = useAuthStore((s) => s.user)
+  const { can } = usePermission()
+
+  const canCreate = can(PERMISSIONS.USER_CREATE)
+  const canUpdate = can(PERMISSIONS.USER_UPDATE)
+  const canResetPwd = can(PERMISSIONS.USER_RESET_PASSWORD)
+  const canDelete = can(PERMISSIONS.USER_DELETE)
 
   const [keyword, setKeyword] = useState('')
   const [scopeTarget, setScopeTarget] = useState<{ id: number; name: string } | null>(null)
@@ -35,7 +44,7 @@ export default function UsersPage() {
   const [deleteTarget, setDeleteTarget] = useState<SysUser | null>(null)
   const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useUsers({ page, pageSize: 20, keyword })
+  const { data, isLoading, isError, error, refetch } = useUsers({ page, pageSize: 20, keyword })
   const total = data?.pagination?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / 20))
   const { mutate: deleteUser } = useDeleteUser()
@@ -98,20 +107,21 @@ export default function UsersPage() {
       key: 'id',
       title: '操作',
       width: 200,
-      render: (_, row) => (
-        <TableActionsMenu
-          primaryLabel="编辑"
-          primaryVariant="outline"
-          onPrimaryClick={() => handleEdit(row)}
-          items={[
-            { label: '重置密码', onClick: () => handleResetPassword(row) },
-            { label: '仓库访问范围', onClick: () => setScopeTarget({ id: row.id, name: row.realName || row.username }) },
-            ...(row.id !== currentUser?.id
-              ? [{ label: '删除', destructive: true, separatorBefore: true, onClick: () => handleDelete(row) }]
-              : []),
-          ]}
-        />
-      ),
+      render: (_, row) => {
+        const items: TableActionItem[] = []
+        if (canResetPwd) items.push({ label: '重置密码', onClick: () => handleResetPassword(row) })
+        if (canUpdate) items.push({ label: '仓库访问范围', onClick: () => setScopeTarget({ id: row.id, name: row.realName || row.username }) })
+        if (canDelete && row.id !== currentUser?.id) items.push({ label: '删除', destructive: true, separatorBefore: true, onClick: () => handleDelete(row) })
+        if (!canUpdate && items.length === 0) return null
+        return (
+          <TableActionsMenu
+            primaryLabel={canUpdate ? '编辑' : items[0].label}
+            primaryVariant="outline"
+            onPrimaryClick={() => (canUpdate ? handleEdit(row) : items[0].onClick())}
+            items={canUpdate ? items : items.slice(1)}
+          />
+        )
+      },
     },
   ]
 
@@ -123,9 +133,11 @@ export default function UsersPage() {
         actions={
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/users').catch(e => toast.error((e as Error).message))}>导出</Button>
-            <Button onClick={() => { setEditUser(null); setFormOpen(true) }}>
-              新增用户
-            </Button>
+            {canCreate && (
+              <Button onClick={() => { setEditUser(null); setFormOpen(true) }}>
+                新增用户
+              </Button>
+            )}
           </>
         }
       />
@@ -146,13 +158,19 @@ export default function UsersPage() {
         )}
       </FilterCard>
 
-      <DataTable
-        columns={columns}
-        data={data?.list ?? []}
-        loading={isLoading}
-        rowKey="id"
-      />
-      <Pagination page={page} totalPages={totalPages} total={total} unit="个" onPageChange={setPage} />
+      {isError ? (
+        <QueryErrorState error={error} onRetry={refetch} />
+      ) : (
+        <>
+          <DataTable
+            columns={columns}
+            data={data?.list ?? []}
+            loading={isLoading}
+            rowKey="id"
+          />
+          <Pagination page={page} totalPages={totalPages} total={total} unit="个" onPageChange={setPage} />
+        </>
+      )}
 
       <UserFormDialog
         open={formOpen}

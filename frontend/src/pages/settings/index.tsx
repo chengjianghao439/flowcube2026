@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useContext, useMemo, useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Upload, Loader2 } from 'lucide-react'
 import { getSettingsApi, updateSettingsApi, getRolesApi, getLogoApi, uploadLogoApi } from '@/api/settings'
@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePermission } from '@/hooks/usePermission'
+import { useDirtyGuard } from '@/hooks/useDirtyGuard'
+import { TabPathContext } from '@/components/layout/TabPathContext'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
 const LOGO_MAX_BYTES = 2 * 1024 * 1024
@@ -50,6 +52,17 @@ export default function SettingsPage() {
   }, [data])
 
   const handleSave = () => save.mutate(form)
+
+  // 未保存变更保护：表单与设置基线不同即脏（关闭标签拦截）
+  const tabPath = useContext(TabPathContext) || ''
+  const isDirty = useMemo(() => {
+    if (!data?.list) return false
+    const base: Record<string, string> = {}
+    data.list.forEach(s => { if (s.type === 'image' || s.type === 'timestamp') return; base[s.key_name] = s.value ?? '' })
+    return Object.keys(form).length !== Object.keys(base).length
+      || Object.entries(base).some(([k, v]) => form[k] !== v)
+  }, [data, form])
+  useDirtyGuard(tabPath, isDirty)
 
   // ── Logo 上传 ──────────────────────────────────────────────────────────
   const fileRef = useRef<HTMLInputElement>(null)

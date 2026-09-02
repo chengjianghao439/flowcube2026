@@ -9,9 +9,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCreateUser, useUpdateUser } from '@/hooks/useUsers'
 import { useDepartmentOptions } from '@/hooks/useDepartments'
 import { usePermission } from '@/hooks/usePermission'
+import { toast } from '@/lib/toast'
 import type { SysUser } from '@/types/users'
 
 // 角色 1（管理员/超管）不能经此表单创建或改派：后端 users.routes schema 只放行 2-5，
@@ -73,6 +75,11 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!isEdit) {
+      if (username.trim().length < 2) return toast.error('账号至少 2 个字符')
+      if (password.length < 6) return toast.error('密码至少 6 位')
+      if (!realName.trim()) return toast.error('姓名不能为空')
+    }
     if (isEdit && editUser) {
       // 编辑超管账号时不传 roleId（后端保持原角色）——超管不可经此表单改派
       // allowSelfApprove 只在操作者是超管时才带上：非超管传该字段会被后端 403 拒绝，
@@ -169,20 +176,18 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="form-department">部门</Label>
-            <select
-              id="form-department"
-              value={departmentId ?? ''}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                setDepartmentId(e.target.value ? Number(e.target.value) : null)}
-              disabled={isPending}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">未分配</option>
-              {(departments ?? []).map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
+            <Label>部门</Label>
+            <Select value={departmentId ? String(departmentId) : '0'} onValueChange={(v) => setDepartmentId(v === '0' ? null : Number(v))}>
+              <SelectTrigger className="w-full" disabled={isPending}>
+                <SelectValue placeholder="未分配" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">未分配</SelectItem>
+                {(departments ?? []).map((d) => (
+                  <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {isEdit && (

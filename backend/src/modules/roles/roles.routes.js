@@ -21,6 +21,12 @@ const duplicateSchema = z.object({
   remark: z.string().trim().max(255, '备注最长 255 字符').optional().nullable(),
 })
 
+const createSchema = z.object({
+  code:   z.string().trim().min(1, '角色编码不能为空').max(50, '角色编码最长 50 字符'),
+  name:   z.string().trim().min(1, '角色名称不能为空').max(50, '角色名称最长 50 字符'),
+  remark: z.string().trim().max(255, '备注最长 255 字符').optional().nullable(),
+})
+
 router.get('/', requirePermission(PERMISSIONS.ROLE_VIEW), ctrl.list)
 
 router.get('/:roleId/permissions', requirePermission(PERMISSIONS.ROLE_VIEW), vParams(idSchema), ctrl.permissions)
@@ -62,6 +68,32 @@ router.put('/:roleId/permissions',
       return ctrl.updatePermissions(req, res, next)
     } catch (e) { next(e) }
   },
+)
+
+// 新增角色（仅超管，同 updatePermissions/duplicate 的提权链防护）
+router.post('/',
+  requirePermission(PERMISSIONS.ROLE_ASSIGN),
+  (req, res, next) => {
+    if (Number(req.user?.roleId) !== 1) {
+      return next(new AppError('仅管理员可新增角色', 403, 'ROLE_ASSIGN_ADMIN_ONLY'))
+    }
+    return next()
+  },
+  validateBody(createSchema),
+  ctrl.create,
+)
+
+// 删除角色（仅超管）。清理权限与角色在同一事务，防残留。
+router.delete('/:roleId',
+  requirePermission(PERMISSIONS.ROLE_ASSIGN),
+  (req, res, next) => {
+    if (Number(req.user?.roleId) !== 1) {
+      return next(new AppError('仅管理员可删除角色', 403, 'ROLE_ASSIGN_ADMIN_ONLY'))
+    }
+    return next()
+  },
+  vParams(idSchema),
+  ctrl.remove,
 )
 
 module.exports = router

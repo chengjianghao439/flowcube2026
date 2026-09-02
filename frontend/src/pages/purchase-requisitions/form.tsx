@@ -19,6 +19,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import { usePermission } from '@/hooks/usePermission'
+import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -150,6 +151,21 @@ export default function RequisitionFormPage() {
       setExpectedDate(initial.expectedDate); setItems(initial.items)
     }
   }, [initial])
+
+  // 未保存变更保护：新建有输入即脏；编辑对比 initial 基线（关闭标签时拦截）
+  const isDirty = useMemo(() => {
+    if (!editable) return false
+    if (!initial) return !!(title.trim() || warehouseId != null || expectedDate || items.length > 0)
+    return title !== initial.title
+      || warehouseId !== initial.warehouseId
+      || expectedDate !== initial.expectedDate
+      || items.length !== initial.items.length
+      || items.some((it, i) => {
+        const b = initial.items[i]
+        return !b || it.quantity !== b.quantity || it.estimatedPrice !== b.estimatedPrice || it.suggestedSupplierId !== b.suggestedSupplierId
+      })
+  }, [editable, initial, title, warehouseId, expectedDate, items])
+  useDirtyGuard(tabPath, isDirty)
 
   function setItem(idx: number, patch: Partial<EditItem>) {
     setItems(list => list.map((it, i) => i === idx ? { ...it, ...patch } : it))

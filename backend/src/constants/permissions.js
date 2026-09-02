@@ -1,7 +1,5 @@
 const PERMISSIONS = {
   DASHBOARD_VIEW: 'dashboard.view',
-  SYSTEM_HEALTH_VIEW: 'system.health.view',
-  SYSTEM_HEALTH_AUTOFIX: 'system.health.autofix',
   ADMIN_PUTAWAY_EXECUTE: 'admin.putaway.execute',
   IMPORT_PRODUCT_EXECUTE: 'import.product.execute',
   IMPORT_STOCK_EXECUTE: 'import.stock.execute',
@@ -121,7 +119,6 @@ const PERMISSIONS = {
 
   // 客户授信：view 看用信、manage 调额度(财务风控)、override 超额一次性放行(销售)。敏感，override 服务端校验。
   SALE_CREDIT_VIEW: 'sale.credit.view',
-  SALE_CREDIT_MANAGE: 'sale.credit.manage',
   SALE_CREDIT_OVERRIDE: 'sale.credit.override',
   // 超额放行申请单（文档 05 Phase 2）：销售员发起「申请—审批」两步，审批通过后占库自动放行。
   // apply/view 是销售员自助链路（seed 给销售角色 3）；审批走多级审批流引擎，不依赖这些权限码。

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { payloadClient as client } from '@/api/client'
-import { getRolesApi } from '@/api/settings'
+import { getRolesApi, createRoleApi, deleteRoleApi } from '@/api/settings'
 
 export const ROLES_QUERY_KEY = 'roles'
 export const ROLE_PERMS_QUERY_KEY = 'role-perms'
@@ -10,6 +10,8 @@ export interface Role {
   code: string
   name: string
   remark: string
+  /** 1=系统内置角色（不可删除），0=自定义 */
+  is_system: number
 }
 
 export function useRoles() {
@@ -39,6 +41,22 @@ export function useDuplicateRole() {
   return useMutation({
     mutationFn: ({ roleId, code, name, remark }: { roleId: number; code: string; name: string; remark?: string }) =>
       client.post(`/roles/${roleId}/duplicate`, { code, name, remark }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [ROLES_QUERY_KEY] }),
+  })
+}
+
+export function useCreateRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (d: { code: string; name: string; remark?: string }) => createRoleApi(d),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [ROLES_QUERY_KEY] }),
+  })
+}
+
+export function useDeleteRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => deleteRoleApi(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: [ROLES_QUERY_KEY] }),
   })
 }

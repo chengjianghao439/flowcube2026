@@ -1,9 +1,11 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Pencil, Save, X, RotateCcw, GripVertical, Plus, Minus, LayoutGrid, Check, Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePermission } from '@/hooks/usePermission'
+import { useDirtyGuard } from '@/hooks/useDirtyGuard'
+import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import {
@@ -79,6 +81,10 @@ export default function DashboardPage() {
       toast.error('保存失败，请重试')
     }
   }
+
+  // 未保存变更保护：进入编辑模式即视为有草稿待保存（关闭标签拦截）
+  const tabPath = useContext(TabPathContext) || ''
+  useDirtyGuard(tabPath, editing && draft != null)
 
   const patch = (fn: (ws: DashboardWidgetLayout[]) => DashboardWidgetLayout[]) =>
     setDraft(prev => prev ? { widgets: fn([...prev.widgets]) } : prev)

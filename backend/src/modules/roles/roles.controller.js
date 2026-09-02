@@ -35,9 +35,29 @@ async function duplicate(req, res, next) {
   }
 }
 
+async function create(req, res, next) {
+  try {
+    const result = await svc.create(req.body)
+    return successResponse(res, result, '角色创建成功', 201)
+  } catch (error) {
+    next(error)
+  }
+}
+
+async function remove(req, res, next) {
+  try {
+    await svc.remove(req.params.roleId)
+    return successResponse(res, null, '角色删除成功')
+  } catch (error) {
+    next(error)
+  }
+}
+
 module.exports = {
   list,
   permissions,
   updatePermissions,
   duplicate,
+  create,
+  remove,
 }

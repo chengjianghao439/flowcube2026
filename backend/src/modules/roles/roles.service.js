@@ -4,7 +4,7 @@ const { clearRolePermissionsCache } = require('../../middleware/loadRolePermissi
 
 async function findAll() {
   const [rows] = await pool.query(
-    'SELECT id, code, name, remark FROM sys_roles ORDER BY id ASC',
+    'SELECT id, code, name, remark, is_system FROM sys_roles ORDER BY id ASC',
   )
   return rows
 }
@@ -114,9 +114,56 @@ async function duplicate(sourceRoleId, { code, name, remark = null } = {}) {
   }
 }
 
+async function create({ code, name, remark = null } = {}) {
+  const roleCode = String(code || '').trim()
+  const roleName = String(name || '').trim()
+  if (!roleCode) throw new AppError('角色编码不能为空', 400)
+  if (!roleName) throw new AppError('角色名称不能为空', 400)
+
+  const [[dup]] = await pool.query('SELECT id FROM sys_roles WHERE code = ?', [roleCode])
+  if (dup) throw new AppError(`角色编码 ${roleCode} 已存在`, 409)
+
+  const [insert] = await pool.query(
+    'INSERT INTO sys_roles (code, name, remark, is_system) VALUES (?, ?, ?, 0)',
+    [roleCode, roleName, remark || null],
+  )
+  const newRoleId = insert.insertId
+  if (!Number.isFinite(newRoleId) || newRoleId <= 0) {
+    throw new AppError('角色创建失败', 500)
+  }
+  return { id: newRoleId, code: roleCode, name: roleName, remark: remark || null }
+}
+
+async function remove(roleId) {
+  const rid = Number(roleId)
+  if (!Number.isFinite(rid) || rid <= 0) throw new AppError('roleId 无效', 400)
+
+  const [[role]] = await pool.query('SELECT id, is_system FROM sys_roles WHERE id = ?', [rid])
+  if (!role) throw new AppError('角色不存在', 404)
+  if (Number(role.is_system) === 1) throw new AppError('系统内置角色不可删除', 400)
+
+  const [[{ count }]] = await pool.query('SELECT COUNT(*) AS count FROM sys_users WHERE role_id = ?', [rid])
+  if (Number(count) > 0) throw new AppError(`有 ${count} 个用户使用该角色，无法删除`, 409)
+
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await conn.query('DELETE FROM sys_role_permissions WHERE role_id = ?', [rid])
+    await conn.query('DELETE FROM sys_roles WHERE id = ?', [rid])
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
 module.exports = {
   findAll,
   listPermissions,
   replacePermissions,
   duplicate,
+  create,
+  remove,
 }

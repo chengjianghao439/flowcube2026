@@ -7,7 +7,9 @@ export interface SettingsData { list: SettingItem[]; map: Record<string, { value
 
 export const getSettingsApi = () => client.get<SettingsData>('/settings')
 export const updateSettingsApi = (data: Record<string, string>) => client.put<null>('/settings', data)
-export const getRolesApi = () => client.get<{ id: number; code: string; name: string; remark: string }[]>('/roles')
+export const getRolesApi = () => client.get<{ id: number; code: string; name: string; remark: string; is_system: number }[]>('/roles')
+export const createRoleApi = (d: { code: string; name: string; remark?: string }) => client.post<{ id: number }>('/roles', d)
+export const deleteRoleApi = (id: number) => client.delete<null>(`/roles/${id}`)
 
 // ─── 品牌 Logo ────────────────────────────────────────────────────────────
 // 后端返回相对路径 /api/settings/logo/image?v=<时间戳>。resolveApiFetchUrl 会自带
