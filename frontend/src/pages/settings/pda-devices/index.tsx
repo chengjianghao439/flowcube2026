@@ -32,6 +32,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import DataTable from '@/components/shared/DataTable'
+import { FilterCard } from '@/components/shared/FilterCard'
+import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
+import Pagination from '@/components/shared/Pagination'
+import PageHeader from '@/components/shared/PageHeader'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
@@ -120,36 +124,31 @@ export default function PdaDevicesPage() {
     { key: 'lastSeenAt', title: '最后在线', width: 14, render: v => v ? formatDisplayDateTime(v as string) : '从未连接' },
     {
       key: 'id', title: '操作', width: 20,
-      render: (_, row) => (
-        <div className="flex flex-wrap gap-1">
-          <Button size="sm" variant="outline" onClick={() => setEditing(row)}>编辑</Button>
-          {row.status === 'active' ? (
-            <Button size="sm" variant="outline" onClick={() => statusMut.mutate({ id: row.id, status: 'disabled' })}>
-              停用
-            </Button>
-          ) : (
-            <Button size="sm" variant="outline" onClick={() => statusMut.mutate({ id: row.id, status: 'active' })}>
-              启用
-            </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={() => setResetTarget(row)}>重置密钥</Button>
-        </div>
-      ),
+      render: (_, row) => {
+        const items: TableActionItem[] = [
+          { label: row.status === 'active' ? '停用' : '启用', onClick: () => statusMut.mutate({ id: row.id, status: row.status === 'active' ? 'disabled' : 'active' }) },
+          { label: '重置密钥', destructive: true, separatorBefore: true, onClick: () => setResetTarget(row) },
+        ]
+        return <TableActionsMenu primaryLabel="编辑" primaryVariant="outline" onPrimaryClick={() => setEditing(row)} items={items} />
+      },
     },
   ]
 
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-4">
+      <PageHeader
+        title="PDA 设备"
+        description="登记 PDA 设备生成设备码与密钥，扫码绑定后即可现场作业；停用或重置密钥会立即吊销该机会话"
+        actions={<Button onClick={() => setCreateOpen(true)}>登记新设备</Button>}
+      />
+      <FilterCard>
         <Input
           className="w-64"
           placeholder="搜索设备名称或设备码"
           value={keyword}
           onChange={e => { setKeyword(e.target.value); setPage(1) }}
         />
-        <div className="flex-1" />
-        <Button onClick={() => setCreateOpen(true)}>登记新设备</Button>
-      </div>
+      </FilterCard>
 
       <div className="rounded-xl border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
         绑定仓库后，这台 PDA 只能作业本仓的单据；未绑定的设备可在任何仓作业。
@@ -166,15 +165,13 @@ export default function PdaDevicesPage() {
       />
 
       {(data?.pagination?.total ?? 0) > 20 && (
-        <div className="flex items-center justify-end gap-2 text-sm">
-          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
-          <span className="text-muted-foreground">第 {page} 页 / 共 {Math.ceil((data?.pagination?.total ?? 0) / 20)} 页</span>
-          <Button
-            size="sm" variant="outline"
-            disabled={page >= Math.ceil((data?.pagination?.total ?? 0) / 20)}
-            onClick={() => setPage(p => p + 1)}
-          >下一页</Button>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={Math.ceil((data?.pagination?.total ?? 0) / 20)}
+          total={data?.pagination?.total ?? 0}
+          unit="台"
+          onPageChange={setPage}
+        />
       )}
 
       {/* 登记新设备 */}

@@ -1,7 +1,7 @@
 import { useContext, useMemo, useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Upload, Loader2 } from 'lucide-react'
-import { getSettingsApi, updateSettingsApi, getRolesApi, getLogoApi, uploadLogoApi } from '@/api/settings'
+import { getSettingsApi, updateSettingsApi, getLogoApi, uploadLogoApi } from '@/api/settings'
 // 与 BrandLogo 组件的查询键保持一致（那里为避免 react-refresh warning 未导出常量）
 const BRAND_LOGO_QUERY_KEY = ['brand-logo']
 import { toast } from '@/lib/toast'
@@ -9,11 +9,11 @@ import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePermission } from '@/hooks/usePermission'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { todayYmd } from '@/lib/dateTime'
 
 const LOGO_MAX_BYTES = 2 * 1024 * 1024
 const LOGO_ACCEPT = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
@@ -25,7 +25,6 @@ export default function SettingsPage() {
   const qc = useQueryClient()
 
   const { data } = useQuery({ queryKey: ['settings'], queryFn: () => getSettingsApi() })
-  const { data: roles } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r || []) })
   const save = useMutation({ mutationFn: updateSettingsApi, onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings'] }); toast.success('保存成功') } })
 
   // 品牌 Logo：与 BrandLogo 组件共享同一查询键（多点位只发一次请求）
@@ -92,41 +91,44 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <PageHeader
         title="系统设置"
         description="配置全局参数与角色权限。"
+        actions={canUpdate ? <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中…' : '保存设置'}</Button> : null}
       />
 
-      {/* 品牌标识 */}
-      <div className="rounded-lg border border-border bg-card p-6 space-y-6">
-        <h2 className="font-semibold text-base border-b pb-3">品牌标识</h2>
+      {isDirty && (
+        <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/5 px-4 py-2.5 text-sm text-warning">
+          <span className="h-2 w-2 rounded-full bg-warning" />
+          有未保存的更改，关闭标签前请先保存。
+        </div>
+      )}
 
-        {/* 公司 Logo：客户内场位（ERP 顶栏、打印单据模板） */}
-        <div className="flex items-start gap-6">
-          {/* 预览：有 Logo 显示图片（后端时间戳参数破缓存），无 Logo 显示默认图标 */}
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/30">
+      {/* 品牌标识 */}
+      <section className="rounded-xl border border-border bg-card">
+        <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-muted/30">
             {logo?.url && !logoImgFailed ? (
               <img
                 src={logo.url}
                 alt="公司 Logo 预览"
-                className="h-full w-full object-contain p-1.5"
+                className="h-full w-full object-contain p-2"
                 onError={() => setLogoImgFailed(true)}
               />
             ) : (
-              <span className="text-xs text-muted-foreground">未设置</span>
+              <span className="px-2 text-center text-xs text-muted-foreground">未设置</span>
             )}
           </div>
-          <div className="min-w-0 flex-1 space-y-3">
+          <div className="min-w-0 flex-1 space-y-2.5">
             <div>
-              <p className="text-sm font-medium">公司 Logo</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                使用贵公司的标识，显示于 ERP 顶栏与打印单据模板（销售单/采购单/出库单/仓库任务单）；
-                支持 {LOGO_FRIENDLY}，≤2MB，上传后立即生效。未上传时这些位置显示极序 Flow 文字/默认图标。
+              <h2 className="text-base font-semibold">品牌标识</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                公司 Logo 显示于 ERP 顶栏与打印单据模板（销售单/采购单/出库单/仓库任务单）。支持 {LOGO_FRIENDLY}，≤2MB，上传后立即生效。
               </p>
             </div>
             {canUpdate ? (
-              <div className="flex items-center gap-2">
+              <div>
                 <input
                   ref={fileRef}
                   type="file"
@@ -143,47 +145,44 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* 基础参数 */}
-      <div className="rounded-lg border border-border bg-card p-6 space-y-5">
-        <h2 className="font-semibold text-base border-b pb-3">基础参数</h2>
-        {data?.list.filter(s => s.type !== 'image' && s.type !== 'timestamp').map(s => (
-          <div key={s.key_name} className="grid grid-cols-3 gap-4 items-start">
-            <div>
-              <Label className="font-medium">{s.label}</Label>
-              {s.remark && <p className="text-xs text-muted-foreground mt-0.5">{s.remark}</p>}
-            </div>
-            <div className="col-span-2">
-              <Input
-                value={form[s.key_name] ?? ''}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [s.key_name]: e.target.value }))}
-                type={s.type === 'number' ? 'number' : 'text'}
-                disabled={!canUpdate}
-              />
-            </div>
-          </div>
-        ))}
-        {canUpdate && (
-          <div className="pt-2">
-            <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中…' : '保存设置'}</Button>
-          </div>
-        )}
-        {!canUpdate && <p className="text-sm text-muted-foreground">当前账号无修改权限</p>}
-      </div>
-
-      {/* 角色说明 */}
-      <div className="rounded-lg border border-border bg-card p-6">
-        <h2 className="font-semibold text-base border-b pb-3 mb-4">角色权限说明</h2>
-        <div className="space-y-3">
-          {roles?.map(r => (
-            <div key={r.id} className="flex items-start gap-4">
-              <SoftStatusLabel label={r.name} tone={r.id === 1 ? 'active' : 'info'} className="shrink-0 mt-0.5" />
-              <p className="text-sm text-muted-foreground">{r.remark || '-'}</p>
+      <section className="rounded-xl border border-border bg-card">
+        <div className="border-b border-border/60 px-6 py-4">
+          <h2 className="text-base font-semibold">基础参数</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">影响业务流程的全局配置，保存后立即生效。</p>
+        </div>
+        <div className="space-y-4 p-6">
+          {data?.list.filter(s => s.type !== 'image' && s.type !== 'timestamp').map(s => (
+            <div key={s.key_name} className="grid gap-1.5 sm:grid-cols-[220px_1fr] sm:gap-6">
+              <div>
+                <Label className="font-medium">{s.label}</Label>
+                {s.remark && <p className="mt-0.5 text-xs text-muted-foreground">{s.remark}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Input
+                  value={form[s.key_name] ?? ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [s.key_name]: e.target.value }))}
+                  type={s.type === 'number' ? 'number' : 'text'}
+                  disabled={!canUpdate}
+                  className="max-w-2xl"
+                />
+                {s.label.includes('前缀') && !s.label.includes('编号') && (
+                  <p className="text-xs text-muted-foreground">
+                    生成的单号示例：<span className="font-mono text-foreground/80">{form[s.key_name] || '—'}{todayYmd().replace(/-/g, '')}</span>
+                  </p>
+                )}
+              </div>
             </div>
           ))}
         </div>
-      </div>
+        {!canUpdate && (
+          <div className="px-6 pb-6">
+            <p className="text-sm text-muted-foreground">当前账号无修改权限</p>
+          </div>
+        )}
+      </section>
     </div>
   )
 }
