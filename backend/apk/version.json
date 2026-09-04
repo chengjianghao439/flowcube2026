@@ -1,7 +1,7 @@
 {
-  "version": "0.9.3",
-  "versionCode": 111,
+  "version": "0.9.4",
+  "versionCode": 112,
   "filename": "app-release.apk",
-  "releaseNote": "- 降低系统更新期间的服务器负担，减少更新影响日常使用的风险。",
-  "publishedAt": "2026-09-04T17:09:01.063Z"
+  "releaseNote": "- 全新官网围绕“业务有序，经营有数”展示采购、销售、仓储、财务与会计协作。",
+  "publishedAt": "2026-09-04T17:55:59.179Z"
 }
