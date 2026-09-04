@@ -23,3 +23,5 @@
 上线前只读核查（2026-09-05 01:01）：生产 timeout/flock/sha256sum/Docker 均存在，指定 Playwright 镜像已缓存；/tmp 与项目目录可用 16430 MB，使用率 66%，HEAD 仍为已发布 v0.9.2。未启动生产构建或验收。
 
 验证完成：57 项隔离/真实进程超时回归通过；actionlint、ShellCheck、bash -n、git diff --check 通过。依 AGENTS 第 1 节，新的 main 推送/生产发版需明确授权；当前交付为已验证的本地改动与可审阅范围，未推送。
+
+用户已于 2026-09-05 明确要求发布新版本，本计划修复纳入 v0.9.3；授权已具备，执行与验收见 `docs/release-v0.9.3-validation.md` 和相应 Actions。

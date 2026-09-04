@@ -1,7 +1,7 @@
 {
-  "version": "0.9.2",
-  "versionCode": 110,
+  "version": "0.9.3",
+  "versionCode": 111,
   "filename": "app-release.apk",
-  "releaseNote": "修复库存占用、销售退货和财务凭证问题，完善桌面自动更新与 PDA 更新流程，提升系统稳定性与权限保护。",
-  "publishedAt": "2026-09-04T13:02:12.022Z"
+  "releaseNote": "- 降低系统更新期间的服务器负担，减少更新影响日常使用的风险。",
+  "publishedAt": "2026-09-04T17:09:01.063Z"
 }
