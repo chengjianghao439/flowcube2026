@@ -82,7 +82,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 - 触发：`push` 到 `main`，或手动 `workflow_dispatch`
 - 前置门禁：等待实际待发布 SHA 的 Tests 与 Security Scan 全部成功，失败、取消或超时均不部署。
 - 目标：服务器获得部署锁后同步至该 SHA，再执行 `scripts/server-update.sh`；不得跳过发布门禁。
-- 结果：保存运行中镜像，构建新镜像，等待 MySQL 健康并执行迁移，再切换应用并验证接口、页面和公网入口；失败恢复旧应用镜像，数据库 DDL 不回滚。
+- 结果：GitHub runner 构建 SHA 标记的镜像，通过 SSH 传输并核验归档摘要和镜像 revision；生产保存运行中镜像，只加载 CI 产物，等待 MySQL 健康并执行迁移，再切换应用并验证接口、页面和公网入口；失败恢复旧应用镜像，数据库 DDL 不回滚。
 - PDA 首次迁移时先保存旧 APK 的已发布清单；新 APK 经独立构建校验、同 SHA 浏览器部署成功后，才由 `scripts/publish-pda.sh` 原子发布。
 
 ### 需要的 Actions 配置
@@ -109,7 +109,9 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
    ```
 4. 提交并推送：
    ```bash
-   git add .
+   # 根据已核对的提交范围，用 git add -- 逐路径暂存；不要夹带不明旧改动。
+   git diff --cached --stat
+   git diff --cached --check
    git commit -m "release: bump version"
    git push origin main
    ```

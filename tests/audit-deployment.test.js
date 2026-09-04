@@ -6,6 +6,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
+const { createHash } = require('node:crypto')
 
 const root = path.resolve(__dirname, '..')
 function deployment(scenario) {
@@ -14,6 +15,7 @@ function deployment(scenario) {
   fs.mkdirSync(bin)
   fs.mkdirSync(path.join(dir, 'scripts/lib'), { recursive: true })
   for (const file of ['server-update.sh', 'lib/ops-common.sh']) fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
+  for (const file of ['lib/runtime-guards.sh']) if (fs.existsSync(path.join(root, 'scripts', file))) fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
   fs.copyFileSync(path.join(root, 'docker-compose.yml'), path.join(dir, 'docker-compose.yml'))
   fs.writeFileSync(path.join(dir, 'scripts/release-gate.sh'), '#!/bin/bash\n[[ "$DEPLOY_TEST_SCENARIO" != gate && "$DEPLOY_TEST_SCENARIO" != rollback_failure && "$DEPLOY_TEST_SCENARIO" != first_deploy && "$DEPLOY_TEST_SCENARIO" != legacy ]]\n')
   if (scenario === 'legacy') {
@@ -31,10 +33,14 @@ fs.appendFileSync(log,JSON.stringify([cmd,...args])+'\\n');
 if(cmd==='git') {if(args[0]==='rev-parse')console.log((s==='sha'?'b':'a').repeat(40)); process.exit(0);}
 if(cmd==='flock'||cmd==='sleep')process.exit(0);
 if(cmd==='node')process.exit(s==='checks'?1:0);
-if(cmd==='df'){console.log('Filesystem 1M-blocks Used Available Use% Mounted on\\nfixture 1000 900 100 90% /');process.exit(0);}
+if(cmd==='timeout'){ const r=require('node:child_process').spawnSync(args[3],args.slice(4),{stdio:'inherit',env:process.env});process.exit(r.status??1); }
+if(cmd==='sha256sum'){console.log(require('node:crypto').createHash('sha256').update(fs.readFileSync(args.at(-1))).digest('hex')+'  '+args.at(-1));process.exit(0);}
+if(cmd==='df'){console.log('Filesystem 1M-blocks Used Available Use% Mounted on\\nfixture 20000 1000 '+(s==='lowdisk'?100:19000)+' 10% /');process.exit(0);}
 if(cmd==='curl'){console.log('<title>极序 Flow</title>');process.exit((s==='health'&&!fs.existsSync(rolled))||(s==='public'&&args.some(a=>a.startsWith('https://')))?22:0);}
 if(cmd==='docker') {
  const a=args.join(' ');
+ if(args[0]==='image'&&args[1]==='inspect')console.log((s==='wrong-image'?'b':'a').repeat(40));
+ if(s==='load'&&args[0]==='load')process.exit(1);
  if(a.startsWith('compose ps')&&s!=='first_deploy')console.log(args.at(-1)==='backend'?'old-backend-container':'old-frontend-container');
  if(args[0]==='inspect')console.log(args.at(-1).includes('backend')?'sha256:'+'1'.repeat(64):'sha256:'+'2'.repeat(64));
  if(args[0]==='tag'&&args[1].startsWith('sha256:'))fs.writeFileSync(rolled,'yes');
@@ -48,10 +54,14 @@ if(cmd==='docker') {
 }
 process.exit(0);
 `
-  for (const command of ['docker', 'curl', 'git', 'flock', 'sleep', 'node', 'df']) fs.writeFileSync(path.join(bin, command), mock, { mode: 0o755 })
+  for (const command of ['docker', 'curl', 'git', 'flock', 'sleep', 'node', 'df', 'timeout', 'sha256sum']) fs.writeFileSync(path.join(bin, command), mock, { mode: 0o755 })
   const log = path.join(dir, 'commands.jsonl')
+  const archive = path.join(dir, 'images.tar.gz')
+  fs.writeFileSync(archive, 'fixture archive')
   const env = { ...process.env, PATH: bin + ':' + process.env.PATH, DEPLOY_TEST_SCENARIO: scenario, DEPLOY_TEST_LOG: log,
     SKIP_GIT_PULL: '1', EXPECTED_COMMIT: 'a'.repeat(40), SKIP_RELEASE_GATE: '0', DEPLOY_LOCK_FILE: path.join(dir, 'deploy.lock'), DINGTALK_WEBHOOK: '', HEALTH_CHECK_ATTEMPTS: '2', HEALTH_CHECK_DELAY: '0', SMOKE_USERNAME: 'fixture', SMOKE_PASSWORD: 'fixture' }
+  env.DEPLOY_IMAGE_ARCHIVE = scenario === 'missing-archive' ? '' : archive
+  env.DEPLOY_IMAGE_SHA256 = scenario === 'corrupt-archive' ? '0'.repeat(64) : createHash('sha256').update('fixture archive').digest('hex')
   if (scenario === 'public') env.DEPLOY_PUBLIC_ORIGIN = 'https://deployment.example.invalid'
   delete env.DEPLOY_LOCK_FD
   try {
@@ -62,7 +72,7 @@ process.exit(0);
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 }
 
-for (const scenario of ['build', 'mysql', 'migration', 'start', 'health', 'gate', 'public', 'lowdisk']) {
+for (const scenario of ['load', 'mysql', 'migration', 'start', 'health', 'gate', 'public', 'lowdisk']) {
   test(`部署 ${scenario} 失败必须退出并恢复实际旧镜像`, () => {
     const result = deployment(scenario)
     assert.equal(result.status, 1, result.stderr)
@@ -78,11 +88,24 @@ for (const scenario of ['build', 'mysql', 'migration', 'start', 'health', 'gate'
 test('成功部署先迁移后替换应用，并通过门禁后结束', () => {
   const result = deployment('success')
   assert.equal(result.status, 0, result.stdout + result.stderr)
-  const migrate = result.commands.findIndex(c => c.join(' ').includes('compose run --rm --no-deps backend npm run migrate'))
+  const migrate = result.commands.findIndex(c => c[0] === 'docker' && c.slice(1, 3).join(' ') === 'compose run' && c.join(' ').includes('backend npm run migrate'))
   const replace = result.commands.findIndex(c => c.join(' ').includes('compose up -d --no-build backend frontend'))
   assert.ok(migrate >= 0 && replace > migrate, JSON.stringify(result.commands))
   assert.ok(!result.commands.some(c => c.includes('--force-recreate')))
+  assert.ok(!result.commands.some(c => c[0] === 'docker' && c.includes('build')), '生产不得编译')
+  const load = result.commands.findIndex(c => c[0] === 'docker' && c[1] === 'load')
+  const verify = result.commands.findIndex(c => c[0] === 'docker' && c.slice(1, 3).join(' ') === 'image inspect')
+  assert.ok(load >= 0 && verify > load && migrate > verify, '先加载并验证 CI 镜像，再执行迁移')
 })
+
+for (const scenario of ['missing-archive', 'corrupt-archive', 'wrong-image']) {
+  test(`CI 产物 ${scenario} 必须拒绝且不执行迁移/切换`, () => {
+    const r = deployment(scenario)
+    assert.equal(r.status, 1, r.stdout + r.stderr)
+    assert.ok(!r.commands.some(c => c[0] === 'docker' && c[1] === 'compose' && ['build', 'run', 'up'].includes(c[2])))
+    if (scenario !== 'wrong-image') assert.ok(!r.commands.some(c => c[0] === 'docker' && c[1] === 'load'))
+  })
+}
 
 test('提交不匹配时在构建及迁移前拒绝部署', () => {
   const result = deployment('sha')

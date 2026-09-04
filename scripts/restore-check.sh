@@ -16,8 +16,9 @@
 #   MIN_TABLES      最小表数阈值（默认从迁移文件数推导：backend/src/database/*.sql
 #                   中的 CREATE TABLE 净数 - 2 容差；可显式覆盖）
 #   MIN_ROWS        关键表最小行数（默认 1：0 行即判恢复异常）
-#   FRESH_HOURS     sale_orders 最新数据允许的最大「小时龄」（默认 48 = 2 天，
-#                   超出说明备份里没有近期业务数据，即便表非空也判为异常）
+#   BACKUP_MAX_AGE_HOURS 自动选取最新备份时允许的文件年龄（默认 48 小时）。
+#                   显式指定历史备份只检验恢复能力，文件过期时提示但不拒绝。
+#                   FRESH_HOURS 保留为旧配置别名，现按文件时间判断，不再查销售单。
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -48,7 +49,7 @@ fi
 MIN_TABLES="${MIN_TABLES:-$DERIVED_MIN_TABLES}"
 MIN_TABLES="${MIN_TABLES:-80}"
 MIN_ROWS="${MIN_ROWS:-1}"
-FRESH_HOURS="${FRESH_HOURS:-48}"
+BACKUP_MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS:-${FRESH_HOURS:-48}}"
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
@@ -61,13 +62,30 @@ fail() {
 }
 
 FILE="${1:-}"
+AUTO_LATEST=0
 if [ -z "$FILE" ]; then
-  FILE=$(ls -t "$BACKUP_DIR"/flowcube_*.sql.gz 2>/dev/null | head -1)
+  AUTO_LATEST=1
+  FILE=$(ls -t "$BACKUP_DIR"/flowcube_*.sql.gz 2>/dev/null | head -1 || true)
 fi
 if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
   fail "未找到备份文件（$BACKUP_DIR/flowcube_*.sql.gz）"
 fi
 echo "[$(ts)] [INFO] 校验备份：$(basename "$FILE")（$(du -h "$FILE" | cut -f1)）"
+
+# 无业务的时段也必须产出新备份；销售单时间不能代表备份作业是否在运行。
+[[ "$BACKUP_MAX_AGE_HOURS" =~ ^[1-9][0-9]*$ ]] || fail "BACKUP_MAX_AGE_HOURS 必须为正整数"
+FILE_EPOCH=$(stat -c %Y "$FILE" 2>/dev/null || stat -f %m "$FILE" 2>/dev/null) \
+  || fail "无法读取备份文件时间"
+[[ "$FILE_EPOCH" =~ ^[0-9]+$ ]] || fail "备份文件时间无效"
+AGE_SECONDS=$(( $(date +%s) - FILE_EPOCH ))
+[ "$AGE_SECONDS" -ge 0 ] || fail "备份文件时间晚于当前时间，请检查系统时钟"
+echo "[$(ts)] [INFO] 备份文件距今 $(( AGE_SECONDS / 3600 )) 小时（阈值 ${BACKUP_MAX_AGE_HOURS}h）"
+if [ "$AGE_SECONDS" -gt $(( BACKUP_MAX_AGE_HOURS * 3600 )) ]; then
+  if [ "$AUTO_LATEST" = 1 ]; then
+    fail "最新备份文件已过期，请检查每日备份作业"
+  fi
+  echo "[$(ts)] [WARN] 指定的历史备份已超过新鲜度阈值，本次仅验证其恢复能力"
+fi
 
 # 起一个临时 MySQL 容器（随机名防冲突），用 root 密码导入
 CONTAINER="flowcube-restore-check-$$"
@@ -129,18 +147,5 @@ for t in sys_users product_items sale_orders purchase_orders inventory_container
     fail "关键表 $t 行数为 0（阈值 ${MIN_ROWS}），备份疑似不完整"
   fi
 done
-
-# 数据新鲜度检查：sale_orders 最新 created_at 距今 > FRESH_HOURS 小时即 FAIL。
-# 备份可能表非空但数据陈旧（如误删后马上备份、或备份流程静默停摆多日）。
-LATEST_SO=$(docker exec "$CONTAINER" \
-  mysql -uroot -prestore_check_pw -N -e \
-  "SELECT TIMESTAMPDIFF(HOUR, MAX(created_at), NOW()) FROM \`$RESTORE_DB\`.\`sale_orders\`" 2>/dev/null | tr -d ' ')
-LATEST_SO=${LATEST_SO:-}
-if [ -n "$LATEST_SO" ]; then
-  echo "[$(ts)] [INFO] sale_orders 最新数据距今 ${LATEST_SO} 小时（阈值 ${FRESH_HOURS}h）"
-  if [ "$LATEST_SO" -gt "$FRESH_HOURS" ]; then
-    fail "sale_orders 最新数据距今 ${LATEST_SO} 小时（阈值 ${FRESH_HOURS}h），备份数据过于陈旧"
-  fi
-fi
 
 echo "[$(ts)] [OK] 备份恢复演练通过：$(basename "$FILE") 可完整导入（${TABLES} 张表）"

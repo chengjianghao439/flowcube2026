@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 服务器部署：构建/迁移先于应用切换；失败统一恢复旧应用镜像并验证健康。
+# 服务器只加载 CI 镜像、迁移和切换；失败统一恢复旧应用镜像并验证健康。
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -23,6 +23,7 @@ DOCKER_DEPLOY=0
 APPLICATION_SWITCHED=0
 PREVIOUS_BACKEND_IMAGE=''
 PREVIOUS_FRONTEND_IMAGE=''
+MIGRATION_CONTAINER=''
 ROLLBACK_RESULT='应用容器未切换'
 
 wait_for_health() {
@@ -87,13 +88,18 @@ rollback_deployment() {
 
 fail_deploy() {
   local reason="$1"
-  trap - ERR
+  trap - ERR INT TERM HUP
+  if [ -n "$MIGRATION_CONTAINER" ]; then
+    DOCKER_COMMAND_TIMEOUT=20 docker rm -f "$MIGRATION_CONTAINER" >/dev/null 2>&1 \
+      || echo '!! 迁移容器清理失败，需人工核对其状态与迁移记录' >&2
+  fi
   rollback_deployment || true
   echo "!! 部署失败：${reason}；${ROLLBACK_RESULT}" >&2
   dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" "🔴 FlowCube 部署失败（$(ts)）：${reason}；${ROLLBACK_RESULT}"
   exit 1
 }
 trap 'fail_deploy "第 ${LINENO} 行执行失败（exit=$?）"' ERR
+trap 'fail_deploy "部署收到中断或超时信号"' INT TERM HUP
 
 assert_expected_commit() {
   local expected="${EXPECTED_COMMIT:-${GITHUB_SHA:-}}" current
@@ -115,6 +121,7 @@ if [ "${SKIP_GIT_PULL:-0}" != '1' ]; then git pull --rebase --autostash origin m
 assert_expected_commit
 
 if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
+  . "$SCRIPT_DIR/lib/runtime-guards.sh"
   DOCKER_DEPLOY=1
   # 保存容器真正运行的 image ID，不能假设 latest 仍指向旧镜像。
   backend_id=$(docker compose ps -aq backend)
@@ -122,17 +129,38 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   if [ -n "$backend_id" ]; then PREVIOUS_BACKEND_IMAGE=$(docker inspect -f '{{.Image}}' "$backend_id"); fi
   if [ -n "$frontend_id" ]; then PREVIOUS_FRONTEND_IMAGE=$(docker inspect -f '{{.Image}}' "$frontend_id"); fi
 
-  echo '==> 构建新应用镜像（旧应用仍在运行）...'
-  docker compose build backend frontend
+  # 不允许回退到宿主编译：2 核生产机只接收 CI 已构建的产物。
+  archive="${DEPLOY_IMAGE_ARCHIVE:-}"
+  checksum="${DEPLOY_IMAGE_SHA256:-}"
+  [ -n "$archive" ] && [ -s "$archive" ] || fail_deploy '缺少 CI 镜像归档，请通过 Deploy Browser App 发布'
+  [[ "$checksum" =~ ^[a-f0-9]{64}$ ]] || fail_deploy '镜像归档摘要无效'
+  avail_mb=$(df -Pm "$ROOT" | awk 'NR==2 {print $4}')
+  [[ "$avail_mb" =~ ^[0-9]+$ ]] && [ "$avail_mb" -ge 4096 ] || fail_deploy '可用磁盘不足 4096 MB，拒绝加载；不自动清理回退镜像'
+  actual_checksum=$(bounded 120 sha256sum "$archive")
+  [ "${actual_checksum%% *}" = "$checksum" ] || fail_deploy 'CI 镜像归档摘要不匹配'
+  echo '==> 加载并验证 CI 应用镜像（旧应用仍在运行）...'
+  DOCKER_COMMAND_TIMEOUT=600 docker load -i "$archive"
+  for service in backend frontend; do
+    image_ref="flowcube-${service}:${expected}"
+    revision=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image_ref")
+    [ "$revision" = "$expected" ] || fail_deploy "${service} 镜像提交与待发布 SHA 不一致"
+  done
+  if [ "${SKIP_RELEASE_GATE:-0}" != '1' ]; then
+    docker image inspect "${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.55.0-noble}" >/dev/null \
+      || fail_deploy '缺少预装的浏览器门禁镜像，请在维护窗口准备；部署期间禁止拉取大型浏览器镜像'
+  fi
+  for service in backend frontend; do docker tag "flowcube-${service}:${expected}" "flowcube-${service}:latest"; done
   assert_expected_commit
-  docker compose up -d --no-build --wait --wait-timeout 120 mysql
+  DOCKER_COMMAND_TIMEOUT=150 docker compose up -d --no-build --wait --wait-timeout 120 mysql
   echo '==> 用新镜像的一次性容器执行迁移...'
-  docker compose run --rm --no-deps backend npm run migrate
+  MIGRATION_CONTAINER="flowcube-migrate-$$-$(date +%s)"
+  DOCKER_COMMAND_TIMEOUT=300 docker compose run --rm --no-deps --name "$MIGRATION_CONTAINER" backend npm run migrate
+  MIGRATION_CONTAINER=''
   assert_expected_commit
 
   echo '==> 切换 backend / frontend...'
   APPLICATION_SWITCHED=1
-  docker compose up -d --no-build backend frontend
+  DOCKER_COMMAND_TIMEOUT=120 docker compose up -d --no-build backend frontend
   wait_for_health
   wait_for_frontend
   if [ "${SKIP_RELEASE_GATE:-0}" = '1' ]; then

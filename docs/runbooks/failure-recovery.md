@@ -162,33 +162,19 @@ curl -fsS http://127.0.0.1:3000/api/health
 - monitor 告警「磁盘使用率 ≥85%」（`DISK_THRESHOLD` 可调）
 - 数据库备份开始失败（`backup-db.sh` 的 fail 钉钉），或 MySQL 写不进去（表空间满）
 
-### 应急顺序（从安全到激进）
+### 应急顺序
+
+先用有时限的小范围查询确认空间、负载与云盘指标。2026-09-04 故障中云平台确认 I/O 受限；此时不要运行 `docker system df`、全目录 `du` 或 prune 增加盘压力。磁盘使用率和 IOPS 是不同指标，空闲容量足够也不能排除 I/O 饱和。
 
 ```bash
-# 0. 先看大头
-df -h /
-du -sh /opt/flowcube/* 2>/dev/null | sort -rh | head -10
-
-# 1. 日志轮转检查：docker-compose.yml 已给 mysql/backend/frontend 配 json-file 50m×3，
-#    但存量历史日志要手动收敛
-docker system prune -f --volumes   # ⚠️ 会删未使用数据卷，先确认 loki_data 等被引用后再执行
-docker system prune -af            # ⚠️ 会删未使用的镜像/缓存，谨慎（部署后镜像缓存重建成本高）
-# 更稳妥的增量清理：
-docker image prune -f              # 只删悬空镜像
-docker builder prune -f            # 只删构建缓存
-
-# 2. 备份保留缩短：默认 14 天，紧急时删旧备份最快
-find /opt/flowcube/backups -name 'flowcube_*.sql.gz' -mtime +3 -delete   # 留最近 3 天
-# 或临时改 KEEP_DAYS 环境变量让 cron 下次自动收紧（改 .env 或 install-cron 的 cron 行）
-
-# 3. /versions 清理（桌面端历史安装包目录，nginx 挂载的 downloads 根下）
-ls -lt /var/www/flowcube-downloads/versions/ | head   # 确认结构
-# 保留最近几个版本，删除更老的：
-find /var/www/flowcube-downloads/versions -type f -mtime +60 -delete 2>/dev/null || true
-# ⚠️ 绝不动 /var/www/flowcube-downloads/latest.json（桌面更新唯一入口）与 current/ 下的当前包
-
-# 4. MySQL 自身占空间的表（如日志类）若有归档需求再处理；没有就到此为止
+timeout -k 5 10 df -h /
+cat /proc/loadavg
+cat /proc/pressure/io
 ```
+
+发布期间保持旧应用镜像和全部数据库卷。新发布器空间不足直接失败，门禁不自动删除任何镜像、缓存或卷。Docker 客户端超时不保证 daemon 内部任务已经停止；如果 Docker 管理查询也超时，先检查云平台磁盘延迟/限流和实例状态，避免重复派生同类请求。
+
+需要清理时，先在维护窗口列出具体对象、确认数据库备份及应用回退镜像，再取得对应删除授权；不要使用 `docker system prune --volumes` 一类范围不明的应急命令。备份保留策略默认 14 天，不因空间告警自行缩短。已有云盘容量未被分区使用时，可按核验后的分区表评估扩容，不能直接套用另一台机器的设备路径。
 
 ### 预防
 
@@ -203,5 +189,5 @@ find /var/www/flowcube-downloads/versions -type f -mtime +60 -delete 2>/dev/null
 - [ ] `docker compose ps` 三容器（mysql / backend / frontend）均 Up，重启计数不再增长
 - [ ] monitor 推送了「✅ 服务已恢复正常」钉钉（说明状态文件已回到 ok）
 - [ ] 若涉及库存：跑 `resync:inventory-stock` 或 `GET /api/inventory/check-consistency`
-- [ ] 若涉及备份恢复：`bash scripts/restore-check.sh` 通过（表数 + 关键表行数 + 数据新鲜度）
+- [ ] 若涉及备份恢复：`bash scripts/restore-check.sh` 通过（备份文件时间 + 导入 + 表数 + 关键表行数）。自动选最新文件时默认最多 48 小时，可用 `BACKUP_MAX_AGE_HOURS` 调整；显式传入历史文件时仅提示过期并验证其恢复能力。销售单多久没有新增与备份是否新鲜无关。
 - [ ] 若动过证书：`echo | openssl s_client -servername jixuflow.com -connect jixuflow.com:443 2>/dev/null | openssl x509 -noout -enddate`

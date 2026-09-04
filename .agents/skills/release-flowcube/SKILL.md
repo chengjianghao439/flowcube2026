@@ -49,7 +49,7 @@ bump 三端版本 ──┐
 
 ## 发版步骤
 
-按顺序执行。每一步都先向用户确认关键决策（新版本号、更新内容），发版是对外动作，不要替用户臆断。
+按顺序执行。用户明确要求发版后，可沿用本次任务已确认的范围，自行选择常规 patch 版本并整理更新内容，先向用户说明再执行；不要逐步重复索要同一授权。重大兼容性变化、范围不明或用户未授权的生产操作仍需澄清。仅咨询发版流程不构成发布授权。
 
 ### 0. 前置检查
 - 确认在项目根目录、当前在 `main`、工作区干净、本地 main 与 `origin/main` 一致。
@@ -62,8 +62,8 @@ bump 三端版本 ──┐
 
 ### 1. 决定新版本号
 - 看当前版本：`node -p "require('./desktop/package.json').version"`
-- 与用户确认升哪一位（语义化版本）：
-  - **patch**（0.4.7 → 0.4.8）：bug 修复、小改动、不影响用法。
+- 根据已确认改动选择语义化版本；涉及兼容性或产品决策时与用户确认：
+  - **patch**（0.4.7 → 0.4.8）：bug 修复、小改动、不影响用法；用户已授权发布修复时可直接选用，并告知版本号。
   - **minor**（0.4.7 → 0.5.0）：新增功能、向后兼容。
   - **major**：不兼容的大改（本项目目前都在 0.x，谨慎）。
 - 默认建议 patch，除非这一版有明显的新功能。
@@ -96,11 +96,15 @@ bash .agents/skills/release-flowcube/scripts/bump-version.sh <version>
 
 ### 4. 提交并推送 main（触发浏览器部署）
 ```bash
-git add .
+# 先核对本次任务的所有改动，再逐路径暂存。不能把不明来源的旧改动一并纳入。
+git status --short
+# git add -- 已核对的具体文件路径（业务改动与对应文档一起；通用技能另行提交）
+git diff --cached --stat
+git diff --cached --check
 git commit -m "release: 发布 v<version> — <一句话主题>"
 git push origin main
 ```
-push 后 `Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan 成功，再在部署锁内构建、迁移、切换和验证。检查失败/取消/超时不能发布；健康或页面门禁失败统一回退旧应用镜像，数据库迁移不回滚。
+push 后 `Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan 成功，由 GitHub runner 构建 Linux amd64 镜像，再在生产部署锁内核对归档摘要/镜像 SHA、加载、迁移、切换和验证。禁止在生产机重新编译。检查失败/取消/超时不能发布；健康或页面门禁失败统一回退旧应用镜像，数据库迁移不回滚。
 
 ### 5. 打 tag（触发桌面构建 + 发布 latest.json）
 ```bash

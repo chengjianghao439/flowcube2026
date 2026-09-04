@@ -76,6 +76,12 @@ jobs:
       - name: 审计回归 — 工具隔离、发布门禁、原生更新与退货扫码
         run: npm run test:audit-tooling && npm run test:audit-client
 
+      - name: 运维回归 — 备份恢复判定与数据库指标
+        run: node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js
+
+      - name: 跨域回归 — 桌面端与 PDA 精确来源
+        run: node --test tests/cors-policy.test.js
+
       - name: ESLint — 后端
         run: npm --prefix backend run lint
 
