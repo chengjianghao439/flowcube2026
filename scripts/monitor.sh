@@ -38,6 +38,11 @@ CERT_DAYS_WARN="${CERT_DAYS_WARN:-14}"
 # 重启次数高说明容器在 crash-loop，仅靠「running」检查会漏报
 RESTART_WARN="${RESTART_WARN:-3}"
 STATE_FILE="${STATE_FILE:-/opt/flowcube/backups/.monitor.state}"
+# cron 每 5 分钟启动一次；上一轮卡住时不得重复派生 Docker/TLS 探针。
+exec 8>"${MONITOR_LOCK_FILE:-${STATE_FILE}.lock}" || { echo '!! 无法创建监控锁' >&2; exit 1; }
+flock -n 8 || { echo '上一轮监控仍在运行，跳过本轮'; exit 0; }
+export DOCKER_COMMAND_TIMEOUT=5
+. "$SCRIPT_DIR/lib/runtime-guards.sh"
 # 持续异常的重提醒间隔（小时）。0 表示只在状态切换时通知（旧行为，不推荐）
 REMIND_HOURS="${REMIND_HOURS:-24}"
 
@@ -87,10 +92,15 @@ if docker inspect "$MYSQL_CONTAINER" >/dev/null 2>&1; then
     # 默认阈值 120：与 my.cnf 的 max_connections=151 拉开检测余量（实际生产峰值
     # 仅个位数，若真涨到 120 说明连接池已严重异常；不要设成 150 这种与上限重叠的值）
     MAX_CONN_WARN="${MAX_CONN_WARN:-120}"
-    threads=$(docker exec "$MYSQL_CONTAINER" mysql -N -e \
-      'SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME="Threads_connected"' 2>/dev/null | tr -d ' ')
-    threads=${threads:-0}
-    if [ "${threads:-0}" -ge "$MAX_CONN_WARN" ]; then
+    # 密码仅在容器内从已有环境读取，不展开到宿主命令参数或日志。
+    # 查询失败/空值必须告警，不能把认证或数据库故障伪装成 0 个连接。
+    if ! threads=$(docker exec "$MYSQL_CONTAINER" sh -c \
+      'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --connect-timeout=5 -N -B -e '\''SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME="Threads_connected"'\''' \
+      2>/dev/null); then
+      problems="${problems}MySQL 连接数查询失败；"
+    elif [[ ! "$threads" =~ ^[0-9]+$ ]]; then
+      problems="${problems}MySQL 连接数指标无效；"
+    elif [ "$threads" -ge "$MAX_CONN_WARN" ]; then
       problems="${problems}MySQL 活跃连接 ${threads}（阈值${MAX_CONN_WARN}）；"
     fi
   fi
@@ -107,8 +117,8 @@ pub_code=${pub_code:-000}
 
 # 6. TLS 证书到期检查：剩余不足 CERT_DAYS_WARN 天告警。
 #    Caddy 自动续期正常时应恒为「充足」，反复告警说明续期链路有问题。
-cert_end=$(echo | openssl s_client -servername "$CERT_HOST" -connect "$CERT_HOST:443" \
-  2>/dev/null | openssl x509 -noout -enddate 2>/dev/null)
+cert_end=$(bounded 10 openssl s_client -servername "$CERT_HOST" -connect "$CERT_HOST:443" </dev/null \
+  2>/dev/null | openssl x509 -noout -enddate 2>/dev/null) || cert_end=''
 if [ -n "$cert_end" ]; then
   cert_date=$(printf '%s' "$cert_end" | cut -d= -f2-)
   cert_epoch=$(date -d "$cert_date" +%s 2>/dev/null || date -j -f '%b %d %H:%M:%S %Y %Z' "$cert_date" +%s 2>/dev/null)
@@ -118,6 +128,8 @@ if [ -n "$cert_end" ]; then
       problems="${problems}${CERT_HOST} 证书 ${days_left} 天后到期（阈值${CERT_DAYS_WARN}天，过期：${cert_date}）；"
     fi
   fi
+else
+  problems="${problems}${CERT_HOST} 证书查询失败或超时；"
 fi
 
 # 7. 容器重启计数：restart: unless-stopped 会把崩溃容器反复拉起，

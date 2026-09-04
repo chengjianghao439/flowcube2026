@@ -24,6 +24,7 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 130
 
     steps:
       - name: Checkout code
@@ -40,6 +41,12 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/wait-release-checks.js
 
+      - name: Build application images on GitHub runner
+        timeout-minutes: 20
+        env:
+          DEPLOY_IMAGE_OUTPUT: ${{ runner.temp }}/flowcube-images.tar.gz
+        run: bash scripts/build-deploy-images.sh
+
       - name: Resolve deploy config
         id: deploy_config
         shell: bash
@@ -52,11 +59,13 @@ jobs:
         run: |
           set -euo pipefail
           if node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
-            echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
-            echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
-            echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
-            echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
-            echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
+            {
+              echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)"
+              echo "server_host=$(node scripts/read-deploy-config.js server.host)"
+              echo "server_user=$(node scripts/read-deploy-config.js server.user)"
+              echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)"
+              echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -66,11 +75,13 @@ jobs:
           SERVER_USER="${SERVER_USER_VAR:-root}"
           SERVER_SSH_PORT="${SERVER_SSH_PORT_VAR:-22}"
           SERVER_APP_PATH="${SERVER_APP_PATH_VAR:-/opt/flowcube}"
-          echo "erp_origin=$ERP_ORIGIN" >> "$GITHUB_OUTPUT"
-          echo "server_host=$SERVER_HOST" >> "$GITHUB_OUTPUT"
-          echo "server_user=$SERVER_USER" >> "$GITHUB_OUTPUT"
-          echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
-          echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
+          {
+            echo "erp_origin=$ERP_ORIGIN"
+            echo "server_host=$SERVER_HOST"
+            echo "server_user=$SERVER_USER"
+            echo "server_ssh_port=$SERVER_SSH_PORT"
+            echo "server_app_path=$SERVER_APP_PATH"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Validate deploy inputs
         shell: bash
@@ -108,6 +119,7 @@ jobs:
           chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy backend and frontend on server
+        timeout-minutes: 70
         shell: bash
         env:
           SMOKE_USERNAME: ${{ secrets.SMOKE_USERNAME }}
@@ -116,15 +128,30 @@ jobs:
           set -euo pipefail
           # 将新发布器带到旧 checkout，首次迁移清单必须早于 Git 更新。
           BOOTSTRAP_SCRIPT="/tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
-          scp -P "${{ steps.deploy_config.outputs.server_ssh_port }}" scripts/publish-pda.sh \
+          IMAGE_ARCHIVE="/tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
+          IMAGE_SHA256="$(sha256sum "$RUNNER_TEMP/flowcube-images.tar.gz" | cut -d' ' -f1)"
+          # 上传前预检临时目录与应用目录，保留余量；不触发 Docker 全盘扫描。
+          timeout -k 5 30 ssh -o ConnectTimeout=20 -p "${{ steps.deploy_config.outputs.server_ssh_port }}" \
+            "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" \
+            "test \$(df -Pm /tmp | awk 'NR==2 {print \$4}') -ge 6144 && test \$(df -Pm '${{ steps.deploy_config.outputs.server_app_path }}' | awk 'NR==2 {print \$4}') -ge 6144"
+          timeout -k 10 600 scp -o ConnectTimeout=20 -P "${{ steps.deploy_config.outputs.server_ssh_port }}" "$RUNNER_TEMP/flowcube-images.tar.gz" \
+            "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:$IMAGE_ARCHIVE"
+          timeout -k 5 60 scp -o ConnectTimeout=20 -P "${{ steps.deploy_config.outputs.server_ssh_port }}" scripts/publish-pda.sh \
             "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:$BOOTSTRAP_SCRIPT"
+          # %q 逐项转义远程环境，口令中的引号/美元符号不能改变远程脚本。
+          printf -v REMOTE_COMMAND '%q ' env \
+            "SERVER_APP_PATH=${{ steps.deploy_config.outputs.server_app_path }}" \
+            "EXPECTED_COMMIT=$GITHUB_SHA" "BOOTSTRAP_SCRIPT=$BOOTSTRAP_SCRIPT" \
+            "DEPLOY_IMAGE_ARCHIVE=$IMAGE_ARCHIVE" "DEPLOY_IMAGE_SHA256=$IMAGE_SHA256" \
+            "DEPLOY_PUBLIC_ORIGIN=${{ steps.deploy_config.outputs.erp_origin }}" \
+            "SMOKE_USERNAME=$SMOKE_USERNAME" "SMOKE_PASSWORD=$SMOKE_PASSWORD" bash -s
           ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o ConnectTimeout=20 \
-            -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" <<EOF
+            -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" "$REMOTE_COMMAND" <<'EOF'
           set -euo pipefail
-          cd "${{ steps.deploy_config.outputs.server_app_path }}"
+          cd "$SERVER_APP_PATH"
           exec 9>/tmp/flowcube-deploy.lock
-          flock -w 1800 9
-          trap 'rm -f "$BOOTSTRAP_SCRIPT"' EXIT
+          flock -w 300 9
+          trap 'rm -f "$BOOTSTRAP_SCRIPT" "$DEPLOY_IMAGE_ARCHIVE"' EXIT
           if [ ! -f backend/apk/published-version.json ] && [ -f backend/apk/version.json ] && [ -f backend/apk/app-release.apk ]; then
             bash "$BOOTSTRAP_SCRIPT" backend/apk/app-release.apk backend/apk/version.json backend/apk
           fi
@@ -132,9 +159,20 @@ jobs:
             echo "==> 检测到服务器 Git 工作区存在未解决冲突，重置到当前发布提交"
             git reset --hard HEAD
           fi
-          git fetch origin main
-          git reset --hard "${{ github.sha }}"
+          timeout -k 5 120 git fetch origin main
+          git reset --hard "$EXPECTED_COMMIT"
           # 发布门禁（release-gate）随部署执行：页面烟雾 + 对账回跳。凭据由 GitHub Secrets 注入，
           # 服务器不再 SKIP_RELEASE_GATE=1——坏版本（渲染错误/路由失效）会在部署时被当场拦下。
-          DEPLOY_LOCK_FD=9 EXPECTED_COMMIT="${{ github.sha }}" SKIP_GIT_PULL=1 DEPLOY_PUBLIC_ORIGIN="${{ steps.deploy_config.outputs.erp_origin }}" SMOKE_USERNAME="$SMOKE_USERNAME" SMOKE_PASSWORD="$SMOKE_PASSWORD" bash scripts/server-update.sh
+          # 600 秒清理窗口覆盖两轮健康等待(420s)、Docker 管理/清理和失败通知。
+          FLOWCUBE_DEPLOY_TIMEOUT_GROUP=1 DEPLOY_LOCK_FD=9 SKIP_GIT_PULL=1 timeout -k 600 2400 bash scripts/server-update.sh
           EOF
+
+      - name: Remove this run's temporary upload
+        if: always() && steps.deploy_config.outputs.server_host != ''
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          timeout -k 5 60 ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 \
+            -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" \
+            "rm -f /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz /tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh" \
+            || echo '::warning::临时上传清理失败，请检查本次 run 对应的 /tmp 文件'

@@ -1,0 +1,26 @@
+name: flowcube-local8
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: flowcube-dev-mysql8
+    command: ["--default-time-zone=+08:00"]
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: ${FLOWCUBE_DEV_MYSQL_ROOT_PASSWORD:?Run npm run dev:mysql8}
+      MYSQL_DATABASE: flowcube_dev8
+      MYSQL_USER: flowcube_dev
+      MYSQL_PASSWORD: ${FLOWCUBE_DEV_MYSQL_PASSWORD:?Run npm run dev:mysql8}
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u\"$$MYSQL_USER\" -p\"$$MYSQL_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+
+volumes:
+  mysql_data:

@@ -22,12 +22,16 @@
 - 默认中文沟通，用户可见文案用中文，代码标识符用英文。先说明要做什么，过程中报告关键发现，最后给出结果与验证依据。
 - 用户要求修改、修复或实现时，完成已授权范围内的工作；常规可逆的实现选择自行处理，确实缺少业务决策时再提问。
 - 开始先看 `git status --short --branch` 和相关 diff，保留用户及其他任务的改动。禁止用 reset、checkout、clean 等操作清除不属于本任务的内容。
+- **提交范围必须明确**：提交前先列出拟包含的文件与用途；只暂存本任务已核对的路径，不用全量 `git add .` / `git add --all` 把旧改动带入。业务代码及其必要说明文档同批提交；通用技能迁移、环境整理和版本发布分别组织提交。遇到不明来源的已有改动先保留，不能默认为本次提交内容。
 - 分支默认使用 `codex/` 前缀。需要隔离时使用工作树；不要假定工作树已经安装依赖或具备本地环境配置。
+- 发布工作树的收尾：完成发布并确认工作区干净后，切回本次专用 `codex/release-*` 分支，或停在已发布提交的 detached HEAD，释放临时占用的 `main`；用 `git worktree list` 核验。不要让发版目录长期阻止用户切换 main，也不要用强制切换或忽略工作树占用来绕过保护。原开发目录有未提交改动时先保存并处理与目标分支的重叠，不自动覆盖。
 - 未经用户明确要求，不执行 `git push`、打 tag、发版、重启生产服务或会删数据的 SQL。已授权的同一操作不重复询问。
 - 不因旧文档曾使用多智能体就自动并行启动代理；是否委派遵循当前会话指令。不要为普通子任务创建用户可见的新 Codex 任务。
 - 技能按当前会话可用清单选择并读取，不假设 Claude 的命令、hooks 或插件在 Codex 中自动生效。
+- 本机技能整理：通用 `brainstorming` 仅在新功能/复杂行为存在未决设计时介入，明确的小修复、配置和文档任务可直接执行。当前 checkout 的 `.agents/skills/frontend-design/SKILL.md` 已通过个人技能设置停用重复加载，保留内容相同的全局副本；仓库文件未删除，此设置不自动覆盖其他工作树路径。发版技能沿用用户已明确给出的授权，不逐步骤重复确认，也不把咨询当作发布授权。
 - **所需工具可直接安装（用户长期授权）**：执行任务过程中，如缺少必要的 Skill、MCP 服务、插件、CLI、依赖或其他工具，可自行查找并从官方或可信来源下载、安装和完成必要配置，无需逐项询问用户。优先复用已有能力，安装后验证可用并继续任务，在完成说明中简要记录安装内容；涉及项目配置或工作流程变化时，按第 0 节同步文档。需要用户登录、提供凭据、付费，或平台强制要求用户授权时，明确说明所需操作及原因；本授权不替代系统权限、工具调用限制或第三方授权，也不扩大生产操作及对外数据传输的授权范围。
-- 不把密钥、口令、Token 写进代码、文档、日志输出或提交。旧文档中的测试账号信息也不要复制到新文档。
+- **项目凭据代为输入（用户长期授权，2026-09-05）**：执行用户已授权的项目任务时，可以使用用户提供或已为本项目安全配置的账号、密码、密钥代为登录、输入密码和完成所需认证，无需每次重新请求输入密码的许可；优先复用已有有效会话。此授权适用于项目开发、测试和已授权的生产操作，不自动授权发版、删除数据或其他原本需要单独授权的操作。缺少必要凭据时再向用户索取；平台或工具明确要求本人完成的扫码、验证码、生物识别、权限确认等步骤，请用户协助，不绕过认证或访问控制。
+- 不把密钥、口令、Token 写进代码、文档、日志输出或提交，也不在回复中回显。旧文档中的测试账号信息不要复制到新文档；代为输入密码不意味着在文档保存密码。
 
 ## 2. 项目与目录
 
@@ -63,6 +67,16 @@
 在仓库根目录运行，具体脚本以各端 `package.json` 为准：
 
 本机已配置项目专用工具环境。若 `$HOME/.config/flowcube/dev-env.sh` 存在，执行本地开发、测试和 Android 命令前先 `source "$HOME/.config/flowcube/dev-env.sh"`，使用与 CI 一致的 Node 22，并加载 Java 21、Android SDK 路径；其他机器先核对实际安装位置，不复制本机路径。环境核查与 MCP 修复记录见 `docs/local-tooling-2026-09-04.md`。
+
+根目录 `.nvmrc` 声明 Node 22；`npm run dev:backend`、`dev:erp`、`dev:pda`、`dev:check`、`dev:setup` 会经 `scripts/with-dev-env.sh` 加载项目环境并验证 Node 主版本。`.nvmrc` 本身不会让未安装版本管理器的终端自动切换。`dev:pda` 默认使用 5174，与 ERP 5173 分开；仍以 Vite 实际输出为准。
+
+本机 Codex 个人设置已将 Claude 专用变量移出通用 shell 注入，并通过私有凭据文件/`http_headers_helper` 提供 GitHub MCP 认证；不把这些文件纳入仓库。个人设置备份、实际验证与需要用户完成的界面操作见 `docs/codex-local-setup-2026-09-04.md`。文件已修改不等于当前任务连接已重载；完成任务后重启应用。中文版“常规 → 跟进处理方式 → 调整方向”和“环境”的界面步骤由用户操作，不用其他手段绕过电脑控制工具对 Codex 自身的限制。
+
+`dev:setup` 用于新工作树，按三端 lockfile 执行 npm ci，不复制真实 `.env`；不要在用户正在使用的开发服务目录中为验证脚本而重装依赖。旧 `.codex/hooks.json` 的 EnterWorktree 匹配器已移除，需用户在 Codex 中文版“环境”中将 `npm run dev:setup` 配置为“设置脚本”；界面配置未完成前不能声称自动初始化已生效。2026-09-04 临时空目录验证中，前后端安装成功，桌面端 Electron 安装阶段超过 240 秒测试时限，完整三端初始化尚待验证；不能以已有 node_modules 目录判断安装成功。
+
+`npm run dev:mysql8` 使用本机 `colima-flowcube` context 启动 `flowcube-dev-mysql8`，监听 127.0.0.1:3307，库名 flowcube_dev8；随机凭据位于用户目录 `~/.config/flowcube/mysql8.env`（600），此命令只执行增量结构迁移，不自动导入业务数据或修改 backend/.env。`dev:mysql8:stop` 停服务并保留数据卷。
+
+**本机开发后端已于 2026-09-04 按用户授权切换至上述 MySQL 8.0.46**：旧 flowcube 库的 134 张表、215,843 行数据完整迁入，逐表内容摘要及结构一致，保留 233 条迁移记录（232 份 SQL 均已执行，另含历史记录）、56 个用户及原密码哈希/JWT。backend/.env 仅修改五个 DB 连接项，当前后端已重启并实测连接 3307；时区 +08:00。旧 MySQL 9.6 / 3306 和原库保留用于回退，不能继续向旧库写开发数据。电脑重启后先运行 `npm run dev:mysql8` 再启动后端。备份、校验与回退说明见 `docs/local-mysql8-cutover-2026-09-04.md`；切换后的新写入不可被直接回退丢弃。
 
 ```bash
 npm --prefix backend run dev
@@ -104,7 +118,7 @@ npm run test:permissions
 - 用户要求“开发者模式/给我网址”时，先检查当前可用的服务启动工具与已有服务。若有预览工具可使用；没有则通过终端运行第 3 节的 npm dev 命令，保留进程并读取实际监听地址。不能照搬不可用的 `preview_start`、`tabs_create` 等 Claude 工具名。
 - 现有 `.claude/launch.json` 可作为启动命令参考；它不意味着存在 `.Codex/launch.json` 或 Codex 已自动加载它。不要凭空创建替代路径。
 - 启动前检查端口与已有服务；端口冲突不杀其他任务进程。交付实际可访问的地址，不能假定一直是 5173。
-- 登录页交给用户本人完成登录，复用已有会话；不得为了预览临时关闭鉴权或越过权限。不要在文档记录密码。
+- 登录按第 1 节“项目凭据代为输入”授权执行：优先复用已有会话，需要登录时可代为输入项目账号和密码并继续验证；仅在缺少凭据或认证步骤要求本人操作时请用户协助。不得为了预览临时关闭鉴权或越过权限，不在文档记录密码。
 - 本地 dev 连接本机后端时，`authStore.ts` 的 `USE_PERSISTENT_DEV_SESSION` 使用 localStorage；生产和本地前端连接生产 API 时仍使用 sessionStorage。边界由 Vite 的 `__DEV_LOCAL_BACKEND__` 控制，不能放宽。
 - 更换端口会更换 origin，不共享 localStorage。会话有效期与续期读 auth/env 代码，不照搬旧文档的“固定 7 天”。
 - ERP 与 PDA 验证分别开标签页，`CrossClientNavigationGuard` 禁止同标签页跨客户端跳转。
@@ -169,6 +183,8 @@ npm run test:permissions
 
 ## 9. 前端与 PDA
 
+- 官网独立展示页位于 `frontend/src/pages/landing/`；2026-09-05 本地重构采用浅色首页、五场景业务示意、供货过程解释与核心能力、精选版本更新和三端下载区，说明见 `docs/landing-redesign-2026-09-05.md`，业务内容与代码依据见 `docs/landing-product-evidence-2026-09-05.md`。版本摘要维护在 `frontend/src/pages/landing/updates.ts`，随对应发布说明同步，不以工作区 package 版本冒充已发布版本；页面动效支持手动暂停与系统减少动态效果。演示数据必须明确标注；页内导航不修改 HashRouter 的 hash，系统入口保留既有鉴权。Windows 下载清单缺失时显示不可用状态，不能以登录链接冒充下载。此版仅本地实现，未发布。
+
 - 新 ERP 页面注册到 `routeRegistry.ts` / `routePatterns`，配置 permission、keepAlive、tabIdentity、nav 或 listPath；菜单自动生成。
 - API 统一经 `src/api/*.ts` + `payloadClient`，组件不直接 axios；自行提示错误时用 `skipGlobalError` 避免双 toast。
 - 服务端业务规则不复制到前端，不让前端传目标状态决定流转。生成的状态常量通过 `npm run generate:status` 更新。
@@ -188,20 +204,26 @@ npm run test:permissions
 - `main` 是发布来源，push main 触发检查与部署；浏览器、桌面发布前必须等待**实际待发布 SHA** 的 Tests 与 Security Scan 成功，旧 SHA/失败/取消/超时不放行。桌面手动 checkout_ref 也用实际 git HEAD，版本输入必须匹配其 package。PDA 还需同 SHA 浏览器部署成功；仅推 main 不等于桌面发版。
 - 发版必须读取 `release-flowcube` 技能。同步三端 package/lock、PDA versionName/versionCode 与 `backend/apk/version.json`；同版本重跑不应虚增版本号或发布时间。脚本用实际存在路径，不照搬旧 `.Codex/skills` 路径。
 - 生产安装包由 Windows CI 构建；迁移由 `scripts/server-update.sh` 部署链执行。不能直接改服务器代码，不能默认跳过发布门禁。
-- 部署在同一锁内固定 SHA、保存运行镜像 ID、构建新镜像、等待 MySQL 健康、一次性容器迁移，再切换应用。构建/迁移/本地或公网健康/页面门禁失败统一恢复旧应用镜像并检查健康；首次部署无旧版本要明确说明。数据库 DDL 不自动回滚，新迁移必须兼容旧代码；回退失败必须报人工恢复。部署门禁低磁盘时禁止清除回退镜像，直接失败。人工脚本入口要求显式 EXPECTED_COMMIT 并查询 GitHub 同 SHA 检查，推荐通过 workflow_dispatch 执行。
+- Docker 构建上下文由根 `.dockerignore` 排除真实环境/密钥、本机依赖、历史安装包、日志和工具目录；运行配置从部署环境注入。新增构建依赖需确认未误排除，不能为构建成功把真实 .env 或 node_modules 加回上下文。
+- GitHub runner 构建带 SHA 标签与 OCI revision 的 Linux amd64 镜像，通过 SSH 传输归档；生产禁止重新编译。部署在同一锁内固定 SHA、保存运行镜像 ID，检查空间与归档 SHA-256、加载并核对镜像 revision、等待 MySQL 健康、一次性容器迁移，再切换应用。产物校验/加载/迁移/本地或公网健康/页面门禁失败统一恢复旧应用镜像并检查健康；首次部署无旧版本要明确说明。数据库 DDL 不自动回滚，新迁移必须兼容旧代码；回退失败必须报人工恢复。部署门禁低磁盘时禁止清除回退镜像，直接失败。人工脚本入口要求显式 EXPECTED_COMMIT 并查询 GitHub 同 SHA 检查，推荐通过 workflow_dispatch 执行。
+- 发布辅助负载边界：Docker 请求由 `scripts/lib/runtime-guards.sh` 设时限；处于 CI 总时限内时共享信号范围，保证清理/回退可执行，宽限为 600 秒；页面验收顺序执行，每次 1 CPU / 1 GiB（不额外交换）/ 256 进程，容器内 14 分钟，超时/中断清理本次容器并回退应用。浏览器镜像须预装，部署前检查存在且 `--pull never`；磁盘不足直接失败，禁止门禁自动 prune。监控用独占锁拒绝重叠，Docker 5 秒、TLS 10 秒，失败必须记为异常。详见 `docs/DEPLOY.md` 和 `tests/deployment-resources.test.js`。这些改动已随 v0.9.3 于 2026-09-05 正式部署；候选 89 项部署/运维/CORS/客户端回归通过，同 SHA 的 Tests、Security 与实际生产页面/对账门禁均成功。实际容器资源限制、镜像提交号、线上清单与发布结果见 `docs/release-v0.9.3-result.md`。
 - 桌面更新清单由 `scripts/release-desktop.js` 写入 `/var/www/flowcube-downloads/latest.json`；`backend/downloads/` 已废弃。
 - 桌面更新使用可信 HTTPS 清单，由主进程重新取清单并绑定 version、URL、sha256；下载后及启动安装前均验摘要。无摘要不能自动安装，系统证书校验失败默认拒绝；取消按 IP/域名放行任意证书的旧行为。根组件消费更新事件，preload 保留订阅前待通知结果并支持清理监听。
 - PDA 已发布状态由不入 Git 的 `backend/apk/published-version.json` 指向唯一 APK；CI 先落安装包再原子替换清单。`backend/apk/version.json` 是构建目标/旧部署兼容清单，不能让浏览器 git reset 把未发布 APK 的版本提前对外公布。PDA 发布只更新挂载产物，不重置 Git 或重建后端；部署回退时将 version.json 原子恢复为已发布清单，兼容不识别 published-version.json 的旧镜像。
 - 依赖审计安装/网络/JSON 错误必须失败，不能视为零漏洞；直接高危以上阻断，传递漏洞仍记录。当前 HashRouter 使用 React Router 7；后端 qs 安全补丁由 overrides 固定最低修复版，移除覆盖前重新审计上游依赖范围。
 - 运维容器解析复用 `scripts/lib/ops-common.sh` 的 `resolve_container()`，不硬编码 Docker 容器名。备份先写临时文件、验证后落正式文件；失败清残留并告警。
+- 恢复演练的新鲜度按备份文件修改时间判断，自动演练默认拒绝超过 48 小时的文件（`BACKUP_MAX_AGE_HOURS`）；显式指定历史备份只检查恢复能力并提示过期。没有新销售单不能判定备份损坏。MySQL 连接数探针在容器内认证，查询失败或无效值必须记录异常，不得回退为零；隔离回归见 `tests/ops-monitor-restore.test.js`。
 - 库存漂移巡检只报警，不自动修库存缓存掩盖根因。调度器与服务器 cron 是不同机制，改动时检查 scheduler、install-cron 和部署同步链路。
 - 故障处理先读 `docs/runbooks/failure-recovery.md`，确认现场与备份后执行已授权操作；测试与生产严格区分。
+- CORS 规则集中在 `backend/src/config/cors.js`：`CORS_ORIGIN` 支持逗号分隔的精确来源，Electron 的字符串 `null` 由 `CORS_ALLOW_NULL_ORIGIN` 单独控制；内置 Android PDA 当前源码默认来源为 `https://localhost`。不要为兼容客户端而打开任意来源反射。v0.9.3 新后端已部署，当前生产保留既有反射兼容配置，须完成实际客户端验证后再收窄来源；测试见 `tests/cors-policy.test.js`，部署说明见 `docs/DEPLOY.md`。
+- 2026-09-04～05 生产环境核查与恢复见 `docs/production-environment-check-2026-09-04.md`：用户授权普通重启后，9 月 5 日 00:12 网站/SSH 恢复。已完成现有 50 GiB 云盘的系统分区扩展（使用率约 66%）、.env 0600、SSH 密钥登录、宿主 Node 22.23.2，以及停用仅支持单队列网卡上不适用的 ecs_mq 优化；配置/数据库/分区表已备份至服务器和 Mac。生产 MySQL 实测 8.0.45，135 表，232 份 SQL 无缺失，另有 1 条历史迁移记录。备份误报、连接数探针和 CORS 配置能力修复已随 v0.9.3 部署（CORS 实际来源配置未收窄）；自动异地备份目的地尚未配置。云盘读写受限已由云平台确认，具体占用进程根因仍不明，避免重跑无时限的整盘 Docker 统计。
 
 ## 11. 历史材料与本次迁移记录
 
 - 历史业务细节/事故：`CLAUDE.md`，尤其第 20 节。它含不同时期相互覆盖的记录，必须结合当前代码确认，不能直接作为尚未修复清单。
 - 架构设计：`docs/01-系统技术与架构总规范.md`；设计与实现不一致时先查实现并记录差异。
-- 本地工具核查（2026-09-04）：三端依赖完整；补装 Node 22、Colima/Lima，设置项目专用 Java/Android 命令环境；修正电脑控制 MCP 启动路径。注意本机 MySQL 实测为 9.6，不能视为部署用 MySQL 8.0 的等价验证环境。详见 `docs/local-tooling-2026-09-04.md`，后续环境变化需同步更新。
+- 本地工具核查（2026-09-04）：补装 Node 22、Colima/Lima，设置项目专用 Java/Android 命令环境；修正电脑控制 MCP 启动路径。初次核查本机数据库为 MySQL 9.6，随后已将开发后端和原数据切换到独立 MySQL 8.0.46，见第 3 节及 `docs/local-mysql8-cutover-2026-09-04.md`。工具及依赖验证的范围见 `docs/local-tooling-2026-09-04.md`，后续环境变化需同步更新。
+- Chrome 扩展已从 Google 官方服务下载并验证发布者签名，经用户明确同意权限后安装启用；配套桌面插件及应用自动注册的 native-host 均通过官方诊断，CUA 已通过扩展读取 Chrome 真实标签页。安装目录须保留，解压导入方式不保证自动更新，详见 `docs/local-tooling-2026-09-04.md`。浏览器通信可用不等于服务器恢复。
 - 本次迁移（2026-09-04）：以本文件替换本地旧 AGENTS 快照；建立第一时间同步文档规则；按 Codex 当前工具能力重写预览约定；不再复制固定计数、过时会话有效期及历史测试口令；保留库存、财务、PDA、打印和发布约束；`CLAUDE.md` 顶部改为指向本文件；从 `.gitignore` 移除 AGENTS.md 忽略项。
 - 上述说明书迁移任务仅验证文档内容、引用路径、npm 脚本和 Git diff；后续系统审计结果见第 12 节，不能混用两次验证范围。
 
@@ -211,4 +233,4 @@ npm run test:permissions
 
 修复任务结束时的未提交状态与验证证据保留在上述报告；用户随后授权将修复纳入 **v0.9.2 / PDA versionCode 110** 正式发布，更新内容见 `docs/release-notes/0.9.2.md`。发布结果以该 tag 对应 SHA 的 Actions 和线上版本清单为准，不能仅凭版本文件认定已部署。业务批量回归只使用新建隔离 MySQL 8；本地开发联调数据库另已执行增量迁移 232，不据此推断生产历史数据已自动修复。Windows/Android 原生设备与物理打印仍须在对应环境验收。运行时、工作流和依赖扫描的验证范围分别记录，不把模拟发布测试等同于一次真实生产发布。
 
-v0.9.2 发布准备复测：前端 69、客户端/PDA 发布 31、部署工具 22 项通过；lint、app 类型检查、ERP/PDA Web 构建通过，三端生产依赖审计为 0。本地开发首页、跳转登录页和 Vite 代理后端健康接口已实跑，无页面脚本错误；登录后业务页仍待用户手动登录验收，不能把公开页面结果写成全部页面通过。正式部署另执行已有账号页面/报表/对账回跳门禁。
+v0.9.2 发布准备复测：前端 69、客户端/PDA 发布 31、部署工具 22 项通过；lint、app 类型检查、ERP/PDA Web 构建通过，三端生产依赖审计为 0。本地开发首页、跳转登录页和 Vite 代理后端健康接口已实跑，无页面脚本错误；当时登录后业务页尚未验收，不能把公开页面结果写成全部页面通过。正式部署另执行已有账号页面/报表/对账回跳门禁。

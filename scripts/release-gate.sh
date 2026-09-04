@@ -1,89 +1,48 @@
 #!/usr/bin/env bash
-# 在服务器仓库根目录执行：bash scripts/release-gate.sh
-# 作用：执行发布前门禁，任一烟雾失败即退出非 0
+# 生产验收按顺序执行；限制辅助容器，失败由 server-update 回退应用。
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-
+. "$ROOT/scripts/lib/runtime-guards.sh"
 PLAYWRIGHT_IMAGE="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.55.0-noble}"
-# 前端容器 80 已让位 Caddy，回环端口为 8080（见 docker-compose.yml 注释）
-SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://127.0.0.1:8080}"
-SMOKE_USERNAME="${SMOKE_USERNAME:-}"
-SMOKE_PASSWORD="${SMOKE_PASSWORD:-}"
+export PAGE_SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://127.0.0.1:8080}"
+export SMOKE_USERNAME="${SMOKE_USERNAME:-}" SMOKE_PASSWORD="${SMOKE_PASSWORD:-}"
+[ -f docker-compose.yml ] || { echo '!! 未找到 docker-compose.yml' >&2; exit 1; }
+[ -n "$SMOKE_USERNAME" ] && [ -n "$SMOKE_PASSWORD" ] || { echo '!! 缺少 SMOKE_USERNAME / SMOKE_PASSWORD' >&2; exit 1; }
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "!! 缺少 docker，无法执行发布门禁" >&2
-  exit 1
-fi
-
-if [ ! -f docker-compose.yml ]; then
-  echo "!! 未找到 docker-compose.yml，无法执行发布门禁" >&2
-  exit 1
-fi
-
-if [ -z "$SMOKE_USERNAME" ] || [ -z "$SMOKE_PASSWORD" ]; then
-  echo "!! 缺少 SMOKE_USERNAME / SMOKE_PASSWORD，无法执行页面烟雾检查" >&2
-  exit 1
-fi
-
-cleanup_docker_space() {
-  echo "==> 预检 Docker 磁盘空间..."
-  local avail_mb
-  avail_mb="$(df -Pm / | awk 'NR==2 {print $4}')"
-  echo "==> 当前可用空间：${avail_mb}MB"
-  if [ "${avail_mb:-0}" -lt 2500 ]; then
-    if [ "${PRESERVE_DEPLOY_IMAGES:-0}" = '1' ]; then
-      echo '!! 部署期间磁盘空间不足；保留回退镜像并终止门禁，请先在部署窗口外清理磁盘' >&2
-      exit 1
-    fi
-    echo "==> 可用空间偏低，清理 Docker builder cache / 未使用镜像..."
-    docker builder prune -af >/dev/null
-    docker image prune -af >/dev/null
-    avail_mb="$(df -Pm / | awk 'NR==2 {print $4}')"
-    echo "==> 清理后可用空间：${avail_mb}MB"
-    if [ "${avail_mb:-0}" -lt 2500 ]; then
-      echo "!! 清理后空间仍不足 2500MB，无法安全拉取 Playwright 容器" >&2
-      exit 1
-    fi
-  fi
+exec 8>"${RELEASE_GATE_LOCK_FILE:-/tmp/flowcube-release-gate.lock}"
+flock -n 8 || { echo '!! 已有发布门禁运行，拒绝重叠执行' >&2; exit 1; }
+gate_name="flowcube-gate-$$-$(date +%s)"
+cleanup_gate() {
+  local status=$?
+  trap - EXIT
+  DOCKER_COMMAND_TIMEOUT=15 docker rm -f "$gate_name" >/dev/null 2>&1 || true
+  exit "$status"
 }
+trap cleanup_gate EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
 
-echo "==> 检查旧桌面下载目录是否被误用..."
-# 服务器宿主机不装 node（运行时都在容器里），本检查需要宿主机 git 仓库上下文。
-# 若无 node 则降级跳过——这是装饰性检查（防废弃目录被误用），不是核心门禁。
-if command -v node >/dev/null 2>&1; then
-  node scripts/check-deprecated-downloads.js
-else
-  echo "  宿主机无 node，跳过废弃下载目录检查（服务器部署从 git reset，目录不会被误写）"
+avail_mb=$(df -Pm "$ROOT" | awk 'NR==2 {print $4}')
+if [[ ! "$avail_mb" =~ ^[0-9]+$ ]] || [ "$avail_mb" -lt 4096 ]; then
+  echo '!! 可用空间不足 4096 MB，终止门禁；不自动 prune 镜像/缓存/数据卷' >&2
+  exit 1
 fi
 
-echo "==> 运行报表烟雾检查..."
-docker compose exec -T backend npm run smoke:reports
+echo '==> 检查旧桌面下载目录是否被误用...'
+if command -v node >/dev/null 2>&1; then bounded 30 node scripts/check-deprecated-downloads.js; fi
+echo '==> 运行报表烟雾检查...'
+DOCKER_COMMAND_TIMEOUT=120 docker compose exec -T backend npm run smoke:reports
 
-cleanup_docker_space
-
-echo "==> 运行页面烟雾检查（Playwright 容器）..."
-docker run --rm --network host \
-  -e PAGE_SMOKE_BASE_URL="$SMOKE_BASE_URL" \
-  -e SMOKE_USERNAME="$SMOKE_USERNAME" \
-  -e SMOKE_PASSWORD="$SMOKE_PASSWORD" \
-  -e PLAYWRIGHT_BROWSER_NAME=chromium \
-  -e PLAYWRIGHT_SKIP_BROWSER_INSTALL=1 \
-  -v "$ROOT":"$ROOT" \
-  -w "$ROOT" \
-  "$PLAYWRIGHT_IMAGE" \
-  node scripts/smoke-pages.node.js
-
-echo "==> 运行对账回跳烟雾检查（Playwright 容器）..."
-docker run --rm --network host \
-  -e PAGE_SMOKE_BASE_URL="$SMOKE_BASE_URL" \
-  -e SMOKE_USERNAME="$SMOKE_USERNAME" \
-  -e SMOKE_PASSWORD="$SMOKE_PASSWORD" \
-  -e PLAYWRIGHT_BROWSER_NAME=chromium \
-  -e PLAYWRIGHT_SKIP_BROWSER_INSTALL=1 \
-  -v "$ROOT":"$ROOT" \
-  -w "$ROOT" \
-  "$PLAYWRIGHT_IMAGE" \
-  node scripts/smoke-reconciliation-jumps.node.js
-
-echo "==> 发布门禁通过"
+for script in smoke-pages.node.js smoke-reconciliation-jumps.node.js; do
+  echo "==> 运行 ${script}（最多 1 CPU / 1 GiB / 14 分钟）..."
+  # 容器内 timeout 真正结束浏览器进程；客户端超时/中断由 EXIT 清理兜底。
+  # --memory-swap 与 --memory 相等，避免验收把主机拖入交换抖动。
+  DOCKER_COMMAND_TIMEOUT=900 docker run --rm --init --pull never --name "$gate_name" --network host \
+    --cpus 1 --memory 1g --memory-swap 1g --pids-limit 256 --shm-size 256m \
+    -e PAGE_SMOKE_BASE_URL -e SMOKE_USERNAME -e SMOKE_PASSWORD \
+    -e PLAYWRIGHT_BROWSER_NAME=chromium -e PLAYWRIGHT_SKIP_BROWSER_INSTALL=1 \
+    -v "$ROOT":"$ROOT" -w "$ROOT" "$PLAYWRIGHT_IMAGE" \
+    timeout -k 10 840 node "scripts/$script"
+done
+echo '==> 发布门禁通过'

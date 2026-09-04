@@ -3,6 +3,13 @@
   "private": true,
   "description": "仓库根脚本（tag / 工具），业务包见 frontend、desktop、backend",
   "scripts": {
+    "dev:backend": "bash scripts/with-dev-env.sh npm --prefix backend run dev",
+    "dev:erp": "bash scripts/with-dev-env.sh npm --prefix frontend run dev",
+    "dev:pda": "bash scripts/with-dev-env.sh env PORT=5174 npm --prefix frontend run dev:pda",
+    "dev:check": "bash scripts/with-dev-env.sh bash scripts/check-local-dev.sh",
+    "dev:setup": "bash scripts/with-dev-env.sh bash scripts/setup-worktree.sh",
+    "dev:mysql8": "bash scripts/with-dev-env.sh bash scripts/mysql8-dev.sh start",
+    "dev:mysql8:stop": "bash scripts/with-dev-env.sh bash scripts/mysql8-dev.sh stop",
     "pretag": "bash scripts/git-tag-check.sh",
     "release:tag-desktop": "bash scripts/release-desktop-tag.sh",
     "release:prod": "bash scripts/release-prod.sh",

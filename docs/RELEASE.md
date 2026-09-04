@@ -82,7 +82,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 - 触发：`push` 到 `main`，或手动 `workflow_dispatch`
 - 前置门禁：等待实际待发布 SHA 的 Tests 与 Security Scan 全部成功，失败、取消或超时均不部署。
 - 目标：服务器获得部署锁后同步至该 SHA，再执行 `scripts/server-update.sh`；不得跳过发布门禁。
-- 结果：保存运行中镜像，构建新镜像，等待 MySQL 健康并执行迁移，再切换应用并验证接口、页面和公网入口；失败恢复旧应用镜像，数据库 DDL 不回滚。
+- 结果：GitHub runner 构建 SHA 标记的镜像，通过 SSH 传输并核验归档摘要和镜像 revision；生产保存运行中镜像，只加载 CI 产物，等待 MySQL 健康并执行迁移，再切换应用并验证接口、页面和公网入口；失败恢复旧应用镜像，数据库 DDL 不回滚。
 - PDA 首次迁移时先保存旧 APK 的已发布清单；新 APK 经独立构建校验、同 SHA 浏览器部署成功后，才由 `scripts/publish-pda.sh` 原子发布。
 
 ### 需要的 Actions 配置
@@ -109,7 +109,9 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
    ```
 4. 提交并推送：
    ```bash
-   git add .
+   # 根据已核对的提交范围，用 git add -- 逐路径暂存；不要夹带不明旧改动。
+   git diff --cached --stat
+   git diff --cached --check
    git commit -m "release: bump version"
    git push origin main
    ```
@@ -131,6 +133,12 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 `🔥 BUILD VERSION: x.x.x`
 
 该版本来自 Electron `app.getVersion()`，与 **`desktop/package.json` / Git tag** 一致即表示本次构建版本正确。
+
+## 发布工作树收尾
+
+使用独立工作树发版时，完成发布后检查该工作树是否干净，再将其切回本次专用 `codex/release-*` 分支；没有专用分支时可停在已发布提交的 detached HEAD。用 `git worktree list` 确认发布目录不再占用 `main`，避免用户原目录切换时报 `main is already used by worktree`。不要用强制切换或忽略占用的参数绕过 Git 保护。
+
+释放分支占用不等于原目录可以无冲突切换：原目录的未提交和未跟踪文件仍需保留；如果与新 main 重叠，先保存工作并合并差异，不删除文件或强制覆盖。清理工作树本身也要先确认没有需要保留的文件。
 
 ## 异常处理
 

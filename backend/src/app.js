@@ -8,6 +8,7 @@ const errorHandler    = require('./middleware/errorHandler')
 const opLogger        = require('./middleware/opLogger')
 const requestLogger   = require('./middleware/requestLogger')
 const { env } = require('./config/env')
+const { buildCorsOptions } = require('./config/cors')
 const { successResponse } = require('./utils/response')
 
 // ─── 启动安全校验 ─────────────────────────────────────────────────────────────
@@ -42,28 +43,7 @@ app.use(
         },
   ),
 )
-// Electron 桌面请求常见 Origin: null；仅配 CORS_ORIGIN=http://localhost:5173 会拒绝桌面端
-const corsOriginEnv = env.CORS_ORIGIN
-const corsReflect = env.CORS_REFLECT || corsOriginEnv === '*'
-const allowNullOrigin =
-  corsReflect ||
-  corsOriginEnv === '*' ||
-  env.CORS_ALLOW_NULL_ORIGIN
-const staticAllowed = corsOriginEnv || (!isProd ? 'http://localhost:5173' : '')
-app.use(cors({
-  origin: corsReflect
-    ? true
-    : (origin, callback) => {
-        if (!origin) {
-          return callback(null, allowNullOrigin)
-        }
-        if (staticAllowed && origin === staticAllowed) {
-          return callback(null, true)
-        }
-        return callback(null, false)
-      },
-  credentials: true,
-}))
+app.use(cors(buildCorsOptions(env)))
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(requestLogger)
