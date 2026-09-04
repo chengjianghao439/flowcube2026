@@ -2,11 +2,11 @@ import { toast } from '@/lib/toast'
 import type { SaleOrderItem } from '@/types/sale'
 import type { ProductUnit } from '@/types/products'
 
-export const PHONE_RE = /^1\d{10}$/
+export const PHONE_RE = /^[0-9+()\-\s]{3,30}$/
 
-export function parsePositiveInteger(value: string) {
+export function parsePositiveQuantity(value: string) {
   if (!value.trim()) return 0
-  const num = Number.parseInt(value, 10)
+  const num = Number.parseFloat(value)
   return Number.isFinite(num) ? num : 0
 }
 
@@ -68,8 +68,8 @@ export function validateSaleForm(input: {
   if (!filledItems.length) { toast.warning('请添加至少一条明细'); return null }
   const badItemKeys = new Set(filledItems.filter(i => i.quantity <= 0 || i.unitPrice <= 0).map(i => i._key))
   setInvalidItemKeys(badItemKeys)
-  if (filledItems.find(i => !Number.isInteger(i.quantity) || i.quantity <= 0)) { toast.warning('销售数量必须为大于 0 的整数'); return null }
+  if (filledItems.find(i => !Number.isFinite(i.quantity) || i.quantity <= 0)) { toast.warning('销售数量必须大于 0'); return null }
   if (filledItems.find(i => i.unitPrice <= 0)) { toast.warning('商品价格必须大于 0'); return null }
-  if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的手机号'); return null }
+  if (receiverPhone && !PHONE_RE.test(receiverPhone)) { toast.warning('请输入正确的联系电话'); return null }
   return filledItems
 }

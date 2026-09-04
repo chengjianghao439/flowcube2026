@@ -29,7 +29,7 @@ export function KpiPendingPurchase() {
 export function KpiPendingSale() {
   const { data, isLoading } = useDashboardSummary()
   const n = data?.pendingSaleOrders ?? 0
-  return <StatTile label="待处理销售" value={data?.pendingSaleOrders ?? '—'} hint="草稿 + 已占库 + 拣货中" icon={ClipboardList} tone={n > 0 ? 'warning' : 'primary'} trend={n > 0 ? 'up' : undefined} loading={isLoading} />
+  return <StatTile label="待处理销售" value={data?.pendingSaleOrders ?? '—'} hint="待占库 + 部分占库 + 已占库" icon={ClipboardList} tone={n > 0 ? 'warning' : 'primary'} trend={n > 0 ? 'up' : undefined} loading={isLoading} />
 }
 
 // —— 今日作业（report.view）——
@@ -46,7 +46,7 @@ export function KpiScanToday() {
 export function KpiReceivable() {
   const { data, isLoading } = useAging()
   const s = data?.receivable
-  return <StatTile label="应收敞口" value={s ? money(s.total) : '—'} hint={s && s.overdueAmount > 0 ? `逾期 ${money(s.overdueAmount)}` : `${s?.totalCount ?? 0} 笔未收回`} icon={HandCoins} tone="info" loading={isLoading} />
+  return <StatTile label="未清应收" value={s ? money(s.total) : '—'} hint={s ? `${s.totalCount} 笔未收回` : '加载应收余额'} icon={HandCoins} tone="info" loading={isLoading} />
 }
 export function KpiPayable() {
   const { data, isLoading } = useAging()

@@ -6,8 +6,6 @@ interface SaleRowActionsProps {
   anyPending: boolean
   onAsk: (title: string, desc: string, onConfirm: () => void) => void
   onReserveSale: (id: number) => void
-  onReleaseSale: (id: number) => void
-  onShipSale: (id: number) => void
   onCancelSale: (id: number) => void
   onDeleteSale: (id: number) => void
   onViewTask: () => void
@@ -17,14 +15,14 @@ interface SaleRowActionsProps {
 
 export function SaleRowActions({
   row, anyPending,
-  onAsk, onReserveSale, onReleaseSale, onShipSale, onCancelSale, onDeleteSale,
+  onAsk, onReserveSale, onCancelSale, onDeleteSale,
   onViewTask, onDetail, onPrint,
 }: SaleRowActionsProps) {
   // 占库期（状态2/6，无 taskId 也可改单）与执行期（状态3，需 taskId）都可改单；
   // 没有取消/改单挂起中、且非多仓、零出库才允许——与详情页 canAdjust 口径一致。
   const canAdjust = (row.status === 2 || row.status === 3 || row.status === 6)
     && !row.warehouseTaskCancelRequestedAt && !row.warehouseTaskAdjustmentRequestedAt
-    && !row.isMultiWarehouse && (row.shippedTotalQty ?? 0) === 0
+    && !row.executionAdjustmentBlocked && !row.isMultiWarehouse && (row.shippedTotalQty ?? 0) === 0
 
   // 打印与订单状态无关（模板只依赖订单基础信息 + 明细），每个状态都可打印，与采购单一致
   const printItem = { label: '打印订单', onClick: onPrint }
@@ -49,15 +47,15 @@ export function SaleRowActions({
   if (row.status === 2) {
     return (
       <TableActionsMenu
-        primaryLabel="发货"
+        primaryLabel="核对发货"
         primaryDisabled={anyPending}
-        onPrimaryClick={() => onAsk('发起出库', '将创建仓库出库任务，由仓库人员执行拣货后完成出库，是否继续？', () => onShipSale(row.id))}
+        onPrimaryClick={onDetail}
         items={[
           { label: '查看详情', onClick: onDetail },
           { label: '占库', onClick: () => onReserveSale(row.id) },
           ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: anyPending }] : []),
           printItem,
-          { label: '取消占库', onClick: () => onAsk('取消占库', '将释放已预占的库存并将订单恢复为草稿状态，是否继续？', () => onReleaseSale(row.id)), separatorBefore: true, disabled: anyPending },
+          { label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: anyPending },
           { label: '取消订单', onClick: () => onAsk('取消订单', '将释放已占用库存并取消销售单，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending },
         ]}
       />
@@ -72,11 +70,11 @@ export function SaleRowActions({
         primaryDisabled={anyPending}
         onPrimaryClick={() => onReserveSale(row.id)}
         items={[
-          { label: '发货', onClick: () => onAsk('发起出库', '仅对已占库的数量创建出库任务，未占部分不会发货，是否继续？', () => onShipSale(row.id)), disabled: anyPending },
+          { label: '核对发货', onClick: onDetail, disabled: anyPending },
           { label: '查看详情', onClick: onDetail },
           ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: anyPending }] : []),
           printItem,
-          { label: '取消占库', onClick: () => onAsk('取消占库', '将释放已预占的库存，是否继续？', () => onReleaseSale(row.id)), separatorBefore: true, disabled: anyPending },
+          { label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: anyPending },
           { label: '取消订单', onClick: () => onAsk('取消订单', '将释放已占用库存并取消销售单，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending },
         ]}
       />

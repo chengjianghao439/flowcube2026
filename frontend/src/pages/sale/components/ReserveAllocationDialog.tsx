@@ -3,7 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
-import { Loader2, AlertTriangle } from 'lucide-react'
+import { Loader2, AlertTriangle, Boxes, PackageSearch, Warehouse } from 'lucide-react'
+import { clampAllocationQty, isAllocationQtyValid } from './saleAllocation'
 import { cn } from '@/lib/utils'
 import { useSaleReservePreview, useReserveSale } from '@/hooks/useSale'
 import { ApiClientError } from '@/api/client'
@@ -39,7 +40,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
         checked: i.remainToReserve > 0,
         warehouseId: i.currentWarehouseId,
         warehouseName: i.currentWarehouseName,
-        qty: i.remainToReserve,
+        qty: clampAllocationQty(i.remainToReserve, i.quantity),
       }]),
     ))
   }, [preview])
@@ -51,15 +52,23 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
     () => items.filter(i => rows[i.itemId]?.checked && (rows[i.itemId]?.qty ?? 0) > 0),
     [items, rows],
   )
+  const orderQty = items.reduce((sum, item) => sum + item.quantity, 0)
+  const reservedQty = items.reduce((sum, item) => sum + item.reservedQty, 0)
+  const remainingQty = items.reduce((sum, item) => sum + item.remainToReserve, 0)
+  const selectedQty = selectedRows.reduce((sum, item) => sum + (rows[item.itemId]?.qty ?? 0), 0)
 
   const availableFor = (itemId: number, warehouseId: number) =>
     items.find(i => i.itemId === itemId)?.warehouses.find(w => w.warehouseId === warehouseId)?.available ?? 0
   const expectedFor = (itemId: number, warehouseId: number) =>
     items.find(i => i.itemId === itemId)?.warehouses.find(w => w.warehouseId === warehouseId)?.expected ?? 0
+  const physicalFor = (itemId: number, warehouseId: number) =>
+    items.find(i => i.itemId === itemId)?.warehouses.find(w => w.warehouseId === warehouseId)?.quantity ?? 0
+  const reservedFor = (itemId: number, warehouseId: number) =>
+    items.find(i => i.itemId === itemId)?.warehouses.find(w => w.warehouseId === warehouseId)?.reserved ?? 0
 
   const shortRows = selectedRows.filter(i => {
     const st = rows[i.itemId]
-    return availableFor(i.itemId, st.warehouseId) < (st?.qty ?? 0)
+    return !isAllocationQtyValid(st?.qty ?? 0, Math.min(i.remainToReserve, availableFor(i.itemId, st.warehouseId)))
   })
 
   function setRow(itemId: number, patch: Partial<RowState>) {
@@ -72,12 +81,13 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
         checked: checked && i.remainToReserve > 0,
         warehouseId: i.currentWarehouseId,
         warehouseName: i.currentWarehouseName,
-        qty: i.remainToReserve,
+        qty: clampAllocationQty(i.remainToReserve, i.quantity),
       }]),
     ))
   }
 
-  const allChecked = items.length > 0 && items.every(i => rows[i.itemId]?.checked)
+  const reservableItems = items.filter(i => i.remainToReserve > 0)
+  const allChecked = reservableItems.length > 0 && reservableItems.every(i => rows[i.itemId]?.checked)
 
   function handleConfirm() {
     if (!orderId) return
@@ -104,128 +114,143 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader><DialogTitle>占用库存 · 按产品选择</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          勾选要占用的商品并填写本次占库数量（默认占满未占余量），不同商品可选不同仓库（分仓发货）。
-        </p>
-
-        {credit?.willExceed && (
-          <p className="flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-warning">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <DialogContent className="flex max-h-[88vh] w-[min(96vw,1180px)] max-w-none flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-5 py-4 pr-12">
+          <DialogTitle className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Boxes className="h-5 w-5" /></span>
             <span>
-              客户授信将超额：额度 {money(credit.creditLimit)}，已用 {money(credit.used)}，本单 {money(credit.thisOrder)}，超出约 {money(credit.overAmount)}。
-              占库时若无放行权限将被拦截，可先发起{' '}
-              <a href="#/credit-overrides" className="underline underline-offset-2">超额放行申请</a>。
+              <span className="block text-base">占用库存</span>
+              <span className="mt-0.5 block text-xs font-normal text-muted-foreground">核对商品身份，按明细选择发货仓库和本次占库数量</span>
             </span>
-          </p>
-        )}
+          </DialogTitle>
+        </DialogHeader>
 
-        {isLoading && (
-          <div className="flex h-32 items-center justify-center text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中…
+        <div className="grid grid-cols-2 border-b border-border bg-muted/20 sm:grid-cols-4">
+          {[
+            ['商品明细', `${items.length} 种`],
+            ['订单总量', String(orderQty)],
+            ['已占数量', String(reservedQty)],
+            ['待占数量', String(remainingQty)],
+          ].map(([label, value]) => (
+            <div key={label} className="border-r border-border px-5 py-2.5 last:border-r-0">
+              <div className="text-[11px] text-muted-foreground">{label}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {credit?.willExceed && (
+            <p className="mb-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2.5 text-sm text-foreground">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <span>
+                客户授信将超额：额度 {money(credit.creditLimit)}，已用 {money(credit.used)}，本单 {money(credit.thisOrder)}，超出约 {money(credit.overAmount)}。
+                占库时若无放行权限将被拦截，可先发起{' '}
+                <a href="#/credit-overrides" className="font-medium text-primary underline underline-offset-2">超额放行申请</a>。
+              </span>
+            </p>
+          )}
+
+          {isLoading && (
+            <div className="flex h-56 items-center justify-center text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载商品与库存信息…
+            </div>
+          )}
+
+          {!isLoading && (
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full min-w-[1040px] text-sm">
+                <thead className="sticky top-0 z-[1] bg-muted/70 text-xs text-muted-foreground backdrop-blur">
+                  <tr>
+                    <th className="w-12 px-4 py-3">
+                      <input type="checkbox" checked={allChecked} onChange={e => toggleAll(e.target.checked)} aria-label="全选可占商品" />
+                    </th>
+                    <th className="min-w-[330px] px-2 py-3 text-left">商品身份</th>
+                    <th className="w-44 px-3 py-3 text-left">订购情况</th>
+                    <th className="w-52 px-3 py-3 text-left">发货仓库</th>
+                    <th className="w-36 px-3 py-3 text-left">本次占库</th>
+                    <th className="w-40 px-4 py-3 text-right">库存参考</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(item => {
+                    const st = rows[item.itemId] ?? { checked: false, warehouseId: item.currentWarehouseId, warehouseName: item.currentWarehouseName, qty: item.remainToReserve }
+                    const available = availableFor(item.itemId, st.warehouseId)
+                    const expected = expectedFor(item.itemId, st.warehouseId)
+                    const physical = physicalFor(item.itemId, st.warehouseId)
+                    const warehouseReserved = reservedFor(item.itemId, st.warehouseId)
+                    const short = st.checked && available < (st.qty ?? 0)
+                    const fullyReserved = item.remainToReserve <= 0
+                    return (
+                      <tr key={item.itemId} className={cn('border-t align-top transition-colors hover:bg-muted/15', !st.checked && 'bg-muted/[0.08]', fullyReserved && 'opacity-60')}>
+                        <td className="px-4 py-4 text-center">
+                          <input type="checkbox" checked={!!st.checked} disabled={fullyReserved} onChange={e => setRow(item.itemId, { checked: e.target.checked })} aria-label={`选择 ${item.productName} ${item.spec || ''} ${item.color || ''}`} />
+                        </td>
+                        <td className="px-2 py-4">
+                          <div className="flex items-start gap-3">
+                            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-primary"><PackageSearch className="h-4 w-4" /></span>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-foreground">{item.productName}</div>
+                              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                <div><span className="text-muted-foreground">编码</span><span className="ml-2 font-mono text-foreground">{item.productCode || '—'}</span></div>
+                                <div><span className="text-muted-foreground">供应商型号</span><span className="ml-2 text-foreground">{item.articleNumber || '—'}</span></div>
+                                <div><span className="text-muted-foreground">型号</span><span className="ml-2 font-medium text-foreground">{item.spec || '—'}</span></div>
+                                <div><span className="text-muted-foreground">颜色</span><span className="ml-2 font-medium text-foreground">{item.color || '—'}</span></div>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-4">
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div><div className="text-[11px] text-muted-foreground">需求</div><div className="mt-1 font-semibold tabular-nums">{item.quantity}</div></div>
+                            <div><div className="text-[11px] text-muted-foreground">已占</div><div className="mt-1 font-semibold tabular-nums">{item.reservedQty}</div></div>
+                            <div><div className="text-[11px] text-muted-foreground">待占</div><div className="mt-1 font-semibold tabular-nums text-primary">{item.remainToReserve}</div></div>
+                          </div>
+                          <div className="mt-2 text-center text-[11px] text-muted-foreground">单位：{item.unit || '—'}</div>
+                        </td>
+                        <td className="px-3 py-4">
+                          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground"><Warehouse className="h-3.5 w-3.5" />选择库存所在仓库</div>
+                          <WarehouseSelect value={st.warehouseId} onChange={(id, name) => { if (id == null) return; setRow(item.itemId, { warehouseId: id, warehouseName: name }) }} className="h-9 text-sm" disabled={!st.checked} />
+                        </td>
+                        <td className="px-3 py-4">
+                          <div className="mb-1.5 text-[11px] text-muted-foreground">最多可占 {item.remainToReserve} {item.unit}</div>
+                          <Input type="number" min={0} max={item.remainToReserve} value={st.qty ?? 0} disabled={!st.checked} onChange={e => setRow(item.itemId, { qty: Number(e.target.value) })} className="h-9 text-right text-sm font-semibold tabular-nums" />
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <div className={cn('text-base font-semibold tabular-nums', short && 'text-destructive')}>{available} <span className="text-xs font-normal">{item.unit}</span></div>
+                          <div className="mt-1 text-[11px] text-muted-foreground">可承诺量（ATP）</div>
+                          <div className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
+                            <div>现货 {physical} · 已占 {warehouseReserved}</div>
+                            <div>预计到货 {expected}</div>
+                          </div>
+                          {st.checked && <div className={cn('mt-2 text-xs tabular-nums', short ? 'text-destructive' : 'text-muted-foreground')}>占后剩余 {available - (st.qty ?? 0)}</div>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {!items.length && (
+                    <tr><td colSpan={6} className="px-4 py-16 text-center text-muted-foreground"><PackageSearch className="mx-auto mb-2 h-8 w-8 opacity-35" />没有可占用库存的商品明细</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="border-t border-border bg-muted/20 px-5 py-3.5 sm:items-center sm:justify-between">
+          <div className="mr-auto text-sm">
+            {shortRows.length > 0 ? (
+              <span className="inline-flex items-center gap-1.5 text-destructive"><AlertTriangle className="h-4 w-4" />{shortRows.length} 项数量无效或库存不足，请检查数量（最多四位小数）与仓库</span>
+            ) : (
+              <span className="text-muted-foreground">已选择 <strong className="text-foreground">{selectedRows.length}</strong> 种商品，占用数量合计 <strong className="text-foreground">{selectedQty}</strong></span>
+            )}
           </div>
-        )}
-
-        {!isLoading && (
-          <div className="max-h-[28rem] overflow-y-auto rounded-md border">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-muted/50 text-xs text-muted-foreground">
-                <tr>
-                  <th className="w-10 px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={allChecked}
-                      onChange={e => toggleAll(e.target.checked)}
-                      aria-label="全选"
-                    />
-                  </th>
-                  <th className="px-2 py-2 text-left">商品</th>
-                  <th className="w-20 px-2 py-2 text-right">需求</th>
-                  <th className="w-24 px-2 py-2 text-right">已占</th>
-                  <th className="w-32 px-2 py-2 text-left">发货仓库</th>
-                  <th className="w-28 px-2 py-2 text-right">本次占库量</th>
-                  <th className="w-20 px-2 py-2 text-right">可用量</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map(item => {
-                  const st = rows[item.itemId] ?? { checked: false, warehouseId: item.currentWarehouseId, warehouseName: item.currentWarehouseName, qty: item.remainToReserve }
-                  const available = availableFor(item.itemId, st.warehouseId)
-                  const short = st.checked && available < (st.qty ?? 0)
-                  const fullyReserved = item.remainToReserve <= 0
-                  return (
-                    <tr key={item.itemId} className={cn('border-t', fullyReserved && 'opacity-60')}>
-                      <td className="px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={!!st.checked}
-                          disabled={fullyReserved}
-                          onChange={e => setRow(item.itemId, { checked: e.target.checked })}
-                          aria-label={`选择 ${item.productName}`}
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <div className="font-medium">{item.productName}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {item.productCode}{item.articleNumber ? ` · 货号 ${item.articleNumber}` : ''}{item.spec ? ` · ${item.spec}` : ''}{item.color ? ` · ${item.color}` : ''}
-                        </div>
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">{item.quantity} {item.unit}</td>
-                      <td className="px-2 py-2 text-right tabular-nums">{item.reservedQty}</td>
-                      <td className="px-2 py-2">
-                        <WarehouseSelect
-                          value={st.warehouseId}
-                          onChange={(id, name) => {
-                            if (id == null) return
-                            setRow(item.itemId, { warehouseId: id, warehouseName: name })
-                          }}
-                          className="h-9 text-sm"
-                          disabled={!st.checked}
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={item.remainToReserve}
-                          value={st.qty ?? 0}
-                          disabled={!st.checked}
-                          onChange={e => setRow(item.itemId, { qty: Number(e.target.value) })}
-                          className="h-9 text-sm tabular-nums"
-                        />
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums font-medium">
-                        <span className="inline-flex items-center gap-1">
-                          {short && <AlertTriangle className="h-3.5 w-3.5" />}
-                          {available}
-                        </span>
-                        {(() => { const exp = expectedFor(item.itemId, st.warehouseId); return exp > 0
-                          ? <div className="text-xs font-normal text-info">在途 +{exp}</div> : null })()}
-                      </td>
-                    </tr>
-                  )
-                })}
-                {!items.length && (
-                  <tr><td colSpan={7} className="px-2 py-6 text-center text-muted-foreground">没有可占用库存的明细</td></tr>
-                )}
-              </tbody>
-            </table>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>取消</Button>
+            <Button disabled={isLoading || reserve.isPending || !selectedRows.length || shortRows.length > 0} onClick={handleConfirm}>
+              {reserve.isPending ? '占用中…' : `确认占用（${selectedRows.length} 项）`}
+            </Button>
           </div>
-        )}
-
-        {shortRows.length > 0 && (
-          <p className="flex items-center gap-1.5 text-sm text-destructive">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            {shortRows.length} 项商品在所选仓库可用量不足，仍可尝试占用，届时会给出可用量不足的详情
-          </p>
-        )}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button disabled={isLoading || reserve.isPending || !selectedRows.length} onClick={handleConfirm}>
-            {reserve.isPending ? '占用中…' : `确认占用库存（${selectedRows.length} 项）`}
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

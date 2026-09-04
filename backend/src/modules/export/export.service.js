@@ -101,13 +101,18 @@ async function getPurchaseExportPayload(query) {
 async function getSaleExportPayload(query) {
   const { startDate, endDate, status, productId, keyword, customerId, warehouseId, remark, scopeWarehouseIds } = query
   let sql = `SELECT o.order_no,o.customer_name,o.warehouse_name,
-    CASE o.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已出库' WHEN 4 THEN '已取消' END AS status_name,
+    CASE o.status WHEN 1 THEN '草稿' WHEN 2 THEN '已占库' WHEN 3 THEN '执行中' WHEN 4 THEN '已出库' WHEN 5 THEN '已取消' WHEN 6 THEN '部分占库' END AS status_name,
     o.total_amount,o.sale_date,o.operator_name,DATE_FORMAT(o.created_at,'%Y-%m-%d %H:%i') AS created_at,o.remark
     FROM sale_orders o WHERE o.deleted_at IS NULL`
   const params = []
   const sc = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
   sql += sc.sql
   params.push(...sc.params)
+  if (Array.isArray(scopeWarehouseIds) && scopeWarehouseIds.length) {
+    sql += ' AND NOT EXISTS (SELECT 1 FROM sale_order_items si WHERE si.order_id=o.id AND si.warehouse_id NOT IN (?))'
+    params.push(scopeWarehouseIds)
+  }
+  if (query.focus === 'pending') sql += ' AND (o.status IN (1,2,3,6) OR EXISTS (SELECT 1 FROM warehouse_tasks wt WHERE wt.sale_order_id=o.id AND wt.deleted_at IS NULL AND (wt.cancel_requested_at IS NOT NULL OR wt.adjustment_requested_at IS NOT NULL)))'
   if (keyword) {
     sql += ' AND o.order_no LIKE ?'
     params.push(`%${keyword}%`)

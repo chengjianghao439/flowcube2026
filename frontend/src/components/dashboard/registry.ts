@@ -1,8 +1,9 @@
+import { KpiApprovalCount, BoardSalesActions, BoardBusinessRisk, ReceivableDueDistribution } from './widgets/OperationalWidgets'
 import type { ComponentType, LazyExoticComponent } from 'react'
 import { lazy } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  Package, Boxes, Wallet, ShoppingCart, ClipboardList, Truck, ScanLine, HandCoins, CreditCard, Landmark,
+  Boxes, Wallet, ShoppingCart, ClipboardList, Truck, ScanLine, HandCoins, CreditCard, Landmark,
   Activity, BarChart3, Warehouse, TrendingUp, ShoppingBag, CalendarClock, Coins, PieChart,
   AlertTriangle, ListTodo, Users, Building2, TriangleAlert, Info,
   Sparkles, Timer, PartyPopper, Hourglass, Quote, Fish, Clover, Droplet, StickyNote, Gauge,
@@ -53,8 +54,12 @@ export const CATEGORY_ORDER: WidgetCategory[] = ['kpi', 'chart', 'list', 'fun', 
 // 注册表：新增小组件只需在此追加一项 + 写好组件，默认布局与组件库会自动纳入。
 // permission 必须与后端对应接口的 requirePermission 一致，否则会向无权限用户发出注定 403 的请求。
 export const WIDGETS: WidgetDef[] = [
+  {id:'kpi-approval-count',title:'待我审批',description:'当前待审批总量',icon:ClipboardCheck,category:'kpi',permission:PERMISSIONS.APPROVAL_TASK_VIEW,defaultW:1,size:'sm',Component:KpiApprovalCount},
+  {id:'board-sales-actions',title:'今天要推进的业务',description:'销售与采购下一步',icon:ClipboardList,category:'list',permission:PERMISSIONS.DASHBOARD_VIEW,defaultW:2,size:'lg',Component:BoardSalesActions},
+  {id:'board-business-risk',title:'需要关注',description:'账款、授信与库存风险',icon:AlertTriangle,category:'list',permission:PERMISSIONS.DASHBOARD_VIEW,defaultW:2,size:'lg',Component:BoardBusinessRisk},
+  {id:'chart-receivable-due',title:'应收到期分布',description:'逾期、今天、未来七天和更晚',icon:CalendarClock,category:'chart',permission:PERMISSIONS.PAYMENT_VIEW,defaultW:2,size:'lg',Component:ReceivableDueDistribution},
+
   // —— 关键指标（sm）——
-  { id: 'kpi-total-skus',      title: '在库 SKU 数',    description: '有库存的商品种类数',        icon: Package,       category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiTotalSkus },
   { id: 'kpi-total-qty',       title: '库存总数量',      description: '各仓库库存数量汇总',        icon: Boxes,         category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiTotalQty },
   { id: 'kpi-total-value',     title: '库存总价值',      description: '按成本价估算的库存金额',    icon: Wallet,        category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiTotalValue },
   { id: 'kpi-pending-purchase', title: '待处理采购',     description: '草稿 + 已提交的采购单数',   icon: ShoppingCart,  category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiPendingPurchase },
@@ -112,14 +117,19 @@ const clampW = (w: number, id: string): number => {
 }
 
 // 新用户 / 未个性化时的默认布局：这些默认显示，其余进组件库待添加（visible:false）。
-const DEFAULT_VISIBLE_ORDER = [
-  'kpi-total-skus', 'kpi-total-value', 'kpi-pending-purchase', 'kpi-pending-sale',
-  'chart-io-trend', 'chart-top-stock',
+const PREVIOUS_VISIBLE_ORDER = [
+  'kpi-pending-sale', 'kpi-pending-purchase', 'kpi-shipped-today', 'kpi-credit-warning',
+  'board-workbench', 'list-pending-approvals',
   'list-low-stock', 'board-incoming',
-  'list-pda-perf', 'system-version',
-  'fun-wooden-fish', 'fun-offwork', 'fun-holiday',
-  'kpi-credit-warning',
+  'chart-sale-trend', 'chart-io-trend',
 ]
+const DEFAULT_VISIBLE_ORDER = [
+  'kpi-pending-sale', 'kpi-shipped-today', 'kpi-receivable', 'kpi-approval-count',
+  'board-sales-actions', 'board-business-risk', 'chart-sale-trend', 'chart-receivable-due',
+]
+
+// 旧默认布局以三项趣味组件为组合标记；迁移后仍可从组件库按需加回。
+const LEGACY_DEFAULT_MARKERS = ['fun-wooden-fish', 'fun-offwork', 'fun-holiday']
 
 export function buildDefaultLayout(): DashboardLayout {
   const visible = DEFAULT_VISIBLE_ORDER
@@ -137,6 +147,10 @@ export function buildDefaultLayout(): DashboardLayout {
  */
 export function mergeLayout(saved: DashboardLayout | null | undefined): DashboardLayout {
   if (!saved?.widgets?.length) return buildDefaultLayout()
+  const previousVisible = saved.widgets.filter(w => w.visible)
+  if (previousVisible.length === PREVIOUS_VISIBLE_ORDER.length && previousVisible.every((w,i) => w.id === PREVIOUS_VISIBLE_ORDER[i] && w.w === WIDGET_MAP[w.id]?.defaultW)) return buildDefaultLayout()
+  const legacyVisible = new Set(saved.widgets.filter(w => w.visible && WIDGET_MAP[w.id]).map(w => w.id))
+  if (LEGACY_DEFAULT_MARKERS.every(id => legacyVisible.has(id))) return buildDefaultLayout()
   const seen = new Set<string>()
   const merged: DashboardLayout['widgets'] = []
   for (const w of saved.widgets) {

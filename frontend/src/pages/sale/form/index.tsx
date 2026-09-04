@@ -11,10 +11,9 @@
 
 import { useState, useCallback, useContext, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Clock, Loader2, PackageOpen, Pencil, Plus, Save, Warehouse, X } from 'lucide-react'
+import { Activity, AlertTriangle, ClipboardList, Clock, History, Loader2, PackageCheck, PackageOpen, Pencil, Plus, Save, ScanLine, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
-import { Input }   from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -44,6 +43,8 @@ import { getProductApi } from '@/api/products'
 import { FulfillmentProgressCard } from './components/FulfillmentProgressCard'
 import { SaleOrderHeaderFields } from './components/SaleOrderHeaderFields'
 import { SaleOrderItemsTable } from './components/SaleOrderItemsTable'
+import { SaleOrderSummaryCard } from './components/SaleOrderSummaryCard'
+import { SaleOrderOverview } from './components/SaleOrderOverview'
 import { validateSaleForm, type DraftItem, type ScanRow } from './validate'
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
@@ -275,7 +276,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       <ActionBar
         title="新建销售单"
         subtitle={isDirty ? <span className="text-xs font-normal text-muted-foreground">未保存</span> : undefined}
@@ -320,52 +321,17 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
             <p className="text-sm text-muted-foreground">尚未添加商品明细，点击右上角「添加商品」开始录入</p>
           </div>
         ) : (
-          <>
           <SaleOrderItemsTable
             items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
           />
-
-          {/* 金额统计：仅统计已选商品的行 */}
-          {items.some(i => i.productId > 0) && (
-            <div className="mt-2 flex items-center justify-between border-t border-border pt-4">
-              <div className="space-y-0.5 text-muted-body">
-                <p>商品种数：{items.filter(i => i.productId > 0).length} 种　合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
-                {items.some(i => i.productId > 0 && i.costPrice != null && i.unitPrice < Number(i.costPrice)) && (
-                  <p className="inline-flex items-center gap-1 text-destructive">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    存在低于进价的销售行，提交后会记录到时间线
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2 text-right">
-                <div>
-                  <p className="text-helper">合计金额</p>
-                  <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
-                </div>
-                <div className="flex items-center justify-end gap-2">
-                  <label className="text-xs text-muted-body">折扣</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={discountAmount}
-                    onChange={(e) => setDiscountAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="h-8 w-28 text-right text-sm"
-                  />
-                </div>
-                <div>
-                  <p className="text-helper">折后金额</p>
-                  <p className="text-2xl font-semibold text-foreground">¥{discountedTotal.toFixed(2)}</p>
-                </div>
-              </div>
-            </div>
-          )}
-          </>
         )}
       </SectionCard>
+
+      <SaleOrderSummaryCard items={items} total={total} discount={discount} discountedTotal={discountedTotal}
+        discountAmount={discountAmount} onDiscountChange={setDiscountAmount}
+        warningText="存在低于进价的销售行，提交后会记录到时间线" />
 
       {/* 商品选择中心 */}
       <ProductFinder
@@ -440,7 +406,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       <ActionBar
         title={`${order.orderNo} · 编辑`}
         rightActions={
@@ -494,45 +460,9 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
         )}
       </SectionCard>
 
-      {/* 金额统计：仅统计已选商品的行 */}
-      {items.some(i => i.productId > 0) && (
-        <SectionCard title="金额统计">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5 text-muted-body">
-              <p>商品种数：{items.filter(i => i.productId > 0).length} 种</p>
-              <p>合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
-              {items.some(i => i.productId > 0 && i.costPrice != null && i.unitPrice < Number(i.costPrice)) && (
-                <p className="inline-flex items-center gap-1 text-destructive">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  存在低于进价的销售行，保存后会记录到时间线
-                </p>
-              )}
-            </div>
-            <div className="space-y-2 text-right">
-              <div>
-                <p className="mb-1 text-xs">合计金额</p>
-                <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
-              </div>
-              <div className="flex items-center justify-end gap-2">
-                <label className="text-xs text-muted-body">折扣</label>
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={discountAmount}
-                  onChange={(e) => setDiscountAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="h-8 w-28 text-right text-sm"
-                />
-              </div>
-              <div>
-                <p className="mb-1 text-xs">折后金额</p>
-                <p className="text-3xl font-bold text-foreground">¥{discountedTotal.toFixed(2)}</p>
-              </div>
-            </div>
-          </div>
-        </SectionCard>
-      )}
+      <SaleOrderSummaryCard items={items} total={total} discount={discount} discountedTotal={discountedTotal}
+        discountAmount={discountAmount} onDiscountChange={setDiscountAmount}
+        warningText="存在低于进价的销售行，保存后会记录到时间线" />
 
       <ProductFinder
         open={finderOpen}
@@ -606,7 +536,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       <ActionBar
         title={`${order.orderNo} · 修改订单`}
         rightActions={
@@ -623,8 +553,9 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
         }
       />
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        订单已发往仓库执行。增加数量将触发重新拣货；减少数量若涉及已拣或已打包的商品，需经仓库扫码确认放回库位 / 拆箱后方可生效。
+      <div className="flex gap-2 rounded-lg border border-warning/25 bg-warning/[0.06] px-4 py-3 text-sm leading-6 text-foreground">
+        <AlertTriangle className="mt-1 h-4 w-4 shrink-0 text-warning" />
+        <span>订单已发往仓库执行。增加数量将触发重新拣货；减少数量若涉及已拣或已打包的商品，需经仓库扫码确认放回库位 / 拆箱后方可生效。</span>
       </div>
 
       <SaleOrderHeaderFields
@@ -663,30 +594,8 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
         )}
       </SectionCard>
 
-      {items.some(i => i.productId > 0) && (
-        <SectionCard title="金额统计">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5 text-muted-body">
-              <p>商品种数：{items.filter(i => i.productId > 0).length} 种</p>
-              <p>合计数量：{items.filter(i => i.productId > 0).reduce((s, i) => s + i.quantity, 0)}</p>
-            </div>
-            <div className="space-y-2 text-right">
-              <div>
-                <p className="mb-1 text-xs">合计金额</p>
-                <p className="text-3xl font-bold text-foreground">¥{total.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="mb-1 text-xs">折扣</p>
-                <p className="text-3xl font-bold text-foreground">-¥{discount.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="mb-1 text-xs">折后金额</p>
-                <p className="text-3xl font-bold text-foreground">¥{discountedTotal.toFixed(2)}</p>
-              </div>
-            </div>
-          </div>
-        </SectionCard>
-      )}
+      <SaleOrderSummaryCard items={items} total={total} discount={discount} discountedTotal={discountedTotal}
+        discountAmount={discountAmount} editableDiscount={false} />
 
       <ProductFinder
         open={finderOpen}
@@ -760,11 +669,11 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   // 占库期（状态2/6）无 taskId 也可改单（占库期改单）；执行期（状态3）需有 taskId。
   const canAdjust = (order.status === 2 || order.status === 3 || order.status === 6)
     && !order.warehouseTaskCancelRequestedAt && !order.warehouseTaskAdjustmentRequestedAt
-    && !order.isMultiWarehouse && (order.shippedTotalQty ?? 0) === 0
+    && !order.executionAdjustmentBlocked && !order.isMultiWarehouse && (order.shippedTotalQty ?? 0) === 0
   const ws = getSaleWorkflowStatus(order)
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       <ActionBar
         title={order.orderNo}
         subtitle={
@@ -838,32 +747,35 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         }
       />
 
+      <SaleOrderOverview order={order} />
+
       {order.warehouseTaskAdjustmentRequestedAt && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <Clock className="h-4 w-4 shrink-0" />
+        <div className="flex items-center gap-2 rounded-lg border border-warning/25 bg-warning/[0.06] px-4 py-3 text-sm text-foreground">
+          <Clock className="h-4 w-4 shrink-0 text-warning" />
           改单待仓库确认：有商品的归还/拆箱还未经 PDA 扫码确认，确认完成前该订单的拣货/分拣/复核/打包/出库都会被阻止，也暂时不能再次修改订单。
         </div>
       )}
 
       {/* 选项卡切换 */}
-      <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
+      <div className="flex gap-1 overflow-x-auto rounded-lg border border-border bg-muted/30 p-1">
         {([
-          ['info', '订单信息'],
-          ['progress', '作业进度'],
-          ['scan', '取货明细'],
-          ['pack', '装箱进度'],
-          ['log', '操作记录'],
-        ] as const).map(([key, label]) => (
+          ['info', '订单信息', ClipboardList],
+          ['progress', '作业进度', Activity],
+          ['scan', '取货明细', ScanLine],
+          ['pack', '装箱进度', PackageCheck],
+          ['log', '操作记录', History],
+        ] as const).map(([key, label, Icon]) => (
           <button
             key={key}
             type="button"
             onClick={() => setDetailTab(key)}
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
+            className={`flex min-w-28 flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] ${
               detailTab === key
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
+            <Icon className="h-4 w-4" />
             {label}
           </button>
         ))}
@@ -872,9 +784,9 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       {detailTab === 'info' && (
         <>
           {/* 基础信息 */}
-          <SectionCard title="基础信息" compact>
+          <SectionCard title="基础信息" compact contentClassName="p-3">
             <div className="space-y-2 text-sm">
-              <div className="grid grid-cols-[repeat(6,minmax(0,260px))] gap-x-8 gap-y-3">
+              <div className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2 xl:grid-cols-6">
                 <div><span className="text-muted-foreground">客户：</span><span>{order.customerName}</span></div>
                 <div><span className="text-muted-foreground">仓库：</span><span>{order.warehouseName}</span></div>
                 <div><span className="text-muted-foreground">时间：</span><span>{formatDisplayDateTime(order.createdAt)}</span></div>
@@ -883,7 +795,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <div><span className="text-muted-foreground">运费方式：</span><span>{order.freightTypeName || '-'}</span></div>
                 <div><span className="text-muted-foreground">收货人：</span><span>{order.receiverName || '-'}</span></div>
                 <div><span className="text-muted-foreground">联系电话：</span><span>{order.receiverPhone || '-'}</span></div>
-                <div className="col-span-2"><span className="text-muted-foreground">收货地址：</span><span>{order.receiverAddress || '-'}</span></div>
+                <div className="sm:col-span-2"><span className="text-muted-foreground">收货地址：</span><span>{order.receiverAddress || '-'}</span></div>
                 <div><span className="text-muted-foreground">备注：</span><span>{order.remark || '-'}</span></div>
                 {(() => {
                   const rs = getReceivableStatus(order)
@@ -1156,8 +1068,8 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         onClose={() => setShipDialogOpen(false)}
         order={order}
         loading={shipMutate.isPending}
-        onConfirm={(itemIds) => {
-          shipMutate.mutate({ id: order.id, itemIds }, { onSuccess: () => setShipDialogOpen(false) })
+        onConfirm={(items) => {
+          shipMutate.mutate({ id: order.id, items }, { onSuccess: () => setShipDialogOpen(false) })
         }}
       />
 

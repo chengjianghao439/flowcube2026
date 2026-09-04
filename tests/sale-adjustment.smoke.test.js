@@ -111,6 +111,8 @@ function itemsFrom(product, quantity) {
 async function scenarioIncrease(log, ctx, token) {
   log.section('Scenario: 改单增量 — 待复核阶段加数量，回退拣货中补拣')
   const container = await seedActiveContainer(ctx.pool, { product: ctx.product, warehouse: ctx.warehouse, qty: 2, locationId: ctx.location.id })
+  // 初始单占用并拣走 2 件，另留 1 件未预占现货供本次增量改单追加。
+  await seedActiveContainer(ctx.pool, { product: ctx.product, warehouse: ctx.warehouse, qty: 1, locationId: ctx.location.id })
   const saleCreate = await createSaleOrder(ctx.http, token, { customer: ctx.customer, warehouse: ctx.warehouse, product: ctx.product, quantity: 2 })
   const saleId = Number(saleCreate.data?.data?.id)
   const taskId = await shipToTask(ctx.http, token, ctx.pool, saleId)
@@ -148,6 +150,7 @@ async function scenarioIncrease(log, ctx, token) {
 // ── 场景②：减量——仅命中未拣部分，无需物理确认，立即生效 ──
 async function scenarioDecreaseImmediate(log, ctx, token) {
   log.section('Scenario: 改单减量 — 仅命中未拣部分，立即生效')
+  await seedActiveContainer(ctx.pool, { product: ctx.product, warehouse: ctx.warehouse, qty: 3, locationId: ctx.location.id })
   const saleCreate = await createSaleOrder(ctx.http, token, { customer: ctx.customer, warehouse: ctx.warehouse, product: ctx.product, quantity: 3 })
   const saleId = Number(saleCreate.data?.data?.id)
   const taskId = await shipToTask(ctx.http, token, ctx.pool, saleId)
@@ -165,6 +168,8 @@ async function scenarioDecreaseImmediate(log, ctx, token) {
   log.assert('任务状态未变(仍拣货中2)，无挂起标记', Number(taskAfter.status) === 2 && taskAfter.adjustment_requested_at === null, JSON.stringify(taskAfter))
 
   const [resv] = await dbQuery(ctx.pool, "SELECT SUM(qty) AS total FROM stock_reservations WHERE ref_type='sale_order' AND ref_id=? AND status=1", [saleId])
+  const [finalQty] = await dbQuery(ctx.pool, 'SELECT reserved_qty,dispatched_qty FROM sale_order_items WHERE order_id=?', [saleId])
+  log.assert('归还确认后数量账对齐为1', Number(finalQty.reserved_qty) === 1 && Number(finalQty.dispatched_qty) === 1, JSON.stringify(finalQty))
   log.assert('预占已释放到1', Number(resv.total) === 1, JSON.stringify(resv))
 }
 
@@ -198,6 +203,8 @@ async function scenarioDecreasePendingConfirm(log, ctx, token) {
   log.assert('命中已打包部分需要物理确认(pending=true)', adjResp.data?.data?.pending === true, JSON.stringify(adjResp.data?.data))
   const adjustmentId = Number(adjResp.data?.data?.adjustmentId)
 
+  const [pendingQty] = await dbQuery(ctx.pool, 'SELECT reserved_qty,dispatched_qty FROM sale_order_items WHERE order_id=?', [saleId])
+  log.assert('归还确认前仍记录实际占库2，目标派发1', Number(pendingQty.reserved_qty) === 2 && Number(pendingQty.dispatched_qty) === 1, JSON.stringify(pendingQty))
   const [pkgAfter] = await dbQuery(ctx.pool, 'SELECT status FROM packages WHERE id=?', [packageId])
   log.assert('箱子已被作废(3)', Number(pkgAfter.status) === 3, JSON.stringify(pkgAfter))
 
@@ -249,6 +256,7 @@ async function scenarioDecreasePendingConfirm(log, ctx, token) {
 // allowed 列表里而误抛异常，把一次单纯的加数量请求搞崩。
 async function scenarioIncreaseWhileStillPicking(log, ctx, token) {
   log.section('Scenario: 改单增量 — 任务仍在拣货中(2)时加数量')
+  await seedActiveContainer(ctx.pool, { product: ctx.product, warehouse: ctx.warehouse, qty: 3, locationId: ctx.location.id })
   const saleCreate = await createSaleOrder(ctx.http, token, { customer: ctx.customer, warehouse: ctx.warehouse, product: ctx.product, quantity: 2 })
   const saleId = Number(saleCreate.data?.data?.id)
   const taskId = await shipToTask(ctx.http, token, ctx.pool, saleId)
@@ -407,6 +415,96 @@ async function scenarioSaleReturnQualifiedQty(log, ctx, token) {
     Number(ar1.confirm_status) === 0, `confirm_status=${ar1.confirm_status}`)
 }
 
+async function scenarioDiscountGuard(log, ctx, token) {
+  log.section('Scenario: 改单后原折扣不得超过新货款')
+  await seedActiveContainer(ctx.pool, {
+    product: ctx.product, warehouse: ctx.warehouse, qty: 20, locationId: ctx.location.id,
+  })
+  const createDiscountedSale = () => ctx.http.post('/api/sale', {
+    token,
+    json: {
+      customerId: Number(ctx.customer.id), customerName: ctx.customer.name,
+      warehouseId: Number(ctx.warehouse.id), warehouseName: ctx.warehouse.name,
+      discountAmount: 90,
+      items: [{
+        productId: Number(ctx.product.id), productCode: ctx.product.code,
+        productName: ctx.product.name, unit: ctx.product.unit, quantity: 10, unitPrice: 10,
+      }],
+    },
+  })
+
+  const reservedSale = await createDiscountedSale()
+  const reservedSaleId = Number(reservedSale.data?.data?.id)
+  await ctx.http.post(`/api/sale/${reservedSaleId}/reserve`, { token })
+  const reservedAdjust = await requestAdjustment(ctx, token, reservedSaleId, itemsFrom(ctx.product, 1))
+  log.assert('占库期减量导致折扣超过新货款时拒绝且返回明确错误码',
+    reservedAdjust.status === 400 && reservedAdjust.data?.code === 'SALE_DISCOUNT_EXCEEDS_TOTAL',
+    `status=${reservedAdjust.status} code=${reservedAdjust.data?.code}`)
+  const [reservedAfter] = await dbQuery(ctx.pool, 'SELECT total_amount, discount_amount FROM sale_orders WHERE id=?', [reservedSaleId])
+  log.assert('占库期折扣校验失败后订单金额保持不变',
+    Number(reservedAfter.total_amount) === 100 && Number(reservedAfter.discount_amount) === 90,
+    JSON.stringify(reservedAfter))
+
+  const pickingSale = await createDiscountedSale()
+  const pickingSaleId = Number(pickingSale.data?.data?.id)
+  await shipToTask(ctx.http, token, ctx.pool, pickingSaleId)
+  const pickingAdjust = await requestAdjustment(ctx, token, pickingSaleId, itemsFrom(ctx.product, 1))
+  log.assert('执行期减量导致折扣超过新货款时拒绝且返回明确错误码',
+    pickingAdjust.status === 400 && pickingAdjust.data?.code === 'SALE_DISCOUNT_EXCEEDS_TOTAL',
+    `status=${pickingAdjust.status} code=${pickingAdjust.data?.code}`)
+  const [pickingAfter] = await dbQuery(ctx.pool, 'SELECT total_amount, discount_amount FROM sale_orders WHERE id=?', [pickingSaleId])
+  log.assert('执行期折扣校验失败后订单金额保持不变',
+    Number(pickingAfter.total_amount) === 100 && Number(pickingAfter.discount_amount) === 90,
+    JSON.stringify(pickingAfter))
+}
+
+async function scenarioIntegrity(log, ctx, token) {
+  log.section('Scenario: 分批改单边界、数量守恒和补占授信')
+  await seedActiveContainer(ctx.pool, { product: ctx.product, warehouse: ctx.warehouse, qty: 100, locationId: ctx.location.id })
+  const create = async () => {
+    const r = await createSaleOrder(ctx.http, token, { customer: ctx.customer, warehouse: ctx.warehouse, product: ctx.product, quantity: 10 })
+    return Number(r.data.data.id)
+  }
+  const id = await create()
+  await shipToTask(ctx.http, token, ctx.pool, id)
+  const key = randomRef('adjust-retry')
+  const result = await requestAdjustment(ctx, token, id, itemsFrom(ctx.product, 9), { 'X-Request-Key': key })
+  log.assert('完整派发单任务改单成功', result.ok, JSON.stringify(result.data))
+  const [row] = await dbQuery(ctx.pool, 'SELECT quantity,reserved_qty,dispatched_qty FROM sale_order_items WHERE order_id=?', [id])
+  log.assert('改单后订单数量账保持9/9/9', [row.quantity,row.reserved_qty,row.dispatched_qty].every(v => Number(v) === 9), JSON.stringify(row))
+  const replay = await requestAdjustment(ctx, token, id, itemsFrom(ctx.product, 9), { 'X-Request-Key': key })
+  log.assert('同键重试返回原回执', replay.ok && JSON.stringify(replay.data.data) === JSON.stringify(result.data.data), JSON.stringify(replay.data))
+  const splitId = await create()
+  await ctx.http.post(`/api/sale/${splitId}/reserve`, { token })
+  const [splitRow] = await dbQuery(ctx.pool, 'SELECT id FROM sale_order_items WHERE order_id=?', [splitId])
+  const dispatch = qty => ctx.http.post(`/api/sale/${splitId}/ship`, { token, json: { items: [{ id: Number(splitRow.id), qty }] } })
+  await dispatch(4)
+  const partial = await requestAdjustment(ctx, token, splitId, itemsFrom(ctx.product, 8))
+  log.assert('单任务只派发部分数量时禁止执行期改单', partial.status === 409, JSON.stringify(partial.data))
+  await dispatch(6)
+  const multi = await requestAdjustment(ctx, token, splitId, itemsFrom(ctx.product, 3))
+  log.assert('同仓多任务禁止执行期改单', multi.status === 409, JSON.stringify(multi.data))
+  const [sum] = await dbQuery(ctx.pool, 'SELECT SUM(required_qty) AS qty FROM warehouse_task_items WHERE task_id IN (SELECT id FROM warehouse_tasks WHERE sale_order_id=?)', [splitId])
+  log.assert('拒绝改单后任务合计仍为10', Number(sum.qty) === 10, JSON.stringify(sum))
+
+  const creditId = await create()
+  const [creditRow] = await dbQuery(ctx.pool, 'SELECT id FROM sale_order_items WHERE order_id=?', [creditId])
+  const { getCustomerCreditUsed } = require('../backend/src/utils/creditExposure')
+  const used = await getCustomerCreditUsed(ctx.pool, Number(ctx.customer.id))
+  await ctx.pool.query('UPDATE sale_customers SET credit_limit=? WHERE id=?', [used + 100, ctx.customer.id])
+  try {
+    const reserve = qty => ctx.http.post(`/api/sale/${creditId}/reserve`, { token, json: { items: [{ id: Number(creditRow.id), warehouseId: Number(ctx.warehouse.id), warehouseName: ctx.warehouse.name, qty }] } })
+    const first = await reserve(4)
+    log.assert('额度刚好足够时首次部分占库成功', first.ok, JSON.stringify(first.data))
+    const preview = await ctx.http.get(`/api/sale/${creditId}/reserve-preview`, { token })
+    log.assert('补占预检不重复计算本单', preview.data?.data?.credit?.willExceed === false, JSON.stringify(preview.data?.data?.credit))
+    const second = await reserve(6)
+    log.assert('补占不需要额外授信放行', second.ok, JSON.stringify(second.data))
+  } finally {
+    await ctx.pool.query('UPDATE sale_customers SET credit_limit=NULL WHERE id=?', [ctx.customer.id])
+  }
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -414,6 +512,12 @@ async function main() {
     const adminLogin = await login(ctx.http, 'smoke_admin', 'SmokeAdmin123!')
     const token = adminLogin.token
     log.assert('smoke_admin 登录成功', !!token, `status=${adminLogin.response.status}`)
+    await ctx.pool.query(
+      `INSERT INTO printer_bindings (warehouse_id, print_type, printer_id, printer_code)
+       VALUES (?, 'package_label', ?, ?)
+       ON DUPLICATE KEY UPDATE printer_id=VALUES(printer_id), printer_code=VALUES(printer_code)`,
+      [Number(ctx.warehouse.id), Number(ctx.printer.id), ctx.printer.code],
+    )
 
     await scenarioIncrease(log, ctx, token)
     await scenarioDecreaseImmediate(log, ctx, token)
@@ -422,6 +526,10 @@ async function main() {
     await scenarioDecreaseWhileStillPicking(log, ctx, token)
     await scenarioPackagingClosure(log, ctx, token)
     await scenarioSaleReturnQualifiedQty(log, ctx, token)
+    await scenarioDiscountGuard(log, ctx, token)
+    await scenarioIntegrity(log, ctx, token)
+  } catch (error) {
+    log.assert('销售改单烟雾测试无未捕获异常', false, error?.stack || error?.message || String(error))
   } finally {
     const summary = log.summary()
     await ctx.close()

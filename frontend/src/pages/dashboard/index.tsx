@@ -26,6 +26,48 @@ const SPAN: Record<number, string> = {
   4: 'sm:col-span-2 lg:col-span-4',
 }
 
+function ReadOnlyWidget({ widget, className }: { widget: DashboardWidgetLayout; className: string }) {
+  const Body = WIDGET_MAP[widget.id].Component
+  return (
+    <div className={cn('min-w-0 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-300', className)}>
+      <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-muted-foreground">加载中…</div>}>
+        <Body />
+      </Suspense>
+    </div>
+  )
+}
+
+function DashboardSection({
+  eyebrow, title, description, widgets, kind,
+}: {
+  eyebrow: string
+  title: string
+  description: string
+  widgets: DashboardWidgetLayout[]
+  kind: 'kpi' | 'panel' | 'personal'
+}) {
+  if (!widgets.length) return null
+  return (
+    <section aria-labelledby={`dashboard-${kind}-${eyebrow}`}>
+      <div className={kind === 'personal' ? 'mb-3 flex items-end justify-between gap-4' : 'sr-only'}>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>
+          <h2 id={`dashboard-${kind}-${eyebrow}`} className="mt-1 text-base font-semibold text-foreground">{title}</h2>
+        </div>
+        <p className="hidden max-w-md text-right text-xs text-muted-foreground lg:block">{description}</p>
+      </div>
+      <div className={cn('grid grid-cols-1', kind === 'panel' ? 'gap-5 sm:grid-cols-2 lg:grid-cols-4' : kind === 'kpi' ? 'gap-0 overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-2 lg:grid-cols-4 [&_.card-base]:rounded-none [&_.card-base]:border-0 [&_.card-base]:shadow-none [&_.card-base]:bg-transparent [&_.card-base]:border-r [&_.card-base]:border-border' : 'gap-3 sm:grid-cols-2 lg:grid-cols-4')}>
+        {widgets.map(widget => (
+          <ReadOnlyWidget key={widget.id} widget={widget} className={cn(
+            kind === 'panel' || (kind === 'personal' && WIDGET_MAP[widget.id].size === 'lg') ? 'h-[380px]' : 'h-32',
+            SPAN[widget.w] ?? SPAN[2],
+          )} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export default function DashboardPage() {
   const { can } = usePermission()
   const { data: saved, isLoading } = useDashboardLayout()
@@ -64,6 +106,10 @@ export default function DashboardPage() {
 
   // 渲染的可见小组件：显示 + 有权限
   const visible = layout.widgets.filter(w => WIDGET_MAP[w.id] && w.visible && allowed[w.id])
+  const kpiWidgets = visible.filter(w => WIDGET_MAP[w.id].category === 'kpi')
+  const listWidgets = visible.filter(w => WIDGET_MAP[w.id].category === 'list')
+  const chartWidgets = visible.filter(w => WIDGET_MAP[w.id].category === 'chart')
+  const extraWidgets = visible.filter(w => ['fun', 'system'].includes(WIDGET_MAP[w.id].category))
   // 组件库可添加：隐藏 + 有权限
   const addable = layout.widgets.filter(w => WIDGET_MAP[w.id] && !w.visible && allowed[w.id])
 
@@ -114,12 +160,10 @@ export default function DashboardPage() {
   // ── 渲染 ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-page-title">仪表盘</h1>
-          <p className="text-muted-body mt-1">
-            {editing ? '拖拽卡片排序 · 调整宽度 · 隐藏或从组件库添加，完成后保存' : '极序 Flow ERP · 数据总览'}
-          </p>
+          <p className="text-muted-body mt-1">{editing ? '拖拽卡片排序 · 调整宽度 · 隐藏或从组件库添加，完成后保存' : '先处理待办，再看经营变化。'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!editing ? (
@@ -193,10 +237,13 @@ export default function DashboardPage() {
 
       {/* 加载骨架 */}
       {isLoading && !editing ? (
-        <div className="grid auto-rows-[184px] grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} style={{ gridRow: `span ${i < 4 ? 1 : 2}` }} className={cn('card-base animate-pulse bg-muted/40', i >= 4 && 'sm:col-span-2')} />
-          ))}
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="card-base h-36 animate-pulse bg-muted/40" />)}
+          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="card-base h-[340px] animate-pulse bg-muted/40" />)}
+          </div>
         </div>
       ) : visible.length === 0 ? (
         <div className="card-base flex flex-col items-center gap-3 py-16 text-center">
@@ -206,8 +253,8 @@ export default function DashboardPage() {
           </p>
           {!editing && <Button size="sm" variant="outline" onClick={startEdit}><Pencil className="h-3.5 w-3.5" /> 编辑仪表盘</Button>}
         </div>
-      ) : (
-        <div className={cn('grid auto-rows-[184px] grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4', !editing && 'grid-flow-row-dense')}>
+      ) : editing ? (
+        <div className="grid auto-rows-[184px] grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {visible.map(w => {
             const def = WIDGET_MAP[w.id]
             const Body = def.Component
@@ -252,6 +299,13 @@ export default function DashboardPage() {
               </div>
             )
           })}
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <DashboardSection eyebrow="经营摘要" title="今日重点" description="先看需要处理的订单、履约进度与资金风险。" widgets={kpiWidgets} kind="kpi" />
+          <DashboardSection eyebrow="执行视图" title="待办与风险" description="把会阻塞业务推进的审批、库存和到货问题集中处理。" widgets={listWidgets} kind="panel" />
+          <DashboardSection eyebrow="经营分析" title="业务走势" description="用趋势判断经营变化，减少被单日数字干扰。" widgets={chartWidgets} kind="panel" />
+          <DashboardSection eyebrow="个性化" title="我的组件" description="你主动保留的效率工具与系统信息。" widgets={extraWidgets} kind="personal" />
         </div>
       )}
 

@@ -495,7 +495,7 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
     pendingShipCount: await fetchOne(
       `SELECT COUNT(*) AS count
        FROM sale_orders o
-       WHERE o.deleted_at IS NULL AND o.status IN (2, 3)${oWh.sql}`,
+       WHERE o.deleted_at IS NULL AND o.status IN (2, 3, 6)${oWh.sql}`,
       oWh.params,
     ),
     pendingShipRows: await fetchMany(
@@ -503,11 +503,11 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
               o.order_no AS title,
               CONCAT(COALESCE(o.customer_name, '未知客户'), ' · ', COALESCE(o.warehouse_name, '未知仓库')) AS subtitle,
               CONCAT('/sale/', o.id) AS path,
-              CASE WHEN o.status = 2 THEN '待出库' ELSE '出库中' END AS badge,
+              CASE WHEN o.status = 2 THEN '待出库' WHEN o.status = 6 THEN '待补占/可分批发货' ELSE '出库中' END AS badge,
               CONCAT('创建于 ', DATE_FORMAT(o.created_at, '%m-%d %H:%i')) AS hint,
               o.created_at AS createdAt
        FROM sale_orders o
-       WHERE o.deleted_at IS NULL AND o.status IN (2, 3)${oWh.sql}
+       WHERE o.deleted_at IS NULL AND o.status IN (2, 3, 6)${oWh.sql}
        ORDER BY o.created_at ASC
        LIMIT 5`,
       oWh.params,

@@ -392,6 +392,34 @@ async function scenarioSaleScope(ctx, log, adminToken, scopedToken, mine, others
   const mineSaleId = Number(mineSale.data?.data?.id)
   const mineDetail = await http.get(`/api/sale/${mineSaleId}`, { token: scopedToken })
   log.assert('自己仓的销售单详情正常', mineDetail.ok, `status=${mineDetail.status}`)
+
+  const crossWarehouseCreate = await http.post('/api/sale', {
+    token: scopedToken,
+    json: {
+      customerId: customer.id, customerName: customer.name,
+      warehouseId: others.id, warehouseName: others.name,
+      items: [{
+        productId: product.id, productCode: product.code, productName: product.name,
+        unit: product.unit, quantity: 1, unitPrice: 10,
+      }],
+    },
+  })
+  log.assert(
+    '★ 受限仓用户不能在其他仓库新建销售单',
+    crossWarehouseCreate.status === 403 && crossWarehouseCreate.data?.code === 'WAREHOUSE_SCOPE_DENIED',
+    `status=${crossWarehouseCreate.status} code=${crossWarehouseCreate.data?.code}`,
+  )
+
+  const [mineItems] = await pool.query('SELECT id FROM sale_order_items WHERE order_id=? ORDER BY id', [mineSaleId])
+  const crossWarehouseReserve = await http.post(`/api/sale/${mineSaleId}/reserve`, {
+    token: scopedToken,
+    json: { items: [{ id: Number(mineItems[0].id), warehouseId: others.id, warehouseName: others.name, qty: 1 }] },
+  })
+  log.assert(
+    '★ 受限仓用户不能把本仓销售单改到其他仓库占库',
+    crossWarehouseReserve.status === 403 && crossWarehouseReserve.data?.code === 'WAREHOUSE_SCOPE_DENIED',
+    `status=${crossWarehouseReserve.status} code=${crossWarehouseReserve.data?.code}`,
+  )
 }
 
 /**

@@ -88,22 +88,42 @@ async function topParties(type, limit = 8) {
   }))
 }
 
+// 到期分布与历史账龄桶分开：未知到期日不得冒充逾期或未来到期。
+const DUE_BUCKETS = [
+  { key: 'overdue', label: '已逾期' }, { key: 'today', label: '今日到期' },
+  { key: 'next7', label: '未来 7 天' }, { key: 'later', label: '7 天以后' },
+  { key: 'unknown', label: '未设置到期日' },
+]
+async function dueDistribution(type, conn = pool) {
+  const [rows] = await conn.query(
+    `SELECT CASE WHEN due_date IS NULL THEN 'unknown'
+                 WHEN due_date < CURDATE() THEN 'overdue'
+                 WHEN due_date = CURDATE() THEN 'today'
+                 WHEN due_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) THEN 'next7'
+                 ELSE 'later' END AS bucket, COUNT(*) AS count, SUM(balance) AS amount
+     FROM payment_records WHERE type=? AND status<>3 AND balance>0 GROUP BY bucket`, [type],
+  )
+  const map = new Map(rows.map(r => [r.bucket, r]))
+  return DUE_BUCKETS.map(b => ({ ...b, count: Number(map.get(b.key)?.count || 0), amount: Number(map.get(b.key)?.amount || 0) }))
+}
+
 /**
  * 完整账龄报告：应收与应付两个方向各自的分桶敞口 + Top 往来方名单。
  * @param {number} topLimit Top 往来方取前几名（默认 8）
  */
 async function aging({ topLimit = 8 } = {}) {
-  const [receivable, payable, arTop, apTop] = await Promise.all([
+  const [receivable, payable, arTop, apTop, receivableDue] = await Promise.all([
     bucketsFor(2),
     bucketsFor(1),
     topParties(2, topLimit),
     topParties(1, topLimit),
+    dueDistribution(2),
   ])
   return {
     asOf: beijingTodayYmd(),
-    receivable: { ...receivable, topParties: arTop },
+    receivable: { ...receivable, dueDistribution: receivableDue, topParties: arTop },
     payable: { ...payable, topParties: apTop },
   }
 }
 
-module.exports = { aging, bucketsFor, topParties, BUCKETS }
+module.exports = { aging, bucketsFor, topParties, BUCKETS, dueDistribution }

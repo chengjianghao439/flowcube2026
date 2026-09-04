@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
+import { Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { baseQtyOf, parsePositiveInteger, parsePrice, type DraftItem } from '../validate'
+import { baseQtyOf, parsePositiveQuantity, parsePrice, type DraftItem } from '../validate'
 
 export function SaleOrderItemsTable({
   items, invalidItemKeys, quantityRefs, priceLoading,
@@ -20,28 +21,28 @@ export function SaleOrderItemsTable({
   const navigate = useNavigate()
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
+      <table className="w-full overflow-hidden rounded-lg text-sm">
+        <thead className="bg-muted/35">
           <tr className="border-b text-table-head">
-            <th className="w-28 pb-2 text-left">编码</th>
-            <th className="w-20 pb-2 text-left">货号</th>
-            <th className="w-20 pb-2 text-left">型号</th>
-            <th className="pb-2 text-left">商品</th>
-            <th className="w-20 pb-2 text-left">颜色</th>
-            <th className="w-16 pb-2 text-center">单位</th>
-            <th className="w-20 pb-2 text-right">数量</th>
-            <th className="w-24 pb-2 text-right">单价 (¥)</th>
-            <th className="w-28 pb-2 text-right">金额</th>
-            <th className="w-10 pb-2" />
+            <th className="w-28 px-2 py-2.5 text-left">编码</th>
+            <th className="w-20 px-2 py-2.5 text-left">货号</th>
+            <th className="w-20 px-2 py-2.5 text-left">型号</th>
+            <th className="px-2 py-2.5 text-left">商品</th>
+            <th className="w-20 px-2 py-2.5 text-left">颜色</th>
+            <th className="w-16 px-2 py-2.5 text-center">单位</th>
+            <th className="w-20 px-2 py-2.5 text-right">数量</th>
+            <th className="w-24 px-2 py-2.5 text-right">单价 (¥)</th>
+            <th className="w-28 px-2 py-2.5 text-right">金额</th>
+            <th className="w-10 px-2 py-2.5" />
           </tr>
         </thead>
         <tbody>
           {items.map(item => (
-            <tr key={item._key} className="border-b border-border/40">
-              <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
-              <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
-              <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
-              <td className="py-2.5 pr-3">
+            <tr key={item._key} className="border-b border-border/40 transition-colors hover:bg-muted/20">
+              <td className="px-2 py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
+              <td className="px-2 py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
+              <td className="px-2 py-2.5 text-muted-foreground">{item.spec || '—'}</td>
+              <td className="px-2 py-2.5">
                 <button
                   type="button"
                   onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
@@ -53,7 +54,7 @@ export function SaleOrderItemsTable({
                     : <span className="text-muted-foreground">点击选择商品…</span>}
                 </button>
               </td>
-              <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
+              <td className="px-2 py-2.5 text-muted-foreground">{item.color || '—'}</td>
 
               <td className="py-2.5 text-center">
                 {(item.units && item.units.filter(u => !u.isBase).length > 0) ? (
@@ -72,10 +73,10 @@ export function SaleOrderItemsTable({
 
               <td className="py-2.5 pr-2">
                 <Input
-                  type="number" min="1" step="1" placeholder="数量"
+                  type="number" min="0.0001" step="0.0001" placeholder="数量"
                   value={item.quantity}
                   ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveQuantity(e.target.value))}
                   className="text-right text-sm"
                 />
                 {item.entryUnit && item.entryUnit !== item.unit && (
@@ -89,7 +90,7 @@ export function SaleOrderItemsTable({
                   value={item.unitPrice}
                   disabled={!!priceLoading[item._key]}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', parsePrice(e.target.value))}
-                  className={`text-right text-sm ${item.priceSource === 'list' ? 'border-blue-300 bg-blue-50/80' : item.priceSource === 'manual' ? 'border-amber-300 bg-amber-50/70' : ''}`}
+                  className={cn('text-right text-sm', item.priceSource === 'list' && 'border-primary/35 bg-primary/[0.04]', item.priceSource === 'manual' && 'border-warning/40 bg-warning/[0.05]')}
                 />
               </td>
 
@@ -102,7 +103,8 @@ export function SaleOrderItemsTable({
                   type="button" size="sm" variant="ghost"
                   className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
                   onClick={() => removeItem(item._key)}
-                >✕</Button>
+                  aria-label="删除商品行"
+                ><Trash2 className="h-4 w-4" /></Button>
               </td>
             </tr>
           ))}

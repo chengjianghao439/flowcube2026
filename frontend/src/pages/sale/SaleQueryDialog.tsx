@@ -62,7 +62,7 @@ export default function SaleQueryDialog({ open, initial, onClose, onApply }: Pro
         open={open}
         onOpenChange={v => { if (!v) onClose() }}
         dialogId="sale-query"
-        title="查询销售单"
+        title="高级查询"
         resizable={false}
         defaultWidth={520}
         defaultHeight={520}
@@ -78,7 +78,7 @@ export default function SaleQueryDialog({ open, initial, onClose, onApply }: Pro
           </div>
         }
       >
-        <div className="grid h-full grid-cols-2 gap-4 overflow-y-auto px-5 py-4">
+        <div className="grid h-full grid-cols-1 gap-4 overflow-y-auto px-5 py-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">单号</span>
             <Input
@@ -97,6 +97,7 @@ export default function SaleQueryDialog({ open, initial, onClose, onApply }: Pro
               <SelectContent>
                 <SelectItem value="__all__">全部状态</SelectItem>
                 <SelectItem value="1">草稿</SelectItem>
+                <SelectItem value="6">部分占库</SelectItem>
                 <SelectItem value="2">已占库</SelectItem>
                 <SelectItem value="3">拣货中</SelectItem>
                 <SelectItem value="4">已出库</SelectItem>
@@ -156,7 +157,7 @@ export default function SaleQueryDialog({ open, initial, onClose, onApply }: Pro
               onChange={v => set('endDate', v)} className="h-9" />
           </label>
 
-          <label className="flex flex-col gap-1 col-span-2">
+          <label className="flex flex-col gap-1 sm:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">备注</span>
             <Input
               placeholder="按订单备注内容查询…"

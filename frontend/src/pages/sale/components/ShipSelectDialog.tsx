@@ -1,86 +1,105 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { PackageCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { SaleOrder } from '@/types/sale'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
+import { isAllocationQtyValid, clampAllocationQty } from './saleAllocation'
+import type { SaleOrder, ShipItemRequest } from '@/types/sale'
 
 interface Props {
   open: boolean
   onClose: () => void
   order: SaleOrder
   loading?: boolean
-  /** 传空数组 = 全部发货；传选中行 id = 只发这些 */
-  onConfirm: (itemIds: number[]) => void
+  onConfirm: (items: ShipItemRequest[]) => void
 }
+type RowState = { checked: boolean; qty: number }
 
-/**
- * 发货选择弹窗（分批/分数量发货）：列出「已占未发完」的明细行，勾选本次要发的行。
- * 每行本次发货量 = 已占数量 - 已派发数量（只发已占部分）。默认全选（等价于全部发货）。
- */
 export default function ShipSelectDialog({ open, onClose, order, loading, onConfirm }: Props) {
-  const undispatched = (order.items ?? []).filter(i => (i.dispatchedQty ?? 0) < (i.reservedQty ?? 0))
-  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const undispatched = useMemo(
+    () => (order.items ?? []).filter(i => (i.dispatchedQty ?? 0) < (i.reservedQty ?? 0)),
+    [order.items],
+  )
+  const [rows, setRows] = useState<Record<number, RowState>>({})
 
   useEffect(() => {
-    if (open) setSelected(new Set(undispatched.map(i => i.id)))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+    if (!open) return
+    setRows(Object.fromEntries(undispatched.map(item => [item.id, {
+      checked: true,
+      qty: clampAllocationQty((item.reservedQty ?? 0) - (item.dispatchedQty ?? 0), item.reservedQty ?? 0),
+    }])))
+  }, [open, undispatched])
 
-  const allSelected = undispatched.length > 0 && selected.size === undispatched.length
-  const toggle = (id: number) => setSelected(prev => {
-    const next = new Set(prev)
-    if (next.has(id)) next.delete(id); else next.add(id)
-    return next
-  })
+  const limitFor = (id: number) => {
+    const item = undispatched.find(row => row.id === id)
+    return item ? clampAllocationQty((item.reservedQty ?? 0) - (item.dispatchedQty ?? 0), item.reservedQty ?? 0) : 0
+  }
+  const selected = undispatched.filter(item => rows[item.id]?.checked)
+  const invalid = selected.filter(item => !isAllocationQtyValid(rows[item.id]?.qty ?? 0, limitFor(item.id)))
+  const allSelected = undispatched.length > 0 && undispatched.every(item => rows[item.id]?.checked)
+
+  const setRow = (id: number, patch: Partial<RowState>) => setRows(prev => ({
+    ...prev,
+    [id]: { ...(prev[id] ?? { checked: false, qty: limitFor(id) }), ...patch },
+  }))
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>发起出库</DialogTitle></DialogHeader>
+      <DialogContent className="flex max-h-[86vh] w-[min(94vw,900px)] max-w-none flex-col overflow-hidden">
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary" />发起出库</DialogTitle></DialogHeader>
         <p className="text-sm text-muted-foreground">
-          勾选本次要发货的商品，每行只发「已占未发」的数量。默认全选=全部发货；只勾一部分即分批，其余留待之后「继续发货」。
-          {order.isMultiWarehouse && '（本单跨多个仓库，按仓库分别建出库任务）'}
+          选择本次发货商品并填写数量。未发部分保留，可稍后继续发货。
+          {order.isMultiWarehouse && ' 本单将按仓库分别创建出库任务。'}
         </p>
-        <div className="max-h-80 overflow-y-auto rounded-md border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs text-muted-foreground">
+        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead className="sticky top-0 bg-muted/70 text-xs text-muted-foreground">
               <tr>
-                <th className="w-10 px-2 py-1.5">
-                  <input type="checkbox" checked={allSelected}
-                    onChange={e => setSelected(e.target.checked ? new Set(undispatched.map(i => i.id)) : new Set())} />
-                </th>
-                <th className="px-2 py-1.5 text-left">商品</th>
-                {order.isMultiWarehouse && <th className="px-2 py-1.5 text-left">发货仓库</th>}
-                <th className="px-2 py-1.5 text-right">本次发货量</th>
+                <th className="w-10 px-3 py-2"><input type="checkbox" checked={allSelected} onChange={e => setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }])))} /></th>
+                <th className="px-3 py-2 text-left">商品身份</th>
+                <th className="w-40 px-3 py-2 text-left">发货仓库</th>
+                <th className="w-28 px-3 py-2 text-right">已占未发</th>
+                <th className="w-36 px-3 py-2 text-right">本次发货</th>
               </tr>
             </thead>
             <tbody>
-              {undispatched.map(item => (
-                <tr key={item.id} className="border-t cursor-pointer hover:bg-muted/30" onClick={() => toggle(item.id)}>
-                  <td className="px-2 py-1.5 text-center">
-                    <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggle(item.id)} onClick={e => e.stopPropagation()} />
-                  </td>
-                  <td className="px-2 py-1.5">
-                    {item.productName}
-                    <span className="ml-1 text-xs text-muted-foreground">{item.productCode}{item.articleNumber ? ` · 货号 ${item.articleNumber}` : ''}{item.spec ? ` · ${item.spec}` : ''}{item.color ? ` · ${item.color}` : ''}</span>
-                  </td>
-                  {order.isMultiWarehouse && <td className="px-2 py-1.5">{item.warehouseName || '默认仓库'}</td>}
-                  <td className="px-2 py-1.5 text-right tabular-nums">
-                    {(item.reservedQty ?? 0) - (item.dispatchedQty ?? 0)} {item.unit}
-                  </td>
-                </tr>
-              ))}
-              {!undispatched.length && (
-                <tr><td colSpan={4} className="px-2 py-4 text-center text-muted-foreground">没有可发货的明细（请先占库）</td></tr>
-              )}
+              {undispatched.map(item => {
+                const state = rows[item.id] ?? { checked: false, qty: limitFor(item.id) }
+                const invalidQty = state.checked && !isAllocationQtyValid(state.qty, limitFor(item.id))
+                return (
+                  <tr key={item.id} className="border-t align-top hover:bg-muted/20">
+                    <td className="px-3 py-3 text-center"><input type="checkbox" checked={state.checked} onChange={e => setRow(item.id, { checked: e.target.checked })} /></td>
+                    <td className="px-3 py-3">
+                      <div className="font-medium">{item.productName}</div>
+                      <div className="mt-1 grid grid-cols-2 gap-x-3 text-xs text-muted-foreground">
+                        <span>编码 {item.productCode || '—'}</span><span>供应商型号 {item.articleNumber || '—'}</span>
+                        <span>型号 {item.spec || '—'}</span><span>颜色 {item.color || '—'}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">{item.warehouseName || order.warehouseName}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{limitFor(item.id)} {item.unit}</td>
+                    <td className="px-3 py-3">
+                      <Input type="number" min={0.0001} step={0.0001} max={limitFor(item.id)} value={state.qty} disabled={!state.checked}
+                        onChange={e => setRow(item.id, { qty: Number(e.target.value) })}
+                        className={cn('h-9 text-right tabular-nums', invalidQty && 'border-destructive')} />
+                    </td>
+                  </tr>
+                )
+              })}
+              {!undispatched.length && <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">没有可发货明细，请先占库</td></tr>}
             </tbody>
           </table>
         </div>
-        <DialogFooter>
+        <DialogFooter className="sm:items-center sm:justify-between">
+          <span className={cn('mr-auto text-sm text-muted-foreground', invalid.length > 0 && 'text-destructive')}>
+            {invalid.length ? `${invalid.length} 项数量无效` : `已选择 ${selected.length} 项`}
+          </span>
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button
-            disabled={loading || selected.size === 0}
-            onClick={() => onConfirm(allSelected ? [] : [...selected])}
-          >{loading ? '发起中…' : allSelected ? '全部发货' : `发选中 ${selected.size} 项`}</Button>
+          <Button disabled={loading || !selected.length || invalid.length > 0}
+            onClick={() => onConfirm(selected.map(item => ({ id: item.id, qty: rows[item.id].qty })))}>
+            {loading ? '发起中…' : '确认发起出库'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useReleaseSale } from '@/hooks/useSale'
 import type { SaleOrderItem, ReserveItemOverride } from '@/types/sale'
+import { isAllocationQtyValid } from './saleAllocation'
 
 interface Props {
   open: boolean
@@ -36,6 +37,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
   if (!orderId) return null
 
   const selected = reservedItems.filter(i => rows[i.id]?.checked && (rows[i.id]?.qty ?? 0) > 0)
+  const invalid = reservedItems.filter(i => rows[i.id]?.checked && !isAllocationQtyValid(rows[i.id]?.qty ?? 0, i.reservedQty ?? 0))
 
   function setRow(id: number, patch: Partial<RowState>) {
     setRows(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
@@ -65,12 +67,12 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>取消占库 · 按产品释放</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>取消占库</DialogTitle></DialogHeader>
         <p className="text-sm text-muted-foreground">
-          勾选要释放的商品并填写释放数量（默认全释放）。只释放勾选部分即可保留其余占库。
+          选择需要释放的商品并填写数量。未勾选的明细继续保留占库。
         </p>
 
-        <div className="max-h-80 overflow-y-auto rounded-md border">
+        <div className="max-h-80 overflow-y-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-muted/50 text-xs text-muted-foreground">
               <tr>
@@ -91,7 +93,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
               {reservedItems.map(item => {
                 const st = rows[item.id] ?? { checked: false, qty: item.reservedQty ?? 0 }
                 return (
-                  <tr key={item.id} className="border-t">
+                  <tr key={item.id} className="border-t transition-colors hover:bg-muted/20">
                     <td className="px-3 py-2">
                       <input
                         type="checkbox"
@@ -115,7 +117,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                         value={st.qty ?? 0}
                         disabled={!st.checked}
                         onChange={e => setRow(item.id, { qty: Number(e.target.value) })}
-                        className={cn('h-9 text-sm tabular-nums')}
+                        className={cn('h-9 text-sm tabular-nums', !isAllocationQtyValid(st.qty, item.reservedQty ?? 0) && st.checked && 'border-destructive')}
                       />
                     </td>
                   </tr>
@@ -131,7 +133,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
         <DialogFooter>
           <Button variant="outline" onClick={releaseAll} disabled={release.isPending}>整单全释放</Button>
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button disabled={release.isPending || !selected.length} onClick={() => handleConfirm(true)}>
+          <Button disabled={release.isPending || !selected.length || invalid.length > 0} onClick={() => handleConfirm(true)}>
             {release.isPending ? '释放中…' : `释放选中 ${selected.length} 项`}
           </Button>
         </DialogFooter>

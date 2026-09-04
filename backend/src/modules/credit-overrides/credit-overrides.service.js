@@ -1,6 +1,8 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
+const { getCustomerCreditUsed } = require('../../utils/creditExposure')
+const { getNetOrderAmount, isApprovedOverrideApplicable } = require('../sale/sale.contracts')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { normalizePagination } = require('../../utils/pagination')
@@ -53,7 +55,7 @@ async function create({ saleOrderId, reason }, operator) {
   try {
     await conn.beginTransaction()
     const [[order]] = await conn.query(
-      'SELECT o.id, o.order_no, o.total_amount, o.customer_id, o.status, c.name AS customer_name, c.credit_limit FROM sale_orders o JOIN sale_customers c ON c.id=o.customer_id WHERE o.id=? AND o.deleted_at IS NULL',
+      'SELECT o.id, o.order_no, o.total_amount, o.discount_amount, o.customer_id, o.status, c.name AS customer_name, c.credit_limit FROM sale_orders o JOIN sale_customers c ON c.id=o.customer_id WHERE o.id=? AND o.deleted_at IS NULL',
       [Number(saleOrderId)],
     )
     if (!order) throw new AppError('销售单不存在', 404)
@@ -68,7 +70,7 @@ async function create({ saleOrderId, reason }, operator) {
 
     // 快照信用口径（占库校验同款：未清应收 + 在途敞口）。本单尚为草稿(1)不占用信用。
     const used = await getUsedCredit(conn, Number(order.customer_id))
-    const thisAmount = Number(order.total_amount) || 0
+    const thisAmount = getNetOrderAmount(order.total_amount, order.discount_amount)
     const limit = Number(order.credit_limit)
     const overAmount = Math.max(0, Math.round((used + thisAmount - limit) * 100) / 100)
     if (overAmount <= 0) {
@@ -232,31 +234,22 @@ async function findById(id) {
   return detail
 }
 
-/** 供 sale.service 占库放行判断：该销售单是否存在「已批准」的放行申请 */
-async function hasApprovedOverride(saleOrderId) {
-  const [[row]] = await pool.query(
-    'SELECT id FROM sale_credit_overrides WHERE sale_order_id=? AND status=3 AND deleted_at IS NULL LIMIT 1',
+/** 供 sale.service 占库放行判断：已批准申请的客户、额度和金额快照仍覆盖当前超额敞口。 */
+async function hasApprovedOverride(saleOrderId, current = {}) {
+  const db = current.conn || pool
+  const [[row]] = await db.query(
+    `SELECT id, customer_id, credit_limit, this_amount, over_amount
+     FROM sale_credit_overrides
+     WHERE sale_order_id=? AND status=3 AND deleted_at IS NULL
+     ORDER BY id DESC LIMIT 1`,
     [Number(saleOrderId)],
   )
-  return row ? Number(row.id) : null
+  return isApprovedOverrideApplicable(row, current) ? Number(row.id) : null
 }
 
 /** 信用口径同款（避免循环依赖 sale.service，此处内联：未清应收 + 在途敞口） */
 async function getUsedCredit(conn, customerId) {
-  const [[a]] = await conn.query(
-    `SELECT COALESCE(SUM(pr.balance),0) AS used FROM payment_records pr
-     JOIN sale_orders so ON so.id=pr.order_id
-     WHERE pr.type=2 AND pr.status IN (1,2) AND so.customer_id=?`,
-    [customerId],
-  )
-  const [[b]] = await conn.query(
-    `SELECT COALESCE(SUM(GREATEST(0, so.total_amount - COALESCE(pr.total_amount,0))),0) AS used_open
-     FROM sale_orders so
-     LEFT JOIN payment_records pr ON pr.type=2 AND pr.order_id=so.id
-     WHERE so.customer_id=? AND so.status IN (2,3) AND so.deleted_at IS NULL`,
-    [customerId],
-  )
-  return Math.round((Number(a.used) + Number(b.used_open)) * 10000) / 10000
+  return getCustomerCreditUsed(conn, customerId)
 }
 
 module.exports = {

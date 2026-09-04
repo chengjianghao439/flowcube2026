@@ -41,9 +41,13 @@ async function foldEntryItem(conn, item) {
   const rate = await resolveConversionRate(conn, item.productId, entryUnit, item.unit)
   const entryQty = Number(item.quantity) || 0
   const entryUnitPrice = Number(item.unitPrice) || 0
+  const quantity = round4(entryQty * rate)
+  if (!(quantity > 0)) {
+    throw new AppError('数量折算后小于库存最小精度 0.0001，请调整录入数量或单位换算率', 400, 'QUANTITY_BELOW_MIN_PRECISION')
+  }
   return {
     ...item,
-    quantity: round4(entryQty * rate),
+    quantity,
     unitPrice: round8(entryUnitPrice / rate),
     amount: round2(entryQty * entryUnitPrice),
     entryUnit,

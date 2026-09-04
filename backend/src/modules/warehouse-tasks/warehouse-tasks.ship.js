@@ -7,6 +7,7 @@ const { getCustomerCreditUsed, hasCreditOverridePermission } = require('../../ut
 const { isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { getNetOrderAmount, getOutstandingOrderAmount } = require('../sale/sale.contracts')
 const {
   logSideEffectFailure,
   assertTaskPickScanClosure,
@@ -19,17 +20,25 @@ const { findById } = require('./warehouse-tasks.query')
 
 /**
  * 出库信用复查（审计 4.8）。客户行 FOR UPDATE 锁住，防止同客户并发出库都读到旧已用值。
- * 已用额度 + 本单总额 > 限额时拦截（除非操作者有 sale.credit.override 权限）。
+ * 其它订单已用额度 + 本单折后未收敞口 > 限额时拦截（除非操作者有 sale.credit.override 权限）。
  * 抽成独立函数便于单测。
  */
-async function assertCreditWithinLimit(conn, customerId, thisOrderAmount, operator) {
+async function assertCreditWithinLimit(conn, customerId, thisOrderAmount, operator, excludeSaleOrderId = null) {
   const [[cust]] = await conn.query(
     'SELECT id, credit_limit FROM sale_customers WHERE id = ? FOR UPDATE',
     [customerId],
   )
   if (!cust || cust.credit_limit == null) return // 无信用额度限制则放行
-  const used = await getCustomerCreditUsed(conn, customerId)
-  const thisOrder = Number(thisOrderAmount) || 0
+  const used = await getCustomerCreditUsed(conn, customerId, { excludeSaleOrderId })
+  let paidAmount = 0
+  if (excludeSaleOrderId != null) {
+    const [[receivable]] = await conn.query(
+      'SELECT paid_amount FROM payment_records WHERE type = 2 AND order_id = ? LIMIT 1',
+      [Number(excludeSaleOrderId)],
+    )
+    paidAmount = Number(receivable?.paid_amount) || 0
+  }
+  const thisOrder = getOutstandingOrderAmount(thisOrderAmount, 0, paidAmount)
   const limit = Number(cust.credit_limit)
   if (used + thisOrder > limit) {
     const overBy = Math.round((used + thisOrder - limit) * 100) / 100
@@ -60,7 +69,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
     saleRow = await lockStatusRow(conn, {
       table: 'sale_orders',
       id: saleOrderId,
-      columns: 'id, status, order_no, customer_id',
+      columns: 'id, status, order_no, customer_id, total_amount, discount_amount',
       entityName: '销售单',
     })
   }
@@ -113,9 +122,15 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   // 出库环节信用复查（审计 4.8）：占库时校验过一次，但占库到出库之间
   // 客户可能又开了新单、或未清应收变多，额度可能已经超限——出库确认是货物
   // 真正离开仓库的时点，此时复查比占库时更贴近「钱能不能收回来」。
-  // 口径与占库一致（已用 + 本单总额 > 限额）；超限且无 override 则拦下。
+  // 口径与占库一致；排除本单后再加回本单折后未收敞口，避免分批出库重复计算。
   if (saleRow && saleRow.customer_id != null) {
-    await assertCreditWithinLimit(conn, saleRow.customer_id, totalAmount, operator)
+    await assertCreditWithinLimit(
+      conn,
+      saleRow.customer_id,
+      getNetOrderAmount(saleRow.total_amount, saleRow.discount_amount),
+      operator,
+      saleRow.id,
+    )
   }
 
   // 与占库侧（sale.service.reserveStock）保持同一加锁顺序：moveStock 会对

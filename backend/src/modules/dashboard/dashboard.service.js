@@ -1,3 +1,4 @@
+const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
 const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
 const { scopeFilter } = require('../../utils/warehouseScope')
@@ -29,32 +30,37 @@ async function getSummary(scopeWarehouseIds = null) {
     `SELECT COUNT(*) AS purchaseOrders FROM purchase_orders WHERE deleted_at IS NULL AND status IN (1,2)${poScope.sql}`,
     poScope.params,
   )
-  const [[{ saleOrders }]] = await pool.query(
-    `SELECT COUNT(*) AS saleOrders FROM sale_orders WHERE deleted_at IS NULL AND status IN (1,2,3)${soScope.sql}`,
-    soScope.params,
+  const itemScope = Array.isArray(scopeWarehouseIds) && scopeWarehouseIds.length
+    ? ' AND NOT EXISTS (SELECT 1 FROM sale_order_items si WHERE si.order_id=sale_orders.id AND si.warehouse_id NOT IN (?))' : ''
+  const [saleRows] = await pool.query(
+    `SELECT status, COUNT(*) AS count FROM sale_orders WHERE deleted_at IS NULL${soScope.sql}${itemScope} GROUP BY status`,
+    [...soScope.params, ...(itemScope ? [scopeWarehouseIds] : [])],
   )
+  const saleStatusCounts = Object.fromEntries(saleRows.map(r => [String(r.status), Number(r.count)]))
   return {
     totalSkus: Number(totalSkus),
     totalQty: Number(totalQty),
     totalValue: Number(totalValue),
     pendingPurchaseOrders: Number(purchaseOrders),
-    pendingSaleOrders: Number(saleOrders)
+    pendingSaleOrders: [1,2,6].reduce((total, status) => total + (saleStatusCounts[status] || 0), 0),
+    saleStatusCounts
   }
 }
 
-async function getLowStock(threshold = 10, scopeWarehouseIds = null) {
-  const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
+async function getLowStock(threshold = 10, scopeWarehouseIds = null, pagination = null) {
   const sc = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
-  const [rows] = await pool.query(
-    `SELECT p.id, p.code, p.name, p.unit, w.name AS warehouse_name, ip.quantity
-     FROM ${inventoryDisplayProjectionSql} ip
-     JOIN product_items p ON ip.product_id=p.id
-     JOIN inventory_warehouses w ON ip.warehouse_id=w.id
-     WHERE ip.quantity <= ? AND p.deleted_at IS NULL AND w.deleted_at IS NULL${sc.sql}
-     ORDER BY ip.quantity ASC LIMIT 20`,
-    [threshold, ...sc.params]
-  )
-  return rows.map(r=>({ id:r.id, code:r.code, name:r.name, unit:r.unit, warehouseName:r.warehouse_name, quantity:Number(r.quantity) }))
+  const base = `SELECT p.id, p.code, p.name, p.unit, p.spec, p.color, ip.warehouse_id, w.name AS warehouse_name, SUM(ip.quantity) AS quantity
+    FROM ${getInventoryDisplayProjectionSql()} ip
+    JOIN product_items p ON ip.product_id=p.id JOIN inventory_warehouses w ON ip.warehouse_id=w.id
+    WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL${sc.sql}
+    GROUP BY p.id,p.code,p.name,p.unit,p.spec,p.color,ip.warehouse_id,w.name HAVING SUM(ip.quantity)<=?`
+  const params = [...sc.params, threshold]
+  const { page, pageSize, offset } = normalizePagination(pagination || {pageSize:20})
+  const [rows] = await pool.query(`${base} ORDER BY quantity ASC,id,warehouse_id LIMIT ? OFFSET ?`, [...params,pageSize,offset])
+  const list = rows.map(r=>({id:r.id,code:r.code,name:r.name,unit:r.unit,spec:r.spec,color:r.color,warehouseId:r.warehouse_id,warehouseName:r.warehouse_name,quantity:Number(r.quantity)}))
+  if (!pagination) return list
+  const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM (${base}) risk`,params)
+  return {list,pagination:{page,pageSize,total:Number(total)}}
 }
 
 async function getRecentTrend(days = 7, scopeWarehouseIds = null) {
@@ -162,8 +168,8 @@ async function saveLayout(userId, layout) {
  * 口径与 creditExposure 一致：已用 = 未清应收(A) + 在途敞口(B)；占用率 = used/credit_limit。
  * 超限客户 = 占用率 > 1；高风险 = 占用率 >= 0.9。
  */
-async function getCreditWarning() {
-  // 在途敞口子查询：已占库(2)/拣货中(3)订单的 (订单总额 − 已生成应收总额)
+async function getCreditWarning(pagination = null) {
+  // 在途敞口子查询：已占库/部分占库/履约中订单的 (折后净额 − 已生成应收总额)
   const [rows] = await pool.query(
     `SELECT c.id, c.name, c.credit_limit,
             COALESCE(a.used_receivable, 0) + COALESCE(b.open_exposure, 0) AS used
@@ -175,10 +181,10 @@ async function getCreditWarning() {
         GROUP BY so.customer_id
      ) a ON a.customer_id = c.id
      LEFT JOIN (
-        SELECT so.customer_id, SUM(GREATEST(0, so.total_amount - COALESCE(pr.total_amount,0))) AS open_exposure
+        SELECT so.customer_id, SUM(GREATEST(0, (so.total_amount - COALESCE(so.discount_amount,0)) - COALESCE(pr.total_amount,0))) AS open_exposure
         FROM sale_orders so
         LEFT JOIN payment_records pr ON pr.type=2 AND pr.order_id=so.id
-        WHERE so.status IN (2,3) AND so.deleted_at IS NULL
+        WHERE so.status IN (2,3,6) AND so.deleted_at IS NULL
         GROUP BY so.customer_id
      ) b ON b.customer_id = c.id
      WHERE c.deleted_at IS NULL AND c.credit_limit IS NOT NULL AND c.credit_limit > 0
@@ -197,6 +203,11 @@ async function getCreditWarning() {
     }
   }).sort((a, b) => b.usageRate - a.usageRate)
 
+  if (pagination) {
+    const { page, pageSize, offset } = normalizePagination(pagination)
+    const filtered = list.filter(x=>x.over)
+    return {list:filtered.slice(offset,offset+pageSize).map(x=>({...x,usageRatePct:Math.round(x.usageRate*100)})), pagination:{page,pageSize,total:filtered.length}}
+  }
   const overCount = list.filter(x => x.over).length
   const highRiskCount = list.filter(x => !x.over && x.usageRate >= 0.9).length
   const top = list.slice(0, 5).map(x => ({ ...x, usageRatePct: Math.round(x.usageRate * 100) }))

@@ -1,7 +1,7 @@
 {
-  "version": "0.9.4",
-  "versionCode": 112,
+  "version": "0.9.5",
+  "versionCode": 113,
   "filename": "app-release.apk",
-  "releaseNote": "- 全新官网围绕“业务有序，经营有数”展示采购、销售、仓储、财务与会计协作。",
-  "publishedAt": "2026-09-04T17:55:59.179Z"
+  "releaseNote": "仪表盘与销售订单全面升级，优化待办处理、订单预览和风险查看，修复占库、分批发货与执行期改单的一致性问题。",
+  "publishedAt": "2026-09-04T20:53:49.809Z"
 }

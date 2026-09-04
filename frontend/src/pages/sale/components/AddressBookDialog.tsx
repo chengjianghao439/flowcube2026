@@ -19,7 +19,7 @@ import {
 import { parseAddressText } from '@/utils/parseAddress'
 import type { CustomerAddress } from '@/types/customers'
 
-const PHONE_RE = /^1\d{10}$/
+const PHONE_RE = /^[0-9+()\-\s]{3,30}$/
 const emptyForm = { receiverName: '', receiverPhone: '', receiverAddress: '' }
 
 /** 挑选出的地址落进销售单收货字段的最小形状 */
@@ -73,7 +73,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
 
   const validateForm = () => {
     if (!form.receiverAddress.trim()) { toast.warning('请填写收货地址'); return false }
-    if (form.receiverPhone && !PHONE_RE.test(form.receiverPhone)) { toast.warning('请输入正确的手机号'); return false }
+    if (form.receiverPhone && !PHONE_RE.test(form.receiverPhone)) { toast.warning('请输入正确的联系电话'); return false }
     return true
   }
 
@@ -128,7 +128,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
       title={`常用地址${customerName ? ` · ${customerName}` : ''}`}
       defaultWidth={640}
       defaultHeight={560}
-      minWidth={560}
+      minWidth={360}
       minHeight={460}
     >
       <div className="flex h-full flex-col gap-3 overflow-hidden px-5 py-4">
@@ -164,12 +164,12 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
               </Button>
             </div>
             {/* 收货人 / 电话 / 地址 —— 占位即标签，保持紧凑 */}
-            <div className="grid grid-cols-[7rem_9.5rem_1fr] gap-2">
-              <LimitedInput maxLength={5} value={form.receiverName} onChange={e => setForm(f => ({ ...f, receiverName: e.target.value }))} placeholder="收货人" />
-              <LimitedInput maxLength={11} value={form.receiverPhone} onChange={e => setForm(f => ({ ...f, receiverPhone: e.target.value }))} placeholder="11位手机号" inputMode="numeric" />
-              <LimitedTextarea maxLength={30} value={form.receiverAddress} onChange={e => setForm(f => ({ ...f, receiverAddress: e.target.value }))} placeholder="详细收货地址" rows={1} className="h-10 min-h-0 py-2" singleLine />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[7rem_9.5rem_1fr]">
+              <LimitedInput maxLength={30} value={form.receiverName} onChange={e => setForm(f => ({ ...f, receiverName: e.target.value }))} placeholder="收货人或部门" />
+              <LimitedInput maxLength={30} value={form.receiverPhone} onChange={e => setForm(f => ({ ...f, receiverPhone: e.target.value }))} placeholder="联系电话" inputMode="tel" />
+              <LimitedTextarea maxLength={200} value={form.receiverAddress} onChange={e => setForm(f => ({ ...f, receiverAddress: e.target.value }))} placeholder="详细收货地址" rows={1} className="h-10 min-h-0 py-2" singleLine />
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button variant="ghost" onClick={closeForm}>取消</Button>
               <Button variant="outline" onClick={handleFillOrder}>仅填入订单</Button>
               <Button onClick={handleSave} disabled={saving}>{saving ? '保存中…' : editingId ? '保存修改' : '保存地址'}</Button>
@@ -240,7 +240,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
                     </div>
                     <p className="truncate text-sm text-muted-foreground">{a.receiverAddress}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                  <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
                     <Button variant="ghost" size="sm" className="h-8 px-2.5" onClick={() => handlePick(a)}>选用</Button>
                     {canWrite && (
                       <>

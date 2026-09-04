@@ -3,9 +3,10 @@ export interface DashboardSummary {
   totalQty: number
   totalValue: number
   pendingPurchaseOrders: number
+  saleStatusCounts?: Record<string, number>
   pendingSaleOrders: number
 }
-export interface LowStockItem { id: number; code: string; name: string; unit: string; warehouseName: string; quantity: number }
+export interface LowStockItem { warehouseId?:number; spec?:string; color?:string; id: number; code: string; name: string; unit: string; warehouseName: string; quantity: number }
 export interface TrendPoint { date: string; inbound: number; outbound: number }
 export interface TopStockItem { code: string; name: string; unit: string; qty: number; value: number }
 export interface IncomingPurchaseItem { id: number; orderNo: string; supplierName: string; expectedDate: string; totalAmount: number }

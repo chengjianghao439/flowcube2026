@@ -49,7 +49,7 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
   if (!order.taskNo) return null
 
   return (
-    <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+    <div className="space-y-4 rounded-lg border border-border bg-card p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">作业进度</h3>
@@ -63,16 +63,16 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
       </div>
 
       {isPicking && !isCancelled && (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1">
           {steps.map((step, idx) => {
             const isDone = idx < currentIdx
             const isCurrent = idx === currentIdx
             return (
               <div key={step.status} className="flex items-center gap-1 flex-1 last:flex-none">
-                <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                  isDone ? 'bg-primary/10 text-primary'
-                    : isCurrent ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                    : 'bg-muted/30 text-muted-foreground'
+                <div className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1.5 text-xs font-medium ${
+                  isDone ? 'border-primary/15 bg-primary/10 text-primary'
+                    : isCurrent ? 'border-warning/35 bg-warning/[0.07] text-foreground'
+                    : 'border-transparent bg-muted/30 text-muted-foreground'
                 }`}>
                   <span>{isDone ? '✓' : isCurrent ? '●' : '○'}</span>
                   <span>{step.label}</span>

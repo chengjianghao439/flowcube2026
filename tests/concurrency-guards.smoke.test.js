@@ -278,7 +278,11 @@ async function scenarioWarehouseCancel(log, ctx, adminToken) {
   const taskId = Number(saleRows[0]?.task_id)
   log.assert('销售单已关联仓库任务', Number.isFinite(taskId) && taskId > 0, `taskId=${taskId}`)
 
-  const cancelCall = () => ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+  const directCancel = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+  log.assert('销售关联任务禁止从仓库任务入口单独取消',
+    directCancel.status === 409 && directCancel.data?.code === 'SALE_ORDER_CANCEL_REQUIRED',
+    `status=${directCancel.status} code=${directCancel.data?.code}`)
+  const cancelCall = () => ctx.http.post(`/api/sale/${saleId}/cancel`, { token: adminToken })
   const [a, b] = await Promise.all([cancelCall(), cancelCall()])
   const successCount = [a, b].filter(r => r.ok).length
   const failureCount = [a, b].filter(r => !r.ok).length
@@ -301,10 +305,31 @@ async function scenarioWarehouseCancel(log, ctx, adminToken) {
   const [saleRows2] = await ctx.pool.query('SELECT task_id FROM sale_orders WHERE id = ?', [saleId2])
   const taskId2 = Number(saleRows2[0]?.task_id)
   await ctx.pool.query('UPDATE sale_orders SET status = 4 WHERE id = ?', [saleId2])
-  const blocked = await ctx.http.put(`/api/warehouse-tasks/${taskId2}/cancel`, { token: adminToken })
+  const blocked = await ctx.http.post(`/api/sale/${saleId2}/cancel`, { token: adminToken })
   log.assert('销售单已出库时 cancel 被拒绝', !blocked.ok, `status=${blocked.status}`)
   const [taskRows2] = await ctx.pool.query('SELECT status FROM warehouse_tasks WHERE id = ?', [taskId2])
   log.assert('cancel 被拒绝时任务状态不落地', Number(taskRows2[0]?.status) === 2, `status=${taskRows2[0]?.status}`)
+}
+
+async function scenarioSaleOperationIdempotencyIsolation(log, ctx, adminToken) {
+  log.section('Scenario: 销售订单幂等键跨单隔离')
+  const first = await createSaleOrder(ctx.http, adminToken, {
+    customer: ctx.customer, warehouse: ctx.warehouse, product: ctx.product, quantity: 1,
+  })
+  const second = await createSaleOrder(ctx.http, adminToken, {
+    customer: ctx.customer, warehouse: ctx.warehouse, product: ctx.product, quantity: 1,
+  })
+  const firstId = Number(first.data?.data?.id)
+  const secondId = Number(second.data?.data?.id)
+  const requestKey = randomRef('sale-cancel-shared')
+  const headers = { 'X-Request-Key': requestKey }
+  const firstCancel = await ctx.http.post(`/api/sale/${firstId}/cancel`, { token: adminToken, headers })
+  const secondCancel = await ctx.http.post(`/api/sale/${secondId}/cancel`, { token: adminToken, headers })
+  log.assert('同一幂等键取消第一张销售单成功', firstCancel.ok, `status=${firstCancel.status}`)
+  log.assert('同一幂等键取消第二张销售单不会重放第一单结果', secondCancel.ok, `status=${secondCancel.status}`)
+  const [rows] = await ctx.pool.query('SELECT id, status FROM sale_orders WHERE id IN (?, ?) ORDER BY id', [firstId, secondId])
+  log.assert('两张销售单均实际进入已取消状态',
+    rows.length === 2 && rows.every(row => Number(row.status) === 5), JSON.stringify(rows))
 }
 
 // 建单→占库→ship→PDA拣一个容器，返回 { taskId, container, itemId }。
@@ -348,7 +373,7 @@ async function scenarioCancelReverseReturnBasics(log, ctx, adminToken) {
   const [containerAfterPick] = await dbQuery(ctx.pool, 'SELECT locked_by_task_id FROM inventory_containers WHERE id=?', [container.id])
   log.assert('容器已被拣货锁定', Number(containerAfterPick.locked_by_task_id) === taskId)
 
-  const cancelResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+  const cancelResp = await ctx.http.post(`/api/sale/${saleId}/cancel`, { token: adminToken })
   log.assert('ERP取消成功（有容器锁定，应走新分支）', cancelResp.ok, `status=${cancelResp.status}`)
 
   const [taskAfterCancel] = await dbQuery(ctx.pool, 'SELECT status, cancel_requested_at FROM warehouse_tasks WHERE id=?', [taskId])
@@ -376,8 +401,8 @@ async function scenarioCancelReverseReturnBasics(log, ctx, adminToken) {
   })
   log.assert('拣货退回中的任务，拣货扫码应返回409', rescanResp.status === 409, `status=${rescanResp.status}`)
 
-  const doubleCancel = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
-  log.assert('对已在收尾中的任务重复cancel应返回409', doubleCancel.status === 409, `status=${doubleCancel.status}`)
+  const doubleCancel = await ctx.http.post(`/api/sale/${saleId}/cancel`, { token: adminToken })
+  log.assert('对已取消销售单重复cancel应被拒绝', !doubleCancel.ok, `status=${doubleCancel.status}`)
 
   const suggestResp = await ctx.http.get(`/api/warehouse-tasks/${taskId}/pick-suggestions`, { token: adminToken })
   log.assert('拣货退回中的任务，pick-suggestions应返回409', suggestResp.status === 409, `status=${suggestResp.status}`)
@@ -386,14 +411,14 @@ async function scenarioCancelReverseReturnBasics(log, ctx, adminToken) {
 // 取消逆向归还：端到端全流程（列表→详情→逐容器扫码归还→finalize→分拣格释放）+ 可见性补丁
 async function scenarioCancelReverseReturnFinalize(log, ctx, adminToken) {
   log.section('Scenario: 取消逆向归还 — 端到端全流程与可见性')
-  const { taskId, container } = await setupTaskWithLockedContainer(ctx, adminToken)
+  const { taskId, container, saleId } = await setupTaskWithLockedContainer(ctx, adminToken)
   const [taskRowBefore] = await dbQuery(ctx.pool, 'SELECT sorting_bin_id FROM warehouse_tasks WHERE id=?', [taskId])
 
   // 取消前：拣货池/SKU汇总里应该能看到
   const poolBefore = await ctx.http.get('/api/warehouse-tasks/my', { token: adminToken })
   log.assert('取消前，任务在拣货池可见', (poolBefore.data?.data || []).some(t => Number(t.id) === taskId))
 
-  const cancelResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+  const cancelResp = await ctx.http.post(`/api/sale/${saleId}/cancel`, { token: adminToken })
   log.assert('ERP取消成功', cancelResp.ok, `status=${cancelResp.status}`)
 
   // 可见性补丁：拣货池/SKU汇总/分拣扫商品/pick-route 都不应再看到这个任务
@@ -465,8 +490,8 @@ async function scenarioCancelReverseReturnConcurrency(log, ctx, adminToken) {
 
   // 1) 并发双击"取消"只有一条成功
   {
-    const { taskId } = await setupTaskWithLockedContainer(ctx, adminToken)
-    const cancelCall = () => ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+    const { taskId, saleId } = await setupTaskWithLockedContainer(ctx, adminToken)
+    const cancelCall = () => ctx.http.post(`/api/sale/${saleId}/cancel`, { token: adminToken })
     const [a, b] = await Promise.all([cancelCall(), cancelCall()])
     const successCount = [a, b].filter(r => r.ok).length
     log.assert('并发双击取消只有一条成功', successCount === 1, `a=${a.status} b=${b.status}`)
@@ -474,8 +499,8 @@ async function scenarioCancelReverseReturnConcurrency(log, ctx, adminToken) {
 
   // 2) 同 requestKey 重复归还扫码走 replay，不重复插入 scan_logs
   {
-    const { taskId, container } = await setupTaskWithLockedContainer(ctx, adminToken)
-    await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+    const { taskId, container, saleId } = await setupTaskWithLockedContainer(ctx, adminToken)
+    await ctx.http.post(`/api/sale/${saleId}/cancel`, { token: adminToken })
     const requestKey = randomRef('idem-cancel-return')
     const call = () => ctx.http.post('/api/scan-logs/cancel-return', {
       token: adminToken, headers: ctx.pdaHeaders({ 'X-Request-Key': requestKey }),
@@ -491,8 +516,8 @@ async function scenarioCancelReverseReturnConcurrency(log, ctx, adminToken) {
 
   // 3) 两个并发请求归还最后一个容器，finalize 只触发一次
   {
-    const { taskId, container } = await setupTaskWithLockedContainer(ctx, adminToken)
-    await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+    const { taskId, container, saleId } = await setupTaskWithLockedContainer(ctx, adminToken)
+    await ctx.http.post(`/api/sale/${saleId}/cancel`, { token: adminToken })
     const call = () => ctx.http.post('/api/scan-logs/cancel-return', {
       token: adminToken, headers: ctx.pdaHeaders(),
       json: { taskId, containerId: container.id, barcode: container.barcode, locationId: Number(container.location_id) },
@@ -554,7 +579,7 @@ async function scenarioCancelReverseReturnPacking(log, ctx, adminToken) {
   const finishResp = await ctx.http.put(`/api/packages/${sealedPkgId}/finish`, { token: adminToken, headers: ctx.pdaHeaders() })
   log.assert('已完成箱子finish成功（含箱贴打印任务）', finishResp.ok, `status=${finishResp.status}`)
 
-  const cancelResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+  const cancelResp = await ctx.http.post(`/api/sale/${setup.saleId}/cancel`, { token: adminToken })
   log.assert('待打包阶段取消成功（有容器锁定，走逆向归还分支）', cancelResp.ok, `status=${cancelResp.status}`)
 
   const [openPkgAfter] = await dbQuery(ctx.pool, 'SELECT status FROM packages WHERE id=?', [openPkgId])
@@ -627,7 +652,7 @@ async function scenarioCancelReverseReturnShipping(log, ctx, adminToken) {
   const [taskAtShipping] = await dbQuery(ctx.pool, 'SELECT status, sorting_bin_id FROM warehouse_tasks WHERE id=?', [taskId])
   log.assert('任务已在待出库(6)，分拣格已随打包完成释放', Number(taskAtShipping.status) === 6, JSON.stringify(taskAtShipping))
 
-  const cancelResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+  const cancelResp = await ctx.http.post(`/api/sale/${setup.saleId}/cancel`, { token: adminToken })
   log.assert('待出库阶段取消成功（走逆向归还分支）', cancelResp.ok, `status=${cancelResp.status}`)
 
   const shipAfterCancel = await ctx.http.put(`/api/warehouse-tasks/${taskId}/ship`, { token: adminToken, headers: ctx.pdaHeaders() })
@@ -659,7 +684,7 @@ async function scenarioCancelReverseReturnForwardGuards(log, ctx, adminToken) {
   const [taskAtChecking] = await dbQuery(ctx.pool, 'SELECT status FROM warehouse_tasks WHERE id=?', [taskId])
   log.assert('任务处于待复核(4)', Number(taskAtChecking.status) === 4, JSON.stringify(taskAtChecking))
 
-  const cancelResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/cancel`, { token: adminToken })
+  const cancelResp = await ctx.http.post(`/api/sale/${setup.saleId}/cancel`, { token: adminToken })
   log.assert('复核阶段取消成功（走逆向归还分支）', cancelResp.ok, `status=${cancelResp.status}`)
 
   const rescanCheck = await ctx.http.post('/api/scan-logs/check', {
@@ -713,6 +738,7 @@ async function main() {
     await scenarioSplitConcurrent(log, ctx)
     await scenarioSplitRollback(log, ctx)
     await scenarioWarehouseCancel(log, ctx, adminToken)
+    await scenarioSaleOperationIdempotencyIsolation(log, ctx, adminToken)
     await scenarioCancelReverseReturnBasics(log, ctx, adminToken)
     await scenarioCancelReverseReturnFinalize(log, ctx, adminToken)
     await scenarioCancelReverseReturnConcurrency(log, ctx, adminToken)

@@ -27,6 +27,7 @@ export const getSettlementDetailApi = (id:number) => client.get<SettlementDetail
 export interface AgingBucket { key:string; label:string; count:number; amount:number }
 export interface AgingParty { partyName:string; count:number; amount:number; overdueAmount:number; maxOverdueDays:number }
 export interface AgingSide {
+  dueDistribution?: AgingBucket[]
   buckets: AgingBucket[]
   total: number; totalCount: number
   overdueAmount: number; overdueCount: number

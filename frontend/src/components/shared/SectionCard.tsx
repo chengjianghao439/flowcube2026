@@ -44,6 +44,8 @@ export interface SectionCardProps {
   compact?: boolean
   /** 额外 className（作用于卡片根节点） */
   className?: string
+  /** 额外内容区样式，用于页面按信息密度微调内边距 */
+  contentClassName?: string
 }
 
 export function SectionCard({
@@ -53,6 +55,7 @@ export function SectionCard({
   noPadding = false,
   compact = false,
   className,
+  contentClassName,
 }: SectionCardProps) {
   const hasHeader = title || actions
 
@@ -74,7 +77,7 @@ export function SectionCard({
       )}
 
       {/* Body */}
-      <div className={cn(!noPadding && (compact ? 'p-4' : 'p-5'))}>
+      <div className={cn(!noPadding && (compact ? 'p-4' : 'p-5'), contentClassName)}>
         {children}
       </div>
     </div>

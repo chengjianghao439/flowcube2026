@@ -526,6 +526,14 @@ async function checkAdjustmentClearedAndFinalize(conn, adjustmentId, { operator 
        WHERE task_id=? AND product_id=?`,
       [Number(item.new_required_qty), Number(item.new_required_qty), adj.warehouse_task_id, item.product_id],
     )
+    await conn.query(
+      `UPDATE sale_order_items soi SET reserved_qty = (
+         SELECT COALESCE(SUM(sr.qty), 0) FROM stock_reservations sr
+         WHERE sr.ref_type='sale_order' AND sr.ref_id=soi.order_id
+           AND sr.product_id=soi.product_id AND sr.warehouse_id=soi.warehouse_id AND sr.status=1
+       ) WHERE soi.order_id=? AND soi.product_id=? AND soi.warehouse_id=?`,
+      [adj.sale_order_id, item.product_id, Number(taskRow.warehouse_id)],
+    )
     // 已归还容器对应的原容器（可能是被拆分的原容器，也可能是整只被归还的容器本身）
     // 同步下调拣货扫码记录，见 reducePickScanLogForContainer 顶部说明。
     const [returnedContainers] = await conn.query(

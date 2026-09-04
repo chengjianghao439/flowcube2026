@@ -26,8 +26,8 @@ export function ListLowStock() {
       action={data && data.length > 0 ? <SoftStatusLabel label={`${data.length} 项`} tone="danger" /> : undefined}>
       {!data?.length ? <p className={EMPTY_HINT}>暂无低库存商品</p> : (
         <div className={scroll}>
-          {data.map(item => (
-            <div key={`${item.id}-${item.warehouseName}`} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-muted/50">
+          {data.map((item, index) => (
+            <div key={`${item.id}-${item.warehouseName}-${index}`} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-muted/50">
               <div className="min-w-0">
                 <span className="font-medium text-foreground">{item.name}</span>
                 <span className="ml-2 text-xs text-muted-foreground">{item.code}</span>

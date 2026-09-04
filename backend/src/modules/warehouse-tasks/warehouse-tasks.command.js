@@ -179,6 +179,15 @@ async function cancel(id, options = {}) {
     if (!isValidTransition(taskRow.status, rule.toStatus)) {
       throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
     }
+    // 销售订单可能拆成多个仓库任务。直接取消其中一个任务会误释放整单预占并覆盖整单状态，
+    // 所以销售关联任务必须由 sale.service.cancel() 统一锁定并取消同单全部任务。
+    if (taskRow.sale_order_id && options.syncSaleStatus !== false) {
+      throw new AppError(
+        '销售出库任务请从销售订单执行取消，系统会统一处理同单全部任务和预占',
+        409,
+        'SALE_ORDER_CANCEL_REQUIRED',
+      )
+    }
 
     // 解锁/清理前先查询所有被锁容器及其库位——用于判断分流路径，也用于归还指引
     const [lockedContainers] = await conn.query(

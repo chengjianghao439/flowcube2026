@@ -9,22 +9,11 @@ export interface ReceivableStatus {
   dueDate?: string | null
 }
 
-/**
- * 回款状态决策表（独立于订单状态，列表页与详情页共用同一份，避免两处口径漂移）：
- *   - 已付清 (receivableStatus=3) → 已付清
- *   - 部分付 (receivableStatus=2) → 部分付（保留，不细分逾期：它比逾期多一层信息）
- *   - 其余（未付 status=1 或未出库 null）：
- *       逾期 + 月结  → 逾期（红）
- *       逾期 + 现结  → 未付（红，文案保持「未付」，仅用颜色强调已过下单当天）
- *       月结未逾期    → 月结
- *       现结未逾期    → 未付（灰）
- *
- * 未出库订单没有应收记录（receivableStatus=null），但结算方式由后端
- * COALESCE(应收快照, 客户主数据, 月结) 回退出来（receivableSettlementType 恒非 null），
- * 现结未出库的到期日也已由后端回退成 DATE(下单日)，故现结逾期边界同样成立。
- */
+/** 回款状态只描述真实应收记录。无记录时不使用客户结算回退值制造未付/逾期；
+ * 已有应收仍沿用账款快照及既有月结、部分付语义。 */
 export function getReceivableStatus(order: SaleOrder): ReceivableStatus {
   const st = order.receivableStatus
+  if (st == null) return { label: '未生成应收', tone: 'draft' }
   if (st === 3) return { label: '已付清', tone: 'success', dueDate: order.receivableDueDate }
   if (st === 2) return { label: '部分付', tone: 'active', dueDate: order.receivableDueDate }
 

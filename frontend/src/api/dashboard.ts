@@ -11,3 +11,6 @@ export const getCreditWarningApi = () => client.get<CreditWarning>('/dashboard/c
 /** 读取当前用户的仪表盘布局；从未个性化时后端返回 null，由前端回落到默认布局 */
 export const getDashboardLayoutApi  = () => client.get<DashboardLayout | null>('/dashboard/layout')
 export const saveDashboardLayoutApi = (layout: DashboardLayout) => client.put<DashboardLayout>('/dashboard/layout', layout)
+
+export const getLowStockPageApi = (page = 1) => client.get<import('@/types').PaginatedData<LowStockItem>>('/dashboard/low-stock', {params:{page,pageSize:10}})
+export const getCreditRiskPageApi = (page = 1) => client.get<import('@/types').PaginatedData<CreditWarning['top'][number]>>('/dashboard/credit-warning', {params:{page,pageSize:10}})

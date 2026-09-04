@@ -8,7 +8,7 @@ import { createRequestKey } from '@/lib/requestKey'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { confirmAction } from '@/lib/confirm'
-import type { CreateSaleParams, UpdateSaleParams, ReserveItemOverride } from '@/types/sale'
+import type { CreateSaleParams, UpdateSaleParams, ReserveItemOverride, ShipItemRequest } from '@/types/sale'
 
 export const useSaleList   = (params: object) => useQuery({ queryKey: ['sale', params], queryFn: () => getSaleListApi(params) })
 export const useSaleDetail = (id: number)     => useQuery({ queryKey: ['sale', id],     queryFn: () => getSaleDetailApi(id), enabled: !!id })
@@ -40,10 +40,12 @@ export const useUpdateSale = () => {
 
 export const useAdjustSale = () => {
   const invalidate = useInvalidate()
+  const keyRef = useRef(createRequestKey('sale-adjust'))
   return useMutation({
-    mutationFn: (data: UpdateSaleParams) => adjustSaleApi(data),
+    mutationFn: (data: UpdateSaleParams) => adjustSaleApi(data, keyRef.current),
     onSuccess: (res) => {
       invalidate('sale_adjust')
+      keyRef.current = createRequestKey('sale-adjust')
       toast.success(res?.pending ? '改单已提交，等待仓库确认' : '修改成功')
     },
   })
@@ -102,24 +104,26 @@ export const useShipSale = () => {
   const invalidate = useInvalidate()
   const keyRef = useRef(createRequestKey('sale-ship'))
   return useMutation({
-    // itemIds 可选：分批发货时只发选中的明细行
-    mutationFn: ({ id, itemIds }: { id: number; itemIds?: number[] }) => shipSaleApi(id, itemIds, keyRef.current),
+    // items 可选：分批发货时按选中的明细行和数量提交
+    mutationFn: ({ id, items }: { id: number; items?: ShipItemRequest[] }) => shipSaleApi(id, items, keyRef.current),
     onSuccess: () => { invalidate('sale_ship'); toast.success('已发起出库'); keyRef.current = createRequestKey('sale-ship') },
   })
 }
 
 export const useCancelSale = () => {
   const invalidate = useInvalidate()
+  const keyRef = useRef(createRequestKey('sale-cancel'))
   return useMutation({
-    mutationFn: (id: number) => cancelSaleApi(id),
-    onSuccess: () => { invalidate('sale_cancel'); toast.success('订单已取消') },
+    mutationFn: (id: number) => cancelSaleApi(id, keyRef.current),
+    onSuccess: () => { invalidate('sale_cancel'); toast.success('订单已取消'); keyRef.current = createRequestKey('sale-cancel') },
   })
 }
 
 export const useDeleteSale = () => {
   const invalidate = useInvalidate()
+  const keyRef = useRef(createRequestKey('sale-delete'))
   return useMutation({
-    mutationFn: (id: number) => deleteSaleApi(id),
-    onSuccess: () => { invalidate('sale_delete'); toast.success('订单删除成功') },
+    mutationFn: (id: number) => deleteSaleApi(id, keyRef.current),
+    onSuccess: () => { invalidate('sale_delete'); toast.success('订单删除成功'); keyRef.current = createRequestKey('sale-delete') },
   })
 }

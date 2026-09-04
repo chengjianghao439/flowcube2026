@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, ComposedChart, Line,
   PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -93,25 +95,22 @@ export function ChartWarehouseStock() {
 
 // —— 月度销售趋势（report.view）——
 export function ChartSaleTrend() {
-  const { data } = useSaleStats()
-  const rows = (data?.byMonth ?? []).map(m => ({ month: m.month, 销售额: m.totalAmount, 已发货: m.shippedAmount }))
-  return (
-    <WidgetShell title="月度销售趋势" icon={TrendingUp} tone="success">
-      {rows.length === 0 ? <p className={EMPTY_HINT}>该区间内暂无销售</p> : (
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="month" tick={axisTick} />
-            <YAxis tick={axisTick} width={44} tickFormatter={wan} />
-            <Tooltip formatter={(v) => money(Number(v ?? 0))} contentStyle={chartTooltip} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="销售额" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} maxBarSize={28} />
-            <Line type="monotone" dataKey="已发货" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      )}
-    </WidgetShell>
-  )
+  const { data, isLoading, error, refetch } = useSaleStats()
+  const [metric, setMetric] = useState<'totalAmount' | 'shippedAmount' | 'orderCount'>('totalAmount')
+  const choices = [{key:'totalAmount',label:'订单金额'}, {key:'shippedAmount',label:'已出库订单金额'}, {key:'orderCount',label:'订单数'}] as const
+  const count = metric === 'orderCount'
+  const label = choices.find(c=>c.key===metric)!.label
+  return <WidgetShell title="月度销售趋势" icon={TrendingUp} bodyClassName="flex flex-col" action={<select aria-label="销售趋势指标" value={metric} onChange={e=>setMetric(e.target.value as typeof metric)} className="max-w-40 rounded border bg-background p-1 text-xs">{choices.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select>}>
+    <p className="mb-2 text-xs text-muted-foreground">按订单创建月份归集 · {count ? '单位：单' : '单位：元，沿用报表订单金额'}{metric === 'shippedAmount' && ' · 仅统计已出库状态订单'}</p>
+    {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} compact/> : isLoading ? <div className="h-40 animate-pulse bg-muted"/> : !data?.byMonth.length ? <p className={EMPTY_HINT}>该区间内暂无销售</p> : <div className="min-h-0 flex-1"><ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data.byMonth} margin={{top:8,right:12,left:4,bottom:4}}>
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))"/>
+        <XAxis dataKey="month" tick={axisTick}/><YAxis tick={axisTick} width={52} allowDecimals={!count} tickFormatter={count ? v=>String(v) : wan}/>
+        <Tooltip formatter={v=>[count ? `${Number(v)} 单` : money(Number(v)),label]} contentStyle={chartTooltip}/>
+        <Bar dataKey={metric} name={label} fill="hsl(var(--primary))" radius={[4,4,0,0]} maxBarSize={32} isAnimationActive={false}/>
+      </BarChart>
+    </ResponsiveContainer></div>}
+  </WidgetShell>
 }
 
 // —— 月度采购趋势（report.view）——

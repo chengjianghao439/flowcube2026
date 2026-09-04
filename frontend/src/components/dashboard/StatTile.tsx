@@ -23,34 +23,29 @@ export function StatTile({
   loading?: boolean
 }) {
   return (
-    <div className={cn('card-base flex h-full flex-col justify-between gap-3 overflow-hidden p-4', accent && TONE_CARD[tone])}>
-      <div className="flex items-center justify-between">
-        <span className={cn('flex h-8 w-8 items-center justify-center rounded-lg', TONE_ICON[tone])}>
-          <Icon className="h-4 w-4" aria-hidden />
+    <div className={cn('card-base group flex h-full flex-col overflow-hidden p-5 transition-[border-color,box-shadow] duration-200 hover:border-primary/20 hover:shadow-sm', accent && TONE_CARD[tone])}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
+          {loading ? <div className="mt-3 h-8 w-20 animate-pulse rounded bg-muted" /> : (
+            <p className={cn('mt-2 truncate text-[28px] font-semibold leading-none tracking-tight tabular-nums', accent ? TONE_TEXT[tone] : 'text-foreground')} title={String(value)}>{value}</p>
+          )}
+        </div>
+        <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:-translate-y-0.5', TONE_ICON[tone])}>
+          <Icon className="h-[18px] w-[18px]" aria-hidden />
         </span>
+      </div>
+      <div className="mt-auto flex min-h-5 items-end justify-between gap-2 pt-4">
+        <p className="truncate text-xs text-muted-foreground">{hint || '—'}</p>
         {trendValue ? (
           <span
-            className={cn('text-xs font-medium tabular-nums', trendValue.startsWith('-') ? 'text-destructive' : 'text-success')}
+            className={cn('shrink-0 text-xs font-medium tabular-nums', trendValue.startsWith('-') ? 'text-destructive' : 'text-success')}
             title={trendValue}
           >
             {trendValue}
           </span>
-        ) : trend === 'up' && <TrendingUp className="h-4 w-4 text-success" aria-label="上升" />}
-        {trend === 'down' && <TrendingDown className="h-4 w-4 text-destructive" aria-label="下降" />}
-      </div>
-      <div>
-        <p className="text-sm text-muted-foreground">{label}</p>
-        {loading ? (
-          <div className="mt-1 h-8 w-20 animate-pulse rounded bg-muted" />
-        ) : (
-          <p
-            className={cn('mt-0.5 truncate text-2xl font-bold tabular-nums', accent ? TONE_TEXT[tone] : 'text-foreground')}
-            title={String(value)}
-          >
-            {value}
-          </p>
-        )}
-        {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
+        ) : trend === 'up' ? <TrendingUp className="h-4 w-4 shrink-0 text-warning" aria-label="需要关注" />
+          : trend === 'down' ? <TrendingDown className="h-4 w-4 shrink-0 text-destructive" aria-label="下降" /> : null}
       </div>
     </div>
   )

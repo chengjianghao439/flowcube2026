@@ -80,7 +80,13 @@ export interface Package {
   items: PackageItem[]
 }
 
+export interface SaleQuantitySummary { unit: string; ordered: number; reserved: number; dispatched: number; shipped: number }
+
 export interface SaleOrder {
+  quantitySummary?: SaleQuantitySummary[]
+  pendingAdjustment?: boolean
+  pendingReturn?: boolean
+  pendingCredit?: boolean
   id: number
   orderNo: string
   customerId: number
@@ -100,6 +106,7 @@ export interface SaleOrder {
   shippedTotalQty?: number | null
   warehouseCount?: number | null
   isMultiWarehouse?: boolean
+  executionAdjustmentBlocked?: boolean
   /** 仍有未派发到仓库任务的明细行 → 履约中可「继续发货」 */
   hasUndispatchedItems?: boolean
   /** partial_ship_close 表示部分发货后取消剩余、以实发结案 */
@@ -167,6 +174,10 @@ export interface ReserveWarehouseOption {
   warehouseId: number
   warehouseName: string
   available: number
+  /** ACTIVE 容器现货。 */
+  quantity?: number
+  /** 所有有效订单已预占数量。 */
+  reserved?: number
   expected?: number
 }
 
@@ -211,5 +222,11 @@ export interface ReserveItemOverride {
   warehouseId: number
   warehouseName: string
   /** 本次要占的数量（可 < 需求，未传/0 表示不占该行） */
+  qty: number
+}
+
+/** POST /sale/:id/ship 的按行发货数量。 */
+export interface ShipItemRequest {
+  id: number
   qty: number
 }
