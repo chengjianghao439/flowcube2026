@@ -1,100 +1,99 @@
 /**
- * 「在途预计量」计算 —— 采购订单预计到货量纳入销售占库判定（ATP）。
- *
- * 为何独立成 util 而不放进某模块：containerEngine / reservationEngine / sale / purchase /
- * inventory 多处都要用，且 containerEngine 不能被 purchase 反向 require（会循环）。
- * 本文件只接收连接对象作为入参，依赖方向干净。
- *
- * 口径：expected(product, warehouse) =
- *   采购单 status IN (2 已提交, 5 待审批) 的每个明细行 quantity
- *     − 该明细行已入库量（inbound_task_items.putaway_qty 且任务已审计未取消）
- *   - 已绑定给销售单的量（sale_order_expected_bindings 未释放部分）
- * 排除 status=3（已完成/短装结案，不再到货）、4（已取消）。
- * 每张采购单整单落一个到货仓（po.warehouse_id），已收量按其归属明细行上架量扣。
+ * 销售 ATP：expected 是已提交/待审批采购的「尚未上架总量」，不是扣除绑定后的净量。
+ * available = ACTIVE 现货 + expected - 全部有效预占，绑定不能再扣第二次。
+ * 绑定只记录未兑现的采购依赖：上架转为现货预占，出库/释放按量解除，均不额外扣 reserved。
  */
+const qty = value => Math.round(Number(value) * 10000) / 10000
 
-/** 把一组 (productId, warehouseId) 对去重展开成 [ [productId, warehouseId], ... ] */
 function pairParams(pairs) {
-  const uniq = new Map()
-  for (const p of pairs) uniq.set(`${Number(p.productId)}:${Number(p.warehouseId)}`, [Number(p.productId), Number(p.warehouseId)])
-  return [...uniq.values()]
+  return [...new Map(pairs.map(p => [`${Number(p.productId)}:${Number(p.warehouseId)}`,
+    [Number(p.productId), Number(p.warehouseId)]])).values()]
 }
 
-/**
- * 查询指定 (product, warehouse) 组合的预计量与可绑定明细。
- * @param {object} conn   事务连接或 pool
- * @param {Array<{productId:number, warehouseId:number}>} pairs
- * @returns {Promise<{
- *   byPair: Map<string, number>,        // `${productId}:${warehouseId}` -> expected（净可参与占用的在途量）
- *   items: Array<{product_id, warehouse_id, purchase_order_id, purchase_item_id, open_qty, bound_qty, burnable, expected_date}>
- * }>}
- */
-async function getExpectedStock(conn, pairs) {
-  const out = { byPair: new Map(), items: [] }
+/** 销售占库先锁全部候选采购主单，再按商品/仓库锁库存，与入库的采购→库存顺序一致。 */
+async function lockExpectedPurchaseOrders(conn, pairs) {
   const list = pairParams(pairs)
-  if (!list.length) return out
-  const productIds = [...new Set(list.map(p => p[0]))]
-
-  const [rows] = await conn.query(
-    `SELECT poi.product_id, po.warehouse_id, po.id AS purchase_order_id, poi.id AS purchase_item_id,
-            poi.quantity AS ordered_qty, po.expected_date,
-            COALESCE(rcd.putaway, 0) AS received_qty,
-            COALESCE(bnd.bound_qty, 0) AS bound_qty
-       FROM purchase_order_items poi
-       JOIN purchase_orders po ON po.id = poi.order_id
-       LEFT JOIN (
-         SELECT iti.purchase_item_id, SUM(iti.putaway_qty) AS putaway
-           FROM inbound_task_items iti
-           JOIN inbound_tasks it ON it.id = iti.task_id
-          WHERE it.status <> 5 AND it.audit_status = 1
-          GROUP BY iti.purchase_item_id
-       ) rcd ON rcd.purchase_item_id = poi.id
-       LEFT JOIN (
-         SELECT purchase_item_id, SUM(qty) AS bound_qty
-           FROM sale_order_expected_bindings
-          WHERE released_at IS NULL
-          GROUP BY purchase_item_id
-       ) bnd ON bnd.purchase_item_id = poi.id
-      WHERE po.status IN (2, 5)
-        AND poi.product_id IN (?) ORDER BY po.expected_date IS NULL, po.expected_date ASC, poi.id ASC`,
-    [productIds],
+  if (!list.length) return
+  await conn.query(
+    `SELECT po.id FROM purchase_orders po JOIN purchase_order_items poi ON poi.order_id=po.id
+     WHERE po.deleted_at IS NULL AND po.status IN (2,5)
+       AND (poi.product_id,po.warehouse_id) IN (${list.map(() => '(?,?)').join(',')})
+     ORDER BY po.id,poi.id FOR UPDATE`, list.flat(),
   )
+}
 
-  // 只保留与目标 (product, warehouse) 匹配的行
-  const pairSet = new Set(list.map(p => `${p[0]}:${p[1]}`))
-  const perPairAgg = new Map()
+/** lock=true 使用当前读，避免事务早先快照漏看刚提交的上架/销售绑定。 */
+async function getExpectedStock(conn, pairs, { lock = false } = {}) {
+  const list = pairParams(pairs)
+  const out = { byPair: new Map(), boundByPair: new Map(), items: [] }
+  if (!list.length) return out
+  const [rows] = await conn.query(
+    `SELECT poi.product_id,po.warehouse_id,po.id AS purchase_order_id,poi.id AS purchase_item_id,
+            poi.quantity AS ordered_qty,po.expected_date
+     FROM purchase_orders po JOIN purchase_order_items poi ON poi.order_id=po.id
+     WHERE po.deleted_at IS NULL AND po.status IN (2,5)
+       AND (poi.product_id,po.warehouse_id) IN (${list.map(() => '(?,?)').join(',')})
+     ORDER BY po.expected_date IS NULL,po.expected_date,poi.id${lock ? ' FOR UPDATE' : ''}`, list.flat(),
+  )
+  const ids = rows.map(r => Number(r.purchase_item_id))
+  const received = new Map(), bound = new Map()
+  if (ids.length) {
+    // 只锁明细，不锁 inbound_tasks：上架先持任务锁再等采购锁，反向锁任务会成环。
+    const [receivedRows] = await conn.query(
+      `SELECT iti.purchase_item_id,iti.putaway_qty FROM inbound_task_items iti
+       JOIN inbound_tasks it ON it.id=iti.task_id
+       WHERE iti.purchase_item_id IN (?) AND it.deleted_at IS NULL AND it.status<>5
+       ${lock ? 'FOR UPDATE OF iti' : ''}`, [ids],
+    )
+    for (const row of receivedRows) received.set(Number(row.purchase_item_id), qty((received.get(Number(row.purchase_item_id)) || 0) + Number(row.putaway_qty)))
+    const [bindings] = await conn.query(
+      `SELECT purchase_item_id,qty FROM sale_order_expected_bindings
+       WHERE purchase_item_id IN (?) AND released_at IS NULL${lock ? ' FOR UPDATE' : ''}`, [ids],
+    )
+    for (const row of bindings) bound.set(Number(row.purchase_item_id), qty((bound.get(Number(row.purchase_item_id)) || 0) + Number(row.qty)))
+  }
   for (const r of rows) {
     const key = `${Number(r.product_id)}:${Number(r.warehouse_id)}`
-    if (!pairSet.has(key)) continue
-    const open = Math.max(0, Number(r.ordered_qty) - Number(r.received_qty))
-    const bound = Number(r.bound_qty)
-    const burnable = Math.max(0, open - bound)
-    const expected = Math.max(0, open - bound)
-    perPairAgg.set(key, (perPairAgg.get(key) ?? 0) + expected)
-    if (burnable > 0) {
-      out.items.push({
-        product_id: Number(r.product_id),
-        warehouse_id: Number(r.warehouse_id),
-        purchase_order_id: Number(r.purchase_order_id),
-        purchase_item_id: Number(r.purchase_item_id),
-        open_qty: open,
-        bound_qty: bound,
-        burnable,
-        expected_date: r.expected_date,
-      })
-    }
+    const open = Math.max(0, qty(Number(r.ordered_qty) - (received.get(Number(r.purchase_item_id)) || 0)))
+    const boundQty = bound.get(Number(r.purchase_item_id)) || 0
+    out.byPair.set(key, qty((out.byPair.get(key) || 0) + open))
+    out.boundByPair.set(key, qty((out.boundByPair.get(key) || 0) + boundQty))
+    const burnable = Math.max(0, qty(open - boundQty))
+    if (burnable > 0) out.items.push({
+      product_id: Number(r.product_id), warehouse_id: Number(r.warehouse_id),
+      purchase_order_id: Number(r.purchase_order_id), purchase_item_id: Number(r.purchase_item_id),
+      open_qty: open, bound_qty: boundQty, burnable, expected_date: r.expected_date,
+    })
   }
-  for (const p of list) {
-    const key = `${p[0]}:${p[1]}`
-    out.byPair.set(key, perPairAgg.get(key) ?? 0)
+  for (const [productId, warehouseId] of list) {
+    const key = `${productId}:${warehouseId}`
+    if (!out.byPair.has(key)) out.byPair.set(key, 0)
   }
   return out
 }
 
-/** 便捷：仅按 single pair 取预计量（供单个仓库判定） */
-async function getExpectedForPair(conn, productId, warehouseId) {
-  const r = await getExpectedStock(conn, [{ productId, warehouseId }])
-  return r.byPair.get(`${Number(productId)}:${Number(warehouseId)}`) ?? 0
+async function getExpectedForPair(conn, productId, warehouseId, options) {
+  const result = await getExpectedStock(conn, [{ productId, warehouseId }], options)
+  return result.byPair.get(`${Number(productId)}:${Number(warehouseId)}`) || 0
 }
 
-module.exports = { getExpectedStock, getExpectedForPair }
+/** 在持有库存维度锁的事务内，将已兑现/释放的依赖按 FIFO 关闭；部分保留未兑现量。 */
+async function reduceExpectedBindings(conn, { purchaseItemId, saleOrderId, productId, warehouseId }, amount) {
+  let remaining = qty(amount)
+  if (!(remaining > 0)) return
+  const conditions = ['released_at IS NULL'], params = []
+  if (purchaseItemId != null) { conditions.push('purchase_item_id=?'); params.push(purchaseItemId) }
+  else { conditions.push('sale_order_id=? AND product_id=? AND warehouse_id=?'); params.push(saleOrderId, productId, warehouseId) }
+  const [bindings] = await conn.query(
+    `SELECT id,qty FROM sale_order_expected_bindings WHERE ${conditions.join(' AND ')} ORDER BY id FOR UPDATE`, params,
+  )
+  for (const binding of bindings) {
+    if (remaining <= 0) break
+    const take = Math.min(Number(binding.qty), remaining)
+    if (take >= Number(binding.qty)) await conn.query('UPDATE sale_order_expected_bindings SET released_at=NOW() WHERE id=?', [binding.id])
+    else await conn.query('UPDATE sale_order_expected_bindings SET qty=qty-? WHERE id=?', [take, binding.id])
+    remaining = qty(remaining - take)
+  }
+}
+
+module.exports = { getExpectedStock, getExpectedForPair, lockExpectedPurchaseOrders, reduceExpectedBindings }

@@ -25,7 +25,7 @@ async function assertPurchaseOrderOpen(conn, purchaseOrderId, actionLabel = '收
  */
 async function assertPurchaseOrdersOpen(conn, taskId, actionLabel = '收货') {
   const [rows] = await conn.query(
-    'SELECT DISTINCT purchase_order_id FROM inbound_task_items WHERE task_id = ?',
+    'SELECT DISTINCT purchase_order_id FROM inbound_task_items WHERE task_id = ? ORDER BY purchase_order_id',
     [taskId],
   )
   for (const row of rows) {

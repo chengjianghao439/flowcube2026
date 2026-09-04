@@ -3,7 +3,7 @@
 
 /**
  * 跨端一致性测试：前端镜像 frontend/src/lib/labelGeometry.ts 必须与后端产出完全一致。
- * 用 Node 类型剥离（Node 23.6+）直接 import .ts，跑同一份快照 fixture 对比 expected。
+ * 用前端已安装的 TypeScript 编译并加载 .ts，Node 22 也实际执行所有 fixture。
  *   node tests/label-geometry-frontend.test.js
  *
  * fixture 由 tests/label-geometry.test.js（后端）以 UPDATE=1 生成，是「单一事实源」。
@@ -12,22 +12,26 @@
 const path = require('path')
 const fs = require('fs')
 const assert = require('assert')
-const { pathToFileURL } = require('url')
+const Module = require('node:module')
+const ts = require('../frontend/node_modules/typescript')
 
 const FIXTURE = path.resolve(__dirname, 'fixtures/label-geometry-cases.json')
-const FRONTEND = pathToFileURL(path.resolve(__dirname, '../frontend/src/lib/labelGeometry.ts')).href
+const FRONTEND = path.resolve(__dirname, '../frontend/src/lib/labelGeometry.ts')
 
 ;(async () => {
-  // Node 23.6+ 才默认支持 .ts 类型剥离；旧版（如 CI 的 node 20）跳过，本机用新版真验证。
-  const [maj, min] = process.versions.node.split('.').map(Number)
-  const supportsStrip = maj > 23 || (maj === 23 && min >= 6)
-  if (!supportsStrip) {
-    console.log(`  ⓘ 跳过：当前 Node ${process.versions.node} 不支持 .ts 类型剥离（需 23.6+）。请用 node ≥23.6 在本机验证前端镜像一致性。`)
-    process.exit(0)
-  }
   let mod
   try {
-    mod = await import(FRONTEND)
+    const compiled = ts.transpileModule(fs.readFileSync(FRONTEND, 'utf8'), {
+      fileName: FRONTEND,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+      reportDiagnostics: true,
+    })
+    if (compiled.diagnostics?.some(d => d.category === ts.DiagnosticCategory.Error)) throw new Error('TypeScript 编译失败')
+    const loaded = new Module(FRONTEND, module)
+    loaded.filename = FRONTEND
+    loaded.paths = Module._nodeModulePaths(path.dirname(FRONTEND))
+    loaded._compile(compiled.outputText, FRONTEND)
+    mod = loaded.exports
   } catch (e) {
     console.error('无法加载前端 .ts 镜像：', e.message)
     process.exit(1)

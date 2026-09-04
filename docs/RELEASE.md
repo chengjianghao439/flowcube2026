@@ -9,10 +9,10 @@
 
 工作流：`.github/workflows/build-desktop.yml`（**Build Desktop Installer**）。
 
-- 触发：`push` 到 `v*` **tag**（推荐发版路径）、或 `push` 到 `main`（验证构建）、或 Actions 里 **手动运行**（仅产物/artifact，**不**创建 Release）。
+- 触发：`push` 到 `v*` **tag**（推荐发版路径）、或 `push` 到 `main`（验证构建）、或 Actions 里手动运行。手动发布必须使用工作流的发布参数，输入版本匹配实际检出 package；关联 tag 时还须核对其 SHA。
 - Runner：`windows-latest`。
 - 步骤概要：`npm ci`（frontend → desktop）→ `npm run build`（frontend，桌面包）→ 固定下载 **NSIS 3.0.4.1** → `dist:win`（electron-builder NSIS）→ 校验产物内部为 **`Nullsoft Install System v3.04`** → 将 `desktop/release/*.exe` 上传 **GitHub Release**（**仅 tag 推送**）→ 通过服务器 `scripts/release-desktop.js` 发布到 canonical 下载目录。
-- 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）。
+- 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）、`actions: read`（读取待发布实际 SHA 的 Tests 与 Security Scan 结果）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
 
 发版请严格使用下面「推荐发布流程」，执行 `npm run release:tag-desktop` 推送 tag 后即可在仓库 **Releases** 下载安装包；服务器 canonical 发布目录中的正式文件名统一为 `FlowCube-Setup-<version>.exe`。
@@ -80,17 +80,20 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 工作流：`.github/workflows/deploy-browser.yml`（**Deploy Browser App**）。
 
 - 触发：`push` 到 `main`，或手动 `workflow_dispatch`
-- 目标：在服务器仓库根目录执行 `SKIP_RELEASE_GATE=1 bash scripts/server-update.sh`
-- 结果：自动 `git pull origin main`，并重建 `backend` / `frontend` 容器，浏览器直接拿到本次提交的前端静态资源
+- 前置门禁：等待实际待发布 SHA 的 Tests 与 Security Scan 全部成功，失败、取消或超时均不部署。
+- 目标：服务器获得部署锁后同步至该 SHA，再执行 `scripts/server-update.sh`；不得跳过发布门禁。
+- 结果：保存运行中镜像，构建新镜像，等待 MySQL 健康并执行迁移，再切换应用并验证接口、页面和公网入口；失败恢复旧应用镜像，数据库 DDL 不回滚。
+- PDA 首次迁移时先保存旧 APK 的已发布清单；新 APK 经独立构建校验、同 SHA 浏览器部署成功后，才由 `scripts/publish-pda.sh` 原子发布。
 
 ### 需要的 Actions 配置
 
 - Secrets
   - `SSH_PRIVATE_KEY`
+  - `SMOKE_USERNAME`、`SMOKE_PASSWORD`（服务器页面与对账回跳门禁账号）
 
 说明：
 
-- 服务器 host / user / path、浏览器 origin 已固定在 [deploy/production.json](/Users/chengjianghao/flowcube/deploy/production.json)
+- 本地服务器配置由不入 Git 的 `deploy/production.local.json` 提供；CI 使用工作流声明的 `VITE_ERP_PRODUCTION_ORIGIN` 和 `FLOWCUBE_SERVER_*` Variables。
 - 如果缺少 `SSH_PRIVATE_KEY`，浏览器自动部署不会生效；此时即使 `main` 已更新，线上页面也仍会停在旧版本
 - 建议同时阅读 [docs/DEPLOY.md](/Users/chengjianghao/flowcube/docs/DEPLOY.md)，后续统一从 `npm run release:prod` 发版
 
@@ -100,9 +103,9 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 
 1. 进入项目根目录：`cd ~/flowcube`
 2. 同步主分支：`git pull origin main`
-3. 更新版本号（关键）：
+3. 先编写 `docs/release-notes/<version>.md`，再同步三端 package/lock 和 PDA 版本（同版本重跑不重复增加 versionCode）：
    ```bash
-   cd desktop && npm version patch --no-git-tag-version && cd ..
+   bash .agents/skills/release-flowcube/scripts/bump-version.sh <version>
    ```
 4. 提交并推送：
    ```bash
@@ -115,7 +118,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
    npm run release:tag-desktop
    ```
 
-等价合并（在已对齐 `main` 且已提交所有改动前提下）：也可先 `cd desktop && npm version patch --no-git-tag-version`，再在根目录 `git add desktop/package.json desktop/package-lock.json && git commit -m "chore(desktop): bump version" && git push origin main`，最后 `npm run release:tag-desktop`。
+已完成版本同步、更新说明和本地验证，并将所有待发布改动提交到 main 后，可运行 `npm run release:prod` 一次完成推送 main 与新 tag。脚本返回仅代表提交发布请求；还须等待对应 SHA 的检查、浏览器部署及桌面/PDA 发布成功，核对线上健康版本、`/latest.json`、`/api/app-update/latest` 和 `/api/pda/version`。
 
 ## 获取 EXE
 

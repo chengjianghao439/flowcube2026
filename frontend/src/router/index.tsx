@@ -6,6 +6,7 @@ import PdaLayout from '@/layouts/PdaLayout'
 import PdaConnectionGate from '@/components/pda/PdaConnectionGate'
 import PdaRoutePermission from '@/components/pda/PdaRoutePermission'
 import ErpDesktopConnectionGate from '@/components/erp/ErpDesktopConnectionGate'
+import { DesktopUpdateBridge } from '@/components/desktop/DesktopUpdateBridge'
 import { DesktopQuitUnloadBridge } from '@/components/desktop/DesktopQuitUnloadBridge'
 import DesktopPrintClientBridge from '@/components/desktop/DesktopPrintClientBridge'
 
@@ -142,6 +143,7 @@ export default function AppRouter() {
           桌面：beforeunload 闸门必须挂在 ErpDesktopConnectionGate 之外。
         */}
         <DesktopQuitUnloadBridge />
+        <DesktopUpdateBridge />
         <DesktopPrintClientBridge />
         <ErpDesktopConnectionGate>
         <Suspense fallback={<PageLoader />}>

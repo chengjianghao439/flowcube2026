@@ -5,7 +5,7 @@ const { PERMISSIONS } = require('../../constants/permissions')
 const { pdaSessionRequired } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
 const { z } = require('zod')
-const { validateBody } = require('../../utils/route')
+const { validateBody, validateParams, validateQuery } = require('../../utils/route')
 
 const router = Router()
 router.use(authMiddleware)
@@ -61,6 +61,26 @@ router.post('/:id/check',
   pdaOnly,
   validateBody(zCheck),
   ctrl.check,
+)
+
+// PDA 扫码查询使用退货执行权限，避免依赖 ERP 库存/库位管理权限。
+const zLookupParams = z.object({ id: z.coerce.number().int().positive() })
+const zLookupQuery = z.object({ barcode: z.string().trim().min(1).max(100) })
+router.get('/:id/putaway-container',
+  pdaSessionRequired(),
+  requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
+  pdaOnly,
+  validateParams(zLookupParams),
+  validateQuery(zLookupQuery),
+  ctrl.putawayContainer,
+)
+router.get('/:id/putaway-location',
+  pdaSessionRequired(),
+  requirePermission(PERMISSIONS.RETURN_ORDER_EXECUTE),
+  pdaOnly,
+  validateParams(zLookupParams),
+  validateQuery(zLookupQuery),
+  ctrl.putawayLocation,
 )
 
 // PDA 上架

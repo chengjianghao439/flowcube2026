@@ -54,7 +54,7 @@ async function getTrialBalance({ period, companyId = 1 }) {
     WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf = 1
     GROUP BY a.id, a.code, a.name, a.category, a.balance_dir, a.is_leaf
     ORDER BY a.code ASC`,
-    [companyId, start, start, start, end, start, end])
+    [start, start, start, end, start, end, companyId])
 
   // 全部科目（含汇总科目），用于把末级发生额上卷到父级
   const [allAccounts] = await pool.query(
@@ -266,7 +266,7 @@ async function getBalanceSheet({ period, companyId = 1 }) {
     LEFT JOIN acct_voucher_entries e ON e.account_id=a.id
     LEFT JOIN acct_vouchers v ON v.id=e.voucher_id
     WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf=1
-    GROUP BY a.id, a.code, a.name, a.category, a.balance_dir`, [companyId, end, end])
+    GROUP BY a.id, a.code, a.name, a.category, a.balance_dir`, [end, end, companyId])
 
   const bal = (r) => round2(r.balance_dir === 1 ? (r.d - r.c) : (r.c - r.d))
   const assets = [], liabilities = [], equity = []

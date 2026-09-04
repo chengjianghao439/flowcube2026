@@ -53,7 +53,7 @@ async function update(req, res, next) {
 
 async function resetPassword(req, res, next) {
   try {
-    await usersService.resetPassword(parseInt(req.params.id), req.body.newPassword)
+    await usersService.resetPassword(parseInt(req.params.id), req.body.newPassword, req.user)
     return successResponse(res, null, '密码重置成功')
   } catch (err) {
     next(err)
@@ -62,7 +62,7 @@ async function resetPassword(req, res, next) {
 
 async function remove(req, res, next) {
   try {
-    await usersService.softDelete(parseInt(req.params.id), req.user.userId)
+    await usersService.softDelete(parseInt(req.params.id), req.user)
     return successResponse(res, null, '删除成功')
   } catch (err) {
     next(err)

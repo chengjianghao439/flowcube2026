@@ -71,5 +71,9 @@ security-scan-report*
 # Claude Code 本地个人配置（不进库，各机器各留一份）
 .claude/settings.local.json
 
-# AI agent 本地说明文件（暂不入库）
-AGENTS.md
+# AGENTS.md 是共享项目工作约定，随代码纳入版本管理
+
+# PDA publication manifest and staging state are not source files.
+backend/apk/published-version.json
+backend/apk/.publish-pda.lock
+backend/apk/.publish-pda-*

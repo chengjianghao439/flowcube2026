@@ -1,10 +1,9 @@
 'use strict'
 
 const path = require('path')
-const dotenv = require(path.resolve(__dirname, '../../backend/node_modules/dotenv'))
+const { configureTestEnvironment, validateTestEnvironment } = require('./testEnvironment')
+configureTestEnvironment()
 const mysql = require(path.resolve(__dirname, '../../backend/node_modules/mysql2/promise'))
-
-dotenv.config({ path: path.resolve(__dirname, '../../backend/.env'), override: true })
 
 const { PERMISSIONS } = require('../../backend/src/constants/permissions')
 
@@ -73,11 +72,7 @@ function createHttpClient(baseUrl) {
 
 function createDbPool() {
   return mysql.createPool({
-    host: process.env.DB_HOST || '127.0.0.1',
-    port: Number(process.env.DB_PORT || 3306),
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'flowcube',
+    ...validateTestEnvironment(),
     waitForConnections: true,
     connectionLimit: 5,
     timezone: '+08:00',
@@ -132,13 +127,10 @@ function randomRef(prefix) {
 }
 
 async function prepareSmokeContext() {
+  validateTestEnvironment()
   // 1. 跑迁移（runMigrations 自行管理数据库连接）
-  try {
-    const { runMigrations } = require('../../backend/src/database/migrate')
-    await runMigrations()
-  } catch (e) {
-    console.warn('[smoke] migration warning:', e.message)
-  }
+  const { runMigrations } = require('../../backend/src/database/migrate')
+  await runMigrations()
 
   // 2. 建测试用连接池
   const pool = createDbPool()

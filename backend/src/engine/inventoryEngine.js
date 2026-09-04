@@ -29,7 +29,7 @@
 const AppError = require('../utils/AppError')
 const logger = require('../utils/logger')
 const { markFulfilled } = require('./reservationEngine')
-const { deductFromContainers, deductFromTaskLockedContainers, syncStockFromContainers } = require('./containerEngine')
+const { deductFromContainers, deductFromTaskLockedContainers, syncStockFromContainers, getStockProjection } = require('./containerEngine')
 
 /**
  * 变动类型常量（对应 inventory_logs.move_type）
@@ -95,7 +95,7 @@ const MIGRATED_GUIDE = {
  *   2. FIFO 扣减容器 remaining_qty
  *   3. syncStockFromContainers → 刷新 inventory_stock 缓存
  *   4. 减少 reserved + 标记预占履行
- *   5. 安全收敛（reserved ≤ on_hand）
+ *   5. 保留未履约的现货及预计预占
  *   6. 写 inventory_logs
  *
  * @param {object} conn          - 已开启事务的 mysql2 连接
@@ -140,16 +140,37 @@ async function moveStock(conn, {
 
   // ── 容器出库路径（SALE_OUT + TASK_OUT）──────────────────────────────────────
   if (moveType === MOVE_TYPE.SALE_OUT || moveType === MOVE_TYPE.TASK_OUT) {
-    // 1. 读当前缓存量（before_qty 供日志使用；reserved 供收敛截断探测）
-    const [[stockRow]] = await conn.query(
-      'SELECT quantity, reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
-      [productId, warehouseId]
-    )
-    const before = stockRow ? Number(stockRow.quantity) : 0
-    const reservedBefore = stockRow ? Number(stockRow.reserved) : 0
-
-    // 2. 容器扣减：任务出库且指定 lockedByTaskId 时仅扣本任务锁定容器，否则 FIFO
+    // 预计预占不能借用其它销售的现货份额；未绑定部分才是本单已承诺的现货。
+    const projection = await getStockProjection(conn, { productId, warehouseId, lock: true })
+    const before = projection.quantity
+    const reservedBefore = projection.reserved
     const absQty = Math.abs(qty)
+    const [bindings] = await conn.query(
+      `SELECT sale_order_id,qty FROM sale_order_expected_bindings
+       WHERE product_id=? AND warehouse_id=? AND released_at IS NULL FOR UPDATE`,
+      [productId, warehouseId],
+    )
+    const boundTotal = bindings.reduce((sum, row) => sum + Number(row.qty), 0)
+    const ownBound = reservationRefType === 'sale_order'
+      ? bindings.filter(row => Number(row.sale_order_id) === Number(reservationRefId)).reduce((sum, row) => sum + Number(row.qty), 0)
+      : 0
+    let ownReserved = 0
+    if (reservationRefType && reservationRefId) {
+      const [[own]] = await conn.query(
+        `SELECT COALESCE(SUM(qty),0) AS qty FROM stock_reservations
+         WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1 FOR UPDATE`,
+        [reservationRefType, reservationRefId, productId, warehouseId],
+      )
+      ownReserved = Number(own.qty)
+    }
+    const physicalReserved = Math.max(0, reservedBefore - boundTotal)
+    const ownPhysicalReserved = Math.max(0, ownReserved - ownBound)
+    const physicalAvailable = Math.max(0, before - physicalReserved) + ownPhysicalReserved
+    if (absQty > physicalAvailable + 1e-6) {
+      throw new AppError(`商品「${productName}」现货不足以履行本单预占，请等待采购上架后再出库`, 409)
+    }
+
+    // 2. 仍只扣本任务锁定的实物容器，不允许靠预计量实际出库。
     const deducted = lockedByTaskId
       ? await deductFromTaskLockedContainers(conn, {
         productId, productName, warehouseId, qty: absQty, taskId: lockedByTaskId,
@@ -165,7 +186,7 @@ async function moveStock(conn, {
     // 对 isPurchaseReturn 显式传 reservationRefType=null）本身不携带任何预占，若在条件外无条件
     // 扣减，会把同商品同仓下其它销售单的预占凭空释放掉：可用量虚高 → 别的订单占走同一批货 →
     // 原订单拣货时货已不在 → 超卖。且事后 releaseByRef 的 GREATEST(0,...) 会把痕迹抹平，
-    // 根因无从追查（审计 P0-1）。无预占的出库只依赖第 5 步的全局收敛兜底。
+    // 根因无从追查（审计 P0-1）。无预占出库不得修改任何销售预占。
     const hasReservation = Boolean(reservationRefType && reservationRefId)
     if (hasReservation) {
       if (reservedBefore < absQty) {
@@ -183,22 +204,8 @@ async function moveStock(conn, {
       await markFulfilled(conn, reservationRefType, reservationRefId, productId, warehouseId, absQty)
     }
 
-    // 5. 安全收敛：reserved 不得超过 on_hand（同样先探测再收敛，触发即告警）
-    //    无预占出库（如采购退货）不改 reserved，此处以出库前的值参与判断——若它已超过出库后的
-    //    在库量，说明物理库存已不足以支撑在册预占，收敛的同时必须告警：这是超卖的直接信号。
-    const reservedAfterRelease = hasReservation ? Math.max(0, reservedBefore - absQty) : reservedBefore
-    if (reservedAfterRelease > after) {
-      logger.error(
-        '[GUARD] reserved 收敛截断：释放后 reserved 仍大于在库量，已压到在库量',
-        null,
-        { moveType, productId, warehouseId, refNo, reserved: reservedAfterRelease, quantity: after },
-        'StockClampGuard',
-      )
-    }
-    await conn.query(
-      'UPDATE inventory_stock SET reserved=LEAST(reserved, quantity) WHERE product_id=? AND warehouse_id=? AND reserved > quantity',
-      [productId, warehouseId]
-    )
+    // ATP 允许 reserved 大于当前现货。这里只核销本单实际履约量，不能把其它销售的
+    // 预计预占压到 quantity；现货不足仍由上面的容器扣减闸门拦截。
 
     // 6. 写日志（按实际扣减容器分行记录，便于追溯 container_id）
     const logRemark = remark || `${MOVE_TYPE_LABEL[moveType]} ${refNo}`

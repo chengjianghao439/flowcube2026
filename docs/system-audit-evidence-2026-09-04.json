@@ -1,0 +1,464 @@
+{
+  "date": "2026-09-04",
+  "commit": "76c8496f12d802457195e2e9f684c1720dbf1d44",
+  "version": "0.9.1",
+  "runtime": {
+    "node": "22.23.2",
+    "mysql": "8.0.46",
+    "additionalLabelMirrorNode": "26.8.1"
+  },
+  "scope": "Tracked source snapshot, no real .env or production database; targeted mocks and isolated MySQL fixtures. Business code not modified.",
+  "staticCommands": [
+    {
+      "name": "backend-lint",
+      "exit": 0,
+      "seconds": 1.2
+    },
+    {
+      "name": "frontend-lint",
+      "exit": 0,
+      "seconds": 3.1
+    },
+    {
+      "name": "typescript",
+      "exit": 0,
+      "seconds": 7.1
+    },
+    {
+      "name": "frontend-unit",
+      "exit": 0,
+      "seconds": 1.0
+    },
+    {
+      "name": "label",
+      "exit": 0,
+      "seconds": 0.2
+    },
+    {
+      "name": "print",
+      "exit": 0,
+      "seconds": 0.2
+    },
+    {
+      "name": "permissions",
+      "exit": 0,
+      "seconds": 0.2
+    },
+    {
+      "name": "accounting-map",
+      "exit": 0,
+      "seconds": 0.2
+    },
+    {
+      "name": "oplog",
+      "exit": 0,
+      "seconds": 0.2
+    },
+    {
+      "name": "status-rules",
+      "exit": 0,
+      "seconds": 0.1
+    },
+    {
+      "name": "migration-numbering",
+      "exit": 0,
+      "seconds": 0.2
+    },
+    {
+      "name": "build-erp",
+      "exit": 0,
+      "seconds": 4.9
+    },
+    {
+      "name": "build-pda",
+      "exit": 0,
+      "seconds": 28.4
+    }
+  ],
+  "databaseCommands": [
+    {
+      "name": "migrate-smoke",
+      "exit": 0,
+      "seconds": 2.7,
+      "database": "flowcube_test",
+      "passLines": 231
+    },
+    {
+      "name": "schema",
+      "exit": 0,
+      "seconds": 0.2,
+      "database": "flowcube_test",
+      "passLines": 1
+    },
+    {
+      "name": "migrate-integration",
+      "exit": 0,
+      "seconds": 2.6,
+      "database": "flowcube_integration_test",
+      "passLines": 231
+    },
+    {
+      "name": "smoke-mainline",
+      "exit": 0,
+      "seconds": 1.2,
+      "database": "flowcube_test",
+      "passed": 49,
+      "failed": 0
+    },
+    {
+      "name": "smoke-concurrency-guards",
+      "exit": 0,
+      "seconds": 1.5,
+      "database": "flowcube_test",
+      "passed": 83,
+      "failed": 0
+    },
+    {
+      "name": "smoke-sale-adjustment",
+      "exit": 0,
+      "seconds": 1.4,
+      "database": "flowcube_test",
+      "passed": 57,
+      "failed": 0
+    },
+    {
+      "name": "smoke-p0-regression",
+      "exit": 0,
+      "seconds": 1.0,
+      "database": "flowcube_test",
+      "passed": 41,
+      "failed": 0
+    },
+    {
+      "name": "smoke-p1-regression",
+      "exit": 0,
+      "seconds": 1.3,
+      "database": "flowcube_test",
+      "passed": 44,
+      "failed": 0
+    },
+    {
+      "name": "smoke-warehouse-scope",
+      "exit": 0,
+      "seconds": 1.2,
+      "database": "flowcube_test",
+      "passed": 41,
+      "failed": 0
+    },
+    {
+      "name": "smoke-pda-device-session",
+      "exit": 0,
+      "seconds": 1.5,
+      "database": "flowcube_test",
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "name": "smoke-finance",
+      "exit": 0,
+      "seconds": 1.3,
+      "database": "flowcube_test",
+      "passed": 108,
+      "failed": 0
+    },
+    {
+      "name": "smoke-disposal",
+      "exit": 0,
+      "seconds": 1.0,
+      "database": "flowcube_test",
+      "passed": 27,
+      "failed": 0
+    },
+    {
+      "name": "smoke-invoice-quota",
+      "exit": 0,
+      "seconds": 0.9,
+      "database": "flowcube_test",
+      "passed": 10,
+      "failed": 0
+    },
+    {
+      "name": "smoke-refund-orders",
+      "exit": 0,
+      "seconds": 0.8,
+      "database": "flowcube_test",
+      "passed": 14,
+      "failed": 0
+    },
+    {
+      "name": "smoke-accounting",
+      "exit": 0,
+      "seconds": 0.8,
+      "database": "flowcube_test",
+      "passed": 11,
+      "failed": 0
+    },
+    {
+      "name": "smoke-accounting-period",
+      "exit": 0,
+      "seconds": 0.8,
+      "database": "flowcube_test",
+      "passed": 14,
+      "failed": 0
+    },
+    {
+      "name": "test-print-purge",
+      "exit": 0,
+      "seconds": 0.7,
+      "database": "flowcube_test",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "name": "smoke-reports-values",
+      "exit": 0,
+      "seconds": 0.7,
+      "database": "flowcube_test",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "name": "smoke-credit-outbound",
+      "exit": 0,
+      "seconds": 0.7,
+      "database": "flowcube_test",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "name": "smoke-purchase-approval",
+      "exit": 0,
+      "seconds": 0.7,
+      "database": "flowcube_test",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "name": "smoke-approval-flow",
+      "exit": 0,
+      "seconds": 1.3,
+      "database": "flowcube_test",
+      "passed": 30,
+      "failed": 0
+    },
+    {
+      "name": "smoke-credit-override",
+      "exit": 0,
+      "seconds": 1.1,
+      "database": "flowcube_test",
+      "passed": 11,
+      "failed": 0
+    },
+    {
+      "name": "smoke-atp",
+      "exit": 0,
+      "seconds": 0.8,
+      "database": "flowcube_test",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "name": "test-hr-tax",
+      "exit": 0,
+      "seconds": 0.2,
+      "database": "flowcube_test",
+      "passed": 7,
+      "failed": 0
+    },
+    {
+      "name": "search-scope.smoke.test.js",
+      "exit": 0,
+      "seconds": 0.9,
+      "database": "flowcube_test",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "name": "users-roles.smoke.test.js",
+      "exit": 0,
+      "seconds": 1.0,
+      "database": "flowcube_test",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "name": "integration",
+      "exit": 0,
+      "seconds": 1.4,
+      "database": "flowcube_integration_test",
+      "passed": 96,
+      "failed": 0
+    }
+  ],
+  "businessAssertions": {
+    "passed": 717,
+    "failed": 0
+  },
+  "gitleaks": {
+    "findings": 0,
+    "scope": "Current git archive snapshot with repository configuration, no git history or real environment files"
+  },
+  "npmAudit": {
+    "status": "incomplete",
+    "targets": [
+      "backend",
+      "frontend",
+      "desktop"
+    ],
+    "reason": "Registry audit requests timed out on initial run and bounded retry; vulnerability totals unknown"
+  },
+  "findings": [
+    {
+      "id": "F01",
+      "priority": "P1",
+      "title": "销售退货部分质检破坏数量守恒【DB + 模拟】"
+    },
+    {
+      "id": "F02",
+      "priority": "P1",
+      "title": "部分上架重复计算采购供应，可超占【DB + 模拟】"
+    },
+    {
+      "id": "F03",
+      "priority": "P1",
+      "title": "出库截断合法 ATP 预占，预占缓存与明细分离【DB + 模拟】"
+    },
+    {
+      "id": "F04",
+      "priority": "P1",
+      "title": "采购撤回/驳回绕过预计销售绑定保护【代码】"
+    },
+    {
+      "id": "F05",
+      "priority": "P2",
+      "title": "ATP 重复扣绑定，履约后绑定不关闭【模拟 + 代码】"
+    },
+    {
+      "id": "F06",
+      "priority": "P1",
+      "title": "试算平衡与资产负债表 SQL 参数错位【DB + 代码】"
+    },
+    {
+      "id": "F07",
+      "priority": "P1",
+      "title": "有重置密码权限的非超管可接管超管【模拟 + 代码】"
+    },
+    {
+      "id": "F08",
+      "priority": "P1",
+      "title": "撤回收货归零后，生成凭证仍保留旧金额【模拟 + 代码】"
+    },
+    {
+      "id": "F09",
+      "priority": "P1",
+      "title": "红字凭证可以被普通删除，冲销关系断裂【模拟 + 代码】"
+    },
+    {
+      "id": "F10",
+      "priority": "P2",
+      "title": "改价未匹配审批流时返回 500【模拟 + 代码】"
+    },
+    {
+      "id": "F11",
+      "priority": "P1",
+      "title": "PDA 销售退货扫码上架无法提交【模拟 + 代码】"
+    },
+    {
+      "id": "F12",
+      "priority": "P2",
+      "title": "独立桌面/PDA 的令牌续期请求地址错误【模拟 + 代码】"
+    },
+    {
+      "id": "F13",
+      "priority": "P1",
+      "title": "桌面白名单 IP 的证书身份未验证【模拟 + 代码；暴露条件待核验】"
+    },
+    {
+      "id": "F14",
+      "priority": "P2",
+      "title": "桌面实际下载入口遗漏 SHA-256 校验【模拟 + 代码】"
+    },
+    {
+      "id": "F15",
+      "priority": "P2",
+      "title": "桌面更新发现事件没有前端订阅者【模拟 + 代码】"
+    },
+    {
+      "id": "F16",
+      "priority": "P1",
+      "title": "生产部署未等待同一提交的 Tests/Security 通过【代码】"
+    },
+    {
+      "id": "F17",
+      "priority": "P1",
+      "title": "部署后健康/页面门禁失败没有统一回滚【代码】"
+    }
+  ],
+  "focusedVerification": {
+    "verify-ledger": {
+      "method": "MySQL 8.0.46, isolated fixtures, transaction rollback",
+      "output": "DATABASE {\"version\":\"8.0.46\",\"db\":\"flowcube_test\"}\nLEDGER_MISMATCH {\"actual\":{\"companyId\":1,\"period\":\"202609\",\"entries\":2,\"debit\":\"100.00\",\"credit\":\"100.00\"},\"trial\":{\"rows\":0,\"totals\":{\"openingDebit\":0,\"openingCredit\":0,\"periodDebit\":0,\"periodCredit\":0,\"closingDebit\":0,\"closingCredit\":0},\"balanced\":{\"period\":true,\"closing\":true}},\"balance\":{\"assetTotal\":0,\"liabTotal\":0,\"equityTotal\":0,\"balanced\":true}}\n"
+    },
+    "repro-inventory-mysql": {
+      "method": "MySQL 8.0.46, isolated fixtures, transaction rollback",
+      "output": "{\"case\":\"ship_erases_atp_reserved\",\"stock\":{\"quantity\":\"0.0000\",\"reserved\":\"0.0000\"},\"activeReservationQty\":\"5.0000\"}\n{\"case\":\"partial_putaway_counts_twice\",\"actualProjection\":{\"quantity\":5,\"reserved\":0,\"expected\":10,\"available\":15},\"acceptedReservation\":15,\"totalSupply\":10}\n{\"case\":\"partial_qa_loses_unchecked_quantity\",\"receivedQty\":10,\"representedContainerQty\":\"2.0000\",\"returnState\":{\"checked_qty\":\"2.0000\",\"rejected_qty\":\"1.0000\"}}\n{\"verification\":\"3 MySQL 8 source reproductions passed\",\"server\":\"8.0.46\",\"guardLogs\":[\"[GUARD] reserved 收敛截断：释放后 reserved 仍大于在库量，已压到在库量\"],\"cleanup\":\"ROLLBACK in finally\"}\n"
+    },
+    "repro-atp-memory": {
+      "method": "Current source with in-memory fixtures, or pure function checks",
+      "output": "{\"case\":\"double_deduction\",\"actualProjection\":{\"quantity\":0,\"reserved\":5,\"expected\":5,\"available\":0},\"correctRemainingSupply\":5}\n{\"case\":\"partial_putaway_counts_twice\",\"actualProjection\":{\"quantity\":5,\"reserved\":0,\"expected\":10,\"available\":15},\"acceptedReserved\":15,\"actualTotalSupply\":10}\n{\"case\":\"ship_erases_atp_reserved\",\"onhand\":0,\"stockReserved\":0,\"activeReservationQty\":5,\"activeBindingQty\":5}\n{\"case\":\"fulfillment_keeps_binding_active\",\"reservationStatus\":2,\"activeBindingQty\":5}\n{\"verification\":\"4 memory reproductions passed\",\"dbConnections\":0,\"guardLogs\":[\"[GUARD] reserved 收敛截断：释放后 reserved 仍大于在库量，已压到在库量\"]}\n"
+    },
+    "repro-return-qa": {
+      "method": "Current source with in-memory fixtures, or pure function checks",
+      "output": "{\"case\":\"partial_mixed_qa_loses_unchecked_quantity\",\"physicalReceived\":10,\"representedContainerQty\":2,\"checkedQty\":2,\"taskStatus\":3,\"containers\":[{\"id\":1,\"product_id\":1,\"warehouse_id\":1,\"barcode\":\"MOCK\",\"status\":4,\"remaining_qty\":1},{\"id\":2,\"product_id\":1,\"warehouse_id\":1,\"barcode\":\"MOCK2\",\"status\":6,\"remaining_qty\":1}]}\n{\"case\":\"partial_pass_moves_entire_container_and_blocks_rest\",\"taskStatus\":3,\"containerStatus\":4,\"containerQty\":10,\"checkedAfterFirstCall\":5,\"secondCallError\":\"质检数量超出待质检容器可用数量\"}\n{\"verification\":\"2 memory reproductions passed\",\"dbConnections\":0}\n"
+    },
+    "repro-client": {
+      "method": "Current source with in-memory fixtures, or pure function checks",
+      "output": "F1_RETURN_PUTAWAY [{\"raw\":\"I000123\",\"type\":\"container\",\"parsedId\":123,\"convertedIsNaN\":true,\"guardReturns\":true},{\"raw\":\"CNT000123\",\"type\":\"container\",\"parsedId\":123,\"convertedIsNaN\":true,\"guardReturns\":true},{\"raw\":\"R000456\",\"type\":\"location\",\"parsedId\":456,\"convertedIsNaN\":true,\"guardReturns\":true},{\"raw\":\"LOC-A01\",\"type\":\"location\",\"convertedIsNaN\":true,\"guardReturns\":true}]\nF2_REFRESH_ORIGIN {\"baseURL\":null,\"timeout\":null,\"sameOriginDev\":\"http://localhost:5173/api/auth/refresh\",\"desktop\":\"file:///api/auth/refresh\",\"bundledPda\":\"https://localhost/api/auth/refresh\"}\nF3_UPDATE_DIGEST {\"optionsKeys\":[\"quitForInstall\"],\"sha256Passed\":false}\nF4_UPDATE_NOTICE {\"sent\":[{\"event\":\"flowcube:update-available\",\"version\":\"9.0.0\"}],\"registeredPreloadListeners\":0,\"frontendConsumerReferences\":0,\"nativeDialogs\":0,\"bridgeFilesReviewed\":[\"frontend/src/components/dashboard/DashboardVersionCard.tsx\",\"frontend/src/components/desktop/DesktopPrintClientBridge.tsx\",\"frontend/src/components/shared/ConfirmDialog.tsx\",\"frontend/src/components/shared/UserMenu.tsx\",\"frontend/src/lib/desktopLocalPrint.ts\",\"frontend/src/lib/erpApiBootstrap.ts\",\"frontend/src/lib/platform.ts\",\"frontend/src/pages/racks/index.tsx\",\"frontend/src/pages/settings/printers/index.tsx\",\"frontend/src/store/dirtyGuardStore.ts\"]}\nF5_CERTIFICATE_POLICY {\"unrelatedCertificateForAllowlistedHostAccepted\":true,\"checkedCertificateFingerprint\":false}\nDone: 5 current-source findings reproduced. Fixtures only; no real services accessed.\n"
+    },
+    "repro-finance": {
+      "method": "Current source with in-memory fixtures, or pure function checks",
+      "output": "{\"case\":\"non_admin_reset_admin\",\"writes\":[{\"targetId\":1,\"passwordWrite\":true}]}\n{\"case\":\"price_submit_no_flow\",\"error\":\"TypeError\",\"message\":\"Cannot read properties of null (reading 'instanceId')\",\"statusCode\":null,\"rollbacks\":1}\n{\"case\":\"purchase_voucher_after_source_zero\",\"before\":{\"created\":1,\"updated\":0,\"unchanged\":0,\"reversed\":0,\"empty\":0,\"skippedClosed\":0,\"total\":1},\"after\":{\"created\":0,\"updated\":0,\"unchanged\":0,\"reversed\":0,\"empty\":0,\"skippedClosed\":0,\"total\":0},\"secondRunWrites\":0,\"remainingVouchers\":[{\"id\":1,\"company_id\":1,\"voucher_no\":\"记-202609-0001\",\"source_type\":\"purchase_settle\",\"source_id\":99,\"total_debit\":100,\"total_credit\":100,\"status\":1}],\"remainingEntries\":[{\"voucher_id\":1,\"code\":\"1405\",\"direction\":1,\"amount\":100},{\"voucher_id\":1,\"code\":\"2202\",\"direction\":2,\"amount\":100}]}\n{\"case\":\"delete_reversal_voucher\",\"committed\":1,\"deletes\":[{\"table\":\"acct_voucher_entries\",\"id\":2},{\"table\":\"acct_vouchers\",\"id\":2}]}\n"
+    },
+    "label-mirror-node26": {
+      "method": "Current source with in-memory fixtures, or pure function checks",
+      "output": "前端镜像 ↔ 后端快照一致性：\n  ✓ 旧结构迁移：fontSize(pt)→mm、剔除 divider、默认不显前缀\n  ✓ v2：showLabel 拼接、title 取值兜底 label、空值跳过、条码清洗、canvas 显式\n  ✓ 排序按 y 再 x（乱序输入）\n  ✓ format=zpl 裸模板：不归几何层，primitives 为空\n  ✓ barcode 参数：EAN13 + 隐藏可读数字\n\n两端一致（5 例）\n"
+    }
+  },
+  "temporaryReproductionScripts": {
+    "flowcube-atp-memory-repro.cjs": {
+      "temporaryPath": "/tmp/flowcube-atp-memory-repro.cjs",
+      "sha256": "7025084e3c77baa631ef0bbb466430a9a06f2129f7ce2046e39a178d6449bbc6"
+    },
+    "flowcube-return-qa-memory-repro.cjs": {
+      "temporaryPath": "/tmp/flowcube-return-qa-memory-repro.cjs",
+      "sha256": "ec39edce6ea7a31b94d474b80cf1107431d289229fe8d54bdc7cfac7c5b773db"
+    },
+    "flowcube-inventory-db-repro.cjs": {
+      "temporaryPath": "/tmp/flowcube-inventory-db-repro.cjs",
+      "sha256": "6b567c18880d82940e68ecb5178262a51134d3d471b9e7a8cfc700bb1df8659d"
+    },
+    "flowcube-client-audit-20260904.cjs": {
+      "temporaryPath": "/tmp/flowcube-client-audit-20260904.cjs",
+      "sha256": "7b4e34308e216982ca601b4c3eff52d09f25206c1f350f0bc198065368509b2b"
+    },
+    "flowcube-finance-audit-20260904.cjs": {
+      "temporaryPath": "/tmp/flowcube-finance-audit-20260904.cjs",
+      "sha256": "8e363b29ab5543690ddb5f874b5c09d545d4b2ac8aa48e5059bd9af969af1c3f"
+    },
+    "verify-ledger.cjs": {
+      "temporaryPath": "/tmp/flowcube-audit-20260904-hr3pqawe/verify-ledger.cjs",
+      "sha256": "d720995fc42333c55c43c87d2edc183b3e1c9a817e7cdd77c764e0f9a0e0bdf3"
+    }
+  },
+  "limitations": [
+    "No production data or permissions inspection",
+    "No Windows/Android native or physical printer testing",
+    "No load testing or disaster recovery exercise",
+    "npm dependency advisory audit incomplete"
+  ],
+  "cleanup": {
+    "temporaryMysqlContainer": "removed",
+    "colimaFlowcube": "stopped",
+    "businessDatabase": "not modified"
+  }
+}

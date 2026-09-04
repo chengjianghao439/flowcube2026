@@ -12,7 +12,8 @@
 
 const AppError = require('../utils/AppError')
 const logger = require('../utils/logger')
-const { getAvailableStockForDecision } = require('./containerEngine')
+const { getAvailableStockForDecision, lockStockDimension } = require('./containerEngine')
+const { getExpectedStock, reduceExpectedBindings } = require('../utils/expectedStock')
 
 /**
  * 收敛截断留痕：reserved 的 GREATEST/LEAST 兜底是防负数扩散的正确手段，
@@ -38,11 +39,9 @@ function logReservedClamp(context, detail) {
  * @param {number} [params.refItemId]   - 销售单明细行 id（在途绑定时记录）
  * @param {string} params.refNo         - 销售单编号
  * @param {boolean} [params.includeExpected=false] - 是否把采购单预计到货量算进可用（仅销售占库用）
- * @param {Array<{purchase_order_id,purchase_item_id,burnable}>} [params.expectedItems]
- *        - 该 (product, warehouse) 下可绑定的采购单明细（FIFO），仅 includeExpected 时传入
  */
 async function reserve(conn, { productId, productName = '该商品', warehouseId, qty,
-  refType, refId, refItemId = null, refNo, includeExpected = false, expectedItems = [] }) {
+  refType, refId, refItemId = null, refNo, includeExpected = false }) {
   const { quantity: onHand, reserved, available } = await getAvailableStockForDecision(conn, {
     productId,
     warehouseId,
@@ -56,6 +55,17 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
       `实际库存 ${onHand}，已预占 ${reserved}，可用 ${available}，需要 ${qty}`,
       400
     )
+  }
+
+  // 采购/库存锁内重新读取，不能复用调用方占库前的 expectedItems 快照。
+  const expected = includeExpected
+    ? await getExpectedStock(conn, [{ productId, warehouseId }], { lock: true })
+    : null
+  const bound = expected?.boundByPair.get(`${Number(productId)}:${Number(warehouseId)}`) || 0
+  const physicalReserved = Math.max(0, Number(reserved) - bound)
+  const fromExpected = Math.max(0, Number(qty) - Math.max(0, Number(onHand) - physicalReserved))
+  if (includeExpected && fromExpected > 1e-6 && (refType !== 'sale_order' || refItemId == null)) {
+    throw new AppError('预计量占库必须指定销售明细', 400)
   }
 
   // 增加 reserved。quantity 是容器汇总缓存，只能由 syncStockFromContainers() 写入；
@@ -72,13 +82,11 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
     [productId, warehouseId, qty, refType, refId, refNo]
   )
 
-  // 记录「靠预计到货量支撑」的绑定：本次占用量里超出【现货 − 已预占】的部分，
-  // 即没有现货兜底、需要采购单到货来兑现的量。按 expectedItems 的 FIFO 顺序分摊到具体采购单明细。
+  // 现货只减去现货预占；已绑定预计量的其它销售不能再次吞掉未占用的现货。
   if (includeExpected && refItemId != null) {
-    let fromExpected = Math.max(0, Number(qty) - Math.max(0, Number(onHand) - Number(reserved)))
     if (fromExpected > 0) {
       let remaining = fromExpected
-      for (const it of expectedItems) {
+      for (const it of expected.items) {
         if (remaining <= 1e-6) break
         const take = Math.min(Number(it.burnable), remaining)
         if (take <= 1e-6) continue
@@ -88,8 +96,9 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
            VALUES (?,?,?,?,?,?,?)`,
           [refId, refItemId, it.purchase_order_id, it.purchase_item_id, productId, warehouseId, take],
         )
-        remaining -= take
+        remaining = Math.round((remaining - take) * 10000) / 10000
       }
+      if (remaining > 1e-6) throw new AppError('采购预计可绑定量不足，请刷新后重试', 409)
     }
   }
 }
@@ -103,11 +112,24 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
  * @param {number} refId     - 销售单 ID
  */
 async function releaseByRef(conn, refType, refId) {
+  // 先锁所有库存维度，才能锁预占/预计绑定。否则首行释放提前锁住其它商品绑定，
+  // 与后者的上架（库存→绑定）或出库（库存→预占）形成 ABBA。
+  const [dimensions] = await conn.query(
+    `SELECT DISTINCT product_id,warehouse_id FROM stock_reservations
+     WHERE ref_type=? AND ref_id=? AND status=1 ORDER BY product_id,warehouse_id`,
+    [refType, refId],
+  )
+  for (const dimension of dimensions) await lockStockDimension(conn, dimension.product_id, dimension.warehouse_id)
   const [rows] = await conn.query(
     'SELECT * FROM stock_reservations WHERE ref_type=? AND ref_id=? AND status=1 FOR UPDATE',
     [refType, refId]
   )
-  if (!rows.length) return   // 无有效预占，可能未曾确认过
+
+  const lockedDimensions = new Set(dimensions.map(d => `${Number(d.product_id)}:${Number(d.warehouse_id)}`))
+  if (rows.some(r => !lockedDimensions.has(`${Number(r.product_id)}:${Number(r.warehouse_id)}`))) {
+    // 调用者旧 RR 快照可能漏掉刚新增的维度；不能持着预占行锁再补取该库存锁。
+    throw new AppError('预占维度已变化，请刷新后重试释放库存', 409)
+  }
 
   for (const r of rows) {
     // 减少 reserved（使用 GREATEST 保证不低于 0；截断即告警，见 logReservedClamp）
@@ -128,7 +150,9 @@ async function releaseByRef(conn, refType, refId) {
     )
     // 标记为已释放
     await conn.query('UPDATE stock_reservations SET status=3 WHERE id=?', [r.id])
-    // 回收在途绑定：整单取消 ⇒ 该单所有未释放的预计量绑定全部作废
+  }
+  // 全部维度预占核销后统一关闭依赖；也能清理旧版本履约后残留的本单绑定。
+  if (refType === 'sale_order') {
     await conn.query(
       'UPDATE sale_order_expected_bindings SET released_at=NOW() WHERE sale_order_id=? AND released_at IS NULL',
       [refId],
@@ -162,6 +186,7 @@ async function markFulfilled(conn, refType, refId, productId, warehouseId, qty =
        WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1`,
       [refType, refId, productId, warehouseId],
     )
+    if (refType === 'sale_order') await reduceExpectedBindings(conn, { saleOrderId: refId, productId, warehouseId }, Number.MAX_SAFE_INTEGER / 10000)
     return
   }
 
@@ -190,7 +215,23 @@ async function markFulfilled(conn, refType, refId, productId, warehouseId, qty =
         [take, r.id],
       )
     }
-    remaining -= take
+    remaining = Math.round((remaining - take) * 10000) / 10000
+  }
+
+  if (refType === 'sale_order') {
+    const [[active]] = await conn.query(
+      `SELECT COALESCE(SUM(qty),0) AS qty FROM stock_reservations
+       WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1 FOR UPDATE`,
+      [refType, refId, productId, warehouseId],
+    )
+    const [[binding]] = await conn.query(
+      `SELECT COALESCE(SUM(qty),0) AS qty FROM sale_order_expected_bindings
+       WHERE sale_order_id=? AND product_id=? AND warehouse_id=? AND released_at IS NULL FOR UPDATE`,
+      [refId, productId, warehouseId],
+    )
+    // 先履行现货部分，只有超出剩余预占的绑定才解除；不能提前抹掉仍依赖采购的尾量。
+    await reduceExpectedBindings(conn, { saleOrderId: refId, productId, warehouseId },
+      Math.max(0, Number(binding.qty) - Number(active.qty)))
   }
 
   // 出库量超过在册预占（预占计数已漂移，或出库走了未预占的路径）——不阻断出库，
@@ -220,6 +261,8 @@ async function partialReleaseByProduct(conn, { refType, refId, productId, wareho
   let remaining = Number(qty)
   if (!(remaining > 0)) return
 
+  await lockStockDimension(conn, productId, warehouseId)
+
   const [rows] = await conn.query(
     `SELECT id, qty FROM stock_reservations
      WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1
@@ -236,7 +279,7 @@ async function partialReleaseByProduct(conn, { refType, refId, productId, wareho
     } else {
       await conn.query('UPDATE stock_reservations SET qty = qty - ? WHERE id=?', [take, r.id])
     }
-    remaining -= take
+    remaining = Math.round((remaining - take) * 10000) / 10000
   }
 
   const released = Number(qty) - remaining
@@ -259,25 +302,8 @@ async function partialReleaseByProduct(conn, { refType, refId, productId, wareho
   if (remaining > 0) {
     throw new AppError(`商品预占记录不足，无法释放 ${qty} 中的剩余 ${remaining}`, 409)
   }
-  // 回收在途绑定：按量释放该 (销售单,商品,仓库) 的预计量绑定（first-fit FIFO）
-  if (released > 0) {
-    let rem = released
-    const [binds] = await conn.query(
-      `SELECT id, qty FROM sale_order_expected_bindings
-        WHERE sale_order_id=? AND product_id=? AND warehouse_id=? AND released_at IS NULL
-        ORDER BY id ASC FOR UPDATE`,
-      [refId, productId, warehouseId],
-    )
-    for (const b of binds) {
-      if (rem <= 1e-6) break
-      const take = Math.min(Number(b.qty), rem)
-      if (take >= Number(b.qty)) {
-        await conn.query('UPDATE sale_order_expected_bindings SET released_at=NOW() WHERE id=?', [b.id])
-      } else {
-        await conn.query('UPDATE sale_order_expected_bindings SET qty=qty-? WHERE id=?', [take, b.id])
-      }
-      rem -= take
-    }
+  if (refType === 'sale_order' && released > 0) {
+    await reduceExpectedBindings(conn, { saleOrderId: refId, productId, warehouseId }, released)
   }
 }
 

@@ -8,6 +8,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { settlePurchaseOnAudit } = require('./inbound-tasks.settle')
+const { reduceExpectedBindings } = require('../../utils/expectedStock')
 const { assertInScope } = require('../../utils/warehouseScope')
 
 async function tryFinishTask(conn, taskId) {
@@ -264,6 +265,9 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
         'UPDATE inbound_task_items SET putaway_qty = putaway_qty + ? WHERE id = ?',
         [amount, row.id],
       )
+      if (row.purchase_item_id != null) {
+        await reduceExpectedBindings(conn, { purchaseItemId: row.purchase_item_id }, amount)
+      }
       row.putaway_qty = Number(row.putaway_qty) + amount
       putLeft -= amount
       return amount

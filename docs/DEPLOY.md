@@ -21,11 +21,10 @@
 ```text
 浏览器/桌面端
    │  https://jixuflow.com:443（正式证书，SNI=域名）
-   │  https://47.93.228.251:443（自签证书兜底，SNI=IP，桌面端过渡期）
    ▼
 宿主机 Caddy（/etc/caddy/Caddyfile，systemd 管理）
    │  80：ACME 证书验证 + HTTP→HTTPS 308 跳转
-   │  443：按 SNI 分流——域名→Let's Encrypt 正式证书；IP→自签证书
+   │  443：匹配域名的可信证书（通常为 Let's Encrypt）
    ▼
 前端容器 nginx（回环 127.0.0.1:8080，映射自 docker-compose.yml）
    │  /api/ → 后端 3000；静态资源 + /latest.json /versions/ /current/
@@ -37,7 +36,7 @@
 
 - **Caddy 模板**：`docker/Caddyfile`（含部署说明）。换服务器时按模板填真实域名/公网 IP/内网 IP，写入服务器 `/etc/caddy/Caddyfile` 后 `systemctl reload caddy`。
 - **前端容器端口**：必须映射 `127.0.0.1:8080:80`，让出宿主机 80 给 Caddy 做 ACME 验证（见 `docker-compose.yml`）。**不要改回 80**，否则 Caddy 证书自动续期会失败。
-- **IP 站点需同时列公网与内网 IP**：无 SNI 的 IP 连接经 EIP NAT 后，Caddy 看到的目标 IP 是内网 IP（如 `172.24.56.21`），只列公网 IP 会匹配不到证书。
+- **客户端必须验证服务端证书身份**：桌面端已移除按 IP 放行任意证书的过渡逻辑；旧模板的 IP 自签站点不能作为可信更新源。恢复证书故障应修复域名/证书链，不能禁用证书校验。
 - **`.env` 生产项**（服务器 `/opt/flowcube/.env`）：`APP_PUBLIC_URL=https://jixuflow.com`（桌面更新链）、`CORS_ORIGIN=https://jixuflow.com`、`TRUST_PROXY=1`。
 - **CI 的 erp_origin**：由 `scripts/read-deploy-config.js` 读 `deploy/production.local.json`，发布后健康检查/页面烟雾自动走域名。
 
@@ -57,37 +56,40 @@
 npm run release:prod
 ```
 
-这个入口会做两件事：
+这个入口推送 main 并打桌面 tag，分别进入以下发布链：
 
 1. `git push origin main`
    - 触发 `Deploy Browser App`
-   - GitHub Actions 通过仓库内的 `deploy/production.json` 自动 SSH 到服务器
-   - 在服务器执行 `SKIP_RELEASE_GATE=1 bash scripts/server-update.sh`
-   - 浏览器端和服务器端更新到本次 `main` 提交
+   - 等待同一 SHA、main 可信事件的 `Tests` 与 `Security Scan` 最新运行成功，失败/取消/超时不得部署
+   - GitHub Actions 解析部署配置后 SSH 到服务器，在重置代码前获取部署锁，固定实际 SHA
+   - `server-update.sh` 保存旧运行镜像 ID，构建新镜像、等 MySQL 健康、一次性容器迁移，再切换应用并执行本地/公网健康与页面门禁
+   - 任何核心步骤失败统一恢复旧应用镜像并验证；DDL 不回滚，迁移须兼容旧代码
 
 2. `npm run release:tag-desktop`
    - 自动读取 `desktop/package.json` 的 `version`
    - 推送对应 `v<version>` tag
    - 触发 `Build Desktop Installer`
+   - 发布前再次确认实际检出 SHA 的 Tests/Security 成功；手动 checkout_ref 和版本输入不得借用另一 SHA 的绿灯或只重命名版本
    - GitHub Release 自动生成/更新安装包
    - 已配置 SSH 时，CI 会把安装包交给服务器 `scripts/release-desktop.js`，写入 `/var/www/flowcube-downloads/versions/v<version>/` 并更新 `/latest.json` 与 `/current/`
 
 3. `Build PDA APK`
    - `main` 推送且包含 `frontend/**` 或 `backend/apk/version.json` 变更时自动触发
    - 使用 `frontend/android/app/build.gradle` 的 `versionName/versionCode` 构建签名 APK
-   - 将 APK 发布到生产服务器 `backend/apk/app-release.apk`
-   - 将 `backend/apk/version.json` 同步到服务器
-   - 重建后端容器并校验 `/api/pda/version` 与 `/api/pda/download`
+   - 等待同 SHA 浏览器部署通过，在同一部署锁内确认服务器 HEAD 匹配
+   - `scripts/publish-pda.sh` 先发布含 versionCode/摘要的唯一 APK，再原子替换 `backend/apk/published-version.json`
+   - 只修改只读挂载目录的宿主文件，不重置 Git/重建后端；校验 `/api/pda/version` 与 `/api/pda/download`
 
 PDA 自动更新的权威关系：
 
 ```text
 frontend/android/app/build.gradle     # APK 内置版本号
-backend/apk/version.json              # 后端对 PDA 公布的新版本号
-backend/apk/app-release.apk           # PDA 实际下载的安装包，未提交进 Git，由 CI 上传到服务器
+backend/apk/version.json              # 源码中的目标版本，必须与 APK 内置版本一致
+backend/apk/published-version.json    # 实际已发布清单，不提交 Git，API 优先读取
+backend/apk/FlowCubePDA-<code>-<sha>.apk # 已发布不可变安装包，不提交 Git
 ```
 
-发布 PDA 时必须同时提升 `versionCode` 和 `versionName`，并保持 `backend/apk/version.json` 一致。否则 PDA 会认为没有新版本，或看到新版本但下载到旧安装包。
+发布 PDA 时必须同时提升 `versionCode` 和 `versionName`，并保持目标 `version.json` 一致。新发布器拒绝同号不同内容；相同包重试幂等。首次升级部署链时，在 git reset 前保存旧清单为 published-version.json，避免先宣传新版本再收到 APK。API 保留无发布清单的旧部署回退，并可按旧下载 URL 的 code/摘要继续提供原包。
 
 ## 桌面端发布目录结构
 
@@ -110,7 +112,7 @@ backend/apk/app-release.apk           # PDA 实际下载的安装包，未提交
 node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.exe
 ```
 
-`latest.json` 是唯一权威入口。`backend/downloads` 已废弃，仅保留废弃说明，不再用于发布。
+`latest.json` 是桌面更新权威入口。主进程从可信 HTTPS 清单获取并绑定 version、URL、sha256，下载及安装前各校验一次；无摘要或证书错误不能自动安装。根组件消费更新事件，订阅晚于检查时仍能显示待处理更新。`backend/downloads` 已废弃，仅保留废弃说明，不再用于发布。
 
 ### `/downloads` 兼容别名
 
@@ -163,15 +165,17 @@ ssh flowcube-prod 'cd /opt/flowcube && git rev-parse --short HEAD'
 
 ## 应急发布
 
-如果 GitHub Actions 暂时不可用，但本机 SSH 已通，可以直接：
+优先手动触发 GitHub Actions 的 workflow_dispatch，仍须通过同 SHA 检查。直接运行服务器脚本时，需显式指定已验证提交，并提供 Node 22、GITHUB_REPOSITORY 和具有 Actions 读取权限的 GITHUB_TOKEN（通过受保护环境注入）：
 
 ```bash
-ssh flowcube-prod 'cd /opt/flowcube && SKIP_RELEASE_GATE=1 bash scripts/server-update.sh'
+EXPECTED_COMMIT=<完整40位SHA> bash scripts/server-update.sh
 ```
 
-这只更新服务器浏览器端，不会构建桌面安装包。
+脚本人工入口会重新查询同 SHA 的 Tests/Security；缺少凭据或检查失败会终止。不要默认设置 SKIP_RELEASE_GATE。仅更新服务器应用，不构建桌面安装包。
 
 ## 回滚
+
+正常 Docker 部署的失败回退由 server-update.sh 统一执行。旧镜像 ID 来自实际容器，不能以已被新构建覆盖的 latest 标签代替；门禁低磁盘时保留旧镜像并失败，不运行 image prune。恢复失败会明确要求人工处理；首次部署无旧镜像时只停止本次应用。旧镜像启动前，将 version.json 原子恢复为已发布清单以兼容旧 PDA API（因此失败回退后该文件可与 Git 目标版本不同）。数据库迁移不回滚，也不能仅通过恢复旧镜像撤销数据变更。
 
 服务器应急回滚示例：
 

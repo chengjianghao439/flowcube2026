@@ -5,6 +5,7 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { assertInScope } = require('../../utils/warehouseScope')
+const { queueReturnLabels } = require('./return-tasks.labels')
 
 const PENDING_QA = 5
 const REJECTED = CONTAINER_STATUS.REJECTED
@@ -15,7 +16,7 @@ const RT_STATUS_NAME = { 1: '待收货', 2: '收货中', 3: '待质检', 4: '待
 /**
  * PDA 设备绑定仓库与退货任务仓库一致性校验（与收货上架 inbound putaway 同口径）：
  * 绑定 A 仓的设备不得对 B 仓退货任务收货/质检/上架（这些都是写操作，会在别仓建容器/质检/入库）。
- * 设备未绑仓库时 pdaWarehouseId 为 null，不限（仍有用户级权限兜底）。
+ * 旧调用在 pdaWarehouseId 为 null 时不由本辅助函数限定；扫码上架及其查询入口另行强制非空设备仓。
  */
 function assertPdaWarehouse(pdaWarehouseId, taskWarehouseId) {
   if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(taskWarehouseId)) {
@@ -78,9 +79,22 @@ async function findById(id, scopeWarehouseIds = null) {
      ORDER BY c.id`,
     [id, REJECTED],
   )
+  const [pendingPutawayContainers] = await pool.query(
+    `SELECT c.id, c.barcode, c.remaining_qty, c.product_id, p.name AS product_name
+     FROM inventory_containers c
+     LEFT JOIN product_items p ON p.id = c.product_id
+     WHERE c.source_ref_type = 'sale_return' AND c.source_ref_id = ? AND c.status = ?
+       AND c.deleted_at IS NULL AND c.remaining_qty > 0
+     ORDER BY c.id`,
+    [id, CONTAINER_STATUS.PENDING_PUTAWAY],
+  )
   return {
     ...fmt(row),
     items: items.map(fmtItem),
+    pendingPutawayContainers: pendingPutawayContainers.map(r => ({
+      id: Number(r.id), barcode: r.barcode, qty: Number(r.remaining_qty),
+      productId: Number(r.product_id), productName: r.product_name,
+    })),
     rejectedContainers: rejectedContainers.map(r => ({
       id: Number(r.id), barcode: r.barcode, qty: Number(r.remaining_qty),
       productId: Number(r.product_id), productName: r.product_name,
@@ -202,7 +216,7 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId, 
       barcodePrefix: 'I',
       remark: `销售退货收货 ${taskRow.task_no}`,
     })
-    containers.push({ containerId: createdContainerId, barcode: newBarcode, qty: Number(pkg.qty) })
+    containers.push({ containerId: createdContainerId, barcode: newBarcode, qty: Number(pkg.qty), status: PENDING_QA })
   }
 
   // 全部收货完成 → 待质检
@@ -218,7 +232,9 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId, 
     })
   }
 
-  const payload = { taskId, containers, status: Number(stillRemaining) <= 0 ? 3 : 2 }
+  const printing = await queueReturnLabels(conn, { taskId, warehouseId: Number(taskRow.warehouse_id),
+    productName: product?.name || taskItems[0].product_name, containers, userId, phase: 'receive' })
+  const payload = { taskId, containers, ...printing, status: Number(stillRemaining) <= 0 ? 3 : 2 }
   if (requestState.enabled) {
     await completeOperationRequest(conn, requestState, {
       data: payload,
@@ -233,12 +249,13 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId, 
 // ─── PDA 质检确认 ────────────────────────────────────────────────────
 /**
  * 按 productId 把该退货任务下的 PENDING_QA 容器分配为「合格→待上架」/「不合格→REJECTED」。
- * 容器数量若跨越合格/不合格边界，就地拆出一个新容器承接不合格部分（不合格量不再计入可用库存）。
+ * 部分质检保留未检分量；跨合格/不合格/未检边界时拆分容器，始终保持数量守恒。
  */
 async function allocateQaContainers(conn, { taskId, taskNo, productId, passedQty, rejectedQty }) {
   let passRemaining = Number(passedQty)
   let rejRemaining = Number(rejectedQty)
-  if (passRemaining <= 0 && rejRemaining <= 0) return
+  if (passRemaining <= 0 && rejRemaining <= 0) return []
+  const changed = []
 
   const [containers] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, unit,
@@ -257,16 +274,24 @@ async function allocateQaContainers(conn, { taskId, taskNo, productId, passedQty
     const passTake = Math.min(passRemaining, rem)
     const rejTake = Math.min(rejRemaining, rem - passTake)
 
-    if (passTake > 0 && rejTake > 0) {
-      // 该容器同时跨越合格/不合格边界：原容器保留合格部分，不合格部分拆成新容器
-      await conn.query(
-        'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
-        [passTake, CONTAINER_STATUS.PENDING_PUTAWAY, c.id],
-      )
-      await createContainer(conn, {
+    // 每次只处理本次质检量。未检量保留原条码；合格/拒收各自独立容器，三者总和不变。
+    const unchecked = Number((rem - passTake - rejTake).toFixed(4))
+    const parts = [
+      { qty: unchecked, status: PENDING_QA, label: '待质检' },
+      { qty: passTake, status: CONTAINER_STATUS.PENDING_PUTAWAY, label: '合格' },
+      { qty: rejTake, status: REJECTED, label: '不合格' },
+    ].filter(part => part.qty > 0)
+    const [original, ...splits] = parts
+    await conn.query(
+      'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
+      [original.qty, original.status, c.id],
+    )
+    changed.push({ containerId: Number(c.id), barcode: c.barcode, qty: original.qty, status: original.status })
+    for (const part of splits) {
+      const created = await createContainer(conn, {
         productId: c.product_id,
         warehouseId: c.warehouse_id,
-        initialQty: rejTake,
+        initialQty: part.qty,
         unit: c.unit,
         batchNo: c.batch_no,
         mfgDate: fmtSqlDate(c.mfg_date),
@@ -275,27 +300,19 @@ async function allocateQaContainers(conn, { taskId, taskNo, productId, passedQty
         sourceRefType: 'sale_return',
         sourceRefId: taskId,
         sourceRefNo: taskNo,
-        containerStatus: REJECTED,
+        containerStatus: part.status,
         barcodePrefix: 'I',
-        remark: `退货质检不合格，自 ${c.barcode} 拆分`,
+        remark: `退货质检${part.label}，自 ${c.barcode} 拆分`,
       })
-    } else if (passTake > 0) {
-      await conn.query(
-        'UPDATE inventory_containers SET status = ? WHERE id = ?',
-        [CONTAINER_STATUS.PENDING_PUTAWAY, c.id],
-      )
-    } else if (rejTake > 0) {
-      await conn.query(
-        'UPDATE inventory_containers SET status = ? WHERE id = ?',
-        [REJECTED, c.id],
-      )
+      changed.push({ containerId: Number(created.containerId), barcode: created.barcode, qty: part.qty, status: part.status })
     }
-    passRemaining -= passTake
-    rejRemaining -= rejTake
+    passRemaining = Number((passRemaining - passTake).toFixed(4))
+    rejRemaining = Number((rejRemaining - rejTake).toFixed(4))
   }
   if (passRemaining > 0 || rejRemaining > 0) {
     throw new AppError('质检数量超出待质检容器可用数量', 409)
   }
+  return changed
 }
 
 function fmtSqlDate(d) {
@@ -372,13 +389,13 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
       'UPDATE return_task_items SET checked_qty = checked_qty + ?, rejected_qty = rejected_qty + ? WHERE id = ?',
       [take, rejTake, item.id],
     )
-    remaining -= take
-    rejRemaining -= rejTake
+    remaining = Number((remaining - take).toFixed(4))
+    rejRemaining = Number((rejRemaining - rejTake).toFixed(4))
   }
   if (remaining > 0) throw new AppError('质检数量超出已收货数量', 409)
 
   // 质检确认 → 容器按合格/不合格分别转 PENDING_PUTAWAY / REJECTED
-  await allocateQaContainers(conn, { taskId, taskNo: taskRow.task_no, productId, passedQty: passed, rejectedQty: rejected })
+  const containers = await allocateQaContainers(conn, { taskId, taskNo: taskRow.task_no, productId, passedQty: passed, rejectedQty: rejected })
 
   // 全部质检完成 → 待上架
   const [[{ remaining: stillRemaining }]] = await conn.query(
@@ -398,7 +415,9 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
     if (finished) finalStatus = 5
   }
 
-  const payload = { taskId, status: finalStatus }
+  const printing = await queueReturnLabels(conn, { taskId, warehouseId: Number(taskRow.warehouse_id),
+    productName: items[0]?.product_name || '退货商品', containers, userId, phase: 'check' })
+  const payload = { taskId, status: finalStatus, containers, ...printing }
   if (requestState.enabled) {
     await completeOperationRequest(conn, requestState, {
       data: payload,
@@ -411,7 +430,7 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
 }
 
 // ─── PDA 上架 ────────────────────────────────────────────────────────
-async function putaway(conn, taskId, { containerId, locationId, requestKey, userId, pdaWarehouseId = null }) {
+async function putaway(conn, taskId, { containerId, locationId, requestKey, userId, pdaWarehouseId = null, scopeWarehouseIds = null }) {
   const requestState = requestKey
     ? await beginOperationRequest(conn, { requestKey, action: 'return.putaway', userId })
     : { enabled: false }
@@ -422,6 +441,8 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
     columns: 'id, task_no, status, return_id, warehouse_id',
     entityName: '退货任务',
   })
+  if (pdaWarehouseId == null) throw new AppError('设备尚未绑定仓库，无法扫码上架', 403)
+  assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '退货任务')
   assertPdaWarehouse(pdaWarehouseId, taskRow.warehouse_id)
   if (Number(taskRow.status) !== 4) {
     throw new AppError('只有待上架状态可以执行上架', 400)
@@ -435,16 +456,17 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
   // 无锁预读安全，真正的状态/归属校验仍由下面的加锁读负责。
   const [[cRef]] = await conn.query(
     `SELECT product_id, warehouse_id FROM inventory_containers
-     WHERE id = ? AND source_ref_type = 'sale_return' AND source_ref_id = ?`,
+     WHERE id = ? AND source_ref_type = 'sale_return' AND source_ref_id = ? AND deleted_at IS NULL`,
     [containerId, taskId],
   )
   if (!cRef) throw new AppError('容器不存在', 404)
+  if (Number(cRef.warehouse_id) !== Number(taskRow.warehouse_id)) throw new AppError('容器和退货任务不在同一仓库', 400)
   await lockStockDimension(conn, cRef.product_id, cRef.warehouse_id)
 
   // 验证容器
   const [[container]] = await conn.query(
     `SELECT * FROM inventory_containers
-     WHERE id = ? AND source_ref_type = 'sale_return' AND source_ref_id = ?
+     WHERE id = ? AND source_ref_type = 'sale_return' AND source_ref_id = ? AND deleted_at IS NULL
      FOR UPDATE`,
     [containerId, taskId],
   )
@@ -453,7 +475,7 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
 
   // 验证库位
   const [[location]] = await conn.query(
-    'SELECT * FROM warehouse_locations WHERE id = ? AND status = 1',
+    'SELECT * FROM warehouse_locations WHERE id = ? AND status = 1 AND deleted_at IS NULL',
     [locationId],
   )
   if (!location) throw new AppError('库位不存在或已停用', 404)
@@ -581,7 +603,45 @@ function fmtItem(row) {
   }
 }
 
+/** 扫码查询只读校验；真正写入仍在 putaway 的事务内重新核对归属与状态。 */
+async function findPutawayTask(taskId, { pdaWarehouseId = null, scopeWarehouseIds = null } = {}) {
+  const [[task]] = await pool.query(
+    'SELECT id, status, warehouse_id FROM return_tasks WHERE id = ? AND deleted_at IS NULL',
+    [taskId],
+  )
+  if (!task) throw new AppError('退货任务不存在', 404)
+  assertInScope(scopeWarehouseIds, task.warehouse_id, '退货任务')
+  if (pdaWarehouseId == null) throw new AppError('设备尚未绑定仓库，无法扫码上架', 403)
+  assertPdaWarehouse(pdaWarehouseId, task.warehouse_id)
+  if (Number(task.status) !== RT_STATUS.PENDING_PUTAWAY) throw new AppError('只有待上架状态可以执行上架', 400)
+  return task
+}
+
+async function findPutawayContainer(taskId, barcode, access = {}) {
+  const task = await findPutawayTask(taskId, access)
+  const [[container]] = await pool.query(
+    'SELECT id, barcode, warehouse_id, status, source_ref_type, source_ref_id FROM inventory_containers WHERE UPPER(barcode) = UPPER(?) AND deleted_at IS NULL LIMIT 1',
+    [String(barcode).trim()],
+  )
+  if (!container) throw new AppError('容器条码不存在', 404)
+  if (container.source_ref_type !== 'sale_return' || Number(container.source_ref_id) !== Number(task.id)) {
+    throw new AppError('容器不属于当前退货任务', 400)
+  }
+  if (Number(container.warehouse_id) !== Number(task.warehouse_id)) throw new AppError('容器和退货任务不在同一仓库', 400)
+  if (Number(container.status) !== CONTAINER_STATUS.PENDING_PUTAWAY) throw new AppError('容器不是待上架状态', 400)
+  return { containerId: Number(container.id), barcode: container.barcode, taskId: Number(task.id), warehouseId: Number(container.warehouse_id), status: Number(container.status) }
+}
+
+async function findPutawayLocation(taskId, barcode, access = {}) {
+  const task = await findPutawayTask(taskId, access)
+  const { findByCode } = require('../locations/locations.service')
+  const location = await findByCode(String(barcode).trim())
+  if (Number(location.warehouseId) !== Number(task.warehouse_id)) throw new AppError('库位和退货任务不在同一仓库', 400)
+  return { id: Number(location.id), code: location.code, warehouseId: Number(location.warehouseId), status: Number(location.status) }
+}
+
 module.exports = {
   RT_STATUS, RT_STATUS_NAME, isValidTransition,
+  findPutawayContainer, findPutawayLocation,
   findPdaTasks, findById, create, submit, submitWithinTransaction, receive, check, putaway, cancel,
 }

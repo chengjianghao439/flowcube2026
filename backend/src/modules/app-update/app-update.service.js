@@ -63,8 +63,7 @@ function absolutizeUpdateAssetUrl(req, url, filename) {
   }
   if (!pathPart) return null
   // 下载地址用 APP_PUBLIC_URL（https）保持 https。桌面端 isValidDownloadUrl 只接受 https，
-  // 且桌面端下载已改用 Electron net.fetch（走 Chromium，信任 main.js 的自签名白名单），
-  // 能正常下载自签名 https，无需把地址降级为 http。
+  // Electron net.fetch 沿用系统证书校验；下载源必须提供匹配域名的可信证书，不能降级 HTTP。
   const envBase = env.APP_PUBLIC_URL
   if (envBase) return `${envBase}${pathPart}`
   const host = req.get('x-forwarded-host') || req.get('host') || '127.0.0.1:3000'

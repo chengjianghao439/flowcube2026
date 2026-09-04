@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 # 并发保护（2026-08-11 生产事故修复）：多次 push 触发的 PDA 构建会在服务器互相覆盖 /tmp 产物
 # （旧 commit 构建覆盖新 commit）。concurrency 让同一时间只构建最新的一次。
@@ -191,6 +192,14 @@ jobs:
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
           ssh-add "$KEY_FILE"
 
+      - name: Wait for verified browser deployment on this commit
+        if: github.ref == 'refs/heads/main'
+        timeout-minutes: 30
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REQUIRE_BROWSER_DEPLOY: '1'
+        run: node scripts/wait-release-checks.js
+
       - name: Add SSH known_hosts
         if: github.ref == 'refs/heads/main'
         shell: bash
@@ -211,31 +220,19 @@ jobs:
           REMOTE="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
           PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
           APP_PATH="${{ steps.deploy_config.outputs.server_app_path }}"
-          # SSH 保活（2026-08-22 修复）：server-update.sh 含 docker 镜像重建耗时数分钟，
-          # 无 keepalive 的长连接会被中间设备断开（反复 Broken pipe 255）。每 30s 保活，
-          # 容忍 3 分钟无响应。
+          # 每次运行使用独立上传路径；只发布挂载目录的产物，不重建应用或修改服务器 Git。
           SSHO="-o ServerAliveInterval=30 -o ServerAliveCountMax=6"
-          scp $SSHO -P "$PORT" "$APK_PATH" "$REMOTE:/tmp/flowcube-pda-app-release.apk"
-          scp $SSHO -P "$PORT" "$VERSION_JSON" "$REMOTE:/tmp/flowcube-pda-version.json"
+          UPLOAD_PREFIX="/tmp/flowcube-pda-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          scp $SSHO -P "$PORT" "$APK_PATH" "$REMOTE:${UPLOAD_PREFIX}.apk"
+          scp $SSHO -P "$PORT" "$VERSION_JSON" "$REMOTE:${UPLOAD_PREFIX}.json"
           ssh $SSHO -p "$PORT" "$REMOTE" <<EOF
           set -euo pipefail
           cd "$APP_PATH"
-          git fetch origin main
-          # 2026-08-22 修复：不再 reset 到自己的 GITHUB_SHA——PDA 发布与 Deploy Browser
-          # 并发跑时各自 reset --hard 会互相覆盖，把服务器回退到旧 commit（Verify 误报失败）。
-          # PDA 发布只需 backend/apk 目录 + server-update.sh 脚本，一律基于 origin/main 最新。
-          git reset --hard origin/main
-          mkdir -p backend/apk
-          install -m 0644 /tmp/flowcube-pda-app-release.apk backend/apk/app-release.apk
-          install -m 0644 /tmp/flowcube-pda-version.json backend/apk/version.json
-          rm -f /tmp/flowcube-pda-app-release.apk /tmp/flowcube-pda-version.json
-          # 2026-08-21 审计修复：不再裸跑 docker compose up——与 Deploy workflow
-          # 并发时会互抢容器（2026-08-11 事故复现路径）。改走 server-update.sh，
-          # 复用同一把 /tmp/flowcube-deploy.lock flock 部署锁；PDA 发布不涉及
-          # 业务代码变更，跳过发布门禁（release-gate 由 Deploy workflow 负责）。
-          # backend/apk 是 git 跟踪目录，reset 后由上面 install 覆盖为新产物，
-          # server-update.sh 的 compose up --build 会用新产物重建 backend 镜像。
-          SKIP_GIT_PULL=1 SKIP_RELEASE_GATE=1 bash scripts/server-update.sh
+          exec 9>/tmp/flowcube-deploy.lock
+          flock -w 1800 9
+          test "\$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          trap 'rm -f "${UPLOAD_PREFIX}.apk" "${UPLOAD_PREFIX}.json"' EXIT
+          bash scripts/publish-pda.sh "${UPLOAD_PREFIX}.apk" "${UPLOAD_PREFIX}.json" backend/apk
           EOF
 
       - name: Verify live PDA update endpoint
@@ -247,7 +244,7 @@ jobs:
           EXPECTED_CODE="$(node -p "require('./backend/apk/version.json').versionCode")"
           VERSION_JSON=""
           for attempt in {1..30}; do
-            if VERSION_JSON="$(curl -fsSLk -H 'Cache-Control: no-cache' "${{ steps.deploy_config.outputs.erp_origin }}/api/pda/version?_=${GITHUB_RUN_ID}-${attempt}")"; then
+            if VERSION_JSON="$(curl -fsSL -H 'Cache-Control: no-cache' "${{ steps.deploy_config.outputs.erp_origin }}/api/pda/version?_=${GITHUB_RUN_ID}-${attempt}")"; then
               break
             fi
             echo "PDA version endpoint not ready, retry ${attempt}/30"
@@ -262,7 +259,7 @@ jobs:
           test "$ACTUAL_CODE" = "$EXPECTED_CODE"
           printf '%s' "$DOWNLOAD_URL" | grep -F "code=${EXPECTED_CODE}" >/dev/null
           for attempt in {1..30}; do
-            if curl -fsSIk -H 'Cache-Control: no-cache' "$DOWNLOAD_URL" | tee /tmp/pda-download-head.txt; then
+            if curl -fsSI -H 'Cache-Control: no-cache' "$DOWNLOAD_URL" | tee /tmp/pda-download-head.txt; then
               break
             fi
             echo "PDA download endpoint not ready, retry ${attempt}/30"

@@ -9,6 +9,7 @@ const logger = require('../../utils/logger')
 const engine = require('./voucher-engine')
 const { assertPeriodOpen } = require('./accounting.period.service')
 const { SOURCE_TYPES } = require('../../constants/voucherSource')
+const { lockAccountingCompany } = require('./accounting.period-lock')
 
 const SOURCE_TYPE_LABELS = {
   [SOURCE_TYPES.PURCHASE_SETTLE]: '采购结算',
@@ -94,6 +95,7 @@ async function generatePeriodVouchers({ period = null, userId = null, companyId 
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockAccountingCompany(conn, companyId)
     if (period) await assertPeriodOpen(conn, period, companyId)
     // 全量重算（未指定期间）跳过已结账期间：那些期间的账面已被锁定认可，
     // 重算去动它们等于破坏已结的账（skippedClosed 计入返回，调用方可见）
@@ -182,14 +184,19 @@ async function createManualVoucher({ voucherDate, summary, entries, companyId = 
   }
 }
 
-/** 删除凭证：仅手工凭证可删（自动凭证由重算维护）。 */
+/** 删除凭证：仅未参与冲销的普通手工凭证可删，成对冲销记录必须完整保留。 */
 async function removeVoucher(id, userId, companyId = 1) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [[v]] = await conn.query('SELECT id, source_type, voucher_no, period FROM acct_vouchers WHERE id = ? AND company_id = ? FOR UPDATE', [Number(id), companyId])
+    await lockAccountingCompany(conn, companyId)
+    const [[v]] = await conn.query('SELECT id, source_type, voucher_no, period, status, is_reversal, reversed_id FROM acct_vouchers WHERE id = ? AND company_id = ? FOR UPDATE', [Number(id), companyId])
     if (!v) throw new AppError('凭证不存在', 404)
     if (v.source_type !== SOURCE_TYPES.MANUAL) throw new AppError('自动生成的凭证不可删除（如需修正请重新生成或冲销）', 400, 'ACCT_VOUCHER_NOT_MANUAL')
+    const [[reversal]] = await conn.query('SELECT id FROM acct_vouchers WHERE reversed_id = ? LIMIT 1 FOR UPDATE', [Number(id)])
+    if (v.is_reversal || v.reversed_id || Number(v.status) === 3 || reversal) {
+      throw new AppError('已参与冲销的凭证不可单独删除，请保留原凭证与红字凭证的完整记录', 409, 'ACCT_VOUCHER_REVERSAL_PROTECTED')
+    }
     await assertPeriodOpen(conn, v.period, companyId)
     await conn.query('DELETE FROM acct_voucher_entries WHERE voucher_id = ?', [Number(id)])
     await conn.query('DELETE FROM acct_vouchers WHERE id = ?', [Number(id)])
@@ -212,6 +219,7 @@ async function reverseVoucher(id, userId, companyId = 1) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockAccountingCompany(conn, companyId)
     const [[v]] = await conn.query('SELECT * FROM acct_vouchers WHERE id = ? AND company_id = ? FOR UPDATE', [Number(id), companyId])
     if (!v) throw new AppError('凭证不存在', 404)
     if (v.status === 3) throw new AppError('该凭证已冲销', 400)

@@ -122,6 +122,9 @@ async function submit(id, operator) {
       applicantId: operator?.userId ?? null,
       applicantName: operator?.realName || operator?.username || '未知',
     })
+    if (!inst) {
+      throw new AppError('未找到适用的商品改价审批流，请管理员启用审批流并检查金额范围后重新提交', 409, 'PRICE_CHANGE_APPROVAL_FLOW_REQUIRED')
+    }
     await conn.query('UPDATE price_change_requests SET approval_id=? WHERE id=?', [inst.instanceId, id])
     await conn.commit()
     return { id: Number(id), approvalId: inst.instanceId }

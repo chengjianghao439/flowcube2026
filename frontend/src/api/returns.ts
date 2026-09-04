@@ -22,6 +22,7 @@ export interface ReturnTask {
   status: number; statusName: string; submittedAt: string | null; createdAt: string
   items?: ReturnTaskItem[]
   rejectedContainers?: RejectedContainer[]
+  pendingPutawayContainers?: RejectedContainer[]
 }
 
 export const getPurchaseReturnsApi  = (p:object) => client.get<PaginatedData<PurchaseReturn>>('/returns/purchase', {params:p})
@@ -46,14 +47,37 @@ export const getPdaReturnTasksApi = () =>
 export const getReturnTaskByIdApi = (id: number) =>
   client.get<ReturnTask>(`/return-tasks/${id}`)
 
+export interface ReturnTaskActionResult {
+  taskId: number
+  status: number
+  containers: Array<{ containerId: number; barcode: string; qty: number; status: number }>
+  printJobIds: number[]
+  noPrinterCount: number
+}
+
 export const receiveReturnApi = (id: number, data: { productId: number; packages: { qty: number }[] }, requestKey?: string) =>
-  client.post(`/return-tasks/${id}/receive`, data,
-    requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) } : { headers: { 'X-Client': 'pda' } })
+  client.post<ReturnTaskActionResult>(`/return-tasks/${id}/receive`, data,
+    requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }), skipGlobalError: true } : { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
 
 export const checkReturnApi = (id: number, data: { productId: number; passedQty: number; rejectedQty?: number }, requestKey?: string) =>
-  client.post(`/return-tasks/${id}/check`, data,
-    requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) } : { headers: { 'X-Client': 'pda' } })
+  client.post<ReturnTaskActionResult>(`/return-tasks/${id}/check`, data,
+    requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }), skipGlobalError: true } : { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
+
+export interface ReturnPutawayContainer {
+  containerId: number; barcode: string; taskId: number; warehouseId: number; status: number
+}
+export interface ReturnPutawayLocation {
+  id: number; code: string; warehouseId: number; status: number
+}
+export const getReturnPutawayContainerApi = (id: number, barcode: string) =>
+  client.get<ReturnPutawayContainer>(`/return-tasks/${id}/putaway-container`, {
+    params: { barcode }, headers: { 'X-Client': 'pda' }, skipGlobalError: true,
+  })
+export const getReturnPutawayLocationApi = (id: number, barcode: string) =>
+  client.get<ReturnPutawayLocation>(`/return-tasks/${id}/putaway-location`, {
+    params: { barcode }, headers: { 'X-Client': 'pda' }, skipGlobalError: true,
+  })
 
 export const putawayReturnApi = (id: number, data: { containerId: number; locationId: number }, requestKey?: string) =>
   client.post(`/return-tasks/${id}/putaway`, data,
-    requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) } : { headers: { 'X-Client': 'pda' } })
+    requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }), skipGlobalError: true } : { headers: { 'X-Client': 'pda' }, skipGlobalError: true })

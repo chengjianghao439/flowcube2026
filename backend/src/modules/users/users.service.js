@@ -97,9 +97,9 @@ async function findById(id) {
   }
 }
 
-async function resolveRoleName(roleId) {
+async function resolveRoleName(roleId, db = pool) {
   try {
-    const [[role]] = await pool.query(
+    const [[role]] = await db.query(
       'SELECT name FROM sys_roles WHERE id=? LIMIT 1',
       [roleId],
     )
@@ -138,48 +138,71 @@ async function create({ username, password, realName, roleId, departmentId = nul
   return { id: result.insertId }
 }
 
-async function update(id, { realName, roleId, isActive, departmentId, allowSelfApprove }, operator = null) {
-  assertCanAssignRole(operator, roleId)
-  assertCanGrantSelfApprove(operator, allowSelfApprove)
-  const user = await findById(id)
-  // roleId 可省略（编辑超管账号时不传）；省略则保持原角色不动
-  const finalRoleId = roleId !== undefined ? roleId : user.roleId
-  const roleName = roleId !== undefined ? await resolveRoleName(roleId) : user.roleName
-  const finalDeptId = departmentId !== undefined ? departmentId : (user.departmentId ?? null)
-  const finalSelfApprove = allowSelfApprove !== undefined ? (allowSelfApprove ? 1 : 0) : (user.allowSelfApprove ? 1 : 0)
-  if (finalDeptId) await assertDepartmentExists(finalDeptId)
-
-  await pool.query(
-    `UPDATE sys_users SET real_name = ?, role_id = ?, role_name = ?, is_active = ?, department_id = ?, allow_self_approve = ?
-     WHERE id = ? AND deleted_at IS NULL`,
-    [realName, finalRoleId, roleName, isActive ? 1 : 0, finalDeptId || null, finalSelfApprove, id],
-  )
+// 锁定操作人和目标账号后读取真实角色；顺序一致避免双方互相编辑时 ABBA 死锁。
+// 不能信任请求开始时缓存的 roleId，也不能在行锁之外先查目标再写密码。
+async function withLockedTarget(id, operator, action) {
+  const actorId = Number(operator?.userId)
+  if (!Number.isInteger(actorId) || actorId <= 0) throw new AppError('缺少有效操作人', 403, 'USER_OPERATOR_REQUIRED')
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [rows] = await conn.query(
+      'SELECT * FROM sys_users WHERE id IN (?, ?) ORDER BY id FOR UPDATE', [actorId, Number(id)],
+    )
+    const actor = rows.find(u => Number(u.id) === actorId)
+    if (!actor || actor.deleted_at || !actor.is_active) throw new AppError('操作人账号不可用，请重新登录', 403, 'USER_OPERATOR_INACTIVE')
+    const target = rows.find(u => Number(u.id) === Number(id))
+    if (!target || target.deleted_at) throw new AppError('用户不存在', 404)
+    if (Number(target.role_id) === 1 && Number(actor.role_id) !== 1) {
+      throw new AppError('只有超级管理员可以修改、重置密码或删除超级管理员账号', 403, 'USER_ADMIN_PROTECTED')
+    }
+    const result = await action(conn, target, { ...operator, roleId: Number(actor.role_id) })
+    await conn.commit()
+    return result
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function assertDepartmentExists(departmentId) {
-  const [[d]] = await pool.query('SELECT id FROM sys_departments WHERE id=? AND deleted_at IS NULL', [Number(departmentId)])
+async function update(id, { realName, roleId, isActive, departmentId, allowSelfApprove }, operator = null) {
+  return withLockedTarget(id, operator, async (conn, user, actor) => {
+    assertCanAssignRole(actor, roleId)
+    assertCanGrantSelfApprove(actor, allowSelfApprove)
+    // roleId 可省略（编辑超管账号时不传）；省略则保持锁定读取的原角色。
+    const finalRoleId = roleId !== undefined ? roleId : user.role_id
+    const roleName = roleId !== undefined ? await resolveRoleName(roleId, conn) : user.role_name
+    const finalDeptId = departmentId !== undefined ? departmentId : (user.department_id ?? null)
+    const finalSelfApprove = allowSelfApprove !== undefined ? (allowSelfApprove ? 1 : 0) : (user.allow_self_approve ? 1 : 0)
+    if (finalDeptId) await assertDepartmentExists(finalDeptId, conn)
+    await conn.query(
+      `UPDATE sys_users SET real_name = ?, role_id = ?, role_name = ?, is_active = ?, department_id = ?, allow_self_approve = ?
+       WHERE id = ? AND deleted_at IS NULL`,
+      [realName, finalRoleId, roleName, isActive ? 1 : 0, finalDeptId || null, finalSelfApprove, id],
+    )
+  })
+}
+
+async function assertDepartmentExists(departmentId, db = pool) {
+  const [[d]] = await db.query('SELECT id FROM sys_departments WHERE id=? AND deleted_at IS NULL', [Number(departmentId)])
   if (!d) throw new AppError('部门不存在', 400)
 }
 
-async function resetPassword(id, newPassword) {
-  await findById(id)
+async function resetPassword(id, newPassword, operator = null) {
+  // 计算哈希在锁外；所有权限判断和写入仍在同一锁定事务内完成。
   const hashed = await bcrypt.hash(newPassword, 10)
-  await pool.query(
+  return withLockedTarget(id, operator, async conn => conn.query(
     `UPDATE sys_users
         SET password = ?,
             token_version = COALESCE(token_version, 0) + 1
       WHERE id = ? AND deleted_at IS NULL`,
     [hashed, id],
-  )
+  ))
 }
 
-async function softDelete(id, currentUserId) {
-  if (id === currentUserId) throw new AppError('不能删除自己的账号', 400)
-  await findById(id)
-  await pool.query(
+async function softDelete(id, operator = null) {
+  if (Number(id) === Number(operator?.userId)) throw new AppError('不能删除自己的账号', 400)
+  return withLockedTarget(id, operator, async conn => conn.query(
     'UPDATE sys_users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL',
     [id],
-  )
+  ))
 }
 
 /** 用户仓库数据权限（user_warehouse_scope）：空数组=清空(不限仓) */

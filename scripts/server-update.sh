@@ -1,150 +1,161 @@
 #!/usr/bin/env bash
-# 在「服务器上」项目根目录执行：bash scripts/server-update.sh
-# 作用：拉最新代码并重建/重启后端（Docker 或本机 Node 二选一）
-set -euo pipefail
+# 服务器部署：构建/迁移先于应用切换；失败统一恢复旧应用镜像并验证健康。
+set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-
-# 部署互斥锁（2026-08-11 并发踩踏事故修复）：同一台服务器同一时刻只允许一个部署进程。
-# 场景：CI Deploy + 手动部署同时跑，多个 `docker compose up --build` 并发互相抢容器，
-# 谁也无法完成重建。flock 让后来的进程等待（最长 DEPLOY_LOCK_TIMEOUT 秒），前一个完成才继续。
-LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/flowcube-deploy.lock}"
-LOCK_TIMEOUT="${DEPLOY_LOCK_TIMEOUT:-1800}"   # 默认等 30 分钟（构建镜像通常 5-10 分钟）
-exec 9>"$LOCK_FILE"
-if ! flock -w "$LOCK_TIMEOUT" 9; then
-  echo "!! 上一个部署仍在进行（$LOCK_FILE），等待超过 ${LOCK_TIMEOUT}s 仍未获得锁，放弃本次部署"
-  echo "!! 若确认无部署在跑，可删除锁文件后重试：rm -f $LOCK_FILE"
-  exit 1
-fi
-echo "==> 获得部署锁，开始部署（PID $$）"
-trap 'echo "==> 部署结束，释放锁"; flock -u 9' EXIT
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$ROOT/scripts"
 PROJECT_DIR="${PROJECT_DIR:-$ROOT}"
+LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/flowcube-deploy.lock}"
+LOCK_TIMEOUT="${DEPLOY_LOCK_TIMEOUT:-1800}"
 
-# 部署失败统一出口（2026-08-22 新增）：钉钉告警 + 失败处理，所有 fail 点共用
-fail_deploy() {
-  local reason="$1"
-  echo "!! 部署失败：$reason" >&2
-  # shellcheck source=lib/ops-common.sh
-  . "$SCRIPT_DIR/lib/ops-common.sh"
-  dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" \
-    "🔴 FlowCube 部署失败（$(ts)）：${reason}\n请查看部署日志并人工介入。"
-  exit 1
-}
+# CI 在 checkout/reset 前持同一把锁，并把已打开的 fd 9 传给本脚本。
+if [ "${DEPLOY_LOCK_FD:-}" = "9" ]; then
+  flock -n 9 || { echo '!! 无法继承部署锁 fd 9' >&2; exit 1; }
+else
+  exec 9>"$LOCK_FILE"
+  flock -w "$LOCK_TIMEOUT" 9 || { echo '!! 等待部署锁超时' >&2; exit 1; }
+fi
+trap 'DEPLOY_EXIT_CODE=$?; flock -u 9; exit "$DEPLOY_EXIT_CODE"' EXIT
+echo "==> 获得部署锁，开始部署（PID $$）"
+. "$SCRIPT_DIR/lib/ops-common.sh"
+
+DOCKER_DEPLOY=0
+APPLICATION_SWITCHED=0
+PREVIOUS_BACKEND_IMAGE=''
+PREVIOUS_FRONTEND_IMAGE=''
+ROLLBACK_RESULT='应用容器未切换'
 
 wait_for_health() {
-  local attempts=30
-  local delay=2
-  local url="http://127.0.0.1:3000/api/health"
-  echo "==> 等待后端健康检查通过..."
+  local attempts="${HEALTH_CHECK_ATTEMPTS:-30}" delay="${HEALTH_CHECK_DELAY:-2}" i
   for ((i=1; i<=attempts; i++)); do
-    if command -v curl >/dev/null 2>&1; then
-      if curl -fsS "$url" >/dev/null 2>&1; then
-        echo "==> 后端健康检查通过"
-        return 0
-      fi
-    else
-      if node -e "const http=require('http');http.get('$url',res=>{process.exit(res.statusCode===200?0:1)}).on('error',()=>process.exit(1))" >/dev/null 2>&1; then
-        echo "==> 后端健康检查通过"
-        return 0
-      fi
-    fi
+    if curl -fsS --max-time 5 http://127.0.0.1:3000/api/health >/dev/null 2>&1; then return 0; fi
     sleep "$delay"
   done
-  echo "!! 后端健康检查超时：$url"
+  echo '!! 后端健康检查超时' >&2
   return 1
 }
 
-ensure_docker_space() {
-  if ! command -v docker >/dev/null 2>&1; then
-    return 0
+wait_for_frontend() {
+  local attempts="${HEALTH_CHECK_ATTEMPTS:-30}" delay="${HEALTH_CHECK_DELAY:-2}" i html
+  for ((i=1; i<=attempts; i++)); do
+    if html=$(curl -fsS --max-time 5 http://127.0.0.1:8080/) && [[ "$html" == *'<title>极序 Flow</title>'* ]]; then return 0; fi
+    sleep "$delay"
+  done
+  echo '!! 前端响应检查超时' >&2
+  return 1
+}
+
+rollback_deployment() {
+  [ "$DOCKER_DEPLOY" = '1' ] || return 0
+  local failed=0 services=() legacy_manifest
+  # 首次回退可能仍是只认识 version.json 的旧镜像；该旧 API 已支持 filename。
+  # published 指向实际已发布的不可变包，不能让 Git 目标版本配上旧固定 APK。
+  if [ -f backend/apk/published-version.json ]; then
+    legacy_manifest=$(mktemp backend/apk/.publish-pda-XXXXXX) || failed=1
+    if [ -n "${legacy_manifest:-}" ]; then
+      if cp backend/apk/published-version.json "$legacy_manifest" && chmod 644 "$legacy_manifest" && mv "$legacy_manifest" backend/apk/version.json; then :
+      else failed=1; rm -f "$legacy_manifest"; fi
+    fi
   fi
-  local avail_mb
-  avail_mb="$(df -Pm / | awk 'NR==2 {print $4}')"
-  if [ "${avail_mb:-0}" -lt 2500 ]; then
-    echo "==> Docker 磁盘空间偏低，预先清理 builder cache / 未使用镜像..."
-    docker builder prune -af >/dev/null
-    docker image prune -af >/dev/null
+  if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then
+    docker tag "$PREVIOUS_BACKEND_IMAGE" flowcube-backend:latest || failed=1
+    services+=(backend)
+  elif [ "$APPLICATION_SWITCHED" = '1' ]; then
+    docker compose rm -s -f backend || failed=1
+  fi
+  if [ -n "$PREVIOUS_FRONTEND_IMAGE" ]; then
+    docker tag "$PREVIOUS_FRONTEND_IMAGE" flowcube-frontend:latest || failed=1
+    services+=(frontend)
+  elif [ "$APPLICATION_SWITCHED" = '1' ]; then
+    docker compose rm -s -f frontend || failed=1
+  fi
+  if [ "${#services[@]}" -gt 0 ]; then
+    if [ "$APPLICATION_SWITCHED" = '1' ]; then
+      docker compose up -d --no-build --no-deps --force-recreate "${services[@]}" || failed=1
+    fi
+    if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then wait_for_health || failed=1; fi
+    if [ -n "$PREVIOUS_FRONTEND_IMAGE" ]; then wait_for_frontend || failed=1; fi
+    ROLLBACK_RESULT='已恢复部署前应用镜像并检查健康；数据库迁移未回滚'
+  else
+    ROLLBACK_RESULT='首次部署没有旧应用镜像；本次应用容器已停止或尚未启动'
+  fi
+  if [ "$failed" != '0' ]; then
+    ROLLBACK_RESULT='应用回退或回退后健康检查失败，需要人工恢复；数据库迁移未回滚'
+    return 1
   fi
 }
 
-SKIP_GIT_PULL="${SKIP_GIT_PULL:-0}"
-if [ "$SKIP_GIT_PULL" = "1" ]; then
-  CURRENT_COMMIT="$(git rev-parse HEAD)"
-  EXPECTED_DEPLOY_COMMIT="${EXPECTED_COMMIT:-${GITHUB_SHA:-}}"
-  echo "!! WARNING: 当前处于跳过 git pull 模式（SKIP_GIT_PULL=1）"
-  echo "!! WARNING: 该模式仅建议 CI / GitHub Actions 在已精确 checkout/reset 到发布提交后使用"
-  echo "==> 当前服务器代码 commit: $CURRENT_COMMIT"
-  if [ -n "$EXPECTED_DEPLOY_COMMIT" ]; then
-    echo "==> 期望部署 commit: $EXPECTED_DEPLOY_COMMIT"
-    if [ "$CURRENT_COMMIT" != "$EXPECTED_DEPLOY_COMMIT" ]; then
-      echo "!! WARNING: 当前 commit 与期望 commit 不一致；继续部署可能会重建错误版本"
-    fi
-  else
-    echo "!! WARNING: 未提供 EXPECTED_COMMIT 或 GITHUB_SHA，无法校验跳过 pull 后的部署提交是否正确"
-  fi
-else
-  echo "==> 拉取代码..."
-  git pull --rebase --autostash origin main
-fi
+fail_deploy() {
+  local reason="$1"
+  trap - ERR
+  rollback_deployment || true
+  echo "!! 部署失败：${reason}；${ROLLBACK_RESULT}" >&2
+  dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" "🔴 FlowCube 部署失败（$(ts)）：${reason}；${ROLLBACK_RESULT}"
+  exit 1
+}
+trap 'fail_deploy "第 ${LINENO} 行执行失败（exit=$?）"' ERR
 
-SKIP_RELEASE_GATE="${SKIP_RELEASE_GATE:-0}"
+assert_expected_commit() {
+  local expected="${EXPECTED_COMMIT:-${GITHUB_SHA:-}}" current
+  [ -n "$expected" ] || fail_deploy '部署必须提供通过门禁的 EXPECTED_COMMIT'
+  if [ -n "$expected" ]; then
+    [[ "$expected" =~ ^[a-fA-F0-9]{40}$ ]] || fail_deploy 'EXPECTED_COMMIT 格式无效'
+    current=$(git rev-parse HEAD)
+    [ "$current" = "$expected" ] || fail_deploy '服务器提交与通过门禁的提交不一致'
+  fi
+}
+
+expected="${EXPECTED_COMMIT:-${GITHUB_SHA:-}}"
+[[ "$expected" =~ ^[a-fA-F0-9]{40}$ ]] || fail_deploy '必须提供合法 EXPECTED_COMMIT'
+# CI 已在连接服务器之前检查，只有它继承已持有的 fd 9；人工入口重新查询 GitHub。
+if [ "${DEPLOY_LOCK_FD:-}" != '9' ]; then
+  GITHUB_REF=refs/heads/main GITHUB_SHA="$expected" node scripts/wait-release-checks.js
+fi
+if [ "${SKIP_GIT_PULL:-0}" != '1' ]; then git pull --rebase --autostash origin main; fi
+assert_expected_commit
 
 if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
-  ensure_docker_space
-  echo "==> Docker：重建并启动 backend / frontend..."
-  # 迁移回滚兜底（2026-08-21 审计修复）：记录当前运行镜像 tag，migrate 失败时
-  # 回滚到旧镜像，避免「新代码跑在旧 schema 上」的半死状态。
-  # 2026-08-22 扩展：backend 与 frontend **两个镜像都打** rollback tag——
-  # 前端容器镜像也可能随本次重建变坏（如构建产物缺陷），失败时一起回滚，不做部分回滚。
-  ROLLBACK_TAG="flowcube-backend:rollback-$(date +%s)"
-  FRONTEND_ROLLBACK_TAG="flowcube-frontend:rollback-$(date +%s)"
-  docker tag flowcube-backend:latest "$ROLLBACK_TAG" 2>/dev/null || true
-  docker tag flowcube-frontend:latest "$FRONTEND_ROLLBACK_TAG" 2>/dev/null || true
-  docker compose up -d --build backend frontend
-  # 【时区固化 2026-08-27】MySQL 服务端时区 = 北京时间：docker-compose.yml 给 mysql
-  # 加了 TZ=Asia/Shanghai，但 mysql 容器不在上方重建（up -d 只重建 backend/frontend）。
-  # 显式 up -d mysql 让 TZ 环境变量生效（官方镜像 mysqld 读 /etc/localtime 为
-  # system_time_zone）；mysql 镜像不变、数据卷不动、无停机迁移，只是重建容器进程。
-  # 注意：若此处省略，compose 配置变更对 mysql 永不生效。
-  docker compose up -d --no-build mysql
-  # 数据库迁移是显式步骤（后端不在启动时自动迁移）。
-  # 必须在容器重建后、用新镜像里的迁移文件执行，否则新代码会跑在旧表结构上。
-  # 失败即中断部署（set -e）——宁可部署失败并告警，也不要静默上线一个坏 schema。
-  echo "==> 执行数据库迁移（应用本次发布新增的迁移文件）..."
-  if ! docker compose exec -T backend npm run migrate; then
-    echo "!! 迁移失败，回滚 backend 与 frontend 到旧镜像 ..." >&2
-    docker compose up -d --no-build --force-recreate backend --quiet-pull 2>/dev/null || true
-    # force-recreate 用当前 compose 配置的镜像（latest）重建——先回退 tag 再重建
-    docker tag "$ROLLBACK_TAG" flowcube-backend:latest 2>/dev/null || true
-    docker compose up -d --no-build --force-recreate backend || true
-    docker tag "$FRONTEND_ROLLBACK_TAG" flowcube-frontend:latest 2>/dev/null || true
-    docker compose up -d --no-build --force-recreate frontend || true
-    echo "!! 回滚完成，请检查服务状态与告警" >&2
-    fail_deploy "数据库迁移失败，已回滚 backend/frontend 到部署前镜像"
-  fi
+  DOCKER_DEPLOY=1
+  # 保存容器真正运行的 image ID，不能假设 latest 仍指向旧镜像。
+  backend_id=$(docker compose ps -aq backend)
+  frontend_id=$(docker compose ps -aq frontend)
+  if [ -n "$backend_id" ]; then PREVIOUS_BACKEND_IMAGE=$(docker inspect -f '{{.Image}}' "$backend_id"); fi
+  if [ -n "$frontend_id" ]; then PREVIOUS_FRONTEND_IMAGE=$(docker inspect -f '{{.Image}}' "$frontend_id"); fi
+
+  echo '==> 构建新应用镜像（旧应用仍在运行）...'
+  docker compose build backend frontend
+  assert_expected_commit
+  docker compose up -d --no-build --wait --wait-timeout 120 mysql
+  echo '==> 用新镜像的一次性容器执行迁移...'
+  docker compose run --rm --no-deps backend npm run migrate
+  assert_expected_commit
+
+  echo '==> 切换 backend / frontend...'
+  APPLICATION_SWITCHED=1
+  docker compose up -d --no-build backend frontend
   wait_for_health
-  if [ "$SKIP_RELEASE_GATE" = "1" ]; then
-    echo "==> 已跳过发布门禁（SKIP_RELEASE_GATE=1）"
+  wait_for_frontend
+  if [ "${SKIP_RELEASE_GATE:-0}" = '1' ]; then
+    echo '!! 已显式跳过页面门禁；常规 CI 部署不可使用此选项'
   else
-    echo "==> 运行发布门禁..."
-    if ! bash scripts/release-gate.sh; then
-      fail_deploy "发布门禁未通过（页面烟雾/权限拦截检查失败）"
-    fi
+    PRESERVE_DEPLOY_IMAGES=1 bash scripts/release-gate.sh
   fi
-  # 运维 cron 同步（2026-08-21 审计 F 修复）：install-cron.sh 的改动不会自动生效，
-  # 此前需手动跑。部署后幂等核对一次（新增任务会装上，已有任务跳过）。
-  echo "==> 同步运维 cron（幂等）..."
-  bash scripts/install-cron.sh >/dev/null 2>&1 || echo "!! cron 同步失败（不影响部署，请手动检查）"
-  echo "==> 完成。请确认仓库根 .env 已设置 APP_PUBLIC_URL=https://你的API域名"
+
+  # 公网证书/页面检查也在部署事务内，失败走同一回退路径。
+  if [ -n "${DEPLOY_PUBLIC_ORIGIN:-}" ]; then
+    [[ "$DEPLOY_PUBLIC_ORIGIN" == https://* ]] || fail_deploy '公网部署地址必须使用 HTTPS'
+    curl -fsS --max-time 20 "${DEPLOY_PUBLIC_ORIGIN%/}/api/health" >/dev/null
+    public_html=$(curl -fsS --max-time 20 "${DEPLOY_PUBLIC_ORIGIN%/}/")
+    [[ "$public_html" == *'<title>极序 Flow</title>'* ]] || fail_deploy '公网前端页面检查失败'
+  fi
+  assert_expected_commit
+  bash scripts/install-cron.sh >/dev/null 2>&1 || echo '!! cron 同步失败，请手动检查'
+  echo '==> 部署完成，健康检查与发布门禁已通过'
   exit 0
 fi
 
-echo "==> 非 Docker：仅安装依赖，请自行重启 Node（pm2/systemd 等）"
+echo '==> 非 Docker：安装依赖并迁移，进程重启由现有进程管理器负责'
 cd backend
 if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
-echo "==> 执行数据库迁移..."
 npm run migrate
-echo "==> 请在 backend 目录配置 .env 中的 APP_PUBLIC_URL=https://你的API域名 后执行你的重启命令"
-echo "    例：pm2 restart flowcube-api"
+echo '==> 请通过现有 pm2/systemd 重启并验证；本分支不提供自动镜像回退'

@@ -16,7 +16,7 @@
 const AppError = require('../utils/AppError')
 const logger   = require('../utils/logger')
 const { generateContainerCode } = require('../utils/codeGenerator')
-const { getExpectedForPair } = require('../utils/expectedStock')
+const { getExpectedForPair, lockExpectedPurchaseOrders } = require('../utils/expectedStock')
 
 /** 与 inventory_containers.status 一致 */
 const CONTAINER_STATUS = {
@@ -459,6 +459,7 @@ async function getStockProjection(conn, {
   lock = false,
   includeExpected = false,
 }) {
+  if (lock && includeExpected) await lockExpectedPurchaseOrders(conn, [{ productId, warehouseId }])
   if (lock) {
     // 统一加锁顺序：先锁 inventory_stock 维度单行、再锁 ACTIVE 容器行，与 lockStockDimension/
     // moveStock 一致。否则本函数是「先容器后 stock」，与出库(moveStock)/上架(lockStockDimension)
@@ -487,7 +488,7 @@ async function getStockProjection(conn, {
   // 出库/调拨/超收闸门/盘点等一律维持「现货 − reserved」口径，不受影响。
   let expected = 0
   if (includeExpected) {
-    expected = await getExpectedForPair(conn, productId, warehouseId)
+    expected = await getExpectedForPair(conn, productId, warehouseId, { lock })
   }
 
   return {

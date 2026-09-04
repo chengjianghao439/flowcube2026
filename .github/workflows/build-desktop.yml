@@ -30,6 +30,7 @@ on:
 # GITHUB_TOKEN 默认可能对 contents 只读，创建 Release 会 403
 permissions:
   contents: write
+  actions: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -224,6 +225,13 @@ jobs:
             echo "tag=$TAG"
           } >> "$GITHUB_OUTPUT"
           echo "Resolved version=$VERSION tag=$TAG (event=$EVENT ref=$REF_NAME)"
+          PKG_VERSION="$(node -p "require('./desktop/package.json').version")"
+          [ "$VERSION" = "$PKG_VERSION" ] || { echo '::error::发布版本必须匹配实际检出代码的 package.json，不能只重命名安装包'; exit 1; }
+          if [[ "${{ github.event.inputs.attach_to_github_release }}" == 'true' ]]; then
+            RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+            [ "$RELEASE_TAG" = "$TAG" ] || { echo '::error::补传 Release tag 必须匹配实际安装包版本'; exit 1; }
+            [ "$(git rev-parse "${RELEASE_TAG}^{commit}")" = "$(git rev-parse HEAD)" ] || { echo '::error::Release tag 与实际构建提交不一致'; exit 1; }
+          fi
 
       - name: Verify desktop/package.json matches Git tag
         if: github.ref_type == 'tag'
@@ -445,6 +453,23 @@ jobs:
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Checkout trusted release gate
+        if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: main
+          path: release-gate-source
+          sparse-checkout: scripts/wait-release-checks.js
+          sparse-checkout-cone-mode: false
+
+      - name: Wait for checks before publishing installer
+        if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
+        timeout-minutes: 30
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: GITHUB_SHA="$(git rev-parse HEAD)" node release-gate-source/scripts/wait-release-checks.js
 
       # ── 推 tag / 手动触发且已配置 SSH_PRIVATE_KEY 时：通过服务器 release-desktop.js 发布到 canonical 下载目录 ──
       - name: Setup SSH agent

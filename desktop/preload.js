@@ -8,20 +8,30 @@ contextBridge.exposeInMainWorld('flowcubeDesktop', {
   /** 订阅主进程推送的可用更新（仅打包安装版） */
   subscribeUpdateAvailable: (cb) => {
     if (typeof cb !== 'function') return () => {}
+    let active = true
+    let receivedEvent = false
+    const deliver = (payload) => {
+      if (!active || !payload) return
+      try { cb(payload) } catch { /* 消费者异常不得影响 IPC */ }
+    }
     const handler = (_event, payload) => {
-      try {
-        cb(payload)
-      } catch {
-        /* ignore */
-      }
+      receivedEvent = true
+      deliver(payload)
     }
     ipcRenderer.on('flowcube:update-available', handler)
-    return () => ipcRenderer.removeListener('flowcube:update-available', handler)
+    // 先监听再读取快照；读取期间收到新事件时丢弃旧快照，避免倒退或重复弹窗。
+    ipcRenderer.invoke('flowcube:get-pending-update').then(payload => {
+      if (!receivedEvent) deliver(payload)
+    }).catch(() => {})
+    return () => {
+      active = false
+      ipcRenderer.removeListener('flowcube:update-available', handler)
+    }
   },
   getAppVersion: () => ipcRenderer.invoke('flowcube:get-app-version'),
   isPackaged: () => ipcRenderer.invoke('flowcube:is-packaged'),
-  startUpdateDownload: (downloadUrl) =>
-    ipcRenderer.invoke('flowcube:start-update-download', downloadUrl),
+  startUpdateDownload: (request) =>
+    ipcRenderer.invoke('flowcube:start-update-download', request),
   ignoreUpdateVersion: (version) =>
     ipcRenderer.invoke('flowcube:ignore-update-version', version),
   /** 手动触发更新检查（仪表盘「检查更新」按钮） */

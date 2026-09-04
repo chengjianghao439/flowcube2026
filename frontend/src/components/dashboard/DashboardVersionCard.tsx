@@ -88,10 +88,10 @@ export default function DashboardVersionCard() {
 
   async function handleDesktopUpdate() {
     const start = window.flowcubeDesktop?.startUpdateDownload
-    if (!downloadUrl || !start) return
+    if (!downloadUrl || !latestVer || !start) return
     setUpdateBusy(true)
     try {
-      await start(downloadUrl)
+      await start({ downloadUrl, version: latestVer })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '无法开始下载更新')
     } finally {

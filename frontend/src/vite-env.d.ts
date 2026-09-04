@@ -19,6 +19,15 @@ interface ImportMetaEnv {
   readonly VITE_PDA_FALLBACK_API_ORIGIN?: string
 }
 
+interface DesktopUpdateAvailable {
+  version: string
+  notes: string
+  downloadUrl: string
+  current: string
+  sha256?: string
+  forceDebug?: boolean
+}
+
 interface Window {
   __FLOWCUBE_DEFAULT_API_ORIGIN__?: string
   /** PDA：ZPL 经后端 POST /api/print-jobs 入队，由打印客户端执行 */
@@ -27,16 +36,10 @@ interface Window {
   flowcubeDesktop?: {
     isDesktop: boolean
     /** 主进程发现新版本时推送；返回取消订阅函数 */
-    subscribeUpdateAvailable?: (cb: (payload: {
-      version: string
-      notes: string
-      downloadUrl: string
-      current: string
-      forceDebug?: boolean
-    }) => void) => () => void
+    subscribeUpdateAvailable?: (cb: (payload: DesktopUpdateAvailable) => void) => () => void
     getAppVersion?: () => Promise<string>
     isPackaged?: () => Promise<boolean>
-    startUpdateDownload?: (downloadUrl: string) => Promise<void>
+    startUpdateDownload?: (request: { downloadUrl: string; version: string }) => Promise<void>
     ignoreUpdateVersion?: (version: string) => Promise<void>
     /** 手动触发更新检查（仪表盘「检查更新」按钮） */
     triggerUpdateCheck?: () => Promise<void>

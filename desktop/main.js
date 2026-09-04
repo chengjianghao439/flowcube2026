@@ -11,7 +11,7 @@ log.transports.file.level = 'info'
 log.transports.console.level = 'debug' // 开发时控制台仍可见
 log.info('🔥 当前 main.js 已加载')
 const { pathToFileURL } = require('url')
-const { checkAppUpdate, startUpdateDownload, ignoreVersion, isValidDownloadUrl } = require('./lib/updateCheck')
+const { checkAppUpdate, startUpdateDownload, ignoreVersion, getPendingUpdate, clearPendingUpdate } = require('./lib/updateCheck')
 const { printZpl } = require('./lib/localPrint')
 
 /** 与 Chromium 枚举一致，避免 PowerShell Get-Printer 与 OpenPrinter 名称不一致导致误拒 */
@@ -198,25 +198,27 @@ ipcMain.handle('flowcube:trigger-update-check', async (event) => {
       log.warn('[FlowCube] 手动更新检查：无法获取 API 根地址')
       return
     }
-    await checkAppUpdate(app, win, () => origin, { ui: 'ipc', quitForInstall: quitForInstaller })
+    await checkAppUpdate(app, win, () => origin, { ui: 'ipc', manual: true, quitForInstall: quitForInstaller })
   } catch (err) {
     log.error('[FlowCube] 手动更新检查失败:', err)
   }
 })
 
-ipcMain.handle('flowcube:start-update-download', async (event, downloadUrl) => {
-  const url = typeof downloadUrl === 'string' ? downloadUrl.trim() : ''
-  if (!isValidDownloadUrl(url)) {
-    throw new Error('无效的下载地址')
-  }
+ipcMain.handle('flowcube:get-pending-update', (event) => getPendingUpdate(event.sender))
+
+ipcMain.handle('flowcube:start-update-download', async (event, request) => {
   const win = BrowserWindow.fromWebContents(event.sender)
-  await startUpdateDownload(app, win, url, { quitForInstall: quitForInstaller })
+  if (!win || win.isDestroyed()) throw new Error('更新窗口不可用')
+  const apiOrigin = await getRendererApiOrigin(win)
+  // 只接受用户选中的版本与地址；摘要必须由主进程重新读取 HTTPS 清单。
+  await startUpdateDownload(app, win, request, { apiOrigin, quitForInstall: quitForInstaller })
 })
 
-ipcMain.handle('flowcube:ignore-update-version', async (_event, version) => {
+ipcMain.handle('flowcube:ignore-update-version', async (event, version) => {
   const v = typeof version === 'string' ? version.trim() : ''
   if (!v) return
   await ignoreVersion(app, v)
+  clearPendingUpdate(event.sender, v)
 })
 
 ipcMain.on('flowcube:close-accept', (event) => {
@@ -378,25 +380,9 @@ function createWindow() {
   return win
 }
 
-/**
- * 受信任的自签名 HTTPS 服务器主机白名单。
- * 异地使用场景：生产服务器用「IP + 自签名证书」对外提供 HTTPS，证书不在系统信任链内。
- * 仅对下列主机放行证书校验失败，其它站点仍严格校验，避免无差别忽略证书带来的中间人风险。
- */
-const TRUSTED_SELF_SIGNED_HOSTS = new Set(['47.93.228.251'])
-
-app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
-  let host = ''
-  try {
-    host = new URL(url).hostname
-  } catch {
-    host = ''
-  }
-  if (host && TRUSTED_SELF_SIGNED_HOSTS.has(host)) {
-    event.preventDefault()
-    callback(true)
-    return
-  }
+// 证书身份/信任链异常一律拒绝。HTTPS API 与更新均使用 Chromium 默认校验；
+// 部署必须配置有效证书，不可用主机名/IP 白名单代替证书身份验证。
+app.on('certificate-error', (_event, _webContents, _url, _error, _certificate, callback) => {
   callback(false)
 })
 

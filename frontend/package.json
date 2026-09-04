@@ -1,7 +1,7 @@
 {
   "name": "flowcube-frontend",
   "private": true,
-  "version": "0.9.1",
+  "version": "0.9.2",
   "type": "module",
   "scripts": {
     "dev": "cross-env VITE_ELECTRON=1 vite",
@@ -44,7 +44,7 @@
     "react-day-picker": "^8.10.2",
     "react-dom": "^18.3.1",
     "react-is": "^19.2.4",
-    "react-router-dom": "^6.28.1",
+    "react-router-dom": "^7.18.3",
     "recharts": "^3.7.0",
     "regenerator-runtime": "^0.14.1",
     "tailwind-merge": "^2.6.0",
@@ -63,6 +63,7 @@
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.16",
     "globals": "^15.14.0",
+    "jsdom": "^26.1.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "terser": "^5.37.0",

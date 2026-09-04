@@ -1,6 +1,4 @@
-// 用 Electron net.fetch（Chromium 网络栈）而非全局 undici fetch：
-// net.fetch 遵守 main.js 的 app.on('certificate-error') 自签名白名单，能下载自签名 HTTPS 更新包；
-// undici fetch 不认自签名证书，会直接 DEPTH_ZERO_SELF_SIGNED_CERT 失败（表现为"无法下载、无加载"）。
+// 使用 Chromium 网络栈与桌面 API 相同的严格 HTTPS 证书校验。
 const { dialog, shell, net } = require('electron')
 const fs = require('fs').promises
 const fssync = require('fs')
@@ -25,8 +23,14 @@ const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000
 const MAX_DOWNLOAD_RETRIES = 3
 /** 留给系统拉起 NSIS / exe 安装器后再退出，避免安装程序尚未启动就释放句柄 */
 const QUIT_AFTER_OPEN_MS = 600
-/** 渲染进程挂载监听后再发送，避免错过 flowcube:update-available */
-const IPC_UPDATE_NOTIFY_DELAY_MS = 2000
+// 按 webContents 保存快照；晚挂载/重载的前端通过 preload 获取，不依赖延时猜测。
+const pendingUpdates = new WeakMap()
+function getPendingUpdate(webContents) {
+  return pendingUpdates.get(webContents) || null
+}
+function clearPendingUpdate(webContents, version) {
+  if (pendingUpdates.get(webContents)?.version === version) pendingUpdates.delete(webContents)
+}
 
 /** 更新流程占用（下载 / 安装确认），防止重复触发 */
 let updateFlowLocked = false
@@ -285,13 +289,51 @@ function verifyFileIntegrity(filePath, expectedSha256) {
   })
 }
 
+/** 主进程从已配置的 HTTPS API 读取清单；不接收渲染层提供的摘要。 */
+async function fetchUpdateManifest(origin) {
+  if (!isValidDownloadUrl(origin)) throw new Error('更新清单需要有效的 HTTPS 服务器地址')
+  const base = new URL(origin).origin
+  const res = await net.fetch(`${base}/api/app-update/latest`, {
+    redirect: 'error',
+    signal: AbortSignal.timeout(HEAD_TIMEOUT_MS),
+  })
+  if (!res.ok) throw new Error(`读取更新清单失败（HTTP ${res.status}）`)
+  const body = await res.json()
+  if (!body || body.success === false) throw new Error('读取更新清单失败')
+  const payload = body.data != null ? body.data : body
+  const version = typeof payload.version === 'string' ? payload.version.trim() : ''
+  const sha256 = typeof payload.sha256 === 'string' ? payload.sha256.trim().toLowerCase() : ''
+  const downloadUrl = resolveDownloadUrl(payload, base)
+  if (!version || !/^[a-f0-9]{64}$/.test(sha256) || !isValidDownloadUrl(downloadUrl)) {
+    throw new Error('更新清单缺少有效版本、下载地址或 SHA-256 校验值，请联系管理员重新发布')
+  }
+  return { version, sha256, downloadUrl, notes: typeof payload.notes === 'string' ? payload.notes : '' }
+}
+
+/** 校验失败时清除损坏文件，并阻止后续安装。 */
+async function verifyInstallerOrWarn(parentWindow, destPath, sha256) {
+  try {
+    await verifyFileIntegrity(destPath, sha256)
+    return true
+  } catch (err) {
+    await fs.unlink(destPath).catch(() => {})
+    await showBox(parentWindow, {
+      type: 'error', title: '安全校验失败',
+      message: '下载的安装包校验失败，请重新检查更新并下载。',
+      detail: err.message, buttons: ['确定'], defaultId: 0, noLink: true,
+    })
+    return false
+  }
+}
+
 /**
  * 下载更新包到本机；完成后询问是否安装并拉起安装程序。
  * @param {import('electron').App} app
  * @param {import('electron').BrowserWindow | null | undefined} parentWindow
- * @param {string} downloadUrl
+ * @param {{ downloadUrl: string, version: string }} request
+ * @param {{ apiOrigin: string, quitForInstall?: Function }} options
  */
-async function startUpdateDownload(app, parentWindow, downloadUrl, options = {}) {
+async function startUpdateDownload(app, parentWindow, request, options = {}) {
   if (updateFlowLocked) {
     await showBox(parentWindow, {
       type: 'info',
@@ -306,7 +348,14 @@ async function startUpdateDownload(app, parentWindow, downloadUrl, options = {})
 
   updateFlowLocked = true
   try {
-    await runUpdateDownloadAndInstall(app, parentWindow, downloadUrl, options)
+    const manifest = await fetchUpdateManifest(options.apiOrigin)
+    if (!request || request.downloadUrl !== manifest.downloadUrl || request.version !== manifest.version) {
+      throw new Error('所选更新的版本或下载地址与服务器清单不一致，请重新检查更新')
+    }
+    if (!FORCE_UPDATE && !isRemoteVersionNewer(app.getVersion(), manifest.version)) {
+      throw new Error('服务器清单中的版本不高于当前版本，无需安装')
+    }
+    await runUpdateDownloadAndInstall(app, parentWindow, manifest.downloadUrl, { ...options, sha256: manifest.sha256 })
   } finally {
     updateFlowLocked = false
   }
@@ -374,26 +423,8 @@ async function runUpdateDownloadAndInstall(app, parentWindow, downloadUrl, optio
 
   if (lastError) return
 
-  // SHA-256 完整性校验：防止下载文件被篡改
-  if (options.sha256) {
-    try {
-      await verifyFileIntegrity(destPath, options.sha256)
-      console.log('[FlowCube] SHA-256 校验通过')
-    } catch (verifyErr) {
-      console.error('[FlowCube] SHA-256 校验失败:', verifyErr.message)
-      await fs.unlink(destPath).catch(() => {})
-      await showBox(parentWindow, {
-        type: 'error',
-        title: '安全校验失败',
-        message: '下载的安装包校验失败，文件可能已被篡改。',
-        detail: verifyErr.message,
-        buttons: ['确定'],
-        defaultId: 0,
-        noLink: true,
-      })
-      return
-    }
-  }
+  // 摘要由主进程清单提供，安装前必须通过，不存在省略摘要的路径。
+  if (!(await verifyInstallerOrWarn(parentWindow, destPath, options.sha256))) return
 
   const installChoice = await showBox(parentWindow, {
     type: 'info',
@@ -447,6 +478,8 @@ async function runUpdateDownloadAndInstall(app, parentWindow, downloadUrl, optio
   })
   if (finalConfirm.response !== 0) return
 
+  // 下载完成到确认之间文件可能被修改，再次校验最终将执行的文件。
+  if (!(await verifyInstallerOrWarn(parentWindow, destPath, options.sha256))) return
   const openErr = await shell.openPath(destPath)
   if (openErr) {
     await showBox(parentWindow, {
@@ -614,40 +647,9 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
       return
     }
 
-    const endpoint = `${origin}/api/app-update/latest`
-    const res = await net.fetch(endpoint)
-    console.log('[FlowCube] 更新接口 HTTP:', res.status, res.statusText, '|', endpoint)
-
-    if (!res.ok) {
-      console.error('[FlowCube] 更新接口请求失败，状态码:', res.status)
-      return
-    }
-
-    const body = await res.json()
-    console.log('[FlowCube] 接口返回:', JSON.stringify(body))
-
-    if (body && body.success === false) {
-      console.error('[FlowCube] 接口 success=false:', body.message || body)
-      return
-    }
-
-    const payload = body && body.data != null ? body.data : body
-    const latest = typeof payload.version === 'string' ? payload.version.trim() : ''
-    const notes = typeof payload.notes === 'string' ? payload.notes : ''
-    const sha256 = typeof payload.sha256 === 'string' ? payload.sha256.trim() : ''
-
-    const resolvedUrl = resolveDownloadUrl(
-      { url: payload.url, filename: payload.filename },
-      origin,
-    )
-
-    console.log('[FlowCube] 解析后下载 URL:', resolvedUrl || '(无)')
-    if (sha256) options.sha256 = sha256
-
-    if (!latest) {
-      console.warn('[FlowCube] 更新检查中止：缺少版本号')
-      return
-    }
+    const manifest = await fetchUpdateManifest(origin)
+    const { version: latest, notes, sha256, downloadUrl: resolvedUrl } = manifest
+    options = { ...options, apiOrigin: origin }
 
     const current = app.getVersion()
     const cSem = semver.coerce(current)
@@ -693,7 +695,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
     }
 
     const ignored = await loadIgnoredVersions(app)
-    if (ignored.includes(latest) && !FORCE_UPDATE) {
+    if (ignored.includes(latest) && !FORCE_UPDATE && !options.manual) {
       console.log('[FlowCube] 用户已忽略版本:', latest)
       return
     }
@@ -738,13 +740,8 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
           current,
           forceDebug: !!FORCE_UPDATE,
         }
-        setTimeout(() => {
-          try {
-            if (!wc.isDestroyed()) wc.send('flowcube:update-available', payload)
-          } catch (e) {
-            console.error('[FlowCube] 发送更新 IPC 失败:', e)
-          }
-        }, IPC_UPDATE_NOTIFY_DELAY_MS)
+        pendingUpdates.set(wc, payload)
+        wc.send('flowcube:update-available', payload)
       } else {
         console.warn('[FlowCube] 无可用 webContents，回退为原生弹窗')
         const boxOptions = {
@@ -761,7 +758,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
         }
         const result = await showBox(parentWindow, boxOptions)
         if (result.response === 0) {
-          await startUpdateDownload(app, parentWindow, resolvedUrl, options)
+          await startUpdateDownload(app, parentWindow, { downloadUrl: resolvedUrl, version: latest }, options)
         } else if (result.response === 1 && !FORCE_UPDATE) {
           await ignoreVersion(app, latest)
         }
@@ -782,7 +779,7 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
       const result = await showBox(parentWindow, boxOptions)
 
       if (result.response === 0) {
-        await startUpdateDownload(app, parentWindow, resolvedUrl, options)
+        await startUpdateDownload(app, parentWindow, { downloadUrl: resolvedUrl, version: latest }, options)
       } else if (result.response === 1 && !FORCE_UPDATE) {
         await ignoreVersion(app, latest)
       }
@@ -794,6 +791,8 @@ async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
 
 module.exports = {
   checkAppUpdate,
+  getPendingUpdate,
+  clearPendingUpdate,
   /** 供测试或后续自动下载模块复用 */
   isRemoteVersionNewer,
   isValidDownloadUrl,

@@ -16,7 +16,7 @@ export function isValidDownloadUrl(url: string): boolean {
   if (typeof url !== 'string' || !url.trim()) return false
   try {
     const u = new URL(url.trim())
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+    if (u.protocol !== 'https:') return false
     if (!u.hostname) return false
     return true
   } catch {

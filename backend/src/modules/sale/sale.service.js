@@ -3,8 +3,8 @@ const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
 const AppError = require('../../utils/AppError')
 const { reserve, releaseByRef, partialReleaseByProduct } = require('../../engine/reservationEngine')
-const { CONTAINER_STATUS } = require('../../engine/containerEngine')
-const { getExpectedStock } = require('../../utils/expectedStock')
+const { getStockProjection } = require('../../engine/containerEngine')
+const { lockExpectedPurchaseOrders } = require('../../utils/expectedStock')
 const { getAvailabilityByProducts } = require('../inventory/inventory.service')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { foldEntryItems, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
@@ -1242,46 +1242,18 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
     const itemWh = it => Number(it.warehouseId)
     const uniqPairs = [...new Map(reserveItems.map(it => [`${Number(it.product_id)}:${itemWh(it)}`, it])).values()]
     const availMap = new Map()
-    const expItemsByPair = new Map()
-    if (uniqPairs.length) {
-      const placeholders = uniqPairs.map(() => '(?,?)').join(',')
-      const pairParams = uniqPairs.flatMap(p => [Number(p.product_id), itemWh(p)])
-      const [availRows] = await conn.query(
-        `SELECT c.product_id, c.warehouse_id,
-                COALESCE(SUM(c.remaining_qty), 0) AS qty
-         FROM inventory_containers c
-         WHERE (c.product_id, c.warehouse_id) IN (${placeholders})
-           AND c.status = ? AND c.deleted_at IS NULL
-         GROUP BY c.product_id, c.warehouse_id`,
-        [...pairParams, CONTAINER_STATUS.ACTIVE],
-      )
-      const [stockRows] = await conn.query(
-        `SELECT product_id, warehouse_id, COALESCE(reserved, 0) AS reserved
-         FROM inventory_stock WHERE (product_id, warehouse_id) IN (${placeholders})`,
-        pairParams,
-      )
-      const reservedMap = new Map(stockRows.map(r => [`${Number(r.product_id)}:${Number(r.warehouse_id)}`, Number(r.reserved)]))
-      const onhandMap = new Map(availRows.map(r => [`${Number(r.product_id)}:${Number(r.warehouse_id)}`, Number(r.qty)]))
-      // 在途预计量（含可绑定明细，供 FIFO 分摊）
-      const exp = await getExpectedStock(conn, uniqPairs.map(p => ({ productId: p.product_id, warehouseId: itemWh(p) })))
-      // 所有目标组合都初始化（含现货为 0、无容器行的组合——它们仍可能靠预计量支撑）
-      for (const p of uniqPairs) {
-        const key = `${Number(p.product_id)}:${itemWh(p)}`
-        const onhand = onhandMap.get(key) ?? 0
-        const reserved = reservedMap.get(key) ?? 0
-        const expected = exp.byPair.get(key) ?? 0
-        availMap.set(key, Math.max(0, onhand + expected - reserved))
-      }
-      for (const it of exp.items) {
-        const key = `${Number(it.product_id)}:${Number(it.warehouse_id)}`
-        if (!expItemsByPair.has(key)) expItemsByPair.set(key, [])
-        expItemsByPair.get(key).push(it)
-      }
+    // 一次锁定全部采购供应，再按统一维度顺序锁现货；后续每行 reserve 重新分配绑定。
+    await lockExpectedPurchaseOrders(conn, uniqPairs.map(p => ({ productId: p.product_id, warehouseId: itemWh(p) })))
+    const sortedPairs = [...uniqPairs].sort((a, b) => Number(a.product_id) - Number(b.product_id) || itemWh(a) - itemWh(b))
+    for (const p of sortedPairs) {
+      const projection = await getStockProjection(conn, { productId: p.product_id, warehouseId: itemWh(p), lock: true, includeExpected: true })
+      availMap.set(`${Number(p.product_id)}:${itemWh(p)}`, projection.available)
     }
     const shortages = []
     for (const it of reserveItems) {
       const key = `${Number(it.product_id)}:${itemWh(it)}`
       const available = availMap.get(key) ?? 0
+      availMap.set(key, Math.max(0, available - Number(it.reserveQty)))
       if (available < Number(it.reserveQty)) {
         shortages.push({
           productId: it.product_id,
@@ -1307,7 +1279,6 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
       (a, b) => Number(a.product_id) - Number(b.product_id) || itemWh(a) - itemWh(b),
     )
     for (const item of reserveOrder) {
-      const key = `${Number(item.product_id)}:${itemWh(item)}`
       await reserve(conn, {
         productId:   item.product_id,
         productName: item.product_name,
@@ -1318,7 +1289,6 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
         refItemId:   Number(item.id),
         refNo:       orderRow.order_no,
         includeExpected: true,
-        expectedItems: expItemsByPair.get(key) || [],
       })
       await conn.query(
         'UPDATE sale_order_items SET reserved_qty = reserved_qty + ? WHERE id = ?',

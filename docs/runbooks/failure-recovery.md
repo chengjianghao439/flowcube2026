@@ -104,7 +104,7 @@ journalctl -u caddy --no-pager | grep -iE 'acme|ocsp|certificate' | tail -50
 
 # 2. 常见原因与对策：
 #    - 域名的 80/443 端口被防火墙挡（ACME http-01 验证需要）→ 检查 Caddyfile 的 global 配置与防火墙
-#    - Let's Encrypt 限流（同一域名短期内申请太多次）→ 等重试，或临时改用自签证书（见下）保通
+#    - Let's Encrypt 限流 → 按 ACME 返回的重试时间处理，或部署另一受信任 CA 签发的有效证书
 #    - 系统时间漂移 → date 对比，差太多会直接拒 ACME
 #    - DNS 解析异常 → dig jixuflow.com 确认 A 记录指向本机公网 IP
 
@@ -112,27 +112,17 @@ journalctl -u caddy --no-pager | grep -iE 'acme|ocsp|certificate' | tail -50
 certbot certificates 2>/dev/null || echo "本机未装 certbot，Caddy 自理证书"
 ```
 
-### 自签证书临时重签（应急兜底，保 HTTPS 可用）
+### 恢复可信证书后验证
 
-桌面端/PDA 对自签证书有白名单支持（`main.js` 的 `certificate-error` 处理），临时换自签证书业务可继续：
+桌面端已移除按 IP 放行任意证书的旧白名单。证书过期、名称不匹配或证书链不可信时应拒绝连接和更新下载，不能换任意自签证书或禁用校验“保通”。修正 DNS、系统时间、ACME 端口或部署可信 CA 签发的完整证书链后，再验证：
 
 ```bash
-# 生成自签证书（有效期按需，如 90 天）
-openssl req -x509 -newkey rsa:2048 -nodes \
-  -keyout /etc/caddy/jixuflow.key \
-  -out  /etc/caddy/jixuflow.crt \
-  -days 90 -subj "/CN=jixuflow.com"
-# Caddyfile 里临时把站点 tls 换成自签：
-#   jixuflow.com {
-#       tls /etc/caddy/jixuflow.crt /etc/caddy/jixuflow.key
-#       ...
-#   }
-systemctl reload caddy
-# 验证
-echo | openssl s_client -servername jixuflow.com -connect jixuflow.com:443 2>/dev/null | openssl x509 -noout -dates
+curl --fail --show-error https://jixuflow.com/api/health
+openssl s_client -verify_return_error -verify_hostname jixuflow.com \
+  -servername jixuflow.com -connect jixuflow.com:443 </dev/null
 ```
 
-> 自签只是应急，恢复正式证书后立即改回 Caddy 默认（自动 ACME）。
+受管私有 CA 必须由用户的设备管理流程建立系统信任；当前应用没有按主机绕过证书验证的例外。
 
 ---
 

@@ -2,7 +2,8 @@
  * 会计凭证导出（文档 10 · Phase 1）。复用 exceljs。
  * 模板层：format='generic' 通用记账凭证（清晰、通用可读，可再另存导入）；
  *   format='kingdee' 金蝶 KIS 风格列。当前仅这两档（用户 2026-08-09 决定不接用友）。
- * 只导出未冲销(status<>3)的凭证；红字冲销凭证(is_reversal=1, status=1)会被正常导出。
+ * 原凭证与红字必须成对导出，与总账同口径全量纳入，反向分录自然相抵；
+ * 不能剔除 status=3 的原凭证，否则人工冲销及自动来源修订都会导出错误净额。
  */
 const ExcelJS = require('exceljs')
 const { pool } = require('../../config/db')
@@ -16,7 +17,7 @@ function dateStr(v) {
 }
 
 async function fetchRows(period, companyId = 1) {
-  const where = ['v.status <> 3', 'v.company_id = ?']
+  const where = ['v.company_id = ?']
   const params = [companyId]
   if (period) { where.push('v.period = ?'); params.push(String(period)) }
   const [rows] = await pool.query(

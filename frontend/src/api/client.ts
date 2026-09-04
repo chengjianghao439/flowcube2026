@@ -24,32 +24,47 @@ type RetriableConfig = InternalAxiosRequestConfig & { __pdaSessionRetried?: bool
 
 /**
  * 用 refresh token 换新 access（2026-08-21 权衡修复）。
- * 成功则更新 authStore 令牌并返回 true；失败（refresh 也失效）返回 false，
- * 由调用方登出。并发 401 时只允许一个 refresh 请求，其余等待。
+ * 同一会话/API 的并发 401 合并续期；会话已切换的旧结果作废，不能覆盖或登出新账号。
  */
-let refreshInFlight: Promise<boolean> | null = null
-async function tryRefreshTokens(): Promise<boolean> {
-  if (refreshInFlight) return refreshInFlight
-  refreshInFlight = (async () => {
-    const refreshToken = useAuthStore.getState().refreshToken
-    if (!refreshToken) return false
+// 独立实例不安装业务拦截器，refresh 的 401 不可递归续期。
+const authRefreshClient = axios.create()
+type RefreshResult = { kind: 'success'; token: string; refreshToken: string | null } | { kind: 'failed' | 'superseded' }
+let refreshInFlight: { refreshToken: string; baseURL: string | undefined; promise: Promise<RefreshResult> } | null = null
+async function tryRefreshTokens(): Promise<RefreshResult> {
+  const { token, refreshToken } = useAuthStore.getState()
+  if (!refreshToken) return { kind: 'failed' }
+  const baseURL = apiClient.defaults.baseURL
+  if (refreshInFlight?.refreshToken === refreshToken && refreshInFlight.baseURL === baseURL) return refreshInFlight.promise
+  const isCurrentSession = () => {
+    const current = useAuthStore.getState()
+    return current.token === token && current.refreshToken === refreshToken && apiClient.defaults.baseURL === baseURL
+  }
+  const promise = (async (): Promise<RefreshResult> => {
     try {
-      const res = await axios.post<{ data?: { token?: string; refreshToken?: string | null } }>(
-        '/api/auth/refresh',
+      const res = await authRefreshClient.post<{ data?: { token?: string; refreshToken?: string | null } }>(
+        '/auth/refresh',
         { refreshToken },
-        { skipGlobalError: true as never },
+        {
+          baseURL,
+          timeout: apiClient.defaults.timeout || 15000,
+          headers: { 'Content-Type': 'application/json' },
+        },
       )
+      if (!isCurrentSession()) return { kind: 'superseded' }
       const d = res.data?.data
-      if (!d?.token) return false
+      if (!d?.token) return { kind: 'failed' }
       useAuthStore.getState().setTokens(d.token, d.refreshToken ?? null)
-      return true
+      return { kind: 'success', token: d.token, refreshToken: useAuthStore.getState().refreshToken }
     } catch {
-      return false
-    } finally {
-      refreshInFlight = null
+      return { kind: isCurrentSession() ? 'failed' : 'superseded' }
     }
   })()
-  return refreshInFlight
+  const flight = { refreshToken, baseURL, promise }
+  refreshInFlight = flight
+  // 不让旧会话请求的结束清除新会话正在进行的续期。
+  const clearFlight = () => { if (refreshInFlight === flight) refreshInFlight = null }
+  void promise.then(clearFlight, clearFlight)
+  return promise
 }
 
 /** 独立 APK：勿走 ERP 浏览器的候选地址回退（易误连占位域名或 localhost） */
@@ -294,15 +309,23 @@ apiClient.interceptors.response.use(
       // 成功则重放原请求；refresh 也失效（过期/被吊销/改密码）才登出。
       // 只重试一次并打标记，避免 401→refresh→401 死循环。
       const cfg401 = error.config as (InternalAxiosRequestConfig & { __authRefreshed?: boolean }) | undefined
-      if (cfg401 && !cfg401.__authRefreshed && useAuthStore.getState().refreshToken) {
+      const before = useAuthStore.getState()
+      const tokenBefore = before.token
+      const refreshBefore = before.refreshToken
+      if (cfg401 && !cfg401.__authRefreshed) {
         const refreshed = await tryRefreshTokens()
-        if (refreshed) {
+        if (refreshed.kind === 'superseded') return Promise.reject(structuredError)
+        if (refreshed.kind === 'success') {
+          const current = useAuthStore.getState()
+          if (current.token !== refreshed.token || current.refreshToken !== refreshed.refreshToken) return Promise.reject(structuredError)
           cfg401.__authRefreshed = true
           cfg401.headers = cfg401.headers ?? {}
-          ;(cfg401.headers as Record<string, string>).Authorization = `Bearer ${useAuthStore.getState().token}`
+          ;(cfg401.headers as Record<string, string>).Authorization = `Bearer ${refreshed.token}`
           return apiClient.request(cfg401)
         }
       }
+      const current = useAuthStore.getState()
+      if (current.token !== tokenBefore || current.refreshToken !== refreshBefore) return Promise.reject(structuredError)
       performSessionLogout()
       return Promise.reject(structuredError)
     }

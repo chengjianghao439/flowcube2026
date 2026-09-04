@@ -5,7 +5,8 @@
  *  - 凭证是业务事实的**投影**：本引擎**只读业务事实表、只写 acct_***，绝不 UPDATE payment_records /
  *    inventory_stock / finance_accounts / 采购销售单等任何业务表。
  *  - **全量重算 + 幂等**：按 UNIQUE(source_type, source_id) upsert。同一业务事件反复生成不新增；
- *    金额随业务重算（分批、退货、撤回）变化时覆盖到最新值。source_hash 未变则跳过（避免无谓改写）。
+ *    采购结算金额变化追加反冲/新版本，归零或来源消失也显式反冲；其它来源沿用 upsert。
+ *    source_hash 未变则跳过；采购来源人工冲销后停止自动恢复。
  *  - **借贷平衡**：每张凭证入库前 assert（借合计 === 贷合计），不平抛错不入库。
  *  - 不塞进任何结算事务；由用户在凭证页点「生成本期凭证」或（将来）定时任务触发，走独立事务。
  *
@@ -21,6 +22,8 @@ const crypto = require('crypto')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { SOURCE_TYPES, DIR } = require('../../constants/voucherSource')
+const { lockAccountingCompany } = require('./accounting.period-lock')
+const { revisePurchaseVoucher } = require('./voucher-source-revisions')
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
@@ -88,7 +91,7 @@ async function makeSeqAllocator(conn, companyId = 1) {
     if (!cache.has(period)) {
       const [[row]] = await conn.query(
         `SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(voucher_no,'-',-1) AS UNSIGNED)), 0) AS mx
-           FROM acct_vouchers WHERE period = ? AND company_id = ?`,
+           FROM acct_vouchers WHERE period = ? AND company_id = ? FOR UPDATE`,
         [period, cid],
       )
       cache.set(period, Number(row.mx) || 0)
@@ -121,22 +124,31 @@ async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, compan
   const legs = spec.legs
     .map(l => ({ ...l, amount: round2(l.amount) }))
     .filter(l => l.amount > 0)
-  if (legs.length === 0) return { skipped: true, reason: 'empty' }
-
+  if (!legs.length && spec.sourceType !== SOURCE_TYPES.PURCHASE_SETTLE) return { skipped: true, reason: 'empty' }
   const { debit, credit } = assertBalanced(legs)
   const voucherDate = toDateStr(spec.voucherDate)
   const period = periodOf(voucherDate)
   const hash = hashSpec(voucherDate, legs)
+  // 固定资产、工资等也直接调用此入口，不能只在凭证页面服务层保护结账边界。
+  const { assertPeriodOpen } = require('./accounting.period.service')
+  await assertPeriodOpen(conn, period, cid)
 
   const [[existing]] = await conn.query(
-    'SELECT id, voucher_no, source_hash, status FROM acct_vouchers WHERE company_id = ? AND source_type = ? AND source_id = ?',
+    'SELECT id, voucher_no, source_hash, status, period FROM acct_vouchers WHERE company_id = ? AND source_type = ? AND source_id = ? FOR UPDATE',
     [cid, spec.sourceType, spec.sourceId],
   )
+
+  if (existing && spec.sourceType === SOURCE_TYPES.PURCHASE_SETTLE) {
+    return revisePurchaseVoucher(conn, { root: existing, spec, legs, voucherDate, period, hash, debit, credit,
+      accountMap, allocSeq, createdBy, companyId: cid, insertEntries })
+  }
+  if (legs.length === 0) return { skipped: true, reason: 'empty' }
 
   if (existing) {
     // 已冲销(3)的凭证不再被自动重算覆盖（保留冲销痕迹）；正常凭证 hash 未变则跳过
     if (existing.status === 3) return { skipped: true, reason: 'reversed', id: existing.id }
     if (existing.source_hash === hash) return { skipped: true, reason: 'unchanged', id: existing.id }
+    if (existing.period !== period) await assertPeriodOpen(conn, existing.period, cid)
     await conn.query(
       `UPDATE acct_vouchers
           SET voucher_date = ?, period = ?, source_no = ?, summary = ?,
@@ -186,7 +198,7 @@ async function buildPurchaseSettle(conn, taxByPO) {
       FROM payment_records pr
       JOIN purchase_orders po ON po.id = pr.order_id
      WHERE pr.type = 1 AND pr.order_id IS NOT NULL`)
-  return rows.filter(r => round2(r.gross) > 0).map(r => {
+  return rows.map(r => {
     const gross = round2(r.gross)
     const tax = Math.min(round2(taxByPO.get(Number(r.poId)) || 0), gross)
     const noTax = round2(gross - tax)
@@ -455,6 +467,7 @@ async function loadTaxMaps(conn, companyId = 1) {
 
 async function generateVouchers(conn, { period = null, createdBy = null, closedPeriods = null, companyId = 1 } = {}) {
   const cid = Number(companyId) || 1
+  await lockAccountingCompany(conn, cid)
   const accountMap = await loadAccountMap(conn, cid)
   const allocSeq = await makeSeqAllocator(conn, cid)
   const { taxByPO, taxBySO } = await loadTaxMaps(conn, cid)
@@ -467,6 +480,16 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
     ...await buildSaleReturn(conn),
     ...await buildStockCheck(conn),
   ]
+  // 消失的采购来源也要进入重算。根保留唯一业务锚点，后续修订 source_id 为空。
+  const purchaseIds = new Set(specs.filter(s => s.sourceType === SOURCE_TYPES.PURCHASE_SETTLE).map(s => Number(s.sourceId)))
+  const [roots] = await conn.query(
+    'SELECT source_id,source_no,voucher_date FROM acct_vouchers WHERE company_id=? AND source_type=? AND source_id IS NOT NULL',
+    [cid, SOURCE_TYPES.PURCHASE_SETTLE],
+  )
+  for (const root of roots) {
+    if (!purchaseIds.has(Number(root.source_id))) specs.push({ sourceType: SOURCE_TYPES.PURCHASE_SETTLE,
+      sourceId: root.source_id, sourceNo: root.source_no, voucherDate: root.voucher_date, legs: [] })
+  }
   const stats = { created: 0, updated: 0, unchanged: 0, reversed: 0, empty: 0, skippedClosed: 0, total: 0 }
   for (const spec of specs) {
     let dateStr
@@ -474,7 +497,13 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
     if (period && periodOf(dateStr) !== period) continue
     stats.total += 1
     if (closedPeriods && closedPeriods.has(periodOf(dateStr))) { stats.skippedClosed += 1; continue }
-    const res = await upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, cid)
+    let res
+    try {
+      res = await upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, cid)
+    } catch (e) {
+      if (!period && e.code === 'ACCT_PERIOD_CLOSED') { stats.skippedClosed += 1; continue }
+      throw e
+    }
     if (res.created) stats.created += 1
     else if (res.updated) stats.updated += 1
     else if (res.reason === 'unchanged') stats.unchanged += 1

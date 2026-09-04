@@ -15,6 +15,7 @@ const logger = require('../../utils/logger')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const engine = require('./voucher-engine')
 const { SOURCE_TYPES } = require('../../constants/voucherSource')
+const { lockAccountingCompany } = require('./accounting.period-lock')
 
 const PERIOD_RE = /^\d{6}$/
 
@@ -38,7 +39,8 @@ function periodRange(period) {
 /** 期间已结账则抛 409。所有落凭证的写路径都必须先过这道闸。 */
 async function assertPeriodOpen(conn, period, companyId = 1) {
   const p = assertPeriodFormat(period)
-  const [[row]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? AND company_id = ?', [p, companyId])
+  await lockAccountingCompany(conn, companyId)
+  const [[row]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? AND company_id = ? FOR UPDATE', [p, companyId])
   if (row && Number(row.status) === 2) {
     throw new AppError(`会计期间 ${p} 已结账，凭证不可变动；如需调整请先反结账`, 409, 'ACCT_PERIOD_CLOSED')
   }
@@ -207,6 +209,7 @@ async function closePeriod(period, operator, companyId = 1) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockAccountingCompany(conn, companyId)
     const [[existing]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? AND company_id = ? FOR UPDATE', [p, companyId])
     if (existing && Number(existing.status) === 2) throw new AppError(`会计期间 ${p} 已是结账状态`, 409)
     const st = await closingStatus(conn, p, companyId)
@@ -237,6 +240,7 @@ async function reopenPeriod(period, operator, companyId = 1) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockAccountingCompany(conn, companyId)
     const [[existing]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? AND company_id = ? FOR UPDATE', [p, companyId])
     if (!existing || Number(existing.status) !== 2) throw new AppError(`会计期间 ${p} 未处于结账状态`, 409)
     await conn.query('UPDATE acct_periods SET status = 1 WHERE period = ? AND company_id = ?', [p, companyId])

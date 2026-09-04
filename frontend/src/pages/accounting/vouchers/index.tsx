@@ -343,7 +343,7 @@ export default function VouchersPage() {
             <Undo2 className="mr-1 h-3.5 w-3.5" />冲销
           </Button>
         )}
-        {canManage && r.sourceType === 'manual' && r.status !== 3 && (
+        {canManage && r.sourceType === 'manual' && !r.isReversal && !r.reversedId && r.status !== 3 && (
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(r)}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>

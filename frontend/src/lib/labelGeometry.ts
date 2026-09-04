@@ -3,7 +3,7 @@
  *
  * 必须与后端 backend/src/modules/print-jobs/labelGeometry.js 行为完全一致 ——
  * 由 tests/fixtures/label-geometry-cases.json 快照锁定（tests/label-geometry-frontend.test.js
- * 用 Node 类型剥离直接加载本文件，跑同一组 input 断言 expected 相等）。
+ * 用项目 TypeScript 转译后加载本文件，Node 22 也实际跑同一组 input 断言 expected 相等）。
  *
  * 前端预览：resolveLayout 出 DrawPrimitive(mm) → ×MM_PX 渲染为 CSS。
  * 后端 ZPL：同一 resolveLayout → ×MM_TO_DOT 渲染为 ZPL。几何只算一次，两端一致。

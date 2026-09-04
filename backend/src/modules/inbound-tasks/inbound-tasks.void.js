@@ -1,8 +1,8 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { CONTAINER_STATUS, syncStockFromContainers, lockStockDimension } = require('../../engine/containerEngine')
+const { CONTAINER_STATUS, syncStockFromContainers, lockStockDimension, getStockProjection } = require('../../engine/containerEngine')
 const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
-const { appendInboundEvent } = require('./inbound-tasks.helpers')
+const { appendInboundEvent, assertPurchaseOrdersOpen } = require('./inbound-tasks.helpers')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertInScope } = require('../../utils/warehouseScope')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -29,6 +29,7 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
     })
     assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     const rule = assertStatusAction('inboundTask', 'voidReceipt', Number(taskRow.status))
+    await assertPurchaseOrdersOpen(conn, taskId, '撤回收货')
 
     // 统一加锁顺序：先按 (product_id, warehouse_id) 升序对涉及维度取 inventory_stock 单行锁，
     // 再锁容器。撤回收货本质是「反向上架」（改容器状态后 syncStockFromContainers 汇总该维度
@@ -67,6 +68,25 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
         `存在 ${touched.length} 个库存条码已被后续拣货/拆分/移动，无法整单撤回收货，请通过库存盘点处理实际差异`,
         409,
       )
+    }
+
+    // 上架已把预计绑定兑现为现货预占；撤收不得移除这些预占的实物支撑。
+    // 操作员先释放相关销售预占，或准备足够的其它现货后才可撤回。
+    for (const d of dimRows) {
+      const removed = containers.filter(c => Number(c.status) === CONTAINER_STATUS.ACTIVE
+        && Number(c.product_id) === Number(d.product_id) && Number(c.warehouse_id) === Number(d.warehouse_id))
+        .reduce((sum, c) => sum + Number(c.remaining_qty), 0)
+      if (removed <= 0) continue
+      const projection = await getStockProjection(conn, { productId: d.product_id, warehouseId: d.warehouse_id, lock: true })
+      const [[binding]] = await conn.query(
+        `SELECT COALESCE(SUM(qty),0) AS qty FROM sale_order_expected_bindings
+         WHERE product_id=? AND warehouse_id=? AND released_at IS NULL FOR UPDATE`,
+        [d.product_id, d.warehouse_id],
+      )
+      const physicalReserved = Math.max(0, projection.reserved - Number(binding.qty))
+      if (projection.quantity - removed + 1e-6 < physicalReserved) {
+        throw new AppError('已上架库存正在支撑销售预占，请先释放相关销售预占后再撤回收货', 409)
+      }
     }
 
     for (const c of containers) {

@@ -32,6 +32,10 @@ cleanup_docker_space() {
   avail_mb="$(df -Pm / | awk 'NR==2 {print $4}')"
   echo "==> 当前可用空间：${avail_mb}MB"
   if [ "${avail_mb:-0}" -lt 2500 ]; then
+    if [ "${PRESERVE_DEPLOY_IMAGES:-0}" = '1' ]; then
+      echo '!! 部署期间磁盘空间不足；保留回退镜像并终止门禁，请先在部署窗口外清理磁盘' >&2
+      exit 1
+    fi
     echo "==> 可用空间偏低，清理 Docker builder cache / 未使用镜像..."
     docker builder prune -af >/dev/null
     docker image prune -af >/dev/null

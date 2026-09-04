@@ -8,24 +8,37 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 # 并发保护（2026-08-11 生产事故修复）：main 上连续多次 push 会触发多个 Deploy 并发在服务器
 # 跑 docker compose up --build 互相抢容器。concurrency 让同一时间只跑一个 Deploy——
-# 新的 push 会取消还在跑的上一个（cancel-in-progress），保证服务器同一时刻只有一个部署。
+# 已开始的部署必须完成或走回退，不在应用切换中途取消；待运行队列保留最新提交。
 concurrency:
   group: deploy-production
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Setup Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Wait for Tests and Security Scan on this commit
+        timeout-minutes: 30
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/wait-release-checks.js
 
       - name: Resolve deploy config
         id: deploy_config
@@ -101,10 +114,20 @@ jobs:
           SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
         run: |
           set -euo pipefail
+          # 将新发布器带到旧 checkout，首次迁移清单必须早于 Git 更新。
+          BOOTSTRAP_SCRIPT="/tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+          scp -P "${{ steps.deploy_config.outputs.server_ssh_port }}" scripts/publish-pda.sh \
+            "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:$BOOTSTRAP_SCRIPT"
           ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o ConnectTimeout=20 \
             -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" <<EOF
           set -euo pipefail
           cd "${{ steps.deploy_config.outputs.server_app_path }}"
+          exec 9>/tmp/flowcube-deploy.lock
+          flock -w 1800 9
+          trap 'rm -f "$BOOTSTRAP_SCRIPT"' EXIT
+          if [ ! -f backend/apk/published-version.json ] && [ -f backend/apk/version.json ] && [ -f backend/apk/app-release.apk ]; then
+            bash "$BOOTSTRAP_SCRIPT" backend/apk/app-release.apk backend/apk/version.json backend/apk
+          fi
           if git diff --name-only --diff-filter=U | grep -q .; then
             echo "==> 检测到服务器 Git 工作区存在未解决冲突，重置到当前发布提交"
             git reset --hard HEAD
@@ -113,26 +136,5 @@ jobs:
           git reset --hard "${{ github.sha }}"
           # 发布门禁（release-gate）随部署执行：页面烟雾 + 对账回跳。凭据由 GitHub Secrets 注入，
           # 服务器不再 SKIP_RELEASE_GATE=1——坏版本（渲染错误/路由失效）会在部署时被当场拦下。
-          SKIP_GIT_PULL=1 SMOKE_USERNAME="$SMOKE_USERNAME" SMOKE_PASSWORD="$SMOKE_PASSWORD" bash scripts/server-update.sh
+          DEPLOY_LOCK_FD=9 EXPECTED_COMMIT="${{ github.sha }}" SKIP_GIT_PULL=1 DEPLOY_PUBLIC_ORIGIN="${{ steps.deploy_config.outputs.erp_origin }}" SMOKE_USERNAME="$SMOKE_USERNAME" SMOKE_PASSWORD="$SMOKE_PASSWORD" bash scripts/server-update.sh
           EOF
-
-      - name: Verify server repo moved to current commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          REMOTE_SHA=$(ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
-            -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" "cd '${{ steps.deploy_config.outputs.server_app_path }}' && git rev-parse HEAD")
-          test "$REMOTE_SHA" = "$GITHUB_SHA"
-
-      - name: Verify backend health
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSLk "${{ steps.deploy_config.outputs.erp_origin }}/api/health" >/dev/null
-
-      - name: Verify frontend responds
-        shell: bash
-        run: |
-          set -euo pipefail
-          HTML=$(curl -fsSLk "${{ steps.deploy_config.outputs.erp_origin }}/")
-          printf '%s' "$HTML" | grep -F '<title>极序 Flow</title>' >/dev/null

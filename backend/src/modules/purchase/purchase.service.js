@@ -255,6 +255,7 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
     // 改单同时限制目标仓：不能把单据「搬」到 scope 之外的仓库
     assertInScope(scopeWarehouseIds, warehouseId, '采购单')
     assertStatusAction('purchase', 'edit', row.status)
+    await assertNoActiveSaleBinding(conn, id, '修改采购明细')
     const folded = []
     for (const item of items) folded.push(await foldEntryItem(conn, item))
     const total = round2(folded.reduce((s,i)=>s+i.amount,0))
@@ -281,21 +282,27 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
 
 // 短装结案：把「已提交(2)」采购单手动完成（剩余未收量作罢），前提是相关收货订单已全部上架完成（audit_status 随上架完成自动置1）且确有实收入库。
 /**
- * 采购单取消/短装前检查：是否存在销售单占用了它的预计到货量。
+ * 采购单退出有效供应或重建明细前检查：是否存在销售单占用了它的预计到货量。
  *
  * 用户语义：采购单取消/短装时，必须先解除绑定那些「占用了它预计量」的销售单，
  * 否则取消/短装动作被拒（列出来由操作员到销售单处理）。系统不自动改销售单。
  */
 async function assertNoActiveSaleBinding(conn, purchaseOrderId, actionLabel) {
-  const [binds] = await conn.query(
-    `SELECT b.sale_order_id, so.order_no, SUM(b.qty) AS bound_qty
-     FROM sale_order_expected_bindings b
-     JOIN sale_orders so ON so.id = b.sale_order_id
-     WHERE b.purchase_order_id = ? AND b.released_at IS NULL
-     GROUP BY b.sale_order_id, so.order_no
-     ORDER BY b.sale_order_id`,
+  const [bindingRows] = await conn.query(
+    `SELECT b.sale_order_id, so.order_no, b.qty AS bound_qty
+     FROM sale_order_expected_bindings b JOIN sale_orders so ON so.id=b.sale_order_id
+     WHERE b.purchase_order_id=? AND b.released_at IS NULL AND b.qty>0
+     ORDER BY b.sale_order_id FOR UPDATE OF b`,
     [purchaseOrderId],
   )
+  const totals = new Map()
+  for (const row of bindingRows) {
+    const id = Number(row.sale_order_id)
+    const current = totals.get(id) || { ...row, bound_qty: 0 }
+    current.bound_qty = Math.round((current.bound_qty + Number(row.bound_qty)) * 10000) / 10000
+    totals.set(id, current)
+  }
+  const binds = [...totals.values()]
   if (!binds.length) return
   const list = binds.map(b => `${b.order_no}（${Number(b.bound_qty)}）`).join('、')
   throw new AppError(
@@ -407,6 +414,7 @@ async function withdrawConfirm(id, operator, scopeWarehouseIds = null) {
     const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id', entityName: '采购单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
     const rule = assertStatusAction('purchase', 'withdrawConfirm', orderRow.status)
+    await assertNoActiveSaleBinding(conn, id, '撤回采购单')
     await compareAndSetStatus(conn, {
       table: 'purchase_orders',
       id,
@@ -465,6 +473,7 @@ async function reject(id, { reason }, operator, scopeWarehouseIds = null) {
     const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id, operator_id, order_no', entityName: '采购单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
     const rule = assertStatusAction('purchase', 'reject', orderRow.status)
+    await assertNoActiveSaleBinding(conn, id, '驳回采购单')
     await assertNotSelfApproval(orderRow.operator_id, operator?.userId, '不能驳回自己提交的采购单')
     await conn.query(
       'UPDATE purchase_orders SET approved_by=?, approved_by_name=?, approved_at=NOW(), reject_reason=? WHERE id=?',

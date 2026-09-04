@@ -1,0 +1,378 @@
+{
+  "date": "2026-09-04",
+  "base_commit": "76c8496f12d802457195e2e9f684c1720dbf1d44",
+  "node": "22.23.2",
+  "mysql": "8.0.46",
+  "business_total_passed": 759,
+  "business": [
+    {
+      "name": "migrate-smoke",
+      "exit": 0,
+      "seconds": 0.2,
+      "database": "flowcube_test"
+    },
+    {
+      "name": "schema",
+      "exit": 0,
+      "seconds": 0.2,
+      "database": "flowcube_test"
+    },
+    {
+      "name": "migrate-integration",
+      "exit": 0,
+      "seconds": 0.2,
+      "database": "flowcube_integration_test"
+    },
+    {
+      "name": "smoke-audit-inventory",
+      "exit": 0,
+      "seconds": 0.6,
+      "database": "flowcube_test",
+      "passed": 25,
+      "failed": 0
+    },
+    {
+      "name": "smoke-audit-finance-security",
+      "exit": 0,
+      "seconds": 1.3,
+      "database": "flowcube_test",
+      "passed": 17,
+      "failed": 0
+    },
+    {
+      "name": "smoke-mainline",
+      "exit": 0,
+      "seconds": 1.1,
+      "database": "flowcube_test",
+      "passed": 49,
+      "failed": 0
+    },
+    {
+      "name": "smoke-concurrency-guards",
+      "exit": 0,
+      "seconds": 1.5,
+      "database": "flowcube_test",
+      "passed": 83,
+      "failed": 0
+    },
+    {
+      "name": "smoke-sale-adjustment",
+      "exit": 0,
+      "seconds": 1.4,
+      "database": "flowcube_test",
+      "passed": 57,
+      "failed": 0
+    },
+    {
+      "name": "smoke-p0-regression",
+      "exit": 0,
+      "seconds": 1.0,
+      "database": "flowcube_test",
+      "passed": 41,
+      "failed": 0
+    },
+    {
+      "name": "smoke-p1-regression",
+      "exit": 0,
+      "seconds": 1.3,
+      "database": "flowcube_test",
+      "passed": 44,
+      "failed": 0
+    },
+    {
+      "name": "smoke-warehouse-scope",
+      "exit": 0,
+      "seconds": 1.2,
+      "database": "flowcube_test",
+      "passed": 41,
+      "failed": 0
+    },
+    {
+      "name": "smoke-pda-device-session",
+      "exit": 0,
+      "seconds": 1.4,
+      "database": "flowcube_test",
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "name": "smoke-finance",
+      "exit": 0,
+      "seconds": 1.3,
+      "database": "flowcube_test",
+      "passed": 108,
+      "failed": 0
+    },
+    {
+      "name": "smoke-disposal",
+      "exit": 0,
+      "seconds": 0.9,
+      "database": "flowcube_test",
+      "passed": 27,
+      "failed": 0
+    },
+    {
+      "name": "smoke-invoice-quota",
+      "exit": 0,
+      "seconds": 0.8,
+      "database": "flowcube_test",
+      "passed": 10,
+      "failed": 0
+    },
+    {
+      "name": "smoke-refund-orders",
+      "exit": 0,
+      "seconds": 0.8,
+      "database": "flowcube_test",
+      "passed": 14,
+      "failed": 0
+    },
+    {
+      "name": "smoke-accounting",
+      "exit": 0,
+      "seconds": 0.7,
+      "database": "flowcube_test",
+      "passed": 11,
+      "failed": 0
+    },
+    {
+      "name": "smoke-accounting-period",
+      "exit": 0,
+      "seconds": 0.8,
+      "database": "flowcube_test",
+      "passed": 14,
+      "failed": 0
+    },
+    {
+      "name": "test-print-purge",
+      "exit": 0,
+      "seconds": 0.6,
+      "database": "flowcube_test",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "name": "smoke-reports-values",
+      "exit": 0,
+      "seconds": 0.6,
+      "database": "flowcube_test",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "name": "smoke-credit-outbound",
+      "exit": 0,
+      "seconds": 0.7,
+      "database": "flowcube_test",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "name": "smoke-purchase-approval",
+      "exit": 0,
+      "seconds": 0.7,
+      "database": "flowcube_test",
+      "passed": 6,
+      "failed": 0
+    },
+    {
+      "name": "smoke-approval-flow",
+      "exit": 0,
+      "seconds": 1.3,
+      "database": "flowcube_test",
+      "passed": 30,
+      "failed": 0
+    },
+    {
+      "name": "smoke-credit-override",
+      "exit": 0,
+      "seconds": 0.9,
+      "database": "flowcube_test",
+      "passed": 11,
+      "failed": 0
+    },
+    {
+      "name": "smoke-atp",
+      "exit": 0,
+      "seconds": 0.8,
+      "database": "flowcube_test",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "name": "test-hr-tax",
+      "exit": 0,
+      "seconds": 0.1,
+      "database": "flowcube_test",
+      "passed": 7,
+      "failed": 0
+    },
+    {
+      "name": "search-scope.smoke.test.js",
+      "exit": 0,
+      "seconds": 0.9,
+      "database": "flowcube_test",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "name": "users-roles.smoke.test.js",
+      "exit": 0,
+      "seconds": 0.9,
+      "database": "flowcube_test",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "name": "integration",
+      "exit": 0,
+      "seconds": 1.3,
+      "database": "flowcube_integration_test",
+      "passed": 96,
+      "failed": 0
+    }
+  ],
+  "static": [
+    {
+      "name": "backend-lint",
+      "exit": 0,
+      "seconds": 1.0
+    },
+    {
+      "name": "test-label",
+      "exit": 0,
+      "seconds": 0.3
+    },
+    {
+      "name": "test-print",
+      "exit": 0,
+      "seconds": 0.2
+    },
+    {
+      "name": "test-permissions",
+      "exit": 0,
+      "seconds": 0.1
+    },
+    {
+      "name": "test-accounting",
+      "exit": 0,
+      "seconds": 0.1
+    },
+    {
+      "name": "test-oplog",
+      "exit": 0,
+      "seconds": 0.2
+    },
+    {
+      "name": "release-check-downloads",
+      "exit": 0,
+      "seconds": 0.2
+    },
+    {
+      "name": "status-integrity",
+      "exit": 0,
+      "seconds": 0.0
+    },
+    {
+      "name": "migration-gaps",
+      "exit": 0,
+      "seconds": 0.2,
+      "environment": "explicit isolated test configuration; first call without JWT_SECRET failed closed"
+    }
+  ],
+  "client_logs": {
+    "unit": {
+      "sha256": "fb13bd7dcc39bc79ff69d1b6414df8fe2b62d383f2affa7ab92769af30fabc52",
+      "local_log": "/tmp/flowcube-repair-20260904/logs/client-unit-final.log"
+    },
+    "node": {
+      "sha256": "352b6bfcc6eadf78a52dafa9fd4cf9ab659efd3eee2dba6135427ff9adb644b4",
+      "local_log": "/tmp/flowcube-repair-20260904/logs/client-node-final.log"
+    },
+    "tsc": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "local_log": "/tmp/flowcube-repair-20260904/logs/client-tsc-final.log"
+    },
+    "lint": {
+      "sha256": "5ed9ac1db406406a462215187a4f9606f3e4f3630170961eb45d54d41091a440",
+      "local_log": "/tmp/flowcube-repair-20260904/logs/client-lint-final.log"
+    },
+    "backend-lint": {
+      "sha256": "bfd1caf95baecc1dc9d0d03b9a7317f6fa883e719558fc6fbbaf651e73a08672",
+      "local_log": "/tmp/flowcube-repair-20260904/logs/client-backend-lint-final.log"
+    },
+    "build-erp": {
+      "sha256": "61a532794e8384d3612a04bffc55dfe21b06910df3f0ac61ca6e598b1c1526fa",
+      "local_log": "/tmp/flowcube-repair-20260904/logs/client-build-erp-final.log"
+    },
+    "build-pda": {
+      "sha256": "5baa533872c747a279de015e8ff4d16de49ea8255aa29087d039c9a4a75a03d9",
+      "local_log": "/tmp/flowcube-repair-20260904/logs/client-build-pda-final.log"
+    },
+    "diffcheck": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "local_log": "/tmp/flowcube-repair-20260904/logs/client-diffcheck-final.log"
+    }
+  },
+  "frontend_vitest_passed": 69,
+  "frontend_lint_errors": 0,
+  "frontend_lint_warnings": 5,
+  "node_client_passed": 31,
+  "tooling_passed": 22,
+  "workflow_validation": "5 YAML documents and embedded Bash parse; actionlint installation unavailable due official downloads/proxy timeout",
+  "dependency_audits": {
+    "backend": {
+      "scope": "omit=dev",
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "report_sha256": "e6bec1910d669e0d37f72cae38bf53b4beb7c55bfe2c7c8f4f507ecbe92c7b55"
+    },
+    "frontend": {
+      "scope": "omit=dev",
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "report_sha256": "ca9ff50519ef80d06d44a34430c54d1656ebc0d3cff1bbda57c32503980bbe4d"
+    },
+    "desktop": {
+      "scope": "omit=dev",
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "report_sha256": "7198a1f34a35f3655d9e07e69daf14ae20f5ed888bee4cd9ecab88e8167eb45e"
+    }
+  },
+  "gitleaks_findings": 0,
+  "production_actions": false,
+  "committed": false,
+  "deployed": false,
+  "delivery": {
+    "synchronized_files": 87,
+    "equality_verified_files": 88,
+    "user_existing_changes_preserved": true,
+    "original_backend_npm_ci_exit": 0,
+    "original_frontend_npm_ci_exit": 0,
+    "temporary_database_container_removed": true,
+    "temporary_credentials_removed": true,
+    "colima_stopped": true,
+    "original_frontend_vitest_passed": 69,
+    "original_client_tests_passed": 31,
+    "temporary_worktree_removed": true
+  }
+}

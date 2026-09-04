@@ -67,11 +67,19 @@ jobs:
       - name: 安装前端依赖
         run: npm --prefix frontend ci
 
+      - name: 安装桌面更新模块运行依赖（不下载 Electron）
+        run: npm --prefix desktop ci --ignore-scripts --omit=dev
+
+      - name: 单元测试 — 标签几何及前端镜像（Node 22 实际执行）
+        run: npm run test:label
+
+      - name: 审计回归 — 工具隔离、发布门禁、原生更新与退货扫码
+        run: npm run test:audit-tooling && npm run test:audit-client
+
       - name: ESLint — 后端
         run: npm --prefix backend run lint
 
-      # 前端存量有 18 条 react-hooks/exhaustive-deps warning（见 frontend/eslint.config.js
-      # 的说明）。这里只卡 error，不设 --max-warnings，避免为了过门禁去撒 eslint-disable。
+      # hooks 依赖规则为 error；现有刷新导出结构 warning 不设 --max-warnings。
       - name: ESLint — 前端
         run: npm --prefix frontend run lint
 
@@ -129,9 +137,6 @@ jobs:
       - name: 安装后端依赖
         run: npm --prefix backend ci
 
-      - name: 单元测试 — 标签几何/ZPL（纯函数，无需 DB）
-        run: npm run test:label
-
       - name: 单元测试 — 打印调度策略/任务状态（纯函数，无需 DB）
         run: npm run test:print
 
@@ -181,6 +186,12 @@ jobs:
         run: npm --prefix backend run migrate
         env:
           DB_NAME: flowcube_integration_test
+
+      - name: 审计回归 — 库存/退货/预计绑定
+        run: npm run smoke:audit-inventory
+
+      - name: 审计回归 — 报表/来源修订/冲销/超管保护
+        run: npm run smoke:audit-finance-security
 
       - name: 冒烟测试 — 主链路（采购入库 / 打印 / 报表 / 导入导出 / 权限）
         run: npm run smoke:mainline
