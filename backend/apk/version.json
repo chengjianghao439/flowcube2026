@@ -1,7 +1,7 @@
 {
-  "version": "0.9.6",
-  "versionCode": 114,
+  "version": "0.9.7",
+  "versionCode": 115,
   "filename": "app-release.apk",
-  "releaseNote": "- 统一 PC 页面、查询弹窗、表格、分页和操作按钮的显示风格，优化登录、采购、销售、库存、仓储、财务和报表页面。",
-  "publishedAt": "2026-09-05T07:16:12.291Z"
+  "releaseNote": "修复调拨分批收发、财务核销与权限边界，提升账号切换和 PDA 作业的可靠性。",
+  "publishedAt": "2026-09-05T15:30:10.384Z"
 }
