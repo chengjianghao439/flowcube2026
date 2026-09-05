@@ -1,3 +1,4 @@
+import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getInvoicesApi, createInvoiceApi, updateInvoiceApi, changeInvoiceStatusApi, deleteInvoiceApi,
@@ -8,7 +9,7 @@ import type { CreateInvoiceParams } from '@/types/accounting'
 const QK = 'acct-invoices'
 
 export const useInvoices = (params: InvoiceQuery) =>
-  useQuery({ queryKey: [QK, 'list', params], queryFn: () => getInvoicesApi(params) })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'list', params]), queryFn: () => getInvoicesApi(params) })
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: [QK] })

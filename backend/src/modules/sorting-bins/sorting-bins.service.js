@@ -111,7 +111,7 @@ async function findAll(warehouseId) {
 /**
  * 查询所有仓库的分拣格（管理页）
  */
-async function findAllWarehouses({ keyword = '', status = null, warehouseId = null, scopeWarehouseIds = null } = {}) {
+async function findAllWarehouses({ keyword = '', status = null, warehouseId = null, scopeWarehouseIds = null, exportLimit = null } = {}) {
   const conds = ['1=1']
   const params = []
   if (keyword) {
@@ -124,6 +124,8 @@ async function findAllWarehouses({ keyword = '', status = null, warehouseId = nu
   const scope = scopeFilter(scopeWarehouseIds, 'sb.warehouse_id')
   const where = conds.join(' AND ') + scope.sql
   const whereParams = [...params, ...scope.params]
+  const limit = exportLimit == null ? '' : ' LIMIT ?'
+  if (exportLimit != null) whereParams.push(Math.max(1, Math.min(10001, Number(exportLimit) || 10001)))
 
   const [rows] = await pool.query(
     `SELECT sb.*,
@@ -134,7 +136,7 @@ async function findAllWarehouses({ keyword = '', status = null, warehouseId = nu
      JOIN inventory_warehouses wh ON wh.id = sb.warehouse_id
      LEFT JOIN warehouse_tasks wt ON wt.id = sb.current_task_id
      WHERE ${where}
-     ORDER BY sb.warehouse_id ASC, sb.code ASC`,
+     ORDER BY sb.warehouse_id ASC, sb.code ASC${limit}`,
     whereParams,
   )
   return rows.map(r => ({ ...fmt(r), warehouseName: r.warehouse_name }))

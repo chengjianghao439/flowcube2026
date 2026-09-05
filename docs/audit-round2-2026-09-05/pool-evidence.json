@@ -1,0 +1,13 @@
+{
+  "target": "flowcube_fix_24_test",
+  "connectionLimit": 1,
+  "configuredConnectTimeoutMs": 10000,
+  "beforeRelease": {
+    "elapsedMs": 11202,
+    "settled": false
+  },
+  "afterRelease": {
+    "ok": 1,
+    "elapsedMs": 11207
+  }
+}

@@ -1,0 +1,22 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[PASS] F01 concurrent receipts retain both committed amounts despite prior RR snapshot
+[PASS] F02 deletion and receipt serialize: never delete an account with a committed transaction
+[PASS] F03 final depreciation voucher and response use the actual remaining cents
+[PASS] F11 fully depreciated asset disposes next month without another depreciation
+[PASS] F10 replay of an existing period leaves ledger and voucher unchanged
+[PASS] F10 reject a new period older than existing depreciation history
+[PASS] F04 disposal creates same-transaction depreciation voucher and F14 DATE strings
+[PASS] F10 concurrent depreciation runs produce one ledger and one matching voucher
+[PASS] F04 disposal rolls back ledger, disposition and status when depreciation voucher fails
+[PASS] F11 disposal of a nearly fully depreciated asset respects residual floor
+[PASS] F10 disposal rejects an earlier acquisition date or earlier existing depreciation period
+[PASS] O01 cold seed observes committed legacy containers after an earlier RR snapshot
+[PASS] O01 concurrent transactional callers serialize without shared-lock upgrade deadlocks
+[PASS] O01 concurrent cold initialization with pool and transactions stays unique above legacy maximum
+[PASS] O01 existing container sequence avoids repeated full-table aggregate and is concurrent-safe
+15 passed, 0 failed

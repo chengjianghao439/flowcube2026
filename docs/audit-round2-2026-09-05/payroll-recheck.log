@@ -1,0 +1,245 @@
+{
+  "database": "flowcube_hr_fix_test",
+  "results": [
+    {
+      "name": "negative_cumulative_deduction_lost",
+      "expectedFebTax": 0,
+      "actualFebTax": 150,
+      "payrolls": [
+        {
+          "period": "202601",
+          "status": 2,
+          "total_gross": "0.00",
+          "total_tax": "0.00",
+          "total_net": "0.00"
+        },
+        {
+          "period": "202602",
+          "status": 2,
+          "total_gross": "10000.00",
+          "total_tax": "150.00",
+          "total_net": "9850.00"
+        }
+      ],
+      "ledger": [
+        {
+          "year": "2026",
+          "month": 1,
+          "accum_taxable": "0.00",
+          "accum_tax_paid": "0.00"
+        },
+        {
+          "year": "2026",
+          "month": 2,
+          "accum_taxable": "5000.00",
+          "accum_tax_paid": "150.00"
+        }
+      ]
+    },
+    {
+      "name": "out_of_order_and_stale_paid_successor",
+      "before": {
+        "payrolls": [
+          {
+            "period": "202601",
+            "status": 1,
+            "total_gross": "0.00",
+            "total_tax": "0.00",
+            "total_net": "0.00"
+          },
+          {
+            "period": "202602",
+            "status": 2,
+            "total_gross": "30000.00",
+            "total_tax": "750.00",
+            "total_net": "29250.00"
+          },
+          {
+            "period": "202603",
+            "status": 3,
+            "total_gross": "30000.00",
+            "total_tax": "1730.00",
+            "total_net": "28270.00"
+          }
+        ],
+        "ledger": [
+          {
+            "year": "2026",
+            "month": 2,
+            "accum_taxable": "25000.00",
+            "accum_tax_paid": "750.00"
+          },
+          {
+            "year": "2026",
+            "month": 3,
+            "accum_taxable": "50000.00",
+            "accum_tax_paid": "2480.00"
+          }
+        ]
+      },
+      "after": {
+        "payrolls": [
+          {
+            "period": "202601",
+            "status": 2,
+            "total_gross": "30000.00",
+            "total_tax": "750.00",
+            "total_net": "29250.00"
+          },
+          {
+            "period": "202602",
+            "status": 2,
+            "total_gross": "30000.00",
+            "total_tax": "1730.00",
+            "total_net": "28270.00"
+          },
+          {
+            "period": "202603",
+            "status": 3,
+            "total_gross": "30000.00",
+            "total_tax": "1730.00",
+            "total_net": "28270.00"
+          }
+        ],
+        "ledger": [
+          {
+            "year": "2026",
+            "month": 1,
+            "accum_taxable": "25000.00",
+            "accum_tax_paid": "750.00"
+          },
+          {
+            "year": "2026",
+            "month": 2,
+            "accum_taxable": "50000.00",
+            "accum_tax_paid": "2480.00"
+          },
+          {
+            "year": "2026",
+            "month": 3,
+            "accum_taxable": "50000.00",
+            "accum_tax_paid": "2480.00"
+          }
+        ]
+      },
+      "actualMarchTax": 1730,
+      "expectedMarchTax": 2500,
+      "expectedMarchAccumTaxable": 75000,
+      "expectedMarchAccumTaxPaid": 4980,
+      "marchRecalculateError": {
+        "statusCode": 400,
+        "message": "工资单已发放，不能再核算"
+      },
+      "paidMarchVoucherCount": 2
+    },
+    {
+      "name": "sequential_control",
+      "payrolls": [
+        {
+          "period": "202601",
+          "status": 2,
+          "total_gross": "30000.00",
+          "total_tax": "750.00",
+          "total_net": "29250.00"
+        },
+        {
+          "period": "202602",
+          "status": 2,
+          "total_gross": "30000.00",
+          "total_tax": "1730.00",
+          "total_net": "28270.00"
+        },
+        {
+          "period": "202603",
+          "status": 2,
+          "total_gross": "30000.00",
+          "total_tax": "2500.00",
+          "total_net": "27500.00"
+        }
+      ],
+      "ledger": [
+        {
+          "year": "2026",
+          "month": 1,
+          "accum_taxable": "25000.00",
+          "accum_tax_paid": "750.00"
+        },
+        {
+          "year": "2026",
+          "month": 2,
+          "accum_taxable": "50000.00",
+          "accum_tax_paid": "2480.00"
+        },
+        {
+          "year": "2026",
+          "month": 3,
+          "accum_taxable": "75000.00",
+          "accum_tax_paid": "4980.00"
+        }
+      ]
+    },
+    {
+      "name": "skip_uncalculated_zero_month",
+      "actualMarchTax": 750,
+      "expectedMarchTax": 1230,
+      "payrolls": [
+        {
+          "period": "202601",
+          "status": 2,
+          "total_gross": "30000.00",
+          "total_tax": "750.00",
+          "total_net": "29250.00"
+        },
+        {
+          "period": "202602",
+          "status": 1,
+          "total_gross": "0.00",
+          "total_tax": "0.00",
+          "total_net": "0.00"
+        },
+        {
+          "period": "202603",
+          "status": 2,
+          "total_gross": "30000.00",
+          "total_tax": "750.00",
+          "total_net": "29250.00"
+        }
+      ],
+      "ledger": [
+        {
+          "year": "2026",
+          "month": 1,
+          "accum_taxable": "25000.00",
+          "accum_tax_paid": "750.00"
+        },
+        {
+          "year": "2026",
+          "month": 3,
+          "accum_taxable": "25000.00",
+          "accum_tax_paid": "750.00"
+        }
+      ]
+    }
+  ],
+  "target": {
+    "db": "flowcube_hr_fix_test",
+    "mysql": "8.0.46"
+  },
+  "pureFunction": {
+    "jan": {
+      "monthlyTaxable": -5000,
+      "accumTaxable": 0,
+      "bracket": 0.03,
+      "tax": 0,
+      "accumTaxPaid": 0
+    },
+    "feb": {
+      "monthlyTaxable": 5000,
+      "accumTaxable": 5000,
+      "bracket": 0.03,
+      "tax": 150,
+      "accumTaxPaid": 150
+    }
+  },
+  "fixtureCompaniesCleaned": 4
+}

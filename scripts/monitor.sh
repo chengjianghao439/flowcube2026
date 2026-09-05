@@ -5,7 +5,7 @@
 # 检查项：
 #   1. 三个容器是否 running（mysql / backend / frontend）
 #   2. 磁盘使用率是否超阈值
-#   3. 后端 /api/health 是否 200
+#   3. 后端 /api/ready 是否 200（使用应用连接池探测数据库）
 #   4. MySQL 深检：连接可用性 + 慢查询堆积 + 连接数
 #   5. 公网 HTTPS 探测（走 Caddy 全链路）
 #   6. TLS 证书到期检查（剩余 <14 天告警）
@@ -26,10 +26,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 PROJECT_DIR="${PROJECT_DIR:-/opt/flowcube}"
 DISK_THRESHOLD="${DISK_THRESHOLD:-85}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/api/health}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/api/ready}"
 # 公网探测地址：走 Caddy 全链路（DNS → Caddy → backend），能发现回环检查看不到的
 # 域名解析 / Caddy 挂掉 / 证书链等问题（2026-08-22 新增）
-PUBLIC_HEALTH_URL="${PUBLIC_HEALTH_URL:-https://jixuflow.com/api/health}"
+PUBLIC_HEALTH_URL="${PUBLIC_HEALTH_URL:-https://jixuflow.com/api/ready}"
 # TLS 证书到期告警阈值（天）。Caddy 内置 ACME 通常提前 30 天自动续期，
 # 连续几天告警说明续期链路有问题，需人工介入
 CERT_HOST="${CERT_HOST:-jixuflow.com}"

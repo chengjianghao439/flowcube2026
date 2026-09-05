@@ -55,7 +55,7 @@ function fmtTransaction(row) {
     bizNo: row.biz_no,
     partyName: row.party_name,
     balanceAfter: Number(row.balance_after),
-    happenedAt: row.happened_at,
+    happenedAt: row.happened_at instanceof Date ? beijingTodayYmd(row.happened_at) : row.happened_at,
     remark: row.remark,
     operatorName: row.operator_name,
     createdAt: row.created_at,
@@ -64,14 +64,15 @@ function fmtTransaction(row) {
 
 /**
  * 按流水重算账户余额。调用方须已开启事务并锁住账户行。
- * 这是 current_balance 的**唯一**合法写入口。
+ * 这是 current_balance 的**唯一**合法写入口。流水聚合必须当前读：调用方可能已由
+ * 单号前缀等普通 SELECT 建立 RR 快照，仅锁账户行无法刷新那份旧快照。
  */
 async function refreshBalance(conn, accountId) {
   const [[acc]] = await conn.query('SELECT opening_balance FROM finance_accounts WHERE id=? FOR UPDATE', [accountId])
   if (!acc) throw new AppError('账户不存在', 404)
   const [[agg]] = await conn.query(
     `SELECT COALESCE(SUM(CASE WHEN direction = 1 THEN amount ELSE -amount END), 0) AS delta
-       FROM finance_account_transactions WHERE account_id = ?`,
+       FROM finance_account_transactions WHERE account_id = ? FOR UPDATE`,
     [accountId],
   )
   const balance = Number(acc.opening_balance) + Number(agg.delta)
@@ -185,7 +186,7 @@ async function update(id, { name, type, accountNo, bankName, holder, openingBala
     const nextOpening = openingBalance != null ? Number(openingBalance) : Number(acc.opening_balance)
     if (nextOpening !== Number(acc.opening_balance)) {
       const [[{ n }]] = await conn.query(
-        'SELECT COUNT(*) AS n FROM finance_account_transactions WHERE account_id=?', [id],
+        'SELECT COUNT(*) AS n FROM finance_account_transactions WHERE account_id=? FOR UPDATE', [id],
       )
       if (Number(n) > 0) {
         throw new AppError('该账户已有资金流水，期初余额不能再改；如需调整请用「余额调整」', 409)
@@ -246,15 +247,25 @@ async function adjust(id, { targetBalance, happenedAt, remark }, operator) {
 
 /** 有流水的账户不允许删除，只能停用——删了流水就成了孤儿，账对不上 */
 async function softDelete(id) {
-  const [[{ n }]] = await pool.query(
-    'SELECT COUNT(*) AS n FROM finance_account_transactions WHERE account_id=?', [id],
-  )
-  if (Number(n) > 0) throw new AppError('该账户已有资金流水，不能删除；请改为停用', 409)
-  const [r] = await pool.query(
-    'UPDATE finance_accounts SET deleted_at=NOW() WHERE id=? AND deleted_at IS NULL', [id],
-  )
-  if (!r.affectedRows) throw new AppError('资金账户不存在', 404)
-  return { id: Number(id) }
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    // 与 recordTransaction/update 共用账户行锁，检查与删除之间不能插入流水。
+    const [[acc]] = await conn.query('SELECT id FROM finance_accounts WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id])
+    if (!acc) throw new AppError('资金账户不存在', 404)
+    const [[transaction]] = await conn.query(
+      'SELECT id FROM finance_account_transactions WHERE account_id=? LIMIT 1 FOR UPDATE', [id],
+    )
+    if (transaction) throw new AppError('该账户已有资金流水，不能删除；请改为停用', 409)
+    await conn.query('UPDATE finance_accounts SET deleted_at=NOW() WHERE id=?', [id])
+    await conn.commit()
+    return { id: Number(id) }
+  } catch (error) {
+    await conn.rollback()
+    throw error
+  } finally {
+    conn.release()
+  }
 }
 
 /**

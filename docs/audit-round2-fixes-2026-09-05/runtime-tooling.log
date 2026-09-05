@@ -1,0 +1,457 @@
+TAP version 13
+# Subtest: certificate errors reject unrelated certificates even for the former allowlisted IP
+ok 1 - certificate errors reject unrelated certificates even for the former allowlisted IP
+  ---
+  duration_ms: 19.537709
+  type: 'test'
+  ...
+# Subtest: the renderer cannot bypass manifest URL/version binding using an arbitrary URL or hash
+ok 2 - the renderer cannot bypass manifest URL/version binding using an arbitrary URL or hash
+  ---
+  duration_ms: 37.684875
+  type: 'test'
+  ...
+# Subtest: dashboard/preload/main download obtains the manifest itself and installs only a matching digest
+ok 3 - dashboard/preload/main download obtains the manifest itself and installs only a matching digest
+  ---
+  duration_ms: 29.993792
+  type: 'test'
+  ...
+# Subtest: corrupt installer is removed and never opened
+ok 4 - corrupt installer is removed and never opened
+  ---
+  duration_ms: 7.967541
+  type: 'test'
+  ...
+# Subtest: missing manifest digest blocks download and install
+ok 5 - missing manifest digest blocks download and install
+  ---
+  duration_ms: 4.886583
+  type: 'test'
+  ...
+# Subtest: file modified while user confirms is checked again before running it
+ok 6 - file modified while user confirms is checked again before running it
+  ---
+  duration_ms: 6.45975
+  type: 'test'
+  ...
+# Subtest: late preload subscriber gets pending update and cleanup removes the listener
+ok 7 - late preload subscriber gets pending update and cleanup removes the listener
+  ---
+  duration_ms: 3.626166
+  type: 'test'
+  ...
+# Subtest: ignoring a version clears the pending snapshot, and explicit manual check can show it again
+ok 8 - ignoring a version clears the pending snapshot, and explicit manual check can show it again
+  ---
+  duration_ms: 4.727375
+  type: 'test'
+  ...
+# Subtest: native fallback uses the same verified manifest download path
+ok 9 - native fallback uses the same verified manifest download path
+  ---
+  duration_ms: 5.529542
+  type: 'test'
+  ...
+# Subtest: 首次发布先生成不可变APK，再发布完整清单；Git version.json保持原值
+ok 10 - 首次发布先生成不可变APK，再发布完整清单；Git version.json保持原值
+  ---
+  duration_ms: 62.204917
+  type: 'test'
+  ...
+# Subtest: 同号同包重跑幂等，不刷新发布时间或改写清单
+ok 11 - 同号同包重跑幂等，不刷新发布时间或改写清单
+  ---
+  duration_ms: 104.756292
+  type: 'test'
+  ...
+# Subtest: 首次迁移将旧固定包变为不可变部署快照，后续Git更新不影响发布事实
+ok 12 - 首次迁移将旧固定包变为不可变部署快照，后续Git更新不影响发布事实
+  ---
+  duration_ms: 50.699458
+  type: 'test'
+  ...
+# Subtest: 同versionCode不同包或回退版本拒绝，保留原清单和原APK
+ok 13 - 同versionCode不同包或回退版本拒绝，保留原清单和原APK
+  ---
+  duration_ms: 73.728625
+  type: 'test'
+  ...
+# Subtest: 非法元数据、越界文件名和错误摘要均不能发布
+ok 14 - 非法元数据、越界文件名和错误摘要均不能发布
+  ---
+  duration_ms: 136.883959
+  type: 'test'
+  ...
+# Subtest: 发布目录中同名APK是符号链接时拒绝覆盖或追随
+ok 15 - 发布目录中同名APK是符号链接时拒绝覆盖或追随
+  ---
+  duration_ms: 35.611666
+  type: 'test'
+  ...
+# [apk/published-version.json] JSON.parse 失败: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+# [apk/published-version.json] 原始数据 length=1: {
+# [apk/published-version.json] 规范化后 length=1: {
+# [apk/published-version.json] 末尾80字符(排查 JSON 后多余字符): "{"
+# Subtest: 并发发布被目录锁拒绝；持锁进程退出后可正常发布
+ok 16 - 并发发布被目录锁拒绝；持锁进程退出后可正常发布
+  ---
+  duration_ms: 88.589958
+  type: 'test'
+  ...
+# Subtest: API优先已发布清单，Git版本提前变化不会暴露新版本号
+ok 17 - API优先已发布清单，Git版本提前变化不会暴露新版本号
+  ---
+  duration_ms: 2.729292
+  type: 'test'
+  ...
+# Subtest: 没有部署清单时兼容version.json与旧固定APK
+ok 18 - 没有部署清单时兼容version.json与旧固定APK
+  ---
+  duration_ms: 1.523625
+  type: 'test'
+  ...
+# Subtest: 清单损坏、路径越界或APK摘要不一致时不能回退到Git版本
+ok 19 - 清单损坏、路径越界或APK摘要不一致时不能回退到Git版本
+  ---
+  duration_ms: 3.879917
+  type: 'test'
+  ...
+# Subtest: 部署清单或APK为符号链接时不能追随外部文件，悬空清单也不能回退
+ok 20 - 部署清单或APK为符号链接时不能追随外部文件，悬空清单也不能回退
+  ---
+  duration_ms: 2.394708
+  type: 'test'
+  ...
+# Subtest: 无摘要的旧URL不能取到另一个versionCode，非法下载参数不能越界
+ok 21 - 无摘要的旧URL不能取到另一个versionCode，非法下载参数不能越界
+  ---
+  duration_ms: 1.47675
+  type: 'test'
+  ...
+# Subtest: 切换新清单后旧下载URL仍取得对应旧APK；摘要缓存按文件身份隔离
+ok 22 - 切换新清单后旧下载URL仍取得对应旧APK；摘要缓存按文件身份隔离
+  ---
+  duration_ms: 2.761084
+  type: 'test'
+  ...
+# Subtest: container lookup uses the full barcode and returns the actual unrelated primary key
+ok 23 - container lookup uses the full barcode and returns the actual unrelated primary key
+  ---
+  duration_ms: 11.333291
+  type: 'test'
+  ...
+# Subtest: location lookup resolves R and LOC codes to actual primary key
+ok 24 - location lookup resolves R and LOC codes to actual primary key
+  ---
+  duration_ms: 1.923208
+  type: 'test'
+  ...
+# Subtest: container lookup rejects different task, source, warehouse, and consumed state
+ok 25 - container lookup rejects different task, source, warehouse, and consumed state
+  ---
+  duration_ms: 6.429959
+  type: 'test'
+  ...
+# Subtest: both lookups enforce task state, warehouse scope and device binding
+ok 26 - both lookups enforce task state, warehouse scope and device binding
+  ---
+  duration_ms: 15.221166
+  type: 'test'
+  ...
+# Subtest: location lookup rejects disabled or other-warehouse locations
+ok 27 - location lookup rejects disabled or other-warehouse locations
+  ---
+  duration_ms: 3.21575
+  type: 'test'
+  ...
+# Subtest: lookup routes require authentication, return execute permission, PDA client and device session
+ok 28 - lookup routes require authentication, return execute permission, PDA client and device session
+  ---
+  duration_ms: 9.741834
+  type: 'test'
+  ...
+# Subtest: direct putaway cannot bypass device binding, scope or task/container warehouse checks
+ok 29 - direct putaway cannot bypass device binding, scope or task/container warehouse checks
+  ---
+  duration_ms: 9.925542
+  type: 'test'
+  ...
+# Subtest: soft-deleted batch labels cannot be looked up or put away, including deletion before the locked read
+ok 30 - soft-deleted batch labels cannot be looked up or put away, including deletion before the locked read
+  ---
+  duration_ms: 2.442625
+  type: 'test'
+  ...
+# Subtest: task detail exposes the real pending container barcode after quality-check splitting
+ok 31 - task detail exposes the real pending container barcode after quality-check splitting
+  ---
+  duration_ms: 1.046041
+  type: 'test'
+  ...
+# Subtest: 数据库回归只接受显式本机测试库，拒绝默认业务库与生产环境
+ok 32 - 数据库回归只接受显式本机测试库，拒绝默认业务库与生产环境
+  ---
+  duration_ms: 2.872625
+  type: 'test'
+  ...
+# Subtest: 仅显式加载测试环境文件，调用者变量优先且不能选择真实 .env
+ok 33 - 仅显式加载测试环境文件，调用者变量优先且不能选择真实 .env
+  ---
+  duration_ms: 7.548208
+  type: 'test'
+  ...
+# Subtest: Node 22 标签镜像必须实际执行所有快照，不能跳过
+ok 34 - Node 22 标签镜像必须实际执行所有快照，不能跳过
+  ---
+  duration_ms: 225.906292
+  type: 'test'
+  ...
+# Subtest: 依赖审计拒绝网络错误、空/损坏JSON及缺少字段的伪成功
+ok 35 - 依赖审计拒绝网络错误、空/损坏JSON及缺少字段的伪成功
+  ---
+  duration_ms: 0.384791
+  type: 'test'
+  ...
+# Subtest: 依赖审计同时阻断直接和传递高危并保留完整报告
+ok 36 - 依赖审计同时阻断直接和传递高危并保留完整报告
+  ---
+  duration_ms: 0.168208
+  type: 'test'
+  ...
+# Subtest: 发布只认同一 SHA、main、可信事件下的最新成功工作流
+ok 37 - 发布只认同一 SHA、main、可信事件下的最新成功工作流
+  ---
+  duration_ms: 0.408167
+  type: 'test'
+  ...
+# Subtest: 发布检查轮询真实 API 契约，两个工作流成功后才放行
+ok 38 - 发布检查轮询真实 API 契约，两个工作流成功后才放行
+  ---
+  duration_ms: 1.302625
+  type: 'test'
+  ...
+# Subtest: 查询失败、损坏检查结果、超时和检查失败均拒绝发布
+ok 39 - 查询失败、损坏检查结果、超时和检查失败均拒绝发布
+  ---
+  duration_ms: 0.658
+  type: 'test'
+  ...
+# Subtest: 部署总超时穿透内层等待，清理和回退必须在强杀前执行
+ok 40 - 部署总超时穿透内层等待，清理和回退必须在强杀前执行
+  ---
+  duration_ms: 1026.053333
+  type: 'test'
+  ...
+# Subtest: 真实 GNU timeout 会终止挂起的 Docker 客户端进程
+ok 41 - 真实 GNU timeout 会终止挂起的 Docker 客户端进程
+  ---
+  duration_ms: 1011.224916
+  type: 'test'
+  ...
+# Subtest: 两轮浏览器验收均有 CPU、内存、交换、进程上限与容器内外时限
+ok 42 - 两轮浏览器验收均有 CPU、内存、交换、进程上限与容器内外时限
+  ---
+  duration_ms: 1567.321417
+  type: 'test'
+  ...
+# Subtest: 浏览器 timeout 必须失败并清理专属验收容器
+ok 43 - 浏览器 timeout 必须失败并清理专属验收容器
+  ---
+  duration_ms: 1154.229375
+  type: 'test'
+  ...
+# Subtest: 浏览器 failure 必须失败并清理专属验收容器
+ok 44 - 浏览器 failure 必须失败并清理专属验收容器
+  ---
+  duration_ms: 1137.489208
+  type: 'test'
+  ...
+# Subtest: 低空间门禁直接拒绝，绝不自动 prune 或拉浏览器镜像
+ok 45 - 低空间门禁直接拒绝，绝不自动 prune 或拉浏览器镜像
+  ---
+  duration_ms: 746.924833
+  type: 'test'
+  ...
+# Subtest: CI 镜像归档 success，失败不能产出半成品
+ok 46 - CI 镜像归档 success，失败不能产出半成品
+  ---
+  duration_ms: 914.599375
+  type: 'test'
+  ...
+# Subtest: CI 镜像归档 build-fails，失败不能产出半成品
+ok 47 - CI 镜像归档 build-fails，失败不能产出半成品
+  ---
+  duration_ms: 413.495416
+  type: 'test'
+  ...
+# Subtest: CI 镜像归档 save-fails，失败不能产出半成品
+ok 48 - CI 镜像归档 save-fails，失败不能产出半成品
+  ---
+  duration_ms: 522.114625
+  type: 'test'
+  ...
+# Subtest: CI 镜像归档 wrong-sha，失败不能产出半成品
+ok 49 - CI 镜像归档 wrong-sha，失败不能产出半成品
+  ---
+  duration_ms: 237.872
+  type: 'test'
+  ...
+# Subtest: CI 镜像归档 outside-ci，失败不能产出半成品
+ok 50 - CI 镜像归档 outside-ci，失败不能产出半成品
+  ---
+  duration_ms: 209.979041
+  type: 'test'
+  ...
+# Subtest: 导出10000条完整；10001条明确拒绝
+ok 51 - 导出10000条完整；10001条明确拒绝
+  ---
+  duration_ms: 9.13825
+  type: 'test'
+  ...
+# Subtest: 导出期间总数变化、重复行或提前空页，拒绝不完整文件
+ok 52 - 导出期间总数变化、重复行或提前空页，拒绝不完整文件
+  ---
+  duration_ms: 0.154833
+  type: 'test'
+  ...
+# Subtest: 审计阻断传递高危与运行时漏洞，保留响应完整性和进程失败保护
+ok 53 - 审计阻断传递高危与运行时漏洞，保留响应完整性和进程失败保护
+  ---
+  duration_ms: 87.83525
+  type: 'test'
+  ...
+# Subtest: 生产合并配置关闭 MySQL 宿主端口并保留 Caddy 的回环前端端口，透传实际配置
+ok 54 - 生产合并配置关闭 MySQL 宿主端口并保留 Caddy 的回环前端端口，透传实际配置
+  ---
+  duration_ms: 192.544875
+  type: 'test'
+  ...
+# Subtest: 桌面 IPC 仅接受注册窗口主 frame 的精确本地入口，阻断网页与其他本地文件
+ok 55 - 桌面 IPC 仅接受注册窗口主 frame 的精确本地入口，阻断网页与其他本地文件
+  ---
+  duration_ms: 0.592416
+  type: 'test'
+  ...
+# [2026-09-05 23:07:14.596] [ERROR] [ERR] [Unhandled] synthetic middleware failure {"path":"/synthetic/1?secret=do-not-upload","userId":1,"refNo":"","requestId":"middleware-correlation"}
+# Error: synthetic middleware failure
+#     at TestContext.<anonymous> (/Users/chengjianghao/flowcube/tests/prelaunch-runtime-ops.test.js:57:16)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# Subtest: Sentry 使用真实 SDK 在内存 transport 捕获未知错误，不上传请求或凭据
+ok 56 - Sentry 使用真实 SDK 在内存 transport 捕获未知错误，不上传请求或凭据
+  ---
+  duration_ms: 134.499584
+  type: 'test'
+  ...
+# Subtest: 错误上报配置检查缺配置失败，默认不发送事件
+ok 57 - 错误上报配置检查缺配置失败，默认不发送事件
+  ---
+  duration_ms: 495.993791
+  type: 'test'
+  ...
+# Subtest: 真实Sentry HTTP传输对接收端200作准确判定
+ok 58 - 真实Sentry HTTP传输对接收端200作准确判定
+  ---
+  duration_ms: 180.357083
+  type: 'test'
+  ...
+# Subtest: 真实Sentry HTTP传输对接收端403作准确判定
+ok 59 - 真实Sentry HTTP传输对接收端403作准确判定
+  ---
+  duration_ms: 170.91125
+  type: 'test'
+  ...
+# Subtest: 真实Sentry HTTP传输对接收端0作准确判定
+ok 60 - 真实Sentry HTTP传输对接收端0作准确判定
+  ---
+  duration_ms: 4166.693208
+  type: 'test'
+  ...
+# Subtest: 恢复临时容器限定资源、禁网络，成功退出删除自有容器及匿名卷
+ok 61 - 恢复临时容器限定资源、禁网络，成功退出删除自有容器及匿名卷
+  ---
+  duration_ms: 1411.549084
+  type: 'test'
+  ...
+# Subtest: 整体恢复时限终止导入并执行自有容器清理
+ok 62 - 整体恢复时限终止导入并执行自有容器清理
+  ---
+  duration_ms: 1071.909166
+  type: 'test'
+  ...
+# Subtest: 非法恢复库名在Docker动作前拒绝
+ok 63 - 非法恢复库名在Docker动作前拒绝
+  ---
+  duration_ms: 14.518958
+  type: 'test'
+  ...
+# Subtest: CPU配额拒绝所有零表示，小数正配额合法
+ok 64 - CPU配额拒绝所有零表示，小数正配额合法
+  ---
+  duration_ms: 755.8935
+  type: 'test'
+  ...
+# Subtest: 直接终止调用者PID会立即终止内部恢复并清理容器
+ok 65 - 直接终止调用者PID会立即终止内部恢复并清理容器
+  ---
+  duration_ms: 2492.229417
+  type: 'test'
+  ...
+# Subtest: query 获取连接超时后不能执行迟到操作，迟到连接归还
+ok 66 - query 获取连接超时后不能执行迟到操作，迟到连接归还
+  ---
+  duration_ms: 20.558792
+  type: 'test'
+  ...
+# Subtest: execute 获取连接超时后不能执行迟到操作，迟到连接归还
+ok 67 - execute 获取连接超时后不能执行迟到操作，迟到连接归还
+  ---
+  duration_ms: 16.629583
+  type: 'test'
+  ...
+# Subtest: getConnection 获取连接超时后不能执行迟到操作，迟到连接归还
+ok 68 - getConnection 获取连接超时后不能执行迟到操作，迟到连接归还
+  ---
+  duration_ms: 17.007
+  type: 'test'
+  ...
+# Subtest: 正常查询、参数及连接释放保持原语义，SQL异常也释放
+ok 69 - 正常查询、参数及连接释放保持原语义，SQL异常也释放
+  ---
+  duration_ms: 0.774291
+  type: 'test'
+  ...
+# Subtest: 池排队上限映射为503，迟到获取失败不产生未处理拒绝
+ok 70 - 池排队上限映射为503，迟到获取失败不产生未处理拒绝
+  ---
+  duration_ms: 12.626916
+  type: 'test'
+  ...
+# Subtest: readiness 真实数据库探测成功才返回ready，并复用短缓存
+ok 71 - readiness 真实数据库探测成功才返回ready，并复用短缓存
+  ---
+  duration_ms: 1.451209
+  type: 'test'
+  ...
+# Subtest: readiness 查询卡住会限时503并销毁专用连接，不回收到池
+ok 72 - readiness 查询卡住会限时503并销毁专用连接，不回收到池
+  ---
+  duration_ms: 16.799584
+  type: 'test'
+  ...
+# Subtest: readiness 获取失败不泄露数据库地址或凭据
+ok 73 - readiness 获取失败不泄露数据库地址或凭据
+  ---
+  duration_ms: 0.490417
+  type: 'test'
+  ...
+1..73
+# tests 73
+# suites 0
+# pass 73
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9030.216583

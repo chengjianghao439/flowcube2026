@@ -118,7 +118,7 @@ async function exportWaybills(req, res, next) {
   try { await sendExport(res, await exportService.getWaybillsExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null })) } catch (e) { next(e) }
 }
 async function exportFixedAssets(req, res, next) {
-  try { await sendExport(res, await exportService.getFixedAssetsExportPayload(req.query)) } catch (e) { next(e) }
+  try { await sendExport(res, await exportService.getFixedAssetsExportPayload({ ...req.query, companyId: req.companyId })) } catch (e) { next(e) }
 }
 async function exportExpenseClaims(req, res, next) {
   try {
@@ -156,16 +156,16 @@ async function exportCarriers(req, res, next) {
   try { await sendExport(res, await exportService.getCarriersExportPayload()) } catch (e) { next(e) }
 }
 async function exportPlasticBoxes(req, res, next) {
-  try { await sendExport(res, await exportService.getPlasticBoxesExportPayload(req.query)) } catch (e) { next(e) }
+  try { await sendExport(res, await exportService.getPlasticBoxesExportPayload({ ...req.query, scopeWarehouseIds: req.user.warehouseIds })) } catch (e) { next(e) }
 }
 async function exportLocations(req, res, next) {
-  try { await sendExport(res, await exportService.getLocationsExportPayload()) } catch (e) { next(e) }
+  try { await sendExport(res, await exportService.getLocationsExportPayload({ ...req.query, scopeWarehouseIds: req.user.warehouseIds })) } catch (e) { next(e) }
 }
 async function exportRacks(req, res, next) {
-  try { await sendExport(res, await exportService.getRacksExportPayload()) } catch (e) { next(e) }
+  try { await sendExport(res, await exportService.getRacksExportPayload({ ...req.query, scopeWarehouseIds: req.user.warehouseIds })) } catch (e) { next(e) }
 }
 async function exportSortingBins(req, res, next) {
-  try { await sendExport(res, await exportService.getSortingBinsExportPayload()) } catch (e) { next(e) }
+  try { await sendExport(res, await exportService.getSortingBinsExportPayload({ ...req.query, scopeWarehouseIds: req.user.warehouseIds })) } catch (e) { next(e) }
 }
 async function exportSuppliers(req, res, next) {
   try { await sendExport(res, await exportService.getSuppliersExportPayload()) } catch (e) { next(e) }
@@ -174,10 +174,10 @@ async function exportCustomers(req, res, next) {
   try { await sendExport(res, await exportService.getCustomersExportPayload()) } catch (e) { next(e) }
 }
 async function exportAccountingPeriods(req, res, next) {
-  try { await sendExport(res, await exportService.getAccountingPeriodsExportPayload()) } catch (e) { next(e) }
+  try { await sendExport(res, await exportService.getAccountingPeriodsExportPayload({ companyId: req.companyId })) } catch (e) { next(e) }
 }
 async function exportTaxAdjustments(req, res, next) {
-  try { await sendExport(res, await exportService.getTaxAdjustmentsExportPayload(req.query)) } catch (e) { next(e) }
+  try { await sendExport(res, await exportService.getTaxAdjustmentsExportPayload({ ...req.query, companyId: req.companyId })) } catch (e) { next(e) }
 }
 async function exportCompanies(req, res, next) {
   try { await sendExport(res, await exportService.getCompaniesExportPayload()) } catch (e) { next(e) }

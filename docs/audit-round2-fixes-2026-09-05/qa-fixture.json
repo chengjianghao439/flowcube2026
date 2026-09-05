@@ -1,0 +1,32 @@
+{
+  "order": {
+    "id": 66,
+    "orderNo": "TF20260905066"
+  },
+  "boxes": [
+    {
+      "containerId": 160,
+      "barcode": "R2QA17886207997490"
+    },
+    {
+      "containerId": 161,
+      "barcode": "R2QA17886207997501"
+    }
+  ],
+  "warehouses": [
+    {
+      "id": 1,
+      "name": "Smoke仓库"
+    },
+    {
+      "id": 2,
+      "name": "R2T1788614677225仓0"
+    }
+  ],
+  "product": {
+    "id": 1,
+    "code": "SMOKE-P001",
+    "name": "Smoke商品",
+    "unit": "个"
+  }
+}

@@ -1,0 +1,16 @@
+
+ RUN  v3.2.7 /Users/chengjianghao/flowcube/frontend
+
+stdout | src/api/round2.audit-probe.test.ts > round2: delayed old 401 replays a write using the replacement session
+ROUND2_SESSION: old write -> replacement session refresh -> replay confirmed; no real HTTP used
+
+stdout | src/api/round2.audit-probe.test.ts > round2: successful company create is rejected after switching company
+ROUND2_COMPANY: successful write response discarded after company switch; no database used
+
+ ✓ src/api/round2.audit-probe.test.ts (18 tests) 701ms
+
+ Test Files  1 passed (1)
+      Tests  18 passed (18)
+   Start at  21:41:33
+   Duration  988ms (transform 43ms, setup 0ms, collect 51ms, tests 701ms, environment 0ms, prepare 32ms)
+

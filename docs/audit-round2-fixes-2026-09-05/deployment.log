@@ -1,0 +1,112 @@
+TAP version 13
+# Subtest: 部署 load 失败必须退出并恢复实际旧镜像
+ok 1 - 部署 load 失败必须退出并恢复实际旧镜像
+  ---
+  duration_ms: 2326.353541
+  type: 'test'
+  ...
+# Subtest: 部署 mysql 失败必须退出并恢复实际旧镜像
+ok 2 - 部署 mysql 失败必须退出并恢复实际旧镜像
+  ---
+  duration_ms: 2542.920208
+  type: 'test'
+  ...
+# Subtest: 部署 migration 失败必须退出并恢复实际旧镜像
+ok 3 - 部署 migration 失败必须退出并恢复实际旧镜像
+  ---
+  duration_ms: 2685.503625
+  type: 'test'
+  ...
+# Subtest: 部署 start 失败必须退出并恢复实际旧镜像
+ok 4 - 部署 start 失败必须退出并恢复实际旧镜像
+  ---
+  duration_ms: 2978.743458
+  type: 'test'
+  ...
+# Subtest: 部署 health 失败必须退出并恢复实际旧镜像
+ok 5 - 部署 health 失败必须退出并恢复实际旧镜像
+  ---
+  duration_ms: 3325.362084
+  type: 'test'
+  ...
+# Subtest: 部署 gate 失败必须退出并恢复实际旧镜像
+ok 6 - 部署 gate 失败必须退出并恢复实际旧镜像
+  ---
+  duration_ms: 3135.047791
+  type: 'test'
+  ...
+# Subtest: 部署 public 失败必须退出并恢复实际旧镜像
+ok 7 - 部署 public 失败必须退出并恢复实际旧镜像
+  ---
+  duration_ms: 3352.534959
+  type: 'test'
+  ...
+# Subtest: 部署 lowdisk 失败必须退出并恢复实际旧镜像
+ok 8 - 部署 lowdisk 失败必须退出并恢复实际旧镜像
+  ---
+  duration_ms: 1957.237416
+  type: 'test'
+  ...
+# Subtest: 成功部署先迁移后替换应用，并通过门禁后结束
+ok 9 - 成功部署先迁移后替换应用，并通过门禁后结束
+  ---
+  duration_ms: 2858.54375
+  type: 'test'
+  ...
+# Subtest: CI 产物 missing-archive 必须拒绝且不执行迁移/切换
+ok 10 - CI 产物 missing-archive 必须拒绝且不执行迁移/切换
+  ---
+  duration_ms: 1716.181125
+  type: 'test'
+  ...
+# Subtest: CI 产物 corrupt-archive 必须拒绝且不执行迁移/切换
+ok 11 - CI 产物 corrupt-archive 必须拒绝且不执行迁移/切换
+  ---
+  duration_ms: 2212.302833
+  type: 'test'
+  ...
+# Subtest: CI 产物 wrong-image 必须拒绝且不执行迁移/切换
+ok 12 - CI 产物 wrong-image 必须拒绝且不执行迁移/切换
+  ---
+  duration_ms: 2354.666791
+  type: 'test'
+  ...
+# Subtest: 提交不匹配时在构建及迁移前拒绝部署
+ok 13 - 提交不匹配时在构建及迁移前拒绝部署
+  ---
+  duration_ms: 650.422583
+  type: 'test'
+  ...
+# Subtest: 人工部署检查失败时不能拉取或构建
+ok 14 - 人工部署检查失败时不能拉取或构建
+  ---
+  duration_ms: 440.627
+  type: 'test'
+  ...
+# Subtest: 首次部署失败清除新应用，不伪称恢复旧版本
+ok 15 - 首次部署失败清除新应用，不伪称恢复旧版本
+  ---
+  duration_ms: 2751.6605
+  type: 'test'
+  ...
+# Subtest: 回退自身失败保留失败状态并明确要求人工恢复
+ok 16 - 回退自身失败保留失败状态并明确要求人工恢复
+  ---
+  duration_ms: 2574.022708
+  type: 'test'
+  ...
+# Subtest: 首发回退旧后端前恢复与实际APK匹配的兼容版本清单
+ok 17 - 首发回退旧后端前恢复与实际APK匹配的兼容版本清单
+  ---
+  duration_ms: 3202.088375
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 41121.958959

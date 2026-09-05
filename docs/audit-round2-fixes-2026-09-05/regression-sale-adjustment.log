@@ -1,0 +1,285 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:20.990] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"ad50a8e3-9c0f-4a74-855a-100732854124"}
+[2026-09-05 22:28:20.992] [INFO ] [HTTP] POST /api/auth/login {"ms":77,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"ad50a8e3-9c0f-4a74-855a-100732854124"}
+  [PASS] smoke_admin 登录成功
+
+────────────────────────────────────────────────────────────
+  Scenario: 改单增量 — 待复核阶段加数量，回退拣货中补拣
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.031] [INFO ] [HTTP] POST /api/sale {"ms":16,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"59765112-ef38-4682-86f1-8a6d0801cc4a"}
+[2026-09-05 22:28:21.050] [INFO ] [HTTP] POST /api/sale/13/reserve {"ms":17,"status":200,"userId":2,"path":"/api/sale/13/reserve","method":"POST","requestId":"d3738578-9258-4596-80ec-cb862772b67b"}
+[2026-09-05 22:28:21.067] [INFO ] [HTTP] POST /api/sale/13/ship {"ms":15,"status":200,"userId":2,"path":"/api/sale/13/ship","method":"POST","requestId":"a2531282-d7a7-4e31-b808-b4987941ae96"}
+[2026-09-05 22:28:21.074] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"a614fd7a-4c7f-4b07-94d6-c24458eb1f11"}
+[2026-09-05 22:28:21.081] [INFO ] [HTTP] POST /api/scan-logs {"ms":11,"status":201,"userId":2,"path":"/api/scan-logs","method":"POST","requestId":"a614fd7a-4c7f-4b07-94d6-c24458eb1f11"}
+[2026-09-05 22:28:21.085] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/12/ready","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"b8411850-f2d7-4a94-bb2c-094bec858981"}
+[2026-09-05 22:28:21.089] [INFO ] [HTTP] PUT /api/warehouse-tasks/12/ready {"ms":7,"status":200,"userId":2,"path":"/api/warehouse-tasks/12/ready","method":"PUT","requestId":"b8411850-f2d7-4a94-bb2c-094bec858981"}
+  [PASS] 拣货完成推进到待分拣(3)
+[2026-09-05 22:28:21.094] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/12/sort-done","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"4a933654-c619-4b91-b77b-21c4eb85891a"}
+[2026-09-05 22:28:21.099] [INFO ] [HTTP] PUT /api/warehouse-tasks/12/sort-done {"ms":7,"status":200,"userId":2,"path":"/api/warehouse-tasks/12/sort-done","method":"PUT","requestId":"4a933654-c619-4b91-b77b-21c4eb85891a"}
+  [PASS] 分拣完成推进到待复核(4)
+  [PASS] 改单前任务确实在待复核(4)
+[2026-09-05 22:28:21.113] [INFO ] [HTTP] GET /api/sale/13 {"ms":11,"status":200,"userId":2,"path":"/api/sale/13","method":"GET","requestId":"82f3bd9c-d139-4288-b3bd-517f46fae63e"}
+[2026-09-05 22:28:21.127] [INFO ] [HTTP] PUT /api/sale/13/adjust {"ms":11,"status":200,"userId":2,"path":"/api/sale/13/adjust","method":"PUT","requestId":"11ad0d22-d4b7-4d2b-9905-5de664e8d2d0"}
+  [PASS] 增量改单提交成功
+  [PASS] 增量改单无需物理确认(pending=false)
+  [PASS] required_qty已上调为3
+  [PASS] 任务已回退到拣货中(2)
+  [PASS] 预占已追加到3
+[2026-09-05 22:28:21.137] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"8af8b90f-7797-498d-981c-1cba1f65fdad"}
+[2026-09-05 22:28:21.141] [INFO ] [HTTP] POST /api/scan-logs {"ms":6,"status":201,"userId":2,"path":"/api/scan-logs","method":"POST","requestId":"8af8b90f-7797-498d-981c-1cba1f65fdad"}
+[2026-09-05 22:28:21.144] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/12/ready","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"c99f6a57-abbf-4cb1-83c4-8ee68ea24ba6"}
+[2026-09-05 22:28:21.149] [INFO ] [HTTP] PUT /api/warehouse-tasks/12/ready {"ms":7,"status":200,"userId":2,"path":"/api/warehouse-tasks/12/ready","method":"PUT","requestId":"c99f6a57-abbf-4cb1-83c4-8ee68ea24ba6"}
+  [PASS] 补拣完成后可重新推进到待分拣(3)
+
+────────────────────────────────────────────────────────────
+  Scenario: 改单减量 — 仅命中未拣部分，立即生效
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.160] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"cd7cc993-7008-43c0-b8b9-3d202604e808"}
+[2026-09-05 22:28:21.174] [INFO ] [HTTP] POST /api/sale/14/reserve {"ms":11,"status":200,"userId":2,"path":"/api/sale/14/reserve","method":"POST","requestId":"f9420924-8a4d-4b58-8f44-020d46d07831"}
+[2026-09-05 22:28:21.184] [INFO ] [HTTP] POST /api/sale/14/ship {"ms":8,"status":200,"userId":2,"path":"/api/sale/14/ship","method":"POST","requestId":"376eb83f-46d0-439c-8b35-c5293ceaf0d8"}
+  [PASS] 初始required=3, picked=0
+[2026-09-05 22:28:21.190] [INFO ] [HTTP] GET /api/sale/14 {"ms":5,"status":200,"userId":2,"path":"/api/sale/14","method":"GET","requestId":"66fc5288-5da2-4927-838a-19f908a2855b"}
+[2026-09-05 22:28:21.202] [INFO ] [HTTP] PUT /api/sale/14/adjust {"ms":10,"status":200,"userId":2,"path":"/api/sale/14/adjust","method":"PUT","requestId":"8f3ce47a-dc4e-4a6f-a952-7acb61cc43e7"}
+  [PASS] 减量改单提交成功
+  [PASS] 未拣部分减量无需物理确认(pending=false)
+  [PASS] required_qty已立即下调为1
+  [PASS] 任务状态未变(仍拣货中2)，无挂起标记
+  [PASS] 归还确认后数量账对齐为1
+  [PASS] 预占已释放到1
+
+────────────────────────────────────────────────────────────
+  Scenario: 改单减量 — 命中已打包部分，PDA确认后生效
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.216] [INFO ] [HTTP] POST /api/sale {"ms":6,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"0c8c6508-1257-47e2-8af4-a2eece4a093c"}
+[2026-09-05 22:28:21.228] [INFO ] [HTTP] POST /api/sale/15/reserve {"ms":10,"status":200,"userId":2,"path":"/api/sale/15/reserve","method":"POST","requestId":"eb44d528-fa25-4ce0-abbc-6c85b599f428"}
+[2026-09-05 22:28:21.236] [INFO ] [HTTP] POST /api/sale/15/ship {"ms":7,"status":200,"userId":2,"path":"/api/sale/15/ship","method":"POST","requestId":"1fa70e90-4514-4475-acf2-887bb6d0166d"}
+[2026-09-05 22:28:21.241] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"a8170b92-9eb7-47fa-8ccf-b093505b5f57"}
+[2026-09-05 22:28:21.245] [INFO ] [HTTP] POST /api/scan-logs {"ms":6,"status":201,"userId":2,"path":"/api/scan-logs","method":"POST","requestId":"a8170b92-9eb7-47fa-8ccf-b093505b5f57"}
+[2026-09-05 22:28:21.247] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/14/ready","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"2159c2f6-e807-472c-b229-6ced5fa645b9"}
+[2026-09-05 22:28:21.252] [INFO ] [HTTP] PUT /api/warehouse-tasks/14/ready {"ms":6,"status":200,"userId":2,"path":"/api/warehouse-tasks/14/ready","method":"PUT","requestId":"2159c2f6-e807-472c-b229-6ced5fa645b9"}
+[2026-09-05 22:28:21.255] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/14/sort-done","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"a35e1da7-f383-46a1-bbcd-d60ffba20420"}
+[2026-09-05 22:28:21.259] [INFO ] [HTTP] PUT /api/warehouse-tasks/14/sort-done {"ms":6,"status":200,"userId":2,"path":"/api/warehouse-tasks/14/sort-done","method":"PUT","requestId":"a35e1da7-f383-46a1-bbcd-d60ffba20420"}
+[2026-09-05 22:28:21.262] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/check","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"e301f825-a5f8-4bee-a5be-4c49813da5f1"}
+[2026-09-05 22:28:21.270] [INFO ] [HTTP] POST /api/scan-logs/check {"ms":10,"status":201,"userId":2,"path":"/api/scan-logs/check","method":"POST","requestId":"e301f825-a5f8-4bee-a5be-4c49813da5f1"}
+  [PASS] 复核扫码成功(全量复核，自动收口进待打包)
+[2026-09-05 22:28:21.273] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"f7f6dcc5-772a-4508-a866-4c14c26021e7"}
+[2026-09-05 22:28:21.275] [INFO ] [HTTP] POST /api/packages {"ms":4,"status":200,"userId":2,"path":"/api/packages","method":"POST","requestId":"f7f6dcc5-772a-4508-a866-4c14c26021e7"}
+[2026-09-05 22:28:21.280] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages/5/add-item","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"2ce8de13-d324-4118-a6bf-aaca73bb8865"}
+[2026-09-05 22:28:21.285] [INFO ] [HTTP] POST /api/packages/5/add-item {"ms":7,"status":200,"userId":2,"path":"/api/packages/5/add-item","method":"POST","requestId":"2ce8de13-d324-4118-a6bf-aaca73bb8865"}
+[2026-09-05 22:28:21.289] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/packages/5/finish","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"f2ea1ae7-8887-424f-b6cf-e78b7ea73a7e"}
+[2026-09-05 22:28:21.306] [INFO ] [HTTP] PUT /api/packages/5/finish {"ms":19,"status":200,"userId":2,"path":"/api/packages/5/finish","method":"PUT","requestId":"f2ea1ae7-8887-424f-b6cf-e78b7ea73a7e"}
+  [PASS] 装箱2件并finish成功
+  [PASS] 改单前任务在待打包(5)
+[2026-09-05 22:28:21.313] [INFO ] [HTTP] GET /api/sale/15 {"ms":5,"status":200,"userId":2,"path":"/api/sale/15","method":"GET","requestId":"5e61a5e1-190b-409d-9bda-8b3774e2e538"}
+[2026-09-05 22:28:21.339] [INFO ] [HTTP] PUT /api/sale/15/adjust {"ms":24,"status":200,"userId":2,"path":"/api/sale/15/adjust","method":"PUT","requestId":"b888e971-7bfd-4909-a55d-47fe8ae1c312"}
+  [PASS] 减量改单提交成功
+  [PASS] 命中已打包部分需要物理确认(pending=true)
+  [PASS] 归还确认前仍记录实际占库2，目标派发1
+  [PASS] 箱子已被作废(3)
+  [PASS] 任务已回退到待复核(4)且挂起标记非空
+[2026-09-05 22:28:21.344] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/14/check-done","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"5c47522c-6fee-4da5-b566-3a24a0befc6e"}
+[2026-09-05 22:28:21.345] [WARN ] [ERR] [AppError] 该任务有改单正在等待仓库确认，请先处理完成 {"path":"/api/warehouse-tasks/14/check-done","userId":2,"refNo":"","requestId":"5c47522c-6fee-4da5-b566-3a24a0befc6e","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:21.345] [WARN ] [HTTP] PUT /api/warehouse-tasks/14/check-done {"ms":3,"status":409,"userId":2,"path":"/api/warehouse-tasks/14/check-done","method":"PUT","requestId":"5c47522c-6fee-4da5-b566-3a24a0befc6e"}
+  [PASS] 挂起期间check-done应返回409
+[2026-09-05 22:28:21.350] [INFO ] [HTTP] GET /api/warehouse-tasks/adjustments/3 {"ms":2,"status":200,"userId":2,"path":"/api/warehouse-tasks/adjustments/3","method":"GET","requestId":"f13ae7a6-3497-4a7a-a8cc-a20eeec0d2ff"}
+  [PASS] 改单详情能查到待确认项
+  [PASS] 详情包含1个待拆箱项和1个待归还项
+[2026-09-05 22:28:21.353] [INFO ] [HTTP] GET /api/warehouse-tasks/adjustments/pending {"ms":1,"status":200,"userId":2,"path":"/api/warehouse-tasks/adjustments/pending","method":"GET","requestId":"fb1a2044-c38a-4790-984e-68bff20401f1"}
+  [PASS] 待处理列表能查到该任务
+[2026-09-05 22:28:21.356] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/warehouse-tasks/adjustments/package-voids/2/confirm","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"ec4495ad-02ec-400d-b954-6f563738c2d1"}
+[2026-09-05 22:28:21.360] [INFO ] [HTTP] POST /api/warehouse-tasks/adjustments/package-voids/2/confirm {"ms":5,"status":200,"userId":2,"path":"/api/warehouse-tasks/adjustments/package-voids/2/confirm","method":"POST","requestId":"ec4495ad-02ec-400d-b954-6f563738c2d1"}
+  [PASS] 确认拆箱成功但尚未finalize(还有容器待归还)
+[2026-09-05 22:28:21.362] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/warehouse-tasks/adjustments/container-returns/3/confirm","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"1539f01a-c3c0-47a9-b5a2-22f4748cebe4"}
+[2026-09-05 22:28:21.373] [INFO ] [HTTP] POST /api/warehouse-tasks/adjustments/container-returns/3/confirm {"ms":12,"status":200,"userId":2,"path":"/api/warehouse-tasks/adjustments/container-returns/3/confirm","method":"POST","requestId":"1539f01a-c3c0-47a9-b5a2-22f4748cebe4"}
+  [PASS] 确认归还成功且finalize=true(最后一项)
+  [PASS] picked_qty已降到新目标1
+  [PASS] checked_qty已清零等待重新复核
+  [PASS] 挂起标记已清空，任务仍在待复核(4)
+  [PASS] 预占已释放到1
+[2026-09-05 22:28:21.378] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/check","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"795089d3-f9d5-49d3-985f-4d536b9c347f"}
+[2026-09-05 22:28:21.383] [INFO ] [HTTP] POST /api/scan-logs/check {"ms":7,"status":201,"userId":2,"path":"/api/scan-logs/check","method":"POST","requestId":"795089d3-f9d5-49d3-985f-4d536b9c347f"}
+  [PASS] 重新复核扫码成功
+  [PASS] 重新复核后推进到待打包(5)
+
+────────────────────────────────────────────────────────────
+  Scenario: 改单增量 — 任务仍在拣货中(2)时加数量
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.394] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"524ec9e0-69c4-469d-896d-ce77645ab749"}
+[2026-09-05 22:28:21.405] [INFO ] [HTTP] POST /api/sale/16/reserve {"ms":10,"status":200,"userId":2,"path":"/api/sale/16/reserve","method":"POST","requestId":"077cfe9c-f787-431b-812a-062e6d052e84"}
+[2026-09-05 22:28:21.413] [INFO ] [HTTP] POST /api/sale/16/ship {"ms":6,"status":200,"userId":2,"path":"/api/sale/16/ship","method":"POST","requestId":"48a0c53d-c9d7-468b-bca9-b16483faab87"}
+  [PASS] 改单前任务在拣货中(2)，尚未拣货
+[2026-09-05 22:28:21.419] [INFO ] [HTTP] GET /api/sale/16 {"ms":4,"status":200,"userId":2,"path":"/api/sale/16","method":"GET","requestId":"da300d2e-7468-4b7e-89d4-d45d83ce1901"}
+[2026-09-05 22:28:21.430] [INFO ] [HTTP] PUT /api/sale/16/adjust {"ms":9,"status":200,"userId":2,"path":"/api/sale/16/adjust","method":"PUT","requestId":"318dadf2-591d-4efc-aa91-54d8b347a7c5"}
+  [PASS] 拣货中阶段加数量不应报错
+  [PASS] 任务仍在拣货中(2)，无需回退
+  [PASS] required_qty已上调为3
+
+────────────────────────────────────────────────────────────
+  Scenario: 改单减量 — 已拣满但任务仍在拣货中(2)时减数量
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.441] [INFO ] [HTTP] POST /api/sale {"ms":6,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"46cd3448-a742-480a-889a-a1b2612b999a"}
+[2026-09-05 22:28:21.452] [INFO ] [HTTP] POST /api/sale/17/reserve {"ms":9,"status":200,"userId":2,"path":"/api/sale/17/reserve","method":"POST","requestId":"e6f79fa0-80b6-4688-82c6-648e6c8708f9"}
+[2026-09-05 22:28:21.460] [INFO ] [HTTP] POST /api/sale/17/ship {"ms":6,"status":200,"userId":2,"path":"/api/sale/17/ship","method":"POST","requestId":"62862a0e-0fb2-4893-b430-f49ee3cce6d3"}
+[2026-09-05 22:28:21.464] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"69c99858-cc62-47ea-a5e4-fa349dd35c49"}
+[2026-09-05 22:28:21.467] [INFO ] [HTTP] POST /api/scan-logs {"ms":4,"status":201,"userId":2,"path":"/api/scan-logs","method":"POST","requestId":"69c99858-cc62-47ea-a5e4-fa349dd35c49"}
+  [PASS] 改单前任务仍在拣货中(2)（已拣满但未点ready）
+[2026-09-05 22:28:21.473] [INFO ] [HTTP] GET /api/sale/17 {"ms":3,"status":200,"userId":2,"path":"/api/sale/17","method":"GET","requestId":"79e8e1b1-1bbd-4edc-a3b4-1496e42310b8"}
+[2026-09-05 22:28:21.488] [INFO ] [HTTP] PUT /api/sale/17/adjust {"ms":13,"status":200,"userId":2,"path":"/api/sale/17/adjust","method":"PUT","requestId":"c2cddd5c-1de7-4749-a4f7-3d3441836e14"}
+  [PASS] 拣货中阶段减数量命中已拣部分不应报错
+  [PASS] 命中已拣部分需要物理确认(pending=true)
+  [PASS] 任务仍在拣货中(2)，无需回退，但挂起标记已写入
+[2026-09-05 22:28:21.493] [INFO ] [HTTP] GET /api/warehouse-tasks/adjustments/4 {"ms":3,"status":200,"userId":2,"path":"/api/warehouse-tasks/adjustments/4","method":"GET","requestId":"df5451f9-42e8-435c-ad07-5390d00a4c03"}
+  [PASS] 详情包含1个待归还容器项
+[2026-09-05 22:28:21.497] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/warehouse-tasks/adjustments/container-returns/4/confirm","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"8f4975a6-4893-4809-b50d-69824fd475c7"}
+[2026-09-05 22:28:21.499] [WARN ] [ERR] [AppError] 必须放回原库位 A-01，不能放到其它库位 {"path":"/api/warehouse-tasks/adjustments/container-returns/4/confirm","userId":2,"refNo":"","requestId":"8f4975a6-4893-4809-b50d-69824fd475c7","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:21.499] [WARN ] [HTTP] POST /api/warehouse-tasks/adjustments/container-returns/4/confirm {"ms":3,"status":400,"userId":2,"path":"/api/warehouse-tasks/adjustments/container-returns/4/confirm","method":"POST","requestId":"8f4975a6-4893-4809-b50d-69824fd475c7"}
+  [PASS] 扫描非原库位应被拒绝(不允许操作员自选库位)
+[2026-09-05 22:28:21.503] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/warehouse-tasks/adjustments/container-returns/4/confirm","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"d2e68414-818c-457f-bbb3-c183b65d82ee"}
+[2026-09-05 22:28:21.512] [INFO ] [HTTP] POST /api/warehouse-tasks/adjustments/container-returns/4/confirm {"ms":11,"status":200,"userId":2,"path":"/api/warehouse-tasks/adjustments/container-returns/4/confirm","method":"POST","requestId":"d2e68414-818c-457f-bbb3-c183b65d82ee"}
+  [PASS] 扫回原库位归还成功且finalize=true
+  [PASS] picked_qty已降到新目标1
+[2026-09-05 22:28:21.516] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/16/ready","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"8c924cd4-e4f8-47a7-8cbf-153fa63cfd2e"}
+[2026-09-05 22:28:21.520] [INFO ] [HTTP] PUT /api/warehouse-tasks/16/ready {"ms":6,"status":200,"userId":2,"path":"/api/warehouse-tasks/16/ready","method":"PUT","requestId":"8c924cd4-e4f8-47a7-8cbf-153fa63cfd2e"}
+  [PASS] 归还完成后任务能正常推进到待分拣(3)
+
+────────────────────────────────────────────────────────────
+  Scenario: 装箱闭合 — 装不满不得进入待出库
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.530] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"6ce778c7-620c-44fd-8851-af0e08b361a5"}
+[2026-09-05 22:28:21.541] [INFO ] [HTTP] POST /api/sale/18/reserve {"ms":9,"status":200,"userId":2,"path":"/api/sale/18/reserve","method":"POST","requestId":"f16abaf9-96d2-46ea-8abe-54fcf75c88f3"}
+[2026-09-05 22:28:21.548] [INFO ] [HTTP] POST /api/sale/18/ship {"ms":6,"status":200,"userId":2,"path":"/api/sale/18/ship","method":"POST","requestId":"f40ff764-9556-4640-a93f-a6ca37de5af2"}
+[2026-09-05 22:28:21.552] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"03ca486e-5c47-434d-aa37-95f50d27b23c"}
+[2026-09-05 22:28:21.555] [INFO ] [HTTP] POST /api/scan-logs {"ms":4,"status":201,"userId":2,"path":"/api/scan-logs","method":"POST","requestId":"03ca486e-5c47-434d-aa37-95f50d27b23c"}
+[2026-09-05 22:28:21.559] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/17/ready","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"3139fd14-2e12-4db2-93a4-cef45dac385c"}
+[2026-09-05 22:28:21.562] [INFO ] [HTTP] PUT /api/warehouse-tasks/17/ready {"ms":4,"status":200,"userId":2,"path":"/api/warehouse-tasks/17/ready","method":"PUT","requestId":"3139fd14-2e12-4db2-93a4-cef45dac385c"}
+[2026-09-05 22:28:21.566] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/17/sort-done","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"44388abd-4500-4b91-b2a6-d0bde31f36aa"}
+[2026-09-05 22:28:21.570] [INFO ] [HTTP] PUT /api/warehouse-tasks/17/sort-done {"ms":5,"status":200,"userId":2,"path":"/api/warehouse-tasks/17/sort-done","method":"PUT","requestId":"44388abd-4500-4b91-b2a6-d0bde31f36aa"}
+[2026-09-05 22:28:21.574] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/check","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"4412b530-8c3d-4831-91a7-b78a232b9c51"}
+[2026-09-05 22:28:21.578] [INFO ] [HTTP] POST /api/scan-logs/check {"ms":5,"status":201,"userId":2,"path":"/api/scan-logs/check","method":"POST","requestId":"4412b530-8c3d-4831-91a7-b78a232b9c51"}
+  [PASS] 全量复核收口进待打包(5)
+[2026-09-05 22:28:21.582] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"d28979d9-821c-4245-a623-10aed522b285"}
+[2026-09-05 22:28:21.585] [INFO ] [HTTP] POST /api/packages {"ms":5,"status":200,"userId":2,"path":"/api/packages","method":"POST","requestId":"d28979d9-821c-4245-a623-10aed522b285"}
+[2026-09-05 22:28:21.588] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages/6/add-item","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"a8908290-d349-4e15-840b-97f4b3d46115"}
+[2026-09-05 22:28:21.592] [INFO ] [HTTP] POST /api/packages/6/add-item {"ms":5,"status":200,"userId":2,"path":"/api/packages/6/add-item","method":"POST","requestId":"a8908290-d349-4e15-840b-97f4b3d46115"}
+[2026-09-05 22:28:21.595] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/packages/6/finish","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"09c6b41a-47fb-4003-81e4-489add17f6f9"}
+[2026-09-05 22:28:21.605] [INFO ] [HTTP] PUT /api/packages/6/finish {"ms":11,"status":200,"userId":2,"path":"/api/packages/6/finish","method":"PUT","requestId":"09c6b41a-47fb-4003-81e4-489add17f6f9"}
+[2026-09-05 22:28:21.608] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/17/pack-done","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"91013d50-4eeb-4f1f-b570-6ba5d3988877"}
+[2026-09-05 22:28:21.610] [WARN ] [ERR] [AppError] 「Smoke商品」装箱数量 3 与复核数量 5 不一致，请装齐后再进入待出库 {"path":"/api/warehouse-tasks/17/pack-done","userId":2,"refNo":"","requestId":"91013d50-4eeb-4f1f-b570-6ba5d3988877","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:21.610] [WARN ] [HTTP] PUT /api/warehouse-tasks/17/pack-done {"ms":4,"status":400,"userId":2,"path":"/api/warehouse-tasks/17/pack-done","method":"PUT","requestId":"91013d50-4eeb-4f1f-b570-6ba5d3988877"}
+  [PASS] ★ 装箱3件<复核5件时 pack-done 被拒(400)（装箱闭合强校验）
+[2026-09-05 22:28:21.614] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"9502b32e-c341-474f-9875-6a404889d608"}
+[2026-09-05 22:28:21.615] [INFO ] [HTTP] POST /api/packages {"ms":2,"status":200,"userId":2,"path":"/api/packages","method":"POST","requestId":"9502b32e-c341-474f-9875-6a404889d608"}
+[2026-09-05 22:28:21.619] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages/7/add-item","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"8a6eb0a3-37f4-4cdf-98c9-c913af950f96"}
+[2026-09-05 22:28:21.622] [INFO ] [HTTP] POST /api/packages/7/add-item {"ms":4,"status":200,"userId":2,"path":"/api/packages/7/add-item","method":"POST","requestId":"8a6eb0a3-37f4-4cdf-98c9-c913af950f96"}
+[2026-09-05 22:28:21.625] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/packages/7/finish","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"93f3fd97-b5a6-4409-9d33-9bfd7548a0b0"}
+[2026-09-05 22:28:21.634] [INFO ] [HTTP] PUT /api/packages/7/finish {"ms":10,"status":200,"userId":2,"path":"/api/packages/7/finish","method":"PUT","requestId":"93f3fd97-b5a6-4409-9d33-9bfd7548a0b0"}
+[2026-09-05 22:28:21.636] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/17/pack-done","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"4ce1a8a9-be2f-4934-8815-8e83e3761141"}
+[2026-09-05 22:28:21.639] [WARN ] [ERR] [AppError] 箱贴仍待确认：箱号 L000006 尚未打印完成，请先收口打印任务 {"path":"/api/warehouse-tasks/17/pack-done","userId":2,"refNo":"","requestId":"4ce1a8a9-be2f-4934-8815-8e83e3761141","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:21.639] [WARN ] [HTTP] PUT /api/warehouse-tasks/17/pack-done {"ms":4,"status":409,"userId":2,"path":"/api/warehouse-tasks/17/pack-done","method":"PUT","requestId":"4ce1a8a9-be2f-4934-8815-8e83e3761141"}
+  [PASS] 装满5件后越过装箱闭合校验（不再报装箱数量不一致）
+
+────────────────────────────────────────────────────────────
+  Scenario: 销售退货按合格量冲减应收（不合格不退）
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.648] [INFO ] [HTTP] POST /api/sale {"ms":4,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"c5cd2a35-555b-4083-b300-a54d5cff999a"}
+[2026-09-05 22:28:21.658] [INFO ] [HTTP] POST /api/sale/19/reserve {"ms":8,"status":200,"userId":2,"path":"/api/sale/19/reserve","method":"POST","requestId":"c90f955e-f3ae-4d88-9144-50735f316444"}
+[2026-09-05 22:28:21.664] [INFO ] [HTTP] POST /api/sale/19/ship {"ms":5,"status":200,"userId":2,"path":"/api/sale/19/ship","method":"POST","requestId":"626d1216-9417-4721-9c13-282f5d4ff330"}
+[2026-09-05 22:28:21.667] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"b11bb691-29af-4bf6-a5e7-a3e580aecaf7"}
+[2026-09-05 22:28:21.670] [INFO ] [HTTP] POST /api/scan-logs {"ms":4,"status":201,"userId":2,"path":"/api/scan-logs","method":"POST","requestId":"b11bb691-29af-4bf6-a5e7-a3e580aecaf7"}
+[2026-09-05 22:28:21.673] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/18/ready","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"c16611e3-adf0-4f4d-bd75-c0666223f337"}
+[2026-09-05 22:28:21.675] [INFO ] [HTTP] PUT /api/warehouse-tasks/18/ready {"ms":4,"status":200,"userId":2,"path":"/api/warehouse-tasks/18/ready","method":"PUT","requestId":"c16611e3-adf0-4f4d-bd75-c0666223f337"}
+[2026-09-05 22:28:21.679] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/18/sort-done","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"a4b28d7c-a1d0-40c6-89b2-b8ccf1bd7b3e"}
+[2026-09-05 22:28:21.682] [INFO ] [HTTP] PUT /api/warehouse-tasks/18/sort-done {"ms":4,"status":200,"userId":2,"path":"/api/warehouse-tasks/18/sort-done","method":"PUT","requestId":"a4b28d7c-a1d0-40c6-89b2-b8ccf1bd7b3e"}
+[2026-09-05 22:28:21.685] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/check","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"8e133062-a117-4266-bac7-6b2ad455892b"}
+[2026-09-05 22:28:21.689] [INFO ] [HTTP] POST /api/scan-logs/check {"ms":6,"status":201,"userId":2,"path":"/api/scan-logs/check","method":"POST","requestId":"8e133062-a117-4266-bac7-6b2ad455892b"}
+[2026-09-05 22:28:21.692] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"0fc67a59-5aea-4457-ba47-967d6c342fa3"}
+[2026-09-05 22:28:21.694] [INFO ] [HTTP] POST /api/packages {"ms":3,"status":200,"userId":2,"path":"/api/packages","method":"POST","requestId":"0fc67a59-5aea-4457-ba47-967d6c342fa3"}
+[2026-09-05 22:28:21.697] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages/8/add-item","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"2ae10293-e40d-4fe5-8e1f-6f15dd2b4ab6"}
+[2026-09-05 22:28:21.700] [INFO ] [HTTP] POST /api/packages/8/add-item {"ms":4,"status":200,"userId":2,"path":"/api/packages/8/add-item","method":"POST","requestId":"2ae10293-e40d-4fe5-8e1f-6f15dd2b4ab6"}
+[2026-09-05 22:28:21.703] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/packages/8/finish","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"215e9d5a-3ffe-4490-84d8-784701239028"}
+[2026-09-05 22:28:21.710] [INFO ] [HTTP] PUT /api/packages/8/finish {"ms":8,"status":200,"userId":2,"path":"/api/packages/8/finish","method":"PUT","requestId":"215e9d5a-3ffe-4490-84d8-784701239028"}
+[2026-09-05 22:28:21.715] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/18/pack-done","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"394fc40b-cc6c-4e10-849d-78edf23e83b2"}
+[2026-09-05 22:28:21.720] [INFO ] [HTTP] PUT /api/warehouse-tasks/18/pack-done {"ms":7,"status":200,"userId":2,"path":"/api/warehouse-tasks/18/pack-done","method":"PUT","requestId":"394fc40b-cc6c-4e10-849d-78edf23e83b2"}
+  [PASS] 装满并跨过箱贴打印后进入待出库(6)
+[2026-09-05 22:28:21.722] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/18/ship","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"8a675906-44eb-4d9c-8ada-a0ddcc4cfb5f"}
+[2026-09-05 22:28:21.743] [INFO ] [HTTP] PUT /api/warehouse-tasks/18/ship {"ms":22,"status":200,"userId":2,"path":"/api/warehouse-tasks/18/ship","method":"PUT","requestId":"8a675906-44eb-4d9c-8ada-a0ddcc4cfb5f"}
+  [PASS] 出库成功进入已出库(7)
+  [PASS] 出库后生成应收 = 10×10 = 100
+[2026-09-05 22:28:21.751] [INFO ] [RETURN_EVENT] 记录退货事件 {"returnType":"sale","returnId":2,"returnNo":"SR20260905002","eventType":"RETURN_CREATED","operatorId":2,"requestId":"7c200428-747a-463f-90e6-a0979dc2b4be"}
+[2026-09-05 22:28:21.752] [INFO ] [HTTP] POST /api/returns/sale {"ms":7,"status":201,"userId":2,"path":"/api/returns/sale","method":"POST","requestId":"7c200428-747a-463f-90e6-a0979dc2b4be"}
+  [PASS] 创建销售退货单成功(201)
+[2026-09-05 22:28:21.759] [INFO ] [RETURN_EVENT] 记录退货事件 {"returnType":"sale","returnId":2,"returnNo":"SR20260905002","eventType":"RETURN_CONFIRMED","operatorId":2,"requestId":"59ec61f9-b9d3-4427-8aa1-9920cefdaa5b"}
+[2026-09-05 22:28:21.760] [INFO ] [HTTP] POST /api/returns/sale/2/confirm {"ms":7,"status":200,"userId":2,"path":"/api/returns/sale/2/confirm","method":"POST","requestId":"59ec61f9-b9d3-4427-8aa1-9920cefdaa5b"}
+[2026-09-05 22:28:21.764] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/return-tasks/2/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"2fe56318-d5c8-41c8-a09a-88093a6eac57"}
+[2026-09-05 22:28:21.771] [INFO ] [HTTP] POST /api/return-tasks/2/receive {"ms":9,"status":200,"userId":2,"path":"/api/return-tasks/2/receive","method":"POST","requestId":"2fe56318-d5c8-41c8-a09a-88093a6eac57"}
+[2026-09-05 22:28:21.773] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/return-tasks/2/check","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"88e0c176-0227-4c77-9367-e38c084beba9"}
+[2026-09-05 22:28:21.784] [INFO ] [HTTP] POST /api/return-tasks/2/check {"ms":12,"status":200,"userId":2,"path":"/api/return-tasks/2/check","method":"POST","requestId":"88e0c176-0227-4c77-9367-e38c084beba9"}
+[2026-09-05 22:28:21.787] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/return-tasks/2/putaway","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"866dac06-cd6f-4326-b6d1-63a6ea1981d6"}
+[2026-09-05 22:28:21.796] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":2,"orderNo":"SL20260905019","eventType":"PAYMENT_ADJUSTED_BY_RETURN","operatorId":null,"requestId":"866dac06-cd6f-4326-b6d1-63a6ea1981d6"}
+[2026-09-05 22:28:21.796] [INFO ] [RETURN_EVENT] 记录退货事件 {"returnType":"sale","returnId":2,"returnNo":"SR20260905002","eventType":"RETURN_EXECUTED","operatorId":null,"requestId":"866dac06-cd6f-4326-b6d1-63a6ea1981d6"}
+[2026-09-05 22:28:21.797] [INFO ] [HTTP] POST /api/return-tasks/2/putaway {"ms":11,"status":200,"userId":2,"path":"/api/return-tasks/2/putaway","method":"POST","requestId":"866dac06-cd6f-4326-b6d1-63a6ea1981d6"}
+  [PASS] ★ 销售退货只按合格量(3)冲减应收：100 − 3×10 = 70（不合格1件不退，业务决策）
+  [PASS] ★ 销售退货冲减应收后 confirm_status 打回 0（业务决策）
+
+────────────────────────────────────────────────────────────
+  Scenario: 改单后原折扣不得超过新货款
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.807] [INFO ] [HTTP] POST /api/sale {"ms":4,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"d4b85495-1d71-4549-86c2-c3927ac2fa14"}
+[2026-09-05 22:28:21.818] [INFO ] [HTTP] POST /api/sale/20/reserve {"ms":8,"status":200,"userId":2,"path":"/api/sale/20/reserve","method":"POST","requestId":"f42d7a5d-64a4-4595-ade9-5e6f938a7433"}
+[2026-09-05 22:28:21.822] [INFO ] [HTTP] GET /api/sale/20 {"ms":3,"status":200,"userId":2,"path":"/api/sale/20","method":"GET","requestId":"473423fb-2166-4153-aac2-a8e54eb6ac52"}
+[2026-09-05 22:28:21.828] [WARN ] [ERR] [AppError] 折扣金额不能超过订单合计 {"path":"/api/sale/20/adjust","userId":2,"refNo":"","requestId":"b0434e9a-37db-4263-a8ab-ac832a55836e","code":"SALE_DISCOUNT_EXCEEDS_TOTAL","statusCode":400}
+[2026-09-05 22:28:21.828] [WARN ] [HTTP] PUT /api/sale/20/adjust {"ms":5,"status":400,"userId":2,"path":"/api/sale/20/adjust","method":"PUT","requestId":"b0434e9a-37db-4263-a8ab-ac832a55836e"}
+  [PASS] 占库期减量导致折扣超过新货款时拒绝且返回明确错误码
+  [PASS] 占库期折扣校验失败后订单金额保持不变
+[2026-09-05 22:28:21.835] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"26d8f573-d9de-418c-bc40-cfdab451c2a3"}
+[2026-09-05 22:28:21.845] [INFO ] [HTTP] POST /api/sale/21/reserve {"ms":9,"status":200,"userId":2,"path":"/api/sale/21/reserve","method":"POST","requestId":"82e8a44a-fdbe-49dc-9eb1-7be4058ddd67"}
+[2026-09-05 22:28:21.853] [INFO ] [HTTP] POST /api/sale/21/ship {"ms":7,"status":200,"userId":2,"path":"/api/sale/21/ship","method":"POST","requestId":"147d4cdc-ee8e-49b7-af66-bcd4504b9727"}
+[2026-09-05 22:28:21.858] [INFO ] [HTTP] GET /api/sale/21 {"ms":4,"status":200,"userId":2,"path":"/api/sale/21","method":"GET","requestId":"b5ec2cb6-aa9a-4463-9764-b9e6426bd6a4"}
+[2026-09-05 22:28:21.864] [WARN ] [ERR] [AppError] 折扣金额不能超过订单合计 {"path":"/api/sale/21/adjust","userId":2,"refNo":"","requestId":"459b7a37-873c-416c-af4e-cd5e78d2aeab","code":"SALE_DISCOUNT_EXCEEDS_TOTAL","statusCode":400}
+[2026-09-05 22:28:21.864] [WARN ] [HTTP] PUT /api/sale/21/adjust {"ms":4,"status":400,"userId":2,"path":"/api/sale/21/adjust","method":"PUT","requestId":"459b7a37-873c-416c-af4e-cd5e78d2aeab"}
+  [PASS] 执行期减量导致折扣超过新货款时拒绝且返回明确错误码
+  [PASS] 执行期折扣校验失败后订单金额保持不变
+
+────────────────────────────────────────────────────────────
+  Scenario: 分批改单边界、数量守恒和补占授信
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.874] [INFO ] [HTTP] POST /api/sale {"ms":4,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"29406364-0254-4dbf-8041-5468e45e734a"}
+[2026-09-05 22:28:21.884] [INFO ] [HTTP] POST /api/sale/22/reserve {"ms":9,"status":200,"userId":2,"path":"/api/sale/22/reserve","method":"POST","requestId":"fb0f3567-b8d2-42fd-a1ac-494b828f6c6a"}
+[2026-09-05 22:28:21.893] [INFO ] [HTTP] POST /api/sale/22/ship {"ms":8,"status":200,"userId":2,"path":"/api/sale/22/ship","method":"POST","requestId":"d19905cb-9cb1-4de5-adee-3c32b5bc2ee1"}
+[2026-09-05 22:28:21.900] [INFO ] [HTTP] GET /api/sale/22 {"ms":5,"status":200,"userId":2,"path":"/api/sale/22","method":"GET","requestId":"bc2ea291-0822-4cf0-8efc-7d4f1bc27322"}
+[2026-09-05 22:28:21.914] [INFO ] [HTTP] PUT /api/sale/22/adjust {"ms":12,"status":200,"userId":2,"path":"/api/sale/22/adjust","method":"PUT","requestId":"113d3ee6-d9ac-4936-858d-a2c227710f3b"}
+  [PASS] 完整派发单任务改单成功
+  [PASS] 改单后订单数量账保持9/9/9
+[2026-09-05 22:28:21.920] [INFO ] [HTTP] GET /api/sale/22 {"ms":4,"status":200,"userId":2,"path":"/api/sale/22","method":"GET","requestId":"020db7cb-759a-45fc-ab21-cafee5ecf3ec"}
+[2026-09-05 22:28:21.925] [INFO ] [HTTP] PUT /api/sale/22/adjust {"ms":3,"status":200,"userId":2,"path":"/api/sale/22/adjust","method":"PUT","requestId":"253d10b8-d68d-4a8a-865b-bd77fba18509"}
+  [PASS] 同键重试返回原回执
+[2026-09-05 22:28:21.931] [INFO ] [HTTP] POST /api/sale {"ms":4,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"3cac4cad-1a65-4154-ae1b-8a7205936dfe"}
+[2026-09-05 22:28:21.941] [INFO ] [HTTP] POST /api/sale/23/reserve {"ms":9,"status":200,"userId":2,"path":"/api/sale/23/reserve","method":"POST","requestId":"ab8c2792-5804-4ada-8706-7b33f2dd4900"}
+[2026-09-05 22:28:21.950] [INFO ] [HTTP] POST /api/sale/23/ship {"ms":6,"status":200,"userId":2,"path":"/api/sale/23/ship","method":"POST","requestId":"b71d2b89-77a5-477c-bf5e-5747c8a9c19f"}
+[2026-09-05 22:28:21.958] [INFO ] [HTTP] GET /api/sale/23 {"ms":6,"status":200,"userId":2,"path":"/api/sale/23","method":"GET","requestId":"2362cb6a-275e-4293-acf4-dc680439b050"}
+[2026-09-05 22:28:21.963] [WARN ] [ERR] [AppError] 分批派发或多任务订单暂不支持改单，请继续发货或取消剩余未发 {"path":"/api/sale/23/adjust","userId":2,"refNo":"","requestId":"195c8a05-4e29-4100-913a-c4d593cfe73c","code":"SALE_ADJUSTMENT_SPLIT_UNSUPPORTED","statusCode":409}
+[2026-09-05 22:28:21.963] [WARN ] [HTTP] PUT /api/sale/23/adjust {"ms":3,"status":409,"userId":2,"path":"/api/sale/23/adjust","method":"PUT","requestId":"195c8a05-4e29-4100-913a-c4d593cfe73c"}
+  [PASS] 单任务只派发部分数量时禁止执行期改单
+[2026-09-05 22:28:21.971] [INFO ] [HTTP] POST /api/sale/23/ship {"ms":6,"status":200,"userId":2,"path":"/api/sale/23/ship","method":"POST","requestId":"cbd9762a-5fd5-4ee5-9bdb-aabd32f427c1"}
+[2026-09-05 22:28:21.977] [INFO ] [HTTP] GET /api/sale/23 {"ms":3,"status":200,"userId":2,"path":"/api/sale/23","method":"GET","requestId":"2333dbea-66fe-463e-87d0-03c9c073e785"}
+[2026-09-05 22:28:21.981] [WARN ] [ERR] [AppError] 分批派发或多任务订单暂不支持改单，请继续发货或取消剩余未发 {"path":"/api/sale/23/adjust","userId":2,"refNo":"","requestId":"0b855d1e-230b-466e-89fd-aedc2f8564d8","code":"SALE_ADJUSTMENT_SPLIT_UNSUPPORTED","statusCode":409}
+[2026-09-05 22:28:21.981] [WARN ] [HTTP] PUT /api/sale/23/adjust {"ms":3,"status":409,"userId":2,"path":"/api/sale/23/adjust","method":"PUT","requestId":"0b855d1e-230b-466e-89fd-aedc2f8564d8"}
+  [PASS] 同仓多任务禁止执行期改单
+  [PASS] 拒绝改单后任务合计仍为10
+[2026-09-05 22:28:21.989] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"242abbe7-7e0a-4ef0-8226-4e13bcbe583c"}
+[2026-09-05 22:28:22.003] [INFO ] [HTTP] POST /api/sale/24/reserve {"ms":10,"status":200,"userId":2,"path":"/api/sale/24/reserve","method":"POST","requestId":"0b8d1717-703c-4476-99e1-cfda604fdbac"}
+  [PASS] 额度刚好足够时首次部分占库成功
+[2026-09-05 22:28:22.011] [INFO ] [HTTP] GET /api/sale/24/reserve-preview {"ms":5,"status":200,"userId":2,"path":"/api/sale/24/reserve-preview","method":"GET","requestId":"8972bf78-1428-468f-9272-9405d71e1df4"}
+  [PASS] 补占预检不重复计算本单
+[2026-09-05 22:28:22.025] [INFO ] [HTTP] POST /api/sale/24/reserve {"ms":12,"status":200,"userId":2,"path":"/api/sale/24/reserve","method":"POST","requestId":"d23b5901-d1f2-4f38-9658-fdcb7f990e15"}
+  [PASS] 补占不需要额外授信放行
+
+════════════════════════════════════════════════════════════
+  72 passed, 0 failed
+════════════════════════════════════════════════════════════
+

@@ -1,0 +1,17 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+  [PASS] 信用内（800≤1000）放行
+  [PASS] ★ 超限且无 override 权限 → 拦截（CREDIT_LIMIT_EXCEEDED）
+  [PASS] 超限但超管操作 → 放行
+  [PASS] 超限但有 sale.credit.override 权限 → 放行
+  [PASS] 无信用额度客户 → 放行
+  [PASS] ★ 已用额度计入未清应收（400+700>1000 → 拦截）
+
+════════════════════════════════════════════════════════════
+  6 passed, 0 failed
+════════════════════════════════════════════════════════════
+

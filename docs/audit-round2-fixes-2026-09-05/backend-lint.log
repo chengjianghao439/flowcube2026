@@ -1,0 +1,4 @@
+
+> flowcube-backend@0.9.6 lint
+> eslint src/
+

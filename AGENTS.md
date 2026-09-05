@@ -110,6 +110,12 @@ npm run test:permissions
 
 运行涉及数据库的测试前确认连接目标与测试数据清理行为，**不得连接生产库跑测试**。公共 `tests/helpers/testEnvironment.js` 要求 `NODE_ENV=test`、显式回环 `DB_HOST`、合法 `DB_PORT`、`DB_USER`/`DB_PASSWORD`、`flowcube_test` 或 `flowcube_<用途>_test` 库名；测试不再加载真实 `backend/.env`。可用 `FLOWCUBE_TEST_ENV_FILE=/绝对路径/.env.test` 显式加载测试专用配置，命令行环境优先，配置错误及迁移失败立即终止。新数据库测试必须复用此校验。没有运行或环境不具备时明确说明；不能据此声称全部通过。纯文档修改核对内容、路径和 diff 即可，不必启动数据库或全量业务回归。
 
+本轮修复回归入口：`npm run smoke:prelaunch-finance`、`smoke:prelaunch-scope-export`、`smoke:prelaunch-hr` 与 `test:prelaunch-runtime`；数据库仍必须使用第 3 节独立测试环境。
+
+第二轮新增 `smoke:round2-transfer`、`smoke:round2-payroll`、`smoke:round2-runtime` 与 `test:round2-runtime`；前三者必须显式测试环境。历史审计 probe 断言缺陷存在，只是修复前证据，不能当作现行正确行为门禁。
+
+正式 Tests CI 的独立数据库专项矩阵包含两轮审计 finance、scope-export、hr、round2-transfer、round2-payroll、round2-runtime，每项先迁移专用测试库；static job 同时执行第二轮运行时/恢复/错误追踪回归。
+
 审计回归入口：`npm run smoke:audit-inventory`、`npm run smoke:audit-finance-security`、`npm run test:audit-client`、`npm run test:audit-tooling`。标签镜像检查使用前端已安装的 TypeScript 在 Node 22 编译并运行，`test:label` 需要前端依赖，不再按 Node 版本跳过；CI 在安装两端依赖后的 static job 执行。
 
 ## 4. Codex 本地预览
@@ -121,8 +127,11 @@ npm run test:permissions
 - 登录按第 1 节“项目凭据代为输入”授权执行：优先复用已有会话，需要登录时可代为输入项目账号和密码并继续验证；仅在缺少凭据或认证步骤要求本人操作时请用户协助。不得为了预览临时关闭鉴权或越过权限，不在文档记录密码。
 - 本地 dev 连接本机后端时，`authStore.ts` 的 `USE_PERSISTENT_DEV_SESSION` 使用 localStorage；生产和本地前端连接生产 API 时仍使用 sessionStorage。边界由 Vite 的 `__DEV_LOCAL_BACKEND__` 控制，不能放宽。
 - 更换端口会更换 origin，不共享 localStorage。会话有效期与续期读 auth/env 代码，不照搬旧文档的“固定 7 天”。
+- PDA 启动时原生与浏览器开发模式均初始化设备凭据缓存；原生仍用加密存储，浏览器仅内存且刷新需重新绑定。不能只在原生初始化，使浏览器绑定页无法发起换票。
+- PDA 构建使用独立路由入口，不打包 ERP 壳层与页面；两种构建复用 PDA 路由及权限定义，保留 legacy WebView 兼容构建。
 - ERP 与 PDA 验证分别开标签页，`CrossClientNavigationGuard` 禁止同标签页跨客户端跳转。
 - 验证结束保留用户可能正在使用的开发服务。连接生产 API 的预览视为生产访问，不能当作本地测试库操作。
+- 自动化浏览器每任务使用独立稳定命名会话并复用标签页；结束、出错或长暂停时关闭本任务会话，用 `agent-browser session list --json` 确认退出。保留默认闲置回收，不无限保活、不批量关闭其他任务或用户浏览器。
 
 ## 5. 后端、API 与数据库规范
 
@@ -160,7 +169,7 @@ npm run test:permissions
 - **销售执行**：拣货 → 分拣 → 复核 → 打包 → 出库，各阶段校验闭合；执行期减量、取消涉及已搬动物料时走 PDA 物理确认/逆向归还。销售关联仓库任务禁止从仓库任务入口单独取消，必须从销售订单统一取消同单任务和剩余预占。已有部分出库时取消剩余需保留已发事实，按实发原值比例保留整单折扣并重算应收，不能整单当未发取消。执行期改单仅支持单个仓库任务且所有明细已完整占库、完整派发的订单；同仓多任务或部分派发返回 409，列表和详情同步禁用入口。重建执行期明细必须写回 reserved_qty/dispatched_qty，不能只写旧 dispatched 标记。待实物归还期间 reserved_qty 按实际有效预占账保留，可暂大于改单目标量；PDA 确认释放后同事务同步已占量，dispatched_qty 表示调整后的派发目标。占库期或执行期改单重算货款后必须再次校验原折扣不超过新合计。同商品分仓的扫描记录必须同时按任务仓库与商品归属，不能只按 product_id 混在多条明细上。
 - **销售主数据快照**：建单和草稿编辑时，客户、默认仓库、明细仓库、商品与承运商名称及商品编码、单位、供应商型号、型号、颜色、成本均从当前启用的服务端主数据生成；不能信任客户端传入的显示名称。停用或删除的客户、仓库、商品、承运商必须拒绝保存。
 - **退货**：采购退货走标准仓库出库并冲减应付；销售退货走收货、质检、上架并冲减应收。部分质检必须保留合格、拒收、未检三份数量并守恒，未检容器可继续质检；收货/分箱标签与数量变化同事务入队，回传容器条码、打印任务及无打印机提示。上架扫码经当前任务范围解析真实容器/库位 ID，提交再次校验归属、状态、设备仓与权限；不能将完整条码直接转 Number，也不能通过列表选 ID 代替扫码。return_tasks 有内联状态机，不能仅查 documentStatusRules。
-- **调拨**：源仓扫码出 → 在途 → 目标仓扫码入；在途不可普通取消，异常走有独立权限的 force-close。
+- **调拨**：列表批量返回本页已授权单据的逐行计划、已出、已收数量，不做逐单N+1；在途且任一行尚未出完时，PDA列表保留源仓出库入口，全部出完才隐藏。源仓扫码出 → 在途 → 目标仓扫码入；在途不可普通取消，异常走有独立权限的 force-close。正常完成须每行计划量=已出量=已收量且无在途容器，部分发收不能提前结束。重复商品行合法，整箱按商品合计余量校验，再按行 ID 用万分之一整数单位分配；不拆实物容器。创建、读写沿用至少一端在用户仓库范围的跨仓规则。扫码 action 为 `transfer.scanOut.<id>` / `transfer.scanIn.<id>`，执行及重放先验单据、仓库范围和设备仓；旧固定 action 只兼容资源归属一致的回执。自有回执查询保留权限调整后的读取契约，不等同于再次执行权限。
 - **盘点**：账面读取 ACTIVE 容器；提交前整单检查账面漂移，任一漂移拒绝整单，刷新账面会清空对应实盘值。差异调整走引擎。
 - **商品快照**：已有业务快照读快照，无快照的过程表按既定 JOIN 读取主档。`article_number` / `articleNumber` 语义为供应商型号，不恢复随机生成；`spec` 为系统型号，不能因改展示名擅改历史列名。
 
@@ -175,10 +184,16 @@ npm run test:permissions
 - 自行审批是用户级 `allow_self_approve`，授予仅超管；复用 `selfApprove.js`，不扩大成全局豁免。收回立即生效，相关测试 finally 还原不可删除。
 - 每个业务接口鉴权与服务端权限校验；权限常量在 `backend/src/constants/permissions.js` 与 `frontend/src/lib/permission-codes.ts` 手工同步，必要时追加 seed 迁移并跑一致性测试。前端隐藏按钮不能替代权限控制。
 - 仓库范围用 `user_warehouse_scope`、`scopeFilter` / `assertInScope`；按业务是否涉仓接入。财务公司级接口不能盲加仓库过滤。
+- 塑料盒所有读写和资料导出均执行仓库范围；空盒创建校验启用商品、仓库和库位归属，删除锁容器并复查余量及任务锁。供应商采购门户继承采购仓库范围；客户对账门户通过账款来源销售单的客户 ID 关联，不能用名称模糊匹配，无法唯一关联的历史记录保留在财务总列表供核查。
 - PDA-only 写操作同时遵守 `X-Client: pda`、设备会话和绑定仓约束，ERP 不能绕过。未绑定设备显示受限引导，不放行业务请求。
+- 会计查询键包含账套 ID；切换账套取消并清理会计缓存、重置会计页面编辑状态并明确提示，存在提交中的写请求时拒绝切换。请求固定发起时的账套，迟到的旧账套响应不得显示。导出和错误上报共用认证客户端，二进制业务错误必须恢复为可读提示。
+- HR 工资明细通过已有模块 GET /payrolls/:id、PATCH /payrolls/:id/lines/:lineId 维护，应发须明确录入（0 合法），仅草稿可编辑，PATCH 要求不超过 80 字符的稳定请求键。HR 写入先锁账套再锁单据，与凭证锁顺序一致；累计台账保留负净额，计税时才截为非负税额。核算逐月验证本年度任职起月至上月的工资与累计链，缺月或陈旧台账拒绝；缺少入职日期以可知首期工资为起点，不允许后来补建改变已使用的起点。已有已核算/发放后月时，拒绝改变上游，结果完全相同的重复核算仍允许；发放再验前月已发及本期台账。扣款超过应发拒绝核算，发放核对明细与汇总金额，个人社保凭证取明细合计。旧版无录入标记或累计失效的单据禁止直接发放，不自动改历史凭证；详见第二轮工资修复说明。
+- 资金余额聚合在账户锁后使用当前锁定读，删除账户同事务锁定并检查流水。资产计提账簿与凭证共用实际封顶金额；重复月份不重写累计值；提足资产仍允许处置，处置补提与处置凭证同事务。
 - JWT access/refresh 分工、token_version、refresh jti 一次性轮换要一起维护；改密码/禁用可撤销旧会话。登出清理 React Query 缓存。
+- 客户端登录/退出递增仅内存中的会话代次，正常 `setTokens` 续期不变；请求首次派发绑定代次，迟到响应、续期、重放和 PDA 换票前均检查归属。旧会话不能覆盖新账号或以新账号执行旧请求。PDA 旧心跳取消不清票据，其他失败也仅清同代次且仍匹配原 token 的票据。创建账套纳入 mutation，提交中禁止关闭、重复创建及账套切换，成功刷新列表。
 - refresh 请求复用运行时 API 基址和超时配置（含原生自定义服务器地址），并发 401 共用一次续期，失败统一清会话；不能从 Electron/file 或 Capacitor origin 请求相对 `/api`。
 - 公开登录/更新/健康检查与公司 Logo 等是现有明确例外，新增接口不得据此省略鉴权。Logo `<img>` 场景不能携带 Bearer；更改公开资源策略需核对桌面跨源加载。
+- `/health`、`/api/health` 为存活/网络检查；公开 `/api/ready` 用应用连接池执行只读探测，整体最多2秒，短缓存合并并发，仅返回就绪状态。新版本部署与服务监控使用 ready，回退尚无该接口的旧镜像才允许原存活检查。连接池获取默认最多5秒（`DB_ACQUIRE_TIMEOUT_MS`），超期返回503且不派发排队 SQL，迟到连接归还；不把已开始的事务用响应超时伪装成取消。
 - **业务日期唯一时区为北京时间**：前端复用 `lib/dateTime.ts`，后端复用 `utils/backendTime.js`，数据库/容器配置保持一致。禁止用 `toISOString().slice(0,10)` 充当北京业务日期。
 - DATETIME 查询按既有半开区间处理，DATE 列按日期语义处理；不可机械统一为同一种边界。到期日等于北京今天时不算逾期。
 
@@ -200,6 +215,7 @@ npm run test:permissions
 
 - 新 ERP 页面注册到 `routeRegistry.ts` / `routePatterns`，配置 permission、keepAlive、tabIdentity、nav 或 listPath；菜单自动生成。
 - API 统一经 `src/api/*.ts` + `payloadClient`，组件不直接 axios；自行提示错误时用 `skipGlobalError` 避免双 toast。
+- 导出沿用列表的筛选、账套与仓库权限，但使用有界分批读取，不限于第一页 500 条；超过 10,000 条明确拒绝并要求缩小范围，读取期间总数变化或重复记录返回重试提示。不能提高公共分页上限代替导出实现。
 - 服务端业务规则不复制到前端，不让前端传目标状态决定流转。生成的状态常量通过 `npm run generate:status` 更新。
 - 状态展示统一 `StatusBadge` / `SoftStatusLabel` 与 `statusTone.ts` 语义色，不硬编码彩色 Badge。
 - 复用 DataTable、TableActionsMenu、QueryErrorState、finder、usePermission、useDirtyGuard、useInvalidate 等已有结构；keepAlive 表单在挂载/参数变化时重置，未保存内容有退出保护。
@@ -223,9 +239,11 @@ npm run test:permissions
 - 桌面更新清单由 `scripts/release-desktop.js` 写入 `/var/www/flowcube-downloads/latest.json`；`backend/downloads/` 已废弃。
 - 桌面更新使用可信 HTTPS 清单，由主进程重新取清单并绑定 version、URL、sha256；下载后及启动安装前均验摘要。无摘要不能自动安装，系统证书校验失败默认拒绝；取消按 IP/域名放行任意证书的旧行为。根组件消费更新事件，preload 保留订阅前待通知结果并支持清理监听。
 - PDA 已发布状态由不入 Git 的 `backend/apk/published-version.json` 指向唯一 APK；CI 先落安装包再原子替换清单。`backend/apk/version.json` 是构建目标/旧部署兼容清单，不能让浏览器 git reset 把未发布 APK 的版本提前对外公布。PDA 发布只更新挂载产物，不重置 Git 或重建后端；部署回退时将 version.json 原子恢复为已发布清单，兼容不识别 published-version.json 的旧镜像。
-- 依赖审计安装/网络/JSON 错误必须失败，不能视为零漏洞；直接高危以上阻断，传递漏洞仍记录。当前 HashRouter 使用 React Router 7；后端 qs 安全补丁由 overrides 固定最低修复版，移除覆盖前重新审计上游依赖范围。
+- 审计目录中的原始`.log`保留工具输出字节与摘要，`.gitattributes`仅对这两轮归档日志关闭源码空白检查；业务源码、配置和Markdown继续检查空白。
+- Gitleaks 审计证据误报只允许豁免经核实的固定非认证值，不能排除整个证据目录；当前四个测试调拨幂等键及一份源码SHA256采用精确匹配，原因写在`.gitleaks.toml`。
+- 依赖审计安装/网络/JSON 错误必须失败，不能视为零漏洞；扫描完整依赖树，直接和传递依赖的所有 high/critical 均阻断，不能用 omit=dev 排除 Electron 分发运行时。当前 HashRouter 使用 React Router 7；后端 qs 安全补丁由 overrides 固定最低修复版，移除覆盖前重新审计上游依赖范围。
 - 运维容器解析复用 `scripts/lib/ops-common.sh` 的 `resolve_container()`，不硬编码 Docker 容器名。备份先写临时文件、验证后落正式文件；失败清残留并告警。
-- 恢复演练的新鲜度按备份文件修改时间判断，自动演练默认拒绝超过 48 小时的文件（`BACKUP_MAX_AGE_HOURS`）；显式指定历史备份只检查恢复能力并提示过期。没有新销售单不能判定备份损坏。MySQL 连接数探针在容器内认证，查询失败或无效值必须记录异常，不得回退为零；隔离回归见 `tests/ops-monitor-restore.test.js`。
+- 恢复演练默认总时限900秒、768m内存、1 CPU、256进程，禁网络与额外swap；正常、超时或TERM退出清理自有容器及匿名卷，外层exec GNU timeout保证信号传递。新鲜度按备份文件修改时间判断，自动演练默认拒绝超过 48 小时的文件（`BACKUP_MAX_AGE_HOURS`）；显式指定历史备份只检查恢复能力并提示过期。没有新销售单不能判定备份损坏。MySQL 连接数探针在容器内认证，查询失败或无效值必须记录异常，不得回退为零；隔离回归见 `tests/ops-monitor-restore.test.js`。
 - 库存漂移巡检只报警，不自动修库存缓存掩盖根因。调度器与服务器 cron 是不同机制，改动时检查 scheduler、install-cron 和部署同步链路。
 - 故障处理先读 `docs/runbooks/failure-recovery.md`，确认现场与备份后执行已授权操作；测试与生产严格区分。
 - CORS 规则集中在 `backend/src/config/cors.js`：`CORS_ORIGIN` 支持逗号分隔的精确来源，Electron 的字符串 `null` 由 `CORS_ALLOW_NULL_ORIGIN` 单独控制；内置 Android PDA 当前源码默认来源为 `https://localhost`。不要为兼容客户端而打开任意来源反射。v0.9.3 新后端已部署，当前生产保留既有反射兼容配置，须完成实际客户端验证后再收窄来源；测试见 `tests/cors-policy.test.js`，部署说明见 `docs/DEPLOY.md`。
@@ -251,3 +269,20 @@ v0.9.2 发布准备复测：前端 69、客户端/PDA 发布 31、部署工具 2
 ## 13. v0.9.3 发布候选（2026-09-05）
 
 本版包含发布资源保护、监控/备份误报修复和 CORS 来源列表兼容，未增加 SQL 迁移。候选在独立工作树核验：89 项相关回归、69 项前端单测、两端 lint、app 类型检查、ERP/PDA Web 构建及工作流/Shell 检查通过。三端目标版本 0.9.3，PDA versionCode 111；实际发布状态以该 tag 同 SHA Actions 和生产清单为准，范围与发布前备份记录见 `docs/release-v0.9.3-validation.md`。本机个人 Codex 配置和开发工具整理未纳入本版。
+
+## 14. v0.9.6 深度审计修复（2026-09-05）
+
+基线 `16d6435f7ca7d64db9641ede82df4c2b76c5c7b1` 的原始问题及修复前证据保留于 `docs/prelaunch-deep-audit-2026-09-05.md`；本轮修复矩阵与实际验证见 `docs/prelaunch-fixes-2026-09-05.md`。实现已覆盖资金、资产、权限、门户、账套、导出、HR、错误追踪、依赖与部署配置；工作区修复不等于已发布，也不修复未经核查的生产历史数据。
+
+- Electron 实际运行时升级至 44.2.0，electron-builder 26.15.3；安全门禁扫描完整依赖树并阻断所有 high/critical，不能用 omit=dev 排除分发运行时。新增导航/IPC 来源守卫；macOS 最低 13，Windows 目标保持 x64。Windows 安装更新与物理打印须实际客户端验证。
+- Sentry 后端声明依赖并按可选 DSN 初始化，剔除请求体等敏感内容；回归覆盖内存 transport及本机HTTP接收、拒绝、无响应。`backend/scripts/check-error-tracking.js` 默认只验配置；显式`--send-test`关闭client reports并发送一条合成事件，4秒销毁无响应连接，必须获HTTP 2xx确认。生产默认client reports行为不变，不能据本机测试声称生产已上报。
+- Compose prod 使用 !override，要求 Compose >= 2.24.4，MySQL 无宿主映射，前端保留给 Caddy 的回环 8080；JWT access/refresh/previous、连接池与 Sentry 变量需按当前样例传递。实际生产配置尚未修改。
+- 容器序列只在初始化扫描历史最大值，正常增量不重复扫描；PDA 独立构建复用权限路由，工作区路由元数据与 ERP 组件加载器分离。仅删除已确认无消费者的 card.tsx 和 carriers/utils.ts，保留迁移、兼容入口、原生插件和运维工具。
+
+## 15. 第二轮审计修复与验收（2026-09-05）
+
+R2-01–08 的工作区实现已落地，修复前报告和原始证据保留于 `docs/prelaunch-second-audit-2026-09-05.md`、对应 JSON 与 `docs/audit-round2-2026-09-05/`。现行调拨、会话、HR 规则见第7–8节；领域实现与红绿回归见 `docs/prelaunch-round2-{transfer,client,payroll}-fixes-2026-09-05.md`，汇总验收见 `docs/prelaunch-round2-fixes-2026-09-05.md`。工作区实现不等于已发布；历史错误完成调拨单和已发放工资链不自动改写。
+
+连接池等待、业务就绪与恢复资源边界已增加。恢复容器默认1 CPU、768m内存及同值swap上限、256进程、无网络，整体900秒；退出清理本任务容器与匿名卷。超时不证明外部 Docker daemon 永不残留，需核对清理结果。错误追踪可用 `backend/scripts/check-error-tracking.js` 检查配置，显式 `--send-test` 才发送无业务数据的合成事件，要求接收端2xx且队列flush完成；平台检索和告警仍需验证。
+
+外部 Sentry 接收端与异地备份目标尚待用户提供或确认，不把本地HTTP接收测试当作生产已接通。此前生产只读快照中的库存、预占、资金、凭证汇总无所检漂移及135表备份可导入，仍只是当次观测；真机、生产压力和完整异地灾备验收以汇总报告记录为准。

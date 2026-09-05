@@ -1,0 +1,141 @@
+{
+  "auditedAt": "2026-09-05T21:49:34+08:00",
+  "baseCommit": "16d6435f7ca7d64db9641ede82df4c2b76c5c7b1",
+  "scope": "current working tree including prior uncommitted fixes; audit only",
+  "findings": [
+    {
+      "id": "R2-01",
+      "priority": "P1",
+      "title": "调拨部分入库提前完成"
+    },
+    {
+      "id": "R2-02",
+      "priority": "P1",
+      "title": "迟到401跨账号重放写操作"
+    },
+    {
+      "id": "R2-03",
+      "priority": "P1",
+      "title": "工资累计扣除余额丢失"
+    },
+    {
+      "id": "R2-04",
+      "priority": "P1",
+      "title": "工资跨月依赖缺失"
+    },
+    {
+      "id": "R2-05",
+      "priority": "P1",
+      "title": "重复商品调拨行无法完成"
+    },
+    {
+      "id": "R2-06",
+      "priority": "P2",
+      "title": "调拨创建缺少仓库范围校验"
+    },
+    {
+      "id": "R2-07",
+      "priority": "P2",
+      "title": "调拨幂等回执未绑定单据"
+    },
+    {
+      "id": "R2-08",
+      "priority": "P2",
+      "title": "创建账套成功响应被误报失败"
+    }
+  ],
+  "production": {
+    "commit": "16d6435f7ca7d64db9641ede82df4c2b76c5c7b1",
+    "mysql": "8.0.45",
+    "timezone": "+08:00",
+    "tables": 135,
+    "migrationRecords": 234,
+    "assets": 0,
+    "payrolls": 0,
+    "diskUsedPercent": 68,
+    "diskAvailableKB": 16094808,
+    "memoryTotalMB": 3563,
+    "memoryAvailableMB": 2466,
+    "sentryConfigured": false,
+    "checks": "read-only consistent snapshot; MAX_EXECUTION_TIME=5000; aggregate output only"
+  },
+  "restore": {
+    "backup": "flowcube_20260905_020001.sql.gz",
+    "sourceMtimeEpoch": 1788544804,
+    "bytes": 186364,
+    "sha256": "0d5b5d396035e44614a8f053c624a18caf9bd4a8bc79a6df1fc50ffa4ea8e360",
+    "sourceAndCopiedHashesMatch": true,
+    "localTargetImage": "mysql:8.0.46",
+    "importedTables": 135,
+    "criticalCounts": {
+      "sys_users": 7,
+      "product_items": 130,
+      "sale_orders": 11,
+      "purchase_orders": 7,
+      "inventory_containers": 107
+    },
+    "localLogAgeCaveat": "scp did not preserve file mtime; log age 0 is copy age, not source backup age; source mtime 2026-09-05 02:00:04 +08:00 is authoritative",
+    "scope": "isolated local container import and count checks; not complete application disaster recovery",
+    "privateBackupCopyRemoved": true
+  },
+  "clientProbe": {
+    "existingCases": 16,
+    "newCases": 2,
+    "passed": 18,
+    "network": "axios adapter only; no real requests",
+    "evidence": "audit-round2-2026-09-05/client-probe.log"
+  },
+  "limitations": [
+    "No Windows installation or physical printing test",
+    "No Android hardware scan test",
+    "No production stress test",
+    "No full offline application recovery or offsite restore evidence",
+    "No production data modifications or deployment",
+    "Business code not modified in this second audit"
+  ],
+  "sourceHashes": {
+    "backend/src/modules/transfer/transfer.service.js": "306a1c3769972e5acd04f414a0ae788158f977c858d960664e1c65224fadb6c2",
+    "backend/src/modules/transfer/transfer.controller.js": "61690b94ff02dc919de0fd9e6a4fb269c859ad3331c43ea9f5186ef50ddb2ee2",
+    "backend/src/modules/hr/hr.tax.js": "46bbcca87bb00a2ac3108045a9b1a63e374e40ff98f95c6bd845c3d90bebbf2b",
+    "backend/src/modules/hr/hr.service.js": "24c3b35f1298e79cbddcd138569280b2be06e5758c27d46102eb4158fd9e8372",
+    "frontend/src/api/client.ts": "0cf3bfde867a94573ed7497598febae2ac46fd9669eeaf3ab142669d3a90e84a",
+    "frontend/src/lib/authSession.ts": "3b6959234a015ce546a0c55464ab080cee2110f40488f8a4235b18f81bf36157",
+    "frontend/src/store/companyStore.ts": "ea13e9d6523c8303ac844379f2544b4e997188f1c2ef6fa720c6213a7c267baf",
+    "frontend/src/pages/accounting/consolidation/index.tsx": "268c52eb3d7ddb2ccc6bec9582d5be4c6e4084e6e5e76a37dad502ee66689c2a",
+    "backend/src/config/db.js": "0ceb611077a851aeabfcfe37249013f53a70b2955c121d4f663d7bc6411bd227",
+    "backend/src/app.js": "42cee4424de5a37d6afe25d0bb5c7ef58fc39210cdbe2c8c6955104daa9439ef",
+    "scripts/restore-check.sh": "3f359a0197c54bfc1b705e5a7a0652eb235d43d5d275352ad3e3a7ae0b723e1e"
+  },
+  "artifactHashes": {
+    "docs/audit-round2-2026-09-05/production-checks.log": "e744f47f413edf9264d7630891cc69ae71d4d6eab9becfc2423571a706e05a4b",
+    "docs/audit-round2-2026-09-05/payroll-evidence.json": "e209427a695445c3638048786ee05de6d2c0c442fda7198adb47599cd42e1501",
+    "docs/audit-round2-2026-09-05/pool-probe.cjs": "495657a6cbaac8f88fa61a51ed6873ce66c208bb9a4b4a0b0bd40541bdede620",
+    "docs/audit-round2-2026-09-05/payroll-recheck.log": "a19eede2ae336ac3cf734e49fb032dbe007c12d237e658904a95ce2edc00b010",
+    "docs/audit-round2-2026-09-05/transfer-evidence.json": "ea0fe5591df19478c295f17e126c65a1e1ffc7485233a78f4773c579ee9905b5",
+    "docs/audit-round2-2026-09-05/production-checks.sql": "94de00210efef74d92784484d7e81f0be8de7e93689456beabd3532ce9431054",
+    "docs/audit-round2-2026-09-05/client-probe.test.ts": "56532b36c5da124bedbffeb9af826d00c1b143a307db851b32db182f2d1e3a18",
+    "docs/audit-round2-2026-09-05/restore.log": "9700778196d3aa601bbe012708c431c9f818ac88e832aab35492237b8decd650",
+    "docs/audit-round2-2026-09-05/knip-backend.json": "e92226d3112ecae79313c0423ae9c85cbe995584302812f568347e6324c2931a",
+    "docs/audit-round2-2026-09-05/payroll-probe.cjs": "74685562280d1bbf72f70f5c4e89c6229506d419eee227cf328c68da591bbf28",
+    "docs/audit-round2-2026-09-05/README.md": "becbb0778f16a013bd5352fefb3c8517e45d51335a83ff13c7f07371cb6d9f9a",
+    "docs/audit-round2-2026-09-05/pool-evidence.json": "e6518e68e62c60f9acd114d0cb8a266b0fcfa7a4b06517b93a9cc27a41aa2344",
+    "docs/audit-round2-2026-09-05/npm-audit-frontend.json": "211d739ac531896a5ea30985ef81c2a067745f51f8ba2bcc71904ad5d2dad1ac",
+    "docs/audit-round2-2026-09-05/production-ledger-checks.log": "f4d81d09d9e0f74f2c6629bdc59bfc79ea7986c2adbe8aed5da013ce8b35b969",
+    "docs/audit-round2-2026-09-05/npm-audit-backend.json": "ddb20cb9b075f99ad7498fdd1c2a9a8c0521e2ae00fdaab6a4ba4f836b347c27",
+    "docs/audit-round2-2026-09-05/npm-audit-desktop.json": "39f518b1a5ade6740ae0501017719d93a98a55b6cd5c89e27f655b8a3a1f98da",
+    "docs/audit-round2-2026-09-05/client-probe.log": "94364d0967689ae7d6c066ec8b59fad21d9367034541fc46eec581bd803300e7",
+    "docs/audit-round2-2026-09-05/knip-frontend.json": "6eeb22c0979498228fa9f7c3abb9e2726571fb8d0136d03e0c8c5e9da6f15721",
+    "docs/audit-round2-2026-09-05/transfer-probe.cjs": "bda10efd711e0c63ab78cdfb4fb824808c823860f9e2877e62482b6ea7c8ed97",
+    "docs/audit-round2-2026-09-05/production-ledger-checks.sql": "813250a42bce12a8f472a6bc26769a8adde35d94b3ce41c622e6581d11b01efa"
+  },
+  "verification": {
+    "gitDiffCheck": true,
+    "priorNonDocumentPathsCompared": 80,
+    "priorNonDocumentDifferences": 0,
+    "archivedPayrollProbeRechecked": true,
+    "transferHttpCalls": 26,
+    "clientTestsPassed": 18,
+    "temporaryClientTestRemoved": true,
+    "ownedAuditDatabaseContainerStopped": true
+  }
+}

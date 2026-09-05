@@ -1,0 +1,142 @@
+TAP version 13
+# Subtest: explicit Electron null origin works without reflecting arbitrary sites
+ok 1 - explicit Electron null origin works without reflecting arbitrary sites
+  ---
+  duration_ms: 26.669834
+  type: 'test'
+  ...
+# Subtest: production domain and bundled Android origin can share an exact allowlist
+ok 2 - production domain and bundled Android origin can share an exact allowlist
+  ---
+  duration_ms: 6.478958
+  type: 'test'
+  ...
+# Subtest: allowing Electron does not allow an unrelated website
+ok 3 - allowing Electron does not allow an unrelated website
+  ---
+  duration_ms: 2.335125
+  type: 'test'
+  ...
+# Subtest: allowlist does not allow suffix matches, changed ports, or http downgrades
+ok 4 - allowlist does not allow suffix matches, changed ports, or http downgrades
+  ---
+  duration_ms: 3.469833
+  type: 'test'
+  ...
+# Subtest: null stays disabled unless separately enabled
+ok 5 - null stays disabled unless separately enabled
+  ---
+  duration_ms: 1.053208
+  type: 'test'
+  ...
+# Subtest: requests without Origin still reach the API without CORS headers
+ok 6 - requests without Origin still reach the API without CORS headers
+  ---
+  duration_ms: 4.073084
+  type: 'test'
+  ...
+# Subtest: empty production policy does not allow localhost implicitly
+ok 7 - empty production policy does not allow localhost implicitly
+  ---
+  duration_ms: 1.473083
+  type: 'test'
+  ...
+# Subtest: development localhost default remains available
+ok 8 - development localhost default remains available
+  ---
+  duration_ms: 0.937459
+  type: 'test'
+  ...
+# Subtest: explicit legacy reflection remains opt-in for staged configuration changes
+ok 9 - explicit legacy reflection remains opt-in for staged configuration changes
+  ---
+  duration_ms: 1.730291
+  type: 'test'
+  ...
+# Subtest: 新备份可恢复，即使最近 668 小时没有销售单
+ok 10 - 新备份可恢复，即使最近 668 小时没有销售单
+  ---
+  duration_ms: 1632.650208
+  type: 'test'
+  ...
+# Subtest: 自动演练拒绝超过 48 小时的备份，且不启动演练容器
+ok 11 - 自动演练拒绝超过 48 小时的备份，且不启动演练容器
+  ---
+  duration_ms: 258.016875
+  type: 'test'
+  ...
+# Subtest: 显式指定历史备份允许验证恢复能力，但提示文件年龄
+ok 12 - 显式指定历史备份允许验证恢复能力，但提示文件年龄
+  ---
+  duration_ms: 1244.286667
+  type: 'test'
+  ...
+# Subtest: 恢复演练仍拒绝 import-fails
+ok 13 - 恢复演练仍拒绝 import-fails
+  ---
+  duration_ms: 807.445667
+  type: 'test'
+  ...
+# Subtest: 恢复演练仍拒绝 missing-tables
+ok 14 - 恢复演练仍拒绝 missing-tables
+  ---
+  duration_ms: 887.123042
+  type: 'test'
+  ...
+# Subtest: 恢复演练仍拒绝 corrupt
+ok 15 - 恢复演练仍拒绝 corrupt
+  ---
+  duration_ms: 811.959083
+  type: 'test'
+  ...
+# Subtest: 连接数 query-fails 必须记录异常，不能静默回退为零
+ok 16 - 连接数 query-fails 必须记录异常，不能静默回退为零
+  ---
+  duration_ms: 3133.668042
+  type: 'test'
+  ...
+# Subtest: 连接数 invalid-metric 必须记录异常，不能静默回退为零
+ok 17 - 连接数 invalid-metric 必须记录异常，不能静默回退为零
+  ---
+  duration_ms: 3152.656292
+  type: 'test'
+  ...
+# Subtest: 认证后的真实连接数触发阈值告警
+ok 18 - 认证后的真实连接数触发阈值告警
+  ---
+  duration_ms: 3154.123583
+  type: 'test'
+  ...
+# Subtest: 连接数正常时保留正常状态
+ok 19 - 连接数正常时保留正常状态
+  ---
+  duration_ms: 3164.009625
+  type: 'test'
+  ...
+# Subtest: 上一轮监控未退出时跳过新一轮，避免 cron 累积探针
+ok 20 - 上一轮监控未退出时跳过新一轮，避免 cron 累积探针
+  ---
+  duration_ms: 229.792417
+  type: 'test'
+  ...
+# Subtest: docker-timeout 不无限挂起，记录异常而不是正常
+ok 21 - docker-timeout 不无限挂起，记录异常而不是正常
+  ---
+  duration_ms: 2048.721375
+  type: 'test'
+  ...
+# Subtest: tls-timeout 不无限挂起，记录异常而不是正常
+ok 22 - tls-timeout 不无限挂起，记录异常而不是正常
+  ---
+  duration_ms: 3162.139792
+  type: 'test'
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 22
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 23744.229708

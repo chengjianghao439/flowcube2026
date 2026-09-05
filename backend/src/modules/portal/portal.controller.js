@@ -16,6 +16,7 @@ const purchaseStatus = async (req, res, next) => {
   try {
     const data = await svc.listPurchaseStatus({
       supplierId: req.query.supplierId,
+      scopeWarehouseIds: req.user.warehouseIds,
       page: +req.query.page || 1,
       pageSize: +req.query.pageSize || 20,
     })

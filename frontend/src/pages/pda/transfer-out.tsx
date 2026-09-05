@@ -7,7 +7,6 @@ import { ArrowUpFromLine, CircleCheck, Hourglass } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getTransferDetailApi, scanOutTransferApi, type TransferScanResult } from '@/api/transfer'
-import { getContainerByBarcodeApi } from '@/api/inventory'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
@@ -34,26 +33,13 @@ export default function PdaTransferOutPage() {
 
   const scanAction = useCriticalPdaAction<TransferScanResult>({
     action: `transfer.scanOut.${transferId}`,
-    requestAction: 'transfer.scanOut',
+    requestAction: `transfer.scanOut.${transferId}`,
     label: `调拨单 ${transferId} 出库`,
     onConfirmed: async () => {
       await qc.invalidateQueries({ queryKey: ['pda-transfer', transferId] })
       await qc.invalidateQueries({ queryKey: ['pda-transfers'] })
     },
-    // 断网重连的第二道兜底：回执查不到时，按扫过的容器条码回查它是否已被整箱移到调入仓
-    // （scanOut 成功后容器 warehouse_id 变为调入仓）。与 sale-return 等作业页对齐，保守判定，
-    // 查不到/异常一律保持待确认，绝不误判成功导致漏扫。
-    resolveServerState: async ({ record }) => {
-      const barcode = String(record.metadata?.barcode ?? '')
-      if (!barcode || !order) return { effective: false as const }
-      try {
-        const c = await getContainerByBarcodeApi(barcode)
-        if (c && Number(c.warehouseId) === Number(order.toWarehouseId)) {
-          return { effective: true as const, message: `容器 ${barcode} 已在途至 ${order.toWarehouseName}，出库已成功。` }
-        }
-      } catch { /* 查不到或异常：保持待确认 */ }
-      return { effective: false as const }
-    },
+    // 调拨结果必须由绑定单据的回执确认；容器当前所在仓/库位不能证明本次操作成功。
   })
 
   const scanMut = useMutation({

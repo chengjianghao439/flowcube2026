@@ -1,3 +1,4 @@
+import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getVouchersApi, getVoucherApi, generateVouchersApi,
@@ -9,13 +10,13 @@ import type { CreateManualVoucherParams } from '@/types/accounting'
 const QK = 'acct-vouchers'
 
 export const useVouchers = (params: VoucherQuery) =>
-  useQuery({ queryKey: [QK, 'list', params], queryFn: () => getVouchersApi(params) })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'list', params]), queryFn: () => getVouchersApi(params) })
 
 export const useVoucher = (id: number | null) =>
-  useQuery({ queryKey: [QK, 'detail', id], queryFn: () => getVoucherApi(id as number), enabled: !!id })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'detail', id]), queryFn: () => getVoucherApi(id as number), enabled: !!id })
 
 export const useReconciliation = () =>
-  useQuery({ queryKey: [QK, 'reconciliation'], queryFn: getReconciliationApi, staleTime: 30000 })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'reconciliation']), queryFn: getReconciliationApi, staleTime: 30000 })
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: [QK] })

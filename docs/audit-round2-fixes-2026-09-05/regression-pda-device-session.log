@@ -1,0 +1,129 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:25.816] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"7bcc46c8-fc9b-43c9-95d5-7a746975ce9b"}
+[2026-09-05 22:28:25.817] [INFO ] [HTTP] POST /api/auth/login {"ms":73,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"7bcc46c8-fc9b-43c9-95d5-7a746975ce9b"}
+
+────────────────────────────────────────────────────────────
+  设备登记：密钥只发一次，之后取不回来
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:25.883] [INFO ] [HTTP] POST /api/pda-devices {"ms":61,"status":201,"userId":2,"path":"/api/pda-devices","method":"POST","requestId":"6cbefd6d-e6a1-42ea-a076-2e27743b85be"}
+  [PASS] 登记设备成功
+  [PASS] ★ 响应里带出设备码与 64 位密钥（现场据此生成绑定二维码）
+[2026-09-05 22:28:25.888] [INFO ] [HTTP] GET /api/pda-devices/3 {"ms":2,"status":200,"userId":2,"path":"/api/pda-devices/3","method":"GET","requestId":"a1c14ef5-de41-4bc0-97bf-e267d3edefff"}
+  [PASS] ★ 再查详情拿不到密钥（库里只存 bcrypt 哈希，丢了只能重置）
+  [PASS] ★ 数据库里存的是哈希而不是明文密钥
+[2026-09-05 22:28:25.951] [INFO ] [HTTP] POST /api/pda/sessions {"ms":60,"status":200,"userId":2,"path":"/api/pda/sessions","method":"POST","requestId":"7d17cf61-d306-42c5-8fda-ded197955f4a"}
+  [PASS] 用密钥可以换到设备票据
+  [PASS] ★ 票据带回设备绑定的仓库（跨仓拦截据此判定）
+[2026-09-05 22:28:26.011] [WARN ] [ERR] [AppError] PDA 设备密钥错误 {"path":"/api/pda/sessions","userId":2,"refNo":"","requestId":"14993f85-33ab-495e-bbc8-af4850866ac9","code":"PDA_DEVICE_SECRET_INVALID","statusCode":401}
+[2026-09-05 22:28:26.011] [WARN ] [HTTP] POST /api/pda/sessions {"ms":57,"status":401,"userId":2,"path":"/api/pda/sessions","method":"POST","requestId":"14993f85-33ab-495e-bbc8-af4850866ac9"}
+  [PASS] 错误密钥换不到票据
+
+────────────────────────────────────────────────────────────
+  跨仓拦截：绑了 A 仓的机器扫 B 仓的单据必须被拒
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:26.030] [INFO ] [HTTP] POST /api/purchase {"ms":14,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"2f23b9b5-b9d3-439b-b9ae-bb8e4458b9fa"}
+[2026-09-05 22:28:26.037] [INFO ] [HTTP] POST /api/purchase/1/confirm {"ms":5,"status":200,"userId":2,"path":"/api/purchase/1/confirm","method":"POST","requestId":"f2e864f9-3515-494a-be5f-2685527b8b6f"}
+[2026-09-05 22:28:26.052] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":13,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"669fd04a-6805-45ee-8846-b5ee282d5eb2"}
+[2026-09-05 22:28:26.068] [INFO ] [HTTP] POST /api/inbound-tasks/1/submit {"ms":13,"status":200,"userId":2,"path":"/api/inbound-tasks/1/submit","method":"POST","requestId":"f3440f54-5a3e-4df2-b549-56cfbe85ff3f"}
+[2026-09-05 22:28:26.077] [INFO ] [HTTP] POST /api/purchase {"ms":4,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"ce468ec7-9cb9-4625-a96f-383f1d023e5a"}
+[2026-09-05 22:28:26.083] [INFO ] [HTTP] POST /api/purchase/2/confirm {"ms":4,"status":200,"userId":2,"path":"/api/purchase/2/confirm","method":"POST","requestId":"b00eab38-c0df-4f41-a3d4-bc1220cd5ef1"}
+[2026-09-05 22:28:26.091] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":7,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"c3948d3f-54cc-49a5-be4b-86b14247e739"}
+[2026-09-05 22:28:26.100] [INFO ] [HTTP] POST /api/inbound-tasks/2/submit {"ms":6,"status":200,"userId":2,"path":"/api/inbound-tasks/2/submit","method":"POST","requestId":"0d2a2883-73e3-4ba0-8567-e347fa0d1f41"}
+[2026-09-05 22:28:26.106] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/1/receive","userId":2,"deviceCode":"PDA-260905-5C2D","warehouseId":1,"requestId":"a21cc5ae-5f82-45fd-969e-a474d021cb77"}
+[2026-09-05 22:28:26.124] [INFO ] [HTTP] POST /api/inbound-tasks/1/receive {"ms":22,"status":200,"userId":2,"path":"/api/inbound-tasks/1/receive","method":"POST","requestId":"a21cc5ae-5f82-45fd-969e-a474d021cb77"}
+  [PASS] 本仓的收货正常放行
+[2026-09-05 22:28:26.127] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/2/receive","userId":2,"deviceCode":"PDA-260905-5C2D","warehouseId":1,"requestId":"66fab7db-c27b-4bed-ba66-f2ba5ae4c43f"}
+[2026-09-05 22:28:26.128] [WARN ] [ERR] [AppError] 当前设备绑定仓库与该收货订单所属仓库不一致，无法收货 {"path":"/api/inbound-tasks/2/receive","userId":2,"refNo":"","requestId":"66fab7db-c27b-4bed-ba66-f2ba5ae4c43f","code":"FORBIDDEN","statusCode":403}
+[2026-09-05 22:28:26.128] [WARN ] [HTTP] POST /api/inbound-tasks/2/receive {"ms":3,"status":403,"userId":2,"path":"/api/inbound-tasks/2/receive","method":"POST","requestId":"66fab7db-c27b-4bed-ba66-f2ba5ae4c43f"}
+  [PASS] ★ 本机扫别仓的收货单被拒（修复前 req.pda 恒为 null，这道拦截从未触发过）
+  [PASS] 被拒时别仓那张单一件都没入账
+
+────────────────────────────────────────────────────────────
+  设备停用：票据立刻失效（设备丢失时的止血手段）
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:26.138] [INFO ] [HTTP] POST /api/purchase {"ms":6,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"5eb80f16-3bf6-43c3-a5c2-796f8f4d2136"}
+[2026-09-05 22:28:26.142] [INFO ] [HTTP] POST /api/purchase/3/confirm {"ms":3,"status":200,"userId":2,"path":"/api/purchase/3/confirm","method":"POST","requestId":"becdd6a7-8ac1-40b5-ae67-1baedc27a88d"}
+[2026-09-05 22:28:26.152] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":9,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"53caa3e9-84f4-4c61-8d89-e6653b6c9179"}
+[2026-09-05 22:28:26.159] [INFO ] [HTTP] POST /api/inbound-tasks/3/submit {"ms":6,"status":200,"userId":2,"path":"/api/inbound-tasks/3/submit","method":"POST","requestId":"15aa27da-c132-4bc6-b295-f484d01ee9ad"}
+[2026-09-05 22:28:26.163] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/3/receive","userId":2,"deviceCode":"PDA-260905-5C2D","warehouseId":1,"requestId":"065a775c-19ab-418f-bc72-4a6b532a6975"}
+[2026-09-05 22:28:26.176] [INFO ] [HTTP] POST /api/inbound-tasks/3/receive {"ms":15,"status":200,"userId":2,"path":"/api/inbound-tasks/3/receive","method":"POST","requestId":"065a775c-19ab-418f-bc72-4a6b532a6975"}
+  [PASS] 停用前可正常作业
+[2026-09-05 22:28:26.183] [INFO ] [HTTP] PUT /api/pda-devices/3/status {"ms":4,"status":200,"userId":2,"path":"/api/pda-devices/3/status","method":"PUT","requestId":"fa37e78b-e0ee-4547-9b59-3ab30edceb7d"}
+  [PASS] 停用设备成功
+  [PASS] ★ 停用同时吊销了在用会话（只改状态不吊票据的话，那台机器还能用到票据过期）
+  [PASS] 库里已无该设备的有效会话
+[2026-09-05 22:28:26.187] [WARN ] [PDASession] PDA device session denied {"method":"POST","route":"/api/inbound-tasks/3/receive","userId":2,"hasPdaSession":true,"reason":"session_revoked","requestId":"a5761c46-b1ac-4572-842e-044604f4a8e0"}
+[2026-09-05 22:28:26.187] [WARN ] [ERR] [AppError] 该设备会话已被管理员吊销，请联系管理员 {"path":"/api/inbound-tasks/3/receive","userId":2,"refNo":"","requestId":"a5761c46-b1ac-4572-842e-044604f4a8e0","code":"PDA_SESSION_REQUIRED","statusCode":403}
+[2026-09-05 22:28:26.187] [WARN ] [HTTP] POST /api/inbound-tasks/3/receive {"ms":1,"status":403,"userId":2,"path":"/api/inbound-tasks/3/receive","method":"POST","requestId":"a5761c46-b1ac-4572-842e-044604f4a8e0"}
+  [PASS] ★ 被吊销票据的机器立刻作业不了（丢失设备的止血闭环到此完整）
+[2026-09-05 22:28:26.191] [INFO ] [HTTP] PUT /api/pda-devices/3/status {"ms":3,"status":200,"userId":2,"path":"/api/pda-devices/3/status","method":"PUT","requestId":"7be52304-1584-4c0e-aa78-59668a49858f"}
+  [PASS] 可以重新启用设备
+
+────────────────────────────────────────────────────────────
+  重置密钥：旧密钥作废且吊销票据
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:26.251] [INFO ] [HTTP] POST /api/pda-devices {"ms":59,"status":201,"userId":2,"path":"/api/pda-devices","method":"POST","requestId":"35c36c1a-51a5-48f4-9482-e1af9c675d23"}
+[2026-09-05 22:28:26.313] [INFO ] [HTTP] POST /api/pda/sessions {"ms":59,"status":200,"userId":2,"path":"/api/pda/sessions","method":"POST","requestId":"1cd70eaa-1278-45ea-9b3d-466862fcc673"}
+  [PASS] 前置：拿到第一张票据
+[2026-09-05 22:28:26.378] [INFO ] [HTTP] POST /api/pda-devices/4/reset-secret {"ms":63,"status":200,"userId":2,"path":"/api/pda-devices/4/reset-secret","method":"POST","requestId":"34dfb96d-334c-4c5e-8d71-fdfee0f966c1"}
+  [PASS] 重置密钥成功
+  [PASS] ★ 新密钥与旧密钥不同，且旧票据被吊销
+[2026-09-05 22:28:26.445] [WARN ] [ERR] [AppError] PDA 设备密钥错误 {"path":"/api/pda/sessions","userId":2,"refNo":"","requestId":"b33ff343-c2a3-401b-95bf-fd7fcc3b88be","code":"PDA_DEVICE_SECRET_INVALID","statusCode":401}
+[2026-09-05 22:28:26.445] [WARN ] [HTTP] POST /api/pda/sessions {"ms":64,"status":401,"userId":2,"path":"/api/pda/sessions","method":"POST","requestId":"b33ff343-c2a3-401b-95bf-fd7fcc3b88be"}
+  [PASS] ★ 旧密钥再也换不到票据
+[2026-09-05 22:28:26.509] [INFO ] [HTTP] POST /api/pda/sessions {"ms":62,"status":200,"userId":2,"path":"/api/pda/sessions","method":"POST","requestId":"5800646c-b804-4c48-bcc4-de7226f343ca"}
+  [PASS] 新密钥可以换到票据
+
+────────────────────────────────────────────────────────────
+  未绑定设备的机器：一律不许作业
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:26.517] [INFO ] [HTTP] POST /api/purchase {"ms":5,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"a7df0241-01b2-48d7-ae95-39ec60c5a70d"}
+[2026-09-05 22:28:26.521] [INFO ] [HTTP] POST /api/purchase/4/confirm {"ms":3,"status":200,"userId":2,"path":"/api/purchase/4/confirm","method":"POST","requestId":"08f6e50d-2362-42fc-bf9b-bcf8ac2593f4"}
+[2026-09-05 22:28:26.530] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":8,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"03b1649f-1451-449e-8fbf-1637fbe947b6"}
+[2026-09-05 22:28:26.536] [INFO ] [HTTP] POST /api/inbound-tasks/4/submit {"ms":5,"status":200,"userId":2,"path":"/api/inbound-tasks/4/submit","method":"POST","requestId":"8617ef26-472e-4767-9409-5b41e5b564a8"}
+[2026-09-05 22:28:26.539] [WARN ] [PDASession] PDA device session denied {"method":"POST","route":"/api/inbound-tasks/4/receive","userId":2,"hasPdaSession":false,"reason":"missing_session","requestId":"e2de29c8-514b-4cb7-b5bd-adf9b1aaa3d0"}
+[2026-09-05 22:28:26.539] [WARN ] [ERR] [AppError] 该 PDA 未绑定设备，请先在「设备绑定」中扫码绑定后再作业 {"path":"/api/inbound-tasks/4/receive","userId":2,"refNo":"","requestId":"e2de29c8-514b-4cb7-b5bd-adf9b1aaa3d0","code":"PDA_SESSION_REQUIRED","statusCode":403}
+[2026-09-05 22:28:26.540] [WARN ] [HTTP] POST /api/inbound-tasks/4/receive {"ms":1,"status":403,"userId":2,"path":"/api/inbound-tasks/4/receive","method":"POST","requestId":"e2de29c8-514b-4cb7-b5bd-adf9b1aaa3d0"}
+  [PASS] ★ 没有设备票据一律不许作业，且提示指向「去绑定」而不是含糊报错
+
+────────────────────────────────────────────────────────────
+  打包写接口：同样要求设备票据（防伪造 X-Client 头绕过）
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:26.542] [WARN ] [PDASession] PDA device session denied {"method":"POST","route":"/api/packages","userId":2,"hasPdaSession":false,"reason":"missing_session","requestId":"61b7b3df-789d-481f-909a-207714437812"}
+[2026-09-05 22:28:26.542] [WARN ] [ERR] [AppError] 该 PDA 未绑定设备，请先在「设备绑定」中扫码绑定后再作业 {"path":"/api/packages","userId":2,"refNo":"","requestId":"61b7b3df-789d-481f-909a-207714437812","code":"PDA_SESSION_REQUIRED","statusCode":403}
+[2026-09-05 22:28:26.542] [WARN ] [HTTP] POST /api/packages {"ms":0,"status":403,"userId":2,"path":"/api/packages","method":"POST","requestId":"61b7b3df-789d-481f-909a-207714437812"}
+  [PASS] ★ 无票据 POST /api/packages 被拒（此前只靠可伪造的 X-Client 头）
+[2026-09-05 22:28:26.545] [WARN ] [PDASession] PDA device session denied {"method":"POST","route":"/api/packages/1/add-item","userId":2,"hasPdaSession":false,"reason":"missing_session","requestId":"7fd5af53-dbbb-4759-9506-193fcc906cbd"}
+[2026-09-05 22:28:26.545] [WARN ] [ERR] [AppError] 该 PDA 未绑定设备，请先在「设备绑定」中扫码绑定后再作业 {"path":"/api/packages/1/add-item","userId":2,"refNo":"","requestId":"7fd5af53-dbbb-4759-9506-193fcc906cbd","code":"PDA_SESSION_REQUIRED","statusCode":403}
+[2026-09-05 22:28:26.545] [WARN ] [HTTP] POST /api/packages/1/add-item {"ms":0,"status":403,"userId":2,"path":"/api/packages/1/add-item","method":"POST","requestId":"7fd5af53-dbbb-4759-9506-193fcc906cbd"}
+  [PASS] ★ 无票据 POST /api/packages/1/add-item 被拒（此前只靠可伪造的 X-Client 头）
+[2026-09-05 22:28:26.547] [WARN ] [PDASession] PDA device session denied {"method":"POST","route":"/api/packages/1/remove-item","userId":2,"hasPdaSession":false,"reason":"missing_session","requestId":"90c8d238-4534-4114-a269-bfb5fc425678"}
+[2026-09-05 22:28:26.547] [WARN ] [ERR] [AppError] 该 PDA 未绑定设备，请先在「设备绑定」中扫码绑定后再作业 {"path":"/api/packages/1/remove-item","userId":2,"refNo":"","requestId":"90c8d238-4534-4114-a269-bfb5fc425678","code":"PDA_SESSION_REQUIRED","statusCode":403}
+[2026-09-05 22:28:26.547] [WARN ] [HTTP] POST /api/packages/1/remove-item {"ms":1,"status":403,"userId":2,"path":"/api/packages/1/remove-item","method":"POST","requestId":"90c8d238-4534-4114-a269-bfb5fc425678"}
+  [PASS] ★ 无票据 POST /api/packages/1/remove-item 被拒（此前只靠可伪造的 X-Client 头）
+[2026-09-05 22:28:26.549] [WARN ] [PDASession] PDA device session denied {"method":"POST","route":"/api/packages/1/void","userId":2,"hasPdaSession":false,"reason":"missing_session","requestId":"26d1f21b-1264-49cb-a34d-7bdb054d2125"}
+[2026-09-05 22:28:26.549] [WARN ] [ERR] [AppError] 该 PDA 未绑定设备，请先在「设备绑定」中扫码绑定后再作业 {"path":"/api/packages/1/void","userId":2,"refNo":"","requestId":"26d1f21b-1264-49cb-a34d-7bdb054d2125","code":"PDA_SESSION_REQUIRED","statusCode":403}
+[2026-09-05 22:28:26.549] [WARN ] [HTTP] POST /api/packages/1/void {"ms":1,"status":403,"userId":2,"path":"/api/packages/1/void","method":"POST","requestId":"26d1f21b-1264-49cb-a34d-7bdb054d2125"}
+  [PASS] ★ 无票据 POST /api/packages/1/void 被拒（此前只靠可伪造的 X-Client 头）
+[2026-09-05 22:28:26.551] [WARN ] [PDASession] PDA device session denied {"method":"PUT","route":"/api/packages/1/finish","userId":2,"hasPdaSession":false,"reason":"missing_session","requestId":"16e91104-a4a2-4f01-9b55-51d698a9783e"}
+[2026-09-05 22:28:26.551] [WARN ] [ERR] [AppError] 该 PDA 未绑定设备，请先在「设备绑定」中扫码绑定后再作业 {"path":"/api/packages/1/finish","userId":2,"refNo":"","requestId":"16e91104-a4a2-4f01-9b55-51d698a9783e","code":"PDA_SESSION_REQUIRED","statusCode":403}
+[2026-09-05 22:28:26.551] [WARN ] [HTTP] PUT /api/packages/1/finish {"ms":0,"status":403,"userId":2,"path":"/api/packages/1/finish","method":"PUT","requestId":"16e91104-a4a2-4f01-9b55-51d698a9783e"}
+  [PASS] ★ 无票据 PUT /api/packages/1/finish 被拒（此前只靠可伪造的 X-Client 头）
+[2026-09-05 22:28:26.558] [INFO ] [HTTP] POST /api/purchase {"ms":4,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"8334d7bf-444c-4694-8cf2-a82f27b73691"}
+[2026-09-05 22:28:26.561] [INFO ] [HTTP] POST /api/purchase/5/confirm {"ms":2,"status":200,"userId":2,"path":"/api/purchase/5/confirm","method":"POST","requestId":"1bc7a364-e94f-4a5b-93dd-f6215d3d26e9"}
+[2026-09-05 22:28:26.569] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":6,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"b9366016-f47c-4e5e-af64-36050cd1d952"}
+[2026-09-05 22:28:26.575] [INFO ] [HTTP] POST /api/inbound-tasks/5/submit {"ms":5,"status":200,"userId":2,"path":"/api/inbound-tasks/5/submit","method":"POST","requestId":"64a1a568-cdb7-4cad-8a13-185228d45716"}
+[2026-09-05 22:28:26.577] [WARN ] [PDASession] PDA device session denied {"method":"POST","route":"/api/packages","userId":2,"hasPdaSession":true,"reason":"session_not_found","requestId":"84543198-41f9-4184-a028-3c04d6b75d15"}
+[2026-09-05 22:28:26.577] [WARN ] [ERR] [AppError] 设备会话无效，请重新登录以重建设备会话 {"path":"/api/packages","userId":2,"refNo":"","requestId":"84543198-41f9-4184-a028-3c04d6b75d15","code":"PDA_SESSION_REQUIRED","statusCode":403}
+[2026-09-05 22:28:26.577] [WARN ] [HTTP] POST /api/packages {"ms":1,"status":403,"userId":2,"path":"/api/packages","method":"POST","requestId":"84543198-41f9-4184-a028-3c04d6b75d15"}
+  [PASS] ★ 伪造票据也过不了会话校验（不是随便一个字符串都算数）
+
+════════════════════════════════════════════════════════════
+  28 passed, 0 failed
+════════════════════════════════════════════════════════════
+

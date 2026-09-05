@@ -1,0 +1,41 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:24.242] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"53cd5c56-04e0-4e5a-87c1-51e911686dab"}
+[2026-09-05 22:28:24.244] [INFO ] [HTTP] POST /api/auth/login {"ms":73,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"53cd5c56-04e0-4e5a-87c1-51e911686dab"}
+[2026-09-05 22:28:24.267] [INFO ] [HTTP] POST /api/finance/accounts {"ms":9,"status":201,"userId":2,"path":"/api/finance/accounts","method":"POST","requestId":"a3a57ac7-633d-40e1-ae5f-3250dd4787a9"}
+  [PASS] 建退款账户成功
+[2026-09-05 22:28:24.282] [INFO ] [HTTP] POST /api/refunds {"ms":13,"status":200,"userId":2,"path":"/api/refunds","method":"POST","requestId":"3e77be06-fc60-4f33-96e7-91c67cec05df"}
+  [PASS] 创建退款单 300 成功
+[2026-09-05 22:28:24.286] [WARN ] [ERR] [AppError] 退款金额 ¥900.00 超过该销售单已收金额 ¥800.00 {"path":"/api/refunds","userId":2,"refNo":"","requestId":"26ab5bca-409a-4f25-bac9-3baa3092fcde","code":"REFUND_EXCEED_PAID","statusCode":400}
+[2026-09-05 22:28:24.287] [WARN ] [HTTP] POST /api/refunds {"ms":3,"status":400,"userId":2,"path":"/api/refunds","method":"POST","requestId":"26ab5bca-409a-4f25-bac9-3baa3092fcde"}
+  [PASS] 退款超已收被拒（900>800）
+[2026-09-05 22:28:24.293] [INFO ] [HTTP] POST /api/refunds/1/submit {"ms":5,"status":200,"userId":2,"path":"/api/refunds/1/submit","method":"POST","requestId":"4e907190-d781-468a-8e93-ceaa6f82c81c"}
+  [PASS] 确认退款 200
+[2026-09-05 22:28:24.307] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":1,"orderNo":"SO-R-f2a78ef2","eventType":"REFUND","operatorId":2,"requestId":"951ec4e3-cd84-496a-a185-f46885307a90"}
+[2026-09-05 22:28:24.309] [INFO ] [HTTP] POST /api/refunds/1/execute {"ms":14,"status":200,"userId":2,"path":"/api/refunds/1/execute","method":"POST","requestId":"951ec4e3-cd84-496a-a185-f46885307a90"}
+  [PASS] 执行退款 200
+  [PASS] 已收 800→500
+  [PASS] 余额 200→500
+  [PASS] 退款落负向 payment_entries
+  [PASS] 资金账户出账 OUT/REFUND 300
+  [PASS] 账户余额 500→200
+[2026-09-05 22:28:24.316] [WARN ] [ERR] [AppError] 退款单已完成 {"path":"/api/refunds/1/execute","userId":2,"refNo":"","requestId":"fdedf0c3-0b70-48df-bce0-5946a24aec47","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:24.316] [WARN ] [HTTP] POST /api/refunds/1/execute {"ms":2,"status":400,"userId":2,"path":"/api/refunds/1/execute","method":"POST","requestId":"fdedf0c3-0b70-48df-bce0-5946a24aec47"}
+  [PASS] 重复执行被拒
+  [PASS] 重复执行未再次扣款
+  [PASS] 退款前退货守卫拦截（已收800>冲减后700）
+[2026-09-05 22:28:24.328] [INFO ] [HTTP] POST /api/finance/accounts {"ms":4,"status":201,"userId":2,"path":"/api/finance/accounts","method":"POST","requestId":"82e1a1c9-e4f5-4e66-b927-1b86d197a5db"}
+[2026-09-05 22:28:24.335] [INFO ] [HTTP] POST /api/refunds {"ms":4,"status":200,"userId":2,"path":"/api/refunds","method":"POST","requestId":"c108cca1-4471-417d-9698-cf716926a14c"}
+[2026-09-05 22:28:24.342] [INFO ] [HTTP] POST /api/refunds/2/submit {"ms":5,"status":200,"userId":2,"path":"/api/refunds/2/submit","method":"POST","requestId":"c5744c0c-9d34-42ca-9e19-6255afacac3a"}
+[2026-09-05 22:28:24.348] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":2,"orderNo":"SO-R-8ca39201","eventType":"REFUND","operatorId":2,"requestId":"3737db9d-5a67-426a-a366-30167a07d824"}
+[2026-09-05 22:28:24.350] [INFO ] [HTTP] POST /api/refunds/2/execute {"ms":7,"status":200,"userId":2,"path":"/api/refunds/2/execute","method":"POST","requestId":"3737db9d-5a67-426a-a366-30167a07d824"}
+  [PASS] 退款后退货守卫放行（已收600≤冲减后700）
+
+════════════════════════════════════════════════════════════
+  14 passed, 0 failed
+════════════════════════════════════════════════════════════
+

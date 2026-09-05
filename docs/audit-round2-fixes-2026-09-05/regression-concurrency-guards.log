@@ -1,0 +1,321 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:16.986] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":6,"username":"smoke_admin","requestId":"063fa9ee-22f5-4e6b-82df-00b34006244a"}
+[2026-09-05 22:28:16.988] [INFO ] [HTTP] POST /api/auth/login {"ms":74,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"063fa9ee-22f5-4e6b-82df-00b34006244a"}
+  [PASS] smoke_admin 登录成功
+
+────────────────────────────────────────────────────────────
+  Scenario: inbound receive idempotency
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.014] [INFO ] [HTTP] POST /api/purchase {"ms":14,"status":201,"userId":6,"path":"/api/purchase","method":"POST","requestId":"6db22fb0-7bd2-41ad-bed6-83bce26aee31"}
+[2026-09-05 22:28:17.020] [INFO ] [HTTP] POST /api/purchase/5/confirm {"ms":5,"status":200,"userId":6,"path":"/api/purchase/5/confirm","method":"POST","requestId":"f0b0ff00-2496-4bcd-ac1b-c7f80f9ca0d1"}
+[2026-09-05 22:28:17.034] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":13,"status":201,"userId":6,"path":"/api/inbound-tasks","method":"POST","requestId":"3d575480-1616-45cb-ad67-730308582708"}
+[2026-09-05 22:28:17.046] [INFO ] [HTTP] POST /api/inbound-tasks/5/submit {"ms":11,"status":200,"userId":6,"path":"/api/inbound-tasks/5/submit","method":"POST","requestId":"c2ad2aed-5e7c-4b43-adfd-b30628af92f7"}
+[2026-09-05 22:28:17.053] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/5/receive","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"050d6df3-4c62-48eb-bac3-2098178b8ef5"}
+[2026-09-05 22:28:17.054] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/5/receive","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"26e4ee6b-4717-4c45-8646-755c0722f7dd"}
+[2026-09-05 22:28:17.074] [INFO ] [HTTP] POST /api/inbound-tasks/5/receive {"ms":26,"status":200,"userId":6,"path":"/api/inbound-tasks/5/receive","method":"POST","requestId":"050d6df3-4c62-48eb-bac3-2098178b8ef5"}
+[2026-09-05 22:28:17.075] [INFO ] [HTTP] POST /api/inbound-tasks/5/receive {"ms":26,"status":200,"userId":6,"path":"/api/inbound-tasks/5/receive","method":"POST","requestId":"26e4ee6b-4717-4c45-8646-755c0722f7dd"}
+  [PASS] receive 并发重复提交均返回成功
+  [PASS] 重复 receive 只生成一个容器
+  [PASS] 重复 receive 只生成一个标签任务
+
+────────────────────────────────────────────────────────────
+  Scenario: inbound receive still records stock when no printer available
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.083] [INFO ] [HTTP] POST /api/purchase {"ms":5,"status":201,"userId":6,"path":"/api/purchase","method":"POST","requestId":"ebd64e59-b8ea-4226-a50b-2d033ee5d514"}
+[2026-09-05 22:28:17.088] [INFO ] [HTTP] POST /api/purchase/6/confirm {"ms":4,"status":200,"userId":6,"path":"/api/purchase/6/confirm","method":"POST","requestId":"f084e81b-88b7-4a8b-a73e-7d1c712f749a"}
+[2026-09-05 22:28:17.098] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":7,"status":201,"userId":6,"path":"/api/inbound-tasks","method":"POST","requestId":"b6543bc1-981a-4375-83c4-53a222338c68"}
+[2026-09-05 22:28:17.105] [INFO ] [HTTP] POST /api/inbound-tasks/6/submit {"ms":5,"status":200,"userId":6,"path":"/api/inbound-tasks/6/submit","method":"POST","requestId":"bf0f3504-4d6b-4a98-a64d-90c5068b5899"}
+[2026-09-05 22:28:17.110] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/6/receive","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"f26ee8cb-b373-43d6-aa61-e5421c02a7d8"}
+[2026-09-05 22:28:17.120] [INFO ] [HTTP] POST /api/inbound-tasks/6/receive {"ms":11,"status":200,"userId":6,"path":"/api/inbound-tasks/6/receive","method":"POST","requestId":"f26ee8cb-b373-43d6-aa61-e5421c02a7d8"}
+  [PASS] 无可用打印机时 receive 仍返回成功
+  [PASS] 响应体如实上报 noPrinterCount
+  [PASS] 收货正常生成容器
+  [PASS] 收货数量正常落地
+  [PASS] 无打印机时不生成打印任务
+
+────────────────────────────────────────────────────────────
+  Scenario: split container concurrent guard
+────────────────────────────────────────────────────────────
+  [PASS] 并发 split 只允许一条成功
+  [PASS] 并发 split 只生成一个新容器
+  [PASS] 源容器数量按一次成功拆分扣减
+
+────────────────────────────────────────────────────────────
+  Scenario: split rollback on print task failure
+────────────────────────────────────────────────────────────
+  [PASS] split 打印任务创建失败时返回失败
+  [PASS] split 回滚后源容器数量不变
+  [PASS] split 回滚后不生成新容器
+
+────────────────────────────────────────────────────────────
+  Scenario: warehouse task cancel concurrency & rollback
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.165] [INFO ] [HTTP] POST /api/sale {"ms":12,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"0c361868-7b48-449b-969e-04744327ae0b"}
+  [PASS] 创建销售单成功
+[2026-09-05 22:28:17.183] [INFO ] [HTTP] POST /api/sale/1/reserve {"ms":17,"status":200,"userId":6,"path":"/api/sale/1/reserve","method":"POST","requestId":"57df2eb7-dd02-4c4f-be30-a494a4ab3cf4"}
+  [PASS] 销售单占库成功
+[2026-09-05 22:28:17.198] [INFO ] [HTTP] POST /api/sale/1/ship {"ms":14,"status":200,"userId":6,"path":"/api/sale/1/ship","method":"POST","requestId":"43d2d994-f712-4ca6-87b3-e1aa6f11e53d"}
+  [PASS] 销售单创建仓库任务成功
+  [PASS] 销售单已关联仓库任务
+[2026-09-05 22:28:17.203] [WARN ] [ERR] [AppError] 销售出库任务请从销售订单执行取消，系统会统一处理同单全部任务和预占 {"path":"/api/warehouse-tasks/1/cancel","userId":6,"refNo":"","requestId":"9abaf9af-6ac3-4f41-9035-284aaa84fe80","code":"SALE_ORDER_CANCEL_REQUIRED","statusCode":409}
+[2026-09-05 22:28:17.203] [WARN ] [HTTP] PUT /api/warehouse-tasks/1/cancel {"ms":2,"status":409,"userId":6,"path":"/api/warehouse-tasks/1/cancel","method":"PUT","requestId":"9abaf9af-6ac3-4f41-9035-284aaa84fe80"}
+  [PASS] 销售关联任务禁止从仓库任务入口单独取消
+[2026-09-05 22:28:17.214] [INFO ] [HTTP] POST /api/sale/1/cancel {"ms":10,"status":200,"userId":6,"path":"/api/sale/1/cancel","method":"POST","requestId":"b5937a31-600a-427c-9bed-4c58d6dec060"}
+[2026-09-05 22:28:17.215] [WARN ] [ERR] [AppError] 订单已取消 {"path":"/api/sale/1/cancel","userId":6,"refNo":"","requestId":"7dd153ae-d409-4c5b-8573-e830249f6508","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:17.215] [WARN ] [HTTP] POST /api/sale/1/cancel {"ms":10,"status":400,"userId":6,"path":"/api/sale/1/cancel","method":"POST","requestId":"7dd153ae-d409-4c5b-8573-e830249f6508"}
+  [PASS] 并发 cancel 只有一条成功
+  [PASS] cancel 成功后任务为已取消
+  [PASS] cancel 成功后销售单同步为已取消
+[2026-09-05 22:28:17.224] [INFO ] [HTTP] POST /api/sale {"ms":6,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"3e18e658-ab59-4df8-8428-61736f22df49"}
+[2026-09-05 22:28:17.237] [INFO ] [HTTP] POST /api/sale/2/reserve {"ms":12,"status":200,"userId":6,"path":"/api/sale/2/reserve","method":"POST","requestId":"d8480e7e-e299-4e28-a812-78ffe7ddf32c"}
+[2026-09-05 22:28:17.246] [INFO ] [HTTP] POST /api/sale/2/ship {"ms":8,"status":200,"userId":6,"path":"/api/sale/2/ship","method":"POST","requestId":"2242a438-ae11-451c-92ee-8bf0baafcb9a"}
+[2026-09-05 22:28:17.252] [WARN ] [ERR] [AppError] 已出库的订单不能取消 {"path":"/api/sale/2/cancel","userId":6,"refNo":"","requestId":"1f5b1dff-ff0d-4acd-a60d-b7c2fd8646dd","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:17.252] [WARN ] [HTTP] POST /api/sale/2/cancel {"ms":1,"status":400,"userId":6,"path":"/api/sale/2/cancel","method":"POST","requestId":"1f5b1dff-ff0d-4acd-a60d-b7c2fd8646dd"}
+  [PASS] 销售单已出库时 cancel 被拒绝
+  [PASS] cancel 被拒绝时任务状态不落地
+
+────────────────────────────────────────────────────────────
+  Scenario: 销售订单幂等键跨单隔离
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.260] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"8db4553f-9c53-45ee-9daf-2f97d82f28f5"}
+[2026-09-05 22:28:17.266] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"07c933b7-ac7f-43dd-89ce-cb5940cd75e1"}
+[2026-09-05 22:28:17.274] [INFO ] [HTTP] POST /api/sale/3/cancel {"ms":6,"status":200,"userId":6,"path":"/api/sale/3/cancel","method":"POST","requestId":"c20f5aeb-b093-4338-a068-cdf80844e5f0"}
+[2026-09-05 22:28:17.281] [INFO ] [HTTP] POST /api/sale/4/cancel {"ms":4,"status":200,"userId":6,"path":"/api/sale/4/cancel","method":"POST","requestId":"4f4543d3-1898-4faf-a8e9-80a46434faec"}
+  [PASS] 同一幂等键取消第一张销售单成功
+  [PASS] 同一幂等键取消第二张销售单不会重放第一单结果
+  [PASS] 两张销售单均实际进入已取消状态
+
+────────────────────────────────────────────────────────────
+  Scenario: 取消逆向归还 — 新分支基本行为
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.296] [INFO ] [HTTP] POST /api/sale {"ms":8,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"18333d09-74e4-4b3d-8219-6b13357b20e3"}
+[2026-09-05 22:28:17.310] [INFO ] [HTTP] POST /api/sale/5/reserve {"ms":12,"status":200,"userId":6,"path":"/api/sale/5/reserve","method":"POST","requestId":"816e8e57-5498-475c-bbf2-bd409ef46e4e"}
+[2026-09-05 22:28:17.318] [INFO ] [HTTP] POST /api/sale/5/ship {"ms":7,"status":200,"userId":6,"path":"/api/sale/5/ship","method":"POST","requestId":"d07e3e4d-e6ba-4c85-9827-cc1c13ec4a8e"}
+[2026-09-05 22:28:17.331] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"84b3ae48-2c4e-489b-9a24-4488cd0364aa"}
+[2026-09-05 22:28:17.354] [INFO ] [HTTP] POST /api/scan-logs {"ms":33,"status":201,"userId":6,"path":"/api/scan-logs","method":"POST","requestId":"84b3ae48-2c4e-489b-9a24-4488cd0364aa"}
+  [PASS] 容器已被拣货锁定
+[2026-09-05 22:28:17.367] [INFO ] [HTTP] POST /api/sale/5/cancel {"ms":10,"status":200,"userId":6,"path":"/api/sale/5/cancel","method":"POST","requestId":"6f2ae893-b52c-4e0f-8e83-443611a39649"}
+  [PASS] ERP取消成功（有容器锁定，应走新分支）
+  [PASS] 任务status未变(仍为2拣货中)
+  [PASS] cancel_requested_at已写入
+  [PASS] 销售单已立即标记为已取消(5)
+  [PASS] 容器仍然锁定，未被批量解锁
+  [PASS] 库存预占已立即释放
+  [PASS] required_qty已clamp到picked_qty
+[2026-09-05 22:28:17.373] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/3/ready","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"cc3140f3-0abd-454e-ae21-219891439b82"}
+[2026-09-05 22:28:17.374] [WARN ] [ERR] [AppError] 该任务正在拣货退回中，不可继续拣货 {"path":"/api/warehouse-tasks/3/ready","userId":6,"refNo":"","requestId":"cc3140f3-0abd-454e-ae21-219891439b82","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:17.374] [WARN ] [HTTP] PUT /api/warehouse-tasks/3/ready {"ms":3,"status":409,"userId":6,"path":"/api/warehouse-tasks/3/ready","method":"PUT","requestId":"cc3140f3-0abd-454e-ae21-219891439b82"}
+  [PASS] 拣货退回中的任务，ready接口应返回409
+[2026-09-05 22:28:17.378] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"08afead4-c1b0-48c1-b448-eb6a891bab7c"}
+[2026-09-05 22:28:17.379] [WARN ] [ERR] [AppError] 该任务已因订单取消停止拣货，请勿继续 {"path":"/api/scan-logs","userId":6,"refNo":"","requestId":"08afead4-c1b0-48c1-b448-eb6a891bab7c","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:17.379] [WARN ] [HTTP] POST /api/scan-logs {"ms":3,"status":409,"userId":6,"path":"/api/scan-logs","method":"POST","requestId":"08afead4-c1b0-48c1-b448-eb6a891bab7c"}
+  [PASS] 拣货退回中的任务，拣货扫码应返回409
+[2026-09-05 22:28:17.382] [WARN ] [ERR] [AppError] 订单已取消 {"path":"/api/sale/5/cancel","userId":6,"refNo":"","requestId":"4e9c0295-e0b8-4558-8f90-3796dcb072cc","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:17.382] [WARN ] [HTTP] POST /api/sale/5/cancel {"ms":2,"status":400,"userId":6,"path":"/api/sale/5/cancel","method":"POST","requestId":"4e9c0295-e0b8-4558-8f90-3796dcb072cc"}
+  [PASS] 对已取消销售单重复cancel应被拒绝
+[2026-09-05 22:28:17.387] [WARN ] [ERR] [AppError] 该任务正在拣货退回中，不可继续拣货 {"path":"/api/warehouse-tasks/3/pick-suggestions","userId":6,"refNo":"","requestId":"f4e25140-4233-43b1-a2e9-92a874b75d18","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:17.387] [WARN ] [HTTP] GET /api/warehouse-tasks/3/pick-suggestions {"ms":4,"status":409,"userId":6,"path":"/api/warehouse-tasks/3/pick-suggestions","method":"GET","requestId":"f4e25140-4233-43b1-a2e9-92a874b75d18"}
+  [PASS] 拣货退回中的任务，pick-suggestions应返回409
+
+────────────────────────────────────────────────────────────
+  Scenario: 取消逆向归还 — 端到端全流程与可见性
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.398] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"a247b9e1-2895-4419-bc8a-407bd4c38c0b"}
+[2026-09-05 22:28:17.412] [INFO ] [HTTP] POST /api/sale/6/reserve {"ms":12,"status":200,"userId":6,"path":"/api/sale/6/reserve","method":"POST","requestId":"75b0e3af-cf44-4542-93b8-629479c2fa04"}
+[2026-09-05 22:28:17.421] [INFO ] [HTTP] POST /api/sale/6/ship {"ms":7,"status":200,"userId":6,"path":"/api/sale/6/ship","method":"POST","requestId":"176b77b2-cf54-43c3-a670-2d1e13146da6"}
+[2026-09-05 22:28:17.425] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"a50c69e3-288a-44ee-b0ca-435bee69dd4b"}
+[2026-09-05 22:28:17.431] [INFO ] [HTTP] POST /api/scan-logs {"ms":7,"status":201,"userId":6,"path":"/api/scan-logs","method":"POST","requestId":"a50c69e3-288a-44ee-b0ca-435bee69dd4b"}
+[2026-09-05 22:28:17.435] [INFO ] [HTTP] GET /api/warehouse-tasks/my {"ms":1,"status":200,"userId":6,"path":"/api/warehouse-tasks/my","method":"GET","requestId":"eb2afd40-57d5-4c8e-a714-3a88bf2873c3"}
+  [PASS] 取消前，任务在拣货池可见
+[2026-09-05 22:28:17.445] [INFO ] [HTTP] POST /api/sale/6/cancel {"ms":8,"status":200,"userId":6,"path":"/api/sale/6/cancel","method":"POST","requestId":"edac9989-258f-45f8-a0cb-70a4d49f9b1f"}
+  [PASS] ERP取消成功
+[2026-09-05 22:28:17.447] [INFO ] [HTTP] GET /api/warehouse-tasks/my {"ms":1,"status":200,"userId":6,"path":"/api/warehouse-tasks/my","method":"GET","requestId":"41c1a0fe-2a5f-4e7e-8fae-ed42babbf7de"}
+  [PASS] 取消后，任务不再出现在拣货池
+[2026-09-05 22:28:17.450] [INFO ] [HTTP] GET /api/warehouse-tasks/my-sku-summary {"ms":1,"status":200,"userId":6,"path":"/api/warehouse-tasks/my-sku-summary","method":"GET","requestId":"518cc272-b14f-434a-b0f9-c10130a6829f"}
+  [PASS] 取消后，任务不再出现在SKU汇总池
+[2026-09-05 22:28:17.454] [INFO ] [HTTP] GET /api/sorting-bins/scan?code=SMOKE-P001 {"ms":2,"status":200,"userId":6,"path":"/api/sorting-bins/scan?code=SMOKE-P001","method":"GET","requestId":"350ee277-baba-49fa-9cf9-c31780685841"}
+  [PASS] 取消后，分拣扫商品查不到该任务
+[2026-09-05 22:28:17.457] [WARN ] [ERR] [AppError] 该任务正在拣货退回中，不可继续拣货 {"path":"/api/warehouse-tasks/4/pick-route","userId":6,"refNo":"","requestId":"9bcdb8ca-18b4-40d7-8f33-9882f3352ff3","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:17.457] [WARN ] [HTTP] GET /api/warehouse-tasks/4/pick-route {"ms":2,"status":409,"userId":6,"path":"/api/warehouse-tasks/4/pick-route","method":"GET","requestId":"9bcdb8ca-18b4-40d7-8f33-9882f3352ff3"}
+  [PASS] 取消后，pick-route应返回409
+[2026-09-05 22:28:17.459] [INFO ] [HTTP] GET /api/warehouse-tasks/cancel-returns/pending {"ms":1,"status":200,"userId":6,"path":"/api/warehouse-tasks/cancel-returns/pending","method":"GET","requestId":"6c45ce8e-f109-44b8-b5bd-f8e406946c43"}
+  [PASS] 任务出现在取消收尾任务池列表里
+[2026-09-05 22:28:17.462] [INFO ] [HTTP] GET /api/warehouse-tasks/4/cancel-return-detail {"ms":1,"status":200,"userId":6,"path":"/api/warehouse-tasks/4/cancel-return-detail","method":"GET","requestId":"ad4403ee-5448-4821-aebc-5d0c298238ee"}
+  [PASS] 详情里包含待归还容器
+[2026-09-05 22:28:17.467] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"df901b1f-4c9d-4c00-a567-18ba52692e8b"}
+[2026-09-05 22:28:17.471] [WARN ] [ERR] [AppError] 必须放回原库位 A-01，不能放到其它库位 {"path":"/api/scan-logs/cancel-return","userId":6,"refNo":"","requestId":"df901b1f-4c9d-4c00-a567-18ba52692e8b","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:17.471] [WARN ] [HTTP] POST /api/scan-logs/cancel-return {"ms":5,"status":400,"userId":6,"path":"/api/scan-logs/cancel-return","method":"POST","requestId":"df901b1f-4c9d-4c00-a567-18ba52692e8b"}
+  [PASS] 扫描非原库位应被拒绝（不允许操作员自选库位）
+[2026-09-05 22:28:17.476] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"d6bd2210-ea15-46c0-aa55-08ee815498e3"}
+[2026-09-05 22:28:17.485] [INFO ] [HTTP] POST /api/scan-logs/cancel-return {"ms":12,"status":201,"userId":6,"path":"/api/scan-logs/cancel-return","method":"POST","requestId":"d6bd2210-ea15-46c0-aa55-08ee815498e3"}
+  [PASS] 扫回原库位归还扫码成功且finalized=true（唯一容器）
+  [PASS] 容器已解锁
+  [PASS] 容器location_id确认为原库位（未被改到别处）
+  [PASS] 任务已真正变为已取消(8)
+  [PASS] cancel_requested_at已清空
+  [PASS] 分拣格已释放
+
+────────────────────────────────────────────────────────────
+  Scenario: 取消逆向归还 — 并发/幂等专项
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.497] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"540f7f94-a031-4904-a2da-35eaa71f4d66"}
+[2026-09-05 22:28:17.522] [INFO ] [HTTP] POST /api/sale/7/reserve {"ms":24,"status":200,"userId":6,"path":"/api/sale/7/reserve","method":"POST","requestId":"16156c0f-936f-49e4-9088-ca0910316b0e"}
+[2026-09-05 22:28:17.532] [INFO ] [HTTP] POST /api/sale/7/ship {"ms":8,"status":200,"userId":6,"path":"/api/sale/7/ship","method":"POST","requestId":"5578aaa2-2cdd-4b0d-a848-ad47dc1850e5"}
+[2026-09-05 22:28:17.539] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"9e500e1e-b885-4da9-8d6b-fe615dba1e3d"}
+[2026-09-05 22:28:17.543] [INFO ] [HTTP] POST /api/scan-logs {"ms":6,"status":201,"userId":6,"path":"/api/scan-logs","method":"POST","requestId":"9e500e1e-b885-4da9-8d6b-fe615dba1e3d"}
+[2026-09-05 22:28:17.557] [INFO ] [HTTP] POST /api/sale/7/cancel {"ms":13,"status":200,"userId":6,"path":"/api/sale/7/cancel","method":"POST","requestId":"9a56c192-9b4a-4b98-9e01-43d0987fca44"}
+[2026-09-05 22:28:17.558] [WARN ] [ERR] [AppError] 订单已取消 {"path":"/api/sale/7/cancel","userId":6,"refNo":"","requestId":"87b4e08b-593b-4bf5-9700-7b30f3420745","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:17.558] [WARN ] [HTTP] POST /api/sale/7/cancel {"ms":14,"status":400,"userId":6,"path":"/api/sale/7/cancel","method":"POST","requestId":"87b4e08b-593b-4bf5-9700-7b30f3420745"}
+  [PASS] 并发双击取消只有一条成功
+[2026-09-05 22:28:17.570] [INFO ] [HTTP] POST /api/sale {"ms":6,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"6eb5bd6a-3298-47b9-8593-f4ee2ab55860"}
+[2026-09-05 22:28:17.584] [INFO ] [HTTP] POST /api/sale/8/reserve {"ms":11,"status":200,"userId":6,"path":"/api/sale/8/reserve","method":"POST","requestId":"935cf157-c134-4b63-b648-1719e42db414"}
+[2026-09-05 22:28:17.594] [INFO ] [HTTP] POST /api/sale/8/ship {"ms":9,"status":200,"userId":6,"path":"/api/sale/8/ship","method":"POST","requestId":"05ce5ec4-be1e-4bc6-8e4c-9fdfae0fc653"}
+[2026-09-05 22:28:17.600] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"41fc2ad0-d940-4ed3-9c46-3af7b095cf54"}
+[2026-09-05 22:28:17.604] [INFO ] [HTTP] POST /api/scan-logs {"ms":6,"status":201,"userId":6,"path":"/api/scan-logs","method":"POST","requestId":"41fc2ad0-d940-4ed3-9c46-3af7b095cf54"}
+[2026-09-05 22:28:17.614] [INFO ] [HTTP] POST /api/sale/8/cancel {"ms":8,"status":200,"userId":6,"path":"/api/sale/8/cancel","method":"POST","requestId":"15115220-60dd-4eab-993b-7862297ca3a0"}
+[2026-09-05 22:28:17.618] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"7550407b-2b63-463f-9717-3ecc8db912e8"}
+[2026-09-05 22:28:17.624] [INFO ] [HTTP] POST /api/scan-logs/cancel-return {"ms":7,"status":201,"userId":6,"path":"/api/scan-logs/cancel-return","method":"POST","requestId":"7550407b-2b63-463f-9717-3ecc8db912e8"}
+[2026-09-05 22:28:17.627] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"0f6d32b1-1690-421f-91b3-ec170ede3f89"}
+[2026-09-05 22:28:17.630] [INFO ] [HTTP] POST /api/scan-logs/cancel-return {"ms":4,"status":201,"userId":6,"path":"/api/scan-logs/cancel-return","method":"POST","requestId":"0f6d32b1-1690-421f-91b3-ec170ede3f89"}
+  [PASS] 第一次归还扫码成功
+  [PASS] 第二次(同requestKey)走replay返回相同记录id
+  [PASS] scan_logs只有一条归还记录（未重复插入）
+[2026-09-05 22:28:17.643] [INFO ] [HTTP] POST /api/sale {"ms":6,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"ec685703-dafd-4f35-a84c-8c372b39d1f0"}
+[2026-09-05 22:28:17.664] [INFO ] [HTTP] POST /api/sale/9/reserve {"ms":18,"status":200,"userId":6,"path":"/api/sale/9/reserve","method":"POST","requestId":"e2c54327-8836-4a2f-9d2f-65f84804c1a8"}
+[2026-09-05 22:28:17.672] [INFO ] [HTTP] POST /api/sale/9/ship {"ms":6,"status":200,"userId":6,"path":"/api/sale/9/ship","method":"POST","requestId":"9176d8bd-4298-4c47-bede-99b1c1d87991"}
+[2026-09-05 22:28:17.699] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"b46e5e58-4d3c-4889-b155-9cc853da3e09"}
+[2026-09-05 22:28:17.733] [INFO ] [HTTP] POST /api/scan-logs {"ms":56,"status":201,"userId":6,"path":"/api/scan-logs","method":"POST","requestId":"b46e5e58-4d3c-4889-b155-9cc853da3e09"}
+[2026-09-05 22:28:17.772] [INFO ] [HTTP] POST /api/sale/9/cancel {"ms":36,"status":200,"userId":6,"path":"/api/sale/9/cancel","method":"POST","requestId":"8d80f102-05fe-4d27-a957-8ff0e9ec4764"}
+[2026-09-05 22:28:17.782] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"d43f15ab-4dbc-49b3-913c-51671893fe5f"}
+[2026-09-05 22:28:17.784] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"46b946da-1757-462f-b4d8-0cda6f0c39e4"}
+[2026-09-05 22:28:17.803] [INFO ] [HTTP] POST /api/scan-logs/cancel-return {"ms":27,"status":201,"userId":6,"path":"/api/scan-logs/cancel-return","method":"POST","requestId":"d43f15ab-4dbc-49b3-913c-51671893fe5f"}
+[2026-09-05 22:28:17.803] [WARN ] [ERR] [AppError] 该任务未处于拣货退回状态，无需归还扫码 {"path":"/api/scan-logs/cancel-return","userId":6,"refNo":"","requestId":"46b946da-1757-462f-b4d8-0cda6f0c39e4","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:17.803] [WARN ] [HTTP] POST /api/scan-logs/cancel-return {"ms":26,"status":400,"userId":6,"path":"/api/scan-logs/cancel-return","method":"POST","requestId":"46b946da-1757-462f-b4d8-0cda6f0c39e4"}
+  [PASS] 并发归还同一容器只有一条成功
+  [PASS] 任务正确变为已取消(8)
+  [PASS] CANCEL_FINALIZED事件只记一条（finalize未重复触发）
+
+────────────────────────────────────────────────────────────
+  Scenario: 取消逆向归还 — 待打包阶段
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.839] [INFO ] [HTTP] POST /api/sale {"ms":19,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"288cd4c3-3276-4b7e-a143-04cd50a07725"}
+[2026-09-05 22:28:17.896] [INFO ] [HTTP] POST /api/sale/10/reserve {"ms":55,"status":200,"userId":6,"path":"/api/sale/10/reserve","method":"POST","requestId":"64780b09-6a1c-41b4-a0b4-30ee60ceae9f"}
+[2026-09-05 22:28:17.934] [INFO ] [HTTP] POST /api/sale/10/ship {"ms":36,"status":200,"userId":6,"path":"/api/sale/10/ship","method":"POST","requestId":"b34ad1c9-578b-4769-9352-a6b032beee67"}
+[2026-09-05 22:28:17.947] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"be453e61-4756-470c-897f-6be4b6729a77"}
+[2026-09-05 22:28:17.969] [INFO ] [HTTP] POST /api/scan-logs {"ms":27,"status":201,"userId":6,"path":"/api/scan-logs","method":"POST","requestId":"be453e61-4756-470c-897f-6be4b6729a77"}
+[2026-09-05 22:28:17.985] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/8/ready","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"54b95010-0226-4e1f-ae9e-cd27b47a6512"}
+[2026-09-05 22:28:18.009] [INFO ] [HTTP] PUT /api/warehouse-tasks/8/ready {"ms":37,"status":200,"userId":6,"path":"/api/warehouse-tasks/8/ready","method":"PUT","requestId":"54b95010-0226-4e1f-ae9e-cd27b47a6512"}
+[2026-09-05 22:28:18.027] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/8/sort-done","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"4996cb1a-42cd-4b66-a593-6902ff3c7c0f"}
+[2026-09-05 22:28:18.049] [INFO ] [HTTP] PUT /api/warehouse-tasks/8/sort-done {"ms":36,"status":200,"userId":6,"path":"/api/warehouse-tasks/8/sort-done","method":"PUT","requestId":"4996cb1a-42cd-4b66-a593-6902ff3c7c0f"}
+[2026-09-05 22:28:18.059] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/check","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"92f1e1fe-ea9b-4b62-b1e6-239acb6e155b"}
+[2026-09-05 22:28:18.093] [INFO ] [HTTP] POST /api/scan-logs/check {"ms":41,"status":201,"userId":6,"path":"/api/scan-logs/check","method":"POST","requestId":"92f1e1fe-ea9b-4b62-b1e6-239acb6e155b"}
+  [PASS] 任务已推进到待打包(5)
+[2026-09-05 22:28:18.104] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"dfff2094-0d56-448e-8989-cbd107650420"}
+[2026-09-05 22:28:18.111] [INFO ] [HTTP] POST /api/packages {"ms":14,"status":200,"userId":6,"path":"/api/packages","method":"POST","requestId":"dfff2094-0d56-448e-8989-cbd107650420"}
+[2026-09-05 22:28:18.121] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"bf319ded-640d-4269-89fb-ba4fefcc66ef"}
+[2026-09-05 22:28:18.130] [INFO ] [HTTP] POST /api/packages {"ms":16,"status":200,"userId":6,"path":"/api/packages","method":"POST","requestId":"bf319ded-640d-4269-89fb-ba4fefcc66ef"}
+[2026-09-05 22:28:18.138] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages/2/add-item","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"51686c19-bc83-49ea-b7ba-553f6b3010c4"}
+[2026-09-05 22:28:18.153] [INFO ] [HTTP] POST /api/packages/2/add-item {"ms":20,"status":200,"userId":6,"path":"/api/packages/2/add-item","method":"POST","requestId":"51686c19-bc83-49ea-b7ba-553f6b3010c4"}
+[2026-09-05 22:28:18.162] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/packages/2/finish","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"0239c372-4818-45f3-b8a5-ea21ec9b71fc"}
+[2026-09-05 22:28:18.210] [INFO ] [HTTP] PUT /api/packages/2/finish {"ms":54,"status":200,"userId":6,"path":"/api/packages/2/finish","method":"PUT","requestId":"0239c372-4818-45f3-b8a5-ea21ec9b71fc"}
+  [PASS] 已完成箱子finish成功（含箱贴打印任务）
+[2026-09-05 22:28:18.245] [INFO ] [HTTP] POST /api/sale/10/cancel {"ms":32,"status":200,"userId":6,"path":"/api/sale/10/cancel","method":"POST","requestId":"093b1f41-0e1e-4599-af9e-04f9b852bf9d"}
+  [PASS] 待打包阶段取消成功（有容器锁定，走逆向归还分支）
+  [PASS] 未完成的空箱已被系统自动作废(3)
+  [PASS] 已完成的箱子仍保持完成(2)，等待人工拆箱确认
+[2026-09-05 22:28:18.261] [INFO ] [HTTP] GET /api/warehouse-tasks/8/cancel-return-detail {"ms":9,"status":200,"userId":6,"path":"/api/warehouse-tasks/8/cancel-return-detail","method":"GET","requestId":"7ffa8050-b870-4923-a5ff-4b254f6e1855"}
+  [PASS] 待处理清单只包含已完成的箱子（未完成的箱子已自动清零）
+[2026-09-05 22:28:18.271] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"77e0833a-5115-4d08-bb9b-968598431187"}
+[2026-09-05 22:28:18.276] [WARN ] [ERR] [AppError] 该任务正在拣货退回中，禁止继续打包操作 {"path":"/api/packages","userId":6,"refNo":"","requestId":"77e0833a-5115-4d08-bb9b-968598431187","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:18.277] [WARN ] [HTTP] POST /api/packages {"ms":12,"status":409,"userId":6,"path":"/api/packages","method":"POST","requestId":"77e0833a-5115-4d08-bb9b-968598431187"}
+  [PASS] 拣货退回中禁止新建箱子
+[2026-09-05 22:28:18.285] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"2e8c7da9-21a4-44ae-bedd-c47802a0775f"}
+[2026-09-05 22:28:18.300] [INFO ] [HTTP] POST /api/scan-logs/cancel-return {"ms":21,"status":201,"userId":6,"path":"/api/scan-logs/cancel-return","method":"POST","requestId":"2e8c7da9-21a4-44ae-bedd-c47802a0775f"}
+  [PASS] 容器归还成功但任务尚未finalize（箱子还没处理）
+[2026-09-05 22:28:18.308] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return/box","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"75e4b927-1fb9-488a-92c1-757ac798b3f6"}
+[2026-09-05 22:28:18.313] [WARN ] [ERR] [AppError] 箱子条码不匹配 {"path":"/api/scan-logs/cancel-return/box","userId":6,"refNo":"","requestId":"75e4b927-1fb9-488a-92c1-757ac798b3f6","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:18.313] [WARN ] [HTTP] POST /api/scan-logs/cancel-return/box {"ms":10,"status":400,"userId":6,"path":"/api/scan-logs/cancel-return/box","method":"POST","requestId":"75e4b927-1fb9-488a-92c1-757ac798b3f6"}
+  [PASS] 拆箱确认条码不匹配应被拒绝
+[2026-09-05 22:28:18.322] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return/box","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"a1feb99a-49f1-4382-9065-1270a450d20c"}
+[2026-09-05 22:28:18.365] [INFO ] [HTTP] POST /api/scan-logs/cancel-return/box {"ms":49,"status":201,"userId":6,"path":"/api/scan-logs/cancel-return/box","method":"POST","requestId":"a1feb99a-49f1-4382-9065-1270a450d20c"}
+  [PASS] 拆箱确认成功且finalized=true（最后一项处理完）
+  [PASS] 任务已真正变为已取消(8)
+  [PASS] 箱子的箱贴打印任务已被取消
+
+────────────────────────────────────────────────────────────
+  Scenario: 取消逆向归还 — 待出库阶段
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:18.393] [INFO ] [HTTP] POST /api/sale {"ms":14,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"895e7f46-e672-4355-b7d1-c9158dfbf373"}
+[2026-09-05 22:28:18.481] [INFO ] [HTTP] POST /api/sale/11/reserve {"ms":86,"status":200,"userId":6,"path":"/api/sale/11/reserve","method":"POST","requestId":"57479fa7-3a53-4017-8fe4-b89fdd69a139"}
+[2026-09-05 22:28:18.521] [INFO ] [HTTP] POST /api/sale/11/ship {"ms":37,"status":200,"userId":6,"path":"/api/sale/11/ship","method":"POST","requestId":"fda74594-28fa-4094-9646-afddce2b0b53"}
+[2026-09-05 22:28:18.538] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"80df1f07-d8d8-4c35-8a1d-851a7652b6f6"}
+[2026-09-05 22:28:18.554] [INFO ] [HTTP] POST /api/scan-logs {"ms":25,"status":201,"userId":6,"path":"/api/scan-logs","method":"POST","requestId":"80df1f07-d8d8-4c35-8a1d-851a7652b6f6"}
+[2026-09-05 22:28:18.563] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/9/ready","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"2b85437f-c63d-4628-9610-fb2bf2a5a9e8"}
+[2026-09-05 22:28:18.579] [INFO ] [HTTP] PUT /api/warehouse-tasks/9/ready {"ms":22,"status":200,"userId":6,"path":"/api/warehouse-tasks/9/ready","method":"PUT","requestId":"2b85437f-c63d-4628-9610-fb2bf2a5a9e8"}
+[2026-09-05 22:28:18.587] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/9/sort-done","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"94213ef6-09f3-4203-9ed6-e9d64c788fdf"}
+[2026-09-05 22:28:18.602] [INFO ] [HTTP] PUT /api/warehouse-tasks/9/sort-done {"ms":20,"status":200,"userId":6,"path":"/api/warehouse-tasks/9/sort-done","method":"PUT","requestId":"94213ef6-09f3-4203-9ed6-e9d64c788fdf"}
+[2026-09-05 22:28:18.611] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/check","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"407f621b-fbf9-4d28-9b57-0dcd6109a153"}
+[2026-09-05 22:28:18.643] [INFO ] [HTTP] POST /api/scan-logs/check {"ms":38,"status":201,"userId":6,"path":"/api/scan-logs/check","method":"POST","requestId":"407f621b-fbf9-4d28-9b57-0dcd6109a153"}
+[2026-09-05 22:28:18.655] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"86f0aa67-c4f4-4147-9e20-e5d507fa1513"}
+[2026-09-05 22:28:18.664] [INFO ] [HTTP] POST /api/packages {"ms":18,"status":200,"userId":6,"path":"/api/packages","method":"POST","requestId":"86f0aa67-c4f4-4147-9e20-e5d507fa1513"}
+[2026-09-05 22:28:18.673] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/packages/3/add-item","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"783ade5f-1905-4cc1-9575-29ae6143f26b"}
+[2026-09-05 22:28:18.685] [INFO ] [HTTP] POST /api/packages/3/add-item {"ms":18,"status":200,"userId":6,"path":"/api/packages/3/add-item","method":"POST","requestId":"783ade5f-1905-4cc1-9575-29ae6143f26b"}
+[2026-09-05 22:28:18.693] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/packages/3/finish","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"60fd51fb-f9b8-4fae-9f8a-1a8950b828a4"}
+[2026-09-05 22:28:18.739] [INFO ] [HTTP] PUT /api/packages/3/finish {"ms":52,"status":200,"userId":6,"path":"/api/packages/3/finish","method":"PUT","requestId":"60fd51fb-f9b8-4fae-9f8a-1a8950b828a4"}
+[2026-09-05 22:28:18.753] [INFO ] [HTTP] POST /api/print-jobs/4/complete-local {"ms":11,"status":200,"userId":6,"path":"/api/print-jobs/4/complete-local","method":"POST","requestId":"ec2ee7f0-9cb7-45b2-a86b-4dff3f8559a1"}
+[2026-09-05 22:28:18.762] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/9/pack-done","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"7cca156c-d0d1-4fbd-bbb9-07ab4e0ca083"}
+[2026-09-05 22:28:18.782] [INFO ] [HTTP] PUT /api/warehouse-tasks/9/pack-done {"ms":26,"status":200,"userId":6,"path":"/api/warehouse-tasks/9/pack-done","method":"PUT","requestId":"7cca156c-d0d1-4fbd-bbb9-07ab4e0ca083"}
+  [PASS] 打包完成成功，推进到待出库(6)
+  [PASS] 任务已在待出库(6)，分拣格已随打包完成释放
+[2026-09-05 22:28:18.838] [INFO ] [HTTP] POST /api/sale/11/cancel {"ms":51,"status":200,"userId":6,"path":"/api/sale/11/cancel","method":"POST","requestId":"30efa153-7404-4fb0-abe4-f82996a338c8"}
+  [PASS] 待出库阶段取消成功（走逆向归还分支）
+[2026-09-05 22:28:18.851] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/9/ship","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"9434458e-dab7-416c-8955-dcbb1f6107fe"}
+[2026-09-05 22:28:18.875] [WARN ] [ERR] [AppError] 该任务正在拣货退回中，不可出库 {"path":"/api/warehouse-tasks/9/ship","userId":6,"refNo":"","requestId":"9434458e-dab7-416c-8955-dcbb1f6107fe","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:18.875] [WARN ] [HTTP] PUT /api/warehouse-tasks/9/ship {"ms":34,"status":409,"userId":6,"path":"/api/warehouse-tasks/9/ship","method":"PUT","requestId":"9434458e-dab7-416c-8955-dcbb1f6107fe"}
+  [PASS] 拣货退回中禁止出库
+[2026-09-05 22:28:18.888] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"133a8f63-b386-4e0b-8104-a4c7172d51ea"}
+[2026-09-05 22:28:18.907] [INFO ] [HTTP] POST /api/scan-logs/cancel-return {"ms":30,"status":201,"userId":6,"path":"/api/scan-logs/cancel-return","method":"POST","requestId":"133a8f63-b386-4e0b-8104-a4c7172d51ea"}
+  [PASS] 容器归还成功但任务尚未finalize
+[2026-09-05 22:28:18.917] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return/box","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"ce4ba075-726e-410a-8a96-4297884d1a84"}
+[2026-09-05 22:28:18.940] [INFO ] [HTTP] POST /api/scan-logs/cancel-return/box {"ms":30,"status":201,"userId":6,"path":"/api/scan-logs/cancel-return/box","method":"POST","requestId":"ce4ba075-726e-410a-8a96-4297884d1a84"}
+  [PASS] 拆箱确认成功且finalized=true
+  [PASS] 任务已真正变为已取消(8)，分拣格释放逻辑未重复出错
+
+────────────────────────────────────────────────────────────
+  Scenario: 取消逆向归还 — 复核阶段正向守卫
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:18.981] [INFO ] [HTTP] POST /api/sale {"ms":20,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"2d4522f0-4dc7-4d92-b529-6fa780657faa"}
+[2026-09-05 22:28:19.048] [INFO ] [HTTP] POST /api/sale/12/reserve {"ms":64,"status":200,"userId":6,"path":"/api/sale/12/reserve","method":"POST","requestId":"12c1f56b-3153-4053-9d20-f1e60a874f76"}
+[2026-09-05 22:28:19.201] [INFO ] [HTTP] POST /api/sale/12/ship {"ms":149,"status":200,"userId":6,"path":"/api/sale/12/ship","method":"POST","requestId":"a87904db-b3fe-4df9-a9a7-f918ede817f2"}
+[2026-09-05 22:28:19.226] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"ad379e30-46c8-4835-9104-036df9177ad8"}
+[2026-09-05 22:28:19.247] [INFO ] [HTTP] POST /api/scan-logs {"ms":36,"status":201,"userId":6,"path":"/api/scan-logs","method":"POST","requestId":"ad379e30-46c8-4835-9104-036df9177ad8"}
+[2026-09-05 22:28:19.254] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/10/ready","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"bc7fad02-3965-446f-ae26-5ed921279d23"}
+[2026-09-05 22:28:19.269] [INFO ] [HTTP] PUT /api/warehouse-tasks/10/ready {"ms":21,"status":200,"userId":6,"path":"/api/warehouse-tasks/10/ready","method":"PUT","requestId":"bc7fad02-3965-446f-ae26-5ed921279d23"}
+[2026-09-05 22:28:19.279] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/10/sort-done","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"ff6b2e68-df5f-4ee3-93f8-400656c4ea7e"}
+[2026-09-05 22:28:19.300] [INFO ] [HTTP] PUT /api/warehouse-tasks/10/sort-done {"ms":27,"status":200,"userId":6,"path":"/api/warehouse-tasks/10/sort-done","method":"PUT","requestId":"ff6b2e68-df5f-4ee3-93f8-400656c4ea7e"}
+  [PASS] 任务处于待复核(4)
+[2026-09-05 22:28:19.372] [INFO ] [HTTP] POST /api/sale/12/cancel {"ms":68,"status":200,"userId":6,"path":"/api/sale/12/cancel","method":"POST","requestId":"66cbe2cc-3eeb-448f-9cc9-d689d31ed215"}
+  [PASS] 复核阶段取消成功（走逆向归还分支）
+[2026-09-05 22:28:19.383] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/check","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"fcbdc33c-208d-4a4c-8e3f-943277045c74"}
+[2026-09-05 22:28:19.386] [WARN ] [ERR] [AppError] 该任务正在拣货退回中，不可继续复核 {"path":"/api/scan-logs/check","userId":6,"refNo":"","requestId":"fcbdc33c-208d-4a4c-8e3f-943277045c74","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:19.387] [WARN ] [HTTP] POST /api/scan-logs/check {"ms":12,"status":409,"userId":6,"path":"/api/scan-logs/check","method":"POST","requestId":"fcbdc33c-208d-4a4c-8e3f-943277045c74"}
+  [PASS] 拣货退回中的任务，复核扫码应返回409
+[2026-09-05 22:28:19.396] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/10/check-done","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"32c9f52c-b020-4fa7-8347-1d16749d5603"}
+[2026-09-05 22:28:19.401] [WARN ] [ERR] [AppError] 该任务正在拣货退回中，不可继续复核 {"path":"/api/warehouse-tasks/10/check-done","userId":6,"refNo":"","requestId":"32c9f52c-b020-4fa7-8347-1d16749d5603","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:19.401] [WARN ] [HTTP] PUT /api/warehouse-tasks/10/check-done {"ms":12,"status":409,"userId":6,"path":"/api/warehouse-tasks/10/check-done","method":"PUT","requestId":"32c9f52c-b020-4fa7-8347-1d16749d5603"}
+  [PASS] 拣货退回中的任务，复核完成应返回409
+[2026-09-05 22:28:19.416] [INFO ] [HTTP] GET /api/warehouse-tasks/10/cancel-return-detail {"ms":12,"status":200,"userId":6,"path":"/api/warehouse-tasks/10/cancel-return-detail","method":"GET","requestId":"13135c5c-3374-4844-8d83-7283357b1874"}
+  [PASS] 复核阶段取消无任何箱子待处理
+[2026-09-05 22:28:19.426] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs/cancel-return","userId":6,"deviceCode":"SMOKE-PDA-01","warehouseId":5,"requestId":"94cc586e-c224-4fb9-bf82-b96f4fcc3e8e"}
+[2026-09-05 22:28:19.456] [INFO ] [HTTP] POST /api/scan-logs/cancel-return {"ms":37,"status":201,"userId":6,"path":"/api/scan-logs/cancel-return","method":"POST","requestId":"94cc586e-c224-4fb9-bf82-b96f4fcc3e8e"}
+  [PASS] 复核阶段容器归还成功且直接finalize（无箱子需处理）
+
+════════════════════════════════════════════════════════════
+  87 passed, 0 failed
+════════════════════════════════════════════════════════════
+

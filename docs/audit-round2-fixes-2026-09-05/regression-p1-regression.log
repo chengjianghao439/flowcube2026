@@ -1,0 +1,166 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:20.654] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"b8ebe9cd-5e5a-44cd-8f48-26ae9d45cb51"}
+[2026-09-05 22:28:20.656] [INFO ] [HTTP] POST /api/auth/login {"ms":75,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"b8ebe9cd-5e5a-44cd-8f48-26ae9d45cb51"}
+
+────────────────────────────────────────────────────────────
+  P1-1 全局 FIFO 扣减必须避让拣货任务锁定的容器
+────────────────────────────────────────────────────────────
+  [PASS] ★P1-1 超出可动用量的出库被拒绝（修复前会把锁定容器的货一起扣走）
+  [PASS] ★P1-1 错误信息说明被任务占用的数量，便于现场判断
+  [PASS] ★P1-1 锁定容器数量分毫未动，仍为 50
+  [PASS] 可动用范围内（40 ≤ 50）出库正常成功
+  [PASS] 成功出库后锁定容器依然完好
+
+────────────────────────────────────────────────────────────
+  P1-2 容器合并不得并入被任务锁定的塑料盒
+────────────────────────────────────────────────────────────
+  [PASS] 前置：成功拆出一只塑料盒
+  [PASS] ★P1-2 并入被锁定塑料盒被拒绝（修复前会让任务锁定量凭空增加 → 出库多扣）
+  [PASS] ★P1-2 错误提示明确指向锁定原因
+  [PASS] ★P1-2 被锁定塑料盒数量未被改动
+
+────────────────────────────────────────────────────────────
+  P1-6 并发占库（商品顺序相反）不得死锁
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:20.750] [INFO ] [HTTP] POST /api/sale {"ms":16,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"445e3e14-2e1f-453a-a32c-f3f619d2e127"}
+[2026-09-05 22:28:20.754] [INFO ] [HTTP] POST /api/sale {"ms":19,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"275d0c5b-dc6d-4051-96c0-ac70f5a66f81"}
+[2026-09-05 22:28:20.779] [INFO ] [HTTP] POST /api/sale/14/reserve {"ms":24,"status":200,"userId":2,"path":"/api/sale/14/reserve","method":"POST","requestId":"e75225dd-3c37-4b11-ba55-c4269bc62955"}
+[2026-09-05 22:28:20.794] [INFO ] [HTTP] POST /api/sale/13/reserve {"ms":38,"status":200,"userId":2,"path":"/api/sale/13/reserve","method":"POST","requestId":"92a2a3a5-18c3-47f3-add2-35a867b7fa1a"}
+[2026-09-05 22:28:20.802] [INFO ] [HTTP] POST /api/sale {"ms":7,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"1001a72f-e443-4558-94af-446348037f57"}
+[2026-09-05 22:28:20.805] [INFO ] [HTTP] POST /api/sale {"ms":9,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"4c9e8a6d-ba5d-46a6-9fa5-498ec6d317ab"}
+[2026-09-05 22:28:20.827] [INFO ] [HTTP] POST /api/sale/15/reserve {"ms":21,"status":200,"userId":2,"path":"/api/sale/15/reserve","method":"POST","requestId":"35de30af-e145-4c97-ba64-da32709fccea"}
+[2026-09-05 22:28:20.842] [INFO ] [HTTP] POST /api/sale/16/reserve {"ms":35,"status":200,"userId":2,"path":"/api/sale/16/reserve","method":"POST","requestId":"1deeb371-aa71-4879-981d-e4039055f571"}
+[2026-09-05 22:28:20.851] [INFO ] [HTTP] POST /api/sale {"ms":6,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"d63a2ec8-e572-47da-afd1-4d0fe157cf9c"}
+[2026-09-05 22:28:20.854] [INFO ] [HTTP] POST /api/sale {"ms":10,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"397061bf-9b30-44ff-805f-507c6d35f6ce"}
+[2026-09-05 22:28:20.875] [INFO ] [HTTP] POST /api/sale/18/reserve {"ms":18,"status":200,"userId":2,"path":"/api/sale/18/reserve","method":"POST","requestId":"57c586a6-9e48-4122-936b-cc22fa44ebd3"}
+[2026-09-05 22:28:20.889] [INFO ] [HTTP] POST /api/sale/17/reserve {"ms":32,"status":200,"userId":2,"path":"/api/sale/17/reserve","method":"POST","requestId":"17d2ee23-3fae-4599-a9a5-950f31f4bb40"}
+[2026-09-05 22:28:20.898] [INFO ] [HTTP] POST /api/sale {"ms":7,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"1795fc5c-74a6-4346-adf5-8e243077f2ec"}
+[2026-09-05 22:28:20.901] [INFO ] [HTTP] POST /api/sale {"ms":10,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"4e3ca4ec-d2f8-46de-87f1-09ba843c8a87"}
+[2026-09-05 22:28:20.924] [INFO ] [HTTP] POST /api/sale/19/reserve {"ms":21,"status":200,"userId":2,"path":"/api/sale/19/reserve","method":"POST","requestId":"44257ea8-698c-4401-920f-578a767c87c9"}
+[2026-09-05 22:28:20.937] [INFO ] [HTTP] POST /api/sale/20/reserve {"ms":34,"status":200,"userId":2,"path":"/api/sale/20/reserve","method":"POST","requestId":"64cb7d84-0475-439d-8a35-0e6b284cac62"}
+[2026-09-05 22:28:20.945] [INFO ] [HTTP] POST /api/sale {"ms":6,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"eced62d4-c9c8-4f44-925d-dbb091de8dd7"}
+[2026-09-05 22:28:20.947] [INFO ] [HTTP] POST /api/sale {"ms":7,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"13286510-1f28-408e-b1c5-d80bf7410972"}
+[2026-09-05 22:28:20.963] [INFO ] [HTTP] POST /api/sale/22/reserve {"ms":13,"status":200,"userId":2,"path":"/api/sale/22/reserve","method":"POST","requestId":"7579d365-bec1-4d54-acc7-bb603f1ac53b"}
+[2026-09-05 22:28:20.975] [INFO ] [HTTP] POST /api/sale/21/reserve {"ms":25,"status":200,"userId":2,"path":"/api/sale/21/reserve","method":"POST","requestId":"7a774c8f-4ca1-48d5-b396-ffb4e1a49f13"}
+[2026-09-05 22:28:20.983] [INFO ] [HTTP] POST /api/sale {"ms":6,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"a99b9c25-98ce-4e21-ba7b-56b452e3fdf9"}
+[2026-09-05 22:28:20.986] [INFO ] [HTTP] POST /api/sale {"ms":8,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"c562244a-0125-4eef-bbcf-8878e3f9bdaa"}
+[2026-09-05 22:28:21.006] [INFO ] [HTTP] POST /api/sale/24/reserve {"ms":19,"status":200,"userId":2,"path":"/api/sale/24/reserve","method":"POST","requestId":"5c8026bb-cf61-4782-9315-47d01d723d42"}
+[2026-09-05 22:28:21.023] [INFO ] [HTTP] POST /api/sale/23/reserve {"ms":36,"status":200,"userId":2,"path":"/api/sale/23/reserve","method":"POST","requestId":"84174648-8858-4383-b142-817f786690b4"}
+[2026-09-05 22:28:21.031] [INFO ] [HTTP] POST /api/sale {"ms":6,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"068a52a6-ef75-47ef-8eda-94e6c7236e15"}
+[2026-09-05 22:28:21.034] [INFO ] [HTTP] POST /api/sale {"ms":8,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"c42f9ccf-9f6d-44b6-ae9d-c6408ba069b7"}
+[2026-09-05 22:28:21.051] [INFO ] [HTTP] POST /api/sale/25/reserve {"ms":14,"status":200,"userId":2,"path":"/api/sale/25/reserve","method":"POST","requestId":"b7cc9017-cf19-4950-92b7-2e38ca30a1aa"}
+[2026-09-05 22:28:21.065] [INFO ] [HTTP] POST /api/sale/26/reserve {"ms":28,"status":200,"userId":2,"path":"/api/sale/26/reserve","method":"POST","requestId":"66a52a3a-be29-44a4-a03d-505fbac3715b"}
+[2026-09-05 22:28:21.071] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"57919994-f442-4e8c-8d4d-bac699235b28"}
+[2026-09-05 22:28:21.074] [INFO ] [HTTP] POST /api/sale {"ms":8,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"2737666d-9f57-4904-86d5-15b1c9248299"}
+[2026-09-05 22:28:21.091] [INFO ] [HTTP] POST /api/sale/27/reserve {"ms":16,"status":200,"userId":2,"path":"/api/sale/27/reserve","method":"POST","requestId":"db1f8503-b295-4aa8-9e4e-1a8429c76d3f"}
+[2026-09-05 22:28:21.107] [INFO ] [HTTP] POST /api/sale/28/reserve {"ms":31,"status":200,"userId":2,"path":"/api/sale/28/reserve","method":"POST","requestId":"6df4d20c-7f02-4ccd-b245-d4c2fbed8efc"}
+  [PASS] ★P1-6 8 轮反向并发占库零死锁（修复前加锁顺序相反，会随机报占库失败）
+  [PASS] 并发占库无其它异常失败
+  [PASS] 并发结束后 reserved 恰好等于成功占用的订单数（每商品每轮 2 单各 1 件）
+  [PASS] 并发过程中未出现 reserved 超过在库量
+
+────────────────────────────────────────────────────────────
+  P1-9 并发上架同一商品的多只容器，inventory_stock 不得丢失更新
+────────────────────────────────────────────────────────────
+  [PASS] 前置：待上架容器不计入库存缓存
+  [PASS] 8 个并发上架全部成功
+  [PASS] ★P1-9 库存缓存等于 8×10=80（修复前汇总在加锁之前完成，并发上架会互相覆盖 → 缓存偏小）
+  [PASS] ★P1-9 库存缓存与容器实际总和严格一致（系统核心不变量）
+
+────────────────────────────────────────────────────────────
+  P1-9 库存热点复合索引必须存在并被实际命中
+────────────────────────────────────────────────────────────
+  [PASS] ★P1-9 idx_container_hot 存在且列顺序为 product_id,warehouse_id,status,deleted_at
+  [PASS] ★P1-9 库存汇总查询实际走 idx_container_hot（status/deleted_at 在索引层过滤，EMPTY 历史容器不再进入锁范围）
+
+────────────────────────────────────────────────────────────
+  P1-4 混单收货：容器归属决定上架落账与移动加权成本
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.159] [INFO ] [HTTP] POST /api/purchase {"ms":5,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"a99e4d29-acea-40b4-b030-6c090e5aae99"}
+[2026-09-05 22:28:21.164] [INFO ] [HTTP] POST /api/purchase/3/confirm {"ms":3,"status":200,"userId":2,"path":"/api/purchase/3/confirm","method":"POST","requestId":"22262284-8b38-49fc-ad02-a4ca0c0fd23c"}
+[2026-09-05 22:28:21.171] [INFO ] [HTTP] POST /api/purchase {"ms":5,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"57a9bfe9-4b3c-40c3-baee-c4a1399ef8cb"}
+[2026-09-05 22:28:21.175] [INFO ] [HTTP] POST /api/purchase/4/confirm {"ms":3,"status":200,"userId":2,"path":"/api/purchase/4/confirm","method":"POST","requestId":"8a35932f-c3fc-4b40-9bf9-48d0363cc765"}
+[2026-09-05 22:28:21.188] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":11,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"4c914dec-706b-4990-af15-fb2589243d86"}
+  [PASS] 混单收货订单创建成功
+[2026-09-05 22:28:21.199] [INFO ] [HTTP] POST /api/inbound-tasks/3/submit {"ms":10,"status":200,"userId":2,"path":"/api/inbound-tasks/3/submit","method":"POST","requestId":"757f4e8b-1e47-45f8-8271-07ad85ada8f7"}
+[2026-09-05 22:28:21.205] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/3/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"5627daa3-1a97-437d-8b2f-74a29bfaad0e"}
+[2026-09-05 22:28:21.222] [INFO ] [HTTP] POST /api/inbound-tasks/3/receive {"ms":21,"status":200,"userId":2,"path":"/api/inbound-tasks/3/receive","method":"POST","requestId":"5627daa3-1a97-437d-8b2f-74a29bfaad0e"}
+  [PASS] 第一箱收货成功
+[2026-09-05 22:28:21.225] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/3/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"6dd017b2-86e8-42fc-a32b-fec3bda48fb1"}
+[2026-09-05 22:28:21.236] [INFO ] [HTTP] POST /api/inbound-tasks/3/receive {"ms":12,"status":200,"userId":2,"path":"/api/inbound-tasks/3/receive","method":"POST","requestId":"6dd017b2-86e8-42fc-a32b-fec3bda48fb1"}
+  [PASS] 第二箱收货成功
+  [PASS] ★P1-4 5 件那箱记住了自己属于 10 元的采购明细（修复前容器不记归属，字段为空）
+  [PASS] ★P1-4 10 件那箱记住了自己属于 30 元的采购明细
+[2026-09-05 22:28:21.240] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/3/putaway","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"229cd3dd-3be9-4ebd-954e-57f6a69483d6"}
+[2026-09-05 22:28:21.252] [INFO ] [HTTP] POST /api/inbound-tasks/3/putaway {"ms":14,"status":200,"userId":2,"path":"/api/inbound-tasks/3/putaway","method":"POST","requestId":"229cd3dd-3be9-4ebd-954e-57f6a69483d6"}
+  [PASS] 贵的那箱上架成功
+  [PASS] ★P1-4 这 10 件全部落在 30 元那行（修复前 first-fit 会先把 5 件记到 10 元行头上）
+  [PASS] ★P1-4 移动加权成本按容器归属的 30 元计价（修复前恒取第一行的 10 元 → 成本永久性偏低）
+  [PASS] ★P1-4 出入库日志里的单价快照同样是 30 元（成本追溯的唯一依据）
+[2026-09-05 22:28:21.257] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/3/putaway","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"c5b414cf-fcb2-4e28-936c-95b8b6837c8c"}
+[2026-09-05 22:28:21.268] [INFO ] [HTTP] POST /api/inbound-tasks/3/putaway {"ms":13,"status":200,"userId":2,"path":"/api/inbound-tasks/3/putaway","method":"POST","requestId":"c5b414cf-fcb2-4e28-936c-95b8b6837c8c"}
+  [PASS] ★P1-4 全部上架后上架总量守恒（15=15），归属分配未凭空增减数量
+
+────────────────────────────────────────────────────────────
+  P1-3 超收：比例 OR 金额双闸门 + 全量留痕
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.276] [INFO ] [HTTP] POST /api/purchase {"ms":5,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"e24bcce1-29eb-401e-b888-36b5a0f7c5ff"}
+[2026-09-05 22:28:21.280] [INFO ] [HTTP] POST /api/purchase/5/confirm {"ms":3,"status":200,"userId":2,"path":"/api/purchase/5/confirm","method":"POST","requestId":"b8a53fbc-f080-45ec-9a39-f020f034ac13"}
+[2026-09-05 22:28:21.290] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":9,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"cdee8c6e-1628-464e-8124-a7a883b576e7"}
+[2026-09-05 22:28:21.297] [INFO ] [HTTP] POST /api/inbound-tasks/4/submit {"ms":6,"status":200,"userId":2,"path":"/api/inbound-tasks/4/submit","method":"POST","requestId":"18cdc6f6-1ecc-4f7f-8354-191456f80436"}
+[2026-09-05 22:28:21.301] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/4/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"01b5d26a-19c5-4a08-824f-1e9b89d12b9c"}
+[2026-09-05 22:28:21.305] [WARN ] [ERR] [AppError] 本次收货后将超收 10个（应到 100，已收 0，本次 110），涉及金额约 1000 元，请确认后重试 {"path":"/api/inbound-tasks/4/receive","userId":2,"refNo":"","requestId":"01b5d26a-19c5-4a08-824f-1e9b89d12b9c","code":"OVER_RECEIVE_CONFIRM_REQUIRED","statusCode":409}
+[2026-09-05 22:28:21.305] [WARN ] [HTTP] POST /api/inbound-tasks/4/receive {"ms":6,"status":409,"userId":2,"path":"/api/inbound-tasks/4/receive","method":"POST","requestId":"01b5d26a-19c5-4a08-824f-1e9b89d12b9c"}
+  [PASS] ★P1-3 超收 10%（低于比例闸门）但金额 1000 元时被拦下要求确认（修复前静默放行并自动计入应付）
+  [PASS] ★P1-3 拦截信息里带出金额影响，便于现场判断是不是真多送了这么多货
+  [PASS] 被拦下时一件都没入账（事务完整回滚）
+[2026-09-05 22:28:21.309] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/4/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"a152dea0-9cec-4d1d-826a-1e14b68be94d"}
+[2026-09-05 22:28:21.309] [WARN ] [VALID] [ZodError] Invalid input {"path":"/api/inbound-tasks/4/receive","userId":2,"requestId":"a152dea0-9cec-4d1d-826a-1e14b68be94d","code":"VALIDATION_ERROR"}
+[2026-09-05 22:28:21.309] [WARN ] [HTTP] POST /api/inbound-tasks/4/receive {"ms":2,"status":400,"userId":2,"path":"/api/inbound-tasks/4/receive","method":"POST","requestId":"a152dea0-9cec-4d1d-826a-1e14b68be94d"}
+  [PASS] ★P1-8 原因码只接受约定枚举，乱传直接 400（防止塞自由文本绕过追溯）
+[2026-09-05 22:28:21.312] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/4/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"789e4738-4cf6-404b-9d5d-f6e1c419eb01"}
+[2026-09-05 22:28:21.323] [INFO ] [HTTP] POST /api/inbound-tasks/4/receive {"ms":12,"status":200,"userId":2,"path":"/api/inbound-tasks/4/receive","method":"POST","requestId":"789e4738-4cf6-404b-9d5d-f6e1c419eb01"}
+  [PASS] 确认后可以正常收货
+  [PASS] ★P1-3 超收写入独立事件留痕，含数量/金额/闸门原因（修复前单据上不留任何异常痕迹）
+  [PASS] ★P1-8 留痕里带着现场选的超收原因码（财务据此区分「真多送」和「扫错了」）
+[2026-09-05 22:28:21.331] [INFO ] [HTTP] POST /api/purchase {"ms":4,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"5aad8924-ed66-45e8-af66-6e12b19a8e63"}
+[2026-09-05 22:28:21.337] [INFO ] [HTTP] POST /api/purchase/6/confirm {"ms":4,"status":200,"userId":2,"path":"/api/purchase/6/confirm","method":"POST","requestId":"f9ef9d36-4a3c-46d4-952e-96f05c000724"}
+[2026-09-05 22:28:21.344] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":6,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"72b6e5c2-b610-4cd5-9546-6020dd71a162"}
+[2026-09-05 22:28:21.352] [INFO ] [HTTP] POST /api/inbound-tasks/5/submit {"ms":5,"status":200,"userId":2,"path":"/api/inbound-tasks/5/submit","method":"POST","requestId":"4f7a3f86-e1bf-4440-b5b9-5fc9a4f97520"}
+[2026-09-05 22:28:21.356] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/5/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"d7372eec-84bf-4a25-afcd-eb88a92387f1"}
+[2026-09-05 22:28:21.366] [INFO ] [HTTP] POST /api/inbound-tasks/5/receive {"ms":12,"status":200,"userId":2,"path":"/api/inbound-tasks/5/receive","method":"POST","requestId":"d7372eec-84bf-4a25-afcd-eb88a92387f1"}
+  [PASS] 小额超收（10 件 × 1 元）不打断现场作业，直接放行
+  [PASS] ★P1-3 未触发闸门的超收也留痕（gateTriggered=false），财务日终能捞到全部超收
+
+────────────────────────────────────────────────────────────
+  P1-5 重复扫码：业务级时间窗防重
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:21.374] [INFO ] [HTTP] POST /api/purchase {"ms":4,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"356ce9ef-825b-4a85-88f5-465b563cec06"}
+[2026-09-05 22:28:21.378] [INFO ] [HTTP] POST /api/purchase/7/confirm {"ms":3,"status":200,"userId":2,"path":"/api/purchase/7/confirm","method":"POST","requestId":"df5c90c8-29a2-4cf7-ab13-a42c585a3cab"}
+[2026-09-05 22:28:21.385] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":6,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"fff82077-0ac0-460c-9335-bb227e1bd319"}
+[2026-09-05 22:28:21.393] [INFO ] [HTTP] POST /api/inbound-tasks/6/submit {"ms":5,"status":200,"userId":2,"path":"/api/inbound-tasks/6/submit","method":"POST","requestId":"aa39a7f9-8c0f-4a92-987d-f32f2c0c6838"}
+[2026-09-05 22:28:21.396] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/6/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"3a934249-1713-4029-a4b9-329d736348e9"}
+[2026-09-05 22:28:21.407] [INFO ] [HTTP] POST /api/inbound-tasks/6/receive {"ms":12,"status":200,"userId":2,"path":"/api/inbound-tasks/6/receive","method":"POST","requestId":"3a934249-1713-4029-a4b9-329d736348e9"}
+  [PASS] 首次收货成功
+[2026-09-05 22:28:21.409] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/6/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"3678b782-341a-4c0d-98c6-ac6ccb8d3939"}
+[2026-09-05 22:28:21.412] [WARN ] [ERR] [AppError] 0 秒前刚登记过完全相同的 1 箱共 10，疑似重复扫码。若确实是另一批实物，请再次提交确认 {"path":"/api/inbound-tasks/6/receive","userId":2,"refNo":"","requestId":"3678b782-341a-4c0d-98c6-ac6ccb8d3939","code":"DUPLICATE_SCAN_CONFIRM_REQUIRED","statusCode":409}
+[2026-09-05 22:28:21.412] [WARN ] [HTTP] POST /api/inbound-tasks/6/receive {"ms":4,"status":409,"userId":2,"path":"/api/inbound-tasks/6/receive","method":"POST","requestId":"3678b782-341a-4c0d-98c6-ac6ccb8d3939"}
+  [PASS] ★P1-5 时间窗内同商品同箱型的重复提交被拦下要求确认（修复前直接重复入账，凭空多出一个容器和一批库存）
+  [PASS] 被拦下时没有产生第二笔入账
+[2026-09-05 22:28:21.415] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/6/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"19483995-f6af-4b21-904b-3889bab6120f"}
+[2026-09-05 22:28:21.424] [INFO ] [HTTP] POST /api/inbound-tasks/6/receive {"ms":11,"status":200,"userId":2,"path":"/api/inbound-tasks/6/receive","method":"POST","requestId":"19483995-f6af-4b21-904b-3889bab6120f"}
+  [PASS] ★P1-5 数量不同的后续收货不被误伤（防重只针对完全相同的箱型组合）
+[2026-09-05 22:28:21.427] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/6/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"0b251033-68d3-41d0-815d-f7ca11f32353"}
+[2026-09-05 22:28:21.437] [INFO ] [HTTP] POST /api/inbound-tasks/6/receive {"ms":12,"status":200,"userId":2,"path":"/api/inbound-tasks/6/receive","method":"POST","requestId":"0b251033-68d3-41d0-815d-f7ca11f32353"}
+  [PASS] 确认后可以正常收货（真实场景里连收两批相同的货是可能的）
+  [PASS] 最终入账 = 10 + 12 + 10 = 32（被拦那次没留下痕迹）
+
+════════════════════════════════════════════════════════════
+  44 passed, 0 failed
+════════════════════════════════════════════════════════════
+

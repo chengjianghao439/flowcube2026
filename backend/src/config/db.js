@@ -1,5 +1,6 @@
 const mysql = require('mysql2/promise')
 const { env } = require('./env')
+const { boundPoolAcquisition } = require('../utils/boundedPool')
 
 const pool = mysql.createPool({
   host: env.DB_HOST,
@@ -17,9 +18,11 @@ const pool = mysql.createPool({
   charset: 'utf8mb4',
   // 注意：mysql2 不支持 acquireTimeout（那是旧 mysql 库的选项），传了会被忽略并打印
   // "Ignoring invalid configuration option" 警告。获取连接的等待由 waitForConnections
-  // + queueLimit 控制，建立连接的超时由 connectTimeout 控制。
+  // + queueLimit 控制数量；boundPoolAcquisition 另限制排队时长。
   connectTimeout: 10000,
 })
+
+boundPoolAcquisition(pool, { timeoutMs: env.DB_ACQUIRE_TIMEOUT_MS })
 
 /** 会话字符集与排序规则，避免极少数环境下连接未按 utf8mb4 解释中文（姓名乱码、排序异常） */
 pool.on('connection', (connection) => {

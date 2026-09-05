@@ -1,0 +1,4 @@
+[2026-09-05 22:57:06.323] [INFO ] [HTTP] POST /api/accounting/companies {"ms":6,"status":201,"userId":2,"path":"/api/accounting/companies","method":"POST","requestId":"88ac985f-e9b0-47ba-a38c-48790070a7e1"}
+[2026-09-05 23:05:05.062] [INFO ] [HTTP] POST /api/pda/sessions {"ms":58,"status":200,"userId":2,"path":"/api/pda/sessions","method":"POST","requestId":"be612b4e-3ee1-450e-82bb-f4f3a48ef0c7"}
+[2026-09-05 23:06:39.835] [INFO ] [HTTP] POST /api/transfer/66/scan-out {"ms":10,"status":200,"userId":2,"path":"/api/transfer/66/scan-out","method":"POST","requestId":"cda18c0f-c68d-4116-80fe-eae06c4d987e"}
+[2026-09-05 23:08:40.103] [INFO ] [HTTP] POST /api/transfer/66/scan-out {"ms":17,"status":200,"userId":2,"path":"/api/transfer/66/scan-out","method":"POST","requestId":"554a6339-5cc7-408d-8ede-f37dc3cd640d"}

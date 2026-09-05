@@ -1,9 +1,9 @@
 import axios, { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios'
 import { beforeEach, expect, test, vi } from 'vitest'
 
-const session = vi.hoisted(() => ({ token: 'old' as string | null, refreshToken: 'refresh' as string | null, setTokens: vi.fn(), logout: vi.fn() }))
+const session = vi.hoisted(() => ({ sessionGeneration: 0, token: 'old' as string | null, refreshToken: 'refresh' as string | null, setTokens: vi.fn(), logout: vi.fn() }))
 vi.mock('@/store/authStore', () => ({ useAuthStore: { getState: () => session } }))
-vi.mock('@/store/companyStore', () => ({ useCompanyStore: { getState: () => ({ companyId: 1 }) } }))
+vi.mock('@/store/companyStore', () => ({ useCompanyStore: { getState: () => company } }))
 vi.mock('@/lib/platform', () => ({ IS_CAPACITOR_PDA: false }))
 vi.mock('@/lib/authSession', () => ({ performSessionLogout: session.logout }))
 vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn() } }))
@@ -11,6 +11,7 @@ vi.mock('@/config/api', () => ({ hasUserConfiguredApiOrigin: () => true }))
 vi.mock('@/lib/pdaDeviceBinding', () => ({ getDeviceSession: () => null }))
 vi.mock('./pda-session', () => ({ ensureDeviceSession: vi.fn(), renewDeviceSession: vi.fn() }))
 
+const company = vi.hoisted(() => ({ companyId: 1 }))
 const requests: InternalAxiosRequestConfig[] = []
 let failRefresh = false
 let failReplay = false
@@ -22,9 +23,11 @@ function unauthorized(config: InternalAxiosRequestConfig) {
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
+  session.sessionGeneration = 1
   session.token = 'old'
   session.refreshToken = 'refresh'
   session.setTokens.mockImplementation((token: string, refresh: string) => { session.token = token; session.refreshToken = refresh })
+  company.companyId = 1
   requests.length = 0
   failRefresh = false
   failReplay = false
@@ -104,11 +107,12 @@ test.each([
   nextRefreshPause = new Promise(resolve => { release = resolve })
   const oldRequest = api.get('/orders').catch(error => error)
   await vi.waitFor(() => expect(requests.some(r => r.url?.endsWith('/auth/refresh'))).toBe(true))
+  session.sessionGeneration += 1
   session.token = change === 'logout' ? null : 'other-access'
   session.refreshToken = change === 'logout' ? null : 'other-refresh'
   failRefresh = refreshFails
   release()
-  expect(await oldRequest).toMatchObject({ status: 401 })
+  expect(axios.isCancel(await oldRequest)).toBe(true)
   expect(session.setTokens).not.toHaveBeenCalled()
   expect(session.logout).not.toHaveBeenCalled()
   expect(session.token).toBe(change === 'logout' ? null : 'other-access')
@@ -121,6 +125,7 @@ test('a new session can refresh while the previous session refresh is still pend
   nextRefreshPause = new Promise(resolve => { release = resolve })
   const oldRequest = api.get('/old-session').catch(error => error)
   await vi.waitFor(() => expect(requests.some(r => r.url?.endsWith('/auth/refresh'))).toBe(true))
+  session.sessionGeneration += 1
   session.token = 'other-access'
   session.refreshToken = 'other-refresh'
   const currentRequest = api.get('/current-session').catch(error => error)
@@ -130,4 +135,40 @@ test('a new session can refresh while the previous session refresh is still pend
   } finally { release(); await oldRequest; await currentRequest }
   expect(session.setTokens).toHaveBeenCalledOnce()
   expect(session.logout).not.toHaveBeenCalled()
+})
+
+test('会计导出续期保留原账套及二进制参数，返回主账套不沿用旧头', async () => {
+  const { default: api } = await import('./client')
+  company.companyId = 2
+  await api.get('/export/fixed-assets', { responseType: 'blob' })
+  expect(requests.filter(r => r.url === '/export/fixed-assets').map(r => [r.headers['X-Company-Id'], r.responseType])).toEqual([['2', 'blob'], ['2', 'blob']])
+  company.companyId = 1
+  await api.get('/accounting/vouchers', { headers: { 'X-Company-Id': '2' } })
+  expect(requests.at(-1)?.headers['X-Company-Id']).toBe('1')
+})
+
+test('续期中切换账套取消旧请求，不重放到新账套', async () => {
+  const { default: api } = await import('./client')
+  let release!: () => void
+  nextRefreshPause = new Promise(resolve => { release = resolve })
+  company.companyId = 2
+  const request = api.get('/export/fixed-assets', { responseType: 'blob' }).catch(e => e)
+  try {
+    await vi.waitFor(() => expect(requests.some(r => r.url === '/auth/refresh')).toBe(true))
+    company.companyId = 1
+  } finally { release() }
+  expect(axios.isCancel(await request)).toBe(true)
+  expect(requests.filter(r => r.url === '/export/fixed-assets')).toHaveLength(1)
+})
+
+test('旧账套迟到的成功响应不能进入新账套页面', async () => {
+  const { default: api } = await import('./client')
+  let release!: () => void
+  const pause = new Promise<void>(resolve => { release = resolve })
+  let started = false
+  api.defaults.adapter = async config => { started = true; await pause; return { data: 'old', status: 200, statusText: 'OK', headers: {}, config } }
+  company.companyId = 2
+  const request = api.get('/fixed-assets').catch(e => e)
+  try { await vi.waitFor(() => expect(started).toBe(true)); company.companyId = 1 } finally { release() }
+  expect(axios.isCancel(await request)).toBe(true)
 })

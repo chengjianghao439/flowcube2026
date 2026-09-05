@@ -1,4 +1,6 @@
+import { isCancel } from 'axios'
 import { payloadClient as client } from './client'
+import { useAuthStore } from '@/store/authStore'
 import {
   getDeviceCredential,
   getDeviceSession,
@@ -69,11 +71,13 @@ export async function ensureDeviceSession(): Promise<PdaDeviceSession | null> {
 /**
  * 心跳续期（2026-08-21 审计修复）：用现有票据换新票据，把 7 天 TTL 的失效窗口
  * 在活跃使用期间持续顺延；设备长期不用自然过期，需重新扫码或凭据换票。
- * 静默失败：网络抖动/票据恰好失效时清掉旧票据，后续请求会走 403 自动换票路径。
+ * 静默失败：当前会话的当前票据失效时清掉旧票据，后续请求会走 403 自动换票路径。
+ * 取消及已被新登录/新票据替代的心跳不再清理设备状态。
  */
 export async function renewDeviceSession(): Promise<PdaDeviceSession | null> {
   const session = getDeviceSession()
   if (!session?.token) return null
+  const sessionGeneration = useAuthStore.getState().sessionGeneration
   try {
     const data = await client.post<CreateSessionResponse>(
       '/pda/sessions/renew',
@@ -89,8 +93,12 @@ export async function renewDeviceSession(): Promise<PdaDeviceSession | null> {
     }
     await saveDeviceSession(renewed)
     return renewed
-  } catch {
-    await clearDeviceSession()
+  } catch (error) {
+    if (!isCancel(error)
+      && useAuthStore.getState().sessionGeneration === sessionGeneration
+      && getDeviceSession()?.token === session.token) {
+      await clearDeviceSession()
+    }
     return null
   }
 }

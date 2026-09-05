@@ -116,7 +116,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, w
      FROM picking_waves w
      LEFT JOIN inventory_warehouses wh ON wh.id = w.warehouse_id
      WHERE ${where}
-     ORDER BY w.priority ASC, w.created_at DESC
+     ORDER BY w.priority ASC, w.created_at DESC, w.id DESC
      LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )

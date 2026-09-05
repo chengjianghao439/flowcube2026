@@ -43,6 +43,17 @@ assert('全年累计个税 43080（20%档）', r2(yearTotalTax) === 43080, `got 
 const rWithSocial = calcMonthlyTax({ monthlyGross: 30000, monthlySocialPersonal: 1500, priorAccumTaxable: 0, priorAccumTaxPaid: 0 })
 assert('1月含个人社保1500：应纳税所得 = 30000-5000-1500 = 23500 → 税 705', rWithSocial.tax === 705, `got ${rWithSocial.tax}`)
 
+// 负累计余额必须保留给后月；只有当期应扣税额截零。
+const zeroJanuary = calcMonthlyTax({ monthlyGross: 0, monthlySocialPersonal: 0 })
+assert('零收入一月保留累计扣除余额 -5000', zeroJanuary.accumTaxable === -5000, `got ${zeroJanuary.accumTaxable}`)
+const catchUpFebruary = calcMonthlyTax({ monthlyGross: 10000, monthlySocialPersonal: 0, priorAccumTaxable: zeroJanuary.accumTaxable, priorAccumTaxPaid: zeroJanuary.accumTaxPaid })
+assert('一月0二月10000持续任职，二月税额0', catchUpFebruary.tax === 0, `got ${catchUpFebruary.tax}`)
+let low = calcMonthlyTax({ monthlyGross: 1000, monthlySocialPersonal: 100 })
+low = calcMonthlyTax({ monthlyGross: 15000, monthlySocialPersonal: 100, priorAccumTaxable: low.accumTaxable, priorAccumTaxPaid: low.accumTaxPaid })
+assert('低收入转高收入保留全部收入与扣除', low.accumTaxable === 5800 && low.tax === 174, JSON.stringify(low))
+const falling = calcMonthlyTax({ monthlyGross: 0, monthlySocialPersonal: 0, priorAccumTaxable: 1000, priorAccumTaxPaid: 30 })
+assert('累计转负不产生负税或退还已预扣', falling.accumTaxable === -4000 && falling.tax === 0 && falling.accumTaxPaid === 30)
+
 // 实发
 assert('实发 = 应发 − 个人社保 − 个税', netPay(30000, 1500, 705) === 27795, `got ${netPay(30000, 1500, 705)}`)
 

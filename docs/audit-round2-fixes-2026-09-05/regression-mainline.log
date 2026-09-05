@@ -1,0 +1,151 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+
+────────────────────────────────────────────────────────────
+  service contract
+────────────────────────────────────────────────────────────
+  [PASS] inbound service 导出 findById
+  [PASS] inbound service 导出 putaway
+  [PASS] print service 导出 create
+  [PASS] print service 导出 claimClientJobs
+  [PASS] reports service 导出 purchaseStats
+  [PASS] reports service 导出 reconciliationReport
+[2026-09-05 22:28:16.967] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"561bebcb-b543-48a7-b5af-df93e900fdc2"}
+[2026-09-05 22:28:16.968] [INFO ] [HTTP] POST /api/auth/login {"ms":71,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"561bebcb-b543-48a7-b5af-df93e900fdc2"}
+  [PASS] 登录成功（smoke_admin）
+[2026-09-05 22:28:17.033] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":3,"username":"smoke_limited","requestId":"844fcdc1-6d7c-45a2-9dd0-dc7fb17ed0c7"}
+[2026-09-05 22:28:17.033] [INFO ] [HTTP] POST /api/auth/login {"ms":60,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"844fcdc1-6d7c-45a2-9dd0-dc7fb17ed0c7"}
+  [PASS] 登录成功（smoke_limited）
+
+────────────────────────────────────────────────────────────
+  auth / permission
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.038] [INFO ] [HTTP] GET /api/auth/me {"ms":2,"status":200,"userId":2,"path":"/api/auth/me","method":"GET","requestId":"9b6f11df-9b52-4539-9c3d-af6ea4dcfbd1"}
+  [PASS] 已登录访问 /api/auth/me 成功
+[2026-09-05 22:28:17.040] [WARN ] [ERR] [AppError] 未提供认证 Token {"path":"/api/users","userId":"-","refNo":"","requestId":"e6faf8e0-b472-447e-bc0c-a82a5cb6c563","code":"AUTH_TOKEN_MISSING","statusCode":401}
+[2026-09-05 22:28:17.040] [WARN ] [HTTP] GET /api/users {"ms":1,"status":401,"userId":"-","path":"/api/users","method":"GET","requestId":"e6faf8e0-b472-447e-bc0c-a82a5cb6c563"}
+  [PASS] 未登录访问受保护接口被拒绝
+[2026-09-05 22:28:17.046] [WARN ] [ERR] [AppError] 无操作权限 {"path":"/api/users","userId":3,"refNo":"","requestId":"3b450f69-42de-4cad-83a7-f0b89930db35","code":"PERMISSION_DENIED","statusCode":403}
+[2026-09-05 22:28:17.046] [WARN ] [HTTP] GET /api/users {"ms":4,"status":403,"userId":3,"path":"/api/users","method":"GET","requestId":"3b450f69-42de-4cad-83a7-f0b89930db35"}
+  [PASS] 已登录但无权限访问被拒绝
+[2026-09-05 22:28:17.048] [INFO ] [AUTH_AUDIT] 权限校验拒绝 {"eventType":"permission_denied","userId":3,"username":"smoke_limited","requestId":"3b450f69-42de-4cad-83a7-f0b89930db35"}
+[2026-09-05 22:28:17.053] [INFO ] [HTTP] GET /api/inbound-tasks {"ms":6,"status":200,"userId":3,"path":"/api/inbound-tasks","method":"GET","requestId":"9dcfa805-ef3d-4ebf-abb3-f0a1e11abcc0"}
+  [PASS] 已登录且有权限访问成功
+[2026-09-05 22:28:17.056] [WARN ] [ERR] [AppError] 无操作权限 {"path":"/api/warehouse-tasks/1/items/1/picked-qty","userId":3,"refNo":"","requestId":"2bfcea6c-1e22-4d27-80f3-12245af98168","code":"PERMISSION_DENIED","statusCode":403}
+[2026-09-05 22:28:17.056] [WARN ] [HTTP] PUT /api/warehouse-tasks/1/items/1/picked-qty {"ms":1,"status":403,"userId":3,"path":"/api/warehouse-tasks/1/items/1/picked-qty","method":"PUT","requestId":"2bfcea6c-1e22-4d27-80f3-12245af98168"}
+  [PASS] 废弃路由 picked-qty 无权限被拒(403)
+[2026-09-05 22:28:17.057] [INFO ] [AUTH_AUDIT] 权限校验拒绝 {"eventType":"permission_denied","userId":3,"username":"smoke_limited","requestId":"2bfcea6c-1e22-4d27-80f3-12245af98168"}
+[2026-09-05 22:28:17.060] [WARN ] [ERR] [AppError] 无操作权限 {"path":"/api/warehouse-tasks/1/check","userId":3,"refNo":"","requestId":"64ee4f4e-657e-4187-99a9-26d473590dd8","code":"PERMISSION_DENIED","statusCode":403}
+[2026-09-05 22:28:17.060] [WARN ] [HTTP] PUT /api/warehouse-tasks/1/check {"ms":1,"status":403,"userId":3,"path":"/api/warehouse-tasks/1/check","method":"PUT","requestId":"64ee4f4e-657e-4187-99a9-26d473590dd8"}
+  [PASS] 废弃路由 check 无权限被拒(403)
+
+────────────────────────────────────────────────────────────
+  inbound mainline
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.062] [INFO ] [AUTH_AUDIT] 权限校验拒绝 {"eventType":"permission_denied","userId":3,"username":"smoke_limited","requestId":"64ee4f4e-657e-4187-99a9-26d473590dd8"}
+[2026-09-05 22:28:17.076] [INFO ] [HTTP] POST /api/purchase {"ms":13,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"f6b1c266-fba1-4480-82dc-d317b775e86e"}
+  [PASS] 创建采购单成功
+[2026-09-05 22:28:17.082] [INFO ] [HTTP] POST /api/purchase/27/confirm {"ms":4,"status":200,"userId":2,"path":"/api/purchase/27/confirm","method":"POST","requestId":"3a7e4087-ae37-46a3-acc7-129523faaf26"}
+  [PASS] 确认采购单成功
+[2026-09-05 22:28:17.094] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":10,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"c5e17857-d465-4675-b426-6a860702ecb0"}
+  [PASS] 创建入库任务成功
+[2026-09-05 22:28:17.100] [INFO ] [HTTP] GET /api/inbound-tasks {"ms":5,"status":200,"userId":2,"path":"/api/inbound-tasks","method":"GET","requestId":"27481328-533f-4a0c-bb1f-bd903a8c3336"}
+  [PASS] 入库任务查询返回 list/pagination
+[2026-09-05 22:28:17.106] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/4/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"0999cb6a-1153-4ff1-b286-5042908d8558"}
+[2026-09-05 22:28:17.108] [WARN ] [ERR] [AppError] 请先在 ERP 提交到 PDA，再开始收货 {"path":"/api/inbound-tasks/4/receive","userId":2,"refNo":"","requestId":"0999cb6a-1153-4ff1-b286-5042908d8558","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:17.108] [WARN ] [HTTP] POST /api/inbound-tasks/4/receive {"ms":6,"status":400,"userId":2,"path":"/api/inbound-tasks/4/receive","method":"POST","requestId":"0999cb6a-1153-4ff1-b286-5042908d8558"}
+  [PASS] 非法状态下收货被拒绝
+[2026-09-05 22:28:17.117] [INFO ] [HTTP] POST /api/inbound-tasks/4/submit {"ms":8,"status":200,"userId":2,"path":"/api/inbound-tasks/4/submit","method":"POST","requestId":"84d300db-6144-4061-bdee-66942b35da16"}
+  [PASS] 入库任务提交到 PDA 成功
+[2026-09-05 22:28:17.120] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/4/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"d674c2c9-892c-4901-adf3-cf7c0cabb90f"}
+[2026-09-05 22:28:17.138] [INFO ] [HTTP] POST /api/inbound-tasks/4/receive {"ms":20,"status":200,"userId":2,"path":"/api/inbound-tasks/4/receive","method":"POST","requestId":"d674c2c9-892c-4901-adf3-cf7c0cabb90f"}
+  [PASS] 收货动作可执行
+[2026-09-05 22:28:17.145] [INFO ] [HTTP] GET /api/inbound-tasks/4 {"ms":4,"status":200,"userId":2,"path":"/api/inbound-tasks/4","method":"GET","requestId":"85bce7e8-94bd-4214-883f-055403bc957d"}
+  [PASS] 入库任务详情结构保持兼容
+[2026-09-05 22:28:17.150] [INFO ] [HTTP] GET /api/inbound-tasks/4/containers {"ms":3,"status":200,"userId":2,"path":"/api/inbound-tasks/4/containers","method":"GET","requestId":"6b2868c0-7263-4997-a4e7-950ae290642c"}
+  [PASS] 收货后存在待上架容器
+[2026-09-05 22:28:17.154] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/4/putaway","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"398da9f4-2e65-4183-ba0d-91ec619eb8ea"}
+[2026-09-05 22:28:17.177] [INFO ] [HTTP] POST /api/inbound-tasks/4/putaway {"ms":25,"status":200,"userId":2,"path":"/api/inbound-tasks/4/putaway","method":"POST","requestId":"398da9f4-2e65-4183-ba0d-91ec619eb8ea"}
+  [PASS] 上架动作可执行
+[2026-09-05 22:28:17.182] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/4/putaway","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"2215a56e-7f10-4ffc-8d3f-63248b66ba90"}
+[2026-09-05 22:28:17.182] [WARN ] [ERR] [AppError] 任务已完成或已取消 {"path":"/api/inbound-tasks/4/putaway","userId":2,"refNo":"","requestId":"2215a56e-7f10-4ffc-8d3f-63248b66ba90","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:17.183] [WARN ] [HTTP] POST /api/inbound-tasks/4/putaway {"ms":3,"status":400,"userId":2,"path":"/api/inbound-tasks/4/putaway","method":"POST","requestId":"2215a56e-7f10-4ffc-8d3f-63248b66ba90"}
+  [PASS] 非法状态下上架被拒绝
+[2026-09-05 22:28:17.187] [INFO ] [HTTP] GET /api/purchase/27 {"ms":3,"status":200,"userId":2,"path":"/api/purchase/27","method":"GET","requestId":"d0f4cefc-93ca-4ad6-8365-bd021c6ca8c2"}
+  [PASS] 上架完成后采购单自动完成(3)
+
+────────────────────────────────────────────────────────────
+  print mainline
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.192] [INFO ] [HTTP] POST /api/print-jobs {"ms":4,"status":201,"userId":2,"path":"/api/print-jobs","method":"POST","requestId":"adcdaf2f-38eb-4606-b611-4c9418fa325c"}
+  [PASS] 打印任务创建成功
+[2026-09-05 22:28:17.198] [INFO ] [HTTP] POST /api/print-jobs/claim-client {"ms":5,"status":200,"userId":2,"path":"/api/print-jobs/claim-client","method":"POST","requestId":"aeaadec3-344d-4578-b65c-a325ea0b9eb6"}
+  [PASS] 打印任务 claim 成功
+  [PASS] claim 返回目标任务与 ackToken
+[2026-09-05 22:28:17.201] [WARN ] [ERR] [AppError] 任务已被打印工作站领取，无法本机核销 {"path":"/api/print-jobs/10/complete-local","userId":2,"refNo":"","requestId":"99789b01-d8b3-45d8-bed3-dd459ebaeb8c","code":"PRINT_JOB_CLAIMED_BY_CLIENT","statusCode":409}
+[2026-09-05 22:28:17.201] [WARN ] [HTTP] POST /api/print-jobs/10/complete-local {"ms":2,"status":409,"userId":2,"path":"/api/print-jobs/10/complete-local","method":"POST","requestId":"99789b01-d8b3-45d8-bed3-dd459ebaeb8c"}
+  [PASS] 打印中任务禁止本机核销
+[2026-09-05 22:28:17.204] [WARN ] [ERR] [AppError] 任务与打印机编码不匹配 {"path":"/api/print-jobs/10/complete","userId":2,"refNo":"","requestId":"512df4e4-2c25-48ae-9ec6-c575ea746a28","code":"FORBIDDEN","statusCode":403}
+[2026-09-05 22:28:17.204] [WARN ] [HTTP] POST /api/print-jobs/10/complete {"ms":2,"status":403,"userId":2,"path":"/api/print-jobs/10/complete","method":"POST","requestId":"512df4e4-2c25-48ae-9ec6-c575ea746a28"}
+  [PASS] 打印任务非法完成请求被拒绝
+[2026-09-05 22:28:17.210] [INFO ] [HTTP] POST /api/print-jobs/10/complete {"ms":4,"status":200,"userId":2,"path":"/api/print-jobs/10/complete","method":"POST","requestId":"18732544-041e-4978-b311-5c44957132b3"}
+  [PASS] 打印任务 complete 成功
+[2026-09-05 22:28:17.214] [INFO ] [HTTP] POST /api/print-jobs {"ms":3,"status":201,"userId":2,"path":"/api/print-jobs","method":"POST","requestId":"4498bce0-fd7c-4e00-9156-0863e5782b76"}
+  [PASS] 第二个打印任务创建成功
+[2026-09-05 22:28:17.220] [INFO ] [HTTP] POST /api/print-jobs/claim-client {"ms":4,"status":200,"userId":2,"path":"/api/print-jobs/claim-client","method":"POST","requestId":"6566dd50-49c7-42db-b45f-76c4a3ad6aae"}
+  [PASS] 第二个打印任务 claim 成功
+[2026-09-05 22:28:17.226] [INFO ] [HTTP] POST /api/print-jobs/11/fail {"ms":4,"status":200,"userId":2,"path":"/api/print-jobs/11/fail","method":"POST","requestId":"249ec690-74a0-412a-a58b-4314cdd3a15f"}
+  [PASS] 打印任务 fail 成功
+[2026-09-05 22:28:17.231] [INFO ] [HTTP] POST /api/print-jobs/11/retry {"ms":2,"status":200,"userId":2,"path":"/api/print-jobs/11/retry","method":"POST","requestId":"c438cda6-3076-448d-a842-ace30f8f873d"}
+  [PASS] 打印任务 retry 成功
+
+────────────────────────────────────────────────────────────
+  reports mainline
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.235] [INFO ] [HTTP] GET /api/reports/purchase {"ms":2,"status":200,"userId":2,"path":"/api/reports/purchase","method":"GET","requestId":"07a3474d-8896-4507-8b97-5528d789561e"}
+  [PASS] 采购报表结构存在 byMonth / bySupplier / byProduct
+[2026-09-05 22:28:17.238] [INFO ] [HTTP] GET /api/reports/inventory {"ms":2,"status":200,"userId":2,"path":"/api/reports/inventory","method":"GET","requestId":"54133751-bc9d-4769-b913-9237e9b9d24f"}
+  [PASS] 库存报表结构存在 turnover / byWarehouse
+[2026-09-05 22:28:17.251] [INFO ] [HTTP] GET /api/reports/role-workbench {"ms":11,"status":200,"userId":2,"path":"/api/reports/role-workbench","method":"GET","requestId":"844848e1-7645-4d53-9dcb-52d37cea9a4e"}
+  [PASS] 角色工作台返回 summary / sections / topAlert
+[2026-09-05 22:28:17.255] [INFO ] [HTTP] GET /api/reports/reconciliation?type=1 {"ms":2,"status":200,"userId":2,"path":"/api/reports/reconciliation?type=1","method":"GET","requestId":"3f8782f5-810d-48f4-828f-76e23d3c341a"}
+  [PASS] 对账报表返回 summary / list / pagination
+
+────────────────────────────────────────────────────────────
+  import / export / search / admin
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:17.273] [INFO ] [HTTP] GET /api/import/products/template {"ms":16,"status":200,"userId":2,"path":"/api/import/products/template","method":"GET","requestId":"8914fd97-3654-4422-8c8c-efd246ec503d"}
+  [PASS] 商品导入模板可下载
+[2026-09-05 22:28:17.280] [INFO ] [HTTP] GET /api/import/stock/template {"ms":5,"status":200,"userId":2,"path":"/api/import/stock/template","method":"GET","requestId":"0d2d3df5-6ec1-4cb4-aa5d-b4651de7b8d3"}
+  [PASS] 库存导入模板可下载
+[2026-09-05 22:28:17.304] [INFO ] [HTTP] POST /api/import/products {"ms":18,"status":200,"userId":2,"path":"/api/import/products","method":"POST","requestId":"6376031c-3ff9-487d-85d5-847cbd5761f0"}
+  [PASS] 商品导入接口可执行
+[2026-09-05 22:28:17.311] [INFO ] [HTTP] GET /api/export/purchase {"ms":5,"status":200,"userId":2,"path":"/api/export/purchase","method":"GET","requestId":"372b751e-9744-40e2-a75a-d4c5a6a28fc3"}
+  [PASS] 采购导出接口可执行
+[2026-09-05 22:28:17.317] [INFO ] [HTTP] GET /api/export/stock {"ms":5,"status":200,"userId":2,"path":"/api/export/stock","method":"GET","requestId":"f39b77b6-e080-4423-b33b-7d3089864ff4"}
+  [PASS] 库存导出接口可执行
+[2026-09-05 22:28:17.353] [INFO ] [HTTP] GET /api/search?q=SMOKE-P001 {"ms":34,"status":200,"userId":3,"path":"/api/search?q=SMOKE-P001","method":"GET","requestId":"9d7db168-de7a-4a22-b11a-e123beb9bf9b"}
+  [PASS] 全局搜索接口兼容返回数组
+[2026-09-05 22:28:17.361] [INFO ] [HTTP] POST /api/purchase {"ms":5,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"e2fc67ba-53f0-44d2-a2ba-ee6fbc7526fc"}
+[2026-09-05 22:28:17.366] [INFO ] [HTTP] POST /api/purchase/28/confirm {"ms":4,"status":200,"userId":2,"path":"/api/purchase/28/confirm","method":"POST","requestId":"da9d7856-171f-4b78-b669-71e7586e803a"}
+[2026-09-05 22:28:17.376] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":8,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"c7669856-73b5-40f6-8083-2a5528624ac4"}
+[2026-09-05 22:28:17.383] [INFO ] [HTTP] POST /api/inbound-tasks/5/submit {"ms":6,"status":200,"userId":2,"path":"/api/inbound-tasks/5/submit","method":"POST","requestId":"776a5061-b0a8-471d-851b-ebc0c4e73ac7"}
+[2026-09-05 22:28:17.387] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/5/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"d46f08fa-2e85-46ad-aa25-049704e728a9"}
+[2026-09-05 22:28:17.399] [INFO ] [HTTP] POST /api/inbound-tasks/5/receive {"ms":14,"status":200,"userId":2,"path":"/api/inbound-tasks/5/receive","method":"POST","requestId":"d46f08fa-2e85-46ad-aa25-049704e728a9"}
+[2026-09-05 22:28:17.402] [INFO ] [HTTP] GET /api/inbound-tasks/5/containers {"ms":2,"status":200,"userId":2,"path":"/api/inbound-tasks/5/containers","method":"GET","requestId":"d7a4ec58-8ea8-4469-ae18-9bd478ef5190"}
+  [PASS] 管理员补录前存在待上架容器
+[2026-09-05 22:28:17.405] [WARN ] [ERR] [AppError] 无操作权限 {"path":"/api/admin/putaway","userId":3,"refNo":"","requestId":"a09f2965-6347-4900-ab34-bdb6457ead42","code":"PERMISSION_DENIED","statusCode":403}
+[2026-09-05 22:28:17.405] [WARN ] [HTTP] POST /api/admin/putaway {"ms":0,"status":403,"userId":3,"path":"/api/admin/putaway","method":"POST","requestId":"a09f2965-6347-4900-ab34-bdb6457ead42"}
+  [PASS] 管理员工具权限点生效
+[2026-09-05 22:28:17.407] [INFO ] [AUTH_AUDIT] 权限校验拒绝 {"eventType":"permission_denied","userId":3,"username":"smoke_limited","requestId":"a09f2965-6347-4900-ab34-bdb6457ead42"}
+[2026-09-05 22:28:17.421] [INFO ] [HTTP] POST /api/admin/putaway {"ms":14,"status":200,"userId":2,"path":"/api/admin/putaway","method":"POST","requestId":"1c0c7d72-800a-462f-a71f-0d23e13b2787"}
+  [PASS] 管理员补录上架成功
+
+════════════════════════════════════════════════════════════
+  49 passed, 0 failed
+════════════════════════════════════════════════════════════
+

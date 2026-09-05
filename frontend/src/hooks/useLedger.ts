@@ -1,3 +1,4 @@
+import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 import { useQuery } from '@tanstack/react-query'
 import {
   getTrialBalanceApi, getAccountLedgerApi,
@@ -7,20 +8,20 @@ import {
 const QK = 'acct-ledger'
 
 export const useTrialBalance = (period: string) =>
-  useQuery({ queryKey: [QK, 'trial', period], queryFn: () => getTrialBalanceApi(period), enabled: /^\d{6}$/.test(period) })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'trial', period]), queryFn: () => getTrialBalanceApi(period), enabled: /^\d{6}$/.test(period) })
 
 export const useAccountLedger = (accountId: number | null, period: string) =>
   useQuery({
-    queryKey: [QK, 'account', accountId, period],
+    queryKey: useCompanyQueryKey([QK, 'account', accountId, period]),
     queryFn: () => getAccountLedgerApi(accountId as number, period),
     enabled: !!accountId && /^\d{6}$/.test(period),
   })
 
 export const useIncomeStatement = (period: string) =>
-  useQuery({ queryKey: [QK, 'income', period], queryFn: () => getIncomeStatementApi(period), enabled: /^\d{6}$/.test(period) })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'income', period]), queryFn: () => getIncomeStatementApi(period), enabled: /^\d{6}$/.test(period) })
 
 export const useBalanceSheet = (period: string) =>
-  useQuery({ queryKey: [QK, 'balance', period], queryFn: () => getBalanceSheetApi(period), enabled: /^\d{6}$/.test(period) })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'balance', period]), queryFn: () => getBalanceSheetApi(period), enabled: /^\d{6}$/.test(period) })
 
 export const useCashFlow = (period: string) =>
-  useQuery({ queryKey: [QK, 'cashflow', period], queryFn: () => getCashFlowApi(period), enabled: /^\d{6}$/.test(period) })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'cashflow', period]), queryFn: () => getCashFlowApi(period), enabled: /^\d{6}$/.test(period) })

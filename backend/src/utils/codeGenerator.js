@@ -150,33 +150,39 @@ async function generateContainerCode(conn, prefix = 'I') {
   let dedicated = null
   const db = isPool ? (dedicated = await conn.getConnection()) : conn
   try {
-    const [[{ maxNum: seedMax }]] = upper === 'B'
-      ? await db.query(
-          `SELECT COALESCE(MAX(CAST(SUBSTRING(barcode, 2) AS UNSIGNED)), 0) AS maxNum
-           FROM inventory_containers WHERE barcode LIKE 'B%'`,
-        )
-      : await db.query(
-          `SELECT COALESCE(MAX(CAST(
-              CASE
-                WHEN barcode LIKE 'I%' THEN SUBSTRING(barcode, 2)
-                WHEN barcode LIKE 'CNT%' THEN SUBSTRING(barcode, 4)
-                ELSE NULL
-              END AS UNSIGNED
-            )), 0) AS maxNum
-           FROM inventory_containers WHERE barcode LIKE 'I%' OR barcode LIKE 'CNT%'`,
-        )
-
-    // 该 seq_key 第一次出现时用当前最大编号播种；此后这行已存在，ON DUPLICATE 分支不再改动 seq_value，
-    // 只靠下面的原子 UPDATE 递增——不会每次都重新扫描 inventory_containers。
+    // 0 表示尚未播种。先插入占位行，再锁定递增；已初始化路径不读取容器表。
+    // 重复键走 UPDATE 获取排他锁，避免 INSERT IGNORE 共享锁并发升级死锁。
     await db.query(
-      `INSERT INTO daily_sequences (seq_key, seq_value) VALUES (?, ?)
-       ON DUPLICATE KEY UPDATE seq_key = seq_key`,
-      [seqKey, seedMax],
-    )
-    await db.query(
-      `UPDATE daily_sequences SET seq_value = LAST_INSERT_ID(seq_value + 1) WHERE seq_key = ?`,
+      'INSERT INTO daily_sequences (seq_key, seq_value) VALUES (?, 0) ON DUPLICATE KEY UPDATE seq_key = seq_key',
       [seqKey],
     )
+    const [advanced] = await db.query(
+      'UPDATE daily_sequences SET seq_value = LAST_INSERT_ID(seq_value + 1) WHERE seq_key = ? AND seq_value > 0',
+      [seqKey],
+    )
+    if (!advanced.affectedRows) {
+      const [[{ maxNum: seedMax }]] = upper === 'B'
+        ? await db.query(
+            `SELECT COALESCE(MAX(CAST(SUBSTRING(barcode, 2) AS UNSIGNED)), 0) AS maxNum
+             FROM inventory_containers WHERE barcode LIKE 'B%' FOR UPDATE`,
+          )
+        : await db.query(
+            `SELECT COALESCE(MAX(CAST(
+                CASE
+                  WHEN barcode LIKE 'I%' THEN SUBSTRING(barcode, 2)
+                  WHEN barcode LIKE 'CNT%' THEN SUBSTRING(barcode, 4)
+                  ELSE NULL
+                END AS UNSIGNED
+              )), 0) AS maxNum
+             FROM inventory_containers WHERE barcode LIKE 'I%' OR barcode LIKE 'CNT%' FOR UPDATE`,
+          )
+
+      // 多个首次调用可能一起读到种子；GREATEST 保留先完成者的递增结果，不回退序列。
+      await db.query(
+        'UPDATE daily_sequences SET seq_value = LAST_INSERT_ID(GREATEST(seq_value, ?) + 1) WHERE seq_key = ?',
+        [seedMax, seqKey],
+      )
+    }
     const [[{ seq }]] = await db.query('SELECT LAST_INSERT_ID() AS seq')
     return `${upper}${String(seq).padStart(6, '0')}`
   } finally {

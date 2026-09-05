@@ -4,6 +4,10 @@ const { generateDailyCode, generateMasterCode } = require('../../utils/codeGener
 const engine = require('../accounting/voucher-engine')
 const { SOURCE_TYPES, DIR } = require('../../constants/voucherSource')
 const { normalizePagination } = require('../../utils/pagination')
+const { beijingTodayYmd } = require('../../utils/backendTime')
+const { assertPeriodOpen } = require('../accounting/accounting.period.service')
+
+const dateOnly = value => value instanceof Date ? beijingTodayYmd(value) : value == null ? null : String(value).slice(0, 10)
 
 /**
  * 固定资产（文档10 完整会计准则 · 固定资产折旧）。
@@ -26,13 +30,13 @@ function fmtAsset(r) {
     category: r.category,
     departmentId: r.department_id != null ? Number(r.department_id) : null,
     departmentName: r.department_name,
-    acquireDate: r.acquire_date,
+    acquireDate: dateOnly(r.acquire_date),
     originalCost: Number(r.original_cost),
     residualRate: Number(r.residual_rate),
     usefulMonths: Number(r.useful_months),
     deprMethod: Number(r.depr_method),
     status: Number(r.status),
-    disposeDate: r.dispose_date,
+    disposeDate: dateOnly(r.dispose_date),
     disposeType: r.dispose_type != null ? Number(r.dispose_type) : null,
     disposeTypeName: r.dispose_type != null ? DISPOSE_TYPE_LABEL[r.dispose_type] : null,
     disposeIncome: r.dispose_income != null ? Number(r.dispose_income) : null,
@@ -49,14 +53,6 @@ function fmtAsset(r) {
 
 const MONTHLY_DEPR_SQL = `(CASE WHEN fa.useful_months > 0
   THEN ROUND(fa.original_cost * (1 - fa.residual_rate) / fa.useful_months, 2) ELSE 0 END)`
-
-/** 校验会计期间未结账（固定资产模块内联，带 company_id，acct_periods 主键已改 (company_id,period)） */
-async function assertPeriodOpenInline(conn, companyId, period) {
-  const [[row]] = await conn.query('SELECT status FROM acct_periods WHERE company_id = ? AND period = ?', [Number(companyId) || 1, period])
-  if (row && Number(row.status) === 2) {
-    throw new AppError(`会计期间 ${period} 已结账，凭证不可变动；如需调整请先反结账`, 409, 'ACCT_PERIOD_CLOSED')
-  }
-}
 
 async function listAssets({ page = 1, pageSize = 20, keyword = '', status = '', companyId = 1 }) {
   const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
@@ -107,7 +103,7 @@ async function findAsset(id, companyId = 1) {
     'SELECT * FROM fixed_asset_depr WHERE asset_id = ? ORDER BY period ASC', [Number(id)],
   )
   detail.deprHistory = deprRows.map(d => ({
-    id: Number(d.id), period: d.period, deprDate: d.depr_date,
+    id: Number(d.id), period: d.period, deprDate: dateOnly(d.depr_date),
     monthlyAmount: Number(d.monthly_amount), accumAmount: Number(d.accum_amount),
     isDisposal: !!d.is_disposal,
   }))
@@ -142,86 +138,81 @@ async function createAsset({ assetName, category, departmentId, departmentName, 
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-/** 计提折旧：跑某期间（默认当前月），对「使用中且该期间应计提」的卡片生成折旧台账 + 凭证。 */
-async function runDepreciation({ period, companyId = 1 }, operator) {
-  const p = String(period || '').slice(0, 6)
-  if (!/^\d{6}$/.test(p)) throw new AppError('请提供有效的计提期间 YYYYMM', 400)
-  const cid = Number(companyId) || 1
+/**
+ * 台账与折旧凭证同事务落地。调用方先锁账套，再锁资产；历史只允许按时间追加，
+ * 已有期间重试直接复用，累计与凭证都采用本次实际计提额（末期补差）。
+ */
+async function depreciateAsset(conn, fa, { period, date, isDisposal = false }, accountMap, allocSeq, operator, companyId) {
+  const [history] = await conn.query(
+    'SELECT * FROM fixed_asset_depr WHERE asset_id = ? ORDER BY period ASC FOR UPDATE', [fa.id],
+  )
+  const accum = engine.round2(history.reduce((sum, row) => sum + Number(row.monthly_amount), 0))
+  const existing = history.find(row => row.period === period)
+  const latest = history.at(-1)?.period
+  if (isDisposal && latest && latest > period) {
+    throw new AppError('处置期间不能早于已有折旧期间', 409, 'ASSET_DEPRECIATION_ORDER')
+  }
+  if (existing) return { skipped: true, accum }
+  if (latest && latest > period) {
+    throw new AppError('不能在已有折旧期间之前补提；请按期间顺序计提', 409, 'ASSET_DEPRECIATION_ORDER')
+  }
+  const totalDepr = engine.round2(Number(fa.original_cost) * (1 - Number(fa.residual_rate)))
+  const remaining = engine.round2(Math.max(0, totalDepr - accum))
+  const monthly = engine.round2(Number(fa.original_cost) * (1 - Number(fa.residual_rate)) / Number(fa.useful_months))
+  const actualMonthly = Math.min(monthly, remaining)
+  if (remaining === 0) {
+    await conn.query('UPDATE fixed_assets SET status = 2 WHERE id = ?', [fa.id])
+    return { skipped: true, accum }
+  }
+  if (actualMonthly <= 0) return { skipped: true, accum }
+  const newAccum = engine.round2(accum + actualMonthly)
+  const [row] = await conn.query(
+    `INSERT INTO fixed_asset_depr (company_id, asset_id, period, depr_date, monthly_amount, accum_amount, is_disposal, created_by)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    [companyId, fa.id, period, date, actualMonthly, newAccum, isDisposal ? 1 : 0, operator?.userId ?? null],
+  )
+  const voucher = await engine.upsertVoucher(conn, {
+    sourceType: SOURCE_TYPES.ASSET_DEPRECIATION,
+    sourceId: Number(row.insertId),
+    sourceNo: fa.asset_no,
+    summary: `固定资产折旧 ${fa.asset_name}（${period}）`,
+    voucherDate: date,
+    legs: [
+      { code: '660203', direction: DIR.DEBIT, amount: actualMonthly, summary: `${fa.asset_name} 折旧`, auxId: fa.department_id != null ? Number(fa.department_id) : null, auxName: fa.department_name || null },
+      { code: '1602', direction: DIR.CREDIT, amount: actualMonthly, summary: `${fa.asset_name} 累计折旧` },
+    ],
+  }, accountMap, allocSeq, operator?.userId ?? null, companyId)
+  if (newAccum >= totalDepr) await conn.query('UPDATE fixed_assets SET status = 2 WHERE id = ?', [fa.id])
+  return { skipped: false, accum: newAccum, monthly: actualMonthly, voucher }
+}
 
+/** 计提折旧：已生成期间幂等跳过，新期间按历史顺序追加。 */
+async function runDepreciation({ period, companyId = 1 }, operator) {
+  const p = String(period || '')
+  const cid = Number(companyId) || 1
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    // 该期间必须未结账（事务内，带 company_id）
-    await assertPeriodOpenInline(conn, cid, p)
+    // 与期间结账共用账套锁，之后按 id 锁资产；处置沿用同一顺序。
+    await assertPeriodOpen(conn, p, cid)
     const accountMap = await engine.loadAccountMap(conn, cid)
     const allocSeq = await engine.makeSeqAllocator(conn, cid)
-
-    // 取使用中卡片；判断「该期间是否应计提」：购置期间 <= 目标期间，且未处置（或处置期 >= 目标期间）
     const [assets] = await conn.query(
       `SELECT * FROM fixed_assets
-        WHERE company_id = ? AND status = 1 AND deleted_at IS NULL
-          AND DATE_FORMAT(acquire_date, '%Y%m') <= ?
-          AND (dispose_date IS NULL OR DATE_FORMAT(dispose_date, '%Y%m') >= ?)`,
-      [cid, p, p],
+       WHERE company_id = ? AND status = 1 AND deleted_at IS NULL
+         AND DATE_FORMAT(acquire_date, '%Y%m') <= ?
+       ORDER BY id ASC FOR UPDATE`,
+      [cid, p],
     )
     const results = { period: p, ran: 0, skipped: 0, vouchers: [] }
     for (const fa of assets) {
-      const monthly = engine.round2(Number(fa.original_cost) * (1 - Number(fa.residual_rate)) / Number(fa.useful_months))
-      if (monthly <= 0) { results.skipped += 1; continue }
-
-      // 已提期数（台账 count）与累计已提
-      const [[agg]] = await conn.query(
-        'SELECT COUNT(*) AS n, COALESCE(SUM(monthly_amount),0) AS accum FROM fixed_asset_depr WHERE asset_id = ?',
-        [fa.id],
-      )
-      const accum = engine.round2(Number(agg.accum))
-      const totalDepr = engine.round2(Number(fa.original_cost) * (1 - Number(fa.residual_rate)))
-      // 已提足 → 停提（状态 2）。用「已提累计 >= 应提总额 - 1e-6」判断，而不是 accum+monthly 提前停：
-      // 旧写法 accum+monthly >= totalDepr-0.01 会在「提满前一期」就停，最后一个月折旧永远漏提，
-      // 累计折旧恒低于原值−残值、账面净值虚高（审计 2026-08-30）。
-      if (accum >= totalDepr - 1e-6) {
-        await conn.query('UPDATE fixed_assets SET status = 2 WHERE id = ?', [fa.id])
-        results.skipped += 1
-        continue
-      }
-
-      // 处置当期：处置日期所在期间 == 目标期间 → 提最后一期
-      const isDisposalPeriod = fa.dispose_date != null && String(fa.dispose_date).slice(0, 6) === p
-      // 最后一期：若本期计提后超过应提总额，差额计提（clamp 到 totalDepr），避免累计折旧超过「原值−残值」
-      const lastPeriodMonthly = engine.round2(totalDepr - accum)
-      const actualMonthly = lastPeriodMonthly < monthly ? lastPeriodMonthly : monthly
-      const newAccum = engine.round2(accum + actualMonthly)
-
-      // 台账行（UNIQUE(asset_id, period) 幂等）
-      await conn.query(
-        `INSERT INTO fixed_asset_depr (company_id, asset_id, period, depr_date, monthly_amount, accum_amount, is_disposal, created_by)
-         VALUES (?,?,?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE monthly_amount=VALUES(monthly_amount), accum_amount=VALUES(accum_amount), is_disposal=VALUES(is_disposal)`,
-        [cid, fa.id, p, `${p.slice(0,4)}-${p.slice(4,6)}-28`, actualMonthly, newAccum, isDisposalPeriod ? 1 : 0, operator?.userId ?? null],
-      )
-      const [[deprRow]] = await conn.query(
-        'SELECT id FROM fixed_asset_depr WHERE asset_id = ? AND period = ?', [fa.id, p],
-      )
-
-      // 凭证：借 折旧费用(660203) / 贷 累计折旧(1602)
-      const spec = {
-        sourceType: SOURCE_TYPES.ASSET_DEPRECIATION,
-        sourceId: Number(deprRow.id),
-        sourceNo: fa.asset_no,
-        summary: `固定资产折旧 ${fa.asset_name}（${p}）`,
-        voucherDate: `${p.slice(0,4)}-${p.slice(4,6)}-28`,
-        legs: [
-          { code: '660203', direction: DIR.DEBIT, amount: monthly, summary: `${fa.asset_name} 折旧`, auxId: fa.department_id != null ? Number(fa.department_id) : null, auxName: fa.department_name || null },
-          { code: '1602', direction: DIR.CREDIT, amount: monthly, summary: `${fa.asset_name} 累计折旧` },
-        ],
-      }
-      const r = await engine.upsertVoucher(conn, spec, accountMap, allocSeq, operator?.userId ?? null, cid)
-      results.ran += 1
-      results.vouchers.push({ assetId: Number(fa.id), assetName: fa.asset_name, monthly, voucher: r })
-
-      // 若本期间处置且已提最后一期 → 状态 3（处置标记，处置凭证由 dispose() 生成）
-      if (isDisposalPeriod) {
-        await conn.query('UPDATE fixed_assets SET status = 3 WHERE id = ?', [fa.id])
+      const result = await depreciateAsset(conn, fa, {
+        period: p, date: `${p.slice(0, 4)}-${p.slice(4, 6)}-28`,
+      }, accountMap, allocSeq, operator, cid)
+      if (result.skipped) results.skipped += 1
+      else {
+        results.ran += 1
+        results.vouchers.push({ assetId: Number(fa.id), assetName: fa.asset_name, monthly: result.monthly, voucher: result.voucher })
       }
     }
     await conn.commit()
@@ -231,48 +222,30 @@ async function runDepreciation({ period, companyId = 1 }, operator) {
 
 /** 处置/报废：生成处置单 + 处置凭证（净值→清理→收入/费用→处置损益），并做处置当期计提。 */
 async function disposeAsset(id, { disposeType, disposeDate, income = 0, expense = 0 }, operator, companyId = 1) {
+  const dDate = String(disposeDate || '')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dDate)) throw new AppError('请填写处置日期', 400)
+  const cid = Number(companyId) || 1
+  const dPeriod = dDate.slice(0, 4) + dDate.slice(5, 7)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await assertPeriodOpen(conn, dPeriod, cid)
     const [[fa]] = await conn.query(
       'SELECT * FROM fixed_assets WHERE id = ? AND company_id = ? AND deleted_at IS NULL FOR UPDATE',
-      [Number(id), Number(companyId) || 1],
+      [Number(id), cid],
     )
     if (!fa) throw new AppError('固定资产不存在', 404)
     if (Number(fa.status) === 3) throw new AppError('该资产已处置，请勿重复操作', 400)
     if (![1, 2].includes(Number(disposeType))) throw new AppError('处置类型无效：1出售 2报废', 400)
-    const dDate = String(disposeDate || '')
-    if (!dDate.match(/^\d{4}-\d{2}-\d{2}$/)) throw new AppError('请填写处置日期', 400)
+    if (dDate < dateOnly(fa.acquire_date)) throw new AppError('处置日期不能早于购置日期', 400)
     const inc = Number(income) || 0
     const exp = Number(expense) || 0
-    const cid = Number(companyId) || 1
-    const dPeriod = dDate.slice(0, 4) + dDate.slice(5, 7)
-
-    // 处置期间必须未结账
-    await assertPeriodOpenInline(conn, cid, dPeriod)
-
-    // 累计已提（到处置当期之前）+ 处置当期应提（若本期间还没提过）
-    const [[agg]] = await conn.query(
-      'SELECT COALESCE(SUM(monthly_amount),0) AS accum FROM fixed_asset_depr WHERE asset_id = ?',
-      [fa.id],
-    )
-    let accum = engine.round2(Number(agg.accum))
-
-    // 处置当期还没提 → 提这一期（在台账加一行），否则直接用已有累计
-    const [[deprThisPeriod]] = await conn.query(
-      'SELECT id FROM fixed_asset_depr WHERE asset_id = ? AND period = ?', [fa.id, dPeriod],
-    )
     const accountMap = await engine.loadAccountMap(conn, cid)
     const allocSeq = await engine.makeSeqAllocator(conn, cid)
-    if (!deprThisPeriod) {
-      const monthly = engine.round2(Number(fa.original_cost) * (1 - Number(fa.residual_rate)) / Number(fa.useful_months))
-      accum = engine.round2(accum + monthly)
-      await conn.query(
-        `INSERT INTO fixed_asset_depr (company_id, asset_id, period, depr_date, monthly_amount, accum_amount, is_disposal, created_by)
-         VALUES (?,?,?,?,?,?,1,?)`,
-        [cid, fa.id, dPeriod, dDate, monthly, accum, operator?.userId ?? null],
-      )
-    }
+    const depreciation = await depreciateAsset(conn, fa, {
+      period: dPeriod, date: dDate, isDisposal: true,
+    }, accountMap, allocSeq, operator, cid)
+    const accum = depreciation.accum
 
     // 生成处置凭证：借 累计折旧 / 借(贷) 固定资产清理 → 收入 → 结平
     const netBook = engine.round2(Number(fa.original_cost) - accum)

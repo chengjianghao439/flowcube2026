@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core'
 import { IS_CAPACITOR_PDA } from '@/lib/platform'
 import { useAuthStore } from '@/store/authStore'
 import { useCompanyStore } from '@/store/companyStore'
+import { isAccountingRequest } from '@/lib/companyScope'
 import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
 import type { ApiErrorResponse, ApiResponse } from '@/types'
@@ -29,15 +30,16 @@ type RetriableConfig = InternalAxiosRequestConfig & { __pdaSessionRetried?: bool
 // 独立实例不安装业务拦截器，refresh 的 401 不可递归续期。
 const authRefreshClient = axios.create()
 type RefreshResult = { kind: 'success'; token: string; refreshToken: string | null } | { kind: 'failed' | 'superseded' }
-let refreshInFlight: { refreshToken: string; baseURL: string | undefined; promise: Promise<RefreshResult> } | null = null
-async function tryRefreshTokens(): Promise<RefreshResult> {
-  const { token, refreshToken } = useAuthStore.getState()
+let refreshInFlight: { sessionGeneration: number; refreshToken: string; baseURL: string | undefined; promise: Promise<RefreshResult> } | null = null
+async function tryRefreshTokens(config: InternalAxiosRequestConfig): Promise<RefreshResult> {
+  assertCurrentAuthSession(config)
+  const { token, refreshToken, sessionGeneration } = useAuthStore.getState()
   if (!refreshToken) return { kind: 'failed' }
   const baseURL = apiClient.defaults.baseURL
-  if (refreshInFlight?.refreshToken === refreshToken && refreshInFlight.baseURL === baseURL) return refreshInFlight.promise
+  if (refreshInFlight && refreshInFlight.sessionGeneration === sessionGeneration && refreshInFlight.refreshToken === refreshToken && refreshInFlight.baseURL === baseURL) return refreshInFlight.promise
   const isCurrentSession = () => {
     const current = useAuthStore.getState()
-    return current.token === token && current.refreshToken === refreshToken && apiClient.defaults.baseURL === baseURL
+    return current.sessionGeneration === sessionGeneration && current.token === token && current.refreshToken === refreshToken && apiClient.defaults.baseURL === baseURL
   }
   const promise = (async (): Promise<RefreshResult> => {
     try {
@@ -59,7 +61,7 @@ async function tryRefreshTokens(): Promise<RefreshResult> {
       return { kind: isCurrentSession() ? 'failed' : 'superseded' }
     }
   })()
-  const flight = { refreshToken, baseURL, promise }
+  const flight = { sessionGeneration, refreshToken, baseURL, promise }
   refreshInFlight = flight
   // 不让旧会话请求的结束清除新会话正在进行的续期。
   const clearFlight = () => { if (refreshInFlight === flight) refreshInFlight = null }
@@ -145,6 +147,16 @@ declare module 'axios' {
     skipGlobalError?: boolean
     /** ERP API fallback 已尝试过，避免循环重试 */
     _erpApiFallbackTried?: boolean
+    /** 首次发起时绑定账套；续期重放不能改投另一账套。 */
+    _companyScopeId?: number
+    /** 首次派发的登录会话；正常令牌轮换不改变归属。禁止持久化。 */
+    _authSessionGeneration?: number
+  }
+}
+
+function assertCurrentAuthSession(config?: AxiosRequestConfig): void {
+  if (config?._authSessionGeneration != null && config._authSessionGeneration !== useAuthStore.getState().sessionGeneration) {
+    throw new axios.CanceledError('登录会话已变化，请重新操作')
   }
 }
 
@@ -179,6 +191,7 @@ async function tryErpApiFallbackAndRetry(config: InternalAxiosRequestConfig): Pr
     if (!n) continue
     if (failedOrigin && n === failedOrigin) continue
     if (!(await probeErpApiOrigin(n))) continue
+    assertCurrentAuthSession(config)
     setApiBase(n)
     const nextBase = `${n}/api`
     apiClient.defaults.baseURL = nextBase
@@ -198,7 +211,9 @@ const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().token
+    assertCurrentAuthSession(config)
+    const { token, sessionGeneration } = useAuthStore.getState()
+    config._authSessionGeneration ??= sessionGeneration
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -212,12 +227,16 @@ apiClient.interceptors.request.use(
     // 会计账套（文档10 多账套）：当前账套 id 注入头，后端 companyScope 中间件解析。
     // 只对会计相关接口有意义；非会计接口忽略该头。
     const companyId = useCompanyStore.getState().companyId
-    if (companyId !== 1) {
-      config.headers['X-Company-Id'] = String(companyId)
+    if (isAccountingRequest(config.url)) {
+      if (config._companyScopeId != null && config._companyScopeId !== companyId) throw new axios.CanceledError('账套已切换，请重新操作')
+      config._companyScopeId ??= companyId
     }
+    config.headers['X-Company-Id'] = String(config._companyScopeId ?? companyId)
     return config
   },
-  (error) => Promise.reject(error),
+  (error) => { throw error },
+  // 调用当下绑定会话，避免请求排入微任务后才捕获到紧随其后的新登录。
+  { synchronous: true },
 )
 
 // PDA 票据心跳续期（2026-08-21 审计修复）：7 天 TTL 下活跃使用需持续顺延失效窗口。
@@ -235,10 +254,20 @@ function maybeRenewPdaSession() {
 
 apiClient.interceptors.response.use(
   (response) => {
+    assertCurrentAuthSession(response.config)
+    if (response.config._companyScopeId != null && response.config._companyScopeId !== useCompanyStore.getState().companyId) throw new axios.CanceledError('账套已切换，忽略旧结果')
     maybeRenewPdaSession()
     return response
   },
   async (error: AxiosError<ApiErrorResponse<PrintQuotaErrorPayload>>) => {
+    if (axios.isCancel(error)) return Promise.reject(error)
+    assertCurrentAuthSession(error.config)
+    if (error.config?._companyScopeId != null && error.config._companyScopeId !== useCompanyStore.getState().companyId) return Promise.reject(new axios.CanceledError('账套已切换，忽略旧结果'))
+    // 二进制下载的业务错误仍是 JSON，恢复统一错误语义和续期流程。
+    if (typeof Blob !== 'undefined' && error.response?.data instanceof Blob) {
+      try { error.response.data = JSON.parse(await error.response.data.text()) } catch { /* 非 JSON 保留通用错误 */ }
+    }
+    assertCurrentAuthSession(error.config)
     const status  = error.response?.status
     const transportCode = error.code
     const rawMsg  = error.message
@@ -250,6 +279,7 @@ apiClient.interceptors.response.use(
       && (transportCode === 'ERR_NETWORK' || rawMsg === 'Network Error')
     ) {
       const switched = await tryErpApiFallbackAndRetry(cfg)
+      assertCurrentAuthSession(cfg)
       if (switched) {
         return apiClient.request(cfg)
       }
@@ -263,7 +293,9 @@ apiClient.interceptors.response.use(
       && error.response?.data?.code === 'PDA_SESSION_REQUIRED'
       && !(cfg as RetriableConfig).__pdaSessionRetried
     ) {
+      assertCurrentAuthSession(cfg)
       const renewed = await ensureDeviceSession()
+      assertCurrentAuthSession(cfg)
       if (renewed?.token) {
         ;(cfg as RetriableConfig).__pdaSessionRetried = true
         cfg.headers = cfg.headers ?? {}
@@ -313,11 +345,10 @@ apiClient.interceptors.response.use(
       const tokenBefore = before.token
       const refreshBefore = before.refreshToken
       if (cfg401 && !cfg401.__authRefreshed) {
-        const refreshed = await tryRefreshTokens()
+        const refreshed = await tryRefreshTokens(cfg401)
+        assertCurrentAuthSession(cfg401)
         if (refreshed.kind === 'superseded') return Promise.reject(structuredError)
         if (refreshed.kind === 'success') {
-          const current = useAuthStore.getState()
-          if (current.token !== refreshed.token || current.refreshToken !== refreshed.refreshToken) return Promise.reject(structuredError)
           cfg401.__authRefreshed = true
           cfg401.headers = cfg401.headers ?? {}
           ;(cfg401.headers as Record<string, string>).Authorization = `Bearer ${refreshed.token}`
@@ -326,6 +357,7 @@ apiClient.interceptors.response.use(
       }
       const current = useAuthStore.getState()
       if (current.token !== tokenBefore || current.refreshToken !== refreshBefore) return Promise.reject(structuredError)
+      assertCurrentAuthSession(cfg401)
       performSessionLogout()
       return Promise.reject(structuredError)
     }

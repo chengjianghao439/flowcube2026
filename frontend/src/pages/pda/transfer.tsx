@@ -2,7 +2,7 @@
  * PDA 调拨任务列表
  * 路由：/pda/transfer
  *
- * 两段：待出库（status=2，调出仓扫码出库） / 待入库（status=3，调入仓扫码入库）。
+ * 两段：待出库（status=2，或 status=3 且仍有未出完明细） / 待入库（status=3）。
  * 库存变动全部经 PDA 扫码，ERP 端不再直接执行调拨。
  */
 import { ArrowUpFromLine, ArrowDownToLine } from 'lucide-react'
@@ -51,7 +51,9 @@ export default function PdaTransferPage() {
     refetchInterval: 30_000,
   })
   const list = (data ?? []) as TransferOrder[]
-  const outbound = list.filter(o => o.status === 2)
+  const outbound = list.filter(o => o.status === 2 || (o.status === 3 && o.items?.some(item =>
+    Math.round(item.quantity * 10000) > Math.round((item.deductedQty ?? 0) * 10000),
+  )))
   const inbound  = list.filter(o => o.status === 3)
 
   return (

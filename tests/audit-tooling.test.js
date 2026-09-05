@@ -51,14 +51,14 @@ test('依赖审计拒绝网络错误、空/损坏JSON及缺少字段的伪成功
   assert.equal(analyzeAudit(JSON.stringify(valid)).blocking, 0)
 })
 
-test('依赖审计拦直接高危并保留传递高危报告', () => {
+test('依赖审计同时阻断直接和传递高危并保留完整报告', () => {
   const { analyzeAudit } = require('../scripts/check-npm-audit')
   const result = analyzeAudit(JSON.stringify({ auditReportVersion: 2, metadata: { vulnerabilities: { total: 3 } }, vulnerabilities: {
     direct: { severity: 'high', isDirect: true, via: ['fixture'] },
     indirect: { severity: 'critical', isDirect: false, via: ['fixture'] },
     lower: { severity: 'moderate', isDirect: true, via: [] },
   } }))
-  assert.equal(result.blocking, 1)
+  assert.equal(result.blocking, 2)
   assert.equal(result.findings.length, 3)
 })
 

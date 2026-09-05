@@ -1,0 +1,8 @@
+metric	n
+reservation_cache_drift	0
+metric	n
+reservation_missing_stock	0
+metric	n
+voucher_unbalanced	0
+metric	n
+voucher_entry_total_drift	0

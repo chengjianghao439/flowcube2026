@@ -27,12 +27,12 @@ MIGRATION_CONTAINER=''
 ROLLBACK_RESULT='应用容器未切换'
 
 wait_for_health() {
-  local attempts="${HEALTH_CHECK_ATTEMPTS:-30}" delay="${HEALTH_CHECK_DELAY:-2}" i
+  local attempts="${HEALTH_CHECK_ATTEMPTS:-30}" delay="${HEALTH_CHECK_DELAY:-2}" i endpoint="${1:-/api/ready}"
   for ((i=1; i<=attempts; i++)); do
-    if curl -fsS --max-time 5 http://127.0.0.1:3000/api/health >/dev/null 2>&1; then return 0; fi
+    if curl -fsS --max-time 5 "http://127.0.0.1:3000${endpoint}" >/dev/null 2>&1; then return 0; fi
     sleep "$delay"
   done
-  echo '!! 后端健康检查超时' >&2
+  echo '!! 后端业务就绪检查超时' >&2
   return 1
 }
 
@@ -74,7 +74,8 @@ rollback_deployment() {
     if [ "$APPLICATION_SWITCHED" = '1' ]; then
       docker compose up -d --no-build --no-deps --force-recreate "${services[@]}" || failed=1
     fi
-    if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then wait_for_health || failed=1; fi
+    # 旧镜像可能尚无ready接口；仅回退验证允许使用原有存活检查。
+    if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then wait_for_health /api/health || failed=1; fi
     if [ -n "$PREVIOUS_FRONTEND_IMAGE" ]; then wait_for_frontend || failed=1; fi
     ROLLBACK_RESULT='已恢复部署前应用镜像并检查健康；数据库迁移未回滚'
   else
@@ -172,7 +173,7 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   # 公网证书/页面检查也在部署事务内，失败走同一回退路径。
   if [ -n "${DEPLOY_PUBLIC_ORIGIN:-}" ]; then
     [[ "$DEPLOY_PUBLIC_ORIGIN" == https://* ]] || fail_deploy '公网部署地址必须使用 HTTPS'
-    curl -fsS --max-time 20 "${DEPLOY_PUBLIC_ORIGIN%/}/api/health" >/dev/null
+    curl -fsS --max-time 20 "${DEPLOY_PUBLIC_ORIGIN%/}/api/ready" >/dev/null
     public_html=$(curl -fsS --max-time 20 "${DEPLOY_PUBLIC_ORIGIN%/}/")
     [[ "$public_html" == *'<title>极序 Flow</title>'* ]] || fail_deploy '公网前端页面检查失败'
   fi

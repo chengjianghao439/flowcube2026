@@ -1,5 +1,5 @@
 const { pool } = require('../../config/db')
-const logger = require('../../utils/logger')
+const { collectExportRows, assertExportLimit, EXPORT_MAX_ROWS } = require('../../utils/exportRows')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const reportsService = require('../reports/reports.service')
 const { ymd } = require('../../utils/excelExport')
@@ -35,16 +35,9 @@ function buildDateStamp() {
   return beijingTodayYmd().replace(/-/g, '')
 }
 
-// 导出行数上限（性能守卫）：ExcelJS 全内存渲染，超限直接截断并告警，
-// 防止大库导出把进程 OOM。各导出函数统一经 buildExportPayload 出口生效。
-const EXPORT_MAX_ROWS = 10000
-
+// 所有导出采用明确上限，超过时拒绝并提示，不返回看似完整的截断文件。
 function buildExportPayload({ filenamePrefix, sheetName, columns, rows }) {
-  const total = Array.isArray(rows) ? rows.length : 0
-  if (total > EXPORT_MAX_ROWS) {
-    logger.warn(`[export] ${filenamePrefix} 导出超限：${total} 行 > ${EXPORT_MAX_ROWS}，已截断`, { total, max: EXPORT_MAX_ROWS }, 'Export')
-    rows = rows.slice(0, EXPORT_MAX_ROWS)
-  }
+  assertExportLimit(Array.isArray(rows) ? rows.length : 0)
   return {
     filename: `${filenamePrefix}_${buildDateStamp()}`,
     sheetName,
@@ -154,8 +147,6 @@ async function getReconciliationExportPayload(query) {
     endDate: query.endDate || null,
     keyword: query.keyword || '',
     status: query.status || null,
-    page: 1,
-    pageSize: 10000,
   })
   const sheetName = data.type === 1 ? '供应商对账单' : '客户对账单'
   return {
@@ -292,7 +283,7 @@ async function getInventoryLogsExportPayload(query) {
   params.push(...sc.params)
   if (startDate) { sql += ' AND l.created_at >= ?'; params.push(`${startDate} 00:00:00`) }
   if (endDate) { sql += ' AND l.created_at < DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
-  sql += ' ORDER BY l.created_at DESC LIMIT 10000'
+  sql += ' ORDER BY l.created_at DESC, l.id DESC LIMIT 10001'
   const [rows] = await pool.query(sql, params)
   return buildExportPayload({
     filenamePrefix: '库存流水',
@@ -448,13 +439,11 @@ async function getSaleReturnsExportPayload(query = {}) {
 
 /** 账款列表：按页面范围（现结或月结）导出，列与页面一致 */
 async function getPaymentsExportPayload(query) {
-  const data = await paymentsService.findAll({
+  const data = await collectExportRows(paymentsService.findAll, {
     type: query.type || '',
     status: query.status || '',
     keyword: query.keyword || '',
     settlementTypes: query.settlementTypes || null,
-    page: 1,
-    pageSize: 10000,
   })
   const isPayable = Number(query.type) === 1
   const sheetName = isPayable ? '应付账款' : '应收账款'
@@ -490,12 +479,10 @@ async function getPaymentsExportPayload(query) {
 
 /** 收付款单（汇款）列表 */
 async function getPaymentReceiptsExportPayload(query) {
-  const data = await receiptsService.findAll({
+  const data = await collectExportRows(receiptsService.findAll, {
     type: query.type || '',
     status: query.status || '',
     keyword: query.keyword || '',
-    page: 1,
-    pageSize: 10000,
   })
   const isPayable = Number(query.type) === 1
   const sheetName = isPayable ? '付款单' : '收款单'
@@ -531,12 +518,10 @@ async function getPaymentReceiptsExportPayload(query) {
 
 /** 对账单列表（不含明细，明细走单张导出） */
 async function getStatementsExportPayload(query) {
-  const data = await statementsService.findAll({
+  const data = await collectExportRows(statementsService.findAll, {
     type: query.type || '',
     status: query.status || '',
     keyword: query.keyword || '',
-    page: 1,
-    pageSize: 10000,
   })
   const isPayable = Number(query.type) === 1
   const sheetName = isPayable ? '供应商对账单' : '客户对账单'
@@ -772,8 +757,7 @@ async function getAgingExportPayload() {
 
 /** 物流运单 */
 async function getWaybillsExportPayload(query = {}) {
-  const { list } = await logisticsService.listWaybills({
-    page: 1, pageSize: 500,
+  const { list } = await collectExportRows(logisticsService.listWaybills, {
     keyword: query.keyword || '',
     status: query.status || null,
     startDate: query.startDate || '',
@@ -822,21 +806,20 @@ async function getWaybillsExportPayload(query = {}) {
 
 /** 固定资产台账 */
 async function getFixedAssetsExportPayload(query = {}) {
-  const { list } = await fixedAssetsService.listAssets({
-    page: 1, pageSize: 500,
+  const { list } = await collectExportRows(fixedAssetsService.listAssets, {
     keyword: query.keyword || '',
     status: query.status || '',
     companyId: query.companyId || 1,
   })
   // 折旧方法：1 平均年限法（默认）——与前端列表展示一致，无独立常量
   const DEPR_LABEL = { 1: '平均年限法', 2: '双倍余额递减', 3: '工作量法' }
-  const ASSET_STATUS = { 1: '在用', 2: '已处置' }
+  const ASSET_STATUS = { 1: '使用中', 2: '已提足', 3: '已处置' }
   const rows = list.map(a => ({
     asset_no: a.assetNo,
     asset_name: a.assetName,
     category: a.category || '—',
     department_name: a.departmentName || '—',
-    acquire_date: a.acquireDate ? String(a.acquireDate).slice(0, 10) : '',
+    acquire_date: a.acquireDate instanceof Date ? beijingTodayYmd(a.acquireDate) : (a.acquireDate || ''),
     original_cost: a.originalCost != null ? a.originalCost : '',
     residual_rate: a.residualRate != null ? a.residualRate : '',
     useful_months: a.usefulMonths ?? '',
@@ -874,8 +857,7 @@ async function getFixedAssetsExportPayload(query = {}) {
 
 /** 费用报销单 */
 async function getExpenseClaimsExportPayload(query = {}) {
-  const { list } = await expenseClaimsService.findAll({
-    page: 1, pageSize: 500,
+  const { list } = await collectExportRows(expenseClaimsService.findAll, {
     status: query.status || '',
     keyword: query.keyword || '',
     applicantId: query.applicantId || '',
@@ -1018,8 +1000,7 @@ async function getFinanceTransactionsExportPayload(query = {}) {
 
 /** 呆滞处置单 */
 async function getDisposalsExportPayload(query = {}) {
-  const { list } = await disposalService.findAll({
-    page: 1, pageSize: 500,
+  const { list } = await collectExportRows(disposalService.findAll, {
     keyword: query.keyword || '',
     status: query.status || null,
     warehouseId: query.warehouseId || null,
@@ -1098,8 +1079,7 @@ async function getAbcExportPayload(query = {}) {
 
 /** 授信预警申请 */
 async function getCreditOverridesExportPayload(query = {}) {
-  const { list } = await creditOverridesService.findAll({
-    page: 1, pageSize: 500,
+  const { list } = await collectExportRows(creditOverridesService.findAll, {
     status: query.status || '',
     keyword: query.keyword || '',
     saleOrderId: query.saleOrderId || '',
@@ -1143,8 +1123,7 @@ async function getCreditOverridesExportPayload(query = {}) {
 
 /** 波次拣货 */
 async function getPickingWavesExportPayload(query = {}) {
-  const { list } = await pickingWavesService.findAll({
-    page: 1, pageSize: 500,
+  const { list } = await collectExportRows(pickingWavesService.findAll, {
     keyword: query.keyword || '',
     status: query.status || null,
     warehouseId: query.warehouseId || null,
@@ -1181,7 +1160,7 @@ async function getPickingWavesExportPayload(query = {}) {
 
 /** 用户 */
 async function getUsersExportPayload(query = {}) {
-  const { list } = await usersService.findAll({ page: 1, pageSize: 500, keyword: query.keyword || '' })
+  const { list } = await collectExportRows(usersService.findAll, { keyword: query.keyword || '' })
   const rows = list.map(u => ({
     username: u.username,
     real_name: u.realName || '—',
@@ -1207,8 +1186,7 @@ async function getUsersExportPayload(query = {}) {
 
 /** 操作日志 */
 async function getOplogsExportPayload(query = {}) {
-  const { list } = await oplogsService.findAll({
-    page: 1, pageSize: 500,
+  const { list } = await collectExportRows(oplogsService.findAll, {
     keyword: query.keyword || '',
     module: query.module || '',
     startDate: query.startDate || '',
@@ -1241,7 +1219,7 @@ async function getOplogsExportPayload(query = {}) {
 
 /** 承运商 */
 async function getCarriersExportPayload() {
-  const { list } = await carriersService.findAll({ page: 1, pageSize: 500 })
+  const { list } = await collectExportRows(carriersService.findAll, { })
   const rows = list.map(c => ({
     code: c.code,
     name: c.name,
@@ -1271,7 +1249,7 @@ async function getCarriersExportPayload() {
 
 /** 塑料盒 */
 async function getPlasticBoxesExportPayload(query = {}) {
-  const { list } = await plasticBoxesService.findAll({ page: 1, pageSize: 500, keyword: query.keyword || '' })
+  const { list } = await collectExportRows(plasticBoxesService.findAll, { keyword: query.keyword || '', warehouseId: query.warehouseId, scopeWarehouseIds: query.scopeWarehouseIds })
   const rows = list.map(b => ({
     barcode: b.barcode,
     product_name: b.productName || '—',
@@ -1302,8 +1280,8 @@ async function getPlasticBoxesExportPayload(query = {}) {
 }
 
 /** 库位 / 货架 / 分拣格 */
-async function getLocationsExportPayload() {
-  const { list } = await locationsService.findAll({ page: 1, pageSize: 500 })
+async function getLocationsExportPayload(query = {}) {
+  const { list } = await collectExportRows(locationsService.findAll, query)
   const rows = list.map(l => ({
     code: l.code,
     barcode: l.barcode || '—',
@@ -1337,8 +1315,8 @@ async function getLocationsExportPayload() {
   })
 }
 
-async function getRacksExportPayload() {
-  const { list } = await racksService.findAll({ page: 1, pageSize: 500 })
+async function getRacksExportPayload(query = {}) {
+  const { list } = await collectExportRows(racksService.findAll, query)
   const rows = list.map(r => ({
     code: r.code,
     barcode: r.barcode || '—',
@@ -1368,14 +1346,14 @@ async function getRacksExportPayload() {
   })
 }
 
-async function getSortingBinsExportPayload() {
-  const { list } = await sortingBinsService.findAll({ page: 1, pageSize: 500 })
+async function getSortingBinsExportPayload(query = {}) {
+  const list = await sortingBinsService.findAllWarehouses({ ...query, exportLimit: EXPORT_MAX_ROWS + 1 })
   const rows = list.map(b => ({
     code: b.code,
     warehouse_name: b.warehouseName || '—',
     customer_name: b.customerName || '—',
     capacity: b.capacity ?? '',
-    is_active: Number(b.status) === 1 ? '启用' : '停用',
+    is_active: b.statusName,
     remark: b.remark || '',
   }))
   return buildExportPayload({
@@ -1395,7 +1373,7 @@ async function getSortingBinsExportPayload() {
 
 /** 供应商 */
 async function getSuppliersExportPayload() {
-  const { list } = await suppliersService.findAll({ page: 1, pageSize: 500 })
+  const { list } = await collectExportRows(suppliersService.findAll, { })
   const rows = list.map(s => ({
     code: s.code,
     name: s.name,
@@ -1431,7 +1409,7 @@ async function getSuppliersExportPayload() {
 
 /** 客户 */
 async function getCustomersExportPayload() {
-  const { list } = await customersService.findAll({ page: 1, pageSize: 500 })
+  const { list } = await collectExportRows(customersService.findAll, { })
   const rows = list.map(c => ({
     code: c.code,
     name: c.name,
@@ -1468,8 +1446,8 @@ async function getCustomersExportPayload() {
 }
 
 /** 会计期间 */
-async function getAccountingPeriodsExportPayload() {
-  const list = await accountingPeriodService.listPeriods()
+async function getAccountingPeriodsExportPayload(query = {}) {
+  const list = await accountingPeriodService.listPeriods(query.companyId || 1)
   const rows = list.map(p => ({
     period: p.period,
     status_name: p.closed ? '已结账' : '未结账',
@@ -1524,7 +1502,7 @@ async function getTaxAdjustmentsExportPayload(query = {}) {
 
 /** 合并报表 · 账套列表 */
 async function getCompaniesExportPayload() {
-  const { list } = await companiesService.listCompanies({ page: 1, pageSize: 500 })
+  const { list } = await collectExportRows(companiesService.listCompanies, { })
   const rows = list.map(c => ({
     code: c.code,
     name: c.name,

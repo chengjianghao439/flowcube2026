@@ -98,7 +98,7 @@ async function findAll({
 
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
   const [rows] = await pool.query(
-    `SELECT pr.* FROM payment_records pr ${where} ORDER BY pr.created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT pr.* FROM payment_records pr ${where} ORDER BY pr.created_at DESC, pr.id DESC LIMIT ? OFFSET ?`,
     [...params, normalizedPageSize, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM payment_records pr ${where}`, params)

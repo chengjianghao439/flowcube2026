@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 PROJECT_DIR="${PROJECT_DIR:-/opt/flowcube}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/flowcube/backups}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/api/health}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/api/ready}"
 MIN_BYTES="${MIN_BYTES:-1024}"
 
 DINGTALK_WEBHOOK="$(read_dingtalk_webhook "$PROJECT_DIR")"

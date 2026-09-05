@@ -1,0 +1,307 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:22.816] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"871140cd-7d19-4913-a08e-80097dc27e0e"}
+[2026-09-05 22:28:22.817] [INFO ] [HTTP] POST /api/auth/login {"ms":76,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"871140cd-7d19-4913-a08e-80097dc27e0e"}
+[2026-09-05 22:28:22.941] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":6,"username":"smoke_finance_approver","requestId":"8acd9c60-1cee-4aa6-a607-35608b3872f5"}
+[2026-09-05 22:28:22.942] [INFO ] [HTTP] POST /api/auth/login {"ms":62,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"8acd9c60-1cee-4aa6-a607-35608b3872f5"}
+
+────────────────────────────────────────────────────────────
+  资金账户：余额是流水的投影
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:22.953] [INFO ] [HTTP] POST /api/finance/accounts {"ms":8,"status":201,"userId":2,"path":"/api/finance/accounts","method":"POST","requestId":"8dbdb4d7-99a0-4d44-95e6-f1ec43475225"}
+  [PASS] 建资金账户成功
+  [PASS] 期初余额即当前余额
+[2026-09-05 22:28:22.971] [INFO ] [HTTP] POST /api/payments/receipts {"ms":15,"status":201,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"861d17bc-2036-4b16-b85f-71ec2281e2fd"}
+  [PASS] 收款单登记成功
+  [PASS] ★ 收款后账户余额 = 期初 + 收入
+  [PASS] 流水方向为收入(1)且金额一致
+  [PASS] 流水 balance_after 与账户余额一致
+[2026-09-05 22:28:22.975] [INFO ] [HTTP] GET /api/finance/accounts/consistency {"ms":1,"status":200,"userId":2,"path":"/api/finance/accounts/consistency","method":"GET","requestId":"001fd344-67a3-4db2-8ac4-583efa010de2"}
+  [PASS] 账户一致性检查无差异
+[2026-09-05 22:28:22.979] [INFO ] [HTTP] GET /api/finance/accounts/consistency {"ms":1,"status":200,"userId":2,"path":"/api/finance/accounts/consistency","method":"GET","requestId":"2f598fab-50f1-49a9-b154-72ef8565c246"}
+  [PASS] 篡改余额后一致性检查能报出差异
+[2026-09-05 22:28:22.988] [INFO ] [HTTP] POST /api/payments/receipts {"ms":7,"status":201,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"0636b033-8eaf-4b55-8504-5335642f65b3"}
+  [PASS] ★ 余额被全量重算回正确值（而非在错值上累加）
+[2026-09-05 22:28:22.995] [INFO ] [HTTP] POST /api/finance/accounts/1/adjust {"ms":4,"status":200,"userId":2,"path":"/api/finance/accounts/1/adjust","method":"POST","requestId":"23d95983-0899-4b85-8950-6680246d600f"}
+  [PASS] 余额调整成功
+  [PASS] ★ 调整走的是差额流水（biz_type=4，金额=差额100）
+  [PASS] 调整后余额等于目标值
+[2026-09-05 22:28:23.002] [WARN ] [ERR] [AppError] 该账户已有资金流水，期初余额不能再改；如需调整请用「余额调整」 {"path":"/api/finance/accounts/1","userId":2,"refNo":"","requestId":"b2ac7344-6769-4aaf-a05f-a31fb85aa477","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:23.003] [WARN ] [HTTP] PUT /api/finance/accounts/1 {"ms":5,"status":409,"userId":2,"path":"/api/finance/accounts/1","method":"PUT","requestId":"b2ac7344-6769-4aaf-a05f-a31fb85aa477"}
+  [PASS] ★ 有流水后不允许改期初余额
+[2026-09-05 22:28:23.009] [WARN ] [ERR] [AppError] 该账户已有资金流水，不能删除；请改为停用 {"path":"/api/finance/accounts/1","userId":2,"refNo":"","requestId":"5577e7da-b65c-4beb-a572-9c90121b0402","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:23.009] [WARN ] [HTTP] DELETE /api/finance/accounts/1 {"ms":4,"status":409,"userId":2,"path":"/api/finance/accounts/1","method":"DELETE","requestId":"5577e7da-b65c-4beb-a572-9c90121b0402"}
+  [PASS] ★ 有流水的账户不允许删除
+
+────────────────────────────────────────────────────────────
+  收款核销：一笔汇款冲多单、部分核销、预收款
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:23.018] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":3,"orderNo":"AR-00d33cce","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"1efe7063-4fcd-401c-b272-bab44baba9b4"}
+[2026-09-05 22:28:23.019] [INFO ] [HTTP] POST /api/payments {"ms":7,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"1efe7063-4fcd-401c-b272-bab44baba9b4"}
+[2026-09-05 22:28:23.025] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":4,"orderNo":"AR-f4550621","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"dab834f3-a33c-43ed-b538-bcddde39c6ff"}
+[2026-09-05 22:28:23.026] [INFO ] [HTTP] POST /api/payments {"ms":3,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"dab834f3-a33c-43ed-b538-bcddde39c6ff"}
+[2026-09-05 22:28:23.031] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":5,"orderNo":"AR-d6da1444","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"e16f690e-621c-4fad-b5d6-dc77e7ef2f94"}
+[2026-09-05 22:28:23.032] [INFO ] [HTTP] POST /api/payments {"ms":2,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"e16f690e-621c-4fad-b5d6-dc77e7ef2f94"}
+[2026-09-05 22:28:23.045] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":3,"orderNo":"AR-00d33cce","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"f72a9337-1d4e-426b-9ef2-1eb8b72e507a"}
+[2026-09-05 22:28:23.047] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":4,"orderNo":"AR-f4550621","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"f72a9337-1d4e-426b-9ef2-1eb8b72e507a"}
+[2026-09-05 22:28:23.049] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":5,"orderNo":"AR-d6da1444","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"f72a9337-1d4e-426b-9ef2-1eb8b72e507a"}
+[2026-09-05 22:28:23.050] [INFO ] [HTTP] POST /api/payments/receipts {"ms":15,"status":201,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"f72a9337-1d4e-426b-9ef2-1eb8b72e507a"}
+  [PASS] 一笔汇款核销三单成功
+  [PASS] ★ 全额核销的两单已收清(status=3)、余额为 0
+  [PASS] ★ 部分核销的单为部分收(status=2)、余额 450
+  [PASS] ★ 汇款单为部分核销(status=2)、余额 50（即预收款）
+  [PASS] 三条核销明细各自落到对应账款
+[2026-09-05 22:28:23.059] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":5,"orderNo":"AR-d6da1444","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"b9ac343a-cdbb-4298-b929-aedb3f5496ad"}
+[2026-09-05 22:28:23.061] [INFO ] [HTTP] POST /api/payments/receipts/3/settle {"ms":6,"status":200,"userId":2,"path":"/api/payments/receipts/3/settle","method":"POST","requestId":"b9ac343a-cdbb-4298-b929-aedb3f5496ad"}
+  [PASS] 用预收余额继续核销成功
+  [PASS] ★ 汇款单核销完毕(status=3)、余额归零
+  [PASS] 账款累计已收 100、仍为部分收
+[2026-09-05 22:28:23.065] [WARN ] [ERR] [AppError] 该单已核销完毕 {"path":"/api/payments/receipts/3/settle","userId":2,"refNo":"","requestId":"9ae962d1-ff01-4a3b-8adc-772496521976","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.065] [WARN ] [HTTP] POST /api/payments/receipts/3/settle {"ms":2,"status":400,"userId":2,"path":"/api/payments/receipts/3/settle","method":"POST","requestId":"9ae962d1-ff01-4a3b-8adc-772496521976"}
+  [PASS] ★ 已核销完的汇款单不能再核销
+
+────────────────────────────────────────────────────────────
+  核销的四道闸门：超额 / 往来方 / 类型 / 未确认应付
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:23.070] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":6,"orderNo":"AR-46d54e11","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"0cf6ccd4-f550-417a-b100-864c1362fc55"}
+[2026-09-05 22:28:23.071] [INFO ] [HTTP] POST /api/payments {"ms":3,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"0cf6ccd4-f550-417a-b100-864c1362fc55"}
+[2026-09-05 22:28:23.076] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":7,"orderNo":"AR-0ba0791f","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"9ec09ea0-1bfa-415d-8aa9-95ec90843b0c"}
+[2026-09-05 22:28:23.077] [INFO ] [HTTP] POST /api/payments {"ms":3,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"9ec09ea0-1bfa-415d-8aa9-95ec90843b0c"}
+[2026-09-05 22:28:23.082] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":8,"orderNo":"AP-231552dc","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"2e70badb-026c-49b7-b483-e6b4dc89d766"}
+[2026-09-05 22:28:23.083] [INFO ] [HTTP] POST /api/payments {"ms":2,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"2e70badb-026c-49b7-b483-e6b4dc89d766"}
+[2026-09-05 22:28:23.092] [WARN ] [ERR] [AppError] AR-46d54e11 核销 ¥300.00 超出其余额 ¥100.00 {"path":"/api/payments/receipts","userId":2,"refNo":"","requestId":"95b500b5-3ac7-4041-875c-77d6e9bced81","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.092] [WARN ] [HTTP] POST /api/payments/receipts {"ms":6,"status":400,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"95b500b5-3ac7-4041-875c-77d6e9bced81"}
+  [PASS] ★ 核销额超出账款余额被拒
+[2026-09-05 22:28:23.101] [WARN ] [ERR] [AppError] AR-0ba0791f 属于「别家-c2d0b382」，与本单往来方「客户-8c847dd5」不一致 {"path":"/api/payments/receipts","userId":2,"refNo":"","requestId":"84b3f52f-0f21-4ecc-a7ce-022b97eb1cf3","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.101] [WARN ] [HTTP] POST /api/payments/receipts {"ms":6,"status":400,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"84b3f52f-0f21-4ecc-a7ce-022b97eb1cf3"}
+  [PASS] ★ 核销到别家往来方的账款被拒
+[2026-09-05 22:28:23.110] [WARN ] [ERR] [AppError] AP-231552dc 与本收款单类型不符 {"path":"/api/payments/receipts","userId":2,"refNo":"","requestId":"5305e11f-e31f-4a0a-92fe-bf1637594078","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.110] [WARN ] [HTTP] POST /api/payments/receipts {"ms":8,"status":400,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"5305e11f-e31f-4a0a-92fe-bf1637594078"}
+  [PASS] ★ 收款单核销到应付账款被拒（类型不符）
+[2026-09-05 22:28:23.118] [WARN ] [ERR] [AppError] AP-231552dc 尚未财务确认，请先确认结算金额 {"path":"/api/payments/receipts","userId":2,"refNo":"","requestId":"6843dd30-c6de-4dea-899c-03f9060ee514","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:23.118] [WARN ] [HTTP] POST /api/payments/receipts {"ms":6,"status":409,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"6843dd30-c6de-4dea-899c-03f9060ee514"}
+  [PASS] ★ 未经财务确认的应付不允许出款核销
+  [PASS] 被拒的核销没有留下痕迹（账款未动）
+
+────────────────────────────────────────────────────────────
+  幂等：连点两次 / 断网重试不重复扣钱
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:23.122] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":9,"orderNo":"AR-5c0ba325","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"1b1aa05f-0c5c-45d3-a07b-c2a9a21b8aa4"}
+[2026-09-05 22:28:23.123] [INFO ] [HTTP] POST /api/payments {"ms":2,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"1b1aa05f-0c5c-45d3-a07b-c2a9a21b8aa4"}
+[2026-09-05 22:28:23.131] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":9,"orderNo":"AR-5c0ba325","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"2bede023-2783-4702-b0db-171c5060dc6c"}
+[2026-09-05 22:28:23.133] [INFO ] [HTTP] POST /api/payments/receipts {"ms":7,"status":201,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"2bede023-2783-4702-b0db-171c5060dc6c"}
+[2026-09-05 22:28:23.139] [INFO ] [HTTP] POST /api/payments/receipts {"ms":3,"status":201,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"9a515c0f-4085-4d37-add6-14093d96d38e"}
+  [PASS] 首次登记成功
+  [PASS] 重放请求同样返回成功（返回原响应）
+  [PASS] ★ 重放返回的是同一张汇款单
+  [PASS] ★ 账款只被核销了一次（paid=100 而非 200）
+  [PASS] ★ 只落了一张汇款单
+  [PASS] ★ 只落了一条核销明细
+  [PASS] ★ 账户只入账一次（余额只 +150）
+[2026-09-05 22:28:23.144] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":10,"orderNo":"AR-c8feea11","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"a26b5c98-5096-4945-8f78-01d1ab53ea61"}
+[2026-09-05 22:28:23.146] [INFO ] [HTTP] POST /api/payments {"ms":4,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"a26b5c98-5096-4945-8f78-01d1ab53ea61"}
+[2026-09-05 22:28:23.153] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":10,"orderNo":"AR-c8feea11","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"5057d96c-83d1-4b0a-9168-7a3c04b0bcda"}
+[2026-09-05 22:28:23.156] [INFO ] [HTTP] POST /api/payments/receipts/8/settle {"ms":6,"status":200,"userId":2,"path":"/api/payments/receipts/8/settle","method":"POST","requestId":"5057d96c-83d1-4b0a-9168-7a3c04b0bcda"}
+[2026-09-05 22:28:23.160] [INFO ] [HTTP] POST /api/payments/receipts/8/settle {"ms":3,"status":200,"userId":2,"path":"/api/payments/receipts/8/settle","method":"POST","requestId":"45f34f86-1214-4cf7-8990-5029d50128de"}
+  [PASS] 核销重放返回成功
+  [PASS] ★ 核销重放没有重复扣（paid=50）
+
+────────────────────────────────────────────────────────────
+  汇总对账单：确认闸门 / 解锁闸门 / 核销投影
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:23.165] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":11,"orderNo":"AR-3439540f","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"8f1e7da5-834f-4f67-b24e-fafa74d12df6"}
+[2026-09-05 22:28:23.166] [INFO ] [HTTP] POST /api/payments {"ms":3,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"8f1e7da5-834f-4f67-b24e-fafa74d12df6"}
+[2026-09-05 22:28:23.169] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":12,"orderNo":"AR-6fece392","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"0f32b506-b85f-4b8f-926a-7b74c5fe6d0a"}
+[2026-09-05 22:28:23.170] [INFO ] [HTTP] POST /api/payments {"ms":3,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"0f32b506-b85f-4b8f-926a-7b74c5fe6d0a"}
+[2026-09-05 22:28:23.172] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":13,"orderNo":"AR-af3d27e9","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"ad8be6dc-a4ee-4a40-a6cd-002a1d10d383"}
+[2026-09-05 22:28:23.174] [INFO ] [HTTP] POST /api/payments {"ms":3,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"ad8be6dc-a4ee-4a40-a6cd-002a1d10d383"}
+[2026-09-05 22:28:23.178] [INFO ] [HTTP] GET /api/payments/statements/candidates?type=2&partyName=%E6%9C%88%E7%BB%93%E5%AE%A2%E6%88%B7-92b4b1f6 {"ms":1,"status":200,"userId":2,"path":"/api/payments/statements/candidates?type=2&partyName=%E6%9C%88%E7%BB%93%E5%AE%A2%E6%88%B7-92b4b1f6","method":"GET","requestId":"4987eb13-4740-42f6-8673-66bb03c15e81"}
+  [PASS] ★ 待对账候选只含月结账款，不含现结
+[2026-09-05 22:28:23.185] [WARN ] [ERR] [AppError] AR-af3d27e9 不是月结账款，请在账款页逐笔处理 {"path":"/api/payments/statements","userId":2,"refNo":"","requestId":"f6bb2dde-6e02-42fe-92f3-a49c0b56594d","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.185] [WARN ] [HTTP] POST /api/payments/statements {"ms":5,"status":400,"userId":2,"path":"/api/payments/statements","method":"POST","requestId":"f6bb2dde-6e02-42fe-92f3-a49c0b56594d"}
+  [PASS] ★ 现结账款不允许进对账单
+[2026-09-05 22:28:23.193] [INFO ] [HTTP] POST /api/payments/statements {"ms":5,"status":201,"userId":2,"path":"/api/payments/statements","method":"POST","requestId":"9cbf68a6-4100-43a6-aac4-de44818aa648"}
+  [PASS] 生成对账单成功
+  [PASS] 对账单合计 = 下属账款合计、状态为草稿
+[2026-09-05 22:28:23.199] [WARN ] [ERR] [AppError] AR-3439540f 已在其它对账单中，不能重复对账 {"path":"/api/payments/statements","userId":2,"refNo":"","requestId":"dedd878d-0ca6-49bb-8932-c94acb662eb3","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:23.199] [WARN ] [HTTP] POST /api/payments/statements {"ms":4,"status":409,"userId":2,"path":"/api/payments/statements","method":"POST","requestId":"dedd878d-0ca6-49bb-8932-c94acb662eb3"}
+  [PASS] ★ 同一笔账款不能进两张对账单
+[2026-09-05 22:28:23.206] [WARN ] [ERR] [AppError] SC20260905001 还是草稿，请先确认后再核销 {"path":"/api/payments/receipts","userId":2,"refNo":"","requestId":"d6669f23-6114-4682-992b-cc5d864631c1","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:23.207] [WARN ] [HTTP] POST /api/payments/receipts {"ms":7,"status":409,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"d6669f23-6114-4682-992b-cc5d864631c1"}
+  [PASS] ★ 草稿态对账单不允许核销
+[2026-09-05 22:28:23.211] [INFO ] [HTTP] POST /api/payments/statements/2/confirm {"ms":3,"status":200,"userId":2,"path":"/api/payments/statements/2/confirm","method":"POST","requestId":"01aa9f94-72b9-4a98-b47e-be90593bd8d0"}
+  [PASS] 确认对账单成功
+[2026-09-05 22:28:23.213] [WARN ] [ERR] [AppError] 已确认的对账单不能改明细，请先解锁 {"path":"/api/payments/statements/2/items/11","userId":2,"refNo":"","requestId":"af8f7866-1699-4e9a-b4bf-b3316b7a9ffc","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:23.213] [WARN ] [HTTP] DELETE /api/payments/statements/2/items/11 {"ms":1,"status":409,"userId":2,"path":"/api/payments/statements/2/items/11","method":"DELETE","requestId":"af8f7866-1699-4e9a-b4bf-b3316b7a9ffc"}
+  [PASS] ★ 已确认的对账单不能改明细
+[2026-09-05 22:28:23.217] [INFO ] [HTTP] POST /api/payments/statements/2/unlock {"ms":3,"status":200,"userId":2,"path":"/api/payments/statements/2/unlock","method":"POST","requestId":"882e5d19-e3d2-42ae-8837-7d77f4b68025"}
+  [PASS] 未核销时可以解锁回草稿
+[2026-09-05 22:28:23.222] [INFO ] [HTTP] POST /api/payments/statements/2/confirm {"ms":3,"status":200,"userId":2,"path":"/api/payments/statements/2/confirm","method":"POST","requestId":"0f0be621-9436-4d1a-b5a7-6e412c680287"}
+[2026-09-05 22:28:23.229] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":11,"orderNo":"AR-3439540f","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"22c23e17-1753-4657-a18c-14fe86ce93bd"}
+[2026-09-05 22:28:23.231] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":12,"orderNo":"AR-6fece392","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"22c23e17-1753-4657-a18c-14fe86ce93bd"}
+[2026-09-05 22:28:23.233] [INFO ] [HTTP] POST /api/payments/receipts {"ms":9,"status":201,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"22c23e17-1753-4657-a18c-14fe86ce93bd"}
+  [PASS] 对账单部分核销成功
+  [PASS] ★ 对账单核销最终落到账款上（先清老账）
+  [PASS] ★ 对账单已核销额是下属账款的汇总投影
+[2026-09-05 22:28:23.237] [WARN ] [ERR] [AppError] 该对账单已有核销记录，不能解锁；如需调整请先冲销已核销金额 {"path":"/api/payments/statements/2/unlock","userId":2,"refNo":"","requestId":"14bc536c-f618-4e58-ab72-d52afdddb803","code":"CONFLICT","statusCode":409}
+[2026-09-05 22:28:23.237] [WARN ] [HTTP] POST /api/payments/statements/2/unlock {"ms":1,"status":409,"userId":2,"path":"/api/payments/statements/2/unlock","method":"POST","requestId":"14bc536c-f618-4e58-ab72-d52afdddb803"}
+  [PASS] ★ 已有核销记录的对账单不允许解锁
+[2026-09-05 22:28:23.245] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":12,"orderNo":"AR-6fece392","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"162fdea9-73d1-4abd-9994-201075b95aa1"}
+[2026-09-05 22:28:23.247] [INFO ] [HTTP] POST /api/payments/receipts {"ms":9,"status":201,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"162fdea9-73d1-4abd-9994-201075b95aa1"}
+  [PASS] 核销剩余额成功
+  [PASS] ★ 全部核销后对账单进入已核销(status=3)、余额为 0
+[2026-09-05 22:28:23.254] [WARN ] [ERR] [AppError] SC20260905001 已核销完毕 {"path":"/api/payments/receipts","userId":2,"refNo":"","requestId":"1d113060-4261-46a1-ba49-a675d9b8483e","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.254] [WARN ] [HTTP] POST /api/payments/receipts {"ms":5,"status":400,"userId":2,"path":"/api/payments/receipts","method":"POST","requestId":"1d113060-4261-46a1-ba49-a675d9b8483e"}
+  [PASS] ★ 已核销完的对账单不能再核销
+[2026-09-05 22:28:23.256] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":14,"orderNo":"AR-c4b6b0a4","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"4243c3b1-96c8-45be-93cd-65c002c53a7c"}
+[2026-09-05 22:28:23.257] [INFO ] [HTTP] POST /api/payments {"ms":2,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"4243c3b1-96c8-45be-93cd-65c002c53a7c"}
+[2026-09-05 22:28:23.264] [INFO ] [HTTP] POST /api/payments/statements {"ms":5,"status":201,"userId":2,"path":"/api/payments/statements","method":"POST","requestId":"5f161a20-438c-461f-90eb-62fe0725838b"}
+[2026-09-05 22:28:23.268] [INFO ] [HTTP] POST /api/payments/statements/4/confirm {"ms":2,"status":200,"userId":2,"path":"/api/payments/statements/4/confirm","method":"POST","requestId":"cb881c15-0f24-4849-b1a9-41594f253db9"}
+[2026-09-05 22:28:23.272] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":14,"orderNo":"AR-c4b6b0a4","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"27d9b52a-a950-4c78-93e4-1a4bb43b18f2"}
+[2026-09-05 22:28:23.274] [INFO ] [HTTP] POST /api/payments/14/pay {"ms":5,"status":200,"userId":2,"path":"/api/payments/14/pay","method":"POST","requestId":"27d9b52a-a950-4c78-93e4-1a4bb43b18f2"}
+  [PASS] 对账单成员账款可被直付
+  [PASS] ★ 直付对账单成员账款后，对账单 settled_amount/状态同步刷新（纵深防御）
+
+────────────────────────────────────────────────────────────
+  结算方式是账款上的快照，不回溯往来方主数据
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:23.280] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":15,"orderNo":"AR-12769fe3","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"55a0406c-09aa-4fc9-8bfe-5780a4bbf7fb"}
+[2026-09-05 22:28:23.281] [INFO ] [HTTP] POST /api/payments {"ms":3,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"55a0406c-09aa-4fc9-8bfe-5780a4bbf7fb"}
+  [PASS] ★ 改客户结算方式后，老账款的快照列不变
+[2026-09-05 22:28:23.287] [INFO ] [HTTP] GET /api/payments?type=2&settlementTypes=1&partyName=%E5%88%87%E6%8D%A2%E5%AE%A2%E6%88%B7-0355a978 {"ms":1,"status":200,"userId":2,"path":"/api/payments?type=2&settlementTypes=1&partyName=%E5%88%87%E6%8D%A2%E5%AE%A2%E6%88%B7-0355a978","method":"GET","requestId":"08040c17-6c3f-4744-b67e-281685adc66b"}
+  [PASS] ★ 老账款仍留在账款页（现结）分流下，未整批换页
+[2026-09-05 22:28:23.290] [INFO ] [HTTP] GET /api/payments?type=2&settlementTypes=2&partyName=%E5%88%87%E6%8D%A2%E5%AE%A2%E6%88%B7-0355a978 {"ms":1,"status":200,"userId":2,"path":"/api/payments?type=2&settlementTypes=2&partyName=%E5%88%87%E6%8D%A2%E5%AE%A2%E6%88%B7-0355a978","method":"GET","requestId":"c1b59433-a433-4fdd-a5b7-fffc86724ea3"}
+  [PASS] 老账款不会出现在对账页（月结）分流下
+
+────────────────────────────────────────────────────────────
+  费用报销：状态机 / 内控 / 与往来账款隔离
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:23.294] [INFO ] [HTTP] GET /api/finance/expense-categories {"ms":2,"status":200,"userId":2,"path":"/api/finance/expense-categories","method":"GET","requestId":"01b08283-77b1-4fbc-95d0-c9debddb985d"}
+  [PASS] 取到费用类别
+[2026-09-05 22:28:23.302] [INFO ] [HTTP] POST /api/finance/expense-claims {"ms":6,"status":201,"userId":2,"path":"/api/finance/expense-claims","method":"POST","requestId":"ee8538e1-8c67-4bdc-afc4-39b64ad3b739"}
+  [PASS] 建报销单成功
+  [PASS] 单头金额 = 明细合计
+  [PASS] 新建为草稿(status=1)
+[2026-09-05 22:28:23.305] [WARN ] [ERR] [AppError] 只有已批准的报销单可以付款 {"path":"/api/finance/expense-claims/1/pay","userId":2,"refNo":"","requestId":"f05848b1-dff7-4c52-b7b1-4de7736d3149","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.306] [WARN ] [HTTP] POST /api/finance/expense-claims/1/pay {"ms":2,"status":400,"userId":2,"path":"/api/finance/expense-claims/1/pay","method":"POST","requestId":"f05848b1-dff7-4c52-b7b1-4de7736d3149"}
+  [PASS] ★ 草稿单不能直接付款
+[2026-09-05 22:28:23.310] [WARN ] [ERR] [AppError] 报销单尚未提交 {"path":"/api/finance/expense-claims/1/approve","userId":6,"refNo":"","requestId":"556babe8-5f89-4b37-a859-b2b4484b4ecb","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.310] [WARN ] [HTTP] POST /api/finance/expense-claims/1/approve {"ms":3,"status":400,"userId":6,"path":"/api/finance/expense-claims/1/approve","method":"POST","requestId":"556babe8-5f89-4b37-a859-b2b4484b4ecb"}
+  [PASS] ★ 未提交的单不能审批
+[2026-09-05 22:28:23.315] [INFO ] [HTTP] POST /api/finance/expense-claims/1/submit {"ms":4,"status":200,"userId":2,"path":"/api/finance/expense-claims/1/submit","method":"POST","requestId":"2791364c-b200-4c83-a74f-55d5f7629eed"}
+  [PASS] 提交审批成功
+[2026-09-05 22:28:23.318] [WARN ] [ERR] [AppError] 只有草稿状态的报销单可以修改明细 {"path":"/api/finance/expense-claims/1","userId":2,"refNo":"","requestId":"93cdb11e-6ad9-41ad-8c69-8fc584ceedaa","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.318] [WARN ] [HTTP] PUT /api/finance/expense-claims/1 {"ms":1,"status":400,"userId":2,"path":"/api/finance/expense-claims/1","method":"PUT","requestId":"93cdb11e-6ad9-41ad-8c69-8fc584ceedaa"}
+  [PASS] ★ 已提交的单不能改明细
+[2026-09-05 22:28:23.320] [WARN ] [ERR] [AppError] 不能审批自己提交的报销单，请由他人审批（如需自行审批，请让管理员在用户管理中开启该账号的「允许自行审批」） {"path":"/api/finance/expense-claims/1/approve","userId":2,"refNo":"","requestId":"a11ba69c-9f37-4967-96db-c1e10432d91e","code":"SELF_APPROVAL_DENIED","statusCode":403}
+[2026-09-05 22:28:23.320] [WARN ] [HTTP] POST /api/finance/expense-claims/1/approve {"ms":1,"status":403,"userId":2,"path":"/api/finance/expense-claims/1/approve","method":"POST","requestId":"a11ba69c-9f37-4967-96db-c1e10432d91e"}
+  [PASS] ★ 不能审批自己提交的报销单
+[2026-09-05 22:28:23.323] [WARN ] [ERR] [AppError] 不能驳回自己提交的报销单（如需自行审批，请让管理员在用户管理中开启该账号的「允许自行审批」） {"path":"/api/finance/expense-claims/1/reject","userId":2,"refNo":"","requestId":"4b29e9f4-6391-4337-b7f9-51a7b92fabc2","code":"SELF_APPROVAL_DENIED","statusCode":403}
+[2026-09-05 22:28:23.323] [WARN ] [HTTP] POST /api/finance/expense-claims/1/reject {"ms":2,"status":403,"userId":2,"path":"/api/finance/expense-claims/1/reject","method":"POST","requestId":"4b29e9f4-6391-4337-b7f9-51a7b92fabc2"}
+  [PASS] ★ 也不能驳回自己提交的报销单
+  [PASS] 被内控拦下后单据仍是待审批
+[2026-09-05 22:28:23.327] [INFO ] [HTTP] POST /api/finance/expense-claims/1/approve {"ms":3,"status":200,"userId":6,"path":"/api/finance/expense-claims/1/approve","method":"POST","requestId":"b5ee0149-2194-4064-a1cc-7a332dd25538"}
+  [PASS] 他人审批通过
+[2026-09-05 22:28:23.329] [WARN ] [ERR] [AppError] 已批准的报销单需先驳回再取消 {"path":"/api/finance/expense-claims/1/cancel","userId":2,"refNo":"","requestId":"77226ed9-93d3-420d-a902-e61d3217e2ab","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.329] [WARN ] [HTTP] POST /api/finance/expense-claims/1/cancel {"ms":1,"status":400,"userId":2,"path":"/api/finance/expense-claims/1/cancel","method":"POST","requestId":"77226ed9-93d3-420d-a902-e61d3217e2ab"}
+  [PASS] ★ 已批准的单不能直接取消（需先驳回）
+[2026-09-05 22:28:23.335] [INFO ] [HTTP] POST /api/finance/expense-claims/1/pay {"ms":4,"status":200,"userId":6,"path":"/api/finance/expense-claims/1/pay","method":"POST","requestId":"7a6ad5a7-6b19-43c6-b388-343ea57ebb47"}
+  [PASS] 付款成功
+  [PASS] 单据进入已付款(status=4)并记下付款账户
+  [PASS] ★ 报销付款从账户扣钱（余额 -200）
+  [PASS] 账户流水记为费用报销支出(biz_type=3, direction=2)
+  [PASS] ★ 报销不写进 payment_records（不污染应付应收口径）
+[2026-09-05 22:28:23.340] [WARN ] [ERR] [AppError] 该报销单已付款 {"path":"/api/finance/expense-claims/1/pay","userId":6,"refNo":"","requestId":"59796132-ebb4-4b66-9f9a-553172687e93","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:23.340] [WARN ] [HTTP] POST /api/finance/expense-claims/1/pay {"ms":2,"status":400,"userId":6,"path":"/api/finance/expense-claims/1/pay","method":"POST","requestId":"59796132-ebb4-4b66-9f9a-553172687e93"}
+  [PASS] ★ 已付款的单不能重复付款
+  [PASS] 重复付款被拒后余额未变
+[2026-09-05 22:28:23.346] [INFO ] [HTTP] POST /api/finance/expense-claims {"ms":5,"status":201,"userId":2,"path":"/api/finance/expense-claims","method":"POST","requestId":"3cf42b85-5fa8-4774-bebc-ba46961d0601"}
+[2026-09-05 22:28:23.350] [INFO ] [HTTP] POST /api/finance/expense-claims/2/submit {"ms":3,"status":200,"userId":2,"path":"/api/finance/expense-claims/2/submit","method":"POST","requestId":"e3f69d37-2a82-4bcc-9596-6c72fdaf00c1"}
+[2026-09-05 22:28:23.354] [INFO ] [HTTP] POST /api/finance/expense-claims/2/withdraw {"ms":3,"status":200,"userId":2,"path":"/api/finance/expense-claims/2/withdraw","method":"POST","requestId":"fd251d83-83ff-4281-bb39-6e2668fcb4f9"}
+  [PASS] 待审批单可由本人撤回
+  [PASS] 撤回后回到草稿
+[2026-09-05 22:28:23.358] [INFO ] [HTTP] POST /api/finance/expense-claims/2/submit {"ms":3,"status":200,"userId":2,"path":"/api/finance/expense-claims/2/submit","method":"POST","requestId":"efa21228-03c6-4063-b38f-5b762cdf5e58"}
+[2026-09-05 22:28:23.361] [WARN ] [VALID] [ZodError] 请填写驳回原因 {"path":"/api/finance/expense-claims/2/reject","userId":6,"requestId":"32554ec1-580a-41a1-bf1f-346c5b364708","code":"VALIDATION_ERROR"}
+[2026-09-05 22:28:23.361] [WARN ] [HTTP] POST /api/finance/expense-claims/2/reject {"ms":1,"status":400,"userId":6,"path":"/api/finance/expense-claims/2/reject","method":"POST","requestId":"32554ec1-580a-41a1-bf1f-346c5b364708"}
+  [PASS] 驳回必须填原因
+[2026-09-05 22:28:23.364] [INFO ] [HTTP] POST /api/finance/expense-claims/2/reject {"ms":2,"status":200,"userId":6,"path":"/api/finance/expense-claims/2/reject","method":"POST","requestId":"c3976b01-d0b9-49f0-bcf9-f17501f4a2de"}
+  [PASS] 他人驳回成功
+  [PASS] 驳回后状态=已驳回并记下原因
+[2026-09-05 22:28:23.369] [INFO ] [HTTP] POST /api/finance/expense-claims/2/cancel {"ms":2,"status":200,"userId":2,"path":"/api/finance/expense-claims/2/cancel","method":"POST","requestId":"ece87f21-8117-4e32-b6b9-1653d4f22bc1"}
+  [PASS] 已驳回的单可以取消
+  [PASS] 报销单申请人 = 建单人
+[2026-09-05 22:28:23.374] [INFO ] [HTTP] POST /api/finance/expense-claims {"ms":4,"status":201,"userId":2,"path":"/api/finance/expense-claims","method":"POST","requestId":"d13d31e1-0b28-4d26-81be-553c66ca0bd5"}
+[2026-09-05 22:28:23.379] [INFO ] [HTTP] POST /api/finance/expense-claims/3/submit {"ms":4,"status":200,"userId":2,"path":"/api/finance/expense-claims/3/submit","method":"POST","requestId":"9468748a-e051-4977-9ea7-518d9ed7017c"}
+[2026-09-05 22:28:23.383] [INFO ] [HTTP] PUT /api/users/2 {"ms":2,"status":200,"userId":2,"path":"/api/users/2","method":"PUT","requestId":"36fc6310-ff42-4cc4-b1b9-c343f64baee9"}
+  [PASS] 超管可授予「允许自行审批」
+[2026-09-05 22:28:23.390] [INFO ] [HTTP] POST /api/finance/expense-claims/3/approve {"ms":4,"status":200,"userId":2,"path":"/api/finance/expense-claims/3/approve","method":"POST","requestId":"e1ad0c6e-7fa8-4f74-b2a0-44044d9995cb"}
+  [PASS] ★ 授予后申请人可自批
+  [PASS] 自批后状态=已批准（可进入付款）
+[2026-09-05 22:28:23.393] [INFO ] [HTTP] PUT /api/users/2 {"ms":2,"status":200,"userId":2,"path":"/api/users/2","method":"PUT","requestId":"f9828f9a-06fd-4545-ab33-43112d0ef981"}
+  [PASS] 自批豁免已收回（不污染后续运行）
+[2026-09-05 22:28:23.400] [INFO ] [HTTP] POST /api/finance/expense-claims {"ms":4,"status":201,"userId":2,"path":"/api/finance/expense-claims","method":"POST","requestId":"0fa920d7-c237-4e95-8670-3b0863e583e8"}
+[2026-09-05 22:28:23.405] [INFO ] [HTTP] POST /api/finance/expense-claims/4/submit {"ms":3,"status":200,"userId":2,"path":"/api/finance/expense-claims/4/submit","method":"POST","requestId":"598e3a27-7f02-4fc9-bdd6-6349366d321c"}
+[2026-09-05 22:28:23.408] [WARN ] [ERR] [AppError] 不能审批自己提交的报销单，请由他人审批（如需自行审批，请让管理员在用户管理中开启该账号的「允许自行审批」） {"path":"/api/finance/expense-claims/4/approve","userId":2,"refNo":"","requestId":"b1c85df2-6e8d-4eab-a30d-0d25015f2748","code":"SELF_APPROVAL_DENIED","statusCode":403}
+[2026-09-05 22:28:23.408] [WARN ] [HTTP] POST /api/finance/expense-claims/4/approve {"ms":1,"status":403,"userId":2,"path":"/api/finance/expense-claims/4/approve","method":"POST","requestId":"b1c85df2-6e8d-4eab-a30d-0d25015f2748"}
+  [PASS] ★ 关关后自批重新被拒（内控恢复）
+
+────────────────────────────────────────────────────────────
+  登记付款：浮点尾款结清 / 幂等去重
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:23.411] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":16,"orderNo":"AR-8441a094","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"817f2ba0-2c8c-4432-93ad-e70d85910678"}
+[2026-09-05 22:28:23.411] [INFO ] [HTTP] POST /api/payments {"ms":2,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"817f2ba0-2c8c-4432-93ad-e70d85910678"}
+[2026-09-05 22:28:23.417] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":16,"orderNo":"AR-8441a094","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"244e52f3-502b-4e8a-8a4d-e10db3429441"}
+[2026-09-05 22:28:23.418] [INFO ] [HTTP] POST /api/payments/16/pay {"ms":3,"status":200,"userId":2,"path":"/api/payments/16/pay","method":"POST","requestId":"244e52f3-502b-4e8a-8a4d-e10db3429441"}
+  [PASS] 首笔部分收款成功
+[2026-09-05 22:28:23.423] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":16,"orderNo":"AR-8441a094","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"aa4bb7b5-b194-45a0-a779-de0829f37b43"}
+[2026-09-05 22:28:23.424] [INFO ] [HTTP] POST /api/payments/16/pay {"ms":3,"status":200,"userId":2,"path":"/api/payments/16/pay","method":"POST","requestId":"aa4bb7b5-b194-45a0-a779-de0829f37b43"}
+  [PASS] ★ 浮点尾款 99.90 能被接受（严格 > 会误拒）
+  [PASS] ★ 尾款付清后 status=已收清、balance=0（不卡在部分付）
+[2026-09-05 22:28:23.428] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":17,"orderNo":"AR-02ff08b5","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"0eea2f88-44e5-4aab-b66f-613d25ea2022"}
+[2026-09-05 22:28:23.429] [INFO ] [HTTP] POST /api/payments {"ms":2,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"0eea2f88-44e5-4aab-b66f-613d25ea2022"}
+[2026-09-05 22:28:23.435] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":17,"orderNo":"AR-02ff08b5","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"93ab5d82-5a4c-43d5-9f8c-93b27033fdfa"}
+[2026-09-05 22:28:23.436] [INFO ] [HTTP] POST /api/payments/17/pay {"ms":4,"status":200,"userId":2,"path":"/api/payments/17/pay","method":"POST","requestId":"93ab5d82-5a4c-43d5-9f8c-93b27033fdfa"}
+[2026-09-05 22:28:23.440] [INFO ] [HTTP] POST /api/payments/17/pay {"ms":2,"status":200,"userId":2,"path":"/api/payments/17/pay","method":"POST","requestId":"f0b5f56e-f6ce-4154-a497-5c2a8cddd029"}
+  [PASS] 首次登记成功
+  [PASS] 重放请求返回成功（原响应）
+  [PASS] ★ 幂等：连发两次只登记一次（paid=200 而非 400）
+  [PASS] ★ 只落一条付款流水
+[2026-09-05 22:28:23.444] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":18,"orderNo":"AP-bc7a1fde","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"dd7f1183-7871-4ef6-9e70-b7ac44180411"}
+[2026-09-05 22:28:23.445] [INFO ] [HTTP] POST /api/payments {"ms":2,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"dd7f1183-7871-4ef6-9e70-b7ac44180411"}
+[2026-09-05 22:28:23.454] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":18,"orderNo":"AP-bc7a1fde","eventType":"PAYMENT_RECORDED","operatorId":2,"requestId":"c7df99e8-60f4-401f-8699-f28706dbb06c"}
+[2026-09-05 22:28:23.455] [INFO ] [HTTP] POST /api/payments/18/pay {"ms":6,"status":200,"userId":2,"path":"/api/payments/18/pay","method":"POST","requestId":"c7df99e8-60f4-401f-8699-f28706dbb06c"}
+  [PASS] 带账户的按单付款成功
+  [PASS] ★ 按单付款(应付)写了账户流水：余额减少 120
+  [PASS] ★ 流水为付款方向(OUT=2)、金额一致、biz_type=PAYMENT(2)
+  [PASS] ★ payment_entries 留存了所用账户
+
+────────────────────────────────────────────────────────────
+  账龄分析：分桶敞口 / Top 往来方
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:23.463] [INFO ] [HTTP] GET /api/payments/aging?topLimit=2000 {"ms":4,"status":200,"userId":2,"path":"/api/payments/aging?topLimit=2000","method":"GET","requestId":"c6919402-715c-46ee-8060-4b99ab8f91d8"}
+  [PASS] 账龄接口可访问
+[2026-09-05 22:28:23.467] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":19,"orderNo":"AR-f10f6681","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"938f217d-1810-47e2-93d6-a08d7510e826"}
+[2026-09-05 22:28:23.468] [INFO ] [HTTP] POST /api/payments {"ms":3,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"938f217d-1810-47e2-93d6-a08d7510e826"}
+[2026-09-05 22:28:23.472] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":20,"orderNo":"AR-36835794","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"3151a1d9-04e3-40e8-b83b-177f03763a40"}
+[2026-09-05 22:28:23.473] [INFO ] [HTTP] POST /api/payments {"ms":2,"status":201,"userId":2,"path":"/api/payments","method":"POST","requestId":"3151a1d9-04e3-40e8-b83b-177f03763a40"}
+[2026-09-05 22:28:23.476] [INFO ] [HTTP] GET /api/payments/aging?topLimit=2000 {"ms":2,"status":200,"userId":2,"path":"/api/payments/aging?topLimit=2000","method":"GET","requestId":"db41ea6a-1496-4fa8-9407-d9cff2dec6d6"}
+  [PASS] ★ 账龄总敞口增加 1500
+  [PASS] ★ 逾期 90+ 桶增加 1000（100 天逾期落对桶）
+  [PASS] ★ 未到期桶增加 500
+  [PASS] ★ 分桶合计 == total（无遗漏、无重复）
+  [PASS] ★ Top 往来方含本客户：敞口 1500 / 逾期 1000 / 最长逾期≈100 天
+
+────────────────────────────────────────────────────────────
+  收尾：全部账户余额与流水一致
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:23.479] [INFO ] [HTTP] GET /api/finance/accounts/consistency {"ms":1,"status":200,"userId":2,"path":"/api/finance/accounts/consistency","method":"GET","requestId":"154236ef-6f51-420b-949c-5d1246aeaebc"}
+  [PASS] ★ 跑完全部财务动作后账户无一漂移
+
+════════════════════════════════════════════════════════════
+  108 passed, 0 failed
+════════════════════════════════════════════════════════════
+

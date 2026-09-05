@@ -1,0 +1,81 @@
+
+ RUN  v3.2.7 /Users/chengjianghao/flowcube/frontend
+
+ ❯ src/api/pda-session.test.ts (6 tests | 4 failed) 62ms
+   × 真实旧心跳迟到失败=false，不清除新登录换得的设备票据 5ms
+     → expected undefined to be 'B-device' // Object.is equality
+   × 真实旧心跳迟到失败=true，不清除新登录换得的设备票据 1ms
+     → expected undefined to be 'B-device' // Object.is equality
+   × 同一登录会话内旧心跳失败，不清除已被换新的设备票据 1ms
+     → expected undefined to be 'newer-device' // Object.is equality
+   × 主动取消当前心跳保留仍有效的设备票据 1ms
+     → expected undefined to be 'A-device' // Object.is equality
+   ✓ 当前心跳正常失败仍清理旧票据，后续凭据换票可恢复 0ms
+   ✓ 当前心跳成功保存续期票据 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/api/pda-session.test.ts > 真实旧心跳迟到失败=false，不清除新登录换得的设备票据
+ FAIL  src/api/pda-session.test.ts > 真实旧心跳迟到失败=true，不清除新登录换得的设备票据
+AssertionError: expected undefined to be 'B-device' // Object.is equality
+
+- Expected: 
+"B-device"
+
++ Received: 
+undefined
+
+ ❯ src/api/pda-session.test.ts:57:37
+     55|   gate.release()
+     56|   expect(await oldRenewal).toBeNull()
+     57|   expect(getDeviceSession()?.token).toBe('B-device')
+       |                                     ^
+     58| })
+     59| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/api/pda-session.test.ts > 同一登录会话内旧心跳失败，不清除已被换新的设备票据
+AssertionError: expected undefined to be 'newer-device' // Object.is equality
+
+- Expected: 
+"newer-device"
+
++ Received: 
+undefined
+
+ ❯ src/api/pda-session.test.ts:67:37
+     65|   gate.release()
+     66|   expect(await oldRenewal).toBeNull()
+     67|   expect(getDeviceSession()?.token).toBe('newer-device')
+       |                                     ^
+     68| })
+     69| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/api/pda-session.test.ts > 主动取消当前心跳保留仍有效的设备票据
+AssertionError: expected undefined to be 'A-device' // Object.is equality
+
+- Expected: 
+"A-device"
+
++ Received: 
+undefined
+
+ ❯ src/api/pda-session.test.ts:73:37
+     71|   transport = async () => { throw new axios.CanceledError('cancelled')…
+     72|   expect(await renewDeviceSession()).toBeNull()
+     73|   expect(getDeviceSession()?.token).toBe('A-device')
+       |                                     ^
+     74| })
+     75| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
+   Start at  22:20:28
+   Duration  505ms (transform 61ms, setup 0ms, collect 52ms, tests 62ms, environment 123ms, prepare 30ms)
+

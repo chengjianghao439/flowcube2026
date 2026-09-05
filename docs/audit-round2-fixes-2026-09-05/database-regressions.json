@@ -1,0 +1,190 @@
+[
+  {
+    "name": "mainline",
+    "database": "flowcube_fix_0_test",
+    "exitCode": 0,
+    "seconds": 1.21,
+    "log": "regression-mainline.log"
+  },
+  {
+    "name": "concurrency-guards",
+    "database": "flowcube_fix_1_test",
+    "exitCode": 0,
+    "seconds": 3.25,
+    "log": "regression-concurrency-guards.log"
+  },
+  {
+    "name": "p0-regression",
+    "database": "flowcube_fix_2_test",
+    "exitCode": 0,
+    "seconds": 2.78,
+    "log": "regression-p0-regression.log"
+  },
+  {
+    "name": "p1-regression",
+    "database": "flowcube_fix_3_test",
+    "exitCode": 0,
+    "seconds": 1.94,
+    "log": "regression-p1-regression.log"
+  },
+  {
+    "name": "sale-adjustment",
+    "database": "flowcube_fix_4_test",
+    "exitCode": 0,
+    "seconds": 1.83,
+    "log": "regression-sale-adjustment.log"
+  },
+  {
+    "name": "sale-atp",
+    "database": "flowcube_fix_5_test",
+    "exitCode": 0,
+    "seconds": 0.85,
+    "log": "regression-sale-atp.log"
+  },
+  {
+    "name": "finance",
+    "database": "flowcube_fix_6_test",
+    "exitCode": 0,
+    "seconds": 1.43,
+    "log": "regression-finance.log"
+  },
+  {
+    "name": "accounting",
+    "database": "flowcube_fix_7_test",
+    "exitCode": 0,
+    "seconds": 0.71,
+    "log": "regression-accounting.log"
+  },
+  {
+    "name": "accounting-period",
+    "database": "flowcube_fix_8_test",
+    "exitCode": 0,
+    "seconds": 0.84,
+    "log": "regression-accounting-period.log"
+  },
+  {
+    "name": "refund-orders",
+    "database": "flowcube_fix_9_test",
+    "exitCode": 0,
+    "seconds": 0.87,
+    "log": "regression-refund-orders.log"
+  },
+  {
+    "name": "disposal",
+    "database": "flowcube_fix_10_test",
+    "exitCode": 0,
+    "seconds": 0.97,
+    "log": "regression-disposal.log"
+  },
+  {
+    "name": "credit-outbound",
+    "database": "flowcube_fix_11_test",
+    "exitCode": 0,
+    "seconds": 0.7,
+    "log": "regression-credit-outbound.log"
+  },
+  {
+    "name": "warehouse-scope",
+    "database": "flowcube_fix_12_test",
+    "exitCode": 0,
+    "seconds": 1.43,
+    "log": "regression-warehouse-scope.log"
+  },
+  {
+    "name": "pda-device-session",
+    "database": "flowcube_fix_13_test",
+    "exitCode": 0,
+    "seconds": 1.53,
+    "log": "regression-pda-device-session.log"
+  },
+  {
+    "name": "reports-values",
+    "database": "flowcube_fix_14_test",
+    "exitCode": 0,
+    "seconds": 0.7,
+    "log": "regression-reports-values.log"
+  },
+  {
+    "name": "invoice-quota",
+    "database": "flowcube_fix_15_test",
+    "exitCode": 0,
+    "seconds": 0.85,
+    "log": "regression-invoice-quota.log"
+  },
+  {
+    "name": "audit-inventory",
+    "database": "flowcube_fix_16_test",
+    "exitCode": 0,
+    "seconds": 0.74,
+    "log": "regression-audit-inventory.log"
+  },
+  {
+    "name": "audit-finance-security",
+    "database": "flowcube_fix_17_test",
+    "exitCode": 0,
+    "seconds": 1.32,
+    "log": "regression-audit-finance-security.log"
+  },
+  {
+    "name": "purchase-approval",
+    "database": "flowcube_fix_18_test",
+    "exitCode": 0,
+    "seconds": 0.7,
+    "log": "regression-purchase-approval.log"
+  },
+  {
+    "name": "approval-flow",
+    "database": "flowcube_fix_19_test",
+    "exitCode": 0,
+    "seconds": 1.28,
+    "log": "regression-approval-flow.log"
+  },
+  {
+    "name": "credit-override",
+    "database": "flowcube_fix_20_test",
+    "exitCode": 0,
+    "seconds": 0.96,
+    "log": "regression-credit-override.log"
+  },
+  {
+    "name": "prelaunch-finance",
+    "database": "flowcube_fix_21_test",
+    "exitCode": 0,
+    "seconds": 1.06,
+    "log": "regression-prelaunch-finance.log"
+  },
+  {
+    "name": "prelaunch-scope-export",
+    "database": "flowcube_fix_22_test",
+    "exitCode": 0,
+    "seconds": 1.06,
+    "log": "regression-prelaunch-scope-export.log"
+  },
+  {
+    "name": "prelaunch-hr",
+    "database": "flowcube_fix_23_test",
+    "exitCode": 0,
+    "seconds": 0.99,
+    "log": "regression-prelaunch-hr.log"
+  },
+  {
+    "name": "round2-transfer",
+    "database": "flowcube_fix_24_test",
+    "exitCode": 0,
+    "seconds": 0.93,
+    "log": "regression-round2-transfer.log"
+  },
+  {
+    "name": "round2-payroll",
+    "database": "flowcube_hr_fix_test",
+    "exitCode": 0,
+    "seconds": 0.12,
+    "log": "regression-round2-payroll.log",
+    "initialAttempt": {
+      "database": "flowcube_fix_25_test",
+      "exitCode": 1,
+      "log": "regression-round2-payroll-initial-environment-error.log",
+      "reason": "Test target flowcube_fix_25_test lacked migrated acct_companies schema; no business assertion ran."
+    }
+  }
+]

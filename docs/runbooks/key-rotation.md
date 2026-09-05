@@ -19,24 +19,24 @@
    node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
    ```
 
-2. **部署过渡配置**：在 `backend/.env`（或生产环境变量）中：
+2. **部署过渡配置**：在本地 `backend/.env`，或 Compose 部署所读取的根目录 `.env` / 显式 `--env-file` 中：
    - 把当前 `JWT_SECRET` 的值移到 `JWT_SECRET_PREVIOUS`
    - 把新密钥写入 `JWT_SECRET`
-   - 重启后端（过渡期内旧 token 仍有效，用户无感知）
+   - Compose 使用 `docker compose up -d --force-recreate backend` 重新创建后端以载入环境；直接 Node 服务重启进程。过渡期内旧 token 仍有效。
 
 3. **验证过渡期**：
    ```bash
-   curl -H "Authorization: Bearer <旧token>" https://<域名>/api/health   # 应仍有效（200）
-   curl -H "Authorization: Bearer <新token>" https://<域名>/api/health   # 应有效（200）
+   curl -H "Authorization: Bearer <旧token>" https://<域名>/api/auth/me   # 必须携带仍有效的旧 access token，验证鉴权成功（200）
+   curl -H "Authorization: Bearer <新token>" https://<域名>/api/auth/me   # 携带新 access token，验证鉴权成功（200）
    ```
 
-4. **等待旧 token 自然过期**（默认 7 天，`JWT_EXPIRES_IN` 可调），或等所有活跃用户重登后：
-   移除 `JWT_SECRET_PREVIOUS`，重启后端，轮换完成。
+4. **等待旧 token 自然过期**（access 默认 2 小时，refresh 默认 30 天；分别由 `JWT_ACCESS_EXPIRES_IN` / `JWT_REFRESH_EXPIRES_IN` 控制，应覆盖轮换前最长存量 token 有效期），或等所有活跃用户重登后：
+   移除 `JWT_SECRET_PREVIOUS`，重新创建后端容器以载入环境（`docker compose up -d --force-recreate backend`），轮换完成。单纯 restart 不会重新读取 Compose 环境变量。
 
 ## 紧急轮换（密钥疑似泄露，立刻生效）
 
 泄露场景不需要过渡期——**立即踢掉所有旧 token**：
-- 直接替换 `JWT_SECRET` 为新值（**不设** `JWT_SECRET_PREVIOUS`），重启后端
+- 直接替换 `JWT_SECRET` 为新值（**不设** `JWT_SECRET_PREVIOUS`），按上述方式重新创建容器或重启 Node 进程
 - 所有用户需重新登录（这是泄露场景的正确代价，防止攻击者用旧 token 继续访问）
 
 ## 注意事项
@@ -44,4 +44,6 @@
 - `JWT_SECRET` 长度必须 ≥32（env.js 强校验，不足拒绝启动）。
 - 密钥**绝不写入代码/文档/提交**；只存在于 `.env`（已 gitignore）与部署环境变量。
 - `token_version` 仍是改密码/禁用用户时立即使旧 token 失效的独立机制，与密钥轮换正交。
-- 生产服务器：`deploy/production*.json` 或系统环境变量中改（不要改仓库内文件）。
+- 生产 Compose 在根目录未跟踪的 `.env` 或显式环境文件配置；`deploy/production*.json` 是部署连接配置，不用于传入 JWT。不要将密钥写入受版本管理文件。
+
+Compose 主配置已透传新旧签名密钥、access/refresh 有效期及 DB_POOL_SIZE。修改根目录部署环境后须重新创建容器；检查时只验证变量是否存在和非敏感有效期，不打印签名密钥。

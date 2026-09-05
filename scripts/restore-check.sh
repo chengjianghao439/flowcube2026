@@ -12,6 +12,8 @@
 # 环境变量：
 #   RESTORE_IMAGE   临时 MySQL 镜像（默认 mysql:8.0）
 #   RESTORE_DB      校验用库名（默认 flowcube_restore_check，用完即删）
+#   RESTORE_TIMEOUT_SECONDS 整个演练时限（默认 900 秒，超时清理容器）
+#   RESTORE_MEMORY / RESTORE_CPUS / RESTORE_PIDS 默认 768m / 1 / 256
 #   BACKUP_DIR      备份目录（默认 /opt/flowcube/backups）
 #   MIN_TABLES      最小表数阈值（默认从迁移文件数推导：backend/src/database/*.sql
 #                   中的 CREATE TABLE 净数 - 2 容差；可显式覆盖）
@@ -23,6 +25,18 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RESTORE_TIMEOUT_SECONDS="${RESTORE_TIMEOUT_SECONDS:-900}"
+[[ "$RESTORE_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || { echo 'RESTORE_TIMEOUT_SECONDS 必须为正整数' >&2; exit 1; }
+TIMEOUT_BIN="$(type -P timeout || type -P gtimeout || true)"
+[ -n "$TIMEOUT_BIN" ] || { echo '恢复演练需要 GNU timeout（macOS: coreutils）' >&2; exit 1; }
+if [ "${FLOWCUBE_RESTORE_DEADLINE_ACTIVE:-0}" != 1 ]; then
+  # 让调用者PID直接由timeout接管；手动终止该PID也会转发到导入与清理链。
+  exec "$TIMEOUT_BIN" -k 10 "$RESTORE_TIMEOUT_SECONDS" env FLOWCUBE_RESTORE_DEADLINE_ACTIVE=1 \
+    bash "$SCRIPT_DIR/restore-check.sh" "$@"
+fi
+# 位于整体 timeout 进程组内，子命令不能创建逃离该时限的新进程组。
+export FLOWCUBE_TIMEOUT_GROUP=1
+. "$SCRIPT_DIR/lib/runtime-guards.sh"
 # shellcheck source=lib/ops-common.sh
 . "$SCRIPT_DIR/lib/ops-common.sh"
 
@@ -30,7 +44,14 @@ PROJECT_DIR="${PROJECT_DIR:-/opt/flowcube}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/flowcube/backups}"
 RESTORE_IMAGE="${RESTORE_IMAGE:-mysql:8.0}"
 RESTORE_DB="${RESTORE_DB:-flowcube_restore_check}"
+RESTORE_MEMORY="${RESTORE_MEMORY:-768m}"
+RESTORE_CPUS="${RESTORE_CPUS:-1}"
+RESTORE_PIDS="${RESTORE_PIDS:-256}"
 MIN_TABLES="${MIN_TABLES:-}"
+[[ "$RESTORE_DB" =~ ^[A-Za-z0-9_]+$ ]] || { echo 'RESTORE_DB 只能包含字母、数字和下划线' >&2; exit 1; }
+[[ "$RESTORE_MEMORY" =~ ^[1-9][0-9]*[mMgG]$ ]] || { echo 'RESTORE_MEMORY 必须带 m/g 容量单位' >&2; exit 1; }
+[[ "$RESTORE_CPUS" =~ ^[0-9]+([.][0-9]+)?$ && ! "$RESTORE_CPUS" =~ ^0+([.]0+)?$ ]] || { echo 'RESTORE_CPUS 必须为正数' >&2; exit 1; }
+[[ "$RESTORE_PIDS" =~ ^[1-9][0-9]*$ ]] || { echo 'RESTORE_PIDS 必须为正整数' >&2; exit 1; }
 
 # 推导表数阈值：取仓库迁移文件里「CREATE TABLE 净数」- 2 容差（脚本在服务器
 # /opt/flowcube 下运行，仓库相对路径为 ../backend/src/database）。
@@ -90,12 +111,18 @@ fi
 # 起一个临时 MySQL 容器（随机名防冲突），用 root 密码导入
 CONTAINER="flowcube-restore-check-$$"
 cleanup() {
-  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  # MySQL 镜像声明匿名数据卷；只清本任务容器及其卷，避免演练长期积累数据。
+  DOCKER_COMMAND_TIMEOUT=5 docker rm -f -v "$CONTAINER" >/dev/null 2>&1 \
+    || echo "[WARN] 临时恢复容器清理失败，请检查 $CONTAINER" >&2
 }
 trap cleanup EXIT
+trap 'exit 124' TERM
+trap 'exit 130' INT
 
 echo "[$(ts)] [INFO] 启动临时 MySQL 容器 $CONTAINER ..."
 docker run -d --name "$CONTAINER" \
+  --network none --memory "$RESTORE_MEMORY" --memory-swap "$RESTORE_MEMORY" \
+  --cpus "$RESTORE_CPUS" --pids-limit "$RESTORE_PIDS" \
   -e MYSQL_ROOT_PASSWORD=restore_check_pw \
   -e MYSQL_DATABASE="$RESTORE_DB" \
   "$RESTORE_IMAGE" >/dev/null
@@ -119,7 +146,7 @@ echo "[$(ts)] [INFO] 解压并导入备份到 $RESTORE_DB ..."
 # 须显式指定目标库；先建库确保存在（幂等），再导入。
 docker exec "$CONTAINER" \
   mysql -uroot -prestore_check_pw -e "CREATE DATABASE IF NOT EXISTS \`$RESTORE_DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" >/dev/null 2>&1
-gunzip -c "$FILE" | docker exec -i "$CONTAINER" \
+gunzip -c "$FILE" | DOCKER_COMMAND_TIMEOUT="$RESTORE_TIMEOUT_SECONDS" docker exec -i "$CONTAINER" \
   mysql -uroot -prestore_check_pw "$RESTORE_DB" >/dev/null 2>&1 || {
     fail "备份导入失败 —— 备份可能损坏"
   }

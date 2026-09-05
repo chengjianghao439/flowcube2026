@@ -67,6 +67,7 @@ const env = {
   TRUST_PROXY: readBool('TRUST_PROXY', false),
   APP_PUBLIC_URL: readString('APP_PUBLIC_URL', { defaultValue: '', allowEmpty: true }).replace(/\/$/, ''),
   // 日志集中检索（P2-12）：配置后 warn/error 级日志异步推送 Grafana Loki；未配置则完全无副作用
+  SENTRY_DSN: readString('SENTRY_DSN', { defaultValue: '', allowEmpty: true }),
   LOKI_URL: readString('LOKI_URL', { defaultValue: '', allowEmpty: true }),
   APP_UPDATE_USE_GITHUB_DIRECT_URL: readBool('APP_UPDATE_USE_GITHUB_DIRECT_URL', false),
   APP_UPDATE_DOWNLOADS_DIR: readString('APP_UPDATE_DOWNLOADS_DIR', {
@@ -80,11 +81,17 @@ const env = {
   // 后续请求全部排队等待，表现为「系统卡住」而非报错。生产可用 DB_POOL_SIZE 覆盖，
   // 上调时注意不要超过 MySQL 的 max_connections（默认 151）除以实例数。
   DB_POOL_SIZE: readInt('DB_POOL_SIZE', { defaultValue: 30 }),
+  // 只限制尚未取得连接的排队；超期请求不会稍后派发 SQL。
+  DB_ACQUIRE_TIMEOUT_MS: readInt('DB_ACQUIRE_TIMEOUT_MS', { defaultValue: 5000 }),
   // 超收金额闸门（元）：单次收货造成的超收金额超过它就要求二次确认，与 20% 比例闸门并列，
   // 任一超限即触发。纯比例闸门对大单形同虚设（应到 10000 件可静默超收 1999 件），
   // 而超收会随上架自动结算直接进应付。默认 500 元——按"错一次也就是一顿饭钱"的量级取，
   // 客单价高的仓库应调高，避免正常收货被频繁打断（审计 P1-3）。
   OVER_RECEIVE_CONFIRM_AMOUNT: readInt('OVER_RECEIVE_CONFIRM_AMOUNT', { defaultValue: 500 }),
+}
+
+if (!Number.isSafeInteger(env.DB_ACQUIRE_TIMEOUT_MS) || env.DB_ACQUIRE_TIMEOUT_MS <= 0 || env.DB_ACQUIRE_TIMEOUT_MS > 60000) {
+  throw new Error('DB_ACQUIRE_TIMEOUT_MS 必须在 1–60000 毫秒之间')
 }
 
 /**

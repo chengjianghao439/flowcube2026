@@ -32,7 +32,11 @@ fs.appendFileSync(process.env.OPS_TEST_LOG, JSON.stringify([cmd, ...args]) + '\\
 if (cmd === 'flock') process.exit(s === 'busy' ? 1 : 0);
 if (cmd === 'timeout') {
  if ((s === 'tls-timeout' && args.some(a => a === 'openssl' || a.endsWith('/openssl'))) || (s === 'docker-timeout' && args.some(a => a.endsWith('/docker')))) process.exit(124);
- const r = require('node:child_process').spawnSync(args[3],args.slice(4),{stdio:'inherit'});process.exit(r.status??1);
+ // 总体时限内的子命令使用 --foreground；按参数语义定位命令，不依赖固定下标。
+ let i=0;
+ while(args[i]?.startsWith('-')) { if(args[i]==='-k') i+=2; else i++; }
+ i++; // duration
+ const r = require('node:child_process').spawnSync(args[i],args.slice(i+1),{stdio:'inherit'});process.exit(r.status??1);
 }
 if (cmd === 'curl') { if (args.includes('-d')) process.exit(99); console.log('200'); process.exit(0); }
 if (cmd === 'openssl') { if (args[0] === 'x509') console.log('notAfter=Nov 16 14:56:59 2030 GMT'); process.exit(0); }

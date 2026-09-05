@@ -2,6 +2,7 @@ const { Router } = require('express')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const controller = require('./export.controller')
+const { companyScope } = require('../../middleware/companyScope')
 
 const router = Router()
 
@@ -25,7 +26,7 @@ router.get('/statements/:id', requirePermission(PERMISSIONS.PAYMENT_VIEW), contr
 
 // ── 后加实体导出（v0.4.79 批量补齐）───────────────────────────────────────────
 router.get('/waybills', requirePermission(PERMISSIONS.LOGISTICS_VIEW), controller.exportWaybills)
-router.get('/fixed-assets', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportFixedAssets)
+router.get('/fixed-assets', companyScope, requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportFixedAssets)
 router.get('/expense-claims', requirePermission(PERMISSIONS.FINANCE_EXPENSE_VIEW), controller.exportExpenseClaims)
 router.get('/finance-accounts', requirePermission(PERMISSIONS.FINANCE_ACCOUNT_VIEW), controller.exportFinanceAccounts)
 router.get('/finance-transactions', requirePermission(PERMISSIONS.FINANCE_ACCOUNT_VIEW), controller.exportFinanceTransactions)
@@ -42,8 +43,8 @@ router.get('/racks', requirePermission(PERMISSIONS.RACK_VIEW), controller.export
 router.get('/sorting-bins', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), controller.exportSortingBins)
 router.get('/suppliers', requirePermission(PERMISSIONS.SUPPLIER_VIEW), controller.exportSuppliers)
 router.get('/customers', requirePermission(PERMISSIONS.CUSTOMER_VIEW), controller.exportCustomers)
-router.get('/accounting-periods', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportAccountingPeriods)
-router.get('/tax-adjustments', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportTaxAdjustments)
+router.get('/accounting-periods', companyScope, requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportAccountingPeriods)
+router.get('/tax-adjustments', companyScope, requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportTaxAdjustments)
 router.get('/companies', requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW), controller.exportCompanies)
 router.get('/profit-analysis', requirePermission(PERMISSIONS.REPORT_VIEW), controller.exportProfitAnalysis)
 router.get('/aging', requirePermission(PERMISSIONS.PAYMENT_VIEW), controller.exportAging)

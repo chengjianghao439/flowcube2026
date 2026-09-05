@@ -36,6 +36,10 @@ function harness(t, { hash, content = 'installer', mutateBeforeInstall = false }
     executeJavaScript: async () => 'https://updates.example.test',
     send: (name, payload) => { for (const fn of listeners.get(name) || []) fn({}, payload) },
   } }
+  const rendererGuard = require('../desktop/lib/rendererSecurity').createRendererGuard()
+  win.webContents.mainFrame = { url: 'file:///test/renderer/index.html#/' }
+  win.webContents.isDestroyed = () => false
+  rendererGuard.register(win.webContents, win.webContents.mainFrame.url)
   const electron = {
     app, Menu: {}, BrowserWindow: { fromWebContents: () => win, getAllWindows: () => [] },
     ipcMain: { handle: (name, fn) => handlers.set(name, fn), on() {} },
@@ -55,12 +59,12 @@ function harness(t, { hash, content = 'installer', mutateBeforeInstall = false }
     } },
   }
   const update = load('desktop/lib/updateCheck.js', { electron })
-  load('desktop/main.js', { electron, 'electron-log/main': quiet, './lib/updateCheck': update, './lib/localPrint': {} })
+  load('desktop/main.js', { electron, 'electron-log/main': quiet, './lib/updateCheck': update, './lib/localPrint': {}, './lib/rendererSecurity': { createRendererGuard: () => rendererGuard } })
   let bridge
   load('desktop/preload.js', { electron: {
     contextBridge: { exposeInMainWorld: (_key, value) => { bridge = value } },
     ipcRenderer: {
-      invoke: async (name, ...args) => handlers.get(name)?.({ sender: win.webContents }, ...args), send() {},
+      invoke: async (name, ...args) => handlers.get(name)?.({ sender: win.webContents, senderFrame: win.webContents.mainFrame }, ...args), send() {},
       on: (name, fn) => listeners.set(name, [...(listeners.get(name) || []), fn]),
       removeListener: (name, fn) => listeners.set(name, (listeners.get(name) || []).filter(x => x !== fn)),
     },
@@ -132,9 +136,9 @@ test('ignoring a version clears the pending snapshot, and explicit manual check 
   const h = harness(t)
   await h.update.checkAppUpdate(h.app, h.win, () => 'https://updates.example.test', { ui: 'ipc' })
   await h.bridge.ignoreUpdateVersion('2.0.0')
-  assert.equal(await h.handlers.get('flowcube:get-pending-update')({ sender: h.win.webContents }), null)
+  assert.equal(await h.handlers.get('flowcube:get-pending-update')({ sender: h.win.webContents, senderFrame: h.win.webContents.mainFrame }), null)
   await h.bridge.triggerUpdateCheck()
-  assert.equal((await h.handlers.get('flowcube:get-pending-update')({ sender: h.win.webContents })).version, '2.0.0')
+  assert.equal((await h.handlers.get('flowcube:get-pending-update')({ sender: h.win.webContents, senderFrame: h.win.webContents.mainFrame })).version, '2.0.0')
 })
 
 test('native fallback uses the same verified manifest download path', async t => {

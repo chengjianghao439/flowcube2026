@@ -1,0 +1,63 @@
+[FAIL] 零收入扣除余额由一月完整延续到二月 Error: Table 'flowcube_fix_25_test.acct_companies' doesn't exist
+    at Object.createCompany (/Users/chengjianghao/flowcube/backend/src/modules/accounting/companies.service.js:53:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async fixture (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:11:13)
+    at async /Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:27:17
+    at async test (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:9:39)
+    at async main (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:26:5)
+[FAIL] 逆序及缺失零收入月核算拒绝且不落账 Error: Table 'flowcube_fix_25_test.acct_companies' doesn't exist
+    at Object.createCompany (/Users/chengjianghao/flowcube/backend/src/modules/accounting/companies.service.js:53:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async fixture (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:11:13)
+    at async /Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:33:17
+    at async test (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:9:39)
+    at async main (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:32:5)
+[FAIL] 前月未发拒绝后月发放；顺序发放及同值重算保持凭证不变 Error: Table 'flowcube_fix_25_test.acct_companies' doesn't exist
+    at Object.createCompany (/Users/chengjianghao/flowcube/backend/src/modules/accounting/companies.service.js:53:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async fixture (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:11:13)
+    at async /Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:41:17
+    at async test (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:9:39)
+    at async main (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:40:5)
+[FAIL] 后月已核算时上游重算变化拒绝并保留全部原值 Error: Table 'flowcube_fix_25_test.acct_companies' doesn't exist
+    at Object.createCompany (/Users/chengjianghao/flowcube/backend/src/modules/accounting/companies.service.js:53:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async fixture (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:11:13)
+    at async /Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:50:17
+    at async test (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:9:39)
+    at async main (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:49:5)
+[FAIL] 发放重验当前及前置累计台账，旧截零或陈旧明细拒绝 Error: Table 'flowcube_fix_25_test.acct_companies' doesn't exist
+    at Object.createCompany (/Users/chengjianghao/flowcube/backend/src/modules/accounting/companies.service.js:53:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async fixture (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:11:13)
+    at async /Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:62:17
+    at async test (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:9:39)
+    at async main (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:61:5)
+[FAIL] 任职起月只扣一个月、不得计算入职前月份、跨年重新累计 Error: Table 'flowcube_fix_25_test.acct_companies' doesn't exist
+    at Object.createCompany (/Users/chengjianghao/flowcube/backend/src/modules/accounting/companies.service.js:53:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async fixture (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:11:13)
+    at async /Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:72:17
+    at async test (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:9:39)
+    at async main (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:71:5)
+[FAIL] 持续任职缺失工资单不能归零；未知入职日期可从首张单起连续核算 Error: Table 'flowcube_fix_25_test.acct_companies' doesn't exist
+    at Object.createCompany (/Users/chengjianghao/flowcube/backend/src/modules/accounting/companies.service.js:53:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async fixture (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:11:13)
+    at async /Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:80:17
+    at async test (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:9:39)
+    at async main (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:79:5)
+[FAIL] 新员工从本月入职起累计，同单老员工继续依赖上月 Error: Table 'flowcube_fix_25_test.acct_companies' doesn't exist
+    at Object.createCompany (/Users/chengjianghao/flowcube/backend/src/modules/accounting/companies.service.js:53:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async fixture (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:11:13)
+    at async /Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:88:17
+    at async test (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:9:39)
+    at async main (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:87:5)
+[FAIL] 跨月并发核算串行后读取刚提交的前月累计 Error: Table 'flowcube_fix_25_test.acct_companies' doesn't exist
+    at Object.createCompany (/Users/chengjianghao/flowcube/backend/src/modules/accounting/companies.service.js:53:32)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async fixture (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:11:13)
+    at async /Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:100:17
+    at async test (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:9:39)
+    at async main (/Users/chengjianghao/flowcube/tests/round2-payroll.smoke.test.js:99:5)

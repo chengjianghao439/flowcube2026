@@ -200,7 +200,7 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', sal
   if (endDate) { conds.push('c.created_at <= ?'); params.push(`${String(endDate).slice(0, 10)} 23:59:59`) }
   const where = `WHERE ${conds.join(' AND ')}`
   const [rows] = await pool.query(
-    `SELECT * FROM sale_credit_overrides c ${where} ORDER BY c.created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT * FROM sale_credit_overrides c ${where} ORDER BY c.created_at DESC, c.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_credit_overrides c ${where}`, params)

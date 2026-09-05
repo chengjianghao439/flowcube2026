@@ -1,0 +1,544 @@
+{
+  "baselineCommit": "16d6435f7ca7d64db9641ede82df4c2b76c5c7b1",
+  "branch": "codex/prelaunch-round2-fixes-20260905",
+  "state": "local_uncommitted_not_deployed",
+  "originalFindingsFixed": [
+    "R2-01",
+    "R2-02",
+    "R2-03",
+    "R2-04",
+    "R2-05",
+    "R2-06",
+    "R2-07",
+    "R2-08"
+  ],
+  "followupFixes": [
+    "PDA stale renewal cannot clear new session",
+    "PDA partial outbound list and batched item projection",
+    "Browser PDA device cache initialization",
+    "Restore signal forwarding and zero CPU validation",
+    "Sentry probe one-event transport deadline"
+  ],
+  "verification": {
+    "frontend": {
+      "files": 23,
+      "passed": 134
+    },
+    "integrationAssertions": 96,
+    "databaseSuites": 26,
+    "transferLatestHttpTests": 15,
+    "payrollServiceGroups": 9,
+    "taxCases": 11,
+    "runtimeToolingTests": 73,
+    "opsCorsTests": 22,
+    "deploymentTests": 17,
+    "permissions": "181 backend/frontend codes consistent",
+    "lint": {
+      "backendErrors": 0,
+      "frontendErrors": 0,
+      "frontendWarnings": 5
+    },
+    "appTypeCheck": "passed",
+    "erpBuild": "passed",
+    "pdaBuild": "passed",
+    "syntheticRestore": {
+      "tables": 5,
+      "rowsPerKeyTable": 1,
+      "result": "passed"
+    },
+    "browser": {
+      "login": "real isolated test backend",
+      "companyCreate": "success, fresh list row",
+      "pdaBinding": "unbound before boot fix; valid device session after fix",
+      "transfer66": "plan10/out5 list entry reachable; simulated keyboard scanner completes second5; out10/in0 leaves only inbound card",
+      "physicalScanner": "not verified"
+    }
+  },
+  "testEnvironment": {
+    "host": "127.0.0.1",
+    "port": 13308,
+    "databaseNames": [
+      "flowcube_fix_0_test",
+      "flowcube_fix_1_test",
+      "flowcube_fix_2_test",
+      "flowcube_fix_3_test",
+      "flowcube_fix_4_test",
+      "flowcube_fix_5_test",
+      "flowcube_fix_6_test",
+      "flowcube_fix_7_test",
+      "flowcube_fix_8_test",
+      "flowcube_fix_9_test",
+      "flowcube_fix_10_test",
+      "flowcube_fix_11_test",
+      "flowcube_fix_12_test",
+      "flowcube_fix_13_test",
+      "flowcube_fix_14_test",
+      "flowcube_fix_15_test",
+      "flowcube_fix_16_test",
+      "flowcube_fix_17_test",
+      "flowcube_fix_18_test",
+      "flowcube_fix_19_test",
+      "flowcube_fix_20_test",
+      "flowcube_fix_21_test",
+      "flowcube_fix_22_test",
+      "flowcube_fix_23_test",
+      "flowcube_fix_24_test",
+      "flowcube_hr_fix_test"
+    ],
+    "configStoredInRepository": false,
+    "runtimeTarget": "loopback only"
+  },
+  "baselinePreservation": {
+    "existingPaths": 114,
+    "unchangedPaths": [
+      ".github/workflows/security-scan.yml",
+      ".github/workflows/test.yml",
+      "backend/package-lock.json",
+      "backend/package.json",
+      "backend/src/constants/voucherSource.js",
+      "backend/src/middleware/errorHandler.js",
+      "backend/src/modules/carriers/carriers.service.js",
+      "backend/src/modules/credit-overrides/credit-overrides.service.js",
+      "backend/src/modules/customers/customers.service.js",
+      "backend/src/modules/disposal/disposal.service.js",
+      "backend/src/modules/export/export.controller.js",
+      "backend/src/modules/export/export.routes.js",
+      "backend/src/modules/export/export.service.js",
+      "backend/src/modules/finance/expense-claims.service.js",
+      "backend/src/modules/finance/finance-accounts.service.js",
+      "backend/src/modules/fixed-assets/fixed-assets.service.js",
+      "backend/src/modules/hr/hr.controller.js",
+      "backend/src/modules/hr/hr.routes.js",
+      "backend/src/modules/oplogs/oplogs.service.js",
+      "backend/src/modules/payments/payment-receipts.service.js",
+      "backend/src/modules/payments/payments.service.js",
+      "backend/src/modules/payments/reconciliation-statements.service.js",
+      "backend/src/modules/picking-waves/picking-waves.service.js",
+      "backend/src/modules/plastic-boxes/plastic-boxes.controller.js",
+      "backend/src/modules/plastic-boxes/plastic-boxes.service.js",
+      "backend/src/modules/portal/portal.controller.js",
+      "backend/src/modules/portal/portal.service.js",
+      "backend/src/modules/sorting-bins/sorting-bins.service.js",
+      "backend/src/modules/suppliers/suppliers.service.js",
+      "backend/src/modules/users/users.service.js",
+      "backend/src/utils/codeGenerator.js",
+      "desktop/main.js",
+      "desktop/package-lock.json",
+      "desktop/package.json",
+      "docs/runbooks/key-rotation.md",
+      "frontend/package-lock.json",
+      "frontend/src/components/GlobalErrorBoundary.tsx",
+      "frontend/src/components/layout/KeepAliveOutlet.tsx",
+      "frontend/src/components/ui/card.tsx",
+      "frontend/src/hooks/useAccounts.ts",
+      "frontend/src/hooks/useInvoices.ts",
+      "frontend/src/hooks/useLedger.ts",
+      "frontend/src/hooks/useVouchers.ts",
+      "frontend/src/lib/exportDownload.ts",
+      "frontend/src/pages/accounting/periods/index.tsx",
+      "frontend/src/pages/carriers/utils.ts",
+      "frontend/src/pages/fixed-assets/index.tsx",
+      "frontend/src/router/index.test.tsx",
+      "frontend/src/router/index.tsx",
+      "frontend/src/router/routeRegistry.ts",
+      "frontend/src/router/workspaceRouteMeta.ts",
+      "frontend/src/store/companyStore.ts",
+      "frontend/src/store/workspaceStore.ts",
+      "scripts/check-npm-audit.js",
+      "tests/audit-desktop.test.js",
+      "tests/audit-tooling.test.js",
+      "backend/src/utils/exportRows.js",
+      "desktop/lib/rendererSecurity.js",
+      "docs/audit-evidence-2026-09-05/assets-after-fix.png",
+      "docs/audit-evidence-2026-09-05/assets-after-switch.png",
+      "docs/audit-evidence-2026-09-05/runtime-dependencies.json",
+      "docs/audit-round2-2026-09-05/README.md",
+      "docs/audit-round2-2026-09-05/client-probe.test.ts",
+      "docs/audit-round2-2026-09-05/knip-backend.json",
+      "docs/audit-round2-2026-09-05/knip-frontend.json",
+      "docs/audit-round2-2026-09-05/npm-audit-backend.json",
+      "docs/audit-round2-2026-09-05/npm-audit-desktop.json",
+      "docs/audit-round2-2026-09-05/npm-audit-frontend.json",
+      "docs/audit-round2-2026-09-05/payroll-evidence.json",
+      "docs/audit-round2-2026-09-05/payroll-probe.cjs",
+      "docs/audit-round2-2026-09-05/pool-evidence.json",
+      "docs/audit-round2-2026-09-05/pool-probe.cjs",
+      "docs/audit-round2-2026-09-05/production-checks.sql",
+      "docs/audit-round2-2026-09-05/production-ledger-checks.sql",
+      "docs/audit-round2-2026-09-05/transfer-evidence.json",
+      "docs/audit-round2-2026-09-05/transfer-probe.cjs",
+      "docs/prelaunch-client-fixes-2026-09-05.md",
+      "docs/prelaunch-deep-audit-2026-09-05.md",
+      "docs/prelaunch-deep-audit-evidence-2026-09-05.json",
+      "docs/prelaunch-finance-fixes-2026-09-05.md",
+      "docs/prelaunch-fixes-2026-09-05.md",
+      "docs/prelaunch-fixes-evidence-2026-09-05.json",
+      "docs/prelaunch-runtime-hr-ops-fixes-2026-09-05.md",
+      "docs/prelaunch-scope-export-fixes-2026-09-05.md",
+      "docs/prelaunch-second-audit-evidence-2026-09-05.json",
+      "docs/superpowers/plans/2026-09-05-prelaunch-audit-fixes.md",
+      "frontend/src/hooks/useCompanyQueryKey.ts",
+      "frontend/src/lib/companyScope.ts",
+      "frontend/src/lib/prelaunch-client.test.tsx",
+      "frontend/src/router/PdaAuthRoutes.tsx",
+      "frontend/src/router/pda.tsx",
+      "frontend/src/router/pdaRoutes.tsx",
+      "frontend/src/router/routeDefinitions.ts",
+      "tests/export-rows.test.js",
+      "tests/prelaunch-electron.smoke.cjs",
+      "tests/prelaunch-finance.smoke.test.js",
+      "tests/prelaunch-runtime-ops.test.js",
+      "tests/prelaunch-scope-export.smoke.test.js"
+    ],
+    "intentionallyRevisitedPaths": [
+      ".env.example",
+      "AGENTS.md",
+      "backend/.env.example",
+      "backend/src/config/env.js",
+      "backend/src/modules/hr/hr.service.js",
+      "docker-compose.prod.yml",
+      "docker-compose.yml",
+      "docs/DEPLOY.md",
+      "frontend/src/api/client.refresh.test.ts",
+      "frontend/src/api/client.ts",
+      "frontend/src/main.tsx",
+      "frontend/src/pages/accounting/consolidation/index.tsx",
+      "package.json",
+      "backend/src/utils/errorTracking.js",
+      "docs/prelaunch-second-audit-2026-09-05.md",
+      "tests/prelaunch-hr.smoke.test.js"
+    ]
+  },
+  "cleanup": {
+    "browserSession": "flowcube-round2-fix-qa",
+    "browserSessionListEmpty": true,
+    "ownedPreviewProcessesStopped": true,
+    "testContainerStopped": "flowcube-audit-20260905",
+    "restoreContainersRemaining": 0,
+    "userDevDatabasePreserved": true
+  },
+  "pendingExternal": [
+    "Production Sentry receiver and alert acceptance",
+    "Offsite backup destination and end-to-end disaster recovery",
+    "Windows/Android physical device, update and print acceptance",
+    "Authorized release and production verification",
+    "Historical wrong completed transfers require separate fact review"
+  ],
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "8d991a3106f6e5f223175a52bd71cdab131e382e17660fb7a831f4c6d0029bad",
+      "bytes": 1456
+    },
+    {
+      "path": "app-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "backend-lint.log",
+      "sha256": "b5d33cc8dce2fcc4068db7aae7be8923d4404a0df0aa7885db19e9d937378f85",
+      "bytes": 46
+    },
+    {
+      "path": "company-created.png",
+      "sha256": "6fe6920e5bb0506e8f44c32d56ed87c990012bcf55e44d08c1163268fcb73e2b",
+      "bytes": 77673
+    },
+    {
+      "path": "database-regressions.json",
+      "sha256": "eed9701f21c28ffe808172f96630bcf1dd67c5df4fd33c40b3b4c3fa7d97a3e8",
+      "bytes": 4491
+    },
+    {
+      "path": "deployment.log",
+      "sha256": "ce674d93cd82017b6ebac4167f4b767b1e94e23b77c26ff0d8ad628a295546c0",
+      "bytes": 3352
+    },
+    {
+      "path": "erp-build.log",
+      "sha256": "5bd38d4b6d156d5d3d0f1165861a3b0c9ce1e3e482d58aeb49cc264d17ab58ba",
+      "bytes": 19480
+    },
+    {
+      "path": "frontend-lint.log",
+      "sha256": "b0c90c306f83cfc506b9cc67784a5f3219b9186c9e7eb52883f197c923b40fda",
+      "bytes": 1312
+    },
+    {
+      "path": "frontend-tests.log",
+      "sha256": "237b275bfe3b7b7f4862a62a215e9ea51df11d5e00bde758a24d95a94e7058fb",
+      "bytes": 1755
+    },
+    {
+      "path": "hr-tax.log",
+      "sha256": "1f6e28d314c65bac2ec8541877450738ed790c7039e0d6fb6402d258e1810a43",
+      "bytes": 624
+    },
+    {
+      "path": "integration.log",
+      "sha256": "dc100c3162357e10384a6d8be6a16905cc1b0246f79484f1237c0c31016e8507",
+      "bytes": 27522
+    },
+    {
+      "path": "observability-timeout-red.log",
+      "sha256": "4bf1663a2002ebee3810b1c7e5355d2b6cdb1b88158e549aad3bca4aedac176f",
+      "bytes": 867
+    },
+    {
+      "path": "ops-cors-initial.log",
+      "sha256": "4917c1ffbda7b23e6d2753144432e0be00bba8fd919ceb67f330bd975f1f0507",
+      "bytes": 6375
+    },
+    {
+      "path": "ops-cors.log",
+      "sha256": "dce3ca5a29d458aa767bbb8e77dbd554b0297d360247d44898213b4b31d0f2e2",
+      "bytes": 4260
+    },
+    {
+      "path": "pda-build.log",
+      "sha256": "6d92b6296868525aecb3498e95ffeab968de9b2d86861592d481917146a5ef3a",
+      "bytes": 11407
+    },
+    {
+      "path": "pda-complete-out-list.png",
+      "sha256": "31eb294ee354a8e4038f041c04b9809effac2a3a6376c0ac50947b9da574bd59",
+      "bytes": 51871
+    },
+    {
+      "path": "pda-partial-list.png",
+      "sha256": "c8b0d3f10d51b6abf128f1ea5b5bc96826f10db7b5c708d90abd1df2783abaae",
+      "bytes": 52298
+    },
+    {
+      "path": "pda-second-batch-out.png",
+      "sha256": "40ab77258000a7d5dff3a183fa044347a11deda8f261741692534b3e6f9a45e1",
+      "bytes": 29720
+    },
+    {
+      "path": "pda-session-green.log",
+      "sha256": "9b67caf889962253458ca97c5c56440e48f637bc3f16bdd2f17e76264d62e5f7",
+      "bytes": 451
+    },
+    {
+      "path": "pda-session-red.log",
+      "sha256": "6786ca6a4684b48b57135891360e877b848bac0307c2ad94850258c230a189a4",
+      "bytes": 2952
+    },
+    {
+      "path": "permissions.log",
+      "sha256": "9cf73a7f5c2d6a2bead293150464230e57513c70e95ca2b1f7b3c5fb80fdb67c",
+      "bytes": 825
+    },
+    {
+      "path": "pool-real-db.log",
+      "sha256": "66bf2d14a46a24698eb06ec96d380f3d09bfb6afdc10cd322a8470877d9df6a3",
+      "bytes": 273
+    },
+    {
+      "path": "qa-fixture.json",
+      "sha256": "a6d1d0fcb80adc94e3439b401c5514f65b847210e25f384666d5dac6b2911b46",
+      "bytes": 483
+    },
+    {
+      "path": "qa-http.log",
+      "sha256": "ae28f86d892aced4f00e612d7ff9aa7361dc55dc27989d6aab6daa30fa393504",
+      "bytes": 815
+    },
+    {
+      "path": "regression-accounting-period.log",
+      "sha256": "31e33909932d6f0cae67e81d089d5d67c55f85ce6b725274150940ac8db12c2f",
+      "bytes": 4550
+    },
+    {
+      "path": "regression-accounting.log",
+      "sha256": "cae207b9d5470125d159461e9c4919603bbfd0ad09ee5b5aea857958f2f83493",
+      "bytes": 3976
+    },
+    {
+      "path": "regression-approval-flow.log",
+      "sha256": "eb857069a09385ebe6865f8e256be7443dca96bdb08e0d1202bfed2003ad5981",
+      "bytes": 13613
+    },
+    {
+      "path": "regression-audit-finance-security.log",
+      "sha256": "b2745d6e0cb2a1edd543698dbdc10142a4fe2ecec6a9e8af4277c8a928cd19e3",
+      "bytes": 26246
+    },
+    {
+      "path": "regression-audit-inventory.log",
+      "sha256": "28953e026e8402800fd689fc919cbe7531fa2888f1814af7c6926d237dcd90ea",
+      "bytes": 1775
+    },
+    {
+      "path": "regression-concurrency-guards.log",
+      "sha256": "4cf6225d0061e6d98c677a772c83bcdc6de6f57f78e0b2ddaf9bb48bb96c6739",
+      "bytes": 47453
+    },
+    {
+      "path": "regression-credit-outbound.log",
+      "sha256": "cde389b77977257905578824cdc86280c52da2197afcd8b46b93088c0636b450",
+      "bytes": 1112
+    },
+    {
+      "path": "regression-credit-override.log",
+      "sha256": "d26371bcc7d78c75e3837cbabfef2e07014ac8d3bc0215b94be7ed3794f78583",
+      "bytes": 6511
+    },
+    {
+      "path": "regression-disposal.log",
+      "sha256": "f735994740b97ad9332440e3f995029c2c4c05dbc8ef7f44ebe8de93e971f401",
+      "bytes": 8390
+    },
+    {
+      "path": "regression-finance.log",
+      "sha256": "4ce3f428b85e80bec2fc0df42b86467e664bba977edffa9651414c9236a613ef",
+      "bytes": 43089
+    },
+    {
+      "path": "regression-invoice-quota.log",
+      "sha256": "e7d6a9084b972b7ccb7ac4afa87bced198e9f9924778ac3ffecbcbdab6f57bc3",
+      "bytes": 7620
+    },
+    {
+      "path": "regression-mainline.log",
+      "sha256": "8d857dffac43c3920b530873e5673fdb96647902ff9935950f49693dd74f8113",
+      "bytes": 19053
+    },
+    {
+      "path": "regression-p0-regression.log",
+      "sha256": "c53477e5b914f2da3e28d21bed7cf93474e554197646778fffa0043849d2b1c6",
+      "bytes": 13285
+    },
+    {
+      "path": "regression-p1-regression.log",
+      "sha256": "1c357ddf3666b43a292ffe1cb68f7fa83369bc7def9bc64760d449a1ad7c7c84",
+      "bytes": 24054
+    },
+    {
+      "path": "regression-pda-device-session.log",
+      "sha256": "6c4c407a0522259e3b74a9fa9bcc0710ecec97192ab5260cac94db77e56f6963",
+      "bytes": 19538
+    },
+    {
+      "path": "regression-prelaunch-finance.log",
+      "sha256": "9ad9d5e2a21e55568fc3f14631303560bc15ba6564ba950742b3224873244bb3",
+      "bytes": 1727
+    },
+    {
+      "path": "regression-prelaunch-hr.log",
+      "sha256": "35906081b8dede1c8d550c88495d6aeb1bc696423969734a737c1fa096108826",
+      "bytes": 5414
+    },
+    {
+      "path": "regression-prelaunch-scope-export.log",
+      "sha256": "1300c7acea8268ad52e980313109bd3d6d5f69694a0654c1878ca3cc06164c02",
+      "bytes": 8636
+    },
+    {
+      "path": "regression-purchase-approval.log",
+      "sha256": "5b6a1e292eed511e42c8efeda1b228b5b4bcf556acc49af91bd33ba83d9d3169",
+      "bytes": 1139
+    },
+    {
+      "path": "regression-refund-orders.log",
+      "sha256": "16e44227721a4b63677a7d06fff1351607990efe6ca5f8a5273be65809fd3592",
+      "bytes": 4491
+    },
+    {
+      "path": "regression-reports-values.log",
+      "sha256": "585982f13a9901691cf584298041836e7e1b4da31bd99704275f13c1f6e60b17",
+      "bytes": 1114
+    },
+    {
+      "path": "regression-round2-payroll-initial-environment-error.log",
+      "sha256": "f1a4a50dbb302c0af5b979ae42763458a91583af2c09795074919e3332ce8eec",
+      "bytes": 6298
+    },
+    {
+      "path": "regression-round2-payroll.log",
+      "sha256": "adc1728cc2f2fc8699117dc64c28bd0ecdd64e0ee1b2c8f4d96d71df2b93d96d",
+      "bytes": 681
+    },
+    {
+      "path": "regression-round2-transfer.log",
+      "sha256": "d74e5ac85c55a9235c62e2421ab24b5c75e9e3aebcd030086285558c426a2792",
+      "bytes": 24966
+    },
+    {
+      "path": "regression-sale-adjustment.log",
+      "sha256": "510f25bf80291cdba0d83f73df7df486f3d6f2f7f8fd0c5489acc243608be54e",
+      "bytes": 43696
+    },
+    {
+      "path": "regression-sale-atp.log",
+      "sha256": "d893f96a770e55b7cc2632cd03420b35856dfca1ca132c42a54a7cff9002686b",
+      "bytes": 2868
+    },
+    {
+      "path": "regression-warehouse-scope.log",
+      "sha256": "ece050fd2b9e63de42bbc0ed4f51930fe672305827901ac245d676c236e3bcdc",
+      "bytes": 24163
+    },
+    {
+      "path": "restore-real-synthetic.log",
+      "sha256": "f9529ee542cfe2ed5d01ae8d41c0351a2917c02d032543d153a16887ac0c48ed",
+      "bytes": 727
+    },
+    {
+      "path": "restore-review-green.log",
+      "sha256": "6b80e34db3ba0cfa02fef66453a37b80a519dee7d9df36e0b17ac3631a1bb1de",
+      "bytes": 1096
+    },
+    {
+      "path": "restore-review-red.log",
+      "sha256": "7ab39f825917c4cc12fb47b96d9488930a54cffa09e9b285a688b9e0284891e1",
+      "bytes": 1601
+    },
+    {
+      "path": "runtime-tooling.log",
+      "sha256": "9e58a295f66d1f1d68f6c31285acfb8fd8d681554ca7d59f0a6d0c477a98e61c",
+      "bytes": 16613
+    },
+    {
+      "path": "transfer-evidence.json",
+      "sha256": "7047557b14d9923cd66e0565e8f87d3849bbfe14a2b50e6e74fc3cd6e73e0b7a",
+      "bytes": 53911
+    },
+    {
+      "path": "transfer-green.log",
+      "sha256": "a2658fe89c39887e54e7aa68597af53072a81dcbeac5d9090ea1b43496944a65",
+      "bytes": 25092
+    },
+    {
+      "path": "transfer-list-api-green.log",
+      "sha256": "8837f8579f9c364d3493d2afcebf1e794108a9dafe4617580d93975e68ddf41e",
+      "bytes": 26024
+    },
+    {
+      "path": "transfer-list-api-red.log",
+      "sha256": "fabc3eed1bd0ff2538c7089af86fce2e0326ca72d7f4963ef24844ed2949ae9c",
+      "bytes": 26243
+    },
+    {
+      "path": "transfer-list-evidence.json",
+      "sha256": "9b12046bc86535eb4f98142ac80988bfc8cd65987352e9984f7001b14131c08a",
+      "bytes": 59924
+    },
+    {
+      "path": "transfer-list-green.log",
+      "sha256": "59cd503dc02c3334ecfc7d74c44821cb5804ae1e563d2db9505198db942674c2",
+      "bytes": 293
+    },
+    {
+      "path": "transfer-list-red.log",
+      "sha256": "f3f71b282f39f5c2c1fa32030874f4271d710dcd45d153bebc5786827e73c87d",
+      "bytes": 3282
+    },
+    {
+      "path": "transfer-red.log",
+      "sha256": "3abdbc1f5d666501cedff44bf6d388a3967110e3774a73fc8bdb92a63e639da4",
+      "bytes": 15494
+    }
+  ]
+}

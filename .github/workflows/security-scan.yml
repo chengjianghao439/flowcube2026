@@ -82,11 +82,11 @@ jobs:
         run: |
           if [ -f gitleaks-report.sarif ]; then
             ISSUES=$(jq -er '.runs[0].results | if type == "array" then length else error("invalid results") end' gitleaks-report.sarif)
-            echo "## Gitleaks 扫描结果" >> $GITHUB_STEP_SUMMARY
-            echo "发现 **$ISSUES** 个敏感信息问题" >> $GITHUB_STEP_SUMMARY
+            echo "## Gitleaks 扫描结果" >> "$GITHUB_STEP_SUMMARY"
+            echo "发现 **$ISSUES** 个敏感信息问题" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "## Gitleaks 扫描结果" >> $GITHUB_STEP_SUMMARY
-            echo "未生成可读取的 SARIF 报告，请核对 Gitleaks 扫描步骤；不能据此判定零泄露。" >> $GITHUB_STEP_SUMMARY
+            echo "## Gitleaks 扫描结果" >> "$GITHUB_STEP_SUMMARY"
+            echo "未生成可读取的 SARIF 报告，请核对 Gitleaks 扫描步骤；不能据此判定零泄露。" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   # ── 2. npm audit 依赖漏洞扫描 ─────────────────────────────
@@ -112,7 +112,7 @@ jobs:
         run: |
           set -uo pipefail
           set +e
-          npm --prefix ${{ matrix.target }} audit --omit=dev --json --fetch-timeout=30000 --fetch-retries=1 > audit-${{ matrix.target }}.json
+          npm --prefix ${{ matrix.target }} audit --json --fetch-timeout=30000 --fetch-retries=1 > audit-${{ matrix.target }}.json
           AUDIT_EXIT=$?
           set -e
           node scripts/check-npm-audit.js audit-${{ matrix.target }}.json "$AUDIT_EXIT"
@@ -127,15 +127,15 @@ jobs:
       - name: Check for tracked secrets
         run: |
           ISSUES=0
-          echo "## 敏感文件检查" >> $GITHUB_STEP_SUMMARY
+          echo "## 敏感文件检查" >> "$GITHUB_STEP_SUMMARY"
           for pattern in "*.pem" "*.key" "id_rsa" "id_ed25519" "*.env" "flowcube_backup.sql"; do
             result=$(git ls-files "$pattern" 2>/dev/null || true)
             if [ -n "$result" ]; then
-              echo "🔴 敏感文件被跟踪: $result" >> $GITHUB_STEP_SUMMARY
+              echo "🔴 敏感文件被跟踪: $result" >> "$GITHUB_STEP_SUMMARY"
               ISSUES=$((ISSUES+1))
             fi
           done
           if [ "$ISSUES" -eq 0 ]; then
-            echo "未发现被跟踪的敏感文件 ✅" >> $GITHUB_STEP_SUMMARY
+            echo "未发现被跟踪的敏感文件 ✅" >> "$GITHUB_STEP_SUMMARY"
           fi
-          exit $ISSUES
+          exit "$ISSUES"

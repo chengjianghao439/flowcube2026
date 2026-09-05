@@ -1,0 +1,27 @@
+Testing flowcube_fix_16_test, MySQL 8.0.46
+PASS F01 部分质检 1/1 保留未检量并可继续
+PASS F01 部分质检 5/0 保留未检量并可继续
+PASS F01 部分质检 0/5 保留未检量并可继续
+PASS F01 部分质检 0.1/0.2 保留未检量并可继续
+PASS F01 退货收货及质检分箱在同事务入队ZPL，重放不重复标签
+PASS F01 暂无打印机仍完成质检，返回未入队数量及所有新条码
+PASS F01 标签入队异常回滚质检及分箱，同键可安全重试
+PASS F11 软删待上架容器不能lookup且无数量副作用
+PASS F11 软删待上架容器不能putaway且无数量副作用
+PASS F02 部分上架5后采购总供应仍为10，拒绝15预占
+PASS F03 出库保留其它销售预计预占并与明细一致
+PASS F04 withdrawConfirm 拦截有效销售绑定
+PASS F04 reject 拦截有效销售绑定
+PASS F04 旧草稿绑定不能被采购改量/重建明细抹除
+PASS F05 多销售顺序预占5+5耗尽10供应，第三单被拒绝
+PASS F05 部分到货兑现绑定、释放剩余后允许采购短装结案
+PASS F05 预计占库出库不能消耗其它销售的现货份额
+PASS F05 有未占现货时履约可按量关闭本销售采购依赖
+PASS F05 上架兑现后撤回收货不能移除现货预占支撑
+PASS F05 两采购明细快照不能把第二销售重复绑定到已满采购行
+PASS F05 并发预占在旧事务快照下也不能超配
+PASS F04 撤回与销售占库交错时，采购锁后能看到刚提交绑定
+PASS F05 整单释放发现旧快照漏掉的新维度时安全拒绝
+PASS F05 all释放与上架/履约按同一库存锁序执行
+PASS F05 partial释放与上架/履约按同一库存锁序执行
+inventory audit: 25 passed / 0 failed; MySQL 8.0.46; fixtures rolled back or exact-ID cleanup

@@ -1,0 +1,55 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:29.502] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"6d7dc96d-5fc9-4641-a9fa-487053b40fe9"}
+[2026-09-05 22:28:29.504] [INFO ] [HTTP] POST /api/auth/login {"ms":71,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"6d7dc96d-5fc9-4641-a9fa-487053b40fe9"}
+[2026-09-05 22:28:29.629] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":6,"username":"smoke_sales_CO--f6","requestId":"72e0eda5-07a0-4542-8f7c-7d539a2b87ff"}
+[2026-09-05 22:28:29.630] [INFO ] [HTTP] POST /api/auth/login {"ms":59,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"72e0eda5-07a0-4542-8f7c-7d539a2b87ff"}
+[2026-09-05 22:28:29.660] [INFO ] [HTTP] POST /api/sale {"ms":15,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"b6e59cd0-acef-44d3-8fc8-71121a8e6312"}
+[2026-09-05 22:28:29.667] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":6,"path":"/api/sale","method":"POST","requestId":"e6b2e760-bc74-48e6-a5d7-6b8f113d58de"}
+  [PASS] 建两张超限销售单
+
+────────────────────────────────────────────────────────────
+  用例1：无 override 权限占库被拦
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:29.677] [WARN ] [ERR] [AppError] 客户授信额度不足 {"path":"/api/sale/2/reserve","userId":6,"refNo":"","requestId":"6635114e-3df6-46ca-939c-231ea6bda53c","code":"CREDIT_LIMIT_EXCEEDED","statusCode":409}
+[2026-09-05 22:28:29.678] [WARN ] [HTTP] POST /api/sale/2/reserve {"ms":9,"status":409,"userId":6,"path":"/api/sale/2/reserve","method":"POST","requestId":"6635114e-3df6-46ca-939c-231ea6bda53c"}
+  [PASS] 超限且无 override 权限 → 409 CREDIT_LIMIT_EXCEEDED
+
+────────────────────────────────────────────────────────────
+  用例2：发起放行申请 → 提交 → 审批通过
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:29.684] [INFO ] [HTTP] POST /api/credit-overrides {"ms":5,"status":201,"userId":6,"path":"/api/credit-overrides","method":"POST","requestId":"2f495348-0ff4-4350-be78-6f8f7438d6d3"}
+  [PASS] 发起申请成功（草稿）
+  [PASS] 申请快照超量 800
+[2026-09-05 22:28:29.692] [INFO ] [HTTP] POST /api/credit-overrides/1/submit {"ms":5,"status":200,"userId":6,"path":"/api/credit-overrides/1/submit","method":"POST","requestId":"2136b585-2091-4447-9ecf-28e52fbaa1cf"}
+  [PASS] 提交后待审批 + 建审批实例
+[2026-09-05 22:28:29.697] [WARN ] [ERR] [AppError] 不能审批自己发起的放行申请（如需自行审批，请让管理员在用户管理中开启该账号的「允许自行审批」） {"path":"/api/credit-overrides/1/approve","userId":6,"refNo":"","requestId":"a6dd14d6-3e80-4075-9b1c-b4770ea457dd","code":"SELF_APPROVAL_DENIED","statusCode":403}
+[2026-09-05 22:28:29.697] [WARN ] [HTTP] POST /api/credit-overrides/1/approve {"ms":2,"status":403,"userId":6,"path":"/api/credit-overrides/1/approve","method":"POST","requestId":"a6dd14d6-3e80-4075-9b1c-b4770ea457dd"}
+  [PASS] 申请人自批被拒
+[2026-09-05 22:28:29.706] [INFO ] [HTTP] POST /api/credit-overrides/1/approve {"ms":7,"status":200,"userId":2,"path":"/api/credit-overrides/1/approve","method":"POST","requestId":"3d6468e6-feaf-46d5-a20b-883d2d55f50a"}
+  [PASS] 审批通过 → 申请单已批准(3)
+[2026-09-05 22:28:29.711] [INFO ] [HTTP] GET /api/credit-overrides/1 {"ms":2,"status":200,"userId":6,"path":"/api/credit-overrides/1","method":"GET","requestId":"0572fc1e-59ea-4a3e-8820-42aa3fb4387a"}
+  [PASS] 详情含审批实例且实例已通过
+
+────────────────────────────────────────────────────────────
+  用例3：★ 已批准申请 → 占库自动放行（无需 override 权限）
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:29.728] [INFO ] [HTTP] POST /api/sale/2/reserve {"ms":15,"status":200,"userId":6,"path":"/api/sale/2/reserve","method":"POST","requestId":"9f0022a7-e904-40af-a3a6-0f891f66c205"}
+  [PASS] 已批准申请单 → 占库自动放行成功
+  [PASS] 放行事件留痕（自动放行）
+
+────────────────────────────────────────────────────────────
+  用例4：未申请的销售单占库仍拦截
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:29.733] [WARN ] [ERR] [AppError] 客户授信额度不足 {"path":"/api/sale/3/reserve","userId":6,"refNo":"","requestId":"063efc91-71ff-4c0e-9ef8-256c7010a31c","code":"CREDIT_LIMIT_EXCEEDED","statusCode":409}
+[2026-09-05 22:28:29.733] [WARN ] [HTTP] POST /api/sale/3/reserve {"ms":2,"status":409,"userId":6,"path":"/api/sale/3/reserve","method":"POST","requestId":"063efc91-71ff-4c0e-9ef8-256c7010a31c"}
+  [PASS] 无申请的另一张超限单 → 仍拦截
+
+════════════════════════════════════════════════════════════
+  11 passed, 0 failed
+════════════════════════════════════════════════════════════
+

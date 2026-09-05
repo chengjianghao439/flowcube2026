@@ -1,0 +1,217 @@
+TAP version 13
+# [2026-09-05 22:05:26.017] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":11,"orderNo":"TF20260905011","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.042] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":12,"orderNo":"TF20260905012","eventType":"TRANSFER_CREATED","operatorId":7}
+# Subtest: R2-06 creation rejects both warehouses outside scope without inserting
+not ok 1 - R2-06 creation rejects both warehouses outside scope without inserting
+  ---
+  duration_ms: 199.072791
+  type: 'test'
+  location: '/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:45:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    201 !== 403
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 403
+  actual: 201
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:47:97)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# [2026-09-05 22:05:26.049] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":13,"orderNo":"TF20260905013","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.057] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":13,"orderNo":"TF20260905013","eventType":"TRANSFER_CONFIRMED","operatorId":7}
+# [2026-09-05 22:05:26.065] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/13/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# [2026-09-05 22:05:26.075] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":13,"orderNo":"TF20260905013","eventType":"TRANSFER_SCAN_OUT","operatorId":7}
+# [2026-09-05 22:05:26.083] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/13/scan-in","userId":7,"deviceCode":"R2FTd82daa655ab4D1","warehouseId":15}
+# [2026-09-05 22:05:26.088] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":13,"orderNo":"TF20260905013","eventType":"TRANSFER_SCAN_IN","operatorId":7}
+# [2026-09-05 22:05:26.089] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":13,"orderNo":"TF20260905013","eventType":"TRANSFER_COMPLETED","operatorId":7}
+# Subtest: R2-01 partial arrival keeps plan open until second batch is received
+not ok 2 - R2-01 partial arrival keeps plan open until second batch is received
+  ---
+  duration_ms: 46.839875
+  type: 'test'
+  location: '/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:50:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:52:57)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# [2026-09-05 22:05:26.096] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":14,"orderNo":"TF20260905014","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.102] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":14,"orderNo":"TF20260905014","eventType":"TRANSFER_CONFIRMED","operatorId":7}
+# [2026-09-05 22:05:26.107] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/14/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# [2026-09-05 22:05:26.111] [WARN ] [ERR] [AppError] 该容器 5 件超出调拨单剩余可调量 3 件，无法整箱扫出；请改用数量相符的容器或改单 {"path":"/api/transfer/14/scan-out","userId":7,"refNo":"","requestId":null,"code":"CONFLICT","statusCode":409}
+# Subtest: R2-05 legacy duplicate lines allocate across boundaries and accept reverse arrival
+not ok 3 - R2-05 legacy duplicate lines allocate across boundaries and accept reverse arrival
+  ---
+  duration_ms: 21.859916
+  type: 'test'
+  location: '/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:57:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    {"label":"scan-out","method":"POST","path":"/api/transfer/14/scan-out","status":409,"response":{"success":false,"code":"CONFLICT","message":"该容器 5 件超出调拨单剩余可调量 3 件，无法整箱扫出；请改用数量相符的容器或改单","data":null},"sqlAfter":{"items":[{"order_id":14,"quantity":"3.0000","deducted_qty":"0.0000","received_qty":"0.0000"},{"order_id":14,"quantity":"7.0000","deducted_qty":"0.0000","received_qty":"0.0000"}],"order":[{"id":14,"status":2}],"container":[{"barcode":"R2FTd82daa655ab4C2","warehouse_id":14,"status":1,"transfer_order_id":null}]}}
+    
+    409 !== 200
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 200
+  actual: 409
+  operator: 'strictEqual'
+  stack: |-
+    success (/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:44:30)
+    TestContext.<anonymous> (/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:59:2)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# [2026-09-05 22:05:26.117] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":15,"orderNo":"TF20260905015","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.123] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":15,"orderNo":"TF20260905015","eventType":"TRANSFER_CONFIRMED","operatorId":7}
+# [2026-09-05 22:05:26.129] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":16,"orderNo":"TF20260905016","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.135] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":16,"orderNo":"TF20260905016","eventType":"TRANSFER_CONFIRMED","operatorId":7}
+# [2026-09-05 22:05:26.139] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/15/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# [2026-09-05 22:05:26.145] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":15,"orderNo":"TF20260905015","eventType":"TRANSFER_SCAN_OUT","operatorId":7}
+# [2026-09-05 22:05:26.150] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/16/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# Subtest: R2-07 same key on two orders returns their own outgoing and incoming receipts
+not ok 4 - R2-07 same key on two orders returns their own outgoing and incoming receipts
+  ---
+  duration_ms: 39.735
+  type: 'test'
+  location: '/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:63:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    15 !== 16
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 16
+  actual: 15
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:65:54)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# [2026-09-05 22:05:26.158] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":17,"orderNo":"TF20260905017","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.166] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":17,"orderNo":"TF20260905017","eventType":"TRANSFER_CONFIRMED","operatorId":7}
+# [2026-09-05 22:05:26.170] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/17/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# [2026-09-05 22:05:26.175] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":17,"orderNo":"TF20260905017","eventType":"TRANSFER_SCAN_OUT","operatorId":7}
+# [2026-09-05 22:05:26.181] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/17/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# [2026-09-05 22:05:26.186] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/17/scan-in","userId":7,"deviceCode":"R2FTd82daa655ab4D1","warehouseId":15}
+# [2026-09-05 22:05:26.190] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":17,"orderNo":"TF20260905017","eventType":"TRANSFER_SCAN_IN","operatorId":7}
+# [2026-09-05 22:05:26.191] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":17,"orderNo":"TF20260905017","eventType":"TRANSFER_COMPLETED","operatorId":7}
+# [2026-09-05 22:05:26.196] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/17/scan-in","userId":7,"deviceCode":"R2FTd82daa655ab4D1","warehouseId":15}
+# Subtest: same-order retries do not duplicate inventory logs, events or received quantity
+ok 5 - same-order retries do not duplicate inventory logs, events or received quantity
+  ---
+  duration_ms: 46.428833
+  type: 'test'
+  ...
+# [2026-09-05 22:05:26.204] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":18,"orderNo":"TF20260905018","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.208] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":18,"orderNo":"TF20260905018","eventType":"TRANSFER_CONFIRMED","operatorId":7}
+# [2026-09-05 22:05:26.213] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/18/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# [2026-09-05 22:05:26.218] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":18,"orderNo":"TF20260905018","eventType":"TRANSFER_SCAN_OUT","operatorId":7}
+# [2026-09-05 22:05:26.224] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/18/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D2","warehouseId":16}
+# Subtest: replayed keys still enforce bound device warehouse and nonexistent resources
+not ok 6 - replayed keys still enforce bound device warehouse and nonexistent resources
+  ---
+  duration_ms: 27.136125
+  type: 'test'
+  location: '/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:79:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    200 !== 403
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 403
+  actual: 200
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:81:9)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# [2026-09-05 22:05:26.232] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":19,"orderNo":"TF20260905019","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.238] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":19,"orderNo":"TF20260905019","eventType":"TRANSFER_CONFIRMED","operatorId":7}
+# [2026-09-05 22:05:26.242] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/19/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# [2026-09-05 22:05:26.245] [WARN ] [ERR] [AppError] 该容器 5 件超出调拨单剩余可调量 4 件，无法整箱扫出；请改用数量相符的容器或改单 {"path":"/api/transfer/19/scan-out","userId":7,"refNo":"","requestId":null,"code":"CONFLICT","statusCode":409}
+# Subtest: whole-container overflow is rejected with no move
+ok 7 - whole-container overflow is rejected with no move
+  ---
+  duration_ms: 20.491167
+  type: 'test'
+  ...
+# [2026-09-05 22:05:26.251] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":20,"orderNo":"TF20260905020","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.257] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":20,"orderNo":"TF20260905020","eventType":"TRANSFER_CONFIRMED","operatorId":7}
+# [2026-09-05 22:05:26.262] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":21,"orderNo":"TF20260905021","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.268] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":21,"orderNo":"TF20260905021","eventType":"TRANSFER_CONFIRMED","operatorId":7}
+# [2026-09-05 22:05:26.272] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/20/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# [2026-09-05 22:05:26.277] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":20,"orderNo":"TF20260905020","eventType":"TRANSFER_SCAN_OUT","operatorId":7}
+# [2026-09-05 22:05:26.283] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/20/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# [2026-09-05 22:05:26.288] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/21/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# Subtest: legacy generic receipt retries stay bound to its original resource
+not ok 8 - legacy generic receipt retries stay bound to its original resource
+  ---
+  duration_ms: 43.140583
+  type: 'test'
+  location: '/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:89:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    200 !== 409
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 409
+  actual: 200
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/chengjianghao/flowcube/tests/round2-transfer.smoke.test.js:93:9)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# [2026-09-05 22:05:26.294] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":22,"orderNo":"TF20260905022","eventType":"TRANSFER_CREATED","operatorId":7}
+# [2026-09-05 22:05:26.300] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":22,"orderNo":"TF20260905022","eventType":"TRANSFER_CONFIRMED","operatorId":7}
+# [2026-09-05 22:05:26.304] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/22/scan-out","userId":7,"deviceCode":"R2FTd82daa655ab4D0","warehouseId":14}
+# [2026-09-05 22:05:26.309] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":22,"orderNo":"TF20260905022","eventType":"TRANSFER_SCAN_OUT","operatorId":7}
+# Subtest: old clients can query an unambiguous newly scoped receipt
+ok 9 - old clients can query an unambiguous newly scoped receipt
+  ---
+  duration_ms: 23.35175
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 3
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 581.763041

@@ -24,13 +24,12 @@ const MONTHLY_DEDUCTION = 5000 // 每月减除费用
 /**
  * 计算某人某月的应预扣个税。
  * @param {object} p 参数
- * @param {number} p.month 当前月（1-12）
  * @param {number} p.monthlyGross 当月应发工资
  * @param {number} p.monthlySocialPersonal 当月个人社保公积金
- * @param {number} p.priorAccumTaxable 上月累计应纳税所得额（1 月为 0）
+ * @param {number} p.priorAccumTaxable 上月累计收入减扣除净额（允许为负；任职起月/每年年初为 0）
  * @param {number} p.priorAccumTaxPaid 上月累计已预缴（1 月为 0）
  * @param {number} [p.specialAdditional] 每月专项附加扣除（房贷/赡养老人等）
- * @returns {{ taxableIncome: number, accumTaxable: number, tax: number, accumTaxPaid: number }}
+ * @returns {{ monthlyTaxable: number, accumTaxable: number, bracket: number, tax: number, accumTaxPaid: number }}
  */
 function calcMonthlyTax({ monthlyGross, monthlySocialPersonal, priorAccumTaxable = 0, priorAccumTaxPaid = 0, specialAdditional = 0 }) {
   const gross = Math.max(0, Number(monthlyGross) || 0)
@@ -39,7 +38,8 @@ function calcMonthlyTax({ monthlyGross, monthlySocialPersonal, priorAccumTaxable
 
   // 本月累计应纳税所得额 = 上月累计 + 本月收入 − 减除费用 − 专项扣除(社保) − 专项附加扣除
   const monthlyTaxable = gross - MONTHLY_DEDUCTION - social - additional
-  const accumTaxable = Math.max(0, Math.round((Number(priorAccumTaxable) + monthlyTaxable) * 100) / 100)
+  // 不截断负余额：前月未用扣除必须延续，只有应扣税额截零。
+  const accumTaxable = Math.round((Number(priorAccumTaxable) + monthlyTaxable) * 100) / 100
 
   // 累计应预扣税额（按累计所得查档）
   const bracket = TAX_TABLE.find(b => accumTaxable <= b.upTo) || TAX_TABLE[TAX_TABLE.length - 1]

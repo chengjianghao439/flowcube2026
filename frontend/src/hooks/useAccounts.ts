@@ -1,3 +1,4 @@
+import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getAccountTreeApi, getAccountFlatApi,
@@ -8,10 +9,10 @@ import type { CreateAccountParams, UpdateAccountParams } from '@/types/accountin
 const QK = 'acct-accounts'
 
 export const useAccountTree = () =>
-  useQuery({ queryKey: [QK, 'tree'], queryFn: getAccountTreeApi, staleTime: 60000 })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'tree']), queryFn: getAccountTreeApi, staleTime: 60000 })
 
 export const useAccountFlat = (opts?: { onlyLeaf?: boolean; onlyActive?: boolean }) =>
-  useQuery({ queryKey: [QK, 'flat', opts], queryFn: () => getAccountFlatApi(opts), staleTime: 60000 })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'flat', opts]), queryFn: () => getAccountFlatApi(opts), staleTime: 60000 })
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: [QK] })

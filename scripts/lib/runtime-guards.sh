@@ -11,7 +11,7 @@ bounded() {
   shift
   # 外层部署 deadline 必须能同时结束等待中的 CLI，让 Bash 执行回退 trap。
   # 独立监控保持 timeout 的默认独立组，单次超时时一起结束其子进程。
-  if [ "${FLOWCUBE_DEPLOY_TIMEOUT_GROUP:-0}" = '1' ]; then
+  if [ "${FLOWCUBE_DEPLOY_TIMEOUT_GROUP:-0}" = '1' ] || [ "${FLOWCUBE_TIMEOUT_GROUP:-0}" = '1' ]; then
     "$TIMEOUT_BIN" --foreground -k 10 "$seconds" "$@"
   else
     "$TIMEOUT_BIN" -k 10 "$seconds" "$@"

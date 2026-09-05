@@ -13,6 +13,21 @@ log.info('🔥 当前 main.js 已加载')
 const { pathToFileURL } = require('url')
 const { checkAppUpdate, startUpdateDownload, ignoreVersion, getPendingUpdate, clearPendingUpdate } = require('./lib/updateCheck')
 const { printZpl } = require('./lib/localPrint')
+const { createRendererGuard } = require('./lib/rendererSecurity')
+const rendererGuard = createRendererGuard()
+
+function handleRenderer(channel, handler) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!rendererGuard.isTrusted(event)) throw new Error('拒绝非应用主窗口的 IPC 请求')
+    return handler(event, ...args)
+  })
+}
+function onRenderer(channel, handler) {
+  ipcMain.on(channel, (event, ...args) => {
+    if (!rendererGuard.isTrusted(event)) return
+    handler(event, ...args)
+  })
+}
 
 /** 与 Chromium 枚举一致，避免 PowerShell Get-Printer 与 OpenPrinter 名称不一致导致误拒 */
 function normalizeQueueLabel(s) {
@@ -180,16 +195,16 @@ function triggerPackagedUpdateCheck(win, originRaw) {
   }, PACKAGED_UPDATE_CHECK_DELAY_MS)
 }
 
-ipcMain.on('flowcube:api-origin-ready', (event, origin) => {
+onRenderer('flowcube:api-origin-ready', (event, origin) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (win && !win.isDestroyed()) triggerPackagedUpdateCheck(win, origin)
 })
 
-ipcMain.handle('flowcube:get-app-version', () => app.getVersion())
+handleRenderer('flowcube:get-app-version', () => app.getVersion())
 
-ipcMain.handle('flowcube:is-packaged', () => app.isPackaged)
+handleRenderer('flowcube:is-packaged', () => app.isPackaged)
 
-ipcMain.handle('flowcube:trigger-update-check', async (event) => {
+handleRenderer('flowcube:trigger-update-check', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || win.isDestroyed()) return
   try {
@@ -204,9 +219,9 @@ ipcMain.handle('flowcube:trigger-update-check', async (event) => {
   }
 })
 
-ipcMain.handle('flowcube:get-pending-update', (event) => getPendingUpdate(event.sender))
+handleRenderer('flowcube:get-pending-update', (event) => getPendingUpdate(event.sender))
 
-ipcMain.handle('flowcube:start-update-download', async (event, request) => {
+handleRenderer('flowcube:start-update-download', async (event, request) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || win.isDestroyed()) throw new Error('更新窗口不可用')
   const apiOrigin = await getRendererApiOrigin(win)
@@ -214,14 +229,14 @@ ipcMain.handle('flowcube:start-update-download', async (event, request) => {
   await startUpdateDownload(app, win, request, { apiOrigin, quitForInstall: quitForInstaller })
 })
 
-ipcMain.handle('flowcube:ignore-update-version', async (event, version) => {
+handleRenderer('flowcube:ignore-update-version', async (event, version) => {
   const v = typeof version === 'string' ? version.trim() : ''
   if (!v) return
   await ignoreVersion(app, v)
   clearPendingUpdate(event.sender, v)
 })
 
-ipcMain.on('flowcube:close-accept', (event) => {
+onRenderer('flowcube:close-accept', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || win.isDestroyed()) return
   closeAllowed.add(win)
@@ -229,7 +244,7 @@ ipcMain.on('flowcube:close-accept', (event) => {
 })
 
 /** 渲染进程请求系统原生提示框（离开确认、confirmAction 等） */
-ipcMain.handle('flowcube:show-message-box', async (event, payload) => {
+handleRenderer('flowcube:show-message-box', async (event, payload) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   const parent = win && !win.isDestroyed() ? win : null
   const p = payload && typeof payload === 'object' ? payload : {}
@@ -248,7 +263,7 @@ ipcMain.handle('flowcube:show-message-box', async (event, payload) => {
 })
 
 /** 枚举本机已安装打印机（与系统「打印机与扫描仪」一致），供添加打印机仅从列表选择 */
-ipcMain.handle('flowcube:get-system-printers', async (event) => {
+handleRenderer('flowcube:get-system-printers', async (event) => {
   const wc = event.sender
   if (!wc || typeof wc.getPrintersAsync !== 'function') {
     return []
@@ -268,10 +283,10 @@ ipcMain.handle('flowcube:get-system-printers', async (event) => {
   }
 })
 
-ipcMain.handle('flowcube:get-client-info', async () => buildDesktopClientInfo())
+handleRenderer('flowcube:get-client-info', async () => buildDesktopClientInfo())
 
 /** 本机直连：按打印机名称 RAW 出 ZPL（Windows WinSpool / macOS·Linux lp） */
-ipcMain.handle('flowcube:print-zpl', async (event, opts) => {
+handleRenderer('flowcube:print-zpl', async (event, opts) => {
   try {
     const o = opts && typeof opts === 'object' ? { ...opts } : {}
     if (o.printerName != null) {
@@ -336,6 +351,15 @@ function createWindow() {
 
   const indexHtml = path.join(rendererDist(), 'index.html')
   const url = pathToFileURL(indexHtml).href + '#/'
+  rendererGuard.register(win.webContents, url)
+  win.webContents.on('will-navigate', (event, targetUrl) => {
+    if (!rendererGuard.allowsNavigation(win.webContents, targetUrl)) event.preventDefault()
+  })
+  win.webContents.on('will-redirect', (event, targetUrl) => {
+    if (!rendererGuard.allowsNavigation(win.webContents, targetUrl)) event.preventDefault()
+  })
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  win.webContents.on('will-attach-webview', event => event.preventDefault())
   win.loadURL(url).catch((err) => {
     log.error('[FlowCube] 无法加载界面文件:', indexHtml, err)
   })

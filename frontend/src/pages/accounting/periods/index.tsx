@@ -1,3 +1,4 @@
+import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 /**
  * 会计期间 / 期末结转（增强② · 2026-08-09）
  * 期间列表 + 结转状态；结账/反结账/生成结转凭证。
@@ -29,7 +30,7 @@ function fmtPeriod(p: string): string {
 
 export default function AccountingPeriodsPage() {
   const qc = useQueryClient()
-  const { data, isLoading } = useQuery({ queryKey: ['accounting-periods'], queryFn: getPeriodsApi })
+  const { data, isLoading } = useQuery({ queryKey: useCompanyQueryKey(['accounting-periods']), queryFn: getPeriodsApi })
   const [generating, setGenerating] = useState<AccountingPeriod | null>(null)
   const [closing, setClosing] = useState<AccountingPeriod | null>(null)
 

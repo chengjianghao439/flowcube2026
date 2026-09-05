@@ -1,0 +1,37 @@
+
+> flowcube-frontend@0.9.6 test:unit
+> vitest run
+
+
+ RUN  v3.2.7 /Users/chengjianghao/flowcube/frontend
+
+ ✓ src/components/shared/Pagination.test.tsx (3 tests) 65ms
+ ✓ src/api/pda-session.test.ts (9 tests) 115ms
+ ✓ src/components/shared/ProductFinderModal.test.tsx (3 tests) 66ms
+ ✓ src/router/index.test.tsx (14 tests) 235ms
+ ✓ src/components/desktop/DesktopUpdateBridge.test.tsx (5 tests) 196ms
+ ✓ src/lib/prelaunch-client.test.tsx (3 tests) 87ms
+ ✓ src/pages/pda/sale-return-putaway.test.tsx (8 tests) 237ms
+ ✓ src/components/shared/OrderStatusFilter.test.tsx (1 test) 16ms
+ ✓ src/components/dashboard/WidgetShell.test.tsx (2 tests) 6ms
+ ✓ src/pages/pda/sale-return-receive.test.tsx (2 tests) 80ms
+ ✓ src/pages/sale/form/components/SaleOrderSummaryCard.test.tsx (1 test) 7ms
+ ✓ src/lib/receivableStatus.test.ts (2 tests) 2ms
+ ✓ src/pages/pda/transfer.test.tsx (10 tests) 107ms
+ ✓ src/api/client.session.test.tsx (15 tests) 980ms
+ ✓ src/lib/permissions.test.ts (7 tests) 2ms
+ ✓ src/lib/labelGeometry.test.ts (12 tests) 5ms
+ ✓ src/lib/saleWorkflowStatus.test.ts (7 tests) 3ms
+ ✓ src/pages/sale/components/saleAllocation.test.ts (3 tests) 2ms
+ ✓ src/lib/resolveAppUpdateDownloadUrl.test.ts (3 tests) 1ms
+ ✓ src/components/dashboard/registry.test.ts (3 tests) 3ms
+ ✓ src/lib/salePresentation.test.ts (4 tests) 2ms
+ ✓ src/api/client.refresh.test.ts (16 tests) 631ms
+ ✓ src/components/shared/NotificationBell.test.tsx (1 test) 2106ms
+   ✓ 通知中心键盘退出 > Escape 关闭通知并将焦点还给入口  1132ms
+
+ Test Files  23 passed (23)
+      Tests  134 passed (134)
+   Start at  23:08:01
+   Duration  9.20s (transform 1.29s, setup 0ms, collect 3.68s, tests 4.95s, environment 4.73s, prepare 1.14s)
+

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
-export { PATH_TITLES } from '@/router/routeRegistry'
+export { PATH_TITLES } from '@/router/routeDefinitions'
 
 export interface WorkspaceTab {
   key: string        // 唯一标识，对列表页即路径本身

@@ -33,7 +33,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
      LEFT JOIN sys_departments d ON d.id = u.department_id AND d.deleted_at IS NULL
      WHERE u.deleted_at IS NULL
        AND (u.username LIKE ? OR u.real_name LIKE ?)
-     ORDER BY u.created_at DESC
+     ORDER BY u.created_at DESC, u.id DESC
      LIMIT ? OFFSET ?`,
     [like, like, ps, offset],
   )

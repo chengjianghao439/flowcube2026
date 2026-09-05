@@ -1,13 +1,8 @@
 /**
  * 会计凭证「业务事件 → 借贷分录」映射（文档 10 · §5.2）
  *
- * ⚠️ Phase 0 现状：本文件是**配置与设计锚点**，尚未接入凭证生成。
- *   - Phase 0（当前）：只定义「事件枚举 + 科目映射规则 + 预置科目清单」，不生成任何凭证。
- *     价值有二：① 强制预置科目 seed（177 迁移）与映射需要的科目一致（下方一致性由
- *     tests/accounting-voucher-mapping 守护）；② 把 Phase 1 凭证引擎的映射规则先定下来、可评审。
- *   - Phase 1：新建 modules/accounting/voucher-engine.js **消费本表**，从既有业务事实（payment_records /
- *     payment_receipts / finance_account_transactions / sale_order_items.cost_snapshot / 退货 / 盘点）
- *     全量重算生成凭证；借贷平衡 assert；UNIQUE(source_type, source_id) 幂等。**只读业务表、只写 acct_*。**
+ * 本文件提供已接入 voucher-engine / voucher-mapping 的来源枚举、科目映射与预置科目清单。
+ * 凭证生成器从业务事实生成分录，幂等与来源修订由凭证引擎维护；映射一致性由 tests/accounting-voucher-mapping 守护。
  *
  * 硬约束（文档 10 · §11）：凭证是业务的投影，绝不反向改业务事实。本文件不含任何写业务表的逻辑。
  */

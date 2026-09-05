@@ -1,0 +1,20 @@
+db	version	timezone
+flowcube	8.0.45	+08:00
+metric	n
+tables	135
+metric	n
+migrations	234
+metric	n
+inventory_cache_drift	0
+metric	n
+negative_container	0
+metric	n
+active_container_missing_stock	0
+metric	n
+fund_balance_drift	0
+metric	n
+assets	0
+metric	n
+payrolls	0
+metric	n
+users	7

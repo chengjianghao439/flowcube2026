@@ -1,4 +1,4 @@
-import { ROUTE_ALIASES, resolveRouteTabIdentity, type RouteTabIdentity } from '@/router/routeRegistry'
+import { ROUTE_ALIASES, resolveRouteTabIdentity, type RouteTabIdentity } from '@/router/routeDefinitions'
 
 /**
  * 当页面主要上下文由 query 决定时，必须在这里登记。

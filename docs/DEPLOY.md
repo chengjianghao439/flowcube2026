@@ -203,3 +203,35 @@ ssh flowcube-prod 'cd /opt/flowcube && git reset --hard <旧提交> && docker co
 实现验证和事故时间线见 `docs/production-environment-check-2026-09-04.md`。本地变更未发布时，线上不会自动获得这些保护。
 
 嵌套超时信号：CI 外层设置 `FLOWCUBE_DEPLOY_TIMEOUT_GROUP=1`，内层命令使用 GNU timeout `--foreground`，使总超时的 TERM 同时到达等待中的客户端并让 Bash 执行清理/回退 trap。独立监控不启用此模式。默认 600 秒回退宽限覆盖两轮健康等待、Docker 管理/清理及通知；扩大 HEALTH_CHECK_ATTEMPTS/DELAY 时须同步计算宽限和 CI job 时限。真实进程回归覆盖外层超时后清理与回退都必须执行，见 `tests/deployment-resources.test.js`。
+
+## Compose 覆盖配置与运行时环境（2026-09-05）
+
+现行 `scripts/server-update.sh` 沿用基础 `docker-compose.yml`，其 MySQL 仅回环 3306、前端仅回环 8080；本次没有改变该部署入口。需要彻底关闭宿主 MySQL 端口时，显式叠加 `docker-compose.prod.yml`。该文件要求 Docker Compose **2.24.4 或更新版本**，使用 `!override` 清除 MySQL 端口并精确替换前端映射。旧版 Compose 不支持时应升级，不能改回 `ports: []`（合并时不会清空）。前端保持 `127.0.0.1:8080:80`，宿主 80/443 留给 Caddy。
+
+Compose 透传 `JWT_ACCESS_EXPIRES_IN`（默认 2h）、`JWT_REFRESH_EXPIRES_IN`（默认 30d）、`JWT_SECRET_PREVIOUS`、`DB_POOL_SIZE`（默认 30）、`DB_ACQUIRE_TIMEOUT_MS`（默认 5000 毫秒，范围 1–60000）和可选 `SENTRY_DSN`；`JWT_EXPIRES_IN` 已失效并从样例删除。改环境后需 `docker compose up -d --force-recreate backend`，单独 restart 不载入新的容器环境。
+
+后端 Sentry 使用已安装的 `@sentry/node`，未配置 DSN 不初始化或发送；配置后只显式上报未知异常与路由模板、方法、requestId，不自动采集 HTTP/SQL、请求体、用户或 breadcrumb。上线前先确认获准使用的 Sentry 项目；第一轮使用内存 transport；第二轮增加本机 HTTP 接收测试，覆盖接受、拒绝及不响应，不向外部服务上传。
+
+依赖安全门禁对三端运行完整 `npm audit --json`（包含 Electron 所在 devDependencies），高危/严重直接和传递依赖均阻断；审计接口失败、非法 JSON、异常退出同样阻断。详见 `docs/prelaunch-runtime-hr-ops-fixes-2026-09-05.md`。
+
+桌面运行时现固定 Electron 44.2.0 / builder 26.15.3；Windows 安装目标仍为 x64。Electron 44 要求 macOS >= 13（旧 macOS 11/12 不再支持）；本机只完成 macOS 目录包与运行时边界验证，Windows 安装/更新和实机打印仍需 Windows 验收。
+
+
+## 第二轮修复的运行时验收
+
+`/health` 和 `/api/health` 只证明进程存活，PDA 沿用其网络检查协议。新 `/api/ready` 使用应用连接池做只读查询，整个探针最多 2 秒、结果缓存 1 秒，并合并并发探测；数据库不可用或排队超时返回 503，成功返回 200，公开响应不暴露连接信息。部署等待、部署后公网检查、服务监控、日报和 prod Compose 健康检查改用 ready；回滚到尚无该接口的旧镜像时，脚本显式回退原存活检查。
+
+连接池对 `query`、`execute` 和 `getConnection` 都限制获取等待；超过 `DB_ACQUIRE_TIMEOUT_MS` 后不再派发该排队 SQL，迟到连接立即归还，队列上限与获取超时分别返回明确 503。该时限不取消已经开始执行的 SQL 或事务；运行中写操作仍依赖原事务、锁等待和幂等规则。
+
+恢复演练默认 `RESTORE_TIMEOUT_SECONDS=900`、`RESTORE_MEMORY=768m`、`RESTORE_CPUS=1`、`RESTORE_PIDS=256`。容器关闭网络，交换内存上限与内存相同；结束、超时和 TERM 都清理本任务容器及匿名卷。外层以 exec 运行 GNU timeout，保证终止调用者 PID 时信号仍到达内部恢复链；不允许零 CPU 配额。Docker 管理请求默认 30 秒，清理最多 5 秒。用合成备份完成过本机真实导入；超时/信号路径由真实进程与模拟 Docker 测试验证，不代表生产恢复演练或异地灾备已经完成。
+
+错误追踪验收命令不读取真实 `.env`，通过获准的安全环境注入 `SENTRY_DSN`：
+
+```bash
+node backend/scripts/check-error-tracking.js             # 仅检查是否配置，不发送事件
+node backend/scripts/check-error-tracking.js --send-test # 显式发送无业务数据的合成事件
+```
+
+探针关闭 SDK client reports，仅发送一条合成事件；底层 HTTP 请求 4 秒未完成则 destroy，flush 等待不能代替 socket 释放。只有接收端 HTTP 2xx 且 flush 完成才返回成功；还须在平台按事件 ID 核对检索、分组和告警。生产错误上报的 client reports 默认行为未改变。缺 DSN 返回 2，未接收或网络失败返回 1；不输出 DSN/密钥。生产接收端与自动异地备份目标仍未配置，需要提供获准服务/安全配置位置并单独完成实际验收，不能根据本机测试标记已接通。
+
+发版秘密扫描覆盖本次候选快照及归档证据。`.gitleaks.toml`精确列出二轮探针四个固定幂等键与一份源码SHA256，均已核实为非认证值；不排除审计目录，不扩大为任意request_key或哈希放行。

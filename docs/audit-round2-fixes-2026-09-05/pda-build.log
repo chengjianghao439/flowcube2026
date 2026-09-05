@@ -1,0 +1,143 @@
+
+> flowcube-frontend@0.9.6 build:pda
+> cross-env VITE_CAPACITOR=1 vite build
+
+plugin-legacy overrode 'build.target'. You should pass 'targets' as an option to this plugin with the list of legacy browsers to support instead.
+vite v6.4.3 building for production...
+transforming...
+✓ 3172 modules transformed.
+rendering chunks...
+[plugin vite:reporter] 
+(!) /Users/chengjianghao/flowcube/frontend/src/lib/queryClient.ts is dynamically imported by /Users/chengjianghao/flowcube/frontend/src/main.tsx but also statically imported by /Users/chengjianghao/flowcube/frontend/src/lib/authSession.ts, /Users/chengjianghao/flowcube/frontend/src/store/companyStore.ts, dynamic import will not move module into another chunk.
+
+computing gzip size...
+dist/assets/pdaCriticalState-legacy-CC8Zd_-f.js           0.29 kB │ gzip:  0.22 kB
+dist/assets/SystemBrand-legacy-B0u4o_OC.js                0.55 kB │ gzip:  0.37 kB
+dist/assets/PdaBottomBar-legacy-BvL7f-AG.js               0.56 kB │ gzip:  0.36 kB
+dist/assets/transfer-legacy-CvOzcqih.js                   0.62 kB │ gzip:  0.31 kB
+dist/assets/inbound-tasks-legacy-BiA_K7gl.js              0.63 kB │ gzip:  0.31 kB
+dist/assets/PdaDoneView-legacy-CLvQJ1AK.js                0.83 kB │ gzip:  0.46 kB
+dist/assets/PdaFlash-legacy-D8c_Ijbn.js                   0.92 kB │ gzip:  0.51 kB
+dist/assets/barcode-legacy-DXj4DDGu.js                    1.10 kB │ gzip:  0.45 kB
+dist/assets/PdaTaskState-legacy-CRPOVy1H.js               1.10 kB │ gzip:  0.55 kB
+dist/assets/returns-legacy-CZbmQxxy.js                    1.15 kB │ gzip:  0.36 kB
+dist/assets/dateTime-legacy--jqn6E-2.js                   1.17 kB │ gzip:  0.54 kB
+dist/assets/usePdaScanner-legacy-aXbL6dgb.js              1.38 kB │ gzip:  0.66 kB
+dist/assets/requestKey-legacy-DVTL4I7B.js                 1.63 kB │ gzip:  0.73 kB
+dist/assets/PdaCard-legacy-Bc-Jqam0.js                    1.95 kB │ gzip:  0.94 kB
+dist/assets/packages-legacy-BE_vvcdB.js                   1.96 kB │ gzip:  0.83 kB
+dist/assets/sale-return-legacy-BXIob1Jx.js                2.09 kB │ gzip:  1.12 kB
+dist/assets/warehouseTaskStatus-legacy-CYvTVpB_.js        2.09 kB │ gzip:  1.12 kB
+dist/assets/PdaCriticalActionNotice-legacy-DMiqL9F9.js    2.20 kB │ gzip:  1.12 kB
+dist/assets/warehouse-tasks-legacy-BjBoaBtb.js            2.33 kB │ gzip:  0.59 kB
+dist/assets/input-legacy-CZfQxFwN.js                      2.38 kB │ gzip:  1.08 kB
+dist/assets/usePdaFeedback-legacy-D9rCDiNB.js             2.76 kB │ gzip:  1.30 kB
+dist/assets/locations-legacy-BKVXEvcE.js                  2.97 kB │ gzip:  1.52 kB
+dist/assets/inventory-legacy--J0Xlm-a.js                  3.36 kB │ gzip:  1.57 kB
+dist/assets/transfer-legacy-CIQRFmWC.js                   3.99 kB │ gzip:  1.53 kB
+dist/assets/PdaScanner-legacy-x59kP_FI.js                 4.06 kB │ gzip:  2.01 kB
+dist/assets/inbound-legacy-CmkWMCZX.js                    4.33 kB │ gzip:  1.83 kB
+dist/assets/GlobalErrorBoundary-legacy-CxVdDkFl.js        4.62 kB │ gzip:  2.03 kB
+dist/assets/StatusBadge-legacy-BHnD5d2s.js                4.67 kB │ gzip:  2.02 kB
+dist/assets/web-legacy-B7PUhLSm.js                        6.51 kB │ gzip:  2.52 kB
+dist/assets/picking-legacy-BI3ugxMb.js                    7.22 kB │ gzip:  2.83 kB
+dist/assets/runtime-legacy-CnYub67D.js                    7.54 kB │ gzip:  2.81 kB
+dist/assets/inventory-query-legacy-C0JcPUiz.js            8.21 kB │ gzip:  3.82 kB
+dist/assets/transfer-out-legacy-CgDKflnd.js               8.43 kB │ gzip:  3.69 kB
+dist/assets/split-legacy-CtSd8_L7.js                      8.76 kB │ gzip:  3.98 kB
+dist/assets/login-legacy-fjPSOEe7.js                      9.20 kB │ gzip:  3.94 kB
+dist/assets/useCriticalPdaAction-legacy-8L2N_17I.js       9.63 kB │ gzip:  4.16 kB
+dist/assets/sale-return-putaway-legacy-C8JDFtkQ.js       10.69 kB │ gzip:  4.45 kB
+dist/assets/transfer-in-legacy-B3g2Xx0X.js               10.83 kB │ gzip:  4.66 kB
+dist/assets/web-legacy-BxdAKOfc.js                       12.49 kB │ gzip:  3.75 kB
+dist/assets/index-legacy-BHKFj55k.js                     12.89 kB │ gzip:  4.54 kB
+dist/assets/sort-legacy-D0zi5ZPP.js                      13.88 kB │ gzip:  5.45 kB
+dist/assets/bind-legacy-BkArlkcV.js                      14.41 kB │ gzip:  6.17 kB
+dist/assets/ship-legacy-Cj8Wcf3L.js                      15.51 kB │ gzip:  5.91 kB
+dist/assets/check-legacy-DwZGd2qi.js                     15.73 kB │ gzip:  6.00 kB
+dist/assets/stockcheck-legacy-BcH7x5En.js                16.09 kB │ gzip:  6.09 kB
+dist/assets/sale-return-receive-legacy-B-6X0z2Q.js       16.28 kB │ gzip:  5.83 kB
+dist/assets/adjustment-legacy-BPTs_ytT.js                17.63 kB │ gzip:  5.99 kB
+dist/assets/cancel-return-legacy-BfdtiPvb.js             18.02 kB │ gzip:  6.06 kB
+dist/assets/putaway-legacy-BQctqS0Q.js                   18.19 kB │ gzip:  6.54 kB
+dist/assets/task-legacy-CNjNBeTw.js                      18.58 kB │ gzip:  6.98 kB
+dist/assets/pack-legacy-DsvO4pAI.js                      23.52 kB │ gzip:  7.84 kB
+dist/assets/receive-legacy-WrG7i-mx.js                   26.89 kB │ gzip:  9.01 kB
+dist/assets/button-legacy-C0EkrPEH.js                    27.41 kB │ gzip:  8.87 kB
+dist/assets/vendor-ui-legacy-CQzPR-Sm.js                 32.87 kB │ gzip:  9.50 kB
+dist/assets/pda-legacy-ZZlkO2a2.js                       41.02 kB │ gzip: 13.46 kB
+dist/assets/vendor-router-legacy-zaqRInaK.js             53.67 kB │ gzip: 18.31 kB
+dist/assets/vendor-query-legacy-DVr8MUKo.js              75.16 kB │ gzip: 20.74 kB
+dist/assets/vendor-core-legacy-EzXAQf0H.js               80.21 kB │ gzip: 27.74 kB
+dist/assets/vendor-react-legacy-Cfmzi4__.js             157.07 kB │ gzip: 50.12 kB
+dist/assets/index-legacy-BJjxe-o3.js                    160.68 kB │ gzip: 37.45 kB
+dist/assets/polyfills-legacy-Cm_2uhIp.js                188.90 kB │ gzip: 69.48 kB
+dist/assets/index-legacy-DHl5KQSB.js                    217.55 kB │ gzip: 78.73 kB
+[plugin vite:reporter] 
+(!) /Users/chengjianghao/flowcube/frontend/src/lib/queryClient.ts is dynamically imported by /Users/chengjianghao/flowcube/frontend/src/main.tsx but also statically imported by /Users/chengjianghao/flowcube/frontend/src/lib/authSession.ts, /Users/chengjianghao/flowcube/frontend/src/store/companyStore.ts, dynamic import will not move module into another chunk.
+
+dist/index.html                                    3.46 kB │ gzip:  1.52 kB
+dist/assets/index-CSCYjnEe.css                    83.91 kB │ gzip: 15.56 kB
+dist/assets/locations-CE14kQ5O.js                  0.17 kB │ gzip:  0.17 kB
+dist/assets/requestKey-Di8GX-zx.js                 0.20 kB │ gzip:  0.17 kB
+dist/assets/pdaCriticalState-97imapJs.js           0.23 kB │ gzip:  0.18 kB
+dist/assets/inventory-Df-iERoa.js                  0.29 kB │ gzip:  0.21 kB
+dist/assets/PdaBottomBar-CgFY42j1.js               0.43 kB │ gzip:  0.29 kB
+dist/assets/SystemBrand-CmEBR3QL.js                0.44 kB │ gzip:  0.32 kB
+dist/assets/inbound-tasks-DoAG3pjJ.js              0.46 kB │ gzip:  0.26 kB
+dist/assets/transfer-D48GEG2Z.js                   0.47 kB │ gzip:  0.26 kB
+dist/assets/PdaCard-DnrwCjcn.js                    0.55 kB │ gzip:  0.37 kB
+dist/assets/input-GP9YkBc0.js                      0.62 kB │ gzip:  0.38 kB
+dist/assets/PdaDoneView-dRQy-v5Y.js                0.71 kB │ gzip:  0.40 kB
+dist/assets/PdaFlash-B0ld1eHi.js                   0.79 kB │ gzip:  0.44 kB
+dist/assets/web-CuSdvDUN.js                        0.95 kB │ gzip:  0.45 kB
+dist/assets/warehouseTaskStatus-WemPEfH0.js        0.96 kB │ gzip:  0.52 kB
+dist/assets/returns-D3qkUMZP.js                    0.97 kB │ gzip:  0.32 kB
+dist/assets/PdaTaskState-B5oMcJ7Q.js               0.97 kB │ gzip:  0.49 kB
+dist/assets/dateTime-D8b8opoP.js                   1.03 kB │ gzip:  0.49 kB
+dist/assets/barcode-CqY8vT1C.js                    1.05 kB │ gzip:  0.41 kB
+dist/assets/usePdaScanner-D5Z0p7XU.js              1.26 kB │ gzip:  0.62 kB
+dist/assets/usePdaFeedback-BmKsS0Xc.js             1.27 kB │ gzip:  0.66 kB
+dist/assets/packages-BDyVkasI.js                   1.69 kB │ gzip:  0.79 kB
+dist/assets/StatusBadge-DrRzXENi.js                1.84 kB │ gzip:  0.87 kB
+dist/assets/sale-return-JhRisw45.js                1.85 kB │ gzip:  1.05 kB
+dist/assets/warehouse-tasks-D7fOa4LV.js            1.97 kB │ gzip:  0.59 kB
+dist/assets/PdaCriticalActionNotice-C94HTPZc.js    2.05 kB │ gzip:  1.05 kB
+dist/assets/GlobalErrorBoundary-azhPkax_.js        2.49 kB │ gzip:  1.25 kB
+dist/assets/PdaScanner-CitLi5ud.js                 2.69 kB │ gzip:  1.33 kB
+dist/assets/transfer-C9024ohS.js                   3.43 kB │ gzip:  1.43 kB
+dist/assets/inbound-CK-Ku83H.js                    3.72 kB │ gzip:  1.68 kB
+dist/assets/inventory-query-QFtYh9_m.js            4.00 kB │ gzip:  1.88 kB
+dist/assets/web-BUl2vQLN.js                        4.16 kB │ gzip:  1.46 kB
+dist/assets/split-CyeMFwCd.js                      4.60 kB │ gzip:  2.05 kB
+dist/assets/useCriticalPdaAction-BRnHw_YS.js       4.63 kB │ gzip:  2.05 kB
+dist/assets/login-C9Iti0rh.js                      4.95 kB │ gzip:  1.99 kB
+dist/assets/transfer-out-CzHyfuAv.js               5.02 kB │ gzip:  2.22 kB
+dist/assets/picking-CL4vOdcI.js                    5.69 kB │ gzip:  2.16 kB
+dist/assets/transfer-in-Ba_1FZ2A.js                5.95 kB │ gzip:  2.60 kB
+dist/assets/sale-return-putaway-uzoJLf2z.js        6.04 kB │ gzip:  2.41 kB
+dist/assets/runtime-CwaW0TGH.js                    7.23 kB │ gzip:  2.79 kB
+dist/assets/sort-DzqcRL4B.js                       8.58 kB │ gzip:  3.31 kB
+dist/assets/bind-V6LQ6Ub2.js                       8.75 kB │ gzip:  3.94 kB
+dist/assets/ship-X3QpOACJ.js                       9.09 kB │ gzip:  3.44 kB
+dist/assets/sale-return-receive-BYQR5D2J.js        9.44 kB │ gzip:  3.39 kB
+dist/assets/stockcheck-BOSRFAbt.js                 9.47 kB │ gzip:  3.62 kB
+dist/assets/index-CkuF4Rr9.js                     10.03 kB │ gzip:  3.45 kB
+dist/assets/check-ouA5KPEN.js                     10.58 kB │ gzip:  3.98 kB
+dist/assets/putaway-CJ9XPBsg.js                   10.60 kB │ gzip:  3.95 kB
+dist/assets/adjustment-BvyIP9SC.js                11.51 kB │ gzip:  3.77 kB
+dist/assets/cancel-return-Czr45LaA.js             12.07 kB │ gzip:  3.86 kB
+dist/assets/task-BWSg1WMd.js                      12.41 kB │ gzip:  4.72 kB
+dist/assets/pack-NC6HnVHx.js                      16.74 kB │ gzip:  5.60 kB
+dist/assets/receive-oyeIGjY7.js                   19.89 kB │ gzip:  6.60 kB
+dist/assets/button-DsacL60V.js                    22.60 kB │ gzip:  7.73 kB
+dist/assets/vendor-ui-G7EXqZ5O.js                 26.03 kB │ gzip:  7.97 kB
+dist/assets/pda-DzDVo1H5.js                       32.76 kB │ gzip: 11.07 kB
+dist/assets/vendor-router-Blcx27EK.js             40.45 kB │ gzip: 14.51 kB
+dist/assets/vendor-query-C7qm9ZJ3.js              53.05 kB │ gzip: 15.77 kB
+dist/assets/index-B3pvNL_O.js                     55.44 kB │ gzip: 17.44 kB
+dist/assets/vendor-core-BGrXfirO.js               70.94 kB │ gzip: 24.14 kB
+dist/assets/polyfills-Dh-M4xP8.js                135.90 kB │ gzip: 51.25 kB
+dist/assets/vendor-react-Dl1QQWg3.js             155.21 kB │ gzip: 49.76 kB
+dist/assets/index-vZmn7pR0.js                    229.80 kB │ gzip: 84.64 kB
+✓ built in 9.69s

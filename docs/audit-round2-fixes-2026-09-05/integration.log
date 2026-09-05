@@ -1,0 +1,232 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 23:07:20.587] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"0a58cfa6-cea0-4429-93c8-6f721b8e8ef1"}
+[2026-09-05 23:07:20.588] [INFO ] [HTTP] POST /api/auth/login {"ms":71,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"0a58cfa6-cea0-4429-93c8-6f721b8e8ef1"}
+  [PASS] smoke_admin 登录成功
+
+────────────────────────────────────────────────────────────
+  采购入库（PDA 收货 + 上架）
+────────────────────────────────────────────────────────────
+[2026-09-05 23:07:20.603] [INFO ] [HTTP] POST /api/purchase {"ms":8,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"22b08575-b35e-427a-91cc-042b10b6595d"}
+  [PASS] 创建采购单成功
+[2026-09-05 23:07:20.609] [INFO ] [HTTP] POST /api/purchase/36/confirm {"ms":4,"status":200,"userId":2,"path":"/api/purchase/36/confirm","method":"POST","requestId":"9370a9c9-2462-447a-8311-166da973dae2"}
+  [PASS] 确认采购单成功
+[2026-09-05 23:07:20.620] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":9,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"d143373a-61e4-424b-89ed-359593e8589b"}
+  [PASS] 由采购单生成收货订单成功
+[2026-09-05 23:07:20.629] [INFO ] [HTTP] POST /api/inbound-tasks/11/submit {"ms":8,"status":200,"userId":2,"path":"/api/inbound-tasks/11/submit","method":"POST","requestId":"ef07bd48-0eb8-4c62-9cfa-01c28f267a98"}
+  [PASS] 收货订单提交到 PDA 成功
+[2026-09-05 23:07:20.634] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/11/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"c53be8ba-2e2d-4dfa-8320-3d2cf7d1a085"}
+[2026-09-05 23:07:20.647] [INFO ] [HTTP] POST /api/inbound-tasks/11/receive {"ms":15,"status":200,"userId":2,"path":"/api/inbound-tasks/11/receive","method":"POST","requestId":"c53be8ba-2e2d-4dfa-8320-3d2cf7d1a085"}
+  [PASS] PDA 收货成功
+[2026-09-05 23:07:20.652] [INFO ] [HTTP] GET /api/inbound-tasks/11/containers {"ms":2,"status":200,"userId":2,"path":"/api/inbound-tasks/11/containers","method":"GET","requestId":"5bd0e648-6d0a-45e6-b0b6-bd8ec7eb594b"}
+  [PASS] 收货后存在待上架容器
+[2026-09-05 23:07:20.656] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/11/putaway","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"b6e3a411-d5f7-4838-aee6-f8c2d471c89f"}
+[2026-09-05 23:07:20.670] [INFO ] [HTTP] POST /api/inbound-tasks/11/putaway {"ms":16,"status":200,"userId":2,"path":"/api/inbound-tasks/11/putaway","method":"POST","requestId":"b6e3a411-d5f7-4838-aee6-f8c2d471c89f"}
+  [PASS] PDA 上架成功（同步库存缓存）
+  [PASS] 入库后 inventory_stock.quantity = 50
+  [PASS] 入库后 reserved = 0
+  [PASS] 入库后 容器总量 = 库存缓存
+
+────────────────────────────────────────────────────────────
+  销售占库 / 释放（reserve / release）
+────────────────────────────────────────────────────────────
+[2026-09-05 23:07:20.679] [INFO ] [HTTP] POST /api/sale {"ms":5,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"1f1f9541-d101-4fa3-bafc-492a0ae18e96"}
+  [PASS] 创建销售单成功
+[2026-09-05 23:07:20.693] [INFO ] [HTTP] POST /api/sale/25/reserve {"ms":11,"status":200,"userId":2,"path":"/api/sale/25/reserve","method":"POST","requestId":"8525c0d6-b84e-44f5-9972-9f4ce04bd5d2"}
+  [PASS] 销售单占库成功
+  [PASS] 占库后 reserved = 20
+  [PASS] 占库不改变物理库存 quantity
+  [PASS] stock_reservations 生成预占记录（status=1, qty对得上）
+[2026-09-05 23:07:20.703] [INFO ] [HTTP] POST /api/sale/25/release {"ms":7,"status":200,"userId":2,"path":"/api/sale/25/release","method":"POST","requestId":"12d003a3-c3b7-4df6-815b-d8c2eea3bab7"}
+  [PASS] 销售单释放占库成功
+  [PASS] 释放后 reserved = 0
+  [PASS] 释放后预占记录状态=3（已释放）
+
+────────────────────────────────────────────────────────────
+  调拨（wh1 → wh2，PDA 两阶段扫码）
+────────────────────────────────────────────────────────────
+  [PASS] 调拨前存在可用源容器
+[2026-09-05 23:07:20.712] [INFO ] [HTTP] POST /api/inventory/containers/41/split {"ms":6,"status":200,"userId":2,"path":"/api/inventory/containers/41/split","method":"POST","requestId":"82f7e53a-bbdb-4352-998f-79db20c17a2c"}
+  [PASS] 拆分出调拨用容器成功
+[2026-09-05 23:07:20.718] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":2,"orderNo":"TF20260905002","eventType":"TRANSFER_CREATED","operatorId":2,"requestId":"07e15249-040d-45ff-80c3-ccc1e5a61f3a"}
+[2026-09-05 23:07:20.719] [INFO ] [HTTP] POST /api/transfer {"ms":4,"status":201,"userId":2,"path":"/api/transfer","method":"POST","requestId":"07e15249-040d-45ff-80c3-ccc1e5a61f3a"}
+  [PASS] 创建调拨单成功(201)
+[2026-09-05 23:07:20.724] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":2,"orderNo":"TF20260905002","eventType":"TRANSFER_CONFIRMED","operatorId":2,"requestId":"381d0618-5057-4855-ae0e-a2a32c66c433"}
+[2026-09-05 23:07:20.725] [INFO ] [HTTP] POST /api/transfer/2/confirm {"ms":5,"status":200,"userId":2,"path":"/api/transfer/2/confirm","method":"POST","requestId":"381d0618-5057-4855-ae0e-a2a32c66c433"}
+  [PASS] 确认调拨单成功（派发到 PDA）
+[2026-09-05 23:07:20.728] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/2/scan-out","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"a4ec6f82-3857-4aa2-8e51-ac8c3d0ccbcb"}
+[2026-09-05 23:07:20.734] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":2,"orderNo":"TF20260905002","eventType":"TRANSFER_SCAN_OUT","operatorId":2,"requestId":"a4ec6f82-3857-4aa2-8e51-ac8c3d0ccbcb"}
+[2026-09-05 23:07:20.735] [INFO ] [HTTP] POST /api/transfer/2/scan-out {"ms":8,"status":200,"userId":2,"path":"/api/transfer/2/scan-out","method":"POST","requestId":"a4ec6f82-3857-4aa2-8e51-ac8c3d0ccbcb"}
+  [PASS] 源仓 PDA 扫码出库成功
+[2026-09-05 23:07:20.854] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/2/scan-in","userId":2,"deviceCode":"SMOKE-PDA-W2-7d5cf925","warehouseId":28,"requestId":"c30c5743-edff-4060-bdba-4b962c0e3e84"}
+[2026-09-05 23:07:20.859] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":2,"orderNo":"TF20260905002","eventType":"TRANSFER_SCAN_IN","operatorId":2,"requestId":"c30c5743-edff-4060-bdba-4b962c0e3e84"}
+[2026-09-05 23:07:20.860] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":2,"orderNo":"TF20260905002","eventType":"TRANSFER_COMPLETED","operatorId":2,"requestId":"c30c5743-edff-4060-bdba-4b962c0e3e84"}
+[2026-09-05 23:07:20.861] [INFO ] [HTTP] POST /api/transfer/2/scan-in {"ms":8,"status":200,"userId":2,"path":"/api/transfer/2/scan-in","method":"POST","requestId":"c30c5743-edff-4060-bdba-4b962c0e3e84"}
+  [PASS] 目标仓 PDA 扫码入库成功（调拨完成）
+  [PASS] 调拨后源仓 quantity = 40
+  [PASS] 调拨后目标仓 quantity = 10
+  [PASS] 调拨后目标仓生成容器
+
+────────────────────────────────────────────────────────────
+  盘点（盘盈 +N）
+────────────────────────────────────────────────────────────
+[2026-09-05 23:07:20.868] [INFO ] [HTTP] POST /api/stockcheck {"ms":4,"status":201,"userId":2,"path":"/api/stockcheck","method":"POST","requestId":"5d7df2eb-61c1-4157-9f6f-70bfb780abe7"}
+  [PASS] 创建盘点单成功(201)
+[2026-09-05 23:07:20.872] [INFO ] [HTTP] GET /api/stockcheck/2 {"ms":2,"status":200,"userId":2,"path":"/api/stockcheck/2","method":"GET","requestId":"7b587279-7c24-4c8f-b22b-556ae369a47c"}
+  [PASS] 盘点单含目标商品
+[2026-09-05 23:07:20.877] [INFO ] [HTTP] PUT /api/stockcheck/2/items {"ms":4,"status":200,"userId":2,"path":"/api/stockcheck/2/items","method":"PUT","requestId":"efd91ce4-ff97-4c2e-a42c-7e130a02ae78"}
+  [PASS] 填写实盘数量成功
+[2026-09-05 23:07:20.887] [INFO ] [HTTP] POST /api/stockcheck/2/submit {"ms":9,"status":200,"userId":2,"path":"/api/stockcheck/2/submit","method":"POST","requestId":"149917c3-3a3e-48f2-9dd8-2d4ac9481728"}
+  [PASS] 盘点提交成功
+  [PASS] 盘点后 quantity = 43
+  [PASS] 盘盈生成新容器 remaining=3
+
+────────────────────────────────────────────────────────────
+  采购退货（PDA 拣货→出库，库存扣减）
+────────────────────────────────────────────────────────────
+  [PASS] 主采购单已生成应付
+[2026-09-05 23:07:20.891] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":9,"orderNo":"PC20260905010","eventType":"PAYMENT_RECORD_CREATED","operatorId":2,"requestId":"e3dbb612-e2e3-4cc1-91b8-8c1fbf06ea4a"}
+[2026-09-05 23:07:20.892] [INFO ] [HTTP] POST /api/payments/9/confirm {"ms":3,"status":200,"userId":2,"path":"/api/payments/9/confirm","method":"POST","requestId":"e3dbb612-e2e3-4cc1-91b8-8c1fbf06ea4a"}
+  [PASS] 财务确认应付成功
+  [PASS] 确认后应付 confirm_status=1
+  [PASS] 采购退货前存在可用源容器
+[2026-09-05 23:07:20.901] [INFO ] [HTTP] POST /api/inventory/containers/41/split {"ms":6,"status":200,"userId":2,"path":"/api/inventory/containers/41/split","method":"POST","requestId":"9b6cd589-4571-4977-86f7-6ecdfe223307"}
+  [PASS] 拆分出采购退货用容器成功
+[2026-09-05 23:07:20.907] [INFO ] [RETURN_EVENT] 记录退货事件 {"returnType":"purchase","returnId":2,"returnNo":"PR20260905002","eventType":"RETURN_CREATED","operatorId":2,"requestId":"fcedb90b-d2cb-486f-bc58-e88971ac1a93"}
+[2026-09-05 23:07:20.908] [INFO ] [HTTP] POST /api/returns/purchase {"ms":5,"status":201,"userId":2,"path":"/api/returns/purchase","method":"POST","requestId":"fcedb90b-d2cb-486f-bc58-e88971ac1a93"}
+  [PASS] 创建采购退货单成功(201)
+[2026-09-05 23:07:20.914] [INFO ] [RETURN_EVENT] 记录退货事件 {"returnType":"purchase","returnId":2,"returnNo":"PR20260905002","eventType":"RETURN_CONFIRMED","operatorId":2,"requestId":"64b42876-6881-4edf-9261-bea8961200f9"}
+[2026-09-05 23:07:20.915] [INFO ] [HTTP] POST /api/returns/purchase/2/confirm {"ms":6,"status":200,"userId":2,"path":"/api/returns/purchase/2/confirm","method":"POST","requestId":"64b42876-6881-4edf-9261-bea8961200f9"}
+  [PASS] 确认采购退货单成功（自动派发 PDA）
+  [PASS] 已自动创建采购退货仓库任务
+[2026-09-05 23:07:20.919] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/scan-logs","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"23f3871b-a50f-4b3b-9061-6698fe1ee1e7"}
+[2026-09-05 23:07:20.923] [INFO ] [HTTP] POST /api/scan-logs {"ms":6,"status":201,"userId":2,"path":"/api/scan-logs","method":"POST","requestId":"23f3871b-a50f-4b3b-9061-6698fe1ee1e7"}
+  [PASS] PDA 拣货扫码成功
+[2026-09-05 23:07:20.925] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/2/ready","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"b9ac82b7-a2bd-4c5b-8f21-3c6916ff5aa7"}
+[2026-09-05 23:07:20.929] [INFO ] [HTTP] PUT /api/warehouse-tasks/2/ready {"ms":5,"status":200,"userId":2,"path":"/api/warehouse-tasks/2/ready","method":"PUT","requestId":"b9ac82b7-a2bd-4c5b-8f21-3c6916ff5aa7"}
+  [PASS] 拣货收口成功（采购退货直接跳至待出库）
+[2026-09-05 23:07:20.932] [INFO ] [PDASession] PDA device session accepted {"method":"PUT","route":"/api/warehouse-tasks/2/ship","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"c965e4ea-38a2-414e-9691-2252963169e2"}
+[2026-09-05 23:07:20.942] [INFO ] [PAYMENT_EVENT] 记录账款事件 {"paymentRecordId":9,"orderNo":"PC20260905010","eventType":"PAYMENT_ADJUSTED_BY_RETURN","operatorId":2,"requestId":"c965e4ea-38a2-414e-9691-2252963169e2"}
+[2026-09-05 23:07:20.943] [INFO ] [RETURN_EVENT] 记录退货事件 {"returnType":"purchase","returnId":2,"returnNo":"PR20260905002","eventType":"RETURN_EXECUTED","operatorId":2,"requestId":"c965e4ea-38a2-414e-9691-2252963169e2"}
+[2026-09-05 23:07:20.944] [INFO ] [HTTP] PUT /api/warehouse-tasks/2/ship {"ms":13,"status":200,"userId":2,"path":"/api/warehouse-tasks/2/ship","method":"PUT","requestId":"c965e4ea-38a2-414e-9691-2252963169e2"}
+  [PASS] PDA 出库成功
+  [PASS] 采购退货后 quantity = 38
+  [PASS] ★ 采购退货冲减应付后 confirm_status 打回 0（业务决策 2026-07-28）
+
+────────────────────────────────────────────────────────────
+  销售退货（PDA 收货→质检→上架，库存入库）
+────────────────────────────────────────────────────────────
+[2026-09-05 23:07:20.950] [INFO ] [RETURN_EVENT] 记录退货事件 {"returnType":"sale","returnId":2,"returnNo":"SR20260905002","eventType":"RETURN_CREATED","operatorId":2,"requestId":"a5dfda57-a70f-4b68-9ee4-0144a009ee93"}
+[2026-09-05 23:07:20.951] [INFO ] [HTTP] POST /api/returns/sale {"ms":4,"status":201,"userId":2,"path":"/api/returns/sale","method":"POST","requestId":"a5dfda57-a70f-4b68-9ee4-0144a009ee93"}
+  [PASS] 创建销售退货单成功(201)
+[2026-09-05 23:07:20.957] [INFO ] [RETURN_EVENT] 记录退货事件 {"returnType":"sale","returnId":2,"returnNo":"SR20260905002","eventType":"RETURN_CONFIRMED","operatorId":2,"requestId":"d9b8c86b-ff9e-4977-8291-d03a70b578c9"}
+[2026-09-05 23:07:20.957] [INFO ] [HTTP] POST /api/returns/sale/2/confirm {"ms":5,"status":200,"userId":2,"path":"/api/returns/sale/2/confirm","method":"POST","requestId":"d9b8c86b-ff9e-4977-8291-d03a70b578c9"}
+  [PASS] 确认销售退货单成功（自动派发 PDA）
+  [PASS] 已自动创建销售退货任务且已派发到 PDA
+[2026-09-05 23:07:20.961] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/return-tasks/11/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"f97bbe99-a1f5-4fb3-87e5-5eebf6271896"}
+[2026-09-05 23:07:20.969] [INFO ] [HTTP] POST /api/return-tasks/11/receive {"ms":9,"status":200,"userId":2,"path":"/api/return-tasks/11/receive","method":"POST","requestId":"f97bbe99-a1f5-4fb3-87e5-5eebf6271896"}
+  [PASS] PDA 收货成功
+[2026-09-05 23:07:20.973] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/return-tasks/11/check","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"b8ee787f-a2ea-4220-bd7c-b998f98a8501"}
+[2026-09-05 23:07:20.980] [INFO ] [HTTP] POST /api/return-tasks/11/check {"ms":8,"status":200,"userId":2,"path":"/api/return-tasks/11/check","method":"POST","requestId":"b8ee787f-a2ea-4220-bd7c-b998f98a8501"}
+  [PASS] PDA 质检成功
+[2026-09-05 23:07:20.984] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/return-tasks/11/putaway","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"b7135ac3-f107-4257-ac65-085984a9ae95"}
+[2026-09-05 23:07:20.989] [INFO ] [RETURN_EVENT] 记录退货事件 {"returnType":"sale","returnId":2,"returnNo":"SR20260905002","eventType":"RETURN_EXECUTED","operatorId":null,"requestId":"b7135ac3-f107-4257-ac65-085984a9ae95"}
+[2026-09-05 23:07:20.990] [INFO ] [HTTP] POST /api/return-tasks/11/putaway {"ms":7,"status":200,"userId":2,"path":"/api/return-tasks/11/putaway","method":"POST","requestId":"b7135ac3-f107-4257-ac65-085984a9ae95"}
+  [PASS] PDA 上架成功
+  [PASS] 销售退货后 quantity = 42
+  [PASS] 销售退货生成新容器 remaining=4
+
+────────────────────────────────────────────────────────────
+  混合采购单收货订单（合并 2 个采购单 → 审核结算）
+────────────────────────────────────────────────────────────
+[2026-09-05 23:07:20.998] [INFO ] [HTTP] POST /api/purchase {"ms":4,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"90c756df-d82a-483b-b596-09e1dfad22d4"}
+  [PASS] 创建采购单A成功
+[2026-09-05 23:07:21.002] [INFO ] [HTTP] POST /api/purchase/37/confirm {"ms":2,"status":200,"userId":2,"path":"/api/purchase/37/confirm","method":"POST","requestId":"d048771e-90f3-47de-8234-da5dde49506b"}
+  [PASS] 确认采购单A成功
+[2026-09-05 23:07:21.007] [INFO ] [HTTP] POST /api/purchase {"ms":4,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"e9f7d997-1851-4779-896a-ae996f9a032c"}
+  [PASS] 创建采购单B成功
+[2026-09-05 23:07:21.011] [INFO ] [HTTP] POST /api/purchase/38/confirm {"ms":2,"status":200,"userId":2,"path":"/api/purchase/38/confirm","method":"POST","requestId":"22dcab3f-7669-4e35-b7c2-498558a28ce2"}
+  [PASS] 确认采购单B成功
+[2026-09-05 23:07:21.018] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":4,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"45c03207-b6dc-4e01-800e-8e570703c33f"}
+  [PASS] 创建混合采购单收货订单成功
+  [PASS] 混合收货单头 purchase_order_id 为空（混单标志）
+[2026-09-05 23:07:21.026] [INFO ] [HTTP] POST /api/inbound-tasks/12/submit {"ms":5,"status":200,"userId":2,"path":"/api/inbound-tasks/12/submit","method":"POST","requestId":"5787b08e-767a-4e1e-8edf-f35fd96ab727"}
+  [PASS] 混合收货单提交到 PDA 成功
+[2026-09-05 23:07:21.028] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/12/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"07667a97-9663-4dc6-8879-872bdd7a60dc"}
+[2026-09-05 23:07:21.039] [INFO ] [HTTP] POST /api/inbound-tasks/12/receive {"ms":12,"status":200,"userId":2,"path":"/api/inbound-tasks/12/receive","method":"POST","requestId":"07667a97-9663-4dc6-8879-872bdd7a60dc"}
+  [PASS] PDA 收货商品A成功
+[2026-09-05 23:07:21.042] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/12/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"bb657c83-d1bc-4424-a214-6543cdfb53a3"}
+[2026-09-05 23:07:21.051] [INFO ] [HTTP] POST /api/inbound-tasks/12/receive {"ms":10,"status":200,"userId":2,"path":"/api/inbound-tasks/12/receive","method":"POST","requestId":"bb657c83-d1bc-4424-a214-6543cdfb53a3"}
+  [PASS] PDA 收货商品B成功
+[2026-09-05 23:07:21.054] [INFO ] [HTTP] GET /api/inbound-tasks/12/containers {"ms":2,"status":200,"userId":2,"path":"/api/inbound-tasks/12/containers","method":"GET","requestId":"8547110b-384d-4715-8115-36cc7513d832"}
+  [PASS] 收货后存在商品A待上架容器
+  [PASS] 收货后存在商品B待上架容器
+[2026-09-05 23:07:21.057] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/12/putaway","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"8a562a34-081d-42df-b9f5-a3db581f8989"}
+[2026-09-05 23:07:21.065] [INFO ] [HTTP] POST /api/inbound-tasks/12/putaway {"ms":10,"status":200,"userId":2,"path":"/api/inbound-tasks/12/putaway","method":"POST","requestId":"8a562a34-081d-42df-b9f5-a3db581f8989"}
+  [PASS] PDA 上架商品A成功
+[2026-09-05 23:07:21.069] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/12/putaway","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"c326064b-9485-4137-bc4d-9295cf5e59cf"}
+[2026-09-05 23:07:21.082] [INFO ] [HTTP] POST /api/inbound-tasks/12/putaway {"ms":15,"status":200,"userId":2,"path":"/api/inbound-tasks/12/putaway","method":"POST","requestId":"c326064b-9485-4137-bc4d-9295cf5e59cf"}
+  [PASS] PDA 上架商品B成功
+  [PASS] 混单结算生成正确应付：A=300, B=80
+  [PASS] 混单结算后两张采购单均自动完成(status=3)
+
+────────────────────────────────────────────────────────────
+  取消采购单联动收货单（混单移出 / 已收货阻止 / 单采购单级联）
+────────────────────────────────────────────────────────────
+[2026-09-05 23:07:21.089] [INFO ] [HTTP] POST /api/purchase {"ms":3,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"319cc7c3-f8a1-4e4e-b3fc-497da46b38e8"}
+  [PASS] 创建采购单C成功
+[2026-09-05 23:07:21.094] [INFO ] [HTTP] POST /api/purchase/39/confirm {"ms":3,"status":200,"userId":2,"path":"/api/purchase/39/confirm","method":"POST","requestId":"27bcc776-7401-4d2a-93ea-228fc183fcd4"}
+  [PASS] 确认采购单C成功
+[2026-09-05 23:07:21.098] [INFO ] [HTTP] POST /api/purchase {"ms":3,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"6acbefbe-f3ba-455d-abfd-4b6d69e3fe76"}
+  [PASS] 创建采购单D成功
+[2026-09-05 23:07:21.102] [INFO ] [HTTP] POST /api/purchase/40/confirm {"ms":2,"status":200,"userId":2,"path":"/api/purchase/40/confirm","method":"POST","requestId":"ca4457cb-d493-4ae5-b780-d315ae649a48"}
+  [PASS] 确认采购单D成功
+[2026-09-05 23:07:21.108] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":4,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"59dbaa92-93e9-4320-8db8-34bf4176ff9c"}
+  [PASS] 创建混合收货单（C+D）成功
+[2026-09-05 23:07:21.113] [INFO ] [HTTP] POST /api/purchase/39/cancel {"ms":4,"status":200,"userId":2,"path":"/api/purchase/39/cancel","method":"POST","requestId":"81364447-bf45-4ea6-80b5-58cfba07d059"}
+  [PASS] 未收货的混单采购单C取消成功（应移出明细而非整单拒绝）
+  [PASS] 采购单C已取消(status=4)
+  [PASS] 混合收货单已移出采购单C的明细，仅保留采购单D
+  [PASS] 混合收货单未被级联取消，继续处理采购单D(status<>5)
+[2026-09-05 23:07:21.120] [INFO ] [HTTP] POST /api/purchase {"ms":4,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"ff373035-9548-4a49-ab11-23b074df3e2a"}
+  [PASS] 创建采购单E成功
+[2026-09-05 23:07:21.124] [INFO ] [HTTP] POST /api/purchase/41/confirm {"ms":3,"status":200,"userId":2,"path":"/api/purchase/41/confirm","method":"POST","requestId":"a95d8398-dc14-44c8-8f4d-c5f5b237521e"}
+  [PASS] 确认采购单E成功
+[2026-09-05 23:07:21.130] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":5,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"3898c467-0461-4327-83de-9258258d4c2d"}
+  [PASS] 由采购单E生成收货订单成功
+[2026-09-05 23:07:21.138] [INFO ] [HTTP] POST /api/inbound-tasks/14/submit {"ms":5,"status":200,"userId":2,"path":"/api/inbound-tasks/14/submit","method":"POST","requestId":"d673e1e4-c32a-4595-a068-ba522a19266b"}
+  [PASS] 收货订单E提交到 PDA 成功
+[2026-09-05 23:07:21.140] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/14/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":26,"requestId":"112e91fd-aeaf-4284-b034-3d8e9c48e365"}
+[2026-09-05 23:07:21.149] [INFO ] [HTTP] POST /api/inbound-tasks/14/receive {"ms":10,"status":200,"userId":2,"path":"/api/inbound-tasks/14/receive","method":"POST","requestId":"112e91fd-aeaf-4284-b034-3d8e9c48e365"}
+  [PASS] PDA 收货商品E成功
+[2026-09-05 23:07:21.153] [WARN ] [ERR] [AppError] 采购单在收货订单 IN20260905011 中已产生实际收货，请先处理收货流程 {"path":"/api/purchase/41/cancel","userId":2,"refNo":"","requestId":"45c290c2-6e66-4e46-ad8a-6f45442f281a","code":"CONFLICT","statusCode":409}
+[2026-09-05 23:07:21.153] [WARN ] [HTTP] POST /api/purchase/41/cancel {"ms":3,"status":409,"userId":2,"path":"/api/purchase/41/cancel","method":"POST","requestId":"45c290c2-6e66-4e46-ad8a-6f45442f281a"}
+  [PASS] 已收货的采购单E取消被拒绝(409)
+  [PASS] 采购单E仍为已提交(status=2)，未被误取消
+[2026-09-05 23:07:21.159] [INFO ] [HTTP] POST /api/purchase {"ms":3,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"65676c7d-c3eb-4a12-8b96-bf81c516b1cd"}
+  [PASS] 创建采购单F成功
+[2026-09-05 23:07:21.164] [INFO ] [HTTP] POST /api/purchase/42/confirm {"ms":2,"status":200,"userId":2,"path":"/api/purchase/42/confirm","method":"POST","requestId":"3e1fb0d9-a76d-427d-8476-d03375ea0d7e"}
+  [PASS] 确认采购单F成功
+[2026-09-05 23:07:21.171] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":5,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"de8bdee0-da98-4fc3-8290-a8993932da12"}
+  [PASS] 由采购单F生成收货订单成功
+[2026-09-05 23:07:21.176] [INFO ] [HTTP] POST /api/purchase/42/cancel {"ms":4,"status":200,"userId":2,"path":"/api/purchase/42/cancel","method":"POST","requestId":"3a64ea41-a0cf-4180-986d-9656c3a1a3cb"}
+  [PASS] 未收货的单采购单F取消成功（级联整单取消收货单）
+  [PASS] 采购单F已取消(status=4)
+  [PASS] 单采购单收货单被级联取消(status=5)
+
+────────────────────────────────────────────────────────────
+  全局一致性不变量
+────────────────────────────────────────────────────────────
+  [PASS] inventory_stock 与容器总量完全一致
+  [PASS] 无负库存（quantity >= 0）
+  [PASS] 无 reserved > quantity
+  [PASS] 无 remaining_qty < 0 的容器
+
+════════════════════════════════════════════════════════════
+  96 passed, 0 failed
+════════════════════════════════════════════════════════════
+

@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import type { NavigateFunction } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import AppRouter from './index'
+import PdaRouter from './pda'
 
 // Keep the actual HashRouter, route tree, navigation and auth guards. Replace
 // connection/device and page rendering boundaries so no API/session is needed.
@@ -98,4 +99,12 @@ test.each([['/sale/31', '/login', 'ERP 登录'], ['/pda/sale-return/31/putaway',
   await renderAt(path)
   expect(window.location.hash).toBe(`#${login}`)
   expect(host.textContent).toBe(label)
+})
+
+test.each([true, false])('独立 PDA 构建复用认证与业务路由 authenticated=%s', async authenticated => {
+  state.authenticated = authenticated
+  window.history.replaceState(null, '', '/#/pda')
+  await act(async () => { root.render(<PdaRouter />) })
+  expect(host.textContent).toContain(authenticated ? '仓库作业' : 'PDA 登录')
+  expect(host.querySelector('[data-client="erp"]')).toBeNull()
 })

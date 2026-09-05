@@ -1,28 +1,13 @@
-import { useAuthStore } from '@/store/authStore'
-import { resolveApiFetchUrl } from '@/lib/apiOrigin'
+import apiClient from '@/api/client'
 
 /**
  * 触发后端 xlsx 文件下载
- * 利用 fetch + Blob 方式，带上 JWT token
+ * 复用认证续期、运行时地址、账套和超时；仅下载响应使用 Blob。
  */
 export async function downloadExport(path: string, params?: Record<string, string>) {
-  const token = useAuthStore.getState().token
-  const query = params ? '?' + new URLSearchParams(params).toString() : ''
-  const fetchUrl = resolveApiFetchUrl(path, query)
-  let res: Response
-  try {
-    res = await fetch(fetchUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-  } catch {
-    throw new Error('无法连接服务器，请检查网络与服务器地址')
-  }
-  if (!res.ok) {
-    const j = await res.json().catch(() => ({}))
-    throw new Error(j.message || '导出失败')
-  }
-  const blob = await res.blob()
-  const disposition = res.headers.get('Content-Disposition') || ''
+  const res = await apiClient.get<Blob>(path, { params, responseType: 'blob', skipGlobalError: true })
+  const blob = res.data
+  const disposition = String(res.headers['content-disposition'] || '')
   const match = disposition.match(/filename\*=UTF-8''(.+)/)
   const filename = match ? decodeURIComponent(match[1]) : 'export.xlsx'
   const url = URL.createObjectURL(blob)

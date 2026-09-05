@@ -1,0 +1,69 @@
+
+ RUN  v3.2.7 /Users/chengjianghao/flowcube/frontend
+
+ ❯ src/pages/pda/transfer.test.tsx (10 tests | 5 failed) 61ms
+   ✓ scanIn keeps ambiguous container state pending and queries old records by bound action 24ms
+   ✓ scanOut keeps ambiguous container state pending and queries old records by bound action 5ms
+   × 在途普通部分出库 保留源仓出库入口和原入库分组 10ms
+     → expected [] to have a length of 1 but got +0
+   × 在途同款多行有未完成行 保留源仓出库入口和原入库分组 3ms
+     → expected [] to have a length of 1 but got +0
+   × 在途四位小数剩余最小单位 保留源仓出库入口和原入库分组 2ms
+     → expected [] to have a length of 1 but got +0
+   × 在途逐行余量不被其他行历史超出抵消 保留源仓出库入口和原入库分组 2ms
+     → expected [] to have a length of 1 but got +0
+   × 从待出库经过部分出库到全部出完，列表刷新持续提供正确入口 8ms
+     → expected [] to have a length of 1 but got +0
+   ✓ 状态1 即使明细未出完也不提供执行入口 2ms
+   ✓ 状态4 即使明细未出完也不提供执行入口 2ms
+   ✓ 状态5 即使明细未出完也不提供执行入口 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/pda/transfer.test.tsx > 在途普通部分出库 保留源仓出库入口和原入库分组
+ FAIL  src/pages/pda/transfer.test.tsx > 在途同款多行有未完成行 保留源仓出库入口和原入库分组
+ FAIL  src/pages/pda/transfer.test.tsx > 在途四位小数剩余最小单位 保留源仓出库入口和原入库分组
+ FAIL  src/pages/pda/transfer.test.tsx > 在途逐行余量不被其他行历史超出抵消 保留源仓出库入口和原入库分组
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/pages/pda/transfer.test.tsx:68:29
+     66| ] as Array<[string, Array<[number, number]>]>)('在途%s 保留源仓出库入口和原入库分组', …
+     67|   await renderList(listOrder(3, quantities))
+     68|   expect(outboundButtons()).toHaveLength(1)
+       |                             ^
+     69|   expect(inboundButtons()).toHaveLength(1)
+     70|   await act(async () => outboundButtons()[0].click())
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/pages/pda/transfer.test.tsx > 从待出库经过部分出库到全部出完，列表刷新持续提供正确入口
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/pages/pda/transfer.test.tsx:79:29
+     77|   expect(inboundButtons()).toHaveLength(0)
+     78|   await act(async () => { qc.setQueryData(['pda-transfers'], [listOrde…
+     79|   expect(outboundButtons()).toHaveLength(1)
+       |                             ^
+     80|   expect(inboundButtons()).toHaveLength(1)
+     81|   await act(async () => { qc.setQueryData(['pda-transfers'], [listOrde…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 5 passed (10)
+   Start at  23:00:21
+   Duration  1.06s (transform 154ms, setup 0ms, collect 336ms, tests 61ms, environment 245ms, prepare 35ms)
+

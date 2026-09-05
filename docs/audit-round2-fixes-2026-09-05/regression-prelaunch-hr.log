@@ -1,0 +1,37 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:31.448] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"c7657f5f-df93-484c-8192-e7914df7d288"}
+[2026-09-05 22:28:31.450] [INFO ] [HTTP] POST /api/auth/login {"ms":72,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"c7657f5f-df93-484c-8192-e7914df7d288"}
+[2026-09-05 22:28:31.514] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":3,"username":"smoke_limited","requestId":"e64f875e-59d0-4f27-a5c6-9613f7f472e9"}
+[2026-09-05 22:28:31.514] [INFO ] [HTTP] POST /api/auth/login {"ms":60,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"e64f875e-59d0-4f27-a5c6-9613f7f472e9"}
+[2026-09-05 22:28:31.518] [WARN ] [ERR] [AppError] 未提供认证 Token {"path":"/api/hr/payrolls/1","userId":"-","refNo":"","requestId":"92a742f5-3d51-4743-ba6a-d0934310ccbb","code":"AUTH_TOKEN_MISSING","statusCode":401}
+[2026-09-05 22:28:31.518] [WARN ] [HTTP] GET /api/hr/payrolls/1 {"ms":1,"status":401,"userId":"-","path":"/api/hr/payrolls/1","method":"GET","requestId":"92a742f5-3d51-4743-ba6a-d0934310ccbb"}
+[2026-09-05 22:28:31.524] [WARN ] [ERR] [AppError] 无操作权限 {"path":"/api/hr/payrolls/1","userId":3,"refNo":"","requestId":"4442581d-2459-4d23-82cd-803c217b153f","code":"PERMISSION_DENIED","statusCode":403}
+[2026-09-05 22:28:31.524] [WARN ] [HTTP] GET /api/hr/payrolls/1 {"ms":4,"status":403,"userId":3,"path":"/api/hr/payrolls/1","method":"GET","requestId":"4442581d-2459-4d23-82cd-803c217b153f"}
+[2026-09-05 22:28:31.525] [INFO ] [AUTH_AUDIT] 权限校验拒绝 {"eventType":"permission_denied","userId":3,"username":"smoke_limited","requestId":"4442581d-2459-4d23-82cd-803c217b153f"}
+[2026-09-05 22:28:31.528] [WARN ] [ERR] [AppError] 工资单不存在 {"path":"/api/hr/payrolls/1","userId":2,"refNo":"","requestId":"a2bc42ec-e938-4bd3-9942-41501d969898","code":"NOT_FOUND","statusCode":404}
+[2026-09-05 22:28:31.528] [WARN ] [HTTP] GET /api/hr/payrolls/1 {"ms":1,"status":404,"userId":2,"path":"/api/hr/payrolls/1","method":"GET","requestId":"a2bc42ec-e938-4bd3-9942-41501d969898"}
+[2026-09-05 22:28:31.531] [WARN ] [VALID] [ZodError] Expected number, received null {"path":"/api/hr/payrolls/1/lines/1","userId":2,"requestId":"3bb9b8fb-1cd8-4f6d-8568-2b787f78d893","code":"VALIDATION_ERROR"}
+[2026-09-05 22:28:31.532] [WARN ] [HTTP] PATCH /api/hr/payrolls/1/lines/1 {"ms":2,"status":400,"userId":2,"path":"/api/hr/payrolls/1/lines/1","method":"PATCH","requestId":"3bb9b8fb-1cd8-4f6d-8568-2b787f78d893"}
+[2026-09-05 22:28:31.534] [WARN ] [VALID] [ZodError] Expected number, received nan {"path":"/api/hr/payrolls/invalid","userId":2,"requestId":"24ef6f63-8f51-499c-bdd5-df7a4b5c6417","code":"VALIDATION_ERROR"}
+[2026-09-05 22:28:31.534] [WARN ] [HTTP] GET /api/hr/payrolls/invalid {"ms":1,"status":400,"userId":2,"path":"/api/hr/payrolls/invalid","method":"GET","requestId":"24ef6f63-8f51-499c-bdd5-df7a4b5c6417"}
+[2026-09-05 22:28:31.537] [INFO ] [HTTP] GET /api/hr/payrolls/1 {"ms":2,"status":200,"userId":2,"path":"/api/hr/payrolls/1","method":"GET","requestId":"3fefd2af-1287-40be-9d1a-337a923fed65"}
+[2026-09-05 22:28:31.540] [WARN ] [ERR] [AppError] 请提供有效的 X-Request-Key（最多80字符）以防重复提交 {"path":"/api/hr/payrolls/1/lines/1","userId":2,"refNo":"","requestId":"f9b3a749-89ce-47e8-9e31-3577306d5d14","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:31.541] [WARN ] [HTTP] PATCH /api/hr/payrolls/1/lines/1 {"ms":1,"status":400,"userId":2,"path":"/api/hr/payrolls/1/lines/1","method":"PATCH","requestId":"f9b3a749-89ce-47e8-9e31-3577306d5d14"}
+[2026-09-05 22:28:31.543] [WARN ] [ERR] [AppError] 请提供有效的 X-Request-Key（最多80字符）以防重复提交 {"path":"/api/hr/payrolls/1/lines/1","userId":2,"refNo":"","requestId":"73db6adf-26cc-4694-b3f5-591e344b73aa","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:31.543] [WARN ] [HTTP] PATCH /api/hr/payrolls/1/lines/1 {"ms":1,"status":400,"userId":2,"path":"/api/hr/payrolls/1/lines/1","method":"PATCH","requestId":"73db6adf-26cc-4694-b3f5-591e344b73aa"}
+[2026-09-05 22:28:31.555] [INFO ] [HTTP] PATCH /api/hr/payrolls/2/lines/2 {"ms":5,"status":200,"userId":2,"path":"/api/hr/payrolls/2/lines/2","method":"PATCH","requestId":"697b6c41-806e-4754-a4d3-5d8e6860b4a2"}
+[PASS] HTTP 明细读写验证鉴权权限、账套、zod 及路径 ID
+[PASS] 未录入工资不能核算，事务不生成个税或汇总
+[PASS] 明细读取及更新受账套保护，拒绝无效工资和越界行
+[PASS] 显式零工资可以录入及核算，重复绝对值写入不累加
+[PASS] 非零工资正确核算且重复核算不重复个税记录
+[PASS] 真实账套非零社保核算发放与重复发放凭证一致
+[PASS] 旧请求重放返回原回执且不覆盖较新的工资录入
+[PASS] 并发核算与工资录入按单头锁串行，核算后不接受迟到编辑
+[PASS] 未知工资状态不可进入核算
+[PASS] 旧版默认零核算单不得直接发放

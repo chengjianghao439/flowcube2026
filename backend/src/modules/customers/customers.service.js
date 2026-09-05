@@ -56,7 +56,7 @@ async function findAll({ page=1, pageSize=20, keyword='' }) {
   // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like=`%${keyword}%`
-  const [rows] = await pool.query(`SELECT * FROM sale_customers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?) ORDER BY created_at DESC LIMIT ? OFFSET ?`,[like,like,ps,offset])
+  const [rows] = await pool.query(`SELECT * FROM sale_customers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?) ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,[like,like,ps,offset])
   const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_customers WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)`,[like,like])
   return { list:rows.map(fmt), pagination:{page,pageSize:ps,total} }
 }

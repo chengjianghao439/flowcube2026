@@ -17,7 +17,7 @@ function analyzeAudit(raw) {
     return { name, severity: item.severity, isDirect: item.isDirect, via: item.via.map(v => typeof v === 'string' ? v : v.title || v.source || 'advisory') }
   })
   if (data.metadata.vulnerabilities.total !== findings.length) throw new Error('依赖审计报告条目数与汇总不一致')
-  const blocking = findings.filter(f => f.isDirect && ['high', 'critical'].includes(f.severity)).length
+  const blocking = findings.filter(f => ['high', 'critical'].includes(f.severity)).length
   return { findings, blocking }
 }
 
@@ -27,7 +27,7 @@ if (require.main === module) {
     const exitCode = Number(process.argv[3])
     if (![0, 1].includes(exitCode)) throw new Error('依赖审计命令异常退出，不能认定扫描成功')
     const result = analyzeAudit(fs.readFileSync(file, 'utf8'))
-    const lines = [`## npm audit — ${file}`, ...result.findings.map(f => `- [${f.severity}] ${f.name}（${f.isDirect ? '直接' : '传递'}依赖）：${f.via.join(', ')}`), `发现 ${result.findings.length} 项；阻断发布的直接高危/严重依赖 ${result.blocking} 项。`]
+    const lines = [`## npm audit — ${file}`, ...result.findings.map(f => `- [${f.severity}] ${f.name}（${f.isDirect ? '直接' : '传递'}依赖）：${f.via.join(', ')}`), `发现 ${result.findings.length} 项；阻断发布的高危/严重依赖 ${result.blocking} 项。`]
     console.log(lines.join('\n'))
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n')
     process.exitCode = result.blocking > 0 ? 1 : 0

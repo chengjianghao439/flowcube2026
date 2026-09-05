@@ -1,0 +1,644 @@
+{
+  "baseline": "16d6435f7ca7d64db9641ede82df4c2b76c5c7b1",
+  "date": "2026-09-05",
+  "status": "findings_unfixed",
+  "scope": "local isolated test data; no production data accessed",
+  "probes": [
+    {
+      "id": "asset_rounding",
+      "rows": [
+        {
+          "period": "202601",
+          "monthly_amount": "16.67",
+          "accum_amount": "16.67",
+          "total_debit": "16.67"
+        },
+        {
+          "period": "202602",
+          "monthly_amount": "16.67",
+          "accum_amount": "33.34",
+          "total_debit": "16.67"
+        },
+        {
+          "period": "202603",
+          "monthly_amount": "16.67",
+          "accum_amount": "50.01",
+          "total_debit": "16.67"
+        },
+        {
+          "period": "202604",
+          "monthly_amount": "16.67",
+          "accum_amount": "66.68",
+          "total_debit": "16.67"
+        },
+        {
+          "period": "202605",
+          "monthly_amount": "16.67",
+          "accum_amount": "83.35",
+          "total_debit": "16.67"
+        },
+        {
+          "period": "202606",
+          "monthly_amount": "16.65",
+          "accum_amount": "100.00",
+          "total_debit": "16.67"
+        }
+      ]
+    },
+    {
+      "id": "asset_full_dispose",
+      "error": "凭证借贷不平：借 133.34 ≠ 贷 116.67",
+      "code": "ACCT_VOUCHER_UNBALANCED"
+    },
+    {
+      "id": "asset_repeat",
+      "before": [
+        {
+          "monthly_amount": "16.67",
+          "accum_amount": "16.67"
+        }
+      ],
+      "after": [
+        {
+          "monthly_amount": "16.67",
+          "accum_amount": "33.34"
+        }
+      ]
+    },
+    {
+      "id": "asset_dispose_missing_voucher",
+      "rows": [
+        {
+          "monthly_amount": "95.00",
+          "id": 10,
+          "voucher_id": null
+        }
+      ]
+    },
+    {
+      "id": "portal_customer_filter",
+      "requested": "审计甲",
+      "returned": [
+        "审计甲",
+        "审计甲乙"
+      ]
+    },
+    {
+      "id": "portal_warehouse_scope",
+      "normalStatus": 200,
+      "normalOrders": [],
+      "portalStatus": 200,
+      "portalOrders": [
+        "AUDIT-PO"
+      ]
+    },
+    {
+      "id": "receipt_concurrent_balance",
+      "balance": {
+        "current_balance": "20.0000",
+        "actual": "30.0000"
+      }
+    },
+    {
+      "id": "account_delete_race",
+      "deleted": {
+        "deleted_at": "2026-09-05T11:38:36.000Z",
+        "current_balance": "30.0000",
+        "transactions": 1
+      }
+    },
+    {
+      "id": "zero_payroll",
+      "calc": {
+        "id": 1,
+        "totalGross": 0,
+        "totalSocialCompany": 0,
+        "totalTax": 0,
+        "totalNet": 0
+      },
+      "payState": {
+        "status": 3,
+        "total_gross": "0.00",
+        "total_net": "0.00"
+      }
+    },
+    {
+      "id": "export_company_date_status",
+      "companyId": 2,
+      "assetId": 4,
+      "defaultRows": [
+        {
+          "name": "Audit direct disposal",
+          "date": "Tue Sep 01",
+          "status": "—"
+        },
+        {
+          "name": "Audit repeat",
+          "date": "Sat Aug 01",
+          "status": "在用"
+        },
+        {
+          "name": "Audit rounding",
+          "date": "Thu Jan 01",
+          "status": "已处置"
+        }
+      ],
+      "selectedRows": [
+        {
+          "name": "乙账套专属设备",
+          "date": "Tue Sep 01",
+          "status": "在用"
+        }
+      ]
+    },
+    {
+      "id": "export_truncation",
+      "databaseRows": 503,
+      "exportRows": 500,
+      "filename": "客户列表_20260905"
+    },
+    {
+      "id": "container_code_scan",
+      "calls": 3,
+      "fullAggregateQueries": 3
+    },
+    {
+      "id": "plastic_box_scope",
+      "allowedWarehouses": [
+        1
+      ],
+      "targetWarehouse": 3,
+      "locationWarehouse": 1,
+      "createStatus": 201,
+      "createdId": 1,
+      "detailStatus": 200,
+      "deleteStatus": 200
+    },
+    {
+      "id": "error_reporting_auth",
+      "withoutToken": 401,
+      "withToken": 200
+    },
+    {
+      "id": "company_cache_switch",
+      "method": "browser real UI switch",
+      "before": {
+        "companyId": 1,
+        "oldAssets": true,
+        "newAsset": false
+      },
+      "after": {
+        "companyId": 2,
+        "visibleOldAssets": true,
+        "visibleNewAsset": false,
+        "serverAssetNames": [
+          "乙账套专属设备"
+        ]
+      }
+    }
+  ],
+  "dependencies": {
+    "backend": {
+      "full": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 1,
+        "critical": 0,
+        "total": 1
+      },
+      "omitDev": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "packages": [
+        {
+          "name": "js-yaml",
+          "severity": "high",
+          "isDirect": false
+        }
+      ]
+    },
+    "frontend": {
+      "full": {
+        "info": 0,
+        "low": 1,
+        "moderate": 1,
+        "high": 1,
+        "critical": 0,
+        "total": 3
+      },
+      "omitDev": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "packages": [
+        {
+          "name": "@humanfs/node",
+          "severity": "moderate",
+          "isDirect": false
+        },
+        {
+          "name": "browserslist",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "postcss-selector-parser",
+          "severity": "low",
+          "isDirect": false
+        }
+      ]
+    },
+    "desktop": {
+      "full": {
+        "info": 0,
+        "low": 1,
+        "moderate": 0,
+        "high": 20,
+        "critical": 1,
+        "total": 22
+      },
+      "omitDev": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "packages": [
+        {
+          "name": "@electron/rebuild",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "@tootallnate/once",
+          "severity": "low",
+          "isDirect": false
+        },
+        {
+          "name": "@xmldom/xmldom",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "app-builder-lib",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "brace-expansion",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "builder-util",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "builder-util-runtime",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "cacache",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "dmg-builder",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "electron",
+          "severity": "high",
+          "isDirect": true
+        },
+        {
+          "name": "electron-builder",
+          "severity": "high",
+          "isDirect": true
+        },
+        {
+          "name": "electron-builder-squirrel-windows",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "electron-publish",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "extract-zip",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "form-data",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "ip-address",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "js-yaml",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "lodash",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "make-fetch-happen",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "node-gyp",
+          "severity": "high",
+          "isDirect": false
+        },
+        {
+          "name": "tar",
+          "severity": "critical",
+          "isDirect": false
+        },
+        {
+          "name": "tmp",
+          "severity": "high",
+          "isDirect": false
+        }
+      ]
+    }
+  },
+  "compose": {
+    "backend": {
+      "ports": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 3000,
+          "published": "3000",
+          "protocol": "tcp"
+        }
+      ],
+      "envKeys": [
+        "APP_PUBLIC_URL",
+        "APP_UPDATE_DOWNLOADS_DIR",
+        "CORS_ALLOW_NULL_ORIGIN",
+        "CORS_ORIGIN",
+        "CORS_REFLECT",
+        "DB_HOST",
+        "DB_NAME",
+        "DB_PASSWORD",
+        "DB_PORT",
+        "DB_USER",
+        "DINGTALK_ALERT_SECRET",
+        "DINGTALK_ALERT_WEBHOOK",
+        "JWT_EXPIRES_IN",
+        "JWT_SECRET",
+        "LOKI_URL",
+        "NODE_ENV",
+        "PORT",
+        "TRUST_PROXY",
+        "TZ"
+      ]
+    },
+    "frontend": {
+      "ports": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 80,
+          "published": "8080",
+          "protocol": "tcp"
+        },
+        {
+          "mode": "ingress",
+          "target": 80,
+          "published": "80",
+          "protocol": "tcp"
+        }
+      ],
+      "envKeys": []
+    },
+    "mysql": {
+      "ports": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 3306,
+          "published": "3306",
+          "protocol": "tcp"
+        }
+      ],
+      "envKeys": [
+        "MYSQL_DATABASE",
+        "MYSQL_PASSWORD",
+        "MYSQL_ROOT_PASSWORD",
+        "MYSQL_USER",
+        "TZ"
+      ]
+    }
+  },
+  "validation": {
+    "domainSuites": [
+      {
+        "name": "audit-inventory.smoke",
+        "exit": 0,
+        "seconds": 1
+      },
+      {
+        "name": "audit-finance-security.smoke",
+        "exit": 0,
+        "seconds": 4
+      },
+      {
+        "name": "mainline.smoke",
+        "exit": 0,
+        "seconds": 3
+      },
+      {
+        "name": "concurrency-guards.smoke",
+        "exit": 0,
+        "seconds": 5
+      },
+      {
+        "name": "sale-adjustment.smoke",
+        "exit": 0,
+        "seconds": 4
+      },
+      {
+        "name": "sale-atp.smoke",
+        "exit": 0,
+        "seconds": 1
+      },
+      {
+        "name": "p0-regression.smoke",
+        "exit": 0,
+        "seconds": 2
+      },
+      {
+        "name": "p1-regression.smoke",
+        "exit": 0,
+        "seconds": 3
+      },
+      {
+        "name": "warehouse-scope.smoke",
+        "exit": 0,
+        "seconds": 3
+      },
+      {
+        "name": "pda-device-session.smoke",
+        "exit": 0,
+        "seconds": 3
+      },
+      {
+        "name": "finance.smoke",
+        "exit": 0,
+        "seconds": 3
+      },
+      {
+        "name": "disposal.smoke",
+        "exit": 0,
+        "seconds": 2
+      },
+      {
+        "name": "invoice-quota.smoke",
+        "exit": 0,
+        "seconds": 1
+      },
+      {
+        "name": "refund-orders.smoke",
+        "exit": 0,
+        "seconds": 2
+      },
+      {
+        "name": "accounting.smoke",
+        "exit": 0,
+        "seconds": 1
+      },
+      {
+        "name": "accounting-period.smoke",
+        "exit": 0,
+        "seconds": 2
+      },
+      {
+        "name": "print-jobs-purge",
+        "exit": 0,
+        "seconds": 1
+      },
+      {
+        "name": "search-scope.smoke",
+        "exit": 0,
+        "seconds": 2
+      },
+      {
+        "name": "users-roles.smoke",
+        "exit": 0,
+        "seconds": 2
+      },
+      {
+        "name": "reports-values.smoke",
+        "exit": 0,
+        "seconds": 1
+      },
+      {
+        "name": "credit-outbound.smoke",
+        "exit": 0,
+        "seconds": 1
+      },
+      {
+        "name": "purchase-approval.smoke",
+        "exit": 0,
+        "seconds": 1
+      },
+      {
+        "name": "approval-flow.smoke",
+        "exit": 0,
+        "seconds": 3
+      },
+      {
+        "name": "credit-override.smoke",
+        "exit": 0,
+        "seconds": 2
+      },
+      {
+        "name": "dashboard-sales-v2.smoke",
+        "exit": 0,
+        "seconds": 2
+      },
+      {
+        "name": "hr-tax.smoke",
+        "exit": 0,
+        "seconds": 0
+      }
+    ],
+    "integration": {
+      "initialSharedFixtureResult": {
+        "exit": 1,
+        "failed": 4
+      },
+      "freshDedicatedDatabaseResult": {
+        "exit": 0,
+        "passed": 96,
+        "failed": 0
+      }
+    },
+    "frontend": {
+      "files": 19,
+      "passed": 92
+    },
+    "safetyClientContracts": {
+      "finalPassed": 104,
+      "finalFailed": 0,
+      "initialTimeoutTestFailed": true
+    },
+    "lint": {
+      "backendErrors": 0,
+      "frontendErrors": 0,
+      "frontendWarnings": 5
+    },
+    "typecheck": "tsconfig.app.json --noEmit passed",
+    "builds": {
+      "erp": {
+        "exit": 0,
+        "files": 258,
+        "diskBytes": 2884888
+      },
+      "pdaWeb": {
+        "exit": 0,
+        "files": 511,
+        "diskBytes": 7370925
+      }
+    },
+    "gitleaks": {
+      "scope": "git archive HEAD current snapshot",
+      "findings": 0
+    },
+    "sqlMigrations": 233
+  },
+  "notes": [
+    "Raw local run logs and controlled reproduction scripts are in /tmp/flowcube-audit-20260905.He7xa5; temporary files are not permanent evidence storage.",
+    "No credentials or tokens copied into this evidence file.",
+    "Package advisory counts include development tooling and transitive affected packages; they are not confirmed application exploit counts."
+  ]
+}

@@ -1,0 +1,109 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:19.154] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"964eabc1-1424-4da1-af27-cbddd6b029b3"}
+[2026-09-05 22:28:19.159] [INFO ] [HTTP] POST /api/auth/login {"ms":357,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"964eabc1-1424-4da1-af27-cbddd6b029b3"}
+
+────────────────────────────────────────────────────────────
+  P0-1 采购退货出库不得释放其它销售单的库存预占
+────────────────────────────────────────────────────────────
+  [PASS] 前置：库存100 / 预占60
+  [PASS] 库存已扣减到 70
+  [PASS] ★P0-1 reserved 保持 60 不变（修复前会被误扣成 30 → 可用量虚高 → 超卖）
+  [PASS] ★P0-1 可用量正确为 10（70-60），不是错误的 40
+
+────────────────────────────────────────────────────────────
+  P0-2 分批发货后取消剩余，预占必须能完整释放
+────────────────────────────────────────────────────────────
+  [PASS] 第一批出库后 reserved 降到 60
+  [PASS] ★P0-2 未发部分仍保留为「预占中」记录 60（修复前整组被标记为已履行 → 记录归零）
+  [PASS] ★P0-2 取消后 reserved 完整归零（修复前会永久卡在 60，货在货架上却永远不可用）
+  [PASS] 库存量不受释放影响，仍为 60
+
+────────────────────────────────────────────────────────────
+  P0-3 短装收货：结束收货 → 上架 → 自动结算 → 采购单结案
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:19.471] [INFO ] [HTTP] POST /api/purchase {"ms":41,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"4adb9184-33ac-4f0b-a064-b1e69b646e22"}
+[2026-09-05 22:28:19.491] [INFO ] [HTTP] POST /api/purchase/3/confirm {"ms":18,"status":200,"userId":2,"path":"/api/purchase/3/confirm","method":"POST","requestId":"72e74442-5653-401b-a974-23b20fc1922d"}
+[2026-09-05 22:28:19.545] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":49,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"af9f169f-8063-4f12-8a4a-81e099dfd268"}
+[2026-09-05 22:28:19.586] [INFO ] [HTTP] POST /api/inbound-tasks/3/submit {"ms":37,"status":200,"userId":2,"path":"/api/inbound-tasks/3/submit","method":"POST","requestId":"f11c6127-c6ac-4e60-a8c7-0ea1c0254269"}
+[2026-09-05 22:28:19.611] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/3/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"f9bb3767-e603-46da-97d7-96228972523a"}
+[2026-09-05 22:28:19.688] [INFO ] [HTTP] POST /api/inbound-tasks/3/receive {"ms":97,"status":200,"userId":2,"path":"/api/inbound-tasks/3/receive","method":"POST","requestId":"f9bb3767-e603-46da-97d7-96228972523a"}
+  [PASS] 短装收货成功
+  [PASS] 未收满时任务停在收货中(2)
+[2026-09-05 22:28:19.713] [INFO ] [HTTP] POST /api/inbound-tasks/3/close-receiving {"ms":21,"status":200,"userId":2,"path":"/api/inbound-tasks/3/close-receiving","method":"POST","requestId":"139a5442-3b0e-4edf-aa62-72cc0a92ce50"}
+  [PASS] 可以提前结束收货
+  [PASS] 结束收货后进入待上架(3)并标记 short_close
+[2026-09-05 22:28:19.727] [INFO ] [HTTP] GET /api/inbound-tasks/3/containers {"ms":9,"status":200,"userId":2,"path":"/api/inbound-tasks/3/containers","method":"GET","requestId":"e6b52f0e-996c-4c41-ac0f-e9dcbe86e2b1"}
+  [PASS] 存在待上架容器
+[2026-09-05 22:28:19.741] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/3/putaway","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"33e8853d-d9fd-4b77-9107-a934b89c10b0"}
+[2026-09-05 22:28:19.847] [INFO ] [HTTP] POST /api/inbound-tasks/3/putaway {"ms":113,"status":200,"userId":2,"path":"/api/inbound-tasks/3/putaway","method":"POST","requestId":"33e8853d-d9fd-4b77-9107-a934b89c10b0"}
+  [PASS] 容器 5 上架成功
+  [PASS] ★P0-3 短装全部上架后收货订单完成(4)（修复前永久卡在待上架(3)，PDA 上却没有任何可上架容器）
+  [PASS] ★P0-3 audit_status 置为已结算(1)
+  [PASS] ★P0-3 应付账款按实收 8 件生成 = 80 元（修复前恒为不生成 → 货进了库却不欠供应商钱）
+[2026-09-05 22:28:19.912] [INFO ] [HTTP] POST /api/purchase/3/close {"ms":55,"status":200,"userId":2,"path":"/api/purchase/3/close","method":"POST","requestId":"ab4bfa8f-e8f6-4b5d-9f22-908eb64e317f"}
+  [PASS] ★P0-3 采购单可以关闭剩余结案（修复前被 audit_status<>1 挡死，用户完全无路可走）
+  [PASS] 采购单已完成(3)并标记短装结案
+
+────────────────────────────────────────────────────────────
+  P0-4 执行期改单必须保留行级发货仓库
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:19.981] [INFO ] [HTTP] POST /api/sale {"ms":38,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"7cb3d624-2be6-4765-aa5d-dea949c40a2c"}
+  [PASS] 销售单创建成功
+[2026-09-05 22:28:20.029] [INFO ] [HTTP] POST /api/sale/1/reserve {"ms":46,"status":200,"userId":2,"path":"/api/sale/1/reserve","method":"POST","requestId":"d7dc87df-5abc-4e58-af60-1323ca168da9"}
+[2026-09-05 22:28:20.071] [INFO ] [HTTP] POST /api/sale/1/ship {"ms":39,"status":200,"userId":2,"path":"/api/sale/1/ship","method":"POST","requestId":"b04877c3-fc85-472e-8631-989ecb6c0bca"}
+  [PASS] 发起出库成功
+[2026-09-05 22:28:20.113] [INFO ] [HTTP] PUT /api/sale/1/adjust {"ms":39,"status":200,"userId":2,"path":"/api/sale/1/adjust","method":"PUT","requestId":"167de393-c046-4d3c-a6a6-fef1e697e298"}
+  [PASS] 改单成功
+  [PASS] 改单后明细已重建
+  [PASS] ★P0-4 warehouse_id 未丢失（修复前为 NULL → shipped_qty 永远回写不上 → 应收恒为 0）
+  [PASS] ★P0-4 warehouse_id 等于该单发货仓库
+  [PASS] ★P0-4 warehouse_name 一并保留
+  [PASS] 改单重建的行仍标记为已派发(dispatched=1)
+
+────────────────────────────────────────────────────────────
+  P0-5 多仓同商品订单出库明细不得重复放大
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:20.145] [INFO ] [HTTP] POST /api/sale {"ms":7,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"86c4920f-8f1f-4087-8f28-d14c1061d0d5"}
+  [PASS] 订单含两行同商品、分属两个仓库
+[2026-09-05 22:28:20.162] [INFO ] [HTTP] POST /api/sale/2/reserve {"ms":14,"status":200,"userId":2,"path":"/api/sale/2/reserve","method":"POST","requestId":"92649f03-c945-4fa7-bcf3-085bfeb201da"}
+[2026-09-05 22:28:20.172] [INFO ] [HTTP] POST /api/sale/2/ship {"ms":9,"status":200,"userId":2,"path":"/api/sale/2/ship","method":"POST","requestId":"3c55294c-7754-422c-a30b-daf19170b121"}
+  [PASS] 分仓发起出库成功
+  [PASS] 按仓库分别建了 2 个仓库任务
+  [PASS] ★P0-5 任务#2（仓库1）出库明细 1 条 == 任务明细 1 条（修复前会放大成 2 条 → 库存扣 2 倍）
+  [PASS] 任务#2 出库仓库取自任务自身
+  [PASS] ★P0-5 任务#3（仓库2）出库明细 1 条 == 任务明细 1 条（修复前会放大成 2 条 → 库存扣 2 倍）
+  [PASS] 任务#3 出库仓库取自任务自身
+
+────────────────────────────────────────────────────────────
+  P0-6 幂等回执查询接口（PDA 断网后确认上次提交结果）
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:20.189] [INFO ] [HTTP] POST /api/purchase {"ms":4,"status":201,"userId":2,"path":"/api/purchase","method":"POST","requestId":"a69f8862-35cc-43c1-921c-f6cf190d5af8"}
+[2026-09-05 22:28:20.194] [INFO ] [HTTP] POST /api/purchase/4/confirm {"ms":3,"status":200,"userId":2,"path":"/api/purchase/4/confirm","method":"POST","requestId":"73bdfe66-8946-42e7-9231-22a4c4a53dff"}
+[2026-09-05 22:28:20.201] [INFO ] [HTTP] POST /api/inbound-tasks {"ms":6,"status":201,"userId":2,"path":"/api/inbound-tasks","method":"POST","requestId":"307d814c-8978-4921-a266-5d18e3e34928"}
+[2026-09-05 22:28:20.209] [INFO ] [HTTP] POST /api/inbound-tasks/4/submit {"ms":6,"status":200,"userId":2,"path":"/api/inbound-tasks/4/submit","method":"POST","requestId":"241137cc-515b-41a1-baf3-ec4d1ce19d33"}
+[2026-09-05 22:28:20.214] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/inbound-tasks/4/receive","userId":2,"deviceCode":"SMOKE-PDA-01","warehouseId":1,"requestId":"308c2b4c-50d7-4ab3-bd59-b07eed5b5cbf"}
+[2026-09-05 22:28:20.226] [INFO ] [HTTP] POST /api/inbound-tasks/4/receive {"ms":15,"status":200,"userId":2,"path":"/api/inbound-tasks/4/receive","method":"POST","requestId":"308c2b4c-50d7-4ab3-bd59-b07eed5b5cbf"}
+  [PASS] 前置：带幂等键的收货成功
+[2026-09-05 22:28:20.229] [INFO ] [HTTP] GET /api/system/request-status/receipt-key-f4b58aec?action=inbound.receive {"ms":2,"status":200,"userId":2,"path":"/api/system/request-status/receipt-key-f4b58aec?action=inbound.receive","method":"GET","requestId":"35cc32e1-f8ee-49aa-8ff0-26c0d9bf8f1a"}
+  [PASS] ★P0-6 回执查询接口存在且可用（修复前后端从未注册 /api/system，前端必然 404）
+  [PASS] ★P0-6 回执如实返回 success，PDA 据此判定「上次其实成了，不要重扫」
+  [PASS] ★P0-6 回执带回原始业务数据与单据归属，断网恢复后能还原现场提示
+[2026-09-05 22:28:20.232] [INFO ] [HTTP] GET /api/system/request-status/receipt-key-f4b58aec?action=inbound.putaway {"ms":1,"status":200,"userId":2,"path":"/api/system/request-status/receipt-key-f4b58aec?action=inbound.putaway","method":"GET","requestId":"decb80c9-3100-46d6-9cc9-95e6c7a295bc"}
+  [PASS] action 不匹配时不串台（按 request_key + action + user_id 三元组定位）
+[2026-09-05 22:28:20.234] [WARN ] [HTTP] GET /api/system/request-status/receipt-key-f4b58aec {"ms":0,"status":400,"userId":2,"path":"/api/system/request-status/receipt-key-f4b58aec","method":"GET","requestId":"5a2d7b34-dc3a-4f89-8b30-4708766a74a9"}
+  [PASS] 缺 action 参数返回 400 且提示为中文
+[2026-09-05 22:28:20.236] [WARN ] [ERR] [AppError] 未提供认证 Token {"path":"/api/system/request-status/receipt-key-f4b58aec?action=inbound.receive","userId":"-","refNo":"","requestId":"42d066f7-eabb-4631-9d28-5828f13954a6","code":"AUTH_TOKEN_MISSING","statusCode":401}
+[2026-09-05 22:28:20.236] [WARN ] [HTTP] GET /api/system/request-status/receipt-key-f4b58aec?action=inbound.receive {"ms":0,"status":401,"userId":"-","path":"/api/system/request-status/receipt-key-f4b58aec?action=inbound.receive","method":"GET","requestId":"42d066f7-eabb-4631-9d28-5828f13954a6"}
+  [PASS] 未登录无法查询回执（回执含业务数据，必须带身份）
+[2026-09-05 22:28:20.239] [WARN ] [ERR] [AppError] 仅待收货状态的任务可取消 {"path":"/api/inbound-tasks/4/cancel","userId":2,"refNo":"","requestId":"341cd572-fb22-4171-9251-15b41eb93d92","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:20.240] [WARN ] [HTTP] POST /api/inbound-tasks/4/cancel {"ms":2,"status":400,"userId":2,"path":"/api/inbound-tasks/4/cancel","method":"POST","requestId":"341cd572-fb22-4171-9251-15b41eb93d92"}
+
+════════════════════════════════════════════════════════════
+  41 passed, 0 failed
+════════════════════════════════════════════════════════════
+

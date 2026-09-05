@@ -1,0 +1,17 @@
+[2026-09-05 21:21:09] [INFO] 校验备份：flowcube_20260905_020001.sql.gz（184K）
+[2026-09-05 21:21:09] [INFO] 备份文件距今 0 小时（阈值 48h）
+[2026-09-05 21:21:09] [INFO] 启动临时 MySQL 容器 flowcube-restore-check-26509 ...
+Unable to find image 'mysql:8.0.46' locally
+8.0.46: Pulling from library/mysql
+Digest: sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
+Status: Downloaded newer image for mysql:8.0.46
+[2026-09-05 21:21:18] [INFO] 临时 MySQL 已就绪
+[2026-09-05 21:21:18] [INFO] 解压并导入备份到 flowcube_restore_check ...
+[2026-09-05 21:21:19] [INFO] 恢复后表数：135（阈值 132）
+[2026-09-05 21:21:19] [INFO] 关键表行数抽查（阈值 ≥1 行）：
+    sys_users: 7 行
+    product_items: 130 行
+    sale_orders: 11 行
+    purchase_orders: 7 行
+    inventory_containers: 107 行
+[2026-09-05 21:21:19] [OK] 备份恢复演练通过：flowcube_20260905_020001.sql.gz 可完整导入（135 张表）

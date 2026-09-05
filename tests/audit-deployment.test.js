@@ -93,6 +93,7 @@ test('成功部署先迁移后替换应用，并通过门禁后结束', () => {
   assert.ok(migrate >= 0 && replace > migrate, JSON.stringify(result.commands))
   assert.ok(!result.commands.some(c => c.includes('--force-recreate')))
   assert.ok(!result.commands.some(c => c[0] === 'docker' && c.includes('build')), '生产不得编译')
+  assert.ok(result.commands.some(c => c[0] === 'curl' && c.some(arg => arg.endsWith('/api/ready'))), '新版本部署须验证应用连接池就绪')
   const load = result.commands.findIndex(c => c[0] === 'docker' && c[1] === 'load')
   const verify = result.commands.findIndex(c => c[0] === 'docker' && c.slice(1, 3).join(' ') === 'image inspect')
   assert.ok(load >= 0 && verify > load && migrate > verify, '先加载并验证 CI 镜像，再执行迁移')

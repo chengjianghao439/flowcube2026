@@ -1,0 +1,27 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:22.176] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"c8536fbb-fce0-4c79-991d-734e386479bf"}
+[2026-09-05 22:28:22.178] [INFO ] [HTTP] POST /api/auth/login {"ms":73,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"c8536fbb-fce0-4c79-991d-734e386479bf"}
+[2026-09-05 22:28:22.210] [INFO ] [HTTP] POST /api/sale {"ms":18,"status":201,"userId":2,"path":"/api/sale","method":"POST","requestId":"76148ee6-2bee-4f67-940f-5e634bb17b78"}
+  [PASS] ★ 在途占库：建销售单成功
+[2026-09-05 22:28:22.240] [INFO ] [HTTP] POST /api/sale/2/reserve {"ms":26,"status":200,"userId":2,"path":"/api/sale/2/reserve","method":"POST","requestId":"0e94874e-c602-434e-9f7f-d4112e1c3d10"}
+  [PASS] ★ 现货 0 也可占库（采购单预计量支撑）
+  [PASS] ★ 超出现货部分已记录采购单绑定
+[2026-09-05 22:28:22.247] [WARN ] [ERR] [AppError] 无法取消采购单：采购单的预计到货量已被销售单占用，请先到销售单解除绑定后再操作。涉及：SL20260905002（5） {"path":"/api/purchase/2/cancel","userId":2,"refNo":"","requestId":"b6146609-935e-4482-9660-f43fe7d9b201","code":"BINDING_SALE_DEPENDENCY","statusCode":409}
+[2026-09-05 22:28:22.247] [WARN ] [HTTP] POST /api/purchase/2/cancel {"ms":4,"status":409,"userId":2,"path":"/api/purchase/2/cancel","method":"POST","requestId":"b6146609-935e-4482-9660-f43fe7d9b201"}
+  [PASS] ★ 采购单取消被绑定拦截（409 BINDING_SALE_DEPENDENCY）
+  [PASS] 拦截信息列出被占用销售单
+[2026-09-05 22:28:22.256] [INFO ] [HTTP] POST /api/sale/2/release {"ms":7,"status":200,"userId":2,"path":"/api/sale/2/release","method":"POST","requestId":"85902ba9-236f-423a-9422-b7959b9f788a"}
+  [PASS] 释放销售占库
+  [PASS] ★ 释放后绑定作废
+[2026-09-05 22:28:22.262] [INFO ] [HTTP] POST /api/purchase/2/cancel {"ms":3,"status":200,"userId":2,"path":"/api/purchase/2/cancel","method":"POST","requestId":"d3e5753a-670f-4b51-ae0e-2ab68d6ee472"}
+  [PASS] ★ 解除绑定后采购单可取消
+
+════════════════════════════════════════════════════════════
+  8 passed, 0 failed
+════════════════════════════════════════════════════════════
+

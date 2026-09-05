@@ -35,11 +35,14 @@ export function useLogin(redirectTo = '/dashboard') {
       useWorkspaceStore.getState().closeAll()
       // refreshToken（2026-08-21 权衡修复）：access 2h 过期后自动换新
       login(data.token, data.refreshToken ?? null, data.user)
+      const sessionGeneration = useAuthStore.getState().sessionGeneration
       await syncPdaLabelPrinterBinding().catch(() => null)
+      if (useAuthStore.getState().sessionGeneration !== sessionGeneration) return
       // PDA 端登录后立刻用本机设备凭据换一张设备票据；没绑定过设备就跳过，
       // 由后端的观察/强制模式决定后续作业是否放行，不在这里打断登录
       if (redirectTo.startsWith('/pda')) {
         await ensureDeviceSession().catch(() => null)
+        if (useAuthStore.getState().sessionGeneration !== sessionGeneration) return
       }
       persistLoginSuccess(variables.username)
       navigate(redirectTo, { replace: true })

@@ -1,0 +1,264 @@
+{
+  "baseline": "16d6435f7ca7d64db9641ede82df4c2b76c5c7b1",
+  "date": "2026-09-05",
+  "status": "fixed_locally_not_deployed",
+  "productionAccess": false,
+  "findings": {
+    "F01": "fixed",
+    "F02": "fixed",
+    "F03": "fixed",
+    "F04": "fixed",
+    "F05": "fixed",
+    "F06": "fixed",
+    "F07": "fixed",
+    "F08": "fixed",
+    "F09": "fixed",
+    "F10": "fixed",
+    "F11": "fixed",
+    "F12": "fixed",
+    "F13": "fixed",
+    "F14": "fixed",
+    "F15": "fixed",
+    "F16": "fixed",
+    "F17": "fixed"
+  },
+  "domainSuites": [
+    {
+      "name": "audit-inventory.smoke",
+      "exit": 0,
+      "seconds": 0.1,
+      "initialExit": 1
+    },
+    {
+      "name": "audit-finance-security.smoke",
+      "exit": 0,
+      "seconds": 0.2,
+      "initialExit": 1
+    },
+    {
+      "name": "mainline.smoke",
+      "exit": 0,
+      "seconds": 3.9
+    },
+    {
+      "name": "concurrency-guards.smoke",
+      "exit": 0,
+      "seconds": 4.2
+    },
+    {
+      "name": "sale-adjustment.smoke",
+      "exit": 0,
+      "seconds": 4.2
+    },
+    {
+      "name": "sale-atp.smoke",
+      "exit": 0,
+      "seconds": 3.4
+    },
+    {
+      "name": "p0-regression.smoke",
+      "exit": 0,
+      "seconds": 3.8
+    },
+    {
+      "name": "p1-regression.smoke",
+      "exit": 0,
+      "seconds": 4.0
+    },
+    {
+      "name": "warehouse-scope.smoke",
+      "exit": 0,
+      "seconds": 3.8
+    },
+    {
+      "name": "pda-device-session.smoke",
+      "exit": 0,
+      "seconds": 4.1
+    },
+    {
+      "name": "finance.smoke",
+      "exit": 0,
+      "seconds": 4.2
+    },
+    {
+      "name": "disposal.smoke",
+      "exit": 0,
+      "seconds": 3.6
+    },
+    {
+      "name": "invoice-quota.smoke",
+      "exit": 0,
+      "seconds": 3.4
+    },
+    {
+      "name": "refund-orders.smoke",
+      "exit": 0,
+      "seconds": 3.4
+    },
+    {
+      "name": "accounting.smoke",
+      "exit": 0,
+      "seconds": 3.4
+    },
+    {
+      "name": "accounting-period.smoke",
+      "exit": 0,
+      "seconds": 3.6
+    },
+    {
+      "name": "print-jobs-purge",
+      "exit": 0,
+      "seconds": 3.5
+    },
+    {
+      "name": "search-scope.smoke",
+      "exit": 0,
+      "seconds": 3.6
+    },
+    {
+      "name": "users-roles.smoke",
+      "exit": 0,
+      "seconds": 3.6
+    },
+    {
+      "name": "reports-values.smoke",
+      "exit": 0,
+      "seconds": 3.3
+    },
+    {
+      "name": "credit-outbound.smoke",
+      "exit": 0,
+      "seconds": 3.2
+    },
+    {
+      "name": "purchase-approval.smoke",
+      "exit": 0,
+      "seconds": 3.3
+    },
+    {
+      "name": "approval-flow.smoke",
+      "exit": 0,
+      "seconds": 4.2
+    },
+    {
+      "name": "credit-override.smoke",
+      "exit": 0,
+      "seconds": 8.7
+    },
+    {
+      "name": "dashboard-sales-v2.smoke",
+      "exit": 0,
+      "seconds": 180.0,
+      "initialExit": 124
+    },
+    {
+      "name": "hr-tax.smoke",
+      "exit": 0,
+      "seconds": 0.1
+    },
+    {
+      "name": "integration",
+      "exit": 0,
+      "seconds": 39.1
+    }
+  ],
+  "specialized": {
+    "finance": 15,
+    "scopeExport": 32,
+    "hr": 10,
+    "failed": 0
+  },
+  "frontend": {
+    "files": 20,
+    "passed": 100,
+    "failed": 0
+  },
+  "staticCombined": {
+    "passed": 62,
+    "failed": 0
+  },
+  "finalRelatedGates": {
+    "passed": 14,
+    "failed": 0
+  },
+  "lint": {
+    "backendErrors": 0,
+    "frontendErrors": 0,
+    "frontendWarnings": 5
+  },
+  "typecheck": "tsconfig.app.json --noEmit passed",
+  "builds": {
+    "erp": {
+      "files": 238,
+      "bytes": 2846644,
+      "exit": 0
+    },
+    "pda": {
+      "files": 131,
+      "bytes": 2569235,
+      "exit": 0
+    }
+  },
+  "npmAudit": {
+    "backend": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "frontend": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "desktop": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    }
+  },
+  "browser": {
+    "mode": "local development with isolated test DB",
+    "erp": [
+      "login",
+      "cached asset tab refreshes after company switch",
+      "company identity",
+      "date YYYY-MM-DD",
+      "fully depreciated dispose dialog",
+      "downloaded Excel verified"
+    ],
+    "pda": [
+      "login",
+      "unbound device gate preserved"
+    ],
+    "errors": 0
+  },
+  "gitleaks": {
+    "scope": "HEAD snapshot plus all reviewed working changes",
+    "findings": 0
+  },
+  "limitations": [
+    "not deployed",
+    "no production historical data repair",
+    "Windows install/update and physical print not verified",
+    "Android native scanner and printer not verified"
+  ],
+  "delivery": {
+    "target": "current project checkout",
+    "paths": 97,
+    "hashesMatched": true,
+    "incrementalDependenciesInstalled": true,
+    "electronRuntime": "44.2.0",
+    "currentCheckoutTypecheck": "passed",
+    "currentCheckoutRuntimeTests": 6,
+    "isolatedPreviewStopped": true
+  }
+}

@@ -1,0 +1,957 @@
+{
+  "environment": {
+    "database": "flowcube_fix_24_test",
+    "host": "127.0.0.1",
+    "port": "13308"
+  },
+  "calls": [
+    {
+      "label": "scope-frontend-active-warehouses",
+      "method": "GET",
+      "path": "/api/warehouses/active",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "查询成功",
+        "data": [
+          {
+            "id": 5,
+            "code": "R2T1788614731513W0",
+            "name": "R2T1788614731513仓0",
+            "type": 1
+          }
+        ]
+      }
+    },
+    {
+      "label": "scope-outside-create",
+      "method": "POST",
+      "path": "/api/transfer",
+      "status": 201,
+      "response": {
+        "success": true,
+        "message": "创建成功",
+        "data": {
+          "id": 6,
+          "orderNo": "TF20260905006"
+        }
+      }
+    },
+    {
+      "label": "scope-outside-read",
+      "method": "GET",
+      "path": "/api/transfer/6",
+      "status": 403,
+      "response": {
+        "success": false,
+        "code": "WAREHOUSE_SCOPE_DENIED",
+        "message": "无权访问其他仓库的调拨单",
+        "data": null
+      }
+    },
+    {
+      "label": "scope-outside-confirm",
+      "method": "POST",
+      "path": "/api/transfer/6/confirm",
+      "status": 403,
+      "response": {
+        "success": false,
+        "code": "WAREHOUSE_SCOPE_DENIED",
+        "message": "无权访问其他仓库的调拨单",
+        "data": null
+      }
+    },
+    {
+      "label": "duplicate-create",
+      "method": "POST",
+      "path": "/api/transfer",
+      "status": 201,
+      "response": {
+        "success": true,
+        "message": "创建成功",
+        "data": {
+          "id": 7,
+          "orderNo": "TF20260905007"
+        }
+      }
+    },
+    {
+      "label": "duplicate-confirm",
+      "method": "POST",
+      "path": "/api/transfer/7/confirm",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "已确认并派发到 PDA",
+        "data": null
+      }
+    },
+    {
+      "label": "duplicate-first-out",
+      "method": "POST",
+      "path": "/api/transfer/7/scan-out",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "出库成功",
+        "data": {
+          "transferId": 7,
+          "containerBarcode": "R2T1788614731513C0",
+          "productId": 26,
+          "qty": 5
+        }
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 7,
+            "quantity": "5.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "0.0000"
+          },
+          {
+            "order_id": 7,
+            "quantity": "5.0000",
+            "deducted_qty": "0.0000",
+            "received_qty": "0.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 7,
+            "status": 3
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C0",
+            "warehouse_id": 6,
+            "status": 4,
+            "transfer_order_id": 7
+          }
+        ]
+      }
+    },
+    {
+      "label": "duplicate-second-out",
+      "method": "POST",
+      "path": "/api/transfer/7/scan-out",
+      "status": 409,
+      "response": {
+        "success": false,
+        "code": "CONFLICT",
+        "message": "该容器 5 件超出调拨单剩余可调量 0 件，无法整箱扫出；请改用数量相符的容器或改单",
+        "data": null
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 7,
+            "quantity": "5.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "0.0000"
+          },
+          {
+            "order_id": 7,
+            "quantity": "5.0000",
+            "deducted_qty": "0.0000",
+            "received_qty": "0.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 7,
+            "status": 3
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C1",
+            "warehouse_id": 5,
+            "status": 1,
+            "transfer_order_id": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "duplicate-first-in",
+      "method": "POST",
+      "path": "/api/transfer/7/scan-in",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "入库成功",
+        "data": {
+          "transferId": 7,
+          "containerBarcode": "R2T1788614731513C0",
+          "productId": 26,
+          "qty": 5,
+          "completed": true
+        }
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 7,
+            "quantity": "5.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "5.0000"
+          },
+          {
+            "order_id": 7,
+            "quantity": "5.0000",
+            "deducted_qty": "0.0000",
+            "received_qty": "0.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 7,
+            "status": 4
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C0",
+            "warehouse_id": 6,
+            "status": 1,
+            "transfer_order_id": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "duplicate-after-completed",
+      "method": "POST",
+      "path": "/api/transfer/7/scan-out",
+      "status": 400,
+      "response": {
+        "success": false,
+        "code": "BAD_REQUEST",
+        "message": "只有待出库/在途的调拨单可以扫码出库",
+        "data": null
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 7,
+            "quantity": "5.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "5.0000"
+          },
+          {
+            "order_id": 7,
+            "quantity": "5.0000",
+            "deducted_qty": "0.0000",
+            "received_qty": "0.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 7,
+            "status": 4
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C1",
+            "warehouse_id": 5,
+            "status": 1,
+            "transfer_order_id": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "replay-A-create",
+      "method": "POST",
+      "path": "/api/transfer",
+      "status": 201,
+      "response": {
+        "success": true,
+        "message": "创建成功",
+        "data": {
+          "id": 8,
+          "orderNo": "TF20260905008"
+        }
+      }
+    },
+    {
+      "label": "replay-A-confirm",
+      "method": "POST",
+      "path": "/api/transfer/8/confirm",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "已确认并派发到 PDA",
+        "data": null
+      }
+    },
+    {
+      "label": "replay-B-create",
+      "method": "POST",
+      "path": "/api/transfer",
+      "status": 201,
+      "response": {
+        "success": true,
+        "message": "创建成功",
+        "data": {
+          "id": 9,
+          "orderNo": "TF20260905009"
+        }
+      }
+    },
+    {
+      "label": "replay-B-confirm",
+      "method": "POST",
+      "path": "/api/transfer/9/confirm",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "已确认并派发到 PDA",
+        "data": null
+      }
+    },
+    {
+      "label": "replay-A-out",
+      "method": "POST",
+      "path": "/api/transfer/8/scan-out",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "出库成功",
+        "data": {
+          "transferId": 8,
+          "containerBarcode": "R2T1788614731513C2",
+          "productId": 26,
+          "qty": 5
+        }
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 8,
+            "quantity": "5.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "0.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 8,
+            "status": 3
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C2",
+            "warehouse_id": 6,
+            "status": 4,
+            "transfer_order_id": 8
+          }
+        ]
+      }
+    },
+    {
+      "label": "replay-B-out-same-key",
+      "method": "POST",
+      "path": "/api/transfer/9/scan-out",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "出库成功",
+        "data": {
+          "transferId": 8,
+          "containerBarcode": "R2T1788614731513C2",
+          "productId": 26,
+          "qty": 5
+        }
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 9,
+            "quantity": "5.0000",
+            "deducted_qty": "0.0000",
+            "received_qty": "0.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 9,
+            "status": 2
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C3",
+            "warehouse_id": 5,
+            "status": 1,
+            "transfer_order_id": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "replay-nonexistent-out-same-key",
+      "method": "POST",
+      "path": "/api/transfer/99999999/scan-out",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "出库成功",
+        "data": {
+          "transferId": 8,
+          "containerBarcode": "R2T1788614731513C2",
+          "productId": 26,
+          "qty": 5
+        }
+      },
+      "sqlAfter": {
+        "items": [],
+        "order": [],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C3",
+            "warehouse_id": 5,
+            "status": 1,
+            "transfer_order_id": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "replay-B-out-new-key",
+      "method": "POST",
+      "path": "/api/transfer/9/scan-out",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "出库成功",
+        "data": {
+          "transferId": 9,
+          "containerBarcode": "R2T1788614731513C3",
+          "productId": 26,
+          "qty": 5
+        }
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 9,
+            "quantity": "5.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "0.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 9,
+            "status": 3
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C3",
+            "warehouse_id": 6,
+            "status": 4,
+            "transfer_order_id": 9
+          }
+        ]
+      }
+    },
+    {
+      "label": "replay-A-in",
+      "method": "POST",
+      "path": "/api/transfer/8/scan-in",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "入库成功",
+        "data": {
+          "transferId": 8,
+          "containerBarcode": "R2T1788614731513C2",
+          "productId": 26,
+          "qty": 5,
+          "completed": true
+        }
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 8,
+            "quantity": "5.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "5.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 8,
+            "status": 4
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C2",
+            "warehouse_id": 6,
+            "status": 1,
+            "transfer_order_id": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "replay-B-in-same-key",
+      "method": "POST",
+      "path": "/api/transfer/9/scan-in",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "入库成功",
+        "data": {
+          "transferId": 8,
+          "containerBarcode": "R2T1788614731513C2",
+          "productId": 26,
+          "qty": 5,
+          "completed": true
+        }
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 9,
+            "quantity": "5.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "0.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 9,
+            "status": 3
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C3",
+            "warehouse_id": 6,
+            "status": 4,
+            "transfer_order_id": 9
+          }
+        ]
+      }
+    },
+    {
+      "label": "replay-B-in-new-key",
+      "method": "POST",
+      "path": "/api/transfer/9/scan-in",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "入库成功",
+        "data": {
+          "transferId": 9,
+          "containerBarcode": "R2T1788614731513C3",
+          "productId": 26,
+          "qty": 5,
+          "completed": true
+        }
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 9,
+            "quantity": "5.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "5.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 9,
+            "status": 4
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C3",
+            "warehouse_id": 6,
+            "status": 1,
+            "transfer_order_id": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "unique-partial-create",
+      "method": "POST",
+      "path": "/api/transfer",
+      "status": 201,
+      "response": {
+        "success": true,
+        "message": "创建成功",
+        "data": {
+          "id": 10,
+          "orderNo": "TF20260905010"
+        }
+      }
+    },
+    {
+      "label": "unique-partial-confirm",
+      "method": "POST",
+      "path": "/api/transfer/10/confirm",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "已确认并派发到 PDA",
+        "data": null
+      }
+    },
+    {
+      "label": "unique-first-out",
+      "method": "POST",
+      "path": "/api/transfer/10/scan-out",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "出库成功",
+        "data": {
+          "transferId": 10,
+          "containerBarcode": "R2T1788614731513C4",
+          "productId": 26,
+          "qty": 5
+        }
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 10,
+            "quantity": "10.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "0.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 10,
+            "status": 3
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C4",
+            "warehouse_id": 6,
+            "status": 4,
+            "transfer_order_id": 10
+          }
+        ]
+      }
+    },
+    {
+      "label": "unique-first-in",
+      "method": "POST",
+      "path": "/api/transfer/10/scan-in",
+      "status": 200,
+      "response": {
+        "success": true,
+        "message": "入库成功",
+        "data": {
+          "transferId": 10,
+          "containerBarcode": "R2T1788614731513C4",
+          "productId": 26,
+          "qty": 5,
+          "completed": true
+        }
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 10,
+            "quantity": "10.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "5.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 10,
+            "status": 4
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C4",
+            "warehouse_id": 6,
+            "status": 1,
+            "transfer_order_id": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "unique-second-out-after-completed",
+      "method": "POST",
+      "path": "/api/transfer/10/scan-out",
+      "status": 400,
+      "response": {
+        "success": false,
+        "code": "BAD_REQUEST",
+        "message": "只有待出库/在途的调拨单可以扫码出库",
+        "data": null
+      },
+      "sqlAfter": {
+        "items": [
+          {
+            "order_id": 10,
+            "quantity": "10.0000",
+            "deducted_qty": "5.0000",
+            "received_qty": "5.0000"
+          }
+        ],
+        "order": [
+          {
+            "id": 10,
+            "status": 4
+          }
+        ],
+        "container": [
+          {
+            "barcode": "R2T1788614731513C5",
+            "warehouse_id": 5,
+            "status": 1,
+            "transfer_order_id": null
+          }
+        ]
+      }
+    }
+  ],
+  "sql": {
+    "orders": [
+      {
+        "id": 6,
+        "status": 1,
+        "from_warehouse_id": 6,
+        "to_warehouse_id": 7
+      },
+      {
+        "id": 7,
+        "status": 4,
+        "from_warehouse_id": 5,
+        "to_warehouse_id": 6
+      },
+      {
+        "id": 8,
+        "status": 4,
+        "from_warehouse_id": 5,
+        "to_warehouse_id": 6
+      },
+      {
+        "id": 9,
+        "status": 4,
+        "from_warehouse_id": 5,
+        "to_warehouse_id": 6
+      },
+      {
+        "id": 10,
+        "status": 4,
+        "from_warehouse_id": 5,
+        "to_warehouse_id": 6
+      }
+    ],
+    "items": [
+      {
+        "order_id": 6,
+        "product_id": 26,
+        "quantity": "1.0000",
+        "deducted_qty": "0.0000",
+        "received_qty": "0.0000"
+      },
+      {
+        "order_id": 7,
+        "product_id": 26,
+        "quantity": "5.0000",
+        "deducted_qty": "5.0000",
+        "received_qty": "5.0000"
+      },
+      {
+        "order_id": 7,
+        "product_id": 26,
+        "quantity": "5.0000",
+        "deducted_qty": "0.0000",
+        "received_qty": "0.0000"
+      },
+      {
+        "order_id": 8,
+        "product_id": 26,
+        "quantity": "5.0000",
+        "deducted_qty": "5.0000",
+        "received_qty": "5.0000"
+      },
+      {
+        "order_id": 9,
+        "product_id": 26,
+        "quantity": "5.0000",
+        "deducted_qty": "5.0000",
+        "received_qty": "5.0000"
+      },
+      {
+        "order_id": 10,
+        "product_id": 26,
+        "quantity": "10.0000",
+        "deducted_qty": "5.0000",
+        "received_qty": "5.0000"
+      }
+    ],
+    "containers": [
+      {
+        "id": 32,
+        "barcode": "R2T1788614731513C0",
+        "warehouse_id": 6,
+        "status": 1,
+        "remaining_qty": "5.0000",
+        "transfer_order_id": null
+      },
+      {
+        "id": 33,
+        "barcode": "R2T1788614731513C1",
+        "warehouse_id": 5,
+        "status": 1,
+        "remaining_qty": "5.0000",
+        "transfer_order_id": null
+      },
+      {
+        "id": 34,
+        "barcode": "R2T1788614731513C2",
+        "warehouse_id": 6,
+        "status": 1,
+        "remaining_qty": "5.0000",
+        "transfer_order_id": null
+      },
+      {
+        "id": 35,
+        "barcode": "R2T1788614731513C3",
+        "warehouse_id": 6,
+        "status": 1,
+        "remaining_qty": "5.0000",
+        "transfer_order_id": null
+      },
+      {
+        "id": 36,
+        "barcode": "R2T1788614731513C4",
+        "warehouse_id": 6,
+        "status": 1,
+        "remaining_qty": "5.0000",
+        "transfer_order_id": null
+      },
+      {
+        "id": 37,
+        "barcode": "R2T1788614731513C5",
+        "warehouse_id": 5,
+        "status": 1,
+        "remaining_qty": "5.0000",
+        "transfer_order_id": null
+      },
+      {
+        "id": 38,
+        "barcode": "R2T1788614731513C6",
+        "warehouse_id": 5,
+        "status": 1,
+        "remaining_qty": "5.0000",
+        "transfer_order_id": null
+      },
+      {
+        "id": 39,
+        "barcode": "R2T1788614731513C7",
+        "warehouse_id": 5,
+        "status": 1,
+        "remaining_qty": "5.0000",
+        "transfer_order_id": null
+      }
+    ],
+    "operationRequests": [
+      {
+        "request_key": "R2T1788614731513b-in",
+        "action": "transfer.scanIn",
+        "resource_id": 9,
+        "response_json": "{\"transferId\":9,\"containerBarcode\":\"R2T1788614731513C3\",\"productId\":26,\"qty\":5,\"completed\":true}"
+      },
+      {
+        "request_key": "R2T1788614731513b-out",
+        "action": "transfer.scanOut",
+        "resource_id": 9,
+        "response_json": "{\"transferId\":9,\"containerBarcode\":\"R2T1788614731513C3\",\"productId\":26,\"qty\":5}"
+      },
+      {
+        "request_key": "R2T1788614731513d1",
+        "action": "transfer.scanOut",
+        "resource_id": 7,
+        "response_json": "{\"transferId\":7,\"containerBarcode\":\"R2T1788614731513C0\",\"productId\":26,\"qty\":5}"
+      },
+      {
+        "request_key": "R2T1788614731513di",
+        "action": "transfer.scanIn",
+        "resource_id": 7,
+        "response_json": "{\"transferId\":7,\"containerBarcode\":\"R2T1788614731513C0\",\"productId\":26,\"qty\":5,\"completed\":true}"
+      },
+      {
+        "request_key": "R2T1788614731513p-in",
+        "action": "transfer.scanIn",
+        "resource_id": 10,
+        "response_json": "{\"transferId\":10,\"containerBarcode\":\"R2T1788614731513C4\",\"productId\":26,\"qty\":5,\"completed\":true}"
+      },
+      {
+        "request_key": "R2T1788614731513p-out",
+        "action": "transfer.scanOut",
+        "resource_id": 10,
+        "response_json": "{\"transferId\":10,\"containerBarcode\":\"R2T1788614731513C4\",\"productId\":26,\"qty\":5}"
+      },
+      {
+        "request_key": "R2T1788614731513shared-in",
+        "action": "transfer.scanIn",
+        "resource_id": 8,
+        "response_json": "{\"transferId\":8,\"containerBarcode\":\"R2T1788614731513C2\",\"productId\":26,\"qty\":5,\"completed\":true}"
+      },
+      {
+        "request_key": "R2T1788614731513shared-out",
+        "action": "transfer.scanOut",
+        "resource_id": 8,
+        "response_json": "{\"transferId\":8,\"containerBarcode\":\"R2T1788614731513C2\",\"productId\":26,\"qty\":5}"
+      }
+    ]
+  },
+  "suffix": "R2T1788614731513",
+  "ids": {
+    "uid": 5,
+    "role": 8,
+    "wh": [
+      5,
+      6,
+      7
+    ],
+    "loc": [
+      5,
+      6,
+      7
+    ],
+    "product": 26,
+    "orders": [
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "containers": [
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39
+    ]
+  }
+}

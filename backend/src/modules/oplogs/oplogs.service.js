@@ -29,7 +29,7 @@ const findAll = async ({ page, pageSize, keyword, module: mod, startDate = '', e
     `SELECT id,user_id,user_name,method,path,module,request_body,status_code,ip,created_at
      FROM operation_logs
      ${where}
-     ORDER BY created_at DESC LIMIT ? OFFSET ?`, [...params, ps, offset])
+     ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, [...params, ps, offset])
   const [[{ total }]] = await pool.query(
     `SELECT COUNT(*) AS total FROM operation_logs ${where}`, cntParams)
   const list = rows.map(r => ({

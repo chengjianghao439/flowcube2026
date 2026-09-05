@@ -1,0 +1,3 @@
+PASS queued query/execute return 503 and never execute after connection release
+PASS real HTTP readiness: available 200, saturated 503, recovered 200; liveness stays 200
+{"target":"flowcube_fix_23_test","acquisition":{"waiting":0,"timeouts":3,"rejected":0,"maxWaitMs":52}}

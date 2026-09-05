@@ -1,0 +1,13 @@
+
+ RUN  v3.2.7 /Users/chengjianghao/flowcube/frontend
+
+ ✓ src/api/pda-session.test.ts (9 tests) 76ms
+ ✓ src/lib/prelaunch-client.test.tsx (3 tests) 79ms
+ ✓ src/api/client.refresh.test.ts (16 tests) 576ms
+ ✓ src/api/client.session.test.tsx (15 tests) 687ms
+
+ Test Files  4 passed (4)
+      Tests  43 passed (43)
+   Start at  22:21:12
+   Duration  1.21s (transform 247ms, setup 0ms, collect 397ms, tests 1.42s, environment 552ms, prepare 154ms)
+

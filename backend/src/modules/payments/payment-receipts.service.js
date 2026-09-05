@@ -369,7 +369,7 @@ async function findAll({
        FROM payment_receipts r
        LEFT JOIN finance_accounts a ON a.id = r.account_id
        ${where}
-      ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
+      ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM payment_receipts r ${where}`, params)

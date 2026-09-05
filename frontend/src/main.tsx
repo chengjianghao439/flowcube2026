@@ -25,11 +25,11 @@ async function boot(): Promise<void> {
   if (isNative) {
     applyPdaApiBaseFromStorage()
     installPdaGlobals()
-    // 设备凭据水合（2026-08-21 权衡修复）：从 SecureStorage 加载到内存缓存，
-    // 同步 getter（axios 拦截器）才能读到票据
-    await initDeviceBinding()
   }
   if (isPdaBuild || isNative) {
+    // 原生读取加密存储，浏览器 PDA 初始化内存存储；两者都必须完成水合，
+    // 否则 getter 一直返回 null，浏览器绑定页保存凭据后也无法发起换票。
+    await initDeviceBinding()
     const inHash = (window.location.hash.replace(/^#/, '').split('?')[0] || '/').trim()
     if (!inHash.startsWith('/pda')) {
       const prefix = window.location.href.split('#')[0]
@@ -65,7 +65,7 @@ void (async () => {
   ] = await Promise.all([
     import('react-dom/client'),
     import('@tanstack/react-query'),
-    import('./router'),
+    import.meta.env.VITE_CAPACITOR === '1' ? import('./router/pda') : import('./router'),
     import('@/components/GlobalErrorBoundary'),
   ])
 

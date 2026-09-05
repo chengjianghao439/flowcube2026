@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: 恢复临时容器限定资源、禁网络，成功退出删除自有容器及匿名卷
+ok 1 - 恢复临时容器限定资源、禁网络，成功退出删除自有容器及匿名卷
+  ---
+  duration_ms: 852.332291
+  type: 'test'
+  ...
+# Subtest: 整体恢复时限终止导入并执行自有容器清理
+ok 2 - 整体恢复时限终止导入并执行自有容器清理
+  ---
+  duration_ms: 1063.250792
+  type: 'test'
+  ...
+# Subtest: 非法恢复库名在Docker动作前拒绝
+ok 3 - 非法恢复库名在Docker动作前拒绝
+  ---
+  duration_ms: 13.5595
+  type: 'test'
+  ...
+# Subtest: CPU配额拒绝所有零表示，小数正配额合法
+ok 4 - CPU配额拒绝所有零表示，小数正配额合法
+  ---
+  duration_ms: 732.629709
+  type: 'test'
+  ...
+# Subtest: 直接终止调用者PID会立即终止内部恢复并清理容器
+ok 5 - 直接终止调用者PID会立即终止内部恢复并清理容器
+  ---
+  duration_ms: 2290.184292
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5015.093542

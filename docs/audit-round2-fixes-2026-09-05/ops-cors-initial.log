@@ -1,0 +1,189 @@
+TAP version 13
+# Subtest: explicit Electron null origin works without reflecting arbitrary sites
+ok 1 - explicit Electron null origin works without reflecting arbitrary sites
+  ---
+  duration_ms: 27.615167
+  type: 'test'
+  ...
+# Subtest: production domain and bundled Android origin can share an exact allowlist
+ok 2 - production domain and bundled Android origin can share an exact allowlist
+  ---
+  duration_ms: 5.673416
+  type: 'test'
+  ...
+# Subtest: allowing Electron does not allow an unrelated website
+ok 3 - allowing Electron does not allow an unrelated website
+  ---
+  duration_ms: 2.01125
+  type: 'test'
+  ...
+# Subtest: allowlist does not allow suffix matches, changed ports, or http downgrades
+ok 4 - allowlist does not allow suffix matches, changed ports, or http downgrades
+  ---
+  duration_ms: 3.344292
+  type: 'test'
+  ...
+# Subtest: null stays disabled unless separately enabled
+ok 5 - null stays disabled unless separately enabled
+  ---
+  duration_ms: 1.087042
+  type: 'test'
+  ...
+# Subtest: requests without Origin still reach the API without CORS headers
+ok 6 - requests without Origin still reach the API without CORS headers
+  ---
+  duration_ms: 3.839708
+  type: 'test'
+  ...
+# Subtest: empty production policy does not allow localhost implicitly
+ok 7 - empty production policy does not allow localhost implicitly
+  ---
+  duration_ms: 1.279833
+  type: 'test'
+  ...
+# Subtest: development localhost default remains available
+ok 8 - development localhost default remains available
+  ---
+  duration_ms: 0.866167
+  type: 'test'
+  ...
+# Subtest: explicit legacy reflection remains opt-in for staged configuration changes
+ok 9 - explicit legacy reflection remains opt-in for staged configuration changes
+  ---
+  duration_ms: 1.656542
+  type: 'test'
+  ...
+# Subtest: 新备份可恢复，即使最近 668 小时没有销售单
+not ok 10 - 新备份可恢复，即使最近 668 小时没有销售单
+  ---
+  duration_ms: 686.003334
+  type: 'test'
+  location: '/Users/chengjianghao/flowcube/tests/ops-monitor-restore.test.js:77:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    [2026-09-05 23:01:34] [INFO] 校验备份：flowcube_fixture.sql.gz（4.0K）
+    [2026-09-05 23:01:34] [INFO] 备份文件距今 0 小时（阈值 48h）
+    [2026-09-05 23:01:34] [INFO] 启动临时 MySQL 容器 flowcube-restore-check-10246 ...
+    [WARN] 临时恢复容器清理失败，请检查 flowcube-restore-check-10246
+    
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/chengjianghao/flowcube/tests/ops-monitor-restore.test.js:79:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: 自动演练拒绝超过 48 小时的备份，且不启动演练容器
+ok 11 - 自动演练拒绝超过 48 小时的备份，且不启动演练容器
+  ---
+  duration_ms: 263.809916
+  type: 'test'
+  ...
+# Subtest: 显式指定历史备份允许验证恢复能力，但提示文件年龄
+not ok 12 - 显式指定历史备份允许验证恢复能力，但提示文件年龄
+  ---
+  duration_ms: 294.199334
+  type: 'test'
+  location: '/Users/chengjianghao/flowcube/tests/ops-monitor-restore.test.js:90:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    [2026-09-05 23:01:35] [INFO] 校验备份：flowcube_fixture.sql.gz（4.0K）
+    [2026-09-05 23:01:35] [INFO] 备份文件距今 72 小时（阈值 48h）
+    [2026-09-05 23:01:35] [WARN] 指定的历史备份已超过新鲜度阈值，本次仅验证其恢复能力
+    [2026-09-05 23:01:35] [INFO] 启动临时 MySQL 容器 flowcube-restore-check-10393 ...
+    [WARN] 临时恢复容器清理失败，请检查 flowcube-restore-check-10393
+    
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/chengjianghao/flowcube/tests/ops-monitor-restore.test.js:92:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: 恢复演练仍拒绝 import-fails
+ok 13 - 恢复演练仍拒绝 import-fails
+  ---
+  duration_ms: 331.175459
+  type: 'test'
+  ...
+# Subtest: 恢复演练仍拒绝 missing-tables
+ok 14 - 恢复演练仍拒绝 missing-tables
+  ---
+  duration_ms: 338.952875
+  type: 'test'
+  ...
+# Subtest: 恢复演练仍拒绝 corrupt
+ok 15 - 恢复演练仍拒绝 corrupt
+  ---
+  duration_ms: 337.68375
+  type: 'test'
+  ...
+# Subtest: 连接数 query-fails 必须记录异常，不能静默回退为零
+ok 16 - 连接数 query-fails 必须记录异常，不能静默回退为零
+  ---
+  duration_ms: 3113.5995
+  type: 'test'
+  ...
+# Subtest: 连接数 invalid-metric 必须记录异常，不能静默回退为零
+ok 17 - 连接数 invalid-metric 必须记录异常，不能静默回退为零
+  ---
+  duration_ms: 3161.395583
+  type: 'test'
+  ...
+# Subtest: 认证后的真实连接数触发阈值告警
+ok 18 - 认证后的真实连接数触发阈值告警
+  ---
+  duration_ms: 3156.441
+  type: 'test'
+  ...
+# Subtest: 连接数正常时保留正常状态
+ok 19 - 连接数正常时保留正常状态
+  ---
+  duration_ms: 3160.664834
+  type: 'test'
+  ...
+# Subtest: 上一轮监控未退出时跳过新一轮，避免 cron 累积探针
+ok 20 - 上一轮监控未退出时跳过新一轮，避免 cron 累积探针
+  ---
+  duration_ms: 240.007584
+  type: 'test'
+  ...
+# Subtest: docker-timeout 不无限挂起，记录异常而不是正常
+ok 21 - docker-timeout 不无限挂起，记录异常而不是正常
+  ---
+  duration_ms: 2092.304458
+  type: 'test'
+  ...
+# Subtest: tls-timeout 不无限挂起，记录异常而不是正常
+ok 22 - tls-timeout 不无限挂起，记录异常而不是正常
+  ---
+  duration_ms: 3116.896208
+  type: 'test'
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 20
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 20350.80075

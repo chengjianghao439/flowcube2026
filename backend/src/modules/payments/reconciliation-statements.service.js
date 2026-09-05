@@ -220,13 +220,30 @@ async function removeItem(id, recordId) {
 
 async function findAll({
   page = 1, pageSize = 20, type = '', status = '', keyword = '',
-  statementNo = '', partyName = '',
+  statementNo = '', partyName = '', customerId = null,
   startDate = '', endDate = '', minAmount = '', maxAmount = '',
 } = {}) {
   const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['s.deleted_at IS NULL']
   const params = []
   if (type) { conds.push('s.type=?'); params.push(Number(type)) }
+  if (customerId != null) {
+    const id = Number(customerId)
+    if (!Number.isSafeInteger(id) || id <= 0) throw new AppError('客户编号无效', 400)
+    // 只认账款来源销售单的稳定客户 ID；空明细或混合/无法关联的历史单据不能猜测归属。
+    conds.push(`s.type=2 AND EXISTS (
+      SELECT 1 FROM reconciliation_statement_items ci
+      JOIN payment_records cp ON cp.id=ci.record_id AND cp.type=2
+      JOIN sale_orders co ON co.id=cp.order_id
+      WHERE ci.statement_id=s.id AND co.customer_id=?
+    ) AND NOT EXISTS (
+      SELECT 1 FROM reconciliation_statement_items ci
+      LEFT JOIN payment_records cp ON cp.id=ci.record_id AND cp.type=2
+      LEFT JOIN sale_orders co ON co.id=cp.order_id
+      WHERE ci.statement_id=s.id AND (co.customer_id IS NULL OR co.customer_id<>?)
+    )`)
+    params.push(id, id)
+  }
   if (status) { conds.push('s.status=?'); params.push(Number(status)) }
   const kw = String(keyword || '').trim()
   if (kw) { conds.push('(s.statement_no LIKE ? OR s.party_name LIKE ?)'); params.push(`%${kw}%`, `%${kw}%`) }
@@ -253,7 +270,7 @@ async function findAll({
           GROUP BY i.statement_id
        ) agg ON agg.statement_id = s.id
        ${where}
-      ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
+      ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM reconciliation_statements s ${where}`, params)

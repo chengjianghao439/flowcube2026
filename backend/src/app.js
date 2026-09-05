@@ -10,6 +10,8 @@ const requestLogger   = require('./middleware/requestLogger')
 const { env } = require('./config/env')
 const { buildCorsOptions } = require('./config/cors')
 const { successResponse } = require('./utils/response')
+const { createReadinessHandler } = require('./utils/readiness')
+const { pool } = require('./config/db')
 
 // ─── 启动安全校验 ─────────────────────────────────────────────────────────────
 
@@ -59,6 +61,9 @@ app.get('/health', (req, res) => {
 app.get('/api/health', (req, res) => {
   return successResponse(res, { status: 'ok', timestamp: new Date().toISOString() }, 'ok')
 })
+
+// 部署与服务监控验证应用自己的连接池；存活探针仍不依赖数据库。
+app.get('/api/ready', createReadinessHandler(pool))
 
 // ─── 全局 API 限流 ─────────────────────────────────────────────────────────────
 // 防异常爆刷的基础防护。阈值默认宽松，兼容同一客户出口 IP（NAT）下多台 PDA / 桌面端并发；

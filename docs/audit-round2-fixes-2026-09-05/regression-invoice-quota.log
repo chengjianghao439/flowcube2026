@@ -1,0 +1,45 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:27.356] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"a2aa009a-023a-463f-a8f0-385924f6a50d"}
+[2026-09-05 22:28:27.358] [INFO ] [HTTP] POST /api/auth/login {"ms":72,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"a2aa009a-023a-463f-a8f0-385924f6a50d"}
+[2026-09-05 22:28:27.379] [INFO ] [[object Object]] accounting {"0":"录","1":"入","2":"销","3":"项","4":"发","5":"票","6":" ","7":"Q","8":"A","9":"-","10":"3","11":"0","12":"3","13":"e","14":"c","15":"6","16":"0","17":"9","18":" ","19":"价","20":"税","21":"6","22":"0","23":"0","24":" ","25":"账","26":"套","27":"1","requestId":"3af6ac1c-b1c5-4b13-bfcd-f726ffb12d98"}
+[2026-09-05 22:28:27.379] [INFO ] [HTTP] POST /api/accounting/invoices {"ms":9,"status":201,"userId":2,"path":"/api/accounting/invoices","method":"POST","requestId":"3af6ac1c-b1c5-4b13-bfcd-f726ffb12d98"}
+  [PASS] 开票 600（≤应收1000）成功
+[2026-09-05 22:28:27.385] [WARN ] [ERR] [AppError] 该单累计已开票 600.00 + 本次 500.00 超过应收基准 1000.00，请核对是否多开票 {"path":"/api/accounting/invoices","userId":2,"refNo":"","requestId":"c3eda737-fc21-4c92-992a-f5672affab13","code":"INVOICE_OVER_QUOTA","statusCode":400}
+[2026-09-05 22:28:27.386] [WARN ] [HTTP] POST /api/accounting/invoices {"ms":5,"status":400,"userId":2,"path":"/api/accounting/invoices","method":"POST","requestId":"c3eda737-fc21-4c92-992a-f5672affab13"}
+  [PASS] 累计超应收被拒（600+500>1000）
+[2026-09-05 22:28:27.392] [INFO ] [[object Object]] accounting {"0":"录","1":"入","2":"销","3":"项","4":"发","5":"票","6":" ","7":"Q","8":"C","9":"-","10":"9","11":"7","12":"6","13":"f","14":"8","15":"6","16":"a","17":"b","18":" ","19":"价","20":"税","21":"4","22":"0","23":"0","24":" ","25":"账","26":"套","27":"1","requestId":"d2f44f7e-d30c-4254-bc37-18a90e679ec3"}
+[2026-09-05 22:28:27.392] [INFO ] [HTTP] POST /api/accounting/invoices {"ms":4,"status":201,"userId":2,"path":"/api/accounting/invoices","method":"POST","requestId":"d2f44f7e-d30c-4254-bc37-18a90e679ec3"}
+  [PASS] 补足到应收上限（600+400=1000）成功
+[2026-09-05 22:28:27.401] [INFO ] [[object Object]] accounting {"0":"录","1":"入","2":"销","3":"项","4":"发","5":"票","6":" ","7":"Q","8":"R","9":"-","10":"0","11":"4","12":"d","13":"c","14":"4","15":"a","16":"8","17":"5","18":" ","19":"价","20":"税","21":"8","22":"0","23":"0","24":" ","25":"账","26":"套","27":"1","requestId":"68da4001-63f8-4608-bec4-44d363ef6663"}
+[2026-09-05 22:28:27.401] [INFO ] [HTTP] POST /api/accounting/invoices {"ms":5,"status":201,"userId":2,"path":"/api/accounting/invoices","method":"POST","requestId":"68da4001-63f8-4608-bec4-44d363ef6663"}
+  [PASS] 开票 800 成功
+[2026-09-05 22:28:27.406] [WARN ] [ERR] [AppError] 该单累计已开票 800.00 + 本次 300.00 超过应收基准 1000.00，请核对是否多开票 {"path":"/api/accounting/invoices","userId":2,"refNo":"","requestId":"f1582f28-8530-4f2b-99f2-e828f8ffb06a","code":"INVOICE_OVER_QUOTA","statusCode":400}
+[2026-09-05 22:28:27.406] [WARN ] [HTTP] POST /api/accounting/invoices {"ms":3,"status":400,"userId":2,"path":"/api/accounting/invoices","method":"POST","requestId":"f1582f28-8530-4f2b-99f2-e828f8ffb06a"}
+  [PASS] 800+300 超限被拒
+[2026-09-05 22:28:27.410] [INFO ] [[object Object]] accounting {"0":"发","1":"票","2":" ","3":"Q","4":"R","5":"-","6":"0","7":"4","8":"d","9":"c","10":"4","11":"a","12":"8","13":"5","14":" ","15":"r","16":"e","17":"d","18":"F","19":"l","20":"u","21":"s","22":"h","23":" ","24":"1","25":"→","26":"2","requestId":"7977aae8-053e-46a6-a601-34c7395cbdd4"}
+[2026-09-05 22:28:27.411] [INFO ] [HTTP] POST /api/accounting/invoices/3/status {"ms":3,"status":200,"userId":2,"path":"/api/accounting/invoices/3/status","method":"POST","requestId":"7977aae8-053e-46a6-a601-34c7395cbdd4"}
+  [PASS] 红冲成功
+[2026-09-05 22:28:27.415] [INFO ] [[object Object]] accounting {"0":"录","1":"入","2":"销","3":"项","4":"发","5":"票","6":" ","7":"Q","8":"R","9":"3","10":"-","11":"e","12":"0","13":"2","14":"8","15":"f","16":"b","17":"8","18":" ","19":"价","20":"税","21":"8","22":"0","23":"0","24":" ","25":"账","26":"套","27":"1","requestId":"f4cc861a-39ea-4fd6-8e81-6122b723b0ed"}
+[2026-09-05 22:28:27.415] [INFO ] [HTTP] POST /api/accounting/invoices {"ms":3,"status":201,"userId":2,"path":"/api/accounting/invoices","method":"POST","requestId":"f4cc861a-39ea-4fd6-8e81-6122b723b0ed"}
+  [PASS] 红冲后额度恢复，可再开 800
+[2026-09-05 22:28:27.424] [INFO ] [[object Object]] accounting {"0":"录","1":"入","2":"销","3":"项","4":"发","5":"票","6":" ","7":"Q","8":"E","9":"-","10":"0","11":"9","12":"d","13":"e","14":"1","15":"b","16":"9","17":"7","18":" ","19":"价","20":"税","21":"5","22":"0","23":"0","24":" ","25":"账","26":"套","27":"1","requestId":"867eccfa-6c94-451c-adcc-cfeeda290be6"}
+[2026-09-05 22:28:27.425] [INFO ] [HTTP] POST /api/accounting/invoices {"ms":4,"status":201,"userId":2,"path":"/api/accounting/invoices","method":"POST","requestId":"867eccfa-6c94-451c-adcc-cfeeda290be6"}
+[2026-09-05 22:28:27.431] [INFO ] [[object Object]] accounting {"0":"更","1":"新","2":"发","3":"票","4":" ","5":"[","6":"i","7":"d","8":"=","9":"5","10":"]","requestId":"4758c685-d632-457e-9ffc-5c9658271ef9"}
+[2026-09-05 22:28:27.432] [INFO ] [HTTP] PUT /api/accounting/invoices/5 {"ms":4,"status":200,"userId":2,"path":"/api/accounting/invoices/5","method":"PUT","requestId":"4758c685-d632-457e-9ffc-5c9658271ef9"}
+  [PASS] 编辑放大到 900（排除自身后 ≤1000）成功
+[2026-09-05 22:28:27.435] [WARN ] [ERR] [AppError] 该单累计已开票 0.00 + 本次 1100.00 超过应收基准 1000.00，请核对是否多开票 {"path":"/api/accounting/invoices/5","userId":2,"refNo":"","requestId":"a50e15e0-34b7-49cc-acac-be2fd63aec3a","code":"INVOICE_OVER_QUOTA","statusCode":400}
+[2026-09-05 22:28:27.435] [WARN ] [HTTP] PUT /api/accounting/invoices/5 {"ms":2,"status":400,"userId":2,"path":"/api/accounting/invoices/5","method":"PUT","requestId":"a50e15e0-34b7-49cc-acac-be2fd63aec3a"}
+  [PASS] 编辑放大到 1100（>应收1000）被拒
+[2026-09-05 22:28:27.441] [INFO ] [[object Object]] accounting {"0":"录","1":"入","2":"销","3":"项","4":"发","5":"票","6":" ","7":"Q","8":"U","9":"-","10":"0","11":"b","12":"2","13":"4","14":"3","15":"b","16":"0","17":"f","18":" ","19":"价","20":"税","21":"9","22":"9","23":"9","24":"9","25":"9","26":" ","27":"账","28":"套","29":"1","requestId":"a2adc02c-3865-463d-b366-e8300a2a02e4"}
+[2026-09-05 22:28:27.441] [INFO ] [HTTP] POST /api/accounting/invoices {"ms":3,"status":201,"userId":2,"path":"/api/accounting/invoices","method":"POST","requestId":"a2adc02c-3865-463d-b366-e8300a2a02e4"}
+  [PASS] 查不到单据的开票不拦截
+
+════════════════════════════════════════════════════════════
+  10 passed, 0 failed
+════════════════════════════════════════════════════════════
+

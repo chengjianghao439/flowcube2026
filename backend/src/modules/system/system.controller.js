@@ -1,5 +1,5 @@
 const { successResponse } = require('../../utils/response')
-const { getOperationRequestStatus } = require('../../utils/operationRequest')
+const { getTransferRequestStatus } = require('../transfer/transfer-requests')
 const logger = require('../../utils/logger')
 
 /**
@@ -14,7 +14,7 @@ const logger = require('../../utils/logger')
  */
 const requestStatus = async (req, res, next) => {
   try {
-    const data = await getOperationRequestStatus({
+    const data = await getTransferRequestStatus({
       requestKey: req.params.key,
       action: req.query.action,
       userId: req.user?.userId ?? null,

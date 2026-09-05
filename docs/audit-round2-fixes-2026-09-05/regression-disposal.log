@@ -1,0 +1,71 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:24.579] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"7f421bc3-fe2c-47c2-9696-5a80d93f2bc9"}
+[2026-09-05 22:28:24.581] [INFO ] [HTTP] POST /api/auth/login {"ms":72,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"7f421bc3-fe2c-47c2-9696-5a80d93f2bc9"}
+  [PASS] 铺底库存 20 已入账
+[2026-09-05 22:28:24.612] [INFO ] [HTTP] GET /api/disposals/suggestions?warehouseId=1&keyword=DP--bc898182 {"ms":7,"status":200,"userId":2,"path":"/api/disposals/suggestions?warehouseId=1&keyword=DP--bc898182","method":"GET","requestId":"2e0bdc13-6e11-4b7b-9699-e37a411bcd9f"}
+  [PASS] 建议接口 200
+  [PASS] 呆滞建议命中测试商品
+[2026-09-05 22:28:24.625] [INFO ] [HTTP] POST /api/disposals {"ms":11,"status":200,"userId":2,"path":"/api/disposals","method":"POST","requestId":"e69dc39f-f3fc-46f9-98ce-676abf84590a"}
+  [PASS] 创建处置单 200
+  [PASS] 创建返回 id
+[2026-09-05 22:28:24.628] [INFO ] [HTTP] GET /api/disposals/1 {"ms":2,"status":200,"userId":2,"path":"/api/disposals/1","method":"GET","requestId":"3df250e5-c7ca-494b-a3ee-b9b690f8a284"}
+  [PASS] 草稿状态=1 明细数量=5
+[2026-09-05 22:28:24.633] [INFO ] [HTTP] POST /api/disposals/1/submit {"ms":3,"status":200,"userId":2,"path":"/api/disposals/1/submit","method":"POST","requestId":"7d93359a-bb9c-4530-b50c-8edcc1721740"}
+  [PASS] 提交审批 200
+[2026-09-05 22:28:24.637] [INFO ] [HTTP] POST /api/disposals/1/approve {"ms":3,"status":200,"userId":2,"path":"/api/disposals/1/approve","method":"POST","requestId":"bcebedff-09da-4aee-9508-bd28429e5bc5"}
+  [PASS] 审批通过 200
+[2026-09-05 22:28:24.639] [INFO ] [HTTP] GET /api/disposals/1 {"ms":1,"status":200,"userId":2,"path":"/api/disposals/1","method":"GET","requestId":"af91f87d-f2ab-458e-a5ff-f716f8e24f0a"}
+  [PASS] 审批后状态=3
+[2026-09-05 22:28:24.649] [INFO ] [HTTP] POST /api/disposals/1/dispose {"ms":8,"status":200,"userId":2,"path":"/api/disposals/1/dispose","method":"POST","requestId":"19a4c401-404e-4270-8c24-4e204ecda3d3"}
+  [PASS] 执行处置 200
+  [PASS] 库存扣减 20→15
+  [PASS] 缓存 = ACTIVE 容器合计
+[2026-09-05 22:28:24.654] [INFO ] [HTTP] GET /api/disposals/1 {"ms":1,"status":200,"userId":2,"path":"/api/disposals/1","method":"GET","requestId":"7ab67090-621b-4daf-8ccb-eb405208f7fe"}
+  [PASS] 处置后状态=4 且已处置时间已写
+[2026-09-05 22:28:24.668] [INFO ] [HTTP] POST /api/disposals {"ms":5,"status":200,"userId":2,"path":"/api/disposals","method":"POST","requestId":"25aa9f40-86be-4ff0-81f4-c0d909f0ae80"}
+[2026-09-05 22:28:24.672] [INFO ] [HTTP] POST /api/disposals/2/submit {"ms":2,"status":200,"userId":2,"path":"/api/disposals/2/submit","method":"POST","requestId":"10e7ea0a-49a9-4512-9020-8c83bbbf7bda"}
+[2026-09-05 22:28:24.675] [INFO ] [HTTP] POST /api/disposals/2/approve {"ms":2,"status":200,"userId":2,"path":"/api/disposals/2/approve","method":"POST","requestId":"4345fe2d-37cc-4186-b490-80ce71e0605a"}
+[2026-09-05 22:28:24.684] [INFO ] [HTTP] POST /api/disposals/2/dispose {"ms":8,"status":200,"userId":2,"path":"/api/disposals/2/dispose","method":"POST","requestId":"7288a414-d38b-4b0a-9596-407d2dc823ca"}
+  [PASS] 报废处置 200
+  [PASS] 报废台账落一条
+  [PASS] 台账数量=3
+  [PASS] 报废后库存 8→5
+[2026-09-05 22:28:24.696] [INFO ] [HTTP] POST /api/disposals {"ms":4,"status":200,"userId":2,"path":"/api/disposals","method":"POST","requestId":"d42a42f7-a45c-4014-8d20-093a2423535c"}
+[2026-09-05 22:28:24.701] [WARN ] [ERR] [AppError] 处置单尚未提交 {"path":"/api/disposals/3/dispose","userId":2,"refNo":"","requestId":"ae3246b9-a8bb-4764-90fb-30c7e067b13c","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:24.701] [WARN ] [HTTP] POST /api/disposals/3/dispose {"ms":2,"status":400,"userId":2,"path":"/api/disposals/3/dispose","method":"POST","requestId":"ae3246b9-a8bb-4764-90fb-30c7e067b13c"}
+  [PASS] 草稿不可执行处置
+[2026-09-05 22:28:24.708] [INFO ] [HTTP] POST /api/disposals {"ms":5,"status":200,"userId":2,"path":"/api/disposals","method":"POST","requestId":"ee5ab144-f4a4-4067-a92a-9e9af6ae1c43"}
+[2026-09-05 22:28:24.711] [INFO ] [HTTP] POST /api/disposals/4/submit {"ms":2,"status":200,"userId":2,"path":"/api/disposals/4/submit","method":"POST","requestId":"a66b27f1-afeb-41eb-8cdc-2681de69ca55"}
+[2026-09-05 22:28:24.715] [INFO ] [HTTP] POST /api/disposals/4/reject {"ms":2,"status":200,"userId":2,"path":"/api/disposals/4/reject","method":"POST","requestId":"2102916b-d6e0-48fc-8244-f0ab688e4fe6"}
+  [PASS] 驳回 200
+[2026-09-05 22:28:24.718] [INFO ] [HTTP] GET /api/disposals/4 {"ms":2,"status":200,"userId":2,"path":"/api/disposals/4","method":"GET","requestId":"0e4dbd2a-b92a-4a6b-8d21-ecd9e5a141c4"}
+  [PASS] 驳回后状态=5 且理由已写
+[2026-09-05 22:28:24.721] [WARN ] [ERR] [AppError] 处置单已驳回 {"path":"/api/disposals/4/dispose","userId":2,"refNo":"","requestId":"5684b14e-d0e0-4d0a-82a9-1049492f0e5c","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:24.721] [WARN ] [HTTP] POST /api/disposals/4/dispose {"ms":2,"status":400,"userId":2,"path":"/api/disposals/4/dispose","method":"POST","requestId":"5684b14e-d0e0-4d0a-82a9-1049492f0e5c"}
+  [PASS] 已驳回不可执行
+[2026-09-05 22:28:24.728] [INFO ] [HTTP] POST /api/disposals {"ms":5,"status":200,"userId":2,"path":"/api/disposals","method":"POST","requestId":"28ed1893-94a2-4191-b1d8-61aca8a1dfb2"}
+[2026-09-05 22:28:24.731] [INFO ] [HTTP] POST /api/disposals/5/cancel {"ms":2,"status":200,"userId":2,"path":"/api/disposals/5/cancel","method":"POST","requestId":"ee5e1db3-2624-4aed-ab8e-f202291b692a"}
+  [PASS] 取消 200
+[2026-09-05 22:28:24.735] [INFO ] [HTTP] GET /api/disposals/5 {"ms":2,"status":200,"userId":2,"path":"/api/disposals/5","method":"GET","requestId":"6caeebaf-0bb3-4fd9-9bff-bd6394c2d37d"}
+  [PASS] 取消后状态=6
+[2026-09-05 22:28:24.738] [WARN ] [ERR] [AppError] 只有草稿状态的处置单可以提交审批 {"path":"/api/disposals/5/submit","userId":2,"refNo":"","requestId":"1867e8f5-4d03-4364-ba2b-2c2c276dd129","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:24.738] [WARN ] [HTTP] POST /api/disposals/5/submit {"ms":1,"status":400,"userId":2,"path":"/api/disposals/5/submit","method":"POST","requestId":"1867e8f5-4d03-4364-ba2b-2c2c276dd129"}
+  [PASS] 已取消不可再提交
+  [PASS] 失败的流转未动库存
+[2026-09-05 22:28:24.748] [INFO ] [HTTP] POST /api/disposals {"ms":3,"status":200,"userId":2,"path":"/api/disposals","method":"POST","requestId":"332a860e-dbed-4378-a50e-c8ba225e1f8c"}
+[2026-09-05 22:28:24.753] [INFO ] [HTTP] POST /api/disposals/6/submit {"ms":2,"status":200,"userId":2,"path":"/api/disposals/6/submit","method":"POST","requestId":"842b2e09-157d-4691-a9ca-54620d9b7eae"}
+[2026-09-05 22:28:24.756] [INFO ] [HTTP] POST /api/disposals/6/approve {"ms":2,"status":200,"userId":2,"path":"/api/disposals/6/approve","method":"POST","requestId":"57ffe6dc-5a36-4015-b16e-6a5264da85d5"}
+[2026-09-05 22:28:24.763] [WARN ] [ERR] [AppError] 商品「处置测试商品-DP--b836a22d」可用库存不足（已扣除销售预留占用），无法出库：可用 4，需要 10 {"path":"/api/disposals/6/dispose","userId":2,"refNo":"","requestId":"baaeada1-14b1-4952-aeb7-92d825b95b35","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:24.763] [WARN ] [HTTP] POST /api/disposals/6/dispose {"ms":6,"status":400,"userId":2,"path":"/api/disposals/6/dispose","method":"POST","requestId":"baaeada1-14b1-4952-aeb7-92d825b95b35"}
+  [PASS] 处置数量超可用被拒
+  [PASS] 超量被拒后库存不变
+
+════════════════════════════════════════════════════════════
+  27 passed, 0 failed
+════════════════════════════════════════════════════════════
+

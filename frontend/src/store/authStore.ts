@@ -32,6 +32,8 @@ function removeLegacyAuthStorage(): void {
 removeLegacyAuthStorage()
 
 interface AuthState {
+  /** 仅进程内有效的会话代次；登录/退出递增，令牌续期保持不变。 */
+  sessionGeneration: number
   token: string | null
   /** refresh token（2026-08-21 权衡修复）：access 2h 过期后自动换新，无需重登 */
   refreshToken: string | null
@@ -47,18 +49,20 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
+      sessionGeneration: 0,
       token: null,
       refreshToken: null,
       user: null,
       isAuthenticated: false,
 
       login: (token, refreshToken, user) => {
-        set({
+        set((state) => ({
+          sessionGeneration: state.sessionGeneration + 1,
           token,
           refreshToken,
           user,
           isAuthenticated: true,
-        })
+        }))
       },
 
       /** 刷新成功后更新令牌（2026-08-21 权衡修复） */
@@ -77,12 +81,13 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           /* ignore */
         }
-        set({
+        set((state) => ({
+          sessionGeneration: state.sessionGeneration + 1,
           token: null,
           refreshToken: null,
           user: null,
           isAuthenticated: false,
-        })
+        }))
       },
 
       updateUser: (partial) => {

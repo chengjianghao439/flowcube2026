@@ -8,11 +8,14 @@ const { transferScopeFilter, assertTransferInScope } = require('../../utils/ware
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { TRANSFER_EVENT, record: recordTransferEvent } = require('./transfer-events.service')
 const { getRequestId } = require('../../utils/requestContext')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { completeOperationRequest } = require('../../utils/operationRequest')
+const { beginTransferRequest } = require('./transfer-requests')
 const { normalizePagination } = require('../../utils/pagination')
 const STATUS = { 1:'草稿', 2:'待出库', 3:'在途', 4:'已完成', 5:'已取消' }
 
 const fmt = r => ({ id:r.id, orderNo:r.order_no, fromWarehouseId:r.from_warehouse_id, fromWarehouseName:r.from_warehouse_name, toWarehouseId:r.to_warehouse_id, toWarehouseName:r.to_warehouse_name, status:r.status, statusName:STATUS[r.status], remark:r.remark, submittedAt:r.submitted_at, submittedByName:r.submitted_by_name, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
+
+const fmtItem = r => ({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, articleNumber:r.article_number, spec:r.spec, color:r.color, quantity:Number(r.quantity), deductedQty:Number(r.deducted_qty||0), receivedQty:Number(r.received_qty||0), remark:r.remark })
 
 const genNo = conn => generateDailyCode(conn, 'TR', 'transfer_orders', 'order_no')
 
@@ -75,7 +78,13 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
   const where = `deleted_at IS NULL AND (order_no LIKE ? OR from_warehouse_name LIKE ? OR to_warehouse_name LIKE ?) ${whereExtra}`
   const [rows]=await pool.query(`SELECT * FROM transfer_orders WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
   const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM transfer_orders WHERE ${where}`,params)
-  return { list:rows.map(fmt), pagination:{page,pageSize:ps,total} }
+  // 只批量读取当前授权分页内的明细；PDA 在途单需逐行判断剩余出库计划。
+  const itemsByOrder = new Map(rows.map(row => [Number(row.id), []]))
+  if (rows.length) {
+    const [items] = await pool.query('SELECT * FROM transfer_order_items WHERE order_id IN (?) ORDER BY order_id, id', [rows.map(row => row.id)])
+    for (const item of items) itemsByOrder.get(Number(item.order_id)).push(fmtItem(item))
+  }
+  return { list:rows.map(row => ({ ...fmt(row), items:itemsByOrder.get(Number(row.id)) })), pagination:{page,pageSize:ps,total} }
 }
 
 async function findById(id, scopeWarehouseIds = null) {
@@ -84,12 +93,13 @@ async function findById(id, scopeWarehouseIds = null) {
   assertTransferInScope(scopeWarehouseIds, rows[0].from_warehouse_id, rows[0].to_warehouse_id)
   const order=fmt(rows[0])
   const [items]=await pool.query('SELECT * FROM transfer_order_items WHERE order_id=? ORDER BY id',[id])
-  order.items=items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, articleNumber:r.article_number, spec:r.spec, color:r.color, quantity:Number(r.quantity), deductedQty:Number(r.deducted_qty||0), receivedQty:Number(r.received_qty||0), remark:r.remark }))
+  order.items=items.map(fmtItem)
   return order
 }
 
-async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWarehouseName, remark, items, operator }) {
+async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWarehouseName, remark, items, operator, scopeWarehouseIds = null }) {
   assertDifferentWarehouses(fromWarehouseId, toWarehouseId)
+  assertTransferInScope(scopeWarehouseIds, fromWarehouseId, toWarehouseId)
   const conn=await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -192,20 +202,50 @@ async function confirm(id, operator = null, scopeWarehouseIds = null) {
   }
 }
 
+// 同一商品可以分多行；按明细 ID 分配本次整箱数量，兼容已有重复商品行。
+// 在单头锁内执行，以万分之一为整数单位，避免跨行浮点累加丢量。
+async function allocateTransferQuantity(conn, orderId, productId, qty, direction) {
+  const [items] = await conn.query(
+    'SELECT id, quantity, deducted_qty, received_qty FROM transfer_order_items WHERE order_id=? AND product_id=? ORDER BY id FOR UPDATE',
+    [orderId, productId],
+  )
+  if (!items.length) throw new AppError('该商品不在本调拨单明细内', 400)
+  const units = value => Math.round(Number(value) * 10000)
+  let remaining = units(qty)
+  if (!Number.isSafeInteger(remaining) || remaining <= 0) throw new AppError('容器剩余数量无效，无法调拨', 409)
+  const capacities = items.map(item => {
+    const planned = units(item.quantity), shipped = units(item.deducted_qty), received = units(item.received_qty)
+    if (received < 0 || shipped < received || planned < shipped) throw new AppError('调拨明细数量不一致，请先核对单据', 409)
+    return { id: item.id, units: direction === 'out' ? planned - shipped : shipped - received }
+  })
+  const available = capacities.reduce((sum, item) => sum + item.units, 0)
+  if (remaining > available) {
+    throw new AppError(`该容器 ${qty} 件超出调拨单剩余可${direction === 'out' ? '调' : '收'}量 ${available / 10000} 件，无法整箱扫码；请核对容器与单据`, 409)
+  }
+  const allocations = []
+  for (const item of capacities) {
+    const taken = Math.min(remaining, item.units)
+    if (taken > 0) allocations.push({ id: item.id, qty: taken / 10000 })
+    remaining -= taken
+    if (!remaining) break
+  }
+  return allocations
+}
+
 // 调出仓 PDA 扫码出库：整容器移到调入仓设 PENDING_PUTAWAY（在途，暂不计入调入仓），调出仓库存立即减。
 async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWarehouseIds = null, pdaWarehouseId = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, { requestKey, action: 'transfer.scanOut', userId: operator?.userId ?? null })
-    if (requestState.replay) { await conn.rollback(); return requestState.responseData }
-
     const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
     assertTransferInScope(scopeWarehouseIds, orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     // 设备绑定仓拦截（对齐 putaway/warehouse-tasks 范式）：扫出必须由源仓设备执行
     if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(orderRow.from_warehouse_id)) {
       throw new AppError('设备绑定仓库与调拨源仓不一致，无法扫出', 403, 'PDA_WAREHOUSE_MISMATCH')
     }
+    const requestState = await beginTransferRequest(conn, { requestKey, action: 'transfer.scanOut', transferId: id, userId: operator?.userId ?? null })
+    if (requestState.replay) { await conn.rollback(); return requestState.responseData }
+
     assertStatusAction('transfer', 'scanOut', orderRow.status)
     assertDifferentWarehouses(orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     const fromWh = Number(orderRow.from_warehouse_id)
@@ -232,23 +272,8 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
     if (c.locked_by_task_id) throw new AppError('该容器已被其他任务锁定', 409)
     if (c.transfer_order_id) throw new AppError('该容器已在其他调拨在途中', 409)
 
-    const [[item]] = await conn.query(
-      'SELECT * FROM transfer_order_items WHERE order_id = ? AND product_id = ? ORDER BY id LIMIT 1 FOR UPDATE',
-      [id, c.product_id],
-    )
-    if (!item) throw new AppError('该商品不在本调拨单明细内', 400)
-
     const qty = Number(c.remaining_qty)
-    // 数量上限校验：整容器搬出量不得超过该明细行「剩余可调量」= quantity - deducted_qty。
-    // 此前只校验源仓可用量，不校验调拨单数量——扫一只装 100 件的容器调 10 件，会把整箱 100 件搬走、
-    // deducted_qty/received_qty 记成 100，超出订单 90 件，跨仓多搬货且无告警（审计 2026-08-30）。
-    const remainQty = Number(item.quantity) - (Number(item.deducted_qty) || 0)
-    if (qty > remainQty + 1e-6) {
-      throw new AppError(
-        `该容器 ${qty} 件超出调拨单剩余可调量 ${remainQty} 件，无法整箱扫出；请改用数量相符的容器或改单`,
-        409,
-      )
-    }
+    const allocations = await allocateTransferQuantity(conn, id, c.product_id, qty, 'out')
     // 复检源仓可用量（available = ACTIVE 容器合计 − reserved）≥ 本容器搬出量。
     // confirm 时校验过一次，但 confirm→scanOut 之间可能新增销售占库（reserve 只加 reserved、
     // 不锁容器），若把已被占库(未拣)的容器整箱调走，会使源仓 available 变负、reserved 无货可拣
@@ -288,7 +313,9 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
       operatorId: operator?.userId ?? null,
       operatorName: operator?.realName ?? null,
     })
-    await conn.query('UPDATE transfer_order_items SET deducted_qty = deducted_qty + ? WHERE id = ?', [qty, item.id])
+    for (const item of allocations) {
+      await conn.query('UPDATE transfer_order_items SET deducted_qty = deducted_qty + ? WHERE id = ?', [item.qty, item.id])
+    }
 
     if (Number(orderRow.status) === 2) {
       await compareAndSetStatus(conn, { table: 'transfer_orders', id, fromStatus: 2, toStatus: 3, entityName: '调拨单' })
@@ -312,15 +339,15 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, { requestKey, action: 'transfer.scanIn', userId: operator?.userId ?? null })
-    if (requestState.replay) { await conn.rollback(); return requestState.responseData }
-
     const orderRow = await lockStatusRow(conn, { table: 'transfer_orders', id, entityName: '调拨单' })
     assertTransferInScope(scopeWarehouseIds, orderRow.from_warehouse_id, orderRow.to_warehouse_id)
     // 设备绑定仓拦截（对齐 putaway/warehouse-tasks 范式）：扫入必须由目标仓设备执行
     if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(orderRow.to_warehouse_id)) {
       throw new AppError('设备绑定仓库与调拨目标仓不一致，无法扫入', 403, 'PDA_WAREHOUSE_MISMATCH')
     }
+    const requestState = await beginTransferRequest(conn, { requestKey, action: 'transfer.scanIn', transferId: id, userId: operator?.userId ?? null })
+    if (requestState.replay) { await conn.rollback(); return requestState.responseData }
+
     assertStatusAction('transfer', 'scanIn', orderRow.status)
     const toWh = Number(orderRow.to_warehouse_id)
 
@@ -352,6 +379,7 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
     if (Number(loc.warehouse_id) !== toWh) throw new AppError('库位与调入仓库不一致', 400)
 
     const qty = Number(c.remaining_qty)
+    const allocations = await allocateTransferQuantity(conn, id, c.product_id, qty, 'in')
     await conn.query(
       'UPDATE inventory_containers SET status = ?, location_id = ?, transfer_order_id = NULL WHERE id = ?',
       [CONTAINER_STATUS.ACTIVE, locationId, c.id],
@@ -377,11 +405,9 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
       operatorId: operator?.userId ?? null,
       operatorName: operator?.realName ?? null,
     })
-    const [[item]] = await conn.query(
-      'SELECT id FROM transfer_order_items WHERE order_id = ? AND product_id = ? ORDER BY id LIMIT 1',
-      [id, c.product_id],
-    )
-    if (item) await conn.query('UPDATE transfer_order_items SET received_qty = received_qty + ? WHERE id = ?', [qty, item.id])
+    for (const item of allocations) {
+      await conn.query('UPDATE transfer_order_items SET received_qty = received_qty + ? WHERE id = ?', [item.qty, item.id])
+    }
 
     await recordTransferEvent(conn, {
       transferOrderId: id, orderNo: orderRow.order_no, eventType: TRANSFER_EVENT.SCAN_IN,
@@ -390,18 +416,23 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
       requestId: getRequestId(), payload: { containerId: c.id, barcode: c.barcode, productId: c.product_id, qty, locationId: Number(locationId) },
     })
 
-    // 完成判断：本单已无在途 PENDING 容器
+    // 完成要求逐行计划、已出、已收相等，且没有剩余在途容器。
     const [[{ pending }]] = await conn.query(
       'SELECT COUNT(*) AS pending FROM inventory_containers WHERE transfer_order_id = ? AND status = ? AND deleted_at IS NULL',
       [id, CONTAINER_STATUS.PENDING_PUTAWAY],
     )
     let completed = false
-    if (Number(pending) === 0) {
+    const [planRows] = await conn.query(
+      'SELECT quantity, deducted_qty, received_qty FROM transfer_order_items WHERE order_id=? ORDER BY id FOR UPDATE', [id],
+    )
+    const planComplete = planRows.length > 0 && planRows.every(row =>
+      Number(row.quantity) === Number(row.deducted_qty) && Number(row.quantity) === Number(row.received_qty))
+    if (Number(pending) === 0 && planComplete) {
       await compareAndSetStatus(conn, { table: 'transfer_orders', id, fromStatus: 3, toStatus: 4, entityName: '调拨单' })
       completed = true
       await recordTransferEvent(conn, {
         transferOrderId: id, orderNo: orderRow.order_no, eventType: TRANSFER_EVENT.COMPLETED,
-        title: '调拨单已完成', description: '全部在途容器已入库上架',
+        title: '调拨单已完成', description: '全部计划数量已出库并入库上架，在途容器已收齐',
         operatorId: operator?.userId ?? null, operatorName: operator?.realName ?? null, requestId: getRequestId(),
       })
     }

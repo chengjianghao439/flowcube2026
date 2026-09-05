@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 /Users/chengjianghao/flowcube/frontend
+
+ ✓ src/pages/pda/transfer.test.tsx (10 tests) 63ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  23:02:41
+   Duration  713ms (transform 110ms, setup 0ms, collect 247ms, tests 63ms, environment 131ms, prepare 36ms)
+

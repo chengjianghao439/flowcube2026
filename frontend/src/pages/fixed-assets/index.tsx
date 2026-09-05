@@ -1,3 +1,4 @@
+import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -153,7 +154,7 @@ export default function FixedAssetsPage() {
   const [disposeTarget, setDisposeTarget] = useState<FixedAsset | null>(null)
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['fixed-assets', applied, page],
+    queryKey: useCompanyQueryKey(['fixed-assets', applied, page]),
     queryFn: () => listFixedAssetsApi({ page, pageSize: 20, keyword: applied.keyword || undefined }),
   })
   const { mutate: runDepr, isPending: deprPending } = useMutation({
@@ -169,7 +170,7 @@ export default function FixedAssetsPage() {
     { key: 'assetNo', title: '固定资产 / 编号', width: 280, render: (_, r) => <RecordIdentity title={r.assetName || '—'} code={r.assetNo} /> },
     { key: 'category', title: '类别', width: 110, render: v => String(v || '—') },
     { key: 'departmentName', title: '使用部门', width: 110, render: v => String(v || '—') },
-    { key: 'acquireDate', title: '购置日期', width: 110, render: v => String(v) },
+    { key: 'acquireDate', title: '购置日期', width: 110, render: v => <span className="whitespace-nowrap">{String(v)}</span> },
     { key: 'originalCost', title: '原值', width: 110, align: 'right', render: v => <span className="tabular-nums">{money(v as number)}</span> },
     { key: 'monthlyDepr', title: '月折旧', width: 100, align: 'right', render: v => <span className="tabular-nums">{money(v as number)}</span> },
     { key: 'accumDepr', title: '累计折旧', width: 110, align: 'right', render: v => <span className="tabular-nums text-muted-foreground">{money(v as number)}</span> },
@@ -179,7 +180,7 @@ export default function FixedAssetsPage() {
       key: 'id',
       title: '操作',
       width: 110,
-      render: (_, r) => r.status === 1 ? (
+      render: (_, r) => (r.status === 1 || r.status === 2) ? (
         <Button size="sm" variant="outline" onClick={() => setDisposeTarget(r)}>处置</Button>
       ) : <span className="text-xs text-muted-foreground">—</span>,
     },

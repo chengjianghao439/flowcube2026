@@ -1,0 +1,73 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:30.460] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":3,"username":"smoke_limited","requestId":"188ec6a8-6e34-443e-b113-fc6bb084e744"}
+[2026-09-05 22:28:30.461] [INFO ] [HTTP] POST /api/auth/login {"ms":71,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"188ec6a8-6e34-443e-b113-fc6bb084e744"}
+[2026-09-05 22:28:30.525] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"cf05ee1d-2c37-46bc-89e9-43fe77bdb61e"}
+[2026-09-05 22:28:30.525] [INFO ] [HTTP] POST /api/auth/login {"ms":59,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"cf05ee1d-2c37-46bc-89e9-43fe77bdb61e"}
+[2026-09-05 22:28:30.531] [WARN ] [ERR] [AppError] 无权访问其他仓库的塑料盒 {"path":"/api/plastic-boxes","userId":3,"refNo":"","requestId":"88ce2362-b0af-4620-b542-558e9fc94ad4","code":"WAREHOUSE_SCOPE_DENIED","statusCode":403}
+[2026-09-05 22:28:30.531] [WARN ] [HTTP] POST /api/plastic-boxes {"ms":2,"status":403,"userId":3,"path":"/api/plastic-boxes","method":"POST","requestId":"88ce2362-b0af-4620-b542-558e9fc94ad4"}
+  [PASS] 塑料盒创建拒绝范围外仓库
+[2026-09-05 22:28:30.543] [INFO ] [HTTP] POST /api/plastic-boxes {"ms":9,"status":201,"userId":2,"path":"/api/plastic-boxes","method":"POST","requestId":"446fc50b-ca8e-4aa2-a0d2-b51862e128ce"}
+[2026-09-05 22:28:30.547] [WARN ] [ERR] [AppError] 无权访问其他仓库的塑料盒 {"path":"/api/plastic-boxes/1","userId":3,"refNo":"","requestId":"92965574-0576-4327-9923-9de7ea787373","code":"WAREHOUSE_SCOPE_DENIED","statusCode":403}
+[2026-09-05 22:28:30.547] [WARN ] [HTTP] GET /api/plastic-boxes/1 {"ms":2,"status":403,"userId":3,"path":"/api/plastic-boxes/1","method":"GET","requestId":"92965574-0576-4327-9923-9de7ea787373"}
+  [PASS] 塑料盒详情拒绝范围外仓库
+[2026-09-05 22:28:30.550] [WARN ] [ERR] [AppError] 无权访问其他仓库的塑料盒 {"path":"/api/plastic-boxes/1/movements","userId":3,"refNo":"","requestId":"d7b19e92-54f4-4eba-b15d-ef512d12ebe1","code":"WAREHOUSE_SCOPE_DENIED","statusCode":403}
+[2026-09-05 22:28:30.551] [WARN ] [HTTP] GET /api/plastic-boxes/1/movements {"ms":2,"status":403,"userId":3,"path":"/api/plastic-boxes/1/movements","method":"GET","requestId":"d7b19e92-54f4-4eba-b15d-ef512d12ebe1"}
+  [PASS] 塑料盒/movements拒绝范围外仓库
+[2026-09-05 22:28:30.554] [INFO ] [HTTP] GET /api/plastic-boxes {"ms":2,"status":200,"userId":3,"path":"/api/plastic-boxes","method":"GET","requestId":"7e25a2ac-e2ac-4470-8877-688d1a101766"}
+  [PASS] 塑料盒列表不含外仓
+[2026-09-05 22:28:30.558] [WARN ] [ERR] [AppError] 无权访问其他仓库的塑料盒 {"path":"/api/plastic-boxes/1","userId":3,"refNo":"","requestId":"6d68102e-8c0c-4973-ab9a-57a0f93ae4b7","code":"WAREHOUSE_SCOPE_DENIED","statusCode":403}
+[2026-09-05 22:28:30.558] [WARN ] [HTTP] DELETE /api/plastic-boxes/1 {"ms":2,"status":403,"userId":3,"path":"/api/plastic-boxes/1","method":"DELETE","requestId":"6d68102e-8c0c-4973-ab9a-57a0f93ae4b7"}
+  [PASS] 塑料盒删除拒绝外仓
+[2026-09-05 22:28:30.563] [WARN ] [ERR] [AppError] 库位不存在、已停用或不属于目标仓库 {"path":"/api/plastic-boxes","userId":2,"refNo":"","requestId":"56043e7c-9f3d-41be-8ae9-5e3b82acec25","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:30.563] [WARN ] [HTTP] POST /api/plastic-boxes {"ms":2,"status":400,"userId":2,"path":"/api/plastic-boxes","method":"POST","requestId":"56043e7c-9f3d-41be-8ae9-5e3b82acec25"}
+  [PASS] 拒绝不属于目标仓库的库位
+[2026-09-05 22:28:30.567] [WARN ] [ERR] [AppError] 商品不存在或已停用 {"path":"/api/plastic-boxes","userId":2,"refNo":"","requestId":"99999cb7-0aa8-4c01-adf9-f4b1f2f1b359","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:30.567] [WARN ] [HTTP] POST /api/plastic-boxes {"ms":2,"status":400,"userId":2,"path":"/api/plastic-boxes","method":"POST","requestId":"99999cb7-0aa8-4c01-adf9-f4b1f2f1b359"}
+  [PASS] 拒绝不存在的商品
+[2026-09-05 22:28:30.579] [INFO ] [HTTP] GET /api/portal/purchase-status?supplierId=1 {"ms":5,"status":200,"userId":3,"path":"/api/portal/purchase-status?supplierId=1","method":"GET","requestId":"5b4be7e0-33f9-424c-b5d6-0d297546fa17"}
+  [PASS] 门户采购不含外仓订单
+  [PASS] 门户按客户身份准确筛选
+  [PASS] 客户改名仍保留原有对账单身份
+  [PASS] 客户导出完整读取超过500条
+  [PASS] 塑料盒导出执行仓库范围
+  [PASS] 分拣格占用状态正确
+  [PASS] 分拣格空闲状态正确
+  [PASS] 分拣格导出请求有界读取
+[2026-09-05 22:28:30.658] [INFO ] [HTTP] GET /api/export/fixed-assets?companyId=1 {"ms":19,"status":200,"userId":2,"path":"/api/export/fixed-assets?companyId=1","method":"GET","requestId":"7c178372-eb65-412d-8d91-6dd9e5f12ffa"}
+  [PASS] fixed-assets HTTP Excel 使用请求头账套
+  [PASS] 资产 Excel 日期与已提足状态正确
+[2026-09-05 22:28:30.681] [INFO ] [HTTP] GET /api/export/accounting-periods?companyId=1 {"ms":8,"status":200,"userId":2,"path":"/api/export/accounting-periods?companyId=1","method":"GET","requestId":"a7aa83b5-e2ef-469f-99c0-d40db7f4952d"}
+  [PASS] accounting-periods HTTP Excel 使用请求头账套
+[2026-09-05 22:28:30.692] [INFO ] [HTTP] GET /api/export/tax-adjustments?companyId=1 {"ms":5,"status":200,"userId":2,"path":"/api/export/tax-adjustments?companyId=1","method":"GET","requestId":"5d11aff9-dc33-4cf8-b4a8-5a6bcbffad44"}
+  [PASS] tax-adjustments HTTP Excel 使用请求头账套
+[2026-09-05 22:28:30.700] [WARN ] [ERR] [AppError] 商品不存在或已停用 {"path":"/api/plastic-boxes","userId":2,"refNo":"","requestId":"51528993-d79d-45bb-9e40-a89fe4e8df47","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:30.700] [WARN ] [HTTP] POST /api/plastic-boxes {"ms":1,"status":400,"userId":2,"path":"/api/plastic-boxes","method":"POST","requestId":"51528993-d79d-45bb-9e40-a89fe4e8df47"}
+  [PASS] 拒绝停用 product_items
+[2026-09-05 22:28:30.706] [WARN ] [ERR] [AppError] 仓库不存在或已停用 {"path":"/api/plastic-boxes","userId":2,"refNo":"","requestId":"f34463a8-e044-430a-a34b-29874f7b06a2","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:30.706] [WARN ] [HTTP] POST /api/plastic-boxes {"ms":2,"status":400,"userId":2,"path":"/api/plastic-boxes","method":"POST","requestId":"f34463a8-e044-430a-a34b-29874f7b06a2"}
+  [PASS] 拒绝停用 inventory_warehouses
+[2026-09-05 22:28:30.713] [WARN ] [ERR] [AppError] 库位不存在、已停用或不属于目标仓库 {"path":"/api/plastic-boxes","userId":2,"refNo":"","requestId":"78526983-5f97-4c3d-a8be-87cc785db2f9","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:30.714] [WARN ] [HTTP] POST /api/plastic-boxes {"ms":3,"status":400,"userId":2,"path":"/api/plastic-boxes","method":"POST","requestId":"78526983-5f97-4c3d-a8be-87cc785db2f9"}
+  [PASS] 拒绝停用 warehouse_locations
+  [PASS] 两个客户同名仍按 ID 隔离
+  [PASS] 混合客户及无法归属的历史单不误投门户
+  [PASS] 无法归属的历史单据仍保留
+[2026-09-05 22:28:30.799] [WARN ] [ERR] [AppError] 塑料盒尚有库存或被任务锁定，无法删除 {"path":"/api/plastic-boxes/1","userId":2,"refNo":"","requestId":"fd507a31-c2ba-4e1c-9543-57ae78fd398b","code":"BAD_REQUEST","statusCode":400}
+[2026-09-05 22:28:30.800] [WARN ] [HTTP] DELETE /api/plastic-boxes/1 {"ms":77,"status":400,"userId":2,"path":"/api/plastic-boxes/1","method":"DELETE","requestId":"fd507a31-c2ba-4e1c-9543-57ae78fd398b"}
+  [PASS] 删除等待容器锁后重新检查库存
+  [PASS] payments 导出503条完整
+  [PASS] payments 超限明确拒绝
+  [PASS] payment-receipts 导出503条完整
+  [PASS] payment-receipts 超限明确拒绝
+  [PASS] reconciliation-statements 导出503条完整
+  [PASS] reconciliation-statements 超限明确拒绝
+
+════════════════════════════════════════════════════════════
+  32 passed, 0 failed
+════════════════════════════════════════════════════════════
+

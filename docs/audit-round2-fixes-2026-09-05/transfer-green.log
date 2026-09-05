@@ -1,0 +1,216 @@
+TAP version 13
+# [2026-09-05 22:10:30.194] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":34,"orderNo":"TF20260905034","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.217] [WARN ] [ERR] [AppError] 无权访问其他仓库的调拨单 {"path":"/api/transfer","userId":9,"refNo":"","requestId":null,"code":"WAREHOUSE_SCOPE_DENIED","statusCode":403}
+# Subtest: R2-06 creation rejects both warehouses outside scope without inserting
+ok 1 - R2-06 creation rejects both warehouses outside scope without inserting
+  ---
+  duration_ms: 261.544709
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.225] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":35,"orderNo":"TF20260905035","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.232] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":35,"orderNo":"TF20260905035","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.237] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/35/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.245] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":35,"orderNo":"TF20260905035","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.253] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/35/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.259] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":35,"orderNo":"TF20260905035","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.266] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/35/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.272] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":35,"orderNo":"TF20260905035","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.279] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/35/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.284] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":35,"orderNo":"TF20260905035","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.285] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":35,"orderNo":"TF20260905035","eventType":"TRANSFER_COMPLETED","operatorId":9}
+# Subtest: R2-01 partial arrival keeps plan open until second batch is received
+ok 2 - R2-01 partial arrival keeps plan open until second batch is received
+  ---
+  duration_ms: 70.622083
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.296] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":36,"orderNo":"TF20260905036","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.302] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":36,"orderNo":"TF20260905036","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.307] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/36/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.313] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":36,"orderNo":"TF20260905036","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.319] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/36/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.325] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":36,"orderNo":"TF20260905036","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.331] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/36/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.335] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":36,"orderNo":"TF20260905036","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.342] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/36/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.347] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":36,"orderNo":"TF20260905036","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.348] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":36,"orderNo":"TF20260905036","eventType":"TRANSFER_COMPLETED","operatorId":9}
+# Subtest: R2-05 legacy duplicate lines allocate across boundaries and accept reverse arrival
+ok 3 - R2-05 legacy duplicate lines allocate across boundaries and accept reverse arrival
+  ---
+  duration_ms: 60.905666
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.356] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":37,"orderNo":"TF20260905037","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.362] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":37,"orderNo":"TF20260905037","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.368] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":38,"orderNo":"TF20260905038","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.374] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":38,"orderNo":"TF20260905038","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.378] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/37/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.384] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":37,"orderNo":"TF20260905037","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.390] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/38/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.395] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":38,"orderNo":"TF20260905038","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.401] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/37/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.405] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":37,"orderNo":"TF20260905037","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.406] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":37,"orderNo":"TF20260905037","eventType":"TRANSFER_COMPLETED","operatorId":9}
+# [2026-09-05 22:10:30.411] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/38/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.416] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":38,"orderNo":"TF20260905038","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.417] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":38,"orderNo":"TF20260905038","eventType":"TRANSFER_COMPLETED","operatorId":9}
+# Subtest: R2-07 same key on two orders returns their own outgoing and incoming receipts
+ok 4 - R2-07 same key on two orders returns their own outgoing and incoming receipts
+  ---
+  duration_ms: 76.397583
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.431] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":39,"orderNo":"TF20260905039","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.437] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":39,"orderNo":"TF20260905039","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.441] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/39/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.446] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":39,"orderNo":"TF20260905039","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.452] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/39/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.459] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/39/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.463] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":39,"orderNo":"TF20260905039","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.464] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":39,"orderNo":"TF20260905039","eventType":"TRANSFER_COMPLETED","operatorId":9}
+# [2026-09-05 22:10:30.469] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/39/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# Subtest: same-order retries do not duplicate inventory logs, events or received quantity
+ok 5 - same-order retries do not duplicate inventory logs, events or received quantity
+  ---
+  duration_ms: 47.236125
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.479] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":40,"orderNo":"TF20260905040","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.485] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":40,"orderNo":"TF20260905040","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.489] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/40/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.495] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":40,"orderNo":"TF20260905040","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.501] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/40/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D2","warehouseId":22}
+# [2026-09-05 22:10:30.502] [WARN ] [ERR] [AppError] 设备绑定仓库与调拨源仓不一致，无法扫出 {"path":"/api/transfer/40/scan-out","userId":9,"refNo":"","requestId":null,"code":"PDA_WAREHOUSE_MISMATCH","statusCode":403}
+# [2026-09-05 22:10:30.506] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/99999999/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.507] [WARN ] [ERR] [AppError] 调拨单不存在 {"path":"/api/transfer/99999999/scan-out","userId":9,"refNo":"","requestId":null,"code":"NOT_FOUND","statusCode":404}
+# [2026-09-05 22:10:30.511] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/40/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.516] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":40,"orderNo":"TF20260905040","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.517] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":40,"orderNo":"TF20260905040","eventType":"TRANSFER_COMPLETED","operatorId":9}
+# [2026-09-05 22:10:30.522] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/40/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.523] [WARN ] [ERR] [AppError] 设备绑定仓库与调拨目标仓不一致，无法扫入 {"path":"/api/transfer/40/scan-in","userId":9,"refNo":"","requestId":null,"code":"PDA_WAREHOUSE_MISMATCH","statusCode":403}
+# Subtest: replayed keys still enforce bound device warehouse and nonexistent resources
+ok 6 - replayed keys still enforce bound device warehouse and nonexistent resources
+  ---
+  duration_ms: 49.972292
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.528] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":41,"orderNo":"TF20260905041","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.534] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":41,"orderNo":"TF20260905041","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.538] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/41/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.542] [WARN ] [ERR] [AppError] 该容器 5 件超出调拨单剩余可调量 4 件，无法整箱扫码；请核对容器与单据 {"path":"/api/transfer/41/scan-out","userId":9,"refNo":"","requestId":null,"code":"CONFLICT","statusCode":409}
+# Subtest: whole-container overflow is rejected with no move
+ok 7 - whole-container overflow is rejected with no move
+  ---
+  duration_ms: 19.582542
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.548] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":42,"orderNo":"TF20260905042","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.554] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":42,"orderNo":"TF20260905042","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.559] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":43,"orderNo":"TF20260905043","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.565] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":43,"orderNo":"TF20260905043","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.569] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/42/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.574] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":42,"orderNo":"TF20260905042","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.580] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/42/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.585] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/43/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.586] [WARN ] [ERR] [AppError] 旧请求键结果不属于本调拨单或仍待确认，请核对原操作回执 {"path":"/api/transfer/43/scan-out","userId":9,"refNo":"","requestId":null,"code":"CONFLICT","statusCode":409}
+# Subtest: legacy generic receipt retries stay bound to its original resource
+ok 8 - legacy generic receipt retries stay bound to its original resource
+  ---
+  duration_ms: 49.044792
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.598] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":44,"orderNo":"TF20260905044","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.603] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":44,"orderNo":"TF20260905044","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.607] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/44/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.613] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":44,"orderNo":"TF20260905044","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# Subtest: old clients can query an unambiguous newly scoped receipt
+ok 9 - old clients can query an unambiguous newly scoped receipt
+  ---
+  duration_ms: 26.074625
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.623] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":45,"orderNo":"TF20260905045","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.629] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":45,"orderNo":"TF20260905045","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.634] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/45/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.640] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":45,"orderNo":"TF20260905045","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.646] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/45/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.650] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":45,"orderNo":"TF20260905045","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.656] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/45/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.662] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":45,"orderNo":"TF20260905045","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.667] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/45/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.671] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":45,"orderNo":"TF20260905045","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.672] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":45,"orderNo":"TF20260905045","eventType":"TRANSFER_COMPLETED","operatorId":9}
+# Subtest: duplicate equal lines finish after both boxes, including interleaved receipt
+ok 10 - duplicate equal lines finish after both boxes, including interleaved receipt
+  ---
+  duration_ms: 55.999625
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.679] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":46,"orderNo":"TF20260905046","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.685] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":46,"orderNo":"TF20260905046","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.689] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/46/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.695] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":46,"orderNo":"TF20260905046","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.701] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/46/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.705] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":46,"orderNo":"TF20260905046","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.711] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/46/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.715] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":46,"orderNo":"TF20260905046","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.721] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/46/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.725] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":46,"orderNo":"TF20260905046","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.726] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":46,"orderNo":"TF20260905046","eventType":"TRANSFER_COMPLETED","operatorId":9}
+# Subtest: four-decimal duplicate rows preserve exact totals across whole boxes
+ok 11 - four-decimal duplicate rows preserve exact totals across whole boxes
+  ---
+  duration_ms: 53.454291
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.732] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":47,"orderNo":"TF20260905047","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.738] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":47,"orderNo":"TF20260905047","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.743] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/47/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.745] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/47/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.748] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":47,"orderNo":"TF20260905047","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.755] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/47/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.755] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/47/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.759] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":47,"orderNo":"TF20260905047","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.760] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":47,"orderNo":"TF20260905047","eventType":"TRANSFER_COMPLETED","operatorId":9}
+# Subtest: concurrent duplicate requests move one container once
+ok 12 - concurrent duplicate requests move one container once
+  ---
+  duration_ms: 35.620209
+  type: 'test'
+  ...
+# [2026-09-05 22:10:30.769] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":48,"orderNo":"TF20260905048","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.775] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":48,"orderNo":"TF20260905048","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.781] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":49,"orderNo":"TF20260905049","eventType":"TRANSFER_CREATED","operatorId":9}
+# [2026-09-05 22:10:30.786] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":49,"orderNo":"TF20260905049","eventType":"TRANSFER_CONFIRMED","operatorId":9}
+# [2026-09-05 22:10:30.790] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/48/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.795] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":48,"orderNo":"TF20260905048","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.801] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/49/scan-out","userId":9,"deviceCode":"R2FT36d220a8d1c4D0","warehouseId":20}
+# [2026-09-05 22:10:30.806] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":49,"orderNo":"TF20260905049","eventType":"TRANSFER_SCAN_OUT","operatorId":9}
+# [2026-09-05 22:10:30.811] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/48/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.816] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":48,"orderNo":"TF20260905048","eventType":"TRANSFER_SCAN_IN","operatorId":9}
+# [2026-09-05 22:10:30.817] [INFO ] [TRANSFER_EVENT] 记录调拨事件 {"transferOrderId":48,"orderNo":"TF20260905048","eventType":"TRANSFER_COMPLETED","operatorId":9}
+# [2026-09-05 22:10:30.823] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/48/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.827] [INFO ] [PDASession] PDA device session accepted {"method":"POST","route":"/api/transfer/49/scan-in","userId":9,"deviceCode":"R2FT36d220a8d1c4D1","warehouseId":21}
+# [2026-09-05 22:10:30.828] [WARN ] [ERR] [AppError] 旧请求键结果不属于本调拨单或仍待确认，请核对原操作回执 {"path":"/api/transfer/49/scan-in","userId":9,"refNo":"","requestId":null,"code":"CONFLICT","statusCode":409}
+# Subtest: incoming legacy receipts remain replayable after completion and reject another order
+ok 13 - incoming legacy receipts remain replayable after completion and reject another order
+  ---
+  duration_ms: 70.763917
+  type: 'test'
+  ...
+# Subtest: fixture quantity remains conserved and stock caches match ACTIVE containers
+ok 14 - fixture quantity remains conserved and stock caches match ACTIVE containers
+  ---
+  duration_ms: 1.1685
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1122.14125

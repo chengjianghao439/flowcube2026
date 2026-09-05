@@ -1,0 +1,13 @@
+[2026-09-05 22:20:55] [INFO] 校验备份：fixture.sql.gz（4.0K）
+[2026-09-05 22:20:55] [INFO] 备份文件距今 0 小时（阈值 48h）
+[2026-09-05 22:20:55] [INFO] 启动临时 MySQL 容器 flowcube-restore-check-4513 ...
+[2026-09-05 22:21:01] [INFO] 临时 MySQL 已就绪
+[2026-09-05 22:21:01] [INFO] 解压并导入备份到 flowcube_restore_check ...
+[2026-09-05 22:21:01] [INFO] 恢复后表数：5（阈值 5）
+[2026-09-05 22:21:01] [INFO] 关键表行数抽查（阈值 ≥1 行）：
+    sys_users: 1 行
+    product_items: 1 行
+    sale_orders: 1 行
+    purchase_orders: 1 行
+    inventory_containers: 1 行
+[2026-09-05 22:21:01] [OK] 备份恢复演练通过：fixture.sql.gz 可完整导入（5 张表）

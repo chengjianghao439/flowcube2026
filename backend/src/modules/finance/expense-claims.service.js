@@ -260,7 +260,7 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', app
        FROM expense_claims c
        LEFT JOIN finance_accounts a ON a.id = c.paid_account_id
        ${where}
-      ORDER BY c.created_at DESC LIMIT ? OFFSET ?`,
+      ORDER BY c.created_at DESC, c.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, (p - 1) * ps],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM expense_claims c ${where}`, params)

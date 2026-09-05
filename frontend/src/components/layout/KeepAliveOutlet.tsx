@@ -38,6 +38,7 @@ import {
 } from '@/router/routeRegistry'
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
 import { TabPathContext } from './TabPathContext'
+import { useCompanyStore } from '@/store/companyStore'
 
 // ── 加载占位 ──────────────────────────────────────────────────────────────────
 function PageLoader() {
@@ -61,6 +62,8 @@ interface TabPanelProps {
 
 function TabPanel({ tabKey, path, isActive }: TabPanelProps) {
   // 首次激活前不渲染，激活后永久保留（keep-alive 核心）
+  const { companyId, companyName } = useCompanyStore()
+  const isAccounting = normalizePath(path).startsWith('/accounting/')
   const mountedRef = useRef(false)
   if (isActive) mountedRef.current = true
   if (!mountedRef.current) return null
@@ -78,7 +81,10 @@ function TabPanel({ tabKey, path, isActive }: TabPanelProps) {
         <div className="p-6">
           {Comp ? (
             <Suspense fallback={<PageLoader />}>
-              <Comp />
+              <div key={isAccounting ? companyId : 'shared'}>
+                {isAccounting && <p className="mb-3 text-xs text-muted-foreground">当前账套：{companyName || (companyId === 1 ? '主账套' : `账套 ${companyId}`)}</p>}
+                <Comp />
+              </div>
             </Suspense>
           ) : (
             <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">

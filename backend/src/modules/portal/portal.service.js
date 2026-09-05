@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const statementsService = require('../payments/reconciliation-statements.service')
 const { normalizePagination } = require('../../utils/pagination')
+const { scopeFilter } = require('../../utils/warehouseScope')
 
 /**
  * 客户/供应商门户（本期轻量版）——单租户系统内的只读查询入口。
@@ -22,10 +23,10 @@ async function listStatements({ customerId = null, page = 1, pageSize = 20 }) {
   )
   if (!cust) throw new AppError('客户不存在', 404)
 
-  // 复用对账单列表查询（按往来方名称过滤），口径与财务「客户对账」页完全一致
+  // 通过账款来源销售单的客户 ID 关联，名称仅是展示快照；不能用模糊名称替代身份。
   const data = await statementsService.findAll({
     type: 2, // 客户对账单
-    partyName: cust.name,
+    customerId: customerIdNum,
     page,
     pageSize,
   })
@@ -36,7 +37,7 @@ async function listStatements({ customerId = null, page = 1, pageSize = 20 }) {
 }
 
 /** 供应商到货查询：purchase_orders 只读列表，返回单号/状态/预计到货/已收量 */
-async function listPurchaseStatus({ supplierId = null, page = 1, pageSize = 20 }) {
+async function listPurchaseStatus({ supplierId = null, page = 1, pageSize = 20, scopeWarehouseIds = null }) {
   if (!supplierId) throw new AppError('请指定供应商', 400)
   const supplierIdNum = Number(supplierId)
   const [[supplier]] = await pool.query(
@@ -48,7 +49,9 @@ async function listPurchaseStatus({ supplierId = null, page = 1, pageSize = 20 }
   const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['po.deleted_at IS NULL', 'po.supplier_id = ?']
   const params = [supplierIdNum]
-  const where = `WHERE ${conds.join(' AND ')}`
+  const scope = scopeFilter(scopeWarehouseIds, 'po.warehouse_id')
+  const where = `WHERE ${conds.join(' AND ')}${scope.sql}`
+  params.push(...scope.params)
 
   const [rows] = await pool.query(
     `SELECT po.id, po.order_no, po.status, po.expected_date, po.total_amount,

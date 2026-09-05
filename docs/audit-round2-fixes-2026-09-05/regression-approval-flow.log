@@ -1,0 +1,107 @@
+[Migrate] ⚠ 重复迁移编号：057, 064, 089（历史遗留 ，仅提示不中断）
+[Migrate] ⚠ 缺迁移编号：008, 009, 040（历史遗留，不影响执行）
+[Migrate] 所有迁移均已执行，无需更新
+[Downloads] 📦 权威静态目录绝对路径: /tmp/flowcube-round2-test-downloads
+[Downloads] ✅ downloads 目录存在
+[Downloads] 📁 文件列表: (空目录)
+[2026-09-05 22:28:29.085] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":2,"username":"smoke_admin","requestId":"25e0da9a-84ba-4c86-bd2e-bfdc3e0911de"}
+[2026-09-05 22:28:29.087] [INFO ] [HTTP] POST /api/auth/login {"ms":74,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"25e0da9a-84ba-4c86-bd2e-bfdc3e0911de"}
+
+────────────────────────────────────────────────────────────
+  数据准备
+────────────────────────────────────────────────────────────
+  [PASS] 审批流配置成功（2 级指定用户）
+[2026-09-05 22:28:29.335] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":6,"username":"smoke_app_SMOKE-","requestId":"fcbabc97-609b-44d8-b719-224ca3f84d14"}
+[2026-09-05 22:28:29.335] [INFO ] [HTTP] POST /api/auth/login {"ms":59,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"fcbabc97-609b-44d8-b719-224ca3f84d14"}
+[2026-09-05 22:28:29.398] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":7,"username":"smoke_apv_a_SMOKE-","requestId":"437e060f-bd3c-4fd6-95a9-1bd1c7f3fa07"}
+[2026-09-05 22:28:29.399] [INFO ] [HTTP] POST /api/auth/login {"ms":62,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"437e060f-bd3c-4fd6-95a9-1bd1c7f3fa07"}
+[2026-09-05 22:28:29.462] [INFO ] [AUTH_AUDIT] 登录成功 {"eventType":"login_success","userId":8,"username":"smoke_apv_b_SMOKE-","requestId":"57593d75-5241-4927-bae9-606b730229e2"}
+[2026-09-05 22:28:29.462] [INFO ] [HTTP] POST /api/auth/login {"ms":61,"status":200,"userId":"-","path":"/api/auth/login","method":"POST","requestId":"57593d75-5241-4927-bae9-606b730229e2"}
+
+────────────────────────────────────────────────────────────
+  用例1：多级审批全链路（提交→一级批过→二级批过→请购已批准）
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:29.479] [INFO ] [HTTP] POST /api/purchase-requisitions {"ms":15,"status":201,"userId":6,"path":"/api/purchase-requisitions","method":"POST","requestId":"8dc6f173-8143-474b-b5d8-041d3980a665"}
+[2026-09-05 22:28:29.490] [INFO ] [HTTP] POST /api/purchase-requisitions/1/submit {"ms":8,"status":200,"userId":6,"path":"/api/purchase-requisitions/1/submit","method":"POST","requestId":"db259a20-dd5e-4b37-b672-8d34a162102f"}
+  [PASS] 申请人提交请购成功
+  [PASS] submit 返回多级标志 multiLevel=true
+  [PASS] submit 返回 2 级
+[2026-09-05 22:28:29.493] [INFO ] [HTTP] GET /api/purchase-requisitions/1 {"ms":2,"status":200,"userId":6,"path":"/api/purchase-requisitions/1","method":"GET","requestId":"30e85f31-e0b8-4819-a97b-04fde4b27575"}
+  [PASS] 详情含审批实例
+  [PASS] 当前第 1 级
+[2026-09-05 22:28:29.496] [WARN ] [ERR] [AppError] 无操作权限 {"path":"/api/purchase-requisitions/1/approve","userId":6,"refNo":"","requestId":"638784bc-342b-453b-a075-0c7e9d92cb76","code":"PERMISSION_DENIED","statusCode":403}
+[2026-09-05 22:28:29.496] [WARN ] [HTTP] POST /api/purchase-requisitions/1/approve {"ms":1,"status":403,"userId":6,"path":"/api/purchase-requisitions/1/approve","method":"POST","requestId":"638784bc-342b-453b-a075-0c7e9d92cb76"}
+  [PASS] 申请人自批被拒
+[2026-09-05 22:28:29.499] [INFO ] [AUTH_AUDIT] 权限校验拒绝 {"eventType":"permission_denied","userId":6,"username":"smoke_app_SMOKE-","requestId":"638784bc-342b-453b-a075-0c7e9d92cb76"}
+[2026-09-05 22:28:29.504] [WARN ] [ERR] [AppError] 您不是该审批节点的审批人，无权审批 {"path":"/api/purchase-requisitions/1/approve","userId":8,"refNo":"","requestId":"ace3ffaa-6a59-4f30-8646-e5dc053f1902","code":"APPROVAL_NOT_ASSIGNED","statusCode":403}
+[2026-09-05 22:28:29.504] [WARN ] [HTTP] POST /api/purchase-requisitions/1/approve {"ms":5,"status":403,"userId":8,"path":"/api/purchase-requisitions/1/approve","method":"POST","requestId":"ace3ffaa-6a59-4f30-8646-e5dc053f1902"}
+  [PASS] 非当前节点审批人被拒(403)
+[2026-09-05 22:28:29.512] [INFO ] [HTTP] POST /api/purchase-requisitions/1/approve {"ms":6,"status":200,"userId":7,"path":"/api/purchase-requisitions/1/approve","method":"POST","requestId":"b9f09656-e4c2-400b-a2d5-69a1e8cef6e1"}
+  [PASS] 第 1 级审批通过
+  [PASS] 审批后 multiLevel=true 且 approvalStatus=1(审批中)
+[2026-09-05 22:28:29.515] [INFO ] [HTTP] GET /api/purchase-requisitions/1 {"ms":2,"status":200,"userId":6,"path":"/api/purchase-requisitions/1","method":"GET","requestId":"90c5b536-abb8-4bfe-981a-e77bc9a58708"}
+  [PASS] 推进后实例 currentStep=2
+  [PASS] 请购仍待审批(2)
+[2026-09-05 22:28:29.518] [WARN ] [ERR] [AppError] 您不是该审批节点的审批人，无权审批 {"path":"/api/purchase-requisitions/1/approve","userId":7,"refNo":"","requestId":"4d7327d0-271b-4461-a9d4-7f09d671b871","code":"APPROVAL_NOT_ASSIGNED","statusCode":403}
+[2026-09-05 22:28:29.518] [WARN ] [HTTP] POST /api/purchase-requisitions/1/approve {"ms":2,"status":403,"userId":7,"path":"/api/purchase-requisitions/1/approve","method":"POST","requestId":"4d7327d0-271b-4461-a9d4-7f09d671b871"}
+  [PASS] 已过节点审批人重复批被拒(403)
+[2026-09-05 22:28:29.526] [INFO ] [HTTP] POST /api/purchase-requisitions/1/approve {"ms":6,"status":200,"userId":8,"path":"/api/purchase-requisitions/1/approve","method":"POST","requestId":"45583066-6c07-41cb-8f04-205c50f9cb1a"}
+  [PASS] 第 2 级审批通过
+  [PASS] 审批后 approvalStatus=2(已通过)
+[2026-09-05 22:28:29.530] [INFO ] [HTTP] GET /api/purchase-requisitions/1 {"ms":2,"status":200,"userId":6,"path":"/api/purchase-requisitions/1","method":"GET","requestId":"1643af2e-d88d-4b94-a870-dc6fb8aaa08c"}
+  [PASS] 请购→已批准(3)
+  [PASS] 实例终态已通过
+
+────────────────────────────────────────────────────────────
+  用例2：驳回 → 实例已驳回 + 请购已驳回
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:29.537] [INFO ] [HTTP] POST /api/purchase-requisitions {"ms":5,"status":201,"userId":6,"path":"/api/purchase-requisitions","method":"POST","requestId":"f15c2b42-f4a2-469a-b441-565e61f6ad0d"}
+[2026-09-05 22:28:29.543] [INFO ] [HTTP] POST /api/purchase-requisitions/2/submit {"ms":5,"status":200,"userId":6,"path":"/api/purchase-requisitions/2/submit","method":"POST","requestId":"81f8459c-4890-4b70-81e4-d732d5ead2b7"}
+[2026-09-05 22:28:29.552] [INFO ] [HTTP] POST /api/purchase-requisitions/2/reject {"ms":6,"status":200,"userId":7,"path":"/api/purchase-requisitions/2/reject","method":"POST","requestId":"db78f6f9-d2d9-4a26-8b3b-9f60ec6d27ba"}
+  [PASS] 第 1 级驳回成功
+[2026-09-05 22:28:29.556] [INFO ] [HTTP] GET /api/purchase-requisitions/2 {"ms":2,"status":200,"userId":6,"path":"/api/purchase-requisitions/2","method":"GET","requestId":"6bb14a5c-c4e6-4d8e-b92e-4d99c5694b9b"}
+  [PASS] 请购→已驳回(4)
+  [PASS] 实例已驳回 + 驳回原因落库
+
+────────────────────────────────────────────────────────────
+  用例3：无匹配审批流 → 走单级审批（行为回归）
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:29.564] [INFO ] [HTTP] POST /api/purchase-requisitions {"ms":5,"status":201,"userId":6,"path":"/api/purchase-requisitions","method":"POST","requestId":"eca4c424-ccf5-419f-8ae8-70ce8d5b6829"}
+[2026-09-05 22:28:29.568] [INFO ] [HTTP] POST /api/purchase-requisitions/3/submit {"ms":3,"status":200,"userId":6,"path":"/api/purchase-requisitions/3/submit","method":"POST","requestId":"78b1466b-4df7-4137-ae54-334bc1b6ac48"}
+  [PASS] submit multiLevel=false（无匹配流程）
+[2026-09-05 22:28:29.570] [INFO ] [HTTP] GET /api/purchase-requisitions/3 {"ms":1,"status":200,"userId":6,"path":"/api/purchase-requisitions/3","method":"GET","requestId":"4febccf4-1ad3-4b1e-ab4b-1a382aea2d9b"}
+  [PASS] 详情无 approval 实例
+[2026-09-05 22:28:29.575] [INFO ] [HTTP] POST /api/purchase-requisitions/3/approve {"ms":3,"status":200,"userId":7,"path":"/api/purchase-requisitions/3/approve","method":"POST","requestId":"2185caa2-ec5e-49b0-9ff7-a065f41ee8ec"}
+  [PASS] 单级审批通过 → 请购已批准
+[2026-09-05 22:28:29.578] [INFO ] [HTTP] GET /api/purchase-requisitions/3 {"ms":1,"status":200,"userId":6,"path":"/api/purchase-requisitions/3","method":"GET","requestId":"b744ab60-03ce-46bc-be55-1a1613a0c4eb"}
+  [PASS] 请购→已批准(3)
+
+────────────────────────────────────────────────────────────
+  用例4：并发同审批人两次审批 → 恰好一次推进
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:29.583] [INFO ] [HTTP] POST /api/purchase-requisitions {"ms":4,"status":201,"userId":6,"path":"/api/purchase-requisitions","method":"POST","requestId":"96cf2071-0e36-43d0-8c59-0d37ad15c63e"}
+[2026-09-05 22:28:29.592] [INFO ] [HTTP] POST /api/purchase-requisitions/4/submit {"ms":6,"status":200,"userId":6,"path":"/api/purchase-requisitions/4/submit","method":"POST","requestId":"d9ced776-3ad1-43b8-9ea5-2b8d6fed2220"}
+[2026-09-05 22:28:29.597] [INFO ] [HTTP] POST /api/purchase-requisitions/4/approve {"ms":5,"status":200,"userId":7,"path":"/api/purchase-requisitions/4/approve","method":"POST","requestId":"78e8c5dc-abda-41c7-bde8-d4e109fb9151"}
+[2026-09-05 22:28:29.599] [WARN ] [ERR] [AppError] 您不是该审批节点的审批人，无权审批 {"path":"/api/purchase-requisitions/4/approve","userId":7,"refNo":"","requestId":"c46a9f19-3dc9-4b53-8bc5-bc60edb6a5c0","code":"APPROVAL_NOT_ASSIGNED","statusCode":403}
+[2026-09-05 22:28:29.599] [WARN ] [HTTP] POST /api/purchase-requisitions/4/approve {"ms":6,"status":403,"userId":7,"path":"/api/purchase-requisitions/4/approve","method":"POST","requestId":"c46a9f19-3dc9-4b53-8bc5-bc60edb6a5c0"}
+  [PASS] 并发双请求恰好 1 成功 1 被拒(403/409)
+[2026-09-05 22:28:29.602] [INFO ] [HTTP] GET /api/purchase-requisitions/4 {"ms":2,"status":200,"userId":6,"path":"/api/purchase-requisitions/4","method":"GET","requestId":"c2eb3e0e-4c37-4fec-a0c2-1402cffb55f8"}
+  [PASS] 实例仍在审批中且停在下一级
+
+────────────────────────────────────────────────────────────
+  用例5：申请人撤回待审批 → 实例撤销，不留孤儿
+────────────────────────────────────────────────────────────
+[2026-09-05 22:28:29.607] [INFO ] [HTTP] POST /api/purchase-requisitions {"ms":4,"status":201,"userId":6,"path":"/api/purchase-requisitions","method":"POST","requestId":"d6eb1518-a78a-4e1d-848d-0ef23b6f1b59"}
+[2026-09-05 22:28:29.615] [INFO ] [HTTP] POST /api/purchase-requisitions/5/submit {"ms":6,"status":200,"userId":6,"path":"/api/purchase-requisitions/5/submit","method":"POST","requestId":"c98c9ff3-c9d9-4523-9b51-a64ab8165406"}
+[2026-09-05 22:28:29.620] [INFO ] [HTTP] POST /api/purchase-requisitions/5/withdraw {"ms":4,"status":200,"userId":6,"path":"/api/purchase-requisitions/5/withdraw","method":"POST","requestId":"62fa2437-8d18-41e4-9132-f4a3e95b6f7e"}
+  [PASS] 撤回成功
+[2026-09-05 22:28:29.623] [INFO ] [HTTP] GET /api/purchase-requisitions/5 {"ms":2,"status":200,"userId":6,"path":"/api/purchase-requisitions/5","method":"GET","requestId":"f18e2717-c014-41a3-9d6d-20ca3e3a6183"}
+  [PASS] 请购回到草稿(1)
+  [PASS] 实例已撤销(4)
+[2026-09-05 22:28:29.630] [INFO ] [HTTP] POST /api/purchase-requisitions/5/submit {"ms":6,"status":200,"userId":6,"path":"/api/purchase-requisitions/5/submit","method":"POST","requestId":"d4f17f66-6108-4239-bcc0-1f37122361d6"}
+  [PASS] 撤销后重新提交成功且新建实例
+
+════════════════════════════════════════════════════════════
+  30 passed, 0 failed
+════════════════════════════════════════════════════════════
+

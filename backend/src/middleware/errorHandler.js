@@ -1,6 +1,9 @@
 const AppError = require('../utils/AppError')
 const logger   = require('../utils/logger')
 const { errorResponse } = require('../utils/response')
+const { env } = require('../config/env')
+const { initializeErrorTracking, captureUnexpectedError } = require('../utils/errorTracking')
+initializeErrorTracking({ dsn: env.SENTRY_DSN, environment: env.NODE_ENV })
 
 function defaultErrorCode(statusCode, fallback = 'INTERNAL_ERROR') {
   if (statusCode === 400) return 'BAD_REQUEST'
@@ -73,20 +76,11 @@ function errorHandler(err, req, res, next) {
 
   // ── 未知错误（记录完整堆栈）──────────────────────────────────────────────
   logger.error(`[Unhandled] ${err.message || '未知错误'}`, err, { path, userId, refNo, requestId }, 'ERR')
-  // 错误追踪（P2-12）：配置 SENTRY_DSN 后把未知错误上报 Sentry（动态 require，未配则零依赖）
-  const sentryDsn = String(process.env.SENTRY_DSN || '').trim()
-  if (sentryDsn) {
-    try {
-      const Sentry = require('@sentry/node')
-      Sentry.withScope((scope) => {
-        scope.setTag('path', path)
-        scope.setUser({ id: String(userId) })
-        scope.setExtra('requestId', requestId)
-        Sentry.captureException(err)
-      })
-    } catch (e) {
-      logger.warn('Sentry 上报失败（未安装 @sentry/node？）', { err: e?.message }, 'SENTRY')
-    }
+  // 不把实际 URL/query、请求体或用户资料发送到错误追踪服务。
+  try {
+    captureUnexpectedError(err, { requestId, method: req.method, route: req.route?.path })
+  } catch (trackingError) {
+    logger.warn('Sentry 上报失败', { err: trackingError?.message }, 'SENTRY')
   }
   const expose = ['1', 'true', 'yes'].includes(String(process.env.APP_EXPOSE_ERRORS || '').toLowerCase())
   const message =

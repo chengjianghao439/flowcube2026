@@ -1,8 +1,9 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ReportTable } from '@/components/shared/ReportTable'
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { useCompanyStore } from '@/store/companyStore'
 import {
-  listCompaniesApi, getConsolidatedBalanceSheetApi, getConsolidatedIncomeApi,
+  createCompanyApi, listCompaniesApi, getConsolidatedBalanceSheetApi, getConsolidatedIncomeApi,
   type AcctCompany,
 } from '@/api/accounting'
 import { toast } from '@/lib/toast'
@@ -45,6 +46,8 @@ export default function ConsolidationPage() {
     const now = new Date()
     return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
   })
+  const queryClient = useQueryClient()
+  const createInFlight = useRef(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [newCode, setNewCode] = useState('')
   const [newName, setNewName] = useState('')
@@ -67,16 +70,24 @@ export default function ConsolidationPage() {
     enabled: companyId > 0 && !!period,
   })
 
-  const createCompany = async () => {
+  const createMutation = useMutation({
+    mutationFn: createCompanyApi,
+    onSuccess: async (company) => {
+      toast.success(`已创建账套 ${company.code}`)
+      setCreateOpen(false)
+      setNewCode('')
+      setNewName('')
+      await queryClient.invalidateQueries({ queryKey: ['acct-companies'] })
+    },
+    onError: (error) => { toast.error(error.message || '创建失败') },
+    onSettled: () => { createInFlight.current = false },
+  })
+  const createCompany = () => {
+    if (createInFlight.current) return
     if (!newCode.trim() || !newName.trim()) return toast.warning('请填写账套编码和名称')
-    try {
-      const { createCompanyApi } = await import('@/api/accounting')
-      const r = await createCompanyApi({ code: newCode.trim(), name: newName.trim(), isGroup: false })
-      toast.success(`已创建账套 ${r.code}`)
-      setCreateOpen(false); setNewCode(''); setNewName('')
-      // 重新拉取账套列表
-      window.location.reload()
-    } catch (e) { toast.error((e as { message?: string })?.message || '创建失败') }
+    // 同一事件循环内的连点也必须被拦住，不能只等 React 的 pending 重渲染。
+    createInFlight.current = true
+    createMutation.mutate({ code: newCode.trim(), name: newName.trim(), isGroup: false })
   }
 
   const companyColumns: TableColumn<AcctCompany>[] = [
@@ -89,7 +100,7 @@ export default function ConsolidationPage() {
       title: '操作',
       width: 140,
       render: (_, r) => (
-        <Button size="sm" variant={companyId === r.id ? 'default' : 'outline'} onClick={() => setCompany(r.id, r.name)}>
+        <Button size="sm" disabled={createMutation.isPending} variant={companyId === r.id ? 'default' : 'outline'} onClick={() => { if (companyId === r.id) return; useDirtyGuardStore.getState().showConfirm('切换账套将关闭会计页面中的未保存编辑，确定切换吗？', () => { try { setCompany(r.id, r.name) } catch (error) { toast.error((error as Error).message) } }) }}>
           {companyId === r.id ? '当前账套' : '切换'}
         </Button>
       ),
@@ -104,7 +115,7 @@ export default function ConsolidationPage() {
         actions={
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/companies').catch(e => toast.error((e as Error).message))}>导出</Button>
-            <Button onClick={() => setCreateOpen(true)}>新建账套</Button>
+            <Button disabled={createMutation.isPending} onClick={() => setCreateOpen(true)}>新建账套</Button>
           </>
         }
       />
@@ -145,15 +156,15 @@ export default function ConsolidationPage() {
         </div>
       )}
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={open => { if (!createInFlight.current) setCreateOpen(open) }}>
         <DialogContent className="sm:max-w-xl">
-          <DialogHeader><DialogTitle>新建账套</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>新建账套</DialogTitle><DialogDescription>填写账套编码和名称，创建期间请等待操作完成。</DialogDescription></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
-            <label className="space-y-2 text-sm">账套编码<Input placeholder="如 SUB5" value={newCode} onChange={e => setNewCode(e.target.value)} /></label>
-            <label className="space-y-2 text-sm">账套名称<Input placeholder="账套名称" value={newName} onChange={e => setNewName(e.target.value)} /></label>
+            <label className="space-y-2 text-sm">账套编码<Input disabled={createMutation.isPending} placeholder="如 SUB5" value={newCode} onChange={e => setNewCode(e.target.value)} /></label>
+            <label className="space-y-2 text-sm">账套名称<Input disabled={createMutation.isPending} placeholder="账套名称" value={newName} onChange={e => setNewName(e.target.value)} /></label>
           </div>
           <p className="text-xs leading-6 text-muted-foreground">新账套会自动复制主账套的预置会计科目；后续可在会计科目页维护其独立科目。</p>
-          <DialogFooter><Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button><Button onClick={createCompany}>创建</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" disabled={createMutation.isPending} onClick={() => { if (!createInFlight.current) setCreateOpen(false) }}>取消</Button><Button disabled={createMutation.isPending} onClick={createCompany}>{createMutation.isPending ? '创建中…' : '创建'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

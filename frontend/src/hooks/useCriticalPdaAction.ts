@@ -105,7 +105,10 @@ export function useCriticalPdaAction<T>({
     try {
       const status = await getOperationRequestStatusApi(
         pendingRecord.requestKey,
-        pendingRecord.requestAction || statusAction,
+        // 老版本调拨 pending 保存固定 action；用当前单据 action 查询兼容回执，防止跨单误确认。
+        /^transfer\.scan(?:Out|In)\.[1-9]\d*$/.test(statusAction)
+          ? statusAction
+          : pendingRecord.requestAction || statusAction,
       )
       if (status.status === 'success') {
         removePending(action)
@@ -129,7 +132,9 @@ export function useCriticalPdaAction<T>({
       if (status.status === 'not_found') {
         const stateConfirmed = await confirmByServerState(pendingRecord, status)
         if (stateConfirmed) return stateConfirmed
-        const message = stateUnconfirmedMessage(pendingRecord.label, 'receipt_missing')
+        const message = resolveServerState
+          ? stateUnconfirmedMessage(pendingRecord.label, 'receipt_missing')
+          : `${pendingRecord.label}的提交回执未找到，结果仍待确认。请稍后再次确认，暂勿重复扫码。`
         setPhase('pending')
         setPhaseMessage(message)
         setLastErrorMessage(null)
@@ -163,7 +168,7 @@ export function useCriticalPdaAction<T>({
     } finally {
       setConfirming(false)
     }
-  }, [action, confirmByServerState, confirming, networkStatus, onConfirmed, pendingRecord, phase, removePending, statusAction])
+  }, [action, confirmByServerState, confirming, networkStatus, onConfirmed, pendingRecord, phase, removePending, resolveServerState, statusAction])
 
   useEffect(() => {
     if (networkStatus !== 'online' || !pendingRecord) return

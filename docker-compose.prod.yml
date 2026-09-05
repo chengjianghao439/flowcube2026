@@ -2,13 +2,13 @@
 # 极序 Flow — 生产环境 Docker Compose 覆盖配置
 # 使用：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 # ============================================================
-version: '3.9'
+# 要求 Docker Compose >= 2.24.4（!override 替换而非追加端口）。
 
 services:
   mysql:
     # 生产环境禁止暴露 MySQL 端口到宿主机
     # 仅允许 backend 容器通过内部网络访问
-    ports: []
+    ports: !override []
 
   backend:
     # 生产环境后端也建议不暴露端口到宿主机，
@@ -25,21 +25,16 @@ services:
       CORS_ALLOW_NULL_ORIGIN: "0"
     # 生产环境应添加健康启动延迟
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/ready',r=>process.exit(r.statusCode===200?0:1)).setTimeout(5000,function(){this.destroy()}).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
 
   frontend:
-    # 生产环境前端可绑定 HTTPS 端口
-    # 更推荐的做法：在宿主机或反代容器上终止 TLS
-    ports:
-      - "80:80"
-    # 如果使用 HTTPS 反代，可在此挂载证书目录给 nginx
-    # volumes:
-    #   - /etc/ssl/certs:/etc/ssl/certs:ro
-    #   - /etc/ssl/private:/etc/ssl/private:ro
+    # 宿主 Caddy 独占 80/443；容器只在 8080 回环暴露。
+    ports: !override
+      - "127.0.0.1:8080:80"
 
 volumes:
   mysql_data:

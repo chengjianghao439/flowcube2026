@@ -74,7 +74,7 @@ jobs:
         run: npm run test:label
 
       - name: 审计回归 — 工具隔离、发布门禁、原生更新与退货扫码
-        run: npm run test:audit-tooling && npm run test:audit-client
+        run: npm run test:audit-tooling && npm run test:audit-client && npm run test:prelaunch-runtime && npm run test:round2-runtime
 
       - name: 运维回归 — 备份恢复判定与数据库指标
         run: node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js
@@ -266,3 +266,39 @@ jobs:
         run: npm run test:integration
         env:
           DB_NAME: flowcube_integration_test
+
+  prelaunch-regression:
+    name: 上线审计专项（独立数据库）
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [prelaunch-finance, prelaunch-scope-export, prelaunch-hr, round2-transfer, round2-payroll, round2-runtime]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: flowcube_prelaunch_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s --health-timeout=5s --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: flowcube_prelaunch_test
+      JWT_SECRET: flowcube_ci_test_jwt_secret_0123456789_abcdef
+      APP_UPDATE_DOWNLOADS_DIR: /tmp/flowcube-downloads
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - run: npm --prefix backend ci
+      - name: 迁移独立专项测试库
+        run: npm --prefix backend run migrate
+      - run: npm run smoke:${{ matrix.suite }}

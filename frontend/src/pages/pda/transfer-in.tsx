@@ -9,7 +9,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
 import { scanInTransferApi, type TransferScanResult } from '@/api/transfer'
 import { getLocationByCodeApi } from '@/api/locations'
-import { getContainerByBarcodeApi } from '@/api/inventory'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
@@ -36,25 +35,13 @@ export default function PdaTransferInPage() {
 
   const scanAction = useCriticalPdaAction<TransferScanResult>({
     action: `transfer.scanIn.${transferId}`,
-    requestAction: 'transfer.scanIn',
+    requestAction: `transfer.scanIn.${transferId}`,
     label: `调拨单 ${transferId} 入库`,
     onConfirmed: async () => {
       await qc.invalidateQueries({ queryKey: ['pda-transfer', transferId] })
       await qc.invalidateQueries({ queryKey: ['pda-transfers'] })
     },
-    // 断网重连的第二道兜底：回执查不到时，按扫过的容器条码回查它是否已入库上架
-    // （scanIn 成功后容器翻在库 stored 并落库位）。保守判定，查不到/异常保持待确认。
-    resolveServerState: async ({ record }) => {
-      const barcode = String(record.metadata?.barcode ?? '')
-      if (!barcode) return { effective: false as const }
-      try {
-        const c = await getContainerByBarcodeApi(barcode)
-        if (c && c.containerStatus === 'stored' && c.locationId != null) {
-          return { effective: true as const, message: `容器 ${barcode} 已入库上架，入库已成功。` }
-        }
-      } catch { /* 查不到或异常：保持待确认 */ }
-      return { effective: false as const }
-    },
+    // 调拨结果必须由绑定单据的回执确认；容器当前所在仓/库位不能证明本次操作成功。
   })
 
   const submitMut = useMutation({
@@ -167,6 +154,7 @@ export default function PdaTransferInPage() {
                   <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
                 </div>
                 <div className="text-right shrink-0 text-xs">
+                  <p className="text-muted-foreground">计划 {item.quantity}</p>
                   <p className="text-muted-foreground">已出库 {item.deductedQty ?? 0}</p>
                   <p className="font-semibold text-emerald-600">已入库 {item.receivedQty ?? 0}</p>
                 </div>

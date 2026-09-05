@@ -1,0 +1,14 @@
+SET SESSION MAX_EXECUTION_TIME=5000;
+SET SESSION TRANSACTION READ ONLY;
+START TRANSACTION WITH CONSISTENT SNAPSHOT;
+SELECT DATABASE() AS db, VERSION() AS version, @@time_zone AS timezone;
+SELECT 'tables' AS metric, COUNT(*) AS n FROM information_schema.tables WHERE table_schema=DATABASE();
+SELECT 'migrations' AS metric, COUNT(*) AS n FROM db_migrations;
+SELECT 'inventory_cache_drift' AS metric, COUNT(*) AS n FROM inventory_stock s LEFT JOIN (SELECT product_id, warehouse_id, SUM(remaining_qty) qty FROM inventory_containers WHERE status=1 AND deleted_at IS NULL GROUP BY product_id,warehouse_id) c ON c.product_id=s.product_id AND c.warehouse_id=s.warehouse_id WHERE ABS(s.quantity-COALESCE(c.qty,0))>0.0001;
+SELECT 'negative_container' AS metric, COUNT(*) AS n FROM inventory_containers WHERE remaining_qty<0 AND deleted_at IS NULL;
+SELECT 'active_container_missing_stock' AS metric, COUNT(*) AS n FROM inventory_containers c LEFT JOIN inventory_stock s ON s.product_id=c.product_id AND s.warehouse_id=c.warehouse_id WHERE c.status=1 AND c.deleted_at IS NULL AND c.remaining_qty>0 AND s.id IS NULL;
+SELECT 'fund_balance_drift' AS metric,COUNT(*) AS n FROM finance_accounts a LEFT JOIN (SELECT account_id,SUM(CASE WHEN direction=1 THEN amount ELSE -amount END) net FROM finance_account_transactions GROUP BY account_id) t ON t.account_id=a.id WHERE a.deleted_at IS NULL AND ABS(a.current_balance-a.opening_balance-COALESCE(t.net,0))>0.0001;
+SELECT 'assets' AS metric,COUNT(*) AS n FROM fixed_assets WHERE deleted_at IS NULL;
+SELECT 'payrolls' AS metric,COUNT(*) AS n FROM hr_payrolls;
+SELECT 'users' AS metric,COUNT(*) AS n FROM sys_users WHERE deleted_at IS NULL;
+COMMIT;

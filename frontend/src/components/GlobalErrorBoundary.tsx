@@ -2,6 +2,8 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import * as Sentry from '@sentry/react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import apiClient from '@/api/client'
+import { useAuthStore } from '@/store/authStore'
 
 interface Props {
   children: ReactNode
@@ -56,17 +58,14 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     // ② 未配置 Sentry → 退回后端上报（P2-12）：fire-and-forget，经后端 logger.error 进 Loki（若已配置 LOKI_URL）。
     // 绝不因上报失败影响页面恢复。
     try {
-      const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || ''
-      void fetch(`${apiBase}/api/system/error-report`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: error?.message || 'unknown',
-          stack: error?.stack || '',
-          componentStack: info?.componentStack || '',
-          url: window.location.href,
-        }),
-      }).catch(() => { /* 忽略上报失败 */ })
+      // 登录前保留 console / Sentry，不把后台日志写入开放为匿名入口。
+      if (!useAuthStore.getState().token) return
+      void apiClient.post('/system/error-report', {
+        message: error?.message || 'unknown',
+        stack: error?.stack || '',
+        componentStack: info?.componentStack || '',
+        url: window.location.href,
+      }, { skipGlobalError: true }).catch(() => { /* 忽略上报失败 */ })
     } catch { /* 忽略 */ }
   }
 
